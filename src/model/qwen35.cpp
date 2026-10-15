@@ -638,10 +638,17 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
       kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(s.cap),
                       1.0f / std::sqrt(float(cfg_.head_dim))};
-      e.use(pipe("attn_prefill"));
+      // attn_prefill10_q4_k32: 4 queries x 8 heads per threadgroup, head dim split over simdgroup
+      // pairs, 32-key tiles (best of the variants in attn.metal; see docs/PERF.md). NI_ATTN overrides.
+      static const std::string an = getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill10_q4_k32";
+      uint32_t qb = 4, th = 256;
+      if (an == "attn_prefill") th = 128;
+      else if (an == "attn_prefill2" || an == "attn_prefill3" || an == "attn_prefill4") qb = 8;
+      else if (an.find("_q8") != std::string::npos) { qb = 8; th = 512; }
+      e.use(pipe(an));
       e.buf(0, qo_); e.buf(1, s.kc[i]); e.buf(2, s.vc[i]); e.buf(3, qg_); e.buf(4, attn_out_);
       e.val(5, fp);
-      e.dispatch((T + 3) / 4, cfg_.hkv, 1, 128);
+      e.dispatch((T + qb - 1) / qb, cfg_.hkv, 1, th);
       enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
       enc_qmm(e, L.o, hh_, x_, T, true);
     }

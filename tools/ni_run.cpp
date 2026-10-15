@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 #include <deque>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -24,7 +26,12 @@ int main(int argc, char** argv) {
   std::string dir = argv[1];
   std::vector<int> ids;
   {
-    std::stringstream ss(argv[2]);
+    std::string arg = argv[2];
+    if (!arg.empty() && arg[0] == '@') {  // @file with comma-separated ids
+      std::ifstream f(arg.substr(1));
+      arg.assign(std::istreambuf_iterator<char>(f), {});
+    }
+    std::stringstream ss(arg);
     std::string t;
     while (std::getline(ss, t, ',')) ids.push_back(std::stoi(t));
   }
@@ -39,7 +46,7 @@ int main(int argc, char** argv) {
 
   Gpu& g = Gpu::get();
   Qwen35 m(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : 2048);
-  auto seq = m.new_seq(8192);
+  auto seq = m.new_seq(std::max(8192, int(ids.size()) + n_gen + 64));
   Seq& s = *seq;
   SamplingParams sp;
   sp.temperature = temp;
