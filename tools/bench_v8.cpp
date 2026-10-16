@@ -1,6 +1,6 @@
 // 8-row verify GEMM (qmm8, src/kernels/verify8.metal) benchmark and correctness check.
-//   bench_qmm8 <N> <K> [bits=4] [nf=2] [cs=4] [ks=0:auto] [R=8]
-//   bench_qmm8 sweep <27b|35b> [nf=2] [cs=4]   model shapes: qmm8 (8 rows) vs the 1-row decode matvec
+//   bench_v8 <N> <K> [bits=4] [nf=2] [cs=4] [ks=0:auto] [R=8]
+//   bench_v8 sweep <27b|35b> [nf=2] [cs=4]   model shapes: qmm8 (8 rows) vs the 1-row decode matvec
 // Weights rotate through ~1 GB of distinct matrices so timings reflect DRAM, not the caches.
 // Error: max over sampled outputs of |gpu - ref| / (|ref| + rms(ref)), ref in double from the
 // same half-rounded inputs the kernel reads (so it measures the GEMM, not the input rounding).
@@ -85,12 +85,13 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
   for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
   {
     auto e = g.begin();
-    e->use(g.pipeline("x8_prep"));
+    const bool v2 = K % 256 == 0 && !getenv("PREP1");
+    e->use(g.pipeline(v2 ? "x8_prep2" : "x8_prep"));
     kp::X8Prep pp{K, R, K, 0, 0, 1e-6f, K, x2 ? 1u : 0u};
     e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
     e->val(5, pp);
     e->buf(6, table_lo); e->buf(7, sums_lo);
-    e->dispatch(8, 1, 1, 256);
+    e->dispatch(v2 ? K / 256 : 8, 1, 1, 256);
     e->commit_and_wait();
   }
   // half-rounded inputs (what the kernel multiplies; two-term hi + lo for qmm8x2)
@@ -123,7 +124,8 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
   const std::string kn = std::string(getenv("KERNEL") ? getenv("KERNEL") : "qmm8") + "_b" + std::to_string(bits) +
                          "_nf" + std::to_string(c.nf);
   Pipeline p = g.pipeline(kn);
-  const int ks = c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
+  const bool staged = kn.rfind("qmm8t_", 0) == 0 || kn.rfind("qmm8abl3_", 0) == 0;  // table staged: ks = 1
+  const int ks = staged ? 1 : c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
   c.cs = std::max(1, std::min(c.cs, 8 / ks));  // <= 8 simdgroups per threadgroup
   const uint32_t rows_tg = 8 * c.nf * c.cs, ntg = (N + rows_tg - 1) / rows_tg;
   kp::Qmm8 prm{};
@@ -218,7 +220,7 @@ static Result run_qmv(Gpu& g, uint32_t N, uint32_t K, int bits) {
 int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   if (argc < 3) {
-    fprintf(stderr, "usage: bench_qmm8 <N> <K> [bits] [nf] [cs] [ks] [R] | sweep <27b|35b> [nf] [cs]\n");
+    fprintf(stderr, "usage: bench_v8 <N> <K> [bits] [nf] [cs] [ks] [R] | sweep <27b|35b> [nf] [cs]\n");
     return 1;
   }
   if (!strcmp(argv[1], "sweep")) {

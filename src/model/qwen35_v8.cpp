@@ -28,6 +28,18 @@ static int env_int(const char* n, int def) {
   return v && *v ? atoi(v) : def;
 }
 
+// gate/up kernel: NI_V8_GU = 1 (default: 8 simdgroups x 1+1 fragments) or 2 (4 x 2+2); NI_V8_GU_PF=1
+// for the software-pipelined loop.
+static int gu_np() {
+  static const int v = std::clamp(env_int("NI_V8_GU", 1), 1, 2);
+  return v;
+}
+static std::string gu_kernel() {
+  static const bool pf = env_int("NI_V8_GU_PF", 0) != 0;
+  return std::string(gu_np() == 1 ? "qmm8_gu1" : "qmm8_gu") + (pf ? "_pf" : "") + "_b4";
+}
+static uint32_t gu_threads() { return 32u * (8u / uint32_t(gu_np())); }
+
 void Qwen35::v8_alloc() {
   if (v8_ready_) return;
   Gpu& g = Gpu::get();
@@ -69,7 +81,10 @@ void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
   if (K % 64 || R < 1 || R > 8) fatal("x8_prep: K=%d R=%d", K, R);
   kp::X8Prep p{uint32_t(K), uint32_t(R), uint32_t(x_ld ? x_ld : K), norm ? 1u : 0u, xn_out ? 1u : 0u, cfg_.eps,
                uint32_t(K), lo ? 1u : 0u};
-  e.use(pipe8("x8_prep"));
+  // x8_prep2 (default): K/256 threadgroups, coalesced table stores; NI_V8_PREP=1: x8_prep (8 threadgroups)
+  static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
+  const bool v2 = !prep1 && K % 256 == 0;
+  e.use(pipe8(v2 ? "x8_prep2" : "x8_prep"));
   e.buf(0, x);
   e.buf(1, norm ? norm->buf : x);
   e.buf(2, v8t_);
@@ -78,7 +93,7 @@ void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
   e.val(5, p);
   e.buf(6, v8tl_);
   e.buf(7, v8sl_);
-  e.dispatch(8, 1, 1, 256);
+  e.dispatch(v2 ? uint32_t(K / 256) : 8u, 1, 1, 256);
 }
 
 // Tiling of the qmm8 grid: nf fragments (8 rows each) per simdgroup, cs column blocks per threadgroup,
@@ -113,7 +128,10 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
   V8Plan pl = v8_plan(Ntot, K, bits == 8 ? 1 : 2);
   if (x2) pl.nf = 1;
   else if (bits == 8) pl.nf = std::min(pl.nf, 2);
-  const std::string name = std::string(x2 ? "qmm8x2_b" : "qmm8_b") + std::to_string(bits) + "_nf" + std::to_string(pl.nf);
+  // NI_V8_GEMM picks the 4-bit inner loop: pf (default: software-pipelined), base, s (split chains), pfs
+  static const std::string var = getenv("NI_V8_GEMM") && *getenv("NI_V8_GEMM") ? getenv("NI_V8_GEMM") : "pf";
+  const std::string pre = x2 ? "qmm8x2" : bits == 4 && var != "base" ? "qmm8" + var : "qmm8";
+  const std::string name = pre + "_b" + std::to_string(bits) + "_nf" + std::to_string(pl.nf);
   kp::Qmm8 p{};
   p.K = K;
   p.R = uint32_t(R);
@@ -159,14 +177,18 @@ void Qwen35::enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffe
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   // NI_V8_ATTN: 1 = attn8m_partial (MMA, all rows and heads of a kv head per threadgroup),
   // 0 = attn8_partial (scalar, RB rows per threadgroup)
-  static const int attn_mma = env_int("NI_V8_ATTN", 0);
+  static const int attn_mma = env_int("NI_V8_ATTN", 1);
   const int G = cfg_.hq / cfg_.hkv;
   const bool mma = attn_mma && G <= 16 && cfg_.head_dim == 256;
+  // history chunks (flash decoding): ~8 threadgroups per core over the kv heads, >= 64 keys each,
+  // at most 1024 / R (partials buffer)
+  static const int tg_target = env_int("NI_V8_ATTN_TGS", 160);
   const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16;
-  uint32_t chunk = std::max<uint32_t>(64, (Lmax + 19) / 20);
+  const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
+  uint32_t chunk = std::max<uint32_t>(64, (Lmax + want - 1) / want);
   chunk = (chunk + gran - 1) / gran * gran;
+  while ((Lmax + chunk - 1) / chunk * uint32_t(R) > 1024) chunk += gran;
   const uint32_t nch = (Lmax + chunk - 1) / chunk;
-  if (nch * R > 1024) fatal("attention rows: too many chunks");
   kp::AttnRows rp{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos), chunk, uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim)), nch};
   const uint32_t Ru = uint32_t(R);
@@ -200,7 +222,7 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   if (I % 64 || L.mu.N != I || L.mg.bits != 4 || L.mu.bits != 4 || L.mg.K != uint32_t(D)) fatal("mlp8: shapes");
   enc_x8(e, x_, R, D, L.post_norm);
   kp::Qmm8Gu p{uint32_t(D), I, 0, 0, 0, 0, 0};
-  e.use(pipe8("qmm8_gu_b4"));
+  e.use(pipe8(gu_kernel()));
   e.buf(0, L.mg.w->buf); e.buf(1, L.mg.s->buf); e.buf(2, L.mg.b->buf);
   e.buf(3, L.mu.w->buf); e.buf(4, L.mu.s->buf); e.buf(5, L.mu.b->buf);
   e.buf(6, L.mg.w->buf); e.buf(7, L.mg.s->buf); e.buf(8, L.mg.b->buf);
@@ -208,7 +230,7 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
   e.val(16, p);
   e.buf(17, v8s_); e.buf(18, v8s_);
-  e.dispatch(I / 64, 1, 1, 128);
+  e.dispatch(I / 64, 1, 1, gu_threads());
   enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_);
 }
 
@@ -222,7 +244,8 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
     fatal("moe8: unsupported expert layout");
   // two-term (~22-bit) inputs and exact codes for the router: keeps the top-8 choice at fp32 level
   static const bool precise = env_int("NI_V8_ROUTER_X2", 1) != 0;
-  // experts used by <= small rows run as register-dequant matvecs over just those rows
+  // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
+  // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify; docs/PERF.md)
   static const int small = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
   enc_x8(e, x_, R, D, L.post_norm, precise, 0, small ? &v8xn_ : nullptr);
   enc_qmm8(e, {{&L.router, rlog_, uint32_t(E)}, {&L.shared_gate, slog_, 1u}}, R, v8t_, v8s_, precise);
@@ -233,9 +256,13 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.dispatch(R, 1, 1, 32);
   static const int dn_nf = env_int("NI_V8_MOE_NF", 2), dn_cs = 4;
   if (D % (8 * dn_nf * dn_cs)) fatal("moe8: hidden %d", D);
-  constexpr uint32_t s_nsg = 8;  // scalar passes: 8 simdgroups x 2 columns per threadgroup
+  // scalar passes: 8 simdgroups x SR columns per threadgroup (v2: x staged, 4 columns; v1: 2)
+  static const bool sv2 = env_int("NI_V8_MOE_SV", 2) == 2;
+  constexpr uint32_t s_nsg = 8;
+  const uint32_t SR = sv2 ? 4 : 2;
+  if (small && sv2 && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
   kp::Moe8Plan pp{uint32_t(R), uint32_t(k), uint32_t(E), I / 64, uint32_t(D / (8 * dn_nf * dn_cs)), uint32_t(li),
-                  uint32_t(small), I / (2 * s_nsg), uint32_t(D) / (2 * s_nsg)};
+                  uint32_t(small), I / (SR * s_nsg), uint32_t(D) / (SR * s_nsg)};
   e.use(pipe8("moe8_plan"));
   e.buf(0, ridx_); e.buf(1, v8tiles_); e.buf(2, v8nt_); e.buf(3, v8slot_); e.buf(4, v8args_);
   e.val(5, pp);
@@ -244,7 +271,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   // gate/up + SwiGLU per touched expert (+ the shared expert), one h table per tile
   const uint32_t wstride = I * (uint32_t(D) / 8), sstride = I * (uint32_t(D) / 64);
   kp::Qmm8Gu gp{uint32_t(D), I, wstride, sstride, 1u, I * 8, I / 64 * 8};
-  e.use(pipe8("qmm8_gu_b4"));
+  e.use(pipe8(gu_kernel()));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
   e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
   e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
@@ -252,7 +279,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
   e.val(16, gp);
   e.buf(17, v8tiles_); e.buf(18, v8nt_);
-  e.dispatch_indirect(v8args_, 0, 128);
+  e.dispatch_indirect(v8args_, 0, gu_threads());
   // down per tile -> per (row, slot) outputs, then the fixed-order combine
   const uint32_t dw = uint32_t(D) * (I / 8), ds = uint32_t(D) * (I / 64);
   kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
@@ -265,7 +292,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.dispatch_indirect(v8args_, 12, 32 * dn_cs);
   if (small) {
     kp::Moe8s sp{uint32_t(D), I, wstride, sstride, uint32_t(k), uint32_t(D)};
-    e.use(pipe8("moe8s_gu"));
+    e.use(pipe8(sv2 ? "moe8s2_gu" : "moe8s_gu"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
     e.buf(6, v8xn_); e.buf(7, v8hsc_);
@@ -273,7 +300,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
     e.buf(9, v8sm_); e.buf(10, v8nt_);
     e.dispatch_indirect(v8args_, 24, 32 * s_nsg);
     kp::Moe8s dq{I, uint32_t(D), dw, ds, uint32_t(k), I};
-    e.use(pipe8("moe8s_down"));
+    e.use(pipe8(sv2 ? "moe8s2_down" : "moe8s_down"));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
     e.buf(3, v8hsc_); e.buf(4, v8out_);
     e.val(5, dq);
@@ -313,7 +340,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       e.buf(12, s.pend_qkv[i]);
       e.val(13, gv);
       e.dispatch(C / 128, 1, 1, 128);
-      e.use(pipe8("gdn_step_verify"));
+      static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;  // gdn_step_verify8: one norm pass
+      e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
       e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
       e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
       e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);

@@ -77,6 +77,14 @@ int main(int argc, char** argv) {
     Encoder::profile_report(n_tok);
   }
 
+  // NI_V8_CAPT=1: capture the outputs of layers {last, 1} (drafter hook) and check slot 0 against the
+  // final residual stream x_ (they must be equal up to the bf16 rounding of the capture)
+  const bool capt = getenv("NI_V8_CAPT") && atoi(getenv("NI_V8_CAPT")) > 0;
+  Buffer cbuf;
+  if (capt) {
+    cbuf = g.alloc(size_t(8) * 2 * m.config().hidden * 2, "capt");
+    m.set_verify_capture({m.config().layers - 1, 1}, cbuf);
+  }
   // ---- teacher-forced verify ----
   std::vector<double> ver_ms;
   int agree = 0, rows = 0, flips = 0;
@@ -106,6 +114,20 @@ int main(int argc, char** argv) {
         for (int l = 0; l < m.config().layers; ++l) su += u[l];
         ustat_sum += su / m.config().layers;
         ++ustat_n;
+      }
+      if (capt) {
+        const int H = m.config().hidden;
+        int bad = 0;
+        for (int r = 0; r < R; ++r)
+          for (int i = 0; i < H; ++i) {
+            const float x = m.hidden()[size_t(r) * H + i];
+            uint32_t u;
+            memcpy(&u, &x, 4);
+            u += 0x7fff + ((u >> 16) & 1);
+            if (uint16_t(u >> 16) != cbuf.as<uint16_t>()[size_t(r) * 2 * H + i]) ++bad;
+          }
+        if (bad) printf("  capture: %d of %d values differ from bf16(x)\n", bad, R * H);
+        else if (P == n) printf("  capture: slot 0 == bf16(final residual) for all %d rows\n", R);
       }
       const float* lv = m.logits();
       for (int r = 0; r < R; ++r) {
