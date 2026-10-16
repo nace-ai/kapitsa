@@ -4,6 +4,8 @@
 // isolated dispatches; outputs, the rolled conv window and the recurrent state are compared bitwise.
 //   bench_gdn [T=512] [Hv=32] [Hk=16] [step kernels...]   (35B: Hv 32 Hk 16; 27B: Hv 48 Hk 16)
 // NI_GDN_SGS sets the simdgroups per threadgroup of the step kernels (default 2, as the engine).
+// NI_MATH_SAFE=1 compiles without fast math: then every output must be bit-identical (with fast
+// math, expect rounding-level differences since each kernel's sums get reassociated differently).
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/log.h"
@@ -138,10 +140,12 @@ int main(int argc, char** argv) {
     f(*e);
     e->commit_and_wait();
   };
-  // bitwise comparison of float (or half) arrays
-  auto cmp = [](const char* what, const Buffer& x, const Buffer& y, size_t n, bool half) {
+  // bitwise comparison of float (or half) arrays; max |diff| is also given relative to max |ref|.
+  // NaN anywhere counts as a mismatch with an infinite diff.
+  double worst_rel = 0;
+  auto cmp = [&worst_rel](const char* what, const Buffer& x, const Buffer& y, size_t n, bool half) {
     size_t bad = 0;
-    double mx = 0;
+    double mx = 0, ref_mx = 0;
     for (size_t i = 0; i < n; ++i) {
       double dx, dy;
       bool same;
@@ -154,12 +158,15 @@ int main(int argc, char** argv) {
         dx = x.as<float>()[i];
         dy = y.as<float>()[i];
       }
+      ref_mx = std::max(ref_mx, std::fabs(dx));
       if (!same) {
         ++bad;
-        mx = std::max(mx, std::fabs(dx - dy));
+        mx = std::max(mx, std::isnan(dx) || std::isnan(dy) ? INFINITY : std::fabs(dx - dy));
       }
     }
-    printf("    %-5s %9zu / %-9zu differ  max |diff| %.3g\n", what, bad, n, mx);
+    double rel = mx / std::max(ref_mx, 1e-30);
+    worst_rel = std::max(worst_rel, rel);
+    printf("    %-5s %9zu / %-9zu differ  max |diff| %.3g (%.2g of max |ref|)\n", what, bad, n, mx, rel);
     return bad;
   };
 
@@ -199,6 +206,10 @@ int main(int argc, char** argv) {
     bad_total += cmp("state", ref.rec, par.rec, size_t(Hv) * D * D, false);
     bad_total += cmp("y", ref.y, par.y, size_t(T) * VD, true);
   }
-  printf("%s\n", bad_total ? "outputs differ (see above)" : "all outputs bit-identical");
+  // Under the engine's fast math each kernel's sums are reassociated differently, so expect small
+  // differences (fp32 rounding, a few 1-ulp half outputs); NI_MATH_SAFE=1 must give bit-identical.
+  if (!bad_total) printf("all outputs bit-identical\n");
+  else printf("outputs differ, worst max |diff| %.2g of max |ref| (%s)\n", worst_rel,
+              worst_rel < 1e-3 ? "rounding-level; NI_MATH_SAFE=1 should be bit-identical" : "TOO LARGE: likely a bug");
   return 0;
 }

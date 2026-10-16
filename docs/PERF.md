@@ -43,9 +43,13 @@ per 512 tokens, ~6% of a 4k prefill. NI_GDN_PAR: gdn_prep_par (a simdgroup per 8
 channels, norm via simd_sum), gdn_step_par_l{4,8,16,32} (value rows of a head are independent:
 spread over simdgroups/threadgroups, no barriers; L lanes per row, 128/L state floats per lane;
 NI_GDN_STEP picks L, default 4; NI_GDN_SGS simdgroups per threadgroup, default 2), gdn_gnorm (gated
-RMSNorm, writes out_proj's half input, replacing rows_to_half). Sums keep the default kernels' order,
-so the outputs should be bit-identical. Estimated instructions per state element per token ~5.5 (L=4) vs
-~11 in gdn_step. Check/measure: `bench_gdn 512 32 16` (35B), `bench_gdn 512 48 16` (27B).
+RMSNorm, writes out_proj's half input, replacing rows_to_half). Sums keep the default kernels' order
+in the source, but fast math reassociates them per kernel (the machine code of gdn_prep, gdn_step,
+rows_to_half and every new kernel changes under `#pragma clang fp reassociate(off)`), so the paths
+should agree only to rounding by default and bit for bit with NI_MATH_SAFE=1 (safe math, A/B checks
+only). Estimated instructions per state element per token ~5.5 (L=4) vs ~11 in gdn_step. Compiled
+register use: gdn_step_par_l4 96 GPRs + 64 B spilled to stack, l8 69, l16 50, l32 33 (gdn_step 55),
+so l8 may beat the l4 default. Check/measure: `bench_gdn 512 32 16` (35B), `bench_gdn 512 48 16` (27B).
 
 ## nace-infer vs other engines (M4 Pro 48 GB, tok/s)
 Other engines from research/inference/REPORT.md: server runs on real prompts (prefill = prompt

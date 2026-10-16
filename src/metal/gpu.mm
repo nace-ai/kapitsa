@@ -75,11 +75,16 @@ void Gpu::compile(const std::string& extra) {
     std::string src = std::string(kKernelSource) + "\n" + extra;
     MTLCompileOptions* o = [MTLCompileOptions new];
     o.languageVersion = MTLLanguageVersion3_1;
+    // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
+    // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
+    // kernels only agree to the last bit or so; with safe math they must agree exactly.
+    const bool safe = getenv("NI_MATH_SAFE") && atoi(getenv("NI_MATH_SAFE")) > 0;
     if (@available(macOS 15.0, *)) {
-      o.mathMode = MTLMathModeFast;
+      o.mathMode = safe ? MTLMathModeSafe : MTLMathModeFast;
     } else {
-      o.fastMathEnabled = YES;
+      o.fastMathEnabled = safe ? NO : YES;
     }
+    if (safe) logi("NI_MATH_SAFE: kernels compiled without fast math");
     NSError* err = nil;
     double t0 = now_ms();
     id<MTLLibrary> lib = [dev(device_) newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()]

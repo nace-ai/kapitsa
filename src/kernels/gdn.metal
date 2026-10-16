@@ -147,7 +147,10 @@ struct GdnStepParams {
 // ---- Gated DeltaNet prefill path (NI_GDN_PAR=1): gdn_prep_par -> gdn_step_par_l* -> gdn_gnorm ----
 // Same math as gdn_prep + gdn_step + rows_to_half, laid out for many tokens. Every sum follows the
 // order of the kernel it replaces (see each kernel), so with simd_sum lowering to the ascending
-// shuffle_xor butterfly (current Apple GPUs) the results are bit-identical.
+// shuffle_xor butterfly (current Apple GPUs) the results are bit-identical under NI_MATH_SAFE=1.
+// The engine's fast math reassociates sums per kernel (the machine code of these and of the
+// default kernels changes under `#pragma clang fp reassociate(off)`), so by default the two
+// paths agree only to rounding.
 
 // conv input row r of concat = [conv_state rows 0..2, qkv rows 0..T-1]
 NI_INLINE float gdn_conv_in(const device float* qkv, const device float* conv_state, uint r, uint C, uint c) {
