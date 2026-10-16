@@ -297,8 +297,11 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   }
   alloc_buffers();
   Gpu::get().make_resident(owned_bufs_);
-  // NI_DFLASH_DYN=tau: dynamic verify depth on MoE targets (the expert union shrinks with fewer rows;
-  // dense targets read every weight once whatever the row count, so it would only cost acceptance)
+  // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
+  // union, the 35B verify's main cost, shrinks with the rows (35B, 512 tokens: code +7%, prose +20% over
+  // verifying all 7; tau 0.4-0.7 swept). Dense targets read every weight once whatever the row count, so
+  // there it would only cost acceptance.
+  dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
   if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f", dyn_tau_);
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
@@ -746,7 +749,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.buf(0, inv_freq_); e.buf(1, rope_cs_);
     e.val(2, Pk);
     e.buf(3, gst_);
-    e.dispatch(1, 1, 1, 512);
+    e.dispatch(8, 1, 1, 64);  // 512 precise sin/cos: spread over 8 threadgroups (1 x 512 took ~50-100 us)
   }
   uint32_t lo, chunk, nsplit;
   dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit, d.valid_lo);

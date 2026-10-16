@@ -364,10 +364,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       e.buf(12, s.pend_qkv[i]);
       e.val(13, gv);
       e.dispatch(C / 128, 1, 1, 128);
-      // NI_V8_GDN: 2 = gdn_step_verify8s (inputs staged in threadgroup memory), 1 = gdn_step_verify8 (one
-      // norm pass), 0 = gdn_step_verify
-      static const int gdn8 = env_int("NI_V8_GDN", 1);
-      e.use(pipe8(gdn8 == 2 ? "gdn_step_verify8s" : gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
+      static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;  // gdn_step_verify8: one norm pass
+      e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
       e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
       e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
       e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);

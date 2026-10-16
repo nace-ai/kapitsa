@@ -2,10 +2,12 @@
 // restores and the 2047-row window): three greedy turns through Engine::chat, printed with their cached
 // prefix, speed and output text, so a run with --dflash and one without can be compared token for token.
 //   engine_turns <model_dir> <text file> [--dflash <dir|auto>] [--spec D] [--lines N] [--max-tokens N]
+//                [--dump-ids <prefix>]   (writes each turn's prompt ids to <prefix>_turnN.txt, for ni_run)
 // Turn 1: the first N lines of the text file (a long prompt) + a question. Turn 2: the conversation so
 // far + a follow-up (reuses the turn-1 checkpoint: the re-rendered answer differs from the live tokens
 // when the model reasoned). Turn 3: a different follow-up after turn 1 (restores the same checkpoint).
 #include "engine/engine.h"
+#include "tokenizer/tokenizer.h"
 #include "util/log.h"
 
 #include <cstring>
@@ -25,11 +27,13 @@ int main(int argc, char** argv) {
   o.model_dir = argv[1];
   o.context = 16384;
   int lines = 320, max_tokens = 160;
+  std::string dump_ids;
   for (int i = 3; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--dflash")) o.dflash = argv[i + 1];
     if (!strcmp(argv[i], "--lines")) lines = atoi(argv[i + 1]);
     if (!strcmp(argv[i], "--max-tokens")) max_tokens = atoi(argv[i + 1]);
     if (!strcmp(argv[i], "--spec")) o.spec_depth = atoi(argv[i + 1]);
+    if (!strcmp(argv[i], "--dump-ids")) dump_ids = argv[i + 1];
   }
   std::string text;
   {
@@ -38,12 +42,22 @@ int main(int argc, char** argv) {
     for (int i = 0; i < lines && std::getline(f, l); ++i) text += l + "\n";
   }
   Engine eng(o);
+  Tokenizer tok;
+  if (!dump_ids.empty()) tok.load(o.model_dir + "/tokenizer.json");
+  int turn_no = 0;
   auto turn = [&](const ojson& msgs, const char* name) {
     ChatRequest r;
     r.messages = msgs;
     r.temperature = 0.0f;
     r.max_tokens = max_tokens;
     r.template_kwargs = ojson{{"enable_thinking", false}};
+    ++turn_no;
+    if (!dump_ids.empty()) {
+      const std::vector<int> ids = tok.encode(eng.render(r, true));
+      FILE* f = fopen((dump_ids + "_turn" + std::to_string(turn_no) + ".txt").c_str(), "w");
+      for (size_t i = 0; i < ids.size(); ++i) fprintf(f, i ? ",%d" : "%d", ids[i]);
+      fclose(f);
+    }
     ChatResult res = eng.chat(r, [](const ChatDelta&) { return true; });
     printf("== %s: prompt %d, cached %d, %d tokens, %.1f tok/s, finish %s\n%s\n", name, res.prompt_tokens,
            res.cached_tokens, res.completion_tokens,

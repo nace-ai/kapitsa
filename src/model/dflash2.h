@@ -134,7 +134,7 @@ class DFlash2 {
   int accepted() const { return acc_.as<int>()[0]; }
   // proposals verified per cycle: NI_DFLASH_VERIFY (1..7), default 7
   static int verify_depth();
-  // dynamic verify depth threshold (dfl_depth; MoE targets only): NI_DFLASH_DYN=tau, 0 = off (default)
+  // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off
   float dyn_tau() const { return dyn_tau_; }
   // sampled cycles verify with row-independent MoE numerics (Qwen35::set_verify_moe_exact)
   bool exact_moe() const { return exact_moe_; }
