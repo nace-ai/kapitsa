@@ -94,6 +94,19 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
   for (uint32_t r : fn_rows_)
     if (r % 32 || r > kMaxRows) throw std::runtime_error("function rows must be multiples of 32 up to 2048");
 
+  // Everything below allocates: a failure (e.g. the ANE refuses the program) must free what was
+  // made so far, since the caller falls back to the GPU and keeps running.
+  try {
+    init_resources();
+  } catch (...) {
+    free_all();
+    throw;
+  }
+  startup_ms_ = now_ms() - t0;
+}
+
+void FfnSplit::init_resources() {
+  const FfnConfig& c = cfg_;
   // ---- memory ----
   Gpu& g = Gpu::get();
   const uint32_t nin = hidden_ / kSeg;
@@ -201,7 +214,6 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
     }
   }
   h_ = std::make_unique<Handoff>(2.0);
-  startup_ms_ = now_ms() - t0;
   char buf[256];
   snprintf(buf, sizeof buf, "row scales %.0f ms, program %s %.0f ms + load %.0f ms (%zu functions, MIL %zu KB)",
            scales_ms, prog_->was_cached ? "cached" : "compiled", prog_->compile_ms, prog_->load_ms, fn_rows_.size(),
@@ -210,7 +222,9 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
   (void)prog_ms;
 }
 
-FfnSplit::~FfnSplit() {
+FfnSplit::~FfnSplit() { free_all(); }
+
+void FfnSplit::free_all() {
   h_.reset();
   for (auto& b : bind_)
     for (auto& l : b) l.clear();

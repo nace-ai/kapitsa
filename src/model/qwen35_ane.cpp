@@ -106,6 +106,10 @@ void Qwen35::init_ane() {
     logi("NI_ANE: share of %u units exceeds the FFN's %d; GPU only", units, cfg_.dense_I / 512);
     return;
   }
+  if (int(std::clamp<uint32_t>(min_rows, 1, ane::FfnSplit::kMaxRows)) > tmax_) {
+    logi("NI_ANE: prefill chunks of %d rows never reach the split's %u; GPU only", tmax_, min_rows);
+    return;
+  }
   const int fault = getenv("NI_ANE_FAULT") ? atoi(getenv("NI_ANE_FAULT")) : -1;
   const int lanes = wave ? 2 : 1;
   if (!ane_rebuild(units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes)) return;
@@ -116,9 +120,13 @@ void Qwen35::init_ane() {
        ane_->min_rows(),
        ane_->startup_note().c_str(), ane_->metal_bytes() / 1e6, ane_->startup_ms() / 1000);
   if (fault >= 0) logi("NI_ANE_FAULT: the ANE job of layer %d of the first split chunk will not start", fault);
+  if (tmax_ > int(ane::FfnSplit::kMaxRows))
+    logi("NI_ANE: prefill chunks of more than %u rows run on the GPU alone (prefill chunk is %d)", ane::FfnSplit::kMaxRows,
+         tmax_);
   if (env_on("NI_ANE_VERIFY") || !getenv("NI_ANE_VERIFY")) {
     const double t0 = now_ms();
-    std::vector<int> rows = {int(ane_->fn_rows().front()), 2048};
+    // the check runs whole chunks through the model's activation buffers: at most tmax_ rows
+    std::vector<int> rows = {int(ane_->fn_rows().front()), std::min(int(ane::FfnSplit::kMaxRows), tmax_)};
     if (env_on("NI_ANE_VERIFY_ALL")) rows.assign(ane_->fn_rows().begin(), ane_->fn_rows().end());
     double err = -1;
     try {
@@ -237,6 +245,17 @@ void Qwen35::enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, co
 }
 
 // ---- startup check and benchmarks (random post-norm input rows in xh_) ----
+namespace {
+// Scratch buffers released however the scope ends (a failed check throws).
+struct ScratchBufs {
+  std::vector<Buffer> v;
+  Buffer& add(size_t bytes, const char* label) { return v.emplace_back(Gpu::get().alloc(bytes, label)); }
+  ~ScratchBufs() {
+    for (auto& b : v) Gpu::get().release(b);
+  }
+};
+}  // namespace
+
 static void fill_random_half(Buffer& b, size_t n, uint32_t seed) {
   std::mt19937 r(seed);
   std::uniform_real_distribution<float> u(-2.f, 2.f);
@@ -246,11 +265,14 @@ static void fill_random_half(Buffer& b, size_t n, uint32_t seed) {
 
 double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
   Gpu& g = Gpu::get();
-  const int D = cfg_.hidden, Tm = 2048;
+  // Tm rows through the model's activation buffers (hg_, hu_, hhalf_ hold tmax_ rows)
+  const int D = cfg_.hidden, Tm = std::min(int(ane::FfnSplit::kMaxRows), tmax_);
   n_layers = std::min(n_layers, cfg_.layers);
   fill_random_half(xh_, size_t(Tm) * D, 20261016);
+  ScratchBufs bufs;
+  bufs.v.reserve(3);
   Buffer out[3];
-  for (auto& o : out) o = g.alloc(size_t(Tm) * D * 4, "ane verify");
+  for (auto& o : out) o = bufs.add(size_t(Tm) * D * 4, "ane verify");
   auto gpu_only = [&](Buffer& o) {
     memset(o.ptr(), 0, o.size);
     auto e = g.begin();
@@ -283,6 +305,7 @@ double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
   split(out[1], Tm, false);
   double worst = 0;
   for (int T : rows) {
+    if (T > Tm) continue;
     split(out[2], T, true);
     const float *a = out[0].as<float>(), *p = out[1].as<float>(), *s = out[2].as<float>();
     double diff = 0, contrib = 0;
@@ -295,15 +318,16 @@ double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
     logd("NI_ANE: check %d rows: %.3f%%", T, 100 * err);
     worst = std::max(worst, err);
   }
-  for (auto& o : out) g.release(o);
   return worst;
 }
 
 AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
   Gpu& g = Gpu::get();
   const int D = cfg_.hidden;
-  fill_random_half(xh_, size_t(2048) * D, 7);
-  Buffer o = g.alloc(size_t(2048) * D * 4, "ane bench");
+  if (T > tmax_) throw std::runtime_error("ane_bench: " + std::to_string(T) + " rows exceed the prefill chunk");
+  fill_random_half(xh_, size_t(T) * D, 7);
+  ScratchBufs bufs;
+  Buffer o = bufs.add(size_t(T) * D * 4, "ane bench");
   memset(o.ptr(), 0, o.size);
   AneLayerTimes r;
   std::vector<double> go, gp, an, sp, ai;
@@ -361,7 +385,6 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
       }
     }
   }
-  g.release(o);
   r.gpu_only = median(go);
   r.gpu_part = median(gp);
   r.ane = median(an);
@@ -372,7 +395,20 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
 
 double Qwen35::ane_bench_chunk(int T, int reps, bool split) {
   Gpu& g = Gpu::get();
-  auto seq = new_seq(T + 64);
+  // A Seq does not release its buffers (the engine's live as long as the process): this one,
+  // made per call (ane_calib times several shares), is released when the call ends.
+  struct SeqGuard {
+    std::unique_ptr<Seq> s;
+    ~SeqGuard() {
+      Gpu& gg = Gpu::get();
+      gg.release(s->tok);
+      gg.release(s->mtp_kc);
+      gg.release(s->mtp_vc);
+      for (auto* v : {&s->conv, &s->rec, &s->kc, &s->vc, &s->pend_qkv, &s->pend_k, &s->pend_g, &s->pend_d})
+        for (auto& b : *v) gg.release(b);
+    }
+  } guard{new_seq(T + 64)};
+  Seq* seq = guard.s.get();
   std::mt19937 r(11);
   for (int i = 0; i < T; ++i) seq->tokens()[i] = int(r() % 150000u);
   SamplingParams sp;

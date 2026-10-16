@@ -86,6 +86,18 @@ void* Gpu::new_shared_event() {
 void Gpu::release(Buffer& b) {
   if (!b.mtl) return;
   std::lock_guard<std::mutex> lk(impl_->mu);
+  // The residency set holds its allocations strongly (measured: a released 256 MB buffer stays
+  // allocated and resident until removed), so a buffer made resident must leave the set too.
+  if (residency_) {
+    if (@available(macOS 15.0, *)) {
+      id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
+      id<MTLBuffer> mb = (__bridge id<MTLBuffer>)b.mtl;
+      if ([rs containsAllocation:mb]) {
+        [rs removeAllocation:mb];
+        [rs commit];
+      }
+    }
+  }
   [impl_->retained removeObjectIdenticalTo:(__bridge id)b.mtl];
   b = Buffer{};
 }

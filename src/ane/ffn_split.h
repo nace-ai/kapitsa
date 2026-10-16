@@ -97,6 +97,8 @@ class FfnSplit {
   void fill_status(uint32_t v);
 
  private:
+  void init_resources();  // surfaces, row scales, program, bindings, handoff (the constructor's)
+  void free_all();        // releases whatever exists (destructor; a constructor that throws)
   struct Set {
     std::vector<Surface> wg, wu, wd;
     Surface sg, su, sd;
