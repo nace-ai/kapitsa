@@ -2,8 +2,6 @@
 
 **The fastest way to run Qwen on a Mac.** A from-scratch inference engine for Apple silicon.
 
-*Named after Pyotr Kapitsa, who discovered superfluidity: a liquid that flows with zero friction.*
-
 Kapitsa runs Qwen3.5, 3.6 and 3.8 (dense and mixture-of-experts) on one Mac behind an OpenAI-compatible
 server, for coding agents and chat apps. It is written in C++ and Metal for one job: the hybrid Gated
 DeltaNet + attention architecture these models use. It decodes several tokens per step with speculative
