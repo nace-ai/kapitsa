@@ -207,19 +207,6 @@ std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
   return e;
 }
 
-void Gpu::wake() {
-  static Pipeline cp = pipeline("copy_u32");
-  static Buffer a = alloc(64, "wake_a"), b = alloc(64, "wake_b");
-  auto e = begin();
-  const uint32_t n = 4;
-  e->use(cp);
-  e->buf(0, a);
-  e->buf(1, b);
-  e->val(2, n);
-  e->dispatch(1, 1, 1, 32);
-  e->commit();
-}
-
 void Gpu::make_resident(const std::vector<Buffer>& bufs) {
   if (@available(macOS 15.0, *)) {
     @autoreleasepool {

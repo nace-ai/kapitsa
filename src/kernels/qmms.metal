@@ -391,51 +391,48 @@ NI_INLINE void qs_tile(constant Qmm2Params& p, const device uint* tiles, uint t,
   }
 }
 
-// ---- MoE experts at small T, hybrid (qmms_moe2_*, NI_SHORTPF_MOE_FMA): tiles of <= 2 rows by FMAs ----
+// ---- MoE experts at small T, hybrid (qmms_moe2_*, NI_SHORTPF_MOE_FMA): experts of <= 2 rows by FMAs ----
 // At 37-65-row suffixes the 35B routes 1-2 rows to most experts; qmms_moe_* pads every tile to an
 // 8-row MMA, i.e. 8 multiply-adds per weight on the same FP ALUs (the M4 has no matrix units) plus
-// ~2.4 instructions of dequantization. Tiles of at most 2 rows take a matvec form instead, with
-// qmms's lane layout (a simdgroup's lane = weight row fm of its 8 and the 16 codes q of each
-// 64-group): each code is masked and converted once (MLX's trick: x pre-scaled by 16^-j for nibble
-// j) and multiplied with the tile's rows in fp32 (the weights are not rounded to half), then
-// s * d + b * sum(x) per group; the 4 lanes of a row are summed with two xor shuffles. Tiles of 3-8
-// rows keep the 8-row MMA path. Same grid, tiles and buffers as qmms_moe_*; group size 32 or 64.
+// ~2.4 instructions of dequantization. Experts of at most 2 rows (their first and only tile) take a
+// matvec form instead, with qmms's lane layout (a simdgroup's lane = weight row fm of its 8 and the
+// 16 codes q of each 64-group): the weights are dequantized exactly as qs_dequant does (the same half
+// values as the MMA path) and multiplied with the tile's rows in fp32, the 4 lanes of a row summed by
+// two xor shuffles; so the two paths differ only in the order of the fp32 sums (an earlier form that
+// skipped the half rounding of the weights moved the cached-turn path further from the large-prefill
+// one). Larger experts keep the 8-row MMA path. Same grid, tiles and buffers as qmms_moe_*; group
+// size 32 or 64.
 template <int R>
-NI_INLINE void qv_load_x(thread const device half* const (&xr)[R], uint g, uint q, thread float (&xs)[R][16],
-                         thread float (&xsum)[R]) {
+NI_INLINE void qv_load_x(thread const device half* const (&xr)[R], uint g, uint q, thread float (&xs)[R][16]) {
   _Pragma("clang loop unroll(full)")
   for (int t = 0; t < R; ++t) {
     const device half4* p = (const device half4*)(xr[t] + g * 64 + 16 * q);
-    xsum[t] = 0.0f;
     _Pragma("clang loop unroll(full)")
     for (int i = 0; i < 4; ++i) {
       const half4 v = p[i];
       _Pragma("clang loop unroll(full)")
-      for (int e = 0; e < 4; ++e) {
-        const int c = i * 4 + e;
-        const float f = float(v[e]);
-        xsum[t] += f;
-        xs[t][c] = f * (1.0f / float(1u << (4 * (c % 8))));
-      }
+      for (int e = 0; e < 4; ++e) xs[t][i * 4 + e] = float(v[e]);
     }
   }
 }
 
+// acc[t] += sum over the lane's 16 codes of w * x[t]: w the half dequantized pairs of qs_dequant (codes j
+// and j + 4 of each word in one half2), products and sums in fp32
 template <int R>
-NI_INLINE void qv_dot(const device uint32_t* wrow, float s, float b, uint g, uint q, thread const float (&xs)[R][16],
-                      thread const float (&xsum)[R], thread float (&acc)[R]) {
+NI_INLINE void qv_dot(const device uint32_t* wrow, half s, half b, uint g, uint q, thread const float (&xs)[R][16],
+                      thread float (&acc)[R]) {
   const uint2 w = *(const device uint2*)(wrow + g * 8 + 2 * q);
-  float d[R];
+  const half2 s2 = half2(s), b2 = half2(b);
   _Pragma("clang loop unroll(full)")
-  for (int t = 0; t < R; ++t) d[t] = 0.0f;
-  _Pragma("clang loop unroll(full)")
-  for (int c = 0; c < 16; ++c) {
-    const float qv = float((c < 8 ? w.x : w.y) & (0xFu << (4 * (c % 8))));
+  for (int f = 0; f < 8; ++f) {
+    const uint word = f < 4 ? w.x : w.y;
+    const uint v = ((word >> (4 * (f % 4))) & 0x000F000Fu) | 0x64006400u;  // 1024 + code, exact
+    const half2 wv = fma(as_type<half2>(v) - half2(1024.0h), s2, b2);       // codes 8(f/4) + f%4 and + 4
+    const float w0 = float(wv.x), w1 = float(wv.y);
+    const int c = 8 * (f / 4) + f % 4;
     _Pragma("clang loop unroll(full)")
-    for (int t = 0; t < R; ++t) d[t] = fma(qv, xs[t][c], d[t]);
+    for (int t = 0; t < R; ++t) acc[t] = fma(w1, xs[t][c + 4], fma(w0, xs[t][c], acc[t]));
   }
-  _Pragma("clang loop unroll(full)")
-  for (int t = 0; t < R; ++t) acc[t] += s * d[t] + b * xsum[t];
 }
 
 // gsh: log2 of the group size (5 or 6): the lane's 16 codes of 64-block g lie in scale group
@@ -454,11 +451,11 @@ NI_INLINE void qv_moe_gu(const device half* X, const device uint* xrows, uint x_
   _Pragma("clang loop unroll(full)")
   for (int t = 0; t < R; ++t) ag[t] = au[t] = 0.0f;
   for (uint g = 0; g < gpr; ++g) {
-    float xs[R][16], xsum[R];
-    qv_load_x<R>(xr, g, q, xs, xsum);
+    float xs[R][16];
+    qv_load_x<R>(xr, g, q, xs);
     const uint si = n * spr + ((64 * g + 16 * q) >> gsh);
-    qv_dot<R>(W[0] + n * wpr, float(S[0][si]), float(B[0][si]), g, q, xs, xsum, ag);
-    qv_dot<R>(W[1] + n * wpr, float(S[1][si]), float(B[1][si]), g, q, xs, xsum, au);
+    qv_dot<R>(W[0] + n * wpr, half(float(S[0][si])), half(float(B[0][si])), g, q, xs, ag);
+    qv_dot<R>(W[1] + n * wpr, half(float(S[1][si])), half(float(B[1][si])), g, q, xs, au);
   }
   _Pragma("clang loop unroll(full)")
   for (int t = 0; t < R; ++t) {
@@ -486,10 +483,10 @@ NI_INLINE void qv_moe_dn(const device half* X, uint x_ld, uint m0, uint rows, co
   _Pragma("clang loop unroll(full)")
   for (int t = 0; t < R; ++t) acc[t] = 0.0f;
   for (uint g = 0; g < gpr; ++g) {
-    float xs[R][16], xsum[R];
-    qv_load_x<R>(xr, g, q, xs, xsum);
+    float xs[R][16];
+    qv_load_x<R>(xr, g, q, xs);
     const uint si = n * spr + ((64 * g + 16 * q) >> gsh);
-    qv_dot<R>(W + n * wpr, float(S[si]), float(B[si]), g, q, xs, xsum, acc);
+    qv_dot<R>(W + n * wpr, half(float(S[si])), half(float(B[si])), g, q, xs, acc);
   }
   _Pragma("clang loop unroll(full)")
   for (int t = 0; t < R; ++t) {

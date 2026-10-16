@@ -61,6 +61,12 @@ int main(int argc, char** argv) {
   // afterwards the in-pass checkpoint is compared with a separate prefill of ids[P, B).
   int prefix = 0, split = 0;
   int pf_gap = 0;  // --pf-gap MS: idle the GPU for MS ms before each timed prefill rep (server turn gaps)
+  // --plan FILE: the prompt state built by a sequence of server-like passes (a multi-turn conversation as
+  // the server ran it) instead of one prefill. Lines: "tokens <ids file>" loads the token buffer used by
+  // the following passes; "pass A B [S]" prefills [A, B) in prefill_chunk chunks with a checkpoint at S
+  // (inside the pass where the model can, as the server does); "restore S" restores that checkpoint.
+  // The last pass must end at the prompt length; decoding then continues from the given ids.
+  const char* plan = nullptr;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (i + 1 < argc && !strcmp(argv[i], "--dump-all-logits")) dump_all = argv[i + 1];
@@ -70,6 +76,7 @@ int main(int argc, char** argv) {
     if (i + 1 < argc && !strcmp(argv[i], "--prefix")) prefix = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--split")) split = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--pf-gap")) pf_gap = atoi(argv[i + 1]);
+    if (i + 1 < argc && !strcmp(argv[i], "--plan")) plan = argv[i + 1];
   }
 
   Gpu& g = Gpu::get();
@@ -88,7 +95,81 @@ int main(int argc, char** argv) {
   int last_chunk = 0;
   double t0 = now_ms();
   if (Encoder::profiling()) fprintf(stderr, "(profiling: prompt timings not meaningful)\n");
-  if (tbt) {
+  if (plan) {
+    if (spec) { fprintf(stderr, "--plan does not run the MTP history (use it without --spec)\n"); return 1; }
+    auto read_ids = [](const std::string& path) {
+      std::ifstream f(path);
+      std::string a((std::istreambuf_iterator<char>(f)), {}), t;
+      std::stringstream ss(a);
+      std::vector<int> v;
+      while (std::getline(ss, t, ',')) v.push_back(std::stoi(t));
+      return v;
+    };
+    std::ifstream pf(plan);
+    std::string line;
+    std::vector<std::pair<int, std::unique_ptr<Checkpoint>>> cks;
+    const int C = m.prefill_chunk();
+    int end = -1;
+    while (std::getline(pf, line)) {
+      std::stringstream ls(line);
+      std::string op;
+      ls >> op;
+      if (op.empty() || op[0] == '#') continue;
+      if (op == "tokens") {
+        std::string f;
+        ls >> f;
+        std::vector<int> v = read_ids(f);
+        if (int(v.size()) + 1 >= s.cap) { fprintf(stderr, "plan: %s too long\n", f.c_str()); return 1; }
+        std::copy(v.begin(), v.end(), s.tokens());
+      } else if (op == "restore") {
+        int at = -1;
+        ls >> at;
+        Checkpoint* c = nullptr;
+        for (auto& k : cks)
+          if (k.first == at) c = k.second.get();
+        if (!c) { fprintf(stderr, "plan: no checkpoint at %d\n", at); return 1; }
+        auto e = g.begin();
+        m.restore(*e, s, *c);
+        e->commit_and_wait();
+      } else if (op == "pass") {
+        int a = -1, b = -1, at = -1;
+        ls >> a >> b;
+        if (!(ls >> at)) at = -1;
+        Checkpoint* ck = nullptr;
+        if (at > a && at <= b) {
+          for (auto& k : cks)
+            if (k.first == at) ck = k.second.get();
+          if (!ck) {
+            cks.emplace_back(at, std::make_unique<Checkpoint>(m.new_checkpoint()));
+            ck = cks.back().second.get();
+          }
+        }
+        int p = a;
+        auto e = g.begin();
+        while (p < b) {
+          int T = std::min(C, b - p);
+          Checkpoint* snap = nullptr;
+          if (ck && at > p && at < p + T) {
+            if (m.can_snapshot() && !m.ane_splits(T)) snap = ck;
+            else T = at - p;
+          }
+          m.encode_prefill(*e, s, p, T, sp, 0, b == n && p + T == b, snap, snap ? at - p : 0);
+          last_chunk = p;
+          p += T;
+          if (ck && p == at) m.save(*e, s, *ck, at);
+          e->commit_and_wait();
+          if (p < b) e = g.begin();
+        }
+        end = b;
+        fprintf(stderr, "plan: pass [%d, %d)%s\n", a, b, ck ? (" checkpoint at " + std::to_string(at)).c_str() : "");
+      } else {
+        fprintf(stderr, "plan: unknown op %s\n", op.c_str());
+        return 1;
+      }
+    }
+    if (end != n) { fprintf(stderr, "plan: the last pass ends at %d, not at the prompt length %d\n", end, n); return 1; }
+    std::copy(ids.begin(), ids.end(), s.tokens());  // tokens[n] holds the sampled first token
+  } else if (tbt) {
     // token by token through the decode path (reference for the batched prefill)
     for (int p = 0; p < n; p += 32) {
       auto e = g.begin();

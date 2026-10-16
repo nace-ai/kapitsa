@@ -65,9 +65,6 @@ class Gpu {
   std::unique_ptr<Encoder> begin(bool concurrent = false);
   // Keeps every resource resident (avoids per-dispatch residency checks).
   void make_resident(const std::vector<Buffer>& bufs);
-  // Commits a one-threadgroup command buffer and returns at once: a request handler calls it on arrival
-  // so the GPU's wake-up after an idle gap overlaps the CPU work before the real commit.
-  void wake();
 
   void* device() const { return device_; }
   void* queue() const { return queue_; }

@@ -601,21 +601,28 @@ profile of that pass: trunk experts ~45 ms (bandwidth: ~10 GB of expert weights 
 layer), dense projections ~30 ms (qmms at 5.2-5.8 TFLOP/s; bench_qmms keeps qmms the best kernel at 37-62 rows),
 attention 7.8, GDN step 3.7, the MTP head's MoE 2.7 (its experts are group-32 and fell to the 64-row large tiles),
 router 4.5, bucket 2.2, small kernels the rest.
-* **Experts of <= 2 rows by FMAs** (qmms_moe2_*, NI_SHORTPF_MOE_FMA): at these lengths most experts get 1-2 rows,
-  which the 8-row MMA path pads to 8 rows (8 multiply-adds per weight on the same ALUs). An expert with at most 2
-  rows takes a matvec form (codes converted once, MLX's pre-scaled-x trick, fp32 products: no half rounding of
-  the weights); the others keep the MMA path. Only the expert's first tile qualifies: which pairs land in the last
-  tile of a larger expert depends on moe_bucket's atomic scatter order, and the first version (any tile of <= 2
-  rows) was not run-to-run deterministic (KL 1.5e-6 between two runs). Also takes group-32 experts, so the MTP head
-  stops falling back to the large tiles. -5.5 ms (89.3-89.5 vs 95.0); KL vs base 4.5-4.9e-5.
+* **Experts of <= 2 rows by FMAs** (qmms_moe2_*, NI_SHORTPF_MOE_FMA, default): at these lengths most experts get
+  1-2 rows, which the 8-row MMA path pads to 8 rows (8 multiply-adds per weight on the same ALUs). An expert with at
+  most 2 rows takes a matvec form on the MMA path's own half-rounded weights (qs_dequant), fp32 products and sums;
+  the others keep the MMA path. Two versions were rejected on the way: (1) any tile of <= 2 rows qualified, but
+  which pairs land in the last tile of a larger expert depends on moe_bucket's atomic scatter order, so it was not
+  run-to-run deterministic (KL 1.5e-6 between two runs): only an expert's first and only tile qualifies now;
+  (2) MLX's pre-scaled-x trick without the half rounding of the weights moved the cached-turn path further from
+  the large-prefill path's numerics (a cold check failed once), so it now uses exactly the MMA path's weights and
+  differs only in the order of the fp32 sums (bench_moe error 7e-8 like the MMA path). Also takes group-32
+  experts, so the MTP head stops falling back to the large tiles. Cached turns 62 / 53 / 37 tokens: 101.0 / 95.2 /
+  74.6 -> 94.7 / 88.7-88.9 / 69.1-69.9 ms (all-MMA vs default, same binary); two runs bitwise equal; KL vs the
+  all-MMA path 3.5e-4 - 9.4e-4 (routing near-ties; the 35B's band).
 * **Token-block split of small qmms dispatches** (NI_QMMS_TY, default): the router + shared gate (N = 257: 17
   threadgroups) and the shared expert's gate/up (32) split their 8-row token blocks over grid.y; bitwise equal.
 * moe_bucket3, moe_topk_rows8, gdn_step_parr4_snap_l16, attn_prefill11g/gs with the rescale skip: bitwise equal.
 * **MTP history after the first token** (engine, NI_MTP_DEFER): the last chunk's MTP history rows run in their
   own command buffer queued behind the trunk's, so the first token is out before them; the first speculative cycle
   is queued after them (no change to any output).
-Tried, slower: the experts in three dispatches by tile class (1 / 2 / 3-8 rows, to give the 1-row path its own
-56 instead of 91 GPRs: 1855 vs 1721 us), qmms with 32-bit row offsets (no fewer GPRs).
+Tried, slower or no gain: the experts in three dispatches by tile class (1 / 2 / 3-8 rows: 1855 vs 1721 us),
+qmms with 32-bit row offsets (no fewer GPRs), NI_QMMS_TY=2 (t4 row groups: 87.7 vs 87.1 ms), the shared expert
+folded in as expert E (NI_SHORTPF_FOLD=1: 86.9-88.8 vs 89.1 ms, noisy; opt-in), a GPU wake-up dispatch at request
+arrival and user-interactive QoS for the request thread (no change in the server, removed).
 
 The server pays an idle penalty the back-to-back reps do not: the harness waits 1 s between turns. ni_run
 `--pf-gap MS` (new) idles the GPU before each rep: 53-token pass 94.5 ms back to back, 95 at 100 ms, 103 at 300 ms,
@@ -624,3 +631,72 @@ seen). A 25 ms keep-alive dispatch during the gap did not help (106-108 vs 107-1
 (gap 1 s) the same turns took 116-144 ms against 76-123 ms with no gap; one run, during heavy load from other
 processes, 207-217 ms. The engine log now prints the last chunk's encode time, commit -> GPU start, GPU time and
 GPU end -> wake-up.
+
+### Server, the harness pattern (bench/shortpf/serve_ttft.sh --sizes 4000,16000 --greedy --cold-check)
+main 2e5bf23 against this branch, interleaved, every run reported (prefill tok/s = prompt tokens / turn-1 TTFT;
+cached = median TTFT of the 3 follow-ups; cold check = the last follow-up sent again cold gives the same text):
+| run (start) | build | 4k cold | 16k cold | cached 4k | cached 16k | cold check 4k / 16k |
+|---|---|---|---|---|---|---|
+| 1 (23:44) | main | 1027 | 863 | 0.114 (0.145, 0.114, 0.094) | 0.164 (0.180, 0.164, 0.105) | yes / no |
+| 1 | branch (FMA v2) | 1125 | 935 | 0.111 (0.139, 0.111, 0.094) | 0.145 (0.160, 0.145, 0.123) | yes / yes |
+| 2 (23:54, slower GPU) | branch (FMA v2) | 1042 | 867 | 0.117 (0.133, 0.117, 0.090) | 0.124 (0.168, 0.107, 0.124) | no / yes |
+| 2 | main | 960 | 802 | 0.128 (0.150, 0.128, 0.095) | 0.127 (0.182, 0.127, 0.124) | yes / no |
+| 3 (00:00) | branch (final FMA) | 1100 | 930 | 0.112 (0.131, 0.112, 0.094) | 0.143 (0.176, 0.143, 0.107) | yes / yes |
+Branch / main: cold prefill +8-10% at both sizes in each pair. In the server every follow-up's command buffer
+starts 4-14 ms after its commit (the new log field) and runs 10-15% longer than back to back; a wake-up dispatch at
+request arrival did not shorten that. The suffixes are 37-65 tokens because the template drops the empty think block
+of earlier answers, so the previous answer is prefilled again (MTPLX's server keeps it: its suffixes are 19-26).
+
+### History prefill (engine, NI_HISTORY_PREFILL, default on)
+After a reply that ends with "stop", the next request is a user query, and the template renders the answer without
+the think block (here the empty `<think>\n\n</think>\n\n` of the generation prompt) that the live state holds, so
+the follow-up used to restore the turn-boundary checkpoint and prefill the answer again with its own message
+(37-65 tokens, two passes' worth of weights for one). Now a thread started after the reply waits until the server
+has been idle for NI_HISTORY_IDLE_MS (250), then renders the conversation as the next request will (the answer, then
+a placeholder user turn, cut at that turn's `<|im_start|>`), restores the checkpoint and prefills the rendered answer
+except its last token (so the follow-up's own pass still covers the MTP pair of that row), with its MTP history.
+The follow-up then continues the live state with only its new message (20-27 tokens). It gives up when a request
+arrives during the wait (a benchmark's next run, a quick tool, another conversation), when another request used the
+slot, after "length" (benchmark decode runs; cut turns are rarely continued as they stand) and after tool calls (the
+next message is a tool response, which keeps the think block, so the live state already matches it). Work is
+serialized with requests by the engine lock: a request that lands while it runs waits for it (50-110 ms for
+one-sentence answers, 360-490 ms for 256-token ones). The first version started at once and delayed the harness's
+cold 4k turn, which follows the warm-up's tool call immediately, by 57 ms; the idle wait removed that.
+
+Harness pattern (serve_ttft.sh, same binary, `--seed` pairs the prompts; cached = median of 3 follow-ups):
+| run | mode | 4k cold | 16k cold | cached 4k | cached 16k | cold check 4k / 16k |
+|---|---|---|---|---|---|---|
+| job22 (start at once) | on | 976 | 850 | 0.065 (0.064, 0.074, 0.065) | 0.080 (0.080, 0.086, 0.071) | yes / no |
+| job22 | off | 1035 | 867 | 0.131 (0.135, 0.131, 0.099) | 0.146 (0.167, 0.146, 0.131) | yes / yes |
+| seed 11 (idle wait) | on | 1031 | 867 | 0.066 (0.066, 0.076, 0.060) | 0.076 (0.074, 0.088, 0.076) | yes / no (char 63) |
+| seed 11 | off | 1033 | 868 | 0.115 (0.143, 0.115, 0.095) | 0.151 (0.164, 0.151, 0.102) | yes / no (char 63) |
+| seed 22 | off | 1114 | 928 | 0.105 (0.129, 0.105, 0.091) | 0.163 (0.163, 0.177, 0.105) | yes / no (char 70) |
+| seed 22 | on | 1113 | 928 | 0.062 (0.061, 0.072, 0.062) | 0.074 (0.074, 0.085, 0.069) | no (char 735) / yes |
+Cold prefill is unchanged with the idle wait (pairs within 0.2%; job22's 976 is the delayed turn). Cold checks
+fail at the same rate in both modes (the same conversation, seed 11, splits at the same character in both): the
+cached path and a cold prefill take different chunkings, and these answers have near-ties.
+
+Is the state equal to the old cached path's? Offline replays of one greedy conversation (`ni_run --plan`, new:
+the server's exact passes, checkpoints and restores; plain decoding so only the prompt state differs): for each
+follow-up prompt, cold (one prefill), off (restore + suffix) and on (restore + rendered answer, then the follow-up
+from there), 32 greedy tokens with every step's logits. Cold is bitwise reproducible (two runs equal).
+| follow-up | KL(cold, off) first / mean / max | KL(cold, on) first / mean / max | tokens vs cold |
+|---|---|---|---|
+| 4k 1 | 5.8e-4 / 6.1e-4 / 3.8e-3 | 1.2e-4 / 5.7e-4 / 4.0e-3 | both split at step 10 (cold margin 0.069; off 0.006, on 0.005 the other way) |
+| 4k 2 | 3.0e-5 / 3.8e-5 / 4.5e-4 | 3.5e-4 / 5.9e-5 / 3.5e-4 | both identical |
+| 4k 3 | 2.4e-4 / 1.5e-4 / 1.8e-3 | 1.3e-4 / 2.0e-4 / 2.5e-3 | both identical |
+| 16k 1 | 3.6e-7 / 5.5e-5 / 9.9e-4 | 2.2e-7 / 7.4e-5 / 1.3e-3 | both identical |
+| 16k 2 | 3.6e-6 / 9.8e-4 / 1.2e-2 | 1.5e-6 / 7.2e-4 / 9.6e-3 | both identical |
+| 16k 3 | 6.2e-3 / 3.1e-4 / 6.2e-3 | 4.1e-3 / 2.4e-4 / 4.1e-3 | both identical |
+The history-prefilled state is as close to a cold prefill as the old cached path's.
+
+### Correctness of the branch defaults against main
+* code_35b, 256 greedy tokens: identical, with MTP and with plain decoding.
+* p4000 logits KL 2.1e-5 (max|d| 0.66), p16000 KL 3.6e-7 (max|d| 1.14), same top-1.
+* Cached-turn suffixes (ni_run --prefix/--split): logits KL 3.6e-5 - 1.9e-3, same top-1; 128 greedy tokens after
+  them identical for the 62- and 53-token suffixes; the 37-token one splits at generated token 37, a near-tie
+  (main p = 0.602 vs 0.395, logit margin 0.42; the branch 0.579 vs 0.419), which the branch with the FMA experts off
+  splits the same way, so it comes from the qrm prefix (KL 2e-5) through a routing near-tie.
+* tests/test_server.py: all passed (serve_test.sh).
+* Every bitwise-neutral change verified bitwise in e2e logits (GDN parr, attention 11r, bucket3, topk8, qmms
+  token-block split, folding the large-T shared expert).

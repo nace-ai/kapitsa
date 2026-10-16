@@ -71,9 +71,10 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_QMMS_TY` | 1 | small qmms dispatches split their token blocks over grid.y (2 = also any > 4 blocks); `0` = off |
 | `NI_MOE_BUCKET3`, `NI_TOPK8` | on | parallel-scan MoE bucketing and 8-tokens-per-threadgroup top-k (bitwise equal) |
 | `NI_MTP_DEFER` | on | the last prefill chunk's MTP history pass runs after the first token's command buffer |
+| `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
+| `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
-| `NI_QOS` | off | server request threads at user-interactive QoS |
 | `NI_DUP` | off | `NI_DUP=<kernel>[,...]`: dispatch those kernels twice (in-pipeline cost; idempotent kernels only) |
 | `NI_FULL_DRAFT` | dense on, MoE off | MTP drafts over the full vocabulary (else ids < 32768 + specials) |
 | `NI_NO_MTP` | off | do not load the MTP head |
