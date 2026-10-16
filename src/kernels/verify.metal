@@ -1085,3 +1085,154 @@ NI_INLINE void qmvr_multi_impl(const device uint32_t* const* W, const device bfl
 
 NI_QMVR_MULTI(qmvr_multi_t2, 2)
 NI_QMVR_MULTI(qmvr_multi_t3, 3)
+
+// ---- MoE over R rows with shared expert reads (dedupe) ----
+// moe_unique_rows: one thread. ue[U] = distinct experts across the rows, uw[u * R + r] = row r's
+// routing weight for that expert (0 if unused); un[0] = U.
+struct MoeUniqParams {
+  uint R;
+  uint k;
+};
+[[kernel]] void moe_unique_rows(const device uint* idx [[buffer(0)]], const device float* wts [[buffer(1)]],
+                                device uint* ue [[buffer(2)]], device float* uw [[buffer(3)]],
+                                device uint* un [[buffer(4)]], constant MoeUniqParams& p [[buffer(5)]],
+                                uint tid [[thread_position_in_grid]]) {
+  if (tid != 0) return;
+  uint U = 0;
+  for (uint r = 0; r < p.R; ++r)
+    for (uint s = 0; s < p.k; ++s) {
+      uint e = idx[r * p.k + s];
+      uint u = 0;
+      while (u < U && ue[u] != e) ++u;
+      if (u == U) {
+        ue[U] = e;
+        for (uint q = 0; q < p.R; ++q) uw[U * p.R + q] = 0.0f;
+        ++U;
+      }
+      uw[u * p.R + r] = wts[r * (p.k + 1) + s];
+    }
+  un[0] = U;
+}
+
+// gate/up: grid (row tiles over max(I, SI), R*k + 1, 1); y index u (last = shared expert, 4-bit).
+// h[u][r][Imax] = silu(gate . x_r) * (up . x_r)
+template <int NT>
+NI_INLINE void moe_gu_dedupe_impl(const device uint32_t* gw, const device bfloat* gsc, const device bfloat* gbi,
+                                  const device uint32_t* uw_, const device bfloat* usc, const device bfloat* ubi,
+                                  const device uint32_t* sgw, const device bfloat* sgs, const device bfloat* sgb,
+                                  const device uint32_t* suw, const device bfloat* sus, const device bfloat* sub,
+                                  const device float* xn, device float* h, constant MoeParams& p,
+                                  const device uint* ue, const device uint* un, uint R, uint2 tgp, uint tid,
+                                  uint ntg, uint sg, uint nsg, uint lane, threadgroup float* xs) {
+  constexpr int ROWS = 4;
+  const uint u = tgp.y;
+  const uint U = un[0];
+  const bool shared = u == R * p.k;
+  if (!shared && u >= U) return;
+  for (uint i = tid; i < uint(NT) * p.D / 4; i += ntg) {
+    uint t = i / (p.D / 4), c = i % (p.D / 4);
+    ((threadgroup float4*)(xs + t * p.D))[c] = ((const device float4*)(xn + min(t, R - 1) * p.D))[c];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint N = shared ? p.SI : p.I;
+  const uint row0 = (tgp.x * nsg + sg) * ROWS;
+  if (row0 >= N) return;
+  const uint K = p.D, wpr = K / 8, gpr = K / 64;
+  const device uint32_t *G = gw, *Up = uw_;
+  const device bfloat *Gs = gsc, *Gb = gbi, *Us = usc, *Ub = ubi;
+  if (shared) {
+    G = sgw; Gs = sgs; Gb = sgb; Up = suw; Us = sus; Ub = sub;
+  } else {
+    uint e = ue[u];
+    G += e * N * wpr; Up += e * N * wpr;
+    Gs += e * N * gpr; Gb += e * N * gpr; Us += e * N * gpr; Ub += e * N * gpr;
+  }
+  float ag[ROWS][NT], au[ROWS][NT];
+  qmvr_tg_rows<4, NT, ROWS>(G, Gs, Gb, xs, K, N, R, row0, lane, ag);
+  qmvr_tg_rows<4, NT, ROWS>(Up, Us, Ub, xs, K, N, R, row0, lane, au);
+  const uint Imax = max(p.I, p.SI);
+  if (lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      for (int t = 0; t < NT; ++t)
+        if (row0 + q < N && uint(t) < R) h[(u * R + t) * Imax + row0 + q] = silu(ag[q][t]) * au[q][t];
+}
+
+// down: grid (row tiles over D). x[r, row] += sum_u uw[u, r] * (down_u[row] . h[u][r]) + shared.
+template <int NT>
+NI_INLINE void moe_down_dedupe_impl(const device uint32_t* dw, const device bfloat* dsc, const device bfloat* dbi,
+                                    const device uint32_t* sdw, const device bfloat* sds, const device bfloat* sdb,
+                                    const device float* h, const device uint* ue, const device float* uw,
+                                    const device uint* un, const device float* wts, device float* x,
+                                    constant MoeParams& p, uint R, uint tgp, uint tid, uint ntg, uint sg, uint nsg,
+                                    uint lane, threadgroup float* hs) {
+  constexpr int ROWS = 4;
+  const uint U = un[0];
+  const uint Imax = max(p.I, p.SI);
+  const uint row0 = (tgp * nsg + sg) * ROWS;
+  float tot[ROWS][NT];
+  for (int q = 0; q < ROWS; ++q)
+    for (int t = 0; t < NT; ++t) tot[q][t] = 0.0f;
+  for (uint u = 0; u <= U; ++u) {
+    const bool shared = u == U;
+    const uint hu = shared ? R * p.k : u;
+    const uint K = shared ? p.SI : p.I;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < uint(NT) * K / 4; i += ntg) {
+      uint t = i / (K / 4), c = i % (K / 4);
+      ((threadgroup float4*)(hs + t * K))[c] = ((const device float4*)(h + (hu * R + min(t, R - 1)) * Imax))[c];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 >= p.D) continue;
+    float a[ROWS][NT];
+    if (shared) {
+      qmvr_tg_rows<4, NT, ROWS>(sdw, sds, sdb, hs, K, p.D, R, row0, lane, a);
+      for (int q = 0; q < ROWS; ++q)
+        for (int t = 0; t < NT; ++t) tot[q][t] += (uint(t) < R ? wts[t * (p.k + 1) + p.k] : 0.0f) * a[q][t];
+    } else {
+      const uint wpr = K / 8, gpr = K / 64, e = ue[u];
+      qmvr_tg_rows<4, NT, ROWS>(dw + e * p.D * wpr, dsc + e * p.D * gpr, dbi + e * p.D * gpr, hs, K, p.D, R, row0,
+                                lane, a);
+      for (int q = 0; q < ROWS; ++q)
+        for (int t = 0; t < NT; ++t) tot[q][t] += (uint(t) < R ? uw[u * R + t] : 0.0f) * a[q][t];
+    }
+  }
+  if (row0 < p.D && lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      for (int t = 0; t < NT; ++t)
+        if (row0 + q < p.D && uint(t) < R) x[t * p.D + row0 + q] += tot[q][t];
+}
+
+#define NI_MOE_DEDUPE(SUFFIX, NT)                                                                          \
+  [[kernel]] void moe_gate_up_dedupe_##SUFFIX(                                                              \
+      const device uint32_t* gw [[buffer(0)]], const device bfloat* gsc [[buffer(1)]],                      \
+      const device bfloat* gbi [[buffer(2)]], const device uint32_t* uw_ [[buffer(3)]],                     \
+      const device bfloat* usc [[buffer(4)]], const device bfloat* ubi [[buffer(5)]],                       \
+      const device uint32_t* sgw [[buffer(6)]], const device bfloat* sgs [[buffer(7)]],                     \
+      const device bfloat* sgb [[buffer(8)]], const device uint32_t* suw [[buffer(9)]],                     \
+      const device bfloat* sus [[buffer(10)]], const device bfloat* sub [[buffer(11)]],                     \
+      const device float* xn [[buffer(12)]], device float* h [[buffer(13)]], constant MoeParams& p [[buffer(14)]], \
+      const device uint* ue [[buffer(15)]], const device uint* un [[buffer(16)]], constant uint& R [[buffer(17)]], \
+      uint2 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                 \
+      uint2 ntg2 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],                   \
+      uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                    \
+    threadgroup float xs[NT * 2048];                                                                         \
+    moe_gu_dedupe_impl<NT>(gw, gsc, gbi, uw_, usc, ubi, sgw, sgs, sgb, suw, sus, sub, xn, h, p, ue, un, R, tgp, \
+                           tid, ntg2.x, sg, nsg, lane, xs);                                                   \
+  }                                                                                                          \
+  [[kernel]] void moe_down_dedupe_##SUFFIX(                                                                 \
+      const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],                      \
+      const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],                     \
+      const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],                       \
+      const device float* h [[buffer(6)]], const device uint* ue [[buffer(7)]], const device float* uw [[buffer(8)]], \
+      const device uint* un [[buffer(9)]], const device float* wts [[buffer(10)]], device float* x [[buffer(11)]], \
+      constant MoeParams& p [[buffer(12)]], constant uint& R [[buffer(13)]],                                \
+      uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
+      uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],                     \
+      uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                    \
+    threadgroup float hs[NT * 512];                                                                          \
+    moe_down_dedupe_impl<NT>(dw, dsc, dbi, sdw, sds, sdb, h, ue, uw, un, wts, x, p, R, tgp, tid, ntg, sg, nsg, \
+                             lane, hs);                                                                      \
+  }
+
+NI_MOE_DEDUPE(t2, 2)
+NI_MOE_DEDUPE(t3, 3)

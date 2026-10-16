@@ -307,6 +307,37 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   e.val(4, tp);
   e.dispatch(R, 1, 1, 32);
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
+  // opt-in: measured slower than per-row expert reads on M4 Pro (see docs/PERF.md)
+  static const bool no_dedupe = getenv("NI_DEDUPE") == nullptr;
+  if (!mtp_layer && !no_dedupe && (R == 2 || R == 3) && L.eg.gs == 64 && L.sg.bits == 4 && L.sd.bits == 4 &&
+      D <= 2048) {
+    // tokens being verified share experts: read each distinct expert once for all rows
+    struct { uint32_t R, k; } up{uint32_t(R), uint32_t(k)};
+    e.use(pipe2("moe_unique_rows"));
+    e.buf(0, ridx_); e.buf(1, rwts_); e.buf(2, ue_); e.buf(3, uw_); e.buf(4, un_);
+    e.val(5, up);
+    e.dispatch(1, 1, 1, 32);
+    const std::string sfx = R == 2 ? "t2" : "t3";
+    const uint32_t Ru = uint32_t(R);
+    constexpr uint32_t rows = 4, nsg = 8;
+    const uint32_t I = uint32_t(std::max(cfg_.moe_I, cfg_.shared_I));
+    e.use(pipe2("moe_gate_up_dedupe_" + sfx));
+    e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+    e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+    e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
+    e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+    e.buf(12, xrn_); e.buf(13, eh_);
+    e.val(14, mp);
+    e.buf(15, ue_); e.buf(16, un_); e.val(17, Ru);
+    e.dispatch((I + rows * nsg - 1) / (rows * nsg), R * k + 1, 1, 32 * nsg);
+    e.use(pipe2("moe_down_dedupe_" + sfx));
+    e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+    e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+    e.buf(6, eh_); e.buf(7, ue_); e.buf(8, uw_); e.buf(9, un_); e.buf(10, rwts_); e.buf(11, x);
+    e.val(12, mp); e.val(13, Ru);
+    e.dispatch((D + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
+    return;
+  }
   const bool g32 = L.eg.gs == 32;
   if (mtp_layer && L.sg.bits != 8) fatal("MTP shared expert must be 8-bit");
   e.use(pipe2(g32 ? "moe_gate_up_rows_g32_s8" : "moe_gate_up_rows_g64"));

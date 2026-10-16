@@ -191,7 +191,7 @@ class Qwen35 {
   Buffer rlog_, slog_, eidx_, ewts_, eh_;
   Buffer cand_v_, cand_i_, sprob_;
   // prefill-only
-  Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_;
+  Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
 };
 

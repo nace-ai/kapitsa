@@ -205,7 +205,10 @@ void Qwen35::alloc_state() {
   part_ml_ = g.alloc(size_t(cfg_.hq) * max_chunks * 2 * 4);
   eidx_ = g.alloc(64 * 4);
   ewts_ = g.alloc(64 * 4);
-  eh_ = g.alloc(size_t(kMaxVerify) * (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) * 4 + 16);
+  eh_ = g.alloc(size_t(kMaxVerify * cfg_.top_k + 1) * kMaxVerify * std::max(cfg_.moe_I, cfg_.shared_I) * 4 + 16);
+  ue_ = g.alloc(size_t(kMaxVerify) * 64 * 4, "uniq_experts");
+  uw_ = g.alloc(size_t(kMaxVerify) * 64 * kMaxVerify * 4, "uniq_weights");
+  un_ = g.alloc(16, "uniq_count");
   cand_v_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
   cand_i_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
   mtp_e_ = g.alloc(size_t(T) * D * 4, "mtp_e");
