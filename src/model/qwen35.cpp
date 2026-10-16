@@ -550,6 +550,7 @@ void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, 
     if (skip & 1) continue;
     if (cfg_.moe) enc_moe(e, L);
     else enc_mlp(e, L);
+    if (cap_) enc_capture(e, i, pos, 1);
   }
   if (!sample || (skip & 8)) return;
   enc_sample(e, s, x_, pos + 1, sp, step);
@@ -864,8 +865,22 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
     }
     if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
     else enc_mlp_prefill(e, L, T, x_);
+    if (cap_) enc_capture(e, i, pos0, T);
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
+}
+
+void Qwen35::enc_capture(Encoder& e, int layer, int pos0, int T) {
+  if (!cap_ || layer >= int(cap_->slot.size()) || cap_->slot[layer] < 0) return;
+  const int lo = std::max(pos0, cap_->pos_base), hi = std::min(pos0 + T, cap_->pos_base + cap_->rows);
+  if (lo >= hi) return;
+  const uint32_t D = uint32_t(cfg_.hidden);
+  kp::DflCapture p{D, cap_->ld, uint32_t(cap_->slot[layer]) * D, uint32_t(lo - cap_->pos_base)};
+  e.use(pipe("dfl_capture"));
+  e.buf(0, x_, size_t(lo - pos0) * D * 4);
+  e.buf(1, cap_->dst);
+  e.val(2, p);
+  e.dispatch((D / 4 + 255) / 256, uint32_t(hi - lo), 1, 256);
 }
 
 Buffer Qwen35::debug_buf(const std::string& n) {

@@ -1,0 +1,1022 @@
+#include "common.h"
+
+// ---- DFlash2 block drafter (research/inference/dflash2/SPEC.md §4-§7) ----
+// One drafting pass = the block [anchor, mask x 7] at positions P..P+7 through NL qwen3-style
+// layers with two-tap grouped dynamic convolutions, bidirectional attention over the committed
+// context ring + the block itself, the target's LM head, per-position top-16 and the rank-256
+// selector walk. Fixed geometry: 8 rows, 32 q heads / 8 kv heads x 128, window 2048, top-16.
+// The file sorts after sample.metal in the embedded library (it uses pcg_hash and tg_argmax).
+//
+// 8-row GEMM operand ("X8 table"): Xh half [8][ld] row-major plus Xs float [K/64][8] = the sum of
+// the 64 half-rounded inputs of each (group, row), which the fp32 epilogue of dfl_qmm8 needs
+// for the affine bias term. Producers write both.
+
+constant constexpr uint kDflKvHeads = 8;
+constant constexpr uint kDflHeadDim = 128;
+constant constexpr uint kDflRing = 2048;  // ring slots = window; slot = position mod 2048
+constant constexpr uint kDflSaltWalk = 0x57A1C3E5u;  // uniform stream of the sampled walk (SPEC §8.2)
+
+// Group g (64 values) of row r: two values per lane -> half table + exact sum of the halfs.
+NI_INLINE void dfl_put2(device half* xh, device float* xs, uint r, uint ld, uint g, uint lane, float v0, float v1) {
+  const half2 hv = half2(half(v0), half(v1));
+  *(device half2*)(xh + r * ld + g * 64 + 2 * lane) = hv;
+  const float s = simd_sum(float(hv.x) + float(hv.y));
+  if (lane == 0) xs[g * 8 + r] = s;
+}
+
+// NeoX-halves RoPE of one 128-dim head held in threadgroup memory (SPEC §5): inv_freq computed
+// on the host in fp32 like HF, angle = float(pos) * inv_freq in fp32, precise cos/sin.
+NI_INLINE float dfl_rope(threadgroup const float* t, uint d, float pos, const device float* inv_freq) {
+  const uint i = d & 63;
+  const float ang = pos * inv_freq[i];
+  const float c = metal::precise::cos(ang), s = metal::precise::sin(ang);
+  return d < 64 ? t[d] * c - t[d + 64] * s : t[d] * c + t[d - 64] * s;
+}
+
+// simdgroup 8x8 matrix lane layout (as MLX steel): lane holds row fm, columns fn and fn + 1.
+NI_INLINE uint2 dfl_lane_rc(uint lane) {
+  const uint q = lane / 4;
+  return uint2((q & 4) + (lane / 2) % 4, (q & 2) * 2 + (lane % 2) * 2);
+}
+
+NI_INLINE float dfl_uniform(uint seed, uint pos, uint salt) {
+  return float(pcg_hash(seed ^ pcg_hash(pos) ^ salt) & 0xffffffu) / 16777216.0f;
+}
+
+// ---- target capture (SPEC §6.1): fp32 residual rows -> bf16 columns [col0, col0 + H) ----
+struct DflCaptureParams {
+  uint H, ld, col0, dst_row0;
+};
+// grid: (ceil(H / 1024), rows) x 256
+[[kernel]] void dfl_capture(const device float* x [[buffer(0)]], device bfloat* dst [[buffer(1)]],
+                            constant DflCaptureParams& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint c = gid.x * 4, r = gid.y;
+  if (c >= p.H) return;
+  const float4 v = *(const device float4*)(x + size_t(r) * p.H + c);
+  *(device bfloat4*)(dst + size_t(p.dst_row0 + r) * p.ld + p.col0 + c) = bfloat4(v);
+}
+
+// ---- row kernels (one threadgroup of 256 per block row) ----
+struct DflEmbedParams {
+  uint H, gs, tok_off, mask;
+  float eps;
+};
+// h[r] = E[t_r] (t_0 = tokens[tok_off], t_1..7 = mask), n = RMSNorm(h; w) -> n (fp32) and X8 table.
+[[kernel]] void dfl_embed_norm(const device uint32_t* W [[buffer(0)]], const device bfloat* S [[buffer(1)]],
+                               const device bfloat* B [[buffer(2)]], const device int* tokens [[buffer(3)]],
+                               device float* h [[buffer(4)]], const device bfloat* nw [[buffer(5)]],
+                               device float* n [[buffer(6)]], device half* xh [[buffer(7)]],
+                               device float* xs [[buffer(8)]], constant DflEmbedParams& p [[buffer(9)]],
+                               uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                               uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                               uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[32];
+  const uint H = p.H, gpr = H / p.gs;
+  const uint tok = r == 0 ? uint(tokens[p.tok_off]) : p.mask;
+  device float* hr = h + r * H;
+  float ss = 0.0f;
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint k = g * 64 + 2 * lane;
+    const uint word = W[size_t(tok) * (H / 8) + k / 8], sh = 4 * (k % 8);
+    const float sc = float(S[size_t(tok) * gpr + k / p.gs]), bi = float(B[size_t(tok) * gpr + k / p.gs]);
+    const float2 v = float2(sc * float((word >> sh) & 15u) + bi, sc * float((word >> (sh + 4)) & 15u) + bi);
+    *(device float2*)(hr + k) = v;
+    ss += v.x * v.x + v.y * v.y;
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  const float inv = metal::precise::rsqrt(ss / float(H) + p.eps);
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint k = g * 64 + 2 * lane;
+    const float2 v = *(device float2*)(hr + k);
+    const float2 o = float2(v.x * inv * float(nw[k]), v.y * inv * float(nw[k + 1]));
+    *(device float2*)(n + r * H + k) = o;
+    dfl_put2(xh, xs, r, H, g, lane, o.x, o.y);
+  }
+}
+
+struct DflNormParams {
+  uint H;
+  float eps;
+  float xscale;   // x is multiplied by this first (exact power of two)
+  uint write_n;   // also write the normalized rows (fp32) to n
+};
+// n = RMSNorm(xscale * x[r]; w) -> X8 table (and fp32 n).
+[[kernel]] void dfl_norm_x8(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
+                            device float* n [[buffer(2)]], device half* xh [[buffer(3)]], device float* xs [[buffer(4)]],
+                            constant DflNormParams& p [[buffer(5)]], uint r [[threadgroup_position_in_grid]],
+                            uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                            uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[32];
+  const uint H = p.H;
+  const device float* xr = x + r * H;
+  float ss = 0.0f;
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const float2 v = *(const device float2*)(xr + g * 64 + 2 * lane) * p.xscale;
+    ss += v.x * v.x + v.y * v.y;
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  const float inv = metal::precise::rsqrt(ss / float(H) + p.eps);
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint k = g * 64 + 2 * lane;
+    const float2 v = *(const device float2*)(xr + k) * p.xscale;
+    const float2 o = float2(v.x * inv * float(w[k]), v.y * inv * float(w[k + 1]));
+    if (p.write_n) *(device float2*)(n + r * H + k) = o;
+    dfl_put2(xh, xs, r, H, g, lane, o.x, o.y);
+  }
+}
+
+// Two-tap grouped dynamic convolution (SPEC §4.1). D [8][4G] = n . P^T, columns
+// [stage][tap][group]; base bf16 [stage][tap][H]; tap 0 = current row, tap 1 = previous row (zero
+// for row 0); the coefficients come from the current row.
+struct DflConvParams {
+  uint H, G;      // hidden, conv groups (H / 16)
+  float eps;
+};
+// Prepare stage: a[r] = (b00 + D[r,0,g]) x[r] + (b01 + D[r,1,g]) x[r-1] -> X8 table.
+[[kernel]] void dfl_conv_prep(const device float* x [[buffer(0)]], const device float* D [[buffer(1)]],
+                              const device bfloat* base [[buffer(2)]], device half* xh [[buffer(3)]],
+                              device float* xs [[buffer(4)]], constant DflConvParams& p [[buffer(5)]],
+                              uint r [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                              uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint H = p.H, G = p.G;
+  const device float* Dr = D + r * 4 * G;
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane, cg = c / 16;
+    const float d0 = Dr[cg], d1 = Dr[G + cg];
+    const float2 xc = *(const device float2*)(x + r * H + c);
+    const float2 xp = r > 0 ? *(const device float2*)(x + (r - 1) * H + c) : float2(0.0f);
+    const float2 b0 = float2(base[c], base[c + 1]), b1 = float2(base[H + c], base[H + c + 1]);
+    const float2 a = (b0 + d0) * xc + (b1 + d1) * xp;
+    dfl_put2(xh, xs, r, H, g, lane, a.x, a.y);
+  }
+}
+
+// Finish stage + residual, then the next RMSNorm:
+//   h[r] += (b10 + D[r,2,g]) u[r] + (b11 + D[r,3,g]) u[r-1];  n = RMSNorm(h[r]; w) -> n, X8 table.
+[[kernel]] void dfl_conv_fin_norm(device float* h [[buffer(0)]], const device float* u [[buffer(1)]],
+                                  const device float* D [[buffer(2)]], const device bfloat* base [[buffer(3)]],
+                                  const device bfloat* w [[buffer(4)]], device float* n [[buffer(5)]],
+                                  device half* xh [[buffer(6)]], device float* xs [[buffer(7)]],
+                                  constant DflConvParams& p [[buffer(8)]], uint r [[threadgroup_position_in_grid]],
+                                  uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                  uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[32];
+  const uint H = p.H, G = p.G;
+  const device float* Dr = D + r * 4 * G;
+  device float* hr = h + r * H;
+  float ss = 0.0f;
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane, cg = c / 16;
+    const float d0 = Dr[2 * G + cg], d1 = Dr[3 * G + cg];
+    const float2 uc = *(const device float2*)(u + r * H + c);
+    const float2 up = r > 0 ? *(const device float2*)(u + (r - 1) * H + c) : float2(0.0f);
+    const float2 b0 = float2(base[2 * H + c], base[2 * H + c + 1]), b1 = float2(base[3 * H + c], base[3 * H + c + 1]);
+    const float2 v = *(device float2*)(hr + c) + ((b0 + d0) * uc + (b1 + d1) * up);
+    *(device float2*)(hr + c) = v;
+    ss += v.x * v.x + v.y * v.y;
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  const float inv = metal::precise::rsqrt(ss / float(H) + p.eps);
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane;
+    const float2 v = *(device float2*)(hr + c);
+    const float2 o = float2(v.x * inv * float(w[c]), v.y * inv * float(w[c + 1]));
+    *(device float2*)(n + r * H + c) = o;
+    dfl_put2(xh, xs, r, H, g, lane, o.x, o.y);
+  }
+}
+
+// ---- attention ----
+struct DflQkParams {
+  uint P;        // position of block row 0
+  float eps;
+  uint q_ld, kv_ld;
+};
+// q/k per-head RMSNorm + RoPE at P + r; v copied. grid: (32 + 8 heads, 8 rows) x 128.
+// Q [32][8][128], Kb/Vb [8][8][128] (head-major, fp32).
+[[kernel]] void dfl_qk_prep(const device float* q [[buffer(0)]], const device float* kv [[buffer(1)]],
+                            const device bfloat* qn [[buffer(2)]], const device bfloat* kn [[buffer(3)]],
+                            const device float* inv_freq [[buffer(4)]], device float* Q [[buffer(5)]],
+                            device float* Kb [[buffer(6)]], device float* Vb [[buffer(7)]],
+                            constant DflQkParams& p [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
+                            uint d [[thread_index_in_threadgroup]]) {
+  threadgroup float red[32];
+  threadgroup float t[128];
+  const uint hh = tg.x, r = tg.y;
+  const bool isq = hh < 32;
+  const uint head = isq ? hh : hh - 32;
+  const float x = isq ? q[r * p.q_ld + head * 128 + d] : kv[r * p.kv_ld + head * 128 + d];
+  const float ss = tg_sum(x * x, red, d, 128);
+  t[d] = x * metal::precise::rsqrt(ss / 128.0f + p.eps) * float((isq ? qn : kn)[d]);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const float o = dfl_rope(t, d, float(p.P + r), inv_freq);
+  if (isq) {
+    Q[(head * 8 + r) * 128 + d] = o;
+  } else {
+    Kb[(head * 8 + r) * 128 + d] = o;
+    Vb[(head * 8 + r) * 128 + d] = kv[r * p.kv_ld + 1024 + head * 128 + d];
+  }
+}
+
+struct DflAttnParams {
+  uint P;       // block row 0 position; the context is positions [lo, P)
+  uint lo;      // max(0, P - 2047): first position any block row can see
+  uint chunk;   // context positions per split (multiple of 16)
+  uint nsplit;
+  float scale;
+};
+
+// Draft attention, one split of the context of one kv head (SPEC §5): 4 simdgroups = the 4 q heads
+// sharing the kv head, 8 block rows each. Context key j is visible to row r iff j >= P + r - 2047
+// (Splash's per-row window, draft.metal; equal to REF/MLX's query - key < 2048); the 8 block keys
+// are visible to every row (is_causal = false) and are added by the last split. fp32 scores and
+// online softmax; partials are combined by dfl_attn_reduce in split order.
+// Tiles of 16 keys: lane (rg, kl) scores rows 4rg..4rg+3 against key kl; for P.V each lane owns
+// 4 of the 128 dims of all 8 rows.
+[[kernel]] void dfl_attn(const device float* Q [[buffer(0)]], const device bfloat* ringK [[buffer(1)]],
+                         const device bfloat* ringV [[buffer(2)]], const device float* Kb [[buffer(3)]],
+                         const device float* Vb [[buffer(4)]], device float* part_o [[buffer(5)]],
+                         device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]],
+                         uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                         uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint TK = 16, KLD = 129;
+  threadgroup float qs[4 * 8 * 128];
+  threadgroup float ks[TK * KLD];
+  threadgroup float ps[4 * 8 * TK];
+  const uint split = tg.x, g = tg.y, h = g * 4 + sg;
+  for (uint i = tid; i < 4 * 8 * 128; i += 128) qs[i] = Q[g * 4 * 1024 + i];
+  const device bfloat* Kr = ringK + size_t(g) * kDflRing * 128;
+  const device bfloat* Vr = ringV + size_t(g) * kDflRing * 128;
+  const uint j_begin = p.lo + split * p.chunk;
+  const uint j_end = min(j_begin + p.chunk, p.P);
+  const uint nctx = j_end > j_begin ? (j_end - j_begin + TK - 1) / TK : 0;
+  const uint ntiles = nctx + (split + 1 == p.nsplit ? 1u : 0u);
+  const uint rg = lane / 16, kl = lane % 16;
+  float M[8], L[8];
+  float4 O[8];
+  for (int r = 0; r < 8; ++r) {
+    M[r] = -INFINITY;
+    L[r] = 0.0f;
+    O[r] = float4(0.0f);
+  }
+  const threadgroup float* qh = qs + sg * 1024;
+  threadgroup float* pw = ps + sg * 8 * TK;
+  for (uint t = 0; t < ntiles; ++t) {
+    const bool blk = t == nctx;
+    const uint j0 = j_begin + t * TK;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    {
+      const uint key = tid / 8, d0 = (tid % 8) * 16;
+      threadgroup float* kd = ks + key * KLD + d0;
+      if (blk) {
+        for (int i = 0; i < 4; ++i) {
+          const float4 v = key < 8 ? *(const device float4*)(Kb + (g * 8 + key) * 128 + d0 + 4 * i) : float4(0.0f);
+          kd[4 * i + 0] = v.x; kd[4 * i + 1] = v.y; kd[4 * i + 2] = v.z; kd[4 * i + 3] = v.w;
+        }
+      } else {
+        const uint j = j0 + key;
+        for (int i = 0; i < 4; ++i) {
+          const float4 v = j < j_end ? float4(*(const device bfloat4*)(Kr + (j & (kDflRing - 1)) * 128 + d0 + 4 * i))
+                                     : float4(0.0f);
+          kd[4 * i + 0] = v.x; kd[4 * i + 1] = v.y; kd[4 * i + 2] = v.z; kd[4 * i + 3] = v.w;
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float sc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const threadgroup float* kk = ks + kl * KLD;
+    const threadgroup float* q0 = qh + (4 * rg) * 128;
+    for (uint d = 0; d < 128; d += 4) {
+      const float4 kv = float4(kk[d], kk[d + 1], kk[d + 2], kk[d + 3]);
+      for (int i = 0; i < 4; ++i) sc[i] += dot(kv, *(const threadgroup float4*)(q0 + i * 128 + d));
+    }
+    const uint j = j0 + kl;
+    const bool kvalid = blk ? kl < 8 : j < j_end;
+    for (int i = 0; i < 4; ++i) {
+      const uint r = 4 * rg + i;
+      const bool vis = kvalid && (blk || j + (kDflRing - 1) >= p.P + r);
+      sc[i] = vis ? sc[i] * p.scale : -INFINITY;
+    }
+    float tm[4], tmo[4];
+    for (int i = 0; i < 4; ++i) {
+      float v = sc[i];
+      v = max(v, simd_shuffle_xor(v, 8));
+      v = max(v, simd_shuffle_xor(v, 4));
+      v = max(v, simd_shuffle_xor(v, 2));
+      v = max(v, simd_shuffle_xor(v, 1));
+      tm[i] = v;
+      tmo[i] = simd_shuffle_xor(v, 16);
+    }
+    float mnew[8], alpha[8];
+    for (int r = 0; r < 8; ++r) {
+      const uint i = uint(r) & 3u;
+      const bool own = (uint(r) >> 2) == rg;
+      const float tmax = own ? tm[i] : tmo[i];
+      mnew[r] = max(M[r], tmax);
+      alpha[r] = mnew[r] == -INFINITY ? 1.0f : exp(M[r] - mnew[r]);
+    }
+    float pe[4];
+    for (int i = 0; i < 4; ++i) {
+      const float mr = rg ? mnew[4 + i] : mnew[i];
+      pe[i] = sc[i] == -INFINITY ? 0.0f : exp(sc[i] - mr);
+      pw[(4 * rg + i) * TK + kl] = pe[i];
+    }
+    float ts[4], tso[4];
+    for (int i = 0; i < 4; ++i) {
+      float v = pe[i];
+      v += simd_shuffle_xor(v, 8);
+      v += simd_shuffle_xor(v, 4);
+      v += simd_shuffle_xor(v, 2);
+      v += simd_shuffle_xor(v, 1);
+      ts[i] = v;
+      tso[i] = simd_shuffle_xor(v, 16);
+    }
+    for (int r = 0; r < 8; ++r) {
+      const uint i = uint(r) & 3u;
+      const bool own = (uint(r) >> 2) == rg;
+      L[r] = L[r] * alpha[r] + (own ? ts[i] : tso[i]);
+      M[r] = mnew[r];
+      O[r] *= alpha[r];
+    }
+    simdgroup_barrier(mem_flags::mem_threadgroup);
+    const uint nk = blk ? 8u : min(TK, j_end - j0);
+    for (uint kq = 0; kq < nk; ++kq) {
+      const float4 v = blk ? *(const device float4*)(Vb + (g * 8 + kq) * 128 + 4 * lane)
+                           : float4(*(const device bfloat4*)(Vr + ((j0 + kq) & (kDflRing - 1)) * 128 + 4 * lane));
+      for (int r = 0; r < 8; ++r) O[r] += pw[r * TK + kq] * v;
+    }
+    simdgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  for (int r = 0; r < 8; ++r) {
+    const size_t base = (size_t(split) * 32 + h) * 8 + r;
+    *(device float4*)(part_o + base * 128 + 4 * lane) = O[r];
+    if (lane == 0) {
+      part_ml[base * 2] = M[r];
+      part_ml[base * 2 + 1] = L[r];
+    }
+  }
+}
+
+// Same contract as dfl_attn with simdgroup-matrix tiles (NI_DFLASH_ATTN=mma): per simdgroup one q
+// head x the 8 block rows; Q kept as 16 half 8x8 fragments, tiles of 32 keys staged as half in
+// threadgroup memory; S = Q K^T and O += P V with fp32 accumulation; online softmax on the S
+// fragments (a lane holds rows fm, keys fn/fn+1: row reductions are xor-shuffles over lane bits 0, 3).
+[[kernel]] void dfl_attn_mma(const device float* Q [[buffer(0)]], const device bfloat* ringK [[buffer(1)]],
+                             const device bfloat* ringV [[buffer(2)]], const device float* Kb [[buffer(3)]],
+                             const device float* Vb [[buffer(4)]], device float* part_o [[buffer(5)]],
+                             device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]],
+                             uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint TK = 32, LD = 136;
+  threadgroup half ks[TK * LD];
+  threadgroup half vs[TK * LD];
+  const uint split = tg.x, g = tg.y, h = g * 4 + sg;
+  const uint2 rc = dfl_lane_rc(lane);
+  const uint fm = rc.x, fn = rc.y;
+  // Q fragments: rows = block rows, cols = 8 dims of chunk c
+  simdgroup_half8x8 qf[16];
+  {
+    const device float* qr = Q + (size_t(h) * 8 + fm) * 128 + fn;
+    _Pragma("clang loop unroll(full)")
+    for (int c = 0; c < 16; ++c) {
+      qf[c].thread_elements()[0] = half(qr[c * 8] * p.scale);
+      qf[c].thread_elements()[1] = half(qr[c * 8 + 1] * p.scale);
+    }
+  }
+  const device bfloat* Kr = ringK + size_t(g) * kDflRing * 128;
+  const device bfloat* Vr = ringV + size_t(g) * kDflRing * 128;
+  const uint j_begin = p.lo + split * p.chunk;
+  const uint j_end = min(j_begin + p.chunk, p.P);
+  const uint nctx = j_end > j_begin ? (j_end - j_begin + TK - 1) / TK : 0;
+  const uint ntiles = nctx + (split + 1 == p.nsplit ? 1u : 0u);
+  simdgroup_float8x8 of[16];
+  _Pragma("clang loop unroll(full)")
+  for (int c = 0; c < 16; ++c) of[c] = simdgroup_float8x8(0);
+  float M = -INFINITY, L = 0.0f;  // row fm (replicated over the lanes holding row fm)
+  for (uint t = 0; t < ntiles; ++t) {
+    const bool blk = t == nctx;
+    const uint j0 = j_begin + t * TK;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    {  // stage 32 keys x 128 of K and V (each thread: one key, 32 dims)
+      const uint key = tid / 4, d0 = (tid % 4) * 32;
+      threadgroup half* kd = ks + key * LD + d0;
+      threadgroup half* vd = vs + key * LD + d0;
+      if (blk) {
+        for (int i = 0; i < 8; ++i) {
+          const float4 kv = key < 8 ? *(const device float4*)(Kb + (g * 8 + key) * 128 + d0 + 4 * i) : float4(0.0f);
+          const float4 vv = key < 8 ? *(const device float4*)(Vb + (g * 8 + key) * 128 + d0 + 4 * i) : float4(0.0f);
+          *(threadgroup half4*)(kd + 4 * i) = half4(kv);
+          *(threadgroup half4*)(vd + 4 * i) = half4(vv);
+        }
+      } else {
+        const uint j = j0 + key;
+        const bool ok = j < j_end;
+        const size_t off = size_t(j & (kDflRing - 1)) * 128 + d0;
+        for (int i = 0; i < 8; ++i) {
+          const float4 kv = ok ? float4(*(const device bfloat4*)(Kr + off + 4 * i)) : float4(0.0f);
+          const float4 vv = ok ? float4(*(const device bfloat4*)(Vr + off + 4 * i)) : float4(0.0f);
+          *(threadgroup half4*)(kd + 4 * i) = half4(kv);
+          *(threadgroup half4*)(vd + 4 * i) = half4(vv);
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    simdgroup_float8x8 sf[4];
+    _Pragma("clang loop unroll(full)")
+    for (int kb = 0; kb < 4; ++kb) {
+      sf[kb] = simdgroup_float8x8(0);
+      _Pragma("clang loop unroll(full)")
+      for (int c = 0; c < 16; ++c) {
+        simdgroup_half8x8 kt;
+        simdgroup_load(kt, ks + kb * 8 * LD + c * 8, LD, ulong2(0, 0), true);
+        simdgroup_multiply_accumulate(sf[kb], qf[c], kt, sf[kb]);
+      }
+    }
+    // mask + row max over the 32 keys
+    float sv[8];
+    float tmax = -INFINITY;
+    _Pragma("clang loop unroll(full)")
+    for (int kb = 0; kb < 4; ++kb)
+      _Pragma("clang loop unroll(full)")
+      for (int e = 0; e < 2; ++e) {
+        const uint kk = kb * 8 + fn + e, j = j0 + kk;
+        const bool vis = blk ? kk < 8 : (j < j_end && j + (kDflRing - 1) >= p.P + fm);
+        const float v = vis ? sf[kb].thread_elements()[e] : -INFINITY;
+        sv[kb * 2 + e] = v;
+        tmax = max(tmax, v);
+      }
+    tmax = max(tmax, simd_shuffle_xor(tmax, 1));
+    tmax = max(tmax, simd_shuffle_xor(tmax, 8));
+    const float mnew = max(M, tmax);
+    const float alpha = mnew == -INFINITY ? 1.0f : exp(M - mnew);
+    float tsum = 0.0f;
+    simdgroup_half8x8 pf[4];
+    _Pragma("clang loop unroll(full)")
+    for (int kb = 0; kb < 4; ++kb)
+      _Pragma("clang loop unroll(full)")
+      for (int e = 0; e < 2; ++e) {
+        const float v = sv[kb * 2 + e];
+        const float pe = v == -INFINITY ? 0.0f : exp(v - mnew);
+        tsum += pe;
+        pf[kb].thread_elements()[e] = half(pe);
+      }
+    tsum += simd_shuffle_xor(tsum, 1);
+    tsum += simd_shuffle_xor(tsum, 8);
+    L = L * alpha + tsum;
+    M = mnew;
+    _Pragma("clang loop unroll(full)")
+    for (int c = 0; c < 16; ++c) {
+      of[c].thread_elements()[0] *= alpha;
+      of[c].thread_elements()[1] *= alpha;
+    }
+    _Pragma("clang loop unroll(full)")
+    for (int kb = 0; kb < 4; ++kb)
+      _Pragma("clang loop unroll(full)")
+      for (int c = 0; c < 16; ++c) {
+        simdgroup_half8x8 vf;
+        simdgroup_load(vf, vs + kb * 8 * LD + c * 8, LD);
+        simdgroup_multiply_accumulate(of[c], pf[kb], vf, of[c]);
+      }
+  }
+  const size_t base = (size_t(split) * 32 + h) * 8 + fm;
+  _Pragma("clang loop unroll(full)")
+  for (int c = 0; c < 16; ++c)
+    *(device float2*)(part_o + base * 128 + c * 8 + fn) =
+        float2(of[c].thread_elements()[0], of[c].thread_elements()[1]);
+  if (fn == 0) {
+    part_ml[base * 2] = M;
+    part_ml[base * 2 + 1] = L;
+  }
+}
+
+struct DflAttnRedParams {
+  uint nsplit;
+};
+// Combines the splits in order; writes o as the o_proj X8 table (K = 4096). grid (32, 8) x 128.
+[[kernel]] void dfl_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                device half* xh [[buffer(2)]], device float* xs [[buffer(3)]],
+                                constant DflAttnRedParams& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                uint d [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[4];
+  const uint h = tg.x, r = tg.y;
+  float mx = -INFINITY;
+  for (uint s = 0; s < p.nsplit; ++s) mx = max(mx, part_ml[((s * 32 + h) * 8 + r) * 2]);
+  float num = 0.0f, den = 0.0f;
+  for (uint s = 0; s < p.nsplit; ++s) {
+    const size_t base = (size_t(s) * 32 + h) * 8 + r;
+    const float m = part_ml[base * 2];
+    if (m == -INFINITY) continue;
+    const float w = exp(m - mx);
+    num += w * part_o[base * 128 + d];
+    den += w * part_ml[base * 2 + 1];
+  }
+  const half o = half(num / den);
+  xh[r * 4096 + h * 128 + d] = o;
+  const float sm = simd_sum(float(o));
+  if (lane == 0) red[sg] = sm;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (d == 0) {
+    xs[(2 * h) * 8 + r] = red[0] + red[1];
+    xs[(2 * h + 1) * 8 + r] = red[2] + red[3];
+  }
+}
+
+// ---- context commit (SPEC §6.2) ----
+struct DflCommitParams {
+  uint rows, pos0, kv_ld;
+  float eps;
+};
+// kv [rows][kv_ld]: draft layer l's k at l*2048 + h*128, v at l*2048 + 1024 + h*128 (c . [W_k|W_v]^T).
+// K = RoPE(RMSNorm_head(k; k_norm_l), pos), V = v -> ring slot pos mod 2048 (bf16).
+// grid: (rows, NL * 8) x 128.
+[[kernel]] void dfl_ctx_commit(const device float* kv [[buffer(0)]], const device bfloat* kn [[buffer(1)]],
+                               const device float* inv_freq [[buffer(2)]], device bfloat* ringK [[buffer(3)]],
+                               device bfloat* ringV [[buffer(4)]], constant DflCommitParams& p [[buffer(5)]],
+                               uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
+  threadgroup float red[32];
+  threadgroup float t[128];
+  const uint r = tg.x, l = tg.y / kDflKvHeads, hh = tg.y % kDflKvHeads;
+  const device float* src = kv + size_t(r) * p.kv_ld + l * 2048 + hh * 128;
+  const float x = src[d];
+  const float ss = tg_sum(x * x, red, d, 128);
+  t[d] = x * metal::precise::rsqrt(ss / 128.0f + p.eps) * float(kn[l * 128 + d]);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint pos = p.pos0 + r;
+  const float o = dfl_rope(t, d, float(pos), inv_freq);
+  const size_t dst = ((size_t(l) * kDflKvHeads + hh) * kDflRing + (pos & (kDflRing - 1))) * 128 + d;
+  ringK[dst] = bfloat(o);
+  ringV[dst] = bfloat(src[1024 + d]);
+}
+
+// Captured rows (bf16, <= 8) -> X8 table scaled by `scale` (an exact power of two keeps the
+// residual stream's outliers inside half range; the GEMM epilogue multiplies back).
+struct DflX8Params {
+  uint K, m, src_ld;
+  float scale;
+};
+[[kernel]] void dfl_x8_from_bf16(const device bfloat* src [[buffer(0)]], device half* xh [[buffer(1)]],
+                                 device float* xs [[buffer(2)]], constant DflX8Params& p [[buffer(3)]],
+                                 uint r [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                 uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  for (uint g = sg; g < p.K / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane;
+    float2 v = float2(0.0f);
+    if (r < p.m) v = float2(*(const device bfloat2*)(src + size_t(r) * p.src_ld + c)) * p.scale;
+    dfl_put2(xh, xs, r, p.K, g, lane, v.x, v.y);
+  }
+}
+
+// Prefill context rows: bf16 -> half (scaled), row-major for the prefill GEMM. grid (ceil(K/1024), rows) x 256.
+struct DflRowsParams {
+  uint K;
+  float scale;
+};
+[[kernel]] void dfl_rows_bf16_half(const device bfloat* src [[buffer(0)]], device half* dst [[buffer(1)]],
+                                   constant DflRowsParams& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint c = gid.x * 4, r = gid.y;
+  if (c >= p.K) return;
+  const float4 v = float4(*(const device bfloat4*)(src + size_t(r) * p.K + c)) * p.scale;
+  *(device half4*)(dst + size_t(r) * p.K + c) = half4(v);
+}
+
+// Prefill: c = RMSNorm(xscale * x[r]; w) -> half rows (+ fp32 rows when write_f). grid rows x 256.
+[[kernel]] void dfl_rows_norm_half(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
+                                   device half* y [[buffer(2)]], device float* yf [[buffer(3)]],
+                                   constant DflNormParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                                   uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float red[32];
+  const device float* xr = x + size_t(r) * p.H;
+  float ss = 0.0f;
+  for (uint i = tid; i < p.H; i += ntg) {
+    const float v = xr[i] * p.xscale;
+    ss += v * v;
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  const float inv = metal::precise::rsqrt(ss / float(p.H) + p.eps);
+  for (uint i = tid; i < p.H; i += ntg) {
+    const float o = xr[i] * p.xscale * inv * float(w[i]);
+    y[size_t(r) * p.H + i] = half(o);
+    if (p.write_n) yf[size_t(r) * p.H + i] = o;
+  }
+}
+
+// ---- 8-row affine-quantized GEMM: Y[8, N] = oscale * X[8, K] . W[N, K]^T ----
+// MLX affine 4/8-bit weights, group 64. A simdgroup owns 8 weight rows; per 64-group every lane
+// loads 16 contiguous codes of its row (opt/shortpf qmms layout: lane row fm, slot q = fn/2,
+// fragment f, element e <-> k = 64g + 16q + 8(f/4) + f%4 + 4e) and turns them into exact half
+// MMA operands (code | 0x6400 = 1024 + code, minus 1024: exact; the exact-code idea is Splash's,
+// Apache-2.0). 8 MMAs per group into a zeroed fp32 C, then the fp32 epilogue
+//   acc += s . C + b . sum(x over the group)
+// applies the scale/bias once per group (no half rounding of dequantized weights). X is gathered
+// from the row-major half table with four 8-byte loads per lane per group.
+// Segments: up to 4 matrices sharing X (one dispatch); ks simdgroups split K (fixed-order sum).
+struct DflQmm8Params {
+  uint K, nseg, ks, x_ld;
+  uint tg_begin[5];
+  uint N[4];
+  uint bits[4];
+  uint y_ld[4];
+  float oscale[4];
+};
+
+
+template <int BITS>
+NI_INLINE void dfl_codes(const device uint32_t* wrow, uint g, uint q, thread half2* a) {
+  if (BITS == 4) {
+    const uint2 w = *(const device uint2*)(wrow + g * 8 + 2 * q);
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < 8; ++f) {
+      const uint word = f < 4 ? w.x : w.y;
+      const uint v = ((word >> (4 * (f % 4))) & 0x000F000Fu) | 0x64006400u;
+      a[f] = as_type<half2>(v) - half2(1024.0h);
+    }
+  } else {
+    const uint4 w = *(const device uint4*)(wrow + g * 16 + 4 * q);
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < 8; ++f) {
+      const uint wa = w[2 * (f / 4)], wb = w[2 * (f / 4) + 1], sh = 8 * (f % 4);
+      const uint v = ((wa >> sh) & 0xFFu) | (((wb >> sh) & 0xFFu) << 16) | 0x64006400u;
+      a[f] = as_type<half2>(v) - half2(1024.0h);
+    }
+  }
+}
+
+// acc[m][f] (tokens fn, fn+1 of weight row rows[f]) over groups [g0, g1) for NM matrices sharing
+// rows; RF fragments of 8 rows per simdgroup share each X gather.
+template <int BITS, int NM, int RF>
+NI_INLINE void dfl_q8_run(const device uint32_t* const* W, const device bfloat* const* S, const device bfloat* const* B,
+                          thread const uint* rows, uint K, const device half* X, uint x_ld, const device float* XS,
+                          uint g0, uint g1, uint lane, thread float2 (&acc)[NM][RF]) {
+  const uint2 rc = dfl_lane_rc(lane);
+  const uint fm = rc.x, fn = rc.y, q = fn / 2;
+  const uint wpr = K * BITS / 32, gpr = K / 64;
+  const device half* x0 = X + fn * x_ld + 16 * (fm / 2) + 4 * (fm % 2);
+  const device half* x1 = x0 + x_ld;
+  _Pragma("clang loop unroll(full)")
+  for (int m = 0; m < NM; ++m)
+    _Pragma("clang loop unroll(full)")
+    for (int r = 0; r < RF; ++r) acc[m][r] = float2(0.0f);
+  for (uint g = g0; g < g1; ++g) {
+    half2 b[8];
+    {
+      const half4 c00 = *(const device half4*)(x0 + g * 64), c01 = *(const device half4*)(x0 + g * 64 + 8);
+      const half4 c10 = *(const device half4*)(x1 + g * 64), c11 = *(const device half4*)(x1 + g * 64 + 8);
+      _Pragma("clang loop unroll(full)")
+      for (int f = 0; f < 4; ++f) {
+        b[f] = half2(c00[f], c10[f]);
+        b[f + 4] = half2(c01[f], c11[f]);
+      }
+    }
+    const float2 sx = *(const device float2*)(XS + g * 8 + fn);
+    _Pragma("clang loop unroll(full)")
+    for (int m = 0; m < NM; ++m)
+      _Pragma("clang loop unroll(full)")
+      for (int r = 0; r < RF; ++r) {
+        half2 a[8];
+        dfl_codes<BITS>(W[m] + size_t(rows[r]) * wpr, g, q, a);
+        simdgroup_float8x8 C = simdgroup_float8x8(0);
+        _Pragma("clang loop unroll(full)")
+        for (int f = 0; f < 8; ++f) {
+          simdgroup_half8x8 Am, Bm;
+          Am.thread_elements()[0] = a[f].x;
+          Am.thread_elements()[1] = a[f].y;
+          Bm.thread_elements()[0] = b[f].x;
+          Bm.thread_elements()[1] = b[f].y;
+          simdgroup_multiply_accumulate(C, Am, Bm, C);
+        }
+        const float s = float(S[m][size_t(rows[r]) * gpr + g]), bb = float(B[m][size_t(rows[r]) * gpr + g]);
+        acc[m][r].x += s * C.thread_elements()[0] + bb * sx.x;
+        acc[m][r].y += s * C.thread_elements()[1] + bb * sx.y;
+      }
+  }
+}
+
+// grid: tg_begin[nseg] threadgroups x 256 (8 simdgroups = 8/ks row blocks of 8 * RF rows).
+template <int RF>
+NI_INLINE void dfl_qmm8_impl(const device uint32_t* const* Wv, const device bfloat* const* Sv,
+                             const device bfloat* const* Bv, device float* const* Yv, const device half* X,
+                             const device float* XS, constant DflQmm8Params& p, threadgroup float2* red, uint tg,
+                             uint sg, uint lane) {
+  uint si = 0;
+  while (si + 1 < p.nseg && tg >= p.tg_begin[si + 1]) ++si;
+  const uint ks = p.ks, rbs = 8 / ks;
+  const uint rb = (tg - p.tg_begin[si]) * rbs + sg / ks, kslice = sg % ks;
+  const uint N = p.N[si], gpr = p.K / 64;
+  const uint2 rc = dfl_lane_rc(lane);
+  uint n[RF], rows[RF];
+  _Pragma("clang loop unroll(full)")
+  for (int r = 0; r < RF; ++r) {
+    n[r] = (rb * RF + r) * 8 + rc.x;
+    rows[r] = min(n[r], N - 1);
+  }
+  const uint gper = (gpr + ks - 1) / ks, g0 = min(kslice * gper, gpr), g1 = min(g0 + gper, gpr);
+  const device uint32_t* W[1] = {Wv[si]};
+  const device bfloat* S[1] = {Sv[si]};
+  const device bfloat* B[1] = {Bv[si]};
+  float2 acc[1][RF];
+  if (p.bits[si] == 4) dfl_q8_run<4, 1, RF>(W, S, B, rows, p.K, X, p.x_ld, XS, g0, g1, lane, acc);
+  else dfl_q8_run<8, 1, RF>(W, S, B, rows, p.K, X, p.x_ld, XS, g0, g1, lane, acc);
+  if (ks > 1) {
+    if (kslice)
+      _Pragma("clang loop unroll(full)")
+      for (int r = 0; r < RF; ++r) red[(sg * RF + r) * 32 + lane] = acc[0][r];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (kslice) return;
+    for (uint j = 1; j < ks; ++j)
+      _Pragma("clang loop unroll(full)")
+      for (int r = 0; r < RF; ++r) acc[0][r] += red[((sg + j) * RF + r) * 32 + lane];
+  }
+  device float* Y = Yv[si];
+  const uint ld = p.y_ld[si];
+  const float os = p.oscale[si];
+  _Pragma("clang loop unroll(full)")
+  for (int r = 0; r < RF; ++r) {
+    if (n[r] >= N) continue;
+    Y[rc.y * ld + n[r]] = os * acc[0][r].x;
+    Y[(rc.y + 1) * ld + n[r]] = os * acc[0][r].y;
+  }
+}
+
+#define DFL_QMM8(NAME, RF)                                                                                   \
+  [[kernel]] void NAME(const device uint32_t* W0 [[buffer(0)]], const device bfloat* S0 [[buffer(1)]],         \
+                       const device bfloat* B0 [[buffer(2)]], device float* Y0 [[buffer(3)]],                 \
+                       const device uint32_t* W1 [[buffer(4)]], const device bfloat* S1 [[buffer(5)]],         \
+                       const device bfloat* B1 [[buffer(6)]], device float* Y1 [[buffer(7)]],                 \
+                       const device uint32_t* W2 [[buffer(8)]], const device bfloat* S2 [[buffer(9)]],         \
+                       const device bfloat* B2 [[buffer(10)]], device float* Y2 [[buffer(11)]],               \
+                       const device uint32_t* W3 [[buffer(12)]], const device bfloat* S3 [[buffer(13)]],       \
+                       const device bfloat* B3 [[buffer(14)]], device float* Y3 [[buffer(15)]],               \
+                       const device half* X [[buffer(16)]], const device float* XS [[buffer(17)]],             \
+                       constant DflQmm8Params& p [[buffer(18)]], uint tg [[threadgroup_position_in_grid]],     \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup float2 red[8 * RF * 32];                                                                     \
+    const device uint32_t* Wv[4] = {W0, W1, W2, W3};                                                          \
+    const device bfloat* Sv[4] = {S0, S1, S2, S3};                                                            \
+    const device bfloat* Bv[4] = {B0, B1, B2, B3};                                                            \
+    device float* Yv[4] = {Y0, Y1, Y2, Y3};                                                                   \
+    dfl_qmm8_impl<RF>(Wv, Sv, Bv, Yv, X, XS, p, red, tg, sg, lane);                                          \
+  }
+
+DFL_QMM8(dfl_qmm8, 1)
+DFL_QMM8(dfl_qmm8_r2, 2)
+
+// Gate/up + SwiGLU: H[8, N] = half(silu(X Wg^T) * (X Wu^T)) and HS[N/64][8] = sums of the half
+// values per 64 columns (the down projection's X8 table). 8 simdgroups x 8 rows = one 64-group
+// per threadgroup; ks = 1. grid: N/64 threadgroups x 256.
+[[kernel]] void dfl_qmm8_gu(const device uint32_t* Wg [[buffer(0)]], const device bfloat* Sg [[buffer(1)]],
+                            const device bfloat* Bg [[buffer(2)]], device half* Hh [[buffer(3)]],
+                            const device uint32_t* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]],
+                            const device bfloat* Bu [[buffer(6)]], device float* HS [[buffer(7)]],
+                            const device half* X [[buffer(16)]], const device float* XS [[buffer(17)]],
+                            constant DflQmm8Params& p [[buffer(18)]], uint tg [[threadgroup_position_in_grid]],
+                            uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float hred[8 * 8];
+  const uint N = p.N[0];
+  const uint2 rc = dfl_lane_rc(lane);
+  const uint n = (tg * 8 + sg) * 8 + rc.x;
+  const uint rows[1] = {min(n, N - 1)};
+  const device uint32_t* W[2] = {Wg, Wu};
+  const device bfloat* S[2] = {Sg, Su};
+  const device bfloat* B[2] = {Bg, Bu};
+  float2 acc[2][1];
+  if (p.bits[0] == 4) dfl_q8_run<4, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, 0, p.K / 64, lane, acc);
+  else dfl_q8_run<8, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, 0, p.K / 64, lane, acc);
+  const half h0 = half(silu(acc[0][0].x) * acc[1][0].x), h1 = half(silu(acc[0][0].y) * acc[1][0].y);
+  const uint ld = p.y_ld[0];
+  float2 t = float2(0.0f);
+  if (n < N) {
+    Hh[rc.y * ld + n] = h0;
+    Hh[(rc.y + 1) * ld + n] = h1;
+    t = float2(float(h0), float(h1));
+  }
+  // sum over the 8 weight rows of the simdgroup (lane bits 1, 2, 4 select the row)
+  t += simd_shuffle_xor(t, 2);
+  t += simd_shuffle_xor(t, 4);
+  t += simd_shuffle_xor(t, 16);
+  if ((lane & 22u) == 0) {
+    hred[sg * 8 + rc.y] = t.x;
+    hred[sg * 8 + rc.y + 1] = t.y;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg == 0 && lane < 8) {
+    float s = 0.0f;
+    for (uint j = 0; j < 8; ++j) s += hred[j * 8 + lane];
+    HS[tg * 8 + lane] = s;
+  }
+}
+
+// ---- selector (SPEC §7) ----
+struct DflMergeParams {
+  uint n;   // stage-1 candidates per row
+};
+// Top-16 of the stage-1 candidates of one proposal row, ordered (value desc, id asc). grid 7 x 256.
+[[kernel]] void dfl_merge16(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
+                            device float* ov [[buffer(2)]], device int* oi [[buffer(3)]],
+                            constant DflMergeParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                            uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float sv[32];
+  threadgroup uint si[32];
+  constexpr int PER = 8;
+  float v[PER];
+  uint id[PER];
+  for (int j = 0; j < PER; ++j) {
+    const uint k = tid * PER + j;
+    v[j] = k < p.n ? cv[r * p.n + k] : -INFINITY;
+    id[j] = k < p.n ? ci[r * p.n + k] : 0xffffffffu;
+  }
+  for (uint q = 0; q < 16; ++q) {
+    float bv = -INFINITY;
+    uint bi = 0xffffffffu;
+    int bj = -1;
+    for (int j = 0; j < PER; ++j)
+      if (v[j] > bv || (v[j] == bv && id[j] < bi)) {
+        bv = v[j];
+        bi = id[j];
+        bj = j;
+      }
+    float wv = bv;
+    uint wi = bi;
+    tg_argmax(wv, wi, sv, si, tid, ntg);
+    if (bj >= 0 && bi == wi && bv == wv) v[bj] = -INFINITY;
+    if (tid == 0) {
+      ov[r * 16 + q] = wv;
+      oi[r * 16 + q] = int(wi);
+    }
+  }
+}
+
+// ---- top-16 with (value desc, id asc) order, simdgroup selection (NI_DFLASH_TOPK=1, default) ----
+NI_INLINE bool dfl_before(float va, uint ia, float vb, uint ib) { return va > vb || (va == vb && ia < ib); }
+#define DFL_CS(a, b)                                       \
+  if (dfl_before(v[b], id[b], v[a], id[a])) {               \
+    const float tv = v[a]; v[a] = v[b]; v[b] = tv;          \
+    const uint ti = id[a]; id[a] = id[b]; id[b] = ti;       \
+  }
+NI_INLINE void dfl_sort8(thread float* v, thread uint* id) {  // Batcher network, 19 comparators
+  DFL_CS(0, 1) DFL_CS(2, 3) DFL_CS(4, 5) DFL_CS(6, 7)
+  DFL_CS(0, 2) DFL_CS(1, 3) DFL_CS(4, 6) DFL_CS(5, 7)
+  DFL_CS(1, 2) DFL_CS(5, 6) DFL_CS(0, 4) DFL_CS(3, 7)
+  DFL_CS(1, 5) DFL_CS(2, 6)
+  DFL_CS(1, 4) DFL_CS(3, 6)
+  DFL_CS(2, 4) DFL_CS(3, 5)
+  DFL_CS(3, 4)
+}
+// Every lane holds a sorted run of 8; 16 rounds pick the simdgroup's best head and pop it.
+// Lane q < 16 returns the q-th largest of the 256 (value, id).
+NI_INLINE void dfl_simd_top16(thread float* v, thread uint* id, uint lane, thread float& ov, thread uint& oi) {
+  ov = -INFINITY;
+  oi = 0xffffffffu;
+  for (uint q = 0; q < 16; ++q) {
+    const float mv = simd_max(v[0]);
+    const uint mi = simd_min(v[0] == mv ? id[0] : 0xffffffffu);
+    if (lane == q) {
+      ov = mv;
+      oi = mi;
+    }
+    if (v[0] == mv && id[0] == mi) {
+      _Pragma("clang loop unroll(full)")
+      for (int j = 0; j < 7; ++j) {
+        v[j] = v[j + 1];
+        id[j] = id[j + 1];
+      }
+      v[7] = -INFINITY;
+      id[7] = 0xffffffffu;
+    }
+  }
+}
+
+struct DflTopParams {
+  uint n;        // valid elements per row
+  uint ld;       // row stride of src
+  uint nchunks;  // threadgroups per row (2048 elements each)
+};
+// grid (nchunks, rows) x 256. out[(r * nchunks + chunk) * 16 + q], ordered. ids: src_id or index.
+[[kernel]] void dfl_top16(const device float* src [[buffer(0)]], const device uint* src_id [[buffer(1)]],
+                          device float* ov [[buffer(2)]], device uint* oi [[buffer(3)]],
+                          constant DflTopParams& p [[buffer(4)]], constant uint& has_id [[buffer(5)]],
+                          uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float sv[8 * 16];
+  threadgroup uint si[8 * 16];
+  const uint r = tg.y, base = tg.x * 2048 + tid * 8;
+  float v[8];
+  uint id[8];
+  _Pragma("clang loop unroll(full)")
+  for (int j = 0; j < 8; ++j) {
+    const uint k = base + j;
+    const bool ok = k < p.n;
+    v[j] = ok ? src[size_t(r) * p.ld + k] : -INFINITY;
+    id[j] = ok ? (has_id ? src_id[size_t(r) * p.ld + k] : k) : 0xffffffffu;
+  }
+  dfl_sort8(v, id);
+  float bv;
+  uint bi;
+  dfl_simd_top16(v, id, lane, bv, bi);
+  if (lane < 16) {
+    sv[sg * 16 + lane] = bv;
+    si[sg * 16 + lane] = bi;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg != 0) return;
+  _Pragma("clang loop unroll(full)")
+  for (int j = 0; j < 4; ++j) {
+    v[j] = sv[lane * 4 + j];
+    id[j] = si[lane * 4 + j];
+    v[4 + j] = -INFINITY;
+    id[4 + j] = 0xffffffffu;
+  }
+  dfl_simd_top16(v, id, lane, bv, bi);
+  if (lane < 16) {
+    const size_t o = (size_t(r) * p.nchunks + tg.x) * 16 + lane;
+    ov[o] = bv;
+    oi[o] = bi;
+  }
+}
+
+struct DflSelectParams {
+  uint P;          // anchor position: tokens[P] is the anchor
+  float temp;      // 0: greedy walk
+  uint seed;
+  uint out_index;  // tokens[out_index + p] = d_p
+};
+// Edge lattice E[p][j][k] = sum_r A[pred_j][r] s_{p+1}[r] Bc[C_p[k]][r] (pred = anchor for p = 0,
+// C_{p-1}[j] otherwise; fp32 from the bf16 codebooks), then the walk: S_p[k] = U_p[k] +
+// E[p][j_p][k]; greedy = first argmax; sampled = first k with cumsum softmax(S_p / T) > u (else 15),
+// q_p stored for the acceptance test. One threadgroup of 1024.
+[[kernel]] void dfl_select(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
+                           const device float* sel [[buffer(2)]], const device bfloat* A [[buffer(3)]],
+                           const device bfloat* Bc [[buffer(4)]], device int* tokens [[buffer(5)]],
+                           device float* edges [[buffer(6)]], device float* walk_s [[buffer(7)]],
+                           device float* qprob [[buffer(8)]], device int* walk_k [[buffer(9)]],
+                           constant DflSelectParams& p [[buffer(10)]], uint tid [[thread_index_in_threadgroup]],
+                           uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                           uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float E[7 * 256];
+  const uint anchor = uint(tokens[p.P]);
+  for (uint t = sg; t < 16 + 6 * 256; t += nsg) {
+    uint pp, j, k;
+    if (t < 16) {
+      pp = 0; j = 0; k = t;
+    } else {
+      const uint u = t - 16;
+      pp = 1 + u / 256; j = (u % 256) / 16; k = u % 16;
+    }
+    const uint pred = pp == 0 ? anchor : uint(cand_i[(pp - 1) * 16 + j]);
+    const uint succ = uint(cand_i[pp * 16 + k]);
+    const device bfloat* a = A + size_t(pred) * 256 + lane * 8;
+    const device bfloat* b = Bc + size_t(succ) * 256 + lane * 8;
+    const device float* s = sel + (pp + 1) * 256 + lane * 8;
+    const float4 a0 = float4(*(const device bfloat4*)a), a1 = float4(*(const device bfloat4*)(a + 4));
+    const float4 b0 = float4(*(const device bfloat4*)b), b1 = float4(*(const device bfloat4*)(b + 4));
+    const float4 s0 = *(const device float4*)s, s1 = *(const device float4*)(s + 4);
+    float acc = dot(a0 * s0, b0) + dot(a1 * s1, b1);
+    acc = simd_sum(acc);
+    if (lane == 0) E[pp * 256 + j * 16 + k] = acc;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < 7 * 256; i += ntg)
+    edges[i] = (i < 256 && i >= 16) ? as_type<float>(0x7fc00000u) : E[i];
+  if (tid != 0) return;
+  uint jp = 0;
+  for (uint pp = 0; pp < 7; ++pp) {
+    float S[16];
+    float mx = -INFINITY;
+    uint kb = 0;
+    for (uint k = 0; k < 16; ++k) {
+      S[k] = cand_v[pp * 16 + k] + E[pp * 256 + jp * 16 + k];
+      walk_s[pp * 16 + k] = S[k];
+      if (S[k] > mx) {
+        mx = S[k];
+        kb = k;
+      }
+    }
+    if (p.temp > 0.0f) {
+      float q[16], tot = 0.0f;
+      for (uint k = 0; k < 16; ++k) {
+        q[k] = metal::precise::exp((S[k] - mx) / p.temp);
+        tot += q[k];
+      }
+      const float u = dfl_uniform(p.seed, p.P + 1 + pp, kDflSaltWalk);
+      float cum = 0.0f;
+      kb = 15;
+      bool found = false;
+      for (uint k = 0; k < 16; ++k) {
+        q[k] /= tot;
+        cum += q[k];
+        if (!found && cum > u) {
+          kb = k;
+          found = true;
+        }
+        qprob[pp * 16 + k] = q[k];
+      }
+    } else {
+      for (uint k = 0; k < 16; ++k) qprob[pp * 16 + k] = 0.0f;
+    }
+    walk_k[pp] = int(kb);
+    jp = kb;
+    tokens[p.out_index + pp] = cand_i[pp * 16 + kb];
+  }
+}

@@ -146,4 +146,79 @@ struct QmvrcMulti {
   uint32_t bits[4];
 };
 
+// ---- DFlash2 drafter (src/kernels/spec_dflash.metal) ----
+struct DflCapture {
+  uint32_t H, ld, col0, dst_row0;
+};
+
+struct DflEmbed {
+  uint32_t H, gs, tok_off, mask;
+  float eps;
+};
+
+struct DflNorm {
+  uint32_t H;
+  float eps;
+  float xscale;
+  uint32_t write_n;
+};
+
+struct DflConv {
+  uint32_t H, G;
+  float eps;
+};
+
+struct DflQk {
+  uint32_t P;
+  float eps;
+  uint32_t q_ld, kv_ld;
+};
+
+struct DflAttn {
+  uint32_t P, lo, chunk, nsplit;
+  float scale;
+};
+
+struct DflAttnRed {
+  uint32_t nsplit;
+};
+
+struct DflCommit {
+  uint32_t rows, pos0, kv_ld;
+  float eps;
+};
+
+struct DflX8 {
+  uint32_t K, m, src_ld;
+  float scale;
+};
+
+struct DflRows {
+  uint32_t K;
+  float scale;
+};
+
+struct DflQmm8 {
+  uint32_t K, nseg, ks, x_ld;
+  uint32_t tg_begin[5];
+  uint32_t N[4];
+  uint32_t bits[4];
+  uint32_t y_ld[4];
+  float oscale[4];
+};
+
+struct DflMerge {
+  uint32_t n;
+};
+
+struct DflTop {
+  uint32_t n, ld, nchunks;
+};
+
+struct DflSelect {
+  uint32_t P;
+  float temp;
+  uint32_t seed, out_index;
+};
+
 } // namespace ni::kp

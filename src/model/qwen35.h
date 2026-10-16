@@ -74,6 +74,17 @@ struct Checkpoint {
   std::vector<Buffer> conv, rec;
 };
 
+// Target hidden capture for a block drafter (DFlash2, research/inference/dflash2/SPEC.md §6.1):
+// after target layer l (mixer + FFN residual add), every row whose position p lies in
+// [pos_base, pos_base + rows) is copied (fp32 -> bf16) to dst row p - pos_base, columns
+// [slot[l] * H, (slot[l] + 1) * H). Unset (the default) adds no work anywhere.
+struct CaptureHook {
+  Buffer dst;              // bf16 [rows, ld]
+  uint32_t ld = 0;         // elements per dst row (slots * H)
+  int pos_base = 0, rows = 0;
+  std::vector<int> slot;   // per target layer: capture slot, or -1
+};
+
 struct SamplingParams {
   float temperature = 0.0f;
   float top_p = 1.0f;
@@ -131,6 +142,14 @@ class Qwen35 {
   const float* hidden() { return x_.as<float>(); }
   Buffer debug_buf(const std::string& name);
 
+  // ---- block drafter support ----
+  // Arms (or with nullptr disarms) the capture of target layer outputs in encode_step,
+  // encode_prefill and encode_verify. The hook is read at encode time and must outlive the
+  // encodes that use it.
+  void set_capture(const CaptureHook* h) { cap_ = h; }
+  const QLinear& embed_table() const { return embed_; }
+  const QLinear& lm_head() const { return lm_head_; }
+
  private:
   void load_config(const std::string& dir);
   QLinear qlin(const std::string& name, bool required = true);
@@ -169,6 +188,8 @@ class Qwen35 {
   const Tensor* own_copy(const Tensor& t);
   QLinear stack_experts(const class WeightStore& w, const std::string& prefix, const std::string& proj);
   void enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D);
+  // block-drafter capture of x_ rows [0, T) at positions pos0.. after layer `layer` (no-op unless armed)
+  void enc_capture(Encoder& e, int layer, int pos0, int T);
   void enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add,
                 uint32_t x_ld = 0, uint32_t y_ld = 0);
   // fused (norm +) projections of R rows sharing the input; falls back to separate kernels
@@ -195,6 +216,7 @@ class Qwen35 {
   QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
   uint32_t draft_split_ = 0, draft_special0_ = 0;
   bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
+  const CaptureHook* cap_ = nullptr;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 

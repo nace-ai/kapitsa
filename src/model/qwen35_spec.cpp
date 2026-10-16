@@ -663,6 +663,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     }
     if (cfg_.moe) enc_moe_rows(e, L, R, x_, false);
     else enc_mlp_rows(e, L, R, x_);
+    if (cap_) enc_capture(e, i, pos, R);
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_rows_norm(e, x_, final_norm_, xrn_, R, D);
