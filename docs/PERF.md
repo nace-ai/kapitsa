@@ -594,6 +594,13 @@ as opt-in or default only where bitwise neutral: moe_bucket3 (parallel tile scan
 (8 tokens per 256-thread threadgroup), NI_QMRS (one dispatch for qkv/z/b/a: +1.1%), GDN prefetch (+1.2%),
 gdn_step_par_l8/l32.
 
+### Prefill chunk size (measured; the default stays 2048)
+`--prefill-chunk 4096` (`NI_CHUNK` in ni_run) gives bitwise-identical logits (p4000, p16000) and is faster: p4000
+3500-3513 vs 3582-3587 ms (two interleaved pairs, -2.1%); p16000 in alternating single runs on a warm GPU 17906 /
+17924 / 18867 vs 18531 / 19806 / 19542 ms (-3.4 / -9.5 / -3.5%). The activation buffers scale with the chunk: Metal
+21196 -> 21923 MB, process footprint 20999 -> 21584 MB at load. Memory is one of the harness's metrics (Kapitsa has
+the smallest footprint of the engines), so the default stays 2048 and 4096 is the app's option.
+
 ### Cached turn (the harness pattern: 4k context, 37-62-token follow-up suffixes)
 ni_run with the harness's real suffixes (bench prompts regenerated with the chat template: 4123 + 62, 4178 + 53,
 4224 + 37), `--prefix P --split B --pf-reps 6`, median of reps 1-5; base 94.5-95.5 ms for 53 tokens. Isolated
@@ -690,6 +697,28 @@ from there), 32 greedy tokens with every step's logits. Cold is bitwise reproduc
 | 16k 3 | 6.2e-3 / 3.1e-4 / 6.2e-3 | 4.1e-3 / 2.4e-4 / 4.1e-3 | both identical |
 The history-prefilled state is as close to a cold prefill as the old cached path's.
 
+### Fair harness (compare_engines.py, 2026-10-17 01:58-03:22, final build 57df0c2)
+Every run of the session, in order, each in its own GPU-lock span (server start, warm-up, 15 s quiet GPU, bench.py,
+stop); Kapitsa main = 2e5bf23. The Mac was warmer than for the 2026-10-16 baseline (main 958-1002 / 819-839 here
+against 1014 / 842 then). Decode tok/s (median of 5, T = 0.6 / greedy); prefill tok/s = prompt / cold TTFT; cached =
+median TTFT of 3 follow-ups (samples).
+| run (start) | decode | prefill 4k / 16k | cached 4k / 16k s | peak GB |
+|---|---|---|---|---|
+| Kapitsa opt/moe35 (01:58) | 118.2 / 120.4 | **1077 / 902** | **0.067** (0.066, 0.067, 0.060) / **0.074** (0.074, 0.088, 0.068) | 20.3 |
+| Splash 1.3.2 (02:06) | 130.7 / 132.7 | 1010 / 859 | 0.160 (0.160, 0.185, 0.152) / 0.205 (0.226, 0.205, 0.205) | 22.0 |
+| Kapitsa main (02:22) | 118.8 / 121.1 | 958 / 819 | 0.116 (0.143, 0.116, 0.090) / 0.120 (0.183, 0.120, 0.114) | 20.4 |
+| oMLX + DFlash2 (02:36; 5.75% foreign GPU load flagged) | 126.2 / 125.9 | 990 / 856 | 0.269 (0.298, 0.269, 0.238) / 0.434 (0.434, 0.466, 0.378) | 23.4 |
+| Kapitsa opt/moe35 (02:48) | 120.3 / 123.2 | **1070 / 914** | **0.065** (0.065, 0.071, 0.056) / **0.072** (0.072, 0.083, 0.070) | 20.3 |
+| MTPLX (03:03) | 77.2 / 72.4 | 889 / 778 | 0.102 (0.096, 0.102, 0.306) / 0.136 (0.136, 0.139, 0.127) | 30.5 |
+| Kapitsa main (03:12) | 120.7 / 122.2 | 1002 / 839 | 0.120 (0.147, 0.120, 0.104) / 0.180 (0.180, 0.228, 0.112) | 20.4 |
+| Kapitsa opt/moe35, `--prefill-chunk 4096` (03:20) | 120.6 / 117.3 | 1086 / 915 | 0.067 / 0.074 | 21.0 |
+Branch against main in the adjacent pairs: prefill +12.4% / +10.1% and +6.8% / +8.9% (4k / 16k), cached turns
+0.116 -> 0.067 and 0.120 -> 0.065 s (4k), decode equal (within the runs' spread). Against the same session's
+competitors: 16k prefill 902-914 vs Splash 859 and oMLX 856, 4k 1070-1077 vs 1010 / 990, cached 4k 0.065-0.067 s vs
+MTPLX 0.102. Tool calls pass everywhere. The 4096-row chunk run is within the 2048 runs' spread here (+0.7%) for
++0.7 GB, which confirms keeping 2048. Server logs: the history prefill ran after each "stop" follow-up (47-98 ms),
+not after the "length" ones, and the 16k cold turn and the tools phase never waited behind it.
+
 ### Correctness of the branch defaults against main
 * code_35b, 256 greedy tokens: identical, with MTP and with plain decoding.
 * p4000 logits KL 2.1e-5 (max|d| 0.66), p16000 KL 3.6e-7 (max|d| 1.14), same top-1.
@@ -697,6 +726,6 @@ The history-prefilled state is as close to a cold prefill as the old cached path
   them identical for the 62- and 53-token suffixes; the 37-token one splits at generated token 37, a near-tie
   (main p = 0.602 vs 0.395, logit margin 0.42; the branch 0.579 vs 0.419), which the branch with the FMA experts off
   splits the same way, so it comes from the qrm prefix (KL 2e-5) through a routing near-tie.
-* tests/test_server.py: all passed (serve_test.sh).
+* tests/test_server.py: 13/13 (serve_test.sh), before and with the history prefill (final build).
 * Every bitwise-neutral change verified bitwise in e2e logits (GDN parr, attention 11r, bucket3, topk8, qmms
   token-block split, folding the large-T shared expert).
