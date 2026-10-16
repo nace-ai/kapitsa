@@ -432,7 +432,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // waits for the host between cycles; the host encodes each verify while the drafting half runs.
     DFlashSeq& d = *slot.dseq;
     const int K = DFlash2::verify_depth();
-    int P = n, m = 0;
+    int P = n, m = 0, a_last = 0;
     req_cycles = 0;
     bool go = handle(s.tokens()[n]);
     std::unique_ptr<Encoder> next_draft;  // committed drafting half of the coming cycle
@@ -458,6 +458,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       }
       e2->wait();
       const int a = dfl_->accepted();
+      a_last = a;
       const int* tk = s.tokens();
       m = 0;  // tokens consumed before stopping = rows committed
       while (m < a + 1) {
@@ -481,6 +482,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       d.ctx = P - m;
       dfl_->encode_commit(*e3, d, m);
     }
+    // The committed drafting half wrote all a_last + 1 rows of the last acceptance (positions P - m ..
+    // P - m + a_last) to the ring. When the host kept fewer (a stop token or the budget inside the
+    // accepted chain), the rows past d.ctx overwrote the slots of the window's oldest positions, which a
+    // later rewind (prefix reuse) would otherwise still treat as valid context.
+    if (next_draft && m < a_last + 1) d.valid_lo = std::max(d.valid_lo, P - m + a_last + 1 - DFlash2::kWin);
     model_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
