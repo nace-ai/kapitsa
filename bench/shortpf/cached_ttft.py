@@ -17,11 +17,25 @@ the cached one. --short: cold TTFT of three short prompts (no system context).
 import argparse, json, os, random, statistics, sys, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def find_corpus():
+    # the harness's frozen corpus: <Nace Agent>/research/inference/bench_corpus.txt, found by walking up
+    # (the main checkout is <Nace Agent>/nace-infer, worktrees sit one level deeper)
+    d = HERE
+    for _ in range(6):
+        c = os.path.join(d, "research", "inference", "bench_corpus.txt")
+        if os.path.exists(c):
+            return c
+        d = os.path.dirname(d)
+    return "bench_corpus.txt"
+
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", default="http://127.0.0.1:8097/v1")
 ap.add_argument("--model", default="x")
 ap.add_argument("--sizes", default="4000,16000")
-ap.add_argument("--corpus", default=os.path.normpath(os.path.join(HERE, "../../../research/inference/bench_corpus.txt")))
+ap.add_argument("--corpus", default=find_corpus())
 ap.add_argument("--samples", type=int, default=3)
 ap.add_argument("--turn-gap", type=float, default=1.0)
 ap.add_argument("--greedy", action="store_true")
