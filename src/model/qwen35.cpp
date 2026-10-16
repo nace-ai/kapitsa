@@ -595,9 +595,10 @@ void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, cons
 }
 
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
-//   unset/empty/0: qmm_b4_m64_n64 (M >= 64) / qmm_b4_m32_n32 (the original kernels)
-//   1: qmr (qmm3.metal: weights dequantized straight into MMA registers, X staged in threadgroup
-//      memory) with the tile picked from M and N
+//   unset/empty/1 (default): qmr (qmm3.metal: weights dequantized straight into MMA registers, X
+//      staged in threadgroup memory) with the tile picked from M and N; 27B prefill 4k +19-21%,
+//      35B +6-8% on macOS 27 (docs/PERF.md), greedy output identical
+//   0: qmm_b4_m64_n64 (M >= 64) / qmm_b4_m32_n32 (the original kernels)
 //   <kernel name>, e.g. qmr_k64_w12_m32_n64: that kernel for M >= 64 and N > 64 (tile and threads
 //      parsed from the name), the automatic choice otherwise
 struct QmrSel {
@@ -609,10 +610,10 @@ static const QmrSel& qmr_sel() {
   static const QmrSel s = [] {
     QmrSel q;
     const char* v = getenv("NI_QMM");
-    if (!v || !*v || !strcmp(v, "0")) return q;
+    if (v && !strcmp(v, "0")) return q;
     q.on = true;
     q.name = "qmr_k32_w14_m32_n128";
-    if (strcmp(v, "1") != 0) {
+    if (v && *v && strcmp(v, "1") != 0) {
       unsigned bm = 0, bn = 0, wm = 0, wn = 0;
       const char* w = strstr(v, "_w");
       const char* m = strstr(v, "_m");
@@ -652,11 +653,12 @@ void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   e.dispatch((L.N + BN - 1) / BN, (M + BM - 1) / BM, 1, 128);
 }
 
-// NI_QMM_GU (boolean, read once, needs NI_QMM): dense MLP / shared-expert gate and up projections
+// NI_QMM_GU (read once, needs qmr; default on, NI_QMM_GU=0 off): dense MLP / shared-expert gate and up projections
 // and SwiGLU in one qmr_gu dispatch writing the half h rows (no fp32 hg/hu, no swiglu pass).
 bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M) {
   static const bool on = [] {
-    const bool v = env_on("NI_QMM_GU") && qmr_sel().on;
+    const char* g = getenv("NI_QMM_GU");
+    const bool v = !(g && !strcmp(g, "0")) && qmr_sel().on;
     if (v) logi("NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)");
     return v;
   }();
