@@ -586,10 +586,12 @@ struct SampleRowsParams {
   if (tid == 0) {
     uint chosen = topi[0];
     if (p.temp > 0.0f && K > 1) {
+      // top-p is taken on the untempered distribution (llama.cpp's and mlx-lm's order: top-k,
+      // top-p, then temperature), then the kept candidates are sampled at temperature p.temp.
       float probs[64];
       float tot = 0.0f;
       for (uint q = 0; q < K; ++q) {
-        probs[q] = metal::precise::exp((topv[q] - topv[0]) / p.temp);
+        probs[q] = metal::precise::exp(topv[q] - topv[0]);
         tot += probs[q];
       }
       uint keep = K;
@@ -599,7 +601,10 @@ struct SampleRowsParams {
         if (cum >= p.top_p) { keep = q + 1; break; }
       }
       float kt = 0.0f;
-      for (uint q = 0; q < keep; ++q) kt += probs[q];
+      for (uint q = 0; q < keep; ++q) {
+        probs[q] = metal::precise::exp((topv[q] - topv[0]) / p.temp);
+        kt += probs[q];
+      }
       float u = float(pcg_hash(p.seed ^ pcg_hash(p.step + r)) & 0xffffff) / 16777216.0f * kt;
       chosen = topi[keep - 1];
       float acc = 0.0f;
