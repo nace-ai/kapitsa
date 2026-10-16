@@ -46,3 +46,42 @@ Open: find what MLX does differently (it runs 32 rows of ONE head per threadgrou
 Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k (dense GEMM ~6 TFLOP/s).
 Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
 the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
+
+## Register spills (`ni_compile --stats`)
+The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
+`ni_compile --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
+qmm_tile's store loop (simdgroup_barrier inside) stays rolled for FM=2, so `acc[i][j]` is indexed
+dynamically and the whole accumulator array (plus the A fragments) lives in stack memory: m32_n64
+spills 2304 B/thread (8 x 256 B accumulators + 2 x 128 B), m32_n128 4352 B; m16/m64 tiles and
+m32_n32 do not. Full-unroll pragmas on the store loops remove it (m32_n64: 55 registers, 0 spill).
+Every attention prefill kernel spills too (attn_prefill10_q4_k32: 6912 B, older variants up to
+13 KB): a likely cause of the 2x gap to MLX's steel attention. Several qmv/qmvr verify kernels hit
+the 96-register ceiling and spill 16-300 B.
+
+## MoE prefill v2 (opt-in, `NI_MOE_FUSED`), not yet measured
+`src/kernels/qmm_moe.metal`. Routed experts: `moe_bucket2` -> `qmm_moe_gu` (gate and up from one X
+tile, SwiGLU in the epilogue, half h in expert-sorted rows) -> `qmm_moe_dn` (-> fp32 rows by pair).
+`NI_MOE_FUSED=1` folds the shared expert in as expert E over the T token rows (two dispatches for
+all expert work; the dense sg/su/swiglu/sd dispatches go away); `=2` keeps it on the dense path.
+Tiles: spill-free, 64 rows by default (`NI_MOE_BM=16|32|64`), row fragments past the tile's rows
+skipped per simdgroup, fragments interleaved over simdgroup rows; for full tiles the gate/up tile
+does the same work per K step as the dense m64_n64 GEMM (6 TFLOP/s). Outputs should equal the
+original path bit for bit (same dequantized halfs, same MMA order): `bench_moe` checks this and
+times both paths on one synthetic layer. Registers: gu m64 82, dn m64 71 (dense m64_n64: 56).
+Estimate at 2048-token chunks: expert GEMMs 23 -> ~17-19 ms/layer, swiglu pass and fp32 hg/hu
+(64 MB written + 80 MB swiglu traffic per layer) gone: prefill +5-10% (4k ~800-840 tok/s).
+
+## Other engines on the same Mac (M4 Pro 48 GB; research/inference/REPORT.md)
+Qwen3.6-35B-A3B 4-bit (llama.cpp: Q4_K_M GGUF). Engines measured through their servers (prefill =
+prompt tokens / TTFT); nace-infer with `ni_run`.
+| engine | decode tok/s | prefill 4k tok/s | prefill 16k tok/s |
+|---|---|---|---|
+| nace-infer 0.3 | 105 plain, 116-123 MTP depth 1 | 765-785 | 600-606 |
+| mlx-lm 0.32.0 server | 63-67 (raw generate 81) | 923 | 824 |
+| oMLX 0.7.1.dev1 | 84-99 | 840-915 | 769-875 |
+| MTPLX 2.12.2, MTP depth 1 | 66-76 | 890-902 | 788-792 |
+| llama.cpp b11429 (Metal) | 53 | 733 | 681 |
+| llama.cpp + draft-mtp | 66-73 | 719 | 652 |
+
+Qwen3.8-27B 4-bit: nace-infer 16.0 plain / 23.9-25.3 MTP decode, 111 prefill at 4k; mlx-lm 10.7-11.4
+decode, 125 / 101 prefill (4k / 16k); oMLX 11.8-12.0, 128 / -; MTPLX 20.6-30.8, 113-125 / 101-110.

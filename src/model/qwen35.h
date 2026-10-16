@@ -153,6 +153,7 @@ class Qwen35 {
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
   void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  bool enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp(Encoder& e, const Layer& L);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);

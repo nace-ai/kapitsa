@@ -82,6 +82,14 @@ struct Bucket {
   uint32_t P, k, E, BM;
 };
 
+struct Bucket2 {
+  uint32_t P, k, E, BM, S;
+};
+
+struct Qmm2 {
+  uint32_t N, K, x_ld, y_ld, gs, w_expert_stride, s_expert_stride, shared_e;
+};
+
 struct Rows {
   uint32_t D, norm;
   float eps;

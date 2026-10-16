@@ -23,6 +23,14 @@ static json read_json(const std::string& path) {
 static json quant_cfg_;
 static Pipeline pipe(const std::string& n);
 
+// NI_MOE_FUSED (opt-in, read once): MoE prefill through the fused grouped kernels in
+// qmm_moe.metal. 1: gate/up/SwiGLU in one GEMM, down GEMM, shared expert folded in as one more
+// expert; 2: same, shared expert on the dense path. 0/unset: the original path.
+static int moe_fused() {
+  static const int v = getenv("NI_MOE_FUSED") ? atoi(getenv("NI_MOE_FUSED")) : 0;
+  return v;
+}
+
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   json t = root.contains("text_config") ? root["text_config"] : root;
@@ -224,19 +232,22 @@ void Qwen35::alloc_state() {
   {
     const size_t P = size_t(T) * std::max(cfg_.top_k, 1);
     const int I = std::max({cfg_.moe_I, cfg_.shared_I, cfg_.dense_I, 1});
+    // fused MoE prefill: T shared-expert rows after the P pair rows (hg/hu stay: a layer the
+    // fused kernels do not support falls back to the original path)
+    const size_t S = cfg_.moe && moe_fused() ? size_t(T) : 0;
     const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim, cfg_.dense_I}); // widest half input row
     xh_ = g.alloc(size_t(T) * W * 2, "xh");
     hh_ = g.alloc(size_t(T) * W * 2, "hh");
     ridx_ = g.alloc(P * 4);
     rwts_ = g.alloc(size_t(T) * (cfg_.top_k + 1) * 4 + 16);
-    spair_ = g.alloc(P * 4);
-    stok_ = g.alloc(P * 4);
-    tiles_ = g.alloc((P + size_t(std::max(cfg_.experts, 1)) + 1) * 3 * 4);
+    spair_ = g.alloc((P + S) * 4);
+    stok_ = g.alloc((P + S) * 4);
+    tiles_ = g.alloc((P + S + size_t(std::max(cfg_.experts, 1)) + 1) * 3 * 4);
     ntiles_ = g.alloc(16);
     hg_ = g.alloc(P * I * 4);
     hu_ = g.alloc(P * I * 4);
-    hhalf_ = g.alloc(P * I * 2);
-    yd_ = g.alloc(P * D * 4);
+    hhalf_ = g.alloc((P + S) * I * 2);
+    yd_ = g.alloc((P + S) * D * 4);
     sgb_ = g.alloc(size_t(T) * I * 4);
     sub_ = g.alloc(size_t(T) * I * 4);
     ys_ = g.alloc(size_t(T) * D * 4);
@@ -607,6 +618,7 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
 }
 
 void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
+  if (moe_fused() && enc_moe_prefill_fused(e, L, T, xbuf)) return;
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k;
   enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_qmm(e, L.router, xh_, rlog_, T, false);
@@ -647,6 +659,94 @@ void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
   e.buf(0, yd_); e.buf(1, ys_); e.buf(2, rwts_); e.buf(3, xbuf);
   e.val(4, cp);
   e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+}
+
+// Opt-in MoE prefill (NI_MOE_FUSED): router and top-k as above, then
+//   moe_bucket2 -> qmm_moe_gu (gate+up+SwiGLU -> half h, sorted rows) -> qmm_moe_dn (-> yd by pair)
+// with the shared expert as expert index E over the T token rows (mode 1, when its shapes and
+// quantization match the routed experts') or on the dense path (mode 2). Per row the arithmetic
+// matches the original path (same dequantized halfs, same MMA order over K). Returns false when
+// the layer does not fit the kernels' assumptions (the caller then runs the original path).
+bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
+  const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
+  const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
+  // NI_MOE_BM: rows per tile (16, 32 or 64); partial tiles skip their empty 8-row fragments
+  static const int bm = getenv("NI_MOE_BM") ? atoi(getenv("NI_MOE_BM")) : 64;
+  constexpr int kBnGu = 32, kBnDn = 64;
+  auto fits = [](const QLinear& q) { return q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0; };
+  if (!fits(G) || !fits(U) || !fits(Dn) || G.N % kBnGu || Dn.N % kBnDn || U.N != G.N || U.gs != G.gs ||
+      Dn.K != G.N || Dn.N != uint32_t(D) || (bm != 16 && bm != 32 && bm != 64)) {
+    static bool warned = false;
+    if (!warned) logi("NI_MOE_FUSED: layer shapes/quantization not supported, using the original MoE path");
+    warned = true;
+    return false;
+  }
+  const bool fold = moe_fused() == 1 && fits(L.sg) && fits(L.su) && fits(L.sd) && L.sg.N == G.N && L.su.N == G.N &&
+                    L.sg.K == G.K && L.su.K == G.K && L.sd.K == Dn.K && L.sd.N == Dn.N && L.sg.gs == G.gs &&
+                    L.su.gs == G.gs && L.sd.gs == Dn.gs;
+  const int S = fold ? T : 0;
+  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  enc_qmm(e, L.router, xh_, rlog_, T, false);
+  enc_qmm(e, L.shared_gate, xh_, slog_, T, false);
+  kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
+  e.use(pipe("moe_topk_rows"));
+  e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
+  e.val(4, tp);
+  e.dispatch(T, 1, 1, 32);
+  kp::Bucket2 bp{uint32_t(P), uint32_t(k), uint32_t(E), uint32_t(bm), uint32_t(S)};
+  e.use(pipe("moe_bucket2"));
+  e.buf(0, ridx_); e.buf(1, spair_); e.buf(2, stok_); e.buf(3, tiles_); e.buf(4, ntiles_);
+  e.val(5, bp);
+  e.dispatch(1, 1, 1, 1024);
+  const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E + (S + bm - 1) / bm);
+  const std::string m = "_b4_m" + std::to_string(bm);
+  // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
+  {
+    // expert matrices are stacked [E, N, K]: strides in words / groups
+    kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), G.N * (G.K / 8), G.N * (G.K / G.gs), uint32_t(E)};
+    const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
+    e.use(pipe("qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
+    e.buf(0, xh_);
+    e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
+    e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
+    e.buf(7, hhalf_);
+    e.val(8, p);
+    e.buf(9, tiles_); e.buf(10, ntiles_); e.buf(11, stok_);
+    e.buf(12, SG.w->buf); e.buf(13, SG.s->buf); e.buf(14, SG.b->buf);
+    e.buf(15, SU.w->buf); e.buf(16, SU.s->buf); e.buf(17, SU.b->buf);
+    e.dispatch(G.N / kBnGu, max_tiles, 1, 128);
+  }
+  // down: yd_ row = pair id (shared rows: P + token)
+  {
+    kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), Dn.N * (Dn.K / 8), Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
+    const QLinear& SD = fold ? L.sd : Dn;
+    e.use(pipe("qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
+    e.buf(0, hhalf_);
+    e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);
+    e.buf(4, yd_);
+    e.val(5, p);
+    e.buf(6, tiles_); e.buf(7, ntiles_); e.buf(8, spair_);
+    e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
+    e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
+  }
+  if (!fold) {
+    // shared expert on all rows (as in enc_moe_prefill)
+    enc_qmm(e, L.sg, xh_, sgb_, T, false);
+    enc_qmm(e, L.su, xh_, sub_, T, false);
+    uint32_t ns = uint32_t(T * cfg_.shared_I);
+    e.use(pipe("swiglu_half"));
+    e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+    e.dispatch((ns + 255) / 256, 1, 1, 256);
+    enc_qmm(e, L.sd, hh_, ys_, T, false);
+  }
+  kp::Combine cp{uint32_t(D), uint32_t(k)};
+  e.use(pipe("moe_combine"));
+  e.buf(0, yd_);
+  e.buf(1, fold ? yd_.view(size_t(P) * D * 4, size_t(T) * D * 4) : ys_);
+  e.buf(2, rwts_); e.buf(3, xbuf);
+  e.val(4, cp);
+  e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  return true;
 }
 
 void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample) {
