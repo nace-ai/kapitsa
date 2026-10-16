@@ -1253,20 +1253,27 @@ struct DflAcceptParams {
   }
 }
 
-// Dynamic verify depth (opt-in, MoE targets): verify proposal p only while the drafter's confidence that
-// p and every proposal before it are accepted, prod_{j <= p} c_j, stays >= tau (always at least one).
-// c_j = the walk's probability of its choice: q at T > 0, softmax(S_j)[k_j] at T = 0. kdyn = {K, K + 1}.
-// The verify then routes experts only for the K + 1 live rows (moe8_plan rows limit) and dfl_accept
-// stops at K. Lossless for any rule: unverified proposals are simply never accepted. grid 1 x 32.
+// Dynamic verify depth (MoE targets): stop verifying once the drafter is unlikely to have been right so far.
+// c_j = the walk's probability of its choice (softmax(S_j)[k_j] at T = 0, q_j(d_j) at T > 0).
+//  T > 0: verify proposal p iff prod_{j < p} c_j >= tau. The decision about d_p must not depend on d_p itself:
+//         given the accepted prefix d_0 .. d_{p-1} it is then fixed, and each position is either an ordinary
+//         speculative step or the bonus draw from p_p, so the emitted law stays exactly the target's. (A rule
+//         that also used c_p would skip unlikely draws of q_p and draw from p_p instead, which is biased;
+//         dflash_accept_test's dynamic-depth cases detect that rule.)
+//  T = 0: verify proposal p iff prod_{j <= p} c_j >= tau (greedy output is the verify argmax whatever is
+//         verified, so the proposal's own confidence may be used).
+// Proposal 0 is always verified. kdyn = {K, K + 1}; the verify then routes experts only for the K + 1 live rows
+// (moe8_plan row limit) and dfl_accept stops at K. rule: 0 = as above, 1 = inclusive at any T (tests only).
+// grid 1 x 32.
 struct DflDepthParams {
   uint kmax;
   float tau, temp;
+  uint rule;
 };
 [[kernel]] void dfl_depth(const device float* walk_s [[buffer(0)]], const device int* walk_k [[buffer(1)]],
                           const device float* qprob [[buffer(2)]], device uint* kdyn [[buffer(3)]],
                           constant DflDepthParams& p [[buffer(4)]], uint lane [[thread_index_in_simdgroup]]) {
-  // lane j < 7 computes c_j; the prefix products are taken by lane 0
-  float c = 1.0f;
+  float c = 1.0f;  // lane j < 7: c_j
   if (lane < 7) {
     const int kj = walk_k[lane];
     if (p.temp > 0.0f) {
@@ -1279,10 +1286,10 @@ struct DflDepthParams {
       c = exp(walk_s[lane * 16 + kj] - mx) / z;
     }
   }
-  const float cum = simd_prefix_inclusive_product(c);
+  const bool excl = p.temp > 0.0f && p.rule == 0;
+  const float cum = excl ? simd_prefix_exclusive_product(c) : simd_prefix_inclusive_product(c);
   const bool keep = lane < p.kmax && (lane == 0 || cum >= p.tau);
-  // number of leading proposals kept: first lane that is not kept
-  const uint k = simd_min(keep ? 32u : lane);
+  const uint k = simd_min(keep ? 32u : lane);  // leading proposals kept (cum is non-increasing)
   if (lane == 0) {
     kdyn[0] = k;
     kdyn[1] = k + 1;

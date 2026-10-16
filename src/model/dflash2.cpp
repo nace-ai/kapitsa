@@ -303,7 +303,11 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   // there it would only cost acceptance.
   dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
   if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
-  if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f", dyn_tau_);
+  // T > 0 uses the exact (exclusive-product) rule, which verifies one proposal more for the same tau
+  dyn_tau_t_ = dyn_tau_;
+  if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
+  if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
+  if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident, loaded in %.0f ms",
        dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, now_ms() - t0);
@@ -938,7 +942,7 @@ void DFlash2::encode_cycle_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_
 void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp) {
   const Buffer rows = kdyn_.view(4, 4);
   if (dyn_tau_ > 0) {
-    kp::DflDepth dp{uint32_t(K), dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f};
+    kp::DflDepth dp{uint32_t(K), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f, 0u};
     e.use(dpipe("dfl_depth"));
     e.buf(0, walk_s_); e.buf(1, walk_k_); e.buf(2, qprob_); e.buf(3, kdyn_);
     e.val(4, dp);

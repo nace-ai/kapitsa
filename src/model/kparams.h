@@ -237,6 +237,7 @@ struct DflAccept {
 struct DflDepth {
   uint32_t kmax;
   float tau, temp;
+  uint32_t rule;  // 0: exact rule (exclusive product at T > 0); 1: inclusive at any T (tests only)
 };
 
 struct DflPerm {

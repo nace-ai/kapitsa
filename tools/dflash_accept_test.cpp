@@ -8,7 +8,9 @@
 //    q on the host, dfl_accept on the GPU, a second cycle from the emitted token when only one token came
 //    out; the joint law of the first two emitted tokens is tested against p(t1) p(t2|t1) (chi-square,
 //    cells with expected count < 5 pooled), in several regimes: random p and q, q = p, q disjoint from p
-//    (always rejected: residual = p), point masses, p(d) = 0 for some proposals, K = 1..7.
+//    (always rejected: residual = p), point masses, p(d) = 0 for some proposals, K = 1..7, and with the
+//    dynamic verify depth (dfl_depth before dfl_accept): its exact T > 0 rule must pass; the rule that also uses
+//    the proposal's own confidence (rule 1, not used by the engine at T > 0) is expected to fail.
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/log.h"
@@ -313,15 +315,19 @@ int main(int argc, char** argv) {
   struct Case {
     int regime, K;
     float temp;
+    float tau = 0.0f;  // > 0: dynamic verify depth (dfl_depth) with this threshold
+    int rule = 0;      // dfl_depth rule (1 = inclusive product at T > 0: biased, expected to fail)
   };
   std::vector<Case> cases = {{kRandom, Kmain, 0.6f}, {kEqual, Kmain, 0.6f}, {kDisjoint, Kmain, 0.6f},
                              {kPoint, Kmain, 0.6f},  {kMixed, Kmain, 0.6f}, {kRandom, 1, 0.6f},
-                             {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f}};
-  Pipeline acc = g.pipeline("dfl_accept");
+                             {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
+                             {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
+                             {kEqual, 7, 0.6f, 0.3f},  {kRandom, 3, 0.6f, 0.1f, 1}, {kMixed, 7, 0.6f, 0.2f, 1}};
+  Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
   Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 256 * 4), dp = g.alloc(size_t(B) * 256 * 4);
-  Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64);
+  Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64), kd = g.alloc(size_t(B) * 16);
   for (size_t ci = 0; ci < cases.size(); ++ci) {
     if (only >= 0 && int(ci) != only) continue;
     const Case& cs = cases[ci];
@@ -346,14 +352,22 @@ int main(int argc, char** argv) {
       auto run = [&](int count, uint32_t P, const std::vector<uint32_t>& seed) {
         auto e = g.begin();
         for (int i = 0; i < count; ++i) {
-          kp::DflAccept ap{P, uint32_t(cs.K), cs.temp, seed[i]};
+          if (cs.tau > 0) {  // the drafter's depth decision from this trial's q and walk choices
+            kp::DflDepth dpp{uint32_t(cs.K), cs.tau, cs.temp, uint32_t(cs.rule)};
+            e->use(dep);
+            e->buf(0, qp, size_t(i) * 448); e->buf(1, wk, size_t(i) * 32); e->buf(2, qp, size_t(i) * 448);
+            e->buf(3, kd, size_t(i) * 16);
+            e->val(4, dpp);
+            e->dispatch(1, 1, 1, 32);
+          }
+          kp::DflAccept ap{P, uint32_t(cs.K), cs.temp, seed[i], cs.tau > 0 ? 1u : 0u};
           e->use(acc);
           e->buf(0, tok, size_t(i) * 64);
           e->buf(1, samp); e->buf(2, did, size_t(i) * 1024); e->buf(3, dp, size_t(i) * 1024);
           e->buf(4, cand, size_t(i) * 448); e->buf(5, qp, size_t(i) * 448); e->buf(6, wk, size_t(i) * 32);
           e->buf(7, res, size_t(i) * 16);
           e->val(8, ap);
-          e->buf(9, samp);    // dynamic depth (off)
+          e->buf(9, kd, size_t(i) * 16);  // dynamic depth (read only with ap.dyn)
           e->buf(10, scratch);  // drafter state for a GPU-driven next pass (unused here)
           e->dispatch(1, 1, 1, 32);
         }
@@ -414,11 +428,14 @@ int main(int argc, char** argv) {
     chi2(obs, ex, trials, &st, &dof, &pv, &out);
     chi2(obs1, ex1, trials, &st1, &dof1, &pv1, &out1);
     const bool ok = pv > 0.01 && pv1 > 0.01 && out == 0 && out1 == 0;
-    printf("[S1] %-24s K=%d T=%.1f: %ld trials, mean a %.2f; joint chi2 %.1f (%d dof) p=%.3f; first token chi2 %.1f "
-           "(%d dof) p=%.3f; outside support %ld: %s\n",
-           regime_name(cs.regime), cs.K, cs.temp, trials, mean_a / trials, st, dof, pv, st1, dof1, pv1, out + out1,
-           ok ? "PASS" : "FAIL");
-    if (!ok) ++fails;
+    char dyn[64] = "";
+    if (cs.tau > 0) snprintf(dyn, sizeof dyn, ", depth tau %.2f rule %d", cs.tau, cs.rule);
+    const bool expect_fail = cs.rule == 1;
+    printf("[S1] %-24s K=%d T=%.1f%s: %ld trials, mean a %.2f; joint chi2 %.1f (%d dof) p=%.3f; first token chi2 "
+           "%.1f (%d dof) p=%.3f; outside support %ld: %s%s\n",
+           regime_name(cs.regime), cs.K, cs.temp, dyn, trials, mean_a / trials, st, dof, pv, st1, dof1, pv1,
+           out + out1, ok ? "PASS" : "FAIL", expect_fail ? (ok ? " (biased rule NOT detected)" : " (biased rule detected, as expected)") : "");
+    if (ok == expect_fail) ++fails;
   }
   printf(fails ? "FAILED: %d\n" : "ALL PASSED\n", fails);
   return fails ? 1 : 0;

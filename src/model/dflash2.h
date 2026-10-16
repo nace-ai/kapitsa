@@ -215,7 +215,8 @@ class DFlash2 {
   Buffer logits_, sel_, tk_v_, tk_i_, cand_v_, cand_i_, edges_, walk_s_, qprob_, walk_k_, rope_cs_;
   // acceptance: target distributions of the verify rows, result {a, token}
   Buffer dist_id_, dist_p_, dist_keep_, acc_, kdyn_, gst_;
-  float dyn_tau_ = 0.0f;
+  float dyn_tau_ = 0.0f;    // T = 0 (0: dynamic depth off)
+  float dyn_tau_t_ = 0.0f;  // T > 0 (exclusive-product rule)
   bool exact_moe_ = true;  // T > 0 on MoE targets: row-independent expert numerics (NI_DFLASH_EXACT_MOE=0 off)
   // MLP and LM head on the target's 8-row verify GEMMs (qmm8_gu1k2 / qmm8pf; NI_DFLASH_V8, default on
   // for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted into their table
