@@ -118,7 +118,7 @@ NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup cons
 // Accumulates the BM x BN tile (per simdgroup TM = BM/WM rows m, TN = BN/WN rows n of each of the NP
 // matrices) into acc[p*FA + a][b] = C_p[n = n0 + sgn*TN + 8a + rc.x][m = m0 + sgm*TM + 8b + rc.y + e].
 // One X buffer: load X/W, stage X, barrier, MMAs, barrier. ABL (bench-only ablations): 1 no dequant
-// math, 2 no X staging, 4 no barriers, 8 no W loads; 16 (not an ablation) prefetches W one step ahead.
+// math, 2 no X staging, 4 no barriers, 8 no W loads.
 template <int BM, int BN, int WM, int WN, int BK, int NP, int ABL>
 NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread* W,
                       const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
@@ -145,27 +145,6 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
   uint4 xr[XL];
   uint wr[NP * FA * WPL];
   half2 sb[NP * FA];
-  if (ABL & 16) {
-    // W prefetch: the next step's words are loaded before this step's MMAs (registers: +FA*WPL+FA)
-    qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, 0, c, wr, sb);
-    for (uint k0 = 0; k0 < K; k0 += BK) {
-      qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
-      qr_store_x<BM, BK, NT>(xs, tid, xr);
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      uint wn[NP * FA * WPL];
-      half2 sn[NP * FA];
-      _Pragma("clang loop unroll(full)")
-      for (int a = 0; a < NP * FA; ++a) sn[a] = sb[a];
-      if (k0 + BK < K) qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, k0 + BK, c, wn, sn);
-      qr_mma<NP * FA, FB, BK, TM, 0>(acc, xs, sgm, wr, sb);
-      _Pragma("clang loop unroll(full)")
-      for (int u = 0; u < NP * FA * WPL; ++u) wr[u] = wn[u];
-      _Pragma("clang loop unroll(full)")
-      for (int a = 0; a < NP * FA; ++a) sb[a] = sn[a];
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-    }
-    return;
-  }
   for (uint k0 = 0; k0 < K; k0 += BK) {
     if (!(ABL & 2)) qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
     if (!(ABL & 8)) {
@@ -278,7 +257,3 @@ NI_QMRA(qmra6_k32_w14_m32_n128, 32, 128, 1, 4, 32, 6)
 NI_QMRA(qmra8_k32_w14_m32_n128, 32, 128, 1, 4, 32, 8)
 NI_QMRA(qmra9_k32_w14_m32_n128, 32, 128, 1, 4, 32, 9)
 NI_QMRA(qmra15_k32_w14_m32_n128, 32, 128, 1, 4, 32, 15)
-NI_QMRA(qmrw_k32_w14_m32_n128, 32, 128, 1, 4, 32, 16)
-NI_QMRA(qmrw_k64_w14_m32_n128, 32, 128, 1, 4, 64, 16)
-NI_QMRA(qmrw_k32_w12_m32_n64, 32, 64, 1, 2, 32, 16)
-NI_QMRA(qmrw_k32_w14_m64_n64, 64, 64, 1, 4, 32, 16)
