@@ -389,7 +389,9 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   else fatal("unrecognized weight naming");
 
   embed_ = qlin("model.embed_tokens");
-  lm_head_ = qlin("lm_head");
+  // tied embeddings (the small Qwen3.5 models): the output layer is the embedding table, stored in the
+  // same quantized [vocab, hidden] layout
+  lm_head_ = ws_.has(prefix_ + "lm_head.weight") ? qlin("lm_head") : embed_;
   final_norm_ = &ws_.get(prefix_ + "model.norm.weight");
   layers_.resize(cfg_.layers);
   for (int i = 0; i < cfg_.layers; ++i) {
