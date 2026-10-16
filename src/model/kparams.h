@@ -221,4 +221,43 @@ struct DflSelect {
   uint32_t seed, out_index;
 };
 
+// ---- 8-row verify (src/kernels/verify8.metal) ----
+struct X8Prep {
+  uint32_t K, R, x_ld, norm, write_xn;
+  float eps;
+  uint32_t xn_ld, write_lo;
+};
+
+struct Qmm8 {
+  uint32_t K, R, nseg, ks;
+  uint32_t N[4];
+  uint32_t y_ld[4];
+  uint32_t add[4];
+  uint32_t tg_begin[5];
+};
+
+struct Qmm8Gu {
+  uint32_t K, N, w_stride, s_stride, moe, h_stride, hs_stride;
+};
+
+struct Moe8Plan {
+  uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx;
+};
+
+struct Moe8s {
+  uint32_t K, N, w_stride, s_stride, k, x_ld;
+};
+
+struct Moe8Down {
+  uint32_t K, N, w_stride, s_stride, h_stride, hs_stride, k;
+};
+
+struct Moe8Combine {
+  uint32_t N, k;
+};
+
+struct Capture8 {
+  uint32_t D, ld, slot;
+};
+
 } // namespace ni::kp

@@ -251,6 +251,25 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
     enc_ = (__bridge_retained void*)ne;
   }
 }
+void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty, uint32_t tz) {
+  [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
+                             indirectBufferOffset:args.offset + off
+                            threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
+  if (profiling()) {
+    [E(enc_) endEncoding];
+    id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
+    [cb commit];
+    prof_recs().push_back({cur_name_, cb});
+    CFRelease(enc_);
+    CFRelease(cb_);
+    id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
+    id<MTLCommandBuffer> nb = [q commandBufferWithUnretainedReferences];
+    id<MTLComputeCommandEncoder> ne =
+        [nb computeCommandEncoderWithDispatchType:concurrent_ ? MTLDispatchTypeConcurrent : MTLDispatchTypeSerial];
+    cb_ = (__bridge_retained void*)nb;
+    enc_ = (__bridge_retained void*)ne;
+  }
+}
 void Encoder::barrier() { [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers]; }
 void Encoder::commit() {
   if (enc_) {

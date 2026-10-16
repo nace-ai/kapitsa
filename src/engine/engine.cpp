@@ -48,7 +48,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   tc_close_ = tok_.find("</tool_call>");
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
-  if (opts_.spec_depth > Qwen35::kMaxVerify - 1) opts_.spec_depth = Qwen35::kMaxVerify - 1;
+  if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
 
   auto add_slot = [&](int cap) {
     Slot s;
