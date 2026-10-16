@@ -50,13 +50,15 @@ MLX's `simdgroup_barrier(mem_none)` fences around fragment loads raise an isolat
 spills beyond that.
 The same thing explains the GEMM tile anomaly: qmm_b4_m32_n64 2304 B, qmm_b4_m32_n128 4352 B,
 qmm_moe_b4_m32_n64 2304 B of stack; m64_n64 / m16_n64 / m32_n32 have none.
+Plain-decode matvecs (qmv2/qmv3) have no stack; the MTP-verify ones spill a little at the
+96-GPR cap: qmvr_multi_t2/t3 16/48 B, qmvr4_b8_t2 16 B, and 224-304 B for qmvr_b*_t3/t4 (R >= 3).
 
 v11 (`NI_ATTN=attn_prefill11`, opt-in): MLX's layout, 32 queries of ONE query head per
 threadgroup (grid ceil(T/32) x Hq), 4 row groups x 2 head-dim halves, everything unrolled. Also:
 no padded rows for G = 6 (27B; v10 wastes a quarter of its MMAs there), causal mask only on
 diagonal tiles, exp2 softmax with a finite sentinel, fp32 P, contiguous 64-byte K row fetches,
 heaviest query blocks first. Variants: `_x` (own 8 KB exchange buffer, 2 barriers fewer per
-tile), `_k16` / `_k16x` (16-key tiles, 12 KB). All 92 GPRs, 64-128 B residual spill (v10: 6912).
+tile), `_k16` / `_k16x` (16-key tiles, 12 / 16 KB). All 92 GPRs, 64-128 B residual spill (v10: 6912).
 Not yet timed (GPU was busy): run bench_attn with v10, v10u and the v11 variants (it now checks
 every kernel against a CPU reference) and `ni_run --dump-logits` A/B before switching the default.
 

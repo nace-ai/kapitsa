@@ -5,6 +5,7 @@
 // queries (block edges, the last partial block) x all heads: err = max |gpu - ref| / max |ref|.
 #include "metal/gpu.h"
 #include "util/log.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <random>
@@ -34,11 +35,14 @@ int main(int argc, char** argv) {
   AttnPrefParams p{T, Hq, Hkv, L - T, L, 1.0f / 16.0f};
   double pairs = double(T) * L - double(T) * T / 2;
 
-  // CPU reference for sampled queries x all heads
+  // CPU reference for sampled queries x all heads: block edges, the last (partial) block, and
+  // queries in every 8-row group of a 32-query block (11, 20, 45, T-19, T-11) for v11's layout
   std::vector<uint32_t> ts;
-  for (int64_t t : {int64_t(0), int64_t(1), int64_t(31), int64_t(32), int64_t(T / 2), int64_t(T) - 33, int64_t(T) - 2,
-                    int64_t(T) - 1})
-    if (t >= 0 && t < T && (ts.empty() || ts.back() != uint32_t(t))) ts.push_back(uint32_t(t));
+  for (int64_t t : {int64_t(0), int64_t(1), int64_t(11), int64_t(20), int64_t(31), int64_t(32), int64_t(45),
+                    int64_t(T / 2), int64_t(T) - 33, int64_t(T) - 19, int64_t(T) - 11, int64_t(T) - 2, int64_t(T) - 1})
+    if (t >= 0 && t < T) ts.push_back(uint32_t(t));
+  std::sort(ts.begin(), ts.end());
+  ts.erase(std::unique(ts.begin(), ts.end()), ts.end());
   std::vector<double> ref(ts.size() * Hq * D);
   double ref_max = 0;
   {
@@ -95,13 +99,16 @@ int main(int argc, char** argv) {
     memset(out.ptr(), 0xff, out.size);  // NaN: rows a kernel fails to write show up as errors
     run();
     double err = 0;
+    bool nan = false;  // sticky: one NaN (unwritten or broken output) makes err NaN
     for (size_t si = 0; si < ts.size(); ++si)
       for (uint32_t h = 0; h < Hq; ++h)
         for (uint32_t d = 0; d < D; ++d) {
           const double gv = out.as<float>()[(size_t(ts[si]) * Hq + h) * D + d];
           const double e = std::fabs(gv - ref[(si * Hq + h) * D + d]);
-          if (!(e <= err)) err = e;  // propagates NaN
+          if (std::isnan(e)) nan = true;
+          else err = std::max(err, e);
         }
+    if (nan) err = NAN;
     double best = 1e9;
     for (int i = 0; i < 3; ++i) best = std::min(best, run());
     double cs = 0;

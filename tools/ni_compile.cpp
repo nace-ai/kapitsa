@@ -67,14 +67,16 @@ void kernel_stats(const Bytes& b, long* text, long* stack, long* gprs) {
     std::vector<uint32_t> w(nmd / 4);
     for (size_t k = 0; k < w.size(); ++k) w[k] = le32(md + 4 * k);
     // A flags word 0x01{01|03}xxxx is followed by the GPR count, or by the stack size (which also
-    // appears in the few words before the flags) and then the GPR count.
+    // appears in the few words before the flags) and then the GPR count. Without a stack the word
+    // after the GPR count is 0 or 1, so a stack needs a plausible GPR count (>= 4) after it: a
+    // 32-GPR kernel whose count equals the 0x20 word before the flags is not "32 B stack, 1 GPR".
     for (size_t k = 4; k + 2 < w.size(); ++k) {
       uint32_t f = w[k];
       if (f >> 24 != 1 || (((f >> 16) & 0xff) != 1 && ((f >> 16) & 0xff) != 3) || f == 0x01000000 || (f & 0xff) > 3)
         continue;
       uint32_t c = w[k + 1];
       bool seen = c > 0 && (w[k - 1] == c || w[k - 2] == c || w[k - 3] == c || w[k - 4] == c);
-      if (seen && w[k + 2] <= 256) { *stack = c; *gprs = w[k + 2]; return; }
+      if (seen && w[k + 2] >= 4 && w[k + 2] <= 256) { *stack = c; *gprs = w[k + 2]; return; }
       if (c <= 256) { *stack = 0; *gprs = c; return; }
     }
     return;
