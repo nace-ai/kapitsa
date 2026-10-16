@@ -368,7 +368,7 @@ void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t
 }
 
 void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh, const Buffer& xs, uint32_t K,
-                  uint32_t x_ld, int ks_req) {
+                  uint32_t x_ld, int ks_req, int rf_req) {
   if (segs.empty() || segs.size() > 4) fatal("enc_qmm8: 1-4 segments");
   kp::DflQmm8 p{};
   p.K = K;
@@ -379,17 +379,18 @@ void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh
     if (s.L->K != K || s.L->gs != 64 || (s.L->bits != 4 && s.L->bits != 8)) fatal("enc_qmm8: K/group/bits mismatch");
     rbs_total += (s.L->N + 7) / 8;
   }
-  // K split: aim for >= ~192 threadgroups of 8 simdgroups while each simdgroup keeps >= 8 groups.
+  // K split (bench_qmm8 sweep, M4 Pro): no split once there are >= 1024 threadgroups (LM head);
+  // otherwise the largest split that leaves every simdgroup >= 8 groups of 64.
   static const int ks_env = getenv("NI_DFLASH_KS") ? atoi(getenv("NI_DFLASH_KS")) : 0;
   uint32_t ks = 1;
   if (ks_req > 0) ks = uint32_t(ks_req);
   else if (ks_env > 0) ks = uint32_t(ks_env);
-  else
-    while (ks < 8 && rbs_total * ks / 8 < 192 && (K / 64) / (ks * 2) >= 8) ks *= 2;
+  else if (rbs_total / 8 < 1024)
+    while (ks < 8 && (K / 64) / (ks * 2) >= 8) ks *= 2;
   p.ks = ks;
   // NI_DFLASH_RF=2: 16 weight rows per simdgroup (the X gather shared by two fragments)
   static const int rf_env = getenv("NI_DFLASH_RF") ? atoi(getenv("NI_DFLASH_RF")) : 1;
-  const uint32_t rf = rf_env == 2 ? 2 : 1;
+  const uint32_t rf = (rf_req ? rf_req : rf_env) == 2 ? 2 : 1;
   const uint32_t rbs = 8 / ks * rf;  // 8-row blocks per threadgroup
   uint32_t tg = 0;
   for (size_t i = 0; i < 4; ++i) {
@@ -416,24 +417,33 @@ void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh
 }
 
 void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffer& xh, const Buffer& xs,
-                     const Buffer& hh, const Buffer& hs) {
+                     const Buffer& hh, const Buffer& hs, int ks_req) {
   if (g.N != u.N || g.K != u.K || g.bits != u.bits || g.N % 64) fatal("enc_qmm8_gu: shapes");
+  // K split inside the 64-column threadgroup (8 row blocks x ks simdgroups); default: the largest
+  // of 1/2/4 that keeps >= 8 groups per simdgroup (NI_DFLASH_GU_KS overrides)
+  static const int ks_env = getenv("NI_DFLASH_GU_KS") ? atoi(getenv("NI_DFLASH_GU_KS")) : 0;
+  uint32_t ks = ks_req > 0 ? uint32_t(ks_req) : ks_env > 0 ? uint32_t(ks_env) : 0;
+  if (!ks) {
+    ks = 1;
+    while (ks < 4 && (g.K / 64) / (ks * 2) >= 8) ks *= 2;
+  }
+  if (ks != 1 && ks != 2 && ks != 4) fatal("enc_qmm8_gu: ks %u", ks);
   kp::DflQmm8 p{};
   p.K = g.K;
   p.nseg = 1;
-  p.ks = 1;
+  p.ks = ks;
   p.x_ld = g.K;
   p.N[0] = g.N;
   p.bits[0] = uint32_t(g.bits);
   p.y_ld[0] = g.N;
   p.oscale[0] = 1.0f;
-  e.use(dpipe("dfl_qmm8_gu"));
+  e.use(dpipe(ks == 1 ? "dfl_qmm8_gu" : ks == 2 ? "dfl_qmm8_gu_ks2" : "dfl_qmm8_gu_ks4"));
   e.buf(0, g.w->buf); e.buf(1, g.s->buf); e.buf(2, g.b->buf); e.buf(3, hh);
   e.buf(4, u.w->buf); e.buf(5, u.s->buf); e.buf(6, u.b->buf); e.buf(7, hs);
   e.buf(16, xh);
   e.buf(17, xs);
   e.val(18, p);
-  e.dispatch(g.N / 64, 1, 1, 256);
+  e.dispatch(g.N / 64, 1, 1, 256 * ks);
 }
 
 // Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows.
@@ -601,7 +611,10 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     {
       const size_t lstride = size_t(8) * kWin * 128 * 2;
       kp::DflAttn p{uint32_t(P), lo, chunk, nsplit, 1.0f / std::sqrt(128.0f)};
-      static const bool mma = getenv("NI_DFLASH_ATTN") && std::string(getenv("NI_DFLASH_ATTN")) == "mma";
+      // simdgroup-matrix attention by default (35B full window: 3.60 vs 4.52 ms per pass);
+      // NI_DFLASH_ATTN=scalar selects the fp32 scalar kernel
+      static const bool mma_env = !(getenv("NI_DFLASH_ATTN") && std::string(getenv("NI_DFLASH_ATTN")) == "scalar");
+      const bool mma = attn_variant_ ? attn_variant_ == 2 : mma_env;
       e.use(dpipe(mma ? "dfl_attn_mma" : "dfl_attn"));
       e.buf(0, Q_); e.buf(1, d.ring_k, l * lstride); e.buf(2, d.ring_v, l * lstride); e.buf(3, Kb_); e.buf(4, Vb_);
       e.buf(5, part_o_); e.buf(6, part_ml_);
@@ -667,6 +680,7 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     e.val(5, no);
     e.dispatch(ntg, 7, 1, 256);
     kp::DflTop p2{ntg * 16, ntg * 16, 1};
+    e.use(dpipe("dfl_top16"));  // every dispatch sets its pipeline (NI_PROFILE splits encoders)
     e.buf(0, tk_v_); e.buf(1, tk_i_); e.buf(2, cand_v_); e.buf(3, cand_i_);
     e.val(4, p2);
     e.val(5, yes);

@@ -243,6 +243,7 @@ int main(int argc, char** argv) {
     else if (a == "--out" && i + 1 < argc) out = argv[++i];
     else fatal("unknown option %s", a.c_str());
   }
+  setvbuf(stdout, nullptr, _IOLBF, 0);
   Gpu& g = Gpu::get();
   Qwen35 tgt(tdir, 2048);
   DFlash2 dr(tgt, ddir, bits);
@@ -406,10 +407,27 @@ int main(int argc, char** argv) {
     printf("  (%d/112, %d/7 rows identical in order)\n", ov_total, ordered_same);
     report("top16_vals", cmp(dr.cand_vals(), ref_tv.data(), 7 * 16));
     {
+      // index-aligned (differs wherever two near-tied candidates swapped order) and matched by
+      // (predecessor id, candidate id) over the pairs both lattices contain
       auto ref_e = load_npy(cd + "/edges.npy").f32();
-      report("edges", cmp(dr.edges(), ref_e.data(), 7 * 256));
+      report("edges (index-aligned)", cmp(dr.edges(), ref_e.data(), 7 * 256));
+      std::vector<float> a, b;
+      for (int p = 0; p < 7; ++p)
+        for (int j = 0; j < (p == 0 ? 1 : 16); ++j)
+          for (int k = 0; k < 16; ++k) {
+            const int64_t rp = p == 0 ? anchor : ref_ti[(p - 1) * 16 + j], rs = ref_ti[p * 16 + k];
+            for (int j2 = 0; j2 < (p == 0 ? 1 : 16); ++j2)
+              for (int k2 = 0; k2 < 16; ++k2) {
+                const int64_t op = p == 0 ? anchor : dr.cand_ids()[(p - 1) * 16 + j2], os = dr.cand_ids()[p * 16 + k2];
+                if (op == rp && os == rs) {
+                  a.push_back(dr.edges()[p * 256 + j2 * 16 + k2]);
+                  b.push_back(ref_e[p * 256 + j * 16 + k]);
+                }
+              }
+          }
+      report("edges (id-matched, " + std::to_string(a.size()) + "/1552)", cmp(a.data(), b.data(), int64_t(a.size())));
       auto ref_ws = load_npy(cd + "/walk_scores.npy").f32();
-      report("walk_scores", cmp(dr.walk_scores(), ref_ws.data(), 7 * 16));
+      report("walk_scores (index-aligned)", cmp(dr.walk_scores(), ref_ws.data(), 7 * 16));
     }
     auto ref_chain = load_npy(cd + "/chain.npy").ints();
     bool eq = true;
@@ -534,19 +552,30 @@ int main(int argc, char** argv) {
     auto time_at = [&](int P, const char* what) {
       d.ctx = P;
       s.tokens()[P] = int(prompt.back());
-      std::vector<double> t;
-      for (int i = 0; i < ntime + 2; ++i) {
-        auto e = g.begin();
-        dr.encode_draft(*e, s, d, P, greedy);
-        e->commit_and_wait();
-        if (i >= 2) t.push_back(e->gpu_ms());
+      // interleaved A/B of the two attention kernels (default = mma) when not profiling
+      const std::vector<int> vars = Encoder::profiling() ? std::vector<int>{0} : std::vector<int>{2, 1};
+      std::vector<std::vector<double>> t(vars.size());
+      for (int i = 0; i < ntime + 2; ++i)
+        for (size_t v = 0; v < vars.size(); ++v) {
+          dr.set_attn_variant(vars[v]);
+          auto e = g.begin();
+          dr.encode_draft(*e, s, d, P, greedy);
+          e->commit_and_wait();
+          if (i >= 2) t[v].push_back(e->gpu_ms());
+        }
+      dr.set_attn_variant(0);
+      for (size_t v = 0; v < vars.size(); ++v) {
+        std::sort(t[v].begin(), t[v].end());
+        printf("[time] drafting pass at P=%d (%s), attention %s: median %.3f ms, min %.3f ms, max %.3f ms over %d runs\n",
+               P, what, vars[v] == 1 ? "scalar" : "mma", t[v][t[v].size() / 2], t[v].front(), t[v].back(), ntime);
       }
-      std::sort(t.begin(), t.end());
-      printf("[time] drafting pass at P=%d (%s): median %.3f ms, min %.3f ms, max %.3f ms over %d runs\n", P, what,
-             t[t.size() / 2], t.front(), t.back(), ntime);
       if (Encoder::profiling()) Encoder::profile_report(ntime + 2);
     };
     const int P0 = d.ctx;
+    if (Encoder::profiling()) {
+      printf("(profile of the check phase above, discarded below)\n");
+      Encoder::profile_report(1);
+    }
     time_at(P0, "dump context");
     time_at(plong, "full window");
     d.ctx = P0;

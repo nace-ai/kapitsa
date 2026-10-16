@@ -764,41 +764,55 @@ DFL_QMM8(dfl_qmm8, 1)
 DFL_QMM8(dfl_qmm8_r2, 2)
 
 // Gate/up + SwiGLU: H[8, N] = half(silu(X Wg^T) * (X Wu^T)) and HS[N/64][8] = sums of the half
-// values per 64 columns (the down projection's X8 table). 8 simdgroups x 8 rows = one 64-group
-// per threadgroup; ks = 1. grid: N/64 threadgroups x 256.
-[[kernel]] void dfl_qmm8_gu(const device uint32_t* Wg [[buffer(0)]], const device bfloat* Sg [[buffer(1)]],
-                            const device bfloat* Bg [[buffer(2)]], device half* Hh [[buffer(3)]],
-                            const device uint32_t* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]],
-                            const device bfloat* Bu [[buffer(6)]], device float* HS [[buffer(7)]],
-                            const device half* X [[buffer(16)]], const device float* XS [[buffer(17)]],
-                            constant DflQmm8Params& p [[buffer(18)]], uint tg [[threadgroup_position_in_grid]],
-                            uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float hred[8 * 8];
-  const uint N = p.N[0];
+// values per 64 columns (the down projection's X8 table). A threadgroup owns 64 output columns:
+// 8 row blocks x KS simdgroups splitting K (fixed-order sum). grid: N/64 threadgroups x 256*KS.
+template <int KS>
+NI_INLINE void dfl_qmm8_gu_impl(const device uint32_t* Wg, const device bfloat* Sg, const device bfloat* Bg,
+                                device half* Hh, const device uint32_t* Wu, const device bfloat* Su,
+                                const device bfloat* Bu, device float* HS, const device half* X,
+                                const device float* XS, constant DflQmm8Params& p, threadgroup float2* red,
+                                threadgroup float* hred, uint tg, uint sg, uint lane) {
+  const uint N = p.N[0], gpr = p.K / 64;
   const uint2 rc = dfl_lane_rc(lane);
-  const uint n = (tg * 8 + sg) * 8 + rc.x;
+  const uint rbl = sg / KS, kslice = sg % KS;
+  const uint n = (tg * 8 + rbl) * 8 + rc.x;
   const uint rows[1] = {min(n, N - 1)};
+  const uint gper = (gpr + KS - 1) / KS, g0 = min(kslice * gper, gpr), g1 = min(g0 + gper, gpr);
   const device uint32_t* W[2] = {Wg, Wu};
   const device bfloat* S[2] = {Sg, Su};
   const device bfloat* B[2] = {Bg, Bu};
   float2 acc[2][1];
-  if (p.bits[0] == 4) dfl_q8_run<4, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, 0, p.K / 64, lane, acc);
-  else dfl_q8_run<8, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, 0, p.K / 64, lane, acc);
-  const half h0 = half(silu(acc[0][0].x) * acc[1][0].x), h1 = half(silu(acc[0][0].y) * acc[1][0].y);
-  const uint ld = p.y_ld[0];
-  float2 t = float2(0.0f);
-  if (n < N) {
-    Hh[rc.y * ld + n] = h0;
-    Hh[(rc.y + 1) * ld + n] = h1;
-    t = float2(float(h0), float(h1));
+  if (p.bits[0] == 4) dfl_q8_run<4, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, g0, g1, lane, acc);
+  else dfl_q8_run<8, 2, 1>(W, S, B, rows, p.K, X, p.x_ld, XS, g0, g1, lane, acc);
+  if (KS > 1) {
+    if (kslice) {
+      red[(sg * 2 + 0) * 32 + lane] = acc[0][0];
+      red[(sg * 2 + 1) * 32 + lane] = acc[1][0];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (kslice == 0)
+      for (uint j = 1; j < KS; ++j) {
+        acc[0][0] += red[((sg + j) * 2 + 0) * 32 + lane];
+        acc[1][0] += red[((sg + j) * 2 + 1) * 32 + lane];
+      }
   }
-  // sum over the 8 weight rows of the simdgroup (lane bits 1, 2, 4 select the row)
-  t += simd_shuffle_xor(t, 2);
-  t += simd_shuffle_xor(t, 4);
-  t += simd_shuffle_xor(t, 16);
-  if ((lane & 22u) == 0) {
-    hred[sg * 8 + rc.y] = t.x;
-    hred[sg * 8 + rc.y + 1] = t.y;
+  if (kslice == 0) {
+    const half h0 = half(silu(acc[0][0].x) * acc[1][0].x), h1 = half(silu(acc[0][0].y) * acc[1][0].y);
+    const uint ld = p.y_ld[0];
+    float2 t = float2(0.0f);
+    if (n < N) {
+      Hh[rc.y * ld + n] = h0;
+      Hh[(rc.y + 1) * ld + n] = h1;
+      t = float2(float(h0), float(h1));
+    }
+    // sum over the 8 weight rows of the fragment (lane bits 1, 2, 4 select the row)
+    t += simd_shuffle_xor(t, 2);
+    t += simd_shuffle_xor(t, 4);
+    t += simd_shuffle_xor(t, 16);
+    if ((lane & 22u) == 0) {
+      hred[rbl * 8 + rc.y] = t.x;
+      hred[rbl * 8 + rc.y + 1] = t.y;
+    }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (sg == 0 && lane < 8) {
@@ -807,6 +821,23 @@ DFL_QMM8(dfl_qmm8_r2, 2)
     HS[tg * 8 + lane] = s;
   }
 }
+
+#define DFL_QMM8_GU(NAME, KS)                                                                                \
+  [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device bfloat* Sg [[buffer(1)]],         \
+                       const device bfloat* Bg [[buffer(2)]], device half* Hh [[buffer(3)]],                  \
+                       const device uint32_t* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]],         \
+                       const device bfloat* Bu [[buffer(6)]], device float* HS [[buffer(7)]],                 \
+                       const device half* X [[buffer(16)]], const device float* XS [[buffer(17)]],             \
+                       constant DflQmm8Params& p [[buffer(18)]], uint tg [[threadgroup_position_in_grid]],     \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup float2 red[KS > 1 ? 8 * KS * 2 * 32 : 1];                                                    \
+    threadgroup float hred[8 * 8];                                                                           \
+    dfl_qmm8_gu_impl<KS>(Wg, Sg, Bg, Hh, Wu, Su, Bu, HS, X, XS, p, red, hred, tg, sg, lane);                \
+  }
+
+DFL_QMM8_GU(dfl_qmm8_gu, 1)
+DFL_QMM8_GU(dfl_qmm8_gu_ks2, 2)
+DFL_QMM8_GU(dfl_qmm8_gu_ks4, 4)
 
 // ---- selector (SPEC §7) ----
 struct DflMergeParams {

@@ -28,7 +28,8 @@ struct DFlashSeq {
 };
 
 // 8-row affine-quantized GEMM (dfl_qmm8): Y_i[8, N_i] = oscale_i * X[8, K] . W_i^T for up to 4
-// matrices sharing the X8 table (xh half [8][x_ld], xs float [K/64][8]). ks = 0 picks the K split.
+// matrices sharing the X8 table (xh half [8][x_ld], xs float [K/64][8]). ks = 0 picks the K split;
+// rf = 2 gives each simdgroup 16 weight rows (0: NI_DFLASH_RF, default 1).
 struct DflSeg8 {
   const QLinear* L;
   Buffer y;
@@ -36,10 +37,10 @@ struct DflSeg8 {
   float oscale;
 };
 void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh, const Buffer& xs, uint32_t K,
-                  uint32_t x_ld, int ks = 0);
+                  uint32_t x_ld, int ks = 0, int rf = 0);
 // Gate/up + SwiGLU (dfl_qmm8_gu): hh half [8][N] = silu(X Wg^T) * (X Wu^T), hs float [N/64][8].
 void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffer& xh, const Buffer& xs,
-                     const Buffer& hh, const Buffer& hs);
+                     const Buffer& hh, const Buffer& hs, int ks = 0);
 
 // MLX affine quantization (mx.quantize, group 64) of bf16 rows on the CPU: W uint32 [N][K*bits/32],
 // S/B bf16 [N][K/64]. even=false reproduces MLX's Metal kernel (IEEE fp32, round half away from
@@ -98,6 +99,8 @@ class DFlash2 {
   void clear_h0() { h0_set_ = false; }
   // Per-stage copies (cycle-0 style intermediates) into named buffers; see dflash2.cpp.
   void set_debug(bool on) { debug_ = on; }
+  // draft attention kernel: 0 = default (simdgroup-matrix; NI_DFLASH_ATTN=scalar), 1 = scalar, 2 = mma
+  void set_attn_variant(int v) { attn_variant_ = v; }
   const std::map<std::string, Buffer>& debug_bufs() const { return dbg_; }
   // fp32 c(j) = RMSNorm(x_ctx W_fc^T; hidden_norm) of the last commit: prefill rows [0, rows) or
   // decode rows [0, m) (tests)
@@ -152,6 +155,7 @@ class DFlash2 {
   Buffer pcap_, xph_, yph_, cph_, kvph_;
   int max_splits_ = 32;
   bool h0_set_ = false, debug_ = false;
+  int attn_variant_ = 0;
   std::map<std::string, Buffer> dbg_;
 };
 

@@ -2,6 +2,8 @@
 //   bench_qmm8 [reps=20] [NxKxbits ...]   (default: the DFlash2 drafter shapes of both models)
 // Random MLX-affine weights (codes, bf16 scales/biases), random half X rows. Each timed run is
 // its own command buffer; the median GPU time is reported with the effective weight bandwidth.
+// After a GPU warm-up, every shape runs its variants interleaved (K split ks in {auto,1,2,4,8} x
+// rows per simdgroup rf in {1,2}); the first variant ("auto") is what the drafter uses.
 #include "metal/gpu.h"
 #include "model/dflash2.h"
 #include "util/bf16.h"
@@ -59,6 +61,7 @@ static double wval(const Mat& m, uint32_t n, uint32_t k) {
 }
 
 int main(int argc, char** argv) {
+  setvbuf(stdout, nullptr, _IOLBF, 0);
   int reps = argc > 1 ? atoi(argv[1]) : 20;
   struct Shape {
     uint32_t N, K;
@@ -81,6 +84,7 @@ int main(int argc, char** argv) {
               {6144, 2048, 8, false},   {17408, 5120, 8, true}};
   Gpu& g = Gpu::get();
   std::mt19937 rng(1234);
+  bool warmed = false;
   for (const Shape& sh : shapes) {
     const uint32_t N = sh.N, K = sh.K;
     Mat A = make(N, K, sh.bits, rng), B;
@@ -98,13 +102,31 @@ int main(int argc, char** argv) {
         for (int k = 0; k < 64; ++k) s += float(X[t * K + gi * 64 + k]);
         xs.as<float>()[gi * 8 + t] = s;
       }
-    auto run = [&](Encoder& e) {
-      if (sh.gu) dfl_enc_qmm8_gu(e, A.L, B.L, xh, xs, hh, hs);
-      else dfl_enc_qmm8(e, {{&A.L, y, N, 1.0f}}, xh, xs, K, K);
+    struct Var {
+      int ks, rf;
     };
+    std::vector<Var> vars = {{0, 0}};
+    if (!sh.gu)
+      for (int rf : {1, 2})
+        for (int ks : {1, 2, 4, 8}) vars.push_back({ks, rf});
+    else
+      for (int ks : {1, 2, 4}) vars.push_back({ks, 1});
+    auto run = [&](Encoder& e, const Var& v) {
+      if (sh.gu) dfl_enc_qmm8_gu(e, A.L, B.L, xh, xs, hh, hs, v.ks);
+      else dfl_enc_qmm8(e, {{&A.L, y, N, 1.0f}}, xh, xs, K, K, v.ks, v.rf);
+    };
+    if (!warmed) {  // ~0.3 s of GPU work so the clocks are up before the first timing
+      warmed = true;
+      const double t0 = now_ms();
+      while (now_ms() - t0 < 300) {
+        auto e = g.begin();
+        for (int i = 0; i < 8; ++i) run(*e, vars[0]);
+        e->commit_and_wait();
+      }
+    }
     {
       auto e = g.begin();
-      run(*e);
+      run(*e, vars[0]);
       e->commit_and_wait();
     }
     // reference on a sample of rows (all rows for small N)
@@ -137,20 +159,27 @@ int main(int argc, char** argv) {
           hden += s * s;
         }
     }
-    std::vector<double> ts;
-    for (int i = 0; i < reps + 3; ++i) {
-      auto e = g.begin();
-      run(*e);
-      e->commit_and_wait();
-      if (i >= 3) ts.push_back(e->gpu_ms());
-    }
-    std::sort(ts.begin(), ts.end());
-    const double med = ts[ts.size() / 2];
+    std::vector<std::vector<double>> ts(vars.size());
+    for (int i = 0; i < reps + 2; ++i)
+      for (size_t v = 0; v < vars.size(); ++v) {
+        auto e = g.begin();
+        run(*e, vars[v]);
+        e->commit_and_wait();
+        if (i >= 2) ts[v].push_back(e->gpu_ms());
+      }
     const double bytes = double(N) * K * (sh.bits / 8.0 + 4.0 / 64) * (sh.gu ? 2 : 1);
-    printf("%s %6ux%-6u b%d  rel err %.2e (max abs %.2e)%s  GPU median %.4f ms (min %.4f)  %.0f GB/s  %.2f TFLOP/s\n",
-           sh.gu ? "gu  " : "qmm8", N, K, sh.bits, std::sqrt(num / den), maxe,
-           sh.gu ? (std::string("  HS rel ") + std::to_string(std::sqrt(hnum / std::max(hden, 1e-30)))).c_str() : "",
-           med, ts.front(), bytes / med / 1e6, 2.0 * 8 * N * K * (sh.gu ? 2 : 1) / med / 1e9);
+    printf("%s %6ux%-6u b%d  rel err %.2e (max abs %.2e)%s\n", sh.gu ? "gu  " : "qmm8", N, K, sh.bits,
+           std::sqrt(num / den), maxe,
+           sh.gu ? (std::string("  HS rel ") + std::to_string(std::sqrt(hnum / std::max(hden, 1e-30)))).c_str() : "");
+    for (size_t v = 0; v < vars.size(); ++v) {
+      std::sort(ts[v].begin(), ts[v].end());
+      const double med = ts[v][ts[v].size() / 2];
+      char name[32];
+      if (v == 0) snprintf(name, sizeof name, "auto");
+      else snprintf(name, sizeof name, "ks%d rf%d", vars[v].ks, vars[v].rf);
+      printf("    %-9s median %.4f ms (min %.4f)  %4.0f GB/s  %.2f TFLOP/s\n", name, med, ts[v].front(),
+             bytes / med / 1e6, 2.0 * 8 * N * K * (sh.gu ? 2 : 1) / med / 1e9);
+    }
   }
   return 0;
 }
