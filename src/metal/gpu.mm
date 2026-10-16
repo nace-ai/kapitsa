@@ -29,42 +29,82 @@ Gpu::Gpu() : impl_(new Impl) {
   id<MTLDevice> d = MTLCreateSystemDefaultDevice();
   if (!d) fatal("no Metal device");
   device_ = (__bridge_retained void*)d;
-  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:64];
+  // NI_ANE=1 (the GPU + Neural Engine FFN split) ends a command buffer at every event signal: a
+  // 2048-row chunk of the 27B is 65 command buffers, with up to two chunks queued, so the queue
+  // must allow more than the default path's 64 in flight (fewer would deadlock on the waits).
+  const bool split = env_on("NI_ANE") || env_on("NI_ANE_QUEUE");
+  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:split ? 512 : 64];
   queue_ = (__bridge_retained void*)q;
 }
 
 std::string Gpu::name() const { return [[dev(device_) name] UTF8String]; }
 size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMaxWorkingSetSize; }
-
-Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
-  if (bytes == 0) bytes = 16;
-  id<MTLBuffer> b = [dev(device_) newBufferWithLength:bytes
-                                              options:MTLResourceStorageModeShared |
-                                                      (tracked ? MTLResourceHazardTrackingModeTracked
-                                                               : MTLResourceHazardTrackingModeUntracked)];
-  if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
-  if (label) b.label = [NSString stringWithUTF8String:label];
-  std::lock_guard<std::mutex> lk(impl_->mu);
-  [impl_->retained addObject:b];
-  return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
+size_t Gpu::allocated_bytes() const { return dev(device_).currentAllocatedSize; }
+const char* Gpu::thermal_state() {
+  switch ([NSProcessInfo processInfo].thermalState) {
+    case NSProcessInfoThermalStateNominal: return "nominal";
+    case NSProcessInfoThermalStateFair: return "fair";
+    case NSProcessInfoThermalStateSerious: return "serious";
+    case NSProcessInfoThermalStateCritical: return "critical";
+  }
+  return "?";
 }
 
-Buffer Gpu::wrap(void* ptr, size_t bytes, const char* label) {
-  id<MTLBuffer> b = [dev(device_) newBufferWithBytesNoCopy:ptr
-                                                    length:bytes
-                                                   options:MTLResourceStorageModeShared |
-                                                           MTLResourceHazardTrackingModeUntracked
-                                               deallocator:nil];
-  if (!b) fatal("Metal no-copy wrap of %zu bytes failed (page aligned?)", bytes);
-  if (label) b.label = [NSString stringWithUTF8String:label];
-  std::lock_guard<std::mutex> lk(impl_->mu);
-  [impl_->retained addObject:b];
-  return Buffer{(__bridge void*)b, (uint8_t*)ptr, 0, bytes};
+// alloc/wrap run in their own autorelease pool: the C++ callers have none, and Metal keeps a new
+// buffer in the current pool too (measured: a buffer allocated without a pool is never freed,
+// even after the last reference is released), so release() could not return its memory.
+Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
+  if (bytes == 0) bytes = 16;
+  @autoreleasepool {
+    id<MTLBuffer> b = [dev(device_) newBufferWithLength:bytes
+                                                options:MTLResourceStorageModeShared |
+                                                        (tracked ? MTLResourceHazardTrackingModeTracked
+                                                                 : MTLResourceHazardTrackingModeUntracked)];
+    if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
+    if (label) b.label = [NSString stringWithUTF8String:label];
+    std::lock_guard<std::mutex> lk(impl_->mu);
+    [impl_->retained addObject:b];
+    return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
+  }
+}
+
+Buffer Gpu::wrap(void* ptr, size_t bytes, const char* label, bool tracked) {
+  @autoreleasepool {
+    id<MTLBuffer> b = [dev(device_) newBufferWithBytesNoCopy:ptr
+                                                      length:bytes
+                                                     options:MTLResourceStorageModeShared |
+                                                             (tracked ? MTLResourceHazardTrackingModeTracked
+                                                                      : MTLResourceHazardTrackingModeUntracked)
+                                                 deallocator:nil];
+    if (!b) fatal("Metal no-copy wrap of %zu bytes failed (page aligned?)", bytes);
+    if (label) b.label = [NSString stringWithUTF8String:label];
+    std::lock_guard<std::mutex> lk(impl_->mu);
+    [impl_->retained addObject:b];
+    return Buffer{(__bridge void*)b, (uint8_t*)ptr, 0, bytes};
+  }
+}
+
+void* Gpu::new_shared_event() {
+  id<MTLSharedEvent> ev = [dev(device_) newSharedEvent];
+  if (!ev) fatal("newSharedEvent failed");
+  return (__bridge_retained void*)ev;
 }
 
 void Gpu::release(Buffer& b) {
   if (!b.mtl) return;
   std::lock_guard<std::mutex> lk(impl_->mu);
+  // The residency set holds its allocations strongly (measured: a released 256 MB buffer stays
+  // allocated and resident until removed), so a buffer made resident must leave the set too.
+  if (residency_) {
+    if (@available(macOS 15.0, *)) {
+      id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
+      id<MTLBuffer> mb = (__bridge id<MTLBuffer>)b.mtl;
+      if ([rs containsAllocation:mb]) {
+        [rs removeAllocation:mb];
+        [rs commit];
+      }
+    }
+  }
   [impl_->retained removeObjectIdenticalTo:(__bridge id)b.mtl];
   b = Buffer{};
 }
@@ -263,12 +303,50 @@ void Encoder::commit() {
 void Encoder::wait() {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
   [cb waitUntilCompleted];
+  for (void* p : prev_) {
+    id<MTLCommandBuffer> b = (__bridge id<MTLCommandBuffer>)p;
+    [b waitUntilCompleted];
+    if (b.status == MTLCommandBufferStatusError) fatal("GPU error: %s", [[b.error description] UTF8String]);
+  }
   if (cb.status == MTLCommandBufferStatusError)
     fatal("GPU error: %s", [[cb.error description] UTF8String]);
 }
 double Encoder::gpu_ms() const {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
-  return (cb.GPUEndTime - cb.GPUStartTime) * 1000.0;
+  id<MTLCommandBuffer> first = prev_.empty() ? cb : (__bridge id<MTLCommandBuffer>)prev_.front();
+  return (cb.GPUEndTime - first.GPUStartTime) * 1000.0;
+}
+void Encoder::open_encoder() {
+  id<MTLComputeCommandEncoder> ne = [(__bridge id<MTLCommandBuffer>)cb_
+      computeCommandEncoderWithDispatchType:concurrent_ ? MTLDispatchTypeConcurrent : MTLDispatchTypeSerial];
+  enc_ = (__bridge_retained void*)ne;
+}
+void Encoder::signal_event(void* event, uint64_t value) {
+  id<MTLSharedEvent> ev = (__bridge id<MTLSharedEvent>)event;
+  if (enc_) {
+    [E(enc_) endEncoding];
+    CFRelease(enc_);
+    enc_ = nullptr;
+  }
+  id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
+  [cb encodeSignalEvent:ev value:value];
+  [cb addCompletedHandler:^(id<MTLCommandBuffer> ended) {
+    if (ended.status == MTLCommandBufferStatusError && ev.signaledValue < value) ev.signaledValue = value;
+  }];
+  [cb commit];
+  prev_.push_back(cb_);
+  id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
+  cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];
+  open_encoder();
+}
+void Encoder::wait_event(void* event, uint64_t value) {
+  if (enc_) {
+    [E(enc_) endEncoding];
+    CFRelease(enc_);
+    enc_ = nullptr;
+  }
+  [(__bridge id<MTLCommandBuffer>)cb_ encodeWaitForEvent:(__bridge id<MTLSharedEvent>)event value:value];
+  open_encoder();
 }
 Encoder::~Encoder() {
   if (enc_) {
@@ -276,6 +354,7 @@ Encoder::~Encoder() {
     CFRelease(enc_);
   }
   if (cb_) CFRelease(cb_);
+  for (void* p : prev_) CFRelease(p);
 }
 
 } // namespace ni

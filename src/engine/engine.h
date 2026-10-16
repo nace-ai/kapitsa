@@ -84,6 +84,7 @@ class Engine {
 
   EngineOptions opts_;
   std::unique_ptr<Qwen35> model_;
+  std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;

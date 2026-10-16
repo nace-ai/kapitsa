@@ -73,6 +73,11 @@ struct Qmm {
   uint32_t M, N, K, x_ld, y_ld, add, gs, w_expert_stride, s_expert_stride;
 };
 
+struct QmmLd {
+  Qmm q;
+  uint32_t w_ld, s_ld;
+};
+
 struct AttnPref {
   uint32_t T, Hq, Hkv, pos0, max_seq;
   float scale;

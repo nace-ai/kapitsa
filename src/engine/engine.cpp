@@ -357,12 +357,32 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
     if (boundary > p && boundary < p + T) {
-      if (in_pass) snap = oldest_ckpt();
+      // NI_SHORTPF captures the checkpoint inside the pass; a chunk the NI_ANE split would run is cut at
+      // the boundary instead (the split's two-half wavefront does not capture mid-chunk state).
+      if (in_pass && !model_->ane_splits(T)) snap = oldest_ckpt();
       else T = boundary - p;
+    }
+    // NI_ANE=1: a chunk that runs the GPU + Neural Engine FFN split saves the recurrent state and
+    // is waited for, so that it can run again on the GPU alone if the split fails.
+    const bool split = !snap && model_->ane_splits(T);
+    if (split) {
+      if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
+      model_->save(*e, s, *ane_ck_, p);
     }
     model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? boundary - p : 0);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (split) {
+      e->commit_and_wait();
+      if (!model_->ane_finish_chunk()) {
+        e = g.begin();
+        model_->restore(*e, s, *ane_ck_);
+        model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+        if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+        e->commit_and_wait();
+      }
+      e = g.begin();
+    }
     last_chunk_row = n - 1 - p;
     p += T;
     if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);

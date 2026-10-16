@@ -3,10 +3,13 @@
 // Prints generated ids, prompt/decode speeds; optionally dumps the logits of the first
 // generated position (raw float32) for comparison against a reference implementation.
 #include "metal/gpu.h"
+#include "ane/ffn_split.h"
 #include "model/qwen35.h"
 #include "util/log.h"
 
 #include <cmath>
+#include <mach/mach.h>
+
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -18,6 +21,13 @@
 #include <vector>
 
 using namespace ni;
+
+static double footprint_mb() {
+  task_vm_info_data_t vi;
+  mach_msg_type_number_t n = TASK_VM_INFO_COUNT;
+  if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &n) != KERN_SUCCESS) return -1;
+  return vi.phys_footprint / 1e6;
+}
 
 int main(int argc, char** argv) {
   if (argc < 3) {
@@ -39,6 +49,7 @@ int main(int argc, char** argv) {
   int n_gen = argc > 3 ? atoi(argv[3]) : 32;
   float temp = argc > 4 ? float(atof(argv[4])) : 0.0f;
   const char* dump = nullptr;
+  const char* dump_all = nullptr;  // logits of the prompt's last position and of every decode step
   bool tbt = false;
   int spec = 0;
   int pf_reps = 1;  // --pf-reps R: time the prefill R times (state reset in between), report each
@@ -49,6 +60,7 @@ int main(int argc, char** argv) {
   int prefix = 0, split = 0;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
+    if (i + 1 < argc && !strcmp(argv[i], "--dump-all-logits")) dump_all = argv[i + 1];
     if (!strcmp(argv[i], "--tbt")) tbt = true;
     if (i + 1 < argc && !strcmp(argv[i], "--spec")) spec = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--pf-reps")) pf_reps = atoi(argv[i + 1]);
@@ -82,6 +94,7 @@ int main(int argc, char** argv) {
   } else {
     const int C = m.prefill_chunk();
     Checkpoint ck0 = m.new_checkpoint(), ck1 = m.new_checkpoint();
+    std::unique_ptr<Checkpoint> ane_ck;
     if (prefix > 0) {
       if (prefix >= n) { fprintf(stderr, "--prefix must be < prompt length\n"); return 1; }
       for (int p = 0; p < prefix; p += C) {
@@ -108,12 +121,33 @@ int main(int argc, char** argv) {
         int T = std::min(C, n - p);
         Checkpoint* snap = nullptr;
         if (split > p && split < p + T) {
-          if (m.can_snapshot()) snap = &ck1;
+          // an in-pass checkpoint and the NI_ANE split do not mix: cut such a chunk at the boundary
+          if (m.can_snapshot() && !m.ane_splits(T)) snap = &ck1;
           else T = split - p;
+        }
+        // NI_ANE=1: a chunk that runs the GPU + ANE FFN split first saves the recurrent state, so
+        // that it can run again on the GPU alone if the split fails (KV rows are simply rewritten).
+        const bool ane = !snap && m.ane_splits(T);
+        if (ane) {
+          if (!ane_ck) ane_ck = std::make_unique<Checkpoint>(m.new_checkpoint());
+          m.save(*e, s, *ane_ck, p);
         }
         m.encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? split - p : 0);
         // MTP history rows i in [p, min(p+T, n-1)): pairs (h_i, t_{i+1})
         if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+        if (ane) {
+          e->commit_and_wait();
+          gpu += e->gpu_ms();
+          if (!m.ane_finish_chunk()) {
+            e = g.begin();
+            m.restore(*e, s, *ane_ck);
+            m.encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+            if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+            e->commit_and_wait();
+            gpu += e->gpu_ms();
+          }
+          e = g.begin();
+        }
         last_chunk = p;
         p += T;
         if (p == split) m.save(*e, s, ck1, split);
@@ -160,6 +194,20 @@ int main(int argc, char** argv) {
     }
   }
   double t_prompt = now_ms() - t0;
+  FILE* fall = dump_all ? fopen(dump_all, "wb") : nullptr;
+  if (fall) fwrite(m.logits(), 4, m.config().vocab, fall);
+  if (m.ane_split())
+    fprintf(stderr, "ane: system wired memory +%.0f MB at the program load, +%.0f MB after the first split chunk "
+            "(split surfaces %.0f MB)\n", m.ane_split()->wired_at_load(), m.ane_split()->wired_after_run(),
+            m.ane_split()->metal_bytes() / 1e6);
+  if (m.ane_split() || env_on("NI_MEM")) {
+    const auto& st = m.ane_stats();
+    fprintf(stderr, "ane: %d split chunks, %d evaluations, ANE %.0f ms (%.1f ms each), reruns %d%s; memory: Metal %.0f MB, "
+            "process footprint %.0f MB; thermal %s\n", st.chunks, st.evals, st.ane_ms,
+            st.evals ? st.ane_ms / st.evals : 0.0, st.reruns,
+            m.ane_split() && m.ane_split()->retired() ? " (split stopped)" : "", g.allocated_bytes() / 1e6,
+            footprint_mb(), Gpu::thermal_state());
+  }
   if (dump) {
     FILE* f = fopen(dump, "wb");
     fwrite(m.logits(), 4, m.config().vocab, f);
@@ -234,8 +282,9 @@ int main(int argc, char** argv) {
     e->commit();
     inflight.push_back(std::move(e));
     ++pos;
-    while (inflight.size() > 2 || (step == n_gen - 1 && !inflight.empty())) {
+    while (inflight.size() > (fall ? 0 : 2) || (step == n_gen - 1 && !inflight.empty())) {
       inflight.front()->wait();
+      if (fall) fwrite(m.logits(), 4, m.config().vocab, fall);
       gpu_total += inflight.front()->gpu_ms();
       ++gpu_n;
       inflight.pop_front();
@@ -253,6 +302,7 @@ int main(int argc, char** argv) {
     ++done;
   }
   double t_dec = now_ms() - t1;
+  if (fall) fclose(fall);
   if (Encoder::profiling()) Encoder::profile_report(int(out.size()) - 1);
   if (gpu_n) fprintf(stderr, "mean GPU time per step: %.2f ms (%d steps)\n", gpu_total / gpu_n, gpu_n);
   printf("ids:");

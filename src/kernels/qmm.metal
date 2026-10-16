@@ -25,11 +25,14 @@ struct QmmParams {
 constant constexpr int BK = 32;
 constant constexpr int PAD = 8;
 
-template <int BITS, int BM, int BN>
+// LD: the weight rows are w_ld words and s_ld groups apart instead of K's (a view of the leading K
+// inputs of wider rows: the GPU part of the ANE split's down projection). Default instances
+// (LD = false) compile as before.
+template <int BITS, int BM, int BN, bool LD = false>
 NI_INLINE void qmm_tile(const device half* X, const device uint32_t* W, const device bfloat* S,
                         const device bfloat* B, device float* Y, constant QmmParams& p, uint m0, uint m_end,
                         uint n0, const device uint* xrows, const device uint* yrows, threadgroup half* xs,
-                        threadgroup half* ws, uint tid, uint sg, uint lane) {
+                        threadgroup half* ws, uint tid, uint sg, uint lane, uint w_ld = 0, uint s_ld = 0) {
   constexpr int TM = BM / 2, TN = BN / 2;     // per-simdgroup tile
   constexpr int FM = TM / 8, FN = TN / 8;     // 8x8 fragments per simdgroup
   constexpr int PER_WORD = 32 / BITS;
@@ -40,8 +43,8 @@ NI_INLINE void qmm_tile(const device half* X, const device uint32_t* W, const de
     for (int j = 0; j < FN; ++j) acc[i][j] = simdgroup_float8x8(0);
 
   const uint K = p.K;
-  const uint wpr = K / PER_WORD;
-  const uint gpr = K / p.gs;
+  const uint wpr = LD ? w_ld : K / PER_WORD;
+  const uint gpr = LD ? s_ld : K / p.gs;
   for (uint k0 = 0; k0 < K; k0 += BK) {
     // X tile: BM rows x 32 halfs; 128 threads, each loads (BM*32/128) halfs as half4s
     for (uint i = tid; i < BM * BK / 4; i += 128) {
@@ -117,6 +120,23 @@ NI_QMM(qmm_b4_m64_n32, 4, 64, 32)
 NI_QMM(qmm_b4_m32_n128, 4, 32, 128)
 NI_QMM(qmm_b8_m32_n32, 8, 32, 32)
 NI_QMM(qmm_b8_m64_n64, 8, 64, 64)
+
+// qmm_b4_m64_n64 over a view: rows of w_ld words / s_ld scale groups (ANE split, NI_ANE=1).
+struct QmmLdParams {
+  QmmParams q;
+  uint w_ld;
+  uint s_ld;
+};
+[[kernel]] void qmm_b4_m64_n64_ld(const device half* X [[buffer(0)]], const device uint32_t* W [[buffer(1)]],
+                                  const device bfloat* S [[buffer(2)]], const device bfloat* B [[buffer(3)]],
+                                  device float* Y [[buffer(4)]], constant QmmLdParams& p [[buffer(5)]],
+                                  uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half xs[64 * (BK + PAD)];
+  threadgroup half ws[64 * (BK + PAD)];
+  qmm_tile<4, 64, 64, true>(X, W, S, B, Y, p.q, tg.y * 64, p.q.M, tg.x * 64, nullptr, nullptr, xs, ws, tid, sg, lane,
+                            p.w_ld, p.s_ld);
+}
 
 // MoE grouped GEMM. tiles[i] = (expert, row_begin, row_end) over the expert-sorted pair list;
 // xrows/yrows map sorted pair rows to X rows (token) and Y rows (pair). ntiles[0] = valid tiles.
