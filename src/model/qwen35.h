@@ -153,6 +153,8 @@ class Qwen35 {
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
   void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  // NI_GDN_PAR=1: GDN conv/prep, recurrence and gated norm of T rows; leaves the half rows in hh_
+  void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T);
   void enc_mlp(Encoder& e, const Layer& L);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);

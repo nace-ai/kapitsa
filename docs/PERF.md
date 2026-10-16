@@ -36,6 +36,44 @@ with softmax (v7), 16-byte tile loads (v8, -10%), 8 queries/16-key tiles (v9, sl
 fragment loads (v10). Ablation: device K/V loads ~25%, Q.K ~30%, P.V ~15%, the rest bookkeeping.
 Open: find what MLX does differently (it runs 32 rows of ONE head per threadgroup).
 
+Gated DeltaNet prefill (NI_GDN_PAR=1, opt-in, not measured yet). Default: gdn_prep loops over T per
+channel (C/128 = 64 threadgroups on the 35B, two barriers per token for the q/k norm), gdn_step one 1024-thread
+threadgroup per value head (32 on the 35B) with a threadgroup reduction per token; gdn_step was ~1.5 ms
+per 512 tokens, ~6% of a 4k prefill. NI_GDN_PAR: gdn_prep_par (a simdgroup per 8 tokens x 128
+channels, norm via simd_sum), gdn_step_par_l{4,8,16,32} (value rows of a head are independent:
+spread over simdgroups/threadgroups, no barriers; L lanes per row, 128/L state floats per lane;
+NI_GDN_STEP picks L, default 4; NI_GDN_SGS simdgroups per threadgroup, default 2), gdn_gnorm (gated
+RMSNorm, writes out_proj's half input, replacing rows_to_half). Sums keep the default kernels' order,
+so the outputs should be bit-identical. Estimated instructions per state element per token ~5.5 (L=4) vs
+~11 in gdn_step. Check/measure: `bench_gdn 512 32 16` (35B), `bench_gdn 512 48 16` (27B).
+
+## nace-infer vs other engines (M4 Pro 48 GB, tok/s)
+Other engines from research/inference/REPORT.md: server runs on real prompts (prefill = prompt
+tokens / TTFT, 4k = 4,133 and 16k = 16,285 tokens), MLX weights except llama.cpp (GGUF UD-Q4_K_M).
+nace-infer from ni_run (MLX 4-bit weights, not necessarily the same files as REPORT.md). Splash:
+published numbers, M5 Pro, needs macOS 26.4+.
+
+Qwen3.6-35B-A3B 4-bit:
+| engine | decode | prefill 4k | prefill 16k |
+|---|---|---|---|
+| nace-infer 0.3, plain | 105 | 765-785 | 600-606 |
+| nace-infer 0.3, MTP depth 1 | 116-123 | 765-785 | 600-606 |
+| mlx-lm 0.32.0 server | 63-67 (raw generate 81) | 923 | 824 |
+| oMLX 0.7.1.dev1 | 84-99 | 840-915 | 769-875 |
+| MTPLX 2.12.2, MTP depth 1 | 66-76 | 890-902 | 788-792 |
+| llama.cpp b11429 Metal | 53 | 733 | 681 |
+| llama.cpp + draft-mtp | 66-73 | 719 | 652 |
+| Splash (M5 Pro, reference only) | 210 | - | 2,011 at 32K |
+
+Qwen3.8-27B 4-bit:
+| engine | decode | prefill 4k | prefill 16k |
+|---|---|---|---|
+| nace-infer, plain | 16.0 | 111 | - |
+| nace-infer, MTP depth 1 | 23.9-25.3 | 111 | - |
+| mlx-lm | 10.7-11.4 | 125 | 101 |
+| oMLX | 11.8-12.0 | 128 | (refused, memory guard) |
+| MTPLX, MTP | 20.6-30.8 | 113-125 | 101-110 |
+
 ## Qwen3.8-27B 4-bit (dense, 64 layers, hidden 5120)
 | mode | decode tok/s | tok/cycle |
 |---|---|---|
