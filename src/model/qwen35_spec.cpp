@@ -10,7 +10,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <unordered_map>
+
+#include <nlohmann/json.hpp>
 
 namespace ni {
 
@@ -86,6 +89,22 @@ QLinear Qwen35::quantize8(const Tensor& w) {
   return L;
 }
 
+// An already-quantized linear from the MTP file (copied into engine-owned buffers).
+QLinear Qwen35::own_qlin(const WeightStore& w, const std::string& name) {
+  QLinear L;
+  L.w = own_copy(w.get(name + ".weight"));
+  L.s = own_copy(w.get(name + ".scales"));
+  L.b = own_copy(w.get(name + ".biases"));
+  const int64_t words = L.w->shape.back(), groups = L.s->shape.back();
+  L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
+  // 4-bit g64 is the only sidecar format in use; derive and check
+  L.gs = 64;
+  L.K = uint32_t(groups * 64);
+  L.bits = int(words * 32 / L.K);
+  if (L.bits != 4 && L.bits != 8) fatal("%s: unsupported quantization", name.c_str());
+  return L;
+}
+
 // Numbered per-expert tensors (mtp.layers.0.mlp.experts.<e>.<proj>.{weight,scales,biases}) ->
 // one stacked [E, N, ...] tensor each, as the trunk's switch_mlp layout.
 QLinear Qwen35::stack_experts(const WeightStore& w, const std::string& prefix, const std::string& proj) {
@@ -128,30 +147,58 @@ void Qwen35::load_mtp(const std::string& dir) {
   }
   double t0 = now_ms();
   auto get = [&](const std::string& n) -> const Tensor& { return w.get(n); };
+  // Which trunk hidden the head was trained on: MTPLX packs record it ("base_hidden_variant").
+  {
+    auto read = [](const std::string& p) -> nlohmann::json {
+      std::ifstream f(p);
+      if (!f) return nlohmann::json();
+      try { return nlohmann::json::parse(f); } catch (...) { return nlohmann::json(); }
+    };
+    std::string variant;
+    for (auto& fn : {"config.json", "pack_config.json"}) {
+      auto j = read(dir + "/" + fn);
+      if (j.contains("mtplx_mtp_contract")) variant = j["mtplx_mtp_contract"].value("base_hidden_variant", variant);
+    }
+    if (variant.empty()) {
+      auto j = read(dir + "/mtplx_runtime.json");
+      if (j.contains("forge_provenance") && j["forge_provenance"].contains("mtp_contract"))
+        variant = j["forge_provenance"]["mtp_contract"].value("base_hidden_variant", "");
+    }
+    mtp_post_norm_hidden_ = variant == "post_norm";
+  }
+  auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
+    return w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+  };
   mtp_pre_e_ = own_copy(get("mtp.pre_fc_norm_embedding.weight"));
   mtp_pre_h_ = own_copy(get("mtp.pre_fc_norm_hidden.weight"));
   mtp_norm_ = own_copy(get("mtp.norm.weight"));
-  mtp_fc_ = quantize8(get("mtp.fc.weight"));
+  mtp_fc_ = lin("mtp.fc");
   const std::string p = "mtp.layers.0.";
   Layer& L = mtp_;
   L.linear = false;
   L.in_norm = own_copy(get(p + "input_layernorm.weight"));
   L.post_norm = own_copy(get(p + "post_attention_layernorm.weight"));
-  L.q = quantize8(get(p + "self_attn.q_proj.weight"));
-  L.k = quantize8(get(p + "self_attn.k_proj.weight"));
-  L.v = quantize8(get(p + "self_attn.v_proj.weight"));
-  L.o = quantize8(get(p + "self_attn.o_proj.weight"));
+  L.q = lin(p + "self_attn.q_proj");
+  L.k = lin(p + "self_attn.k_proj");
+  L.v = lin(p + "self_attn.v_proj");
+  L.o = lin(p + "self_attn.o_proj");
   L.q_norm = own_copy(get(p + "self_attn.q_norm.weight"));
   L.k_norm = own_copy(get(p + "self_attn.k_norm.weight"));
-  L.router = quantize8(get(p + "mlp.gate.weight"));
-  L.shared_gate = quantize8(get(p + "mlp.shared_expert_gate.weight"));
-  L.sg = quantize8(get(p + "mlp.shared_expert.gate_proj.weight"));
-  L.su = quantize8(get(p + "mlp.shared_expert.up_proj.weight"));
-  L.sd = quantize8(get(p + "mlp.shared_expert.down_proj.weight"));
-  L.eg = stack_experts(w, p + "mlp.experts.", "gate_proj");
-  L.eu = stack_experts(w, p + "mlp.experts.", "up_proj");
-  L.ed = stack_experts(w, p + "mlp.experts.", "down_proj");
-  if (L.eg.gs != 32 && L.eg.gs != 64) fatal("MTP experts: group size %d unsupported", L.eg.gs);
+  if (cfg_.moe) {
+    L.router = lin(p + "mlp.gate");
+    L.shared_gate = lin(p + "mlp.shared_expert_gate");
+    L.sg = lin(p + "mlp.shared_expert.gate_proj");
+    L.su = lin(p + "mlp.shared_expert.up_proj");
+    L.sd = lin(p + "mlp.shared_expert.down_proj");
+    L.eg = stack_experts(w, p + "mlp.experts.", "gate_proj");
+    L.eu = stack_experts(w, p + "mlp.experts.", "up_proj");
+    L.ed = stack_experts(w, p + "mlp.experts.", "down_proj");
+    if (L.eg.gs != 32 && L.eg.gs != 64) fatal("MTP experts: group size %d unsupported", L.eg.gs);
+  } else {
+    L.mg = lin(p + "mlp.gate_proj");
+    L.mu = lin(p + "mlp.up_proj");
+    L.md = lin(p + "mlp.down_proj");
+  }
 
   // Draft head: the 32768 lowest token ids (byte-level BPE ids are roughly in merge order, i.e.
   // by frequency) plus every added/special token, so the drafter can still propose <tool_call>,
@@ -173,8 +220,8 @@ void Qwen35::load_mtp(const std::string& dir) {
   draft_head_[0] = rows_view(lm_head_, 0, draft_split_);
   draft_head_[1] = rows_view(lm_head_, draft_special0_, uint32_t(cfg_.vocab) - draft_special0_);
   mtp_loaded_ = true;
-  logi("MTP head loaded in %.0f ms (attention/fc/router/shared requantized to 8-bit; experts %d-bit g%d)",
-       now_ms() - t0, L.eg.bits, L.eg.gs);
+  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
+       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm");
 }
 
 // ---- small-batch encoders ----
@@ -193,6 +240,18 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
                       uint32_t y_ld) {
   if (L.gs != 64) fatal("qmvr: group %d", L.gs);
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
+  if (L.K > 4096 || (R == 1 && L.K > 2048 && false)) {  // wide inputs: tiled staging
+    // 3-4 rows of 4-bit: 8 values per lane keeps the per-lane x copies in registers
+    std::string kn = "qmvr4_b" + std::to_string(L.bits) + "_t" + std::to_string(R);
+    if (L.bits == 4 && R >= 3) kn += "_v8";
+    e.use(pipe2(kn));
+    kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
+    e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
+    e.val(5, p);
+    constexpr uint32_t rows = 4, nsg = 8;
+    e.dispatch((L.N + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
+    return;
+  }
   // R > 1: x rows staged as half in threadgroup memory (R * K <= 4096 * R), 4 rows/simdgroup
   static const int ver = getenv("NI_QMVR") ? atoi(getenv("NI_QMVR")) : 3;
   // v3 (simdgroup-matrix kernel) stages R*K halfs (<= 12288) and K/64*R group sums (<= 256)
@@ -360,9 +419,23 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   e.dispatch((D + rows * nsg - 1) / (rows * nsg), R, 1, 32 * nsg);
 }
 
+// Dense SwiGLU MLP for R rows: x += down(silu(gate(n)) * up(n)), n = norm(x).
+void Qwen35::enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x) {
+  const int D = cfg_.hidden;
+  enc_rows_norm(e, x, L.post_norm, xrn_, R, D);
+  enc_qmvr(e, L.mg, xrn_, hg_, R, false);
+  enc_qmvr(e, L.mu, xrn_, hu_, R, false);
+  uint32_t n = uint32_t(R) * L.mg.N;
+  e.use(pipe2("swiglu_f32"));
+  e.buf(0, hg_); e.buf(1, hu_); e.buf(2, mh_); e.val(3, n);
+  e.dispatch((n + 255) / 256, 1, 1, 256);
+  enc_qmvr(e, L.md, mh_, x, R, true);
+}
+
 // ---- MTP head ----
 
-void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out) {
+void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
+                        bool h_trunk) {
   if (!mtp_loaded_) fatal("no MTP head");
   if (R > kMaxVerify) fatal("encode_mtp: R=%d", R);
   const int D = cfg_.hidden;
@@ -372,14 +445,17 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   e.val(5, ep);
   e.dispatch((D / 8 + 63) / 64, R, 1, 64);
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
-  e.use(pipe2("mtp_concat_norm"));
+  const bool post = h_trunk && mtp_post_norm_hidden_;
+  e.use(pipe2(post ? "mtp_concat_norm_post" : "mtp_concat_norm"));
   e.buf(0, mtp_e_); e.buf(1, h, size_t(h_row0) * D * 4); e.buf(2, mtp_pre_e_->buf); e.buf(3, mtp_pre_h_->buf);
   e.buf(4, mtp_u_);
   e.val(5, np);
+  if (post) e.buf(6, final_norm_->buf);
   e.dispatch(R, 1, 1, 256);
   enc_qmvr(e, mtp_fc_, mtp_u_, mtp_x_, R, false);
   enc_attn_rows(e, mtp_, s.mtp_kc, s.mtp_vc, s.cap, mpos0, R, mtp_x_);
-  enc_moe_rows(e, mtp_, R, mtp_x_, true);
+  if (cfg_.moe) enc_moe_rows(e, mtp_, R, mtp_x_, true);
+  else enc_mlp_rows(e, mtp_, R, mtp_x_);
   enc_rows_norm(e, mtp_x_, mtp_norm_, mtp_post_, R, D);
   if (draft_out < 0) return;
   // greedy draft over the reduced vocabulary from the last row
@@ -413,10 +489,11 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
   e.val(5, ep);
   e.dispatch((D / 8 + 63) / 64, R, 1, 64);
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
-  e.use(pipe2("mtp_concat_norm"));
+  e.use(pipe2(mtp_post_norm_hidden_ ? "mtp_concat_norm_post" : "mtp_concat_norm"));
   e.buf(0, mtp_e_); e.buf(1, x_, size_t(h_row0) * D * 4); e.buf(2, mtp_pre_e_->buf); e.buf(3, mtp_pre_h_->buf);
   e.buf(4, mtp_u_);
   e.val(5, np);
+  if (mtp_post_norm_hidden_) e.buf(6, final_norm_->buf);
   e.dispatch(R, 1, 1, 256);
   enc_rows_half(e, mtp_u_, nullptr, hh_, R, 2 * D);
   enc_qmm(e, mtp_fc_, hh_, mtp_x_, R, false);
@@ -440,7 +517,8 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
   e.dispatch((R + 3) / 4, cfg_.hkv, 1, 256);
   enc_rows_half(e, attn_out_, nullptr, hh_, R, cfg_.hq * cfg_.head_dim);
   enc_qmm(e, mtp_.o, hh_, mtp_x_, R, true);
-  enc_moe_prefill(e, mtp_, R, mtp_x_);
+  if (cfg_.moe) enc_moe_prefill(e, mtp_, R, mtp_x_);
+  else enc_mlp_prefill(e, mtp_, R, mtp_x_);
 }
 
 // ---- trunk verify ----
@@ -479,7 +557,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
       enc_attn_rows(e, L, s.kc[i], s.vc[i], s.cap, pos, R, x_);
     }
     if (cfg_.moe) enc_moe_rows(e, L, R, x_, false);
-    else fatal("dense MLP not implemented yet");
+    else enc_mlp_rows(e, L, R, x_);
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_rows_norm(e, x_, final_norm_, xrn_, R, D);

@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
       auto e = g.begin();
       m.encode_mtp(*e, s, P - c, c, P - c + 1, m.hidden_rows(), h_row0, P + 1);
       for (int k = 2; k <= D; ++k)
-        m.encode_mtp(*e, s, P + k - 2, 1, P + k - 1, m.mtp_post(), k == 2 ? c - 1 : 0, P + k);
+        m.encode_mtp(*e, s, P + k - 2, 1, P + k - 1, m.mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
       m.encode_verify(*e, s, P, D + 1, sp, uint32_t(P));
       e->commit_and_wait();
       const int* y = m.samples();

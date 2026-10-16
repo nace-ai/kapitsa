@@ -108,7 +108,9 @@ class Qwen35 {
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
   // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
-  void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out);
+  // h_trunk: `h` holds trunk hidden states (pre-norm); false for the MTP's own chained output.
+  void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
+                  bool h_trunk = true);
   // Trunk forward of tokens[pos .. pos+R) (R <= kMaxVerify) without committing the recurrent
   // state: the rows go to the tape; samples() gets one sampled token per row and hidden_rows()
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
@@ -151,6 +153,10 @@ class Qwen35 {
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
   void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  void enc_mlp(Encoder& e, const Layer& L);
+  void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
+  QLinear own_qlin(const class WeightStore& w, const std::string& name);
   // speculative decoding helpers (qwen35_spec.cpp)
   void load_mtp(const std::string& dir);
   QLinear quantize8(const Tensor& w);
@@ -176,6 +182,7 @@ class Qwen35 {
   int tmax_;
   // MTP head
   bool mtp_loaded_ = false;
+  bool mtp_post_norm_hidden_ = false;  // head expects the trunk hidden after the final norm
   Layer mtp_;
   QLinear mtp_fc_;
   const Tensor *mtp_norm_ = nullptr, *mtp_pre_e_ = nullptr, *mtp_pre_h_ = nullptr;
@@ -191,7 +198,7 @@ class Qwen35 {
   Buffer rlog_, slog_, eidx_, ewts_, eh_;
   Buffer cand_v_, cand_i_, sprob_;
   // prefill-only
-  Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_;
+  Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_, mh_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
 };
 

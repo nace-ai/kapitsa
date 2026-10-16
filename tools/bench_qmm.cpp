@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
     uint32_t M, N, K;
   };
   std::vector<Shape> shapes = {{512, 8192, 2048}, {2048, 8192, 2048}, {2048, 2048, 4096}, {2048, 512, 2048}, {64, 512, 2048}};
+  if (getenv("SMALLM")) shapes = {{4, 8192, 2048}, {8, 8192, 2048}, {16, 8192, 2048}, {4, 17408, 5120}, {8, 5120, 17408}};
   for (auto sh : shapes) {
     const uint32_t M = sh.M, N = sh.N, K = sh.K;
     Buffer W = g.alloc(size_t(N) * K / 2), S = g.alloc(size_t(N) * K / 64 * 2), B = g.alloc(size_t(N) * K / 64 * 2);

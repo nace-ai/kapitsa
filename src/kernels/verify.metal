@@ -1236,3 +1236,139 @@ NI_INLINE void moe_down_dedupe_impl(const device uint32_t* dw, const device bflo
 
 NI_MOE_DEDUPE(t2, 2)
 NI_MOE_DEDUPE(t3, 3)
+
+// ---- qmvr4: small-batch matvec for any K (x rows staged per 4096-wide tile as half) ----
+template <int BITS, int NT, int ROWS, int VPL = 16>
+NI_INLINE void qmvr4_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                          const device float* x, device float* y, constant QmvrParams& p, threadgroup half* xs,
+                          uint row0, uint tid, uint ntg, uint lane) {
+  constexpr int PER_WORD = 32 / BITS;
+  constexpr uint MASK = (1u << BITS) - 1u;
+  constexpr int WORDS = VPL / PER_WORD;
+  constexpr uint TILE = 4096;
+  const uint K = p.K;
+  const uint wpr = K / PER_WORD, gpr = K / 64;
+  float acc[ROWS][NT];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    rows[r] = min(row0 + r, p.N - 1);
+    for (int t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+  }
+  for (uint kt = 0; kt < K; kt += TILE) {
+    const uint tile = min(TILE, K - kt);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < uint(NT) * tile / 4; i += ntg) {
+      uint t = i / (tile / 4), c = i % (tile / 4);
+      uint tt = min(t, p.R - 1);
+      ((threadgroup half4*)(xs + t * TILE))[c] = half4(((const device float4*)(x + tt * p.x_ld + kt))[c]);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 >= p.N) continue;
+    for (uint k0 = lane * VPL; k0 < tile; k0 += 32 * VPL) {
+      float xv[NT][VPL];
+      float xsum[NT];
+      for (int t = 0; t < NT; ++t) {
+        xsum[t] = 0.0f;
+        for (int i = 0; i < VPL / 4; ++i) {
+          float4 v = float4(((threadgroup const half4*)(xs + t * TILE + k0))[i]);
+          xsum[t] += v.x + v.y + v.z + v.w;
+          for (int e = 0; e < 4; ++e) xv[t][i * 4 + e] = v[e] * float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
+        }
+      }
+      const uint kg = kt + k0;
+      const uint g = kg / 64, wo = kg / PER_WORD;
+      for (int r = 0; r < ROWS; ++r) {
+        const device uint32_t* wp = w + rows[r] * wpr + wo;
+        uint32_t wv[WORDS];
+        if (WORDS == 4) {
+          uint4 v = *(const device uint4*)wp;
+          wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
+        } else if (WORDS == 2) {
+          uint2 v = *(const device uint2*)wp;
+          wv[0] = v.x; wv[1] = v.y;
+        } else {
+          wv[0] = wp[0];
+        }
+        const float s = float(scales[rows[r] * gpr + g]), b = float(biases[rows[r] * gpr + g]);
+        float d[NT];
+        for (int t = 0; t < NT; ++t) d[t] = 0.0f;
+        for (int i = 0; i < WORDS; ++i)
+          for (int j = 0; j < PER_WORD; ++j) {
+            float wf = float(wv[i] & (MASK << (BITS * j)));
+            for (int t = 0; t < NT; ++t) d[t] += wf * xv[t][i * PER_WORD + j];
+          }
+        for (int t = 0; t < NT; ++t) acc[r][t] += s * d[t] + b * xsum[t];
+      }
+    }
+  }
+  if (row0 >= p.N) return;
+  for (int r = 0; r < ROWS; ++r)
+    for (int t = 0; t < NT; ++t) {
+      float v = simd_sum(acc[r][t]);
+      uint row = row0 + r;
+      if (lane == 0 && row < p.N && uint(t) < p.R) {
+        device float* dst = y + t * p.y_ld + row;
+        *dst = p.add ? *dst + v : v;
+      }
+    }
+}
+
+#define NI_QMVR4(NAME, BITS, NT, ROWS, ...)                                                                    \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* s [[buffer(1)]],      \
+                       const device bfloat* b [[buffer(2)]], const device float* x [[buffer(3)]],         \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],               \
+                       uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup half xs[NT * 4096];                                                                      \
+    uint row0 = (tgp * nsg + sg) * ROWS;                                                                 \
+    qmvr4_impl<BITS, NT, ROWS __VA_OPT__(,) __VA_ARGS__>(w, s, b, x, y, p, xs, row0, tid, ntg, lane);                              \
+  }
+
+NI_QMVR4(qmvr4_b4_t1, 4, 1, 4)
+NI_QMVR4(qmvr4_b4_t2, 4, 2, 4)
+NI_QMVR4(qmvr4_b4_t3, 4, 3, 4)
+NI_QMVR4(qmvr4_b8_t1, 8, 1, 4)
+NI_QMVR4(qmvr4_b8_t2, 8, 2, 4)
+NI_QMVR4(qmvr4_b8_t3, 8, 3, 4)
+NI_QMVR4(qmvr4_b4_t3_v8, 4, 3, 4, 8)
+NI_QMVR4(qmvr4_b4_t4_v8, 4, 4, 4, 8)
+NI_QMVR4(qmvr4_b8_t4, 8, 4, 4)
+
+// MTP input when the head expects the trunk's final-normed hidden ("post_norm" contract):
+// u[r] = [rmsnorm(e[r]) * we, rmsnorm(rmsnorm(h[r]) * wf) * wh]. grid: R x 256.
+[[kernel]] void mtp_concat_norm_post(const device float* e [[buffer(0)]], const device float* h [[buffer(1)]],
+                                     const device bfloat* we [[buffer(2)]], const device bfloat* wh [[buffer(3)]],
+                                     device float* u [[buffer(4)]], constant RowsNormParams& p [[buffer(5)]],
+                                     const device bfloat* wf [[buffer(6)]], uint r [[threadgroup_position_in_grid]],
+                                     uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float red[32];
+  const device float* er = e + r * p.D;
+  const device float* hr = h + r * p.D;
+  float se = 0.0f, sh = 0.0f;
+  for (uint i = tid; i < p.D; i += ntg) {
+    se += er[i] * er[i];
+    sh += hr[i] * hr[i];
+  }
+  se = tg_sum(se, red, tid, ntg);
+  sh = tg_sum(sh, red, tid, ntg);
+  const float ie = metal::precise::rsqrt(se / float(p.D) + p.eps), ih = metal::precise::rsqrt(sh / float(p.D) + p.eps);
+  float s2 = 0.0f;
+  for (uint i = tid; i < p.D; i += ntg) {
+    float v = hr[i] * ih * float(wf[i]);
+    s2 += v * v;
+  }
+  s2 = tg_sum(s2, red, tid, ntg);
+  const float i2 = metal::precise::rsqrt(s2 / float(p.D) + p.eps);
+  for (uint i = tid; i < p.D; i += ntg) {
+    u[r * 2 * p.D + i] = er[i] * ie * float(we[i]);
+    u[r * 2 * p.D + p.D + i] = hr[i] * ih * float(wf[i]) * i2 * float(wh[i]);
+  }
+}
+
+// h[i] = silu(g[i]) * u[i] (fp32). grid: n threads.
+[[kernel]] void swiglu_f32(const device float* g [[buffer(0)]], const device float* u [[buffer(1)]],
+                           device float* h [[buffer(2)]], constant uint& n [[buffer(3)]],
+                           uint i [[thread_position_in_grid]]) {
+  if (i < n) h[i] = silu(g[i]) * u[i];
+}

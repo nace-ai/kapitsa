@@ -315,3 +315,207 @@ struct QmvMulti2Params {
 
 NI_QMV2_MULTI(qmv2_multi_r2, 2)
 NI_QMV2_MULTI(qmv2_multi_r1, 1)
+
+// ---- v3: any K (x staged in 4096-wide tiles). Used for the wide dense models (27B: hidden 5120,
+// DeltaNet value dim 6144, MLP 17408). With NORM the RMS is computed over the whole x first.
+NI_INLINE float rms_inv_device(const device float* x, uint K, float eps, threadgroup float* red, uint tid, uint ntg) {
+  float ss = 0.0f;
+  for (uint i = tid; i < K / 4; i += ntg) {
+    float4 v = ((const device float4*)x)[i];
+    ss += dot(v, v);
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  return metal::precise::rsqrt(ss / float(K) + eps);
+}
+
+template <int BITS, int ROWS>
+NI_INLINE void qmv3_tile_rows(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                              threadgroup const float* xs, uint K, uint kt, uint tile, uint N, thread const uint* rows,
+                              uint lane, thread float* acc) {
+  constexpr int PER_WORD = 32 / BITS;
+  constexpr uint MASK = (1u << BITS) - 1u;
+  constexpr int VPL = 16;
+  constexpr int WORDS = VPL / PER_WORD;
+  const uint wpr = K / PER_WORD, gpr = K / 64;
+  for (uint k0 = lane * VPL; k0 < tile; k0 += 32 * VPL) {
+    float xv[VPL];
+    float xsum = 0.0f;
+    for (int i = 0; i < VPL / 4; ++i) {
+      float4 v = ((threadgroup const float4*)(xs + k0))[i];
+      xsum += v.x + v.y + v.z + v.w;
+      for (int e = 0; e < 4; ++e) xv[i * 4 + e] = v[e] * float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
+    }
+    const uint kg = kt + k0;
+    const uint g = kg / 64, wo = kg / PER_WORD;
+    for (int r = 0; r < ROWS; ++r) {
+      const device uint32_t* wp = w + rows[r] * wpr + wo;
+      uint32_t wv[WORDS];
+      if (WORDS == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
+      } else {
+        uint2 v = *(const device uint2*)wp;
+        wv[0] = v.x; wv[1] = v.y;
+      }
+      float d = 0.0f;
+      for (int i = 0; i < WORDS; ++i)
+        for (int j = 0; j < PER_WORD; ++j) d += float(wv[i] & (MASK << (BITS * j))) * xv[i * PER_WORD + j];
+      acc[r] += float(scales[rows[r] * gpr + g]) * d + float(biases[rows[r] * gpr + g]) * xsum;
+    }
+  }
+}
+
+// Stages x[kt, kt+tile) (scaled by inv * nw when norm) into xs.
+NI_INLINE void stage_tile(const device float* x, uint kt, uint tile, bool norm, float inv, const device bfloat* nw,
+                          threadgroup float* xs, uint tid, uint ntg) {
+  for (uint i = tid; i < tile / 4; i += ntg) {
+    float4 v = ((const device float4*)(x + kt))[i];
+    if (norm) {
+      uint k = kt + i * 4;
+      v *= inv * float4(nw[k], nw[k + 1], nw[k + 2], nw[k + 3]);
+    }
+    ((threadgroup float4*)xs)[i] = v;
+  }
+}
+
+template <int BITS, int ROWS, bool ADD, bool NORM>
+NI_INLINE void qmv3_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                         const device float* x, device float* y, uint N, uint K, float eps, const device float* resid,
+                         const device bfloat* nw, threadgroup float* xs, threadgroup float* red, uint row0, uint tid,
+                         uint ntg, uint lane) {
+  const float inv = NORM ? rms_inv_device(x, K, eps, red, tid, ntg) : 1.0f;
+  uint rows[ROWS];
+  float acc[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    rows[r] = min(row0 + r, N - 1);
+    acc[r] = 0.0f;
+  }
+  for (uint kt = 0; kt < K; kt += 4096) {
+    const uint tile = min(4096u, K - kt);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    stage_tile(x, kt, tile, NORM, inv, nw, xs, tid, ntg);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 < N) qmv3_tile_rows<BITS, ROWS>(w, scales, biases, xs, K, kt, tile, N, rows, lane, acc);
+  }
+  if (row0 >= N) return;
+  for (int r = 0; r < ROWS; ++r) {
+    float v = simd_sum(acc[r]);
+    uint row = row0 + r;
+    if (lane == 0 && row < N) {
+      if (ADD) v += resid[row];
+      y[row] = v;
+    }
+  }
+}
+
+#define NI_QMV3(NAME, BITS, ROWS, ADD, NORM)                                                              \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device float* x [[buffer(3)]],     \
+                       device float* y [[buffer(4)]], constant QmvParams& p [[buffer(5)]],                 \
+                       const device float* resid [[buffer(6)]], const device bfloat* nw [[buffer(7)]],     \
+                       uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float xs[4096];                                                                           \
+    threadgroup float red[32];                                                                            \
+    uint row0 = (tgp * nsg + sg) * ROWS;                                                                  \
+    qmv3_impl<BITS, ROWS, ADD, NORM>(w, scales, biases, x, y, p.N, p.K, p.eps, resid, nw, xs, red, row0, tid, \
+                                     ntg, lane);                                                          \
+  }
+
+NI_QMV3(qmv3_b4_r2, 4, 2, false, false)
+NI_QMV3(qmv3_b4_r4, 4, 4, false, false)
+NI_QMV3(qmv3_b4_r2_add, 4, 2, true, false)
+NI_QMV3(qmv3_b4_r2_norm, 4, 2, false, true)
+NI_QMV3(qmv3_b4_r4_norm, 4, 4, false, true)
+NI_QMV3(qmv3_b8_r2, 8, 2, false, false)
+NI_QMV3(qmv3_b8_r2_add, 8, 2, true, false)
+NI_QMV3(qmv3_b8_r2_norm, 8, 2, false, true)
+
+// Multi-segment v3 (any K), optional norm, optional normalized-x output (full x, all threadgroups
+// write disjoint slices of it).
+#define NI_QMV3_MULTI(NAME, ROWS)                                                                         \
+  [[kernel]] void NAME(                                                                                  \
+      const device uint32_t* w0 [[buffer(0)]], const device bfloat* s0 [[buffer(1)]],                    \
+      const device bfloat* b0 [[buffer(2)]], device float* y0 [[buffer(3)]],                             \
+      const device uint32_t* w1 [[buffer(4)]], const device bfloat* s1 [[buffer(5)]],                    \
+      const device bfloat* b1 [[buffer(6)]], device float* y1 [[buffer(7)]],                             \
+      const device uint32_t* w2 [[buffer(8)]], const device bfloat* s2 [[buffer(9)]],                    \
+      const device bfloat* b2 [[buffer(10)]], device float* y2 [[buffer(11)]],                           \
+      const device uint32_t* w3 [[buffer(12)]], const device bfloat* s3 [[buffer(13)]],                  \
+      const device bfloat* b3 [[buffer(14)]], device float* y3 [[buffer(15)]],                           \
+      const device float* x [[buffer(16)]], constant QmvMulti2Params& p [[buffer(17)]],                  \
+      const device bfloat* nw [[buffer(18)]], device float* xn_out [[buffer(19)]],                       \
+      uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],               \
+      uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],                  \
+      uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
+    threadgroup float xs[4096];                                                                           \
+    threadgroup float red[32];                                                                            \
+    const bool norm = p.norm != 0;                                                                        \
+    const float inv = norm ? rms_inv_device(x, p.K, p.eps, red, tid, ntg) : 1.0f;                         \
+    if (p.write_xn && tgp == 0)                                                                           \
+      for (uint i = tid; i < p.K; i += ntg) xn_out[i] = norm ? x[i] * inv * float(nw[i]) : x[i];         \
+    uint seg = 0;                                                                                        \
+    for (uint i = 1; i < p.nseg; ++i)                                                                    \
+      if (tgp >= p.tg_begin[i]) seg = i;                                                                  \
+    const uint N = p.N[seg];                                                                              \
+    uint row0 = ((tgp - p.tg_begin[seg]) * nsg + sg) * ROWS;                                             \
+    const device uint32_t* W = seg == 0 ? w0 : seg == 1 ? w1 : seg == 2 ? w2 : w3;                        \
+    const device bfloat* S = seg == 0 ? s0 : seg == 1 ? s1 : seg == 2 ? s2 : s3;                          \
+    const device bfloat* B = seg == 0 ? b0 : seg == 1 ? b1 : seg == 2 ? b2 : b3;                          \
+    device float* Y = seg == 0 ? y0 : seg == 1 ? y1 : seg == 2 ? y2 : y3;                                 \
+    uint rows[ROWS];                                                                                      \
+    float acc[ROWS];                                                                                      \
+    for (int r = 0; r < ROWS; ++r) { rows[r] = min(row0 + r, N - 1); acc[r] = 0.0f; }                     \
+    for (uint kt = 0; kt < p.K; kt += 4096) {                                                             \
+      const uint tile = min(4096u, p.K - kt);                                                             \
+      threadgroup_barrier(mem_flags::mem_threadgroup);                                                    \
+      stage_tile(x, kt, tile, norm, inv, nw, xs, tid, ntg);                                               \
+      threadgroup_barrier(mem_flags::mem_threadgroup);                                                    \
+      if (row0 < N) {                                                                                     \
+        if (p.bits[seg] == 8) qmv3_tile_rows<8, ROWS>(W, S, B, xs, p.K, kt, tile, N, rows, lane, acc);    \
+        else qmv3_tile_rows<4, ROWS>(W, S, B, xs, p.K, kt, tile, N, rows, lane, acc);                     \
+      }                                                                                                   \
+    }                                                                                                     \
+    if (row0 >= N) return;                                                                                \
+    for (int r = 0; r < ROWS; ++r) {                                                                      \
+      float v = simd_sum(acc[r]);                                                                         \
+      if (lane == 0 && row0 + r < N) Y[row0 + r] = v;                                                     \
+    }                                                                                                     \
+  }
+
+NI_QMV3_MULTI(qmv3_multi_r2, 2)
+
+// Dense SwiGLU MLP, gate+up fused (any K): h[i] = silu(gate_i . xn) * (up_i . xn), xn = rmsnorm(x).
+[[kernel]] void mlp_gate_up(const device uint32_t* gw [[buffer(0)]], const device bfloat* gs [[buffer(1)]],
+                            const device bfloat* gb [[buffer(2)]], const device uint32_t* uw [[buffer(3)]],
+                            const device bfloat* us [[buffer(4)]], const device bfloat* ub [[buffer(5)]],
+                            const device float* x [[buffer(6)]], const device bfloat* nw [[buffer(7)]],
+                            device float* h [[buffer(8)]], constant QmvParams& p [[buffer(9)]],
+                            uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                            uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                            uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  threadgroup float xs[4096];
+  threadgroup float red[32];
+  const float inv = rms_inv_device(x, p.K, p.eps, red, tid, ntg);
+  const uint row0 = (tgp * nsg + sg) * ROWS;
+  uint rows[ROWS];
+  float ag[ROWS], au[ROWS];
+  for (int r = 0; r < ROWS; ++r) { rows[r] = min(row0 + r, p.N - 1); ag[r] = au[r] = 0.0f; }
+  for (uint kt = 0; kt < p.K; kt += 4096) {
+    const uint tile = min(4096u, p.K - kt);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    stage_tile(x, kt, tile, true, inv, nw, xs, tid, ntg);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 < p.N) {
+      qmv3_tile_rows<4, ROWS>(gw, gs, gb, xs, p.K, kt, tile, p.N, rows, lane, ag);
+      qmv3_tile_rows<4, ROWS>(uw, us, ub, xs, p.K, kt, tile, p.N, rows, lane, au);
+    }
+  }
+  if (row0 >= p.N) return;
+  for (int r = 0; r < ROWS; ++r) {
+    float g = simd_sum(ag[r]), u = simd_sum(au[r]);
+    if (lane == 0 && row0 + r < p.N) h[row0 + r] = silu(g) * u;
+  }
+}

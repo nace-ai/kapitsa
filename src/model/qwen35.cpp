@@ -21,6 +21,7 @@ static json read_json(const std::string& path) {
 }
 
 static json quant_cfg_;
+static Pipeline pipe(const std::string& n);
 
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
@@ -165,8 +166,8 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   if (cfg_.moe && (cfg_.moe_I % 512 || cfg_.shared_I % 512)) fatal("expert sizes must be multiples of 512");
   if (cfg_.moe && (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) > 4608) fatal("MoE decode: (k+1)*I > 4608");
   if (cfg_.moe && (cfg_.experts % 32 || cfg_.experts > 512 || cfg_.top_k > 16)) fatal("MoE: unsupported expert count");
-  if (cfg_.hidden > 4096 || cfg_.lin_hv * cfg_.lin_dv > 4096 || cfg_.hq * cfg_.head_dim > 4096)
-    fatal("decode kernels stage at most 4096 inputs");
+  if (cfg_.moe && (cfg_.hidden > 4096 || cfg_.lin_hv * cfg_.lin_dv > 4096 || cfg_.hq * cfg_.head_dim > 4096))
+    fatal("MoE decode kernels stage at most 4096 inputs");
   if (embed_.bits != 4) fatal("embedding must be 4-bit");
 
   if (!getenv("NI_NO_MTP")) load_mtp(dir);
@@ -218,11 +219,12 @@ void Qwen35::alloc_state() {
   xrn_ = g.alloc(size_t(kMaxVerify) * std::max(D, VD) * 4, "xrn");
   samp_ = g.alloc(64, "samples");
   dlog_ = g.alloc(size_t(cfg_.vocab) * 4, "draft_logits");
+  mh_ = g.alloc(size_t(kMaxVerify) * std::max(cfg_.dense_I, 1) * 4, "mlp_h");
   sprob_ = g.alloc(64 * 4);
   {
     const size_t P = size_t(T) * std::max(cfg_.top_k, 1);
     const int I = std::max({cfg_.moe_I, cfg_.shared_I, cfg_.dense_I, 1});
-    const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim}); // widest half input row
+    const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim, cfg_.dense_I}); // widest half input row
     xh_ = g.alloc(size_t(T) * W * 2, "xh");
     hh_ = g.alloc(size_t(T) * W * 2, "hh");
     ridx_ = g.alloc(P * 4);
@@ -339,9 +341,13 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
                      const Tensor* norm) {
   // Tuned on M4 Pro: huge matrices (lm_head) like 4 rows x 4 simdgroups, the rest 2 rows x 8.
   const bool huge = L.N >= 65536;
-  const uint32_t rows = huge ? 4 : 2, nsg = huge ? 4 : 8;
+  uint32_t rows = huge ? 4 : 2, nsg = huge ? 4 : 8;
   if (L.gs != 64) fatal("qmv: group size %d unsupported", L.gs);
   std::string name = "qmv2_b" + std::to_string(L.bits) + "_g64_r" + std::to_string(rows);
+  if (L.K > 4096) {  // wide inputs: x staged in 4096-wide tiles
+    if (L.bits == 8 || resid) rows = 2;
+    name = "qmv3_b" + std::to_string(L.bits) + "_r" + std::to_string(rows);
+  }
   if (resid) name += "_add";
   if (norm) name += "_norm";
   static std::unordered_map<std::string, Pipeline> cache;
@@ -363,8 +369,9 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
 void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm,
                            const Buffer* xn_out) {
   static Pipeline pp = Gpu::get().pipeline("qmv2_multi_r2");
+  static Pipeline pw = Gpu::get().pipeline("qmv3_multi_r2");
   constexpr uint32_t rows = 2, nsg = 8;
-  e.use(pp);
+  e.use(segs[0].L->K > 4096 ? pw : pp);
   kp::QmvMulti2 p{};
   p.K = segs[0].L->K;
   p.nseg = uint32_t(segs.size());
@@ -482,6 +489,31 @@ void Qwen35::enc_moe(Encoder& e, const Layer& L) {
   e.dispatch((cfg_.hidden + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
 }
 
+void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
+  static Pipeline gu = Gpu::get().pipeline("mlp_gate_up");
+  constexpr uint32_t rows = 2, nsg = 8;
+  kp::Qmv p{L.mg.N, L.mg.K, L.mg.K, L.mg.N, cfg_.eps};
+  e.use(gu);
+  e.buf(0, L.mg.w->buf); e.buf(1, L.mg.s->buf); e.buf(2, L.mg.b->buf);
+  e.buf(3, L.mu.w->buf); e.buf(4, L.mu.s->buf); e.buf(5, L.mu.b->buf);
+  e.buf(6, x_); e.buf(7, L.post_norm->buf); e.buf(8, mh_);
+  e.val(9, p);
+  e.dispatch((L.mg.N + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
+  enc_qmv(e, L.md, mh_, x_, &x_, nullptr);
+}
+
+void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
+  const int D = cfg_.hidden;
+  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  enc_qmm(e, L.mg, xh_, hg_, T, false);
+  enc_qmm(e, L.mu, xh_, hu_, T, false);
+  uint32_t n = uint32_t(T) * L.mg.N;
+  e.use(pipe("swiglu_half"));
+  e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
+  e.dispatch((n + 255) / 256, 1, 1, 256);
+  enc_qmm(e, L.md, hhalf_, xbuf, T, true);
+}
+
 void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
   static Pipeline emb = Gpu::get().pipeline("embed_q4");
   static Pipeline st1 = Gpu::get().pipeline("topk_stage1");
@@ -506,7 +538,7 @@ void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, 
     if (i + 1 == dbg_layers && getenv("NI_DEBUG_HALF")) return;
     if (skip & 1) continue;
     if (cfg_.moe) enc_moe(e, L);
-    else fatal("dense MLP not implemented yet");
+    else enc_mlp(e, L);
   }
   if (!sample || (skip & 8)) return;
   enc_sample(e, s, x_, pos + 1, sp, step);
@@ -679,7 +711,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       enc_qmm(e, L.o, hh_, x_, T, true);
     }
     if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
-    else fatal("dense MLP not implemented yet");
+    else enc_mlp_prefill(e, L, T, x_);
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
 }

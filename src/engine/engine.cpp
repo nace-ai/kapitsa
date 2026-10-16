@@ -409,7 +409,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       auto e2 = g.begin();
       model_->encode_mtp(*e2, s, P - c, c, P - c + 1, model_->hidden_rows(), h_row0, P + 1);
       for (int k = 2; k <= depth; ++k)
-        model_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, model_->mtp_post(), k == 2 ? c - 1 : 0, P + k);
+        model_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, model_->mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
       model_->encode_verify(*e2, s, P, depth + 1, sp, uint32_t(P));
       e2->commit_and_wait();
       const int* y = model_->samples();

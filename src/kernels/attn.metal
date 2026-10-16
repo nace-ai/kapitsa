@@ -1346,7 +1346,7 @@ NI_INLINE void attn_prefill10_impl(const device float* q, const device half* kc,
       uint r = i / (kHD / 4), c4 = i % (kHD / 4);
       uint s = part * QPP + r / 8, g = r % 8;
       uint t = min(t0 + s, p.T - 1);
-      float4 v = *(const device float4*)(q + (t * p.Hq + kvh * G + g) * kHD + c4 * 4);
+      float4 v = g < G ? *(const device float4*)(q + (t * p.Hq + kvh * G + g) * kHD + c4 * 4) : float4(0);
       *(threadgroup half4*)(kv + r * kLD2 + c4 * 4) = half4(v * p.scale);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -1437,7 +1437,7 @@ NI_INLINE void attn_prefill10_impl(const device float* q, const device half* kc,
         simdgroup_multiply_accumulate(o[j], pf[c], vf, o[j]);
       }
   }
-  if (qvalid) {
+  if (qvalid && frow < G) {
     const float inv = l_row > 0.0f ? 1.0f / l_row : 0.0f;
     const uint h = kvh * G + frow;
     const device float* gate = qg + (qi * p.Hq + h) * 2 * kHD + kHD + dh * kDH;
