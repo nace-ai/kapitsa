@@ -326,3 +326,72 @@ struct Bucket2Params {
     xrows[p.P + t] = t;
   }
 }
+
+// moe_bucket2 with the per-expert offsets and tiles from parallel prefix sums instead of thread 0's
+// loop over the experts (53-94 us per layer, ~1% of a short prefill): same outputs bit for bit (same
+// tile order: expert-major, rows ascending; shared tiles last). E <= 512, one threadgroup of 1024.
+[[kernel]] void moe_bucket3(const device uint* idx [[buffer(0)]], device uint* yrows [[buffer(1)]],
+                            device uint* xrows [[buffer(2)]], device uint* tiles [[buffer(3)]],
+                            device uint* ntiles [[buffer(4)]], constant Bucket2Params& p [[buffer(5)]],
+                            uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                            uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup atomic_uint cnt[512];
+  threadgroup uint off[512];
+  threadgroup uint sums[2][16];
+  threadgroup uint totals[2];
+  for (uint e = tid; e < p.E; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < p.P; i += ntg) atomic_fetch_add_explicit(&cnt[idx[i]], 1u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  // exclusive prefix sums of rows and tiles over the experts (threads tid < 512: 16 simdgroups)
+  const uint c = tid < p.E ? atomic_load_explicit(&cnt[tid], memory_order_relaxed) : 0u;
+  const uint nt = (c + p.BM - 1) / p.BM;
+  const uint pc = simd_prefix_exclusive_sum(c), pt = simd_prefix_exclusive_sum(nt);
+  if (tid < 512 && lane == 31) {
+    sums[0][sg] = pc + c;
+    sums[1][sg] = pt + nt;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg == 0) {
+    const uint a = lane < 16 ? sums[0][lane] : 0u, b = lane < 16 ? sums[1][lane] : 0u;
+    const uint ea = simd_prefix_exclusive_sum(a), eb = simd_prefix_exclusive_sum(b);
+    if (lane < 16) {
+      sums[0][lane] = ea;
+      sums[1][lane] = eb;
+    }
+    if (lane == 31) {
+      totals[0] = ea + a;
+      totals[1] = eb + b;
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < p.E) {
+    const uint o = sums[0][sg] + pc, to = sums[1][sg] + pt;
+    off[tid] = o;
+    for (uint r = 0; r < nt; ++r) {
+      tiles[(to + r) * 3 + 0] = tid;
+      tiles[(to + r) * 3 + 1] = o + r * p.BM;
+      tiles[(to + r) * 3 + 2] = o + min((r + 1) * p.BM, c);
+    }
+  }
+  const uint nt_routed = totals[1], nt_shared = (p.S + p.BM - 1) / p.BM;
+  for (uint r = tid; r < nt_shared; r += ntg) {
+    tiles[(nt_routed + r) * 3 + 0] = p.E;
+    tiles[(nt_routed + r) * 3 + 1] = p.P + r * p.BM;
+    tiles[(nt_routed + r) * 3 + 2] = p.P + min((r + 1) * p.BM, p.S);
+  }
+  if (tid == 0) ntiles[0] = nt_routed + nt_shared;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint e = tid; e < p.E; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < p.P; i += ntg) {
+    uint e = idx[i];
+    uint pos = off[e] + atomic_fetch_add_explicit(&cnt[e], 1u, memory_order_relaxed);
+    yrows[pos] = i;
+    xrows[pos] = i / p.k;
+  }
+  for (uint t = tid; t < p.S; t += ntg) {
+    yrows[p.P + t] = p.P + t;
+    xrows[p.P + t] = t;
+  }
+}

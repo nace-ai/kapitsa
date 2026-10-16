@@ -65,6 +65,9 @@ class Gpu {
   std::unique_ptr<Encoder> begin(bool concurrent = false);
   // Keeps every resource resident (avoids per-dispatch residency checks).
   void make_resident(const std::vector<Buffer>& bufs);
+  // Commits a one-threadgroup command buffer and returns at once: a request handler calls it on arrival
+  // so the GPU's wake-up after an idle gap overlaps the CPU work before the real commit.
+  void wake();
 
   void* device() const { return device_; }
   void* queue() const { return queue_; }
@@ -101,6 +104,11 @@ class Encoder {
   void wait_event(void* event, uint64_t value);
   void commit_and_wait() { commit(); wait(); }
   double gpu_ms() const;     // GPU time of the finished command buffer
+  // GPU start / end of the finished command buffer on the host clock (mach time, ms), and that
+  // clock now: for commit -> start and end -> wake-up latencies
+  double gpu_start_host_ms() const;
+  double gpu_end_host_ms() const;
+  static double host_ms();
   ~Encoder();
 
   // Profiling (NI_PROFILE=1): every dispatch runs in its own command buffer so its GPU time can

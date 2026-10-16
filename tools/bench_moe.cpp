@@ -1,10 +1,19 @@
 // MoE prefill GEMM benchmark + correctness on one synthetic Qwen3.6-35B-A3B layer (D=2048, I=512,
-// 256 experts, top-8, shared expert I=512, 4-bit g64): the original path (moe_bucket,
-// qmm_moe_b4_m16_n64 gate/up -> fp32, swiglu_half, down; shared expert as 3 dense GEMMs + swiglu)
-// against the NI_MOE_FUSED path (moe_bucket2, qmm_moe_gu, qmm_moe_dn; shared expert folded in) for
-// 16/32/64-row tiles. Outputs must match the original bit for bit (same dequantized halfs, same
-// MMA order); the tool prints mismatch counts and max differences.
-//   bench_moe [T=2048] [skew=1]   (skew=0: uniform routing; 1: Zipf-like expert popularity)
+// 256 experts, top-8, 4-bit g64), routed experts only (the default NI_MOE_FUSED=2 keeps the shared
+// expert on the dense path):
+//   orig    moe_bucket (16-row tiles), qmm_moe_b4_m16_n64 gate and up -> fp32, swiglu_half, down
+//   fused   moe_bucket2 (64-row tiles), qmm_moe_gu_b4_m64_n32 (gate/up/SwiGLU), qmm_moe_dn_b4_m64_n64
+//           (the default NI_MOE_FUSED path; must equal orig bit for bit: same dequantized halfs and
+//           MMA order)
+//   qrm     moe_bucket2 (BM-row tiles), qrm_gu_* / qrm_dn_* (qmm_moe3.metal: weights dequantized
+//           straight into MMA registers; agrees with orig to rounding)
+// Every path is checked against a double-precision CPU reference on sampled outputs (gate/up: on
+// the dequantized halfs of orig's rule half(s*q + b); down: on the path's own half h rows), as
+// max |got - ref| / (|ref| + 1) like bench_qmm. Timing: trials interleaved over the paths, each the
+// mean of `reps` back-to-back runs in one command buffer; medians printed.
+//   bench_moe [T=2048] [skew=1] [trials=5]   (skew=0: uniform random routing; 1: Zipf-like popularity;
+//                                             2: balanced, every expert gets P/E rows)
+//   BENCH_QRM="gu:dn,gu:dn" picks the qrm kernel pairs (tile rows/width parsed from _m<BM>_n<BN>).
 #include "metal/gpu.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -14,6 +23,7 @@
 #include <cstring>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -64,14 +74,27 @@ static float h2f(uint16_t u) {
   return float(h);
 }
 
+// dequantized weight (orig's rule: float s*q + b rounded to half) of matrix e, row n, column k
+static double wq(const QMat& m, uint32_t e, uint32_t n, uint32_t k) {
+  const size_t row = size_t(e) * m.N + n, i = row * m.K + k;
+  const uint32_t q = (m.w.as<uint32_t>()[i / 8] >> (4 * (i % 8))) & 15;
+  const float v = bf16_to_f32(m.s.as<uint16_t>()[i / 64]) * float(q) + bf16_to_f32(m.b.as<uint16_t>()[i / 64]);
+  return double(float(__fp16(v)));
+}
+
+static int name_int(const std::string& n, const char* key) {
+  size_t p = n.rfind(key);
+  return p == std::string::npos ? 0 : atoi(n.c_str() + p + strlen(key));
+}
+
 int main(int argc, char** argv) {
   const uint32_t T = argc > 1 ? atoi(argv[1]) : 2048;
-  const bool skew = argc > 2 ? atoi(argv[2]) != 0 : true;
+  const int skew = argc > 2 ? atoi(argv[2]) : 1;  // 0 uniform random, 1 Zipf-like, 2 balanced (P/E rows each)
+  const int trials = argc > 3 ? atoi(argv[3]) : 5;
   const uint32_t D = 2048, I = 512, E = 256, k = 8, gs = 64, P = T * k;
   Gpu& g = Gpu::get();
 
   QMat eg = make_qmat(g, E, I, D), eu = make_qmat(g, E, I, D), ed = make_qmat(g, E, D, I);
-  QMat sg = make_qmat(g, 1, I, D), su = make_qmat(g, 1, I, D), sd = make_qmat(g, 1, D, I);
   Buffer xh = g.alloc(size_t(T) * D * 2);
   for (size_t i = 0; i < size_t(T) * D; ++i) {
     __fp16 h = rndf();
@@ -90,6 +113,12 @@ int main(int argc, char** argv) {
     std::vector<uint32_t> cnt(E, 0);
     for (uint32_t t = 0; t < T; ++t) {
       uint32_t got = 0;
+      if (skew == 2)
+        for (; got < k; ++got) {
+          const uint32_t e = (t * k + got) % E;
+          idx.as<uint32_t>()[t * k + got] = e;
+          cnt[e]++;
+        }
       while (got < k) {
         double u = (rnd() / 4294967296.0) * acc;
         uint32_t e = perm[std::lower_bound(cdf.begin(), cdf.end(), u) - cdf.begin()];
@@ -102,166 +131,258 @@ int main(int argc, char** argv) {
     }
     std::sort(cnt.begin(), cnt.end());
     printf("T=%u P=%u, rows per expert: min %u median %u max %u (%s routing)\n", T, P, cnt[0], cnt[E / 2], cnt[E - 1],
-           skew ? "skewed" : "uniform");
+           skew == 2 ? "balanced" : skew ? "skewed" : "uniform");
+  }
+  const uint32_t wst_gu = I * (D / 8), sst_gu = I * (D / gs), wst_dn = D * (I / 8), sst_dn = D * (I / gs);
+
+  // ---- paths
+  struct Path {
+    std::string name, gu, dn;
+    int kind;  // 0 orig, 1 fused (qmm_moe), 2 qrm, 3 short-prefill 8-row tiles (qmms_moe*)
+    uint32_t bm, bn_gu, bn_dn;
+    Buffer yrows, xrows, tiles, ntiles, hg, hu, h, yd;
+    std::vector<double> t_gu, t_dn, t_all;
+    double err_h = 0, err_y = 0;
+    size_t bad_h = 0, bad_y = 0;  // bitwise mismatches vs orig (fused only)
+  };
+  std::vector<Path> paths;
+  paths.push_back({"orig", "qmm_moe_b4_m16_n64", "qmm_moe_b4_m16_n64", 0, 16, 64, 64});
+  paths.push_back({"fused64", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64", 1, 64, 32, 64});
+  {
+    const char* env = getenv("BENCH_QRM");
+    std::string spec = env && *env ? env : "qrm_gu_k32_m32_n64:qrm_dn_k32_m32_n128";
+    std::stringstream ss(spec);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+      size_t c = item.find(':');
+      if (c == std::string::npos) fatal("BENCH_QRM item %s: expected gu:dn", item.c_str());
+      std::string gu = item.substr(0, c), dn = item.substr(c + 1);
+      uint32_t bm = uint32_t(name_int(gu, "_m"));
+      if (bm != uint32_t(name_int(dn, "_m"))) fatal("BENCH_QRM %s: gate/up and down tile rows differ", item.c_str());
+      paths.push_back({gu.substr(7) + "+" + dn.substr(7), gu, dn, 2, bm, uint32_t(name_int(gu, "_n")),
+                       uint32_t(name_int(dn, "_n"))});
+    }
+  }
+  // BENCH_SHORT=1: the short-prefill expert paths (8-row tiles): qmms_moe (8-row MMA) and the hybrid
+  // qmms_moe2 (tiles of <= 2 rows by FMAs)
+  if (getenv("BENCH_SHORT") && atoi(getenv("BENCH_SHORT"))) {
+    paths.push_back({"qmms_moe (8-row MMA)", "qmms_moe_gu_b4", "qmms_moe_dn_b4", 3, 8, 32, 32});
+    paths.push_back({"qmms_moe2 (FMA <= 2 rows)", "qmms_moe2_gu_b4", "qmms_moe2_dn_b4", 3, 8, 32, 32});
+  }
+  for (auto& p : paths) {
+    const size_t R = P;
+    p.yrows = g.alloc(R * 4);
+    p.xrows = g.alloc(R * 4);
+    p.tiles = g.alloc((R + E + 1) * 3 * 4);
+    p.ntiles = g.alloc(16);
+    if (p.kind == 0) {
+      p.hg = g.alloc(R * I * 4);
+      p.hu = g.alloc(R * I * 4);
+    }
+    p.h = g.alloc(R * I * 2);
+    p.yd = g.alloc(R * size_t(D) * 4);
   }
 
-  // ---- original path buffers
-  Buffer spair = g.alloc(size_t(P) * 4), stok = g.alloc(size_t(P) * 4);
-  Buffer tiles = g.alloc((size_t(P) + E + 1) * 3 * 4), ntiles = g.alloc(16);
-  Buffer hg = g.alloc(size_t(P) * I * 4), hu = g.alloc(size_t(P) * I * 4), hhalf = g.alloc(size_t(P) * I * 2);
-  Buffer yd = g.alloc(size_t(P) * D * 4);
-  Buffer sgb = g.alloc(size_t(T) * I * 4), sub = g.alloc(size_t(T) * I * 4), hh = g.alloc(size_t(T) * I * 2);
-  Buffer ys = g.alloc(size_t(T) * D * 4);
-  // ---- fused path buffers (P pair rows + T shared rows)
-  const size_t R2 = size_t(P) + T;
-  Buffer yrows2 = g.alloc(R2 * 4), xrows2 = g.alloc(R2 * 4);
-  Buffer tiles2 = g.alloc((R2 + E + 1) * 3 * 4), ntiles2 = g.alloc(16);
-  Buffer h2 = g.alloc(R2 * I * 2), yd2 = g.alloc(R2 * D * 4);
-
-  const uint32_t wst_gu = I * (D / 8), sst_gu = I * (D / gs), wst_dn = D * (I / 8), sst_dn = D * (I / gs);
-  // stage encoders (each appends its dispatches to e)
-  auto old_bucket = [&](Encoder& e) {
-    BucketParams bp{P, k, E, 16};
-    e.use(g.pipeline("moe_bucket"));
-    e.buf(0, idx); e.buf(1, spair); e.buf(2, stok); e.buf(3, tiles); e.buf(4, ntiles);
-    e.val(5, bp);
+  auto bucket = [&](Encoder& e, Path& p) {
+    if (p.kind == 0) {
+      BucketParams bp{P, k, E, p.bm};
+      e.use(g.pipeline("moe_bucket"));
+      e.buf(0, idx); e.buf(1, p.yrows); e.buf(2, p.xrows); e.buf(3, p.tiles); e.buf(4, p.ntiles);
+      e.val(5, bp);
+    } else {
+      Bucket2Params bp{P, k, E, p.bm, 0};
+      e.use(g.pipeline("moe_bucket2"));
+      e.buf(0, idx); e.buf(1, p.yrows); e.buf(2, p.xrows); e.buf(3, p.tiles); e.buf(4, p.ntiles);
+      e.val(5, bp);
+    }
     e.dispatch(1, 1, 1, 1024);
   };
-  auto old_qmm_moe = [&](Encoder& e, const QMat& m, const Buffer& x, const Buffer& y, const Buffer& xr, const Buffer& yr,
-                         uint32_t wst, uint32_t sst) {
-    QmmParams p{P, m.N, m.K, m.K, m.N, 0, gs, wst, sst};
-    e.use(g.pipeline("qmm_moe_b4_m16_n64"));
+  auto max_tiles = [&](const Path& p) { return (P + p.bm - 1) / p.bm + E; };
+  auto old_qmm_moe = [&](Encoder& e, Path& p, const QMat& m, const Buffer& x, const Buffer& y, const Buffer& xr,
+                         const Buffer& yr, uint32_t wst, uint32_t sst) {
+    QmmParams q{P, m.N, m.K, m.K, m.N, 0, gs, wst, sst};
+    e.use(g.pipeline(p.gu));
     e.buf(0, x); e.buf(1, m.w); e.buf(2, m.s); e.buf(3, m.b); e.buf(4, y);
-    e.val(5, p);
-    e.buf(6, tiles); e.buf(7, ntiles); e.buf(8, xr); e.buf(9, yr);
-    e.dispatch(m.N / 64, (P + 15) / 16 + E, 1, 128);
+    e.val(5, q);
+    e.buf(6, p.tiles); e.buf(7, p.ntiles); e.buf(8, xr); e.buf(9, yr);
+    e.dispatch(m.N / 64, max_tiles(p), 1, 128);
   };
-  auto swiglu = [&](Encoder& e, const Buffer& a, const Buffer& b, const Buffer& h, uint32_t n) {
-    e.use(g.pipeline("swiglu_half"));
-    e.buf(0, a); e.buf(1, b); e.buf(2, h); e.val(3, n);
-    e.dispatch((n + 255) / 256, 1, 1, 256);
+  auto gate_up = [&](Encoder& e, Path& p) {
+    if (p.kind == 0) {
+      old_qmm_moe(e, p, eg, xh, p.hg, p.xrows, p.yrows, wst_gu, sst_gu);
+      old_qmm_moe(e, p, eu, xh, p.hu, p.xrows, p.yrows, wst_gu, sst_gu);
+      uint32_t n = P * I;
+      e.use(g.pipeline("swiglu_half"));
+      e.buf(0, p.hg); e.buf(1, p.hu); e.buf(2, p.h); e.val(3, n);
+      e.dispatch((n + 255) / 256, 1, 1, 256);
+      return;
+    }
+    Qmm2Params q{I, D, D, I, gs, wst_gu, sst_gu, E};
+    {
+      e.use(g.pipeline(p.gu));
+      e.buf(0, xh);
+      e.buf(1, eg.w); e.buf(2, eg.s); e.buf(3, eg.b);
+      e.buf(4, eu.w); e.buf(5, eu.s); e.buf(6, eu.b);
+      e.buf(7, p.h);
+      e.val(8, q);
+      e.buf(9, p.tiles); e.buf(10, p.ntiles); e.buf(11, p.xrows);
+      e.buf(12, eg.w); e.buf(13, eg.s); e.buf(14, eg.b);
+      e.buf(15, eu.w); e.buf(16, eu.s); e.buf(17, eu.b);
+      e.dispatch(I / p.bn_gu, max_tiles(p), 1, 128);
+    }
   };
-  auto dense = [&](Encoder& e, const QMat& m, const Buffer& x, const Buffer& y) {
-    QmmParams p{T, m.N, m.K, m.K, m.N, 0, gs, 0, 0};
-    e.use(g.pipeline("qmm_b4_m64_n64"));
-    e.buf(0, x); e.buf(1, m.w); e.buf(2, m.s); e.buf(3, m.b); e.buf(4, y);
-    e.val(5, p);
-    e.dispatch(m.N / 64, (T + 63) / 64, 1, 128);
-  };
-  auto old_gate_up = [&](Encoder& e) {
-    old_qmm_moe(e, eg, xh, hg, stok, spair, wst_gu, sst_gu);
-    old_qmm_moe(e, eu, xh, hu, stok, spair, wst_gu, sst_gu);
-  };
-  auto old_swiglu = [&](Encoder& e) { swiglu(e, hg, hu, hhalf, P * I); };
-  auto old_down = [&](Encoder& e) { old_qmm_moe(e, ed, hhalf, yd, spair, spair, wst_dn, sst_dn); };
-  auto old_shared = [&](Encoder& e) {
-    dense(e, sg, xh, sgb);
-    dense(e, su, xh, sub);
-    swiglu(e, sgb, sub, hh, T * I);
-    dense(e, sd, hh, ys);
+  auto down = [&](Encoder& e, Path& p) {
+    if (p.kind == 0) {
+      QmmParams q{P, D, I, I, D, 0, gs, wst_dn, sst_dn};
+      e.use(g.pipeline(p.dn));
+      e.buf(0, p.h); e.buf(1, ed.w); e.buf(2, ed.s); e.buf(3, ed.b); e.buf(4, p.yd);
+      e.val(5, q);
+      e.buf(6, p.tiles); e.buf(7, p.ntiles); e.buf(8, p.yrows); e.buf(9, p.yrows);
+      e.dispatch(D / 64, max_tiles(p), 1, 128);
+      return;
+    }
+    Qmm2Params q{D, I, I, D, gs, wst_dn, sst_dn, E};
+    {
+      e.use(g.pipeline(p.dn));
+      e.buf(0, p.h);
+      e.buf(1, ed.w); e.buf(2, ed.s); e.buf(3, ed.b);
+      e.buf(4, p.yd);
+      e.val(5, q);
+      e.buf(6, p.tiles); e.buf(7, p.ntiles); e.buf(8, p.yrows);
+      e.buf(9, ed.w); e.buf(10, ed.s); e.buf(11, ed.b);
+      e.dispatch(D / p.bn_dn, max_tiles(p), 1, 128);
+    }
   };
 
-  int bm = 64;
-  bool fold = true;
-  auto max_tiles2 = [&]() { return (P + bm - 1) / bm + E + (fold ? (T + bm - 1) / bm : 0); };
-  auto new_bucket = [&](Encoder& e) {
-    Bucket2Params bp{P, k, E, uint32_t(bm), fold ? T : 0};
-    e.use(g.pipeline("moe_bucket2"));
-    e.buf(0, idx); e.buf(1, yrows2); e.buf(2, xrows2); e.buf(3, tiles2); e.buf(4, ntiles2);
-    e.val(5, bp);
-    e.dispatch(1, 1, 1, 1024);
-  };
-  auto new_gate_up = [&](Encoder& e) {
-    Qmm2Params p{I, D, D, I, gs, wst_gu, sst_gu, E};
-    e.use(g.pipeline("qmm_moe_gu_b4_m" + std::to_string(bm) + "_n32"));
-    e.buf(0, xh);
-    e.buf(1, eg.w); e.buf(2, eg.s); e.buf(3, eg.b);
-    e.buf(4, eu.w); e.buf(5, eu.s); e.buf(6, eu.b);
-    e.buf(7, h2);
-    e.val(8, p);
-    e.buf(9, tiles2); e.buf(10, ntiles2); e.buf(11, xrows2);
-    e.buf(12, sg.w); e.buf(13, sg.s); e.buf(14, sg.b);
-    e.buf(15, su.w); e.buf(16, su.s); e.buf(17, su.b);
-    e.dispatch(I / 32, max_tiles2(), 1, 128);
-  };
-  auto new_down = [&](Encoder& e) {
-    Qmm2Params p{D, I, I, D, gs, wst_dn, sst_dn, E};
-    e.use(g.pipeline("qmm_moe_dn_b4_m" + std::to_string(bm) + "_n64"));
-    e.buf(0, h2);
-    e.buf(1, ed.w); e.buf(2, ed.s); e.buf(3, ed.b);
-    e.buf(4, yd2);
-    e.val(5, p);
-    e.buf(6, tiles2); e.buf(7, ntiles2); e.buf(8, yrows2);
-    e.buf(9, sd.w); e.buf(10, sd.s); e.buf(11, sd.b);
-    e.dispatch(D / 64, max_tiles2(), 1, 128);
-  };
-
-  // GPU ms per run of `f`, averaged over reps in one command buffer (after one warm-up run)
+  // GPU ms per run of `f`, averaged over reps in one command buffer
   auto gpu_time = [&](auto&& f, int reps) {
-    { auto e = g.begin(); f(*e); e->commit_and_wait(); }
     auto e = g.begin();
     for (int r = 0; r < reps; ++r) f(*e);
     e->commit_and_wait();
     return e->gpu_ms() / reps;
   };
-  const double f_gu = 2.0 * 2 * P * I * D, f_dn = 2.0 * P * D * I, f_sh = 3 * 2.0 * T * I * D;
+  const double f_gu = 2.0 * 2 * P * I * D, f_dn = 2.0 * P * D * I;
   auto tf = [](double flop, double ms) { return flop / (ms * 1e-3) / 1e12; };
   const int reps = 10;
 
-  // ---- original path: run once for reference outputs, then time each stage
-  {
+  // ---- moe_bucket3 (parallel scans) against moe_bucket2: identical tiles, same rows per tile
+  for (uint32_t bm : {8u, 32u, 64u}) {
+    Path a = paths.back(), b = paths.back();
+    a.yrows = g.alloc(size_t(P) * 4); a.xrows = g.alloc(size_t(P) * 4);
+    a.tiles = g.alloc((size_t(P) + E + 1) * 3 * 4); a.ntiles = g.alloc(16);
+    b.yrows = g.alloc(size_t(P) * 4); b.xrows = g.alloc(size_t(P) * 4);
+    b.tiles = g.alloc((size_t(P) + E + 1) * 3 * 4); b.ntiles = g.alloc(16);
+    auto run = [&](const char* kn, Path& q, int reps) {
+      Bucket2Params bp{P, k, E, bm, 0};
+      auto e = g.begin();
+      for (int r = 0; r < reps; ++r) {
+        e->use(g.pipeline(kn));
+        e->buf(0, idx); e->buf(1, q.yrows); e->buf(2, q.xrows); e->buf(3, q.tiles); e->buf(4, q.ntiles);
+        e->val(5, bp);
+        e->dispatch(1, 1, 1, 1024);
+      }
+      e->commit_and_wait();
+      return e->gpu_ms() / reps;
+    };
+    run("moe_bucket2", a, 1);
+    run("moe_bucket3", b, 1);
+    // tiles must be identical; the rows of an expert (the atomic scatter orders them arbitrarily in
+    // both kernels) must be the same set over the expert's whole row range
+    const uint32_t na = a.ntiles.as<uint32_t>()[0], nb = b.ntiles.as<uint32_t>()[0];
+    bool same = na == nb && !memcmp(a.tiles.ptr(), b.tiles.ptr(), size_t(na) * 12);
+    for (uint32_t t = 0; same && t < na;) {
+      const uint32_t ex = a.tiles.as<uint32_t>()[t * 3 + 0], r0 = a.tiles.as<uint32_t>()[t * 3 + 1];
+      uint32_t r1 = a.tiles.as<uint32_t>()[t * 3 + 2];
+      for (++t; t < na && a.tiles.as<uint32_t>()[t * 3 + 0] == ex; ++t) r1 = a.tiles.as<uint32_t>()[t * 3 + 2];
+      std::vector<uint64_t> va, vb;
+      for (uint32_t r = r0; r < r1; ++r) {
+        va.push_back(uint64_t(a.yrows.as<uint32_t>()[r]) << 32 | a.xrows.as<uint32_t>()[r]);
+        vb.push_back(uint64_t(b.yrows.as<uint32_t>()[r]) << 32 | b.xrows.as<uint32_t>()[r]);
+      }
+      std::sort(va.begin(), va.end());
+      std::sort(vb.begin(), vb.end());
+      same = va == vb;
+    }
+    double t2 = 1e9, t3 = 1e9;
+    for (int i = 0; i < 3; ++i) {
+      t2 = std::min(t2, run("moe_bucket2", a, 20));
+      t3 = std::min(t3, run("moe_bucket3", b, 20));
+    }
+    printf("bucket BM=%2u: %u tiles; moe_bucket2 %.1f us, moe_bucket3 %.1f us; %s\n", bm, na, t2 * 1e3, t3 * 1e3,
+           same ? "identical tiles and rows" : "MISMATCH");
+  }
+
+  // ---- one run of every path, then correctness
+  for (auto& p : paths) {
+    memset(p.h.ptr(), 0, p.h.size);
+    memset(p.yd.ptr(), 0, p.yd.size);
     auto e = g.begin();
-    old_bucket(*e); old_gate_up(*e); old_swiglu(*e); old_down(*e); old_shared(*e);
+    bucket(*e, p); gate_up(*e, p); down(*e, p);
     e->commit_and_wait();
   }
-  double o_b = gpu_time(old_bucket, reps), o_gu = gpu_time(old_gate_up, reps), o_sw = gpu_time(old_swiglu, reps);
-  double o_dn = gpu_time(old_down, reps), o_sh = gpu_time(old_shared, reps);
-  double o_all = gpu_time([&](Encoder& e) { old_bucket(e); old_gate_up(e); old_swiglu(e); old_down(e); old_shared(e); }, reps);
-  printf("original : bucket %6.1f us | gate+up %7.1f us (%4.2f TFLOP/s) | swiglu %6.1f us | down %7.1f us (%4.2f) | "
-         "shared %6.1f us (%4.2f) | total %7.1f us\n",
-         o_b * 1e3, o_gu * 1e3, tf(f_gu, o_gu), o_sw * 1e3, o_dn * 1e3, tf(f_dn, o_dn), o_sh * 1e3, tf(f_sh, o_sh),
-         o_all * 1e3);
-
-  for (int b : {16, 32, 64}) {
-    bm = b;
-    for (bool fl : {true, false}) {
-      fold = fl;
-      memset(h2.ptr(), 0, h2.size);
-      memset(yd2.ptr(), 0, yd2.size);
-      {
-        auto e = g.begin();
-        new_bucket(*e); new_gate_up(*e); new_down(*e);
-        e->commit_and_wait();
+  {
+    // h row of pair `pair` for path p (orig: by pair; others: sorted rows -> find through yrows)
+    std::vector<std::vector<uint32_t>> sorted_of(paths.size(), std::vector<uint32_t>(P));
+    for (size_t pi = 0; pi < paths.size(); ++pi)
+      for (uint32_t m = 0; m < P; ++m) sorted_of[pi][paths[pi].yrows.as<uint32_t>()[m]] = m;
+    auto hrow = [&](size_t pi, uint32_t pair) -> const uint16_t* {
+      const Path& p = paths[pi];
+      return p.h.as<uint16_t>() + size_t(p.kind == 0 ? pair : sorted_of[pi][pair]) * I;
+    };
+    std::mt19937 r2(11);
+    const int samples = 192;
+    for (int t = 0; t < samples; ++t) {
+      const uint32_t pair = t == 0 ? P - 1 : r2() % P, tok = pair / k, e = idx.as<uint32_t>()[pair];
+      const uint32_t n = t == 0 ? I - 1 : r2() % I, nd = t == 0 ? D - 1 : r2() % D;
+      double gv = 0, uv = 0;
+      for (uint32_t kk = 0; kk < D; ++kk) {
+        const double x = h2f(xh.as<uint16_t>()[size_t(tok) * D + kk]);
+        gv += wq(eg, e, n, kk) * x;
+        uv += wq(eu, e, n, kk) * x;
       }
-      // correctness against the original path
-      size_t h_bad = 0, y_bad = 0, s_bad = 0;
-      double h_max = 0, y_max = 0, s_max = 0;
-      const uint32_t* yr = yrows2.as<uint32_t>();
-      for (size_t m = 0; m < P; ++m) {
-        const uint16_t* a = hhalf.as<uint16_t>() + size_t(yr[m]) * I;
-        const uint16_t* c = h2.as<uint16_t>() + m * I;
-        for (uint32_t n = 0; n < I; ++n)
-          if (a[n] != c[n]) { ++h_bad; h_max = std::max(h_max, double(std::fabs(h2f(a[n]) - h2f(c[n])))); }
+      const double href = gv / (1.0 + std::exp(-gv)) * uv;
+      for (size_t pi = 0; pi < paths.size(); ++pi) {
+        Path& p = paths[pi];
+        const uint16_t* hr = hrow(pi, pair);
+        p.err_h = std::max(p.err_h, std::fabs(h2f(hr[n]) - href) / (std::fabs(href) + 1.0));
+        double yref = 0;
+        for (uint32_t j = 0; j < I; ++j) yref += wq(ed, e, nd, j) * h2f(hr[j]);
+        const double got = p.yd.as<float>()[size_t(pair) * D + nd];
+        p.err_y = std::max(p.err_y, std::fabs(got - yref) / (std::fabs(yref) + 1.0));
       }
-      for (size_t i = 0; i < size_t(P) * D; ++i) {
-        float a = yd.as<float>()[i], c = yd2.as<float>()[i];
-        if (a != c) { ++y_bad; y_max = std::max(y_max, double(std::fabs(a - c))); }
-      }
-      if (fold)
-        for (size_t i = 0; i < size_t(T) * D; ++i) {
-          float a = ys.as<float>()[i], c = yd2.as<float>()[size_t(P) * D + i];
-          if (a != c) { ++s_bad; s_max = std::max(s_max, double(std::fabs(a - c))); }
-        }
-      double n_b = gpu_time(new_bucket, reps), n_gu = gpu_time(new_gate_up, reps), n_dn = gpu_time(new_down, reps);
-      double n_all = fold ? gpu_time([&](Encoder& e) { new_bucket(e); new_gate_up(e); new_down(e); }, reps)
-                          : gpu_time([&](Encoder& e) { new_bucket(e); new_gate_up(e); new_down(e); old_shared(e); }, reps);
-      // with the shared expert folded in, its FLOPs are inside gate+up / down
-      double fgu = f_gu + (fold ? 2 * 2.0 * T * I * D : 0), fdn = f_dn + (fold ? 2.0 * T * D * I : 0);
-      printf("fused m%-2d%s: bucket %6.1f us | gate+up %7.1f us (%4.2f TFLOP/s) | down %7.1f us (%4.2f) | total %7.1f us "
-             "(%.2fx) | mismatches h %zu (max %.2g) y %zu (max %.2g) shared %zu (max %.2g)\n",
-             bm, fold ? " +shared" : " dense-sh", n_b * 1e3, n_gu * 1e3, tf(fgu, n_gu), n_dn * 1e3, tf(fdn, n_dn),
-             n_all * 1e3, o_all / n_all, h_bad, h_max, y_bad, y_max, s_bad, s_max);
     }
+    // bitwise: fused vs orig (same dequantized halfs, same MMA order)
+    const Path& o = paths[0];
+    for (size_t pi = 1; pi < paths.size(); ++pi) {
+      Path& p = paths[pi];
+      for (uint32_t pair = 0; pair < P; ++pair) {
+        const uint16_t *a = hrow(0, pair), *c = hrow(pi, pair);
+        for (uint32_t n = 0; n < I; ++n) p.bad_h += a[n] != c[n];
+      }
+      for (size_t i = 0; i < size_t(P) * D; ++i) p.bad_y += o.yd.as<float>()[i] != p.yd.as<float>()[i];
+    }
+  }
+  // ---- timing, trials interleaved over the paths
+  for (auto& p : paths) gpu_time([&](Encoder& e) { bucket(e, p); gate_up(e, p); down(e, p); }, 1);
+  for (int t = 0; t < trials; ++t)
+    for (auto& p : paths) {
+      p.t_gu.push_back(gpu_time([&](Encoder& e) { gate_up(e, p); }, reps));
+      p.t_dn.push_back(gpu_time([&](Encoder& e) { down(e, p); }, reps));
+      p.t_all.push_back(gpu_time([&](Encoder& e) { bucket(e, p); gate_up(e, p); down(e, p); }, reps));
+    }
+  auto med = [](std::vector<double> v) {
+    std::sort(v.begin(), v.end());
+    return v[v.size() / 2];
+  };
+  const double o_all = med(paths[0].t_all);
+  for (auto& p : paths) {
+    const double gu = med(p.t_gu), dn = med(p.t_dn), all = med(p.t_all);
+    printf("%-34s bm %2u | gate+up %7.1f us (%4.2f TFLOP/s) | down %7.1f us (%4.2f) | total %7.1f us (%.3fx) | "
+           "err h %.1e y %.1e%s",
+           p.name.c_str(), p.bm, gu * 1e3, tf(f_gu, gu), dn * 1e3, tf(f_dn, dn), all * 1e3, o_all / all, p.err_h,
+           p.err_y, p.err_h > 4e-3 || p.err_y > 1e-3 ? " FAIL" : "");
+    if (p.kind != 0) printf(" | vs orig: h %zu / y %zu values differ", p.bad_h, p.bad_y);
+    printf("\n");
   }
   return 0;
 }

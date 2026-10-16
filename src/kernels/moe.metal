@@ -213,6 +213,60 @@ struct MoeParams {
   }
 }
 
+// moe_topk_rows for E = 256 (8 logits per lane) with the loops unrolled and 8 tokens per 256-thread
+// threadgroup (one simdgroup each) instead of a 32-thread threadgroup per token: the same operations
+// per token in the same order (NI_TOPK8). grid: ceil(T / 8) x 256 threads.
+[[kernel]] void moe_topk_rows8(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
+                               device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
+                               constant TopkParams& p [[buffer(4)]], constant uint& T [[buffer(5)]],
+                               uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                               uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint per = 8;
+  const uint t = tg * 8 + sg;
+  if (t >= T) return;
+  float v[per];
+  float mx = -INFINITY;
+  _Pragma("clang loop unroll(full)")
+  for (uint i = 0; i < per; ++i) {
+    v[i] = logits[t * 256 + lane * per + i];
+    mx = max(mx, v[i]);
+  }
+  mx = simd_max(mx);
+  float sum = 0.0f;
+  _Pragma("clang loop unroll(full)")
+  for (uint i = 0; i < per; ++i) {
+    v[i] = metal::precise::exp(v[i] - mx);
+    sum += v[i];
+  }
+  sum = simd_sum(sum);
+  _Pragma("clang loop unroll(full)")
+  for (uint i = 0; i < per; ++i) v[i] /= sum;
+  uint taken = 0;
+  float sel_sum = 0.0f;
+  float my_w[16];
+  uint my_i[16];
+  for (uint r = 0; r < p.k; ++r) {
+    float best = -1.0f;
+    uint bi = 0xffffffff;
+    _Pragma("clang loop unroll(full)")
+    for (uint i = 0; i < per; ++i)
+      if (!(taken & (1u << i)) && v[i] > best) { best = v[i]; bi = lane * per + i; }
+    float gbest = simd_max(best);
+    uint win = simd_min(best == gbest ? bi : 0xffffffff);
+    if (win != 0xffffffff && win / per == lane) taken |= 1u << (win % per);
+    my_w[r] = gbest;
+    my_i[r] = win;
+    sel_sum += gbest;
+  }
+  if (lane == 0) {
+    for (uint r = 0; r < p.k; ++r) {
+      idx[t * p.k + r] = my_i[r];
+      wts[t * (p.k + 1) + r] = p.norm ? my_w[r] / sel_sum : my_w[r];
+    }
+    wts[t * (p.k + 1) + p.k] = sigmoid(shared[t]);
+  }
+}
+
 // Groups the T*k (token, slot) pairs by expert. One threadgroup of 1024 threads.
 // Outputs: sorted_pair[P] (pair ids grouped by expert), sorted_tok[P] (= pair / k),
 // tiles[3*i] = (expert, begin, end) row ranges of at most BM sorted rows, ntiles[0].

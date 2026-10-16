@@ -523,3 +523,104 @@ Correctness:
 * tests/test_server.py: 13/13 on both models.
 * bench_qmms / bench_attn check every kernel against double-precision CPU references (GEMM max rel.
   err 1e-6 - 3e-5, fused gate/up 3-4e-4 (half output); attention max err / max |ref| 2-3e-4, as v11).
+
+## 35B prefill v3 and cached turns (branch opt/moe35, macOS 27.0.1, 2026-10-16/17)
+Starting point (main 2e5bf23, fair server harness 21:17): cold prefill 4k / 16k 1014 / 842 tok/s (Splash 1021 / 879,
+oMLX 970 / 882); cached-turn TTFT at 4k / 16k 0.12 / 0.15 s (MTPLX 0.10 / 0.17). Every GPU run below under the
+shared lock; A/B runs interleaved in one locked script; ni_run numbers are `--pf-reps 3` (reps 1-2 after a warm-up
+rep), which run the prefill of p4000 (3999 ids) / p16000 (15999 ids) with the MTP history pass, as the server does.
+
+### Where the time went (NI_PROFILE=1, isolated dispatches; they sum to ~1.3-1.4x the real time)
+| kernel | 4k | 16k |
+|---|---|---|
+| dense projections (qmr_k32_w14_m32_n128) | 46.4% | 39.9% |
+| routed experts (qmm_moe_gu + qmm_moe_dn) | 30.8% | 27.0% |
+| attention (attn_prefill11) | 5.0% | 17.8% |
+| GDN recurrence (gdn_step_par_l16) | 5.5% | 4.7% |
+| 8-bit GEMMs (qmm_b8_m32_n32: router, shared gate, the MTP head's projections) | 3.5% | 3.0% |
+| everything else (shared expert, top-k, combine, rows_to_half, GDN prep/gnorm, ...) | 8.8% | 7.6% |
+The small kernels cost much less in the pipeline than isolated: `NI_DUP=<kernel>` (new, timing aid: every dispatch
+of the kernel runs twice; only for kernels that do not read their own output) gives their in-context cost.
+
+### Routed experts on the qmr design (qrm, qmm_moe3.metal; NI_MOE_QMR=32 default, 0 = qmm_moe_gu/_dn)
+qmr's register dequantization (W as the A operand straight from the packed words, X staged once per K step in the
+permuted K order) on moe_bucket's sorted pair rows: gate/up 64 + 64 weight rows x 32 rows per threadgroup (SwiGLU
+epilogue, half h), down 128 x 32 (fp32 rows by pair id). A tile holds at most 32 rows of one expert; the kernel
+branches once per threadgroup on its live 8-row fragments and runs a K loop specialized for that count, so partial
+tiles pay MMAs and X staging only for their rows. 88 / 85 GPRs, no stack. bench_moe (T = 2048, one synthetic layer,
+routed experts only, TFLOP/s):
+| routing | qmm_moe_gu / _dn (old default) | qrm gu / dn | layer total |
+|---|---|---|---|
+| balanced (64 rows per expert) | 6.50 / 6.26 | 7.06-7.17 / 6.97-7.07 | 16.1 -> 14.5-14.7 ms |
+| skewed (median 36, max 527 rows) | 5.13-5.75 / 4.95-5.51 | 6.14-6.68 / 6.16-6.65 | 20.4 -> 16.8 ms (1.21x) |
+| uniform random (44-85 rows) | 4.98-5.78 / 4.79-5.59 | 5.89-6.58 / 5.75-6.56 | 1.14-1.15x |
+Full tiles reach the dense qmr's 7.0-7.2 TFLOP/s; partial tiles cost ~10%. Error vs a double reference equals the old
+path's (h 1.1-1.9e-4 (half output), y 0.8-1.3e-7). Tried, slower: 64-row tiles with 32 + 32 / 64 weight rows (all
+three routings and e2e, 3695 vs 3645 ms at 4k), 16-row tiles, BK = 64 (48 / 32 B of stack), down with 64 rows.
+Folding the shared expert in (NI_MOE_FUSED=1) is bitwise identical and as fast as keeping it dense.
+
+### 8-bit GEMMs on qmr (qmr8_*, qmm3.metal; NI_QMM8=1 default: the MTP head)
+Byte j of a lane's word e is the 4-bit kernel's k for fragment j, column e, so X is staged as before; 0x3400 | q << 2
+is the half 0.25 + q/1024 and one half2 FMA with (1024 s, b) dequantizes. bench_qmm (TFLOP/s, qmr8 vs
+qmm_b8_m32_n32): 2048x8192x2048 6.90 vs 4.65; 2048x2048x4096 6.48 vs 4.39; 2048x256x2048 5.86 vs 4.38; gate/up
+6.79 (qmr8_gu); errors as qmm_b8. Used for the MTP head's projections (bf16 in the file, 8-bit at load; they never
+reach the trunk's logits); NI_QMM8=2 also moves the trunk's 8-bit router and shared gate (p4000 KL 2.1e-4 from routing
+near-ties for ~0.3%, so not the default).
+
+### GDN recurrence with four value rows per lane (gdn_step_parr4_l16, default; NI_GDN_STEP overrides)
+The prefetching variant (next token's q/k/v/g/beta loaded during the current step) changed nothing (3874 vs 3866 ms),
+so the step is not waiting for loads but for its own chain: per token a decay, dot, a 16-lane shuffle reduction,
+update, dot and reduction, one dependent chain per lane. Holding R rows of the same head per lane (shared q/k loads,
+R independent chains): bench_gdn 2048 tokens x 32 heads, step ms: par_l16 4.51, parr2_l16 2.91, **parr4_l16 2.75**,
+parr4_l32 3.10, parr8_l32 3.06 (par_l4 5.70, l8 5.26, l32 5.90). Same arithmetic per row in the same order:
+bit-identical outputs and state under NI_MATH_SAFE=1, and identical logits in e2e. 4k e2e 3620-3639 -> 3524-3528 ms
+(parr2).
+
+### Attention: skip unit rescales (attn_prefill11r, default; 11g / 11gs too)
+When no row of a simdgroup's 8 queries raises its running max on a key tile, corr is exactly 1 and the O rescale is
+x * 1.0: a uniform `simd_all` branch skips it. Bitwise neutral; 2048 x 16k 92.4 -> 91.4 ms, 2048 x 4k 18.05 -> 17.87.
+Tried, slower: the K tile row-major with transposed simdgroup_loads (attn_prefill12: 95.2 -> 99.0 ms).
+
+### Large prefill, end to end (ni_run, ms per prefill)
+| build / flags | 4k | 16k |
+|---|---|---|
+| base (all new paths off) | 3863-3868 | 18798-18810 (851 tok/s) |
+| + qrm experts | 3642-3660 | |
+| + qrm + qmr8 (MTP head) | 3620-3635 | 17615-17632 (907-908) |
+| + GDN rows per lane (parr2) + attention 11r | 3524-3528 | 17188 (931) |
+Logits vs base: qrm KL 2.08e-5, max|d| 0.66, same top-1 (the qmr dense change was 2.0e-5; the 35B's NI_MATH_SAFE
+noise band 2.5e-5); every other change bitwise identical (p4000 and p16000). No gain at large T, measured and left
+as opt-in or default only where bitwise neutral: moe_bucket3 (parallel tile scan, 3-5x faster kernel), moe_topk_rows8
+(8 tokens per 256-thread threadgroup), NI_QMRS (one dispatch for qkv/z/b/a: +1.1%), GDN prefetch (+1.2%),
+gdn_step_par_l8/l32.
+
+### Cached turn (the harness pattern: 4k context, 37-62-token follow-up suffixes)
+ni_run with the harness's real suffixes (bench prompts regenerated with the chat template: 4123 + 62, 4178 + 53,
+4224 + 37), `--prefix P --split B --pf-reps 6`, median of reps 1-5; base 94.5-95.5 ms for 53 tokens. Isolated
+profile of that pass: trunk experts ~45 ms (bandwidth: ~10 GB of expert weights for ~150 distinct experts per
+layer), dense projections ~30 ms (qmms at 5.2-5.8 TFLOP/s; bench_qmms keeps qmms the best kernel at 37-62 rows),
+attention 7.8, GDN step 3.7, the MTP head's MoE 2.7 (its experts are group-32 and fell to the 64-row large tiles),
+router 4.5, bucket 2.2, small kernels the rest.
+* **Experts of <= 2 rows by FMAs** (qmms_moe2_*, NI_SHORTPF_MOE_FMA): at these lengths most experts get 1-2 rows,
+  which the 8-row MMA path pads to 8 rows (8 multiply-adds per weight on the same ALUs). An expert with at most 2
+  rows takes a matvec form (codes converted once, MLX's pre-scaled-x trick, fp32 products: no half rounding of
+  the weights); the others keep the MMA path. Only the expert's first tile qualifies: which pairs land in the last
+  tile of a larger expert depends on moe_bucket's atomic scatter order, and the first version (any tile of <= 2
+  rows) was not run-to-run deterministic (KL 1.5e-6 between two runs). Also takes group-32 experts, so the MTP head
+  stops falling back to the large tiles. -5.5 ms (89.3-89.5 vs 95.0); KL vs base 4.5-4.9e-5.
+* **Token-block split of small qmms dispatches** (NI_QMMS_TY, default): the router + shared gate (N = 257: 17
+  threadgroups) and the shared expert's gate/up (32) split their 8-row token blocks over grid.y; bitwise equal.
+* moe_bucket3, moe_topk_rows8, gdn_step_parr4_snap_l16, attn_prefill11g/gs with the rescale skip: bitwise equal.
+* **MTP history after the first token** (engine, NI_MTP_DEFER): the last chunk's MTP history rows run in their
+  own command buffer queued behind the trunk's, so the first token is out before them; the first speculative cycle
+  is queued after them (no change to any output).
+Tried, slower: the experts in three dispatches by tile class (1 / 2 / 3-8 rows, to give the 1-row path its own
+56 instead of 91 GPRs: 1855 vs 1721 us), qmms with 32-bit row offsets (no fewer GPRs).
+
+The server pays an idle penalty the back-to-back reps do not: the harness waits 1 s between turns. ni_run
+`--pf-gap MS` (new) idles the GPU before each rep: 53-token pass 94.5 ms back to back, 95 at 100 ms, 103 at 300 ms,
+112-114 at 1 s (GPU time +19%), 131-167 at 2 s (another 25-40 ms between commit and the GPU's start/finish being
+seen). A 25 ms keep-alive dispatch during the gap did not help (106-108 vs 107-110 ms at 1 s). Through the server
+(gap 1 s) the same turns took 116-144 ms against 76-123 ms with no gap; one run, during heavy load from other
+processes, 207-217 ms. The engine log now prints the last chunk's encode time, commit -> GPU start, GPU time and
+GPU end -> wake-up.

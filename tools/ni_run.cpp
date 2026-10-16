@@ -19,6 +19,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 using namespace ni;
 
@@ -58,6 +60,7 @@ int main(int argc, char** argv) {
   // inside the suffix, checkpointed like the server does (split pass, or in-pass with NI_SHORTPF);
   // afterwards the in-pass checkpoint is compared with a separate prefill of ids[P, B).
   int prefix = 0, split = 0;
+  int pf_gap = 0;  // --pf-gap MS: idle the GPU for MS ms before each timed prefill rep (server turn gaps)
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (i + 1 < argc && !strcmp(argv[i], "--dump-all-logits")) dump_all = argv[i + 1];
@@ -66,6 +69,7 @@ int main(int argc, char** argv) {
     if (i + 1 < argc && !strcmp(argv[i], "--pf-reps")) pf_reps = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--prefix")) prefix = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--split")) split = atoi(argv[i + 1]);
+    if (i + 1 < argc && !strcmp(argv[i], "--pf-gap")) pf_gap = atoi(argv[i + 1]);
   }
 
   Gpu& g = Gpu::get();
@@ -158,7 +162,8 @@ int main(int argc, char** argv) {
       return gpu;
     };
     for (int rep = 0; rep < pf_reps; ++rep) {
-      if (rep) t0 = now_ms();
+      if (pf_gap > 0) std::this_thread::sleep_for(std::chrono::milliseconds(pf_gap));
+      if (rep || pf_gap > 0) t0 = now_ms();
       const double gpu = prefill_pass();
       if (pf_reps > 1)
         fprintf(stderr, "prefill rep %d: %d tok in %.2f ms (GPU %.2f ms)\n", rep, n - prefix, now_ms() - t0, gpu);

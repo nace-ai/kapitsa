@@ -7,6 +7,8 @@
 #include "util/log.h"
 
 #include <httplib/httplib.h>
+#include "metal/gpu.h"
+#include <pthread/qos.h>
 
 #include <atomic>
 #include <csignal>
@@ -133,6 +135,14 @@ int main(int argc, char** argv) {
     res.set_content(j.dump(), "application/json");
   });
   srv.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {
+    // NI_QOS=1: the worker thread that runs this request (template, encode, waits on the GPU, streams
+    // tokens) at user-interactive QoS, so a busy machine does not leave it on an efficiency core.
+    static const bool qos = getenv("NI_QOS") && *getenv("NI_QOS") && strcmp(getenv("NI_QOS"), "0") != 0;
+    if (qos) pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    // NI_GPU_WAKE=1: a tiny command buffer right away, so the GPU's wake-up after an idle gap (the log's
+    // "GPU start +N ms") overlaps JSON parsing, the template, the tokenizer and the encode
+    static const bool wake = getenv("NI_GPU_WAKE") && *getenv("NI_GPU_WAKE") && strcmp(getenv("NI_GPU_WAKE"), "0") != 0;
+    if (wake) ni::Gpu::get().wake();
     json body;
     ChatRequest r;
     try {

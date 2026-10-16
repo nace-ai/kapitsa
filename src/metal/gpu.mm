@@ -2,12 +2,15 @@
 #import <Metal/Metal.h>
 
 #include "metal/gpu.h"
+#include <mach/mach_time.h>
 #include "util/log.h"
 
 #include <algorithm>
 #include <map>
 #include <mutex>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace ni {
 extern const char* const kKernelSource;
@@ -204,6 +207,19 @@ std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
   return e;
 }
 
+void Gpu::wake() {
+  static Pipeline cp = pipeline("copy_u32");
+  static Buffer a = alloc(64, "wake_a"), b = alloc(64, "wake_b");
+  auto e = begin();
+  const uint32_t n = 4;
+  e->use(cp);
+  e->buf(0, a);
+  e->buf(1, b);
+  e->val(2, n);
+  e->dispatch(1, 1, 1, 32);
+  e->commit();
+}
+
 void Gpu::make_resident(const std::vector<Buffer>& bufs) {
   if (@available(macOS 15.0, *)) {
     @autoreleasepool {
@@ -273,8 +289,35 @@ void Encoder::buf(int idx, const Buffer& b, size_t extra) {
 }
 void Encoder::bytes(int idx, const void* data, size_t len) { [E(enc_) setBytes:data length:len atIndex:idx]; }
 void Encoder::tgmem(int idx, size_t len) { [E(enc_) setThreadgroupMemoryLength:(len + 15) & ~size_t(15) atIndex:idx]; }
+// NI_DUP=<kernel>[,<kernel>...] (timing aid, read once): every dispatch of these kernels runs twice in
+// a row, so (time with) - (time without) is their in-pipeline cost, unlike NI_PROFILE's isolated
+// command buffers. Only meaningful for kernels that do not read their own outputs (GEMMs without
+// accumulation, top-k, ...): an accumulating kernel would change the results downstream.
+static bool dup_kernel(const char* name) {
+  static const std::vector<std::string> names = [] {
+    std::vector<std::string> v;
+    if (const char* s = getenv("NI_DUP")) {
+      std::string all = s;
+      size_t p = 0;
+      while (p <= all.size()) {
+        size_t q = all.find(',', p);
+        if (q == std::string::npos) q = all.size();
+        if (q > p) v.push_back(all.substr(p, q - p));
+        p = q + 1;
+      }
+    }
+    return v;
+  }();
+  if (names.empty()) return false;
+  for (auto& n : names)
+    if (n == name) return true;
+  return false;
+}
+
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
+  if (dup_kernel(cur_name_))
+    [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (profiling()) {
     // close this dispatch into its own command buffer and continue in a fresh one
     [E(enc_) endEncoding];
@@ -310,6 +353,20 @@ void Encoder::wait() {
   }
   if (cb.status == MTLCommandBufferStatusError)
     fatal("GPU error: %s", [[cb.error description] UTF8String]);
+}
+double Encoder::gpu_start_host_ms() const {
+  id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
+  id<MTLCommandBuffer> first = prev_.empty() ? cb : (__bridge id<MTLCommandBuffer>)prev_.front();
+  return first.GPUStartTime * 1000.0;
+}
+double Encoder::gpu_end_host_ms() const { return ((__bridge id<MTLCommandBuffer>)cb_).GPUEndTime * 1000.0; }
+double Encoder::host_ms() {
+  static const double scale = [] {
+    mach_timebase_info_data_t tb;
+    mach_timebase_info(&tb);
+    return double(tb.numer) / double(tb.denom) / 1e6;
+  }();
+  return double(mach_absolute_time()) * scale;
 }
 double Encoder::gpu_ms() const {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;

@@ -353,6 +353,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
   // the whole new suffix); otherwise the chunk is split so the checkpoint lands exactly.
   const bool in_pass = model_->can_snapshot();
+  // NI_MTP_DEFER (default on): the last chunk's MTP history rows go into their own command buffer behind
+  // the trunk's, so the first token (sampled by the trunk pass) is out before they run; the first
+  // speculative cycle is queued after them. 0 keeps them in the trunk's command buffer.
+  static const bool mtp_defer = [] {
+    const char* v = getenv("NI_MTP_DEFER");
+    return !(v && !strcmp(v, "0"));
+  }();
+  std::unique_ptr<Encoder> mtp_e;
   while (p < n) {
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
@@ -371,7 +379,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? boundary - p : 0);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
-    if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    const bool defer = spec_ && mtp_defer && !split && p + T == n;
+    if (spec_ && !defer) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (defer) {
+      mtp_e = g.begin();
+      model_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);
+    }
     if (split) {
       e->commit_and_wait();
       if (!model_->ane_finish_chunk()) {
@@ -387,10 +400,17 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     p += T;
     if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);
     e->commit();
+    if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) e = g.begin();
   }
+  const double t_enc = now_ms() - t0;  // until the last chunk's commit
+  const double h_commit = Encoder::host_ms();
   e->wait();
+  const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
+  const double gpu_last = e->gpu_ms();
+  // last chunk: commit -> GPU start, GPU end -> this thread awake (host clock)
+  const double lat_start = e->gpu_start_host_ms() - h_commit, lat_wake = h_woke - e->gpu_end_host_ms();
   slot.tokens = prompt;
 
   // ---- decode ----
@@ -516,8 +536,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize), %d tokens in %.0f ms (%.1f tok/s), %s", n,
-       start, res.prefill_ms, tok_ms, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
+  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, tok_ms,
+       t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
        finish.c_str());
   return res;
 }
