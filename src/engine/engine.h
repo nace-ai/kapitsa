@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -60,6 +61,9 @@ struct ChatResult {
   std::string error;
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   double prefill_ms = 0, decode_ms = 0;
+  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply
+  int slot = -1;
+  uint64_t slot_gen = 0, req_seq = 0;
 };
 
 class Engine {
@@ -72,6 +76,14 @@ class Engine {
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
   // Runs one request. `on_delta` returns false to cancel. Serialized across threads.
   ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta);
+  // History prefill (NI_HISTORY_PREFILL): after a reply, prefills the conversation as the next request
+  // will render it (the template drops this turn's think block, so the generated tokens in the live
+  // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its
+  // own new messages. Call it from its own thread once the reply has been sent: it first waits until
+  // the server has been idle for NI_HISTORY_IDLE_MS (default 250 ms) and gives up if any request
+  // arrived meanwhile. Only replies that end with "stop" (a user query follows; after tool calls the
+  // template keeps the think block and the live state already matches the next request).
+  void prefill_history(const ChatRequest& r, const ChatResult& res);
 
  private:
   struct Slot {
@@ -79,6 +91,7 @@ class Engine {
     std::vector<int> tokens;          // tokens whose effect is in the live state
     std::vector<Checkpoint> ckpts;    // recurrent-state snapshots
     uint64_t last_used = 0;
+    uint64_t gen = 0;                 // requests run on this slot
   };
   Slot& pick_slot(const std::vector<int>& prompt);
 
@@ -90,6 +103,7 @@ class Engine {
   std::vector<Slot> slots_;
   std::mutex mu_;
   uint64_t clock_ = 0;
+  std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   bool spec_ = false;
   long spec_cycles_ = 0, spec_accepted_ = 0;

@@ -167,7 +167,9 @@ void Qwen35::load_mtp(const std::string& dir) {
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
-    return w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+    QLinear L = w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+    L.mtp = true;
+    return L;
   };
   mtp_pre_e_ = own_copy(get("mtp.pre_fc_norm_embedding.weight"));
   mtp_pre_h_ = own_copy(get("mtp.pre_fc_norm_hidden.weight"));

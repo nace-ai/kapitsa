@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
     if (name.rfind("attn_prefill8_q", 0) == 0 || name.rfind("attn_prefill9_q", 0) == 0) { qb = atoi(name.c_str() + 15); th = qb * 64; }
     if (name.rfind("attn_prefill10_q", 0) == 0) { qb = atoi(name.c_str() + 16); th = qb * 64; }
     if (name.rfind("attn_prefill10u_q", 0) == 0) { qb = atoi(name.c_str() + 17); th = qb * 64; }
-    if (name.rfind("attn_prefill11", 0) == 0) { qb = 32; th = 256; gy = Hq; }  // 32 queries of one q head
+    if (name.rfind("attn_prefill11", 0) == 0) { qb = 32; th = 256; gy = Hq; }  // 32 queries of one q head  // 32 queries of one q head
     const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
     if (gq) gy = Hkv;
     auto run = [&](int n = 1) {  // n back-to-back calls in one command buffer, ms per call

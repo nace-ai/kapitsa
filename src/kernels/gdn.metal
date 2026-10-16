@@ -371,6 +371,101 @@ NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l8, 8)
 NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l16, 16)
 NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l32, 32)
 
+// ---- R value rows per lane (gdn_step_parr{R}_l*, default gdn_step_parr4_l16): a lane holds the same dk
+// slice of rows dv + i*32/L, i < R, of one head, so each token's q/k chunks are loaded once for all R
+// and the R independent recurrences interleave. The plain form runs one dependent chain per lane (per
+// token: decay, dot, an L-lane shuffle reduction, update, dot, reduction), and its time is that chain's
+// latency: at 2048 tokens x 32 heads on the 35B, gdn_step_par_l16 4.5 ms, parr2_l16 2.9, parr4_l16 2.75
+// (parr4_l32 3.1, parr8_l32 3.1). Per row the arithmetic is gdn_step_par_tok's in the same order:
+// outputs and state are bitwise equal to gdn_step_par_* (bench_gdn under NI_MATH_SAFE=1).
+template <uint N, uint L, uint R>
+NI_INLINE void gdn_step_parr_tok(const device float* q, const device float* k, const device float* v,
+                                 const device float* g, const device float* beta, device float* out,
+                                 constant GdnStepParams& p, uint t, uint h, uint hk, uint dv0, uint li,
+                                 thread float4 (&st)[R][N]) {
+  constexpr uint D = 128;
+  const device float4* q4 = (const device float4*)(q + (t * p.Hk + hk) * D + li * 4 * N);
+  const device float4* k4 = (const device float4*)(k + (t * p.Hk + hk) * D + li * 4 * N);
+  float gg = g[t * p.Hv + h], be = beta[t * p.Hv + h];
+  float4 kk[N];
+  float part[R][N];
+  for (uint j = 0; j < N; ++j) {
+    kk[j] = k4[j];
+    for (uint r = 0; r < R; ++r) {
+      st[r][j] *= gg;
+      part[r][j] = dot(st[r][j], kk[j]);
+    }
+  }
+  float delta[R];
+  for (uint r = 0; r < R; ++r) {
+    const float kv = gdn_row_sum<N, L>(part[r]);
+    delta[r] = (v[(t * p.Hv + h) * D + dv0 + r * N] - kv) * be;
+  }
+  for (uint j = 0; j < N; ++j) {
+    const float4 qq = q4[j];
+    for (uint r = 0; r < R; ++r) {
+      st[r][j] += kk[j] * delta[r];
+      part[r][j] = dot(st[r][j], qq);
+    }
+  }
+  float o[R];
+  for (uint r = 0; r < R; ++r) o[r] = gdn_row_sum<N, L>(part[r]);
+  if (li == 0)
+    for (uint r = 0; r < R; ++r) out[(t * p.Hv + h) * D + dv0 + r * N] = o[r];
+}
+
+template <uint L, uint R, bool SNAP = false>
+NI_INLINE void gdn_step_parr_impl(const device float* q, const device float* k, const device float* v,
+                                  const device float* g, const device float* beta, device float* state,
+                                  device float* out, constant GdnStepParams& p, uint tg, uint sg, uint nsg,
+                                  uint lane, device float* snap_state = nullptr, uint snap = 0) {
+  constexpr uint D = 128, N = 32 / L;
+  const uint tph = D / (R * N * nsg);  // threadgroups per head: R*N rows per simdgroup
+  const uint h = tg / tph;
+  const uint dv0 = ((tg % tph) * nsg + sg) * R * N + lane / L;
+  const uint li = lane % L;
+  const uint hk = h / (p.Hv / p.Hk);
+  float4 st[R][N];
+  for (uint r = 0; r < R; ++r)
+    for (uint j = 0; j < N; ++j) st[r][j] = *(device float4*)(state + (h * D + dv0 + r * N) * D + li * 4 * N + j * 4);
+  const uint t_mid = SNAP ? min(snap, p.T) : p.T;
+  for (uint t = 0; t < t_mid; ++t) gdn_step_parr_tok<N, L, R>(q, k, v, g, beta, out, p, t, h, hk, dv0, li, st);
+  if (SNAP) {
+    for (uint r = 0; r < R; ++r)
+      for (uint j = 0; j < N; ++j)
+        *(device float4*)(snap_state + (h * D + dv0 + r * N) * D + li * 4 * N + j * 4) = st[r][j];
+    for (uint t = t_mid; t < p.T; ++t) gdn_step_parr_tok<N, L, R>(q, k, v, g, beta, out, p, t, h, hk, dv0, li, st);
+  }
+  for (uint r = 0; r < R; ++r)
+    for (uint j = 0; j < N; ++j) *(device float4*)(state + (h * D + dv0 + r * N) * D + li * 4 * N + j * 4) = st[r][j];
+}
+
+#define NI_GDN_STEP_PARR(NAME, L, R)                                                                       \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],           \
+                       const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],           \
+                       const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],          \
+                       device float* out [[buffer(6)]], constant GdnStepParams& p [[buffer(7)]],           \
+                       uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    gdn_step_parr_impl<L, R>(q, k, v, g, beta, state, out, p, tg, sg, nsg, lane);                         \
+  }
+#define NI_GDN_STEP_PARR_SNAP(NAME, L, R)                                                                  \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],           \
+                       const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],           \
+                       const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],          \
+                       device float* out [[buffer(6)]], constant GdnStepParams& p [[buffer(7)]],           \
+                       device float* snap_state [[buffer(8)]], constant uint& snap [[buffer(9)]],          \
+                       uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    gdn_step_parr_impl<L, R, true>(q, k, v, g, beta, state, out, p, tg, sg, nsg, lane, snap_state, snap); \
+  }
+NI_GDN_STEP_PARR(gdn_step_parr4_l16, 16, 4)
+NI_GDN_STEP_PARR(gdn_step_parr4_l32, 32, 4)
+NI_GDN_STEP_PARR(gdn_step_parr8_l32, 32, 8)
+NI_GDN_STEP_PARR(gdn_step_parr2_l16, 16, 2)
+NI_GDN_STEP_PARR_SNAP(gdn_step_parr4_snap_l16, 16, 4)
+NI_GDN_STEP_PARR_SNAP(gdn_step_parr4_snap_l32, 32, 4)
+
 // gdn_step's epilogue as its own pass, fused with rows_to_half:
 //   y[t, h*128 + dv] = half(rmsnorm(o[t, h, :])[dv] * w[dv] * silu(z[t, h, dv]))
 // One simdgroup per (token, head); lane l holds rows 4l..4l+3 and sums them like gdn_step's

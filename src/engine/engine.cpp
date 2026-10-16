@@ -4,10 +4,13 @@
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
 
+#include <chrono>
+#include <cstring>
 #include <deque>
 #include <fstream>
 #include <random>
 #include <sstream>
+#include <thread>
 
 namespace ni {
 
@@ -274,8 +277,11 @@ class OutputParser {
 } // namespace
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
-  model_->ane_poll();  // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled
+  ++requests_;
   std::lock_guard<std::mutex> lk(mu_);
+  // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (under the engine lock:
+  // it runs a startup check through the model's buffers, which the idle history prefill also uses)
+  model_->ane_poll();
   const double t_req = now_ms();
   ChatResult res;
   Gpu& g = Gpu::get();
@@ -305,6 +311,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   Slot& slot = pick_slot(prompt);
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
+  ++slot.gen;
   if (n + 1 >= s.cap) {
     res.finish_reason = "error";
     res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(s.cap) + ")";
@@ -354,6 +361,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
   // the whole new suffix); otherwise the chunk is split so the checkpoint lands exactly.
   const bool in_pass = model_->can_snapshot();
+  // NI_MTP_DEFER (default on): the last chunk's MTP history rows go into their own command buffer behind
+  // the trunk's, so the first token (sampled by the trunk pass) is out before they run; the first
+  // speculative cycle is queued after them. 0 keeps them in the trunk's command buffer.
+  static const bool mtp_defer = [] {
+    const char* v = getenv("NI_MTP_DEFER");
+    return !(v && !strcmp(v, "0"));
+  }();
+  std::unique_ptr<Encoder> mtp_e;
   while (p < n) {
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
@@ -372,7 +387,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? boundary - p : 0);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
-    if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    const bool defer = spec_ && mtp_defer && !split && p + T == n;
+    if (spec_ && !defer) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (defer) {
+      mtp_e = g.begin();
+      model_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);
+    }
     if (split) {
       e->commit_and_wait();
       if (!model_->ane_finish_chunk()) {
@@ -388,10 +408,17 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     p += T;
     if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);
     e->commit();
+    if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) e = g.begin();
   }
+  const double t_enc = now_ms() - t0;  // until the last chunk's commit
+  const double h_commit = Encoder::host_ms();
   e->wait();
+  const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
+  const double gpu_last = e->gpu_ms();
+  // last chunk: commit -> GPU start, GPU end -> this thread awake (host clock)
+  const double lat_start = e->gpu_start_host_ms() - h_commit, lat_wake = h_woke - e->gpu_end_host_ms();
   slot.tokens = prompt;
 
   // ---- decode ----
@@ -506,6 +533,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       fed_until = pos + 1;
     }
   }
+  res.slot = int(&slot - slots_.data());
+  res.slot_gen = slot.gen;
+  res.req_seq = requests_.load();
   ChatDelta tail = parser.finish();
   res.reasoning += tail.reasoning;
   res.content += tail.content;
@@ -517,10 +547,87 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize), %d tokens in %.0f ms (%.1f tok/s), %s", n,
-       start, res.prefill_ms, tok_ms, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
+  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, tok_ms,
+       t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
        finish.c_str());
   return res;
+}
+
+void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
+  static const bool on = [] {  // default on; NI_HISTORY_PREFILL=0 turns it off
+    const char* v = getenv("NI_HISTORY_PREFILL");
+    return !(v && !strcmp(v, "0"));
+  }();
+  static const int idle_ms = [] {
+    const char* v = getenv("NI_HISTORY_IDLE_MS");
+    return v && *v ? std::max(0, atoi(v)) : 250;
+  }();
+  // Only after a final answer ("stop"): the next message is then a user query, and the template renders
+  // this turn (and any tool-call turns since the previous query) without the think block the live state
+  // holds. After tool calls the next message is a tool response, which keeps the think block, so the
+  // live state already matches it; a turn cut by max_tokens is rarely continued as it stands (benchmark
+  // decode runs end this way).
+  if (!on || res.slot < 0 || res.finish_reason != "stop") return;
+  // only in an idle gap: a request that follows at once (a benchmark's next run, a fast tool) or another
+  // conversation must not wait behind this work
+  std::this_thread::sleep_for(std::chrono::milliseconds(idle_ms));
+  if (requests_.load() != res.req_seq) return;
+  std::unique_lock<std::mutex> lk(mu_, std::try_to_lock);
+  if (!lk.owns_lock() || requests_.load() != res.req_seq) return;
+  Slot& slot = slots_[size_t(res.slot)];
+  if (slot.gen != res.slot_gen) return;
+  const double t0 = now_ms();
+  // the answer as the client sends it back ("stop": no tool calls), then a placeholder user turn: the
+  // template renders answers before the last user query without their think block, so render it that
+  // way and keep the text up to the placeholder turn's start
+  ChatRequest r2 = r;
+  r2.messages.push_back({{"role", "assistant"}, {"content", res.content}});
+  static const std::string marker = "\x01nace-history-marker\x01";
+  r2.messages.push_back({{"role", "user"}, {"content", marker}});
+  std::string text;
+  try {
+    text = render(r2, false);
+  } catch (...) {
+    return;
+  }
+  const size_t mpos = text.rfind(marker);
+  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind("<|im_start|>", mpos);
+  if (cut == std::string::npos) return;
+  text.resize(cut);
+  std::vector<int> t2 = tok_.encode(text);
+  // prefill all but the last token: the follow-up's own prefill then starts with it, so its MTP
+  // history pass covers the pair (hidden, next token) of this turn's last row
+  const int n = int(t2.size()) - 1;
+  size_t common = 0;
+  while (common < slot.tokens.size() && common < t2.size() && slot.tokens[common] == t2[common]) ++common;
+  // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
+  if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
+  const Checkpoint* best = nullptr;
+  for (auto& c : slot.ckpts)
+    if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
+  Seq& s = *slot.seq;
+  if (!best || n + 64 >= s.cap) return;
+  Gpu& g = Gpu::get();
+  auto e = g.begin();
+  model_->restore(*e, s, *best);
+  const int start = best->pos;
+  for (auto& c : slot.ckpts)
+    if (c.pos > start) c.pos = -1;
+  std::copy(t2.begin(), t2.end(), s.tokens());
+  SamplingParams sp;
+  const int C = model_->prefill_chunk();
+  for (int p = start; p < n;) {
+    const int T = std::min(C, n - p);
+    model_->encode_prefill(*e, s, p, T, sp, 0, false);
+    if (spec_) model_->encode_mtp_prefill(*e, s, p, T, 0);  // next tokens known up to t2[n]
+    p += T;
+    e->commit();
+    if (p < n) e = g.begin();
+  }
+  e->wait();
+  slot.tokens.assign(t2.begin(), t2.begin() + n);
+  logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
 }
 
 } // namespace ni

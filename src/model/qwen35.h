@@ -25,6 +25,7 @@ struct QLinear {
   const Tensor* b = nullptr;
   uint32_t N = 0, K = 0;
   int bits = 4, gs = 64;
+  bool mtp = false;  // part of the MTP head (NI_QMM8=1 selects its 8-bit prefill GEMM)
   explicit operator bool() const { return w != nullptr; }
 };
 
@@ -229,6 +230,7 @@ class Qwen35 {
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
   // projections sharing xh: one dispatch where the short-prefill kernels allow it
   void enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
+  void enc_topk_rows(Encoder& e, uint32_t E, uint32_t k, bool norm, int T);
   void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
   bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x);

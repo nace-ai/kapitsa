@@ -9,6 +9,7 @@
 #include <httplib/httplib.h>
 
 #include <atomic>
+#include <thread>
 #include <csignal>
 #include <ctime>
 
@@ -152,6 +153,7 @@ int main(int argc, char** argv) {
     const std::string model = engine.model_id();
     if (!body.value("stream", false)) {
       ChatResult out = engine.chat(r, [](const ChatDelta&) { return true; });
+      std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       if (out.finish_reason == "error") {
         res.status = 400;
         res.set_content(json{{"error", {{"message", out.error}, {"type", "invalid_request_error"}}}}.dump(), "application/json");
@@ -203,6 +205,8 @@ int main(int argc, char** argv) {
       std::string done = "data: [DONE]\n\n";
       sink.write(done.data(), done.size());
       sink.done();
+      // the reply is out: prefill the history as the next turn will render it (NI_HISTORY_PREFILL)
+      std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       return true;
     });
   });
