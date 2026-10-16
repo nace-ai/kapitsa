@@ -592,7 +592,54 @@ void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, cons
   e.dispatch(T, 1, 1, 256);
 }
 
+// NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
+//   unset/empty/0: qmm_b4_m64_n64 (M >= 64) / qmm_b4_m32_n32 (the original kernels)
+//   1: qmr (qmm3.metal: weights dequantized straight into MMA registers, X staged in threadgroup
+//      memory) with the tile picked from M and N
+//   <kernel name>, e.g. qmr_k64_w12_m32_n64: that kernel for M >= 64 and N > 64 (tile and threads
+//      parsed from the name), the automatic choice otherwise
+struct QmrSel {
+  bool on = false;
+  std::string name;  // large-M kernel
+  uint32_t bm = 32, bn = 128, threads = 128;
+};
+static const QmrSel& qmr_sel() {
+  static const QmrSel s = [] {
+    QmrSel q;
+    const char* v = getenv("NI_QMM");
+    if (!v || !*v || !strcmp(v, "0")) return q;
+    q.on = true;
+    q.name = "qmr_k32_w14_m32_n128";
+    if (strcmp(v, "1") != 0) {
+      unsigned bm = 0, bn = 0, wm = 0, wn = 0;
+      const char* w = strstr(v, "_w");
+      const char* m = strstr(v, "_m");
+      if (!w || sscanf(w, "_w%1u%1u", &wm, &wn) != 2 || !m || sscanf(m, "_m%u_n%u", &bm, &bn) != 2)
+        fatal("NI_QMM=%s: expected 1 or a qmr kernel name like qmr_k32_w14_m32_n128", v);
+      q.name = v;
+      q.bm = bm, q.bn = bn, q.threads = 32 * wm * wn;
+    }
+    logi("NI_QMM: dense prefill GEMM %s (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below", q.name.c_str());
+    return q;
+  }();
+  return s;
+}
+
 void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
+  const QmrSel& q = qmr_sel();
+  if (q.on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    const std::string* n = &q.name;
+    uint32_t bm = q.bm, bn = q.bn, th = q.threads;
+    static const std::string small = "qmr_k64_w14_m16_n64", tiny = "qmr_k64_w12_m8_n64";
+    if (M <= 8) n = &tiny, bm = 8, bn = 64, th = 64;
+    else if (M < 64 || L.N <= 64) n = &small, bm = 16, bn = 64, th = 128;
+    e.use(pipe(*n));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
+    return;
+  }
   const bool big = M >= 64 && L.bits == 4;
   const int BM = big ? 64 : 32, BN = big ? 64 : 32;
   std::string n = "qmm_b" + std::to_string(L.bits) + (big ? "_m64_n64" : "_m32_n32");
