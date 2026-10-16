@@ -169,7 +169,7 @@ void Gpu::make_resident(const std::vector<Buffer>& bufs) {
     @autoreleasepool {
       if (!residency_) {
         MTLResidencySetDescriptor* d = [MTLResidencySetDescriptor new];
-        d.label = @"nace-infer";
+        d.label = @"kapitsa";
         NSError* err = nil;
         id<MTLResidencySet> rs = [dev(device_) newResidencySetWithDescriptor:d error:&err];
         if (!rs) return;

@@ -1,4 +1,4 @@
-# nace-infer performance notes (M4 Pro 20-core GPU, 273 GB/s, macOS 15.3.1)
+# Kapitsa (formerly nace-infer) performance notes (M4 Pro 20-core GPU, 273 GB/s, macOS 15.3.1)
 
 Targets: Splash (incoai) is the reference for end-to-end speed but cannot run on macOS 15 (Metal 4,
 macOS 26.4+). Its published Qwen3.6-35B-A3B numbers are 210 tok/s decode (M5 Pro, DFlash2

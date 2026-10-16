@@ -2,7 +2,7 @@
 #include <metal_simdgroup>
 using namespace metal;
 
-// Shared helpers for nace-infer kernels. Activations are fp32 on the decode path;
+// Shared helpers for Kapitsa kernels. Activations are fp32 on the decode path;
 // weights are MLX affine-quantized (uint32-packed, bf16 scales/biases per group).
 
 #define NI_INLINE inline __attribute__((always_inline))

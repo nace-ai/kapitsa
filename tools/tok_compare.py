@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compares nace-infer's tokenizer with HF tokenizers on a mixed corpus.
+"""Compares Kapitsa's tokenizer with HF tokenizers on a mixed corpus.
 usage: tok_compare.py <ni_tok binary> <tokenizer.json> [files...]"""
 import subprocess, sys, random
 from tokenizers import Tokenizer

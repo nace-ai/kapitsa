@@ -40,6 +40,11 @@ foreach(t ${NI_TOOLS})
   target_link_libraries(${name} PRIVATE naceinfer)
 endforeach()
 
-add_executable(nace-infer-server ${CMAKE_SOURCE_DIR}/src/server/main.cpp)
-target_include_directories(nace-infer-server PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(nace-infer-server PRIVATE naceinfer "-framework CoreFoundation")
+# Kapitsa's server and CLI: `kapitsa serve --model <dir> ...`. build/nace-infer-server stays as a
+# symlink to it for scripts written before the rename.
+add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp)
+target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
+add_custom_command(TARGET kapitsa POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/nace-infer-server
+  COMMAND ${CMAKE_COMMAND} -E create_symlink kapitsa ${CMAKE_BINARY_DIR}/nace-infer-server)

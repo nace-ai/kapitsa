@@ -25,7 +25,7 @@ inline int& log_level() {
 [[noreturn]] inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  fprintf(stderr, "[nace-infer] fatal: ");
+  fprintf(stderr, "[kapitsa] fatal: ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);
@@ -36,7 +36,7 @@ inline void logi(const char* fmt, ...) {
   if (log_level() < 1) return;
   va_list ap;
   va_start(ap, fmt);
-  fprintf(stderr, "[nace-infer] ");
+  fprintf(stderr, "[kapitsa] ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);
@@ -46,7 +46,7 @@ inline void logd(const char* fmt, ...) {
   if (log_level() < 2) return;
   va_list ap;
   va_start(ap, fmt);
-  fprintf(stderr, "[nace-infer] ");
+  fprintf(stderr, "[kapitsa] ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);

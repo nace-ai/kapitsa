@@ -1,5 +1,8 @@
-// nace-infer-server: OpenAI-compatible HTTP server (chat completions, streaming, tools).
-//   nace-infer-server --model <dir> [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--api-key K]
+// kapitsa: OpenAI-compatible HTTP server (chat completions, streaming, tools).
+//   kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--slots 2]
+//                 [--spec N] [--prefill-chunk 2048] [--api-key K]
+// ("serve" is optional; build/nace-infer-server is a symlink kept for older scripts.)
+#include <cstring>
 #include "engine/engine.h"
 #include "util/log.h"
 
@@ -78,7 +81,15 @@ int main(int argc, char** argv) {
   EngineOptions opt;
   std::string host = "127.0.0.1", api_key;
   int port = 8000;
-  for (int i = 1; i < argc; ++i) {
+  int first = 1;
+  if (argc > 1 && !strcmp(argv[1], "serve")) first = 2;
+  if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h") || !strcmp(argv[1], "help"))) {
+    printf("Kapitsa: fast Qwen inference on Apple silicon\n"
+           "usage: kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768]\n"
+           "                     [--slots 2] [--spec N] [--prefill-chunk 2048] [--api-key KEY]\n");
+    return 0;
+  }
+  for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
     auto next = [&]() -> std::string {
       if (i + 1 >= argc) fatal("%s needs a value", a.c_str());

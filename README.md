@@ -1,8 +1,10 @@
-# nace-infer
+# Kapitsa
 
 **The fastest way to run Qwen on a Mac.** A from-scratch inference engine for Apple silicon.
 
-nace-infer runs Qwen3.5, 3.6 and 3.8 (dense and mixture-of-experts) on one Mac behind an OpenAI-compatible
+*Named after Pyotr Kapitsa, who discovered superfluidity: a liquid that flows with zero friction.*
+
+Kapitsa runs Qwen3.5, 3.6 and 3.8 (dense and mixture-of-experts) on one Mac behind an OpenAI-compatible
 server, for coding agents and chat apps. It is written in C++ and Metal for one job: the hybrid Gated
 DeltaNet + attention architecture these models use. It decodes several tokens per step with speculative
 decoding, prefills dense models on the GPU and the Neural Engine together, and picks a conversation back up
@@ -16,10 +18,10 @@ Apple silicon Mac, macOS 15 or later (tested on an M4 Pro with macOS 15.3 and 27
 Command Line Tools. The 4-bit 35B and 27B models need 48 GB of unified memory (about 20 and 16 GB of weights).
 
 ```bash
-git clone https://github.com/nace-ai/nace-infer && cd nace-infer
+git clone https://github.com/nace-ai/kapitsa && cd kapitsa
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 hf download Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed --local-dir ~/models/qwen3.6-35b-a3b-4bit
-./build/nace-infer-server --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b
+./build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b
 ```
 
 The server listens on `127.0.0.1:8000`. Kernels compile at load in a few seconds; the first request is

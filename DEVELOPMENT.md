@@ -1,6 +1,6 @@
 # Development
 
-Building, internals, tuning switches and tools. For what the engine is and how fast it runs, see
+Building Kapitsa, internals, tuning switches and tools. For what the engine is and how fast it runs, see
 [README.md](README.md); measured history lives in [docs/PERF.md](docs/PERF.md).
 
 ## Build
@@ -16,7 +16,7 @@ created at load (`NI_PREWARM=0` skips that and creates them on first use).
 ## Server
 
 ```bash
-./build/nace-infer-server --model <model dir> --model-id <id>
+./build/kapitsa serve --model <model dir> --model-id <id>   # build/nace-infer-server is an alias
 ```
 
 | Option | Purpose |
@@ -56,7 +56,7 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server.
 - `tests/test_server.py`: end-to-end API checks (13).
 
-## Switches (environment, read once at start)
+## Switches (environment, read once at start; the `NI_` prefix predates the name)
 
 Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to fall back.
 
