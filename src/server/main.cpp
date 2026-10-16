@@ -1,6 +1,6 @@
 // kapitsa: OpenAI-compatible HTTP server (chat completions, streaming, tools).
 //   kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--slots 2]
-//                 [--spec N] [--prefill-chunk 2048] [--api-key K]
+//                 [--spec N] [--dflash <drafter dir> | --dflash auto] [--prefill-chunk 2048] [--api-key K]
 // ("serve" is optional; build/nace-infer-server is a symlink kept for older scripts.)
 #include <cstring>
 #include "engine/engine.h"
@@ -87,7 +87,8 @@ int main(int argc, char** argv) {
   if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h") || !strcmp(argv[1], "help"))) {
     printf("Kapitsa: fast Qwen inference on Apple silicon\n"
            "usage: kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768]\n"
-           "                     [--slots 2] [--spec N] [--prefill-chunk 2048] [--api-key KEY]\n");
+           "                     [--slots 2] [--spec N] [--dflash <drafter dir>|auto] [--prefill-chunk 2048]\n"
+           "                     [--api-key KEY]\n");
     return 0;
   }
   for (int i = first; i < argc; ++i) {
@@ -103,6 +104,7 @@ int main(int argc, char** argv) {
     else if (a == "--ctx") opt.context = std::stoi(next());
     else if (a == "--slots") opt.slots = std::stoi(next());
     else if (a == "--spec") opt.spec_depth = std::stoi(next());
+    else if (a == "--dflash") opt.dflash = next();
     else if (a == "--prefill-chunk") opt.prefill_chunk = std::stoi(next());
     else if (a == "--api-key") api_key = next();
     else fatal("unknown option %s", a.c_str());

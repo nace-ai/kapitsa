@@ -1,0 +1,991 @@
+// DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
+// Math: research/inference/dflash2/SPEC.md §4-§7 (kernels in src/kernels/spec_dflash.metal).
+// Ideas credited to Splash (github.com/incoai/splash, Apache-2.0): MLX af4g64 quantization of the
+// drafter at load, the per-row window bound of the draft attention, exact-code MMA operands, the
+// separate block K/V scratch; the code is our own.
+#include "model/dflash2.h"
+#include "model/kparams.h"
+#include "util/bf16.h"
+#include "util/log.h"
+
+#include <nlohmann/json.hpp>
+
+#include <mach/mach.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <thread>
+#include <unordered_map>
+
+namespace ni {
+
+using json = nlohmann::json;
+
+// process physical footprint (what Activity Monitor / bench.py report), bytes
+static double footprint_gb() {
+  task_vm_info_data_t info;
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return 0;
+  return double(info.phys_footprint) / 1e9;
+}
+
+static Pipeline dpipe(const std::string& n) {
+  static std::unordered_map<std::string, Pipeline> cache;
+  auto it = cache.find(n);
+  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  return it->second;
+}
+
+void DFlash2::load_config(const std::string& dir) {
+  std::ifstream f(dir + "/config.json");
+  if (!f) fatal("DFlash2: cannot read %s/config.json", dir.c_str());
+  json c = json::parse(f);
+  if (!c.contains("dflash_config")) fatal("DFlash2: %s has no dflash_config", dir.c_str());
+  const json& dc = c["dflash_config"];
+  cfg_.H = c["hidden_size"];
+  cfg_.NL = c["num_hidden_layers"];
+  cfg_.I = c["intermediate_size"];
+  cfg_.vocab = c["vocab_size"];
+  cfg_.nq = c["num_attention_heads"];
+  cfg_.nkv = c["num_key_value_heads"];
+  cfg_.hd = c.value("head_dim", cfg_.H / cfg_.nq);
+  cfg_.eps = c.value("rms_norm_eps", 1e-6f);
+  cfg_.block = dc["block_size"];
+  cfg_.mask_id = dc["mask_token_id"];
+  cfg_.conv_gs = dc["conv_group_size"];
+  cfg_.rank = dc["selector_rank"];
+  cfg_.topk = dc["selector_top_k"];
+  for (auto& v : dc["target_layer_ids"]) cfg_.target_layers.push_back(v);
+  cfg_.window = c.value("sliding_window", 0);
+  double theta = 0;
+  std::string rope_type = "default";
+  if (c.contains("rope_parameters")) {
+    theta = c["rope_parameters"].value("rope_theta", 0.0);
+    rope_type = c["rope_parameters"].value("rope_type", "default");
+  } else {
+    theta = c.value("rope_theta", 0.0);
+  }
+  cfg_.theta = float(theta);
+  // SPEC §1 load-time checks: the kernels hard-code this geometry.
+  std::vector<std::string> bad;
+  auto check = [&](bool ok, const char* what) {
+    if (!ok) bad.push_back(what);
+  };
+  check(c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}), "architecture");
+  check(c.contains("is_causal") && c["is_causal"] == false, "is_causal false");
+  bool sliding = c.contains("layer_types") && c["layer_types"].size() == size_t(cfg_.NL);
+  if (sliding)
+    for (auto& t : c["layer_types"]) sliding = sliding && t == "sliding_attention";
+  check(sliding && cfg_.window == kWin, "all layers sliding, window 2048");
+  check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
+  check(cfg_.conv_gs == 16, "conv group 16");
+  check(cfg_.rank == kRank && cfg_.topk == kTopK, "selector rank 256 / top-k 16");
+  check(cfg_.block == kB, "block 8");
+  check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
+  check(cfg_.nq == 32 && cfg_.nkv == 8 && cfg_.hd == 128, "heads 32/8 x 128");
+  check(cfg_.eps == 1e-6f, "eps 1e-6");
+  check(dc.value("input_embedding_scale", 1.0) == 1.0 && dc.value("output_multiplier", 1.0) == 1.0 &&
+            dc.value("final_logit_softcapping", json()).is_null() && c.value("final_logit_softcapping", json()).is_null(),
+        "neutral embedding/output scales, no softcap");
+  check(!c.value("tie_word_embeddings", false), "untied");
+  check(cfg_.H == tg_.config().hidden, "draft hidden == target hidden");
+  check(cfg_.vocab == tg_.config().vocab, "vocab == target vocab");
+  bool in_range = !cfg_.target_layers.empty();
+  for (int l : cfg_.target_layers) in_range = in_range && l >= 0 && l < tg_.config().layers;
+  check(in_range, "target_layer_ids in range");
+  check(cfg_.H % 64 == 0 && cfg_.I % 64 == 0, "hidden/intermediate multiples of 64");
+  check(cfg_.mask_id >= 0 && cfg_.mask_id < cfg_.vocab, "mask id");
+  if (!bad.empty()) {
+    std::string s;
+    for (auto& b : bad) s += " [" + b + "]";
+    fatal("DFlash2: unsupported drafter config in %s:%s", dir.c_str(), s.c_str());
+  }
+}
+
+const Tensor* DFlash2::own(const Tensor& t, const char* label) {
+  Buffer b = Gpu::get().alloc(t.buf.size, label, /*tracked=*/false);
+  memcpy(b.ptr(), t.buf.ptr(), t.buf.size);
+  owned_bufs_.push_back(b);
+  resident_ += b.size;
+  Tensor c = t;
+  c.buf = b;
+  owned_.push_back(c);
+  return &owned_.back();
+}
+
+// MLX affine quantization of bf16 rows (see DFlash2::quantize); multithreaded over rows.
+void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int bits, bool even, uint32_t* W,
+                      uint16_t* S, uint16_t* B) {
+  const uint32_t N = uint32_t(rowp.size()), wpr = K * bits / 32, gpr = K / 64;
+  auto rnd = [even](float x) { return even ? std::nearbyint(x) : std::round(x); };
+  const float n_bins = float((1 << bits) - 1);
+  auto work = [&](uint32_t r0, uint32_t r1) {
+    float v[64];
+    for (uint32_t n = r0; n < r1; ++n) {
+      const uint16_t* src = rowp[n];
+      for (uint32_t gi = 0; gi < gpr; ++gi) {
+        float lo = 3.38953139e38f, hi = 0.0f;  // MLX starts from (Limits<bf16>::max, 0)
+        for (int k = 0; k < 64; ++k) {
+          v[k] = bf16_to_f32(src[gi * 64 + k]);
+          lo = std::min(lo, v[k]);
+          hi = std::max(hi, v[k]);
+        }
+        float scale = std::max((hi - lo) / n_bins, 1e-7f);
+        const bool side = std::fabs(lo) > std::fabs(hi);
+        scale = side ? scale : -scale;
+        const float edge = side ? lo : hi;
+        const float q0 = rnd(edge / scale);
+        const bool at_zero = q0 == 0.0f;
+        scale = at_zero ? scale : edge / q0;
+        const float bias = at_zero ? 0.0f : edge;
+        S[size_t(n) * gpr + gi] = f32_to_bf16(scale);
+        B[size_t(n) * gpr + gi] = f32_to_bf16(bias);
+        uint32_t* wr = W + size_t(n) * wpr + gi * (64 * bits / 32);
+        const int per = 32 / bits;
+        for (int w = 0; w < 64 / per; ++w) {
+          uint32_t word = 0;
+          for (int j = 0; j < per; ++j) {
+            float c = std::min(rnd((v[w * per + j] - bias) / scale), n_bins);
+            c = std::max(c, 0.0f);
+            word |= uint32_t(c) << (bits * j);
+          }
+          wr[w] = word;
+        }
+      }
+    }
+  };
+  const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+  std::vector<std::thread> th;
+  const uint32_t per = (N + nth - 1) / nth;
+  for (unsigned t = 0; t < nth; ++t) {
+    uint32_t a = std::min(N, t * per), b = std::min(N, a + per);
+    if (a < b) th.emplace_back(work, a, b);
+  }
+  for (auto& t : th) t.join();
+}
+
+// bf16 rows (the parts stacked along N) -> MLX affine `bits_`-bit, group 64, with exactly
+// mx.quantize's rounding (MLX Metal affine_quantize: lo = min(w), hi = max(max(w), 0),
+// scale = max((hi - lo) / n_bins, 1e-7) signed toward the larger-magnitude edge, rescaled so the
+// edge is exact, bias = edge; codes = min(round((w - bias) / scale), n_bins) in IEEE fp32 with
+// round-half-away; scale/bias stored as bf16 RNE). MLX's CPU backend rounds halves to even
+// instead (NI_DFLASH_QROUND=even reproduces that one).
+QLinear DFlash2::quantize(const std::vector<const Tensor*>& parts, const char* label) {
+  const uint32_t K = uint32_t(parts[0]->shape[1]);
+  uint32_t N = 0;
+  for (auto* t : parts) {
+    if (t->dtype != DType::BF16 || t->shape.size() != 2 || uint32_t(t->shape[1]) != K)
+      fatal("DFlash2 quantize: %s parts must be 2-D bf16 with equal K", label);
+    N += uint32_t(t->shape[0]);
+  }
+  if (K % 64 || N % 8) fatal("DFlash2 quantize: %s [%u, %u] not a multiple of (8, 64)", label, N, K);
+  const int bits = bits_;
+  const uint32_t wpr = K * bits / 32, gpr = K / 64;
+  Gpu& g = Gpu::get();
+  Buffer wq = g.alloc(size_t(N) * wpr * 4, label, false);
+  Buffer sc = g.alloc(size_t(N) * gpr * 2, label, false);
+  Buffer bi = g.alloc(size_t(N) * gpr * 2, label, false);
+  static const bool even = getenv("NI_DFLASH_QROUND") && std::string(getenv("NI_DFLASH_QROUND")) == "even";
+  std::vector<const uint16_t*> rowp(N);
+  {
+    uint32_t r = 0;
+    for (auto* t : parts)
+      for (int64_t i = 0; i < t->shape[0]; ++i) rowp[r++] = t->buf.as<uint16_t>() + size_t(i) * K;
+  }
+  dfl_quantize_cpu(rowp, K, bits, even, wq.as<uint32_t>(), sc.as<uint16_t>(), bi.as<uint16_t>());
+  owned_bufs_.push_back(wq);
+  owned_bufs_.push_back(sc);
+  owned_bufs_.push_back(bi);
+  resident_ += wq.size + sc.size + bi.size;
+  QLinear L;
+  owned_.push_back(Tensor{wq, DType::U32, {int64_t(N), int64_t(wpr)}});
+  L.w = &owned_.back();
+  owned_.push_back(Tensor{sc, DType::BF16, {int64_t(N), int64_t(gpr)}});
+  L.s = &owned_.back();
+  owned_.push_back(Tensor{bi, DType::BF16, {int64_t(N), int64_t(gpr)}});
+  L.b = &owned_.back();
+  L.N = N;
+  L.K = K;
+  L.bits = bits;
+  L.gs = 64;
+  return L;
+}
+
+QLinear DFlash2::row_view(const QLinear& src, uint32_t r0, uint32_t n) {
+  QLinear v = src;
+  const size_t wrow = size_t(src.K) * src.bits / 8, srow = size_t(src.K / src.gs) * 2;
+  owned_.push_back(Tensor{src.w->buf.view(r0 * wrow, n * wrow), src.w->dtype, {int64_t(n), int64_t(wrow / 4)}});
+  v.w = &owned_.back();
+  owned_.push_back(Tensor{src.s->buf.view(r0 * srow, n * srow), src.s->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
+  v.s = &owned_.back();
+  owned_.push_back(Tensor{src.b->buf.view(r0 * srow, n * srow), src.b->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
+  v.b = &owned_.back();
+  v.N = n;
+  return v;
+}
+
+DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target), dir_(dir) {
+  const double t0 = now_ms(), fp0 = footprint_gb();
+  bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
+  if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
+  load_config(dir);
+  const QLinear& emb = tg_.embed_table();
+  const QLinear& head = tg_.lm_head();
+  if (emb.bits != 4 || emb.gs % 64 || head.gs != 64 || (head.bits != 4 && head.bits != 8) || head.K != uint32_t(cfg_.H))
+    fatal("DFlash2: target embedding must be 4-bit and lm_head 4/8-bit g64");
+  {
+    WeightStore w;  // bf16 checkpoint, released after quantization
+    w.open_dir(dir);
+    auto get = [&](const std::string& n) -> const Tensor& { return w.get(n); };
+    auto expect = [&](const std::string& n, std::vector<int64_t> shape) -> const Tensor& {
+      const Tensor& t = get(n);
+      if (t.dtype != DType::BF16 || t.shape != shape) fatal("DFlash2: %s has an unexpected dtype/shape", n.c_str());
+      return t;
+    };
+    const int64_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
+    const int64_t nH = int64_t(cfg_.target_layers.size()) * H;
+    fc_ = quantize({&expect("fc.weight", {H, nH})}, "dfl_fc");
+    sel_w_ = quantize({&expect("candidate_selector.hidden_projection.weight", {kRank, H})}, "dfl_sel");
+    hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
+    norm_ = own(expect("norm.weight", {H}), "dfl_norm");
+    cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
+    cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+    // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
+    std::vector<const Tensor*> kv_parts;
+    for (int l = 0; l < cfg_.NL; ++l) {
+      const std::string p = "layers." + std::to_string(l) + ".self_attn.";
+      kv_parts.push_back(&expect(p + "k_proj.weight", {1024, H}));
+      kv_parts.push_back(&expect(p + "v_proj.weight", {1024, H}));
+    }
+    kv_all_ = quantize(kv_parts, "dfl_kv");
+    {
+      Buffer kn = Gpu::get().alloc(size_t(cfg_.NL) * 128 * 2, "dfl_kn", false);
+      for (int l = 0; l < cfg_.NL; ++l) {
+        const Tensor& t = expect("layers." + std::to_string(l) + ".self_attn.k_norm.weight", {128});
+        memcpy(kn.as<uint8_t>() + l * 256, t.buf.ptr(), 256);
+      }
+      owned_bufs_.push_back(kn);
+      owned_.push_back(Tensor{kn, DType::BF16, {int64_t(cfg_.NL), 128}});
+      kn_all_ = &owned_.back();
+    }
+    layers_.resize(cfg_.NL);
+    for (int l = 0; l < cfg_.NL; ++l) {
+      DLayer& L = layers_[l];
+      const std::string p = "layers." + std::to_string(l) + ".";
+      L.in_w = own(expect(p + "input_layernorm.weight", {H}), "dfl_norm");
+      L.post_w = own(expect(p + "post_attention_layernorm.weight", {H}), "dfl_norm");
+      L.qn = own(expect(p + "self_attn.q_norm.weight", {128}), "dfl_norm");
+      owned_.push_back(Tensor{kn_all_->buf.view(size_t(l) * 256, 256), DType::BF16, {128}});
+      L.kn = &owned_.back();
+      L.ac_base = own(expect(p + "attention_conv.base_kernel", {2, 2, H}), "dfl_conv");
+      L.mc_base = own(expect(p + "mlp_conv.base_kernel", {2, 2, H}), "dfl_conv");
+      L.ac = quantize({&expect(p + "attention_conv.kernel_projection.weight", {G4, H})}, "dfl_ac");
+      L.mc = quantize({&expect(p + "mlp_conv.kernel_projection.weight", {G4, H})}, "dfl_mc");
+      L.q = quantize({&expect(p + "self_attn.q_proj.weight", {4096, H})}, "dfl_q");
+      L.o = quantize({&expect(p + "self_attn.o_proj.weight", {H, 4096})}, "dfl_o");
+      L.gate = quantize({&expect(p + "mlp.gate_proj.weight", {I, H})}, "dfl_gate");
+      L.up = quantize({&expect(p + "mlp.up_proj.weight", {I, H})}, "dfl_up");
+      L.down = quantize({&expect(p + "mlp.down_proj.weight", {H, I})}, "dfl_down");
+      L.kv = row_view(kv_all_, uint32_t(l) * 2048, 2048);
+    }
+  }
+  // RoPE inverse frequencies in fp32 as HF computes them: 1 / theta^(2i/128).
+  inv_freq_ = Gpu::get().alloc(64 * 4, "dfl_inv_freq", false);
+  for (int i = 0; i < 64; ++i)
+    inv_freq_.as<float>()[i] = 1.0f / std::pow(cfg_.theta, float(2 * i) / 128.0f);
+  owned_bufs_.push_back(inv_freq_);
+  // capture slots: target layer -> slot
+  for (CaptureHook* hk : {&hook_pf_, &hook_vf_}) {
+    hk->slot.assign(tg_.config().layers, -1);
+    for (size_t i = 0; i < cfg_.target_layers.size(); ++i) hk->slot[cfg_.target_layers[i]] = int(i);
+    hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
+  }
+  alloc_buffers();
+  Gpu::get().make_resident(owned_bufs_);
+  // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
+  // union, the 35B verify's main cost, shrinks with the rows (35B, 512 tokens: code +7%, prose +20% over
+  // verifying all 7; tau 0.4-0.7 swept). Dense targets read every weight once whatever the row count, so
+  // there it would only cost acceptance.
+  dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
+  if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
+  // T > 0 uses the exact (exclusive-product) rule: default tau 0.3 (35B code_35b 512, T = 0.6: 139.2 tok/s
+  // without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7); NI_DFLASH_DYN_T overrides
+  dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
+  if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
+  if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
+  if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
+  if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
+  logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
+       "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
+}
+
+void DFlash2::alloc_buffers() {
+  Gpu& g = Gpu::get();
+  const size_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
+  const size_t nH = cfg_.target_layers.size() * H;
+  const size_t Kx = std::max({nH, size_t(4096), H, I});
+  const size_t KV = size_t(cfg_.NL) * 2048;
+  h_ = g.alloc(8 * H * 4, "dfl_h");
+  n_ = g.alloc(8 * H * 4, "dfl_n");
+  xh_ = g.alloc(8 * Kx * 2, "dfl_xh");
+  xs_ = g.alloc(Kx / 64 * 8 * 4, "dfl_xs");
+  hh_ = g.alloc(8 * I * 2, "dfl_hh");
+  hs_ = g.alloc(I / 64 * 8 * 4, "dfl_hs");
+  dyn_ = g.alloc(8 * G4 * 4, "dfl_dyn");
+  q_ = g.alloc(8 * 4096 * 4, "dfl_q");
+  kv_ = g.alloc(8 * 2048 * 4, "dfl_kv");
+  Q_ = g.alloc(32 * 8 * 128 * 4, "dfl_Q");
+  Kb_ = g.alloc(8 * 8 * 128 * 4, "dfl_Kb");
+  Vb_ = g.alloc(8 * 8 * 128 * 4, "dfl_Vb");
+  part_o_ = g.alloc(size_t(max_splits_) * 32 * 8 * 128 * 4, "dfl_part_o");
+  part_ml_ = g.alloc(size_t(max_splits_) * 32 * 8 * 2 * 4, "dfl_part_ml");
+  u_ = g.alloc(8 * H * 4, "dfl_u");
+  logits_ = g.alloc(8 * V * 4, "dfl_logits");
+  sel_ = g.alloc(8 * kRank * 4, "dfl_sel");
+  const size_t ntg = (V + 2047) / 2048;
+  tk_v_ = g.alloc(7 * ntg * 16 * 4, "dfl_tk_v");
+  tk_i_ = g.alloc(7 * ntg * 16 * 4, "dfl_tk_i");
+  cand_v_ = g.alloc(7 * 16 * 4, "dfl_cand_v");
+  cand_i_ = g.alloc(7 * 16 * 4, "dfl_cand_i");
+  edges_ = g.alloc(7 * 256 * 4, "dfl_edges");
+  rope_cs_ = g.alloc(8 * 64 * 8, "dfl_rope_cs");
+  walk_s_ = g.alloc(7 * 16 * 4, "dfl_walk_s");
+  qprob_ = g.alloc(7 * 16 * 4, "dfl_qprob");
+  walk_k_ = g.alloc(8 * 4, "dfl_walk_k");
+  dist_id_ = g.alloc(8 * 32 * 4, "dfl_dist_id");
+  dist_p_ = g.alloc(8 * 32 * 4, "dfl_dist_p");
+  dist_keep_ = g.alloc(8 * 4, "dfl_dist_keep");
+  acc_ = g.alloc(16, "dfl_acc");
+  memset(acc_.ptr(), 0, acc_.size);
+  {
+    const char* v = getenv("NI_DFLASH_V8");
+    v8_ = v && *v ? atoi(v) != 0 : H >= 4096;
+  }
+  if (v8_) {
+    v8t_ = g.alloc(8 * H * 2, "dfl_v8_table");
+    v8h_ = g.alloc(8 * I * 2, "dfl_v8_h");
+    v8hs_ = g.alloc(I / 64 * 8 * 4, "dfl_v8_hs");
+    resident_ += v8t_.size + v8h_.size + v8hs_.size;
+  }
+  gst_ = g.alloc(16, "dfl_gpu_state");
+  memset(gst_.ptr(), 0, gst_.size);
+  kdyn_ = g.alloc(16, "dfl_kdyn");
+  kdyn_.as<uint32_t>()[0] = 7;
+  kdyn_.as<uint32_t>()[1] = 8;
+  capt_ = g.alloc(8 * nH * 2, "dfl_capt");
+  y8_ = g.alloc(8 * H * 4, "dfl_y8");
+  c8_ = g.alloc(8 * H * 4, "dfl_c8");
+  kv8_ = g.alloc(8 * KV * 4, "dfl_kv8");
+  cdbg_ = g.alloc(size_t(kCtxKeep) * H * 4, "dfl_c");
+  memset(capt_.ptr(), 0, capt_.size);
+  for (Buffer* b : {&h_, &n_, &xh_, &xs_, &hh_, &hs_, &dyn_, &q_, &kv_, &Q_, &Kb_, &Vb_, &part_o_, &part_ml_, &u_,
+                    &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
+                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_})
+    resident_ += b->size;
+}
+
+std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
+  auto d = std::make_unique<DFlashSeq>();
+  const size_t bytes = size_t(cfg_.NL) * 8 * kWin * 128 * 2;
+  d->ring_k = Gpu::get().alloc(bytes, "dfl_ring_k");
+  d->ring_v = Gpu::get().alloc(bytes, "dfl_ring_v");
+  memset(d->ring_k.ptr(), 0, bytes);
+  memset(d->ring_v.ptr(), 0, bytes);
+  d->ctx = 0;
+  d->valid_lo = 0;
+  return d;
+}
+
+std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) {
+  namespace fs = std::filesystem;
+  auto lower = [](std::string x) {
+    for (auto& c : x) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return x;
+  };
+  auto fits = [&](const fs::path& d) {
+    std::ifstream f(d / "config.json");
+    if (!f) return false;
+    try {
+      json c = json::parse(f);
+      return c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}) && c.contains("dflash_config") &&
+             c.value("hidden_size", 0) == tc.hidden && c.value("vocab_size", 0) == tc.vocab &&
+             c.value("num_target_layers", tc.layers) == tc.layers;
+    } catch (...) {
+      return false;
+    }
+  };
+  std::error_code ec;
+  fs::path md = fs::path(model_dir);
+  if (md.filename().empty()) md = md.parent_path();
+  for (const char* sub : {"dflash2", "drafter"})
+    if (fits(md / sub)) return (md / sub).string();
+  const std::string name = lower(md.filename().string());
+  std::vector<fs::path> roots = {md.parent_path(), md.parent_path() / "drafters"};
+  if (const char* home = getenv("HOME")) roots.push_back(fs::path(home) / ".cache/nace-infer-models/drafters");
+  std::string best;
+  size_t best_len = 0;
+  const std::string suffix = "-dflash2";
+  for (auto& r : roots) {
+    if (!fs::is_directory(r, ec)) continue;
+    for (auto& ent : fs::directory_iterator(r, ec)) {
+      if (!ent.is_directory(ec)) continue;
+      const std::string dn = lower(ent.path().filename().string());
+      if (dn.size() <= suffix.size() || dn.compare(dn.size() - suffix.size(), suffix.size(), suffix) != 0) continue;
+      const std::string base = dn.substr(0, dn.size() - suffix.size());
+      const bool match = name == base || (name.size() > base.size() && name.compare(0, base.size(), base) == 0 &&
+                                          name[base.size()] == '-');
+      if (match && base.size() > best_len && fits(ent.path())) {
+        best = ent.path().string();
+        best_len = base.size();
+      }
+    }
+  }
+  return best;
+}
+
+void DFlash2::rewind(DFlashSeq& d, int pos) {
+  if (pos >= d.ctx) {
+    if (pos > d.ctx) d.valid_lo = pos;  // positions [ctx, pos) were never committed: nothing before pos is usable
+    d.ctx = pos;
+    return;
+  }
+  // entries still in the ring: positions [max(valid_lo, ctx - 2048), ctx); keep those below pos
+  const int oldest = std::max(d.valid_lo, d.ctx - kWin);
+  d.ctx = pos;
+  d.valid_lo = std::min(oldest, pos);
+}
+
+// ---- encoders ----
+
+void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes) {
+  if (!debug_) return;
+  auto it = dbg_.find(name);
+  if (it == dbg_.end()) it = dbg_.emplace(name, Gpu::get().alloc((bytes + 15) / 16 * 16, "dfl_dbg")).first;
+  const uint32_t n = uint32_t(bytes / 16);
+  e.use(dpipe("copy_u32"));
+  e.buf(0, src);
+  e.buf(1, it->second);
+  e.val(2, n);
+  e.dispatch((n + 255) / 256, 1, 1, 256);
+}
+
+void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh, const Buffer& xs, uint32_t K,
+                  uint32_t x_ld, int ks_req, int rf_req) {
+  if (segs.empty() || segs.size() > 4) fatal("enc_qmm8: 1-4 segments");
+  kp::DflQmm8 p{};
+  p.K = K;
+  p.nseg = uint32_t(segs.size());
+  p.x_ld = x_ld;
+  uint32_t rbs_total = 0;
+  for (auto& s : segs) {
+    if (s.L->K != K || s.L->gs != 64 || (s.L->bits != 4 && s.L->bits != 8)) fatal("enc_qmm8: K/group/bits mismatch");
+    rbs_total += (s.L->N + 7) / 8;
+  }
+  // K split (bench_qmm8 sweep, M4 Pro): no split once there are >= 1024 threadgroups (LM head);
+  // otherwise the largest split that leaves every simdgroup >= 8 groups of 64.
+  static const int ks_env = getenv("NI_DFLASH_KS") ? atoi(getenv("NI_DFLASH_KS")) : 0;
+  uint32_t ks = 1;
+  if (ks_req > 0) ks = uint32_t(ks_req);
+  else if (ks_env > 0) ks = uint32_t(ks_env);
+  else if (rbs_total / 8 < 1024)
+    while (ks < 8 && (K / 64) / (ks * 2) >= 8) ks *= 2;
+  p.ks = ks;
+  // NI_DFLASH_RF=2: 16 weight rows per simdgroup (the X gather shared by two fragments)
+  static const int rf_env = getenv("NI_DFLASH_RF") ? atoi(getenv("NI_DFLASH_RF")) : 1;
+  const uint32_t rf = (rf_req ? rf_req : rf_env) == 2 ? 2 : 1;
+  const uint32_t rbs = 8 / ks * rf;  // 8-row blocks per threadgroup
+  uint32_t tg = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    const DflSeg8& s = segs[std::min(i, segs.size() - 1)];
+    if (i < segs.size()) {
+      p.N[i] = s.L->N;
+      p.bits[i] = uint32_t(s.L->bits);
+      p.y_ld[i] = s.y_ld;
+      p.oscale[i] = s.oscale;
+      p.tg_begin[i] = tg;
+      tg += ((s.L->N + 7) / 8 + rbs - 1) / rbs;
+    }
+    e.buf(int(i * 4 + 0), s.L->w->buf);
+    e.buf(int(i * 4 + 1), s.L->s->buf);
+    e.buf(int(i * 4 + 2), s.L->b->buf);
+    e.buf(int(i * 4 + 3), s.y);
+  }
+  p.tg_begin[segs.size()] = tg;
+  e.use(dpipe(rf == 2 ? "dfl_qmm8_r2" : "dfl_qmm8"));
+  e.buf(16, xh);
+  e.buf(17, xs);
+  e.val(18, p);
+  e.dispatch(tg, 1, 1, 256);
+}
+
+void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffer& xh, const Buffer& xs,
+                     const Buffer& hh, const Buffer& hs, int ks_req) {
+  if (g.N != u.N || g.K != u.K || g.bits != u.bits || g.N % 64) fatal("enc_qmm8_gu: shapes");
+  // K split inside the 64-column threadgroup (8 row blocks x ks simdgroups); default: the largest
+  // of 1/2/4 that keeps >= 8 groups per simdgroup (NI_DFLASH_GU_KS overrides)
+  static const int ks_env = getenv("NI_DFLASH_GU_KS") ? atoi(getenv("NI_DFLASH_GU_KS")) : 0;
+  uint32_t ks = ks_req > 0 ? uint32_t(ks_req) : ks_env > 0 ? uint32_t(ks_env) : 0;
+  if (!ks) {
+    ks = 1;
+    while (ks < 4 && (g.K / 64) / (ks * 2) >= 8) ks *= 2;
+  }
+  if (ks != 1 && ks != 2 && ks != 4) fatal("enc_qmm8_gu: ks %u", ks);
+  kp::DflQmm8 p{};
+  p.K = g.K;
+  p.nseg = 1;
+  p.ks = ks;
+  p.x_ld = g.K;
+  p.N[0] = g.N;
+  p.bits[0] = uint32_t(g.bits);
+  p.y_ld[0] = g.N;
+  p.oscale[0] = 1.0f;
+  e.use(dpipe(ks == 1 ? "dfl_qmm8_gu" : ks == 2 ? "dfl_qmm8_gu_ks2" : "dfl_qmm8_gu_ks4"));
+  e.buf(0, g.w->buf); e.buf(1, g.s->buf); e.buf(2, g.b->buf); e.buf(3, hh);
+  e.buf(4, u.w->buf); e.buf(5, u.s->buf); e.buf(6, u.b->buf); e.buf(7, hs);
+  e.buf(16, xh);
+  e.buf(17, xs);
+  e.val(18, p);
+  e.dispatch(g.N / 64, 1, 1, 256 * ks);
+}
+
+// Prefill-size GEMM (context commit of the prompt): the target's prefill kernels, half X rows.
+void DFlash2::enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M) {
+  const bool big = M >= 64;
+  const int BM = big ? 64 : 32, BN = big ? 64 : 32;
+  const std::string n = "qmm_b" + std::to_string(L.bits) + (big ? "_m64_n64" : "_m32_n32");
+  e.use(dpipe(n));
+  kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, 0u, uint32_t(L.gs), 0, 0};
+  e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+  e.val(5, p);
+  e.dispatch((L.N + BN - 1) / BN, (M + BM - 1) / BM, 1, 128);
+}
+
+void DFlash2::enc_to_v8(Encoder& e, const Buffer& xh, uint32_t K, const Buffer& table) {
+  kp::DflPerm p{K};
+  e.use(dpipe("dfl_x8_to_v8"));
+  e.buf(0, xh); e.buf(1, table);
+  e.val(2, p);
+  e.dispatch((K / 64 + 7) / 8, 1, 1, 256);
+}
+
+void DFlash2::enc_commit_kv(Encoder& e, DFlashSeq& d, const Buffer& kv, int rows, int pos0) {
+  // rows < 0: rows and positions from the drafter state (GPU-driven; the grid covers 8 rows)
+  const bool gpu = rows < 0;
+  kp::DflCommit p{gpu ? 0xffffffffu : uint32_t(rows), uint32_t(pos0), uint32_t(cfg_.NL) * 2048, cfg_.eps};
+  e.use(dpipe("dfl_ctx_commit"));
+  e.buf(0, kv); e.buf(1, kn_all_->buf); e.buf(2, inv_freq_); e.buf(3, d.ring_k); e.buf(4, d.ring_v);
+  e.val(5, p);
+  e.buf(6, gst_);
+  e.dispatch(gpu ? uint32_t(kB) : uint32_t(rows), uint32_t(cfg_.NL) * 8, 1, 128);
+}
+
+void DFlash2::begin_prefill(int n, int start) {
+  const size_t nH = cfg_.target_layers.size() * cfg_.H;
+  pf_n_ = n;
+  pf_rows_ = std::max(0, n - std::max(start, n - kCtxKeep));
+  Gpu& g = Gpu::get();
+  if (!pcap_) {
+    pcap_ = g.alloc(size_t(kCtxKeep) * nH * 2, "dfl_prompt_capt");
+    constexpr int C = 512;  // rows per context-commit chunk
+    xph_ = g.alloc(size_t(C) * nH * 2, "dfl_pf_x");
+    yph_ = g.alloc(size_t(C) * cfg_.H * 4, "dfl_pf_y");
+    cph_ = g.alloc(size_t(C) * cfg_.H * 2, "dfl_pf_c");
+    kvph_ = g.alloc(size_t(C) * cfg_.NL * 2048 * 4, "dfl_pf_kv");
+  }
+  hook_pf_.dst = pcap_;
+  hook_pf_.pos_base = n - pf_rows_;
+  hook_pf_.rows = pf_rows_;
+  tg_.set_capture(&hook_pf_);
+}
+
+void DFlash2::set_prompt_captures(const uint16_t* rows_bf16, int rows) {
+  if (!pcap_ || rows != pf_rows_) fatal("set_prompt_captures: call begin_prefill(n) first (rows %d vs %d)", rows, pf_rows_);
+  memcpy(pcap_.ptr(), rows_bf16, size_t(rows) * hook_pf_.ld * 2);
+}
+
+void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
+  const uint32_t H = uint32_t(cfg_.H), nH = hook_pf_.ld;
+  if (pf_rows_ == 0) {
+    d.ctx = pf_n_;
+    return;
+  }
+  // a gap between the ring's last position and the new rows: nothing older is contiguous with them
+  // (with d.ctx == start the gap, if any, lies below n - 2047 and is never visible anyway)
+  if (d.ctx < pf_n_ - pf_rows_) d.valid_lo = std::max(d.valid_lo, pf_n_ - pf_rows_);
+  // Short prompts: 8-row chunks through the 8-row GEMM (it streams each weight once per 8 rows at
+  // ~180 GB/s; the prefill GEMM pays 64-row tiles). NI_DFLASH_PF8 = largest row count for this path.
+  static const int pf8_env = getenv("NI_DFLASH_PF8") ? atoi(getenv("NI_DFLASH_PF8")) : 256;
+  if (pf_rows_ <= (pf8_ >= 0 ? pf8_ : pf8_env)) {
+    for (int c0 = 0; c0 < pf_rows_; c0 += kB) {
+      const int cn = std::min(kB, pf_rows_ - c0);
+      kp::DflX8 xp{nH, uint32_t(cn), nH, 1.0f / 16.0f};
+      e.use(dpipe("dfl_x8_from_bf16"));
+      e.buf(0, pcap_, size_t(c0) * nH * 2); e.buf(1, xh_); e.buf(2, xs_);
+      e.val(3, xp);
+      e.buf(4, gst_);
+      e.dispatch(8, 1, 1, 256);
+      enc_qmm8(e, {{&fc_, y8_, H, 16.0f}}, xh_, xs_, nH, nH);
+      kp::DflNorm np{H, cfg_.eps, 1.0f, 1u};
+      e.use(dpipe("dfl_norm_x8"));
+      e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, c8_); e.buf(3, xh_); e.buf(4, xs_);
+      e.val(5, np);
+      e.dispatch(8, 1, 1, 256);
+      if (debug_) {  // keep c(j) of the whole prompt for tests
+        e.use(dpipe("copy_u32"));
+        const uint32_t nq = uint32_t(cn) * H / 4;
+        e.buf(0, c8_); e.buf(1, cdbg_, size_t(c0) * H * 4); e.val(2, nq);
+        e.dispatch((nq + 255) / 256, 1, 1, 256);
+      }
+      enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H);
+      enc_commit_kv(e, d, kv8_, cn, pf_n_ - pf_rows_ + c0);
+    }
+    d.ctx = pf_n_;
+    return;
+  }
+  constexpr int C = 512;
+  for (int c0 = 0; c0 < pf_rows_; c0 += C) {
+    const int cn = std::min(C, pf_rows_ - c0);
+    {  // bf16 captures -> half / 16 (exact for |x| in [2^-10, 2^20])
+      kp::DflRows p{nH, 1.0f / 16.0f};
+      e.use(dpipe("dfl_rows_bf16_half"));
+      e.buf(0, pcap_, size_t(c0) * nH * 2);
+      e.buf(1, xph_);
+      e.val(2, p);
+      e.dispatch((nH / 4 + 255) / 256, uint32_t(cn), 1, 256);
+    }
+    enc_qmm_rows(e, fc_, xph_, yph_, cn);
+    {
+      kp::DflNorm p{H, cfg_.eps, 16.0f, 1u};
+      e.use(dpipe("dfl_rows_norm_half"));
+      e.buf(0, yph_); e.buf(1, hnorm_->buf); e.buf(2, cph_); e.buf(3, cdbg_, size_t(c0) * H * 4);
+      e.val(4, p);
+      e.dispatch(uint32_t(cn), 1, 1, 256);
+    }
+    enc_qmm_rows(e, kv_all_, cph_, kvph_, cn);
+    enc_commit_kv(e, d, kvph_, cn, pf_n_ - pf_rows_ + c0);
+  }
+  d.ctx = pf_n_;
+}
+
+void DFlash2::end_prefill() { tg_.set_capture(nullptr); }
+
+void DFlash2::arm_verify(int P) {
+  hook_vf_.dst = capt_;
+  hook_vf_.pos_base = P;
+  hook_vf_.rows = kB;
+  tg_.set_capture(&hook_vf_);
+}
+
+void DFlash2::disarm() { tg_.set_capture(nullptr); }
+
+void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
+  // m < 0: GPU-driven (rows and positions from the drafter state; d.ctx is advanced by the caller)
+  const bool gpu = m < 0;
+  if (!gpu && (m < 1 || m > kB)) fatal("DFlash2 commit: m=%d", m);
+  const uint32_t H = uint32_t(cfg_.H), nH = hook_vf_.ld;
+  {
+    kp::DflX8 p{nH, gpu ? 0xffffffffu : uint32_t(m), nH, 1.0f / 16.0f};
+    e.use(dpipe("dfl_x8_from_bf16"));
+    e.buf(0, capt_); e.buf(1, xh_); e.buf(2, xs_);
+    e.val(3, p);
+    e.buf(4, gst_);
+    e.dispatch(8, 1, 1, 256);
+  }
+  enc_qmm8(e, {{&fc_, y8_, H, 16.0f}}, xh_, xs_, nH, nH);
+  {
+    kp::DflNorm p{H, cfg_.eps, 1.0f, 1u};
+    e.use(dpipe("dfl_norm_x8"));
+    e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, cdbg_); e.buf(3, xh_); e.buf(4, xs_);
+    e.val(5, p);
+    e.dispatch(8, 1, 1, 256);
+  }
+  enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H);
+  enc_commit_kv(e, d, kv8_, gpu ? -1 : m, d.ctx);
+  if (!gpu) d.ctx += m;
+}
+
+void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit,
+                   int valid_lo) {
+  static const uint32_t env = getenv("NI_DFLASH_ATTN_CHUNK") ? uint32_t(atoi(getenv("NI_DFLASH_ATTN_CHUNK"))) : 0;
+  // 256-key splits: at the full window 8 splits x 8 kv heads beat 32 x 64 keys (smaller partials,
+  // cheaper reduce; dflash_attn_test, M4 Pro)
+  const uint32_t mc = std::max<uint32_t>(32, min_chunk ? min_chunk : env ? env : 256);
+  *lo = P > DFlash2::kCtxKeep ? uint32_t(P - DFlash2::kCtxKeep) : 0u;
+  if (valid_lo > 0 && uint32_t(valid_lo) > *lo) *lo = std::min(uint32_t(valid_lo), uint32_t(P));
+  const uint32_t L = uint32_t(P) - *lo;
+  uint32_t ns = std::max<uint32_t>(1, std::min<uint32_t>(max_splits, (L + mc - 1) / mc));
+  uint32_t ch = ((L + ns - 1) / ns + 31) / 32 * 32;
+  if (ch == 0) ch = 32;
+  *chunk = ch;
+  *nsplit = std::max<uint32_t>(1, (L + ch - 1) / ch);
+}
+
+void DFlash2::set_h0(const float* rows) {
+  memcpy(h_.ptr(), rows, size_t(8) * cfg_.H * 4);
+  h0_set_ = true;
+}
+
+void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const SamplingParams& sp) {
+  encode_draft_impl(e, s, d, P, sp, false);
+}
+
+void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const SamplingParams& sp, bool gpu) {
+  // gpu: the anchor position comes from the drafter state (gst_); P is only its upper bound here
+  if (!gpu && P != d.ctx) fatal("DFlash2 draft: anchor position %d but the ring holds %d positions", P, d.ctx);
+  if (P + kB >= s.cap) fatal("DFlash2 draft: context full (%d)", s.cap);
+  const uint32_t Pk = gpu ? 0xffffffffu : uint32_t(P);  // kDflGpu in the kernels
+  const uint32_t H = uint32_t(cfg_.H), G = H / uint32_t(cfg_.conv_gs), I = uint32_t(cfg_.I);
+  const uint32_t V = uint32_t(cfg_.vocab), NL = uint32_t(cfg_.NL);
+  // block rows: embedding (or the test override) + the first input norm
+  if (h0_set_) {
+    kp::DflNorm p{H, cfg_.eps, 1.0f, 1u};
+    e.use(dpipe("dfl_norm_x8"));
+    e.buf(0, h_); e.buf(1, layers_[0].in_w->buf); e.buf(2, n_); e.buf(3, xh_); e.buf(4, xs_);
+    e.val(5, p);
+    e.dispatch(8, 1, 1, 256);
+  } else {
+    const QLinear& E = tg_.embed_table();
+    kp::DflEmbed p{H, uint32_t(E.gs), Pk, uint32_t(cfg_.mask_id), cfg_.eps};
+    e.use(dpipe("dfl_embed_norm"));
+    e.buf(0, E.w->buf); e.buf(1, E.s->buf); e.buf(2, E.b->buf); e.buf(3, s.tok); e.buf(4, h_);
+    e.buf(5, layers_[0].in_w->buf); e.buf(6, n_); e.buf(7, xh_); e.buf(8, xs_);
+    e.val(9, p);
+    e.buf(10, gst_);
+    e.dispatch(8, 1, 1, 256);
+  }
+  dbg(e, "h_0", h_, size_t(8) * H * 4);
+  {
+    e.use(dpipe("dfl_rope_table"));
+    e.buf(0, inv_freq_); e.buf(1, rope_cs_);
+    e.val(2, Pk);
+    e.buf(3, gst_);
+    e.dispatch(1, 1, 1, 512);
+  }
+  uint32_t lo, chunk, nsplit;
+  dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit, d.valid_lo);
+  if (gpu) {  // the kernels derive the plan from the GPU-side P: [max(P - 2047, valid_lo), P) in 256-key splits
+    lo = uint32_t(std::max(d.valid_lo, 0));
+    chunk = kGpuChunk;
+    nsplit = (kCtxKeep + kGpuChunk - 1) / kGpuChunk;  // grid for the full window; empty splits exit
+  }
+  const kp::DflConv cp{H, G, cfg_.eps};
+  for (uint32_t l = 0; l < NL; ++l) {
+    const DLayer& Ly = layers_[l];
+    const std::string sfx = "_" + std::to_string(l);
+    dbg(e, "n" + sfx, n_, size_t(8) * H * 4);
+    enc_qmm8(e, {{&Ly.ac, dyn_, 4 * G, 1.0f}}, xh_, xs_, H, H);
+    dbg(e, "D" + sfx, dyn_, size_t(8) * 4 * G * 4);
+    e.use(dpipe("dfl_conv_prep"));
+    e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.ac_base->buf); e.buf(3, xh_); e.buf(4, xs_);
+    e.val(5, cp);
+    e.dispatch(8, 1, 1, 256);
+    dbg(e, "a" + sfx, xh_, size_t(8) * H * 2);
+    enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, xh_, xs_, H, H);
+    {
+      kp::DflQk p{uint32_t(P), cfg_.eps, 4096, 2048};
+      e.use(dpipe("dfl_qk_prep"));
+      e.buf(0, q_); e.buf(1, kv_); e.buf(2, Ly.qn->buf); e.buf(3, Ly.kn->buf); e.buf(4, rope_cs_);
+      e.buf(5, Q_); e.buf(6, Kb_); e.buf(7, Vb_);
+      e.val(8, p);
+      e.dispatch(40, 8, 1, 128);
+    }
+    dbg(e, "q" + sfx, Q_, size_t(32) * 8 * 128 * 4);
+    dbg(e, "kb" + sfx, Kb_, size_t(8) * 8 * 128 * 4);
+    dbg(e, "vb" + sfx, Vb_, size_t(8) * 8 * 128 * 4);
+    {
+      const size_t lstride = size_t(8) * kWin * 128 * 2;
+      kp::DflAttn p{Pk, lo, chunk, nsplit, 1.0f / std::sqrt(128.0f)};
+      // simdgroup-matrix attention by default (35B full window: 3.60 vs 4.52 ms per pass);
+      // NI_DFLASH_ATTN=scalar selects the fp32 scalar kernel
+      static const bool mma_env = !(getenv("NI_DFLASH_ATTN") && std::string(getenv("NI_DFLASH_ATTN")) == "scalar");
+      const bool mma = attn_variant_ ? attn_variant_ == 2 : mma_env;
+      e.use(dpipe(mma ? "dfl_attn_mma" : "dfl_attn"));
+      e.buf(0, Q_); e.buf(1, d.ring_k, l * lstride); e.buf(2, d.ring_v, l * lstride); e.buf(3, Kb_); e.buf(4, Vb_);
+      e.buf(5, part_o_); e.buf(6, part_ml_);
+      e.val(7, p);
+      e.buf(8, gst_);
+      e.dispatch(nsplit, 8, 1, 128);
+      kp::DflAttnRed rp{nsplit, Pk, lo, chunk};
+      e.use(dpipe("dfl_attn_reduce"));
+      e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, xh_); e.buf(3, xs_);
+      e.val(4, rp);
+      e.buf(5, gst_);
+      e.dispatch(32, 8, 1, 128);
+    }
+    dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
+    enc_qmm8(e, {{&Ly.o, u_, H, 1.0f}}, xh_, xs_, 4096, 4096);
+    dbg(e, "u" + sfx, u_, size_t(8) * H * 4);
+    e.use(dpipe("dfl_conv_fin_norm"));
+    e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.ac_base->buf); e.buf(4, Ly.post_w->buf);
+    e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
+    e.val(8, cp);
+    e.dispatch(8, 1, 1, 256);
+    dbg(e, "h_mid" + sfx, h_, size_t(8) * H * 4);
+    dbg(e, "n2" + sfx, n_, size_t(8) * H * 4);
+    enc_qmm8(e, {{&Ly.mc, dyn_, 4 * G, 1.0f}}, xh_, xs_, H, H);
+    dbg(e, "D2" + sfx, dyn_, size_t(8) * 4 * G * 4);
+    e.use(dpipe("dfl_conv_prep"));
+    e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.mc_base->buf); e.buf(3, xh_); e.buf(4, xs_);
+    e.val(5, cp);
+    e.dispatch(8, 1, 1, 256);
+    dbg(e, "mm" + sfx, xh_, size_t(8) * H * 2);
+    if (v8_) {  // the target's verify GEMMs (same math; the sums layout is shared, only the table permutes)
+      enc_to_v8(e, xh_, H, v8t_);
+      tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, xs_, v8h_, v8hs_);
+      if (debug_) {
+        kp::DflPerm pp{I};
+        e.use(dpipe("dfl_v8_to_x8"));
+        e.buf(0, v8h_); e.buf(1, hh_);
+        e.val(2, pp);
+        e.dispatch((I / 64 + 7) / 8, 1, 1, 256);
+      }
+      dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
+      tg_.enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
+    } else {
+      enc_qmm8_gu(e, Ly.gate, Ly.up, xh_, xs_);
+      dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
+      enc_qmm8(e, {{&Ly.down, u_, H, 1.0f}}, hh_, hs_, I, I);
+    }
+    dbg(e, "f" + sfx, u_, size_t(8) * H * 4);
+    const Tensor* next = l + 1 < NL ? layers_[l + 1].in_w : norm_;
+    e.use(dpipe("dfl_conv_fin_norm"));
+    e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.mc_base->buf); e.buf(4, next->buf);
+    e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
+    e.val(8, cp);
+    e.dispatch(8, 1, 1, 256);
+    dbg(e, "h_" + std::to_string(l + 1), h_, size_t(8) * H * 4);
+  }
+  dbg(e, "hn", n_, size_t(8) * H * 4);
+  // target LM head (fp32 logits, all 8 rows; row 0 is never used) + selector hidden
+  if (v8_ && tg_.lm_head().bits == sel_w_.bits) {
+    enc_to_v8(e, xh_, H, v8t_);
+    tg_.enc_qmm8(e, {{&tg_.lm_head(), logits_, V, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
+  } else {
+    enc_qmm8(e, {{&tg_.lm_head(), logits_, V, 1.0f}, {&sel_w_, sel_, uint32_t(kRank), 1.0f}}, xh_, xs_, H, H);
+  }
+  const uint32_t ntg = (V + 2047) / 2048;
+  static const bool old_topk = getenv("NI_DFLASH_TOPK") && atoi(getenv("NI_DFLASH_TOPK")) == 0;
+  if (old_topk) {  // reference path: 16 rounds of threadgroup argmax per stage
+    kp::TopkStage ts{V, 16, 2048};
+    e.use(dpipe("topk_stage1_rows"));
+    e.buf(0, logits_, size_t(V) * 4); e.buf(1, tk_v_); e.buf(2, tk_i_);
+    e.val(3, ts);
+    e.dispatch(ntg, 7, 1, 256);
+    kp::DflMerge p{ntg * 16};
+    e.use(dpipe("dfl_merge16"));
+    e.buf(0, tk_v_); e.buf(1, tk_i_); e.buf(2, cand_v_); e.buf(3, cand_i_);
+    e.val(4, p);
+    e.dispatch(7, 1, 1, 256);
+  } else {
+    kp::DflTop p1{V, V, ntg};
+    const uint32_t no = 0, yes = 1;
+    e.use(dpipe("dfl_top16"));
+    e.buf(0, logits_, size_t(V) * 4); e.buf(1, tk_i_); e.buf(2, tk_v_); e.buf(3, tk_i_);
+    e.val(4, p1);
+    e.val(5, no);
+    e.dispatch(ntg, 7, 1, 256);
+    kp::DflTop p2{ntg * 16, ntg * 16, 1};
+    e.use(dpipe("dfl_top16"));  // every dispatch sets its pipeline (NI_PROFILE splits encoders)
+    e.buf(0, tk_v_); e.buf(1, tk_i_); e.buf(2, cand_v_); e.buf(3, cand_i_);
+    e.val(4, p2);
+    e.val(5, yes);
+    e.dispatch(1, 7, 1, 256);
+  }
+  {
+    e.use(dpipe("dfl_lattice"));
+    e.buf(0, cand_i_); e.buf(1, sel_); e.buf(2, cbA_->buf); e.buf(3, cbB_->buf); e.buf(4, s.tok); e.buf(5, edges_);
+    e.val(6, Pk);
+    e.buf(7, gst_);
+    e.dispatch(7, 1, 1, 256);
+    kp::DflSelect p{Pk, sp.temperature, sp.seed, uint32_t(P + 1)};
+    e.use(dpipe("dfl_walk"));
+    e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, s.tok); e.buf(4, walk_s_); e.buf(5, qprob_);
+    e.buf(6, walk_k_);
+    e.val(7, p);
+    e.buf(8, gst_);
+    e.dispatch(1, 1, 1, 32);
+  }
+}
+
+// ---- acceptance and the decode cycle ----
+
+int DFlash2::verify_depth() {
+  static const int k = std::clamp(getenv("NI_DFLASH_VERIFY") && *getenv("NI_DFLASH_VERIFY") ? atoi(getenv("NI_DFLASH_VERIFY")) : kB - 1,
+                                  1, kB - 1);
+  return k;
+}
+
+void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
+  if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);
+  kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+                 sp.top_p};
+  e.use(dpipe("dfl_dist_rows"));
+  e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
+  e.buf(4, dist_keep_);
+  e.val(5, dp);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
+void DFlash2::encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp) {
+  if (K < 1 || K > kB - 1) fatal("DFlash2 accept: K=%d", K);
+  const bool sampled = sp.temperature > 0;
+  if (sampled) encode_dist(e, K + 1, sp);
+  kp::DflAccept ap{uint32_t(P), uint32_t(K), sampled ? sp.temperature : 0.0f, sp.seed, dyn_tau_ > 0 ? 1u : 0u};
+  e.use(dpipe("dfl_accept"));
+  e.buf(0, s.tok); e.buf(1, tg_.verify_samples()); e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, cand_i_);
+  e.buf(5, qprob_); e.buf(6, walk_k_); e.buf(7, acc_);
+  e.val(8, ap);
+  e.buf(9, kdyn_);
+  e.buf(10, gst_);
+  e.dispatch(1, 1, 1, 32);
+}
+
+void DFlash2::encode_cycle_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, const SamplingParams& sp) {
+  if (m_prev) encode_commit(e, d, m_prev);
+  encode_draft(e, s, d, P, sp);
+}
+
+void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp) {
+  const Buffer rows = kdyn_.view(4, 4);
+  if (dyn_tau_ > 0) {
+    kp::DflDepth dp{uint32_t(K), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f, 0u};
+    e.use(dpipe("dfl_depth"));
+    e.buf(0, walk_s_); e.buf(1, walk_k_); e.buf(2, qprob_); e.buf(3, kdyn_);
+    e.val(4, dp);
+    e.dispatch(1, 1, 1, 32);
+    tg_.set_verify_row_limit(&rows);
+  }
+  // At T > 0 the acceptance needs each row's p(. | prefix) itself: on MoE targets keep a row's numerics
+  // independent of how the other (drafted) rows route (see Qwen35::set_verify_moe_exact).
+  tg_.set_verify_moe_exact(exact_moe_ && sp.temperature > 0);
+  arm_verify(P);
+  tg_.encode_verify(e, s, P, K + 1, sp, uint32_t(P), /*v8=*/true);
+  disarm();
+  tg_.set_verify_row_limit(nullptr);
+  tg_.set_verify_moe_exact(false);
+  encode_accept(e, s, P, K, sp);
+}
+
+void DFlash2::gpu_state_reset(int P) {
+  uint32_t* g = gst_.as<uint32_t>();
+  g[0] = uint32_t(P);
+  g[1] = 0;
+  g[2] = uint32_t(P);
+}
+
+void DFlash2::encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max, const SamplingParams& sp) {
+  encode_commit(e, d, -1);  // the rows the last acceptance kept (none after gpu_state_reset)
+  encode_draft_impl(e, s, d, P_max, sp, true);
+}
+
+void DFlash2::encode_cycle(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, int K, const SamplingParams& sp) {
+  encode_cycle_draft(e, s, d, P, m_prev, sp);
+  encode_cycle_verify(e, s, P, K, sp);
+}
+
+} // namespace ni

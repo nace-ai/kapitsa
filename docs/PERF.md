@@ -346,6 +346,135 @@ never freed. Fixed:
   as GPU-only.
 * The check's scratch buffers on its failure path, and `ane_bench_chunk`'s per-call sequence, are released.
 
+## 8-row verify (DFlash2 target side; `src/model/qwen35_v8.cpp`, `src/kernels/verify8.metal`)
+`encode_verify` with R >= 5 rows (anchor + up to 7 drafts) runs the 8-row path; R <= 4 (MTP depths 1-3) keeps
+the MTP-era kernels unchanged (`NI_V8=1` sends R >= 2 to the 8-row path for A/B). `kMaxVerify` is 8; the MTP
+history limit (`kMaxMtpRows` = 4) and the engine's MTP depth clamp (3) are unchanged. macOS 27.0.1, M4 Pro,
+every number from runs under the GPU lock (A/B interleaved within one locked session; the GPU's speed drifted by
+up to ~10% between sessions, so compare within a table only).
+
+Kernels (all new, the default path dispatches none of them):
+* `qmm8*`: Y^T = W X^T on 8x8x8 simdgroup MMAs, weight = A operand as exact integer codes (`1024 + q` in half,
+  two integer ops per two weights; idea from Splash's Apple9 register tile), one fp32 epilogue per 64-group
+  (`y += s * dot + (b - 1024 s) * sum x`), MLX weight layout read directly (no repacked copy). Inputs are
+  "X8 tables" (half, already in the B-fragment order, plus per-group sums) written by `x8_prep2`
+  (K/256 threadgroups, coalesced stores; fused RMSNorm). Up to 4 segments per dispatch (GDN qkv|z|b|a,
+  attention q|k|v, router|shared gate), in-threadgroup K split with a fixed-order sum (deterministic).
+  Default inner loop `qmm8pf` (next group's loads issued before the current MMAs), 2 fragments per simdgroup.
+* `qmm8_gu1_b4`: gate + up + SwiGLU for 8 simdgroups x (1 gate + 1 up fragment) = one 64-column group of h
+  per threadgroup, writing the down GEMM's X8 table and sums directly (no fp32 h, no prep dispatch).
+* MoE: `moe8_plan` (one threadgroup) groups the 64 (row, expert) routes by distinct expert (ascending ids)
+  and writes indirect grids; experts used by >= 3 rows and the shared expert run as 8-row MMA tiles
+  (`qmm8_gu1_b4`, `moe8_down_nf2`), experts used by 1-2 rows as register-dequant matvecs over just those rows
+  (`moe8s2_gu/down`); `moe8_combine` sums the 8 routes + shared in slot order (fp32, deterministic). Router
+  and shared gate: `qmm8x2_b8` (two-term hi+lo half inputs, exact codes: ~22-bit inputs, fp32-level routing).
+* Attention: `attn8m_partial` (one threadgroup per history chunk x kv head serves all G heads x 8 rows on
+  MMAs, attn_prefill11's inner loop, each K/V tile read once), reduced by `attn_rows_reduce`.
+* GDN: `gdn_prep_verify` (unchanged) + `gdn_step_verify8` (gdn_step_verify's math, one normalization pass
+  after the 8-row scan instead of two barriers per row); the tape and pend buffers hold 8 rows.
+* `capture8`: optional bf16 copy of target layer outputs for a drafter (`set_verify_capture`).
+
+GEMM vs the 1-row decode matvec (`bench_v8 sweep <model>`: ~1 GB of rotating weights, best of 4; error vs an
+fp64 CPU reference on the same half-rounded inputs, 2-4e-5), with the model's tiling (`qmm8pf`, 2 fragments per
+simdgroup, threadgroup = 2 column blocks x 4 k-slices; 8 k-slices for small grids), two runs in one session:
+
+| 27B shape (N x K) | 1-row us | 8-row us | 8-row GB/s | ratio |
+|---|---:|---:|---:|---:|
+| GDN in_proj qkv\|z\|b\|a 16480 x 5120 | 197.7-199.9 | 223.0-223.7 | 212 | 1.12-1.13 |
+| attention q\|k\|v 14336 x 5120 | 173.1-183.5 | 197.7-198.0 | 209 | 1.08-1.14 |
+| GDN out / attention o 5120 x 6144 | 79.0-79.5 | 89.6-89.8 | 197 | 1.13-1.14 |
+| MLP gate+up 34816 x 5120 | 403.2-403.7 | 456.3-464.7 | 216-220 | 1.13-1.15 |
+| MLP down 5120 x 17408 | 220.3-222.4 | 255.6-255.9 | 196 | 1.15-1.16 |
+| LM head 248320 x 5120 | 2851-3186 | 3169-3205 | 223-226 | 0.99-1.12 |
+
+| 35B shape (N x K) | 1-row us | 8-row us | 8-row GB/s | ratio |
+|---|---:|---:|---:|---:|
+| GDN in_proj 12352 x 2048 | 58.7-66.8 | 74.3-78.2 | 182-192 | 1.11-1.33 |
+| attention q\|k\|v 9216 x 2048 | 45.0-45.9 | 57.5-57.6 | 185 | 1.25-1.28 |
+| GDN out / attention o 2048 x 4096 | 23.4-23.5 | 30.6-31.2 | 151-154 | 1.30-1.33 |
+| one expert's gate+up 1024 x 2048 | 7.9-8.0 | 13.5-13.9 | 85-88 | 1.71-1.74 |
+| one expert's down 2048 x 512 | 4.7-4.8 | 7.4-7.6 | 78-79 | 1.59-1.60 |
+| router 256 x 2048, 8-bit | | 7.2-7.3 | | |
+| LM head 248320 x 2048 | 1088-1107 | 1294-1297 | 221 | 1.17-1.19 |
+
+The first plan (4 column blocks per threadgroup, k-slices only until the grid had 1280 simdgroups) measured
+gate+up 500-507 us and the LM head 3354-3380 us in the same tiling sweep (cs 2 / ks 4: 452-457 and 3141-3199).
+A single expert matrix is launch-bound in isolation (the 1-row kernel reaches only 120-150 GB/s on it too); inside
+the MoE dispatch an 8-row expert tile costs ~5 us for gate+up (1.18 MB) and ~2.7 us for down.
+The bench times `qmm8pf` on the concatenated N; in the model the MLP gate+up runs as the SwiGLU kernel
+(`qmm8_gu1k2_b4`: 8 column slices x 2 k-slices, 512 threads; vs `qmm8_gu1_b4` without the K split: 27B p700
+78.2 vs 79.6 ms per verify, 35B 21.7 vs 22.1, interleaved).
+
+Inner-loop variants (27B gate+up 34816x5120, first tiling plan: 4 column blocks, no K split): base 507-537 us, prefetching (default) 497-525, split MMA chains
+(`qmm8s`, `qmm8pfs`) 512-532 (within noise of the default), 4 fragments per simdgroup 519-535, threadgroup-staged
+input table (cs simdgroups share each chunk, `qmm8t`) 533-600. Ablations: without MMAs 487 us, without DRAM
+streaming (weights cache-resident) 472, without table reads 512: no single resource dominates; the MMA work alone
+(2.85 GFLOP at the 7.41 TFLOP/s MMA ceiling of bench_mma) is 385 us and the 1-row time 405 us; with every other
+instruction of the loop included the kernel runs at ~80% of that MMA ceiling. The 2 x 4 tiling then took
+gate+up to 452-465 us (1.13-1.15x).
+
+Teacher-forced check (`ni_v8check <model> @ids n R`): plain greedy decode of n tokens (logits kept), then a
+fresh prefill and encode_verify of the same tokens R rows at a time (all rows committed, so every verify also
+folds 8 tape rows), each row's logits compared with the plain step predicting the same position:
+
+| model | prompt | rows | argmax = plain | \|logit diff\| at the plain argmax: median / p95 / max | old R = 4 kernels (same test) |
+|---|---|---:|---:|---|---|
+| 27B | p700 | 64 | 64/64 | 0.0014 / 0.0044 / 0.011 | 0.0014 / 0.0049 / 0.015 |
+| 27B | code_27b | 64 | 64/64 | 0.0010 / 0.0025 / 0.051 | |
+| 27B | p4000 | 32 | 32/32 | 0.0018 / 0.012 / 0.087 | |
+| 35B | p700 | 64 | 64/64 | 0.026 / 0.21 / 0.41 | 0.046 / 0.31 / 0.63 |
+| 35B | code_35b | 64 | 64/64 | 0.0098 / 0.14 / 0.79 | |
+| 35B | p4000 | 32 | 32/32 | 0.0051 / 0.13 / 0.13 | |
+
+The 35B's larger spread is its MoE routing (a top-8 boundary moved by rounding), at the level of the existing
+R = 4 verify; the 27B's is ~1e-3. No argmax differed in any of the 320 rows.
+
+Full verify (embedding, all layers, LM head, top-k/sampling for every row) vs one plain decode step, GPU time
+per command buffer:
+
+| model | prompt (context) | plain step ms | 8-row verify ms | ratio | old kernels, R = 4 |
+|---|---|---:|---:|---:|---:|
+| 27B | p700 | 64.21 / 63.55 | 79.70 / 77.91 | 1.24 / 1.23 | 135.8 ms (1.98x) |
+| 27B | code_27b (85 + 64) | 63.64 | 80.23 | 1.26 | |
+| 27B | p4000 | 66.26 | 82.90 | 1.25 | |
+| 35B | p700 | 9.58 / 9.61 | 23.32 / 23.42 | 2.43 / 2.44 | 26.56 ms (2.77x) |
+| 35B | code_35b (85 + 64) | 9.47 | 21.62 | 2.28 | |
+| 35B | p4000 | 9.96 | 25.41 | 2.55 (scalar attention: 26.95) | |
+
+Final binary, one locked session per model and table row group (the 27B plain step drifted between 62.4 and 73 ms
+over the day across sessions; within a session the 27B ratio stayed 1.22-1.33 through the whole tuning). The 35B
+verify reads every touched expert once: 39.0 distinct routed experts per layer on p700, 34.1 on code_35b, 41.2 on
+p4000 (of 64 routes), i.e. ~4.3 GB per verify against 1.79 GB per plain step; its ratio is that byte ratio (2.4x)
+plus ~5%. Improvements along the way (35B p700 / 27B p700, interleaved A/B): prefetching GEMM loop -1.2 ms / -0.5
+ms; gate/up as 8 simdgroups x (1+1) fragments -0 / -2.5 ms, plus the 2-way K split -0.4 / -1.4 ms; MMA attention
+-0.6 to -1.3 ms (p4000: 26.8 vs 28.6 ms on the 35B); scalar tiles for 1-2-row experts -0.8 ms (35B); the remaining
+switches were within noise.
+
+Per-kernel profile of one 8-row verify (`NI_PROFILE=1`, isolated dispatches, so small kernels are inflated by
+~5 us each), final binary. 27B p700: `qmm8pf` 40.6 ms (193 dispatches: GDN in/out, attention q|k|v/o, MLP down,
+LM head), `qmm8_gu1k2_b4` 31.9 (64), `gdn_step_verify8` 2.5 (48), `x8_prep2` 2.3 (193), `attn8m_partial` 1.1 (16),
+`gdn_prep_verify` 0.8, rest < 0.5; 79.6 ms in total, 91% in the GEMMs. 35B p700 (40 routed experts per layer):
+scalar expert gate/up `moe8s2_gu` 7.7 ms + down `moe8s2_down` 3.7 (the ~27 experts with 1-2 rows), MMA expert
+tiles `qmm8_gu1k2_b4` 2.4 + `moe8_down_nf2` 1.0 (~13 + the shared expert), dense `qmm8pf` 5.9 (81),
+`gdn_step_verify8` 1.1, `x8_prep2` 0.9 (121), `attn8m_partial` 0.5, router `qmm8x2_b8` 0.44, `moe8_plan` 0.39,
+`moe8_combine` 0.25, rest < 0.5; 25.2 ms in total, experts 59%.
+
+MTP (R <= 4) is untouched: `ni_run --spec D` ids identical to 45705ec for D = 0..3 on code_* (128 tokens), same
+speeds. `ni_run --spec D` now also runs D = 4..7 through the 8-row verify (partial commits of the tape every
+cycle): greedy output identical to plain decoding over 256 tokens on both models (D = 7 and 4). On the 27B, MTP D =
+7 gives 31.2-35.9 tok/s at 4.05 tok/cycle (code_27b, 256 tokens; 35.9 with the final binary) against 25.0-27.5 for
+D = 2 (the default) and 14.0-15.1 plain; on the 35B, D = 7 runs at 76-84 tok/s and D = 4 at 92-101, below D = 1
+(107-112): the MTP head's acceptance is too low there to pay for the expert union, which a block drafter's
+(DFlash2) is meant to fix.
+
+Tried and dropped: scalar experts reading their inputs from device memory per 2 columns (29.0 vs 24.9 ms; the
+staged version is the default), the staged-table GEMM and the ablation kernels (templates kept in verify8.metal,
+not instantiated). Left opt-in: `NI_V8_GU=1|2|1k4|2k2|2k4` (`2` = 4 simdgroups x 2+2 fragments: +2.5-3 ms on the
+27B; the K-split variants other than 1k2 within 1-3 ms), `NI_V8_PLAN=1`, `NI_V8_GEMM=base|s|pfs`, `NI_V8_GU_PF=1`,
+`NI_V8_PREP=1` (8-threadgroup prep), `NI_V8_GDN=0`, `NI_V8_ATTN=0` (scalar attention with K/V tiles shared by 4-5
+rows), `NI_V8_MOE_SMALL=0` (all experts as MMA tiles), `NI_V8_ROUTER_X2=0` (half-input router: 0.1-0.4 ms faster,
+p95 logit noise 0.39-0.45 vs 0.21-0.23).
+
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
 `ni_kstats --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
@@ -729,3 +858,333 @@ not after the "length" ones, and the 16k cold turn and the tools phase never wai
 * tests/test_server.py: 13/13 (serve_test.sh), before and with the history prefill (final build).
 * Every bitwise-neutral change verified bitwise in e2e logits (GDN parr, attention 11r, bucket3, topk8, qmms
   token-block split, folding the large-T shared expert).
+
+## DFlash2 block drafter (opt/dflash2-draft; opt-in `ni_run --dflash <drafter dir>` / `NI_DFLASH`)
+
+Spec and oracle: `research/inference/dflash2/SPEC.md`, `dflash2_ref.py` (MLX). Code: `src/model/dflash2.{h,cpp}`,
+`src/kernels/spec_dflash.metal`, capture hook in `Qwen35` (`CaptureHook`, `set_capture`), tools
+`dflash_check` (oracle dumps, timing, `--sim` replay), `bench_qmm8`, `dflash_attn_test`, `dflash_qtest`.
+
+* **Load**: config checked against SPEC §1; every 2-D projection quantized at load to MLX affine 4-bit
+  (or 8-bit, `NI_DFLASH_BITS=8`) g64. Bit-exact with `mx.quantize`: MLX's Metal kernel (IEEE fp32,
+  round half away from zero; what wrote the q4 dumps) by default, MLX's CPU backend (half to even)
+  with `NI_DFLASH_QROUND=even` (`dflash_qtest` + numpy: 0 differing words/scales/biases). k|v of all
+  layers stacked into one [NL*2048, H] matrix (one GEMM per context commit). Norms, conv bases and
+  both codebooks stay bf16; embedding and LM head are the target's. 35B 0.51 GB resident (8-bit 0.71),
+  27B 1.32 GB (8-bit 2.22); load 0.5-1.4 s.
+* **Capture**: after each `T_ids` layer of `encode_step`/`encode_prefill`/`encode_verify`, rows in
+  the armed position window are copied fp32 -> bf16 into `[rows, n*H]`. Unarmed it adds nothing:
+  logits after prefill bitwise identical to main 45705ec and generated ids identical (p700, 64
+  tokens, plain and MTP, both models).
+* **Context path**: captures -> half (pre-scaled by 1/16, exact for bf16 values) -> `fc` -> RMSNorm
+  (x16 folded back) -> stacked k|v GEMM -> `dfl_ctx_commit` (k_norm, RoPE at the row's position, bf16)
+  into a 2048-slot ring per layer.
+* **Pass**: one encoder, ~85 dispatches: embedding + norm, per layer {P_a GEMM, conv prepare,
+  q|kv GEMM, q/k norm + RoPE, attention + split reduce, o GEMM, conv finish + residual + norm,
+  P_m GEMM, conv prepare, fused gate/up/SwiGLU GEMM, down GEMM, conv finish + norm}, LM head +
+  selector GEMM, two-stage top-16, edge lattice, walk (greedy or sampled with q).
+* **8-row GEMM `dfl_qmm8`**: weights straight to registers (opt/shortpf qmms lane layout), exact
+  codes as half MMA operands (Splash idea), fp32 per-group epilogue `s.C + b.sum(x)`, X as a half
+  table with per-64 sums written by the producers. Interleaved sweep (`bench_qmm8`, warm GPU):
+  175-207 GB/s and 5.0-5.9 TFLOP/s on the drafter shapes (LM head 248320x2048 1.38 ms = 206 GB/s,
+  248320x5120 3.5 ms = 200 GB/s). 16 rows per simdgroup (`NI_DFLASH_RF=2`) never wins; a K split
+  helps every shape with < 1024 threadgroups (heuristic: the largest of 1/2/4/8 leaving >= 8 groups
+  per simdgroup). Fused gate/up gets its own K split inside its 64-column threadgroup.
+
+| D1 vs the oracle q4 dumps (`code_*_q4`, 3 cycles) | 35B | 27B |
+|---|---|---|
+| ring K / V after the prompt commit (bf16) | 1.7e-3 / 1.7e-3 | 1.7e-3 / 1.7e-3 |
+| c(j) | 9.6e-7 | 3.2e-6 |
+| per-layer h (worst layer, worst cycle) | 2.5e-3 | 2.4e-3 |
+| final hidden / draft logits | 1.7-2.1e-3 / 1.3-1.6e-3 | 2.1-2.8e-3 / 2.0-2.6e-3 |
+| top-16 sets | 112/112 every cycle | 111/112, 112/112, 112/112 |
+| edges (matched by token ids) | 0.9-1.0e-3 | 1.3-2.2e-3 |
+| proposal chains | identical 3/3 | identical 3/3 |
+| sampled walk (T 0.6/1.0, 3 seeds) | q = softmax(S/T) to 1.6e-7; index = inverse CDF of u in 42/42 | same, 3.1e-7 |
+
+All numbers are relative L2 errors; the inputs were the dump's own captures and block embedding. The
+intermediates of every layer (n, D, a, q, k, v, o, u, n2, D2, mm, hgu, f) are 3e-8 to 2.1e-3. With
+8-bit weights against the bf16 dump: per-layer h 1.3-1.9e-2 (weight rounding), chains still identical.
+
+| tokens per cycle, all 7 proposals verified (`dflash_check --sim N`, code_*, greedy, plain-decode numerics) | 35B | 27B |
+|---|---|---|
+| ours, 4-bit drafter, 256 tokens | **3.26** | **4.33** |
+| ours, 8-bit drafter, 256 tokens | 3.30 | 4.22 |
+| oracle serial verify, fp32 math, bf16 weights, 256 (SPEC §15.2) | 3.24 | 4.15 |
+| oracle batched, q4 drafter, 256 (SPEC §15.3) | 3.19 | 4.42 |
+| ours, 4-bit drafter, **512 tokens** | **3.72** | **4.79** |
+| oracle 512 fp32 / q4; Splash (same ids, q4) | 3.65 / 3.62; 3.61 | 4.79 / 4.83; 4.83 |
+
+Acceptance by draft position at 512: 35B 0.84 0.79 0.69 0.67 0.74 0.55 0.82 (oracle 0.79 0.81 0.76 0.65 0.70
+0.52 0.81), 27B 0.86 0.88 0.79 0.86 0.84 0.83 0.76 (oracle 0.84 0.88 0.81 0.86 0.87 0.77 0.86). 4-bit is the
+default: 8-bit buys nothing measurable and costs 26% (35B) / 38% (27B) more drafting time.
+
+Drafting pass GPU time (one command buffer per pass, median of 10-20 runs, under the GPU lock; the range is
+across lock slots, which differ by up to ~10% on this shared, warm Mac):
+
+| | 35B-A3B | 27B |
+|---|---|---|
+| bytes read per pass (4-bit drafter + target LM head) | 0.49 GB | 1.65 GB |
+| pass at P = 96 | 3.0-3.5 ms (min 3.02) | 9.3-10.0 ms (min 9.25) |
+| pass at P = 4096 (full 2047-row window) | 3.5-4.0 ms (scalar attention 4.5-5.4) | 9.9-10.4 ms (scalar 10.9-11.4) |
+| + context commit of the m kept rows (decode) | 0.4-0.9 ms | 0.6-0.8 ms |
+| prompt context commit, 85 rows (8-row chunks / prefill GEMM) | 2.3-3.8 / 3.4-5.9 ms | 6.9-7.2 / 8.8-9.2 ms |
+
+Profile of the 35B pass (`NI_PROFILE=1`, isolated dispatches, 3.4-3.6 ms): 8-row GEMMs 2.4-2.5 ms (LM head
+~1.4), fused gate/up 0.51-0.53, attention + reduce 0.16 (0.73 at the full window before the 256-key splits),
+top-16 0.09-0.16, conv/norm kernels 0.14, q/k prep 0.03 (0.09 before the per-pass RoPE table), lattice + walk 0.02
+(0.05 as one threadgroup). 27B (10.0 ms): GEMMs 6.45 (LM head ~3.5, down ~1.6), gate/up 2.7 (0.54 ms per layer =
+184 GB/s), the rest 0.8. The pass streams ~140-175 GB/s overall against a ~205 GB/s ceiling of the GEMM kernel.
+
+End to end with the existing verify (`ni_run --dflash`, at most `kMaxVerify - 1 = 3` of the 7 proposals; greedy;
+the full 8-row verify + speculative-sampling accept are other branches' work):
+
+| prompt, 256 tokens unless noted | output vs plain greedy | tok/cycle | GPU/cycle | tok/s (plain) |
+|---|---|---|---|---|
+| 35B code_35b | identical 256/256 | 2.77 | 28.8 ms | 93.1 (107.9) |
+| 35B p4000, 64 tokens (prompt > 2047: ring window, 2047-row commit) | identical 64/64 | 3.71 | 33.8 ms | 107.2 (94.8) |
+| 27B code_27b | identical 256/256 | 3.15 | 152 ms | 20.6 (14.7) |
+
+The 4-row verify of the existing path (R = 4: 2x the bytes-time of a decode step on the dense model, ~25 ms on
+the MoE) dominates the cycle: with an 8-row verify near 1.15-1.35x decode the same drafts give the SPEC §11 cycle.
+(Superseded by the full loop below: 8-row verify, on-GPU acceptance, double-buffered cycles.)
+
+## DFlash2 decode loop (opt/dflash2 = opt/dflash2-draft + opt/dflash2-verify8 + the loop)
+
+Opt-in: `ni_run <model> @ids n T --dflash <drafter dir|auto>`, server `--dflash <dir|auto>` (or `NI_DFLASH`).
+`auto` = `DFlash2::find`: `<model>/dflash2`, `<model>/drafter`, then `*-DFlash2` directories next to the model, in
+`<parent>/drafters` and in `~/.cache/nace-infer-models/drafters` whose name minus `-DFlash2` (case-insensitive) is the
+model directory name up to a `-` and whose config is a `DFlash2DraftModel` with the target's hidden size, vocabulary
+and layer count (qwen3.6-35b-a3b-4bit -> Qwen3.6-35B-A3B-DFlash2, qwen3.8-27b-4bit-mtp -> Qwen3.8-27B-DFlash2). When a
+drafter loads it replaces MTP; without the flag nothing changes (G3 below).
+
+**One cycle** (anchor `y` at position `P`, SPEC §3), no host round trip inside:
+1. drafting half: ring commit of the rows the previous acceptance kept (their verify captures -> fc -> norm ->
+   stacked k|v GEMM -> K/V ring), then the drafting pass from the anchor (7-token chain; q at T > 0);
+2. verify half: `dfl_depth` (MoE targets, below), the 8-row verify of `[y, d_0 .. d_6]` with the drafter's
+   `CaptureHook` armed (the verify branch's `capture8` / `set_verify_capture` were folded into it), `dfl_dist_rows`
+   (T > 0) and `dfl_accept`, which writes the bonus / correction token to `tokens[P+1+a]`;
+3. the host reads `a`, emits `tokens[P+1 .. P+1+a]` (cut at a stop token / the budget: `m` rows), `commit_rows(s, m)`
+   (the next verify folds `m` tape rows), `P += m`.
+* **Double-buffered** (`NI_DFLASH_CB=3`, default in ni_run and the engine): `dfl_accept` also writes a drafter state
+  (`gst`: next anchor `P + a + 1`, rows `a + 1`, their first position) and every position-dependent drafter kernel
+  (embedding, RoPE table, attention split plan, lattice, walk, commit) reads it when the host passes the sentinel
+  position, so the NEXT cycle's drafting half is committed right behind each verify, before the host waits for it;
+  the host then encodes the following verify (~600 dispatches) while that drafting half runs. If the host cuts `m`
+  below `a + 1` the generation ends, and the extra ring rows past the host's `d.ctx` are never read. `NI_DFLASH_CB=2`:
+  drafting and verify halves as two command buffers committed back to back (host-driven positions); `=1`: one buffer.
+  35B code_35b 512 greedy, interleaved: wall per cycle = GPU time + 0.04 ms (mode 3), + 0.25-0.30 (mode 2), + 0.69 (1).
+* **Greedy acceptance**: longest prefix of the chain equal to the verify rows' argmax (the verify's own
+  `topk_stage1_rows` / `sample_stage2_rows`, ties to the lowest id, as plain decoding), bonus = argmax of row `a`.
+* **Sampled acceptance** (exact speculative sampling, SPEC §8.2): `dfl_dist_rows` rebuilds each verify row's
+  distribution exactly as the plain sampler does (`sample_stage2_rows`: top-k ordered (value desc, id asc), top-p on
+  the untempered probabilities, then temperature on the kept prefix); accept `d_i` iff `u_i q_i(d_i) < p_i(d_i)`;
+  after a rejection draw from `max(0, p_a - q_a)` over the kept set (or `p_a` if empty), after `K` acceptances from
+  `p_K`. Uniforms `pcg_hash(seed ^ pcg_hash(pos) ^ salt)`, separate salts for walk / acceptance / residual; a
+  position's acceptance and residual uniforms are used at most once per generation.
+* **Row-independent MoE numerics at T > 0** (`Qwen35::set_verify_moe_exact`, `NI_DFLASH_EXACT_MOE=0` off): the 8-row
+  verify sends experts used by 1-2 rows through register-dequant matvecs and the others through MMA tiles, which round
+  differently, so a row's logits move (up to ~0.1 on the 35B) with how the other, drafted, rows route; the sampled
+  acceptance needs `p(. | prefix)` itself. Sampled cycles therefore run every routed expert as an MMA tile. Not slower
+  (35B code_35b 512, T = 0.6, interleaved: 132.6 / 136.5 tok/s vs 130.6 / 130.5), and the S2 test on the same start
+  point went from p = 0.086 / 0.039 (joint / first token, 2000 trials) to 0.202 / 0.162 (3000 trials).
+* **Dynamic verify depth on MoE targets** (default tau 0.5 at T = 0 and 0.3 at T > 0; `NI_DFLASH_DYN=tau`, 0 = off;
+  `NI_DFLASH_DYN_T` for T > 0; dense targets: off): the 35B verify's cost is the union of routed experts over its rows (SPEC §15.7: 31.5 per
+  layer for 8 rows, 23.4 for 5), so `dfl_depth` decides on the GPU how many proposals to verify from the drafter's
+  confidence `c_j` (the walk's probability of its choice: softmax of `S_j` at T = 0, `q_j(d_j)` at T > 0);
+  `moe8_plan` routes only the live rows (a GPU-side row limit) and `dfl_accept` stops there.
+  - T = 0: verify proposal `p` while `prod_{j <= p} c_j >= tau` (the greedy output is the verify argmax whatever is
+    verified, so the proposal's own confidence may be used).
+  - T > 0: verify `p` iff `prod_{j < p} c_j >= tau`. The decision about `d_p` must not depend on `d_p`: given the
+    accepted prefix it is then fixed and every position is an ordinary speculative step or the bonus draw from
+    `p_p`, so the emitted law is exact. The first version used the inclusive product at T > 0 too, which skips
+    unlikely draws of `q_p` and draws from `p_p` instead: biased at positions >= 1 of a cycle; S2's first-token
+    test cannot see it and its start point rarely accepted `d_0`, so `dflash_accept_test` now has dynamic-depth
+    cases, including that rule, which it rejects. Measured before the fix (12 seeds, server, T = 0.6): no visible
+    effect on the text (distinct-4-gram ratio 0.990 vs 0.992 for plain sampling, Mann-Whitney p = 0.56). Exact rule,
+    35B code_35b 512 T = 0.6, tau 0 / 0.3 / 0.5 / 0.7: 139.2 / 149.4 / 147.8 / 140.3 tok/s (single runs).
+  - Calibration (469 cycles, code / p700 / prose, 512 tokens, all 7 verified): c >= 0.99 -> 97% accepted,
+    0.95-0.99 -> 81%, 0.7-0.8 -> 50%, < 0.5 -> 13-27%. Offline simulation with the measured cost (0.38 ms per expert of
+    U) predicted +8-11%; measured (greedy, 512, interleaved): code 135.1 / 136.9 tok/s at tau 0 -> 144.4 / 146.7 at
+    0.3 -> 147.0 / 146.6 at 0.5; prose 93.1 -> 111.8 -> 112.2. Sweep on the final loop: code 160.7 / 159.9 / 159.0 /
+    154.8 tok/s at tau 0.4 / 0.5 / 0.6 / 0.7, p700 189.1 / 199.4 / 185.9 / 184.8, prose 115.3 / 119.6 / 109.9 / 113.1.
+    Static depths are worse: 5 of 7 gave 126.7 / 130.0 vs 120.0 / 117.6 for 7 (256 tokens).
+* **Prefix reuse** (engine): the drafter ring is per slot; on a checkpoint restore `DFlash2::rewind` keeps the entries
+  of the reused prefix that are still in the 2048-slot window (`valid_lo`, the draft attention starts there), and the
+  prompt capture covers only the rows that can still be seen, `[max(start, n - 2047), n)`. The end of a generation
+  commits the last kept rows (unless the committed drafting half already did) and folds the tape.
+* **27B drafter on the verify GEMMs** (`NI_DFLASH_V8`, default for hidden >= 4096): its MLP and LM head run on the
+  verify path's `qmm8_gu1k2` / `qmm8pf` (inputs permuted into their fragment-order table by `dfl_x8_to_v8`; the per-64
+  sums have the same layout). `bench_v8 dfl <model>` (same rotating weights, best of 6): 27B gate+up 509.6 vs 606.3 us,
+  down 255.7 vs 300.2, LM head 3430 vs 3661, o 62.5 vs 66.2; 35B within +-5% either way (kept on `dfl_qmm8`). Pass:
+  8.73 vs 9.19 ms (P = 96), 9.04 vs 9.54 (full window); D1 parity unchanged (worst per-layer h 2.4e-3).
+* Tried and dropped: `gdn_step_verify8` with every per-row input staged in threadgroup memory (27B verify 80.4 / 80.7
+  vs 79.6 / 80.5 ms, 35B 21.4 / 21.5 vs 21.6 / 21.4; identical logits); the pass's RoPE table (512 precise sin/cos,
+  50-100 us) over 8 threadgroups instead of one (35B 49.7 -> 61.8 us, 27B 97.6 -> 97.9; the final-matrix binary still
+  had it, bitwise the same values); static verify depths (above).
+
+**Correctness** (final build unless noted; every run under the GPU lock):
+
+| check | 35B-A3B | 27B |
+|---|---|---|
+| G1 code_* 512 greedy (`--ignore-eos`) vs plain greedy | identical 512/512 (6 runs of the final matrix too) | identical 512/512 (6 runs) |
+| G1 p4000 + 256 greedy | first difference at token 197: plain top-2 gap 0.020; one multi-row prefill of the prefix picks the DFlash token (gap -0.170); the verify row -0.151 (G2: the target's own batching numerics). An earlier build (no dynamic depth) split at token 119: plain gap 0.273, verify row a tie (-0.0002), prefill +0.128 (the 35B's verify-vs-plain noise: p95 0.14, max 0.79 on code_35b) | identical 256/256 |
+| chat prompt of 5349 tokens (engine_turns turn 3) | first difference at token 73: plain gap 0.0042, one prefill picks the DFlash token | |
+| G3 default path vs 45705ec (base build) | logits after prefill bitwise identical, plain 64 and MTP depth 1 (128) ids identical | logits bitwise identical, plain 32 and MTP depth 2 (96) ids identical |
+| D1 drafter parity (q4 dump) | chains 3/3, worst per-layer h 2.49e-3 | chains 3/3, 2.41e-3 (MLP/LM head on the verify GEMMs) |
+| server tests/test_server.py with `--dflash auto` | 13/13 (T = 0.6 default; also with the double-buffered loop) | 13/13 |
+| engine_turns (5168-token prompt, 2 follow-ups reusing 5161 tokens, T = 0) | 3.88 / 3.61 / 3.12 tok/cycle (the ring survives the rewind); turns 1-2 identical to plain decoding, turn 3 a near-tie (above) | |
+
+* **S1** (`dflash_accept_test`, synthetic prefix-conditional p and q, joint law of the first two emitted tokens,
+  40000-100000 trials per case): every case passes (random p/q, q = p, q disjoint from p, point masses, p(d) = 0, flat
+  q, K = 1/3/7, T = 0.6/1.0, dynamic depth with the exact rule); `dfl_dist_rows` equals a CPU transcription of the
+  plain sampler bit for bit; the depth-sensitive regime rejects the old inclusive T > 0 rule (chi2 446, 3 dof).
+* **S2** (`dflash_stat`, real models: after a fixed prompt, a greedy start point with >= 3 kept tokens and top
+  probability <= 0.8; DFlash2 cycles until two tokens are out, state restored per trial; chi-square against p(t1)
+  p(t2 | t1) from the same 8-row verify path): all pass.
+
+| model, start point | T | trials | MoE path | joint p | first token p |
+|---|---:|---:|---|---:|---:|
+| 35B prose (+23) | 0.6 | 2000 | 1-2-row experts on the scalar path | 0.086 | 0.039 |
+| 35B prose (+23) | 1.0 | 2000 | scalar path | 0.432 | 0.086 |
+| 35B prose (+23) | 0.6 | 3000 | row-independent (default at T > 0) | 0.202 | 0.162 |
+| 35B prose (+23) | 1.0 | 3000 | row-independent | 0.658 | 0.165 |
+| 35B code (+32) | 0.6 | 2000 | row-independent | 0.496 | 0.496 |
+| 35B prose, dynamic depth on | 0.6 | 3000 | row-independent | 0.255 | 0.162 |
+| 27B prose (+23) | 0.6 | 1200 | dense | 0.316 | 0.361 |
+
+**Performance** (ni_run, `code_*` ids = chat-templated coding request, 512 tokens, `--ignore-eos`, the same seed
+for every sampled run; configurations interleaved inside one locked session; tok/s = decode tokens / decode wall time):
+
+| model, T | plain | current best (MTP) | DFlash2 | tok/cycle (DFlash2) | ms/cycle (GPU) |
+|---|---:|---:|---:|---:|---:|
+| 35B, greedy | 107.4 | depth 1: 123.3 / 123.3 / 125.2 | **161.7 / 162.9 / 161.7** (+31%) | 3.41 (3.59 verified) | 20.9-21.0 |
+| 35B, T = 0.6 | | depth 1: 119.2 / 119.3 / 119.3 | **151.0 / 150.7 / 150.9** (+26%) | 3.50 (5.34 verified) | 23.1-23.2 |
+| 27B, greedy | 15.9 | depth 2: 31.0 / 30.4 / 31.4 | **55.2 / 55.0 / 55.1** (+78%) | 4.78 | 86.4-86.8 |
+| 27B, T = 0.6 | | depth 2: 31.2 / 31.1 / 31.2 | **47.7 / 47.7 / 48.0** (+53%) | 4.15 | 86.4-87.0 |
+
+All 12 greedy runs (MTP and DFlash2) are identical to plain greedy over the 512 tokens. Splash on this Mac (SPLASH_RUN.md,
+same ids, greedy, 512): 35B 124.6-132.4 tok/s at 3.61 tok/cycle, 27B 54.7 at 4.83. The 35B's tok/cycle is below the
+oracle's 3.65 on purpose (dynamic depth; all 7 verified: 3.70); the 27B's 4.78 matches (oracle 4.79, Splash 4.83).
+Longer context, p4000 + 256 greedy: 35B 183.9 tok/s (4.72 tok/cycle, 25.6 ms/cycle), 27B 80.1 tok/s (7.29 tok/cycle,
+90.6 ms/cycle; a raw code continuation, plain 13.5).
+
+Server (`research/inference/scripts/bench.py` decode phases against `nace-infer-server`, the app's streaming API:
+middle-window decode rate, median of 3 x 512 tokens, thinking off; T = 0.6 / top_p 0.95 / top_k 20 and T = 0):
+
+| model | default server (MTP) T = 0.6 / T = 0 | `--dflash auto` T = 0.6 / T = 0 |
+|---|---|---|
+| 35B | 123.3 (118.4-125.4) / 125.1 (123.4-127.0) | **151.6** (135.3-160.8) / **165.5** (156.3-167.9) |
+| 27B | 30.5 (30.4-31.8) / 30.9 (30.6-31.4) | **52.4** (49.2-56.9) / **57.6** (57.2-57.7) |
+
+(T = 0.6 sampled runs vary with the text drawn; the 27B's earlier DFlash2 server run, same code but before the
+allocation fix below: 52.0 / 56.0.) Memory: the drafter adds its resident size to the process footprint, +0.48 GB
+(35B) / +1.27 GB (27B) at load, plus a 48 / 40 MiB context ring per slot; after one request the servers measured
+20 / 21 GB (35B, MTP / DFlash2) and 18 / 19 GB (27B) (`footprint -p`). Before `Gpu::alloc` got its own autorelease
+pool the drafter's bf16 checkpoint (1.05 / 3.85 GB) was never freed after the 4-bit quantization (Metal keeps new
+buffers in the caller's pool, and the C++ callers have none; same fix as opt/ane c2de003): +1.46 / +4.7 GB.
+
+Profile of a cycle (`NI_PROFILE=1`, isolated dispatches, so small kernels are inflated by a few us each):
+35B, code 96 tokens: 21.9 ms (first loop: 27.4): dense verify GEMMs (`qmm8pf`) 5.8, routed experts 8.6 (scalar 1-2-row
+passes 6.2, MMA tiles 2.4; 13.2 before the dynamic depth), drafter 3.0 (8-row GEMMs incl. the 1.4 ms LM head 2.4, gate/up
+0.5), GDN 1.5, x8 tables 0.85, router 0.42, plan 0.31, verify attention 0.28, draft attention 0.23. 27B, code 64
+tokens: 90.7 ms: the 8-row GEMMs of verify and drafter (`qmm8pf` 46.5, `qmm8_gu1k2` 35.4) are 90%; GDN 3.4, x8 tables
+2.4, remaining drafter GEMMs 1.7, attention 0.6. Both are bandwidth-bound: the 27B cycle reads ~16.7 GB (verify 15.0,
+drafter 1.7), the 35B's ~3.6 GB at 3.6 rows.
+
+Tools: `ni_run ... --dflash auto [--ignore-eos] [--ref <plain output>]` (`--ref`: at the first token that differs from a
+reference run, the logits of both tokens from the verify row, plain decoding and one prefill of the prefix; `NI_TRACE`,
+`NI_DFLASH_CONF=<file>` per-cycle confidences; `NI_DFLASH_CB`, `NI_DFLASH_VERIFY`, `NI_DFLASH_DYN[_T]`,
+`NI_DFLASH_EXACT_MOE`, `NI_DFLASH_V8` switches), `dflash_accept_test [trials] [K] [stream] [case]` (S1),
+`dflash_stat <model> @ids [trials] [T]` (S2), `engine_turns <model> <text> [--dflash auto] [--dump-ids p]` (multi-turn
+prefix reuse through `Engine::chat`), `bench_v8 dfl <27b|35b>` (drafter GEMM shapes), `dflash_check` (D1, unchanged).
+
+Open: the 27B cycle at a ~4k context is 90.6 ms (target 88; 86.4-86.8 at 85 + 512); further 27B gains are in the
+8-row GEMMs (90% of the cycle, already ~1.15x a 1-row matvec) and small fusions (writing the X8 tables of the GDN /
+attention outputs from their kernels: ~64 dispatches per verify). The GPU-driven drafting pass splits the attention
+context in fixed 256-key chunks (the host-driven plan balances them; same math, other fp32 rounding). The drafter's
+target-LM-head pass is ~40% of a 27B pass and ~45% of a 35B pass.
+
+## DFlash2 review: independent re-check (2026-10-17, build of 4cdc5a0 + dd9025c)
+
+Everything under `lockf -k -t 540 ~/.cache/nace-gpu.lock`; this lock slot ran ~7% (35B) and ~12% (27B) slower than
+the loop section's slots, so compare within a table only.
+
+**Greedy equality (G1)**, `ni_run <model> @<prompt> 512 0 --ignore-eos [--dflash <drafter>] [--ref <plain>]`:
+
+| prompt | 35B-A3B | 27B |
+|---|---|---|
+| code_* | identical 512/512 | identical 512/512 |
+| p700 | first difference at token 241 (pos 941): plain top-2 gap 0.035, verify row -0.42, one prefill of the prefix +0.021 | identical 512/512 |
+| p4000 | first difference at token 197 (pos 4197): plain gap 0.020, verify row -0.151, one prefill -0.170 (takes the DFlash token) | identical 512/512 |
+
+The 35B p700 split is the 8-row verify's numerics, not the loop: it is unchanged with `NI_DFLASH_DYN=0`,
+`NI_V8_MOE_SMALL=0` and `NI_DFLASH_CB=1`, and the teacher-forced verify without any drafter (`ni_v8check` 512 rows)
+flips at the same position, as does the MTP-era R = 4 verify; MTP depth 1 (R = 2) stays identical over the 512.
+`ni_v8drift` (new) splits the verify's deviation from plain decoding into the per-step error of the kernels on the
+plain state ("fresh") and the drift when the verify path builds the KV/GDN state ("accumulated", what a speculative
+loop does), over 512 generated rows; |change of the plain top-2 gap| median / p95 / max, argmax flips:
+
+| | fresh | accumulated |
+|---|---|---|
+| 35B p700, R = 8 (DFlash2) | 0.0023 / 0.25 / 0.70, 0 | 0.095 / 0.56 / 1.35, 5 (gaps 0.010-0.92) |
+| 35B p700, R = 8, `NI_V8_MOE_SMALL=0` | 0.0023 / 0.15 / 0.64, 0 | 0.096 / 0.57 / 2.77, 4 |
+| 35B p700, R = 4 (MTP depth 3 kernels) | 0.0013 / 0.13 / 1.31, 0 | 0.107 / 0.59 / 2.03, 4 |
+| 35B p700, R = 2 (MTP depth 1 kernels) | 0.0000 / 0.0002 / 0.0009, 0 | 0.0032 / 0.057 / 0.42, 0 |
+| 35B code_35b, R = 8 | 0.0015 / 0.081 / 1.08, 0 | 0.038 / 0.26 / 4.79, 0 |
+| 27B p700, R = 8 | 0.0011 / 0.0043 / 0.11, 0 | 0.0014 / 0.0052 / 0.064, 0 |
+
+So on the dense 27B the 8-row verify tracks plain decoding at the 1e-3 level; on the MoE 35B any multi-row verify
+with half-precision inputs (R = 4 as much as R = 8) has a heavy-tailed per-step error (top-8 routing boundary flips)
+that accumulates in the state, and greedy DFlash2 output leaves plain greedy at the first near-tie it meets (2 of 3
+prompts within 512 tokens here). Both splits seen are near-ties (gaps 0.035, 0.020), but this is above SPEC §12's
+"<= 0.02" noise target and the 35B's default (MTP depth 1) does not have it.
+
+**Default path (G3)** vs a build of 45705ec: logits after the p700 prefill bitwise identical; plain greedy (64), MTP
+greedy and T = 0.6 (128) ids identical on both models.
+
+**Sampled exactness through the real loop** (`dflash_seedtest`, new: many seeds through the engine's
+double-buffered loop, tested against the exact law of the plain sampler and, with `--law-out`, against the law
+whose 2nd/3rd token comes from the 8-row verify rows; prose prompt, T = 0.6 unless noted, top_k 20, top_p 0.95,
+start point = prompt + 24 greedy tokens, chi-square p of (t1), (t1, t2), (t1, t2, t3)):
+
+| model, arm | trials | first-cycle a = 0 / 1-4 / 5-7 | t1 | t1,t2 (plain / verify law) | t1,t2,t3 (plain / verify law) |
+|---|---:|---|---:|---|---|
+| 35B plain sampler (reference) | 4000 | | 0.013 | 0.011 / 0.011 | 0.17 / 0.17 |
+| 35B DFlash2, seeds A | 4000 | 2637 / 199 / 1164 | 0.996 | 0.047 / 0.052 | 0.054 / 0.056 |
+| 35B DFlash2, seeds C | 4000 | 2628 / 221 / 1151 | 0.69 | 0.62 / 0.63 | 0.41 / 0.41 |
+| 35B DFlash2, T = 1.0 | 4000 | 2256 / 648 / 1096 | 0.87 | 0.41 / 0.40 | 0.40 / 0.38 |
+| 27B plain sampler (reference) | 1500 | | 0.19 | 0.27 / 0.28 | 0.80 / 0.81 |
+| 27B DFlash2, two seed sets | 1600 | 1153 / 119 / 328 | 0.20 | 0.72 / 0.71 | 0.57 / 0.56 |
+
+At this start point the verify law and the plain law differ by <= 0.004 per probability (27B <= 0.001). No test falls
+below 0.01; the borderline 35B batch A did not reproduce with fresh seeds (C), and the plain sampler's own arm shows a
+comparable fluctuation. `dflash_accept_test` (S1, the GPU kernels on synthetic p/q) with two new seed streams
+(`40000 3 7`, `40000 7 11`): all 26 cases pass (p 0.029-1.0), the biased depth rule is still rejected (chi2 345 / 387).
+
+**Performance** (`ni_run`, code_* ids, 512 tokens, `--ignore-eos`, the four configurations interleaved, 3 rounds):
+
+| | MTP default | DFlash2 | gain | DFlash2 tok/cycle, GPU ms/cycle |
+|---|---|---|---:|---|
+| 35B greedy | depth 1: 114.9 / 113.7 / 114.5 | 150.2 / 150.3 / 150.0 | +31% | 3.407 (3.59 verified), 22.6 |
+| 35B T = 0.6 | 111.3 / 106.9 / 110.5 | 140.2 / 139.3 / 139.8 | +27% | 3.500 (5.34 verified), 25.0 |
+| 27B greedy | depth 2: 26.9 / 27.1 / 27.6 | 48.1 / 48.0 / 49.3 | +78% | 4.776, 96.8-99.3 |
+| 27B T = 0.6 | 26.9 / 26.9 / 27.5 | 41.4 / 41.8 / 41.7 | +54% | 4.154, 99.2-100.2 |
+
+Same ratios as the loop section; the absolute 27B number of this slot (48-49 tok/s) is below Splash's 54.7 from
+another day, so "on par with Splash" for the 27B holds only against same-slot conditions, which were not re-measured.
+
+**Fixed** (dd9025c): with a stop token or max_tokens inside the last accepted chain, the committed drafting half
+had already written all a + 1 ring rows; the rows past `d.ctx` overwrote the slots of the window's oldest
+positions, which `DFlash2::rewind` still counted as valid on the next request (prefix reuse, e.g. a regenerate of a
+prompt longer than 2048 tokens): up to 7 wrong context rows at the far end of the window. Draft quality only; the
+engine now raises `valid_lo` past them. tests/test_server.py with `--dflash auto` (35B): 13/13.
+
+**Merging into main** (d6d2ed0 at the time of the review): `git merge-tree` reports conflicts in docs/PERF.md,
+src/engine/engine.{cpp,h}, src/metal/gpu.mm (the same autorelease-pool change on both sides), src/model/qwen35.cpp,
+src/server/main.cpp and tools/ni_run.cpp. The substantive one is the prefill capture: main's dense prefill can run the
+FFN on the Neural Engine (`enc_mlp_prefill_split`, the wave schedule `enc_prefill_wave`), captures checkpoints inside
+the pass, and re-encodes a chunk on the GPU when the Neural Engine half fails; the drafter's capture hook
+(`enc_capture` after each target layer) and `encode_prefill_commit` (after the last chunk) have to follow the final
+residual of every layer in those paths (or DFlash2 has to keep the prefill on the GPU), then G1 (with p4000 for the
+ring window), G3 against main, S1 and the sampled test must be re-run.
