@@ -48,6 +48,9 @@ class Gpu {
   // (tests); `defines` become preprocessor macros.
   void compile(const std::string& extra_source = "");
   Pipeline pipeline(const std::string& fn);
+  // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
+  // ni_compile reads code size, stack (spills) and GPR count from it.
+  bool archive(const std::string& fn, const std::string& path);
 
   // Command buffer that holds one compute encoder. Commit is non-blocking.
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between

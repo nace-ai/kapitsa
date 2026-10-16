@@ -1464,3 +1464,371 @@ NI_INLINE void attn_prefill10_impl(const device float* q, const device half* kc,
     attn_prefill10_impl<QB, BK>(q, kc, vc, qg, out, p, tg, tid, sg, lane, kv, xchg);                        \
   }
 NI_ATTN10(attn_prefill10_q4_k32, 4, 32)
+
+// ---- Prefill attention v10u: v10 with its fixed-trip loops fully unrolled (A/B for v11) ----
+// Nothing else changes. Left to itself the compiler does not fully unroll v10's 16 x 4 fragment
+// loop nests, so o[], qf[], s[], pf[] ... are indexed at run time and live in per-thread stack
+// memory: 6912 bytes per thread for v10 (v1-v9: 6.4-13 KB; see ni_compile NI_ARCHIVE_DIR), and
+// every MMA moves its operands through memory. Unrolled: 96 B of stack, 96 GPRs.
+#define NI_UNROLL _Pragma("clang loop unroll(full)")
+
+template <uint QB, uint BK>
+NI_INLINE void attn_prefill10u_impl(const device float* q, const device half* kc,
+                              const device half* vc, const device float* qg,
+                              device float* out, constant AttnPrefParams& p,
+                              uint2 tg, uint tid,
+                              uint sg, uint lane, threadgroup half* kv, threadgroup float (*xchg)[32 * (BK / 4)]) {
+  constexpr uint NT = QB * 64;
+  const uint G = p.Hq / p.Hkv;
+  const uint kvh = tg.y;
+  const uint rg = sg / 2, dh = sg % 2;        // row group (query), head-dim half
+  const uint t0 = tg.x * QB;
+  const uint qi = t0 + rg;
+  const bool qvalid = qi < p.T;
+  const uint qpos = p.pos0 + min(qi, p.T - 1);
+  const uint last_q = min(t0 + QB, p.T) - 1;
+  const uint kend = p.pos0 + last_q + 1;
+  const uint qd = lane / 4;
+  const uint frow = (qd & 4) + (lane / 2) % 4;
+  const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
+
+  // Q (4 queries x 8 heads = 32 rows) -> threadgroup -> registers (own half)
+  simdgroup_half8x8 qf[kDH / 8];
+  constexpr uint QPP = BK / 8;  // queries staged per pass (BK rows of the tile buffer)
+  NI_UNROLL for (uint part = 0; part < QB / QPP; ++part) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < BK * kHD / 4; i += NT) {
+      uint r = i / (kHD / 4), c4 = i % (kHD / 4);
+      uint s = part * QPP + r / 8, g = r % 8;
+      uint t = min(t0 + s, p.T - 1);
+      float4 v = g < G ? *(const device float4*)(q + (t * p.Hq + kvh * G + g) * kHD + c4 * 4) : float4(0);
+      *(threadgroup half4*)(kv + r * kLD2 + c4 * 4) = half4(v * p.scale);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (rg / QPP == part)
+      NI_UNROLL for (uint d = 0; d < kDH / 8; ++d) simdgroup_load(qf[d], kv + (rg % QPP) * 8 * kLD2 + dh * kDH + d * 8, kLD2);
+  }
+
+  simdgroup_float8x8 o[kDH / 8];
+  NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) o[j] = simdgroup_float8x8(0);
+  float m_row = -INFINITY, l_row = 0.0f;
+  const device half* kb = kc + kvh * p.max_seq * kHD;
+  const device half* vb = vc + kvh * p.max_seq * kHD;
+
+  for (uint k0 = 0; k0 < kend; k0 += BK) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < BK * kHD / 8; i += NT) {
+      uint r = i % BK, c8 = i / BK;  // consecutive threads -> consecutive keys (conflict-free stores)
+      uint4 v = k0 + r < kend ? *(const device uint4*)(kb + (k0 + r) * kHD + c8 * 8) : uint4(0);
+      thread const half* hv = (thread const half*)&v;
+      NI_UNROLL for (uint e = 0; e < 8; ++e) kv[(c8 * 8 + e) * (BK + 8) + r] = hv[e];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    constexpr uint NC = BK / 8;
+    simdgroup_float8x8 s[NC];
+    NI_UNROLL for (uint c = 0; c < NC; ++c) s[c] = simdgroup_float8x8(0);
+    NI_UNROLL for (uint d = 0; d < kDH / 8; ++d)
+      NI_UNROLL for (uint c = 0; c < NC; ++c) {
+        simdgroup_half8x8 b;
+        half2 kp2 = *(threadgroup const half2*)(kv + (dh * kDH + d * 8 + frow) * (BK + 8) + c * 8 + fcol);
+        b.thread_elements()[0] = kp2.x;
+        b.thread_elements()[1] = kp2.y;
+        simdgroup_multiply_accumulate(s[c], qf[d], b, s[c]);
+      }
+    // exchange partial scores with the other half
+    NI_UNROLL for (uint c = 0; c < NC; ++c) {
+      xchg[sg][lane * (BK / 4) + 2 * c] = s[c].thread_elements()[0];
+      xchg[sg][lane * (BK / 4) + 2 * c + 1] = s[c].thread_elements()[1];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float sfin[BK / 4];
+    NI_UNROLL for (uint c = 0; c < NC; ++c) {
+      sfin[2 * c] = s[c].thread_elements()[0] + xchg[sg ^ 1][lane * (BK / 4) + 2 * c];
+      sfin[2 * c + 1] = s[c].thread_elements()[1] + xchg[sg ^ 1][lane * (BK / 4) + 2 * c + 1];
+    }
+    // Every simdgroup is past the exchange barrier, so K is dead: start loading V now and let the
+    // softmax below overlap with it.
+    for (uint i = tid; i < BK * kHD / 8; i += NT) {
+      uint r = i / (kHD / 8), c8 = i % (kHD / 8);
+      uint4 v = k0 + r < kend ? *(const device uint4*)(vb + (k0 + r) * kHD + c8 * 8) : uint4(0);
+      *(threadgroup uint4*)(kv + r * kLD2 + c8 * 8) = v;
+    }
+    float sv[BK / 4];
+    float mx = -INFINITY;
+    NI_UNROLL for (uint c = 0; c < NC; ++c) {
+      uint key = k0 + c * 8 + fcol;
+      sv[2 * c] = key <= qpos ? sfin[2 * c] : -INFINITY;
+      sv[2 * c + 1] = key + 1 <= qpos ? sfin[2 * c + 1] : -INFINITY;
+      mx = max(mx, max(sv[2 * c], sv[2 * c + 1]));
+    }
+    mx = max(mx, simd_shuffle_xor(mx, 1));
+    mx = max(mx, simd_shuffle_xor(mx, 8));
+    const float m_new = max(m_row, mx);
+    const float corr = m_new == -INFINITY ? 1.0f : metal::fast::exp(m_row - m_new);
+    float ps = 0.0f;
+    simdgroup_half8x8 pf[NC];
+    NI_UNROLL for (uint c = 0; c < NC; ++c) {
+      float a = sv[2 * c] == -INFINITY ? 0.0f : metal::fast::exp(sv[2 * c] - m_new);
+      float b = sv[2 * c + 1] == -INFINITY ? 0.0f : metal::fast::exp(sv[2 * c + 1] - m_new);
+      ps += a + b;
+      pf[c].thread_elements()[0] = half(a);
+      pf[c].thread_elements()[1] = half(b);
+    }
+    ps += simd_shuffle_xor(ps, 1);
+    ps += simd_shuffle_xor(ps, 8);
+    l_row = l_row * corr + ps;
+    m_row = m_new;
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      o[j].thread_elements()[0] *= corr;
+      o[j].thread_elements()[1] *= corr;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j)
+      NI_UNROLL for (uint c = 0; c < NC; ++c) {
+        simdgroup_half8x8 vf;
+        half2 vp2 = *(threadgroup const half2*)(kv + (c * 8 + frow) * kLD2 + dh * kDH + j * 8 + fcol);
+        vf.thread_elements()[0] = vp2.x;
+        vf.thread_elements()[1] = vp2.y;
+        simdgroup_multiply_accumulate(o[j], pf[c], vf, o[j]);
+      }
+  }
+  if (qvalid && frow < G) {
+    const float inv = l_row > 0.0f ? 1.0f / l_row : 0.0f;
+    const uint h = kvh * G + frow;
+    const device float* gate = qg + (qi * p.Hq + h) * 2 * kHD + kHD + dh * kDH;
+    device float* dst = out + qi * p.Hq * kHD + h * kHD + dh * kDH;
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      uint d = j * 8 + fcol;
+      dst[d] = o[j].thread_elements()[0] * inv * sigmoid(gate[d]);
+      dst[d + 1] = o[j].thread_elements()[1] * inv * sigmoid(gate[d + 1]);
+    }
+  }
+}
+
+#define NI_ATTN10U(NAME, QB, BK)                                                                            \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],            \
+                       const device half* vc [[buffer(2)]], const device float* qg [[buffer(3)]],           \
+                       device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],           \
+                       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup half kv[kHD * (BK + 8) > BK * kLD2 ? kHD * (BK + 8) : BK * kLD2];                          \
+    threadgroup float xchg[QB * 2][32 * (BK / 4)];                                                          \
+    attn_prefill10u_impl<QB, BK>(q, kc, vc, qg, out, p, tg, tid, sg, lane, kv, xchg);                       \
+  }
+NI_ATTN10U(attn_prefill10u_q4_k32, 4, 32)
+
+// ---- Prefill attention v11: one query head per threadgroup (MLX steel-attention layout) ----
+// Threadgroup = 32 consecutive queries of ONE query head, 256 threads; grid = (ceil(T/32), Hq).
+// 8 simdgroups = 4 row groups (8 queries, one fragment row each) x 2 halves of the head dim; each
+// keeps Q (its 128 dims, half) and O (its 128 dims, fp32) in registers, and the pair sums partial
+// scores through threadgroup memory. Every fixed-trip loop is fully unrolled, so all fragment
+// arrays stay in registers (v1-v10 keep them on the stack, see v10u). Against v10 also:
+//  - rows are queries, not GQA heads: no padded rows when G < 8 (the 27B has G = 6, a quarter of
+//    v10's MMAs are padding there), any G works, and only tiles that reach past a row group's
+//    first query need the causal mask;
+//  - softmax in the log2 domain (exp2 on scores scaled by log2e) with a finite sentinel for masked
+//    scores, so no -inf special cases; P stays fp32 as the A operand of the P.V multiply;
+//  - each lane fetches 2*BK contiguous bytes of one K row (v10: 16 bytes from 4 places);
+//  - the score exchange reuses the K tile (XS = false: 20 KB at BK = 32, as MLX, two more
+//    barriers per tile) or has its own buffer (XS = true);
+//  - V is fetched before the softmax (MLX order); heaviest query blocks are dispatched first.
+// Not taken from MLX: simdgroup_barrier fences between fragment loads and MMAs (here they raise
+// an isolated P.V loop from 52 to 92 GPRs plus spills) and max_total_threads_per_threadgroup
+// (v10 compiles to identical machine code with it; v11 keeps it, it is what the host dispatches).
+// Registers (ni_compile NI_ARCHIVE_DIR): BK = 32 sits at the compiler's ~92-96 GPR ceiling with
+// ~100 B of residual spill; BK = 16 halves S and the tiles at twice the per-key barrier/softmax work.
+// q: [T, Hq, D] fp32 (normed + roped); kc/vc: [Hkv, max_seq, D] half; qg: [T, Hq, 2D] (gate half).
+// out: [T, Hq*D] = softmax(q k^T * scale) v * sigmoid(gate), causal at absolute positions pos0 + t.
+constant constexpr uint kBQ11 = 32;            // queries per threadgroup
+constant constexpr uint kVLD11 = kHD + 8;      // V tile row stride (halves)
+constant constexpr float kNeg11 = -1.0e30f;    // masked score: exp2 underflows to 0, no inf arithmetic
+
+// K^T row stride (halves; conflict-free half2 fragment reads), tile buffer (halves), exchange (float2)
+template <uint BK> constexpr uint attn11_kld() { return BK + 8; }
+template <uint BK> constexpr uint attn11_kv() { return kHD * (BK + 8) > BK * kVLD11 ? kHD * (BK + 8) : BK * kVLD11; }
+template <uint BK> constexpr uint attn11_xs() { return 8 * (BK / 8) * 32; }
+
+// K rows of one tile into registers: thread = (key tid % BK, BK-dim slice tid / BK), 2*BK bytes.
+template <uint BK>
+NI_INLINE void attn11_fetch_k(thread uint4* r, const device half* kb, uint k0, uint kend, uint tid) {
+  const uint key = tid % BK;
+  const bool ok = k0 + key < kend;
+  const device uint4* src = (const device uint4*)(kb + (k0 + key) * kHD + (tid / BK) * BK);
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? src[u] : uint4(0);
+}
+
+// K^T store: for each dim, consecutive lanes write consecutive keys.
+template <uint BK>
+NI_INLINE void attn11_store_k(threadgroup half* kt, thread const uint4* r, uint tid) {
+  threadgroup half* dst = kt + (tid / BK) * BK * attn11_kld<BK>() + tid % BK;
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u)
+    NI_UNROLL for (uint w = 0; w < 4; ++w) {
+      const half2 h2 = as_type<half2>(r[u][w]);
+      dst[(u * 8 + w * 2) * attn11_kld<BK>()] = h2.x;
+      dst[(u * 8 + w * 2 + 1) * attn11_kld<BK>()] = h2.y;
+    }
+}
+
+// V rows of one tile: thread = (key, BK-dim slice); 256 / BK lanes cover one 512-byte row.
+template <uint BK>
+NI_INLINE void attn11_fetch_v(thread uint4* r, const device half* vb, uint k0, uint kend, uint tid) {
+  const uint key = tid / (kHD / BK);
+  const bool ok = k0 + key < kend;
+  const device uint4* src = (const device uint4*)(vb + (k0 + key) * kHD + (tid % (kHD / BK)) * BK);
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) r[u] = ok ? src[u] : uint4(0);
+}
+
+template <uint BK>
+NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint tid) {
+  threadgroup uint4* dst = (threadgroup uint4*)(vt + (tid / (kHD / BK)) * kVLD11 + (tid % (kHD / BK)) * BK);
+  NI_UNROLL for (uint u = 0; u < BK / 8; ++u) dst[u] = r[u];
+}
+
+template <uint BK, bool XS>
+NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
+                                   const device float* qg, device float* out, constant AttnPrefParams& p,
+                                   uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
+                                   threadgroup float2* xs) {
+  constexpr uint NC = BK / 8;                     // key fragments per tile
+  constexpr uint KLD = attn11_kld<BK>();
+  const uint G = p.Hq / p.Hkv;
+  const uint h = tg.y, kvh = h / G;
+  const uint nqb = (p.T + kBQ11 - 1) / kBQ11;
+  const uint t0 = (nqb - 1 - tg.x) * kBQ11;       // heaviest (latest) blocks first: short last wave
+  const uint rg = sg / 2, dh = sg % 2;            // row group (8 queries), head-dim half
+  const uint qd = lane / 4;
+  const uint frow = (qd & 4) + (lane / 2) % 4;    // this lane's fragment row and first column
+  const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
+  const uint t = t0 + rg * 8 + frow;              // this lane's query
+  const uint qpos = p.pos0 + t;
+  const uint qpos_rg = p.pos0 + t0 + rg * 8;      // first query position of the row group
+  const uint kend = p.pos0 + min(t0 + kBQ11, p.T); // keys needed by the block
+  const uint ntiles = (kend + BK - 1) / BK;
+
+  // Q straight from device into fragments (own 128 dims), scaled by 1/sqrt(D) (a power of two:
+  // the half rounding is v10's). Rows past T are zero and never stored.
+  simdgroup_half8x8 qf[kDH / 8];
+  {
+    const device float* qr = q + (min(t, p.T - 1) * p.Hq + h) * kHD + dh * kDH + fcol;
+    NI_UNROLL for (uint d = 0; d < kDH / 8; ++d) {
+      const half2 v = t < p.T ? half2(*(const device float2*)(qr + d * 8) * p.scale) : half2(0);
+      qf[d].thread_elements()[0] = v.x;
+      qf[d].thread_elements()[1] = v.y;
+    }
+  }
+
+  simdgroup_float8x8 o[kDH / 8];
+  NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) o[j] = simdgroup_float8x8(0);
+  float m_row = kNeg11, l_row = 0.0f;             // running max (log2 domain) and sum of the lane's row
+  const device half* kb = kc + kvh * p.max_seq * kHD;
+  const device half* vb = vc + kvh * p.max_seq * kHD;
+  threadgroup float2* xw = XS ? xs : (threadgroup float2*)kv;
+  const threadgroup half* kfr = kv + (dh * kDH + frow) * KLD + fcol;     // K^T fragment base
+  const threadgroup half* vfr = kv + frow * kVLD11 + dh * kDH + fcol;   // V fragment base
+
+  for (uint it = 0; it < ntiles; ++it) {
+    const uint k0 = it * BK;
+    uint4 r[BK / 8];
+    attn11_fetch_k<BK>(r, kb, k0, kend, tid);
+    threadgroup_barrier(mem_flags::mem_threadgroup);   // previous P.V is done with the buffer
+    attn11_store_k<BK>(kv, r, tid);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // S (8 queries x BK keys) = Q K^T over this simdgroup's 128 dims
+    simdgroup_float8x8 s[NC];
+    NI_UNROLL for (uint c = 0; c < NC; ++c) s[c] = simdgroup_float8x8(0);
+    NI_UNROLL for (uint d = 0; d < kDH / 8; ++d) {
+      simdgroup_half8x8 kf[NC];
+      NI_UNROLL for (uint c = 0; c < NC; ++c) {
+        const half2 k2 = *(const threadgroup half2*)(kfr + d * 8 * KLD + c * 8);
+        kf[c].thread_elements()[0] = k2.x;
+        kf[c].thread_elements()[1] = k2.y;
+      }
+      NI_UNROLL for (uint c = 0; c < NC; ++c) simdgroup_multiply_accumulate(s[c], qf[d], kf[c], s[c]);
+    }
+
+    // sum the two head-dim halves: one float2 per lane per fragment, lane-consecutive
+    if (!XS) threadgroup_barrier(mem_flags::mem_threadgroup);  // K reads done: the exchange reuses it
+    NI_UNROLL for (uint c = 0; c < NC; ++c)
+      xw[(sg * NC + c) * 32 + lane] = float2(s[c].thread_elements()[0], s[c].thread_elements()[1]);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    NI_UNROLL for (uint c = 0; c < NC; ++c) {
+      const float2 o2 = xw[((sg ^ 1) * NC + c) * 32 + lane];
+      s[c].thread_elements()[0] += o2.x;
+      s[c].thread_elements()[1] += o2.y;
+    }
+    if (!XS) threadgroup_barrier(mem_flags::mem_threadgroup);  // exchange reads done: V may overwrite
+    // V load issued before the softmax so the two overlap
+    attn11_fetch_v<BK>(r, vb, k0, kend, tid);
+    attn11_store_v<BK>(kv, r, tid);
+
+    // online softmax on this lane's scores (row frow; the row's other lanes are lane^1, lane^8)
+    const bool diag = k0 + BK - 1 > qpos_rg;      // tile reaches past the row group's first query
+    float mx = kNeg11;
+    NI_UNROLL for (uint c = 0; c < NC; ++c)
+      NI_UNROLL for (uint i = 0; i < 2; ++i) {
+        float v = s[c].thread_elements()[i] * M_LOG2E_F;
+        if (diag && k0 + c * 8 + fcol + i > qpos) v = kNeg11;
+        s[c].thread_elements()[i] = v;
+        mx = max(mx, v);
+      }
+    mx = max(mx, simd_shuffle_xor(mx, 1));
+    mx = max(mx, simd_shuffle_xor(mx, 8));
+    const float m_new = max(m_row, mx);
+    const float corr = metal::fast::exp2(m_row - m_new);
+    float ps = 0.0f;
+    NI_UNROLL for (uint c = 0; c < NC; ++c)
+      NI_UNROLL for (uint i = 0; i < 2; ++i) {
+        const float e = metal::fast::exp2(s[c].thread_elements()[i] - m_new);
+        s[c].thread_elements()[i] = e;
+        ps += e;
+      }
+    ps += simd_shuffle_xor(ps, 1);
+    ps += simd_shuffle_xor(ps, 8);
+    l_row = l_row * corr + ps;
+    m_row = m_new;
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      o[j].thread_elements()[0] *= corr;
+      o[j].thread_elements()[1] *= corr;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);   // V tile visible
+
+    // O += P V (P: the fp32 fragments as they came out of the softmax)
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      simdgroup_half8x8 vf[NC];
+      NI_UNROLL for (uint c = 0; c < NC; ++c) {
+        const half2 v2 = *(const threadgroup half2*)(vfr + c * 8 * kVLD11 + j * 8);
+        vf[c].thread_elements()[0] = v2.x;
+        vf[c].thread_elements()[1] = v2.y;
+      }
+      NI_UNROLL for (uint c = 0; c < NC; ++c) simdgroup_multiply_accumulate(o[j], s[c], vf[c], o[j]);
+    }
+  }
+
+  if (t < p.T) {
+    const float inv = 1.0f / l_row;   // l_row >= 1: the row's maximum contributed exp2(0)
+    const device float* gate = qg + (t * p.Hq + h) * 2 * kHD + kHD + dh * kDH + fcol;
+    device float* dst = out + (t * p.Hq + h) * kHD + dh * kDH + fcol;
+    NI_UNROLL for (uint j = 0; j < kDH / 8; ++j) {
+      const float2 g = *(const device float2*)(gate + j * 8);
+      const float2 r = float2(o[j].thread_elements()[0], o[j].thread_elements()[1]) * inv;
+      *(device float2*)(dst + j * 8) = float2(r.x * sigmoid(g.x), r.y * sigmoid(g.y));
+    }
+  }
+}
+
+#define NI_ATTN11(NAME, BK, XS)                                                                             \
+  [[kernel, max_total_threads_per_threadgroup(256)]] void NAME(                                             \
+      const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],                            \
+      const device half* vc [[buffer(2)]], const device float* qg [[buffer(3)]],                           \
+      device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],                           \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                 \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {               \
+    threadgroup uint4 kvm[attn11_kv<BK>() / 8];                                                              \
+    threadgroup float2 xs[XS ? attn11_xs<BK>() : 1];                                                         \
+    attn_prefill11_impl<BK, XS>(q, kc, vc, qg, out, p, tg, tid, sg, lane, (threadgroup half*)kvm, xs);      \
+  }
+NI_ATTN11(attn_prefill11, 32, false)         // 20 KB, exchange in the K tile (MLX)
+NI_ATTN11(attn_prefill11_x, 32, true)        // 28 KB, own exchange buffer, 2 barriers fewer per tile
+NI_ATTN11(attn_prefill11_k16, 16, false)     // 16-key tiles: 12 KB, fewer registers
+NI_ATTN11(attn_prefill11_k16x, 16, true)

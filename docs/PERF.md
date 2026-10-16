@@ -27,7 +27,8 @@ DeltaNet in-proj 39 us/layer, MoE gate/up 50 us, down 29 us, out_proj 34 us, lm_
 | MLX / oMLX (same Mac) | 824-923 | 769-875 |
 
 Dense quantized GEMM: 6.0-6.2 TFLOP/s (MLX 6.2-6.6). Expert GEMM: ~4.2 TFLOP/s.
-Tile anomaly: 32x64 and 32x128 tiles (2 row fragments per simdgroup) run at 2-3 TFLOP/s.
+Tile anomaly: 32x64 and 32x128 tiles (2 row fragments per simdgroup) run at 2-3 TFLOP/s: they
+keep 2.3-4.4 KB of fragments on the stack (see Attention below).
 
 Attention (D=256, 16 q / 2 kv heads), 2048 queries x 16K keys: ours 200 ms (2.56 TFLOP/s), MLX
 steel attention 97 ms (5.3). Tried: GQA heads as fragment rows (v2), in-register softmax (v3/v4,
@@ -35,6 +36,29 @@ slower: spills), head dim split over simdgroup pairs like MLX (v5), K^T tile (v6
 with softmax (v7), 16-byte tile loads (v8, -10%), 8 queries/16-key tiles (v9, slower), per-lane
 fragment loads (v10). Ablation: device K/V loads ~25%, Q.K ~30%, P.V ~15%, the rest bookkeeping.
 Open: find what MLX does differently (it runs 32 rows of ONE head per threadgroup).
+
+Found (compile-time evidence; `NI_ARCHIVE_DIR=<dir> ni_compile <kernels>` prints machine-code size,
+per-thread stack and GPRs from a Metal binary archive): v1-v10 keep their fragment arrays on the
+stack. The compiler does not fully unroll the 16 x 4 fragment loop nests, so o[], qf[], s[] are
+indexed at run time and demoted to memory: v10 6912 B of stack per thread with 47 GPRs (v1-v9:
+6.4-13 KB). Every MMA then moves its operands through memory, which fits the ablation (loads and
+both products all expensive). MLX unrolls every tile loop. The same v10 with only
+`#pragma clang loop unroll(full)` added (attn_prefill10u_q4_k32): 96 B stack, 96 GPRs.
+Not the cause: `max_total_threads_per_threadgroup` (v10 compiles to byte-identical code with it).
+MLX's `simdgroup_barrier(mem_none)` fences around fragment loads raise an isolated P.V loop from
+52 to 92 GPRs plus spills here, so v11 leaves them out. The compiler caps at ~92-96 GPRs and
+spills beyond that.
+The same thing explains the GEMM tile anomaly: qmm_b4_m32_n64 2304 B, qmm_b4_m32_n128 4352 B,
+qmm_moe_b4_m32_n64 2304 B of stack; m64_n64 / m16_n64 / m32_n32 have none.
+
+v11 (`NI_ATTN=attn_prefill11`, opt-in): MLX's layout, 32 queries of ONE query head per
+threadgroup (grid ceil(T/32) x Hq), 4 row groups x 2 head-dim halves, everything unrolled. Also:
+no padded rows for G = 6 (27B; v10 wastes a quarter of its MMAs there), causal mask only on
+diagonal tiles, exp2 softmax with a finite sentinel, fp32 P, contiguous 64-byte K row fetches,
+heaviest query blocks first. Variants: `_x` (own 8 KB exchange buffer, 2 barriers fewer per
+tile), `_k16` / `_k16x` (16-key tiles, 12 KB). All 92 GPRs, 64-128 B residual spill (v10: 6912).
+Not yet timed (GPU was busy): run bench_attn with v10, v10u and the v11 variants (it now checks
+every kernel against a CPU reference) and `ni_run --dump-logits` A/B before switching the default.
 
 ## Qwen3.8-27B 4-bit (dense, 64 layers, hidden 5120)
 | mode | decode tok/s | tok/cycle |
@@ -46,3 +70,30 @@ Open: find what MLX does differently (it runs 32 rows of ONE head per threadgrou
 Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k (dense GEMM ~6 TFLOP/s).
 Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
 the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
+
+## Same Mac, other engines (tok/s, M4 Pro)
+nace-infer from the tables above (ni_run); the others from research/inference/REPORT.md (servers,
+TTFT on real 4,133 / 16,285-token prompts, MTPLX-optimized 4-bit MLX weights; llama.cpp on GGUF
+UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
+
+| Qwen3.6-35B-A3B 4-bit | decode | prefill 4k | prefill 16k |
+|---|---|---|---|
+| nace-infer plain | 105 | 765-785 | 600-606 |
+| nace-infer MTP depth 1 | 117-123 | (same) | (same) |
+| mlx-lm 0.32.0 server | 63-67 (raw generate 81) | 923 | 824 |
+| oMLX 0.7.1.dev1 | 84-99 | 840-915 | 769-875 |
+| MTPLX 2.12.2, MTP depth 1 | 66-76 | 890-902 | 788-792 |
+| llama.cpp b11429 (Metal) | 53 | 733 | 681 |
+| llama.cpp + draft-mtp | 66-73 | 719 | 652 |
+
+| Qwen3.8-27B 4-bit | decode | prefill 4k | prefill 16k |
+|---|---|---|---|
+| nace-infer plain | 16.0 | 111 | - |
+| nace-infer MTP depth 1 | 23.9-25.3 | (same) | - |
+| mlx-lm | 10.7-11.4 | 125 | 101 |
+| oMLX | 11.8-12.0 | 128 | (memory guard) |
+| MTPLX (MTP) | 20.6-30.8 | 113-125 | 101-110 |
+
+Attention share of nace-infer prefill (35B, 10 attention layers, v10 at 2.56 TFLOP/s): ~0.5 s of
+5.3 s at 4k, ~8.6 s of 27 s at 16k. At MLX's 5.3 TFLOP/s that becomes ~0.26 s / ~4.2 s, i.e.
+about 805 tok/s at 4k and 715 at 16k (projection, not measured).

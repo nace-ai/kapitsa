@@ -113,6 +113,28 @@ Pipeline Gpu::pipeline(const std::string& fn) {
   }
 }
 
+bool Gpu::archive(const std::string& fn, const std::string& path) {
+  compile();
+  @autoreleasepool {
+    id<MTLLibrary> lib = (__bridge id<MTLLibrary>)library_;
+    id<MTLFunction> f = [lib newFunctionWithName:[NSString stringWithUTF8String:fn.c_str()]];
+    if (!f) return false;
+    NSError* err = nil;
+    id<MTLBinaryArchive> ar = [dev(device_) newBinaryArchiveWithDescriptor:[MTLBinaryArchiveDescriptor new] error:&err];
+    MTLComputePipelineDescriptor* d = [MTLComputePipelineDescriptor new];
+    d.computeFunction = f;
+    if (!ar || ![ar addComputePipelineFunctionsWithDescriptor:d error:&err]) {
+      logi("archive %s: %s", fn.c_str(), err ? [[err description] UTF8String] : "?");
+      return false;
+    }
+    if (![ar serializeToURL:[NSURL fileURLWithPath:[NSString stringWithUTF8String:path.c_str()]] error:&err]) {
+      logi("archive %s: %s", fn.c_str(), err ? [[err description] UTF8String] : "?");
+      return false;
+    }
+    return true;
+  }
+}
+
 std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
   auto e = std::unique_ptr<Encoder>(new Encoder());
   id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)queue_;
