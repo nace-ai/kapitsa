@@ -46,17 +46,18 @@ struct ReadJob {
 };
 } // namespace
 
-void WeightStore::open_dir(const std::string& dir, const Filter& keep) {
+void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter) {
   DIR* d = opendir(dir.c_str());
   if (!d) fatal("cannot open model dir %s", dir.c_str());
   std::vector<std::string> files;
   while (dirent* e = readdir(d)) {
     std::string n = e->d_name;
-    if (n.size() > 12 && n.substr(n.size() - 12) == ".safetensors") files.push_back(dir + "/" + n);
+    if (n.size() > 12 && n.substr(n.size() - 12) == ".safetensors" && (!file_filter || file_filter(n)))
+      files.push_back(dir + "/" + n);
   }
   closedir(d);
   std::sort(files.begin(), files.end());
-  if (files.empty()) fatal("no .safetensors in %s", dir.c_str());
+  if (files.empty() && !file_filter) fatal("no .safetensors in %s", dir.c_str());
 
   constexpr size_t kAlign = 256, kChunk = 32u << 20;
   std::vector<ReadJob> jobs;

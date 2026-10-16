@@ -39,9 +39,11 @@ int main(int argc, char** argv) {
   float temp = argc > 4 ? float(atof(argv[4])) : 0.0f;
   const char* dump = nullptr;
   bool tbt = false;
+  int spec = 0;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (!strcmp(argv[i], "--tbt")) tbt = true;
+    if (i + 1 < argc && !strcmp(argv[i], "--spec")) spec = atoi(argv[i + 1]);
   }
 
   Gpu& g = Gpu::get();
@@ -57,6 +59,7 @@ int main(int argc, char** argv) {
   int n = int(ids.size());
   for (int i = 0; i < n; ++i) s.tokens()[i] = ids[i];
 
+  int last_chunk = 0;
   double t0 = now_ms();
   if (Encoder::profiling()) fprintf(stderr, "(profiling: prompt timings not meaningful)\n");
   if (tbt) {
@@ -72,7 +75,10 @@ int main(int argc, char** argv) {
       int T = std::min(C, n - p);
       auto e = g.begin();
       m.encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+      // MTP history rows i in [p, min(p+T, n-1)): pairs (h_i, t_{i+1})
+      if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
       e->commit_and_wait();
+      last_chunk = p;
     }
   }
   double t_prompt = now_ms() - t0;
@@ -83,6 +89,54 @@ int main(int argc, char** argv) {
   }
   std::vector<int> out;
   out.push_back(s.tokens()[n]);
+
+  if (spec && m.has_mtp()) {
+    const int D = spec;
+    double ts = now_ms();
+    int P = n, c = 1, h_row0 = n - 1 - last_chunk;
+    int cycles = 0, accepted = 0;
+    if (Encoder::profiling()) Encoder::profile_report(1);  // drop prefill records
+    std::vector<int> acc_hist(D + 1, 0);
+    bool stop2 = false;
+    while (int(out.size()) < n_gen && !stop2) {
+      auto e = g.begin();
+      m.encode_mtp(*e, s, P - c, c, P - c + 1, m.hidden_rows(), h_row0, P + 1);
+      for (int k = 2; k <= D; ++k)
+        m.encode_mtp(*e, s, P + k - 2, 1, P + k - 1, m.mtp_post(), k == 2 ? c - 1 : 0, P + k);
+      m.encode_verify(*e, s, P, D + 1, sp, uint32_t(P));
+      e->commit_and_wait();
+      const int* y = m.samples();
+      int* tk = s.tokens();
+      int a = 0;
+      while (a < D && tk[P + 1 + a] == y[a]) ++a;
+      if (getenv("NI_TRACE")) fprintf(stderr, "P=%d c=%d draft=%d y0=%d a=%d\n", P, c, tk[P + 1], y[0], a);
+      tk[P + a + 1] = y[a];
+      for (int i = 1; i <= a + 1 && int(out.size()) < n_gen; ++i) {
+        out.push_back(tk[P + i]);
+        for (int eos : m.config().eos)
+          if (tk[P + i] == eos) stop2 = true;
+        if (stop2) break;
+      }
+      m.commit_rows(s, a + 1);
+      ++cycles;
+      accepted += a;
+      acc_hist[a]++;
+      c = a + 1;
+      h_row0 = 0;
+      P += a + 1;
+    }
+    double td = now_ms() - ts;
+    if (Encoder::profiling()) Encoder::profile_report(cycles);
+    printf("ids:");
+    for (int t : out) printf(" %d", t);
+    printf("\n");
+    fprintf(stderr, "prompt %d tok in %.0f ms (%.1f tok/s); spec decode D=%d: %zu tok in %.0f ms (%.1f tok/s), %d cycles, %.2f tok/cycle, accepted/drafted %.2f, hist",
+            n, t_prompt, n / (t_prompt / 1000), D, out.size() - 1, td, (out.size() - 1) / (td / 1000), cycles,
+            double(out.size() - 1) / cycles, double(accepted) / (cycles * D));
+    for (int a = 0; a <= D; ++a) fprintf(stderr, " %d", acc_hist[a]);
+    fprintf(stderr, "\n");
+    return 0;
+  }
 
   // Decode: keep up to 2 command buffers in flight; the GPU writes each sampled id into the
   // token buffer, which the next step's embedding reads, so the CPU never waits per token.

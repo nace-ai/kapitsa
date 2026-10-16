@@ -4,6 +4,7 @@
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
 
+#include <deque>
 #include <memory>
 #include <string>
 #include <vector>
@@ -59,6 +60,10 @@ struct Seq {
   Buffer tok;                      // int32 [cap + 8]
   std::vector<Buffer> conv, rec;   // per layer (linear layers only)
   std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]
+  // speculative decoding: rows accepted by the last verify, not yet folded into conv/rec
+  std::vector<Buffer> pend_qkv, pend_k, pend_g, pend_d;  // per linear layer
+  int n_pend = 0;
+  Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
   int* tokens() { return tok.as<int>(); }
 };
 
@@ -96,6 +101,27 @@ class Qwen35 {
   // With `sample`, also samples tokens[pos0+T] from the last position.
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample);
   int prefill_chunk() const { return tmax_; }
+
+  // ---- speculative decoding with the model's MTP head ----
+  bool has_mtp() const { return mtp_loaded_; }
+  static constexpr int kMaxVerify = 4;  // rows per verify (pending token + up to 3 drafts)
+  // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
+  // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
+  // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
+  void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out);
+  // Trunk forward of tokens[pos .. pos+R) (R <= kMaxVerify) without committing the recurrent
+  // state: the rows go to the tape; samples() gets one sampled token per row and hidden_rows()
+  // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
+  void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
+  void commit_rows(Seq& s, int n) { s.n_pend = n; }
+  // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
+  void encode_flush(Encoder& e, Seq& s);
+  // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
+  // prefill chunk (row offset h_row0 in hidden_rows()); tokens[i + 1] must be known.
+  void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0);
+  const int* samples() { return samp_.as<int>(); }
+  Buffer hidden_rows() { return x_; }
+  Buffer mtp_post() { return mtp_post_; }
   float* logits() { return logits_.as<float>(); }
   // Debug: copy of the residual stream after the last step.
   const float* hidden() { return x_.as<float>(); }
@@ -124,7 +150,21 @@ class Qwen35 {
                    const Buffer& yrows, int P, int bm);
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
-  void enc_moe_prefill(Encoder& e, const Layer& L, int T);
+  void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  // speculative decoding helpers (qwen35_spec.cpp)
+  void load_mtp(const std::string& dir);
+  QLinear quantize8(const Tensor& w);
+  const Tensor* own_copy(const Tensor& t);
+  QLinear stack_experts(const class WeightStore& w, const std::string& prefix, const std::string& proj);
+  void enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D);
+  void enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add,
+                uint32_t x_ld = 0, uint32_t y_ld = 0);
+  // fused (norm +) projections of R rows sharing the input; falls back to separate kernels
+  void enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm, int R,
+                      const Buffer* xn_out = nullptr, std::vector<bool> add = {});
+  void enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
+                     const Buffer& x);
+  void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer);
 
   std::string dir_;
   std::string prefix_;
@@ -134,6 +174,15 @@ class Qwen35 {
   const Tensor* final_norm_ = nullptr;
   QLinear embed_, lm_head_;
   int tmax_;
+  // MTP head
+  bool mtp_loaded_ = false;
+  Layer mtp_;
+  QLinear mtp_fc_;
+  const Tensor *mtp_norm_ = nullptr, *mtp_pre_e_ = nullptr, *mtp_pre_h_ = nullptr;
+  QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
+  uint32_t draft_split_ = 0, draft_special0_ = 0;
+  std::deque<Tensor> owned_;
+  std::vector<Buffer> owned_bufs_;
 
   // state
   Buffer x_, xn_, logits_;
@@ -142,6 +191,7 @@ class Qwen35 {
   Buffer rlog_, slog_, eidx_, ewts_, eh_;
   Buffer cand_v_, cand_i_, sprob_;
   // prefill-only
+  Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
 };
 

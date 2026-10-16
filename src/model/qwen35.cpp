@@ -169,6 +169,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     fatal("decode kernels stage at most 4096 inputs");
   if (embed_.bits != 4) fatal("embedding must be 4-bit");
 
+  if (!getenv("NI_NO_MTP")) load_mtp(dir);
   Gpu::get().make_resident(ws_.buffers());
   alloc_state();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms", dir.c_str(), cfg_.layers,
@@ -183,7 +184,7 @@ void Qwen35::alloc_state() {
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
   x_ = g.alloc(size_t(T) * D * 4, "x");
   xn_ = g.alloc(size_t(D) * 4, "xn");
-  logits_ = g.alloc(size_t(cfg_.vocab) * 4, "logits");
+  logits_ = g.alloc(size_t(cfg_.vocab) * kMaxVerify * 4, "logits");
   qkv_ = g.alloc(size_t(T) * C * 4);
   zb_ = g.alloc(size_t(T) * VD * 4);
   ab_ = g.alloc(size_t(T) * cfg_.lin_hv * 4);
@@ -204,9 +205,16 @@ void Qwen35::alloc_state() {
   part_ml_ = g.alloc(size_t(cfg_.hq) * max_chunks * 2 * 4);
   eidx_ = g.alloc(64 * 4);
   ewts_ = g.alloc(64 * 4);
-  eh_ = g.alloc(size_t(cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) * 4 + 16);
-  cand_v_ = g.alloc(size_t(cfg_.vocab / 2048 + 2) * 64 * 4);
-  cand_i_ = g.alloc(size_t(cfg_.vocab / 2048 + 2) * 64 * 4);
+  eh_ = g.alloc(size_t(kMaxVerify) * (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) * 4 + 16);
+  cand_v_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
+  cand_i_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
+  mtp_e_ = g.alloc(size_t(T) * D * 4, "mtp_e");
+  mtp_u_ = g.alloc(size_t(T) * 2 * D * 4, "mtp_u");
+  mtp_x_ = g.alloc(size_t(T) * D * 4, "mtp_x");
+  mtp_post_ = g.alloc(size_t(kMaxVerify) * D * 4, "mtp_post");
+  xrn_ = g.alloc(size_t(kMaxVerify) * std::max(D, VD) * 4, "xrn");
+  samp_ = g.alloc(64, "samples");
+  dlog_ = g.alloc(size_t(cfg_.vocab) * 4, "draft_logits");
   sprob_ = g.alloc(64 * 4);
   {
     const size_t P = size_t(T) * std::max(cfg_.top_k, 1);
@@ -246,6 +254,10 @@ std::unique_ptr<Seq> Qwen35::new_seq(int cap) {
       s->kc.push_back(Buffer{});
       s->vc.push_back(Buffer{});
       bytes += s->conv.back().size + s->rec.back().size;
+      s->pend_qkv.push_back(g.alloc(size_t(kMaxVerify) * C * 4, "pend_qkv"));
+      s->pend_k.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dk * 4, "pend_k"));
+      s->pend_g.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * 4, "pend_g"));
+      s->pend_d.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dv * 4, "pend_d"));
     } else {
       size_t kvb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
       s->conv.push_back(Buffer{});
@@ -253,7 +265,17 @@ std::unique_ptr<Seq> Qwen35::new_seq(int cap) {
       s->kc.push_back(g.alloc(kvb, "k_cache"));
       s->vc.push_back(g.alloc(kvb, "v_cache"));
       bytes += 2 * kvb;
+      s->pend_qkv.push_back(Buffer{});
+      s->pend_k.push_back(Buffer{});
+      s->pend_g.push_back(Buffer{});
+      s->pend_d.push_back(Buffer{});
     }
+  }
+  if (mtp_loaded_) {
+    size_t kvb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
+    s->mtp_kc = g.alloc(kvb, "mtp_k_cache");
+    s->mtp_vc = g.alloc(kvb, "mtp_v_cache");
+    bytes += 2 * kvb;
   }
   logd("sequence: %.0f MB (KV for %d tokens)", bytes / 1e6, cap);
   reset(*s);
@@ -261,6 +283,7 @@ std::unique_ptr<Seq> Qwen35::new_seq(int cap) {
 }
 
 void Qwen35::reset(Seq& s) {
+  s.n_pend = 0;
   for (auto& b : s.conv)
     if (b) memset(b.ptr(), 0, b.size);
   for (auto& b : s.rec)
@@ -548,9 +571,9 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
   e.dispatch((L.N + 63) / 64, max_tiles, 1, 128);
 }
 
-void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T) {
+void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k;
-  enc_rows_half(e, x_, L.post_norm, xh_, T, D);
+  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_qmm(e, L.router, xh_, rlog_, T, false);
   enc_qmm(e, L.shared_gate, xh_, slog_, T, false);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
@@ -586,7 +609,7 @@ void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T) {
   enc_qmm(e, L.sd, hh_, ys_, T, false);
   kp::Combine cp{uint32_t(D), uint32_t(k)};
   e.use(pipe("moe_combine"));
-  e.buf(0, yd_); e.buf(1, ys_); e.buf(2, rwts_); e.buf(3, x_);
+  e.buf(0, yd_); e.buf(1, ys_); e.buf(2, rwts_); e.buf(3, xbuf);
   e.val(4, cp);
   e.dispatch((D / 4 + 63) / 64, T, 1, 64);
 }
@@ -652,7 +675,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
       enc_qmm(e, L.o, hh_, x_, T, true);
     }
-    if (cfg_.moe) enc_moe_prefill(e, L, T);
+    if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
     else fatal("dense MLP not implemented yet");
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);

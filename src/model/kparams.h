@@ -91,4 +91,43 @@ struct Combine {
   uint32_t D, k;
 };
 
+struct RowsNorm {
+  uint32_t D;
+  float eps;
+};
+
+struct Qmvr {
+  uint32_t N, K, R, x_ld, y_ld, add;
+};
+
+struct AttnRows {
+  uint32_t Hq, Hkv, pos0, chunk, max_seq;
+  float scale;
+  uint32_t nchunks;
+};
+
+struct MoeRowsDown {
+  uint32_t D, I, SI, k, shared_bits;
+};
+
+struct GdnVerify {
+  uint32_t R, n_pend, Hk, Hv, C;
+  float eps;
+};
+
+struct SampleRows {
+  uint32_t n, K;
+  float temp, top_p;
+  uint32_t seed, step, out_index, remap_from, remap_base;
+};
+
+struct QmvrMulti {
+  uint32_t K, R, nseg, norm, write_xn;
+  float eps;
+  uint32_t N[4];
+  uint32_t tg_begin[5];
+  uint32_t bits[4];
+  uint32_t add[4];
+};
+
 } // namespace ni::kp

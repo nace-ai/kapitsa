@@ -32,7 +32,8 @@ class WeightStore {
  public:
   using Filter = std::function<bool(const std::string&)>;
   // Loads every *.safetensors in `dir` (follows HF snapshot symlinks).
-  void open_dir(const std::string& dir, const Filter& keep = nullptr);
+  // `files` limits which *.safetensors are read (by file name); `keep` filters tensors.
+  void open_dir(const std::string& dir, const Filter& keep = nullptr, const Filter& files = nullptr);
   bool has(const std::string& name) const { return tensors_.count(name) != 0; }
   const Tensor& get(const std::string& name) const;
   const Tensor* find(const std::string& name) const;
