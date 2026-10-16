@@ -53,7 +53,9 @@ The AGX pipeline object records each kernel's temporary registers and stack spil
 qmm_tile's store loop (simdgroup_barrier inside) stays rolled for FM=2, so `acc[i][j]` is indexed
 dynamically and the whole accumulator array (plus the A fragments) lives in stack memory: m32_n64
 spills 2304 B/thread (8 x 256 B accumulators + 2 x 128 B), m32_n128 4352 B; m16/m64 tiles and
-m32_n32 do not. Full-unroll pragmas on the store loops remove it (m32_n64: 55 registers, 0 spill).
+m32_n32 do not. Full-unroll pragmas on the two store loops remove it (m32_n64: 44 registers, m32_n128:
+59, both 0 spill; m64_n64 unchanged at 56). The bench-only attn_prefill9_q8_k32 fails pipeline creation
+(33280 B threadgroup memory > 32 KB), so `ni_compile --stats` over the whole library exits 1.
 Every attention prefill kernel spills too (attn_prefill10_q4_k32: 6912 B, older variants up to
 13 KB): a likely cause of the 2x gap to MLX's steel attention. Several qmv/qmvr verify kernels hit
 the 96-register ceiling and spill 16-300 B.

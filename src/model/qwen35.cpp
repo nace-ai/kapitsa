@@ -674,8 +674,9 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   static const int bm = getenv("NI_MOE_BM") ? atoi(getenv("NI_MOE_BM")) : 64;
   constexpr int kBnGu = 32, kBnDn = 64;
   auto fits = [](const QLinear& q) { return q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0; };
-  if (!fits(G) || !fits(U) || !fits(Dn) || G.N % kBnGu || Dn.N % kBnDn || U.N != G.N || U.gs != G.gs ||
-      Dn.K != G.N || Dn.N != uint32_t(D) || (bm != 16 && bm != 32 && bm != 64)) {
+  // gate and up share K, strides and the xh_ row stride (D) in one dispatch
+  if (!fits(G) || !fits(U) || !fits(Dn) || G.N % kBnGu || Dn.N % kBnDn || U.N != G.N || U.K != G.K ||
+      U.gs != G.gs || G.K != uint32_t(D) || Dn.K != G.N || Dn.N != uint32_t(D) || (bm != 16 && bm != 32 && bm != 64)) {
     static bool warned = false;
     if (!warned) logi("NI_MOE_FUSED: layer shapes/quantization not supported, using the original MoE path");
     warned = true;
