@@ -177,6 +177,62 @@ Startup: compiling the 13-function program takes 31-40 s (MIL 115-133 KB, 13-18 
 process finds it in the ANE daemon's cache (1-3 ms) and loads it in 44-78 ms, but the daemon evicts it:
 twice today, after 10-40 minutes (other processes use the ANE too), so a cold start can pay the compile again. Row scales: 0.1 s computed, cached on disk (4-5 MB per share). Startup check 0.65-1.0 s.
 
+### Review: re-measurement and fixes (2026-10-16, 19:47-21:00; fixes 01638f7, c2de003)
+An independent re-run under the GPU lock, every run reported. `ni_run`, `NI_NO_MTP=1`, n_gen 65 with
+`--dump-all-logits` (the decode steps then run synchronously; prefill timing is unaffected). The fix builds give
+bitwise the same logits as 05da0cd in both modes (p4000 and p16000, 65 positions). Thermal state at the end of each run.
+
+| block (start) | build | prompt | GPU only | NI_ANE=1 | speedup |
+|---|---|---|---|---|---|
+| 1 (19:47) | 05da0cd | p4000 | 110.3 (45705ec: 106.8) | 317.2 (fair) | 2.88x |
+| 2 (19:59) | 05da0cd | p16000 | 95.5 | 266.5 (fair) | 2.79x |
+| 3 (20:11, reversed; after another agent's run) | 05da0cd | p4000 | 89.6 (45705ec: 93.7) | 239.0 (fair) | 2.67x |
+| 4 (20:14, reversed) | 05da0cd | p16000 | 97.5 | 234.3 (fair) | 2.40x |
+| 5 (20:41) | 01638f7 | p4000 / p16000 | 116.6 / 109.9 | 338.6 (nominal) / 304.5 (fair) | 2.90x / 2.77x |
+| 6 (20:47, reversed) | 01638f7 | p16000 / p4000 | 110.6 / 111.9 | 270.7 / 307.6 (fair) | 2.45x / 2.75x |
+| 7 (20:55) | c2de003 | p4000 / p16000 | 119.7 / 107.4 | 330.2 (nominal) / 289.9 (fair) | 2.76x / 2.70x |
+
+Other runs: plain split (`NI_ANE_WAVE=0`, 27 units) p4000 228.4; p1000 338.2 vs 116.3 GPU only; p2348 (a 2048-row
+wavefront chunk, then 300 rows on the GPU) 268.3 vs 118.0; p2650 (then a 602-row plain split) 280.7 vs 116.2;
+`NI_CHUNK=1024` p4000 324.7 / 331.9 vs 119.5; `ane_calib --wave --units 33,34 --reps 1` (c2de003's rebuild path):
+GPU alone 113.0, 33 units 286.6, 34 units 308.1 tok/s per 2048-row chunk.
+
+KL(GPU only || NI_ANE=1) over the last prompt position + 64 greedy steps. The noise floor is the GPU alone with
+`NI_MATH_SAFE=1` against the default (fast-math) build:
+| case | KL mean / median / max | greedy tokens |
+|---|---|---|
+| p4000, wavefront 34 units | 1.36e-5 / 7.2e-7 / 2.9e-4 | 65/65 |
+| p4000, plain 27 units | 9.1e-6 / 4.5e-7 / 1.6e-4 | 65/65 |
+| p1000 (halves of 512 and 488 rows) | 5.8e-5 / 3.4e-6 / 9.1e-4 | 65/65 |
+| p2348 / p2650 | 3.4e-5 / 3.3e-6 / 3.3e-4; 1.6e-4 / 2.6e-5 / 2.4e-3 | 65/65; 65/65 |
+| p16000 | last prompt position 2.5e-8; the 42 steps before the divergence 1.4e-4 / 2.5e-5 / 1.8e-3 | 43 of 65: step 43 is a near-tie (0.439 vs 0.412; 0.463 vs 0.403 with the ANE), KL 5.3e-3 |
+| noise floor p4000 | 2.5e-8 / 6.6e-10 / 6.6e-7 | 65/65 |
+| noise floor p16000 | last prompt position 4.1e-12 | 6 of 65 (step 6: top-1 p 0.31) |
+So W8A8 on the whole FFN costs about 550x the GPU's own rounding noise in mean KL at 4k (still below the 1e-4 gap
+between the default build and MLX bf16), some low-confidence positions exceed 1e-3, and greedy tokens are not always
+identical: on p16000 they split at a near-tie, which the GPU alone with exact math already splits at step 6.
+Default path bitwise equal to 45705ec. NI_ANE=1 is bitwise reproducible run to run and across chunk sizes
+(`NI_CHUNK=1024` = 2048). Fault injection: `ni_run` p4000 bitwise equal to the GPU alone over 65 positions; server
+(one 4,568-token request, MTP on): GPU only 44.7 s, `NI_ANE=1 NI_ANE_FAULT=10` 51.2 s with the identical reply
+(the engine's rerun path).
+
+Checked with small Metal programs under the lock: a command buffer blocked in `encodeWaitForEvent` holds back the
+later command buffers of the same queue, even independent ones (so `stage_layer`, which overwrites a weight set at the
+start of the command buffer after the one that waited for that set's last ANE job, is ordered); an `MTLResidencySet`
+keeps a released buffer alive and resident until it is removed; a buffer allocated without an autorelease pool is
+never freed. Fixed:
+* `Gpu::release` now removes the buffer from the residency set (01638f7), and `Gpu::alloc`/`wrap` run in their own
+  autorelease pool (c2de003). Before, an `FfnSplit` teardown (a failed startup check, `ane_calib` rebuilds) freed
+  nothing. With `NI_ANE_FAULT=0` (the check fails, GPU only), Metal at the end: 18,197 MB before, 17,442 MB after,
+  the same as without NI_ANE. A normal NI_ANE=1 run now also frees the check's 126 MB of scratch buffers: process
+  footprint at p4000 17,838 MB (was 17,964).
+* An `FfnSplit` constructor that fails after allocating (program compile/load, bindings) frees what it made.
+* The startup check and `ane_bench` used 2048 rows whatever the prefill chunk: with `--prefill-chunk`/`NI_CHUNK`
+  below 2048 the GPU wrote up to 71 MB past `hg_`, `hu_` and `hhalf_` (silent in the `NI_CHUNK=1024` run). They now
+  stay within the chunk; a chunk below the split's minimum turns NI_ANE off, and chunks above 2048 rows are logged
+  as GPU-only.
+* The check's scratch buffers on its failure path, and `ane_bench_chunk`'s per-call sequence, are released.
+
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
 `ni_kstats --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
