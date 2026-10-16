@@ -27,6 +27,30 @@ static std::string random_id(const char* prefix) {
   return s;
 }
 
+// Whether the conversation ends with a user query, by the Qwen3.5+ template's own test: a user message
+// whose trimmed text is not wrapped in <tool_response> ... </tool_response>. Tool results (role "tool",
+// rendered inside a user turn, or such a wrapped user message) are not queries.
+static bool ends_with_query(const ojson& messages) {
+  if (!messages.is_array() || messages.empty()) return false;
+  const ojson& m = messages.back();
+  if (!m.is_object() || m.value("role", "") != "user") return false;
+  std::string text;
+  if (m.contains("content") && m["content"].is_string()) {
+    text = m["content"].get<std::string>();
+  } else if (m.contains("content") && m["content"].is_array()) {
+    for (auto& part : m["content"]) {
+      if (!part.is_object() || !part.contains("text") || !part["text"].is_string()) return true;  // image, video
+      text += part["text"].get<std::string>();
+    }
+  }
+  const size_t a = text.find_first_not_of(" \n\r\t"), b = text.find_last_not_of(" \n\r\t");
+  if (a == std::string::npos) return true;
+  static const std::string open = "<tool_response>", close = "</tool_response>";
+  const bool wrapped = b + 1 - a >= open.size() + close.size() && text.compare(a, open.size(), open) == 0 &&
+                       text.compare(b + 1 - close.size(), close.size(), close) == 0;
+  return !wrapped;
+}
+
 Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
@@ -53,8 +77,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   auto add_slot = [&](int cap) {
     Slot s;
     s.seq = model_->new_seq(cap);
-    s.ckpts.push_back(model_->new_checkpoint());
-    s.ckpts.push_back(model_->new_checkpoint());
+    s.ckpts.push_back({model_->new_checkpoint()});
+    s.ckpts.push_back({model_->new_checkpoint()});
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
@@ -319,7 +343,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (common == slot.tokens.size() && int(common) < n) {
     start = int(common);  // live state continues
   } else {
-    const Checkpoint* best = nullptr;
+    const TurnCheckpoint* best = nullptr;
     for (auto& c : slot.ckpts)
       if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
     if (best) {
@@ -328,6 +352,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     } else {
       model_->reset(s);
     }
+    logd("checkpoints: prompt diverges at %zu of %d, %s", common, n,
+         best ? (std::string("restored ") + (best->query ? "query" : "tool") + " checkpoint at " +
+                 std::to_string(best->pos)).c_str()
+              : "none usable, prefill from 0");
   }
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
@@ -345,10 +373,24 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const int C = model_->prefill_chunk();
   int p = start;
   int last_chunk_row = 0;
-  auto oldest_ckpt = [&]() {
-    Checkpoint* c = &slot.ckpts[0];
+  // The checkpoint this request's turn boundary overwrites: an invalid one, else the oldest.
+  // NI_QUERY_CKPT=1: checkpoints saved at a user query are overwritten after all others. The template
+  // renders the assistant turns after the last user query with their reasoning and those before it
+  // without, so when the next query arrives, the prompt diverges from the live state right after the
+  // previous query: only that query's checkpoint can be restored. Every request of a tool loop saves a
+  // checkpoint at its tool response, and with "oldest first" two tool calls evicted the query's, so the
+  // next query re-prefilled the whole conversation. Kept this way: the newest query checkpoint and the
+  // newest one (the tool response a tool loop's next request restores when it diverges).
+  static const bool keep_query = env_on("NI_QUERY_CKPT");
+  const bool query = ends_with_query(r.messages);
+  auto victim = [&]() {
+    auto rank = [&](const TurnCheckpoint& k) { return k.pos < 0 ? 0 : keep_query && k.query ? 2 : 1; };
+    TurnCheckpoint* c = &slot.ckpts[0];
     for (auto& k : slot.ckpts)
-      if (k.pos < c->pos) c = &k;  // overwrite the oldest / invalid one
+      if (rank(k) < rank(*c) || (rank(k) == rank(*c) && k.pos < c->pos)) c = &k;
+    logd("checkpoints: %s boundary at %d overwrites %s", query ? "query" : "tool", boundary,
+         c->pos < 0 ? "an empty one" : (std::string(c->query ? "query" : "tool") + " at " + std::to_string(c->pos)).c_str());
+    c->query = query;
     return c;
   };
   // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
@@ -360,7 +402,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (boundary > p && boundary < p + T) {
       // NI_SHORTPF captures the checkpoint inside the pass; a chunk the NI_ANE split would run is cut at
       // the boundary instead (the split's two-half wavefront does not capture mid-chunk state).
-      if (in_pass && !model_->ane_splits(T)) snap = oldest_ckpt();
+      if (in_pass && !model_->ane_splits(T)) snap = victim();
       else T = boundary - p;
     }
     // NI_ANE=1: a chunk that runs the GPU + Neural Engine FFN split saves the recurrent state and
@@ -386,7 +428,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     last_chunk_row = n - 1 - p;
     p += T;
-    if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);
+    if (p == boundary) model_->save(*e, s, *victim(), boundary);
     e->commit();
     if (p < n) e = g.begin();
   }

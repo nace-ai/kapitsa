@@ -74,10 +74,15 @@ class Engine {
   ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta);
 
  private:
+  // Recurrent-state snapshot at a turn boundary. `query`: the request that saved it ended with a user
+  // query (not a tool response); NI_QUERY_CKPT keeps those through tool loops (see Engine::chat).
+  struct TurnCheckpoint : Checkpoint {
+    bool query = false;
+  };
   struct Slot {
     std::unique_ptr<Seq> seq;
-    std::vector<int> tokens;          // tokens whose effect is in the live state
-    std::vector<Checkpoint> ckpts;    // recurrent-state snapshots
+    std::vector<int> tokens;             // tokens whose effect is in the live state
+    std::vector<TurnCheckpoint> ckpts;   // recurrent-state snapshots
     uint64_t last_used = 0;
   };
   Slot& pick_slot(const std::vector<int>& prompt);
