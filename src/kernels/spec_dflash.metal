@@ -967,7 +967,8 @@ struct DflTopParams {
   uint ld;       // row stride of src
   uint nchunks;  // threadgroups per row (2048 elements each)
 };
-// grid (nchunks, rows) x 256. out[(r * nchunks + chunk) * 16 + q], ordered. ids: src_id or index.
+// grid (nchunks, rows) x 256. out[(r * nchunks + chunk) * 16 + q], ordered. ids: has_id 0 = the index,
+// 1 = src_id[r * ld + k], 2 = src_id[k] (one id map for every row: a reduced draft head's token ids).
 [[kernel]] void dfl_top16(const device float* src [[buffer(0)]], const device uint* src_id [[buffer(1)]],
                           device float* ov [[buffer(2)]], device uint* oi [[buffer(3)]],
                           constant DflTopParams& p [[buffer(4)]], constant uint& has_id [[buffer(5)]],
@@ -983,7 +984,7 @@ struct DflTopParams {
     const uint k = base + j;
     const bool ok = k < p.n;
     v[j] = ok ? src[size_t(r) * p.ld + k] : -INFINITY;
-    id[j] = ok ? (has_id ? src_id[size_t(r) * p.ld + k] : k) : 0xffffffffu;
+    id[j] = ok ? (has_id == 2 ? src_id[k] : has_id ? src_id[size_t(r) * p.ld + k] : k) : 0xffffffffu;
   }
   dfl_sort8(v, id);
   float bv;
@@ -1040,12 +1041,15 @@ struct DflTopParams {
 
 struct DflSelectParams {
   uint P;          // anchor position: tokens[P] is the anchor
-  float temp;      // 0: greedy walk
+  float temp;      // 0: greedy walk (greedy acceptance)
   uint seed;
   uint out_index;  // tokens[out_index + p] = d_p
+  float qtemp;     // temp > 0: the walk's own temperature T_q (0: argmax walk, q = one-hot)
 };
 // The walk over the lattice: S_p[k] = U_p[k] + E[p][j_p][k]; greedy = first argmax; sampled = first k
-// with cumsum softmax(S_p / T) > u (else 15), q_p stored for the acceptance test. One thread.
+// with cumsum softmax(S_p / T_q) > u (else 15), q_p stored for the acceptance test. One thread.
+// T_q is a free choice (the acceptance only needs q_p to be exactly the law d_p was drawn from); the
+// spec's T_q = T is the default, T_q = 0 drafts the argmax chain with q = one-hot (accept iff u < p(d)).
 [[kernel]] void dfl_walk(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
                          const device float* E [[buffer(2)]], device int* tokens [[buffer(3)]],
                          device float* walk_s [[buffer(4)]], device float* qprob [[buffer(5)]],
@@ -1066,10 +1070,12 @@ struct DflSelectParams {
         kb = k;
       }
     }
-    if (p.temp > 0.0f) {
+    if (p.temp > 0.0f && !(p.qtemp > 0.0f)) {  // argmax chain, q = point mass on it
+      for (uint k = 0; k < 16; ++k) qprob[pp * 16 + k] = k == kb ? 1.0f : 0.0f;
+    } else if (p.temp > 0.0f) {
       float q[16], tot = 0.0f;
       for (uint k = 0; k < 16; ++k) {
-        q[k] = metal::precise::exp((S[k] - mx) / p.temp);
+        q[k] = metal::precise::exp((S[k] - mx) / p.qtemp);
         tot += q[k];
       }
       const float u = dfl_uniform(p.seed, P + 1 + pp, kDflSaltWalk);

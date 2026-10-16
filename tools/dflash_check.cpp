@@ -244,6 +244,8 @@ int main(int argc, char** argv) {
     else fatal("unknown option %s", a.c_str());
   }
   setvbuf(stdout, nullptr, _IOLBF, 0);
+  // the oracle dumps hold full-vocabulary draft logits and top-16 sets: always the full draft head here
+  setenv("NI_DFLASH_HEAD", "0", 1);
   Gpu& g = Gpu::get();
   Qwen35 tgt(tdir, 2048);
   DFlash2 dr(tgt, ddir, bits);

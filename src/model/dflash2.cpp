@@ -306,6 +306,11 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
   }
   alloc_buffers();
+  {  // reduced draft head: NI_DFLASH_HEAD=n (0 = full vocabulary); by default kHeadRows when a ranked list exists
+    const char* v = getenv("NI_DFLASH_HEAD");
+    if (v && *v) build_head(atoi(v), true);
+    else build_head(kHeadRows, false);
+  }
   Gpu::get().make_resident(owned_bufs_);
   // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
   // union, the 35B verify's main cost, shrinks with the rows (35B, 512 tokens: code +7%, prose +20% over
@@ -320,6 +325,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
+  if (const char* v = getenv("NI_DFLASH_QT")) walk_tf_ = std::max(0.0f, float(atof(v)));
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
@@ -387,6 +393,66 @@ void DFlash2::alloc_buffers() {
                     &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
                     &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_, &kdyn_, &gst_})
     resident_ += b->size;
+}
+
+void DFlash2::build_head(int n_req, bool explicit_n) {
+  const uint32_t V = uint32_t(cfg_.vocab);
+  if (n_req <= 0 || uint32_t(n_req) >= V) return;
+  const QLinear& H = tg_.lm_head();
+  std::vector<uint32_t> ranked;
+  const std::string path = getenv("NI_DFLASH_HEAD_IDS") && *getenv("NI_DFLASH_HEAD_IDS") ? getenv("NI_DFLASH_HEAD_IDS")
+                                                                                      : dir_ + "/head-ranked.u32";
+  if (std::ifstream f{path, std::ios::binary}) {
+    f.seekg(0, std::ios::end);
+    ranked.resize(size_t(f.tellg()) / 4);
+    f.seekg(0);
+    f.read(reinterpret_cast<char*>(ranked.data()), std::streamsize(ranked.size() * 4));
+  }
+  // without a ranked list only an explicit NI_DFLASH_HEAD builds one (in id order, which drafts worse: 27B
+  // code_27b 512 at 65536 rows 4.52 tok/cycle vs 4.78 for the full head or a frequency-ranked 65536)
+  if (ranked.empty() && !explicit_n) return;
+  const auto& eos = tg_.config().eos;
+  const uint32_t special0 = eos.empty() ? V : uint32_t(*std::min_element(eos.begin(), eos.end()));
+  const size_t n = std::max<size_t>(size_t(n_req), V - std::min(special0, V));
+  std::vector<char> in(V, 0);
+  std::vector<uint32_t> ids;
+  ids.reserve(n);
+  auto add = [&](uint32_t t) {
+    if (t < V && !in[t] && ids.size() < n) {
+      in[t] = 1;
+      ids.push_back(t);
+    }
+  };
+  for (uint32_t t = special0; t < V; ++t) add(t);  // added/special tokens (and the padding rows past them)
+  for (uint32_t t : ranked) add(t);
+  for (uint32_t t = 0; t < V && ids.size() < n; ++t) add(t);  // no list (or a short one): id order
+  std::sort(ids.begin(), ids.end());
+  const size_t wrow = size_t(H.K) * H.bits / 8, srow = size_t(H.K / H.gs) * 2;
+  Gpu& g = Gpu::get();
+  Buffer w = g.alloc(ids.size() * wrow, "dfl_head_w", false), sc = g.alloc(ids.size() * srow, "dfl_head_s", false),
+         bi = g.alloc(ids.size() * srow, "dfl_head_b", false);
+  head_ids_ = g.alloc(ids.size() * 4, "dfl_head_ids", false);
+  for (size_t i = 0; i < ids.size(); ++i) {
+    memcpy(w.as<uint8_t>() + i * wrow, H.w->buf.as<uint8_t>() + size_t(ids[i]) * wrow, wrow);
+    memcpy(sc.as<uint8_t>() + i * srow, H.s->buf.as<uint8_t>() + size_t(ids[i]) * srow, srow);
+    memcpy(bi.as<uint8_t>() + i * srow, H.b->buf.as<uint8_t>() + size_t(ids[i]) * srow, srow);
+    head_ids_.as<uint32_t>()[i] = ids[i];
+  }
+  for (Buffer* b : {&w, &sc, &bi, &head_ids_}) {
+    owned_bufs_.push_back(*b);
+    resident_ += b->size;
+  }
+  head_sub_ = H;
+  owned_.push_back(Tensor{w, H.w->dtype, {int64_t(ids.size()), int64_t(wrow / 4)}});
+  head_sub_.w = &owned_.back();
+  owned_.push_back(Tensor{sc, H.s->dtype, {int64_t(ids.size()), int64_t(H.K / H.gs)}});
+  head_sub_.s = &owned_.back();
+  owned_.push_back(Tensor{bi, H.b->dtype, {int64_t(ids.size()), int64_t(H.K / H.gs)}});
+  head_sub_.b = &owned_.back();
+  head_sub_.N = uint32_t(ids.size());
+  head_n_ = uint32_t(ids.size());
+  logi("DFlash2: reduced draft head, %u of %u ids (%s), %.0f MB", head_n_, V,
+       ranked.empty() ? "id order" : path.c_str(), (w.size + sc.size + bi.size) / 1e6);
 }
 
 std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
@@ -687,6 +753,10 @@ void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
   // m < 0: GPU-driven (rows and positions from the drafter state; d.ctx is advanced by the caller)
   const bool gpu = m < 0;
   if (!gpu && (m < 1 || m > kB)) fatal("DFlash2 commit: m=%d", m);
+  if (v8_knobs().skip & 16384) {  // timing only (V8Knobs::skip)
+    if (!gpu) d.ctx += m;
+    return;
+  }
   const uint32_t H = uint32_t(cfg_.H), nH = hook_vf_.ld;
   {
     kp::DflX8 p{nH, gpu ? 0xffffffffu : uint32_t(m), nH, 1.0f / 16.0f};
@@ -774,18 +844,22 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     nsplit = (kCtxKeep + kGpuChunk - 1) / kGpuChunk;  // grid for the full window; empty splits exit
   }
   const kp::DflConv cp{H, G, cfg_.eps};
+  const int skip = v8_knobs().skip;  // timing only: 1024 MLP gate/up, 2048 MLP down, 4096 LM head, 8192 projections
+  auto proj = [&](const std::vector<DflSeg8>& segs, uint32_t K) {  // conv / attention projections
+    if (!(skip & 8192)) enc_qmm8(e, segs, xh_, xs_, K, K);
+  };
   for (uint32_t l = 0; l < NL; ++l) {
     const DLayer& Ly = layers_[l];
     const std::string sfx = "_" + std::to_string(l);
     dbg(e, "n" + sfx, n_, size_t(8) * H * 4);
-    enc_qmm8(e, {{&Ly.ac, dyn_, 4 * G, 1.0f}}, xh_, xs_, H, H);
+    proj({{&Ly.ac, dyn_, 4 * G, 1.0f}}, H);
     dbg(e, "D" + sfx, dyn_, size_t(8) * 4 * G * 4);
     e.use(dpipe("dfl_conv_prep"));
     e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.ac_base->buf); e.buf(3, xh_); e.buf(4, xs_);
     e.val(5, cp);
     e.dispatch(8, 1, 1, 256);
     dbg(e, "a" + sfx, xh_, size_t(8) * H * 2);
-    enc_qmm8(e, {{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, xh_, xs_, H, H);
+    proj({{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, H);
     {
       kp::DflQk p{uint32_t(P), cfg_.eps, 4096, 2048};
       e.use(dpipe("dfl_qk_prep"));
@@ -818,7 +892,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
       e.dispatch(32, 8, 1, 128);
     }
     dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
-    enc_qmm8(e, {{&Ly.o, u_, H, 1.0f}}, xh_, xs_, 4096, 4096);
+    proj({{&Ly.o, u_, H, 1.0f}}, 4096);
     dbg(e, "u" + sfx, u_, size_t(8) * H * 4);
     e.use(dpipe("dfl_conv_fin_norm"));
     e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.ac_base->buf); e.buf(4, Ly.post_w->buf);
@@ -827,7 +901,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.dispatch(8, 1, 1, 256);
     dbg(e, "h_mid" + sfx, h_, size_t(8) * H * 4);
     dbg(e, "n2" + sfx, n_, size_t(8) * H * 4);
-    enc_qmm8(e, {{&Ly.mc, dyn_, 4 * G, 1.0f}}, xh_, xs_, H, H);
+    proj({{&Ly.mc, dyn_, 4 * G, 1.0f}}, H);
     dbg(e, "D2" + sfx, dyn_, size_t(8) * 4 * G * 4);
     e.use(dpipe("dfl_conv_prep"));
     e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.mc_base->buf); e.buf(3, xh_); e.buf(4, xs_);
@@ -836,7 +910,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     dbg(e, "mm" + sfx, xh_, size_t(8) * H * 2);
     if (v8_) {  // the target's verify GEMMs (same math; the sums layout is shared, only the table permutes)
       enc_to_v8(e, xh_, H, v8t_);
-      tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, xs_, v8h_, v8hs_);
+      if (!(skip & 1024)) tg_.enc_gu8(e, Ly.gate, Ly.up, v8t_, xs_, v8h_, v8hs_);
       if (debug_) {
         kp::DflPerm pp{I};
         e.use(dpipe("dfl_v8_to_x8"));
@@ -845,7 +919,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
         e.dispatch((I / 64 + 7) / 8, 1, 1, 256);
       }
       dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
-      tg_.enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
+      if (!(skip & 2048)) tg_.enc_qmm8(e, {{&Ly.down, u_, H, false}}, 8, v8h_, v8hs_);
     } else {
       enc_qmm8_gu(e, Ly.gate, Ly.up, xh_, xs_);
       dbg(e, "hgu" + sfx, hh_, size_t(8) * I * 2);
@@ -862,15 +936,19 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   }
   dbg(e, "hn", n_, size_t(8) * H * 4);
   // target LM head (fp32 logits, all 8 rows; row 0 is never used) + selector hidden
-  if (v8_ && tg_.lm_head().bits == sel_w_.bits) {
+  const QLinear& head = draft_head();
+  const uint32_t Vd = draft_vocab();  // draft logit columns: the vocabulary or the reduced head
+  if (skip & 4096) {
+  } else if (v8_ && head.bits == sel_w_.bits) {
     enc_to_v8(e, xh_, H, v8t_);
-    tg_.enc_qmm8(e, {{&tg_.lm_head(), logits_, V, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
+    tg_.enc_qmm8(e, {{&head, logits_, Vd, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
   } else {
-    enc_qmm8(e, {{&tg_.lm_head(), logits_, V, 1.0f}, {&sel_w_, sel_, uint32_t(kRank), 1.0f}}, xh_, xs_, H, H);
+    enc_qmm8(e, {{&head, logits_, Vd, 1.0f}, {&sel_w_, sel_, uint32_t(kRank), 1.0f}}, xh_, xs_, H, H);
   }
-  const uint32_t ntg = (V + 2047) / 2048;
+  const uint32_t ntg = (Vd + 2047) / 2048;
   static const bool old_topk = getenv("NI_DFLASH_TOPK") && atoi(getenv("NI_DFLASH_TOPK")) == 0;
   if (old_topk) {  // reference path: 16 rounds of threadgroup argmax per stage
+    if (head_n_) fatal("NI_DFLASH_TOPK=0 needs the full draft head (NI_DFLASH_HEAD=0)");
     kp::TopkStage ts{V, 16, 2048};
     e.use(dpipe("topk_stage1_rows"));
     e.buf(0, logits_, size_t(V) * 4); e.buf(1, tk_v_); e.buf(2, tk_i_);
@@ -882,10 +960,10 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.val(4, p);
     e.dispatch(7, 1, 1, 256);
   } else {
-    kp::DflTop p1{V, V, ntg};
-    const uint32_t no = 0, yes = 1;
+    kp::DflTop p1{Vd, Vd, ntg};
+    const uint32_t no = head_n_ ? 2u : 0u, yes = 1;  // stage 1 ids: the index, or the reduced head's id map
     e.use(dpipe("dfl_top16"));
-    e.buf(0, logits_, size_t(V) * 4); e.buf(1, tk_i_); e.buf(2, tk_v_); e.buf(3, tk_i_);
+    e.buf(0, logits_, size_t(Vd) * 4); e.buf(1, head_n_ ? head_ids_ : tk_i_); e.buf(2, tk_v_); e.buf(3, tk_i_);
     e.val(4, p1);
     e.val(5, no);
     e.dispatch(ntg, 7, 1, 256);
@@ -902,7 +980,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.val(6, Pk);
     e.buf(7, gst_);
     e.dispatch(7, 1, 1, 256);
-    kp::DflSelect p{Pk, sp.temperature, sp.seed, uint32_t(P + 1)};
+    kp::DflSelect p{Pk, sp.temperature, sp.seed, uint32_t(P + 1), sp.temperature * walk_tf_};
     e.use(dpipe("dfl_walk"));
     e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, s.tok); e.buf(4, walk_s_); e.buf(5, qprob_);
     e.buf(6, walk_k_);

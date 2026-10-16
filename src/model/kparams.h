@@ -220,6 +220,7 @@ struct DflSelect {
   uint32_t P;
   float temp;
   uint32_t seed, out_index;
+  float qtemp;  // the walk's temperature at temp > 0 (0: argmax walk, one-hot q)
 };
 
 struct DflDist {
@@ -249,6 +250,7 @@ struct X8Prep {
   uint32_t K, R, x_ld, norm, write_xn;
   float eps;
   uint32_t xn_ld, write_lo;
+  uint32_t unroll;  // x8_prep2 norm: 4 independent sum-of-squares chains
 };
 
 struct Qmm8 {
@@ -261,6 +263,10 @@ struct Qmm8 {
 
 struct Qmm8Gu {
   uint32_t K, N, w_stride, s_stride, moe, h_stride, hs_stride;
+};
+
+struct SwigluX8 {
+  uint32_t K, R;
 };
 
 struct Moe8Plan {

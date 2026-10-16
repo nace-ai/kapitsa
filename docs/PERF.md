@@ -516,3 +516,135 @@ Open: the 27B cycle at a ~4k context is 90.6 ms (target 88; 86.4-86.8 at 85 + 51
 attention outputs from their kernels: ~64 dispatches per verify). The GPU-driven drafting pass splits the attention
 context in fixed 256-key chunks (the host-driven plan balances them; same math, other fp32 rounding). The drafter's
 target-LM-head pass is ~40% of a 27B pass and ~45% of a 35B pass.
+
+## 27B DFlash2 cycle (opt/dfl27 = 4cdc5a0 + the changes below)
+
+Goal: Qwen3.8-27B decode with DFlash2 clearly faster than Splash, greedy and T = 0.6. Every number under the GPU lock;
+the Mac's speed drifted by up to ~15% between sessions (other agents' jobs, thermals), so changes were measured with
+`ni_run ... NI_AB=<knobs>` (below: two kernel settings alternate per decode cycle inside one run, so both see the same
+GPU state; GPU ms per cycle by parity, 53 cycles each) and base vs new as interleaved separate runs.
+
+**Result** (ni_run `code_27b`, 512 tokens, `--ignore-eos`, one session, base = 4cdc5a0 with only `NI_SEED` added to
+ni_run, runs interleaved):
+
+| | base 4cdc5a0 | opt/dfl27 | |
+|---|---:|---:|---:|
+| 27B greedy, tok/s (3 runs) | 51.8 / 54.7 / 54.7 | **61.7 / 60.4 / 61.8** | +14.2% |
+| 27B greedy, GPU ms / cycle | 88.8 (mean) | 77.8 | 4.776 tok/cycle both |
+| 27B T = 0.6, 10 seeds (42, 1-9), mean tok/s | 53.3 (46.7-59.4) | **60.6** (52.8-65.2) | +13.7% |
+| 27B T = 0.6, seed 42 (PERF's single seed) | 46.7 (4.154 tok/cycle) | 59.3 (4.604 tok/cycle) | other text |
+| 27B T = 0.6, GPU ms / cycle | 88.4 | 78.3 | |
+
+This session's base ran 2.5% below the "DFlash2 decode loop" table above (55.0-55.2 greedy); scaled to that state the
+new greedy is ~62.9 tok/s. Splash on this Mac: 54.7 tok/s on the same ids (SPLASH_RUN.md), 57.7 greedy / 55.2 T = 0.6
+through the server harness.
+
+35B (`code_35b`, same session, interleaved; every change below applies to its dense GEMMs, expert gate/up tiles, GDN
+step and draft head):
+
+| | base 4cdc5a0 | opt/dfl27 | |
+|---|---:|---:|---:|
+| 35B greedy, tok/s (3 runs) | 158.6 / 157.9 / 154.3 | **167.7 / 168.8 / 170.3** | +7.3% |
+| 35B greedy, GPU ms / cycle, tok/cycle | 21.4-22.0, 3.407 | 19.7-20.0, 3.362 | |
+| 35B T = 0.6, 14 seeds (1-14), mean tok/s | 154.5 (tok/cycle 3.552, 22.95 ms) | **163.5** (3.487, 21.29 ms) | +5.8% |
+| 35B T = 0.6, seed 42 (3 runs) | 149.7 / 150.6 / 150.0 (3.500) | 136.0 / 136.4 / 136.3 (2.887) | other text |
+
+At seed 42 the new verify numerics draw another text, one with lower acceptance: the new build with the full draft
+head gives 2.903 tok/cycle there (so not the head), and with every new knob at its old value and the full head it
+reproduces the base's output bit for bit (seed 42 T = 0.6: 3.500 tok/cycle, 146 cycles; also 27B code T = 0.6 and 35B
+p4000 greedy: identical outputs). Over 14 other seeds tokens per cycle are within 2% and decode +5.8%.
+
+**T = 0.6 vs greedy (lead 1).** No sampled-path overhead to remove: GPU ms per cycle is the same at T = 0.6 and T = 0
+(98.64 vs 98.57 ms in one session; the sampled-only kernels, stage-1 top-20 + `dfl_dist_rows` + the residual draw, cost
+~0.05 ms in the pipeline: a top-32 stage 1 from sorted runs and simdgroup selection, ids identical, measured -0.05 ms
+and was dropped). The 13% gap of the table above is the text seed 42 happens to draw: tokens per cycle at T = 0.6 over
+seeds 1-6 are 4.60 / 4.87 / 5.01 / 4.37 / 5.01 / 4.91 (mean 4.80, greedy 4.78); over seeds 42 + 1-9 above 4.72 (base)
+and 4.74 (new). The walk's temperature is a free choice (the acceptance only needs q = the law d was drawn from;
+`NI_DFLASH_QT` = T_q / T): T_q = 0.5 T gave 4.53 and the argmax chain (q one-hot) 4.42 over the same 6 seeds, so q =
+softmax(S / T) (the spec, Splash, z-lab) stays the default.
+
+**Reduced draft head (lead 3).** The drafter's top-16 now comes from the target LM head rows of the 65536 highest
+ranked ids plus every id >= the first end-of-sequence id (added tokens and padding rows), gathered at load into its own
+4-bit matrix (189 MB on the 27B, 75 MB on the 35B); the ids map back in `dfl_top16` (shared id map). Only the drafts
+change; the verify always uses the full head. Ranking: Pulsar 1.1.7's `data/head-ranked.u32` (248320 ids, specials first,
+then by frequency; Apache-2.0, sha256 9eca7a0f...c2c5), read from `<drafter>/head-ranked.u32` or `NI_DFLASH_HEAD_IDS`;
+installed next to both drafters on this Mac. Without a list the full head is used (`NI_DFLASH_HEAD=n` forces n rows, in
+id order without a list). Greedy 512 tokens, tok/cycle (tok/s), one session per model:
+
+| rows | 27B code | 27B prose | 27B p700 | 35B code | 35B prose | 35B p700 |
+|---|---|---|---|---|---|---|
+| full 248320 | 4.776 | 2.555 (32.0) | 5.162 (61.8) | 3.430 (160.5) | 2.433 (126.3) | 4.154 (179.9) |
+| 98304 | 4.776 | 2.555 (32.9) | 5.162 (63.1) | 3.430 (167.9) | 2.433 (130.1) | 4.154 (186.7) |
+| **65536 (default)** | 4.776 | 2.568 (33.2) | 5.162 (63.7) | 3.362 (166.1) | 2.410 (131.2) | 4.154 (189.6) |
+| 49152 | 4.776 | 2.481 (32.1) | 5.059 (62.8) | 3.362 (166.9) | 2.231 (123.9) | 4.121 (189.8) |
+| 32768 | 4.645 | | | | | |
+| id order 65536 / 32768 | 4.522 / 4.258 | | | | | |
+
+27B code: GPU ms per cycle 110.1 / 106.3 / 104.9 / 103.7 / 103.1 for full / 98k / 65k / 49k / 32k in a slow session
+(-5.2 ms at 65k; ~-3 ms in normal sessions). D1 (`dflash_check`) forces the full head.
+
+**8-row verify GEMMs (lead 2).** `bench_v8 cmp <N> <K> <reps> <kernel[:nf:cs:ks]> ...` alternates kernels on the same
+rotating ~1 GB of weights (min / median of 12); then each change by `NI_AB` in the real loop (B - A, ms per cycle):
+* **CM 1, exact subnormal code operands** (`V8Knobs::cm`, `qmm8sn*`): the MMA's A operand is the bare code `q` read as
+  a half subnormal (`q * 2^-24`, exact; Apple's half MMA keeps subnormals), the epilogue scales by `s * 2^24`. One
+  integer op fewer per MMA (no OR) and no `1024 * sum(x)` term to cancel: GEMM error vs fp64 2-5e-7 instead of 2-3e-5;
+  teacher-forced 27B verify vs plain decode: max |logit diff| at the plain argmax 0.025 instead of 0.051, max over the
+  vocabulary 0.062 instead of 0.126. -0.67 / -0.80 ms.
+* **Two groups per inner step** (`pair`, `qmm8snb*`): the scale and bias of groups g, g+1 in one 4-byte load each, half
+  the loop iterations. -0.94 / -0.74 ms (needs an even number of groups per row).
+* **Tiling** (`kplan`): 8 k-slices x 1 column block per threadgroup whenever a slice keeps >= 8 groups (K >= 4096), 16
+  k-slices (512 threads, `qmm8snb16`) for K >= 16384. cmp (us, cs1/ks8 vs the cs2/ks4 plan): gate+up 427 vs 446, GDN
+  in_proj 209 vs 223, attention o 84 vs 88, LM head 3038 vs 3103, down 232 (ks16) / 240 (ks8) vs 256. Back to the old
+  plan: +3.9 ms (ks8 instead of ks16 for down: +0.2 / +0.3 ms). The 35B's shapes keep their plans (K = 2048) except
+  the K = 4096 ones, which already ran 8 x 1.
+* **MLP gate/up as two GEMM segments** (`gusplit`): gate and up as two segments of one `qmm8` dispatch (fp32 rows) and
+  `swiglu_x8` building the down GEMM's table, instead of the fused `qmm8_gu1k2` (8 column slices x 2 k-slices of one
+  64-column group, which streamed ~10% slower than `qmm8pf` on the same bytes). -2.67 / -2.47 ms (-2.73 / -2.75 on top of
+  the GEMM changes); the drafter's MLP takes the same path.
+* Together (cm + pair + old kplan): -2.70 / -2.53 ms, i.e. additive.
+* Tried, no gain: CM 2 (odd fragments take the nibbles at bits 4-7 in place, x / 16 in the table: 10 integer ops per 8
+  MMAs instead of 14; in cmp within noise of CM 1, and the table change would reach every producer), a prefetching
+  two-group loop (96 GPRs), 4 fragments per simdgroup, nf 1 with ks 8/16, the drafter's conv / attention projections on
+  these GEMMs (+0.27 / -0.06 ms).
+
+**Other verify kernels.**
+* **GDN step over value-row blocks** (`gdnsplit`, default 256 threads = 32 rows): a head's 128 value rows are
+  independent, so `gdn_step_verify8s` spreads them over 4 threadgroups (192 instead of 48 threadgroups of 1024
+  threads); the per-head tape rows k, g are written by the block that arrives last at a per-head counter (all blocks
+  have read the old ones by then); `gdn_gnorm_x8` applies the gated RMSNorm and writes the out_proj's table with
+  x8_prep2's summation order. Logits bitwise identical on both models (`ni_v8check` dumps, `cmp`). -0.66 / -0.74 ms.
+* **x8_prep2 row norms** (`prepu`): four independent load chains. -0.38 / -0.46 ms.
+* Tried, neutral or slower: GDN prepare with all rows in parallel (bitwise identical; +0.14 / -0.25), the GDN and
+  attention outputs written straight into the next GEMM's table (bitwise identical; +0.02 / +0.03: dispatch boundaries
+  cost ~0.7 us each, measured with `V8Knobs::pad` empty dispatches: +0.18 ms for 268), a GDN step with 4 lanes per value
+  row (96 GPRs, +0.7 to +1.1 ms), a latency-scheduled GDN step (next row's operands before the stores; bitwise
+  identical, -0.12 / +0.05).
+
+**In-pipeline cost per 27B cycle** (`NI_AB=skip=<bit>`: odd cycles skip a kernel group; outputs garbage, timing valid
+because the dense cycle's work does not depend on token values; before the GEMM, GDN and prep changes, reduced head on,
+cycle ~87.5 ms): MLP gate/up 33.4 ms (192 GB/s), MLP down 16.6 (192), GDN in_proj 11.2 (204), GDN out + attention o
+5.2 (217), LM head + sampling 3.4 (209), attention q|k|v 3.0 (223), GDN step 3.2-3.5, normed X8 preps 1.1, GDN prep
+0.5, attention core 0.45; drafter: MLP gate/up 2.3, down 1.1, conv / attention projections 1.0-1.2, ring commit
+0.5-0.6, LM head (65k rows) 0.5. After the changes the cycle is 77-78 ms: ~16.3 GB per cycle at ~210 GB/s.
+
+**Correctness** (final build):
+* G1: 27B `code_27b` 512 and p4000 + 256 greedy identical to plain decoding; 35B `code_35b` 512 identical. 35B p4000 +
+  256: first difference at output token 101: plain top-2 gap 0.110 (20.1403 vs 20.0302), the verify row -0.0055 (20.0580
+  / 20.0635), one prefill of the prefix +0.024 (20.0427 / 20.0192): all three computations of that row are within ~0.1
+  of each other, the 35B's multi-row noise at this context (the base build split this prompt at token 197, gap 0.020).
+* D1 (`dflash_check` on the q4 dumps, full head): chains identical 3/3 on both drafters, worst per-layer h 2.42e-3
+  (27B) / 2.49e-3 (35B); the sampled walk matches softmax(S / T) to 2.3e-7.
+* S1 (`dflash_accept_test`): all cases pass, the biased depth rule is still rejected (chi2 362).
+* S2 (`dflash_stat`, joint law of the first two tokens vs p(t1) p(t2 | t1), chi-square p): 27B prose (+23) T = 0.6
+  1200 trials joint 0.307 / first token 0.357 (base 0.316 / 0.361), T = 1.0 1200 trials 0.212 / 0.119; 35B prose (+23)
+  T = 0.6 2000 trials 0.148 / 0.038 and 3000 trials 0.298 / 0.169, code (+32) T = 0.6 2000 trials 0.518. All pass.
+* `tests/test_server.py` with `--dflash auto` (`NI_DFLASH=auto bench/shortpf/serve_test.sh`, main's script): 13/13 on
+  both models (the reduced head loaded from `<drafter>/head-ranked.u32`).
+* Memory: the reduced head adds 189 MB (27B) / 75 MB (35B) to the drafter (resident 1.51 / 0.59 GB), the split MLP
+  2 x 557 KB of scratch.
+
+Tools: `ni_run ... NI_AB=key=value,...` (the `V8Knobs` keys: cm, pair, kplan, gusplit, gdnsplit, prepu, and timing-only
+skip / pad: odd cycles run the given knobs, prints GPU ms per cycle of both halves), `NI_SEED` (sampled runs),
+`NI_DFLASH_QT` (walk temperature factor), `NI_DFLASH_HEAD` / `NI_DFLASH_HEAD_IDS` (draft head rows / ranked list),
+`NI_V8_*` (knob defaults), `bench_v8 cmp` (interleaved kernel / tiling comparison), `ni_v8check` with
+`NI_V8CHECK_DUMP=<file>` (verify logits for bitwise A/B with `cmp`).
