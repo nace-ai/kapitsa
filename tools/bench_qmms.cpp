@@ -1,7 +1,7 @@
 // Small-T quantized GEMM benchmark + correctness: qmms_b{4,8}_t{TB} (src/kernels/qmms.metal) vs the
 // prefill GEMM the engine picks at that T (qmm_b4_m32_n32 below 64 rows, m64_n64 from 64).
 //   bench_qmms            35B + 27B projection shapes, T = 1..64
-// env: TS="8 16 32" token counts; KS="1 2 4" K splits; NSG="4 8" simdgroups per threadgroup;
+// env: KERNEL=qmmsi (interleaved-MMA variant, TB <= 4); NOBASE=1 skips qmm; TS="8 16 32" token counts; KS="1 2 4" K splits; NSG="4 8" simdgroups per threadgroup;
 //      SHAPES=35|27; BITS=8 (8-bit weights); GU=1 (gate/up+SwiGLU kernel, two matrices).
 // Reports us, weight GB/s, TFLOP/s and the max relative error of 64 sampled outputs vs a CPU
 // reference that dequantizes like qmm (half(s*q + b)) and multiplies in double.
@@ -129,7 +129,7 @@ int main() {
                gbytes / (ms * 1e-3), 2.0 * nmat * T * N * K / (ms * 1e-3) / 1e12, maxrel);
       };
       // baseline: the engine's qmm choice (gate/up: two qmm calls, no SwiGLU)
-      if (bits == 4 || T < 64) {
+      if (!env_on("NOBASE") && (bits == 4 || T < 64)) {
         const bool big = T >= 64 && bits == 4;
         const int BM = big ? 64 : 32, BN = big ? 64 : 32;
         std::string qn = "qmm_b" + std::to_string(bits) + (big ? "_m64_n64" : "_m32_n32");
@@ -145,7 +145,8 @@ int main() {
         });
       }
       const int TB = (T + 7) / 8;
-      Pipeline sp = g.pipeline(std::string(gu ? "qmms_gu_b" : "qmms_b") + std::to_string(bits) + "_t" + std::to_string(TB));
+      const std::string kp = getenv("KERNEL") && *getenv("KERNEL") ? getenv("KERNEL") : "qmms";
+      Pipeline sp = g.pipeline(kp + (gu ? "_gu_b" : "_b") + std::to_string(bits) + "_t" + std::to_string(TB));
       for (int nsg : NSGs)
         for (int ks : KSs) {
           if (nsg % ks) continue;

@@ -669,7 +669,10 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
   while (ks > 1 && (gpr / ks < 2 || nsg % ks)) ks /= 2;
   const int TB = (T + 7) / 8;
-  e.use(pipe("qmms_b" + std::to_string(L0.bits) + "_t" + std::to_string(TB)));
+  // NI_QMMS_IL=1: interleaved-MMA variants (qmmsi_*, 2-4 token blocks), for A/B
+  static const bool il = env_on("NI_QMMS_IL");
+  const bool use_il = il && TB >= 2 && TB <= 4 && L0.bits == 4;
+  e.use(pipe(std::string(use_il ? "qmmsi_b" : "qmms_b") + std::to_string(L0.bits) + "_t" + std::to_string(TB)));
   kp::Qmms p{};
   p.K = K;
   p.T = uint32_t(T);
@@ -706,7 +709,9 @@ bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const B
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
   while (ks > 1 && (gpr / ks < 2 || nsg % ks)) ks /= 2;
   const int TB = (T + 7) / 8;
-  e.use(pipe("qmms_gu_b" + std::to_string(G.bits) + "_t" + std::to_string(TB)));
+  static const bool il = env_on("NI_QMMS_IL");
+  const bool use_il = il && TB >= 2 && TB <= 4 && G.bits == 4;
+  e.use(pipe(std::string(use_il ? "qmmsi_gu_b" : "qmms_gu_b") + std::to_string(G.bits) + "_t" + std::to_string(TB)));
   kp::Qmms p{};
   p.K = K;
   p.T = uint32_t(T);
@@ -764,14 +769,12 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
     e.buf(12, G.w->buf); e.buf(13, G.s->buf); e.buf(14, G.b->buf);
     e.buf(15, U.w->buf); e.buf(16, U.s->buf); e.buf(17, U.b->buf);
     e.dispatch(G.N / (8 * nsg), max_tiles, 1, 32 * nsg);
-  }
-  {
-    kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), Dn.N * (Dn.K / 8), Dn.N * (Dn.K / Dn.gs), uint32_t(E) + 1};
+    kp::Qmm2 q{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), Dn.N * (Dn.K / 8), Dn.N * (Dn.K / Dn.gs), uint32_t(E) + 1};
     e.use(pipe("qmms_moe_dn_b4"));
     e.buf(0, hhalf_);
     e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);
     e.buf(4, yd_);
-    e.val(5, p);
+    e.val(5, q);
     e.buf(6, tiles_); e.buf(7, ntiles_); e.buf(8, spair_);
     e.buf(9, Dn.w->buf); e.buf(10, Dn.s->buf); e.buf(11, Dn.b->buf);
     e.dispatch(Dn.N / (8 * nsg), max_tiles, 1, 32 * nsg);
@@ -1000,18 +1003,29 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   static const std::string an = getenv("NI_ATTN") && *getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill11";
   // NI_SHORTPF: few queries over a long prefix split the keys over more threadgroups (aim ~240 in
   // all, >= 8 key tiles of 32 each); partials in part_o_/part_ml_ (room for nsplit * T <= 1024).
+  // NI_ATTN_GQ=0: query-major blocks (attn_prefill11s) instead of (query, head) rows (11gs/11g)
+  static const bool gq = !getenv("NI_ATTN_GQ") || env_on("NI_ATTN_GQ");
   if (small_t(T) && an == "attn_prefill11") {
-    const uint32_t nqb = (uint32_t(T) + 31) / 32, tiles = (uint32_t(pos0 + T) + 31) / 32;
+    const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv);
+    const uint32_t nqb = gq ? (uint32_t(T) * G + 31) / 32 : (uint32_t(T) + 31) / 32;
+    const uint32_t gy = gq ? uint32_t(cfg_.hkv) : uint32_t(cfg_.hq), tiles = (uint32_t(pos0 + T) + 31) / 32;
     static const int ns_env = getenv("NI_ATTN_SPLIT") && *getenv("NI_ATTN_SPLIT") ? atoi(getenv("NI_ATTN_SPLIT")) : 0;
-    uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (240 + nqb * cfg_.hq - 1) / (nqb * cfg_.hq);
+    uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (240 + nqb * gy - 1) / (nqb * gy);
     ns = std::min({ns, tiles / 8, 1024u / uint32_t(T), 16u});
+    if (gq && ns < 2) {
+      e.use(pipe("attn_prefill11g"));
+      e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      e.dispatch(nqb, gy, 1, 256);
+      return;
+    }
     if (ns >= 2) {
-      e.use(pipe("attn_prefill11s"));
+      e.use(pipe(gq ? "attn_prefill11gs" : "attn_prefill11s"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
       e.val(5, fp);
       e.buf(6, part_o_); e.buf(7, part_ml_);
       e.val(8, ns);
-      e.dispatch(nqb, cfg_.hq, ns, 256);
+      e.dispatch(nqb, gy, ns, 256);
       e.use(pipe("attn11_reduce"));
       e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
       e.val(4, fp);

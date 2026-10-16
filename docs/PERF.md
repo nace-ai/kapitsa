@@ -141,3 +141,42 @@ UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
 Attention share of nace-infer prefill (35B, 10 attention layers, v10 at 2.56 TFLOP/s): ~0.5 s of
 5.3 s at 4k, ~8.6 s of 27 s at 16k. At MLX's 5.3 TFLOP/s that becomes ~0.26 s / ~4.2 s, i.e.
 about 805 tok/s at 4k and 715 at 16k (projection, not measured).
+
+## Short prefills (`NI_SHORTPF=1`, opt-in; macOS 27.0.1)
+Cached-turn TTFT (second chat turn on a cached 4k/16k prefix = a short new suffix) and short cold
+prompts. Two causes, both fixed behind the flag:
+1. **The suffix was split at the turn-boundary checkpoint** into two prefill passes, each reading
+   every weight (27B: ~370 ms per pass at <= 32 rows). Now `encode_prefill(..., snap, snap_row)`
+   captures the checkpoint inside the pass: `gdn_prep_par_snap` copies the conv window as it stands
+   after `snap_row` tokens (before rolling it) and `gdn_step_par_snap_l*` writes the recurrent state
+   after token `snap_row - 1`. `ni_run --prefix P --split B` checks it against a separate prefill of
+   [P, B): bit-identical (conv and state max|d| = 0) on both models.
+2. **Small-T GEMMs**: `qmm_b4_m32_n32` (any T < 64) streams weights at 35-40 GB/s with 4-32 rows
+   (bench_qmms, same on both models' shapes). `qmms_b{4,8}_t{1..8}` (src/kernels/qmms.metal):
+   simdgroup owns 8 weight rows, each lane loads 16 contiguous codes of its row per 64-group and
+   dequantizes them as half2 straight into simdgroup-matrix A operands (no threadgroup tiles, no
+   barriers); the k order inside a group is permuted so the matching B operand (8 k x 8 tokens) is
+   four 8-byte loads per lane from the row-major half X; K split over 4/8 simdgroups of a
+   threadgroup (fixed-order sum). Up to 4 projections sharing X in one dispatch (GDN qkv/z/b/a,
+   attention q/k/v, router + shared gate), fused gate/up+SwiGLU (`qmms_gu_*`, dense MLP and the
+   MoE shared expert), MoE experts in 8-row tiles (`qmms_moe_gu_b4` / `qmms_moe_dn_b4`, tile lists
+   of `moe_bucket2` with BM = 8). Beyond 64 rows, whole 64-row tiles stay on qmm and the remainder
+   rows go to qmms (a partial 64-row tile cost a full one). Few queries over a long cached prefix:
+   attention rows are (query, head) pairs of one KV head (`attn_prefill11g*`: 32-row blocks hold
+   4 queries x 8 heads instead of padding T to 32) with the keys split over threadgroups
+   (`attn_prefill11gs` + `attn11_reduce`).
+
+bench_qmms (M4 Pro, isolated kernel, 4-bit g64; qmm = the engine's tile below 64 rows):
+| shape (N x K) | T | qmm_b4_m32_n32 | qmms (ks) |
+|---|---|---|---|
+| 35B qkv 8192x2048 | 8 | 235 us (40 GB/s) | 54 us (174 GB/s, ks4) |
+| 35B qkv 8192x2048 | 32 | 245 us (4.4 TFLOP/s) | 176 us (6.1, ks4) |
+| 35B out 2048x4096 | 8 | 164 us | 30 us (ks8) |
+| 27B qkv 10240x5120 | 8 | 789 us (37 GB/s) | 166 us (177 GB/s, ks4) |
+| 27B gate 17408x5120 | 8 | 1296 us | 272 us (184 GB/s, ks8) |
+| 27B gate 17408x5120 | 32 | 1335 us (4.3 TFLOP/s) | 1054 us (5.4, ks8) |
+| 27B down 5120x17408 | 32 | 1467 us | 1296 us (ks8) |
+| 27B gate 17408x5120 | 64 | m64_n64 2264 us (5.0) | 2175 us (5.3, ks8) |
+Fused gate/up at 27B T=32: 1663 us for both matrices (two qmms: 2108). FMA tile matvecs for the
+MoE experts (1-3 rows per expert tile, so the 8-row MMAs are mostly padding) were slower: 35B T=32
+prefill 55 ms -> 71 (tiles of <= 2 rows) / 75 (<= 4); removed.

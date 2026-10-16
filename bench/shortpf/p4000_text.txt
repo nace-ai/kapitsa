@@ -1,0 +1,474 @@
+# Copyright © 2025 Apple Inc.
+
+from dataclasses import dataclass
+from typing import Any, List, Optional
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .switch_layers import SwitchGLU
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    hidden_size: int
+    num_hidden_layers: int
+    intermediate_size: int
+    num_attention_heads: int
+    attention_bias: bool
+    mlp_only_layers: List[int]
+    num_experts: int
+    num_experts_per_tok: int
+    decoder_sparse_step: int
+    n_shared_experts: int
+    moe_intermediate_size: int
+    rms_norm_eps: float
+    vocab_size: int
+    num_key_value_heads: int
+    rope_theta: float
+    max_position_embeddings: int
+    norm_topk_prob: bool
+
+
+class KlearAttention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.num_attention_heads = args.num_attention_heads
+        self.num_key_value_heads = args.num_key_value_heads
+
+        self.head_dim = args.hidden_size // args.num_attention_heads
+        self.scale = self.head_dim**-0.5
+
+        self.q_proj = nn.Linear(
+            args.hidden_size,
+            self.num_attention_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.k_proj = nn.Linear(
+            args.hidden_size,
+            self.num_key_value_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.v_proj = nn.Linear(
+            args.hidden_size,
+            self.num_key_value_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.o_proj = nn.Linear(
+            self.num_attention_heads * self.head_dim,
+            args.hidden_size,
+            bias=args.attention_bias,
+        )
+
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+
+        self.rope = nn.RoPE(
+            self.head_dim,
+            traditional=False,
+            base=args.rope_theta,
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+
+        queries, keys, values = self.q_proj(x), self.k_proj(x), self.v_proj(x)
+
+        queries = self.q_norm(
+            queries.reshape(B, L, self.num_attention_heads, -1)
+        ).transpose(0, 2, 1, 3)
+        keys = self.k_norm(keys.reshape(B, L, self.num_key_value_heads, -1)).transpose(
+            0, 2, 1, 3
+        )
+        values = values.reshape(B, L, self.num_key_value_heads, -1).transpose(
+            0, 2, 1, 3
+        )
+
+        if cache is not None:
+            queries = self.rope(queries, offset=cache.offset)
+            keys = self.rope(keys, offset=cache.offset)
+            keys, values = cache.update_and_fetch(keys, values)
+        else:
+            queries = self.rope(queries)
+            keys = self.rope(keys)
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=cache, scale=self.scale, mask=mask
+        )
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.o_proj(output)
+
+
+class KlearMLP(nn.Module):
+    def __init__(self, dim, hidden_dim):
+        super().__init__()
+        self.gate_proj = nn.Linear(dim, hidden_dim, bias=False)
+        self.down_proj = nn.Linear(hidden_dim, dim, bias=False)
+        self.up_proj = nn.Linear(dim, hidden_dim, bias=False)
+
+    def __call__(self, x) -> mx.array:
+        return self.down_proj(swiglu(self.gate_proj(x), self.up_proj(x)))
+
+
+class KlearSparseMoeBlock(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.norm_topk_prob = args.norm_topk_prob
+        self.num_experts = args.num_experts
+        self.top_k = args.num_experts_per_tok
+
+        self.gate = nn.Linear(args.hidden_size, args.num_experts, bias=False)
+        self.experts = SwitchGLU(
+            args.hidden_size, args.moe_intermediate_size, args.num_experts
+        )
+        self.shared_experts = KlearMLP(
+            args.hidden_size,
+            hidden_dim=args.moe_intermediate_size * args.n_shared_experts,
+        )
+        self.coefficient = nn.Linear(args.hidden_size, 2)
+        self.expert_bias = mx.zeros((self.num_experts,), dtype=mx.float32)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        routing_weights = mx.sigmoid(self.gate(x).astype(mx.float32))
+        biased_weights = routing_weights + self.expert_bias.reshape((1, 1, -1))
+        k = self.top_k
+        inds = mx.argpartition(-biased_weights, kth=k - 1, axis=-1)[..., :k]
+        inds = mx.stop_gradient(inds)
+        scores = mx.take_along_axis(routing_weights, inds, axis=-1)
+        if self.norm_topk_prob:
+            scores = scores / mx.sum(scores, axis=-1, keepdims=True)
+        scores = scores.astype(x.dtype)
+        expert_out = self.experts(x, inds)
+        y_experts = (expert_out * scores[..., None]).sum(axis=-2)
+        coef = mx.softmax(self.coefficient(x), axis=-1, precise=True)
+        shared = self.shared_experts(x)
+        y = y_experts * coef[..., :1] + shared * coef[..., 1:]
+        return y
+
+
+class KlearDecoderLayer(nn.Module):
+    def __init__(self, args: ModelArgs, layer_idx: int):
+        super().__init__()
+        self.self_attn = KlearAttention(args)
+
+        if (layer_idx not in args.mlp_only_layers) and (
+            args.num_experts > 0 and (layer_idx + 1) % args.decoder_sparse_step == 0
+        ):
+            self.mlp = KlearSparseMoeBlock(args)
+        else:
+            self.mlp = KlearMLP(args.hidden_size, args.intermediate_size)
+
+        self.input_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            args.hidden_size, eps=args.rms_norm_eps
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), mask, cache)
+        h = x + r
+        r = self.mlp(self.post_attention_layernorm(h))
+        out = h + r
+        return out
+
+
+class KlearModel(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.embed_tokens = nn.Embedding(args.vocab_size, args.hidden_size)
+        self.layers = [
+            KlearDecoderLayer(args=args, layer_idx=i)
+            for i in range(args.num_hidden_layers)
+        ]
+        self.norm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        h = self.embed_tokens(inputs)
+
+        if cache is None:
+            cache = [None] * len(self.layers)
+
+        mask = create_attention_mask(h, cache[0])
+
+        for layer, c in zip(self.layers, cache):
+            h = layer(h, mask, c)
+
+        return self.norm(h)
+
+
+class Model(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.model_type = args.model_type
+        self.model = KlearModel(args)
+        self.lm_head = nn.Linear(args.hidden_size, args.vocab_size, bias=False)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ):
+        out = self.model(inputs, cache)
+        return self.lm_head(out)
+
+    def sanitize(self, weights):
+        moe_layers = sorted(
+            int(k.split(".")[2])
+            for k in weights
+            if k.startswith("model.layers.")
+            and k.endswith(".mlp.experts.0.gate_proj.weight")
+        )
+        for l in moe_layers:
+            prefix = f"model.layers.{l}.mlp.experts"
+            for name in ["gate_proj", "up_proj", "down_proj"]:
+                stacked = [
+                    weights.pop(f"{prefix}.{e}.{name}.weight")
+                    for e in range(self.args.num_experts)
+                ]
+                weights[f"{prefix}.{name}.weight"] = mx.stack(stacked)
+
+        return weights
+
+    @property
+    def layers(self):
+        return self.model.layers
+
+    @property
+    def quant_predicate(self):
+        def predicate(path, _):
+            if path.endswith("mlp.gate"):
+                return {"group_size": 64, "bits": 8}
+            return True
+
+        return predicate
+
+    @property
+    def cast_predicate(self):
+        def predicate(k):
+            return "expert_bias" not in k
+
+        return predicate
+# Copyright © 2024 Apple Inc.
+# Copyright © 2023 Apple Inc.
+
+from functools import partial
+
+import mlx.core as mx
+import mlx.nn as nn
+
+
+@partial(mx.compile, shapeless=True)
+def swiglu(gate, x):
+    return nn.silu(gate) * x
+
+
+@partial(mx.compile, shapeless=True)
+def precise_swiglu(h, gate, x):
+    gate = nn.silu(gate.astype(mx.float32))
+    x = x.astype(mx.float32)
+    return (gate * x).astype(h.dtype)
+
+
+@partial(mx.compile, shapeless=True)
+def swiglu_oai(
+    gate: mx.array, x: mx.array, alpha: float = 1.702, limit: float = 7.0
+) -> mx.array:
+    # GPT-OSS variant: clip the gate from above only, and add 1 to the linear part.
+    gate = mx.minimum(gate, limit)
+    x = mx.clip(x, -limit, limit)
+    return (x + 1.0) * (gate * mx.sigmoid(alpha * gate))
+
+
+class SwigluOAI(nn.Module):
+    def __init__(self, alpha: float = 1.702, limit: float = 7.0):
+        super().__init__()
+        self._alpha = alpha
+        self._limit = limit
+
+    def __call__(self, x: mx.array, gate: mx.array) -> mx.array:
+        return swiglu_oai(gate, x, alpha=self._alpha, limit=self._limit)
+
+
+@partial(mx.compile, shapeless=True)
+def xielu(x, alpha_p, alpha_n, beta, eps):
+    alpha_p = nn.softplus(alpha_p)
+    alpha_n = beta + nn.softplus(alpha_n)
+    return mx.where(
+        x > 0,
+        alpha_p * mx.square(x) + beta * x,
+        (mx.expm1(mx.minimum(x, eps)) - x) * alpha_n + beta * x,
+    )
+
+
+class XieLU(nn.Module):
+    def __init__(
+        self,
+        alpha_p_init=0.8,
+        alpha_n_init=0.8,
+        beta=0.5,
+        eps=-1e-6,
+    ):
+        super().__init__()
+        alpha_p_tensor = mx.array(alpha_p_init)
+        alpha_n_tensor = mx.array(alpha_n_init - beta)
+        self.alpha_p = mx.log(mx.exp(alpha_p_tensor) - 1)
+        self.alpha_n = mx.log(mx.exp(alpha_n_tensor) - 1)
+
+        self.beta = mx.array(beta)
+        self.eps = mx.array(eps)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return xielu(x, self.alpha_p, self.alpha_n, self.beta, self.eps)
+# Copyright © 2025 Apple Inc.
+
+import math
+from dataclasses import dataclass
+from functools import partial
+from itertools import accumulate
+from typing import Any, Optional
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .cache import ConcatenateKVCache, KVCache
+from .rope_utils import initialize_rope
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    vocab_size: int
+    hidden_dim: int
+    num_layers: int
+    num_kv_reuse_layers: int
+    num_heads: int
+    num_kv_heads: int
+    hidden_dim_scale_factor: float = 3.25
+    rope_theta: float = 50000
+    rms_norm_eps: float = 1e-5
+
+
+class FusedLoRALinear(nn.Module):
+    def __init__(
+        self,
+        input_dims: int,
+        output_dims: list[int],
+        r: int = 8,
+        dropout: float = 0.0,
+        scale: float = 20.0,
+    ):
+        super().__init__()
+
+        self.linear = FusedLinear(input_dims, output_dims)
+        self.dropout = nn.Dropout(p=dropout)
+        self.scale = scale
+
+        scale = 1 / math.sqrt(input_dims)
+        self.lora_a = [
+            mx.random.uniform(low=-scale, high=scale, shape=(input_dims, r))
+            for _ in output_dims
+        ]
+        self.lora_b = [mx.zeros((r, od)) for od in output_dims]
+
+    def fuse(self, dequantize: bool = False):
+        linear = self.linear
+        weight = linear.weight
+        is_quantized = isinstance(linear, FusedQuantizedLinear)
+
+        # Use the same type as the linear weight if not quantized
+        dtype = weight.dtype
+
+        if is_quantized:
+            dtype = linear.scales.dtype
+            weight = mx.dequantize(
+                weight,
+                linear.scales,
+                linear.biases,
+                linear.group_size,
+                linear.bits,
+            )
+
+        input_dims = weight.shape[-1]
+        output_dims = linear.output_dims
+        fused_linear = FusedLinear(input_dims, output_dims)
+        fused_linear.weight = weight
+        deltas = [
+            ((self.scale * b.T) @ a.T).astype(dtype)
+            for a, b in zip(self.lora_a, self.lora_b)
+        ]
+        delta = mx.concatenate(deltas, axis=0)
+        fused_linear.weight = weight + delta
+
+        if is_quantized and not dequantize:
+            fused_linear = fused_linear.to_quantized(linear.group_size, linear.bits)
+
+        return fused_linear
+
+    def __call__(self, x):
+        dt = x.dtype
+        y = self.linear(x)
+        x = self.dropout(x)
+        z = [(x @ a) @ b for a, b in zip(self.lora_a, self.lora_b)]
+        return tuple(yi + (self.scale * zi).astype(dt) for yi, zi in zip(y, z))
+
+
+class FusedQuantizedLinear(nn.QuantizedLinear):
+    def __init__(self, input_dims, output_dims, group_size: int = 64, bits: int = 4):
+        *indices, output_dims = accumulate(output_dims)
+        self.indices = indices
+        super().__init__(
+            input_dims, output_dims, bias=False, group_size=group_size, bits=bits
+        )
+
+    @property
+    def input_dims(self):
+        return self.scales.shape[-1] * self.group_size
+
+    @property
+    def output_dims(self):
+        indices = [0] + self.indices + [self.weight.shape[0]]
+        return [indices[i] - indices[i - 1] for i in range(1, len(indices))]
+
+    def __call__(self, x):
+        x = super().__call__(x)
+        return x.split(self.indices, axis=-1)
+
+    def to_lora(self, r: int = 8, dropout: float = 0.0, scale: float = 20.0):
+        lora_lin = FusedLoRALinear(self.input_dims, self.output_dims, r, dropout, scale)
+        lora_lin.linear = self
+        return lora_lin
+
+
+class FusedLinear(nn.Linear):
+    def __init__(self, input_dims, output_dims):
+        *indices, output_dims = accumulate(output_dims)
+        self.indices = indices
+        super().__init__(input_dims, output_dims, bias=False)
+
+    @property
+    def input_dims(self):
+        return self.weight.shape[-1]
+
+    @property
+    def output_dims(self):
+        indices = [0] + self.indices + [self.weight.shape[0]]
+        return [indices[i

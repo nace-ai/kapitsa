@@ -1688,7 +1688,10 @@ NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint 
 // threadgroups, each writing its unnormalized O rows, running max and sum to part_o / part_ml
 // ([split][t][head]); attn11_reduce combines them. For few queries over a long cached prefix,
 // where (ceil(T/32) x Hq) threadgroups alone cannot fill the GPU.
-template <uint BK, bool XS, bool SPLIT = false>
+// GQ (attn_prefill11g, NI_SHORTPF): rows are (query, head) pairs of one KV head's G query heads,
+// row r = query r / G, head kvh*G + r % G; grid = (ceil(T*G / 32), Hkv[, nsplit]). For few queries
+// the 32-row blocks then hold G queries' worth of rows instead of padding T up to 32.
+template <uint BK, bool XS, bool SPLIT = false, bool GQ = false>
 NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
                                    const device float* qg, device float* out, constant AttnPrefParams& p,
                                    uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
@@ -1697,17 +1700,30 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   constexpr uint NC = BK / 8;                     // key fragments per tile
   constexpr uint KLD = attn11_kld<BK>();
   const uint G = p.Hq / p.Hkv;
-  const uint h = tg.y, kvh = h / G;
-  const uint nqb = (p.T + kBQ11 - 1) / kBQ11;
-  const uint t0 = (nqb - 1 - tg.x) * kBQ11;       // heaviest (latest) blocks first: short last wave
   const uint rg = sg / 2, dh = sg % 2;            // row group (8 queries), head-dim half
   const uint qd = lane / 4;
   const uint frow = (qd & 4) + (lane / 2) % 4;    // this lane's fragment row and first column
   const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
-  const uint t = t0 + rg * 8 + frow;              // this lane's query
+  uint h, kvh, t, qpos_rg, kend;
+  if (GQ) {
+    kvh = tg.y;
+    const uint nrb = (p.T * G + kBQ11 - 1) / kBQ11;
+    const uint r0 = (nrb - 1 - tg.x) * kBQ11;     // heaviest (latest) blocks first
+    const uint r = r0 + rg * 8 + frow;
+    t = r / G;
+    h = kvh * G + r % G;
+    qpos_rg = p.pos0 + (r0 + rg * 8) / G;
+    kend = p.pos0 + min((r0 + kBQ11 - 1) / G + 1, p.T);
+  } else {
+    h = tg.y;
+    kvh = h / G;
+    const uint nqb = (p.T + kBQ11 - 1) / kBQ11;
+    const uint t0 = (nqb - 1 - tg.x) * kBQ11;     // heaviest (latest) blocks first: short last wave
+    t = t0 + rg * 8 + frow;                       // this lane's query
+    qpos_rg = p.pos0 + t0 + rg * 8;               // first query position of the row group
+    kend = p.pos0 + min(t0 + kBQ11, p.T);         // keys needed by the block
+  }
   const uint qpos = p.pos0 + t;
-  const uint qpos_rg = p.pos0 + t0 + rg * 8;      // first query position of the row group
-  const uint kend = p.pos0 + min(t0 + kBQ11, p.T); // keys needed by the block
   const uint ntiles = (kend + BK - 1) / BK;
   uint it_begin = 0, it_end = ntiles;
   if (SPLIT) {
@@ -1859,6 +1875,30 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   threadgroup float2 xs[1];
   attn_prefill11_impl<32, false, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane, (threadgroup half*)kvm, xs, tg.z,
                                        nsplit, part_o, part_ml);
+}
+
+// GQA-row form of attn_prefill11s (grid (ceil(T*G/32), Hkv, nsplit)); same partials/reduce.
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11gs(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    device float* part_o [[buffer(6)]], device float2* part_ml [[buffer(7)]], constant uint& nsplit [[buffer(8)]],
+    uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  threadgroup float2 xs[1];
+  attn_prefill11_impl<32, false, true, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane, (threadgroup half*)kvm, xs,
+                                             tg.z, nsplit, part_o, part_ml);
+}
+
+// GQA-row form without the key split (grid (ceil(T*G/32), Hkv)).
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11g(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  threadgroup float2 xs[1];
+  attn_prefill11_impl<32, false, false, true>(q, kc, vc, qg, out, p, tg, tid, sg, lane, (threadgroup half*)kvm, xs);
 }
 
 // Combines attn_prefill11s partials: out[t, h*D + d] = (sum_s 2^(m_s - m) o_s[d]) / (sum_s 2^(m_s - m) l_s)

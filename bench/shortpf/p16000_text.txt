@@ -1,0 +1,1821 @@
+# Copyright © 2025 Apple Inc.
+
+from dataclasses import dataclass
+from typing import Any, List, Optional
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .switch_layers import SwitchGLU
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    hidden_size: int
+    num_hidden_layers: int
+    intermediate_size: int
+    num_attention_heads: int
+    attention_bias: bool
+    mlp_only_layers: List[int]
+    num_experts: int
+    num_experts_per_tok: int
+    decoder_sparse_step: int
+    n_shared_experts: int
+    moe_intermediate_size: int
+    rms_norm_eps: float
+    vocab_size: int
+    num_key_value_heads: int
+    rope_theta: float
+    max_position_embeddings: int
+    norm_topk_prob: bool
+
+
+class KlearAttention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.num_attention_heads = args.num_attention_heads
+        self.num_key_value_heads = args.num_key_value_heads
+
+        self.head_dim = args.hidden_size // args.num_attention_heads
+        self.scale = self.head_dim**-0.5
+
+        self.q_proj = nn.Linear(
+            args.hidden_size,
+            self.num_attention_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.k_proj = nn.Linear(
+            args.hidden_size,
+            self.num_key_value_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.v_proj = nn.Linear(
+            args.hidden_size,
+            self.num_key_value_heads * self.head_dim,
+            bias=args.attention_bias,
+        )
+        self.o_proj = nn.Linear(
+            self.num_attention_heads * self.head_dim,
+            args.hidden_size,
+            bias=args.attention_bias,
+        )
+
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+
+        self.rope = nn.RoPE(
+            self.head_dim,
+            traditional=False,
+            base=args.rope_theta,
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+
+        queries, keys, values = self.q_proj(x), self.k_proj(x), self.v_proj(x)
+
+        queries = self.q_norm(
+            queries.reshape(B, L, self.num_attention_heads, -1)
+        ).transpose(0, 2, 1, 3)
+        keys = self.k_norm(keys.reshape(B, L, self.num_key_value_heads, -1)).transpose(
+            0, 2, 1, 3
+        )
+        values = values.reshape(B, L, self.num_key_value_heads, -1).transpose(
+            0, 2, 1, 3
+        )
+
+        if cache is not None:
+            queries = self.rope(queries, offset=cache.offset)
+            keys = self.rope(keys, offset=cache.offset)
+            keys, values = cache.update_and_fetch(keys, values)
+        else:
+            queries = self.rope(queries)
+            keys = self.rope(keys)
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=cache, scale=self.scale, mask=mask
+        )
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.o_proj(output)
+
+
+class KlearMLP(nn.Module):
+    def __init__(self, dim, hidden_dim):
+        super().__init__()
+        self.gate_proj = nn.Linear(dim, hidden_dim, bias=False)
+        self.down_proj = nn.Linear(hidden_dim, dim, bias=False)
+        self.up_proj = nn.Linear(dim, hidden_dim, bias=False)
+
+    def __call__(self, x) -> mx.array:
+        return self.down_proj(swiglu(self.gate_proj(x), self.up_proj(x)))
+
+
+class KlearSparseMoeBlock(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.norm_topk_prob = args.norm_topk_prob
+        self.num_experts = args.num_experts
+        self.top_k = args.num_experts_per_tok
+
+        self.gate = nn.Linear(args.hidden_size, args.num_experts, bias=False)
+        self.experts = SwitchGLU(
+            args.hidden_size, args.moe_intermediate_size, args.num_experts
+        )
+        self.shared_experts = KlearMLP(
+            args.hidden_size,
+            hidden_dim=args.moe_intermediate_size * args.n_shared_experts,
+        )
+        self.coefficient = nn.Linear(args.hidden_size, 2)
+        self.expert_bias = mx.zeros((self.num_experts,), dtype=mx.float32)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        routing_weights = mx.sigmoid(self.gate(x).astype(mx.float32))
+        biased_weights = routing_weights + self.expert_bias.reshape((1, 1, -1))
+        k = self.top_k
+        inds = mx.argpartition(-biased_weights, kth=k - 1, axis=-1)[..., :k]
+        inds = mx.stop_gradient(inds)
+        scores = mx.take_along_axis(routing_weights, inds, axis=-1)
+        if self.norm_topk_prob:
+            scores = scores / mx.sum(scores, axis=-1, keepdims=True)
+        scores = scores.astype(x.dtype)
+        expert_out = self.experts(x, inds)
+        y_experts = (expert_out * scores[..., None]).sum(axis=-2)
+        coef = mx.softmax(self.coefficient(x), axis=-1, precise=True)
+        shared = self.shared_experts(x)
+        y = y_experts * coef[..., :1] + shared * coef[..., 1:]
+        return y
+
+
+class KlearDecoderLayer(nn.Module):
+    def __init__(self, args: ModelArgs, layer_idx: int):
+        super().__init__()
+        self.self_attn = KlearAttention(args)
+
+        if (layer_idx not in args.mlp_only_layers) and (
+            args.num_experts > 0 and (layer_idx + 1) % args.decoder_sparse_step == 0
+        ):
+            self.mlp = KlearSparseMoeBlock(args)
+        else:
+            self.mlp = KlearMLP(args.hidden_size, args.intermediate_size)
+
+        self.input_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            args.hidden_size, eps=args.rms_norm_eps
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), mask, cache)
+        h = x + r
+        r = self.mlp(self.post_attention_layernorm(h))
+        out = h + r
+        return out
+
+
+class KlearModel(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.embed_tokens = nn.Embedding(args.vocab_size, args.hidden_size)
+        self.layers = [
+            KlearDecoderLayer(args=args, layer_idx=i)
+            for i in range(args.num_hidden_layers)
+        ]
+        self.norm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        h = self.embed_tokens(inputs)
+
+        if cache is None:
+            cache = [None] * len(self.layers)
+
+        mask = create_attention_mask(h, cache[0])
+
+        for layer, c in zip(self.layers, cache):
+            h = layer(h, mask, c)
+
+        return self.norm(h)
+
+
+class Model(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.model_type = args.model_type
+        self.model = KlearModel(args)
+        self.lm_head = nn.Linear(args.hidden_size, args.vocab_size, bias=False)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ):
+        out = self.model(inputs, cache)
+        return self.lm_head(out)
+
+    def sanitize(self, weights):
+        moe_layers = sorted(
+            int(k.split(".")[2])
+            for k in weights
+            if k.startswith("model.layers.")
+            and k.endswith(".mlp.experts.0.gate_proj.weight")
+        )
+        for l in moe_layers:
+            prefix = f"model.layers.{l}.mlp.experts"
+            for name in ["gate_proj", "up_proj", "down_proj"]:
+                stacked = [
+                    weights.pop(f"{prefix}.{e}.{name}.weight")
+                    for e in range(self.args.num_experts)
+                ]
+                weights[f"{prefix}.{name}.weight"] = mx.stack(stacked)
+
+        return weights
+
+    @property
+    def layers(self):
+        return self.model.layers
+
+    @property
+    def quant_predicate(self):
+        def predicate(path, _):
+            if path.endswith("mlp.gate"):
+                return {"group_size": 64, "bits": 8}
+            return True
+
+        return predicate
+
+    @property
+    def cast_predicate(self):
+        def predicate(k):
+            return "expert_bias" not in k
+
+        return predicate
+# Copyright © 2024 Apple Inc.
+# Copyright © 2023 Apple Inc.
+
+from functools import partial
+
+import mlx.core as mx
+import mlx.nn as nn
+
+
+@partial(mx.compile, shapeless=True)
+def swiglu(gate, x):
+    return nn.silu(gate) * x
+
+
+@partial(mx.compile, shapeless=True)
+def precise_swiglu(h, gate, x):
+    gate = nn.silu(gate.astype(mx.float32))
+    x = x.astype(mx.float32)
+    return (gate * x).astype(h.dtype)
+
+
+@partial(mx.compile, shapeless=True)
+def swiglu_oai(
+    gate: mx.array, x: mx.array, alpha: float = 1.702, limit: float = 7.0
+) -> mx.array:
+    # GPT-OSS variant: clip the gate from above only, and add 1 to the linear part.
+    gate = mx.minimum(gate, limit)
+    x = mx.clip(x, -limit, limit)
+    return (x + 1.0) * (gate * mx.sigmoid(alpha * gate))
+
+
+class SwigluOAI(nn.Module):
+    def __init__(self, alpha: float = 1.702, limit: float = 7.0):
+        super().__init__()
+        self._alpha = alpha
+        self._limit = limit
+
+    def __call__(self, x: mx.array, gate: mx.array) -> mx.array:
+        return swiglu_oai(gate, x, alpha=self._alpha, limit=self._limit)
+
+
+@partial(mx.compile, shapeless=True)
+def xielu(x, alpha_p, alpha_n, beta, eps):
+    alpha_p = nn.softplus(alpha_p)
+    alpha_n = beta + nn.softplus(alpha_n)
+    return mx.where(
+        x > 0,
+        alpha_p * mx.square(x) + beta * x,
+        (mx.expm1(mx.minimum(x, eps)) - x) * alpha_n + beta * x,
+    )
+
+
+class XieLU(nn.Module):
+    def __init__(
+        self,
+        alpha_p_init=0.8,
+        alpha_n_init=0.8,
+        beta=0.5,
+        eps=-1e-6,
+    ):
+        super().__init__()
+        alpha_p_tensor = mx.array(alpha_p_init)
+        alpha_n_tensor = mx.array(alpha_n_init - beta)
+        self.alpha_p = mx.log(mx.exp(alpha_p_tensor) - 1)
+        self.alpha_n = mx.log(mx.exp(alpha_n_tensor) - 1)
+
+        self.beta = mx.array(beta)
+        self.eps = mx.array(eps)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return xielu(x, self.alpha_p, self.alpha_n, self.beta, self.eps)
+# Copyright © 2025 Apple Inc.
+
+import math
+from dataclasses import dataclass
+from functools import partial
+from itertools import accumulate
+from typing import Any, Optional
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .cache import ConcatenateKVCache, KVCache
+from .rope_utils import initialize_rope
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    vocab_size: int
+    hidden_dim: int
+    num_layers: int
+    num_kv_reuse_layers: int
+    num_heads: int
+    num_kv_heads: int
+    hidden_dim_scale_factor: float = 3.25
+    rope_theta: float = 50000
+    rms_norm_eps: float = 1e-5
+
+
+class FusedLoRALinear(nn.Module):
+    def __init__(
+        self,
+        input_dims: int,
+        output_dims: list[int],
+        r: int = 8,
+        dropout: float = 0.0,
+        scale: float = 20.0,
+    ):
+        super().__init__()
+
+        self.linear = FusedLinear(input_dims, output_dims)
+        self.dropout = nn.Dropout(p=dropout)
+        self.scale = scale
+
+        scale = 1 / math.sqrt(input_dims)
+        self.lora_a = [
+            mx.random.uniform(low=-scale, high=scale, shape=(input_dims, r))
+            for _ in output_dims
+        ]
+        self.lora_b = [mx.zeros((r, od)) for od in output_dims]
+
+    def fuse(self, dequantize: bool = False):
+        linear = self.linear
+        weight = linear.weight
+        is_quantized = isinstance(linear, FusedQuantizedLinear)
+
+        # Use the same type as the linear weight if not quantized
+        dtype = weight.dtype
+
+        if is_quantized:
+            dtype = linear.scales.dtype
+            weight = mx.dequantize(
+                weight,
+                linear.scales,
+                linear.biases,
+                linear.group_size,
+                linear.bits,
+            )
+
+        input_dims = weight.shape[-1]
+        output_dims = linear.output_dims
+        fused_linear = FusedLinear(input_dims, output_dims)
+        fused_linear.weight = weight
+        deltas = [
+            ((self.scale * b.T) @ a.T).astype(dtype)
+            for a, b in zip(self.lora_a, self.lora_b)
+        ]
+        delta = mx.concatenate(deltas, axis=0)
+        fused_linear.weight = weight + delta
+
+        if is_quantized and not dequantize:
+            fused_linear = fused_linear.to_quantized(linear.group_size, linear.bits)
+
+        return fused_linear
+
+    def __call__(self, x):
+        dt = x.dtype
+        y = self.linear(x)
+        x = self.dropout(x)
+        z = [(x @ a) @ b for a, b in zip(self.lora_a, self.lora_b)]
+        return tuple(yi + (self.scale * zi).astype(dt) for yi, zi in zip(y, z))
+
+
+class FusedQuantizedLinear(nn.QuantizedLinear):
+    def __init__(self, input_dims, output_dims, group_size: int = 64, bits: int = 4):
+        *indices, output_dims = accumulate(output_dims)
+        self.indices = indices
+        super().__init__(
+            input_dims, output_dims, bias=False, group_size=group_size, bits=bits
+        )
+
+    @property
+    def input_dims(self):
+        return self.scales.shape[-1] * self.group_size
+
+    @property
+    def output_dims(self):
+        indices = [0] + self.indices + [self.weight.shape[0]]
+        return [indices[i] - indices[i - 1] for i in range(1, len(indices))]
+
+    def __call__(self, x):
+        x = super().__call__(x)
+        return x.split(self.indices, axis=-1)
+
+    def to_lora(self, r: int = 8, dropout: float = 0.0, scale: float = 20.0):
+        lora_lin = FusedLoRALinear(self.input_dims, self.output_dims, r, dropout, scale)
+        lora_lin.linear = self
+        return lora_lin
+
+
+class FusedLinear(nn.Linear):
+    def __init__(self, input_dims, output_dims):
+        *indices, output_dims = accumulate(output_dims)
+        self.indices = indices
+        super().__init__(input_dims, output_dims, bias=False)
+
+    @property
+    def input_dims(self):
+        return self.weight.shape[-1]
+
+    @property
+    def output_dims(self):
+        indices = [0] + self.indices + [self.weight.shape[0]]
+        return [indices[i] - indices[i - 1] for i in range(1, len(indices))]
+
+    def __call__(self, x):
+        x = super().__call__(x)
+        return x.split(self.indices, axis=-1)
+
+    def to_quantized(self, group_size: int = 64, bits: int = 4):
+        input_dims = self.input_dims
+        output_dims = self.output_dims
+        ql = FusedQuantizedLinear(input_dims, output_dims, group_size, bits)
+        ql.weight, ql.scales, ql.biases = mx.quantize(self.weight, group_size, bits)
+
+        return ql
+
+    def to_lora(self, r: int = 8, dropout: float = 0.0, scale: float = 20.0):
+        lora_lin = FusedLoRALinear(self.input_dims, self.output_dims, r, dropout, scale)
+        lora_lin.linear = self
+        return lora_lin
+
+
+@partial(mx.compile, shapeless=True)
+def fake_8bit_quant(x, scale):
+    dt = x.dtype
+    x = x.astype(mx.float32)
+    x = (x / scale).round()
+    x = mx.clip(x, -128, 127)
+    return (x * scale).astype(dt)
+
+
+class Attention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+
+        dim = args.hidden_dim
+        self.n_heads = n_heads = args.num_heads
+        self.n_kv_heads = n_kv_heads = args.num_kv_heads
+        self.head_dim = head_dim = args.hidden_dim // n_heads
+        self.scale = head_dim**-0.5
+
+        self.qkv_proj = FusedLinear(
+            dim, [n_heads * head_dim] + 2 * [n_kv_heads * head_dim]
+        )
+        self.out_proj = nn.Linear(dim, dim, bias=False)
+        self.rope = initialize_rope(
+            self.head_dim,
+            args.rope_theta,
+            True,
+        )
+        self.q_norm = nn.RMSNorm(head_dim)
+        self.k_norm = nn.RMSNorm(head_dim)
+        self.quant_key_scale = mx.array(1.0)
+        self.quant_value_scale = mx.array(1.0)
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+
+        # Get the queries, keys and values
+        queries, keys, values = self.qkv_proj(x)
+
+        # Prepare the queries, keys and values for the attention computation
+        queries = queries.reshape(B, L, self.n_heads, -1).transpose(0, 2, 1, 3)
+        keys = keys.reshape(B, L, self.n_kv_heads, -1).transpose(0, 2, 1, 3)
+        values = values.reshape(B, L, self.n_kv_heads, -1).transpose(0, 2, 1, 3)
+
+        if cache is not None:
+            queries = self.q_norm(self.rope(queries, offset=cache.offset))
+            keys = self.k_norm(self.rope(keys, offset=cache.offset))
+            keys = fake_8bit_quant(keys, self.quant_key_scale)
+            values = fake_8bit_quant(values, self.quant_value_scale)
+            keys, values = cache.update_and_fetch(keys, values)
+        else:
+            queries = self.q_norm(self.rope(queries))
+            keys = self.k_norm(self.rope(keys))
+            keys = fake_8bit_quant(keys, self.quant_key_scale)
+            values = fake_8bit_quant(values, self.quant_value_scale)
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=cache, scale=self.scale, mask=mask
+        )
+
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.out_proj(output)
+
+
+class KVReuseAttention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+
+        dim = args.hidden_dim
+        self.n_heads = n_heads = args.num_heads
+        self.head_dim = head_dim = args.hidden_dim // n_heads
+        self.scale = head_dim**-0.5
+
+        self.q_proj = nn.Linear(dim, dim, bias=False)
+        self.out_proj = nn.Linear(dim, dim, bias=False)
+        self.rope = initialize_rope(
+            self.head_dim,
+            args.rope_theta,
+            True,
+        )
+        self.q_norm = nn.RMSNorm(head_dim)
+
+    def __call__(
+        self,
+        x: mx.array,
+        keys: mx.array,
+        values: mx.array,
+        mask: Optional[mx.array] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+        _, _, S, _ = keys.shape
+
+        queries = self.q_proj(x)
+        queries = queries.reshape(B, L, self.n_heads, -1).transpose(0, 2, 1, 3)
+        queries = self.q_norm(self.rope(queries, offset=S - L))
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=None, scale=self.scale, mask=mask
+        )
+
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.out_proj(output)
+
+
+class MLP(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+
+        dim = args.hidden_dim
+        hidden_dim = int(dim * args.hidden_dim_scale_factor)
+
+        self.gate_proj = nn.Linear(dim, hidden_dim, bias=False)
+        self.down_proj = nn.Linear(hidden_dim, dim, bias=False)
+        self.up_proj = nn.Linear(dim, hidden_dim, bias=False)
+
+    def __call__(self, x) -> mx.array:
+        g = self.gate_proj(x)
+        x = self.up_proj(x)
+        return self.down_proj(swiglu(g, x))
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.self_attn = Attention(args)
+        self.mlp = MLP(args)
+        self.input_layernorm = nn.RMSNorm(args.hidden_dim, eps=args.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            args.hidden_dim, eps=args.rms_norm_eps
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), mask, cache)
+        h = x + r
+        r = self.mlp(self.post_attention_layernorm(h))
+        out = h + r
+        return out
+
+
+class KVReuseTransformerBlock(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.self_attn = KVReuseAttention(args)
+        self.mlp = MLP(args)
+        self.input_layernorm = nn.RMSNorm(args.hidden_dim, eps=args.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            args.hidden_dim, eps=args.rms_norm_eps
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        keys: mx.array,
+        values: mx.array,
+        mask: Optional[mx.array] = None,
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), keys, values, mask)
+        h = x + r
+        r = self.mlp(self.post_attention_layernorm(h))
+        out = h + r
+        return out
+
+
+class AFMModel(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.vocab_size = args.vocab_size
+
+        self.embedding = nn.Embedding(args.vocab_size, args.hidden_dim)
+        self.layers = [
+            TransformerBlock(args)
+            for _ in range(args.num_layers - args.num_kv_reuse_layers)
+        ]
+        self.kv_reuse_layers = [
+            KVReuseTransformerBlock(args) for _ in range(args.num_kv_reuse_layers)
+        ]
+        self.output_norm = nn.RMSNorm(args.hidden_dim, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache=None,
+    ):
+        h = self.embedding(inputs)
+
+        if cache is None:
+            cache = [None] * len(self.layers)
+            cache[-1] = ConcatenateKVCache()
+
+        mask = create_attention_mask(h, cache[0])
+
+        for layer, c in zip(self.layers, cache):
+            h = layer(h, mask, cache=c)
+
+        keys, values = cache[-1].keys_and_values()
+        for layer in self.kv_reuse_layers:
+            h = layer(h, keys, values, mask)
+
+        return self.output_norm(h)
+
+
+class Model(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.model_type = args.model_type
+        self.model = AFMModel(args)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache=None,
+    ):
+        out = self.model(inputs, cache)
+        out = self.model.embedding.as_linear(out)
+        return out
+
+    def make_cache(self):
+        return [KVCache() for _ in range(len(self.model.layers))]
+
+    @property
+    def layers(self):
+        return self.model.layers + self.model.kv_reuse_layers
+# Copyright © 2024 Apple Inc.
+
+import math
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .cache import KVCache, RotatingKVCache
+from .rope_utils import initialize_rope
+from .switch_layers import SwitchGLU
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    layer_types: List[str]
+    vocab_size: int = 200192
+    hidden_size: int = 2048
+    intermediate_size: int = 6144
+    moe_intermediate_size: int = 1024
+    num_hidden_layers: int = 32
+    num_attention_heads: int = 32
+    num_key_value_heads: int = 4
+    head_dim: int = 64
+    max_position_embeddings: int = 131072
+    rms_norm_eps: float = 1e-5
+    rope_theta: float = 10000
+    rope_scaling: Optional[Dict[str, Union[float, str]]] = None
+    tie_word_embeddings: bool = False
+    # MoE config
+    num_experts: int = 128
+    num_experts_per_tok: int = 8
+    num_shared_experts: int = 1
+    num_dense_layers: int = 2
+    route_norm: bool = True
+    route_scale: float = 2.826
+    score_func: str = "sigmoid"
+    n_group: int = 1
+    topk_group: int = 1
+    sliding_window: int = 2048
+    mup_enabled: bool = True
+
+
+class Attention(nn.Module):
+    def __init__(self, args: ModelArgs, is_local_attention: bool = False):
+        super().__init__()
+
+        self.hidden_size = args.hidden_size
+        self.n_heads = args.num_attention_heads
+        self.n_kv_heads = args.num_key_value_heads
+        self.head_dim = args.head_dim
+        self.is_local_attention = is_local_attention
+
+        self.scale = self.head_dim**-0.5
+
+        self.q_proj = nn.Linear(
+            self.hidden_size, self.n_heads * self.head_dim, bias=False
+        )
+        self.k_proj = nn.Linear(
+            self.hidden_size, self.n_kv_heads * self.head_dim, bias=False
+        )
+        self.v_proj = nn.Linear(
+            self.hidden_size, self.n_kv_heads * self.head_dim, bias=False
+        )
+        self.o_proj = nn.Linear(
+            self.n_heads * self.head_dim, self.hidden_size, bias=False
+        )
+
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+
+        self.gate_proj = nn.Linear(
+            self.hidden_size, self.n_heads * self.head_dim, bias=False
+        )
+
+        if is_local_attention:
+            self.rope = initialize_rope(
+                self.head_dim,
+                args.rope_theta,
+                False,  # traditional
+                args.rope_scaling,
+                args.max_position_embeddings,
+            )
+        else:
+            self.rope = None
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+
+        queries = self.q_proj(x)
+        keys = self.k_proj(x)
+        values = self.v_proj(x)
+
+        queries = queries.reshape(B, L, self.n_heads, self.head_dim).transpose(
+            0, 2, 1, 3
+        )
+        keys = keys.reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+        values = values.reshape(B, L, self.n_kv_heads, self.head_dim).transpose(
+            0, 2, 1, 3
+        )
+
+        queries = self.q_norm(queries)
+        keys = self.k_norm(keys)
+
+        if self.is_local_attention and self.rope is not None:
+            if cache is not None:
+                queries = self.rope(queries, offset=cache.offset)
+                keys = self.rope(keys, offset=cache.offset)
+            else:
+                queries = self.rope(queries)
+                keys = self.rope(keys)
+
+        if cache is not None:
+            keys, values = cache.update_and_fetch(keys, values)
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=cache, scale=self.scale, mask=mask
+        )
+
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+
+        gate = mx.sigmoid(self.gate_proj(x))
+        output = output * gate
+
+        return self.o_proj(output)
+
+
+class MLP(nn.Module):
+    def __init__(self, args: ModelArgs, intermediate_size: Optional[int] = None):
+        super().__init__()
+
+        dim = args.hidden_size
+        hidden_dim = (
+            intermediate_size
+            if intermediate_size is not None
+            else args.intermediate_size
+        )
+
+        self.gate_proj = nn.Linear(dim, hidden_dim, bias=False)
+        self.down_proj = nn.Linear(hidden_dim, dim, bias=False)
+        self.up_proj = nn.Linear(dim, hidden_dim, bias=False)
+
+    def __call__(self, x) -> mx.array:
+        return self.down_proj(swiglu(self.gate_proj(x), self.up_proj(x)))
+
+
+class MoERouter(nn.Module):
+    """Router module that wraps the gate for proper weight naming."""
+
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.gate = nn.Linear(args.hidden_size, args.num_experts, bias=False)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return self.gate(x)
+
+
+class AfmoeMoE(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.num_experts = args.num_experts
+        self.num_experts_per_tok = args.num_experts_per_tok
+        self.route_norm = args.route_norm
+        self.route_scale = args.route_scale
+        self.score_func = args.score_func
+        self.n_group = args.n_group
+        self.topk_group = args.topk_group
+
+        self.router = MoERouter(args)
+
+        self.expert_bias = mx.zeros((args.num_experts,))
+
+        self.experts = SwitchGLU(
+            args.hidden_size,
+            args.moe_intermediate_size,
+            args.num_experts,
+        )
+
+        if args.num_shared_experts > 0:
+            shared_intermediate_size = (
+                args.moe_intermediate_size * args.num_shared_experts
+            )
+            self.shared_experts = MLP(args, intermediate_size=shared_intermediate_size)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        gates = self.router(x)
+
+        if self.score_func == "sigmoid":
+            scores = mx.sigmoid(gates.astype(mx.float32))
+        else:
+            scores = mx.softmax(gates.astype(mx.float32), axis=-1)
+
+        # Add expert bias for selection
+        selection_scores = scores + self.expert_bias
+
+        # Group-based expert selection if n_group > 1
+        if self.n_group > 1:
+            selection_scores = mx.unflatten(
+                selection_scores, axis=-1, shape=(self.n_group, -1)
+            )
+            group_scores = mx.topk(selection_scores, 2, axis=-1).sum(
+                axis=-1, keepdims=True
+            )
+            k = self.n_group - self.topk_group
+            group_idx = mx.argpartition(group_scores, kth=k - 1, axis=-2)[..., :k, :]
+            selection_scores = mx.put_along_axis(
+                selection_scores, mx.stop_gradient(group_idx), mx.array(0.0), axis=-2
+            )
+            selection_scores = mx.flatten(selection_scores, -2, -1)
+
+        # Select top-k experts
+        k = self.num_experts_per_tok
+        inds = mx.argpartition(-selection_scores, kth=k - 1, axis=-1)[..., :k]
+        inds = mx.stop_gradient(inds)
+
+        selected_scores = mx.take_along_axis(scores, inds, axis=-1)
+
+        if self.route_norm and self.num_experts_per_tok > 1:
+            denominator = selected_scores.sum(axis=-1, keepdims=True)
+            selected_scores = selected_scores / denominator
+
+        selected_scores = selected_scores * self.route_scale
+
+        y = self.experts(x, inds)
+        y = (y * selected_scores[..., None]).sum(axis=-2).astype(y.dtype)
+
+        if self.args.num_shared_experts > 0:
+            y = y + self.shared_experts(x)
+
+        return y
+
+
+class DecoderLayer(nn.Module):
+    def __init__(self, args: ModelArgs, layer_idx: int, use_sliding: bool = False):
+        super().__init__()
+        self.hidden_size = args.hidden_size
+        self.use_sliding = use_sliding
+        self.layer_idx = layer_idx
+
+        self.self_attn = Attention(args, is_local_attention=use_sliding)
+
+        if layer_idx < args.num_dense_layers:
+            self.mlp = MLP(args)
+        else:
+            self.mlp = AfmoeMoE(args)
+
+        self.input_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            args.hidden_size, eps=args.rms_norm_eps
+        )
+        self.pre_mlp_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+        self.post_mlp_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), mask, cache)
+        r = self.post_attention_layernorm(r)
+        h = x + r
+
+        r = self.mlp(self.pre_mlp_layernorm(h))
+        r = self.post_mlp_layernorm(r)
+        return h + r
+
+
+class AfmoeModel(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.vocab_size = args.vocab_size
+        self.num_hidden_layers = args.num_hidden_layers
+        self.layer_types = args.layer_types
+        self.sliding_window = args.sliding_window
+        self.mup_enabled = args.mup_enabled
+        self.hidden_size = args.hidden_size
+
+        self.embed_tokens = nn.Embedding(args.vocab_size, args.hidden_size)
+        self.layers = [
+            DecoderLayer(
+                args=args, layer_idx=idx, use_sliding=layer_type == "sliding_attention"
+            )
+            for idx, layer_type in enumerate(self.layer_types)
+        ]
+        self.norm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+        self.fa_idx = self.layer_types.index("full_attention")
+        self.swa_idx = None
+        for idx, layer in enumerate(self.layers):
+            if layer.use_sliding:
+                self.swa_idx = idx
+                break
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache=None,
+    ):
+        h = self.embed_tokens(inputs)
+
+        if self.mup_enabled:
+            h = h * math.sqrt(self.hidden_size)
+
+        if cache is None:
+            cache = [None] * len(self.layers)
+
+        fa_mask = create_attention_mask(h, cache[self.fa_idx])
+        swa_mask = None
+        if self.swa_idx is not None:
+            swa_mask = create_attention_mask(
+                h, cache[self.swa_idx], window_size=self.sliding_window
+            )
+
+        for layer, c in zip(self.layers, cache):
+            mask = swa_mask if layer.use_sliding else fa_mask
+            h = layer(h, mask, cache=c)
+
+        return self.norm(h)
+
+
+class Model(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.model_type = args.model_type
+        self.model = AfmoeModel(args)
+
+        if not args.tie_word_embeddings:
+            self.lm_head = nn.Linear(args.hidden_size, args.vocab_size, bias=False)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache=None,
+    ):
+        out = self.model(inputs, cache)
+        if self.args.tie_word_embeddings:
+            out = self.model.embed_tokens.as_linear(out)
+        else:
+            out = self.lm_head(out)
+        return out
+
+    def sanitize(self, weights):
+        # Remove unused precomputed rotary freqs
+        weights = {k: v for k, v in weights.items() if "rotary_emb.inv_freq" not in k}
+
+        if self.args.tie_word_embeddings:
+            weights.pop("lm_head.weight", None)
+
+        # Stack experts weights for SwitchGLU
+        for l in range(self.args.num_hidden_layers):
+            if l < self.args.num_dense_layers:
+                continue
+            prefix = f"model.layers.{l}"
+            for n in ["up_proj", "down_proj", "gate_proj"]:
+                for k in ["weight", "scales", "biases"]:
+                    if f"{prefix}.mlp.experts.0.{n}.{k}" in weights:
+                        to_join = [
+                            weights.pop(f"{prefix}.mlp.experts.{e}.{n}.{k}")
+                            for e in range(self.args.num_experts)
+                        ]
+                        weights[f"{prefix}.mlp.experts.{n}.{k}"] = mx.stack(to_join)
+
+        return weights
+
+    @property
+    def layers(self):
+        return self.model.layers
+
+    def make_cache(self):
+        return [
+            (
+                RotatingKVCache(max_size=self.model.sliding_window)
+                if layer.use_sliding
+                else KVCache()
+            )
+            for layer in self.layers
+        ]
+
+    @property
+    def cast_predicate(self):
+        def predicate(k):
+            return "expert_bias" not in k
+
+        return predicate
+
+    @property
+    def quant_predicate(self):
+        def predicate(path, _):
+            if "router.gate" in path:
+                return {"group_size": 64, "bits": 8}
+            return True
+
+        return predicate
+# Copyright © 2023 Apple Inc.
+
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Union
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import XieLU
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .rope_utils import initialize_rope
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    hidden_size: int
+    num_hidden_layers: int
+    intermediate_size: int
+    mlp_bias: bool
+    num_attention_heads: int
+    attention_bias: bool
+    rms_norm_eps: float
+    vocab_size: int
+    num_key_value_heads: int
+    max_position_embeddings: int
+    rope_theta: float
+    post_norm: bool
+    qk_norm: bool
+    tie_word_embeddings: bool
+    rope_traditional: bool = False
+    rope_scaling: Optional[Dict[str, Union[float, str]]] = None
+
+
+class ApertusMLP(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.up_proj = nn.Linear(
+            args.hidden_size, args.intermediate_size, bias=args.mlp_bias
+        )
+        self.down_proj = nn.Linear(
+            args.intermediate_size, args.hidden_size, bias=args.mlp_bias
+        )
+        self.act_fn = XieLU()
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return self.down_proj(self.act_fn(self.up_proj(x)))
+
+
+class ApertusAttention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.num_attention_heads = args.num_attention_heads
+        self.num_key_value_heads = args.num_key_value_heads
+
+        self.head_dim = args.hidden_size // args.num_attention_heads
+        self.scale = self.head_dim**-0.5
+
+        self.q_proj = nn.Linear(
+            args.hidden_size, args.num_attention_heads * self.head_dim, bias=False
+        )
+        self.k_proj = nn.Linear(
+            args.hidden_size, args.num_key_value_heads * self.head_dim, bias=False
+        )
+        self.v_proj = nn.Linear(
+            args.hidden_size, args.num_key_value_heads * self.head_dim, bias=False
+        )
+        self.o_proj = nn.Linear(
+            args.num_attention_heads * self.head_dim, args.hidden_size, bias=False
+        )
+
+        self.q_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+        self.k_norm = nn.RMSNorm(self.head_dim, eps=args.rms_norm_eps)
+
+        self.rope = initialize_rope(
+            self.head_dim,
+            args.rope_theta,
+            args.rope_traditional,
+            args.rope_scaling,
+            args.max_position_embeddings,
+        )
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        B, L, D = x.shape
+        queries, keys, values = self.q_proj(x), self.k_proj(x), self.v_proj(x)
+        queries = self.q_norm(
+            queries.reshape(B, L, self.num_attention_heads, -1)
+        ).transpose(0, 2, 1, 3)
+        keys = self.k_norm(keys.reshape(B, L, self.num_key_value_heads, -1)).transpose(
+            0, 2, 1, 3
+        )
+        values = values.reshape(B, L, self.num_key_value_heads, -1).transpose(
+            0, 2, 1, 3
+        )
+
+        if cache is not None:
+            queries = self.rope(queries, offset=cache.offset)
+            keys = self.rope(keys, offset=cache.offset)
+            keys, values = cache.update_and_fetch(keys, values)
+        else:
+            queries = self.rope(queries)
+            keys = self.rope(keys)
+
+        output = scaled_dot_product_attention(
+            queries, keys, values, cache=cache, scale=self.scale, mask=mask
+        )
+        output = output.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.o_proj(output)
+
+
+class ApertusDecoderLayer(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.self_attn = ApertusAttention(args)
+        self.mlp = ApertusMLP(args)
+
+        self.attention_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+        self.feedforward_layernorm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        x: mx.array,
+        mask: Optional[mx.array] = None,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        h = x + self.self_attn(self.attention_layernorm(x), mask, cache)
+        out = h + self.mlp(self.feedforward_layernorm(h))
+        return out
+
+
+class ApertusModel(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.embed_tokens = nn.Embedding(args.vocab_size, args.hidden_size)
+        self.layers = [
+            ApertusDecoderLayer(args=args) for _ in range(args.num_hidden_layers)
+        ]
+        self.norm = nn.RMSNorm(args.hidden_size, eps=args.rms_norm_eps)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        h = self.embed_tokens(inputs)
+
+        if cache is None:
+            cache = [None] * len(self.layers)
+
+        mask = create_attention_mask(h, cache[0])
+
+        for layer, c in zip(self.layers, cache):
+            h = layer(h, mask=mask, cache=c)
+
+        return self.norm(h)
+
+
+class Model(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.model_type = args.model_type
+        self.model = ApertusModel(args)
+        if not args.tie_word_embeddings:
+            self.lm_head = nn.Linear(args.hidden_size, args.vocab_size, bias=False)
+
+    def __call__(
+        self,
+        inputs: mx.array,
+        cache: Optional[Any] = None,
+    ) -> mx.array:
+        out = self.model(inputs, cache)
+        if self.args.tie_word_embeddings:
+            out = self.model.embed_tokens.as_linear(out)
+        else:
+            out = self.lm_head(out)
+        return out
+
+    def sanitize(self, weights):
+        for k, v in weights.items():
+            if k.endswith("alpha_p") or k.endswith("alpha_n"):
+                weights[k] = v.squeeze()
+        if self.args.tie_word_embeddings:
+            weights.pop("lm_head.weight", None)
+        return weights
+
+    @property
+    def layers(self):
+        return self.model.layers
+# Copyright © 2025 Apple Inc.
+
+from dataclasses import dataclass
+from typing import Any, List, Optional
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import BaseModelArgs, create_attention_mask, scaled_dot_product_attention
+from .cache import ArraysCache, CacheList, KVCache, RotatingKVCache
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    vocab_size: int
+    hidden_size: int
+    intermediate_size: int
+    num_hidden_layers: int
+    num_attention_heads: int
+    num_key_value_heads: int
+    rope_theta: float
+    sliding_window: int
+    sliding_window_layers: List[int]
+    conv_window: int
+    rms_norm_eps: float
+    model_type: str = "baichuan_m1"
+    num_swa_attention_heads: Optional[int] = None
+    num_swa_key_value_heads: Optional[int] = None
+    tie_word_embeddings: bool = False
+
+
+class Attention(nn.Module):
+    def __init__(self, config: ModelArgs, layer_idx: Optional[int] = None):
+        super().__init__()
+        self.config = config
+        self.layer_idx = layer_idx
+        if layer_idx is None:
+            raise ValueError("Layer index must be provided to Attention module.")
+
+        self.is_swa = layer_idx in config.sliding_window_layers
+        self.num_heads = (
+            config.num_swa_attention_heads
+            if self.is_swa and config.num_swa_attention_heads
+            else config.num_attention_heads
+        )
+        self.num_kv_heads = (
+            config.num_swa_key_value_heads
+            if self.is_swa and config.num_swa_key_value_heads
+            else config.num_key_value_heads
+        )
+
+        self.hidden_size = config.hidden_size
+        self.head_dim = self.hidden_size // self.num_heads
+        assert self.head_dim * self.num_heads == self.hidden_size
+
+        self.scale = self.head_dim**-0.5
+
+        self.W_pack = nn.Linear(
+            config.hidden_size,
+            self.hidden_size + 2 * self.num_kv_heads * self.head_dim,
+            bias=False,
+        )
+        self.o_proj = nn.Linear(
+            self.num_heads * self.head_dim, config.hidden_size, bias=False
+        )
+
+        self.rope = nn.RoPE(self.head_dim, traditional=False, base=config.rope_theta)
+
+        self.conv_window = config.conv_window
+        assert self.conv_window == 2
+        self.conv_k = mx.zeros((1, 1, self.num_kv_heads, 1, self.conv_window))
+        self.conv_v = mx.zeros((1, 1, self.num_kv_heads, 1, self.conv_window))
+
+    def _custom_convolution(self, u, weights, state=None):
+        B, H, L, D = u.shape
+        weights = weights.reshape((1, H, self.conv_window, 1, 1))
+        w0 = weights[:, :, 0]
+        w1 = weights[:, :, 1]
+        if state is None:
+            state = mx.zeros((B, H, 1, D), u.dtype)
+        if L > 1:
+            u_prev = mx.concatenate([state, u[:, :, :-1]], axis=2)
+        else:
+            u_prev = state
+        return u_prev * w0 + u * w1
+
+    def __call__(
+        self, x: mx.array, mask: mx.array = None, cache: Any = None
+    ) -> mx.array:
+        B, L, D = x.shape
+
+        proj = self.W_pack(x)
+        q, k, v = mx.split(proj, (D, D + self.num_kv_heads * self.head_dim), axis=-1)
+
+        q = q.reshape(B, L, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
+        k = k.reshape(B, L, self.num_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+        v = v.reshape(B, L, self.num_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+
+        if cache is None:
+            cache = (None, None)
+
+        if cache[0] is not None:
+            offset = cache[1].offset
+            last_k, last_v = cache[0][0], cache[0][1]
+        else:
+            offset = 0
+            last_k, last_v = None, None
+
+        k_init = k
+        v_init = v
+        k = self._custom_convolution(k, self.conv_k, state=last_k)
+        v = self._custom_convolution(v, self.conv_v, state=last_v)
+        q = self.rope(q, offset=offset)
+        k = self.rope(k, offset=offset)
+
+        if cache[0] is not None:
+            k, v = cache[1].update_and_fetch(k, v)
+            if L > 0:
+                cache[0][0] = k_init[:, :, -1:, :]
+                cache[0][1] = v_init[:, :, -1:, :]
+
+        out = scaled_dot_product_attention(
+            q, k, v, cache=cache[1], scale=self.scale, mask=mask
+        )
+        out = out.transpose(0, 2, 1, 3).reshape(B, L, -1)
+        return self.o_proj(out)
+
+
+class MLP(nn.Module):
+    def __init__(self, config: ModelArgs):
+        super().__init__()
+        self.gate_proj = nn.Linear(
+            config.hidden_size, config.intermediate_size, bias=False
+        )
+        self.up_proj = nn.Linear(
+            config.hidden_size, config.intermediate_size, bias=False
+        )
+        self.down_proj = nn.Linear(
+            config.intermediate_size, config.hidden_size, bias=False
+        )
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return self.down_proj(swiglu(self.gate_proj(x), self.up_proj(x)))
+
+
+class DecoderLayer(nn.Module):
+    def __init__(self, config: ModelArgs, layer_idx: int):
+        super().__init__()
+        self.self_attn = Attention(config, layer_idx)
+        self.mlp = MLP(config)
+        self.input_layernorm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = nn.RMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
+
+    def __call__(
+        self, x: mx.array, mask: mx.array = None, cache: Any = None
+    ) -> mx.array:
+        r = self.self_attn(self.input_layernorm(x), mask, cache)
+        x = x + r
+        r = self.mlp(self.post_attention_layernorm(x))
+        return x + r
+
+
+class BaichuanModel(nn.Module):
+    def __init__(self, config: ModelArgs):
+        super().__init__()
+        self.args = config
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.layers = [DecoderLayer(config, i) for i in range(config.num_hidden_layers)]
+        self.norm = nn.RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+
+        self.sliding_window = config.sliding_window
+        self.first_swa_idx = None
+        if config.sliding_window_layers:
+            self.first_swa_idx = config.sliding_window_layers[0]
+
+        self.first_global_idx = None
+        self.swa_layers = set(config.sliding_window_layers)
+        for i in range(config.num_hidden_layers):
+            if i in self.swa_layers:
+                continue
+            self.first_global_idx = i
+            break
+
+    def __call__(self, inputs: mx.array, cache: Any = None) -> mx.array:
+        x = self.embed_tokens(inputs)
+
+        if cache is None:
+            cache = [(None, None)] * len(self.layers)
+
+        if self.first_global_idx is None:
+            c_global = None
+        else:
+            c_global = cache[self.first_global_idx][1]
+
+        if self.first_swa_idx is None:
+            c_swa = None
+        else:
+            c_swa = cache[self.first_swa_idx][1]
+
+        global_mask = create_attention_mask(x, c_global)
+        swa_mask = create_attention_mask(x, c_swa, window_size=self.sliding_window)
+
+        for l, (layer, c) in enumerate(zip(self.layers, cache)):
+            mask = swa_mask if l in self.swa_layers else global_mask
+            x = layer(x, mask, c)
+        return self.norm(x)
+
+
+class Model(nn.Module):
+    def __init__(self, config: ModelArgs):
+        super().__init__()
+        self.config = config
+        self.model_type = config.model_type
+        self.model = BaichuanModel(config)
+        self.tie_word_embeddings = config.tie_word_embeddings
+        if not config.tie_word_embeddings:
+            self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+
+    def make_cache(self) -> List[Any]:
+        caches = []
+        for i in range(len(self.model.layers)):
+            is_swa = i in self.config.sliding_window_layers
+            conv_cache = ArraysCache(size=2)
+            if is_swa:
+                kv_cache = RotatingKVCache(max_size=self.config.sliding_window)
+            else:
+                kv_cache = KVCache()
+            caches.append(CacheList(conv_cache, kv_cache))
+        return caches
+
+    def sanitize(self, weights: dict) -> dict:
+        is_quantized = "lm_head.scales" in weights
+        if not is_quantized and "lm_head.weight" in weights:
+            w = weights["lm_head.weight"]
+            dtype = w.dtype
+            w = w.astype(mx.float32)
+            norm = mx.linalg.norm(w, axis=-1, keepdims=True)
+            w = (w / (norm + 1e-7)).astype(dtype)
+            weights["lm_head.weight"] = w
+        return weights
+
+    def __call__(self, inputs: mx.array, cache: Any = None) -> mx.array:
+        outputs = self.model(inputs, cache)
+        return self.lm_head(outputs)
+
+    @property
+    def layers(self) -> List[nn.Module]:
+        return self.model.layers
+# Copyright © 2026 Apple Inc.
+
+import math
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Tuple, Union
+
+import mlx.core as mx
+import mlx.nn as nn
+
+from .activations import swiglu
+from .base import (
+    BaseModelArgs,
+    create_attention_mask,
+    create_ssm_mask,
+    scaled_dot_product_attention,
+)
+from .cache import ArraysCache, KVCache
+from .mla import MultiLinear
+from .pipeline import PipelineMixin
+from .rope_utils import apply_yarn_mscale, initialize_rope
+from .switch_layers import SwitchGLU
+
+
+@dataclass
+class ModelArgs(BaseModelArgs):
+    model_type: str
+    hidden_size: int
+    intermediate_size: int
+    moe_intermediate_size: int
+    num_hidden_layers: int
+    num_attention_heads: int
+    num_key_value_heads: int
+    num_experts: int
+    num_experts_per_tok: int
+    num_shared_experts: int
+    n_group: int
+    topk_group: int
+    first_k_dense_replace: int
+    layer_group_size: int
+    group_norm_size: int
+    vocab_size: int
+    rms_norm_eps: float
+    rope_theta: float
+    max_position_embeddings: int
+    routed_scaling_factor: float
+    head_dim: int
+    kv_lora_rank: int
+    qk_rope_head_dim: int
+    qk_nope_head_dim: int
+    v_head_dim: int
+    q_lora_rank: Optional[int] = None
+    moe_shared_expert_intermediate_size: Optional[int] = None
+    rope_interleave: bool = True
+    partial_rotary_factor: float = 0.5
+    rope_scaling: Optional[Dict[str, Union[float, str]]] = None
+    use_qkv_bias: bool = False
+    use_bias: bool = False
+    use_qk_norm: bool = True
+    score_function: str = "sigmoid"
+    norm_topk_prob: bool = True
+    moe_router_enable_expert_bias: bool = True
+    tie_word_embeddings: bool = False
+    num_nextn_predict_layers: int = 0
+
+    def __post_init__(self):
+        head_dim = self.head_dim or self.hidden_size // self.num_attention_heads
+        dims = int(head_dim * self.partial_rotary_factor)
+        if dims <= 0 or dims > head_dim or dims % 2:
+            raise ValueError(
+                f"Invalid rotary dimension {dims} with head_dim={head_dim}"
+            )
+
+
+@mx.compile
+def _recurrent_gla_step(
+    q_t: mx.array,
+    k_t: mx.array,
+    v_t: mx.array,
+    h: mx.array,
+    exp_g: mx.array,
+) -> Tuple[mx.array, mx.array]:
+    h = h * exp_g + k_t.transpose(0, 1, 3, 2) @ v_t
+    return (q_t @ h).astype(q_t.dtype), h
+
+
+def recurrent_gla(
+    q: mx.array,
+    k: mx.array,
+    v: mx.array,
+    g: mx.array,
+    *,
+    scale: float,
+    h: Optional[mx.array] = None,
+    mask: Optional[mx.array] = None,
+    chunk: int = 128,
+) -> Tuple[mx.array, mx.array]:
+    """
+    Lightning-attention recurrence ``h_t = h_{t-1} exp(g) + k_t^T v_t``,
+    ``y_t = q_t h_t``, with ``g`` a per-head decay constant over time.
+
+    Past one step it runs chunked. With ``r_t`` the number of valid positions up
+    to ``t``, unrolling gives
+
+        y_t = sum_{s <= t} exp(g (r_t - r_s)) (q_t . k_s) v_s + exp(g r_t) q_t h_0
+
+    so each block of ``C`` steps is one decay-weighted causal attention plus one
+    state carry, both matmuls.
+
+    Args:
+        mask (mx.array, optional): A ``[B, L]`` validity mask. Padded positions
+          contribute no ``k v^T`` and do not decay the state.
+    """
+    B, H, L, K = q.shape
+    V = v.shape[-1]
+    out_dtype = q.dtype
+    if h is None:
+        # Hold the state in float32, as the reference does.
+        h = mx.zeros((B, H, K, V), dtype=mx.float32)
+
+    if L == 1:
+        exp_g = mx.exp(g)[:, None, None].astype(h.dtype)
+        y, h_t = _recurrent_gla_step(q * scale, k, v, h, exp_g)
+        if mask is None:
+            return y, h_t
+        keep = mask[:, 0][:, None, None, None]
+        return mx.where(keep, y, 0), mx.where(keep, h_t, h)
+
+    # exp(|g| C / 2) must stay in float32 and |g| < 1, so 176 is the ceiling.
+    C = min(chunk, L, 128)
+    n_chunks = (L + C - 1) // C
+    pad = n_chunks * C - L
+
+    # Rank counts valid positions, so padding neither contributes nor decays.
+    if mask is None:
+        m = (mx.arange(n_chunks * C) < L).astype(mx.float32)[None]
+    else:
+        m = mx.pad(mask.astype(mx.float32), [(0, 0), (0, pad)])
+    if pad:
+        pad_width = [(0, 0), (0, 0), (0, pad), (0, 0)]
+        q = mx.pad(q, pad_width)
+        k = mx.pad(k, pad_width)
+        v = mx.pad(v, pad_width)
+
+    q = mx.unflatten(q, 2, (n_chunks, C))
+    k = mx.unflatten(k, 2, (n_chunks, C))
+    v = mx.unflatten(v, 2, (n_chunks, C)).astype(mx.float32)
+
+    m = mx.unflatten(m, 1, (n_chunks, C))[:, None]
+    rank = mx.cumsum(m, axis=-1)
+    total = rank[..., -1:]
+    gh = g.reshape(1, H, 1, 1)
+
+    # Centring the rank splits exp(g (r_i - r_j)) over i and j within float32.
+    centre = 0.5 * C
+    e = gh * (rank - centre)
+    eq = mx.exp(e) * scale * m
+    ek = mx.exp(-e) * m
+    q = q * eq[..., None]
+    k = k * ek[..., None]
+
+    # The strict upper triangle overflows to +-inf; `tril` selects, so it drops
+    # those instead of multiplying them into NaN.
+    scores = mx.tril(q @ k.swapaxes(-1, -2))
+    intra = scores @ v
+    carry = k.swapaxes(-1, -2) @ v
+    decay = mx.exp(gh * (total - centre))[..., None]
+    state_decay = mx.exp(gh * total)[..., None]
+
+    cross = []
+    for i in range(n_chunks):
+        cross.append(q[:, :, i] @ h)
+        h = state_decay[:, :, i] * h + carry[:, :, i] * decay[:, :, i]
+    cross = mx.stack(cross, axis=2)
+
+    cross_scale = mx.exp(g * centre).reshape(1, H, 1, 1, 1)
+    y = (intra + cross * cross_scale).astype(out_dtype)
+    return mx.flatten(y, 2, 3)[:, :, :L], h
+
+
+class GroupRMSNorm(nn.Module):
+    def __init__(self, dims: int, eps: float = 1e-5, groups: int = 1):
+        super().__init__()
+        self.weight = mx.ones((dims,))
+        self.groups = groups
+        self.eps = eps
+
+    def __call__(self, x: mx.array) -> mx.array:
+        x = mx.unflatten(x, axis=-1, shape=(self.groups, -1))
+        x = mx.fast.rms_norm(x, weight=None, eps=self.eps)
+        return self.weight * mx.flatten(x, -2)
+
+
+class MLP(nn.Module):
+    def __init__(self, args: ModelArgs, intermediate_size: Optional[int] = None):
+        super().__init__()
+        dim = (
+            intermediate_size
+            if intermediate_size is not None
+            else args.intermediate_size
+        )
+        self.gate_proj = nn.Linear(args.hidden_size, dim, bias=args.use_bias)
+        self.up_proj = nn.Linear(args.hidden_size, dim, bias=args.use_bias)
+        self.down_proj = nn.Linear(dim, args.hidden_size, bias=args.use_bias)
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return self.down_proj(swiglu(self.gate_proj(x), self.up_proj(x)))
+
+
+class MultiLatentAttention(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.num_heads = args.num_attention_heads
+        self.q_lora_rank = args.q_lora_rank
+        self.qk_rope_head_dim = args.qk_rope_head_dim
+        self.kv_lora_rank = args.kv_lora_rank
+        self.v_head_dim = args.v_head_dim
+        self.qk_nope_head_dim = args.qk_nope_head_dim
+        self.qk_head_dim = args.qk_nope_head_dim + args.qk_rope_head_dim
+
+        self.scale = self.qk_head_dim**-0.5
+
+        if self.q_lora_rank is None:
+            self.q_proj = nn.Linear(
+                args.hidden_size, self.num_heads * self.qk_head_dim, bias=False
+            )
+        else:
+            self.q_a_proj = nn.Linear(
+                args.hidden_size, self.q_lora_rank, bias=args.use_qkv_bias
+            )
+            self.q_a_layernorm = nn.RMSNorm(self.q_lora_rank, eps=args.rms_norm_eps)
+            self.q_b_proj = nn.Linear(
+                self.q_lora_rank, self.num_heads * self.qk_head_dim, bias=False
+            )
+
+        self.kv_a_proj_with_mqa = nn.Linear(
+            args.hidden_size,
+            self.kv_lora_rank + self.qk_rope_head_dim,
+            bias=args.use_qkv_bias,
+        )
+        self.kv_a_layernorm = nn.RMSNorm(self.kv_lora_rank, eps=args.rms_norm_eps)
+
+        self.embed_q = MultiLinear(
+            self.qk_n
