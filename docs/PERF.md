@@ -255,41 +255,126 @@ Attention share of nace-infer prefill (35B, 10 attention layers, v10 at 2.56 TFL
 5.3 s at 4k, ~8.6 s of 27 s at 16k. At MLX's 5.3 TFLOP/s that becomes ~0.26 s / ~4.2 s, i.e.
 about 805 tok/s at 4k and 715 at 16k (projection, not measured).
 
-## Short prefills (`NI_SHORTPF=1`, opt-in; macOS 27.0.1)
-Cached-turn TTFT (second chat turn on a cached 4k/16k prefix = a short new suffix) and short cold
-prompts. Two causes, both fixed behind the flag:
-1. **The suffix was split at the turn-boundary checkpoint** into two prefill passes, each reading
-   every weight (27B: ~370 ms per pass at <= 32 rows). Now `encode_prefill(..., snap, snap_row)`
-   captures the checkpoint inside the pass: `gdn_prep_par_snap` copies the conv window as it stands
-   after `snap_row` tokens (before rolling it) and `gdn_step_par_snap_l*` writes the recurrent state
-   after token `snap_row - 1`. `ni_run --prefix P --split B` checks it against a separate prefill of
-   [P, B): bit-identical (conv and state max|d| = 0) on both models.
-2. **Small-T GEMMs**: `qmm_b4_m32_n32` (any T < 64) streams weights at 35-40 GB/s with 4-32 rows
-   (bench_qmms, same on both models' shapes). `qmms_b{4,8}_t{1..8}` (src/kernels/qmms.metal):
-   simdgroup owns 8 weight rows, each lane loads 16 contiguous codes of its row per 64-group and
-   dequantizes them as half2 straight into simdgroup-matrix A operands (no threadgroup tiles, no
-   barriers); the k order inside a group is permuted so the matching B operand (8 k x 8 tokens) is
-   four 8-byte loads per lane from the row-major half X; K split over 4/8 simdgroups of a
-   threadgroup (fixed-order sum). Up to 4 projections sharing X in one dispatch (GDN qkv/z/b/a,
-   attention q/k/v, router + shared gate), fused gate/up+SwiGLU (`qmms_gu_*`, dense MLP and the
-   MoE shared expert), MoE experts in 8-row tiles (`qmms_moe_gu_b4` / `qmms_moe_dn_b4`, tile lists
-   of `moe_bucket2` with BM = 8). Beyond 64 rows, whole 64-row tiles stay on qmm and the remainder
-   rows go to qmms (a partial 64-row tile cost a full one). Few queries over a long cached prefix:
-   attention rows are (query, head) pairs of one KV head (`attn_prefill11g*`: 32-row blocks hold
-   4 queries x 8 heads instead of padding T to 32) with the keys split over threadgroups
-   (`attn_prefill11gs` + `attn11_reduce`).
+## Short prefills and cached-turn TTFT (`NI_SHORTPF`, default on; macOS 27.0.1)
+The cached-TTFT column of the benchmark harness is the second chat turn on a cached 4k/16k prefix:
+a short new suffix (27B: 21-28 tokens, because its template renders the previous answer exactly as
+generated, so the live state continues; 35B: 37-65 tokens, because the Qwen3.6 template drops the
+empty think block of earlier answers, so the turn-1 checkpoint is restored and the answer
+re-prefilled). At 45705ec nace-infer took 0.83 / 0.94 s (27B, 4k / 16k) and 0.25 / 0.32 s (35B) there;
+Ollama 0.52 / 0.60 and 0.24 / 0.28, mlx-lm 0.57 / 0.90 (27B), llama.cpp 0.18 / 0.20 (35B).
+`NI_SHORTPF=0` restores the previous behaviour; the parts:
 
-bench_qmms (M4 Pro, isolated kernel, 4-bit g64; qmm = the engine's tile below 64 rows):
-| shape (N x K) | T | qmm_b4_m32_n32 | qmms (ks) |
+1. **One pass per suffix.** The engine split the suffix at the turn-boundary checkpoint into two
+   prefill passes, each reading every weight. `encode_prefill(..., snap, snap_row)` now captures the
+   checkpoint inside the pass: `gdn_prep_par_snap` copies the conv window as it stands after
+   `snap_row` tokens (before rolling it) and `gdn_step_par_snap_l*` writes the recurrent state after
+   token `snap_row - 1` (two loops, no per-token branch). Cold prompts save a pass too (their last
+   chunk holds the boundary). `ni_run --prefix P --split B` compares the snapshot with a separate
+   prefill of [P, B): max|d| = 0 when both passes use the same kernels (27B at 23 rows); otherwise
+   rounding-level (the attention split count depends on T).
+2. **Short-prefill GEMMs** (passes of <= 128 rows, `NI_SHORTPF_MAX`). Two kernel families, picked
+   per projection group by `short_qmms()` from bench_qmms data (`NI_SHORTPF_GEMM=auto`, or
+   `qmms` / `tile` / `qmr` to force one):
+   * `qmms_b{4,8}_t{1..8}` (qmms.metal, from the WIP branch): a simdgroup owns 8 weight rows and
+     dequantizes them as half2 straight into simdgroup-matrix A operands; the B operand is read from
+     the row-major half X in a matching permuted k order; K split over 4/8 simdgroups (fixed-order
+     sum); no threadgroup tiles. Wins at <= 16 rows everywhere and on small weights (all 35B shapes,
+     the fused gate/up) up to 56 rows; the only short kernel for 8-bit weights (35B router + shared
+     gate: 5-19x the old `qmm_b8_m32_n32`, which ran at 3.5 GB/s).
+   * qmr with one row tile holding all rows (qmm3.metal `qmr_k64_w14_m{24,40,48,56}_n64` next to
+     main's m16/m32/m64; two tiles from 49 rows, `Qwen35::short_tile`), multi-projection `qmrs_*`
+     (one dispatch for GDN qkv/z/b/a or attention q/k/v), `qmr_gu_k64_w14_m24_n64`. Wins on the big
+     27B groups past 16 rows (compute bound: the 16-row tiles of main paid 32 rows for 23).
+   * Projections that share an input run in one dispatch (`enc_proj`: GDN in-proj, attention q/k/v,
+     router + shared gate, the MTP head's q/k/v); `enc_qmm_large` keeps the large-prefill choice.
+3. **MoE experts in 8-row tiles** (`qmms_moe_gu_b4` / `qmms_moe_dn_b4`, tile lists from
+   `moe_bucket2` with BM = 8; passes of <= 128 rows, `NI_SHORTPF_MOE_MAX`). At 37-65 rows the 35B
+   routes ~1-2 rows per expert; the 64-row fused tiles paid barriers and threadgroup staging per K
+   step for them. Blocking 2-8 row blocks per simdgroup (X gathered once) measured +-1%: dropped.
+4. **Attention over a long cached prefix** (passes of <= 128 queries, `NI_SHORTPF_ATTN_MAX`): rows
+   are (query, head) pairs of one KV head (`attn_prefill11g`: a 32-row block holds 32/G queries x G
+   heads instead of padding T to 32 per head), keys split over ~100 threadgroups in all
+   (`attn_prefill11gs` + `attn11_reduce`; `NI_ATTN_SPLIT` overrides).
+5. CPU side: the turn boundary comes out of the one tokenizer pass (`Tokenizer::encode` reports the
+   id index where an added token starts at the conversation's end) instead of a second encode of the
+   whole conversation; the server sets TCP_NODELAY on its SSE streams (`NI_TCP_NODELAY=0` reverts) so
+   a first token never waits for the client's delayed ACK; the `chat:` log line shows the
+   template/tokenize time.
+
+bench_qmms (isolated GEMMs, weights rotated over copies past the SLC, median of interleaved
+trials): sum over one pass of a layer stack's dense projections (35B: no routed experts), ms:
+| model, rows | main (qmr m8/m16 tiles, per projection) | qmms | one-tile qmr | auto rule | best per shape |
+|---|---|---|---|---|---|
+| 27B, 8 | 105.9 | 74.6 | (qmms) | 74.6 | 74.6 |
+| 27B, 16 | 153.2 | 134.9 | 153.2 | 134.9 | 129.1 |
+| 27B, 23 | 278.3 | 198.8 | 193.7 | 190.8 | 190.2 |
+| 27B, 32 | 275.2 | 272.9 | 258.5 | 252.5 | 247.1 |
+| 27B, 48 | 396.5 | 406.5 | 372.9 | 368.3 | 366.7 |
+| 35B, 8 | 19.2 | 5.6 | (qmms) | 5.6 | 5.6 |
+| 35B, 23 | 29.0 | 13.1 | 16.3 | 13.1 | 13.1 |
+| 35B, 37 | 36.7 | 21.1 | 31.4 | 21.1 | 21.1 |
+| 35B, 55 | 41.3 | 34.0 | 35.9 | 34.0 | 31.1 |
+At 65-128 rows two qmr row tiles beat main's m32_n128 large tile up to ~96 rows on both models
+(35B GDN in-proj at 65 rows 632 vs 1038 us, 27B 2089 vs 3083) and tie at 128.
+
+bench_attn (median of 9 x 8 back-to-back calls), ms per layer:
+| model, queries | 4k keys: v11 / GQA split | 16k keys: v11 / GQA split |
+|---|---|---|
+| 27B (G=6), 8 | 1.03 / 0.26-0.31 | 4.11 / 0.98-1.05 |
+| 27B, 23 | 1.04 / 0.60-0.66 | 4.12 / 2.25-2.41 |
+| 27B, 37 | 1.55 / 0.88-0.90 | 6.14 / 3.33-3.34 |
+| 35B (G=8), 23 | 0.68 / 0.36-0.41 | 2.77 / 1.46-1.48 |
+| 35B, 37 | 1.03 / 0.55-0.62 | 4.13 / 2.14-2.35 |
+| 35B, 55 | 1.04 / 0.80-0.85 | 4.08 / 3.10-3.28 |
+| 35B, 128 | 2.03 / 1.74 | 8.08 / 6.80-6.90 |
+
+End to end, prefill of a cached-turn suffix (ni_run --prefix/--split, restore + one pass incl. the
+MTP history rows, median of 5), ms; base = NI_SHORTPF=0 (two passes, main's kernels):
+| case | base | in-pass only | + short GEMMs/MoE/attention (default) |
 |---|---|---|---|
-| 35B qkv 8192x2048 | 8 | 235 us (40 GB/s) | 54 us (174 GB/s, ks4) |
-| 35B qkv 8192x2048 | 32 | 245 us (4.4 TFLOP/s) | 176 us (6.1, ks4) |
-| 35B out 2048x4096 | 8 | 164 us | 30 us (ks8) |
-| 27B qkv 10240x5120 | 8 | 789 us (37 GB/s) | 166 us (177 GB/s, ks4) |
-| 27B gate 17408x5120 | 8 | 1296 us | 272 us (184 GB/s, ks8) |
-| 27B gate 17408x5120 | 32 | 1335 us (4.3 TFLOP/s) | 1054 us (5.4, ks8) |
-| 27B down 5120x17408 | 32 | 1467 us | 1296 us (ks8) |
-| 27B gate 17408x5120 | 64 | m64_n64 2264 us (5.0) | 2175 us (5.3, ks8) |
-Fused gate/up at 27B T=32: 1663 us for both matrices (two qmms: 2108). FMA tile matvecs for the
-MoE experts (1-3 rows per expert tile, so the 8-row MMAs are mostly padding) were slower: 35B T=32
-prefill 55 ms -> 71 (tiles of <= 2 rows) / 75 (<= 4); removed.
+| 35B, 4k prefix + 37 (boundary 7 before the end) | 170-172 | 128 | 75-76 |
+| 35B, 4k + 55 | 204 | | 100-101 |
+| 35B, 4k + 65 | 224-227 | 192 | 127 (185 with the 64-row limits) |
+| 27B, 700 + 23 | 409-417 | 296 | 210-211 |
+| 27B, 700 + 37 | 415 | | 335 |
+| 27B, 4k + 23 | 443 | | 219 |
+Cold short prompts (one pass, no boundary): 35B 8 / 23 tokens 53 / 87 -> 27 / 48 ms; 27B 118 / 288
+-> 88 / 207 ms. The 27B is compute bound here (~8.8 ms per suffix token at ~6 TFLOP/s on 8-row MMA
+granularity): its cached turn costs what its suffix length costs.
+
+Through the server, the harness's pattern (bench/shortpf/cached_ttft.py: same corpus, system prompt,
+questions, sampling, thinking off, 1 s turn gap; median of 3 follow-ups; `--slots 1 --ctx 32768`,
+default MTP), seconds to the first token. before = main cc776e5 (qmr + fused gate/up, which already
+took the 27B from 0.83 to 0.35 s), after = this branch; competitors from the harness runs of the same
+day (research/inference/results):
+| cached turn TTFT | 45705ec (harness) | before (cc776e5) | after | Ollama | llama.cpp | mlx-lm |
+|---|---|---|---|---|---|---|
+| 27B, 4k prefix | 0.829 | 0.347 | 0.247 (0.242) | 0.50-0.52 | 0.60-0.65 | 0.573 |
+| 27B, 16k prefix | 0.941 | 0.447 | 0.280 (0.272) | 0.58-0.60 | 0.64-0.69 | 0.898 |
+| 35B, 4k prefix | 0.254 | 0.232 | 0.117 | 0.22-0.24 | 0.18-0.21 | |
+| 35B, 16k prefix | 0.320 | 0.264 | 0.163 | 0.26-0.28 | 0.20-0.23 | |
+27B follow-up suffixes 23/28/21 tokens (prefill 244/302/237 ms after vs 344/464/338 before), 35B
+62/54/37 (129/114/93 ms after vs 238/229/195 before at 65/56/37). In parentheses: an earlier session
+of the same 27B code paths (its cold 4k prompt ran 9% faster: the GPU speed drifts between sessions).
+Cold short prompts (three 30-47-token prompts, median of 3 each): 27B 0.42 / 0.46 / 0.62 ->
+0.29 / 0.39 / 0.47 s (0.27 / 0.33 / 0.40 in the faster session); 35B 0.147 / 0.158 / 0.173 ->
+0.064 / 0.074 / 0.086 s. Template + tokenizer: 1-5 ms per request at 4k-16k.
+A new build's first requests compile its kernels (the shader cache is keyed by the library):
+before the load-time prewarm (`prewarm_pipelines`, NI_PREWARM=0 skips) the first cached turns of the
+35B took 253-334 ms of prefill and the first 2.9k prompt 9.0 s instead of 3.3 s.
+
+Correctness:
+* prefix reuse stays exact: turn-2 output with the cache == the same conversation sent cold at T=0
+  (server, 4k, after 3 cached follow-ups): equal on both models, before and after.
+* greedy continuation (128 tokens, ni_run, with MTP and without) after a cached-suffix prefill
+  (35B 4k + 37 / 55, 27B 700 + 23 / 37) and after cold prompts (23 tokens on both models, 100 on the
+  35B): identical ids to NI_SHORTPF=0.
+* logits of the last position vs NI_SHORTPF=0 (cached suffixes and cold prompts): 27B max|d|
+  0.004-0.011, KL 2e-10 - 7e-8; 35B max|d| 0.37-1.18, KL 4e-5 - 5e-4; argmax always the same. That is
+  the 35B's own rounding band (routing near-ties amplify it): its default path against
+  NI_MATH_SAFE=1 on the same prompts gives KL 3e-5 - 1.6e-3, max|d| 0.08-1.05 (4k + 55: 5.4e-4 vs the
+  new path's 4.8e-4), and changes the greedy text of the 100-token prompt at token 121; the new
+  path does not.
+* tests/test_server.py: 13/13 on both models.
+* bench_qmms / bench_attn check every kernel against double-precision CPU references (GEMM max rel.
+  err 1e-6 - 3e-5, fused gate/up 3-4e-4 (half output); attention max err / max |ref| 2-3e-4, as v11).
