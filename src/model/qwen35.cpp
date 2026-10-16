@@ -23,11 +23,11 @@ static json read_json(const std::string& path) {
 static json quant_cfg_;
 static Pipeline pipe(const std::string& n);
 
-// NI_MOE_FUSED (opt-in, read once): MoE prefill through the fused grouped kernels in
-// qmm_moe.metal. 1: gate/up/SwiGLU in one GEMM, down GEMM, shared expert folded in as one more
-// expert; 2: same, shared expert on the dense path. 0/unset: the original path.
+// NI_MOE_FUSED (read once): MoE prefill through the fused grouped kernels in qmm_moe.metal.
+// 1: gate/up/SwiGLU in one GEMM, down GEMM, shared expert folded in as one more expert;
+// 2 (default): same, shared expert on the dense path (35B 4k: 785 -> 862 tok/s); 0: the original path.
 static int moe_fused() {
-  static const int v = getenv("NI_MOE_FUSED") ? atoi(getenv("NI_MOE_FUSED")) : 0;
+  static const int v = getenv("NI_MOE_FUSED") && *getenv("NI_MOE_FUSED") ? atoi(getenv("NI_MOE_FUSED")) : 2;
   return v;
 }
 
@@ -756,13 +756,14 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
 // and gdn_gnorm applies the gated RMSNorm, writing out_proj's half input directly (replaces
 // rows_to_half). Same arithmetic order as the default kernels. NI_GDN_STEP picks the recurrence
 // layout (gdn_step_par_l{4,8,16,32}: lanes per value row), NI_GDN_SGS its simdgroups per threadgroup.
+// On by default (35B 4k prefill +5.5%); NI_GDN_PAR=0 runs the per-channel gdn_prep/gdn_step path.
 static bool gdn_par() {
-  static const bool on = getenv("NI_GDN_PAR") && atoi(getenv("NI_GDN_PAR")) > 0;
+  static const bool on = !getenv("NI_GDN_PAR") || !*getenv("NI_GDN_PAR") || atoi(getenv("NI_GDN_PAR")) > 0;
   return on;
 }
 
 void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T) {
-  static const std::string step_name = getenv("NI_GDN_STEP") ? getenv("NI_GDN_STEP") : "gdn_step_par_l4";
+  static const std::string step_name = getenv("NI_GDN_STEP") ? getenv("NI_GDN_STEP") : "gdn_step_par_l16";
   static const uint32_t sgs = getenv("NI_GDN_SGS") ? uint32_t(atoi(getenv("NI_GDN_SGS"))) : 2u;
   static const uint32_t lanes = uint32_t(atoi(step_name.c_str() + step_name.rfind("_l") + 2));
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
@@ -788,6 +789,24 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
   e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, hh_);
   e.val(4, sp);
   e.dispatch((uint32_t(T) * Hv + 7) / 8, 1, 1, 256);
+}
+
+// Causal attention of T new query rows (qo_, gate qg_) against the cache (kc, vc) -> attn_out_.
+// attn_prefill11 (default): MLX-style layout, 32 queries of one query head per threadgroup,
+// fragments in registers (2.1x v10 on the 35B shape, 3.1x on the 27B's G=6). NI_ATTN overrides.
+void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap) {
+  kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(cap),
+                  1.0f / std::sqrt(float(cfg_.head_dim))};
+  static const std::string an = getenv("NI_ATTN") && *getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill11";
+  uint32_t qb = 4, th = 256, gy = cfg_.hkv;
+  if (an.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
+  else if (an == "attn_prefill") th = 128;
+  else if (an == "attn_prefill2" || an == "attn_prefill3" || an == "attn_prefill4") qb = 8;
+  else if (an.find("_q8") != std::string::npos) { qb = 8; th = 512; }
+  e.use(pipe(an));
+  e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+  e.val(5, fp);
+  e.dispatch((T + qb - 1) / qb, gy, 1, th);
 }
 
 void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample) {
@@ -839,20 +858,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
       e.val(8, ap);
       e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
-      kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(s.cap),
-                      1.0f / std::sqrt(float(cfg_.head_dim))};
-      // attn_prefill10_q4_k32: 4 queries x 8 heads per threadgroup, head dim split over simdgroup
-      // pairs, 32-key tiles (best of the variants in attn.metal; see docs/PERF.md). NI_ATTN overrides.
-      static const std::string an = getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill10_q4_k32";
-      uint32_t qb = 4, th = 256, gy = cfg_.hkv;
-      if (an.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
-      else if (an == "attn_prefill") th = 128;
-      else if (an == "attn_prefill2" || an == "attn_prefill3" || an == "attn_prefill4") qb = 8;
-      else if (an.find("_q8") != std::string::npos) { qb = 8; th = 512; }
-      e.use(pipe(an));
-      e.buf(0, qo_); e.buf(1, s.kc[i]); e.buf(2, s.vc[i]); e.buf(3, qg_); e.buf(4, attn_out_);
-      e.val(5, fp);
-      e.dispatch((T + qb - 1) / qb, gy, 1, th);
+      enc_attn_prefill(e, s.kc[i], s.vc[i], T, pos0, s.cap);
       enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
       enc_qmm(e, L.o, hh_, x_, T, true);
     }

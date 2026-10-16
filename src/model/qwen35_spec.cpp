@@ -204,6 +204,9 @@ void Qwen35::load_mtp(const std::string& dir) {
   // by frequency) plus every added/special token, so the drafter can still propose <tool_call>,
   // </think> or <|im_end|>. 286 MB per draft step becomes ~37 MB.
   draft_split_ = std::min<uint32_t>(32768, uint32_t(cfg_.vocab));
+  // Dense 27B: the full-vocabulary draft raises acceptance (depth 2: 0.73 -> 0.83) for ~1% of the
+  // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain.
+  full_draft_ = getenv("NI_FULL_DRAFT") && *getenv("NI_FULL_DRAFT") ? env_on("NI_FULL_DRAFT") : !cfg_.moe;
   draft_special0_ = uint32_t(cfg_.eos.empty() ? cfg_.vocab : *std::min_element(cfg_.eos.begin(), cfg_.eos.end()));
   auto rows_view = [&](const QLinear& src, uint32_t r0, uint32_t n) {
     QLinear v = src;
@@ -560,7 +563,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (draft_out < 0) return;
   // greedy draft over the reduced vocabulary from the last row
   const Buffer last = mtp_post_.view(size_t(R - 1) * D * 4, size_t(D) * 4);
-  static const bool full_vocab = env_on("NI_FULL_DRAFT");  // diagnostic: draft over the whole vocabulary
+  const bool full_vocab = full_draft_;
   uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N;
   if (full_vocab) {
     enc_qmv(e, lm_head_, last, dlog_, nullptr, nullptr);
@@ -616,12 +619,7 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
   e.buf(5, qo_); e.buf(6, s.mtp_kc); e.buf(7, s.mtp_vc);
   e.val(8, ap);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
-  kp::AttnPref fp{uint32_t(R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(s.cap),
-                  1.0f / std::sqrt(float(cfg_.head_dim))};
-  e.use(pipe2("attn_prefill10_q4_k32"));
-  e.buf(0, qo_); e.buf(1, s.mtp_kc); e.buf(2, s.mtp_vc); e.buf(3, qg_); e.buf(4, attn_out_);
-  e.val(5, fp);
-  e.dispatch((R + 3) / 4, cfg_.hkv, 1, 256);
+  enc_attn_prefill(e, s.mtp_kc, s.mtp_vc, R, pos0, s.cap);
   enc_rows_half(e, attn_out_, nullptr, hh_, R, cfg_.hq * cfg_.head_dim);
   enc_qmm(e, mtp_.o, hh_, mtp_x_, R, true);
   if (cfg_.moe) enc_moe_prefill(e, mtp_, R, mtp_x_);

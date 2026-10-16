@@ -27,7 +27,7 @@ struct EngineOptions {
   int context = 32768;         // capacity of each slot (tokens)
   int slots = 2;               // conversations kept warm at once (each has its own KV/state)
   int prefill_chunk = 2048;
-  int spec_depth = 1;          // MTP draft tokens per cycle (0 = plain decoding)
+  int spec_depth = -1;         // MTP draft tokens per cycle (0 = plain decoding, -1 = model default)
 };
 
 struct ChatRequest {

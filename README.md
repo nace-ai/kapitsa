@@ -7,7 +7,7 @@ no llama.cpp. Kernels are embedded as source and compiled at runtime (works with
 ## Build and run
 ```
 cmake -S . -B build && cmake --build build -j
-./build/nace-infer-server --model <MLX model dir> --port 8090 --spec 1
+./build/nace-infer-server --model <MLX model dir> --port 8090   # --spec N overrides the per-model MTP depth
 ```
 OpenAI-compatible: `/v1/chat/completions` (SSE and JSON, `reasoning_content`, tool calls), `/v1/models`, `/health`.
 Options: `--ctx` (per-slot context), `--slots` (conversations kept warm), `--spec` (MTP draft depth, 0 = off),

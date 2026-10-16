@@ -40,6 +40,8 @@ int main(int argc, char** argv) {
     uint32_t M, N, K;
   };
   std::vector<Shape> shapes = {{512, 8192, 2048}, {2048, 8192, 2048}, {2048, 2048, 4096}, {2048, 512, 2048}, {64, 512, 2048}};
+  if (getenv("SHAPES27"))  // Qwen3.8-27B prefill: MLP gate/up, down, out_proj, GDN in_proj
+    shapes = {{2048, 17408, 5120}, {2048, 5120, 17408}, {2048, 5120, 6144}, {2048, 16384, 5120}};
   if (getenv("SMALLM")) shapes = {{4, 8192, 2048}, {8, 8192, 2048}, {16, 8192, 2048}, {4, 17408, 5120}, {8, 5120, 17408}};
   for (auto sh : shapes) {
     const uint32_t M = sh.M, N = sh.N, K = sh.K;

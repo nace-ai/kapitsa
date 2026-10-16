@@ -141,12 +141,12 @@ NI_QMM_MOE(qmm_moe_b4_m16_n64, 4, 16, 64)
 NI_QMM_MOE(qmm_moe_b4_m32_n64, 4, 32, 64)
 NI_QMM_MOE(qmm_moe_b4_m64_n64, 4, 64, 64)
 
-// ---- qmm2: dense prefill GEMM with BK = 64 (one quantization group per step) ----
+// ---- qmmk64: dense prefill GEMM with BK = 64 (no faster than qmm_b4; kept for A/B) (one quantization group per step) ----
 // 128 threads (2x2 simdgroups), tile BM x 64 output columns. Each thread dequantizes one row's
 // 64-value group (or half of it) with a single scale/bias load and vector stores, and X tiles are
 // loaded as half4. Half the barriers of qmm_tile (BK = 32).
 template <int BITS, int BM, int BN>
-NI_INLINE void qmm2_tile(const device half* X, const device uint32_t* W, const device bfloat* S,
+NI_INLINE void qmmk64_tile(const device half* X, const device uint32_t* W, const device bfloat* S,
                          const device bfloat* B, device float* Y, constant QmmParams& p, uint m0, uint m_end,
                          uint n0, threadgroup half* xs, threadgroup half* ws, uint tid, uint sg, uint lane) {
   constexpr int BK2 = 64, LD = BK2 + 8;
@@ -209,7 +209,7 @@ NI_INLINE void qmm2_tile(const device half* X, const device uint32_t* W, const d
     }
 }
 
-#define NI_QMM2(NAME, BITS, BM, BN)                                                                       \
+#define NI_QMMK64(NAME, BITS, BM, BN)                                                                       \
   [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uint32_t* W [[buffer(1)]],         \
                        const device bfloat* S [[buffer(2)]], const device bfloat* B [[buffer(3)]],         \
                        device float* Y [[buffer(4)]], constant QmmParams& p [[buffer(5)]],                 \
@@ -217,11 +217,11 @@ NI_INLINE void qmm2_tile(const device half* X, const device uint32_t* W, const d
                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
     threadgroup half xs[BM * 72];                                                                         \
     threadgroup half ws[BN * 72];                                                                         \
-    qmm2_tile<BITS, BM, BN>(X, W, S, B, Y, p, tg.y * BM, p.M, tg.x * BN, xs, ws, tid, sg, lane);         \
+    qmmk64_tile<BITS, BM, BN>(X, W, S, B, Y, p, tg.y * BM, p.M, tg.x * BN, xs, ws, tid, sg, lane);         \
   }
 
-NI_QMM2(qmm2_b4_m64_n64, 4, 64, 64)
-NI_QMM2(qmm2_b4_m32_n64, 4, 32, 64)
-NI_QMM2(qmm2_b4_m64_n32, 4, 64, 32)
-NI_QMM2(qmm2_b4_m16_n64, 4, 16, 64)
-NI_QMM2(qmm2_b8_m64_n64, 8, 64, 64)
+NI_QMMK64(qmmk64_b4_m64_n64, 4, 64, 64)
+NI_QMMK64(qmmk64_b4_m32_n64, 4, 32, 64)
+NI_QMMK64(qmmk64_b4_m64_n32, 4, 64, 32)
+NI_QMMK64(qmmk64_b4_m16_n64, 4, 16, 64)
+NI_QMMK64(qmmk64_b8_m64_n64, 8, 64, 64)

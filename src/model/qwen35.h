@@ -104,6 +104,8 @@ class Qwen35 {
 
   // ---- speculative decoding with the model's MTP head ----
   bool has_mtp() const { return mtp_loaded_; }
+  // Measured best MTP draft depth for this model (M4 Pro): MoE 35B-A3B 1, dense 27B 2.
+  int default_spec_depth() const { return cfg_.moe ? 1 : 2; }
   static constexpr int kMaxVerify = 4;  // rows per verify (pending token + up to 3 drafts)
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
@@ -153,6 +155,7 @@ class Qwen35 {
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);
   void enc_copy(Encoder& e, const Buffer& src, const Buffer& dst);
   void enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  void enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap);
   bool enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& x);
   // NI_GDN_PAR=1: GDN conv/prep, recurrence and gated norm of T rows; leaves the half rows in hh_
   void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T);
@@ -191,6 +194,7 @@ class Qwen35 {
   const Tensor *mtp_norm_ = nullptr, *mtp_pre_e_ = nullptr, *mtp_pre_h_ = nullptr;
   QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
   uint32_t draft_split_ = 0, draft_special0_ = 0;
+  bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 
