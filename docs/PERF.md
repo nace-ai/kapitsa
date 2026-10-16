@@ -35,3 +35,14 @@ slower: spills), head dim split over simdgroup pairs like MLX (v5), K^T tile (v6
 with softmax (v7), 16-byte tile loads (v8, -10%), 8 queries/16-key tiles (v9, slower), per-lane
 fragment loads (v10). Ablation: device K/V loads ~25%, Q.K ~30%, P.V ~15%, the rest bookkeeping.
 Open: find what MLX does differently (it runs 32 rows of ONE head per threadgroup).
+
+## Qwen3.8-27B 4-bit (dense, 64 layers, hidden 5120)
+| mode | decode tok/s | tok/cycle |
+|---|---|---|
+| plain | 16.0 | 1 |
+| MTP depth 1 | 25.3 (harness 23.9-24.4) | 1.88 |
+| MTP depth 2 | 23.6 | 2.39 |
+| MTP depth 3 | 21.6 | 3.04 |
+Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k (dense GEMM ~6 TFLOP/s).
+Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
+the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
