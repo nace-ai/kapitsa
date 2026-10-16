@@ -6,6 +6,7 @@
 #pragma once
 #include "model/qwen35.h"
 
+#include <algorithm>
 #include <deque>
 #include <map>
 #include <memory>
@@ -132,6 +133,8 @@ class DFlash2 {
   void gpu_state_reset(int P);
   void encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max, const SamplingParams& sp);
   int accepted() const { return acc_.as<int>()[0]; }
+  // proposals the last completed cycle verified (K, or the dynamic depth's choice)
+  int verified(int K) const { return dyn_tau_ > 0 ? std::min(K, int(kdyn_.as<uint32_t>()[0])) : K; }
   // proposals verified per cycle: NI_DFLASH_VERIFY (1..7), default 7
   static int verify_depth();
   // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off

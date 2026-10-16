@@ -145,6 +145,7 @@ int main(int argc, char** argv) {
     double ts = now_ms();
     int P = n, m_prev = 0, cycles = 0, emitted = 0;
     int div_at = -1, div_tok[2] = {0, 0}, div_row = 0, div_P = 0;
+    long verified_sum = 0;
     float div_logit[2] = {0, 0};
     std::vector<int> acc_hist(K + 1, 0), reached(K, 0), acc_pos(K, 0);
     double gpu_sum = 0, wall_sum = 0;
@@ -234,7 +235,9 @@ int main(int argc, char** argv) {
             if (tk[P + i] == eos) stop2 = true;
         if (stop2) break;
       }
-      for (int i = 0; i <= std::min(a, K - 1); ++i) {
+      const int kv = dfl->verified(K);  // proposals this cycle verified
+      verified_sum += kv;
+      for (int i = 0; i <= std::min(a, kv - 1); ++i) {
         reached[i]++;
         if (i < a) acc_pos[i]++;
       }
@@ -260,7 +263,7 @@ int main(int argc, char** argv) {
             (out.size() - 1) / (td / 1000), cycles, double(emitted) / std::max(cycles, 1), gpu_sum / std::max(cycles, 1),
             td / std::max(cycles, 1), mode);
     for (int a = 0; a <= K; ++a) fprintf(stderr, " %d", acc_hist[a]);
-    fprintf(stderr, "; acceptance by position");
+    fprintf(stderr, "; %.2f proposals verified per cycle; acceptance by position", double(verified_sum) / std::max(cycles, 1));
     for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
     if (!ref.empty()) {
