@@ -13,7 +13,11 @@ class Tokenizer {
  public:
   void load(const std::string& tokenizer_json);
   // Added tokens (e.g. <|im_start|>) in `text` are always recognized, as HF tokenizers do.
-  std::vector<int> encode(const std::string& text) const;
+  // With `split_index`: when an added token starts exactly at byte `split_at`, *split_index is set
+  // to the number of ids before it, which equals encode(text.substr(0, split_at)).size() with those
+  // ids as a prefix (text between added tokens is encoded independently); else left unchanged.
+  std::vector<int> encode(const std::string& text, size_t split_at = std::string::npos,
+                          int* split_index = nullptr) const;
   std::string decode(const std::vector<int>& ids) const;
   // Raw bytes of one token (may be a partial UTF-8 sequence).
   const std::string& token_bytes(int id) const;

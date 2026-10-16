@@ -609,9 +609,7 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
   enc_qmm(e, mtp_fc_, hh_, mtp_x_, R, false);
   // attention block (batched)
   enc_rows_half(e, mtp_x_, mtp_.in_norm, xh_, R, D);
-  enc_qmm(e, mtp_.q, xh_, qg_, R, false);
-  enc_qmm(e, mtp_.k, xh_, kr_, R, false);
-  enc_qmm(e, mtp_.v, xh_, vr_, R, false);
+  enc_proj(e, {{&mtp_.q, qg_, false}, {&mtp_.k, kr_, false}, {&mtp_.v, vr_, false}}, xh_, R);
   kp::AttnPrep ap{uint32_t(R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                   uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
   e.use(pipe2("attn_prep"));

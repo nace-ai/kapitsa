@@ -155,6 +155,8 @@ class Qwen35 {
   // prefill
   void enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D);
   void enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
+  // the large-prefill kernel choice (qmr, else the original qmm tiles), no short-prefill paths
+  void enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
   // NI_QMM + NI_QMM_GU: h = half(silu(xh G^T) * (xh U^T)) in one dispatch; false when off/unsupported
   bool enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M);
   void enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, const Buffer& xrows,
@@ -177,6 +179,9 @@ class Qwen35 {
   bool small_t(int T) const;
   bool qmms_ok(const QLinear& L) const;
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
+  // projections sharing xh: one dispatch where the short-prefill kernels allow it
+  void enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
+  void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
   bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);

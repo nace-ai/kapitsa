@@ -286,6 +286,33 @@ NI_INLINE float gdn_row_sum(thread float* part) {
   return s;
 }
 
+// One token of gdn_step_par_impl for this lane's state chunks st[] (row dv of head h).
+template <uint N, uint L>
+NI_INLINE void gdn_step_par_tok(const device float* q, const device float* k, const device float* v,
+                                const device float* g, const device float* beta, device float* out,
+                                constant GdnStepParams& p, uint t, uint h, uint hk, uint dv, uint li,
+                                thread float4* st) {
+  constexpr uint D = 128;
+  const device float4* q4 = (const device float4*)(q + (t * p.Hk + hk) * D + li * 4 * N);
+  const device float4* k4 = (const device float4*)(k + (t * p.Hk + hk) * D + li * 4 * N);
+  float gg = g[t * p.Hv + h], be = beta[t * p.Hv + h];
+  float4 kk[N];
+  float part[N];
+  for (uint j = 0; j < N; ++j) {
+    kk[j] = k4[j];
+    st[j] *= gg;
+    part[j] = dot(st[j], kk[j]);
+  }
+  float kv = gdn_row_sum<N, L>(part);
+  float delta = (v[(t * p.Hv + h) * D + dv] - kv) * be;
+  for (uint j = 0; j < N; ++j) {
+    st[j] += kk[j] * delta;
+    part[j] = dot(st[j], q4[j]);
+  }
+  float o = gdn_row_sum<N, L>(part);
+  if (li == 0) out[(t * p.Hv + h) * D + dv] = o;
+}
+
 template <uint L, bool SNAP = false>
 NI_INLINE void gdn_step_par_impl(const device float* q, const device float* k, const device float* v,
                                  const device float* g, const device float* beta, device float* state,
@@ -301,27 +328,12 @@ NI_INLINE void gdn_step_par_impl(const device float* q, const device float* k, c
   float4 st[N];
   for (uint j = 0; j < N; ++j) st[j] = *(device float4*)(S + j * 4);
 
-  for (uint t = 0; t < p.T; ++t) {
-    const device float4* q4 = (const device float4*)(q + (t * p.Hk + hk) * D + li * 4 * N);
-    const device float4* k4 = (const device float4*)(k + (t * p.Hk + hk) * D + li * 4 * N);
-    float gg = g[t * p.Hv + h], be = beta[t * p.Hv + h];
-    float4 kk[N];
-    float part[N];
-    for (uint j = 0; j < N; ++j) {
-      kk[j] = k4[j];
-      st[j] *= gg;
-      part[j] = dot(st[j], kk[j]);
-    }
-    float kv = gdn_row_sum<N, L>(part);
-    float delta = (v[(t * p.Hv + h) * D + dv] - kv) * be;
-    for (uint j = 0; j < N; ++j) {
-      st[j] += kk[j] * delta;
-      part[j] = dot(st[j], q4[j]);
-    }
-    float o = gdn_row_sum<N, L>(part);
-    if (li == 0) out[(t * p.Hv + h) * D + dv] = o;
-    if (SNAP && t + 1 == snap)  // state after the first `snap` tokens (checkpoint inside the pass)
-      for (uint j = 0; j < N; ++j) *(device float4*)(snap_state + (S - state) + j * 4) = st[j];
+  // SNAP: tokens [0, snap), the state after them to snap_state, then [snap, T) (no per-token branch)
+  const uint t_mid = SNAP ? min(snap, p.T) : p.T;
+  for (uint t = 0; t < t_mid; ++t) gdn_step_par_tok<N, L>(q, k, v, g, beta, out, p, t, h, hk, dv, li, st);
+  if (SNAP) {
+    for (uint j = 0; j < N; ++j) *(device float4*)(snap_state + (S - state) + j * 4) = st[j];
+    for (uint t = t_mid; t < p.T; ++t) gdn_step_par_tok<N, L>(q, k, v, g, beta, out, p, t, h, hk, dv, li, st);
   }
   for (uint j = 0; j < N; ++j) *(device float4*)(S + j * 4) = st[j];
 }

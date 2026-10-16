@@ -275,6 +275,7 @@ class OutputParser {
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
   std::lock_guard<std::mutex> lk(mu_);
+  const double t_req = now_ms();
   ChatResult res;
   Gpu& g = Gpu::get();
   std::string text, base;
@@ -286,14 +287,18 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     res.error = std::string("chat template: ") + ex.what();
     return res;
   }
-  std::vector<int> prompt = tok_.encode(text);
   // Checkpoint at the end of the conversation so far (before the assistant header): the next
   // turn re-renders this turn's answer without its reasoning, so it diverges right after it.
+  // The generation prompt starts with an added token (<|im_start|>), so the boundary falls out of
+  // the one encode; otherwise the conversation is encoded separately and compared.
   int boundary = -1;
-  if (text.compare(0, base.size(), base) == 0) {
+  const bool prefix_ok = text.compare(0, base.size(), base) == 0;
+  std::vector<int> prompt = tok_.encode(text, prefix_ok ? base.size() : std::string::npos, &boundary);
+  if (boundary < 0 && prefix_ok) {
     std::vector<int> bt = tok_.encode(base);
     if (bt.size() < prompt.size() && std::equal(bt.begin(), bt.end(), prompt.begin())) boundary = int(bt.size());
   }
+  if (boundary >= int(prompt.size())) boundary = -1;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
   Slot& slot = pick_slot(prompt);
@@ -329,6 +334,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   std::copy(prompt.begin(), prompt.end(), s.tokens());
 
   // ---- prefill ----
+  const double tok_ms = now_ms() - t_req;  // template + tokenizer + slot pick
   SamplingParams sp;
   sp.temperature = r.temperature;
   sp.top_p = r.top_p;
@@ -490,8 +496,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  logi("chat: prompt %d (cached %d) in %.0f ms, %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, gen,
-       res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str());
+  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize), %d tokens in %.0f ms (%.1f tok/s), %s", n,
+       start, res.prefill_ms, tok_ms, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
+       finish.c_str());
   return res;
 }
 
