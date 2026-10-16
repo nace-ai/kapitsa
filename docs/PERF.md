@@ -529,7 +529,7 @@ ni_run, runs interleaved):
 
 | | base 4cdc5a0 | opt/dfl27 | |
 |---|---:|---:|---:|
-| 27B greedy, tok/s (3 runs) | 51.8 / 54.7 / 54.7 | **61.7 / 60.4 / 61.8** | +14.2% |
+| 27B greedy, tok/s (3 runs) | 51.8 / 54.7 / 54.7 | **61.7 / 60.4 / 61.8** | +14.1% |
 | 27B greedy, GPU ms / cycle | 88.8 (mean) | 77.8 | 4.776 tok/cycle both |
 | 27B T = 0.6, 10 seeds (42, 1-9), mean tok/s | 53.3 (46.7-59.4) | **60.6** (52.8-65.2) | +13.7% |
 | 27B T = 0.6, seed 42 (PERF's single seed) | 46.7 (4.154 tok/cycle) | 59.3 (4.604 tok/cycle) | other text |
@@ -544,7 +544,7 @@ step and draft head):
 
 | | base 4cdc5a0 | opt/dfl27 | |
 |---|---:|---:|---:|
-| 35B greedy, tok/s (3 runs) | 158.6 / 157.9 / 154.3 | **167.7 / 168.8 / 170.3** | +7.3% |
+| 35B greedy, tok/s (3 runs) | 158.6 / 157.9 / 154.3 | **167.7 / 168.8 / 170.3** | +7.6% |
 | 35B greedy, GPU ms / cycle, tok/cycle | 21.4-22.0, 3.407 | 19.7-20.0, 3.362 | |
 | 35B T = 0.6, 14 seeds (1-14), mean tok/s | 154.5 (tok/cycle 3.552, 22.95 ms) | **163.5** (3.487, 21.29 ms) | +5.8% |
 | 35B T = 0.6, seed 42 (3 runs) | 149.7 / 150.6 / 150.0 (3.500) | 136.0 / 136.4 / 136.3 (2.887) | other text |
