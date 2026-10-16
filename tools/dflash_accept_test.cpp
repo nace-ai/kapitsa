@@ -10,7 +10,8 @@
 //    cells with expected count < 5 pooled), in several regimes: random p and q, q = p, q disjoint from p
 //    (always rejected: residual = p), point masses, p(d) = 0 for some proposals, K = 1..7, and with the
 //    dynamic verify depth (dfl_depth before dfl_accept): its exact T > 0 rule must pass; the rule that also uses
-//    the proposal's own confidence (rule 1, not used by the engine at T > 0) is expected to fail.
+//    the proposal's own confidence (rule 1, not used by the engine at T > 0) must fail in the depth-sensitive
+//    regime (q = p at the first proposal, q = 0.9 / 0.1 vs p = 1/2 at the second: that rule emits 0.55 / 0.45).
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/log.h"
@@ -344,8 +345,7 @@ int main(int argc, char** argv) {
                              {kPoint, Kmain, 0.6f},  {kMixed, Kmain, 0.6f}, {kRandom, 1, 0.6f},
                              {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
                              {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
-                             {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1},
-                             {kRandom, 3, 0.6f, 0.1f, 1}};
+                             {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1}};
   Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);

@@ -10,6 +10,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <mach/mach.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -23,6 +25,14 @@
 namespace ni {
 
 using json = nlohmann::json;
+
+// process physical footprint (what Activity Monitor / bench.py report), bytes
+static double footprint_gb() {
+  task_vm_info_data_t info;
+  mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
+  if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&info, &count) != KERN_SUCCESS) return 0;
+  return double(info.phys_footprint) / 1e9;
+}
 
 static Pipeline dpipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
@@ -220,7 +230,7 @@ QLinear DFlash2::row_view(const QLinear& src, uint32_t r0, uint32_t n) {
 }
 
 DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target), dir_(dir) {
-  const double t0 = now_ms();
+  const double t0 = now_ms(), fp0 = footprint_gb();
   bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
   load_config(dir);
@@ -310,8 +320,8 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
-  logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident, loaded in %.0f ms",
-       dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, now_ms() - t0);
+  logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
+       "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
 
 void DFlash2::alloc_buffers() {

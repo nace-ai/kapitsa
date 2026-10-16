@@ -36,17 +36,22 @@ Gpu::Gpu() : impl_(new Impl) {
 std::string Gpu::name() const { return [[dev(device_) name] UTF8String]; }
 size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMaxWorkingSetSize; }
 
+// alloc/wrap run in their own autorelease pool: the C++ callers have none, and Metal keeps a new
+// buffer in the current pool too (measured: a buffer allocated without a pool is never freed,
+// even after the last reference is released), so release() could not return its memory.
 Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
   if (bytes == 0) bytes = 16;
-  id<MTLBuffer> b = [dev(device_) newBufferWithLength:bytes
-                                              options:MTLResourceStorageModeShared |
-                                                      (tracked ? MTLResourceHazardTrackingModeTracked
-                                                               : MTLResourceHazardTrackingModeUntracked)];
-  if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
-  if (label) b.label = [NSString stringWithUTF8String:label];
-  std::lock_guard<std::mutex> lk(impl_->mu);
-  [impl_->retained addObject:b];
-  return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
+  @autoreleasepool {
+    id<MTLBuffer> b = [dev(device_) newBufferWithLength:bytes
+                                                options:MTLResourceStorageModeShared |
+                                                        (tracked ? MTLResourceHazardTrackingModeTracked
+                                                                 : MTLResourceHazardTrackingModeUntracked)];
+    if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
+    if (label) b.label = [NSString stringWithUTF8String:label];
+    std::lock_guard<std::mutex> lk(impl_->mu);
+    [impl_->retained addObject:b];
+    return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
+  }
 }
 
 Buffer Gpu::wrap(void* ptr, size_t bytes, const char* label) {
