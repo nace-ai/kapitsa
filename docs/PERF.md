@@ -516,3 +516,87 @@ Open: the 27B cycle at a ~4k context is 90.6 ms (target 88; 86.4-86.8 at 85 + 51
 attention outputs from their kernels: ~64 dispatches per verify). The GPU-driven drafting pass splits the attention
 context in fixed 256-key chunks (the host-driven plan balances them; same math, other fp32 rounding). The drafter's
 target-LM-head pass is ~40% of a 27B pass and ~45% of a 35B pass.
+
+## DFlash2 review: independent re-check (2026-10-17, build of 4cdc5a0 + dd9025c)
+
+Everything under `lockf -k -t 540 ~/.cache/nace-gpu.lock`; this lock slot ran ~7% (35B) and ~12% (27B) slower than
+the loop section's slots, so compare within a table only.
+
+**Greedy equality (G1)**, `ni_run <model> @<prompt> 512 0 --ignore-eos [--dflash <drafter>] [--ref <plain>]`:
+
+| prompt | 35B-A3B | 27B |
+|---|---|---|
+| code_* | identical 512/512 | identical 512/512 |
+| p700 | first difference at token 241 (pos 941): plain top-2 gap 0.035, verify row -0.42, one prefill of the prefix +0.021 | identical 512/512 |
+| p4000 | first difference at token 197 (pos 4197): plain gap 0.020, verify row -0.151, one prefill -0.170 (takes the DFlash token) | identical 512/512 |
+
+The 35B p700 split is the 8-row verify's numerics, not the loop: it is unchanged with `NI_DFLASH_DYN=0`,
+`NI_V8_MOE_SMALL=0` and `NI_DFLASH_CB=1`, and the teacher-forced verify without any drafter (`ni_v8check` 512 rows)
+flips at the same position, as does the MTP-era R = 4 verify; MTP depth 1 (R = 2) stays identical over the 512.
+`ni_v8drift` (new) splits the verify's deviation from plain decoding into the per-step error of the kernels on the
+plain state ("fresh") and the drift when the verify path builds the KV/GDN state ("accumulated", what a speculative
+loop does), over 512 generated rows; |change of the plain top-2 gap| median / p95 / max, argmax flips:
+
+| | fresh | accumulated |
+|---|---|---|
+| 35B p700, R = 8 (DFlash2) | 0.0023 / 0.25 / 0.70, 0 | 0.095 / 0.56 / 1.35, 5 (gaps 0.010-0.92) |
+| 35B p700, R = 8, `NI_V8_MOE_SMALL=0` | 0.0023 / 0.15 / 0.64, 0 | 0.096 / 0.57 / 2.77, 4 |
+| 35B p700, R = 4 (MTP depth 3 kernels) | 0.0013 / 0.13 / 1.31, 0 | 0.107 / 0.59 / 2.03, 4 |
+| 35B p700, R = 2 (MTP depth 1 kernels) | 0.0000 / 0.0002 / 0.0009, 0 | 0.0032 / 0.057 / 0.42, 0 |
+| 35B code_35b, R = 8 | 0.0015 / 0.081 / 1.08, 0 | 0.038 / 0.26 / 4.79, 0 |
+| 27B p700, R = 8 | 0.0011 / 0.0043 / 0.11, 0 | 0.0014 / 0.0052 / 0.064, 0 |
+
+So on the dense 27B the 8-row verify tracks plain decoding at the 1e-3 level; on the MoE 35B any multi-row verify
+with half-precision inputs (R = 4 as much as R = 8) has a heavy-tailed per-step error (top-8 routing boundary flips)
+that accumulates in the state, and greedy DFlash2 output leaves plain greedy at the first near-tie it meets (2 of 3
+prompts within 512 tokens here). Both splits seen are near-ties (gaps 0.035, 0.020), but this is above SPEC §12's
+"<= 0.02" noise target and the 35B's default (MTP depth 1) does not have it.
+
+**Default path (G3)** vs a build of 45705ec: logits after the p700 prefill bitwise identical; plain greedy (64), MTP
+greedy and T = 0.6 (128) ids identical on both models.
+
+**Sampled exactness through the real loop** (`dflash_seedtest`, new: many seeds through the engine's
+double-buffered loop, tested against the exact law of the plain sampler and, with `--law-out`, against the law
+whose 2nd/3rd token comes from the 8-row verify rows; prose prompt, T = 0.6 unless noted, top_k 20, top_p 0.95,
+start point = prompt + 24 greedy tokens, chi-square p of (t1), (t1, t2), (t1, t2, t3)):
+
+| model, arm | trials | first-cycle a = 0 / 1-4 / 5-7 | t1 | t1,t2 (plain / verify law) | t1,t2,t3 (plain / verify law) |
+|---|---:|---|---:|---|---|
+| 35B plain sampler (reference) | 4000 | | 0.013 | 0.011 / 0.011 | 0.17 / 0.17 |
+| 35B DFlash2, seeds A | 4000 | 2637 / 199 / 1164 | 0.996 | 0.047 / 0.052 | 0.054 / 0.056 |
+| 35B DFlash2, seeds C | 4000 | 2628 / 221 / 1151 | 0.69 | 0.62 / 0.63 | 0.41 / 0.41 |
+| 35B DFlash2, T = 1.0 | 4000 | 2256 / 648 / 1096 | 0.87 | 0.41 / 0.40 | 0.40 / 0.38 |
+| 27B plain sampler (reference) | 1500 | | 0.19 | 0.27 / 0.28 | 0.80 / 0.81 |
+| 27B DFlash2, two seed sets | 1600 | 1153 / 119 / 328 | 0.20 | 0.72 / 0.71 | 0.57 / 0.56 |
+
+At this start point the verify law and the plain law differ by <= 0.004 per probability (27B <= 0.001). No test falls
+below 0.01; the borderline 35B batch A did not reproduce with fresh seeds (C), and the plain sampler's own arm shows a
+comparable fluctuation. `dflash_accept_test` (S1, the GPU kernels on synthetic p/q) with two new seed streams
+(`40000 3 7`, `40000 7 11`): all 26 cases pass (p 0.029-1.0), the biased depth rule is still rejected (chi2 345 / 387).
+
+**Performance** (`ni_run`, code_* ids, 512 tokens, `--ignore-eos`, the four configurations interleaved, 3 rounds):
+
+| | MTP default | DFlash2 | gain | DFlash2 tok/cycle, GPU ms/cycle |
+|---|---|---|---:|---|
+| 35B greedy | depth 1: 114.9 / 113.7 / 114.5 | 150.2 / 150.3 / 150.0 | +31% | 3.407 (3.59 verified), 22.6 |
+| 35B T = 0.6 | 111.3 / 106.9 / 110.5 | 140.2 / 139.3 / 139.8 | +27% | 3.500 (5.34 verified), 25.0 |
+| 27B greedy | depth 2: 26.9 / 27.1 / 27.6 | 48.1 / 48.0 / 49.3 | +78% | 4.776, 96.8-99.3 |
+| 27B T = 0.6 | 26.9 / 26.9 / 27.5 | 41.4 / 41.8 / 41.7 | +54% | 4.154, 99.2-100.2 |
+
+Same ratios as the loop section; the absolute 27B number of this slot (48-49 tok/s) is below Splash's 54.7 from
+another day, so "on par with Splash" for the 27B holds only against same-slot conditions, which were not re-measured.
+
+**Fixed** (dd9025c): with a stop token or max_tokens inside the last accepted chain, the committed drafting half
+had already written all a + 1 ring rows; the rows past `d.ctx` overwrote the slots of the window's oldest
+positions, which `DFlash2::rewind` still counted as valid on the next request (prefix reuse, e.g. a regenerate of a
+prompt longer than 2048 tokens): up to 7 wrong context rows at the far end of the window. Draft quality only; the
+engine now raises `valid_lo` past them. tests/test_server.py with `--dflash auto` (35B): 13/13.
+
+**Merging into main** (d6d2ed0 at the time of the review): `git merge-tree` reports conflicts in docs/PERF.md,
+src/engine/engine.{cpp,h}, src/metal/gpu.mm (the same autorelease-pool change on both sides), src/model/qwen35.cpp,
+src/server/main.cpp and tools/ni_run.cpp. The substantive one is the prefill capture: main's dense prefill can run the
+FFN on the Neural Engine (`enc_mlp_prefill_split`, the wave schedule `enc_prefill_wave`), captures checkpoints inside
+the pass, and re-encodes a chunk on the GPU when the Neural Engine half fails; the drafter's capture hook
+(`enc_capture` after each target layer) and `encode_prefill_commit` (after the last chunk) have to follow the final
+residual of every layer in those paths (or DFlash2 has to keep the prefill on the GPU), then G1 (with p4000 for the
+ring window), G3 against main, S1 and the sampled test must be re-run.
