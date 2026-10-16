@@ -1,6 +1,7 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models.
 #pragma once
+#include "model/dflash2.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
 
@@ -28,6 +29,9 @@ struct EngineOptions {
   int slots = 2;               // conversations kept warm at once (each has its own KV/state)
   int prefill_chunk = 2048;
   int spec_depth = -1;         // MTP draft tokens per cycle (0 = plain decoding, -1 = model default)
+  // DFlash2 block drafter (replaces MTP when loaded): "" = off (default; NI_DFLASH=<dir|auto> also
+  // sets it), a drafter directory, or "auto" = DFlash2::find() next to the model / in the cache.
+  std::string dflash;
 };
 
 struct ChatRequest {
@@ -76,6 +80,7 @@ class Engine {
  private:
   struct Slot {
     std::unique_ptr<Seq> seq;
+    std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
     std::vector<int> tokens;          // tokens whose effect is in the live state
     std::vector<Checkpoint> ckpts;    // recurrent-state snapshots
     uint64_t last_used = 0;
@@ -84,6 +89,7 @@ class Engine {
 
   EngineOptions opts_;
   std::unique_ptr<Qwen35> model_;
+  std::unique_ptr<DFlash2> dfl_;
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;

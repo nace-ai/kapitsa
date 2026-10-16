@@ -634,12 +634,18 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
 
 // ---- trunk verify ----
 
-void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
+uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
+  const uint32_t V = uint32_t(cfg_.vocab), ntg = (V + 2047) / 2048;
+  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  return ntg * K;
+}
+
+void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
   if (R < 1 || R > kMaxVerify) fatal("encode_verify: R=%d", R);
   // NI_V8=1: the 8-row path for any R >= 2 (A/B); by default only R >= 5 takes it, so MTP verifies
   // (R <= 4) run exactly the kernels they always did.
   static const bool v8_all = env_on("NI_V8");
-  if (R > 4 || (v8_all && R > 1)) {
+  if (R > 4 || v8 || (v8_all && R > 1)) {
     encode_verify8(e, s, pos, R, sp, step);
     return;
   }

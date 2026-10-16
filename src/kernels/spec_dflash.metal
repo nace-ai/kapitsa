@@ -1039,12 +1039,13 @@ struct DflSelectParams {
       }
       const float u = dfl_uniform(p.seed, p.P + 1 + pp, kDflSaltWalk);
       float cum = 0.0f;
-      kb = 15;
+      kb = 0;
       bool found = false;
       for (uint k = 0; k < 16; ++k) {
         q[k] /= tot;
         cum += q[k];
-        if (!found && cum > u) {
+        if (!found && q[k] > 0.0f) kb = k;  // fallback (u above the rounded total): last k with q > 0
+        if (!found && cum > u && q[k] > 0.0f) {
           kb = k;
           found = true;
         }
@@ -1056,5 +1057,155 @@ struct DflSelectParams {
     walk_k[pp] = int(kb);
     jp = kb;
     tokens[p.out_index + pp] = cand_i[pp * 16 + kb];
+  }
+}
+
+// ---- acceptance (SPEC §8): verify rows -> accepted length a and the bonus / correction token ----
+// Uniform streams (counter-based, keyed by seed, absolute position and purpose; SPEC §8.2): the walk
+// draws proposal p with position P+1+p (kDflSaltWalk), acceptance of proposal i uses P+1+i
+// (kDflSaltAcc), the residual / bonus draw P+1+a (kDflSaltRes). A position's acceptance and residual
+// uniforms are consumed at most once over a whole generation (the next anchor sits past them); walk
+// uniforms of proposals that were never evaluated are reused by the next cycle, which is harmless
+// because nothing emitted depended on them.
+constant constexpr uint kDflSaltAcc = 0x3C6EF372u;
+constant constexpr uint kDflSaltRes = 0xA54FF53Au;
+
+// Target distribution of every verify row, exactly the plain sampler's (sample_stage2 /
+// sample_stage2_rows, verify.metal): the K best stage-1 candidates ordered (value desc, id asc), the
+// top-p prefix on the untempered probabilities, then exp((l - l0) / T) normalized over that prefix.
+// dist_id / dist_p [R][32] (zero past keep), dist_keep [R]. grid: R threadgroups x 1024.
+struct DflDistParams {
+  uint n;  // stage-1 candidates per row
+  uint K;  // top-k (<= 32)
+  float temp;
+  float top_p;
+};
+[[kernel]] void dfl_dist_rows(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
+                              device int* dist_id [[buffer(2)]], device float* dist_p [[buffer(3)]],
+                              device uint* dist_keep [[buffer(4)]], constant DflDistParams& p [[buffer(5)]],
+                              uint r [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                              uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float sv[32];
+  threadgroup uint si[32];
+  threadgroup float topv[32];
+  threadgroup uint topi[32];
+  constexpr int PER = 4;
+  float v[PER];
+  uint id[PER];
+  for (int j = 0; j < PER; ++j) {
+    uint k = tid * PER + j;
+    v[j] = k < p.n ? cv[r * p.n + k] : -INFINITY;
+    id[j] = k < p.n ? ci[r * p.n + k] : 0xffffffff;
+  }
+  const uint K = max(1u, min(p.K, 32u));
+  for (uint q = 0; q < K; ++q) {  // the selection loop of sample_stage2_rows
+    float bv = -INFINITY;
+    uint bi = 0xffffffff;
+    int bj = -1;
+    for (int j = 0; j < PER; ++j)
+      if (v[j] > bv || (v[j] == bv && id[j] < bi)) { bv = v[j]; bi = id[j]; bj = j; }
+    float wv = bv;
+    uint wi = bi;
+    tg_argmax(wv, wi, sv, si, tid, ntg);
+    if (bj >= 0 && bi == wi && bv == wv) v[bj] = -INFINITY;
+    if (tid == 0) { topv[q] = wv; topi[q] = wi; }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid == 0) {
+    float probs[32];
+    uint keep = 1;
+    float kt = 1.0f;
+    probs[0] = 1.0f;
+    if (p.temp > 0.0f && K > 1) {  // same arithmetic, same order as sample_stage2_rows
+      float tot = 0.0f;
+      for (uint q = 0; q < K; ++q) {
+        probs[q] = metal::precise::exp(topv[q] - topv[0]);
+        tot += probs[q];
+      }
+      keep = K;
+      float cum = 0.0f;
+      for (uint q = 0; q < K; ++q) {
+        cum += probs[q] / tot;
+        if (cum >= p.top_p) { keep = q + 1; break; }
+      }
+      kt = 0.0f;
+      for (uint q = 0; q < keep; ++q) {
+        probs[q] = metal::precise::exp((topv[q] - topv[0]) / p.temp);
+        kt += probs[q];
+      }
+    }
+    for (uint q = 0; q < 32; ++q) {
+      dist_id[r * 32 + q] = q < keep ? int(topi[q]) : -1;
+      dist_p[r * 32 + q] = q < keep ? probs[q] / kt : 0.0f;
+    }
+    dist_keep[r] = keep;
+  }
+}
+
+// Accepts proposals d_i = tokens[P+1+i] (i < K) against the verify rows of [anchor, d_0 .. d_{K-1}]
+// and writes the token that follows the accepted prefix to tokens[P+1+a]; res = {a, that token}.
+//  T = 0: a = longest prefix with d_i == argmax_i (samp: the verify's own argmax, ties to the lowest id
+//         as in plain decoding), token = argmax_a.
+//  T > 0: exact speculative sampling (Leviathan et al. / Chen et al.; SPEC §8.2): accept d_i iff
+//         u_i * q_i(d_i) < p_i(d_i), stop at the first rejection; then the token is drawn from
+//         max(0, p_a - q_a) normalized (or p_a if that is empty), or from p_K after K acceptances.
+//         p = dfl_dist_rows, q = the walk's distribution over its 16 candidates (qprob, walk_k).
+// grid: 1 x 32 (one simdgroup; lane q holds candidate q of the current row).
+struct DflAcceptParams {
+  uint P;   // anchor position
+  uint K;   // proposals verified (verify rows 0..K)
+  float temp;
+  uint seed;
+};
+[[kernel]] void dfl_accept(device int* tokens [[buffer(0)]], const device int* samp [[buffer(1)]],
+                           const device int* dist_id [[buffer(2)]], const device float* dist_p [[buffer(3)]],
+                           const device int* cand_i [[buffer(4)]], const device float* qprob [[buffer(5)]],
+                           const device int* walk_k [[buffer(6)]], device int* res [[buffer(7)]],
+                           constant DflAcceptParams& p [[buffer(8)]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint K = p.K;
+  if (p.temp <= 0.0f) {
+    const bool stop = lane >= K || tokens[p.P + 1 + lane] != samp[lane];
+    const uint a = simd_min(stop ? lane : 32u);
+    if (lane == 0) {
+      const int y = samp[a];
+      tokens[p.P + 1 + a] = y;
+      res[0] = int(a);
+      res[1] = y;
+    }
+    return;
+  }
+  uint a = 0;
+  for (; a < K; ++a) {
+    const int d = tokens[p.P + 1 + a];
+    const float pd = simd_sum(dist_id[a * 32 + lane] == d ? dist_p[a * 32 + lane] : 0.0f);
+    const float qd = qprob[a * 16 + uint(walk_k[a])];
+    const float u = dfl_uniform(p.seed, p.P + 1 + a, kDflSaltAcc);
+    if (!(u * qd < pd)) break;
+  }
+  const int x = dist_id[a * 32 + lane];
+  const float px = dist_p[a * 32 + lane];
+  float w = px;
+  if (a < K) {  // residual max(0, p_a - q_a): q_a(x) from the walk's 16 candidates of proposal a
+    const int cid = lane < 16 ? cand_i[a * 16 + lane] : -2;
+    const float cq = lane < 16 ? qprob[a * 16 + lane] : 0.0f;
+    float qx = 0.0f;
+    for (ushort k = 0; k < 16; ++k) {
+      const int c = simd_shuffle(cid, k);
+      const float cv = simd_shuffle(cq, k);
+      if (c == x) qx = cv;
+    }
+    w = x >= 0 ? max(0.0f, px - qx) : 0.0f;
+    if (!(simd_sum(w) > 0.0f)) w = px;  // p_a <= q_a everywhere (rejection only by rounding)
+  }
+  const float cum = simd_prefix_inclusive_sum(w);
+  const float tot = simd_shuffle(cum, 31);
+  const float u = dfl_uniform(p.seed, p.P + 1 + a, kDflSaltRes) * tot;
+  uint sel = simd_min(cum > u && w > 0.0f ? lane : 32u);
+  if (sel == 32u) sel = uint(simd_max(w > 0.0f ? int(lane) : -1));  // u above the rounded total
+  const int y = simd_shuffle(x, ushort(sel));
+  if (lane == 0) {
+    tokens[p.P + 1 + a] = y;
+    res[0] = int(a);
+    res[1] = y;
   }
 }

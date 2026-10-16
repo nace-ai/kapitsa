@@ -1,6 +1,10 @@
 // Runs a prompt (token ids) through the engine and generates tokens.
 //   ni_run <model_dir> <ids: comma-separated> [n_gen=32] [temp=0] [--dump-logits file]
-//          [--spec D] [--dflash <drafter dir>]   (NI_DFLASH=<dir> works too)
+//          [--spec D] [--dflash <drafter dir>]   (NI_DFLASH=<dir> works too) [--ignore-eos]
+// --dflash: DFlash2 speculative decoding (research/inference/dflash2/SPEC.md), one command buffer per
+// cycle: drafting pass, 8-row target verify with captures, on-GPU acceptance (greedy, or exact
+// speculative sampling at temp > 0), ring commit of the kept rows at the start of the next cycle.
+// --ignore-eos: keep generating past end-of-sequence tokens (benchmarks, equality tests).
 // Prints generated ids, prompt/decode speeds; optionally dumps the logits of the first
 // generated position (raw float32) for comparison against a reference implementation.
 #include "metal/gpu.h"
@@ -41,11 +45,12 @@ int main(int argc, char** argv) {
   int n_gen = argc > 3 ? atoi(argv[3]) : 32;
   float temp = argc > 4 ? float(atof(argv[4])) : 0.0f;
   const char* dump = nullptr;
-  bool tbt = false;
+  bool tbt = false, ignore_eos = false;
   int spec = 0;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (!strcmp(argv[i], "--tbt")) tbt = true;
+    if (!strcmp(argv[i], "--ignore-eos")) ignore_eos = true;
     if (i + 1 < argc && !strcmp(argv[i], "--spec")) spec = atoi(argv[i + 1]);
   }
   std::string dflash_dir = getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "";
@@ -65,12 +70,14 @@ int main(int argc, char** argv) {
   int n = int(ids.size());
   for (int i = 0; i < n; ++i) s.tokens()[i] = ids[i];
 
-  // Opt-in DFlash2 block drafter: the target's verify (currently <= Qwen35::kMaxVerify rows)
-  // checks the first NI_DFLASH_VERIFY (default kMaxVerify - 1) of the 7 proposals. Acceptance is
-  // the MTP rule (each verify row samples its own token, accept while it equals the proposal):
-  // exact at any temperature; the speculative-sampling accept (min(1, p/q)) is not wired here yet.
+  // Opt-in DFlash2 block drafter; the prompt rows are captured for the drafter's context during the
+  // prefill below.
   std::unique_ptr<DFlash2> dfl;
   std::unique_ptr<DFlashSeq> dseq;
+  if (dflash_dir == "auto") {
+    dflash_dir = DFlash2::find(dir, m.config());
+    if (dflash_dir.empty()) fatal("--dflash auto: no DFlash2 drafter found for %s", dir.c_str());
+  }
   if (!dflash_dir.empty()) {
     dfl = std::make_unique<DFlash2>(m, dflash_dir);
     dseq = dfl->new_seq();
@@ -115,54 +122,63 @@ int main(int argc, char** argv) {
   out.push_back(s.tokens()[n]);
 
   if (dfl) {
-    const int K = std::clamp(getenv("NI_DFLASH_VERIFY") ? atoi(getenv("NI_DFLASH_VERIFY")) : Qwen35::kMaxVerify - 1, 1,
-                             Qwen35::kMaxVerify - 1);
+    // NI_DFLASH_VERIFY=k: verify only the first k of the 7 proposals (lossless; fewer verify rows)
+    const int K = DFlash2::verify_depth();
+    const bool trace = getenv("NI_TRACE") != nullptr;
     double ts = now_ms();
-    int P = n, m_prev = 0, cycles = 0;
-    std::vector<int> acc_hist(K + 1, 0);
-    double gpu_sum = 0;
+    int P = n, m_prev = 0, cycles = 0, emitted = 0;
+    std::vector<int> acc_hist(K + 1, 0), reached(K, 0), acc_pos(K, 0);
+    double gpu_sum = 0, wall_sum = 0;
     bool stop2 = false;
     if (Encoder::profiling()) Encoder::profile_report(1);
     while (int(out.size()) < n_gen && !stop2) {
-      double tc0 = now_ms();
+      if (P + DFlash2::kB + 2 >= s.cap) break;
+      const double tc0 = now_ms();
       auto e = g.begin();
-      if (m_prev) dfl->encode_commit(*e, *dseq, m_prev);
-      dfl->encode_draft(*e, s, *dseq, P, sp);
-      dfl->arm_verify(P);
-      m.encode_verify(*e, s, P, K + 1, sp, uint32_t(P));
-      dfl->disarm();
+      dfl->encode_cycle(*e, s, *dseq, P, m_prev, K, sp);
       e->commit_and_wait();
+      const double wall = now_ms() - tc0;
       gpu_sum += e->gpu_ms();
-      const int* y = m.samples();
-      int* tk = s.tokens();
-      int a = 0;
-      while (a < K && tk[P + 1 + a] == y[a]) ++a;
-      if (getenv("NI_TRACE"))
-        fprintf(stderr, "P=%d draft=%d,%d,%d y0=%d a=%d wall=%.1fms gpu=%.1fms\n", P, tk[P + 1], tk[P + 2], tk[P + 3],
-                y[0], a, now_ms() - tc0, e->gpu_ms());
-      tk[P + a + 1] = y[a];
+      wall_sum += wall;
+      const int a = dfl->accepted();
+      const int* tk = s.tokens();
+      if (trace)
+        fprintf(stderr, "P=%d a=%d chain=%d,%d,%d,%d,%d,%d,%d next=%d wall=%.2fms gpu=%.2fms\n", P, a, tk[P + 1],
+                tk[P + 2], tk[P + 3], tk[P + 4], tk[P + 5], tk[P + 6], tk[P + 7], tk[P + 1 + a], wall, e->gpu_ms());
+      int mm = 0;  // tokens emitted = rows committed this cycle
       for (int i = 1; i <= a + 1 && int(out.size()) < n_gen; ++i) {
         out.push_back(tk[P + i]);
-        for (int eos : m.config().eos)
-          if (tk[P + i] == eos) stop2 = true;
+        ++mm;
+        if (!ignore_eos)
+          for (int eos : m.config().eos)
+            if (tk[P + i] == eos) stop2 = true;
         if (stop2) break;
       }
-      m.commit_rows(s, a + 1);
-      m_prev = a + 1;
+      for (int i = 0; i <= std::min(a, K - 1); ++i) {
+        reached[i]++;
+        if (i < a) acc_pos[i]++;
+      }
+      m.commit_rows(s, mm);
+      m_prev = mm;
+      emitted += mm;
       ++cycles;
       acc_hist[a]++;
-      P += a + 1;
+      P += mm;
     }
     double td = now_ms() - ts;
     if (Encoder::profiling()) Encoder::profile_report(cycles);
     printf("ids:");
     for (int t : out) printf(" %d", t);
     printf("\n");
-    fprintf(stderr, "prompt %d tok in %.0f ms (%.1f tok/s); dflash decode (verify %d of 7): %zu tok in %.0f ms (%.1f tok/s), "
-            "%d cycles, %.2f tok/cycle, %.2f ms GPU/cycle, hist",
-            n, t_prompt, n / (t_prompt / 1000), K, out.size() - 1, td, (out.size() - 1) / (td / 1000), cycles,
-            double(out.size() - 1) / cycles, gpu_sum / cycles);
+    fprintf(stderr,
+            "prompt %d tok in %.0f ms (%.1f tok/s); dflash decode (verify %d of 7, %s): %zu tok in %.0f ms (%.1f tok/s), "
+            "%d cycles, %.3f tok/cycle, %.2f ms GPU/cycle, %.2f ms wall/cycle, hist",
+            n, t_prompt, n / (t_prompt / 1000), K, sp.temperature > 0 ? "sampled" : "greedy", out.size() - 1, td,
+            (out.size() - 1) / (td / 1000), cycles, double(emitted) / std::max(cycles, 1), gpu_sum / std::max(cycles, 1),
+            wall_sum / std::max(cycles, 1));
     for (int a = 0; a <= K; ++a) fprintf(stderr, " %d", acc_hist[a]);
+    fprintf(stderr, "; acceptance by position");
+    for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
     return 0;
   }
@@ -193,8 +209,9 @@ int main(int argc, char** argv) {
       tk[P + a + 1] = y[a];
       for (int i = 1; i <= a + 1 && int(out.size()) < n_gen; ++i) {
         out.push_back(tk[P + i]);
-        for (int eos : m.config().eos)
-          if (tk[P + i] == eos) stop2 = true;
+        if (!ignore_eos)
+          for (int eos : m.config().eos)
+            if (tk[P + i] == eos) stop2 = true;
         if (stop2) break;
       }
       m.commit_rows(s, a + 1);
@@ -241,8 +258,9 @@ int main(int argc, char** argv) {
       int tok = s.tokens()[n + done];
       out.push_back(tok);
       ++done;
-      for (int eos : m.config().eos)
-        if (tok == eos) stop = true;
+      if (!ignore_eos)
+        for (int eos : m.config().eos)
+          if (tok == eos) stop = true;
     }
   }
   while (!inflight.empty()) {

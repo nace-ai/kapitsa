@@ -221,6 +221,17 @@ struct DflSelect {
   uint32_t seed, out_index;
 };
 
+struct DflDist {
+  uint32_t n, K;
+  float temp, top_p;
+};
+
+struct DflAccept {
+  uint32_t P, K;
+  float temp;
+  uint32_t seed;
+};
+
 // ---- 8-row verify (src/kernels/verify8.metal) ----
 struct X8Prep {
   uint32_t K, R, x_ld, norm, write_xn;
@@ -254,10 +265,6 @@ struct Moe8Down {
 
 struct Moe8Combine {
   uint32_t N, k;
-};
-
-struct Capture8 {
-  uint32_t D, ld, slot;
 };
 
 } // namespace ni::kp

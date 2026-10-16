@@ -1018,19 +1018,6 @@ NI_INLINE void v8s_dot2t(const device uint32_t* w, const device bfloat* scales, 
   }
 }
 
-// ---- captures for a speculative drafter (DFlash2) ----
-// capt[t][slot * D + i] = bf16(x[t][i]) for t < R: the residual stream after a target layer.
-// grid (D / 256, R) x 256.
-struct Capture8Params {
-  uint D, ld, slot;
-};
-[[kernel]] void capture8(const device float* x [[buffer(0)]], device bfloat* capt [[buffer(1)]],
-                         constant Capture8Params& p [[buffer(2)]], uint2 tg [[threadgroup_position_in_grid]],
-                         uint2 tid2 [[thread_position_in_threadgroup]]) {
-  const uint i = tg.x * 256 + tid2.x, t = tg.y;
-  if (i < p.D) capt[t * p.ld + p.slot * p.D + i] = bfloat(x[t * p.D + i]);
-}
-
 // ---- attention for R <= 8 rows on simdgroup MMAs (attn8m) ----
 // One threadgroup per (history chunk, kv head) serves all G query heads of the group x 8 rows:
 // 2G simdgroups = G heads x 2 halves of the head dim, each holding its head's 8 rows as ONE fragment

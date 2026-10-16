@@ -81,9 +81,15 @@ int main(int argc, char** argv) {
   // final residual stream x_ (they must be equal up to the bf16 rounding of the capture)
   const bool capt = getenv("NI_V8_CAPT") && atoi(getenv("NI_V8_CAPT")) > 0;
   Buffer cbuf;
+  CaptureHook hook;  // armed per verify at its position (the drafter's CaptureHook)
   if (capt) {
     cbuf = g.alloc(size_t(8) * 2 * m.config().hidden * 2, "capt");
-    m.set_verify_capture({m.config().layers - 1, 1}, cbuf);
+    hook.dst = cbuf;
+    hook.ld = uint32_t(2 * m.config().hidden);
+    hook.rows = R;
+    hook.slot.assign(m.config().layers, -1);
+    hook.slot[m.config().layers - 1] = 0;
+    hook.slot[1] = 1;
   }
   // ---- teacher-forced verify ----
   std::vector<double> ver_ms;
@@ -102,7 +108,12 @@ int main(int argc, char** argv) {
     }
     for (int P = n; P + R <= n + n_tok; P += R) {
       auto e = g.begin();
+      if (capt) {
+        hook.pos_base = P;
+        m.set_capture(&hook);
+      }
       m.encode_verify(*e, *s2, P, R, sp, uint32_t(P));
+      m.set_capture(nullptr);
       e->commit_and_wait();
       ver_ms.push_back(e->gpu_ms());
       if (rep) {

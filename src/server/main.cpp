@@ -1,5 +1,6 @@
 // nace-infer-server: OpenAI-compatible HTTP server (chat completions, streaming, tools).
 //   nace-infer-server --model <dir> [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--api-key K]
+//                     [--spec D] [--dflash <drafter dir> | --dflash auto]
 #include "engine/engine.h"
 #include "util/log.h"
 
@@ -91,6 +92,7 @@ int main(int argc, char** argv) {
     else if (a == "--ctx") opt.context = std::stoi(next());
     else if (a == "--slots") opt.slots = std::stoi(next());
     else if (a == "--spec") opt.spec_depth = std::stoi(next());
+    else if (a == "--dflash") opt.dflash = next();
     else if (a == "--prefill-chunk") opt.prefill_chunk = std::stoi(next());
     else if (a == "--api-key") api_key = next();
     else fatal("unknown option %s", a.c_str());

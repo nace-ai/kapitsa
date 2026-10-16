@@ -130,11 +130,9 @@ class Qwen35 {
   // Trunk forward of tokens[pos .. pos+R) (R <= kMaxVerify) without committing the recurrent
   // state: the rows go to the tape; samples() gets one sampled token per row and hidden_rows()
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
-  void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
+  // v8: take the 8-row path for any R >= 1 (a block drafter verifying fewer than 4 proposals).
+  void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8 = false);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
-  // Drafter captures (DFlash2): after a verify on the 8-row path, capt holds bf16 rows
-  // [R][layers.size() * hidden], slot i = the output of target layer layers[i]. Empty = off.
-  void set_verify_capture(const std::vector<int>& layers, Buffer capt);
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   void encode_flush(Encoder& e, Seq& s);
   // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
@@ -157,6 +155,13 @@ class Qwen35 {
   void set_capture(const CaptureHook* h) { cap_ = h; }
   const QLinear& embed_table() const { return embed_; }
   const QLinear& lm_head() const { return lm_head_; }
+  // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
+  // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
+  Buffer verify_cand_vals() const { return cand_v_; }
+  Buffer verify_cand_ids() const { return cand_i_; }
+  Buffer verify_samples() const { return samp_; }
+  // candidates per verify row for these sampling parameters (stage-1 chunks x top-k)
+  uint32_t verify_candidates(const SamplingParams& sp) const;
 
  private:
   void load_config(const std::string& dir);
@@ -257,8 +262,6 @@ class Qwen35 {
   // 8-row verify (allocated on first use)
   bool v8_ready_ = false;
   Buffer v8t_, v8s_, v8tl_, v8sl_, v8h_, v8hs_, v8tiles_, v8nt_, v8slot_, v8args_, v8out_, v8sh_, v8ustat_, v8sm_, v8hsc_, v8xn_;
-  std::vector<int> capt_layers_;
-  Buffer capt_;
 };
 
 } // namespace ni

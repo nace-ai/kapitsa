@@ -83,13 +83,6 @@ void Qwen35::v8_alloc() {
   v8_ready_ = true;
 }
 
-void Qwen35::set_verify_capture(const std::vector<int>& layers, Buffer capt) {
-  for (int l : layers)
-    if (l < 0 || l >= cfg_.layers) fatal("capture layer %d out of range", l);
-  capt_layers_ = layers;
-  capt_ = capt;
-}
-
 void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo, int x_ld,
                     const Buffer* xn_out) {
   if (K % 64 || R < 1 || R > 8) fatal("x8_prep: K=%d R=%d", K, R);
@@ -349,7 +342,6 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.val(5, ep);
   e.dispatch((D / 8 + 63) / 64, R, 1, 64);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
-  const size_t ncapt = capt_layers_.size();
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
     if (L.linear) {
@@ -376,13 +368,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     }
     if (cfg_.moe) enc_moe8(e, L, R, i);
     else enc_mlp8(e, L, R);
-    for (size_t c = 0; c < ncapt; ++c)
-      if (capt_layers_[c] == i) {
-        kp::Capture8 cp{uint32_t(D), uint32_t(ncapt * D), uint32_t(c)};
-        e.use(pipe8("capture8"));
-        e.buf(0, x_); e.buf(1, capt_); e.val(2, cp);
-        e.dispatch((D + 255) / 256, R, 1, 256);
-      }
+    if (cap_) enc_capture(e, i, pos, R);  // block-drafter capture (DFlash2), off unless armed
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_x8(e, x_, R, D, final_norm_);

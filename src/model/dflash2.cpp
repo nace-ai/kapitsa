@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <thread>
 #include <unordered_map>
@@ -332,6 +334,11 @@ void DFlash2::alloc_buffers() {
   walk_s_ = g.alloc(7 * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(7 * 16 * 4, "dfl_qprob");
   walk_k_ = g.alloc(8 * 4, "dfl_walk_k");
+  dist_id_ = g.alloc(8 * 32 * 4, "dfl_dist_id");
+  dist_p_ = g.alloc(8 * 32 * 4, "dfl_dist_p");
+  dist_keep_ = g.alloc(8 * 4, "dfl_dist_keep");
+  acc_ = g.alloc(16, "dfl_acc");
+  memset(acc_.ptr(), 0, acc_.size);
   capt_ = g.alloc(8 * nH * 2, "dfl_capt");
   y8_ = g.alloc(8 * H * 4, "dfl_y8");
   c8_ = g.alloc(8 * H * 4, "dfl_c8");
@@ -340,7 +347,7 @@ void DFlash2::alloc_buffers() {
   memset(capt_.ptr(), 0, capt_.size);
   for (Buffer* b : {&h_, &n_, &xh_, &xs_, &hh_, &hs_, &dyn_, &q_, &kv_, &Q_, &Kb_, &Vb_, &part_o_, &part_ml_, &u_,
                     &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
-                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_})
+                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_, &dist_id_, &dist_p_, &dist_keep_, &acc_})
     resident_ += b->size;
 }
 
@@ -352,7 +359,67 @@ std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
   memset(d->ring_k.ptr(), 0, bytes);
   memset(d->ring_v.ptr(), 0, bytes);
   d->ctx = 0;
+  d->valid_lo = 0;
   return d;
+}
+
+std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) {
+  namespace fs = std::filesystem;
+  auto lower = [](std::string x) {
+    for (auto& c : x) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return x;
+  };
+  auto fits = [&](const fs::path& d) {
+    std::ifstream f(d / "config.json");
+    if (!f) return false;
+    try {
+      json c = json::parse(f);
+      return c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}) && c.contains("dflash_config") &&
+             c.value("hidden_size", 0) == tc.hidden && c.value("vocab_size", 0) == tc.vocab &&
+             c.value("num_target_layers", tc.layers) == tc.layers;
+    } catch (...) {
+      return false;
+    }
+  };
+  std::error_code ec;
+  fs::path md = fs::path(model_dir);
+  if (md.filename().empty()) md = md.parent_path();
+  for (const char* sub : {"dflash2", "drafter"})
+    if (fits(md / sub)) return (md / sub).string();
+  const std::string name = lower(md.filename().string());
+  std::vector<fs::path> roots = {md.parent_path(), md.parent_path() / "drafters"};
+  if (const char* home = getenv("HOME")) roots.push_back(fs::path(home) / ".cache/nace-infer-models/drafters");
+  std::string best;
+  size_t best_len = 0;
+  const std::string suffix = "-dflash2";
+  for (auto& r : roots) {
+    if (!fs::is_directory(r, ec)) continue;
+    for (auto& ent : fs::directory_iterator(r, ec)) {
+      if (!ent.is_directory(ec)) continue;
+      const std::string dn = lower(ent.path().filename().string());
+      if (dn.size() <= suffix.size() || dn.compare(dn.size() - suffix.size(), suffix.size(), suffix) != 0) continue;
+      const std::string base = dn.substr(0, dn.size() - suffix.size());
+      const bool match = name == base || (name.size() > base.size() && name.compare(0, base.size(), base) == 0 &&
+                                          name[base.size()] == '-');
+      if (match && base.size() > best_len && fits(ent.path())) {
+        best = ent.path().string();
+        best_len = base.size();
+      }
+    }
+  }
+  return best;
+}
+
+void DFlash2::rewind(DFlashSeq& d, int pos) {
+  if (pos >= d.ctx) {
+    if (pos > d.ctx) d.valid_lo = pos;  // positions [ctx, pos) were never committed: nothing before pos is usable
+    d.ctx = pos;
+    return;
+  }
+  // entries still in the ring: positions [max(valid_lo, ctx - 2048), ctx); keep those below pos
+  const int oldest = std::max(d.valid_lo, d.ctx - kWin);
+  d.ctx = pos;
+  d.valid_lo = std::min(oldest, pos);
 }
 
 // ---- encoders ----
@@ -468,10 +535,10 @@ void DFlash2::enc_commit_kv(Encoder& e, DFlashSeq& d, const Buffer& kv, int rows
   e.dispatch(uint32_t(rows), uint32_t(cfg_.NL) * 8, 1, 128);
 }
 
-void DFlash2::begin_prefill(int n) {
+void DFlash2::begin_prefill(int n, int start) {
   const size_t nH = cfg_.target_layers.size() * cfg_.H;
   pf_n_ = n;
-  pf_rows_ = std::min(n, kCtxKeep);
+  pf_rows_ = std::max(0, n - std::max(start, n - kCtxKeep));
   Gpu& g = Gpu::get();
   if (!pcap_) {
     pcap_ = g.alloc(size_t(kCtxKeep) * nH * 2, "dfl_prompt_capt");
@@ -494,6 +561,13 @@ void DFlash2::set_prompt_captures(const uint16_t* rows_bf16, int rows) {
 
 void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
   const uint32_t H = uint32_t(cfg_.H), nH = hook_pf_.ld;
+  if (pf_rows_ == 0) {
+    d.ctx = pf_n_;
+    return;
+  }
+  // a gap between the ring's last position and the new rows: nothing older is contiguous with them
+  // (with d.ctx == start the gap, if any, lies below n - 2047 and is never visible anyway)
+  if (d.ctx < pf_n_ - pf_rows_) d.valid_lo = std::max(d.valid_lo, pf_n_ - pf_rows_);
   // Short prompts: 8-row chunks through the 8-row GEMM (it streams each weight once per 8 rows at
   // ~180 GB/s; the prefill GEMM pays 64-row tiles). NI_DFLASH_PF8 = largest row count for this path.
   static const int pf8_env = getenv("NI_DFLASH_PF8") ? atoi(getenv("NI_DFLASH_PF8")) : 256;
@@ -582,12 +656,14 @@ void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
   d.ctx += m;
 }
 
-void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit) {
+void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit,
+                   int valid_lo) {
   static const uint32_t env = getenv("NI_DFLASH_ATTN_CHUNK") ? uint32_t(atoi(getenv("NI_DFLASH_ATTN_CHUNK"))) : 0;
   // 256-key splits: at the full window 8 splits x 8 kv heads beat 32 x 64 keys (smaller partials,
   // cheaper reduce; dflash_attn_test, M4 Pro)
   const uint32_t mc = std::max<uint32_t>(32, min_chunk ? min_chunk : env ? env : 256);
   *lo = P > DFlash2::kCtxKeep ? uint32_t(P - DFlash2::kCtxKeep) : 0u;
+  if (valid_lo > 0 && uint32_t(valid_lo) > *lo) *lo = std::min(uint32_t(valid_lo), uint32_t(P));
   const uint32_t L = uint32_t(P) - *lo;
   uint32_t ns = std::max<uint32_t>(1, std::min<uint32_t>(max_splits, (L + mc - 1) / mc));
   uint32_t ch = ((L + ns - 1) / ns + 31) / 32 * 32;
@@ -631,7 +707,7 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     e.dispatch(1, 1, 1, 512);
   }
   uint32_t lo, chunk, nsplit;
-  dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit);
+  dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit, d.valid_lo);
   const kp::DflConv cp{H, G, cfg_.eps};
   for (uint32_t l = 0; l < NL; ++l) {
     const DLayer& Ly = layers_[l];
@@ -747,6 +823,43 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     e.val(7, p);
     e.dispatch(1, 1, 1, 32);
   }
+}
+
+// ---- acceptance and the decode cycle ----
+
+int DFlash2::verify_depth() {
+  static const int k = std::clamp(getenv("NI_DFLASH_VERIFY") && *getenv("NI_DFLASH_VERIFY") ? atoi(getenv("NI_DFLASH_VERIFY")) : kB - 1,
+                                  1, kB - 1);
+  return k;
+}
+
+void DFlash2::encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp) {
+  if (K < 1 || K > kB - 1) fatal("DFlash2 accept: K=%d", K);
+  const bool sampled = sp.temperature > 0;
+  if (sampled) {
+    kp::DflDist dp{tg_.verify_candidates(sp), uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature,
+                   sp.top_p};
+    e.use(dpipe("dfl_dist_rows"));
+    e.buf(0, tg_.verify_cand_vals()); e.buf(1, tg_.verify_cand_ids()); e.buf(2, dist_id_); e.buf(3, dist_p_);
+    e.buf(4, dist_keep_);
+    e.val(5, dp);
+    e.dispatch(uint32_t(K + 1), 1, 1, 1024);
+  }
+  kp::DflAccept ap{uint32_t(P), uint32_t(K), sampled ? sp.temperature : 0.0f, sp.seed};
+  e.use(dpipe("dfl_accept"));
+  e.buf(0, s.tok); e.buf(1, tg_.verify_samples()); e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, cand_i_);
+  e.buf(5, qprob_); e.buf(6, walk_k_); e.buf(7, acc_);
+  e.val(8, ap);
+  e.dispatch(1, 1, 1, 32);
+}
+
+void DFlash2::encode_cycle(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, int K, const SamplingParams& sp) {
+  if (m_prev) encode_commit(e, d, m_prev);
+  encode_draft(e, s, d, P, sp);
+  arm_verify(P);
+  tg_.encode_verify(e, s, P, K + 1, sp, uint32_t(P), /*v8=*/true);
+  disarm();
+  encode_accept(e, s, P, K, sp);
 }
 
 } // namespace ni
