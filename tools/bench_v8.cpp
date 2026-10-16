@@ -339,8 +339,110 @@ static void run_dfl_cmp(Gpu& g, const char* what, uint32_t N, uint32_t K, bool g
   for (Buffer* b : {&x, &table, &sums, &xh, &xs, &y, &hh, &hs}) g.release(*b);
 }
 
+// ---- interleaved comparison of qmm8 kernel variants on one shape (same weights, alternating runs) ----
+// bench_v8 cmp <N> <K> <reps> <kernel>[:nf][:cs][:ks] ...   (kernel = pipeline name prefix, e.g. qmm8snb_b4; names
+// with "16" allow 16 simdgroups per threadgroup). Prints min / median us and GB/s per kernel.
+static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<std::string>& specs) {
+  std::mt19937 rng(7);
+  const int bits = 4;
+  const size_t mbytes = size_t(N) * K * bits / 8 + size_t(N) * K / 64 * 4;
+  const int copies = std::clamp(int(1.0e9 / mbytes), 1, 400);
+  std::vector<QMat> mats;
+  for (int i = 0; i < copies; ++i) mats.push_back(make_mat(g, N, K, bits, rng));
+  Buffer x = g.alloc(size_t(8) * K * 4), y = g.alloc(size_t(8) * N * 4);
+  std::normal_distribution<float> nd(0.0f, 1.0f);
+  for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
+  Buffer tab = g.alloc(size_t(K) * 8 * 2), sum = g.alloc(size_t(K) / 64 * 8 * 4);
+  {
+    auto e = g.begin();
+    e->use(g.pipeline("x8_prep2"));
+    kp::X8Prep pp{K, 8, K, 0, 0, 1e-6f, K, 0u};
+    e->buf(0, x); e->buf(1, x); e->buf(2, tab); e->buf(3, sum); e->buf(4, x);
+    e->val(5, pp);
+    e->buf(6, tab); e->buf(7, sum);
+    e->dispatch(K / 256, 1, 1, 256);
+    e->commit_and_wait();
+  }
+  struct K8 {
+    std::string name;
+    Pipeline p;
+    int nf, cs, ks;
+    uint32_t ntg;
+    kp::Qmm8 prm;
+    std::vector<double> t;
+  };
+  std::vector<K8> ks;
+  for (auto& sp : specs) {
+    K8 k{};
+    std::vector<std::string> f;
+    size_t a = 0;
+    while (true) {
+      size_t b = sp.find(':', a);
+      f.push_back(sp.substr(a, b == std::string::npos ? std::string::npos : b - a));
+      if (b == std::string::npos) break;
+      a = b + 1;
+    }
+    k.nf = f.size() > 1 ? atoi(f[1].c_str()) : 2;
+    k.name = f[0] + "_nf" + std::to_string(k.nf);
+    k.p = g.pipeline(k.name);
+    k.ks = f.size() > 3 && atoi(f[3].c_str()) > 0 ? atoi(f[3].c_str()) : auto_ks(N, K, k.nf);
+    const int maxsg = f[0].find("16_") != std::string::npos || f[0].size() > 2 && f[0].substr(f[0].size() - 2) == "16" ? 16 : 8;
+    k.cs = std::max(1, std::min(f.size() > 2 && atoi(f[2].c_str()) > 0 ? atoi(f[2].c_str()) : 8, maxsg / k.ks));
+    const uint32_t rows_tg = 8 * k.nf * k.cs;
+    k.ntg = (N + rows_tg - 1) / rows_tg;
+    k.prm = kp::Qmm8{};
+    k.prm.K = K;
+    k.prm.R = 8;
+    k.prm.nseg = 1;
+    k.prm.ks = uint32_t(k.ks);
+    k.prm.N[0] = N;
+    k.prm.y_ld[0] = N;
+    k.prm.tg_begin[1] = k.ntg;
+    ks.push_back(k);
+  }
+  auto run = [&](K8& k) {
+    auto e = g.begin();
+    e->use(k.p);
+    for (int i = 0; i < copies; ++i) {
+      for (int sgi = 0; sgi < 4; ++sgi) {
+        e->buf(sgi * 4 + 0, mats[i].w); e->buf(sgi * 4 + 1, mats[i].s); e->buf(sgi * 4 + 2, mats[i].b);
+        e->buf(sgi * 4 + 3, y);
+      }
+      e->buf(16, tab); e->buf(17, sum);
+      e->val(18, k.prm);
+      e->buf(19, tab); e->buf(20, sum);
+      e->dispatch(k.ntg, 1, 1, 32 * k.cs * k.ks);
+    }
+    e->commit_and_wait();
+    return e->gpu_ms() * 1000.0 / copies;
+  };
+  for (auto& k : ks) run(k);  // warm-up
+  for (int r = 0; r < reps; ++r)
+    for (auto& k : ks) k.t.push_back(run(k));
+  double base_med = 0;
+  for (size_t i = 0; i < ks.size(); ++i) {
+    auto& k = ks[i];
+    std::vector<double> t = k.t;
+    std::sort(t.begin(), t.end());
+    const double mn = t.front(), med = t[t.size() / 2];
+    if (i == 0) base_med = med;
+    printf("%-22s nf%d cs%d ks%d tg%5u | min %8.1f us %6.1f GB/s | median %8.1f us %6.1f GB/s | med/first %.3f\n",
+           k.name.c_str(), k.nf, k.cs, k.ks, k.ntg, mn, mbytes / (mn * 1e3), med, mbytes / (med * 1e3), med / base_med);
+  }
+  fflush(stdout);
+  for (auto& m : mats) { g.release(m.w); g.release(m.s); g.release(m.b); }
+  for (Buffer* b : {&x, &y, &tab, &sum}) g.release(*b);
+}
+
 int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
+  if (argc >= 6 && !strcmp(argv[1], "cmp")) {
+    std::vector<std::string> specs;
+    for (int i = 5; i < argc; ++i) specs.push_back(argv[i]);
+    printf("cmp N=%s K=%s reps=%s\n", argv[2], argv[3], argv[4]);
+    run_cmp(g, uint32_t(atoi(argv[2])), uint32_t(atoi(argv[3])), atoi(argv[4]), specs);
+    return 0;
+  }
   if (argc >= 3 && !strcmp(argv[1], "dfl")) {
     const bool b27 = !strcmp(argv[2], "27b");
     const uint32_t H = b27 ? 5120 : 2048, I = b27 ? 17408 : 6144, nH = b27 ? 25600 : 16384, NL = b27 ? 5 : 6;

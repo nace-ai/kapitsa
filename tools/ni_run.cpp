@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
   sp.temperature = temp;
   sp.top_p = 0.95f;
   sp.top_k = 20;
-  sp.seed = 42;
+  sp.seed = getenv("NI_SEED") && *getenv("NI_SEED") ? uint32_t(strtoul(getenv("NI_SEED"), nullptr, 10)) : 42u;  // sampled runs
 
   int n = int(ids.size());
   for (int i = 0; i < n; ++i) s.tokens()[i] = ids[i];
@@ -384,6 +384,15 @@ int main(int argc, char** argv) {
     int mode = getenv("NI_DFLASH_CB") && *getenv("NI_DFLASH_CB") ? atoi(getenv("NI_DFLASH_CB")) : 3;
     if ((trace || conf) && mode == 3) mode = 2;
     if (Encoder::profiling()) mode = 1;
+    // NI_AB=key=value,... (V8Knobs keys): odd cycles run with those verify-kernel knobs, even cycles with the
+    // defaults, so two kernel variants are timed under the same GPU conditions (GPU ms per cycle by parity;
+    // the drafting half of a cycle is encoded with that cycle's knobs too)
+    const V8Knobs knob_a = v8_knobs();
+    const bool ab = getenv("NI_AB") && *getenv("NI_AB");
+    const V8Knobs knob_b = ab ? v8_knobs_parse(getenv("NI_AB"), knob_a) : knob_a;
+    std::vector<double> ab_ms[2];
+    auto knobs_for = [&](int cycle) { v8_knobs() = (ab && (cycle & 1)) ? knob_b : knob_a; };
+    knobs_for(0);
     std::unique_ptr<Encoder> next_draft;  // mode 3: the committed drafting half of the coming cycle
     if (mode == 3) {
       dfl->gpu_state_reset(P);  // the GPU is idle here
@@ -413,6 +422,7 @@ int main(int argc, char** argv) {
         e->commit();
         // the next anchor is at most P + 8: commit its drafting half now (it waits on this verify)
         if (P + 8 + DFlash2::kB + 2 < s.cap) {
+          knobs_for(cycles + 1);
           next_draft = g.begin();
           dfl->encode_cycle_draft_gpu(*next_draft, s, *dseq, P + 8, sp);
           next_draft->commit();
@@ -423,6 +433,7 @@ int main(int argc, char** argv) {
       const double gms = e->gpu_ms() + (e1 ? e1->gpu_ms() : 0.0);
       gpu_sum += gms;
       wall_sum += wall;
+      if (cycles > 0) ab_ms[cycles & 1].push_back(gms);  // the first cycle includes the first drafting half
       const int a = dfl->accepted();
       const int* tk = s.tokens();
       if (trace)
@@ -472,7 +483,9 @@ int main(int argc, char** argv) {
       acc_hist[a]++;
       P += mm;
       if (mode == 3) dseq->ctx = P;  // the GPU committed the kept rows to the ring
+      if (mode != 3) knobs_for(cycles);
     }
+    v8_knobs() = knob_a;
     if (next_draft) next_draft->wait();
     double td = now_ms() - ts;
     if (conf) fclose(conf);
@@ -490,6 +503,20 @@ int main(int argc, char** argv) {
     fprintf(stderr, "; %.2f proposals verified per cycle; acceptance by position", double(verified_sum) / std::max(cycles, 1));
     for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
+    if (ab) {
+      double med[2], mean[2];
+      for (int k = 0; k < 2; ++k) {
+        std::vector<double> v = ab_ms[k];
+        std::sort(v.begin(), v.end());
+        med[k] = v.empty() ? 0 : v[v.size() / 2];
+        mean[k] = 0;
+        for (double x : v) mean[k] += x;
+        mean[k] /= std::max<size_t>(1, v.size());
+      }
+      fprintf(stderr, "AB [%s]: GPU ms/cycle A (default) mean %.3f median %.3f (%zu cycles) | B mean %.3f median %.3f (%zu) | "
+              "B - A mean %+.3f median %+.3f\n", getenv("NI_AB"), mean[0], med[0], ab_ms[0].size(), mean[1], med[1],
+              ab_ms[1].size(), mean[1] - mean[0], med[1] - med[0]);
+    }
     if (!ref.empty()) {
       const size_t cmpn = std::min(ref.size(), out.size());
       if (div_at < 0) {

@@ -1,5 +1,7 @@
 // Teacher-forced check of the multi-row verify against plain decoding, plus timing.
 //   ni_v8check <model_dir> @ids [n_tok=64] [R=8] [reps=1]
+// NI_V8CHECK_DUMP=<file>: also writes every verify row's logits (fp32, rows in order) there, e.g. to check that
+// two kernel variants give bitwise the same verify (cmp the files).
 // 1. Prefill the prompt, then n_tok plain greedy decode steps (one command buffer each), keeping
 //    every step's logits and GPU time.
 // 2. Fresh sequence, same prefill; then verify the SAME tokens R rows at a time (encode_verify,
@@ -142,6 +144,10 @@ int main(int argc, char** argv) {
         else if (P == n) printf("  capture: slot 0 == bf16(final residual) for all %d rows\n", R);
       }
       const float* lv = m.logits();
+      if (const char* dp = getenv("NI_V8CHECK_DUMP")) {
+        static FILE* df = fopen(dp, "wb");
+        if (df) fwrite(lv, 4, size_t(R) * V, df), fflush(df);
+      }
       for (int r = 0; r < R; ++r) {
         const float* a = plain.data() + size_t(P - n + r) * V;
         const float* b = lv + size_t(r) * V;

@@ -60,6 +60,8 @@ class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
+  // default reduced draft head rows when <drafter>/head-ranked.u32 (or NI_DFLASH_HEAD_IDS) gives a ranked list
+  static constexpr int kHeadRows = 65536;
   // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4).
   DFlash2(Qwen35& target, const std::string& dir, int bits = 0);
   const DFlash2Config& config() const { return cfg_; }
@@ -149,7 +151,9 @@ class DFlash2 {
   const int* walk_k() const { return walk_k_.as<int>(); }         // [7]
   const float* walk_scores() const { return walk_s_.as<float>(); }// [7][16]
   const float* edges() const { return edges_.as<float>(); }       // [7][16][16]
-  const float* logits() const { return logits_.as<float>(); }     // [8][V] (row 0 unused)
+  const float* logits() const { return logits_.as<float>(); }     // [8][Vd] (row 0 unused; Vd = head_rows())
+  uint32_t head_rows() const { return draft_vocab(); }             // draft logit columns (vocab or the reduced head)
+  const uint32_t* head_ids() const { return head_n_ ? head_ids_.as<uint32_t>() : nullptr; }  // column -> token id
   const float* sel_hidden() const { return sel_.as<float>(); }    // [8][256]
   const float* final_hidden() const { return n_.as<float>(); }    // [8][H] after the last layer
 
@@ -218,10 +222,23 @@ class DFlash2 {
   float dyn_tau_ = 0.0f;    // T = 0 (0: dynamic depth off)
   float dyn_tau_t_ = 0.0f;  // T > 0 (exclusive-product rule)
   bool exact_moe_ = true;  // T > 0 on MoE targets: row-independent expert numerics (NI_DFLASH_EXACT_MOE=0 off)
-  // MLP and LM head on the target's 8-row verify GEMMs (qmm8_gu1k2 / qmm8pf; NI_DFLASH_V8, default on
-  // for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted into their table
+  // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_DFLASH_QT; 0 = argmax chain with one-hot q)
+  float walk_tf_ = 1.0f;
+  // MLP and LM head on the target's 8-row verify GEMMs (Qwen35::enc_gu8 / enc_qmm8 with the verify's V8Knobs;
+  // NI_DFLASH_V8, default on for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted
+  // into their table
   bool v8_ = false;
   Buffer v8t_, v8h_, v8hs_;
+  // Reduced draft head (NI_DFLASH_HEAD=n rows, 0 = the full vocabulary): the target lm_head rows of the n
+  // highest-ranked token ids (a ranked id list, NI_DFLASH_HEAD_IDS or <drafter>/head-ranked.u32, else id
+  // order) plus every id >= the first end-of-sequence id (added/special tokens), ascending; the drafter's
+  // top-16 then picks among those ids only (the verify always uses the full head, so outputs are unchanged).
+  QLinear head_sub_;
+  Buffer head_ids_;
+  uint32_t head_n_ = 0;  // 0: full head
+  void build_head(int n, bool explicit_n);
+  const QLinear& draft_head() const { return head_n_ ? head_sub_ : tg_.lm_head(); }
+  uint32_t draft_vocab() const { return head_n_ ? head_n_ : uint32_t(cfg_.vocab); }
   void enc_to_v8(Encoder& e, const Buffer& xh, uint32_t K, const Buffer& table);
   // context commit
   Buffer capt_, y8_, c8_, kv8_, cdbg_;

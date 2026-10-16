@@ -110,6 +110,28 @@ struct AneLayerTimes {
   double ane_in_split = 0;  // ANE time inside the split (event reached ready -> report)
 };
 
+// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp; docs/PERF.md "27B DFlash2 cycle"). Defaults
+// are the measured-fastest settings; the environment (NI_V8_CM, NI_V8_PAIR, NI_V8_KPLAN, NI_V8_GUSPLIT,
+// NI_V8_GDNSPLIT, NI_V8_PREPU) overrides them, and tools may change them between encodes: ni_run's NI_AB alternates
+// two settings per decode cycle so both are timed under the same GPU conditions.
+struct V8Knobs {
+  int cm = 1;       // GEMM operands: 0 = codes as 1024 + q, 1 = codes as exact half subnormals q * 2^-24
+  int pair = 1;     // 1: two 64-groups per inner step (scale / bias pairs in one load each)
+  int kplan = 2;    // 1: 8 k-slices x 1 column block per threadgroup when K >= 4096; 2: also 16 k-slices for K >= 16384
+  int gusplit = 1;  // 1: dense MLP gate / up as two segments of one GEMM (fp32) + swiglu_x8, instead of qmm8_gu1k2
+  int gdnsplit = 256;  // GDN step over value-row blocks of this many threads + gdn_gnorm_x8 (0: one threadgroup per head)
+  int prepu = 1;    // 1: x8_prep2's row norms with 4 independent load chains
+  // timing only (wrong outputs): skip kernel groups of a dense verify / drafting pass. Verify: 1 GDN step, 2 attention
+  // core, 4 GDN prep, 8 MLP down, 16 MLP gate/up, 32 GDN in_proj, 64 GDN out / attention o, 128 LM head + sampling,
+  // 256 normed X8 preps, 512 attention q|k|v; drafter: 1024 MLP gate/up, 2048 MLP down, 4096 LM head,
+  // 8192 conv / attention projections, 16384 ring commit. With NI_AB: the in-pipeline cost of those kernels.
+  int skip = 0;
+  int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
+};
+V8Knobs& v8_knobs();
+// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad); unknown keys are fatal
+V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
+
 class Qwen35 {
  public:
   explicit Qwen35(const std::string& model_dir, int prefill_chunk = 2048);
@@ -380,6 +402,8 @@ class Qwen35 {
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
   // 8-row verify (allocated on first use)
   bool v8_ready_ = false;
+  Buffer v8g_, v8u_;  // split MLP: fp32 gate / up rows [8][I]
+  Buffer v8cnt_;      // gdn_step_verify8s: per-head arrival counters (zero between dispatches)
   Buffer v8t_, v8s_, v8tl_, v8sl_, v8h_, v8hs_, v8tiles_, v8nt_, v8slot_, v8args_, v8out_, v8sh_, v8ustat_, v8sm_, v8hsc_, v8xn_;
 };
 
