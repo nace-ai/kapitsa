@@ -359,3 +359,160 @@ the full 8-row verify + speculative-sampling accept are other branches' work):
 
 The 4-row verify of the existing path (R = 4: 2x the bytes-time of a decode step on the dense model, ~25 ms on
 the MoE) dominates the cycle: with an 8-row verify near 1.15-1.35x decode the same drafts give the SPEC §11 cycle.
+(Superseded by the full loop below: 8-row verify, on-GPU acceptance, double-buffered cycles.)
+
+## DFlash2 decode loop (opt/dflash2 = opt/dflash2-draft + opt/dflash2-verify8 + the loop)
+
+Opt-in: `ni_run <model> @ids n T --dflash <drafter dir|auto>`, server `--dflash <dir|auto>` (or `NI_DFLASH`).
+`auto` = `DFlash2::find`: `<model>/dflash2`, `<model>/drafter`, then `*-DFlash2` directories next to the model, in
+`<parent>/drafters` and in `~/.cache/nace-infer-models/drafters` whose name minus `-DFlash2` (case-insensitive) is the
+model directory name up to a `-` and whose config is a `DFlash2DraftModel` with the target's hidden size, vocabulary
+and layer count (qwen3.6-35b-a3b-4bit -> Qwen3.6-35B-A3B-DFlash2, qwen3.8-27b-4bit-mtp -> Qwen3.8-27B-DFlash2). When a
+drafter loads it replaces MTP; without the flag nothing changes (G3 below).
+
+**One cycle** (anchor `y` at position `P`, SPEC §3), no host round trip inside:
+1. drafting half: ring commit of the rows the previous acceptance kept (their verify captures -> fc -> norm ->
+   stacked k|v GEMM -> K/V ring), then the drafting pass from the anchor (7-token chain; q at T > 0);
+2. verify half: `dfl_depth` (MoE targets, below), the 8-row verify of `[y, d_0 .. d_6]` with the drafter's
+   `CaptureHook` armed (the verify branch's `capture8` / `set_verify_capture` were folded into it), `dfl_dist_rows`
+   (T > 0) and `dfl_accept`, which writes the bonus / correction token to `tokens[P+1+a]`;
+3. the host reads `a`, emits `tokens[P+1 .. P+1+a]` (cut at a stop token / the budget: `m` rows), `commit_rows(s, m)`
+   (the next verify folds `m` tape rows), `P += m`.
+* **Double-buffered** (`NI_DFLASH_CB=3`, default in ni_run and the engine): `dfl_accept` also writes a drafter state
+  (`gst`: next anchor `P + a + 1`, rows `a + 1`, their first position) and every position-dependent drafter kernel
+  (embedding, RoPE table, attention split plan, lattice, walk, commit) reads it when the host passes the sentinel
+  position, so the NEXT cycle's drafting half is committed right behind each verify, before the host waits for it;
+  the host then encodes the following verify (~600 dispatches) while that drafting half runs. If the host cuts `m`
+  below `a + 1` the generation ends, and the extra ring rows past the host's `d.ctx` are never read. `NI_DFLASH_CB=2`:
+  drafting and verify halves as two command buffers committed back to back (host-driven positions); `=1`: one buffer.
+  35B code_35b 512 greedy, interleaved: wall per cycle = GPU time + 0.04 ms (mode 3), + 0.25-0.30 (mode 2), + 0.69 (1).
+* **Greedy acceptance**: longest prefix of the chain equal to the verify rows' argmax (the verify's own
+  `topk_stage1_rows` / `sample_stage2_rows`, ties to the lowest id, as plain decoding), bonus = argmax of row `a`.
+* **Sampled acceptance** (exact speculative sampling, SPEC §8.2): `dfl_dist_rows` rebuilds each verify row's
+  distribution exactly as the plain sampler does (`sample_stage2_rows`: top-k ordered (value desc, id asc), top-p on
+  the untempered probabilities, then temperature on the kept prefix); accept `d_i` iff `u_i q_i(d_i) < p_i(d_i)`;
+  after a rejection draw from `max(0, p_a - q_a)` over the kept set (or `p_a` if empty), after `K` acceptances from
+  `p_K`. Uniforms `pcg_hash(seed ^ pcg_hash(pos) ^ salt)`, separate salts for walk / acceptance / residual; a
+  position's acceptance and residual uniforms are used at most once per generation.
+* **Row-independent MoE numerics at T > 0** (`Qwen35::set_verify_moe_exact`, `NI_DFLASH_EXACT_MOE=0` off): the 8-row
+  verify sends experts used by 1-2 rows through register-dequant matvecs and the others through MMA tiles, which round
+  differently, so a row's logits move (up to ~0.1 on the 35B) with how the other, drafted, rows route; the sampled
+  acceptance needs `p(. | prefix)` itself. Sampled cycles therefore run every routed expert as an MMA tile. Not slower
+  (35B code_35b 512, T = 0.6, interleaved: 132.6 / 136.5 tok/s vs 130.6 / 130.5), and the S2 test on the same start
+  point went from p = 0.086 / 0.039 (joint / first token, 2000 trials) to 0.202 / 0.162 (3000 trials).
+* **Dynamic verify depth on MoE targets** (default tau 0.5 at T = 0 and 0.3 at T > 0; `NI_DFLASH_DYN=tau`, 0 = off;
+  `NI_DFLASH_DYN_T` for T > 0; dense targets: off): the 35B verify's cost is the union of routed experts over its rows (SPEC §15.7: 31.5 per
+  layer for 8 rows, 23.4 for 5), so `dfl_depth` decides on the GPU how many proposals to verify from the drafter's
+  confidence `c_j` (the walk's probability of its choice: softmax of `S_j` at T = 0, `q_j(d_j)` at T > 0);
+  `moe8_plan` routes only the live rows (a GPU-side row limit) and `dfl_accept` stops there.
+  - T = 0: verify proposal `p` while `prod_{j <= p} c_j >= tau` (the greedy output is the verify argmax whatever is
+    verified, so the proposal's own confidence may be used).
+  - T > 0: verify `p` iff `prod_{j < p} c_j >= tau`. The decision about `d_p` must not depend on `d_p`: given the
+    accepted prefix it is then fixed and every position is an ordinary speculative step or the bonus draw from
+    `p_p`, so the emitted law is exact. The first version used the inclusive product at T > 0 too, which skips
+    unlikely draws of `q_p` and draws from `p_p` instead: biased at positions >= 1 of a cycle; S2's first-token
+    test cannot see it and its start point rarely accepted `d_0`, so `dflash_accept_test` now has dynamic-depth
+    cases, including that rule, which it rejects. Measured before the fix (12 seeds, server, T = 0.6): no visible
+    effect on the text (distinct-4-gram ratio 0.990 vs 0.992 for plain sampling, Mann-Whitney p = 0.56). Exact rule,
+    35B code_35b 512 T = 0.6, tau 0 / 0.3 / 0.5 / 0.7: 139.2 / 149.4 / 147.8 / 140.3 tok/s (single runs).
+  - Calibration (469 cycles, code / p700 / prose, 512 tokens, all 7 verified): c >= 0.99 -> 97% accepted,
+    0.95-0.99 -> 81%, 0.7-0.8 -> 50%, < 0.5 -> 13-27%. Offline simulation with the measured cost (0.38 ms per expert of
+    U) predicted +8-11%; measured (greedy, 512, interleaved): code 135.1 / 136.9 tok/s at tau 0 -> 144.4 / 146.7 at
+    0.3 -> 147.0 / 146.6 at 0.5; prose 93.1 -> 111.8 -> 112.2. Sweep on the final loop: code 160.7 / 159.9 / 159.0 /
+    154.8 tok/s at tau 0.4 / 0.5 / 0.6 / 0.7, p700 189.1 / 199.4 / 185.9 / 184.8, prose 115.3 / 119.6 / 109.9 / 113.1.
+    Static depths are worse: 5 of 7 gave 126.7 / 130.0 vs 120.0 / 117.6 for 7 (256 tokens).
+* **Prefix reuse** (engine): the drafter ring is per slot; on a checkpoint restore `DFlash2::rewind` keeps the entries
+  of the reused prefix that are still in the 2048-slot window (`valid_lo`, the draft attention starts there), and the
+  prompt capture covers only the rows that can still be seen, `[max(start, n - 2047), n)`. The end of a generation
+  commits the last kept rows (unless the committed drafting half already did) and folds the tape.
+* **27B drafter on the verify GEMMs** (`NI_DFLASH_V8`, default for hidden >= 4096): its MLP and LM head run on the
+  verify path's `qmm8_gu1k2` / `qmm8pf` (inputs permuted into their fragment-order table by `dfl_x8_to_v8`; the per-64
+  sums have the same layout). `bench_v8 dfl <model>` (same rotating weights, best of 6): 27B gate+up 509.6 vs 606.3 us,
+  down 255.7 vs 300.2, LM head 3430 vs 3661, o 62.5 vs 66.2; 35B within +-5% either way (kept on `dfl_qmm8`). Pass:
+  8.73 vs 9.19 ms (P = 96), 9.04 vs 9.54 (full window); D1 parity unchanged (worst per-layer h 2.4e-3).
+* Tried and dropped: `gdn_step_verify8` with every per-row input staged in threadgroup memory (27B verify 80.4 / 80.7
+  vs 79.6 / 80.5 ms, 35B 21.4 / 21.5 vs 21.6 / 21.4; identical logits); the pass's RoPE table (512 precise sin/cos,
+  50-100 us) over 8 threadgroups instead of one (35B 49.7 -> 61.8 us, 27B 97.6 -> 97.9; the final-matrix binary still
+  had it, bitwise the same values); static verify depths (above).
+
+**Correctness** (final build unless noted; every run under the GPU lock):
+
+| check | 35B-A3B | 27B |
+|---|---|---|
+| G1 code_* 512 greedy (`--ignore-eos`) vs plain greedy | identical 512/512 (6 runs of the final matrix too) | identical 512/512 (6 runs) |
+| G1 p4000 + 256 greedy | first difference at token 197: plain top-2 gap 0.020; one multi-row prefill of the prefix picks the DFlash token (gap -0.170); the verify row -0.151 (G2: the target's own batching numerics). An earlier build (no dynamic depth) split at token 119: plain gap 0.273, verify row a tie (-0.0002), prefill +0.128 (the 35B's verify-vs-plain noise: p95 0.14, max 0.79 on code_35b) | identical 256/256 |
+| chat prompt of 5349 tokens (engine_turns turn 3) | first difference at token 73: plain gap 0.0042, one prefill picks the DFlash token | |
+| G3 default path vs 45705ec (base build) | logits after prefill bitwise identical, plain 64 and MTP depth 1 (128) ids identical | logits bitwise identical, plain 32 and MTP depth 2 (96) ids identical |
+| D1 drafter parity (q4 dump) | chains 3/3, worst per-layer h 2.49e-3 | chains 3/3, 2.41e-3 (MLP/LM head on the verify GEMMs) |
+| server tests/test_server.py with `--dflash auto` | 13/13 (T = 0.6 default; also with the double-buffered loop) | 13/13 |
+| engine_turns (5168-token prompt, 2 follow-ups reusing 5161 tokens, T = 0) | 3.88 / 3.61 / 3.12 tok/cycle (the ring survives the rewind); turns 1-2 identical to plain decoding, turn 3 a near-tie (above) | |
+
+* **S1** (`dflash_accept_test`, synthetic prefix-conditional p and q, joint law of the first two emitted tokens,
+  40000-100000 trials per case): every case passes (random p/q, q = p, q disjoint from p, point masses, p(d) = 0, flat
+  q, K = 1/3/7, T = 0.6/1.0, dynamic depth with the exact rule); `dfl_dist_rows` equals a CPU transcription of the
+  plain sampler bit for bit; the depth-sensitive regime rejects the old inclusive T > 0 rule (chi2 446, 3 dof).
+* **S2** (`dflash_stat`, real models: after a fixed prompt, a greedy start point with >= 3 kept tokens and top
+  probability <= 0.8; DFlash2 cycles until two tokens are out, state restored per trial; chi-square against p(t1)
+  p(t2 | t1) from the same 8-row verify path): all pass.
+
+| model, start point | T | trials | MoE path | joint p | first token p |
+|---|---:|---:|---|---:|---:|
+| 35B prose (+23) | 0.6 | 2000 | 1-2-row experts on the scalar path | 0.086 | 0.039 |
+| 35B prose (+23) | 1.0 | 2000 | scalar path | 0.432 | 0.086 |
+| 35B prose (+23) | 0.6 | 3000 | row-independent (default at T > 0) | 0.202 | 0.162 |
+| 35B prose (+23) | 1.0 | 3000 | row-independent | 0.658 | 0.165 |
+| 35B code (+32) | 0.6 | 2000 | row-independent | 0.496 | 0.496 |
+| 35B prose, dynamic depth on | 0.6 | 3000 | row-independent | 0.255 | 0.162 |
+| 27B prose (+23) | 0.6 | 1200 | dense | 0.316 | 0.361 |
+
+**Performance** (ni_run, `code_*` ids = chat-templated coding request, 512 tokens, `--ignore-eos`, the same seed
+for every sampled run; configurations interleaved inside one locked session; tok/s = decode tokens / decode wall time):
+
+| model, T | plain | current best (MTP) | DFlash2 | tok/cycle (DFlash2) | ms/cycle (GPU) |
+|---|---:|---:|---:|---:|---:|
+| 35B, greedy | 107.4 | depth 1: 123.3 / 123.3 / 125.2 | **161.7 / 162.9 / 161.7** (+31%) | 3.41 (3.59 verified) | 20.9-21.0 |
+| 35B, T = 0.6 | | depth 1: 119.2 / 119.3 / 119.3 | **151.0 / 150.7 / 150.9** (+26%) | 3.50 (5.34 verified) | 23.1-23.2 |
+| 27B, greedy | 15.9 | depth 2: 31.0 / 30.4 / 31.4 | **55.2 / 55.0 / 55.1** (+78%) | 4.78 | 86.4-86.8 |
+| 27B, T = 0.6 | | depth 2: 31.2 / 31.1 / 31.2 | **47.7 / 47.7 / 48.0** (+53%) | 4.15 | 86.4-87.0 |
+
+All 12 greedy runs (MTP and DFlash2) are identical to plain greedy over the 512 tokens. Splash on this Mac (SPLASH_RUN.md,
+same ids, greedy, 512): 35B 124.6-132.4 tok/s at 3.61 tok/cycle, 27B 54.7 at 4.83. The 35B's tok/cycle is below the
+oracle's 3.65 on purpose (dynamic depth; all 7 verified: 3.70); the 27B's 4.78 matches (oracle 4.79, Splash 4.83).
+Longer context, p4000 + 256 greedy: 35B 183.9 tok/s (4.72 tok/cycle, 25.6 ms/cycle), 27B 80.1 tok/s (7.29 tok/cycle,
+90.6 ms/cycle; a raw code continuation, plain 13.5).
+
+Server (`research/inference/scripts/bench.py` decode phases against `nace-infer-server`, the app's streaming API:
+middle-window decode rate, median of 3 x 512 tokens, thinking off; T = 0.6 / top_p 0.95 / top_k 20 and T = 0):
+
+| model | default server (MTP) T = 0.6 / T = 0 | `--dflash auto` T = 0.6 / T = 0 |
+|---|---|---|
+| 35B | 123.3 (118.4-125.4) / 125.1 (123.4-127.0) | **151.6** (135.3-160.8) / **165.5** (156.3-167.9) |
+| 27B | 30.5 (30.4-31.8) / 30.9 (30.6-31.4) | **52.4** (49.2-56.9) / **57.6** (57.2-57.7) |
+
+(T = 0.6 sampled runs vary with the text drawn; the 27B's earlier DFlash2 server run, same code but before the
+allocation fix below: 52.0 / 56.0.) Memory: the drafter adds its resident size to the process footprint, +0.48 GB
+(35B) / +1.27 GB (27B) at load, plus a 48 / 40 MiB context ring per slot; after one request the servers measured
+20 / 21 GB (35B, MTP / DFlash2) and 18 / 19 GB (27B) (`footprint -p`). Before `Gpu::alloc` got its own autorelease
+pool the drafter's bf16 checkpoint (1.05 / 3.85 GB) was never freed after the 4-bit quantization (Metal keeps new
+buffers in the caller's pool, and the C++ callers have none; same fix as opt/ane c2de003): +1.46 / +4.7 GB.
+
+Profile of a cycle (`NI_PROFILE=1`, isolated dispatches, so small kernels are inflated by a few us each):
+35B, code 96 tokens: 21.9 ms (first loop: 27.4): dense verify GEMMs (`qmm8pf`) 5.8, routed experts 8.6 (scalar 1-2-row
+passes 6.2, MMA tiles 2.4; 13.2 before the dynamic depth), drafter 3.0 (8-row GEMMs incl. the 1.4 ms LM head 2.4, gate/up
+0.5), GDN 1.5, x8 tables 0.85, router 0.42, plan 0.31, verify attention 0.28, draft attention 0.23. 27B, code 64
+tokens: 90.7 ms: the 8-row GEMMs of verify and drafter (`qmm8pf` 46.5, `qmm8_gu1k2` 35.4) are 90%; GDN 3.4, x8 tables
+2.4, remaining drafter GEMMs 1.7, attention 0.6. Both are bandwidth-bound: the 27B cycle reads ~16.7 GB (verify 15.0,
+drafter 1.7), the 35B's ~3.6 GB at 3.6 rows.
+
+Tools: `ni_run ... --dflash auto [--ignore-eos] [--ref <plain output>]` (`--ref`: at the first token that differs from a
+reference run, the logits of both tokens from the verify row, plain decoding and one prefill of the prefix; `NI_TRACE`,
+`NI_DFLASH_CONF=<file>` per-cycle confidences; `NI_DFLASH_CB`, `NI_DFLASH_VERIFY`, `NI_DFLASH_DYN[_T]`,
+`NI_DFLASH_EXACT_MOE`, `NI_DFLASH_V8` switches), `dflash_accept_test [trials] [K] [stream] [case]` (S1),
+`dflash_stat <model> @ids [trials] [T]` (S2), `engine_turns <model> <text> [--dflash auto] [--dump-ids p]` (multi-turn
+prefix reuse through `Engine::chat`), `bench_v8 dfl <27b|35b>` (drafter GEMM shapes), `dflash_check` (D1, unchanged).
+
+Open: the 27B cycle at a ~4k context is 90.6 ms (target 88; 86.4-86.8 at 85 + 512); further 27B gains are in the
+8-row GEMMs (90% of the cycle, already ~1.15x a 1-row matvec) and small fusions (writing the X8 tables of the GDN /
+attention outputs from their kernels: ~64 dispatches per verify). The GPU-driven drafting pass splits the attention
+context in fixed 256-key chunks (the host-driven plan balances them; same math, other fp32 rounding). The drafter's
+target-LM-head pass is ~40% of a 27B pass and ~45% of a 35B pass.
