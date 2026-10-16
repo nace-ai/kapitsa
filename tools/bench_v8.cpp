@@ -1,6 +1,7 @@
 // 8-row verify GEMM (qmm8, src/kernels/verify8.metal) benchmark and correctness check.
-//   bench_v8 <N> <K> [bits=4] [nf=2] [cs=4] [ks=0:auto] [R=8]
-//   bench_v8 sweep <27b|35b> [nf=2] [cs=4]   model shapes: qmm8 (8 rows) vs the 1-row decode matvec
+//   bench_v8 <N> <K> [bits=4] [nf=2] [cs=0:auto] [ks=0:auto] [R=8]
+//   bench_v8 sweep <27b|35b> [nf=2] [cs=0:auto]   model shapes: qmm8 (8 rows) vs the 1-row decode matvec
+// KERNEL=<prefix> picks the variant (default qmm8pf, the model's default).
 // Weights rotate through ~1 GB of distinct matrices so timings reflect DRAM, not the caches.
 // Error: max over sampled outputs of |gpu - ref| / (|ref| + rms(ref)), ref in double from the
 // same half-rounded inputs the kernel reads (so it measures the GEMM, not the input rounding).
@@ -55,14 +56,15 @@ static double cpu_dot(const QMat& m, uint32_t K, int bits, const float* x, uint3
 }
 
 struct Cfg {
-  int nf = 2, cs = 4, ks = 0;
+  int nf = 2, cs = 0, ks = 0;  // 0: the model's plan
 };
 
-// Host plan (kept in sync with Qwen35::enc_qmm8): k-slices so that the grid has enough simdgroups.
+// Host plan (kept in sync with v8_plan in src/model/qwen35_v8.cpp): 4 k-slices when a slice keeps >= 4
+// groups of 64, 8 for small grids; cs = 8 / ks column blocks per threadgroup unless given.
 static int auto_ks(uint32_t N, uint32_t K, int nf) {
   const uint32_t blocks = (N + 8 * nf - 1) / (8 * nf), gpr = K / 64;
-  int ks = 1;
-  while (ks < 8 && blocks * ks < 1280 && gpr / (ks * 2) >= 4) ks *= 2;
+  int ks = gpr >= 16 ? 4 : gpr >= 8 ? 2 : 1;
+  if (ks == 4 && gpr >= 32 && blocks * 4 < 1280) ks = 8;
   return ks;
 }
 
@@ -121,12 +123,12 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
       }
     if (bad || serr > 1e-5) logi("x8_prep: %d table mismatches, sum err %.1e", bad, serr);
   }
-  const std::string kn = std::string(getenv("KERNEL") ? getenv("KERNEL") : "qmm8") + "_b" + std::to_string(bits) +
+  const std::string kn = std::string(getenv("KERNEL") ? getenv("KERNEL") : bits == 4 ? "qmm8pf" : "qmm8") + "_b" + std::to_string(bits) +
                          "_nf" + std::to_string(c.nf);
   Pipeline p = g.pipeline(kn);
   const bool staged = kn.rfind("qmm8t_", 0) == 0 || kn.rfind("qmm8abl3_", 0) == 0;  // table staged: ks = 1
   const int ks = staged ? 1 : c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
-  c.cs = std::max(1, std::min(c.cs, 8 / ks));  // <= 8 simdgroups per threadgroup
+  c.cs = std::max(1, std::min(c.cs > 0 ? c.cs : 8, 8 / ks));  // <= 8 simdgroups per threadgroup
   const uint32_t rows_tg = 8 * c.nf * c.cs, ntg = (N + rows_tg - 1) / rows_tg;
   kp::Qmm8 prm{};
   prm.K = K;
@@ -262,7 +264,7 @@ int main(int argc, char** argv) {
   uint32_t R = argc > 7 ? atoi(argv[7]) : 8;
   Result b = run_qmm8(g, N, K, bits, c, R, true);
   const int ks = c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
-  c.cs = std::max(1, std::min(c.cs, 8 / ks));
+  c.cs = std::max(1, std::min(c.cs > 0 ? c.cs : 8, 8 / ks));
   printf("qmm8 b%d nf%d cs%d ks%d R=%u N=%u K=%u  %8.1f us  %6.1f GB/s  err %.1e\n", bits, c.nf, c.cs, ks, R, N, K, b.us,
          b.gbs, b.err);
   if (getenv("BASE")) {

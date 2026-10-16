@@ -118,37 +118,43 @@ Kernels (all new, the default path dispatches none of them):
 * `capture8`: optional bf16 copy of target layer outputs for a drafter (`set_verify_capture`).
 
 GEMM vs the 1-row decode matvec (`bench_v8 sweep <model>`: ~1 GB of rotating weights, best of 4; error vs an
-fp64 CPU reference on the same half-rounded inputs, 2-4e-5):
+fp64 CPU reference on the same half-rounded inputs, 2-4e-5), with the model's tiling (`qmm8pf`, 2 fragments per
+simdgroup, threadgroup = 2 column blocks x 4 k-slices; 8 k-slices for small grids), two runs in one session:
 
-| 27B shape (N x K) | 1-row us | 8-row us | 8-row GB/s | ratio | ratio, 6 sessions |
-|---|---:|---:|---:|---:|---:|
-| GDN in_proj qkv\|z\|b\|a 16480 x 5120 | 205.1 | 233.8 | 203 | 1.14 | 1.13-1.25 |
-| attention q\|k\|v 14336 x 5120 | 181.6 | 213.6 | 193 | 1.18 | 1.06-1.26 |
-| GDN out / attention o 5120 x 6144 | 80.5 | 94.0 | 188 | 1.17 | 1.09-1.17 |
-| MLP gate+up 34816 x 5120 | 406.0 | 508.7 | 197 | 1.25 | 1.12-1.35 |
-| MLP down 5120 x 17408 | 225.2 | 268.3 | 187 | 1.19 | 1.13-1.32 |
-| LM head 248320 x 5120 | 2938 | 3467 | 206 | 1.18 | 1.09-1.27 |
+| 27B shape (N x K) | 1-row us | 8-row us | 8-row GB/s | ratio |
+|---|---:|---:|---:|---:|
+| GDN in_proj qkv\|z\|b\|a 16480 x 5120 | 197.7-199.9 | 223.0-223.7 | 212 | 1.12-1.13 |
+| attention q\|k\|v 14336 x 5120 | 173.1-183.5 | 197.7-198.0 | 209 | 1.08-1.14 |
+| GDN out / attention o 5120 x 6144 | 79.0-79.5 | 89.6-89.8 | 197 | 1.13-1.14 |
+| MLP gate+up 34816 x 5120 | 403.2-403.7 | 456.3-464.7 | 216-220 | 1.13-1.15 |
+| MLP down 5120 x 17408 | 220.3-222.4 | 255.6-255.9 | 196 | 1.15-1.16 |
+| LM head 248320 x 5120 | 2851-3186 | 3169-3205 | 223-226 | 0.99-1.12 |
 
 | 35B shape (N x K) | 1-row us | 8-row us | 8-row GB/s | ratio |
 |---|---:|---:|---:|---:|
-| GDN in_proj 12352 x 2048 | 64.7 | 78.5 | 181 | 1.21 |
-| attention q\|k\|v 9216 x 2048 | 47.2 | 58.0 | 183 | 1.23 |
-| GDN out / attention o 2048 x 4096 | 23.7 | 32.7 | 144 | 1.38 |
-| one expert's gate+up 1024 x 2048 | 8.2 | 11.9 | 99 | 1.44 |
-| one expert's down 2048 x 512 | 4.7 | 8.1 | 73 | 1.71 |
-| router 256 x 2048, 8-bit | | 10.2 | | |
-| LM head 248320 x 2048 | 1104 | 1347 | 212 | 1.22 |
+| GDN in_proj 12352 x 2048 | 58.7-66.8 | 74.3-78.2 | 182-192 | 1.11-1.33 |
+| attention q\|k\|v 9216 x 2048 | 45.0-45.9 | 57.5-57.6 | 185 | 1.25-1.28 |
+| GDN out / attention o 2048 x 4096 | 23.4-23.5 | 30.6-31.2 | 151-154 | 1.30-1.33 |
+| one expert's gate+up 1024 x 2048 | 7.9-8.0 | 13.5-13.9 | 85-88 | 1.71-1.74 |
+| one expert's down 2048 x 512 | 4.7-4.8 | 7.4-7.6 | 78-79 | 1.59-1.60 |
+| router 256 x 2048, 8-bit | | 7.2-7.3 | | |
+| LM head 248320 x 2048 | 1088-1107 | 1294-1297 | 221 | 1.17-1.19 |
 
-A single expert matrix is launch-bound in isolation (the 1-row kernel reaches only 120-145 GB/s on it too); inside
+The first plan (4 column blocks per threadgroup, k-slices only until the grid had 1280 simdgroups) measured
+gate+up 500-507 us and the LM head 3354-3380 us in the same tiling sweep (cs 2 / ks 4: 452-457 and 3141-3199).
+A single expert matrix is launch-bound in isolation (the 1-row kernel reaches only 120-150 GB/s on it too); inside
 the MoE dispatch an 8-row expert tile costs ~5 us for gate+up (1.18 MB) and ~2.7 us for down.
-The bench times `qmm8pf` on the concatenated N; in the model the MLP gate+up runs as `qmm8_gu1_b4` (SwiGLU
-epilogue), measured 531-557 us per 27B layer in the profiles.
+The bench times `qmm8pf` on the concatenated N; in the model the MLP gate+up runs as the SwiGLU kernel
+(`qmm8_gu1k2_b4`: 8 column slices x 2 k-slices, 512 threads; vs `qmm8_gu1_b4` without the K split: 27B p700
+78.2 vs 79.6 ms per verify, 35B 21.7 vs 22.1, interleaved).
 
-Inner-loop variants (27B gate+up 34816x5120): base 507-537 us, prefetching (default) 497-525, split MMA chains
+Inner-loop variants (27B gate+up 34816x5120, first tiling plan: 4 column blocks, no K split): base 507-537 us, prefetching (default) 497-525, split MMA chains
 (`qmm8s`, `qmm8pfs`) 512-532 (within noise of the default), 4 fragments per simdgroup 519-535, threadgroup-staged
-input table (cs simdgroups share each chunk, `qmm8t`) 533-600. Ablations: without MMAs 487 us, without DRAM streaming (weights cache-resident) 472, without
-table reads 512: no single resource dominates; the MMA work alone (2.85 GFLOP at the 7.41 TFLOP/s MMA ceiling)
-is 385 us, the 1-row time 405 us, and the loop overlaps both at ~82% efficiency.
+input table (cs simdgroups share each chunk, `qmm8t`) 533-600. Ablations: without MMAs 487 us, without DRAM
+streaming (weights cache-resident) 472, without table reads 512: no single resource dominates; the MMA work alone
+(2.85 GFLOP at the 7.41 TFLOP/s MMA ceiling of bench_mma) is 385 us and the 1-row time 405 us; with every other
+instruction of the loop included the kernel runs at ~80% of that MMA ceiling. The 2 x 4 tiling then took
+gate+up to 452-465 us (1.13-1.15x).
 
 Teacher-forced check (`ni_v8check <model> @ids n R`): plain greedy decode of n tokens (logits kept), then a
 fresh prefill and encode_verify of the same tokens R rows at a time (all rows committed, so every verify also
@@ -156,12 +162,12 @@ folds 8 tape rows), each row's logits compared with the plain step predicting th
 
 | model | prompt | rows | argmax = plain | \|logit diff\| at the plain argmax: median / p95 / max | old R = 4 kernels (same test) |
 |---|---|---:|---:|---|---|
-| 27B | p700 | 64 | 64/64 | 0.0017 / 0.0054 / 0.023 | 0.0014 / 0.0049 / 0.015 |
-| 27B | code_27b | 64 | 64/64 | 0.0007 / 0.0032 / 0.026 | |
-| 27B | p4000 | 32 | 32/32 | 0.0017 / 0.021 / 0.067 | |
-| 35B | p700 | 64 | 64/64 | 0.061 / 0.23 / 1.34 | 0.046 / 0.31 / 0.63 |
-| 35B | code_35b | 64 | 64/64 | 0.018 / 0.13 / 0.37 | |
-| 35B | p4000 | 32 | 32/32 | 0.0097 / 0.13 / 0.43 | |
+| 27B | p700 | 64 | 64/64 | 0.0014 / 0.0044 / 0.011 | 0.0014 / 0.0049 / 0.015 |
+| 27B | code_27b | 64 | 64/64 | 0.0010 / 0.0025 / 0.051 | |
+| 27B | p4000 | 32 | 32/32 | 0.0018 / 0.012 / 0.087 | |
+| 35B | p700 | 64 | 64/64 | 0.026 / 0.21 / 0.41 | 0.046 / 0.31 / 0.63 |
+| 35B | code_35b | 64 | 64/64 | 0.0098 / 0.14 / 0.79 | |
+| 35B | p4000 | 32 | 32/32 | 0.0051 / 0.13 / 0.13 | |
 
 The 35B's larger spread is its MoE routing (a top-8 boundary moved by rounding), at the level of the existing
 R = 4 verify; the 27B's is ~1e-3. No argmax differed in any of the 320 rows.
@@ -171,42 +177,46 @@ per command buffer:
 
 | model | prompt (context) | plain step ms | 8-row verify ms | ratio | old kernels, R = 4 |
 |---|---|---:|---:|---:|---:|
-| 27B | p700 | 72.6 / 73.1 | 90.1 / 91.4 | 1.24 / 1.25 | 150.0 ms (2.11x) |
-| 27B | code_27b (85 + 64) | 71.2 | 89.6 | 1.26 | |
-| 27B | p4000 | 72.6 | 92.5 | 1.27 | |
-| 35B | p700 | 10.04 / 10.13 | 24.9 / 24.4 | 2.48 / 2.41 | 27.6 ms (2.75x) |
-| 35B | code_35b (85 + 64) | 10.07 | 22.6 | 2.24 | |
-| 35B | p4000 | 10.44 | 26.8 | 2.57 | |
+| 27B | p700 | 64.21 / 63.55 | 79.70 / 77.91 | 1.24 / 1.23 | 135.8 ms (1.98x) |
+| 27B | code_27b (85 + 64) | 63.64 | 80.23 | 1.26 | |
+| 27B | p4000 | 66.26 | 82.90 | 1.25 | |
+| 35B | p700 | 9.58 / 9.61 | 23.32 / 23.42 | 2.43 / 2.44 | 26.56 ms (2.77x) |
+| 35B | code_35b (85 + 64) | 9.47 | 21.62 | 2.28 | |
+| 35B | p4000 | 9.96 | 25.41 | 2.55 (scalar attention: 26.95) | |
 
-Same binary, same session per model (the 27B plain step drifted between 63.5 and 73 ms over the day; within a
-session the ratio stayed 1.22-1.33). The 35B verify reads every touched expert once: 39.0 distinct routed experts
-per layer on p700, 34.1 on code_35b, 41.2 on p4000 (of 64 routes), i.e. ~4.3 GB per verify against 1.79 GB per
-plain step; its ratio is that byte ratio (2.4x) plus ~5%. Improvements along the way (35B p700 / 27B p700,
-interleaved A/B): prefetching GEMM loop -1.2 ms / -0.5 ms; gate/up as 8 simdgroups x (1+1) fragments -0 / -2.5 ms;
-MMA attention -0.6 to -1.3 ms (p4000: 26.8 vs 28.6 ms on the 35B); scalar tiles for 1-2-row experts -0.8 ms
-(35B); the remaining switches were within noise.
+Final binary, one locked session per model and table row group (the 27B plain step drifted between 62.4 and 73 ms
+over the day across sessions; within a session the 27B ratio stayed 1.22-1.33 through the whole tuning). The 35B
+verify reads every touched expert once: 39.0 distinct routed experts per layer on p700, 34.1 on code_35b, 41.2 on
+p4000 (of 64 routes), i.e. ~4.3 GB per verify against 1.79 GB per plain step; its ratio is that byte ratio (2.4x)
+plus ~5%. Improvements along the way (35B p700 / 27B p700, interleaved A/B): prefetching GEMM loop -1.2 ms / -0.5
+ms; gate/up as 8 simdgroups x (1+1) fragments -0 / -2.5 ms, plus the 2-way K split -0.4 / -1.4 ms; MMA attention
+-0.6 to -1.3 ms (p4000: 26.8 vs 28.6 ms on the 35B); scalar tiles for 1-2-row experts -0.8 ms (35B); the remaining
+switches were within noise.
 
 Per-kernel profile of one 8-row verify (`NI_PROFILE=1`, isolated dispatches, so small kernels are inflated by
-~5 us each), 27B p700: `qmm8pf` 46.7 ms (193 dispatches), `qmm8_gu1_b4` 35.7 (64), `x8_prep2` 4.0 (193),
-`gdn_step_verify8` 2.6 (48), `attn8m_partial` 1.2 (16), `gdn_prep_verify` 1.0, rest < 1 ms; 92.3 ms in total.
-35B p700 (40 routed experts per layer): scalar expert gate/up `moe8s2_gu` 7.6 ms + down `moe8s2_down` 4.4 (the
-~27 experts with 1-2 rows), MMA expert tiles `qmm8_gu1_b4` 2.1 + `moe8_down_nf2` 1.0 (~13 + the shared expert),
-dense `qmm8pf` 6.2 (81), `gdn_step_verify8` 1.1, `x8_prep2` 1.0 (121), `attn8m_partial` 0.5, router `qmm8x2_b8` 0.45,
-`moe8_plan` 0.39, `moe8_combine` 0.27, rest < 0.5; 26.1 ms in total. Experts are ~58% of the verify.
+~5 us each), final binary. 27B p700: `qmm8pf` 40.6 ms (193 dispatches: GDN in/out, attention q|k|v/o, MLP down,
+LM head), `qmm8_gu1k2_b4` 31.9 (64), `gdn_step_verify8` 2.5 (48), `x8_prep2` 2.3 (193), `attn8m_partial` 1.1 (16),
+`gdn_prep_verify` 0.8, rest < 0.5; 79.6 ms in total, 91% in the GEMMs. 35B p700 (40 routed experts per layer):
+scalar expert gate/up `moe8s2_gu` 7.7 ms + down `moe8s2_down` 3.7 (the ~27 experts with 1-2 rows), MMA expert
+tiles `qmm8_gu1k2_b4` 2.4 + `moe8_down_nf2` 1.0 (~13 + the shared expert), dense `qmm8pf` 5.9 (81),
+`gdn_step_verify8` 1.1, `x8_prep2` 0.9 (121), `attn8m_partial` 0.5, router `qmm8x2_b8` 0.44, `moe8_plan` 0.39,
+`moe8_combine` 0.25, rest < 0.5; 25.2 ms in total, experts 59%.
 
 MTP (R <= 4) is untouched: `ni_run --spec D` ids identical to 45705ec for D = 0..3 on code_* (128 tokens), same
 speeds. `ni_run --spec D` now also runs D = 4..7 through the 8-row verify (partial commits of the tape every
-cycle): greedy output identical to plain decoding over 256 tokens on both models (D = 7 and 4). On the 27B,
-MTP D = 7 gives 31.2-33.8 tok/s at 4.05 tok/cycle (code_27b, 256 tokens) against 25.0-27.4 for D = 2 (the default)
-and 14.0-14.7 plain; on the 35B, D = 7 runs at 76-81 tok/s and D = 4 at 92-97, below D = 1 (107): the MTP head's
-acceptance is too low there to pay for the expert union, which a block drafter's (DFlash2) is meant to fix.
+cycle): greedy output identical to plain decoding over 256 tokens on both models (D = 7 and 4). On the 27B, MTP D =
+7 gives 31.2-35.9 tok/s at 4.05 tok/cycle (code_27b, 256 tokens; 35.9 with the final binary) against 25.0-27.5 for
+D = 2 (the default) and 14.0-15.1 plain; on the 35B, D = 7 runs at 76-84 tok/s and D = 4 at 92-101, below D = 1
+(107-112): the MTP head's acceptance is too low there to pay for the expert union, which a block drafter's
+(DFlash2) is meant to fix.
 
 Tried and dropped: scalar experts reading their inputs from device memory per 2 columns (29.0 vs 24.9 ms; the
 staged version is the default), the staged-table GEMM and the ablation kernels (templates kept in verify8.metal,
-not instantiated). Left opt-in: `NI_V8_GU=2` (4 simdgroups x 2+2 fragments: +2.5-3 ms on the 27B), `NI_V8_GEMM=base|s|pfs`, `NI_V8_GU_PF=1`,
+not instantiated). Left opt-in: `NI_V8_GU=1|2|1k4|2k2|2k4` (`2` = 4 simdgroups x 2+2 fragments: +2.5-3 ms on the
+27B; the K-split variants other than 1k2 within 1-3 ms), `NI_V8_PLAN=1`, `NI_V8_GEMM=base|s|pfs`, `NI_V8_GU_PF=1`,
 `NI_V8_PREP=1` (8-threadgroup prep), `NI_V8_GDN=0`, `NI_V8_ATTN=0` (scalar attention with K/V tiles shared by 4-5
-rows), `NI_V8_MOE_SMALL=0` (all experts as MMA tiles), `NI_V8_ROUTER_X2=0` (half-input router: 0.4 ms faster,
-p95 logit noise 0.45 vs 0.23).
+rows), `NI_V8_MOE_SMALL=0` (all experts as MMA tiles), `NI_V8_ROUTER_X2=0` (half-input router: 0.1-0.4 ms faster,
+p95 logit noise 0.39-0.45 vs 0.21-0.23).
 
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
