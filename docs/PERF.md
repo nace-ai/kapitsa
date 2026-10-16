@@ -141,3 +141,92 @@ UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
 Attention share of nace-infer prefill (35B, 10 attention layers, v10 at 2.56 TFLOP/s): ~0.5 s of
 5.3 s at 4k, ~8.6 s of 27 s at 16k. At MLX's 5.3 TFLOP/s that becomes ~0.26 s / ~4.2 s, i.e.
 about 805 tok/s at 4k and 715 at 16k (projection, not measured).
+
+## DFlash2 block drafter (opt/dflash2-draft; opt-in `ni_run --dflash <drafter dir>` / `NI_DFLASH`)
+
+Spec and oracle: `research/inference/dflash2/SPEC.md`, `dflash2_ref.py` (MLX). Code: `src/model/dflash2.{h,cpp}`,
+`src/kernels/spec_dflash.metal`, capture hook in `Qwen35` (`CaptureHook`, `set_capture`), tools
+`dflash_check` (oracle dumps, timing, `--sim` replay), `bench_qmm8`, `dflash_attn_test`, `dflash_qtest`.
+
+* **Load**: config checked against SPEC §1; every 2-D projection quantized at load to MLX affine 4-bit
+  (or 8-bit, `NI_DFLASH_BITS=8`) g64. Bit-exact with `mx.quantize`: MLX's Metal kernel (IEEE fp32,
+  round half away from zero; what wrote the q4 dumps) by default, MLX's CPU backend (half to even)
+  with `NI_DFLASH_QROUND=even` (`dflash_qtest` + numpy: 0 differing words/scales/biases). k|v of all
+  layers stacked into one [NL*2048, H] matrix (one GEMM per context commit). Norms, conv bases and
+  both codebooks stay bf16; embedding and LM head are the target's. 35B 0.51 GB resident (8-bit 0.71),
+  27B 1.32 GB (8-bit 2.22); load 0.5-1.4 s.
+* **Capture**: after each `T_ids` layer of `encode_step`/`encode_prefill`/`encode_verify`, rows in
+  the armed position window are copied fp32 -> bf16 into `[rows, n*H]`. Unarmed it adds nothing:
+  logits after prefill bitwise identical to main 45705ec and generated ids identical (p700, 64
+  tokens, plain and MTP, both models).
+* **Context path**: captures -> half (pre-scaled by 1/16, exact for bf16 values) -> `fc` -> RMSNorm
+  (x16 folded back) -> stacked k|v GEMM -> `dfl_ctx_commit` (k_norm, RoPE at the row's position, bf16)
+  into a 2048-slot ring per layer.
+* **Pass**: one encoder, ~85 dispatches: embedding + norm, per layer {P_a GEMM, conv prepare,
+  q|kv GEMM, q/k norm + RoPE, attention + split reduce, o GEMM, conv finish + residual + norm,
+  P_m GEMM, conv prepare, fused gate/up/SwiGLU GEMM, down GEMM, conv finish + norm}, LM head +
+  selector GEMM, two-stage top-16, edge lattice, walk (greedy or sampled with q).
+* **8-row GEMM `dfl_qmm8`**: weights straight to registers (opt/shortpf qmms lane layout), exact
+  codes as half MMA operands (Splash idea), fp32 per-group epilogue `s.C + b.sum(x)`, X as a half
+  table with per-64 sums written by the producers. Interleaved sweep (`bench_qmm8`, warm GPU):
+  175-207 GB/s and 5.0-5.9 TFLOP/s on the drafter shapes (LM head 248320x2048 1.38 ms = 206 GB/s,
+  248320x5120 3.5 ms = 200 GB/s). 16 rows per simdgroup (`NI_DFLASH_RF=2`) never wins; a K split
+  helps every shape with < 1024 threadgroups (heuristic: the largest of 1/2/4/8 leaving >= 8 groups
+  per simdgroup). Fused gate/up gets its own K split inside its 64-column threadgroup.
+
+| D1 vs the oracle q4 dumps (`code_*_q4`, 3 cycles) | 35B | 27B |
+|---|---|---|
+| ring K / V after the prompt commit (bf16) | 1.7e-3 / 1.7e-3 | 1.7e-3 / 1.7e-3 |
+| c(j) | 9.6e-7 | 3.2e-6 |
+| per-layer h (worst layer, worst cycle) | 2.5e-3 | 2.4e-3 |
+| final hidden / draft logits | 1.7-2.1e-3 / 1.3-1.6e-3 | 2.1-2.8e-3 / 2.0-2.6e-3 |
+| top-16 sets | 112/112 every cycle | 111/112, 112/112, 112/112 |
+| edges (matched by token ids) | 0.9-1.0e-3 | 1.3-2.2e-3 |
+| proposal chains | identical 3/3 | identical 3/3 |
+| sampled walk (T 0.6/1.0, 3 seeds) | q = softmax(S/T) to 1.6e-7; index = inverse CDF of u in 42/42 | same, 3.1e-7 |
+
+All numbers are relative L2 errors; the inputs were the dump's own captures and block embedding. The
+intermediates of every layer (n, D, a, q, k, v, o, u, n2, D2, mm, hgu, f) are 3e-8 to 2.1e-3. With
+8-bit weights against the bf16 dump: per-layer h 1.3-1.9e-2 (weight rounding), chains still identical.
+
+| tokens per cycle, all 7 proposals verified (`dflash_check --sim N`, code_*, greedy, plain-decode numerics) | 35B | 27B |
+|---|---|---|
+| ours, 4-bit drafter, 256 tokens | **3.26** | **4.33** |
+| ours, 8-bit drafter, 256 tokens | 3.30 | 4.22 |
+| oracle serial verify, fp32 math, bf16 weights, 256 (SPEC §15.2) | 3.24 | 4.15 |
+| oracle batched, q4 drafter, 256 (SPEC §15.3) | 3.19 | 4.42 |
+| ours, 4-bit drafter, **512 tokens** | **3.72** | **4.79** |
+| oracle 512 fp32 / q4; Splash (same ids, q4) | 3.65 / 3.62; 3.61 | 4.79 / 4.83; 4.83 |
+
+Acceptance by draft position at 512: 35B 0.84 0.79 0.69 0.67 0.74 0.55 0.82 (oracle 0.79 0.81 0.76 0.65 0.70
+0.52 0.81), 27B 0.86 0.88 0.79 0.86 0.84 0.83 0.76 (oracle 0.84 0.88 0.81 0.86 0.87 0.77 0.86). 4-bit is the
+default: 8-bit buys nothing measurable and costs 26% (35B) / 38% (27B) more drafting time.
+
+Drafting pass GPU time (one command buffer per pass, median of 10-20 runs, under the GPU lock; the range is
+across lock slots, which differ by up to ~10% on this shared, warm Mac):
+
+| | 35B-A3B | 27B |
+|---|---|---|
+| bytes read per pass (4-bit drafter + target LM head) | 0.49 GB | 1.65 GB |
+| pass at P = 96 | 3.0-3.5 ms (min 3.02) | 9.3-10.0 ms (min 9.25) |
+| pass at P = 4096 (full 2047-row window) | 3.5-4.0 ms (scalar attention 4.5-5.4) | 9.9-10.4 ms (scalar 10.9-11.4) |
+| + context commit of the m kept rows (decode) | 0.4-0.9 ms | 0.6-0.8 ms |
+| prompt context commit, 85 rows (8-row chunks / prefill GEMM) | 2.3-3.8 / 3.4-5.9 ms | 6.9-7.2 / 8.8-9.2 ms |
+
+Profile of the 35B pass (`NI_PROFILE=1`, isolated dispatches, 3.4-3.6 ms): 8-row GEMMs 2.4-2.5 ms (LM head
+~1.4), fused gate/up 0.51-0.53, attention + reduce 0.16 (0.73 at the full window before the 256-key splits),
+top-16 0.09-0.16, conv/norm kernels 0.14, q/k prep 0.03 (0.09 before the per-pass RoPE table), lattice + walk 0.02
+(0.05 as one threadgroup). 27B (10.0 ms): GEMMs 6.45 (LM head ~3.5, down ~1.6), gate/up 2.7 (0.54 ms per layer =
+184 GB/s), the rest 0.8. The pass streams ~140-175 GB/s overall against a ~205 GB/s ceiling of the GEMM kernel.
+
+End to end with the existing verify (`ni_run --dflash`, at most `kMaxVerify - 1 = 3` of the 7 proposals; greedy;
+the full 8-row verify + speculative-sampling accept are other branches' work):
+
+| prompt, 256 tokens unless noted | output vs plain greedy | tok/cycle | GPU/cycle | tok/s (plain) |
+|---|---|---|---|---|
+| 35B code_35b | identical 256/256 | 2.77 | 28.8 ms | 93.1 (107.9) |
+| 35B p4000, 64 tokens (prompt > 2047: ring window, 2047-row commit) | identical 64/64 | 3.71 | 33.8 ms | 107.2 (94.8) |
+| 27B code_27b | identical 256/256 | 3.15 | 152 ms | 20.6 (14.7) |
+
+The 4-row verify of the existing path (R = 4: 2x the bytes-time of a decode step on the dense model, ~25 ms on
+the MoE) dominates the cycle: with an 8-row verify near 1.15-1.35x decode the same drafts give the SPEC §11 cycle.
