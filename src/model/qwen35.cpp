@@ -750,6 +750,46 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   return true;
 }
 
+// NI_GDN_PAR=1 (read once): token-parallel GDN prefill. gdn_prep_par runs the conv/norm with
+// a simdgroup per 8 tokens x 128 channels instead of a T-long loop per channel; the recurrence
+// spreads each head's value rows over simdgroups/threadgroups with no barriers (gdn_step_par_l*),
+// and gdn_gnorm applies the gated RMSNorm, writing out_proj's half input directly (replaces
+// rows_to_half). Same arithmetic order as the default kernels. NI_GDN_STEP picks the recurrence
+// layout (gdn_step_par_l{4,8,16,32}: lanes per value row), NI_GDN_SGS its simdgroups per threadgroup.
+static bool gdn_par() {
+  static const bool on = getenv("NI_GDN_PAR") && atoi(getenv("NI_GDN_PAR")) > 0;
+  return on;
+}
+
+void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T) {
+  static const std::string step_name = getenv("NI_GDN_STEP") ? getenv("NI_GDN_STEP") : "gdn_step_par_l4";
+  static const uint32_t sgs = getenv("NI_GDN_SGS") ? uint32_t(atoi(getenv("NI_GDN_SGS"))) : 2u;
+  static const uint32_t lanes = uint32_t(atoi(step_name.c_str() + step_name.rfind("_l") + 2));
+  const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
+  const uint32_t Hv = uint32_t(cfg_.lin_hv);
+  // rows per threadgroup = sgs * 32/lanes must split the 128 value rows of a head evenly
+  const uint32_t rows_tg = lanes ? sgs * (32 / lanes) : 0;
+  if (!rows_tg || 32 % lanes || 128 % rows_tg || sgs > 32)
+    fatal("NI_GDN_STEP=%s with NI_GDN_SGS=%u: bad layout", step_name.c_str(), sgs);
+  kp::GdnPrep pp{uint32_t(T), uint32_t(cfg_.lin_hk), Hv, C};
+  e.use(pipe("gdn_prep_par"));
+  e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[li]);
+  e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
+  e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
+  e.val(12, pp);
+  e.dispatch((T + 31) / 32, C / 128 + 1, 1, 128);
+  kp::GdnStep sp{uint32_t(T), uint32_t(cfg_.lin_hk), Hv, cfg_.eps};
+  e.use(pipe(step_name));
+  e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
+  e.buf(5, s.rec[li]); e.buf(6, gout_);
+  e.val(7, sp);
+  e.dispatch(Hv * (128 / rows_tg), 1, 1, 32 * sgs);
+  e.use(pipe("gdn_gnorm"));
+  e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, hh_);
+  e.val(4, sp);
+  e.dispatch((uint32_t(T) * Hv + 7) / 8, 1, 1, 256);
+}
+
 void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample) {
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
@@ -769,20 +809,24 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       enc_qmm(e, L.z, xh_, zb_, T, false);
       enc_qmm(e, L.b, xh_, bb_, T, false);
       enc_qmm(e, L.a, xh_, ab_, T, false);
-      kp::GdnPrep pp{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C};
-      e.use(pipe("gdn_prep"));
-      e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
-      e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
-      e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
-      e.val(12, pp);
-      e.dispatch(C / 128, 1, 1, 128);
-      kp::GdnStep sp2{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), cfg_.eps};
-      e.use(pipe("gdn_step"));
-      e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
-      e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
-      e.val(9, sp2);
-      e.dispatch(cfg_.lin_hv, 1, 1, 1024);
-      enc_rows_half(e, gout_, nullptr, hh_, T, VD);
+      if (gdn_par()) {
+        enc_gdn_prefill_par(e, s, i, L, T);
+      } else {
+        kp::GdnPrep pp{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C};
+        e.use(pipe("gdn_prep"));
+        e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
+        e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
+        e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
+        e.val(12, pp);
+        e.dispatch(C / 128, 1, 1, 128);
+        kp::GdnStep sp2{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), cfg_.eps};
+        e.use(pipe("gdn_step"));
+        e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
+        e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
+        e.val(9, sp2);
+        e.dispatch(cfg_.lin_hv, 1, 1, 1024);
+        enc_rows_half(e, gout_, nullptr, hh_, T, VD);
+      }
       enc_qmm(e, L.out, hh_, x_, T, true);
     } else {
       enc_qmm(e, L.q, xh_, qg_, T, false);
