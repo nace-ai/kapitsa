@@ -66,7 +66,9 @@ int main(int argc, char** argv) {
   for (int i = 0; i < n; ++i) s.tokens()[i] = ids[i];
 
   // Opt-in DFlash2 block drafter: the target's verify (currently <= Qwen35::kMaxVerify rows)
-  // checks the first NI_DFLASH_VERIFY (default kMaxVerify - 1) of the 7 proposals.
+  // checks the first NI_DFLASH_VERIFY (default kMaxVerify - 1) of the 7 proposals. Acceptance is
+  // the MTP rule (each verify row samples its own token, accept while it equals the proposal):
+  // exact at any temperature; the speculative-sampling accept (min(1, p/q)) is not wired here yet.
   std::unique_ptr<DFlash2> dfl;
   std::unique_ptr<DFlashSeq> dseq;
   if (!dflash_dir.empty()) {

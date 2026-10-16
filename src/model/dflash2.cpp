@@ -340,7 +340,7 @@ void DFlash2::alloc_buffers() {
   memset(capt_.ptr(), 0, capt_.size);
   for (Buffer* b : {&h_, &n_, &xh_, &xs_, &hh_, &hs_, &dyn_, &q_, &kv_, &Q_, &Kb_, &Vb_, &part_o_, &part_ml_, &u_,
                     &logits_, &sel_, &tk_v_, &tk_i_, &cand_v_, &cand_i_, &edges_, &walk_s_, &qprob_, &walk_k_, &capt_,
-                    &y8_, &kv8_, &cdbg_})
+                    &y8_, &c8_, &kv8_, &cdbg_, &rope_cs_})
     resident_ += b->size;
 }
 
