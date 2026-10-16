@@ -243,6 +243,12 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
                       uint32_t y_ld) {
   if (L.gs != 64) fatal("qmvr: group %d", L.gs);
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
+  if (R > 4) {  // 5-8 rows (deep MTP drafts): the 8-row MMA GEMM
+    v8_alloc();
+    enc_x8(e, x, R, int(L.K), nullptr, false, int(x_ld ? x_ld : L.K));
+    enc_qmm8(e, {{&L, y, y_ld ? y_ld : L.N, add}}, R, v8t_, v8s_);
+    return;
+  }
   // Two rows: one small single-row threadgroup per (row, 8-row weight block), rows fastest. The pair
   // shares each weight block through the core's cache, so verifying 2 rows costs ~1 row
   // (bench_qmvr: 17408x5120 208 us for 1 or 2 rows, vs 240 us for the 2-rows-in-registers kernel).
@@ -589,7 +595,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
 void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0) {
   if (!mtp_loaded_ || R <= 0) return;
   const int D = cfg_.hidden;
-  if (R <= kMaxVerify) {
+  if (R <= kMaxMtpRows) {
     encode_mtp(e, s, pos0, R, pos0 + 1, x_, h_row0, -1);
     return;
   }
@@ -630,6 +636,13 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
 
 void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
   if (R < 1 || R > kMaxVerify) fatal("encode_verify: R=%d", R);
+  // NI_V8=1: the 8-row path for any R >= 2 (A/B); by default only R >= 5 takes it, so MTP verifies
+  // (R <= 4) run exactly the kernels they always did.
+  static const bool v8_all = env_on("NI_V8");
+  if (R > 4 || (v8_all && R > 1)) {
+    encode_verify8(e, s, pos, R, sp, step);
+    return;
+  }
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;

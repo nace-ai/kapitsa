@@ -106,7 +106,10 @@ class Qwen35 {
   bool has_mtp() const { return mtp_loaded_; }
   // Measured best MTP draft depth for this model (M4 Pro): MoE 35B-A3B 1, dense 27B 2.
   int default_spec_depth() const { return cfg_.moe ? 1 : 2; }
-  static constexpr int kMaxVerify = 4;  // rows per verify (pending token + up to 3 drafts)
+  // Rows per verify (pending token + up to 7 drafts). R <= 4 runs the MTP-era small-batch kernels
+  // (unchanged); R >= 5 (or NI_V8=1 for any R >= 2) the 8-row MMA path (qwen35_v8.cpp).
+  static constexpr int kMaxVerify = 8;
+  static constexpr int kMaxMtpRows = 4;  // MTP history rows per encode_mtp on the default path
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
   // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
@@ -118,12 +121,17 @@ class Qwen35 {
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
   void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
+  // Drafter captures (DFlash2): after a verify on the 8-row path, capt holds bf16 rows
+  // [R][layers.size() * hidden], slot i = the output of target layer layers[i]. Empty = off.
+  void set_verify_capture(const std::vector<int>& layers, Buffer capt);
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   void encode_flush(Encoder& e, Seq& s);
   // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
   // prefill chunk (row offset h_row0 in hidden_rows()); tokens[i + 1] must be known.
   void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0);
   const int* samples() { return samp_.as<int>(); }
+  // MoE models, after an 8-row verify: distinct routed experts of each layer (0 for dense layers)
+  const uint32_t* verify8_experts() { return v8ustat_ ? v8ustat_.as<uint32_t>() : nullptr; }
   Buffer hidden_rows() { return x_; }
   Buffer mtp_post() { return mtp_post_; }
   float* logits() { return logits_.as<float>(); }
@@ -177,6 +185,23 @@ class Qwen35 {
   void enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
                      const Buffer& x);
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer);
+  // ---- 8-row verify path (qwen35_v8.cpp) ----
+  struct Seg8 {
+    const QLinear* L;
+    Buffer y;
+    uint32_t y_ld = 0;  // 0: N
+    bool add = false;
+  };
+  void v8_alloc();
+  void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
+  // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table
+  void enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
+              const Buffer* xn_out = nullptr);
+  void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
+                bool x2 = false);
+  void enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
+  void enc_mlp8(Encoder& e, const Layer& L, int R);
+  void enc_moe8(Encoder& e, const Layer& L, int R, int li);
 
   std::string dir_;
   std::string prefix_;
@@ -207,6 +232,11 @@ class Qwen35 {
   // prefill-only
   Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_, mh_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
+  // 8-row verify (allocated on first use)
+  bool v8_ready_ = false;
+  Buffer v8t_, v8s_, v8tl_, v8sl_, v8h_, v8hs_, v8tiles_, v8nt_, v8slot_, v8args_, v8out_, v8sh_, v8ustat_, v8sm_, v8hsc_, v8xn_;
+  std::vector<int> capt_layers_;
+  Buffer capt_;
 };
 
 } // namespace ni
