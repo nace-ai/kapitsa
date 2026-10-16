@@ -73,6 +73,32 @@ Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k
 Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
 the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
 
+## Register spills (`ni_kstats --stats`)
+The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
+`ni_kstats --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
+qmm_tile's store loop (simdgroup_barrier inside) stays rolled for FM=2, so `acc[i][j]` is indexed
+dynamically and the whole accumulator array (plus the A fragments) lives in stack memory: m32_n64
+spills 2304 B/thread (8 x 256 B accumulators + 2 x 128 B), m32_n128 4352 B; m16/m64 tiles and
+m32_n32 do not. Full-unroll pragmas on the two store loops remove it (m32_n64: 44 registers, m32_n128:
+59, both 0 spill; m64_n64 unchanged at 56). The bench-only attn_prefill9_q8_k32 fails pipeline creation
+(33280 B threadgroup memory > 32 KB), so `ni_kstats --stats` over the whole library exits 1.
+Every attention prefill kernel spills too (attn_prefill10_q4_k32: 6912 B, older variants up to
+13 KB): a likely cause of the 2x gap to MLX's steel attention. Several qmv/qmvr verify kernels hit
+the 96-register ceiling and spill 16-300 B.
+
+## MoE prefill v2 (opt-in, `NI_MOE_FUSED`), not yet measured
+`src/kernels/qmm_moe.metal`. Routed experts: `moe_bucket2` -> `qmm_moe_gu` (gate and up from one X
+tile, SwiGLU in the epilogue, half h in expert-sorted rows) -> `qmm_moe_dn` (-> fp32 rows by pair).
+`NI_MOE_FUSED=1` folds the shared expert in as expert E over the T token rows (two dispatches for
+all expert work; the dense sg/su/swiglu/sd dispatches go away); `=2` keeps it on the dense path.
+Tiles: spill-free, 64 rows by default (`NI_MOE_BM=16|32|64`), row fragments past the tile's rows
+skipped per simdgroup, fragments interleaved over simdgroup rows; for full tiles the gate/up tile
+does the same work per K step as the dense m64_n64 GEMM (6 TFLOP/s). Outputs should equal the
+original path bit for bit (same dequantized halfs, same MMA order): `bench_moe` checks this and
+times both paths on one synthetic layer. Registers: gu m64 82, dn m64 71 (dense m64_n64: 56).
+Estimate at 2048-token chunks: expert GEMMs 23 -> ~17-19 ms/layer, swiglu pass and fp32 hg/hu
+(64 MB written + 80 MB swiglu traffic per layer) gone: prefill +5-10% (4k ~800-840 tok/s).
+
 ## Same Mac, other engines (tok/s, M4 Pro)
 nace-infer from the tables above (ni_run); the others from research/inference/REPORT.md (servers,
 TTFT on real 4,133 / 16,285-token prompts, MTPLX-optimized 4-bit MLX weights; llama.cpp on GGUF

@@ -47,10 +47,12 @@ class Gpu {
   // Compiles the embedded kernel library on first use. Extra source can be appended
   // (tests); `defines` become preprocessor macros.
   void compile(const std::string& extra_source = "");
-  Pipeline pipeline(const std::string& fn);
   // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
   // ni_compile reads code size, stack (spills) and GPR count from it.
   bool archive(const std::string& fn, const std::string& path);
+  // required=false returns an empty Pipeline (pso null) instead of exiting when creation fails
+  Pipeline pipeline(const std::string& fn, bool required = true);
+  std::vector<std::string> function_names();  // kernels in the compiled library
 
   // Command buffer that holds one compute encoder. Commit is non-blocking.
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between

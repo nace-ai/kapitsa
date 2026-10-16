@@ -91,7 +91,7 @@ void Gpu::compile(const std::string& extra) {
   }
 }
 
-Pipeline Gpu::pipeline(const std::string& fn) {
+Pipeline Gpu::pipeline(const std::string& fn, bool required) {
   {
     std::lock_guard<std::mutex> lk(impl_->mu);
     auto it = impl_->pipelines.find(fn);
@@ -104,6 +104,10 @@ Pipeline Gpu::pipeline(const std::string& fn) {
     if (!f) fatal("kernel %s not found", fn.c_str());
     NSError* err = nil;
     id<MTLComputePipelineState> pso = [dev(device_) newComputePipelineStateWithFunction:f error:&err];
+    if (!pso && !required) {
+      fprintf(stderr, "pipeline %s: %s\n", fn.c_str(), [[err description] UTF8String]);
+      return Pipeline{};
+    }
     if (!pso) fatal("pipeline %s: %s", fn.c_str(), [[err description] UTF8String]);
     Pipeline p{(__bridge_retained void*)pso, strdup(fn.c_str()), (uint32_t)pso.maxTotalThreadsPerThreadgroup,
                (uint32_t)pso.threadExecutionWidth};
@@ -133,6 +137,14 @@ bool Gpu::archive(const std::string& fn, const std::string& path) {
     }
     return true;
   }
+}
+
+std::vector<std::string> Gpu::function_names() {
+  compile();
+  std::vector<std::string> v;
+  for (NSString* n in [(__bridge id<MTLLibrary>)library_ functionNames]) v.push_back([n UTF8String]);
+  std::sort(v.begin(), v.end());
+  return v;
 }
 
 std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
