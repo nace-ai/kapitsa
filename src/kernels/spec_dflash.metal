@@ -189,16 +189,25 @@ struct DflConvParams {
 }
 
 // ---- attention ----
+// cos/sin of the 8 block positions P + r for the 64 frequencies (shared by every draft layer):
+// cs[r * 64 + i] = (cos, sin)(float(P + r) * inv_freq[i]). grid 1 x 512.
+[[kernel]] void dfl_rope_table(const device float* inv_freq [[buffer(0)]], device float2* cs [[buffer(1)]],
+                               constant uint& P [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+  if (i >= 512) return;
+  const float ang = float(P + i / 64) * inv_freq[i % 64];
+  cs[i] = float2(metal::precise::cos(ang), metal::precise::sin(ang));
+}
+
 struct DflQkParams {
   uint P;        // position of block row 0
   float eps;
   uint q_ld, kv_ld;
 };
-// q/k per-head RMSNorm + RoPE at P + r; v copied. grid: (32 + 8 heads, 8 rows) x 128.
-// Q [32][8][128], Kb/Vb [8][8][128] (head-major, fp32).
+// q/k per-head RMSNorm + RoPE at P + r (table from dfl_rope_table); v copied.
+// grid: (32 + 8 heads, 8 rows) x 128. Q [32][8][128], Kb/Vb [8][8][128] (head-major, fp32).
 [[kernel]] void dfl_qk_prep(const device float* q [[buffer(0)]], const device float* kv [[buffer(1)]],
                             const device bfloat* qn [[buffer(2)]], const device bfloat* kn [[buffer(3)]],
-                            const device float* inv_freq [[buffer(4)]], device float* Q [[buffer(5)]],
+                            const device float2* cs [[buffer(4)]], device float* Q [[buffer(5)]],
                             device float* Kb [[buffer(6)]], device float* Vb [[buffer(7)]],
                             constant DflQkParams& p [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
                             uint d [[thread_index_in_threadgroup]]) {
@@ -211,7 +220,8 @@ struct DflQkParams {
   const float ss = tg_sum(x * x, red, d, 128);
   t[d] = x * metal::precise::rsqrt(ss / 128.0f + p.eps) * float((isq ? qn : kn)[d]);
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  const float o = dfl_rope(t, d, float(p.P + r), inv_freq);
+  const float2 c = cs[r * 64 + (d & 63)];
+  const float o = d < 64 ? t[d] * c.x - t[d + 64] * c.y : t[d] * c.x + t[d - 64] * c.y;
   if (isq) {
     Q[(head * 8 + r) * 128 + d] = o;
   } else {
@@ -967,49 +977,46 @@ struct DflTopParams {
   }
 }
 
+// Edge lattice E[p][j][k] = sum_r A[pred_j][r] s_{p+1}[r] Bc[C_p[k]][r] (pred = anchor for p = 0,
+// C_{p-1}[j] otherwise; fp32 from the bf16 codebooks) -> edges [7][16][16] (NaN where p = 0, j > 0).
+// grid: 7 threadgroups (position p) x 256; one simdgroup per dot product of 256.
+[[kernel]] void dfl_lattice(const device int* cand_i [[buffer(0)]], const device float* sel [[buffer(1)]],
+                            const device bfloat* A [[buffer(2)]], const device bfloat* Bc [[buffer(3)]],
+                            const device int* tokens [[buffer(4)]], device float* edges [[buffer(5)]],
+                            constant uint& P [[buffer(6)]], uint pp [[threadgroup_position_in_grid]],
+                            uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+  const uint ntask = pp == 0 ? 16u : 256u;
+  if (pp == 0)
+    for (uint i = 16 + sg * 32 + lane; i < 256; i += nsg * 32) edges[i] = as_type<float>(0x7fc00000u);
+  const device float* s = sel + (pp + 1) * 256 + lane * 8;
+  const float4 s0 = *(const device float4*)s, s1 = *(const device float4*)(s + 4);
+  for (uint t = sg; t < ntask; t += nsg) {
+    const uint j = t / 16, k = t % 16;
+    const uint pred = pp == 0 ? uint(tokens[P]) : uint(cand_i[(pp - 1) * 16 + j]);
+    const uint succ = uint(cand_i[pp * 16 + k]);
+    const device bfloat* a = A + size_t(pred) * 256 + lane * 8;
+    const device bfloat* b = Bc + size_t(succ) * 256 + lane * 8;
+    const float4 a0 = float4(*(const device bfloat4*)a), a1 = float4(*(const device bfloat4*)(a + 4));
+    const float4 b0 = float4(*(const device bfloat4*)b), b1 = float4(*(const device bfloat4*)(b + 4));
+    const float acc = simd_sum(dot(a0 * s0, b0) + dot(a1 * s1, b1));
+    if (lane == 0) edges[pp * 256 + j * 16 + k] = acc;
+  }
+}
+
 struct DflSelectParams {
   uint P;          // anchor position: tokens[P] is the anchor
   float temp;      // 0: greedy walk
   uint seed;
   uint out_index;  // tokens[out_index + p] = d_p
 };
-// Edge lattice E[p][j][k] = sum_r A[pred_j][r] s_{p+1}[r] Bc[C_p[k]][r] (pred = anchor for p = 0,
-// C_{p-1}[j] otherwise; fp32 from the bf16 codebooks), then the walk: S_p[k] = U_p[k] +
-// E[p][j_p][k]; greedy = first argmax; sampled = first k with cumsum softmax(S_p / T) > u (else 15),
-// q_p stored for the acceptance test. One threadgroup of 1024.
-[[kernel]] void dfl_select(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
-                           const device float* sel [[buffer(2)]], const device bfloat* A [[buffer(3)]],
-                           const device bfloat* Bc [[buffer(4)]], device int* tokens [[buffer(5)]],
-                           device float* edges [[buffer(6)]], device float* walk_s [[buffer(7)]],
-                           device float* qprob [[buffer(8)]], device int* walk_k [[buffer(9)]],
-                           constant DflSelectParams& p [[buffer(10)]], uint tid [[thread_index_in_threadgroup]],
-                           uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
-                           uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float E[7 * 256];
-  const uint anchor = uint(tokens[p.P]);
-  for (uint t = sg; t < 16 + 6 * 256; t += nsg) {
-    uint pp, j, k;
-    if (t < 16) {
-      pp = 0; j = 0; k = t;
-    } else {
-      const uint u = t - 16;
-      pp = 1 + u / 256; j = (u % 256) / 16; k = u % 16;
-    }
-    const uint pred = pp == 0 ? anchor : uint(cand_i[(pp - 1) * 16 + j]);
-    const uint succ = uint(cand_i[pp * 16 + k]);
-    const device bfloat* a = A + size_t(pred) * 256 + lane * 8;
-    const device bfloat* b = Bc + size_t(succ) * 256 + lane * 8;
-    const device float* s = sel + (pp + 1) * 256 + lane * 8;
-    const float4 a0 = float4(*(const device bfloat4*)a), a1 = float4(*(const device bfloat4*)(a + 4));
-    const float4 b0 = float4(*(const device bfloat4*)b), b1 = float4(*(const device bfloat4*)(b + 4));
-    const float4 s0 = *(const device float4*)s, s1 = *(const device float4*)(s + 4);
-    float acc = dot(a0 * s0, b0) + dot(a1 * s1, b1);
-    acc = simd_sum(acc);
-    if (lane == 0) E[pp * 256 + j * 16 + k] = acc;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  for (uint i = tid; i < 7 * 256; i += ntg)
-    edges[i] = (i < 256 && i >= 16) ? as_type<float>(0x7fc00000u) : E[i];
+// The walk over the lattice: S_p[k] = U_p[k] + E[p][j_p][k]; greedy = first argmax; sampled = first k
+// with cumsum softmax(S_p / T) > u (else 15), q_p stored for the acceptance test. One thread.
+[[kernel]] void dfl_walk(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
+                         const device float* E [[buffer(2)]], device int* tokens [[buffer(3)]],
+                         device float* walk_s [[buffer(4)]], device float* qprob [[buffer(5)]],
+                         device int* walk_k [[buffer(6)]], constant DflSelectParams& p [[buffer(7)]],
+                         uint tid [[thread_position_in_grid]]) {
   if (tid != 0) return;
   uint jp = 0;
   for (uint pp = 0; pp < 7; ++pp) {

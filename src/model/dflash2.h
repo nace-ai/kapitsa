@@ -48,6 +48,11 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
 void dfl_quantize_cpu(const std::vector<const uint16_t*>& rows, uint32_t K, int bits, bool even, uint32_t* W,
                       uint16_t* S, uint16_t* B);
 
+// Draft attention split plan for anchor position P: context [lo, P) cut into nsplit chunks of
+// `chunk` positions (multiple of 32), at least min_chunk each (0: NI_DFLASH_ATTN_CHUNK, default 256),
+// at most max_splits.
+void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit);
+
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
@@ -101,6 +106,8 @@ class DFlash2 {
   void set_debug(bool on) { debug_ = on; }
   // draft attention kernel: 0 = default (simdgroup-matrix; NI_DFLASH_ATTN=scalar), 1 = scalar, 2 = mma
   void set_attn_variant(int v) { attn_variant_ = v; }
+  // prompt context commit: rows <= threshold go through 8-row chunks (-1: NI_DFLASH_PF8, default 256)
+  void set_pf8(int rows) { pf8_ = rows; }
   const std::map<std::string, Buffer>& debug_bufs() const { return dbg_; }
   // fp32 c(j) = RMSNorm(x_ctx W_fc^T; hidden_norm) of the last commit: prefill rows [0, rows) or
   // decode rows [0, m) (tests)
@@ -149,13 +156,13 @@ class DFlash2 {
 
   // pass buffers (8 rows)
   Buffer h_, n_, xh_, xs_, hh_, hs_, dyn_, q_, kv_, Q_, Kb_, Vb_, part_o_, part_ml_, u_;
-  Buffer logits_, sel_, tk_v_, tk_i_, cand_v_, cand_i_, edges_, walk_s_, qprob_, walk_k_;
+  Buffer logits_, sel_, tk_v_, tk_i_, cand_v_, cand_i_, edges_, walk_s_, qprob_, walk_k_, rope_cs_;
   // context commit
-  Buffer capt_, y8_, kv8_, cdbg_;
+  Buffer capt_, y8_, c8_, kv8_, cdbg_;
   Buffer pcap_, xph_, yph_, cph_, kvph_;
   int max_splits_ = 32;
   bool h0_set_ = false, debug_ = false;
-  int attn_variant_ = 0;
+  int attn_variant_ = 0, pf8_ = -1;
   std::map<std::string, Buffer> dbg_;
 };
 

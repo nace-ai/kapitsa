@@ -3,6 +3,7 @@
 // j >= P + r - 2047, SPEC §5). Also times both kernels.
 //   dflash_attn_test [P ...]   (default 1 85 700 2047 2048 2055 4100 9000)
 #include "metal/gpu.h"
+#include "model/dflash2.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -78,12 +79,10 @@ int main(int argc, char** argv) {
         for (int x = 0; x < D; ++x) ref[(size_t(r) * HQ + h) * D + x] = o[x] / z;
       }
     }
-    const uint32_t lo = P > 2047 ? uint32_t(P - 2047) : 0u, L = uint32_t(P) - lo;
-    uint32_t nsplit = std::max<uint32_t>(1, std::min<uint32_t>(S, (L + 63) / 64));
-    uint32_t chunk = ((L + nsplit - 1) / nsplit + 15) / 16 * 16;
-    if (!chunk) chunk = 16;
-    nsplit = std::max<uint32_t>(1, (L + chunk - 1) / chunk);
+    for (uint32_t mchunk : {64u, 128u, 256u})
     for (int variant = 0; variant < 2; ++variant) {
+      uint32_t lo, chunk, nsplit;
+      dfl_attn_plan(P, S, mchunk, &lo, &chunk, &nsplit);
       kp::DflAttn p{uint32_t(P), lo, chunk, nsplit, scale};
       kp::DflAttnRed rp{nsplit};
       auto enc = [&](Encoder& e) {
@@ -121,8 +120,8 @@ int main(int argc, char** argv) {
           for (int x = 0; x < 64; ++x) s += double(xh.as<__fp16>()[r * 4096 + gi * 64 + x]);
           serr = std::max(serr, std::fabs(s - xs.as<float>()[gi * 8 + r]));
         }
-      printf("P=%5d %-12s splits %2u x chunk %4u: rel err %.2e max abs %.2e (sums %.1e)  GPU attn+reduce median %.4f ms\n",
-             P, variant ? "dfl_attn_mma" : "dfl_attn", nsplit, chunk, std::sqrt(num / den), mx, serr, ts[ts.size() / 2]);
+      printf("P=%5d %-12s min chunk %3u: splits %2u x chunk %4u: rel err %.2e max abs %.2e (sums %.1e)  GPU attn+reduce median %.4f ms\n",
+             P, variant ? "dfl_attn_mma" : "dfl_attn", mchunk, nsplit, chunk, std::sqrt(num / den), mx, serr, ts[ts.size() / 2]);
     }
   }
   return 0;

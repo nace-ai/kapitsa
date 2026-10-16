@@ -328,11 +328,13 @@ void DFlash2::alloc_buffers() {
   cand_v_ = g.alloc(7 * 16 * 4, "dfl_cand_v");
   cand_i_ = g.alloc(7 * 16 * 4, "dfl_cand_i");
   edges_ = g.alloc(7 * 256 * 4, "dfl_edges");
+  rope_cs_ = g.alloc(8 * 64 * 8, "dfl_rope_cs");
   walk_s_ = g.alloc(7 * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(7 * 16 * 4, "dfl_qprob");
   walk_k_ = g.alloc(8 * 4, "dfl_walk_k");
   capt_ = g.alloc(8 * nH * 2, "dfl_capt");
   y8_ = g.alloc(8 * H * 4, "dfl_y8");
+  c8_ = g.alloc(8 * H * 4, "dfl_c8");
   kv8_ = g.alloc(8 * KV * 4, "dfl_kv8");
   cdbg_ = g.alloc(size_t(kCtxKeep) * H * 4, "dfl_c");
   memset(capt_.ptr(), 0, capt_.size);
@@ -492,6 +494,35 @@ void DFlash2::set_prompt_captures(const uint16_t* rows_bf16, int rows) {
 
 void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
   const uint32_t H = uint32_t(cfg_.H), nH = hook_pf_.ld;
+  // Short prompts: 8-row chunks through the 8-row GEMM (it streams each weight once per 8 rows at
+  // ~180 GB/s; the prefill GEMM pays 64-row tiles). NI_DFLASH_PF8 = largest row count for this path.
+  static const int pf8_env = getenv("NI_DFLASH_PF8") ? atoi(getenv("NI_DFLASH_PF8")) : 256;
+  if (pf_rows_ <= (pf8_ >= 0 ? pf8_ : pf8_env)) {
+    for (int c0 = 0; c0 < pf_rows_; c0 += kB) {
+      const int cn = std::min(kB, pf_rows_ - c0);
+      kp::DflX8 xp{nH, uint32_t(cn), nH, 1.0f / 16.0f};
+      e.use(dpipe("dfl_x8_from_bf16"));
+      e.buf(0, pcap_, size_t(c0) * nH * 2); e.buf(1, xh_); e.buf(2, xs_);
+      e.val(3, xp);
+      e.dispatch(8, 1, 1, 256);
+      enc_qmm8(e, {{&fc_, y8_, H, 16.0f}}, xh_, xs_, nH, nH);
+      kp::DflNorm np{H, cfg_.eps, 1.0f, 1u};
+      e.use(dpipe("dfl_norm_x8"));
+      e.buf(0, y8_); e.buf(1, hnorm_->buf); e.buf(2, c8_); e.buf(3, xh_); e.buf(4, xs_);
+      e.val(5, np);
+      e.dispatch(8, 1, 1, 256);
+      if (debug_) {  // keep c(j) of the whole prompt for tests
+        e.use(dpipe("copy_u32"));
+        const uint32_t nq = uint32_t(cn) * H / 4;
+        e.buf(0, c8_); e.buf(1, cdbg_, size_t(c0) * H * 4); e.val(2, nq);
+        e.dispatch((nq + 255) / 256, 1, 1, 256);
+      }
+      enc_qmm8(e, {{&kv_all_, kv8_, uint32_t(cfg_.NL) * 2048, 1.0f}}, xh_, xs_, H, H);
+      enc_commit_kv(e, d, kv8_, cn, pf_n_ - pf_rows_ + c0);
+    }
+    d.ctx = pf_n_;
+    return;
+  }
   constexpr int C = 512;
   for (int c0 = 0; c0 < pf_rows_; c0 += C) {
     const int cn = std::min(C, pf_rows_ - c0);
@@ -551,6 +582,20 @@ void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
   d.ctx += m;
 }
 
+void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo, uint32_t* chunk, uint32_t* nsplit) {
+  static const uint32_t env = getenv("NI_DFLASH_ATTN_CHUNK") ? uint32_t(atoi(getenv("NI_DFLASH_ATTN_CHUNK"))) : 0;
+  // 256-key splits: at the full window 8 splits x 8 kv heads beat 32 x 64 keys (smaller partials,
+  // cheaper reduce; dflash_attn_test, M4 Pro)
+  const uint32_t mc = std::max<uint32_t>(32, min_chunk ? min_chunk : env ? env : 256);
+  *lo = P > DFlash2::kCtxKeep ? uint32_t(P - DFlash2::kCtxKeep) : 0u;
+  const uint32_t L = uint32_t(P) - *lo;
+  uint32_t ns = std::max<uint32_t>(1, std::min<uint32_t>(max_splits, (L + mc - 1) / mc));
+  uint32_t ch = ((L + ns - 1) / ns + 31) / 32 * 32;
+  if (ch == 0) ch = 32;
+  *chunk = ch;
+  *nsplit = std::max<uint32_t>(1, (L + ch - 1) / ch);
+}
+
 void DFlash2::set_h0(const float* rows) {
   memcpy(h_.ptr(), rows, size_t(8) * cfg_.H * 4);
   h0_set_ = true;
@@ -578,12 +623,15 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     e.dispatch(8, 1, 1, 256);
   }
   dbg(e, "h_0", h_, size_t(8) * H * 4);
-  // attention splits: >= ~64 threadgroups over the live context, 16-key tiles
-  const uint32_t lo = P > kCtxKeep ? uint32_t(P - kCtxKeep) : 0u, L = uint32_t(P) - lo;
-  uint32_t nsplit = std::max<uint32_t>(1, std::min<uint32_t>(uint32_t(max_splits_), (L + 63) / 64));
-  uint32_t chunk = ((L + nsplit - 1) / nsplit + 15) / 16 * 16;
-  if (chunk == 0) chunk = 16;
-  nsplit = std::max<uint32_t>(1, (L + chunk - 1) / chunk);
+  {
+    const uint32_t P32 = uint32_t(P);
+    e.use(dpipe("dfl_rope_table"));
+    e.buf(0, inv_freq_); e.buf(1, rope_cs_);
+    e.val(2, P32);
+    e.dispatch(1, 1, 1, 512);
+  }
+  uint32_t lo, chunk, nsplit;
+  dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit);
   const kp::DflConv cp{H, G, cfg_.eps};
   for (uint32_t l = 0; l < NL; ++l) {
     const DLayer& Ly = layers_[l];
@@ -600,7 +648,7 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     {
       kp::DflQk p{uint32_t(P), cfg_.eps, 4096, 2048};
       e.use(dpipe("dfl_qk_prep"));
-      e.buf(0, q_); e.buf(1, kv_); e.buf(2, Ly.qn->buf); e.buf(3, Ly.kn->buf); e.buf(4, inv_freq_);
+      e.buf(0, q_); e.buf(1, kv_); e.buf(2, Ly.qn->buf); e.buf(3, Ly.kn->buf); e.buf(4, rope_cs_);
       e.buf(5, Q_); e.buf(6, Kb_); e.buf(7, Vb_);
       e.val(8, p);
       e.dispatch(40, 8, 1, 128);
@@ -687,12 +735,17 @@ void DFlash2::encode_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, const Sampli
     e.dispatch(1, 7, 1, 256);
   }
   {
+    const uint32_t P32 = uint32_t(P);
+    e.use(dpipe("dfl_lattice"));
+    e.buf(0, cand_i_); e.buf(1, sel_); e.buf(2, cbA_->buf); e.buf(3, cbB_->buf); e.buf(4, s.tok); e.buf(5, edges_);
+    e.val(6, P32);
+    e.dispatch(7, 1, 1, 256);
     kp::DflSelect p{uint32_t(P), sp.temperature, sp.seed, uint32_t(P + 1)};
-    e.use(dpipe("dfl_select"));
-    e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, sel_); e.buf(3, cbA_->buf); e.buf(4, cbB_->buf);
-    e.buf(5, s.tok); e.buf(6, edges_); e.buf(7, walk_s_); e.buf(8, qprob_); e.buf(9, walk_k_);
-    e.val(10, p);
-    e.dispatch(1, 1, 1, 1024);
+    e.use(dpipe("dfl_walk"));
+    e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, s.tok); e.buf(4, walk_s_); e.buf(5, qprob_);
+    e.buf(6, walk_k_);
+    e.val(7, p);
+    e.dispatch(1, 1, 1, 32);
   }
 }
 

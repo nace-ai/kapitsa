@@ -271,11 +271,24 @@ int main(int argc, char** argv) {
   dr.begin_prefill(n);
   dr.end_prefill();  // the hook is not needed: the captures come from the dump
   dr.set_prompt_captures(ctx_x.as<uint16_t>(), Nc);
-  {
+  {  // both commit paths, interleaved (the last one run, the default, stays in the ring)
+    std::vector<double> t8, tq;
+    for (int i = 0; i < 4; ++i)
+      for (int v = 0; v < 2; ++v) {
+        dr.set_pf8(v == 0 ? 0 : 1 << 30);
+        auto e = g.begin();
+        dr.encode_prefill_commit(*e, d);
+        e->commit_and_wait();
+        if (i) (v ? t8 : tq).push_back(e->gpu_ms());
+      }
+    dr.set_pf8(-1);
     auto e = g.begin();
     dr.encode_prefill_commit(*e, d);
     e->commit_and_wait();
-    printf("context commit of %d prompt rows: %.2f ms GPU\n", Nc, e->gpu_ms());
+    std::sort(t8.begin(), t8.end());
+    std::sort(tq.begin(), tq.end());
+    printf("context commit of %d prompt rows: %.2f ms GPU (default path); 8-row chunks median %.2f ms, "
+           "prefill GEMM median %.2f ms\n", Nc, e->gpu_ms(), t8[t8.size() / 2], tq[tq.size() / 2]);
   }
   // ring readback: [l][h][slot][d] -> [l][j][h][d]
   auto ring_rows = [&](const Buffer& ring, const std::vector<int64_t>& pos) {
