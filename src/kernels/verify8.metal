@@ -539,15 +539,17 @@ struct Qmm8GuParams {
   uint hs_stride;  // floats between tiles' output sums
 };
 
-// NP fragments (8 columns each) of gate and of up per simdgroup: 8 / NP simdgroups per threadgroup.
-template <bool PF, int NP>
+// NP fragments (8 columns each) of gate and of up per simdgroup, 8 / NP column slices, KS k-slices:
+// 8 / NP * KS simdgroups per threadgroup, simdgroup sg = column slice sg / KS, k-slice sg % KS (the
+// k-slices' partials are summed in a fixed order before the epilogue, as qmm8's in-threadgroup split).
+template <bool PF, int NP, int KS>
 NI_INLINE void qmm8_gu_impl(const device uint32_t* Wg, const device ushort* Sg, const device ushort* Bg,
                             const device uint32_t* Wu, const device ushort* Su, const device ushort* Bu,
                             const device uint32_t* SWg, const device ushort* SSg, const device ushort* SBg,
                             const device uint32_t* SWu, const device ushort* SSu, const device ushort* SBu,
                             const device half* table, const device float* sums, device half* hT, device float* hS,
                             constant Qmm8GuParams& p, const device uint* tiles, const device uint* ntiles, uint2 tg,
-                            uint sg, uint lane, threadgroup float* red) {
+                            uint sg, uint lane, threadgroup float* red, threadgroup float2* kred) {
   constexpr uint NSG = 8 / NP;
   uint wo = 0, so = 0;
   bool shared = false;
@@ -567,7 +569,9 @@ NI_INLINE void qmm8_gu_impl(const device uint32_t* Wg, const device ushort* Sg, 
   const uint gpr = p.K / 64, wpr = p.K / 8;
   const uint2 rc = v8_lane(lane);
   const uint fm = rc.x, fn = rc.y, q = fn / 2;
-  const uint c0 = tg.x * 64 + sg * 8 * NP;
+  const uint ci = sg / KS, kslice = sg % KS;
+  const uint c0 = tg.x * 64 + ci * 8 * NP;
+  const uint gper = (gpr + KS - 1) / KS, g0 = min(kslice * gper, gpr), g1 = min(g0 + gper, gpr);
   const device uint32_t* wp[2 * NP];
   const device ushort* sp[2 * NP];
   const device ushort* bp[2 * NP];
@@ -584,27 +588,31 @@ NI_INLINE void qmm8_gu_impl(const device uint32_t* Wg, const device ushort* Sg, 
   }
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < 2 * NP; ++f) acc[f] = float2(0.0f);
-  if (PF) v8_run_pf<4, 2 * NP>(wp, sp, bp, table, sums, 0, gpr, lane, fn, acc);
-  else v8_run<4, 2 * NP>(wp, sp, bp, table, sums, table, sums, 0, gpr, lane, fn, acc);
+  if (PF) v8_run_pf<4, 2 * NP>(wp, sp, bp, table, sums, g0, g1, lane, fn, acc);
+  else v8_run<4, 2 * NP>(wp, sp, bp, table, sums, table, sums, g0, g1, lane, fn, acc);
+  if (KS > 1) v8_reduce<2 * NP>(acc, kred, KS, sg, lane);  // every simdgroup passes the same barriers
+  const bool lead = kslice == 0;                            // holds the column slice's totals
   device half* ht = hT + tg.y * p.h_stride;
   float2 ps = float2(0.0f);
-  _Pragma("clang loop unroll(full)")
-  for (int f = 0; f < NP; ++f) {
-    const uint kk = sg * 8 * NP + 8 * f + fm;
+  if (lead) {
     _Pragma("clang loop unroll(full)")
-    for (int e = 0; e < 2; ++e) {
-      const half h = half(silu(acc[f][e]) * acc[f + NP][e]);
-      ht[v8_tab(tg.x, kk, fn + e)] = h;
-      ps[e] += float(h);
+    for (int f = 0; f < NP; ++f) {
+      const uint kk = ci * 8 * NP + 8 * f + fm;
+      _Pragma("clang loop unroll(full)")
+      for (int e = 0; e < 2; ++e) {
+        const half h = half(silu(acc[f][e]) * acc[f + NP][e]);
+        ht[v8_tab(tg.x, kk, fn + e)] = h;
+        ps[e] += float(h);
+      }
     }
   }
   // sum over the simdgroup's columns: lanes sharing fn differ in the fm bits (lane bits 1, 2, 4)
   ps += simd_shuffle_xor(ps, 2u);
   ps += simd_shuffle_xor(ps, 4u);
   ps += simd_shuffle_xor(ps, 16u);
-  if (fm == 0) {
-    red[sg * kV8 + fn] = ps.x;
-    red[sg * kV8 + fn + 1] = ps.y;
+  if (lead && fm == 0) {
+    red[ci * kV8 + fn] = ps.x;
+    red[ci * kV8 + fn + 1] = ps.y;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (sg == 0 && lane < kV8) {
@@ -614,7 +622,7 @@ NI_INLINE void qmm8_gu_impl(const device uint32_t* Wg, const device ushort* Sg, 
   }
 }
 
-#define NI_QMM8_GU(NAME, PF, NP)                                                                                \
+#define NI_QMM8_GU(NAME, PF, NP, KS)                                                                            \
   [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device ushort* Sg [[buffer(1)]],          \
                        const device ushort* Bg [[buffer(2)]], const device uint32_t* Wu [[buffer(3)]],          \
                        const device ushort* Su [[buffer(4)]], const device ushort* Bu [[buffer(5)]],            \
@@ -627,13 +635,18 @@ NI_INLINE void qmm8_gu_impl(const device uint32_t* Wg, const device ushort* Sg, 
                        const device uint* ntiles [[buffer(18)]], uint2 tg [[threadgroup_position_in_grid]],     \
                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {   \
     threadgroup float red[8 * kV8];                                                                            \
-    qmm8_gu_impl<PF, NP>(Wg, Sg, Bg, Wu, Su, Bu, SWg, SSg, SBg, SWu, SSu, SBu, table, sums, hT, hS, p, tiles,    \
-                         ntiles, tg, sg, lane, red);                                                           \
+    threadgroup float2 kred[KS > 1 ? (8 / NP) * KS * 2 * NP * 32 : 1];                                          \
+    qmm8_gu_impl<PF, NP, KS>(Wg, Sg, Bg, Wu, Su, Bu, SWg, SSg, SBg, SWu, SSu, SBu, table, sums, hT, hS, p,      \
+                             tiles, ntiles, tg, sg, lane, red, kred);                                          \
   }
-NI_QMM8_GU(qmm8_gu_b4, false, 2)     // 4 simdgroups x (2 gate + 2 up fragments)
-NI_QMM8_GU(qmm8_gu_pf_b4, true, 2)
-NI_QMM8_GU(qmm8_gu1_b4, false, 1)    // 8 simdgroups x (1 gate + 1 up fragment)
-NI_QMM8_GU(qmm8_gu1_pf_b4, true, 1)
+NI_QMM8_GU(qmm8_gu_b4, false, 2, 1)       // 4 simdgroups x (2 gate + 2 up fragments)
+NI_QMM8_GU(qmm8_gu_pf_b4, true, 2, 1)
+NI_QMM8_GU(qmm8_gu1_b4, false, 1, 1)      // 8 simdgroups x (1 gate + 1 up fragment)
+NI_QMM8_GU(qmm8_gu1_pf_b4, true, 1, 1)
+NI_QMM8_GU(qmm8_gu1k2_b4, true, 1, 2)     // + in-threadgroup K split (16 / 32 simdgroups)
+NI_QMM8_GU(qmm8_gu1k4_b4, true, 1, 4)
+NI_QMM8_GU(qmm8_gu2k2_b4, true, 2, 2)     // 4 column slices x 2 k-slices (8 simdgroups)
+NI_QMM8_GU(qmm8_gu2k4_b4, true, 2, 4)
 
 // ---- MoE for 8 rows ----
 // moe8_plan (one threadgroup, E threads): the distinct experts of the R rows' top-k (ascending ids).

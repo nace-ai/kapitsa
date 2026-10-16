@@ -28,17 +28,31 @@ static int env_int(const char* n, int def) {
   return v && *v ? atoi(v) : def;
 }
 
-// gate/up kernel: NI_V8_GU = 1 (default: 8 simdgroups x 1+1 fragments) or 2 (4 x 2+2); NI_V8_GU_PF=1
-// for the software-pipelined loop.
-static int gu_np() {
-  static const int v = std::clamp(env_int("NI_V8_GU", 1), 1, 2);
-  return v;
+// gate/up kernel (NI_V8_GU): "1" = 8 simdgroups x (1 gate + 1 up fragment), "2" = 4 x (2 + 2) (NI_V8_GU_PF=1:
+// their software-pipelined loops), "<np>k<ks>" = np fragments per matrix with a ks-way in-threadgroup K split
+// (prefetching loop): 1k2, 1k4, 2k2, 2k4.
+struct GuCfg {
+  std::string kernel;
+  uint32_t threads;
+};
+static const GuCfg& gu_cfg() {
+  static const GuCfg c = [] {
+    const char* v = getenv("NI_V8_GU");
+    const std::string s = v && *v ? v : "1k2";  // measured best on both models (docs/PERF.md)
+    const bool pf = env_int("NI_V8_GU_PF", 0) != 0;
+    if (s == "1") return GuCfg{pf ? "qmm8_gu1_pf_b4" : "qmm8_gu1_b4", 256u};
+    if (s == "2") return GuCfg{pf ? "qmm8_gu_pf_b4" : "qmm8_gu_b4", 128u};
+    if (s.size() == 3 && (s[0] == '1' || s[0] == '2') && s[1] == 'k' && (s[2] == '2' || s[2] == '4')) {
+      const uint32_t np = uint32_t(s[0] - '0'), ks = uint32_t(s[2] - '0');
+      return GuCfg{"qmm8_gu" + s + "_b4", 32u * (8u / np) * ks};
+    }
+    fatal("NI_V8_GU=%s: expected 1, 2, 1k2, 1k4, 2k2 or 2k4", s.c_str());
+    return GuCfg{};
+  }();
+  return c;
 }
-static std::string gu_kernel() {
-  static const bool pf = env_int("NI_V8_GU_PF", 0) != 0;
-  return std::string(gu_np() == 1 ? "qmm8_gu1" : "qmm8_gu") + (pf ? "_pf" : "") + "_b4";
-}
-static uint32_t gu_threads() { return 32u * (8u / uint32_t(gu_np())); }
+static std::string gu_kernel() { return gu_cfg().kernel; }
+static uint32_t gu_threads() { return gu_cfg().threads; }
 
 void Qwen35::v8_alloc() {
   if (v8_ready_) return;
@@ -103,13 +117,23 @@ void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
 struct V8Plan {
   int nf, cs, ks;
 };
+// Default (bench_v8 tiling sweep, 27B shapes: gate+up 34816x5120 457 vs 504 us at cs 4 / ks 1, LM head
+// 3141-3199 vs 3354-3380): 8 simdgroups per threadgroup as 2 column blocks x 4 k-slices whenever a slice
+// keeps >= 4 groups (K >= 1024), 8 k-slices for grids under ~1280 simdgroups. NI_V8_PLAN=1: the first
+// plan (cs 4, k-slices only until the grid has 1280 simdgroups).
 static V8Plan v8_plan(uint32_t N, uint32_t K, int nf_def) {
   static const int nf_env = env_int("NI_V8_NF", 0), cs_env = env_int("NI_V8_CS", 0), ks_env = env_int("NI_V8_KS", 0);
+  static const bool plan1 = env_int("NI_V8_PLAN", 2) == 1;
   V8Plan p{nf_env ? nf_env : nf_def, cs_env ? cs_env : 4, 1};
   const uint32_t blocks = (N + 8 * p.nf - 1) / (8 * p.nf), gpr = K / 64;
   if (ks_env) p.ks = ks_env;
-  else
+  else if (plan1)
     while (p.ks < 8 && blocks * p.ks < 1280 && gpr / (p.ks * 2) >= 4) p.ks *= 2;
+  else {
+    p.ks = gpr >= 16 ? 4 : gpr >= 8 ? 2 : 1;
+    if (p.ks == 4 && gpr >= 32 && blocks * 4 < 1280) p.ks = 8;
+    if (!cs_env) p.cs = 8;
+  }
   p.cs = std::max(1, std::min(p.cs, 8 / p.ks));
   return p;
 }
