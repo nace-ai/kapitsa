@@ -303,8 +303,9 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   // there it would only cost acceptance.
   dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
   if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
-  // T > 0 uses the exact (exclusive-product) rule, which verifies one proposal more for the same tau
-  dyn_tau_t_ = dyn_tau_;
+  // T > 0 uses the exact (exclusive-product) rule: default tau 0.3 (35B code_35b 512, T = 0.6: 139.2 tok/s
+  // without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7); NI_DFLASH_DYN_T overrides
+  dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
   if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);

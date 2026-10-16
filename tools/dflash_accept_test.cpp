@@ -106,9 +106,10 @@ struct Dist {
   std::vector<int> id;
   std::vector<float> p;
 };
-enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed };
+enum Regime { kRandom, kEqual, kDisjoint, kPoint, kMixed, kBias };
 const char* regime_name(int r) {
-  static const char* n[] = {"random p, random q", "q = p", "q disjoint from p", "point masses", "mixed (p(d)=0, flat q)"};
+  static const char* n[] = {"random p, random q", "q = p", "q disjoint from p", "point masses", "mixed (p(d)=0, flat q)",
+                            "depth-sensitive"};
   return n[r];
 }
 
@@ -122,6 +123,14 @@ uint64_t key_of(const std::vector<int>& prefix) {
 Dist p_of(const std::vector<int>& prefix, int regime) {
   std::mt19937_64 r(key_of(prefix) ^ 0x1111);
   Dist d;
+  if (regime == kBias) {
+    // every position: two tokens at 1/2 (which two depends on the prefix); q (below) equals p at the
+    // first proposal, so d_0 is always accepted and position 1 is always decided inside the cycle
+    const int a = int(r() % kV), b = (a + 1 + int(r() % (kV - 1))) % kV;
+    d.id = {kBase + a, kBase + b};
+    d.p = {0.5f, 0.5f};
+    return d;
+  }
   int ns = regime == kPoint ? 1 + int(r() % 2) : 1 + int(r() % 10);
   std::vector<int> u(kV);
   for (int i = 0; i < kV; ++i) u[i] = i;
@@ -146,6 +155,19 @@ Dist p_of(const std::vector<int>& prefix, int regime) {
 Dist q_of(const std::vector<int>& prefix, int regime, const Dist& p) {
   std::mt19937_64 r(key_of(prefix) ^ 0x2222);
   Dist q;
+  if (regime == kBias) {
+    // q = p for the first proposal (prefix of length <= 1 here: the anchor's cycle starts at prefix ()),
+    // else 0.9 / 0.1 on p's two tokens: a confidence rule that uses c_p verifies only the 0.9 draw
+    q.id = p.id;
+    if (prefix.size() % 2 == 0) q.p = {0.5f, 0.5f};
+    else q.p = {0.9f, 0.1f};
+    for (int i = 0; i < kV && q.id.size() < 16; ++i)
+      if (std::find(q.id.begin(), q.id.end(), kBase + i) == q.id.end()) {
+        q.id.push_back(kBase + i);
+        q.p.push_back(0.0f);
+      }
+    return q;
+  }
   std::vector<int> u(kV);
   for (int i = 0; i < kV; ++i) u[i] = i;
   std::shuffle(u.begin(), u.end(), r);
@@ -322,7 +344,8 @@ int main(int argc, char** argv) {
                              {kPoint, Kmain, 0.6f},  {kMixed, Kmain, 0.6f}, {kRandom, 1, 0.6f},
                              {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
                              {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
-                             {kEqual, 7, 0.6f, 0.3f},  {kRandom, 3, 0.6f, 0.1f, 1}, {kMixed, 7, 0.6f, 0.2f, 1}};
+                             {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1},
+                             {kRandom, 3, 0.6f, 0.1f, 1}};
   Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
