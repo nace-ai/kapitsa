@@ -155,6 +155,27 @@ class Qwen35 {
   void set_capture(const CaptureHook* h) { cap_ = h; }
   const QLinear& embed_table() const { return embed_; }
   const QLinear& lm_head() const { return lm_head_; }
+  // Drafter's dynamic verify depth (DFlash2, MoE only): while set, the 8-row verify routes experts only
+  // for rows < min(R, rows[0]) (uint read by the GPU); later rows' outputs are garbage and must not be used.
+  void set_verify_row_limit(const Buffer* rows) { v8_rlim_ = rows; }
+  // Row-independent MoE numerics in the 8-row verify (every routed expert as an MMA tile, no scalar
+  // passes for 1-2-row experts): a row's logits then depend only on the rows before it, not on how the
+  // other rows route. A speculative sampler that needs p(. | prefix) exactly sets it (~3% slower verify).
+  void set_verify_moe_exact(bool on) { v8_moe_exact_ = on; }
+  // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
+  // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
+  struct Seg8 {
+    const QLinear* L;
+    Buffer y;
+    uint32_t y_ld = 0;  // 0: N
+    bool add = false;   // y += X W^T
+  };
+  // y_i[R, N_i] = X W_i^T for up to 4 matrices sharing K and bits (x2: two-term hi+lo inputs)
+  void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
+                bool x2 = false);
+  // h = half(silu(X Wg^T) * (X Wu^T)) written as the down projection's X8 table h + sums hs (4-bit, N % 64 == 0)
+  void enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
+               const Buffer& h, const Buffer& hs);
   // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
   // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
   Buffer verify_cand_vals() const { return cand_v_; }
@@ -212,19 +233,11 @@ class Qwen35 {
                      const Buffer& x);
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer);
   // ---- 8-row verify path (qwen35_v8.cpp) ----
-  struct Seg8 {
-    const QLinear* L;
-    Buffer y;
-    uint32_t y_ld = 0;  // 0: N
-    bool add = false;
-  };
   void v8_alloc();
   void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
   // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table
   void enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
               const Buffer* xn_out = nullptr);
-  void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
-                bool x2 = false);
   void enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
   void enc_mlp8(Encoder& e, const Layer& L, int R);
   void enc_moe8(Encoder& e, const Layer& L, int R, int li);
@@ -247,6 +260,8 @@ class Qwen35 {
   uint32_t draft_split_ = 0, draft_special0_ = 0;
   bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
   const CaptureHook* cap_ = nullptr;
+  const Buffer* v8_rlim_ = nullptr;
+  bool v8_moe_exact_ = false;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 

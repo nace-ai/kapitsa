@@ -232,22 +232,30 @@ void Qwen35::enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffe
   enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
 }
 
+void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
+                     const Buffer& h, const Buffer& hs) {
+  const uint32_t I = gate.N, K = gate.K;
+  if (I % 64 || up.N != I || up.K != K || gate.bits != 4 || up.bits != 4 || gate.gs != 64 || up.gs != 64)
+    fatal("gu8: shapes");
+  kp::Qmm8Gu p{K, I, 0, 0, 0, 0, 0};
+  e.use(pipe8(gu_kernel()));
+  e.buf(0, gate.w->buf); e.buf(1, gate.s->buf); e.buf(2, gate.b->buf);
+  e.buf(3, up.w->buf); e.buf(4, up.s->buf); e.buf(5, up.b->buf);
+  e.buf(6, gate.w->buf); e.buf(7, gate.s->buf); e.buf(8, gate.b->buf);
+  e.buf(9, up.w->buf); e.buf(10, up.s->buf); e.buf(11, up.b->buf);
+  e.buf(12, table); e.buf(13, sums); e.buf(14, h); e.buf(15, hs);
+  e.val(16, p);
+  e.buf(17, sums); e.buf(18, sums);
+  e.dispatch(I / 64, 1, 1, gu_threads());
+}
+
 // Dense SwiGLU MLP for R rows: x_ += down(silu(gate(n)) * up(n)), n = norm(x_).
 void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   const int D = cfg_.hidden;
   const uint32_t I = L.mg.N;
   if (I % 64 || L.mu.N != I || L.mg.bits != 4 || L.mu.bits != 4 || L.mg.K != uint32_t(D)) fatal("mlp8: shapes");
   enc_x8(e, x_, R, D, L.post_norm);
-  kp::Qmm8Gu p{uint32_t(D), I, 0, 0, 0, 0, 0};
-  e.use(pipe8(gu_kernel()));
-  e.buf(0, L.mg.w->buf); e.buf(1, L.mg.s->buf); e.buf(2, L.mg.b->buf);
-  e.buf(3, L.mu.w->buf); e.buf(4, L.mu.s->buf); e.buf(5, L.mu.b->buf);
-  e.buf(6, L.mg.w->buf); e.buf(7, L.mg.s->buf); e.buf(8, L.mg.b->buf);
-  e.buf(9, L.mu.w->buf); e.buf(10, L.mu.s->buf); e.buf(11, L.mu.b->buf);
-  e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
-  e.val(16, p);
-  e.buf(17, v8s_); e.buf(18, v8s_);
-  e.dispatch(I / 64, 1, 1, gu_threads());
+  enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_);
   enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_);
 }
 
@@ -263,7 +271,8 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   static const bool precise = env_int("NI_V8_ROUTER_X2", 1) != 0;
   // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
   // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify; docs/PERF.md)
-  static const int small = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
+  static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
+  const int small = v8_moe_exact_ ? 0 : small_env;
   enc_x8(e, x_, R, D, L.post_norm, precise, 0, small ? &v8xn_ : nullptr);
   enc_qmm8(e, {{&L.router, rlog_, uint32_t(E)}, {&L.shared_gate, slog_, 1u}}, R, v8t_, v8s_, precise);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
@@ -277,11 +286,12 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   constexpr uint32_t s_nsg = 8, SR = 4;
   if (small && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
   kp::Moe8Plan pp{uint32_t(R), uint32_t(k), uint32_t(E), I / 64, uint32_t(D / (8 * dn_nf * dn_cs)), uint32_t(li),
-                  uint32_t(small), I / (SR * s_nsg), uint32_t(D) / (SR * s_nsg)};
+                  uint32_t(small), I / (SR * s_nsg), uint32_t(D) / (SR * s_nsg), v8_rlim_ ? 1u : 0u};
   e.use(pipe8("moe8_plan"));
   e.buf(0, ridx_); e.buf(1, v8tiles_); e.buf(2, v8nt_); e.buf(3, v8slot_); e.buf(4, v8args_);
   e.val(5, pp);
   e.buf(6, v8ustat_); e.buf(7, v8sm_);
+  e.buf(8, v8_rlim_ ? *v8_rlim_ : v8nt_);
   e.dispatch(1, 1, 1, uint32_t(std::max(32, (E + 31) / 32 * 32)));
   // gate/up + SwiGLU per touched expert (+ the shared expert), one h table per tile
   const uint32_t wstride = I * (uint32_t(D) / 8), sstride = I * (uint32_t(D) / 64);
@@ -354,8 +364,10 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       e.buf(12, s.pend_qkv[i]);
       e.val(13, gv);
       e.dispatch(C / 128, 1, 1, 128);
-      static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;  // gdn_step_verify8: one norm pass
-      e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
+      // NI_V8_GDN: 2 = gdn_step_verify8s (inputs staged in threadgroup memory), 1 = gdn_step_verify8 (one
+      // norm pass), 0 = gdn_step_verify
+      static const int gdn8 = env_int("NI_V8_GDN", 1);
+      e.use(pipe8(gdn8 == 2 ? "gdn_step_verify8s" : gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
       e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
       e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
       e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);

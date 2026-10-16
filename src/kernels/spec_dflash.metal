@@ -43,6 +43,22 @@ NI_INLINE float dfl_uniform(uint seed, uint pos, uint salt) {
   return float(pcg_hash(seed ^ pcg_hash(pos) ^ salt) & 0xffffffu) / 16777216.0f;
 }
 
+// GPU-driven drafting (double-buffered decode loop): a position parameter equal to kDflGpu means "read
+// it from the drafter state gst", which the previous cycle's dfl_accept wrote: gst[0] = anchor
+// position P of the next pass, gst[1] = rows m to commit to the ring, gst[2] = their first position.
+// The host can then commit the next cycle's ring commit + drafting pass before it has read the
+// accepted count of the current cycle.
+constant constexpr uint kDflGpu = 0xffffffffu;
+NI_INLINE uint dfl_pos(uint p, const device uint* gst) { return p == kDflGpu ? gst[0] : p; }
+// split plan of the draft attention for a GPU-side P: context [lo, P), lo = max(P - 2047, lo_min),
+// fixed `chunk` positions per split; the host plan (dfl_attn_plan) is used when P is host-known.
+NI_INLINE void dfl_attn_geom(const device uint* gst, thread uint& P, thread uint& lo, uint chunk, thread uint& nsplit) {
+  if (P != kDflGpu) return;
+  P = gst[0];
+  lo = min(max(P > 2047u ? P - 2047u : 0u, lo), P);
+  nsplit = max(1u, (P - lo + chunk - 1) / chunk);
+}
+
 // ---- target capture (SPEC §6.1): fp32 residual rows -> bf16 columns [col0, col0 + H) ----
 struct DflCaptureParams {
   uint H, ld, col0, dst_row0;
@@ -67,12 +83,13 @@ struct DflEmbedParams {
                                device float* h [[buffer(4)]], const device bfloat* nw [[buffer(5)]],
                                device float* n [[buffer(6)]], device half* xh [[buffer(7)]],
                                device float* xs [[buffer(8)]], constant DflEmbedParams& p [[buffer(9)]],
+                               const device uint* gst [[buffer(10)]],
                                uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                                uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                                uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float red[32];
   const uint H = p.H, gpr = H / p.gs;
-  const uint tok = r == 0 ? uint(tokens[p.tok_off]) : p.mask;
+  const uint tok = r == 0 ? uint(tokens[dfl_pos(p.tok_off, gst)]) : p.mask;
   device float* hr = h + r * H;
   float ss = 0.0f;
   for (uint g = sg; g < H / 64; g += nsg) {
@@ -192,9 +209,10 @@ struct DflConvParams {
 // cos/sin of the 8 block positions P + r for the 64 frequencies (shared by every draft layer):
 // cs[r * 64 + i] = (cos, sin)(float(P + r) * inv_freq[i]). grid 1 x 512.
 [[kernel]] void dfl_rope_table(const device float* inv_freq [[buffer(0)]], device float2* cs [[buffer(1)]],
-                               constant uint& P [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+                               constant uint& P [[buffer(2)]], const device uint* gst [[buffer(3)]],
+                               uint i [[thread_position_in_grid]]) {
   if (i >= 512) return;
-  const float ang = float(P + i / 64) * inv_freq[i % 64];
+  const float ang = float(dfl_pos(P, gst) + i / 64) * inv_freq[i % 64];
   cs[i] = float2(metal::precise::cos(ang), metal::precise::sin(ang));
 }
 
@@ -248,7 +266,7 @@ struct DflAttnParams {
 [[kernel]] void dfl_attn(const device float* Q [[buffer(0)]], const device bfloat* ringK [[buffer(1)]],
                          const device bfloat* ringV [[buffer(2)]], const device float* Kb [[buffer(3)]],
                          const device float* Vb [[buffer(4)]], device float* part_o [[buffer(5)]],
-                         device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]],
+                         device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]], const device uint* gst [[buffer(8)]],
                          uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   constexpr uint TK = 16, KLD = 129;
@@ -256,13 +274,16 @@ struct DflAttnParams {
   threadgroup float ks[TK * KLD];
   threadgroup float ps[4 * 8 * TK];
   const uint split = tg.x, g = tg.y, h = g * 4 + sg;
+  uint P = p.P, lo = p.lo, nsplit = p.nsplit;
+  dfl_attn_geom(gst, P, lo, p.chunk, nsplit);
+  if (split >= nsplit) return;
   for (uint i = tid; i < 4 * 8 * 128; i += 128) qs[i] = Q[g * 4 * 1024 + i];
   const device bfloat* Kr = ringK + size_t(g) * kDflRing * 128;
   const device bfloat* Vr = ringV + size_t(g) * kDflRing * 128;
-  const uint j_begin = p.lo + split * p.chunk;
-  const uint j_end = min(j_begin + p.chunk, p.P);
+  const uint j_begin = lo + split * p.chunk;
+  const uint j_end = min(j_begin + p.chunk, P);
   const uint nctx = j_end > j_begin ? (j_end - j_begin + TK - 1) / TK : 0;
-  const uint ntiles = nctx + (split + 1 == p.nsplit ? 1u : 0u);
+  const uint ntiles = nctx + (split + 1 == nsplit ? 1u : 0u);
   const uint rg = lane / 16, kl = lane % 16;
   float M[8], L[8];
   float4 O[8];
@@ -306,7 +327,7 @@ struct DflAttnParams {
     const bool kvalid = blk ? kl < 8 : j < j_end;
     for (int i = 0; i < 4; ++i) {
       const uint r = 4 * rg + i;
-      const bool vis = kvalid && (blk || j + (kDflRing - 1) >= p.P + r);
+      const bool vis = kvalid && (blk || j + (kDflRing - 1) >= P + r);
       sc[i] = vis ? sc[i] * p.scale : -INFINITY;
     }
     float tm[4], tmo[4];
@@ -376,13 +397,16 @@ struct DflAttnParams {
 [[kernel]] void dfl_attn_mma(const device float* Q [[buffer(0)]], const device bfloat* ringK [[buffer(1)]],
                              const device bfloat* ringV [[buffer(2)]], const device float* Kb [[buffer(3)]],
                              const device float* Vb [[buffer(4)]], device float* part_o [[buffer(5)]],
-                             device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]],
+                             device float* part_ml [[buffer(6)]], constant DflAttnParams& p [[buffer(7)]], const device uint* gst [[buffer(8)]],
                              uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                              uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   constexpr uint TK = 32, LD = 136;
   threadgroup half ks[TK * LD];
   threadgroup half vs[TK * LD];
   const uint split = tg.x, g = tg.y, h = g * 4 + sg;
+  uint P = p.P, lo = p.lo, nsplit = p.nsplit;
+  dfl_attn_geom(gst, P, lo, p.chunk, nsplit);
+  if (split >= nsplit) return;
   const uint2 rc = dfl_lane_rc(lane);
   const uint fm = rc.x, fn = rc.y;
   // Q fragments: rows = block rows, cols = 8 dims of chunk c
@@ -397,10 +421,10 @@ struct DflAttnParams {
   }
   const device bfloat* Kr = ringK + size_t(g) * kDflRing * 128;
   const device bfloat* Vr = ringV + size_t(g) * kDflRing * 128;
-  const uint j_begin = p.lo + split * p.chunk;
-  const uint j_end = min(j_begin + p.chunk, p.P);
+  const uint j_begin = lo + split * p.chunk;
+  const uint j_end = min(j_begin + p.chunk, P);
   const uint nctx = j_end > j_begin ? (j_end - j_begin + TK - 1) / TK : 0;
-  const uint ntiles = nctx + (split + 1 == p.nsplit ? 1u : 0u);
+  const uint ntiles = nctx + (split + 1 == nsplit ? 1u : 0u);
   simdgroup_float8x8 of[16];
   _Pragma("clang loop unroll(full)")
   for (int c = 0; c < 16; ++c) of[c] = simdgroup_float8x8(0);
@@ -452,7 +476,7 @@ struct DflAttnParams {
       _Pragma("clang loop unroll(full)")
       for (int e = 0; e < 2; ++e) {
         const uint kk = kb * 8 + fn + e, j = j0 + kk;
-        const bool vis = blk ? kk < 8 : (j < j_end && j + (kDflRing - 1) >= p.P + fm);
+        const bool vis = blk ? kk < 8 : (j < j_end && j + (kDflRing - 1) >= P + fm);
         const float v = vis ? sf[kb].thread_elements()[e] : -INFINITY;
         sv[kb * 2 + e] = v;
         tmax = max(tmax, v);
@@ -503,19 +527,23 @@ struct DflAttnParams {
 
 struct DflAttnRedParams {
   uint nsplit;
+  uint P, lo, chunk;  // P == kDflGpu: the split plan of dfl_attn_geom (nsplit derived from gst)
 };
 // Combines the splits in order; writes o as the o_proj X8 table (K = 4096). grid (32, 8) x 128.
 [[kernel]] void dfl_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
                                 device half* xh [[buffer(2)]], device float* xs [[buffer(3)]],
-                                constant DflAttnRedParams& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                constant DflAttnRedParams& p [[buffer(4)]], const device uint* gst [[buffer(5)]],
+                                uint2 tg [[threadgroup_position_in_grid]],
                                 uint d [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                                 uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float red[4];
   const uint h = tg.x, r = tg.y;
+  uint P = p.P, lo = p.lo, nsplit = p.nsplit;
+  dfl_attn_geom(gst, P, lo, p.chunk, nsplit);
   float mx = -INFINITY;
-  for (uint s = 0; s < p.nsplit; ++s) mx = max(mx, part_ml[((s * 32 + h) * 8 + r) * 2]);
+  for (uint s = 0; s < nsplit; ++s) mx = max(mx, part_ml[((s * 32 + h) * 8 + r) * 2]);
   float num = 0.0f, den = 0.0f;
-  for (uint s = 0; s < p.nsplit; ++s) {
+  for (uint s = 0; s < nsplit; ++s) {
     const size_t base = (size_t(s) * 32 + h) * 8 + r;
     const float m = part_ml[base * 2];
     if (m == -INFINITY) continue;
@@ -545,16 +573,19 @@ struct DflCommitParams {
 [[kernel]] void dfl_ctx_commit(const device float* kv [[buffer(0)]], const device bfloat* kn [[buffer(1)]],
                                const device float* inv_freq [[buffer(2)]], device bfloat* ringK [[buffer(3)]],
                                device bfloat* ringV [[buffer(4)]], constant DflCommitParams& p [[buffer(5)]],
+                               const device uint* gst [[buffer(6)]],
                                uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
   threadgroup float red[32];
   threadgroup float t[128];
   const uint r = tg.x, l = tg.y / kDflKvHeads, hh = tg.y % kDflKvHeads;
+  const bool gpu = p.rows == kDflGpu;  // rows / positions from the drafter state (grid: 8 rows)
+  if (r >= (gpu ? gst[1] : p.rows)) return;
   const device float* src = kv + size_t(r) * p.kv_ld + l * 2048 + hh * 128;
   const float x = src[d];
   const float ss = tg_sum(x * x, red, d, 128);
   t[d] = x * metal::precise::rsqrt(ss / 128.0f + p.eps) * float(kn[l * 128 + d]);
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  const uint pos = p.pos0 + r;
+  const uint pos = (gpu ? gst[2] : p.pos0) + r;
   const float o = dfl_rope(t, d, float(pos), inv_freq);
   const size_t dst = ((size_t(l) * kDflKvHeads + hh) * kDflRing + (pos & (kDflRing - 1))) * 128 + d;
   ringK[dst] = bfloat(o);
@@ -569,12 +600,14 @@ struct DflX8Params {
 };
 [[kernel]] void dfl_x8_from_bf16(const device bfloat* src [[buffer(0)]], device half* xh [[buffer(1)]],
                                  device float* xs [[buffer(2)]], constant DflX8Params& p [[buffer(3)]],
+                                 const device uint* gst [[buffer(4)]],
                                  uint r [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
                                  uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint m = p.m == kDflGpu ? gst[1] : p.m;
   for (uint g = sg; g < p.K / 64; g += nsg) {
     const uint c = g * 64 + 2 * lane;
     float2 v = float2(0.0f);
-    if (r < p.m) v = float2(*(const device bfloat2*)(src + size_t(r) * p.src_ld + c)) * p.scale;
+    if (r < m) v = float2(*(const device bfloat2*)(src + size_t(r) * p.src_ld + c)) * p.scale;
     dfl_put2(xh, xs, r, p.K, g, lane, v.x, v.y);
   }
 }
@@ -983,7 +1016,8 @@ struct DflTopParams {
 [[kernel]] void dfl_lattice(const device int* cand_i [[buffer(0)]], const device float* sel [[buffer(1)]],
                             const device bfloat* A [[buffer(2)]], const device bfloat* Bc [[buffer(3)]],
                             const device int* tokens [[buffer(4)]], device float* edges [[buffer(5)]],
-                            constant uint& P [[buffer(6)]], uint pp [[threadgroup_position_in_grid]],
+                            constant uint& P [[buffer(6)]], const device uint* gst [[buffer(7)]],
+                            uint pp [[threadgroup_position_in_grid]],
                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
                             uint lane [[thread_index_in_simdgroup]]) {
   const uint ntask = pp == 0 ? 16u : 256u;
@@ -993,7 +1027,7 @@ struct DflTopParams {
   const float4 s0 = *(const device float4*)s, s1 = *(const device float4*)(s + 4);
   for (uint t = sg; t < ntask; t += nsg) {
     const uint j = t / 16, k = t % 16;
-    const uint pred = pp == 0 ? uint(tokens[P]) : uint(cand_i[(pp - 1) * 16 + j]);
+    const uint pred = pp == 0 ? uint(tokens[dfl_pos(P, gst)]) : uint(cand_i[(pp - 1) * 16 + j]);
     const uint succ = uint(cand_i[pp * 16 + k]);
     const device bfloat* a = A + size_t(pred) * 256 + lane * 8;
     const device bfloat* b = Bc + size_t(succ) * 256 + lane * 8;
@@ -1016,8 +1050,9 @@ struct DflSelectParams {
                          const device float* E [[buffer(2)]], device int* tokens [[buffer(3)]],
                          device float* walk_s [[buffer(4)]], device float* qprob [[buffer(5)]],
                          device int* walk_k [[buffer(6)]], constant DflSelectParams& p [[buffer(7)]],
-                         uint tid [[thread_position_in_grid]]) {
+                         const device uint* gst [[buffer(8)]], uint tid [[thread_position_in_grid]]) {
   if (tid != 0) return;
+  const uint P = dfl_pos(p.P, gst), out_index = p.P == kDflGpu ? P + 1 : p.out_index;
   uint jp = 0;
   for (uint pp = 0; pp < 7; ++pp) {
     float S[16];
@@ -1037,7 +1072,7 @@ struct DflSelectParams {
         q[k] = metal::precise::exp((S[k] - mx) / p.temp);
         tot += q[k];
       }
-      const float u = dfl_uniform(p.seed, p.P + 1 + pp, kDflSaltWalk);
+      const float u = dfl_uniform(p.seed, P + 1 + pp, kDflSaltWalk);
       float cum = 0.0f;
       kb = 0;
       bool found = false;
@@ -1056,7 +1091,7 @@ struct DflSelectParams {
     }
     walk_k[pp] = int(kb);
     jp = kb;
-    tokens[p.out_index + pp] = cand_i[pp * 16 + kb];
+    tokens[out_index + pp] = cand_i[pp * 16 + kb];
   }
 }
 
@@ -1156,13 +1191,15 @@ struct DflAcceptParams {
   uint K;   // proposals verified (verify rows 0..K)
   float temp;
   uint seed;
+  uint dyn;  // 1: only the first kdyn[0] proposals were verified (dfl_depth)
 };
 [[kernel]] void dfl_accept(device int* tokens [[buffer(0)]], const device int* samp [[buffer(1)]],
                            const device int* dist_id [[buffer(2)]], const device float* dist_p [[buffer(3)]],
                            const device int* cand_i [[buffer(4)]], const device float* qprob [[buffer(5)]],
                            const device int* walk_k [[buffer(6)]], device int* res [[buffer(7)]],
-                           constant DflAcceptParams& p [[buffer(8)]], uint lane [[thread_index_in_simdgroup]]) {
-  const uint K = p.K;
+                           constant DflAcceptParams& p [[buffer(8)]], const device uint* kdyn [[buffer(9)]],
+                           device uint* gst [[buffer(10)]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint K = p.dyn ? min(p.K, kdyn[0]) : p.K;
   if (p.temp <= 0.0f) {
     const bool stop = lane >= K || tokens[p.P + 1 + lane] != samp[lane];
     const uint a = simd_min(stop ? lane : 32u);
@@ -1171,6 +1208,9 @@ struct DflAcceptParams {
       tokens[p.P + 1 + a] = y;
       res[0] = int(a);
       res[1] = y;
+      gst[0] = p.P + a + 1;  // next anchor
+      gst[1] = a + 1;        // rows to commit to the ring (old anchor + accepted drafts)
+      gst[2] = p.P;
     }
     return;
   }
@@ -1207,5 +1247,87 @@ struct DflAcceptParams {
     tokens[p.P + 1 + a] = y;
     res[0] = int(a);
     res[1] = y;
+    gst[0] = p.P + a + 1;
+    gst[1] = a + 1;
+    gst[2] = p.P;
+  }
+}
+
+// Dynamic verify depth (opt-in, MoE targets): verify proposal p only while the drafter's confidence that
+// p and every proposal before it are accepted, prod_{j <= p} c_j, stays >= tau (always at least one).
+// c_j = the walk's probability of its choice: q at T > 0, softmax(S_j)[k_j] at T = 0. kdyn = {K, K + 1}.
+// The verify then routes experts only for the K + 1 live rows (moe8_plan rows limit) and dfl_accept
+// stops at K. Lossless for any rule: unverified proposals are simply never accepted. grid 1 x 32.
+struct DflDepthParams {
+  uint kmax;
+  float tau, temp;
+};
+[[kernel]] void dfl_depth(const device float* walk_s [[buffer(0)]], const device int* walk_k [[buffer(1)]],
+                          const device float* qprob [[buffer(2)]], device uint* kdyn [[buffer(3)]],
+                          constant DflDepthParams& p [[buffer(4)]], uint lane [[thread_index_in_simdgroup]]) {
+  // lane j < 7 computes c_j; the prefix products are taken by lane 0
+  float c = 1.0f;
+  if (lane < 7) {
+    const int kj = walk_k[lane];
+    if (p.temp > 0.0f) {
+      c = qprob[lane * 16 + kj];
+    } else {
+      float mx = -INFINITY;
+      for (uint k = 0; k < 16; ++k) mx = max(mx, walk_s[lane * 16 + k]);
+      float z = 0.0f;
+      for (uint k = 0; k < 16; ++k) z += exp(walk_s[lane * 16 + k] - mx);
+      c = exp(walk_s[lane * 16 + kj] - mx) / z;
+    }
+  }
+  const float cum = simd_prefix_inclusive_product(c);
+  const bool keep = lane < p.kmax && (lane == 0 || cum >= p.tau);
+  // number of leading proposals kept: first lane that is not kept
+  const uint k = simd_min(keep ? 32u : lane);
+  if (lane == 0) {
+    kdyn[0] = k;
+    kdyn[1] = k + 1;
+  }
+}
+
+// ---- the verify GEMMs' input layout (verify8.metal "X8 table") ----
+// The drafter's tables are row-major half [8][K]; the 8-row verify GEMMs (qmm8pf, qmm8_gu*) read the
+// fragment-order table table[(g * 32 + lane) * 16 + 2 f + e] = x[fn + e][64 g + k8(f, fm)] with
+// (fm, fn) = the lane's 8x8 position and k8(f, j) = 16 (j / 2) + 8 (f / 4) + (f % 4) + 4 (j % 2). The
+// per-64 group sums have the same layout in both ([K/64][8]), so only the table is permuted.
+// grid: K / 512 threadgroups x 256 (one simdgroup per group of 64 inputs).
+struct DflPermParams {
+  uint K;
+};
+[[kernel]] void dfl_x8_to_v8(const device half* xh [[buffer(0)]], device half* table [[buffer(1)]],
+                             constant DflPermParams& p [[buffer(2)]], uint tg [[threadgroup_position_in_grid]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint g = tg * 8 + sg;
+  if (g >= p.K / 64) return;
+  const uint q = lane >> 2, fm = (q & 4) | ((lane >> 1) & 3), fn = ((q & 2) << 1) | ((lane & 1) << 1);
+  half v[16];
+  _Pragma("clang loop unroll(full)")
+  for (uint f = 0; f < 8; ++f) {
+    const uint kk = 16 * (fm / 2) + 8 * (f / 4) + (f % 4) + 4 * (fm % 2);
+    v[2 * f] = xh[fn * p.K + g * 64 + kk];
+    v[2 * f + 1] = xh[(fn + 1) * p.K + g * 64 + kk];
+  }
+  device half4* o = (device half4*)(table + (g * 32 + lane) * 16);
+  o[0] = half4(v[0], v[1], v[2], v[3]);
+  o[1] = half4(v[4], v[5], v[6], v[7]);
+  o[2] = half4(v[8], v[9], v[10], v[11]);
+  o[3] = half4(v[12], v[13], v[14], v[15]);
+}
+// the inverse (debug dumps of the drafter's intermediates in row-major order)
+[[kernel]] void dfl_v8_to_x8(const device half* table [[buffer(0)]], device half* xh [[buffer(1)]],
+                             constant DflPermParams& p [[buffer(2)]], uint tg [[threadgroup_position_in_grid]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint g = tg * 8 + sg;
+  if (g >= p.K / 64) return;
+  const uint q = lane >> 2, fm = (q & 4) | ((lane >> 1) & 3), fn = ((q & 2) << 1) | ((lane & 1) << 1);
+  _Pragma("clang loop unroll(full)")
+  for (uint f = 0; f < 8; ++f) {
+    const uint kk = 16 * (fm / 2) + 8 * (f / 4) + (f % 4) + 4 * (fm % 2);
+    xh[fn * p.K + g * 64 + kk] = table[(g * 32 + lane) * 16 + 2 * f];
+    xh[(fn + 1) * p.K + g * 64 + kk] = table[(g * 32 + lane) * 16 + 2 * f + 1];
   }
 }

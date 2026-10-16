@@ -181,6 +181,7 @@ struct DflAttn {
 
 struct DflAttnRed {
   uint32_t nsplit;
+  uint32_t P, lo, chunk;
 };
 
 struct DflCommit {
@@ -230,6 +231,16 @@ struct DflAccept {
   uint32_t P, K;
   float temp;
   uint32_t seed;
+  uint32_t dyn;  // 1: K = min(K, kdyn[0]) (dynamic verify depth)
+};
+
+struct DflDepth {
+  uint32_t kmax;
+  float tau, temp;
+};
+
+struct DflPerm {
+  uint32_t K;
 };
 
 // ---- 8-row verify (src/kernels/verify8.metal) ----
@@ -252,7 +263,7 @@ struct Qmm8Gu {
 };
 
 struct Moe8Plan {
-  uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx;
+  uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx, rlim;
 };
 
 struct Moe8s {

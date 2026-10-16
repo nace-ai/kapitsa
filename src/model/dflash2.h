@@ -58,6 +58,7 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
+  static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
   // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4).
   DFlash2(Qwen35& target, const std::string& dir, int bits = 0);
   const DFlash2Config& config() const { return cfg_; }
@@ -107,15 +108,36 @@ class DFlash2 {
   // with the walk's q (T > 0) on the GPU; writes the bonus / correction token to tokens[P+1+a].
   // accepted() = a once the command buffer has completed.
   void encode_accept(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp);
+  // The target's sampler distribution of verify rows 0..R-1 (dist_ids() / dist_probs()), T > 0.
+  void encode_dist(Encoder& e, int R, const SamplingParams& sp);
+  const int* dist_ids() const { return dist_id_.as<int>(); }       // [8][32], -1 past the kept prefix
+  const float* dist_probs() const { return dist_p_.as<float>(); }  // [8][32]
   // One whole cycle into `e`, no host round trip inside: ring commit of the previous cycle's m_prev
   // kept rows, the drafting pass from the anchor tokens[P], the target's verify of the first K
   // proposals with captures, the acceptance. Afterwards tokens[P+1 .. P+1+accepted()] are the next
   // tokens; the caller emits m <= accepted() + 1 of them, calls target.commit_rows(s, m) and passes
   // m as the next cycle's m_prev (P advances by m).
   void encode_cycle(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, int K, const SamplingParams& sp);
+  // The same cycle as two command buffers committed back to back (no host round trip between them):
+  // the small first one (ring commit + drafting pass, ~85 dispatches) starts on the GPU while the host
+  // encodes the second (verify + acceptance, ~600 dispatches), which hides most of the encoding time.
+  void encode_cycle_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, const SamplingParams& sp);
+  void encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp);
+  // Double-buffered loop: the drafting half of the NEXT cycle reads its anchor position and the rows to
+  // commit from a GPU-side state that the current cycle's acceptance writes, so it can be committed right
+  // behind the current verify, before the host has read the result (the GPU then never waits for the
+  // host between cycles). gpu_state_reset(P) sets "anchor P, nothing to commit" (host write: only while
+  // the GPU is idle, e.g. after the prefill). P_max bounds the anchor (capacity check). The caller keeps
+  // d.ctx = the anchor position after each cycle (the GPU committed the accepted rows).
+  void gpu_state_reset(int P);
+  void encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max, const SamplingParams& sp);
   int accepted() const { return acc_.as<int>()[0]; }
   // proposals verified per cycle: NI_DFLASH_VERIFY (1..7), default 7
   static int verify_depth();
+  // dynamic verify depth threshold (dfl_depth; MoE targets only): NI_DFLASH_DYN=tau, 0 = off (default)
+  float dyn_tau() const { return dyn_tau_; }
+  // sampled cycles verify with row-independent MoE numerics (Qwen35::set_verify_moe_exact)
+  bool exact_moe() const { return exact_moe_; }
 
   // results of the last pass (host-visible after the command buffer completed)
   const int* cand_ids() const { return cand_i_.as<int>(); }       // [7][16]
@@ -167,6 +189,7 @@ class DFlash2 {
   }
   void enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M);  // prefill GEMM
   void enc_commit_kv(Encoder& e, DFlashSeq& d, const Buffer& kv, int rows, int pos0);
+  void encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const SamplingParams& sp, bool gpu);
   void dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes);
 
   Qwen35& tg_;
@@ -188,7 +211,14 @@ class DFlash2 {
   Buffer h_, n_, xh_, xs_, hh_, hs_, dyn_, q_, kv_, Q_, Kb_, Vb_, part_o_, part_ml_, u_;
   Buffer logits_, sel_, tk_v_, tk_i_, cand_v_, cand_i_, edges_, walk_s_, qprob_, walk_k_, rope_cs_;
   // acceptance: target distributions of the verify rows, result {a, token}
-  Buffer dist_id_, dist_p_, dist_keep_, acc_;
+  Buffer dist_id_, dist_p_, dist_keep_, acc_, kdyn_, gst_;
+  float dyn_tau_ = 0.0f;
+  bool exact_moe_ = true;  // T > 0 on MoE targets: row-independent expert numerics (NI_DFLASH_EXACT_MOE=0 off)
+  // MLP and LM head on the target's 8-row verify GEMMs (qmm8_gu1k2 / qmm8pf; NI_DFLASH_V8, default on
+  // for hidden >= 4096, where they measured 6-16% faster than dfl_qmm8): inputs permuted into their table
+  bool v8_ = false;
+  Buffer v8t_, v8h_, v8hs_;
+  void enc_to_v8(Encoder& e, const Buffer& xh, uint32_t K, const Buffer& table);
   // context commit
   Buffer capt_, y8_, c8_, kv8_, cdbg_;
   Buffer pcap_, xph_, yph_, cph_, kvph_;

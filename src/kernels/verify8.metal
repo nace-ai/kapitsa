@@ -664,18 +664,21 @@ struct Moe8PlanParams {
   uint layer;   // stats[layer] = distinct routed experts, for diagnostics
   uint small;   // experts with <= small rows take the scalar passes (0: none, max 2)
   uint sgu_gx, sdn_gx;
+  uint rlim;    // 1: route only rows < min(R, rows[0]) (a drafter's dynamic verify depth; later rows are dropped)
 };
 
 [[kernel]] void moe8_plan(const device uint* ridx [[buffer(0)]], device uint* tiles [[buffer(1)]],
                           device uint* ntiles [[buffer(2)]], device uint* slot [[buffer(3)]],
                           device uint* args [[buffer(4)]], constant Moe8PlanParams& p [[buffer(5)]],
                           device uint* stats [[buffer(6)]], device uint* sm [[buffer(7)]],
+                          const device uint* rows_lim [[buffer(8)]],
                           uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
                           uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup uint ids[64];
   threadgroup uint cnt[2][32];
   threadgroup uint total[2];
-  const uint n = p.R * p.k;
+  const uint R = p.rlim ? min(p.R, rows_lim[0]) : p.R;
+  const uint n = R * p.k;
   if (tid < n) ids[tid] = ridx[tid];
   threadgroup_barrier(mem_flags::mem_threadgroup);
   // thread e: its slots per row (rows use each expert at most once)
@@ -684,7 +687,7 @@ struct Moe8PlanParams {
   uint rows = 0;
   for (uint t = 0; t < 8; ++t) {
     my[t] = 0xffffffffu;
-    if (t < p.R && e < p.E)
+    if (t < R && e < p.E)
       for (uint j = 0; j < p.k; ++j)
         if (ids[t * p.k + j] == e) my[t] = j;
     rows += my[t] != 0xffffffffu ? 1u : 0u;
@@ -1199,6 +1202,94 @@ NI_INLINE void v8s_dot2t(const device uint32_t* w, const device bfloat* scales, 
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
   // gated RMSNorm: simdgroup t normalizes row t (lane: 4 consecutive channels)
+  if (sg < p.R) {
+    const uint t = sg;
+    const float4 ov = *(threadgroup float4*)&os[t][lane * 4];
+    const float tot = simd_sum(dot(ov, ov));
+    const float inv = metal::precise::rsqrt(tot / float(D) + p.eps);
+    const uint base = (t * p.Hv + h) * D + lane * 4;
+    const float4 zz = *(const device float4*)(z + base);
+    float4 r;
+    for (int i = 0; i < 4; ++i) r[i] = ov[i] * inv * float(norm_w[lane * 4 + i]) * silu(zz[i]);
+    *(device float4*)(out + base) = r;
+  }
+}
+
+// gdn_step_verify8s: gdn_step_verify8's math in the same order, with every per-row input staged in
+// threadgroup memory by one cooperative load first (the previous verify's tape rows for the fold, then
+// q/k/v/g/beta of the R new rows). gdn_step_verify8 issues those loads one row at a time inside its
+// two sequential loops, i.e. up to 16 dependent memory latencies per head; here only the state itself
+// is read from and written to device memory inside the loops' critical path. Same grid (Hv x 1024).
+[[kernel]] void gdn_step_verify8s(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
+                                  const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
+                                  const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
+                                  const device float* z [[buffer(6)]], const device bfloat* norm_w [[buffer(7)]],
+                                  device float* out [[buffer(8)]], device float* pend_k [[buffer(9)]],
+                                  device float* pend_g [[buffer(10)]], device float* pend_d [[buffer(11)]],
+                                  constant GdnVerifyParams& p [[buffer(12)]], uint h [[threadgroup_position_in_grid]],
+                                  uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                  uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float os[8][128];
+  threadgroup float4 fk[8][32];   // fold: pend_k rows
+  threadgroup float fd[8][128];   // fold: pend_d rows
+  threadgroup float fg[8];
+  threadgroup float4 rq[8][32], rk[8][32];  // new rows: q, k (key head hk)
+  threadgroup float rv[8][128];             // new rows: v (value head h)
+  threadgroup float rg[8], rb[8];
+  constexpr uint D = 128;
+  const uint hk = h / (p.Hv / p.Hk);
+  device float* S = state + h * D * D;
+  float4 st[4];
+  for (int r = 0; r < 4; ++r) st[r] = *(device float4*)(S + (sg * 4 + r) * D + lane * 4);
+  // cooperative staging (1024 threads): 128 floats per row and tensor
+  {
+    const uint t = tid / 128, c = tid % 128;  // 8 rows x 128 channels
+    if (t < p.n_pend) {
+      if (c < 32) fk[t][c] = *(const device float4*)(pend_k + (t * p.Hv + h) * D + c * 4);
+      fd[t][c] = pend_d[(t * p.Hv + h) * D + c];
+      if (c == 0) fg[t] = pend_g[t * p.Hv + h];
+    }
+    if (t < p.R) {
+      if (c < 32) {
+        rq[t][c] = *(const device float4*)(q + (t * p.Hk + hk) * D + c * 4);
+        rk[t][c] = *(const device float4*)(k + (t * p.Hk + hk) * D + c * 4);
+      }
+      rv[t][c] = v[(t * p.Hv + h) * D + c];
+      if (c == 0) {
+        rg[t] = g[t * p.Hv + h];
+        rb[t] = beta[t * p.Hv + h];
+      }
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);  // the old tape is in threadgroup memory: safe to overwrite
+  for (uint t = 0; t < p.n_pend; ++t) {
+    const float4 kk = fk[t][lane];
+    const float gg = fg[t];
+    for (int r = 0; r < 4; ++r) st[r] = st[r] * gg + kk * fd[t][sg * 4 + r];
+  }
+  if (p.n_pend > 0)
+    for (int r = 0; r < 4; ++r) *(device float4*)(S + (sg * 4 + r) * D + lane * 4) = st[r];
+  for (uint t = 0; t < p.R; ++t) {
+    const float4 q4 = rq[t][lane];
+    const float4 k4 = rk[t][lane];
+    const float gg = rg[t], be = rb[t];
+    const float4 v4 = *(threadgroup float4*)&rv[t][sg * 4];
+    if (sg == 0) *(device float4*)(pend_k + (t * p.Hv + h) * D + lane * 4) = k4;
+    if (sg == 0 && lane == 0) pend_g[t * p.Hv + h] = gg;
+    float o[4], dl[4];
+    for (int r = 0; r < 4; ++r) {
+      st[r] *= gg;
+      const float kv = simd_sum(dot(st[r], k4));
+      dl[r] = (v4[r] - kv) * be;
+      st[r] += k4 * dl[r];
+      o[r] = simd_sum(dot(st[r], q4));
+    }
+    if (lane == 0) {
+      *(device float4*)(pend_d + (t * p.Hv + h) * D + sg * 4) = float4(dl[0], dl[1], dl[2], dl[3]);
+      *(threadgroup float4*)&os[t][sg * 4] = float4(o[0], o[1], o[2], o[3]);
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
   if (sg < p.R) {
     const uint t = sg;
     const float4 ov = *(threadgroup float4*)&os[t][lane * 4];

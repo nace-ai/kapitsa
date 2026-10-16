@@ -422,25 +422,44 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return finish.empty();
   };
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
+  int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
   if (dfl_) {
-    // DFlash2: one command buffer per cycle (ring commit of the last kept rows, drafting pass, 8-row
-    // verify with captures, on-GPU acceptance); the host reads the accepted count once per cycle.
+    // DFlash2, double-buffered: each cycle's verify (8-row target forward with captures + on-GPU
+    // acceptance) is committed, then right behind it the NEXT cycle's drafting half (ring commit of the
+    // rows this acceptance keeps + drafting pass from the anchor it picks; both read the GPU-side state
+    // the acceptance writes), and only then does the host wait and read the accepted count. The GPU never
+    // waits for the host between cycles; the host encodes each verify while the drafting half runs.
     DFlashSeq& d = *slot.dseq;
     const int K = DFlash2::verify_depth();
-    int P = n, m_prev = 0;
+    int P = n, m = 0;
+    req_cycles = 0;
     bool go = handle(s.tokens()[n]);
+    std::unique_ptr<Encoder> next_draft;  // committed drafting half of the coming cycle
+    if (go && P + 8 + DFlash2::kB + 2 < s.cap) {
+      dfl_->gpu_state_reset(P);  // the GPU is idle after the prefill
+      next_draft = g.begin();
+      dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P, sp);
+      next_draft->commit();
+    }
     while (go) {
-      if (P + DFlash2::kB + 2 >= s.cap) {
+      if (!next_draft) {  // no room for another drafting pass
         finish = "length";
         break;
       }
+      next_draft.reset();
       auto e2 = g.begin();
-      dfl_->encode_cycle(*e2, s, d, P, m_prev, K, sp);
-      e2->commit_and_wait();
+      dfl_->encode_cycle_verify(*e2, s, P, K, sp);
+      e2->commit();
+      if (P + 8 + 8 + DFlash2::kB + 2 < s.cap) {  // the next anchor is at most P + 8
+        next_draft = g.begin();
+        dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P + 8, sp);
+        next_draft->commit();
+      }
+      e2->wait();
       const int a = dfl_->accepted();
       const int* tk = s.tokens();
-      int m = 0;  // tokens consumed before stopping = rows committed
+      m = 0;  // tokens consumed before stopping = rows committed
       while (m < a + 1) {
         ++m;
         if (!handle(tk[P + m])) {
@@ -449,14 +468,19 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         }
       }
       ++spec_cycles_;
+      ++req_cycles;
       spec_accepted_ += m;
       model_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
-      m_prev = m;
       P += m;
+      d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
     }
-    // finish: ring rows of the last cycle, then fold the tape into the recurrent state
+    // finish: the ring rows of the last cycle (unless the committed drafting half already wrote them),
+    // then fold the tape into the recurrent state
     auto e3 = g.begin();
-    if (m_prev) dfl_->encode_commit(*e3, d, m_prev);
+    if (!next_draft && m > 0) {
+      d.ctx = P - m;
+      dfl_->encode_commit(*e3, d, m);
+    }
     model_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
@@ -547,8 +571,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  logi("chat: prompt %d (cached %d) in %.0f ms, %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, gen,
-       res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str());
+  char cyc[64] = "";
+  if (dfl_ && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  logi("chat: prompt %d (cached %d) in %.0f ms, %d tokens in %.0f ms (%.1f tok/s), %s%s", n, start, res.prefill_ms, gen,
+       res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc);
   return res;
 }
 

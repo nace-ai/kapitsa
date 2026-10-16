@@ -84,15 +84,17 @@ int main(int argc, char** argv) {
       uint32_t lo, chunk, nsplit;
       dfl_attn_plan(P, S, mchunk, &lo, &chunk, &nsplit);
       kp::DflAttn p{uint32_t(P), lo, chunk, nsplit, scale};
-      kp::DflAttnRed rp{nsplit};
+      kp::DflAttnRed rp{nsplit, uint32_t(P), lo, chunk};
       auto enc = [&](Encoder& e) {
         e.use(variant ? pm : pa);
         e.buf(0, Q); e.buf(1, rk); e.buf(2, rv); e.buf(3, Kb); e.buf(4, Vb); e.buf(5, po); e.buf(6, pml);
         e.val(7, p);
+        e.buf(8, xs);  // drafter state: unused with a host-known P
         e.dispatch(nsplit, 8, 1, 128);
         e.use(pr);
         e.buf(0, po); e.buf(1, pml); e.buf(2, xh); e.buf(3, xs);
         e.val(4, rp);
+        e.buf(5, xs);
         e.dispatch(32, 8, 1, 128);
       };
       std::vector<double> ts;

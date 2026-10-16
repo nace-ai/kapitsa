@@ -1,11 +1,14 @@
 // 8-row verify GEMM (qmm8, src/kernels/verify8.metal) benchmark and correctness check.
 //   bench_v8 <N> <K> [bits=4] [nf=2] [cs=0:auto] [ks=0:auto] [R=8]
 //   bench_v8 sweep <27b|35b> [nf=2] [cs=0:auto]   model shapes: qmm8 (8 rows) vs the 1-row decode matvec
+//   bench_v8 dfl <27b|35b>   DFlash2 drafter shapes: the drafter's dfl_qmm8 / dfl_qmm8_gu vs qmm8pf /
+//                            qmm8_gu1k2 on the same rotating weights (alternating runs, best of 6)
 // KERNEL=<prefix> picks the variant (default qmm8pf, the model's default).
 // Weights rotate through ~1 GB of distinct matrices so timings reflect DRAM, not the caches.
 // Error: max over sampled outputs of |gpu - ref| / (|ref| + rms(ref)), ref in double from the
 // same half-rounded inputs the kernel reads (so it measures the GEMM, not the input rounding).
 #include "metal/gpu.h"
+#include "model/dflash2.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -219,8 +222,138 @@ static Result run_qmv(Gpu& g, uint32_t N, uint32_t K, int bits) {
   return {best * 1000 / copies, mbytes * copies / (best * 1e-3) / 1e9, 0};
 }
 
+// ---- drafter GEMM comparison: dfl_qmm8 (row-major half input table) vs qmm8pf (fragment-order table) ----
+static QLinear qlin_of(const QMat& m, uint32_t N, uint32_t K, int bits, std::vector<std::unique_ptr<Tensor>>& keep) {
+  QLinear L;
+  keep.push_back(std::make_unique<Tensor>(Tensor{m.w, DType::U32, {int64_t(N), int64_t(K * bits / 32)}}));
+  L.w = keep.back().get();
+  keep.push_back(std::make_unique<Tensor>(Tensor{m.s, DType::BF16, {int64_t(N), int64_t(K / 64)}}));
+  L.s = keep.back().get();
+  keep.push_back(std::make_unique<Tensor>(Tensor{m.b, DType::BF16, {int64_t(N), int64_t(K / 64)}}));
+  L.b = keep.back().get();
+  L.N = N;
+  L.K = K;
+  L.bits = bits;
+  L.gs = 64;
+  return L;
+}
+
+// gu: gate and up of N x K each (fused SwiGLU kernels), else one N x K matrix
+static void run_dfl_cmp(Gpu& g, const char* what, uint32_t N, uint32_t K, bool gu) {
+  std::mt19937 rng(11);
+  const int bits = 4;
+  const size_t mbytes = (size_t(N) * K * bits / 8 + size_t(N) * K / 64 * 4) * (gu ? 2 : 1);
+  const int copies = std::clamp(int(1.0e9 / mbytes), 1, 400);
+  std::vector<QMat> mats;
+  for (int i = 0; i < copies * (gu ? 2 : 1); ++i) mats.push_back(make_mat(g, N, K, bits, rng));
+  std::vector<std::unique_ptr<Tensor>> keep;
+  std::vector<QLinear> L;
+  for (auto& m : mats) L.push_back(qlin_of(m, N, K, bits, keep));
+  // inputs in both layouts (same values)
+  Buffer x = g.alloc(size_t(8) * K * 4), table = g.alloc(size_t(K) * 8 * 2), sums = g.alloc(size_t(K) / 64 * 8 * 4);
+  Buffer xh = g.alloc(size_t(8) * K * 2), xs = g.alloc(size_t(K) / 64 * 8 * 4);
+  Buffer y = g.alloc(size_t(8) * N * 4), hh = g.alloc(size_t(8) * N * 2), hs = g.alloc(size_t(N) / 64 * 8 * 4);
+  std::normal_distribution<float> nd(0.0f, 1.0f);
+  for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
+  for (uint32_t t = 0; t < 8; ++t)
+    for (uint32_t k = 0; k < K; ++k) xh.as<__fp16>()[size_t(t) * K + k] = __fp16(x.as<float>()[size_t(t) * K + k]);
+  for (uint32_t gi = 0; gi < K / 64; ++gi)
+    for (uint32_t t = 0; t < 8; ++t) {
+      float sm = 0;
+      for (int k = 0; k < 64; ++k) sm += float(xh.as<__fp16>()[size_t(t) * K + gi * 64 + k]);
+      xs.as<float>()[gi * 8 + t] = sm;
+    }
+  {
+    auto e = g.begin();
+    e->use(g.pipeline("x8_prep2"));
+    kp::X8Prep pp{K, 8, K, 0, 0, 1e-6f, K, 0u};
+    e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
+    e->val(5, pp);
+    e->buf(6, table); e->buf(7, sums);
+    e->dispatch(K / 256, 1, 1, 256);
+    e->commit_and_wait();
+  }
+  auto run_dfl = [&]() {
+    auto e = g.begin();
+    for (int i = 0; i < copies; ++i) {
+      if (gu) dfl_enc_qmm8_gu(*e, L[2 * i], L[2 * i + 1], xh, xs, hh, hs);
+      else dfl_enc_qmm8(*e, {{&L[i], y, N, 1.0f}}, xh, xs, K, K);
+    }
+    e->commit_and_wait();
+    return e->gpu_ms();
+  };
+  // qmm8pf with the model's plan (v8_plan: 2 column blocks x 4 k-slices, 8 k-slices for small grids)
+  const int nf = 2, ks = auto_ks(N, K, nf), cs = std::max(1, 8 / ks);
+  const uint32_t rows_tg = 8 * nf * cs, ntg = (N + rows_tg - 1) / rows_tg;
+  Pipeline p8 = g.pipeline("qmm8pf_b4_nf2"), pgu = g.pipeline("qmm8_gu1k2_b4");
+  kp::Qmm8 prm{};
+  prm.K = K;
+  prm.R = 8;
+  prm.nseg = 1;
+  prm.ks = uint32_t(ks);
+  prm.N[0] = N;
+  prm.y_ld[0] = N;
+  prm.tg_begin[1] = ntg;
+  auto run_v8 = [&]() {
+    auto e = g.begin();
+    for (int i = 0; i < copies; ++i) {
+      if (gu) {
+        kp::Qmm8Gu gp{K, N, 0, 0, 0, 0, 0};
+        const QMat& a = mats[2 * i];
+        const QMat& b = mats[2 * i + 1];
+        e->use(pgu);
+        e->buf(0, a.w); e->buf(1, a.s); e->buf(2, a.b); e->buf(3, b.w); e->buf(4, b.s); e->buf(5, b.b);
+        e->buf(6, a.w); e->buf(7, a.s); e->buf(8, a.b); e->buf(9, b.w); e->buf(10, b.s); e->buf(11, b.b);
+        e->buf(12, table); e->buf(13, sums); e->buf(14, hh); e->buf(15, hs);
+        e->val(16, gp);
+        e->buf(17, sums); e->buf(18, sums);
+        e->dispatch(N / 64, 1, 1, 512);
+      } else {
+        e->use(p8);
+        for (int sgi = 0; sgi < 4; ++sgi) {
+          e->buf(sgi * 4 + 0, mats[i].w); e->buf(sgi * 4 + 1, mats[i].s); e->buf(sgi * 4 + 2, mats[i].b);
+          e->buf(sgi * 4 + 3, y);
+        }
+        e->buf(16, table); e->buf(17, sums);
+        e->val(18, prm);
+        e->buf(19, table); e->buf(20, sums);
+        e->dispatch(ntg, 1, 1, 32 * cs * ks);
+      }
+    }
+    e->commit_and_wait();
+    return e->gpu_ms();
+  };
+  run_dfl();
+  run_v8();
+  double bd = 1e9, bv = 1e9;
+  for (int i = 0; i < 6; ++i) {
+    bd = std::min(bd, run_dfl());
+    bv = std::min(bv, run_v8());
+  }
+  const double ud = bd * 1000 / copies, uv = bv * 1000 / copies;
+  printf("%-26s %7u x %-6u%s | dfl_qmm8%s %8.1f us %6.1f GB/s | %s %8.1f us %6.1f GB/s | v8/dfl %.3f\n", what, N, K,
+         gu ? " x2" : "   ", gu ? "_gu" : "   ", ud, mbytes / (ud * 1e3), gu ? "qmm8_gu1k2" : "qmm8pf    ", uv,
+         mbytes / (uv * 1e3), uv / ud);
+  fflush(stdout);
+  for (auto& m : mats) { g.release(m.w); g.release(m.s); g.release(m.b); }
+  for (Buffer* b : {&x, &table, &sums, &xh, &xs, &y, &hh, &hs}) g.release(*b);
+}
+
 int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
+  if (argc >= 3 && !strcmp(argv[1], "dfl")) {
+    const bool b27 = !strcmp(argv[2], "27b");
+    const uint32_t H = b27 ? 5120 : 2048, I = b27 ? 17408 : 6144, nH = b27 ? 25600 : 16384, NL = b27 ? 5 : 6;
+    run_dfl_cmp(g, "conv kernel projection", 4 * (H / 16), H, false);
+    run_dfl_cmp(g, "q|kv", 6144, H, false);
+    run_dfl_cmp(g, "o", H, 4096, false);
+    run_dfl_cmp(g, "gate+up (fused SwiGLU)", I, H, true);
+    run_dfl_cmp(g, "down", H, I, false);
+    run_dfl_cmp(g, "lm_head", 248320, H, false);
+    run_dfl_cmp(g, "commit fc", H, nH, false);
+    run_dfl_cmp(g, "commit k|v all layers", NL * 2048, H, false);
+    return 0;
+  }
   if (argc < 3) {
     fprintf(stderr, "usage: bench_v8 <N> <K> [bits] [nf] [cs] [ks] [R] | sweep <27b|35b> [nf] [cs]\n");
     return 1;

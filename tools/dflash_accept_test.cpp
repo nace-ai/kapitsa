@@ -321,7 +321,7 @@ int main(int argc, char** argv) {
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
   Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 256 * 4), dp = g.alloc(size_t(B) * 256 * 4);
-  Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64);
+  Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64);
   for (size_t ci = 0; ci < cases.size(); ++ci) {
     if (only >= 0 && int(ci) != only) continue;
     const Case& cs = cases[ci];
@@ -353,6 +353,8 @@ int main(int argc, char** argv) {
           e->buf(4, cand, size_t(i) * 448); e->buf(5, qp, size_t(i) * 448); e->buf(6, wk, size_t(i) * 32);
           e->buf(7, res, size_t(i) * 16);
           e->val(8, ap);
+          e->buf(9, samp);    // dynamic depth (off)
+          e->buf(10, scratch);  // drafter state for a GPU-driven next pass (unused here)
           e->dispatch(1, 1, 1, 32);
         }
         e->commit_and_wait();
