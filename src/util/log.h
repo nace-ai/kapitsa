@@ -11,6 +11,12 @@ inline double now_ms() {
   return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
 }
 
+// Feature flags: unset, empty or "0" means off.
+inline bool env_on(const char* name) {
+  const char* v = getenv(name);
+  return v && *v && !(v[0] == '0' && v[1] == 0);
+}
+
 inline int& log_level() {
   static int lvl = getenv("NI_LOG") ? atoi(getenv("NI_LOG")) : 1;
   return lvl;

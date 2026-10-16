@@ -27,19 +27,29 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < gbytes / 2; ++i) { S.back().as<uint16_t>()[i] = f32_to_bf16(0.01f); B.back().as<uint16_t>()[i] = f32_to_bf16(-0.05f); }
   }
   Buffer x = g.alloc(size_t(R) * K * 4), y = g.alloc(size_t(R) * N * 4);
+  Buffer xh = g.alloc(size_t(R) * K * 2);
   std::normal_distribution<float> nd(0, 1);
-  for (size_t i = 0; i < size_t(R) * K; ++i) x.as<float>()[i] = nd(rng);
+  for (size_t i = 0; i < size_t(R) * K; ++i) {
+    x.as<float>()[i] = nd(rng);
+    xh.as<__fp16>()[i] = (__fp16)x.as<float>()[i];
+    x.as<float>()[i] = float(xh.as<__fp16>()[i]);  // reference sees the same rounded inputs
+  }
   Pipeline p = g.pipeline(kname);
   QmvrParams prm{N, K, R, K, N, 0};
-  uint32_t nsg = 8;
+  uint32_t nsg = (kname.rfind("qmvrc1", 0) == 0 || kname.rfind("qmvrc2", 0) == 0 || kname.rfind("qmvrch", 0) == 0) ? 2 : 8;
+  const bool sgr = kname.rfind("qmvsg", 0) == 0;
+  const bool xhalf = kname.rfind("qmvrch", 0) == 0 || sgr;
   auto run = [&]() {
     auto e = g.begin();
     e->use(p);
     for (int c = 0; c < copies; ++c) {
-      e->buf(0, W[c]); e->buf(1, S[c]); e->buf(2, B[c]); e->buf(3, x); e->buf(4, y);
+      e->buf(0, W[c]); e->buf(1, S[c]); e->buf(2, B[c]); e->buf(3, xhalf ? xh : x); e->buf(4, y);
       e->val(5, prm);
-      if (kname.rfind("qmv2_", 0) == 0) { e->buf(6, y); e->buf(7, y); }
-      e->dispatch((N + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
+      if (kname.rfind("qmv2_", 0) == 0 || kname.rfind("qmvrc", 0) == 0) { e->buf(6, y); e->buf(7, y); }
+      if (sgr) e->dispatch((N + rows - 1) / rows, 1, 1, 32 * R);
+      else if (kname.rfind("qmvrc2", 0) == 0) e->dispatch((R + 1) / 2, (N + rows * nsg - 1) / (rows * nsg), 1, 32 * nsg);
+      else if (kname.rfind("qmvrc", 0) == 0) e->dispatch(R, (N + rows * nsg - 1) / (rows * nsg), 1, 32 * nsg);
+      else e->dispatch((N + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
     }
     e->commit_and_wait();
     return e->gpu_ms();
@@ -49,7 +59,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < 3; ++i) best = std::min(best, run());
   // check row 0..R-1 element 5 against CPU
   double maxerr = 0;
-  for (uint32_t t = 0; t < (kname.rfind("qmv2_", 0) == 0 ? 1u : R); ++t) {
+  for (uint32_t t = 0; t < (kname.rfind("qmv2_", 0) == 0 || kname.rfind("qmv3_", 0) == 0 ? 1u : R); ++t) {
     uint32_t n = 5;
     double ref = 0;
     for (uint32_t k = 0; k < K; ++k) {

@@ -130,4 +130,12 @@ struct QmvrMulti {
   uint32_t add[4];
 };
 
+struct QmvrcMulti {
+  uint32_t K, R, nseg, norm, write_xn;
+  float eps;
+  uint32_t N[4];
+  uint32_t tg_begin[5];
+  uint32_t bits[4];
+};
+
 } // namespace ni::kp

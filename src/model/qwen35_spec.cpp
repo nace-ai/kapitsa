@@ -240,6 +240,45 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
                       uint32_t y_ld) {
   if (L.gs != 64) fatal("qmvr: group %d", L.gs);
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
+  // Two rows: one small single-row threadgroup per (row, 8-row weight block), rows fastest. The pair
+  // shares each weight block through the core's cache, so verifying 2 rows costs ~1 row
+  // (bench_qmvr: 17408x5120 208 us for 1 or 2 rows, vs 240 us for the 2-rows-in-registers kernel).
+  static const bool pair_off = env_on("NI_NO_RC1");
+  if (R == 2 && !pair_off) {
+    std::string n = std::string("qmvrc1_b") + std::to_string(L.bits) + (add ? "_add" : "");
+    e.use(pipe2(n));
+    kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
+    e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch(R, (L.N + 7) / 8, 1, 64);
+    return;
+  }
+  // Three rows: half-precision inner products with the dequantization shared across rows (the
+  // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x).
+  static const bool half3_off = env_on("NI_NO_QMVH");
+  if (R == 3 && !half3_off && L.bits == 4) {
+    e.use(pipe2("qmvht_t3_r4"));
+    kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
+    e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
+    e.val(5, p);
+    constexpr uint32_t rows = 4, nsg = 8;
+    e.dispatch((L.N + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
+    return;
+  }
+  static const bool rowcache = env_on("NI_RC");
+  if (rowcache && R > 1) {
+    // one single-row threadgroup per (row, block), rows fastest: weights read from DRAM once
+    const bool huge = L.N >= 65536 && !add;
+    const uint32_t rows = huge ? 4 : 2, nsg = 8;
+    std::string n = "qmvrc_b" + std::to_string(L.bits) + "_r" + std::to_string(rows) + (add ? "_add" : "");
+    e.use(pipe2(n));
+    kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
+    e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
+    e.val(5, p);
+    e.buf(6, y); e.buf(7, y);
+    e.dispatch(R, (L.N + rows * nsg - 1) / (rows * nsg), 1, 32 * nsg);
+    return;
+  }
   if (L.K > 4096 || (R == 1 && L.K > 2048 && false)) {  // wide inputs: tiled staging
     // 3-4 rows of 4-bit: 8 values per lane keeps the per-lane x copies in registers
     std::string kn = "qmvr4_b" + std::to_string(L.bits) + "_t" + std::to_string(R);
@@ -256,7 +295,7 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
   static const int ver = getenv("NI_QMVR") ? atoi(getenv("NI_QMVR")) : 3;
   // v3 (simdgroup-matrix kernel) stages R*K halfs (<= 12288) and K/64*R group sums (<= 256)
   if (ver == 3 && R > 2 && R * L.K <= 12288 && R * (L.K / 64) <= 256 && getenv("NI_QMVM")) {
-    static const bool m1 = getenv("NI_QMVM1") != nullptr;
+    static const bool m1 = env_on("NI_QMVM1");
     e.use(pipe2(L.bits == 8 ? (m1 ? "qmvm_b8_g64" : "qmvm2_b8_g64") : (m1 ? "qmvm_b4_g64" : "qmvm2_b4_g64")));
     kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
     e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
@@ -282,7 +321,41 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
 void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm, int R,
                             const Buffer* xn_out, std::vector<bool> add) {
   const uint32_t K = segs[0].L->K;
-  static const bool off = getenv("NI_NO_QMVR_MULTI") != nullptr;
+  static const bool rowcache = env_on("NI_RC");
+  if (rowcache && R > 1 && segs.size() <= 4 && (add.empty() || std::none_of(add.begin(), add.end(), [](bool b) { return b; }))) {
+    e.use(pipe2("qmvrc_multi_r2"));
+    constexpr uint32_t rows = 2, nsg = 8;
+    kp::QmvrcMulti p{};
+    p.K = K;
+    p.R = uint32_t(R);
+    p.nseg = uint32_t(segs.size());
+    p.norm = norm ? 1u : 0u;
+    p.write_xn = xn_out ? 1u : 0u;
+    p.eps = cfg_.eps;
+    uint32_t tg = 0;
+    for (size_t i = 0; i < 4; ++i) {
+      const Seg& sgm = segs[std::min(i, segs.size() - 1)];
+      if (i < segs.size()) {
+        if (sgm.L->K != K || sgm.L->gs != 64) fatal("qmvrc_multi: segments must share K, group 64");
+        p.N[i] = sgm.L->N;
+        p.bits[i] = uint32_t(sgm.L->bits);
+        p.tg_begin[i] = tg;
+        tg += (sgm.L->N + rows * nsg - 1) / (rows * nsg);
+      }
+      e.buf(int(i * 4 + 0), sgm.L->w->buf);
+      e.buf(int(i * 4 + 1), sgm.L->s->buf);
+      e.buf(int(i * 4 + 2), sgm.L->b->buf);
+      e.buf(int(i * 4 + 3), sgm.y);
+    }
+    p.tg_begin[segs.size()] = tg;
+    e.buf(16, x);
+    e.val(17, p);
+    e.buf(18, norm ? norm->buf : x);
+    e.buf(19, xn_out ? *xn_out : x);
+    e.dispatch(R, tg, 1, 32 * nsg);
+    return;
+  }
+  static const bool off = env_on("NI_NO_QMVR_MULTI");
   if (off || (R != 2 && R != 3) || K > 2048 || segs.size() > 4) {
     const Buffer* xin = &x;
     if (norm) {
@@ -367,7 +440,34 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   e.dispatch(R, 1, 1, 32);
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
   // opt-in: measured slower than per-row expert reads on M4 Pro (see docs/PERF.md)
-  static const bool no_dedupe = getenv("NI_DEDUPE") == nullptr;
+  static const bool no_dedupe = !env_on("NI_DEDUPE");
+  static const bool rc_moe = env_on("NI_RC");
+  if (!mtp_layer && rc_moe && R > 1 && L.eg.gs == 64 && L.sg.bits == 4 && L.sd.bits == 4 && D <= 4096) {
+    struct { uint32_t R, k; } up{uint32_t(R), uint32_t(k)};
+    e.use(pipe2("moe_unique_rows"));
+    e.buf(0, ridx_); e.buf(1, rwts_); e.buf(2, ue_); e.buf(3, uw_); e.buf(4, un_);
+    e.val(5, up);
+    e.dispatch(1, 1, 1, 32);
+    const uint32_t Ru = uint32_t(R);
+    constexpr uint32_t rows = 2, nsg = 8;
+    const uint32_t I = uint32_t(std::max(cfg_.moe_I, cfg_.shared_I));
+    e.use(pipe2("moe_gate_up_rc"));
+    e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+    e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+    e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
+    e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+    e.buf(12, xrn_); e.buf(13, eh_);
+    e.val(14, mp);
+    e.buf(15, ue_); e.buf(16, uw_); e.buf(17, un_); e.val(18, Ru);
+    e.dispatch(R, (I + rows * nsg - 1) / (rows * nsg), R * k + 1, 32 * nsg);
+    e.use(pipe2("moe_down_rc"));
+    e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+    e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+    e.buf(6, eh_); e.buf(7, ue_); e.buf(8, uw_); e.buf(9, un_); e.buf(10, rwts_); e.buf(11, x);
+    e.val(12, mp); e.val(13, Ru);
+    e.dispatch(R, (D + rows * nsg - 1) / (rows * nsg), 1, 32 * nsg);
+    return;
+  }
   if (!mtp_layer && !no_dedupe && (R == 2 || R == 3) && L.eg.gs == 64 && L.sg.bits == 4 && L.sd.bits == 4 &&
       D <= 2048) {
     // tokens being verified share experts: read each distinct expert once for all rows
@@ -460,16 +560,23 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (draft_out < 0) return;
   // greedy draft over the reduced vocabulary from the last row
   const Buffer last = mtp_post_.view(size_t(R - 1) * D * 4, size_t(D) * 4);
-  const uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N;
-  enc_qmv(e, draft_head_[0], last, dlog_, nullptr, nullptr);
-  enc_qmv(e, draft_head_[1], last, dlog_.view(size_t(n0) * 4, size_t(n1) * 4), nullptr, nullptr);
+  static const bool full_vocab = env_on("NI_FULL_DRAFT");  // diagnostic: draft over the whole vocabulary
+  uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N;
+  if (full_vocab) {
+    enc_qmv(e, lm_head_, last, dlog_, nullptr, nullptr);
+    n0 = lm_head_.N;
+    n1 = 0;
+  } else {
+    enc_qmv(e, draft_head_[0], last, dlog_, nullptr, nullptr);
+    enc_qmv(e, draft_head_[1], last, dlog_.view(size_t(n0) * 4, size_t(n1) * 4), nullptr, nullptr);
+  }
   const uint32_t V = n0 + n1, chunk = 2048, ntg = (V + chunk - 1) / chunk;
   kp::TopkStage ts{V, 1, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, dlog_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   e.dispatch(ntg, 1, 1, 256);
-  kp::SampleRows sr{ntg, 1, 0.0f, 1.0f, 0, 0, uint32_t(draft_out), n0, draft_special0_};
+  kp::SampleRows sr{ntg, 1, 0.0f, 1.0f, 0, 0, uint32_t(draft_out), full_vocab ? 0u : n0, draft_special0_};
   e.use(pipe2("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok);
   e.val(3, sr);

@@ -99,6 +99,7 @@ int main(int argc, char** argv) {
     std::vector<int> acc_hist(D + 1, 0);
     bool stop2 = false;
     while (int(out.size()) < n_gen && !stop2) {
+      double tc0 = now_ms();
       auto e = g.begin();
       m.encode_mtp(*e, s, P - c, c, P - c + 1, m.hidden_rows(), h_row0, P + 1);
       for (int k = 2; k <= D; ++k)
@@ -109,7 +110,9 @@ int main(int argc, char** argv) {
       int* tk = s.tokens();
       int a = 0;
       while (a < D && tk[P + 1 + a] == y[a]) ++a;
-      if (getenv("NI_TRACE")) fprintf(stderr, "P=%d c=%d draft=%d y0=%d a=%d\n", P, c, tk[P + 1], y[0], a);
+      if (getenv("NI_TRACE"))
+        fprintf(stderr, "P=%d c=%d draft=%d y0=%d a=%d wall=%.1fms gpu=%.1fms\n", P, c, tk[P + 1], y[0], a,
+                now_ms() - tc0, e->gpu_ms());
       tk[P + a + 1] = y[a];
       for (int i = 1; i <= a + 1 && int(out.size()) < n_gen; ++i) {
         out.push_back(tk[P + i]);

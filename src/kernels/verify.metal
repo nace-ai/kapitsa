@@ -1372,3 +1372,580 @@ NI_QMVR4(qmvr4_b8_t4, 8, 4, 4)
                            uint i [[thread_position_in_grid]]) {
   if (i < n) h[i] = silu(g[i]) * u[i];
 }
+
+// ---- Row-major small batches ("rowcache"): one single-row matvec threadgroup per (row, block),
+// with the row index in the FASTEST grid dimension. The R threadgroups that read the same weight
+// block run back to back, so weights stream from DRAM once and the other rows hit the caches,
+// while each threadgroup keeps the register footprint of a single-row kernel.
+// grid: (R, row blocks). x/y/resid rows are x_ld / y_ld apart.
+#define NI_QMV2_ROWCACHE(NAME, BITS, ROWS, ADD, NORM)                                                    \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device float* x [[buffer(3)]],     \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],                \
+                       const device float* resid [[buffer(6)]], const device bfloat* nw [[buffer(7)]],     \
+                       uint2 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint2 ntg2 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float xs[4096];                                                                           \
+    threadgroup float red[32];                                                                            \
+    const uint r = tgp.x;                                                                                 \
+    if (r >= p.R) return;                                                                                 \
+    uint row0 = (tgp.y * nsg + sg) * ROWS;                                                                \
+    device float* yr = y + r * p.y_ld;                                                                    \
+    if (p.K <= 4096)                                                                                      \
+      qmv2_impl<BITS, 16, ROWS, 64, ADD, NORM>(w, scales, biases, x + r * p.x_ld, yr, p.N, p.K, 1e-6f,   \
+                                               ADD ? resid + r * p.y_ld : yr, nw, xs, red, row0, tid,     \
+                                               ntg2.x, lane);                                             \
+    else                                                                                                  \
+      qmv3_impl<BITS, ROWS, ADD, NORM>(w, scales, biases, x + r * p.x_ld, yr, p.N, p.K, 1e-6f,           \
+                                       ADD ? resid + r * p.y_ld : yr, nw, xs, red, row0, tid, ntg2.x, lane); \
+  }
+
+NI_QMV2_ROWCACHE(qmvrc_b4_r2, 4, 2, false, false)
+NI_QMV2_ROWCACHE(qmvrc_b4_r4, 4, 4, false, false)
+NI_QMV2_ROWCACHE(qmvrc_b4_r2_add, 4, 2, true, false)
+NI_QMV2_ROWCACHE(qmvrc_b8_r2, 8, 2, false, false)
+NI_QMV2_ROWCACHE(qmvrc_b8_r2_add, 8, 2, true, false)
+
+// Multi-segment version (fused projections sharing the input rows), optional per-row norm and
+// normalized-row output. grid: (R, sum of segment blocks).
+struct QmvrcMultiParams {
+  uint K;
+  uint R;
+  uint nseg;
+  uint norm;
+  uint write_xn;
+  float eps;
+  uint N[4];
+  uint tg_begin[5];
+  uint bits[4];
+};
+[[kernel]] void qmvrc_multi_r2(
+    const device uint32_t* w0 [[buffer(0)]], const device bfloat* s0 [[buffer(1)]],
+    const device bfloat* b0 [[buffer(2)]], device float* y0 [[buffer(3)]],
+    const device uint32_t* w1 [[buffer(4)]], const device bfloat* s1 [[buffer(5)]],
+    const device bfloat* b1 [[buffer(6)]], device float* y1 [[buffer(7)]],
+    const device uint32_t* w2 [[buffer(8)]], const device bfloat* s2 [[buffer(9)]],
+    const device bfloat* b2 [[buffer(10)]], device float* y2 [[buffer(11)]],
+    const device uint32_t* w3 [[buffer(12)]], const device bfloat* s3 [[buffer(13)]],
+    const device bfloat* b3 [[buffer(14)]], device float* y3 [[buffer(15)]],
+    const device float* x [[buffer(16)]], constant QmvrcMultiParams& p [[buffer(17)]],
+    const device bfloat* nw [[buffer(18)]], device float* xn_out [[buffer(19)]],
+    uint2 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint2 ntg2 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  threadgroup float xs[4096];
+  threadgroup float red[32];
+  const uint ntg = ntg2.x;
+  const uint r = tgp.x;
+  if (r >= p.R) return;
+  const device float* xr = x + r * p.K;
+  const bool norm = p.norm != 0;
+  const float inv = norm ? rms_inv_device(xr, p.K, p.eps, red, tid, ntg) : 1.0f;
+  if (p.write_xn && tgp.y == 0)
+    for (uint i = tid; i < p.K; i += ntg) xn_out[r * p.K + i] = norm ? xr[i] * inv * float(nw[i]) : xr[i];
+  uint seg = 0;
+  for (uint i = 1; i < p.nseg; ++i)
+    if (tgp.y >= p.tg_begin[i]) seg = i;
+  const uint N = p.N[seg];
+  const uint row0 = ((tgp.y - p.tg_begin[seg]) * nsg + sg) * ROWS;
+  const device uint32_t* W = seg == 0 ? w0 : seg == 1 ? w1 : seg == 2 ? w2 : w3;
+  const device bfloat* S = seg == 0 ? s0 : seg == 1 ? s1 : seg == 2 ? s2 : s3;
+  const device bfloat* B = seg == 0 ? b0 : seg == 1 ? b1 : seg == 2 ? b2 : b3;
+  device float* Y = (seg == 0 ? y0 : seg == 1 ? y1 : seg == 2 ? y2 : y3) + r * N;
+  uint rows[ROWS];
+  float acc[ROWS];
+  for (int q = 0; q < ROWS; ++q) { rows[q] = min(row0 + q, N - 1); acc[q] = 0.0f; }
+  for (uint kt = 0; kt < p.K; kt += 4096) {
+    const uint tile = min(4096u, p.K - kt);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    stage_tile(xr, kt, tile, norm, inv, nw, xs, tid, ntg);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 < N) {
+      if (p.bits[seg] == 8) qmv3_tile_rows<8, ROWS>(W, S, B, xs, p.K, kt, tile, N, rows, lane, acc);
+      else qmv3_tile_rows<4, ROWS>(W, S, B, xs, p.K, kt, tile, N, rows, lane, acc);
+    }
+  }
+  if (row0 >= N) return;
+  for (int q = 0; q < ROWS; ++q) {
+    float v = simd_sum(acc[q]);
+    if (lane == 0 && row0 + q < N) Y[row0 + q] = v;
+  }
+}
+
+// ---- MoE verify with row-major caching ----
+// After moe_unique_rows: ue[U] distinct experts, uw[u * R + r] row weights (0 = unused).
+// gate/up grid: (R, row tiles over max(I, SI), R*k + 1): threadgroup (r, t, u) computes rows of expert u
+// for token row r only if r uses it (the shared expert, u = R*k, serves every row). Rows are the
+// fastest grid dimension, so the R threadgroups of one expert tile run back to back and share the
+// weight reads through the caches. h[u][r][Imax].
+[[kernel]] void moe_gate_up_rc(const device uint32_t* gw [[buffer(0)]], const device bfloat* gsc [[buffer(1)]],
+                               const device bfloat* gbi [[buffer(2)]], const device uint32_t* uw_ [[buffer(3)]],
+                               const device bfloat* usc [[buffer(4)]], const device bfloat* ubi [[buffer(5)]],
+                               const device uint32_t* sgw [[buffer(6)]], const device bfloat* sgs [[buffer(7)]],
+                               const device bfloat* sgb [[buffer(8)]], const device uint32_t* suw [[buffer(9)]],
+                               const device bfloat* sus [[buffer(10)]], const device bfloat* sub [[buffer(11)]],
+                               const device float* xn [[buffer(12)]], device float* h [[buffer(13)]],
+                               constant MoeParams& p [[buffer(14)]], const device uint* ue [[buffer(15)]],
+                               const device float* uwts [[buffer(16)]], const device uint* un [[buffer(17)]],
+                               constant uint& R [[buffer(18)]], uint3 tgp [[threadgroup_position_in_grid]],
+                               uint tid [[thread_index_in_threadgroup]], uint3 ntg3 [[threads_per_threadgroup]],
+                               uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                               uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  threadgroup float xs[4096];
+  const uint r = tgp.x, u = tgp.z;
+  if (r >= R) return;
+  const bool shared = u == R * p.k;
+  if (!shared && (u >= un[0] || uwts[u * R + r] == 0.0f)) return;
+  for (uint i = tid; i < p.D / 4; i += ntg3.x) ((threadgroup float4*)xs)[i] = ((const device float4*)(xn + r * p.D))[i];
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint N = shared ? p.SI : p.I;
+  const uint row0 = (tgp.y * nsg + sg) * ROWS;
+  if (row0 >= N) return;
+  const uint K = p.D, wpr = K / 8, gpr = K / 64;
+  const device uint32_t *G = gw, *U = uw_;
+  const device bfloat *Gs = gsc, *Gb = gbi, *Us = usc, *Ub = ubi;
+  if (shared) {
+    G = sgw; Gs = sgs; Gb = sgb; U = suw; Us = sus; Ub = sub;
+  } else {
+    uint e = ue[u];
+    G += e * N * wpr; U += e * N * wpr;
+    Gs += e * N * gpr; Gb += e * N * gpr; Us += e * N * gpr; Ub += e * N * gpr;
+  }
+  float ag[ROWS], au[ROWS];
+  qmv2_rows<4, 16, ROWS, 64>(G, Gs, Gb, xs, N, K, row0, lane, ag);
+  qmv2_rows<4, 16, ROWS, 64>(U, Us, Ub, xs, N, K, row0, lane, au);
+  const uint Imax = max(p.I, p.SI);
+  if (lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      if (row0 + q < N) h[(u * R + r) * Imax + row0 + q] = silu(ag[q]) * au[q];
+}
+
+// down grid: (R, row tiles over D). x[r] += sum over experts u used by r of uw[u,r] * down_u(h[u][r])
+// + shared. Rows fastest again, so both rows' threadgroups of a tile reuse each shared expert's rows.
+[[kernel]] void moe_down_rc(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],
+                            const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],
+                            const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],
+                            const device float* h [[buffer(6)]], const device uint* ue [[buffer(7)]],
+                            const device float* uwts [[buffer(8)]], const device uint* un [[buffer(9)]],
+                            const device float* wts [[buffer(10)]], device float* x [[buffer(11)]],
+                            constant MoeParams& p [[buffer(12)]], constant uint& R [[buffer(13)]],
+                            uint2 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                            uint2 ntg2 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                            uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int ROWS = 2;
+  threadgroup float hs[512];
+  const uint r = tgp.x;
+  if (r >= R) return;
+  const uint U = un[0];
+  const uint Imax = max(p.I, p.SI);
+  const uint row0 = (tgp.y * nsg + sg) * ROWS;
+  float tot[ROWS] = {0.0f, 0.0f};
+  for (uint u = 0; u <= U; ++u) {
+    const bool shared = u == U;
+    const float wgt = shared ? wts[r * (p.k + 1) + p.k] : uwts[u * R + r];
+    if (wgt == 0.0f) continue;  // uniform across the threadgroup: no barrier divergence
+    const uint hu = shared ? R * p.k : u;
+    const uint K = shared ? p.SI : p.I;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = tid; i < K / 4; i += ntg2.x) ((threadgroup float4*)hs)[i] = ((const device float4*)(h + (hu * R + r) * Imax))[i];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (row0 >= p.D) continue;
+    float a[ROWS];
+    if (shared) {
+      qmv2_rows<4, 16, ROWS, 64>(sdw, sds, sdb, hs, p.D, K, row0, lane, a);
+    } else {
+      const uint wpr = K / 8, gpr = K / 64, e = ue[u];
+      qmv2_rows<4, 16, ROWS, 64>(dw + e * p.D * wpr, dsc + e * p.D * gpr, dbi + e * p.D * gpr, hs, p.D, K, row0, lane, a);
+    }
+    for (int q = 0; q < ROWS; ++q) tot[q] += wgt * a[q];
+  }
+  if (row0 < p.D && lane == 0)
+    for (int q = 0; q < ROWS; ++q)
+      if (row0 + q < p.D) x[r * p.D + row0 + q] += tot[q];
+}
+
+// Row-major small batch with small threadgroups (2 simdgroups x 4 rows, x read per simdgroup from
+// device memory, no staging or barriers): grid (R, N / 8). Consecutive threadgroups (the R token
+// rows of one 8-row weight block) tend to land on the same core and share the block in its cache.
+#define NI_QMV_RC1(NAME, BITS, ADD)                                                                       \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device float* x [[buffer(3)]],     \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],                \
+                       uint2 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    const uint r = tgp.x;                                                                                 \
+    if (r >= p.R) return;                                                                                 \
+    QmvParams q;                                                                                          \
+    q.N = p.N; q.K = p.K; q.x_stride = p.x_ld; q.y_stride = p.y_ld; q.eps = 0.0f;                         \
+    uint row0 = (tgp.y * nsg + sg) * 4;                                                                   \
+    qmv_impl_rc<BITS, 16, 4, 64, ADD>(w, scales, biases, x + r * p.x_ld, y + r * p.y_ld, q, row0, lane);  \
+  }
+
+template <int BITS, int VPL, int ROWS, int GS, bool ADD>
+NI_INLINE void qmv_impl_rc(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                           const device float* x, device float* y, thread const QmvParams& p, uint row0, uint lane) {
+  constexpr int PER_WORD = 32 / BITS;
+  const uint K = p.K, words_per_row = K / PER_WORD, groups_per_row = K / GS;
+  float acc[ROWS];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    acc[r] = 0.0f;
+    rows[r] = min(row0 + r, p.N - 1);
+  }
+  NormCtx<1> nc;
+  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
+    XChunk<BITS, VPL, 1> c;
+    load_x<BITS, VPL, 1, false>(c, x, K, k0, nc, nullptr);
+    const uint g = k0 / GS, wo = k0 / PER_WORD;
+    for (int r = 0; r < ROWS; ++r)
+      dot_row<BITS, VPL, 1>(c, w + rows[r] * words_per_row + wo, float(scales[rows[r] * groups_per_row + g]),
+                            float(biases[rows[r] * groups_per_row + g]), &acc[r]);
+  }
+  for (int r = 0; r < ROWS; ++r) {
+    float v = simd_sum(acc[r]);
+    uint row = row0 + r;
+    if (lane == 0 && row < p.N) y[row] = ADD ? y[row] + v : v;
+  }
+}
+
+NI_QMV_RC1(qmvrc1_b4, 4, false)
+NI_QMV_RC1(qmvrc1_b4_add, 4, true)
+NI_QMV_RC1(qmvrc1_b8, 8, false)
+NI_QMV_RC1(qmvrc1_b8_add, 8, true)
+
+// Two token rows per threadgroup (in registers) and row pairs in the fastest grid dimension:
+// grid (ceil(R/2), N / 8), 2 simdgroups x 4 weight rows. R = 3 or 4 -> two threadgroups per weight
+// block, adjacent in dispatch order, sharing the block through the core's cache.
+template <int BITS, int VPL, int ROWS, bool ADD>
+NI_INLINE void qmv_rc2_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                            const device float* x0, const device float* x1, device float* y0, device float* y1,
+                            bool two, uint N, uint K, uint row0, uint lane) {
+  constexpr int PER_WORD = 32 / BITS;
+  constexpr uint MASK = (1u << BITS) - 1u;
+  constexpr int WORDS = VPL / PER_WORD;
+  const uint wpr = K / PER_WORD, gpr = K / 64;
+  float a0[ROWS], a1[ROWS];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    a0[r] = a1[r] = 0.0f;
+    rows[r] = min(row0 + r, N - 1);
+  }
+  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
+    float v0[VPL], v1[VPL];
+    float s0 = 0.0f, s1 = 0.0f;
+    for (int i = 0; i < VPL / 4; ++i) {
+      float4 p0 = ((const device float4*)(x0 + k0))[i];
+      float4 p1 = ((const device float4*)(x1 + k0))[i];
+      s0 += p0.x + p0.y + p0.z + p0.w;
+      s1 += p1.x + p1.y + p1.z + p1.w;
+      for (int e = 0; e < 4; ++e) {
+        const float sc = float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
+        v0[i * 4 + e] = p0[e] * sc;
+        v1[i * 4 + e] = p1[e] * sc;
+      }
+    }
+    const uint g = k0 / 64, wo = k0 / PER_WORD;
+    for (int r = 0; r < ROWS; ++r) {
+      const device uint32_t* wp = w + rows[r] * wpr + wo;
+      uint32_t wv[WORDS];
+      if (WORDS == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
+      } else {
+        uint2 v = *(const device uint2*)wp;
+        wv[0] = v.x; wv[1] = v.y;
+      }
+      float d0 = 0.0f, d1 = 0.0f;
+      for (int i = 0; i < WORDS; ++i)
+        for (int j = 0; j < PER_WORD; ++j) {
+          float wf = float(wv[i] & (MASK << (BITS * j)));
+          d0 += wf * v0[i * PER_WORD + j];
+          d1 += wf * v1[i * PER_WORD + j];
+        }
+      const float sc = float(scales[rows[r] * gpr + g]), bi = float(biases[rows[r] * gpr + g]);
+      a0[r] += sc * d0 + bi * s0;
+      a1[r] += sc * d1 + bi * s1;
+    }
+  }
+  for (int r = 0; r < ROWS; ++r) {
+    float u0 = simd_sum(a0[r]), u1 = simd_sum(a1[r]);
+    uint row = row0 + r;
+    if (lane == 0 && row < N) {
+      y0[row] = ADD ? y0[row] + u0 : u0;
+      if (two) y1[row] = ADD ? y1[row] + u1 : u1;
+    }
+  }
+}
+
+#define NI_QMV_RC2(NAME, BITS, ADD)                                                                       \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device float* x [[buffer(3)]],     \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],                \
+                       uint2 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    const uint r0 = tgp.x * 2;                                                                            \
+    if (r0 >= p.R) return;                                                                                \
+    const bool two = r0 + 1 < p.R;                                                                        \
+    const uint r1 = two ? r0 + 1 : r0;                                                                    \
+    uint row0 = (tgp.y * nsg + sg) * 4;                                                                   \
+    qmv_rc2_impl<BITS, 16, 4, ADD>(w, scales, biases, x + r0 * p.x_ld, x + r1 * p.x_ld, y + r0 * p.y_ld,  \
+                                   y + r1 * p.y_ld, two, p.N, p.K, row0, lane);                          \
+  }
+
+NI_QMV_RC2(qmvrc2_b4, 4, false)
+NI_QMV_RC2(qmvrc2_b4_add, 4, true)
+NI_QMV_RC2(qmvrc2_b8, 8, false)
+NI_QMV_RC2(qmvrc2_b8_add, 8, true)
+
+// Same as qmvrc1 but x rows are half (half the cache footprint of the activations, as MLX's
+// bf16 vectors), so several token rows' threadgroups can keep sharing the weight block.
+template <int BITS, int VPL, int ROWS, bool ADD>
+NI_INLINE void qmv_rch_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                            const device half* x, device float* y, uint N, uint K, uint row0, uint lane) {
+  constexpr int PER_WORD = 32 / BITS;
+  constexpr uint MASK = (1u << BITS) - 1u;
+  constexpr int WORDS = VPL / PER_WORD;
+  const uint wpr = K / PER_WORD, gpr = K / 64;
+  float acc[ROWS];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    acc[r] = 0.0f;
+    rows[r] = min(row0 + r, N - 1);
+  }
+  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
+    float xv[VPL];
+    float xs = 0.0f;
+    for (int i = 0; i < VPL / 4; ++i) {
+      float4 v = float4(((const device half4*)(x + k0))[i]);
+      xs += v.x + v.y + v.z + v.w;
+      for (int e = 0; e < 4; ++e) xv[i * 4 + e] = v[e] * float(1.0f / float(1u << (BITS * ((i * 4 + e) % PER_WORD))));
+    }
+    const uint g = k0 / 64, wo = k0 / PER_WORD;
+    for (int r = 0; r < ROWS; ++r) {
+      const device uint32_t* wp = w + rows[r] * wpr + wo;
+      uint32_t wv[WORDS];
+      if (WORDS == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wv[0] = v.x; wv[1] = v.y; wv[2] = v.z; wv[3] = v.w;
+      } else {
+        uint2 v = *(const device uint2*)wp;
+        wv[0] = v.x; wv[1] = v.y;
+      }
+      float d = 0.0f;
+      for (int i = 0; i < WORDS; ++i)
+        for (int j = 0; j < PER_WORD; ++j) d += float(wv[i] & (MASK << (BITS * j))) * xv[i * PER_WORD + j];
+      acc[r] += float(scales[rows[r] * gpr + g]) * d + float(biases[rows[r] * gpr + g]) * xs;
+    }
+  }
+  for (int r = 0; r < ROWS; ++r) {
+    float v = simd_sum(acc[r]);
+    uint row = row0 + r;
+    if (lane == 0 && row < N) y[row] = ADD ? y[row] + v : v;
+  }
+}
+
+#define NI_QMV_RCH(NAME, BITS, ADD)                                                                       \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device half* x [[buffer(3)]],      \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],                \
+                       uint2 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    const uint r = tgp.x;                                                                                 \
+    if (r >= p.R) return;                                                                                 \
+    uint row0 = (tgp.y * nsg + sg) * 4;                                                                   \
+    qmv_rch_impl<BITS, 16, 4, ADD>(w, scales, biases, x + r * p.x_ld, y + r * p.y_ld, p.N, p.K, row0, lane); \
+  }
+
+NI_QMV_RCH(qmvrch_b4, 4, false)
+NI_QMV_RCH(qmvrch_b4_add, 4, true)
+NI_QMV_RCH(qmvrch_b8, 8, false)
+NI_QMV_RCH(qmvrch_b8_add, 8, true)
+
+// One threadgroup per block of ROWS weight rows; simdgroup s handles token row s (R simdgroups),
+// so the R reads of each weight row happen on one core at the same time (one DRAM read, R-1 L1
+// hits) while every simdgroup keeps a single-row register footprint. x rows are half.
+// grid: (N / ROWS) threadgroups of 32 * R threads.
+#define NI_QMV_SGR(NAME, BITS, ROWS, ADD)                                                                 \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* scales [[buffer(1)]], \
+                       const device bfloat* biases [[buffer(2)]], const device half* x [[buffer(3)]],      \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],                \
+                       uint tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint lane [[thread_index_in_simdgroup]]) {                                          \
+    if (sg >= p.R) return;                                                                                \
+    qmv_rch_impl<BITS, 16, ROWS, ADD>(w, scales, biases, x + sg * p.x_ld, y + sg * p.y_ld, p.N, p.K,      \
+                                      tgp * ROWS, lane);                                                  \
+  }
+
+NI_QMV_SGR(qmvsg_b4_r4, 4, 4, false)
+NI_QMV_SGR(qmvsg_b4_r8, 4, 8, false)
+NI_QMV_SGR(qmvsg_b4_r2, 4, 2, false)
+NI_QMV_SGR(qmvsg_b4_r4_add, 4, 4, true)
+NI_QMV_SGR(qmvsg_b8_r4, 8, 4, false)
+NI_QMV_SGR(qmvsg_b8_r4_add, 8, 4, true)
+
+// Small batch with half-precision inner products: each 16-bit half of a weight word holds 4
+// nibbles; (w16 & mask_j) converts exactly to half (<= 61440) and x is pre-scaled by 2^-4j in half,
+// so the per-value work is AND + convert + half FMA, shared dequant across NT rows, 16-value
+// partial sums in half then promoted to float with the group scale.
+template <int NT, int ROWS>
+NI_INLINE void qmvh_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                         threadgroup const half* xs, device float* y, constant QmvrParams& p, uint row0, uint lane) {
+  constexpr int VPL = 16;
+  const uint K = p.K;
+  const uint wpr = K / 8, gpr = K / 64;
+  float acc[ROWS][NT];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    rows[r] = min(row0 + r, p.N - 1);
+    for (int t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+  }
+  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
+    half xv[NT][VPL];
+    float xsum[NT];
+    for (int t = 0; t < NT; ++t) {
+      xsum[t] = 0.0f;
+      for (int i = 0; i < VPL / 4; ++i) {
+        half4 v = ((threadgroup const half4*)(xs + t * K + k0))[i];
+        xsum[t] += float(v.x) + float(v.y) + float(v.z) + float(v.w);
+        xv[t][i * 4 + 0] = v.x;
+        xv[t][i * 4 + 1] = v.y * half(1.0h / 16.0h);
+        xv[t][i * 4 + 2] = v.z * half(1.0h / 256.0h);
+        xv[t][i * 4 + 3] = v.w * half(1.0h / 4096.0h);
+      }
+    }
+    const uint g = k0 / 64, wo = k0 / 8;
+    for (int r = 0; r < ROWS; ++r) {
+      uint2 wv = *(const device uint2*)(w + rows[r] * wpr + wo);
+      ushort4 h4 = as_type<ushort4>(wv);
+      half d[NT];
+      for (int t = 0; t < NT; ++t) d[t] = 0.0h;
+      for (int i = 0; i < 4; ++i) {
+        ushort u = h4[i];
+        half w0 = half(u & 0x000f), w1 = half(u & 0x00f0), w2 = half(u & 0x0f00), w3 = half(u & 0xf000);
+        for (int t = 0; t < NT; ++t)
+          d[t] += w0 * xv[t][i * 4] + w1 * xv[t][i * 4 + 1] + w2 * xv[t][i * 4 + 2] + w3 * xv[t][i * 4 + 3];
+      }
+      const float s = float(scales[rows[r] * gpr + g]), b = float(biases[rows[r] * gpr + g]);
+      for (int t = 0; t < NT; ++t) acc[r][t] += s * float(d[t]) + b * xsum[t];
+    }
+  }
+  for (int r = 0; r < ROWS; ++r)
+    for (int t = 0; t < NT; ++t) {
+      float v = simd_sum(acc[r][t]);
+      uint row = row0 + r;
+      if (lane == 0 && row < p.N && uint(t) < p.R) {
+        device float* dst = y + t * p.y_ld + row;
+        *dst = p.add ? *dst + v : v;
+      }
+    }
+}
+
+#define NI_QMVH(NAME, NT, ROWS)                                                                           \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* s [[buffer(1)]],      \
+                       const device bfloat* b [[buffer(2)]], const device float* x [[buffer(3)]],         \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],               \
+                       uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup half xs[NT * 4096];                                                                      \
+    for (uint i = tid; i < NT * p.K / 4; i += ntg) {                                                     \
+      uint t = i / (p.K / 4), c = i % (p.K / 4);                                                         \
+      ((threadgroup half4*)(xs + t * p.K))[c] = half4(((const device float4*)(x + min(t, p.R - 1) * p.x_ld))[c]); \
+    }                                                                                                    \
+    threadgroup_barrier(mem_flags::mem_threadgroup);                                                     \
+    uint row0 = (tgp * nsg + sg) * ROWS;                                                                 \
+    if (row0 >= p.N) return;                                                                             \
+    qmvh_impl<NT, ROWS>(w, s, b, xs, y, p, row0, lane);                                                  \
+  }
+
+NI_QMVH(qmvh_t3_r4, 3, 4)
+NI_QMVH(qmvh_t4_r4, 4, 4)
+NI_QMVH(qmvh_t3_r2, 3, 2)
+NI_QMVH(qmvh_t4_r2, 4, 2)
+NI_QMVH(qmvh_t2_r4, 2, 4)
+
+template <int NT, int ROWS>
+NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
+                         const device float* x, threadgroup half* xs, device float* y, constant QmvrParams& p, uint row0,
+                          uint tid, uint ntg, uint lane) {
+  constexpr uint TILE = NT <= 2 ? 4096 : NT == 3 ? 4096 : 2048;
+  constexpr int VPL = 16;
+  const uint K = p.K;
+  const uint wpr = K / 8, gpr = K / 64;
+  float acc[ROWS][NT];
+  uint rows[ROWS];
+  for (int r = 0; r < ROWS; ++r) {
+    rows[r] = min(row0 + r, p.N - 1);
+    for (int t = 0; t < NT; ++t) acc[r][t] = 0.0f;
+  }
+  for (uint kt = 0; kt < K; kt += TILE) {
+  const uint tile = min(TILE, K - kt);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < uint(NT) * tile / 4; i += ntg) {
+    uint t = i / (tile / 4), c = i % (tile / 4);
+    ((threadgroup half4*)(xs + t * TILE))[c] = half4(((const device float4*)(x + min(t, p.R - 1) * p.x_ld + kt))[c]);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (row0 >= p.N) continue;
+  for (uint k0 = lane * VPL; k0 < tile; k0 += 32 * VPL) {
+    half xv[NT][VPL];
+    float xsum[NT];
+    for (int t = 0; t < NT; ++t) {
+      xsum[t] = 0.0f;
+      for (int i = 0; i < VPL / 4; ++i) {
+        half4 v = ((threadgroup const half4*)(xs + t * TILE + k0))[i];
+        xsum[t] += float(v.x) + float(v.y) + float(v.z) + float(v.w);
+        xv[t][i * 4 + 0] = v.x;
+        xv[t][i * 4 + 1] = v.y * half(1.0h / 16.0h);
+        xv[t][i * 4 + 2] = v.z * half(1.0h / 256.0h);
+        xv[t][i * 4 + 3] = v.w * half(1.0h / 4096.0h);
+      }
+    }
+    const uint g = (kt + k0) / 64, wo = (kt + k0) / 8;
+    for (int r = 0; r < ROWS; ++r) {
+      uint2 wv = *(const device uint2*)(w + rows[r] * wpr + wo);
+      ushort4 h4 = as_type<ushort4>(wv);
+      half d[NT];
+      for (int t = 0; t < NT; ++t) d[t] = 0.0h;
+      for (int i = 0; i < 4; ++i) {
+        ushort u = h4[i];
+        half w0 = half(u & 0x000f), w1 = half(u & 0x00f0), w2 = half(u & 0x0f00), w3 = half(u & 0xf000);
+        for (int t = 0; t < NT; ++t)
+          d[t] += w0 * xv[t][i * 4] + w1 * xv[t][i * 4 + 1] + w2 * xv[t][i * 4 + 2] + w3 * xv[t][i * 4 + 3];
+      }
+      const float s = float(scales[rows[r] * gpr + g]), b = float(biases[rows[r] * gpr + g]);
+      for (int t = 0; t < NT; ++t) acc[r][t] += s * float(d[t]) + b * xsum[t];
+    }
+  }
+  }
+  if (row0 >= p.N) return;
+  for (int r = 0; r < ROWS; ++r)
+    for (int t = 0; t < NT; ++t) {
+      float v = simd_sum(acc[r][t]);
+      uint row = row0 + r;
+      if (lane == 0 && row < p.N && uint(t) < p.R) {
+        device float* dst = y + t * p.y_ld + row;
+        *dst = p.add ? *dst + v : v;
+      }
+    }
+}
+
+
+#define NI_QMVHT(NAME, NT, ROWS)                                                                          \
+  [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* s [[buffer(1)]],      \
+                       const device bfloat* b [[buffer(2)]], const device float* x [[buffer(3)]],         \
+                       device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],               \
+                       uint tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]], \
+                       uint ntg [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup half xs[NT * (NT <= 3 ? 4096 : 2048)];                                                   \
+    uint row0 = (tgp * nsg + sg) * ROWS;                                                                 \
+    qmvht_impl<NT, ROWS>(w, s, b, x, xs, y, p, row0, tid, ntg, lane);                                    \
+  }
+NI_QMVHT(qmvht_t2_r4, 2, 4)
+NI_QMVHT(qmvht_t3_r4, 3, 4)
+NI_QMVHT(qmvht_t4_r4, 4, 4)
+NI_QMVHT(qmvht_t4_r2, 4, 2)
