@@ -86,7 +86,7 @@ NI_INLINE void qs_mma8(thread simdgroup_float8x8& acc, thread const half2* a, th
 
 // One simdgroup: NM weight matrices (same rows n0..n0+7, e.g. gate and up) x TB token blocks over
 // groups [g0, g1). acc[m][tb] gets the partial products.
-template <int BITS, int NM, int TB, bool IL = false>
+template <int BITS, int NM, int TB>
 NI_INLINE void qs_run(const device uint32_t* const* W, const device bfloat* const* S, const device bfloat* const* B,
                       uint row, uint wpr, uint gpr, const device half* X, uint x_ld, uint T, uint g0, uint g1,
                       uint lane, thread simdgroup_float8x8 (&acc)[NM][TB]) {
@@ -110,31 +110,12 @@ NI_INLINE void qs_run(const device uint32_t* const* W, const device bfloat* cons
       const half s = half(float(S[m][row * gpr + g])), bi = half(float(B[m][row * gpr + g]));
       qs_dequant<BITS>(W[m] + row * wpr, s, bi, g, q, a[m]);
     }
-    if (IL) {  // all B fragments first, then the MMAs interleaved over independent accumulators
-      half2 b[TB][8];
+    _Pragma("clang loop unroll(full)")
+    for (int tb = 0; tb < TB; ++tb) {
+      half2 b[8];
+      qs_gather(xr[tb][0], xr[tb][1], g, fm, b);
       _Pragma("clang loop unroll(full)")
-      for (int tb = 0; tb < TB; ++tb) qs_gather(xr[tb][0], xr[tb][1], g, fm, b[tb]);
-      _Pragma("clang loop unroll(full)")
-      for (int f = 0; f < 8; ++f)
-        _Pragma("clang loop unroll(full)")
-        for (int tb = 0; tb < TB; ++tb)
-          _Pragma("clang loop unroll(full)")
-          for (int m = 0; m < NM; ++m) {
-            simdgroup_half8x8 Af, Bf;
-            Af.thread_elements()[0] = a[m][f].x;
-            Af.thread_elements()[1] = a[m][f].y;
-            Bf.thread_elements()[0] = b[tb][f].x;
-            Bf.thread_elements()[1] = b[tb][f].y;
-            simdgroup_multiply_accumulate(acc[m][tb], Af, Bf, acc[m][tb]);
-          }
-    } else {
-      _Pragma("clang loop unroll(full)")
-      for (int tb = 0; tb < TB; ++tb) {
-        half2 b[8];
-        qs_gather(xr[tb][0], xr[tb][1], g, fm, b);
-        _Pragma("clang loop unroll(full)")
-        for (int m = 0; m < NM; ++m) qs_mma8(acc[m][tb], a[m], b);
-      }
+      for (int m = 0; m < NM; ++m) qs_mma8(acc[m][tb], a[m], b);
     }
   }
 }
@@ -167,7 +148,7 @@ NI_INLINE void qs_reduce(thread simdgroup_float8x8 (&acc)[NM][TB], threadgroup f
 
 // Dense, up to 4 segments sharing X (e.g. GDN qkv/z/b/a): grid = tg_begin[nseg] threadgroups of
 // nsg simdgroups; a threadgroup covers nsg/ks row blocks of 8 rows of one segment.
-template <int BITS, int TB, bool IL = false>
+template <int BITS, int TB>
 NI_INLINE void qmms_impl(const device uint32_t* const* Wv, const device bfloat* const* Sv,
                          const device bfloat* const* Bv, device float* const* Yv, const device half* X,
                          constant QmmsParams& p, threadgroup float2* red, uint tg, uint sg, uint nsg, uint lane) {
@@ -184,7 +165,7 @@ NI_INLINE void qmms_impl(const device uint32_t* const* Wv, const device bfloat* 
   const device bfloat* S[1] = {Sv[si]};
   const device bfloat* B[1] = {Bv[si]};
   simdgroup_float8x8 acc[1][TB];
-  qs_run<BITS, 1, TB, IL>(W, S, B, row, wpr, gpr, X, p.x_ld, p.T, g0, g1, lane, acc);
+  qs_run<BITS, 1, TB>(W, S, B, row, wpr, gpr, X, p.x_ld, p.T, g0, g1, lane, acc);
   if (p.ks > 1) {
     qs_reduce<1, TB>(acc, red, p.ks, sg, lane);
     if (kslice) return;
@@ -206,7 +187,7 @@ NI_INLINE void qmms_impl(const device uint32_t* const* Wv, const device bfloat* 
     }
 }
 
-#define NI_QMMS(NAME, BITS, TB, ...)                                                                            \
+#define NI_QMMS(NAME, BITS, TB)                                                                              \
   [[kernel]] void NAME(const device uint32_t* W0 [[buffer(0)]], const device bfloat* S0 [[buffer(1)]],         \
                        const device bfloat* B0 [[buffer(2)]], device float* Y0 [[buffer(3)]],                 \
                        const device uint32_t* W1 [[buffer(4)]], const device bfloat* S1 [[buffer(5)]],         \
@@ -223,7 +204,7 @@ NI_INLINE void qmms_impl(const device uint32_t* const* Wv, const device bfloat* 
     const device bfloat* Sv[4] = {S0, S1, S2, S3};                                                            \
     const device bfloat* Bv[4] = {B0, B1, B2, B3};                                                            \
     device float* Yv[4] = {Y0, Y1, Y2, Y3};                                                                   \
-    qmms_impl<BITS, TB, ##__VA_ARGS__>(Wv, Sv, Bv, Yv, X, p, red, tg, sg, nsg, lane);                                     \
+    qmms_impl<BITS, TB>(Wv, Sv, Bv, Yv, X, p, red, tg, sg, nsg, lane);                                       \
   }
 
 NI_QMMS(qmms_b4_t1, 4, 1)
@@ -242,14 +223,10 @@ NI_QMMS(qmms_b8_t5, 8, 5)
 NI_QMMS(qmms_b8_t6, 8, 6)
 NI_QMMS(qmms_b8_t7, 8, 7)
 NI_QMMS(qmms_b8_t8, 8, 8)
-// interleaved-MMA variants (A/B in bench_qmms: KERNEL=qmmsi)
-NI_QMMS(qmmsi_b4_t2, 4, 2, true)
-NI_QMMS(qmmsi_b4_t3, 4, 3, true)
-NI_QMMS(qmmsi_b4_t4, 4, 4, true)
 
 // Dense gate/up + SwiGLU: H[t, n] = half(silu(x W_gate^T) * (x W_up^T)), half rows of N (= y_ld[0]).
 // Segment 0 = gate, segment 1 = up (same N, K, bits); grid = ceil(N/8 / (nsg/ks)) threadgroups.
-template <int BITS, int TB, bool IL = false>
+template <int BITS, int TB>
 NI_INLINE void qmms_gu_impl(const device uint32_t* Wg, const device bfloat* Sg, const device bfloat* Bg,
                             const device uint32_t* Wu, const device bfloat* Su, const device bfloat* Bu,
                             device half* H, const device half* X, constant QmmsParams& p, threadgroup float2* red,
@@ -265,7 +242,7 @@ NI_INLINE void qmms_gu_impl(const device uint32_t* Wg, const device bfloat* Sg, 
   const device bfloat* S[2] = {Sg, Su};
   const device bfloat* B[2] = {Bg, Bu};
   simdgroup_float8x8 acc[2][TB];
-  qs_run<BITS, 2, TB, IL>(W, S, B, row, wpr, gpr, X, p.x_ld, p.T, g0, g1, lane, acc);
+  qs_run<BITS, 2, TB>(W, S, B, row, wpr, gpr, X, p.x_ld, p.T, g0, g1, lane, acc);
   if (p.ks > 1) {
     qs_reduce<2, TB>(acc, red, p.ks, sg, lane);
     if (kslice) return;
@@ -284,7 +261,7 @@ NI_INLINE void qmms_gu_impl(const device uint32_t* Wg, const device bfloat* Sg, 
     }
 }
 
-#define NI_QMMS_GU(NAME, BITS, TB, ...)                                                                         \
+#define NI_QMMS_GU(NAME, BITS, TB)                                                                           \
   [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device bfloat* Sg [[buffer(1)]],         \
                        const device bfloat* Bg [[buffer(2)]], device half* H [[buffer(3)]],                   \
                        const device uint32_t* Wu [[buffer(4)]], const device bfloat* Su [[buffer(5)]],         \
@@ -293,7 +270,7 @@ NI_INLINE void qmms_gu_impl(const device uint32_t* Wg, const device bfloat* Sg, 
                        uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],    \
                        uint lane [[thread_index_in_simdgroup]]) {                                              \
     threadgroup float2 red[8 * 2 * TB * 32];                                                                 \
-    qmms_gu_impl<BITS, TB, ##__VA_ARGS__>(Wg, Sg, Bg, Wu, Su, Bu, H, X, p, red, tg, sg, nsg, lane);                       \
+    qmms_gu_impl<BITS, TB>(Wg, Sg, Bg, Wu, Su, Bu, H, X, p, red, tg, sg, nsg, lane);                         \
   }
 
 NI_QMMS_GU(qmms_gu_b4_t1, 4, 1)
@@ -312,9 +289,6 @@ NI_QMMS_GU(qmms_gu_b8_t5, 8, 5)
 NI_QMMS_GU(qmms_gu_b8_t6, 8, 6)
 NI_QMMS_GU(qmms_gu_b8_t7, 8, 7)
 NI_QMMS_GU(qmms_gu_b8_t8, 8, 8)
-NI_QMMS_GU(qmmsi_gu_b4_t2, 4, 2, true)
-NI_QMMS_GU(qmmsi_gu_b4_t3, 4, 3, true)
-NI_QMMS_GU(qmmsi_gu_b4_t4, 4, 4, true)
 
 // ---- MoE experts at small T: tiles of <= 8 sorted pair rows (moe_bucket2 with BM = 8) ----
 // Same tile lists and row maps as qmm_moe_gu/_dn (Qmm2Params): the gate/up kernel gathers X rows

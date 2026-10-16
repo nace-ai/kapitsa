@@ -123,8 +123,7 @@ template <int BM, int BN, int WM, int WN, int BK, int NP, int ABL>
 NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread* W,
                       const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
                       uint K, uint x_ld, uint m0, uint n0, threadgroup half* xs, uint tid, uint sgm, uint sgn,
-                      uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8],
-                      uint k_begin = 0, uint k_end = 0xFFFFFFFFu) {
+                      uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8]) {
   constexpr int NT = WM * WN * 32;
   constexpr int TM = BM / WM, TN = BN / WN;
   constexpr int FB = TM / 8, FA = TN / 8;
@@ -146,8 +145,7 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
   uint4 xr[XL];
   uint wr[NP * FA * WPL];
   half2 sb[NP * FA];
-  const uint kl = min(K, k_end);
-  for (uint k0 = k_begin; k0 < kl; k0 += BK) {
+  for (uint k0 = 0; k0 < K; k0 += BK) {
     if (!(ABL & 2)) qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
     if (!(ABL & 8)) {
       qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, k0, c, wr, sb);
@@ -235,55 +233,6 @@ NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread*
     }                                                                                                      \
   }
 
-// Split-K form (NI_SHORTPF, deep K at few rows, e.g. the 27B's MLP down projection with K = 17408):
-// grid z = ks slices of K (K / ks a multiple of BK); slice z writes its fp32 partial tile to
-// P[z][m][n] (M x N each) and qmr_sk_reduce sums the slices in order into Y (+= with add).
-// QmmParams: w_expert_stride = ks.
-#define NI_QMR_SK(NAME, BM, BN, WM, WN, BK)                                                               \
-  [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
-      const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                         \
-      const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                        \
-      device float* P [[buffer(4)]], constant QmmParams& p [[buffer(5)]],                                   \
-      uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
-      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
-    constexpr int TM = BM / WM, TN = BN / WN;                                                              \
-    threadgroup uint4 xs4[BM * (BK + 8) / 8];                                                              \
-    const device uint32_t* W[1] = {Wd};                                                                    \
-    const device bfloat* S[1] = {Sd};                                                                      \
-    const device bfloat* B[1] = {Bd};                                                                      \
-    const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
-    const uint kc = p.K / p.w_expert_stride;                                                               \
-    const uint2 rc = qr_rc(lane);                                                                          \
-    simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                \
-    qr_acc<BM, BN, WM, WN, BK, 1, 0>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,    \
-                                     tid, sgm, sgn, rc, acc, tg.z * kc, (tg.z + 1) * kc);                  \
-    device float* Pz = P + size_t(tg.z) * p.M * p.N;                                                       \
-    _Pragma("clang loop unroll(full)")                                                                     \
-    for (int a = 0; a < TN / 8; ++a) {                                                                     \
-      const uint n = n0 + sgn * TN + a * 8 + rc.x;                                                         \
-      if (n >= p.N) continue;                                                                              \
-      _Pragma("clang loop unroll(full)")                                                                   \
-      for (int b = 0; b < TM / 8; ++b)                                                                     \
-        _Pragma("clang loop unroll(full)")                                                                 \
-        for (int e = 0; e < 2; ++e) {                                                                      \
-          const uint m = m0 + sgm * TM + b * 8 + rc.y + e;                                                 \
-          if (m < p.M) Pz[m * p.N + n] = acc[a][b].thread_elements()[e];                                   \
-        }                                                                                                  \
-    }                                                                                                      \
-  }
-
-// Y[m, n] (+)= sum over the ks slices of P[z][m][n] (ascending z); one thread per 4 outputs.
-[[kernel]] void qmr_sk_reduce(const device float4* P [[buffer(0)]], device float* Y [[buffer(1)]],
-                              constant QmmParams& p [[buffer(2)]], uint i [[thread_position_in_grid]]) {
-  const uint n4 = p.N / 4;
-  if (i >= p.M * n4) return;
-  const uint m = i / n4, n = (i % n4) * 4;
-  float4 s = P[i];
-  for (uint z = 1; z < p.w_expert_stride; ++z) s += P[z * p.M * n4 + i];
-  device float4* y = (device float4*)(Y + m * p.y_ld + n);
-  *y = p.add ? *y + s : s;
-}
-
 // Multi-projection form (NI_SHORTPF): up to 4 projections sharing X (same K, 4-bit g64), e.g. the
 // GDN in-proj (qkv, z, b, a) or attention q/k/v, in ONE dispatch: tg.x runs over the concatenated N
 // tiles of the segments (tg_begin), tg.y over M tiles. Per element the arithmetic is the
@@ -351,43 +300,15 @@ NI_QMR(qmr_k64_w14_m16_n128, 16, 128, 1, 4, 64)
 NI_QMR(qmr_k64_w14_m16_n64, 16, 64, 1, 4, 64)     // M < 64 or N <= 64
 NI_QMR(qmr_k64_w12_m16_n64, 16, 64, 1, 2, 64)
 NI_QMR(qmr_k64_w12_m8_n64, 8, 64, 1, 2, 64)       // M <= 8
-// short prefills (NI_SHORTPF): one row tile covering all M <= 64 rows (8-row steps), so every
-// weight is read and dequantized once per pass instead of once per 16-row tile
+// short prefills (NI_SHORTPF, Qwen35::short_tile): one row tile holding all rows up to 48 (8-row
+// steps; two tiles up to 128 rows), so each weight is read and dequantized once (twice) per pass
+// instead of once per 16-row tile; qmrs_* = the multi-projection form above
 NI_QMR(qmr_k64_w14_m24_n64, 24, 64, 1, 4, 64)
 NI_QMR(qmr_k64_w14_m40_n64, 40, 64, 1, 4, 64)
 NI_QMR(qmr_k64_w14_m48_n64, 48, 64, 1, 4, 64)
 NI_QMR(qmr_k64_w14_m56_n64, 56, 64, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m16_n32, 16, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m24_n32, 24, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m32_n32, 32, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m40_n32, 40, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m48_n32, 48, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m56_n32, 56, 32, 1, 4, 64)
-NI_QMR(qmr_k64_w14_m64_n32, 64, 32, 1, 4, 64)
 NI_QMR_GU(qmr_gu_k64_w14_m24_n64, 24, 64, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m16_n32, 16, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m24_n32, 24, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m32_n32, 32, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m40_n32, 40, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m48_n32, 48, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m56_n32, 56, 32, 1, 4, 64)
-NI_QMR_GU(qmr_gu_k64_w14_m64_n32, 64, 32, 1, 4, 64)
 NI_QMR_GU(qmr_gu_k32_w14_m32_n64, 32, 64, 1, 4, 32)
-NI_QMR_SK(qmrk_k64_w12_m8_n64, 8, 64, 1, 2, 64)
-NI_QMR_SK(qmrk_k64_w14_m16_n64, 16, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m24_n64, 24, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m32_n64, 32, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m40_n64, 40, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m48_n64, 48, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m56_n64, 56, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m64_n64, 64, 64, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m16_n32, 16, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m24_n32, 24, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m32_n32, 32, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m40_n32, 40, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m48_n32, 48, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m56_n32, 56, 32, 1, 4, 64)
-NI_QMR_SK(qmrk_k64_w14_m64_n32, 64, 32, 1, 4, 64)
 NI_QMR_SEG(qmrs_k64_w12_m8_n64, 8, 64, 1, 2, 64)
 NI_QMR_SEG(qmrs_k64_w14_m16_n64, 16, 64, 1, 4, 64)
 NI_QMR_SEG(qmrs_k64_w14_m24_n64, 24, 64, 1, 4, 64)
@@ -396,14 +317,6 @@ NI_QMR_SEG(qmrs_k64_w14_m40_n64, 40, 64, 1, 4, 64)
 NI_QMR_SEG(qmrs_k64_w14_m48_n64, 48, 64, 1, 4, 64)
 NI_QMR_SEG(qmrs_k64_w14_m56_n64, 56, 64, 1, 4, 64)
 NI_QMR_SEG(qmrs_k64_w14_m64_n64, 64, 64, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m16_n32, 16, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m24_n32, 24, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m32_n32, 32, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m40_n32, 40, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m48_n32, 48, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m56_n32, 56, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k64_w14_m64_n32, 64, 32, 1, 4, 64)
-NI_QMR_SEG(qmrs_k32_w14_m32_n128, 32, 128, 1, 4, 32)
 NI_QMR_GU(qmr_gu_k64_w14_m32_n64, 32, 64, 1, 4, 64)
 NI_QMR_GU(qmr_gu_k32_w12_m32_n32, 32, 32, 1, 2, 32)
 NI_QMR_GU(qmr_gu_k64_w14_m16_n64, 16, 64, 1, 4, 64)

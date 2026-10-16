@@ -106,14 +106,13 @@ static bool short_qmms(int M, double bytes, bool gu, bool multi, uint32_t K) {
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
-// tiles hold at most 32 rows), BM = 8 ceil(M / R / 8), 64-wide N tiles (NI_SHORTPF_BN=32 for A/B).
-// `seg`: the multi-projection form (qmrs_*).
+// tiles hold at most 32 rows), BM = 8 ceil(M / R / 8), 64-wide N tiles (32-wide measured slower on
+// every 35B / 27B shape). `seg`: the multi-projection form (qmrs_*).
 struct ShortTile {
   std::string name;
   uint32_t bm, bn, th;
 };
 static ShortTile short_tile(int M, bool gu, bool seg) {
-  static const int bn_env = getenv("NI_SHORTPF_BN") ? atoi(getenv("NI_SHORTPF_BN")) : 0;
   const std::string pre = gu ? "qmr_gu_k64" : seg ? "qmrs_k64" : "qmr_k64";
   if (M <= 8) {
     if (gu) return {"qmr_gu_k64_w12_m8_n32", 8, 32, 64};
@@ -121,9 +120,7 @@ static ShortTile short_tile(int M, bool gu, bool seg) {
   }
   const int R = gu ? (M + 31) / 32 : M <= 48 ? 1 : 2;
   const uint32_t bm = uint32_t(((M + R - 1) / R + 7) / 8 * 8);
-  const uint32_t bn = bn_env == 32 ? 32 : 64;
-  if (gu && bn == 64 && bm > 32) fatal("short tile: gate/up m%u_n64 not built", bm);
-  return {pre + "_w14_m" + std::to_string(bm) + "_n" + std::to_string(bn), bm, bn, 128};
+  return {pre + "_w14_m" + std::to_string(bm) + "_n64", bm, 64, 128};
 }
 
 // Projections sharing the half input xh (same K): one short-prefill dispatch where the kernels
@@ -855,10 +852,7 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
   while (ks > 1 && (gpr / ks < 2 || nsg % ks)) ks /= 2;
   const int TB = (T + 7) / 8;
-  // NI_QMMS_IL=1: interleaved-MMA variants (qmmsi_*, 2-4 token blocks), for A/B
-  static const bool il = env_on("NI_QMMS_IL");
-  const bool use_il = il && TB >= 2 && TB <= 4 && L0.bits == 4;
-  e.use(pipe(std::string(use_il ? "qmmsi_b" : "qmms_b") + std::to_string(L0.bits) + "_t" + std::to_string(TB)));
+  e.use(pipe("qmms_b" + std::to_string(L0.bits) + "_t" + std::to_string(TB)));
   kp::Qmms p{};
   p.K = K;
   p.T = uint32_t(T);
@@ -895,9 +889,7 @@ bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const B
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
   while (ks > 1 && (gpr / ks < 2 || nsg % ks)) ks /= 2;
   const int TB = (T + 7) / 8;
-  static const bool il = env_on("NI_QMMS_IL");
-  const bool use_il = il && TB >= 2 && TB <= 4 && G.bits == 4;
-  e.use(pipe(std::string(use_il ? "qmmsi_gu_b" : "qmms_gu_b") + std::to_string(G.bits) + "_t" + std::to_string(TB)));
+  e.use(pipe("qmms_gu_b" + std::to_string(G.bits) + "_t" + std::to_string(TB)));
   kp::Qmms p{};
   p.K = K;
   p.T = uint32_t(T);
@@ -1233,19 +1225,19 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim))};
   static const std::string an = getenv("NI_ATTN") && *getenv("NI_ATTN") ? getenv("NI_ATTN") : "attn_prefill11";
-  // NI_SHORTPF: few queries over a long prefix split the keys over more threadgroups (aim ~100 in
-  // all, the best of a 2-16 sweep within ~5% at 8-128 queries over 4k/16k keys on both models;
-  // >= 8 key tiles of 32 each); partials in part_o_/part_ml_ (room for nsplit * T <= 1024).
-  // NI_ATTN_GQ=0: query-major blocks (attn_prefill11s) instead of (query, head) rows (11gs/11g)
-  static const bool gq = !getenv("NI_ATTN_GQ") || env_on("NI_ATTN_GQ");
+  // NI_SHORTPF: few queries over a long cached prefix. Rows are (query, head) pairs of one KV
+  // head (attn_prefill11g*: a 32-row block holds 32/G queries x G heads instead of padding T to 32
+  // per head), and the keys are split over threadgroups when the blocks alone cannot fill the GPU
+  // (aim ~100 in all: within ~5% of the best split of a 2-16 sweep at 8-128 queries over 4k/16k
+  // keys on both models; >= 8 key tiles of 32 each; NI_ATTN_SPLIT overrides). Partials in
+  // part_o_/part_ml_ (room for nsplit * T <= 1024 rows), combined by attn11_reduce.
   if (shortpf() && T <= shortpf_attn_max() && an == "attn_prefill11") {
     const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv);
-    const uint32_t nqb = gq ? (uint32_t(T) * G + 31) / 32 : (uint32_t(T) + 31) / 32;
-    const uint32_t gy = gq ? uint32_t(cfg_.hkv) : uint32_t(cfg_.hq), tiles = (uint32_t(pos0 + T) + 31) / 32;
+    const uint32_t nqb = (uint32_t(T) * G + 31) / 32, gy = uint32_t(cfg_.hkv), tiles = (uint32_t(pos0 + T) + 31) / 32;
     static const int ns_env = getenv("NI_ATTN_SPLIT") && *getenv("NI_ATTN_SPLIT") ? atoi(getenv("NI_ATTN_SPLIT")) : 0;
     uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (100 + nqb * gy - 1) / (nqb * gy);
     ns = std::min({ns, tiles / 8, 1024u / uint32_t(T), 16u});
-    if (gq && ns < 2) {
+    if (ns < 2) {
       e.use(pipe("attn_prefill11g"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
       e.val(5, fp);
@@ -1253,7 +1245,7 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
       return;
     }
     if (ns >= 2) {
-      e.use(pipe(gq ? "attn_prefill11gs" : "attn_prefill11s"));
+      e.use(pipe("attn_prefill11gs"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
       e.val(5, fp);
       e.buf(6, part_o_); e.buf(7, part_ml_);

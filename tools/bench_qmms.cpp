@@ -11,8 +11,9 @@
 // outputs per projection vs a double reference on the dequantized halfs (as qmm: half(s*q + b)).
 // env: SHAPES=35|27 (default both); TS="8 16 23" token counts; CASES=substring filter on case names;
 //      KERNELS="auto qmms ..." where auto = the engine's qmr tile (m8 for T <= 8, m16 below 64),
-//      qmms / qmmsi = register-streaming (engine K split; qmms:NSG:KS overrides), or a qmr kernel
-//      name (qmr_k64_w14_m32_n64, qmr_gu_k64_w14_m16_n64, ...: tile/threads parsed from the name).
+//      qmms = register-streaming (engine K split; qmms:NSG:KS overrides), a qmr kernel name
+//      (qmr_k64_w14_m32_n64, qmr_gu_k64_w14_m16_n64, ...: tile/threads parsed from the name) or a
+//      multi-projection qmrs_* name (the whole group in one dispatch).
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
@@ -148,16 +149,13 @@ int main() {
       std::vector<K1> ks;
       for (const std::string& spec : kspecs) {
         if (spec.rfind("qmms", 0) == 0) {
-          const bool il = spec.rfind("qmmsi", 0) == 0;
           const int TB = (T + 7) / 8;
-          if (TB > 8 || (il && (TB < 2 || TB > 4))) continue;
+          if (TB > 8) continue;
           uint32_t nsg = 8, ksplit = K >= 4096 ? 8 : 4;
           if (spec.find(':') != std::string::npos) sscanf(spec.c_str() + spec.find(':'), ":%u:%u", &nsg, &ksplit);
           const uint32_t gpr = K / 64;
           while (ksplit > 1 && (gpr / ksplit < 2 || nsg % ksplit)) ksplit /= 2;
-          if (il && bits != 4) continue;
-          std::string kn = std::string(il ? "qmmsi" : "qmms") + (c.gu ? "_gu_b" : "_b") + std::to_string(bits) + "_t" +
-                           std::to_string(TB);
+          std::string kn = std::string("qmms") + (c.gu ? "_gu_b" : "_b") + std::to_string(bits) + "_t" + std::to_string(TB);
           Pipeline pl = g.pipeline(kn);
           kp::Qmms p{};
           p.K = K; p.T = uint32_t(T); p.x_ld = K; p.ks = ksplit;
@@ -190,33 +188,6 @@ int main() {
                           (void)nseg;
                         },
                         c.gu});
-          continue;
-        }
-        if (spec.rfind("qmrk_", 0) == 0) {  // split-K qmr ("qmrk_..._nBN:KS") + qmr_sk_reduce, one projection
-          if (c.gu || bits != 4 || nmat != 1) continue;
-          const std::string kn = spec.substr(0, spec.find(':'));
-          const uint32_t ksp = spec.find(':') != std::string::npos ? std::stoi(spec.substr(spec.find(':') + 1)) : 4;
-          if ((K / 64) % ksp) continue;
-          std::smatch mt;
-          if (!std::regex_match(kn, mt, tile)) fatal("bad kernel %s", kn.c_str());
-          const uint32_t th = 32 * std::stoi(mt[1]) * std::stoi(mt[2]), bm = std::stoi(mt[3]), bn = std::stoi(mt[4]);
-          Pipeline pl = g.pipeline(kn), red = g.pipeline("qmr_sk_reduce");
-          static Buffer part;
-          if (!part) part = g.alloc(size_t(16) * 64 * 32768 * 4);
-          kp::Qmm p{uint32_t(T), mats[0].N, K, K, mats[0].N, 0, 64, ksp, 0};
-          ks.push_back({spec, [&, pl, red, p, th, bm, bn, ksp, T](Encoder& e, int cp) {
-                          e.use(pl);
-                          e.buf(0, X); e.buf(1, mats[0].W[cp]); e.buf(2, mats[0].S[cp]); e.buf(3, mats[0].B[cp]);
-                          e.buf(4, part);
-                          e.val(5, p);
-                          e.dispatch((mats[0].N + bn - 1) / bn, (T + bm - 1) / bm, ksp, th);
-                          e.use(red);
-                          e.buf(0, part); e.buf(1, Y[0]);
-                          e.val(2, p);
-                          const uint32_t n4 = uint32_t(T) * mats[0].N / 4;
-                          e.dispatch((n4 + 255) / 256, 1, 1, 256);
-                        },
-                        false});
           continue;
         }
         if (spec.rfind("qmrs_", 0) == 0) {  // multi-projection qmr: the whole group in one dispatch

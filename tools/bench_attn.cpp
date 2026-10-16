@@ -2,7 +2,7 @@
 // 16 query heads / 2 kv heads (Qwen3.5/3.6 shapes; NI_HQ=24 NI_HKV=4 for the 27B's G=6).
 // usage: bench_attn [T] [L] kernels...
 // Short-prefill forms (NI_SHORTPF): attn_prefill11g (rows = (query, head) pairs of one KV head),
-// attn_prefill11s:NS / attn_prefill11gs:NS (keys split over NS threadgroups + attn11_reduce;
+// attn_prefill11gs:NS (the same with the keys split over NS threadgroups + attn11_reduce;
 // NS = auto: the engine's choice).
 // Each kernel's output is checked against a CPU reference (double precision) on a few sampled
 // queries (block edges, the last partial block) x all heads: err = max |gpu - ref| / max |ref|.
