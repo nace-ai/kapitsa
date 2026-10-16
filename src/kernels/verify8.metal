@@ -512,20 +512,14 @@ NI_QMM8(qmm8_b8_nf2, 8, 2, false)
 NI_QMM8(qmm8x2_b4_nf1, 4, 1, true)
 NI_QMM8(qmm8x2_b8_nf1, 8, 1, true)
 NI_QMM8(qmm8pf_b4_nf1, 4, 1, false, 1)
-NI_QMM8(qmm8pf_b4_nf2, 4, 2, false, 1)
+NI_QMM8(qmm8pf_b4_nf2, 4, 2, false, 1)  // the default 4-bit GEMM
 NI_QMM8(qmm8pf_b4_nf4, 4, 4, false, 1)
-NI_QMM8(qmm8s_b4_nf1, 4, 1, false, 2)
 NI_QMM8(qmm8s_b4_nf2, 4, 2, false, 2)
-NI_QMM8(qmm8s_b4_nf4, 4, 4, false, 2)
-NI_QMM8(qmm8pfs_b4_nf1, 4, 1, false, 3)
 NI_QMM8(qmm8pfs_b4_nf2, 4, 2, false, 3)
-NI_QMM8(qmm8pfs_b4_nf4, 4, 4, false, 3)
-NI_QMM8(qmm8abl1_b4_nf2, 4, 2, false, 4)
-NI_QMM8(qmm8abl2_b4_nf2, 4, 2, false, 5)
-NI_QMM8(qmm8t_b4_nf1, 4, 1, false, 6)
-NI_QMM8(qmm8t_b4_nf2, 4, 2, false, 6)
-NI_QMM8(qmm8t_b4_nf4, 4, 4, false, 6)
-NI_QMM8(qmm8abl3_b4_nf2, 4, 2, false, 7)
+// Experiments measured in docs/PERF.md (not instantiated to keep the library small; add the line to
+// reproduce): NI_QMM8(qmm8abl1_b4_nf2, 4, 2, false, 4)  no MMAs; NI_QMM8(qmm8abl2_b4_nf2, 4, 2, false, 5)
+// cache-resident weights; NI_QMM8(qmm8t_b4_nf2, 4, 2, false, 6) threadgroup-staged table (ks = 1);
+// NI_QMM8(qmm8abl3_b4_nf2, 4, 2, false, 7) staged table without table reads.
 
 // ---- gate/up + SwiGLU, writing the down projection's input table ----
 // h[t][n] = half(silu(x_t . Wg[n]) * (x_t . Wu[n])) for all 8 rows, stored straight into an X8 table of
@@ -735,55 +729,6 @@ struct Moe8PlanParams {
 }
 
 // ---- scalar expert passes for experts used by 1-2 rows ----
-// The weights are read once for the tile's rows (dequantized in registers: AND + convert per value,
-// one FMA per value and row, x pre-scaled for the shift-free nibbles as qmv2_rows), so a lightly used
-// expert costs its bytes, not an 8-row MMA tile. ROWS output columns per simdgroup.
-template <int ROWS>
-NI_INLINE void v8s_dot2(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
-                        const device float* x0, const device float* x1, uint K, uint row0, uint lane,
-                        thread float (&acc)[ROWS][2]) {
-  constexpr int VPL = 16;
-  const uint wpr = K / 8, gpr = K / 64;
-  for (int r = 0; r < ROWS; ++r) acc[r][0] = acc[r][1] = 0.0f;
-  for (uint k0 = lane * VPL; k0 < K; k0 += 32 * VPL) {
-    float xv[2][VPL];
-    float xs[2];
-    _Pragma("clang loop unroll(full)")
-    for (int t = 0; t < 2; ++t) {
-      const device float* xr = t ? x1 : x0;
-      xs[t] = 0.0f;
-      _Pragma("clang loop unroll(full)")
-      for (int i = 0; i < VPL / 4; ++i) {
-        const float4 v = ((const device float4*)(xr + k0))[i];
-        xs[t] += (v.x + v.y) + (v.z + v.w);
-        _Pragma("clang loop unroll(full)")
-        for (int e = 0; e < 4; ++e) xv[t][i * 4 + e] = v[e] * float(1.0f / float(1u << (4 * ((i * 4 + e) % 8))));
-      }
-    }
-    const uint g = k0 / 64, wo = k0 / 8;
-    _Pragma("clang loop unroll(full)")
-    for (int r = 0; r < ROWS; ++r) {
-      const uint row = row0 + r;
-      const uint2 wv = *(const device uint2*)(w + row * wpr + wo);
-      float d0 = 0.0f, d1 = 0.0f;
-      _Pragma("clang loop unroll(full)")
-      for (int j = 0; j < 16; ++j) {
-        const float q = float((j < 8 ? wv.x : wv.y) & (15u << (4 * (j % 8))));
-        d0 = fma(q, xv[0][j], d0);
-        d1 = fma(q, xv[1][j], d1);
-      }
-      const float s = float(scales[row * gpr + g]), b = float(biases[row * gpr + g]);
-      acc[r][0] += s * d0 + b * xs[0];
-      acc[r][1] += s * d1 + b * xs[1];
-    }
-  }
-  _Pragma("clang loop unroll(full)")
-  for (int r = 0; r < ROWS; ++r) {
-    acc[r][0] = simd_sum(acc[r][0]);
-    acc[r][1] = simd_sum(acc[r][1]);
-  }
-}
-
 struct Moe8sParams {
   uint K, N;            // input width, output columns
   uint w_stride, s_stride;
@@ -791,150 +736,11 @@ struct Moe8sParams {
   uint x_ld;            // floats per input row
 };
 
-// gate/up + SwiGLU of scalar tile s: hs[(2 s + i) * N + n] = silu(g) * u for its rows i < 2.
-// grid (N / (2 * nsg), max(S, 1)); xn: [8][x_ld] normalized fp32 rows.
-[[kernel]] void moe8s_gu(const device uint32_t* Wg [[buffer(0)]], const device bfloat* Sg [[buffer(1)]],
-                         const device bfloat* Bg [[buffer(2)]], const device uint32_t* Wu [[buffer(3)]],
-                         const device bfloat* Su [[buffer(4)]], const device bfloat* Bu [[buffer(5)]],
-                         const device float* xn [[buffer(6)]], device float* hs [[buffer(7)]],
-                         constant Moe8sParams& p [[buffer(8)]], const device uint* sm [[buffer(9)]],
-                         const device uint* ntiles [[buffer(10)]], uint2 tg [[threadgroup_position_in_grid]],
-                         uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
-                         uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  if (tg.y >= ntiles[1]) return;
-  const uint e = sm[tg.y], t0 = sm[64 + 2 * tg.y], t1r = sm[64 + 2 * tg.y + 1];
-  const bool two = t1r != 0xffffffffu;
-  const uint t1 = two ? t1r : t0;
-  constexpr int ROWS = 2;
-  const uint row0 = (tg.x * nsg + sg) * ROWS;
-  if (row0 >= p.N) return;
-  const device float* xs = xn + t0 * p.x_ld;
-  const device float* xs1 = xn + t1 * p.x_ld;
-  float ag[ROWS][2], au[ROWS][2];
-  v8s_dot2<ROWS>(Wg + e * p.w_stride, Sg + e * p.s_stride, Bg + e * p.s_stride, xs, xs1, p.K, row0, lane, ag);
-  v8s_dot2<ROWS>(Wu + e * p.w_stride, Su + e * p.s_stride, Bu + e * p.s_stride, xs, xs1, p.K, row0, lane, au);
-  if (lane == 0)
-    for (int r = 0; r < ROWS; ++r) {
-      hs[(2 * tg.y) * p.N + row0 + r] = silu(ag[r][0]) * au[r][0];
-      if (two) hs[(2 * tg.y + 1) * p.N + row0 + r] = silu(ag[r][1]) * au[r][1];
-    }
-}
-
-// down of scalar tile s: out[(t * k + slot) * N + n] for its rows. grid (N / (2 * nsg), max(S, 1)).
-[[kernel]] void moe8s_down(const device uint32_t* W [[buffer(0)]], const device bfloat* S [[buffer(1)]],
-                           const device bfloat* B [[buffer(2)]], const device float* hs [[buffer(3)]],
-                           device float* out [[buffer(4)]], constant Moe8sParams& p [[buffer(5)]],
-                           const device uint* sm [[buffer(6)]], const device uint* ntiles [[buffer(7)]],
-                           uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                           uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                           uint lane [[thread_index_in_simdgroup]]) {
-  if (tg.y >= ntiles[1]) return;
-  const uint e = sm[tg.y];
-  const uint t0 = sm[64 + 2 * tg.y], t1r = sm[64 + 2 * tg.y + 1];
-  const uint j0 = sm[192 + 2 * tg.y], j1 = sm[192 + 2 * tg.y + 1];
-  const bool two = t1r != 0xffffffffu;
-  constexpr int ROWS = 2;
-  const uint row0 = (tg.x * nsg + sg) * ROWS;
-  if (row0 >= p.N) return;
-  const device float* xs = hs + (2 * tg.y) * p.K;
-  const device float* xs1 = hs + (2 * tg.y + (two ? 1 : 0)) * p.K;
-  float a[ROWS][2];
-  v8s_dot2<ROWS>(W + e * p.w_stride, S + e * p.s_stride, B + e * p.s_stride, xs, xs1, p.K, row0, lane, a);
-  if (lane == 0)
-    for (int r = 0; r < ROWS; ++r) {
-      out[(t0 * p.k + j0) * p.N + row0 + r] = a[r][0];
-      if (two) out[(t1r * p.k + j1) * p.N + row0 + r] = a[r][1];
-    }
-}
-
-// Expert down projections: tile u reads its h table (h_stride / hs_stride apart) and writes row t's
-// output to out[(t * k + slot) * N] for the rows that route to it (shared tile: sh_out[t * N]).
-// grid (N / (8 NF cs), tiles), cs = simdgroups per threadgroup.
-struct Moe8DownParams {
-  uint K;          // expert intermediate (input width)
-  uint N;          // hidden (output width)
-  uint w_stride, s_stride;
-  uint h_stride, hs_stride;
-  uint k;
-};
-
-template <int NF>
-NI_INLINE void moe8_down_impl(const device uint32_t* W, const device ushort* S, const device ushort* B,
-                              const device uint32_t* SW, const device ushort* SS, const device ushort* SB,
-                              const device half* hT, const device float* hS, device float* out,
-                              device float* sh_out, constant Moe8DownParams& p, const device uint* tiles,
-                              const device uint* ntiles, const device uint* slot, uint2 tg, uint sg, uint nsg,
-                              uint lane) {
-  if (tg.y >= ntiles[0]) return;
-  const uint e = tiles[tg.y];
-  const bool shared = e == 0xffffffffu;
-  const device uint32_t* Wb = shared ? SW : W + e * p.w_stride;
-  const device ushort* Sb = shared ? SS : S + e * p.s_stride;
-  const device ushort* Bb = shared ? SB : B + e * p.s_stride;
-  const uint gpr = p.K / 64, wpr = p.K / 8;
-  const uint2 rc = v8_lane(lane);
-  const uint fm = rc.x, fn = rc.y, q = fn / 2;
-  const uint n0 = (tg.x * nsg + sg) * 8 * NF;
-  const device uint32_t* wp[NF];
-  const device ushort* sp[NF];
-  const device ushort* bp[NF];
-  float2 acc[NF];
-  _Pragma("clang loop unroll(full)")
-  for (int f = 0; f < NF; ++f) {
-    const uint row = n0 + 8 * f + fm;
-    wp[f] = Wb + row * wpr + 2 * q;
-    sp[f] = Sb + row * gpr;
-    bp[f] = Bb + row * gpr;
-    acc[f] = float2(0.0f);
-  }
-  const device half* ht = hT + tg.y * p.h_stride;
-  const device float* hs = hS + tg.y * p.hs_stride;
-  v8_run<4, NF>(wp, sp, bp, ht, hs, ht, hs, 0, gpr, lane, fn, acc);
-  _Pragma("clang loop unroll(full)")
-  for (int e2 = 0; e2 < 2; ++e2) {
-    const uint t = fn + e2, j = slot[tg.y * 8 + t];
-    if (j == 0xffffffffu) continue;
-    device float* o = shared ? sh_out + t * p.N : out + (t * p.k + j) * p.N;
-    _Pragma("clang loop unroll(full)")
-    for (int f = 0; f < NF; ++f) o[n0 + 8 * f + fm] = acc[f][e2];
-  }
-}
-
-#define NI_MOE8_DOWN(NAME, NF)                                                                                  \
-  [[kernel]] void NAME(const device uint32_t* W [[buffer(0)]], const device ushort* S [[buffer(1)]],           \
-                       const device ushort* B [[buffer(2)]], const device uint32_t* SW [[buffer(3)]],          \
-                       const device ushort* SS [[buffer(4)]], const device ushort* SB [[buffer(5)]],           \
-                       const device half* hT [[buffer(6)]], const device float* hS [[buffer(7)]],              \
-                       device float* out [[buffer(8)]], device float* sh_out [[buffer(9)]],                    \
-                       constant Moe8DownParams& p [[buffer(10)]], const device uint* tiles [[buffer(11)]],     \
-                       const device uint* ntiles [[buffer(12)]], const device uint* slot [[buffer(13)]],       \
-                       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],  \
-                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {     \
-    moe8_down_impl<NF>(W, S, B, SW, SS, SB, hT, hS, out, sh_out, p, tiles, ntiles, slot, tg, sg, nsg, lane);   \
-  }
-NI_MOE8_DOWN(moe8_down_nf1, 1)
-NI_MOE8_DOWN(moe8_down_nf2, 2)
-
-// x[t] += sum_j w[t][j] * out[t * k + j] + w[t][k] * sh_out[t]   (slot order, then the shared expert).
-// grid (N / 256, R) x 64 threads (float4 per thread).
-struct Moe8CombineParams {
-  uint N, k;
-};
-[[kernel]] void moe8_combine(const device float4* out [[buffer(0)]], const device float4* sh_out [[buffer(1)]],
-                             const device float* wts [[buffer(2)]], device float4* x [[buffer(3)]],
-                             constant Moe8CombineParams& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
-                             uint2 tid2 [[thread_position_in_threadgroup]]) {
-  const uint t = tg.y, i = tg.x * 64 + tid2.x, n4 = p.N / 4;
-  if (i >= n4) return;
-  float4 acc = float4(0.0f);
-  for (uint j = 0; j < p.k; ++j) acc += wts[t * (p.k + 1) + j] * out[(t * p.k + j) * n4 + i];
-  acc += wts[t * (p.k + 1) + p.k] * sh_out[t * n4 + i];
-  x[t * n4 + i] += acc;
-}
-
-// v2 of the scalar expert passes: the tile's (<= 2) input rows are staged once per threadgroup in
-// threadgroup memory and each simdgroup produces ROWS output columns, so the inputs cost a fraction
-// of the weight bytes (v1 re-read them from device memory per 2 columns: 4x the weight traffic).
+// The tile's (<= 2) input rows are staged once per threadgroup in threadgroup memory and each simdgroup
+// produces ROWS output columns from register-dequantized weights (AND + convert per value, one FMA per
+// value and row, x pre-scaled for the shift-free nibbles as qmv2_rows), so a lightly used expert costs
+// its bytes, not an 8-row MMA tile. (A first version read the inputs from device memory per 2 columns,
+// 4x the weight traffic, and was slower than the MMA tiles.)
 template <int ROWS>
 NI_INLINE void v8s_dot2t(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
                          threadgroup const float* x0, threadgroup const float* x1, uint K, uint row0, uint lane,

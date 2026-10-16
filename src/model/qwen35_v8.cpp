@@ -256,11 +256,9 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.dispatch(R, 1, 1, 32);
   static const int dn_nf = env_int("NI_V8_MOE_NF", 2), dn_cs = 4;
   if (D % (8 * dn_nf * dn_cs)) fatal("moe8: hidden %d", D);
-  // scalar passes: 8 simdgroups x SR columns per threadgroup (v2: x staged, 4 columns; v1: 2)
-  static const bool sv2 = env_int("NI_V8_MOE_SV", 2) == 2;
-  constexpr uint32_t s_nsg = 8;
-  const uint32_t SR = sv2 ? 4 : 2;
-  if (small && sv2 && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
+  // scalar passes: 8 simdgroups x 4 columns per threadgroup, inputs staged (hidden <= 2048)
+  constexpr uint32_t s_nsg = 8, SR = 4;
+  if (small && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
   kp::Moe8Plan pp{uint32_t(R), uint32_t(k), uint32_t(E), I / 64, uint32_t(D / (8 * dn_nf * dn_cs)), uint32_t(li),
                   uint32_t(small), I / (SR * s_nsg), uint32_t(D) / (SR * s_nsg)};
   e.use(pipe8("moe8_plan"));
@@ -292,7 +290,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.dispatch_indirect(v8args_, 12, 32 * dn_cs);
   if (small) {
     kp::Moe8s sp{uint32_t(D), I, wstride, sstride, uint32_t(k), uint32_t(D)};
-    e.use(pipe8(sv2 ? "moe8s2_gu" : "moe8s_gu"));
+    e.use(pipe8("moe8s2_gu"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
     e.buf(6, v8xn_); e.buf(7, v8hsc_);
@@ -300,7 +298,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
     e.buf(9, v8sm_); e.buf(10, v8nt_);
     e.dispatch_indirect(v8args_, 24, 32 * s_nsg);
     kp::Moe8s dq{I, uint32_t(D), dw, ds, uint32_t(k), I};
-    e.use(pipe8(sv2 ? "moe8s2_down" : "moe8s_down"));
+    e.use(pipe8("moe8s2_down"));
     e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
     e.buf(3, v8hsc_); e.buf(4, v8out_);
     e.val(5, dq);
