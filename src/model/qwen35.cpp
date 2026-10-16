@@ -655,7 +655,11 @@ void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 // NI_QMM_GU (boolean, read once, needs NI_QMM): dense MLP / shared-expert gate and up projections
 // and SwiGLU in one qmr_gu dispatch writing the half h rows (no fp32 hg/hu, no swiglu pass).
 bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M) {
-  static const bool on = env_on("NI_QMM_GU") && qmr_sel().on;
+  static const bool on = [] {
+    const bool v = env_on("NI_QMM_GU") && qmr_sel().on;
+    if (v) logi("NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)");
+    return v;
+  }();
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
   if (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K) return false;
   const char* n = "qmr_gu_k32_w14_m32_n64";
