@@ -1,0 +1,622 @@
+// GPU + Neural Engine FFN split (see ffn_split.h). Design from Splash (incoai/splash,
+// Apache-2.0, runtime/ops/AneFfn.cpp); our code.
+#include "ane/ffn_split.h"
+#include "util/log.h"
+
+#include <algorithm>
+#include <bit>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <random>
+#include <stdexcept>
+
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+
+namespace ni::ane {
+namespace {
+
+constexpr uint32_t kBlock = 512;  // intermediate rotation block (and the channel unit)
+
+struct RotP {
+  uint32_t T, D;
+};
+struct PackP {
+  uint32_t T, D, ch0, stride;
+};
+struct WP {
+  uint32_t row0, col0, width, wpr, gpr, stride, sstride;
+};
+struct JoinP {
+  uint32_t T, D, ystride;
+};
+
+Pipeline pipe(const char* n) { return Gpu::get().pipeline(n); }
+
+}  // namespace
+
+// System-wide wired memory (MB): the ANE service's buffers are wired kernel memory that no
+// process footprint shows, so the split reports the change around its program's load and first
+// evaluations (other processes add noise).
+double wired_mb() {
+  vm_statistics64_data_t v;
+  mach_msg_type_number_t n = HOST_VM_INFO64_COUNT;
+  if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&v, &n) != KERN_SUCCESS) return 0;
+  return double(v.wire_count) * double(vm_kernel_page_size) / 1e6;
+}
+
+namespace {
+
+std::string fp16lit(double v) {
+  char t[48];
+  snprintf(t, sizeof t, "fp16(%a)", v);
+  return t;
+}
+std::string dims(uint64_t r, uint64_t w) { return "[1, 1, " + std::to_string(r) + ", " + std::to_string(w) + "]"; }
+std::string tens(const char* ty, uint64_t r, uint64_t w) { return std::string("tensor<") + ty + ", " + dims(r, w) + ">"; }
+
+std::vector<float> make_signs() {
+  std::mt19937 g(20261016);
+  std::vector<float> s(kBlock);
+  for (float& v : s) v = (g() & 1) ? -1.f : 1.f;
+  return s;
+}
+
+}  // namespace
+
+FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(std::move(layers)), cfg_(c) {
+  const double t0 = now_ms();
+  if (const std::string& why = unavailable(); !why.empty()) throw std::runtime_error(why);
+  if (layers_.empty()) throw std::runtime_error("no layers");
+  hidden_ = layers_[0].gate.K;
+  inter_ = layers_[0].gate.N;
+  for (const FfnLayer& L : layers_)
+    if (L.gate.K != hidden_ || L.up.K != hidden_ || L.gate.N != inter_ || L.up.N != inter_ || L.down.N != hidden_ ||
+        L.down.K != inter_)
+      throw std::runtime_error("FFN layers differ in shape");
+  if (hidden_ % kSeg) throw std::runtime_error("hidden size is not whole 2560-channel segments");
+  if ((hidden_ / 128) % 8 || hidden_ / 128 / 8 > 8) throw std::runtime_error("hidden size ane_rotate does not take");
+  if (inter_ % kUnit || inter_ < 2 * kUnit) throw std::runtime_error("intermediate size is not whole 512-channel units");
+  if (c.units < 1 || c.units > inter_ / kUnit)
+    throw std::runtime_error("units must be in 1.." + std::to_string(inter_ / kUnit));
+  units_ = c.units;
+  ane_ = units_ * kUnit;
+  gpu_ = inter_ - ane_;
+  for (uint32_t b = 0; b < ane_; b += kSeg) dseg_.push_back(std::min(kSeg, ane_ - b));
+  min_rows_ = std::clamp<uint32_t>(c.min_rows, 1, kMaxRows);
+  fn_rows_ = c.fn_rows;
+  if (fn_rows_.empty())
+    for (uint32_t r = std::max<uint32_t>(128, (min_rows_ + 127) / 128 * 128); r <= kMaxRows; r += 128) fn_rows_.push_back(r);
+  std::sort(fn_rows_.begin(), fn_rows_.end());
+  if (fn_rows_.back() != kMaxRows) fn_rows_.push_back(kMaxRows);
+  for (uint32_t r : fn_rows_)
+    if (r % 32 || r > kMaxRows) throw std::runtime_error("function rows must be multiples of 32 up to 2048");
+
+  // ---- memory ----
+  Gpu& g = Gpu::get();
+  const uint32_t nin = hidden_ / kSeg;
+  auto surf = [&](uint32_t r, uint32_t w, bool f16) {
+    Surface s = make_surface(r, w, f16);
+    bytes_ += s.bytes;
+    return s;
+  };
+  if (c.lanes < 1 || c.lanes > 2) throw std::runtime_error("lanes must be 1 or 2");
+  for (int l = 0; l < c.lanes; ++l) {
+    for (uint32_t k = 0; k < nin; ++k) lane_[l].x.push_back(surf(kSeg, kMaxRows, false));
+    lane_[l].tx = surf(1, kMaxRows, true);
+    lane_[l].y = surf(hidden_ + 1, kMaxRows, true);
+  }
+  for (Set& s : set_) {
+    for (uint32_t k = 0; k < nin; ++k) {
+      s.wg.push_back(surf(ane_, kSeg, false));
+      s.wu.push_back(surf(ane_, kSeg, false));
+    }
+    for (uint32_t d : dseg_) s.wd.push_back(surf(hidden_, d, false));
+    s.sg = surf(ane_, 1, true);
+    s.su = surf(ane_, 1, true);
+    s.sd = surf(hidden_, 1, true);
+  }
+  rot_ = g.alloc(size_t(kMaxRows) * hidden_ * 2, "ane rotated input");
+  signs_ = g.alloc(kBlock * 4, "ane signs");
+  status_ = g.alloc(16, "ane status");
+  rs_ = g.alloc(layers_.size() * (2 * ane_ + hidden_) * 2, "ane row scales");
+  bytes_ += rot_.size + signs_.size + status_.size + rs_.size;
+  signs_host_ = make_signs();
+  memcpy(signs_.ptr(), signs_host_.data(), kBlock * 4);
+  memset(status_.ptr(), 0, 16);
+  g.make_resident({rot_, signs_, status_, rs_});
+  {
+    std::vector<Buffer> sb;
+    for (int l = 0; l < c.lanes; ++l) {
+      for (auto& s : lane_[l].x) sb.push_back(s.buf);
+      sb.push_back(lane_[l].tx.buf);
+      sb.push_back(lane_[l].y.buf);
+    }
+    for (Set& s : set_) {
+      for (auto* v : {&s.wg, &s.wu, &s.wd})
+        for (auto& x : *v) sb.push_back(x.buf);
+      sb.push_back(s.sg.buf);
+      sb.push_back(s.su.buf);
+      sb.push_back(s.sd.buf);
+    }
+    g.make_resident(sb);
+  }
+
+  // ---- per-row int8 scales (cached on disk) ----
+  const double t1 = now_ms();
+  compute_row_scales();
+  const double scales_ms = now_ms() - t1;
+
+  // ---- the program: one function per row count ----
+  std::string mil = "program(1.3)\n{\n";
+  for (uint32_t r : fn_rows_) mil += function(r);
+  mil += "}\n";
+  std::vector<_Float16> rot(size_t(ane_) * kBlock);
+  const float nrm = 1.f / std::sqrt(float(kBlock));
+  for (uint32_t ch = 0; ch < ane_; ++ch)
+    for (uint32_t i = 0; i < kBlock; ++i) {
+      const uint32_t o = ch % kBlock;
+      const float h = (std::popcount(o & i) & 1) ? -1.f : 1.f;
+      rot[size_t(ch) * kBlock + i] = _Float16(signs_host_[o] * h * nrm);
+    }
+  const std::vector<uint8_t> blob = fp16_blob(rot.data(), rot.size());
+  const double t2 = now_ms();
+  wired0_ = wired_mb();
+  prog_ = std::make_unique<Program>(mil, blob, "nace-infer-ane");
+  wired_load_ = wired_mb() - wired0_;
+  const double prog_ms = now_ms() - t2;
+
+  // ---- bindings: inputs in each procedure's order, per weight set and lane ----
+  struct In {
+    std::string name;
+    const Surface* s[2];
+  };
+  for (int lane = 0; lane < c.lanes; ++lane) {
+    const Lane& La = lane_[lane];
+    std::vector<In> ins;
+    for (uint32_t k = 0; k < nin; ++k) ins.push_back({"x" + std::to_string(k), {&La.x[k], &La.x[k]}});
+    ins.push_back({"tx", {&La.tx, &La.tx}});
+    for (uint32_t k = 0; k < nin; ++k) {
+      ins.push_back({"wg" + std::to_string(k), {&set_[0].wg[k], &set_[1].wg[k]}});
+      ins.push_back({"wu" + std::to_string(k), {&set_[0].wu[k], &set_[1].wu[k]}});
+    }
+    ins.push_back({"sg", {&set_[0].sg, &set_[1].sg}});
+    ins.push_back({"su", {&set_[0].su, &set_[1].su}});
+    for (size_t i = 0; i < dseg_.size(); ++i) ins.push_back({"wd" + std::to_string(i), {&set_[0].wd[i], &set_[1].wd[i]}});
+    ins.push_back({"sd", {&set_[0].sd, &set_[1].sd}});
+    for (uint32_t r : fn_rows_) {
+      const int p = prog_->proc("ffn" + std::to_string(r));
+      if (p < 0) throw std::runtime_error("ANE program lacks ffn" + std::to_string(r));
+      for (int s = 0; s < 2; ++s) {
+        std::vector<const Surface*> v;
+        for (const std::string& n : prog_->inputs(p)) {
+          auto it = std::find_if(ins.begin(), ins.end(), [&](const In& x) { return x.name == n; });
+          if (it == ins.end()) throw std::runtime_error("ANE program has an unknown input " + n);
+          v.push_back(it->s[s]);
+        }
+        bind_[s][lane].push_back(prog_->bind(p, v, La.y));
+      }
+    }
+  }
+  h_ = std::make_unique<Handoff>(2.0);
+  startup_ms_ = now_ms() - t0;
+  char buf[256];
+  snprintf(buf, sizeof buf, "row scales %.0f ms, program %s %.0f ms + load %.0f ms (%zu functions, MIL %zu KB)",
+           scales_ms, prog_->was_cached ? "cached" : "compiled", prog_->compile_ms, prog_->load_ms, fn_rows_.size(),
+           mil.size() / 1024);
+  note_ = buf;
+  (void)prog_ms;
+}
+
+FfnSplit::~FfnSplit() {
+  h_.reset();
+  for (auto& b : bind_)
+    for (auto& l : b) l.clear();
+  prog_.reset();
+  for (Lane& l : lane_) {
+    for (auto& s : l.x) free_surface(s);
+    if (l.tx.ref) free_surface(l.tx);
+    if (l.y.ref) free_surface(l.y);
+  }
+  for (Set& s : set_) {
+    for (auto* v : {&s.wg, &s.wu, &s.wd})
+      for (auto& x : *v) free_surface(x);
+    free_surface(s.sg);
+    free_surface(s.su);
+    free_surface(s.sd);
+  }
+  Gpu& g = Gpu::get();
+  g.release(rot_);
+  g.release(signs_);
+  g.release(status_);
+  g.release(rs_);
+}
+
+// The ANE's share of the FFN over R tokens (layout [1,1,channels,tokens], tokens innermost).
+// int8 values are read as code/128 so fp16 sums cannot overflow; per-row weight scales and the
+// per-token input scale carry the magnitude back. silu(g) = g/2 (1 + tanh(g/2)) (Splash found the
+// ANE's sigmoid much less accurate for small gate values). The intermediate is rotated in
+// 512-blocks (a grouped 1x1 conv against the program's only constant) and quantized per token;
+// the output is down's partial before its token scales plus a last row holding the intermediate's
+// per-token scale, applied with the input's by the GPU join in fp32. Up's token scale is left out
+// (applied in the join): the true output is partial * hscale * tx.
+std::string FfnSplit::function(uint32_t R) const {
+  const uint32_t C = ane_, nseg = hidden_ / kSeg;
+  std::string par, b;
+  auto line = [&](const std::string& t) { b += "        " + t + ";\n"; };
+  auto f16 = [&](const std::string& n, uint64_t r, uint64_t w, const std::string& e) {
+    line(tens("fp16", r, w) + " " + n + " = " + e);
+  };
+  auto input = [&](const std::string& name, const Surface& s, uint32_t rows, uint32_t width) {
+    par += (par.empty() ? "" : ", ") + s.buffer_type(rows, width) + " " + name;
+    line(tens(s.mil_type().c_str(), rows, width) + " " + name + "_t = tensor_buffer_to_tensor<ios17>(input = " + name +
+         ")");
+  };
+  for (uint32_t k = 0; k < nseg; ++k) input("x" + std::to_string(k), lane_[0].x[k], kSeg, R);
+  input("tx", lane_[0].tx, 1, R);
+  for (uint32_t k = 0; k < nseg; ++k) {
+    input("wg" + std::to_string(k), set_[0].wg[k], C, kSeg);
+    input("wu" + std::to_string(k), set_[0].wu[k], C, kSeg);
+  }
+  input("sg", set_[0].sg, C, 1);
+  input("su", set_[0].su, C, 1);
+  for (size_t i = 0; i < dseg_.size(); ++i) input("wd" + std::to_string(i), set_[0].wd[i], hidden_, dseg_[i]);
+  input("sd", set_[0].sd, hidden_, 1);
+
+  const std::string unit = fp16lit(1.0 / 128);
+  auto matmul = [&](const std::string& n, const std::string& w, const std::string& x, uint64_t r, uint64_t k) {
+    f16(w + "_d", r, k, "dequantize(input = " + w + "_t, scale = " + unit + ")");
+    line(tens("fp16", r, R) + " " + n + " = matmul(transpose_x = bool(false), transpose_y = bool(false), x = " + w +
+         "_d, y = " + x + ")");
+  };
+  auto sum = [&](const std::string& p, size_t n, uint64_t r) {
+    std::string t = p + "0";
+    for (size_t k = 1; k < n; ++k) {
+      std::string nx = p + "_s" + std::to_string(k);
+      f16(nx, r, R, "add(x = " + t + ", y = " + p + std::to_string(k) + ")");
+      t = nx;
+    }
+    return t;
+  };
+  for (uint32_t k = 0; k < nseg; ++k)
+    f16("x" + std::to_string(k) + "_d", kSeg, R, "dequantize(input = x" + std::to_string(k) + "_t, scale = " + unit + ")");
+  for (const char* p : {"g", "u"}) {
+    for (uint32_t k = 0; k < nseg; ++k)
+      matmul(std::string(p) + "m" + std::to_string(k), std::string("w") + p + std::to_string(k),
+             "x" + std::to_string(k) + "_d", C, kSeg);
+    f16(std::string(p) + "s", C, R, "mul(x = " + sum(std::string(p) + "m", nseg, C) + ", y = s" + p + "_t)");
+  }
+  f16("gt", C, R, "mul(x = gs, y = tx_t)");
+  f16("gh", C, R, "mul(x = gt, y = " + fp16lit(0.5) + ")");
+  f16("th", C, R, "tanh(x = gh)");
+  f16("tp", C, R, "add(x = th, y = " + fp16lit(1.0) + ")");
+  f16("si", C, R, "mul(x = gh, y = tp)");
+  f16("h", C, R, "mul(x = si, y = us)");
+  const std::string cs = std::to_string(C), rs = std::to_string(R);
+  line("tensor<fp16, [1, " + cs + ", 1, " + rs + "]> h4 = reshape(x = h, shape = tensor<int32, [4]>([1, " + cs + ", 1, " +
+       rs + "]))");
+  line("tensor<fp16, [" + cs + ", 512, 1, 1]> rot = const()[name = string(\"rot\"), val = tensor<fp16, [" + cs +
+       ", 512, 1, 1]>(BLOBFILE(path = string(\"@model_path/weights.bin\"), offset = uint64(64)))]");
+  line("tensor<fp16, [1, " + cs + ", 1, " + rs + "]> hr4 = conv(dilations = tensor<int32, [2]>([1, 1]), groups = int32(" +
+       std::to_string(C / kBlock) + "), pad = tensor<int32, [4]>([0, 0, 0, 0]), pad_type = string(\"valid\"), " +
+       "strides = tensor<int32, [2]>([1, 1]), weight = rot, x = h4)");
+  f16("hr", C, R, "reshape(x = hr4, shape = tensor<int32, [4]>(" + dims(C, R) + "))");
+  f16("ha", C, R, "abs(x = hr)");
+  f16("pk", 1, R, "reduce_max(x = ha, axes = tensor<int32, [1]>([2]), keep_dims = bool(true))");
+  f16("fl", 1, R, "maximum(x = pk, y = " + fp16lit(0x1p-9) + ")");
+  f16("iv", 1, R, "real_div(x = " + fp16lit(127.0) + ", y = fl)");
+  f16("hs", C, R, "mul(x = hr, y = iv)");
+  line(tens("int8", C, R) + " hq = quantize(input = hs, scale = fp16(1), output_dtype = string(\"int8\"))");
+  f16("hd", C, R, "dequantize(input = hq, scale = " + unit + ")");
+  f16("hsc", 1, R, "mul(x = fl, y = " + fp16lit(128.0 / 127.0) + ")");
+  uint32_t begin = 0;
+  for (size_t i = 0; i < dseg_.size(); ++i) {
+    const uint32_t w = dseg_[i];
+    const std::string s = "hd" + std::to_string(i);
+    f16(s, w, R, "slice_by_size(x = hd, begin = tensor<int32, [4]>([0, 0, " + std::to_string(begin) +
+                     ", 0]), size = tensor<int32, [4]>(" + dims(w, R) + "))");
+    matmul("dm" + std::to_string(i), "wd" + std::to_string(i), s, hidden_, w);
+    begin += w;
+  }
+  f16("ds", hidden_, R, "mul(x = " + sum("dm", dseg_.size(), hidden_) + ", y = sd_t)");
+  f16("yt", hidden_ + 1, R, "concat(axis = int32(2), interleave = bool(false), values = (ds, hsc))");
+  const Surface& Y = lane_[0].y;
+  line(Y.buffer_type(hidden_ + 1, R) +
+       " y = tensor_to_tensor_buffer<ios17>(input = yt, interleave_factors = tensor<uint8, [4]>([1, 1, 1, 1]), "
+       "strides = tensor<int64, [4]>(" + Y.strides(Y.rows) + "))");
+  return "    func ffn" + std::to_string(R) + "<ios18>(" + par + ") {\n" + b + "    } -> (y);\n";
+}
+
+Buffer FfnSplit::row_scales(int li, int which) const {
+  const size_t per = 2 * ane_ + hidden_;
+  const size_t off = (size_t(li) * per + size_t(which) * ane_) * 2;
+  return rs_.view(off, size_t(which == 2 ? hidden_ : ane_) * 2);
+}
+
+void FfnSplit::compute_row_scales() {
+  namespace fs = std::filesystem;
+  const size_t n = rs_.size;
+  std::string path;
+  if (!cfg_.cache_dir.empty() && !cfg_.model_key.empty()) {
+    path = cfg_.cache_dir + "/rowscales-" + cfg_.model_key + "-u" + std::to_string(units_) + ".bin";
+    std::ifstream f(path, std::ios::binary);
+    if (f) {
+      char magic[8] = {0};
+      uint64_t len = 0;
+      f.read(magic, 8);
+      f.read((char*)&len, 8);
+      if (f && !memcmp(magic, "NIANERS1", 8) && len == n) {
+        f.read((char*)rs_.ptr(), n);
+        if (f) {
+          note_ = "row scales from cache";
+          return;
+        }
+      }
+    }
+  }
+  auto e = Gpu::get().begin();
+  Pipeline p128 = pipe("ane_row_scale_b128"), p512 = pipe("ane_row_scale_b512");
+  for (size_t li = 0; li < layers_.size(); ++li) {
+    const FfnLayer& L = layers_[li];
+    for (int which = 0; which < 3; ++which) {
+      const Proj& P = which == 0 ? L.gate : which == 1 ? L.up : L.down;
+      WP w{};
+      uint32_t rows;
+      if (which < 2) {
+        w = WP{gpu_, 0, hidden_, hidden_ / 8, hidden_ / 64, 0, 0};
+        rows = ane_;
+        e->use(p128);
+      } else {
+        w = WP{0, gpu_, ane_, inter_ / 8, inter_ / 64, 0, 0};
+        rows = hidden_;
+        e->use(p512);
+      }
+      e->buf(0, P.w);
+      e->buf(1, P.s);
+      e->buf(2, P.b);
+      e->buf(3, row_scales(int(li), which));
+      e->buf(4, signs_);
+      e->val(5, w);
+      e->dispatch(rows / 8, 1, 1, 256);
+    }
+  }
+  e->commit_and_wait();
+  if (!path.empty()) {
+    std::error_code ec;
+    fs::create_directories(cfg_.cache_dir, ec);
+    const std::string tmp = path + ".tmp";
+    std::ofstream f(tmp, std::ios::binary);
+    const uint64_t len = n;
+    f.write("NIANERS1", 8);
+    f.write((const char*)&len, 8);
+    f.write((const char*)rs_.ptr(), n);
+    f.close();
+    if (f) fs::rename(tmp, path, ec);
+  }
+}
+
+bool FfnSplit::splits(int T) const { return T >= int(min_rows_) && T <= int(kMaxRows) && !h_->retired(); }
+
+int FfnSplit::fn_for(int T) const {
+  for (size_t i = 0; i < fn_rows_.size(); ++i)
+    if (fn_rows_[i] >= uint32_t(T)) return int(i);
+  throw std::logic_error("ANE split: no function of " + std::to_string(T) + " rows");
+}
+
+void FfnSplit::begin_chunk(int T) {
+  if (T < 1 || T > int(kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
+  fn_ = fn_for(T);
+  T_ = T;
+  jobs_ = 0;
+  lane_[0].done = lane_[1].done = 0;
+  *status_.as<uint32_t>() = 0;
+}
+
+void FfnSplit::stage_layer(Encoder& e, int li, int set) {
+  const FfnLayer& L = layers_.at(li);
+  const Set& S = set_[set];
+  e.use(pipe("ane_stage_b128"));
+  for (size_t k = 0; k < S.wg.size(); ++k)
+    for (int which = 0; which < 2; ++which) {
+      const Proj& P = which == 0 ? L.gate : L.up;
+      const Surface& out = which == 0 ? S.wg[k] : S.wu[k];
+      const Surface& so = which == 0 ? S.sg : S.su;
+      WP w{gpu_, uint32_t(k * kSeg), kSeg, hidden_ / 8, hidden_ / 64, out.stride, so.stride / 2};
+      e.buf(0, P.w);
+      e.buf(1, P.s);
+      e.buf(2, P.b);
+      e.buf(3, row_scales(li, which));
+      e.buf(4, out.buf);
+      e.buf(5, so.buf);
+      e.buf(6, signs_);
+      e.val(7, w);
+      e.dispatch(ane_ / 8, kSeg / 128, 1, 256);
+    }
+  e.use(pipe("ane_stage_b512"));
+  uint32_t col = gpu_;
+  for (size_t i = 0; i < S.wd.size(); ++i) {
+    WP w{0, col, dseg_[i], inter_ / 8, inter_ / 64, S.wd[i].stride, S.sd.stride / 2};
+    e.buf(0, L.down.w);
+    e.buf(1, L.down.s);
+    e.buf(2, L.down.b);
+    e.buf(3, row_scales(li, 2));
+    e.buf(4, S.wd[i].buf);
+    e.buf(5, S.sd.buf);
+    e.buf(6, signs_);
+    e.val(7, w);
+    e.dispatch(hidden_ / 8, dseg_[i] / 512, 1, 256);
+    col += dseg_[i];
+  }
+}
+
+void FfnSplit::pack(Encoder& e, int lane, const Buffer& xh, int T) {
+  const Lane& La = lane_[lane];
+  const uint32_t R = fn_rows_[fn_for(T)], tiles = R / 32;
+  e.use(pipe("ane_rotate"));
+  e.buf(0, xh);
+  e.buf(1, signs_);
+  e.buf(2, rot_);
+  e.buf(3, La.tx.buf);
+  e.val(4, RotP{uint32_t(T), hidden_});
+  e.dispatch(R, 1, 1, 256);
+  e.use(pipe("ane_pack"));
+  for (size_t k = 0; k < La.x.size(); ++k) {
+    e.buf(0, rot_);
+    e.buf(1, La.x[k].buf);
+    e.val(2, PackP{uint32_t(T), hidden_, uint32_t(k * kSeg), La.x[k].stride});
+    e.dispatch(tiles, kSeg / 32, 1, 32, 8);
+  }
+}
+
+void FfnSplit::launch(Encoder& e, int lane, int li, int T) {
+  const uint64_t ready = h_->next_ready(), done = h_->next_done();
+  const bool fault = cfg_.fault_layer == li && !fault_used_;
+  if (fault) fault_used_ = true;
+  std::shared_ptr<Program::Binding> b = bind_[li & 1][lane][fn_for(T)];
+  Program* prog = prog_.get();
+  h_->queue(ready, done, [prog, b, fault](void* rev, uint64_t w, void* dev, uint64_t s, Handoff::Report rep) {
+    if (fault) return;  // injected fault: never starts, so the watchdog must retire the split
+    prog->enqueue(*b, rev, w, dev, s, std::move(rep));
+  });
+  ++jobs_;
+  lane_[lane].done = done;
+  e.signal_event(h_->ready_event(), ready);
+}
+
+void FfnSplit::join(Encoder& e, int lane, const Buffer& x, int T) {
+  Lane& La = lane_[lane];
+  if (La.done) e.wait_event(h_->done_event(), La.done);
+  La.done = 0;
+  e.use(pipe("ane_join"));
+  e.buf(0, x);
+  e.buf(1, La.y.buf);
+  e.buf(2, La.tx.buf);
+  e.buf(3, status_);
+  e.val(4, JoinP{uint32_t(T), hidden_, La.y.stride / 2});
+  e.dispatch((uint32_t(T) + 31) / 32, hidden_ / 32, 1, 32, 8);
+}
+
+void FfnSplit::encode_layer(Encoder& e, int li, const Buffer& xh, const Buffer& x,
+                            const std::function<void(Encoder&)>& gpu_part, bool ane, bool stage) {
+  if (fn_ < 0) throw std::logic_error("ANE split: begin_chunk() first");
+  if (stage && li == 0) stage_layer(e, 0, 0);
+  pack(e, 0, xh, T_);
+  if (ane) launch(e, 0, li, T_);
+  gpu_part(e);
+  if (stage && li + 1 < int(layers_.size())) stage_layer(e, li + 1, (li + 1) & 1);
+  join(e, 0, x, T_);
+}
+
+bool FfnSplit::finish_chunk(double* ane_ms) {
+  double ms = 0;
+  bool ok = h_->finish(&ms);
+  if (*status_.as<uint32_t>()) {
+    h_->retire("the Neural Engine's output or its scales were not finite");
+    ok = false;
+  }
+  if (ane_ms) *ane_ms = ms;
+  fn_ = -1;
+  last_jobs_ = jobs_;
+  if (jobs_ && wired_run_ == 0) wired_run_ = wired_mb() - wired0_;
+  return ok;
+}
+
+void FfnSplit::retire(const std::string& why) { h_->retire(why); }
+bool FfnSplit::retired() const { return h_->retired(); }
+std::string FfnSplit::reason() const { return h_->reason(); }
+
+void FfnSplit::fill_partial(uint16_t bits) {
+  for (int l = 0; l < cfg_.lanes; ++l) {
+    uint16_t* p = lane_[l].y.buf.as<uint16_t>();
+    std::fill(p, p + lane_[l].y.bytes / 2, bits);
+  }
+}
+
+void FfnSplit::fill_status(uint32_t v) { *status_.as<uint32_t>() = v; }
+
+double FfnSplit::eval_sync(int set) {
+  if (fn_ < 0) throw std::logic_error("ANE split: begin_chunk() first");
+  return prog_->evaluate(*bind_[set][0][fn_]);
+}
+
+// ---- persisted configuration ----
+std::string cache_dir() {
+  const char* h = getenv("HOME");
+  return std::string(h && *h ? h : "/tmp") + "/.cache/nace-infer-models/ane-cache";
+}
+
+std::string model_key(const std::string& dir) {
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  const std::string real = fs::weakly_canonical(dir, ec).string();
+  uint64_t h = fnv1a(real.data(), real.size());
+  std::vector<std::string> files;
+  for (auto& de : fs::directory_iterator(dir, ec))
+    if (de.path().extension() == ".safetensors") files.push_back(de.path().string());
+  std::sort(files.begin(), files.end());
+  for (const std::string& f : files) {
+    const uint64_t sz = fs::file_size(f, ec);
+    const auto mt = fs::last_write_time(f, ec).time_since_epoch().count();
+    h = fnv1a(f.data(), f.size(), h);
+    h = fnv1a(&sz, sizeof sz, h);
+    h = fnv1a(&mt, sizeof mt, h);
+  }
+  char hex[17];
+  snprintf(hex, sizeof hex, "%016llx", (unsigned long long)h);
+  return hex;
+}
+
+std::string os_build() {
+  char b[64] = {0};
+  size_t n = sizeof b;
+  if (sysctlbyname("kern.osversion", b, &n, nullptr, 0)) return "unknown";
+  return b;
+}
+
+std::string machine_key(const std::string& chip, const std::string& model) {
+  std::string c = chip;
+  for (char& ch : c)
+    if (ch == ' ' || ch == '|') ch = '_';
+  return c + "|" + os_build() + "|" + model;
+}
+
+static std::string calib_path() { return cache_dir() + "/calibration.txt"; }
+
+bool read_calibration(const std::string& key, Calibration& out) {
+  std::ifstream f(calib_path());
+  std::string line;
+  bool found = false;
+  while (std::getline(f, line)) {  // the last line for the key wins
+    char k[512], tag[32];
+    unsigned u = 0, r = 0;
+    int used = 0;
+    if (sscanf(line.c_str(), "%31s %511s %u %u%n", tag, k, &u, &r, &used) == 4 && !strcmp(tag, "nace-ane-calib-1") &&
+        key == k) {
+      out.units = u;
+      out.min_rows = r;
+      out.detail = line.substr(size_t(used));
+      found = true;
+    }
+  }
+  return found;
+}
+
+bool write_calibration(const std::string& key, const Calibration& c) {
+  std::error_code ec;
+  std::filesystem::create_directories(cache_dir(), ec);
+  std::ofstream f(calib_path(), std::ios::app);
+  f << "nace-ane-calib-1 " << key << " " << c.units << " " << c.min_rows << " " << c.detail << "\n";
+  return bool(f);
+}
+
+uint32_t default_units(const std::string& chip, bool wave) {
+  // M4 Pro (20-core GPU, 16-core ANE), measured (docs/PERF.md): the plain split balances at 25-27 of
+  // 34 units; the wavefront hides the ANE under the GPU's mixer, so it gives the ANE nearly all
+  // channels. An ane_calib run on the Mac overrides this.
+  if (chip == "Apple M4 Pro") return wave ? 33 : 27;
+  return 0;
+}
+
+}  // namespace ni::ane

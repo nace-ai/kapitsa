@@ -1,0 +1,399 @@
+// GPU + Neural Engine split of the dense prefill FFN (opt-in NI_ANE=1). See src/ane/ffn_split.h
+// and research/inference/ane/ANE_DESIGN.md. Design ideas from Splash (incoai/splash, Apache-2.0);
+// our code.
+//
+//   NI_ANE=1            enable (dense models; the MoE path is unchanged)
+//   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)
+//   NI_ANE_MIN_ROWS=<r> smallest prefill chunk that splits (default: calibration, else 512)
+//   NI_ANE_FNS=a,b,..   ANE program functions (rows); default every 128 rows from min_rows to 2048
+//   NI_ANE_VERIFY=0     skip the startup check (on by default)
+//   NI_ANE_FAULT=<l>    test: the ANE job of layer l of the first split chunk never starts
+//   NI_ANE_WAVE=0       the plain split (default: the two-half wavefront, for chunks >= 2 x the
+//                       smallest function; smaller chunks always run the plain split)
+#include "ane/ffn_split.h"
+#include "model/kparams.h"
+#include "model/qwen35.h"
+#include "util/log.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <random>
+
+namespace ni {
+namespace {
+
+Pipeline kpipe(const std::string& n) {
+  static std::unordered_map<std::string, Pipeline> cache;
+  auto it = cache.find(n);
+  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  return it->second;
+}
+
+std::vector<uint32_t> parse_rows(const char* v) {
+  std::vector<uint32_t> r;
+  if (!v) return r;
+  std::string s = v;
+  for (size_t p = 0; p < s.size();) {
+    size_t q = s.find(',', p);
+    r.push_back(uint32_t(std::stoul(s.substr(p, q - p))));
+    p = q == std::string::npos ? s.size() : q + 1;
+  }
+  return r;
+}
+
+double median(std::vector<double> v) {
+  if (v.empty()) return 0;
+  std::sort(v.begin(), v.end());
+  return v[v.size() / 2];
+}
+
+}  // namespace
+
+bool Qwen35::ane_splits(int T) const { return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T); }
+
+void Qwen35::ane_begin_chunk(int T) {
+  ane_->begin_chunk(T);
+  ++ane_stats_.chunks;
+}
+
+bool Qwen35::ane_finish_chunk() {
+  if (!ane_chunk_) return true;
+  ane_chunk_ = false;
+  double ms = 0;
+  const bool ok = ane_->finish_chunk(&ms);
+  if (ok) {
+    ane_stats_.ane_ms += ms;
+    ane_stats_.evals += ane_->last_jobs();
+  } else {
+    ++ane_stats_.reruns;
+    logi("NI_ANE: Neural Engine FFN split stopped (%s); this chunk reruns on the GPU, which runs the prefill FFN "
+         "alone from now on", ane_->reason().c_str());
+  }
+  return ok;
+}
+
+void Qwen35::init_ane() {
+  if (cfg_.moe) {
+    logi("NI_ANE: the Neural Engine split is for dense FFNs; this MoE model runs its prefill on the GPU");
+    return;
+  }
+  if (Encoder::profiling()) {
+    logi("NI_ANE: off under NI_PROFILE");
+    return;
+  }
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.mg, &L.mu, &L.md})
+      if (q->bits != 4 || q->gs != 64) {
+        logi("NI_ANE: the split needs 4-bit group-64 FFN weights; GPU only");
+        return;
+      }
+  const std::string chip = Gpu::get().name();
+  const std::string mkey = ane::model_key(dir_);
+  // the two-half wavefront is the default schedule (NI_ANE_WAVE=0: the plain split)
+  const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
+  ane::Calibration cal;
+  const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
+  uint32_t units = have_cal ? cal.units : ane::default_units(chip, wave);
+  uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
+  if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
+  if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
+  if (!units) {
+    logi("NI_ANE: no calibration for %s (run ane_calib) and no default share; GPU only", chip.c_str());
+    return;
+  }
+  if (units * 512 > uint32_t(cfg_.dense_I)) {
+    logi("NI_ANE: share of %u units exceeds the FFN's %d; GPU only", units, cfg_.dense_I / 512);
+    return;
+  }
+  const int fault = getenv("NI_ANE_FAULT") ? atoi(getenv("NI_ANE_FAULT")) : -1;
+  const int lanes = wave ? 2 : 1;
+  if (!ane_rebuild(units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes)) return;
+  const char* source = getenv("NI_ANE_UNITS") ? "NI_ANE_UNITS" : have_cal ? "calibration" : "default for this chip";
+  logi("NI_ANE: Neural Engine FFN split%s: %u/%d units (%u channels; GPU %u) from the %s, chunks >= %u rows; %s; "
+       "%.1f MB Metal; ready in %.1f s",
+       lanes > 1 ? " (wavefront)" : "", units, cfg_.dense_I / 512, ane_->ane_channels(), ane_->gpu_channels(), source,
+       ane_->min_rows(),
+       ane_->startup_note().c_str(), ane_->metal_bytes() / 1e6, ane_->startup_ms() / 1000);
+  if (fault >= 0) logi("NI_ANE_FAULT: the ANE job of layer %d of the first split chunk will not start", fault);
+  if (env_on("NI_ANE_VERIFY") || !getenv("NI_ANE_VERIFY")) {
+    const double t0 = now_ms();
+    std::vector<int> rows = {int(ane_->fn_rows().front()), 2048};
+    if (env_on("NI_ANE_VERIFY_ALL")) rows.assign(ane_->fn_rows().begin(), ane_->fn_rows().end());
+    double err = -1;
+    try {
+      err = ane_verify(2, rows);
+    } catch (const std::exception& e) {
+      logi("NI_ANE: startup check failed (%s); GPU only", e.what());
+      ane_.reset();
+      return;
+    }
+    if (!(err <= 0.10)) {
+      logi("NI_ANE: startup check: the split differs from the GPU alone by %.1f%% of the ANE's part (> 10%%); GPU only",
+           100 * err);
+      ane_.reset();
+      return;
+    }
+    logi("NI_ANE: startup check %.2f%% of the ANE's part from the GPU alone (%zu functions, %.0f ms)", 100 * err,
+         rows.size(), now_ms() - t0);
+  }
+}
+
+bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
+                         int lanes) {
+  ane_.reset();
+  ane::FfnConfig c;
+  c.lanes = lanes;
+  c.units = units;
+  c.min_rows = min_rows;
+  c.fn_rows = fn_rows;
+  c.fault_layer = fault_layer;
+  c.cache_dir = ane::cache_dir();
+  c.model_key = ane::model_key(dir_);
+  std::vector<ane::FfnLayer> ls;
+  for (const Layer& L : layers_)
+    ls.push_back({{L.mg.w->buf, L.mg.s->buf, L.mg.b->buf, L.mg.N, L.mg.K},
+                  {L.mu.w->buf, L.mu.s->buf, L.mu.b->buf, L.mu.N, L.mu.K},
+                  {L.md.w->buf, L.md.s->buf, L.md.b->buf, L.md.N, L.md.K}});
+  try {
+    ane_ = std::make_unique<ane::FfnSplit>(c, std::move(ls));
+  } catch (const std::exception& e) {
+    logi("NI_ANE: Neural Engine split unavailable (%s); the GPU runs the prefill FFN alone", e.what());
+    ane_.reset();
+    return false;
+  }
+  return true;
+}
+
+// The GPU's channels [0, g) of the FFN of T rows of xh_: gate/up over their leading g rows,
+// SwiGLU, down over the leading g inputs of its rows (row stride I), added into x (fp32).
+void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
+  if (!g) return;  // the ANE takes every channel
+  const uint32_t D = uint32_t(cfg_.hidden), I = L.mg.N;
+  for (int k = 0; k < 2; ++k) {
+    const QLinear& Q = k ? L.mu : L.mg;
+    e.use(kpipe("qmm_b4_m64_n64"));
+    kp::Qmm p{uint32_t(T), g, Q.K, Q.K, g, 0, uint32_t(Q.gs), 0, 0};
+    e.buf(0, xh_); e.buf(1, Q.w->buf); e.buf(2, Q.s->buf); e.buf(3, Q.b->buf); e.buf(4, k ? hu_ : hg_);
+    e.val(5, p);
+    e.dispatch((g + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  }
+  const uint32_t n = uint32_t(T) * g;
+  e.use(kpipe("swiglu_half"));
+  e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
+  e.dispatch((n + 255) / 256, 1, 1, 256);
+  kp::QmmLd p{{uint32_t(T), D, g, g, D, 1u, uint32_t(L.md.gs), 0, 0}, I / 8, I / uint32_t(L.md.gs)};
+  e.use(kpipe("qmm_b4_m64_n64_ld"));
+  e.buf(0, hhalf_); e.buf(1, L.md.w->buf); e.buf(2, L.md.s->buf); e.buf(3, L.md.b->buf); e.buf(4, x);
+  e.val(5, p);
+  e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+}
+
+// NI_ANE_WAVE=1: the chunk runs as two row halves A and B in a skewed schedule, so the ANE's
+// FFN of one half overlaps the GPU's work on the other (the plain split leaves the ANE idle while
+// the GPU runs each layer's mixer). Per layer i, in GPU order:
+//   mixer_i(A); norm; pack(A); launch FFN_i(A) on the ANE; GPU part of FFN_i(A)
+//   join FFN_{i-1}(B) (waits for the ANE); mixer_i(B); norm; pack(B); launch FFN_i(B)
+//   stage layer i+1's weights; join FFN_i(A); GPU part of FFN_i(B)
+// so the ANE runs FFN_i(A) under mixer_i(B) and FFN_i(B) under mixer_{i+1}(A). B's mixer follows
+// A's within a layer (GDN state and causal KV flow from A to B, as between two chunks). Each half
+// has its own activation surfaces (lane); both use layer i's weight set i & 1.
+int Qwen35::ane_wave_rows(int T) const {
+  if (!ane_ || ane_->lanes() < 2) return 0;
+  const int h = (T / 2 + 127) / 128 * 128;
+  if (h >= T || h < int(ane_->fn_rows().front()) || T - h < int(ane_->min_rows()) / 2) return 0;
+  return h;
+}
+
+void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
+  const int D = cfg_.hidden, TA = h, TB = T - h;
+  const Buffer xA = x_.view(0, size_t(TA) * D * 4), xB = x_.view(size_t(TA) * D * 4, size_t(TB) * D * 4);
+  const uint32_t g = ane_->gpu_channels();
+  ane::FfnSplit& A = *ane_;
+  for (int i = 0; i < cfg_.layers; ++i) {
+    const Layer& L = layers_[i];
+    enc_mixer_prefill(e, s, i, L, pos0, TA, xA);
+    enc_rows_half(e, xA, L.post_norm, xh_, TA, D);
+    if (i == 0) A.stage_layer(e, 0, 0);
+    A.pack(e, 0, xh_, TA);
+    A.launch(e, 0, i, TA);
+    enc_mlp_gpu_part(e, L, TA, g, xA);
+    if (i > 0) A.join(e, 1, xB, TB);
+    enc_mixer_prefill(e, s, i, L, pos0 + TA, TB, xB);
+    enc_rows_half(e, xB, L.post_norm, xh_, TB, D);
+    A.pack(e, 1, xh_, TB);
+    A.launch(e, 1, i, TB);
+    if (i + 1 < cfg_.layers) A.stage_layer(e, i + 1, (i + 1) & 1);
+    A.join(e, 0, xA, TA);
+    enc_mlp_gpu_part(e, L, TB, g, xB);
+  }
+  A.join(e, 1, xB, TB);
+}
+
+void Qwen35::enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x) {
+  enc_rows_half(e, x, L.post_norm, xh_, T, cfg_.hidden);
+  const uint32_t g = ane_->gpu_channels();
+  ane_->encode_layer(e, li, xh_, x, [&](Encoder& en) { enc_mlp_gpu_part(en, L, T, g, x); });
+}
+
+// ---- startup check and benchmarks (random post-norm input rows in xh_) ----
+static void fill_random_half(Buffer& b, size_t n, uint32_t seed) {
+  std::mt19937 r(seed);
+  std::uniform_real_distribution<float> u(-2.f, 2.f);
+  _Float16* p = b.as<_Float16>();
+  for (size_t i = 0; i < n; ++i) p[i] = _Float16(u(r));
+}
+
+double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
+  Gpu& g = Gpu::get();
+  const int D = cfg_.hidden, Tm = 2048;
+  n_layers = std::min(n_layers, cfg_.layers);
+  fill_random_half(xh_, size_t(Tm) * D, 20261016);
+  Buffer out[3];
+  for (auto& o : out) o = g.alloc(size_t(Tm) * D * 4, "ane verify");
+  auto gpu_only = [&](Buffer& o) {
+    memset(o.ptr(), 0, o.size);
+    auto e = g.begin();
+    for (int l = 0; l < n_layers; ++l) {
+      const Layer& L = layers_[l];
+      enc_qmm(*e, L.mg, xh_, hg_, Tm, false);
+      enc_qmm(*e, L.mu, xh_, hu_, Tm, false);
+      const uint32_t n = uint32_t(Tm) * L.mg.N;
+      e->use(kpipe("swiglu_half"));
+      e->buf(0, hg_); e->buf(1, hu_); e->buf(2, hhalf_); e->val(3, n);
+      e->dispatch((n + 255) / 256, 1, 1, 256);
+      enc_qmm(*e, L.md, hhalf_, o, Tm, true);
+    }
+    e->commit_and_wait();
+  };
+  auto split = [&](Buffer& o, int T, bool ane) {
+    memset(o.ptr(), 0, o.size);
+    ane_->fill_partial(ane ? 0x7e00 : 0);  // NaN where the ANE leaves the output unwritten
+    ane_->begin_chunk(T);
+    auto e = g.begin();
+    const uint32_t gc = ane_->gpu_channels();
+    for (int l = 0; l < n_layers; ++l) {
+      const Layer& L = layers_[l];
+      ane_->encode_layer(*e, l, xh_, o, [&](Encoder& en) { enc_mlp_gpu_part(en, L, T, gc, o); }, ane);
+    }
+    e->commit_and_wait();
+    if (!ane_->finish_chunk()) throw std::runtime_error("split of " + std::to_string(T) + " rows failed: " + ane_->reason());
+  };
+  gpu_only(out[0]);
+  split(out[1], Tm, false);
+  double worst = 0;
+  for (int T : rows) {
+    split(out[2], T, true);
+    const float *a = out[0].as<float>(), *p = out[1].as<float>(), *s = out[2].as<float>();
+    double diff = 0, contrib = 0;
+    for (size_t i = 0; i < size_t(T) * D; ++i) {
+      if (!std::isfinite(s[i])) throw std::runtime_error("split output of " + std::to_string(T) + " rows is not finite");
+      diff += (double(s[i]) - a[i]) * (double(s[i]) - a[i]);
+      contrib += (double(a[i]) - p[i]) * (double(a[i]) - p[i]);
+    }
+    const double err = std::sqrt(diff / std::max(contrib, 1e-30));
+    logd("NI_ANE: check %d rows: %.3f%%", T, 100 * err);
+    worst = std::max(worst, err);
+  }
+  for (auto& o : out) g.release(o);
+  return worst;
+}
+
+AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
+  Gpu& g = Gpu::get();
+  const int D = cfg_.hidden;
+  fill_random_half(xh_, size_t(2048) * D, 7);
+  Buffer o = g.alloc(size_t(2048) * D * 4, "ane bench");
+  memset(o.ptr(), 0, o.size);
+  AneLayerTimes r;
+  std::vector<double> go, gp, an, sp, ai;
+  const uint32_t gc = ane_->gpu_channels();
+  for (int rep = 0; rep < reps + 1; ++rep) {  // first round warms up
+    {
+      auto e = g.begin();
+      for (int l = l0; l < l0 + n; ++l) {
+        const Layer& L = layers_[l];
+        enc_qmm(*e, L.mg, xh_, hg_, T, false);
+        enc_qmm(*e, L.mu, xh_, hu_, T, false);
+        const uint32_t nn = uint32_t(T) * L.mg.N;
+        e->use(kpipe("swiglu_half"));
+        e->buf(0, hg_); e->buf(1, hu_); e->buf(2, hhalf_); e->val(3, nn);
+        e->dispatch((nn + 255) / 256, 1, 1, 256);
+        enc_qmm(*e, L.md, hhalf_, o, T, true);
+      }
+      e->commit_and_wait();
+      if (rep) go.push_back(e->gpu_ms() / n);
+    }
+    {
+      ane_->begin_chunk(T);
+      auto e = g.begin();
+      for (int l = l0; l < l0 + n; ++l) {
+        const Layer& L = layers_[l];
+        ane_->encode_layer(*e, l, xh_, o, [&](Encoder& en) { enc_mlp_gpu_part(en, L, T, gc, o); }, false, stage);
+      }
+      e->commit_and_wait();
+      ane_->finish_chunk();
+      if (rep) gp.push_back(e->gpu_ms() / n);
+    }
+    {
+      ane_->begin_chunk(T);
+      double t = 0;
+      for (int l = 0; l < n; ++l) t += ane_->eval_sync(l & 1);
+      if (rep) an.push_back(t / n);
+      ane_->finish_chunk();
+    }
+    {
+      ane_->begin_chunk(T);
+      auto e = g.begin();
+      const double w0 = now_ms();
+      for (int l = l0; l < l0 + n; ++l) {
+        const Layer& L = layers_[l];
+        ane_->encode_layer(*e, l, xh_, o, [&](Encoder& en) { enc_mlp_gpu_part(en, L, T, gc, o); }, true, stage);
+      }
+      e->commit_and_wait();
+      const double wall = now_ms() - w0;
+      double ams = 0;
+      const bool ok = ane_->finish_chunk(&ams);
+      if (!ok) throw std::runtime_error("split failed: " + ane_->reason());
+      if (rep) {
+        sp.push_back(std::max(wall, e->gpu_ms()) / n);
+        ai.push_back(ams / n);
+      }
+    }
+  }
+  g.release(o);
+  r.gpu_only = median(go);
+  r.gpu_part = median(gp);
+  r.ane = median(an);
+  r.split = median(sp);
+  r.ane_in_split = median(ai);
+  return r;
+}
+
+double Qwen35::ane_bench_chunk(int T, int reps, bool split) {
+  Gpu& g = Gpu::get();
+  auto seq = new_seq(T + 64);
+  std::mt19937 r(11);
+  for (int i = 0; i < T; ++i) seq->tokens()[i] = int(r() % 150000u);
+  SamplingParams sp;
+  std::vector<double> ms;
+  ane_on_ = split;
+  for (int rep = 0; rep < reps + 1; ++rep) {
+    reset(*seq);
+    auto e = g.begin();
+    const double t0 = now_ms();
+    encode_prefill(*e, *seq, 0, T, sp, 0, false);
+    e->commit_and_wait();
+    const double t = now_ms() - t0;
+    const bool ok = ane_finish_chunk();
+    if (!ok) {
+      ane_on_ = true;
+      throw std::runtime_error("split failed: " + ane_->reason());
+    }
+    if (rep) ms.push_back(t);
+  }
+  ane_on_ = true;
+  return median(ms);
+}
+
+}  // namespace ni

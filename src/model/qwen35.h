@@ -11,6 +11,10 @@
 
 namespace ni {
 
+namespace ane {
+class FfnSplit;
+}
+
 struct QLinear {
   const Tensor* w = nullptr;
   const Tensor* s = nullptr;
@@ -81,10 +85,46 @@ struct SamplingParams {
   uint32_t seed = 0;
 };
 
+// Timings of one split layer (ANE split benchmark / calibration), ms per layer.
+struct AneLayerTimes {
+  double gpu_only = 0;   // the FFN on the GPU alone (as without NI_ANE)
+  double gpu_part = 0;   // the split's GPU part alone: pack, own channels, staging, join
+  double ane = 0;        // the ANE alone (synchronous evaluation)
+  double split = 0;      // both, concurrently
+  double ane_in_split = 0;  // ANE time inside the split (event reached ready -> report)
+};
+
 class Qwen35 {
  public:
   explicit Qwen35(const std::string& model_dir, int prefill_chunk = 2048);
+  ~Qwen35();
   const Qwen35Config& config() const { return cfg_; }
+
+  // ---- GPU + Neural Engine split of the dense prefill FFN (opt-in NI_ANE=1; qwen35_ane.cpp) ----
+  // Whether a prefill chunk of T rows would run the split (callers checkpoint the recurrent state
+  // before such a chunk so it can be rerun on the GPU alone if the split fails).
+  bool ane_splits(int T) const;
+  // After the command of a chunk encoded with the split has completed: false if the split failed
+  // (it is then off for the rest of the process) and the chunk must be rerun. True otherwise.
+  bool ane_finish_chunk();
+  ane::FfnSplit* ane_split() { return ane_.get(); }
+  // Startup check: layers [0, n) on random input rows, GPU alone vs split. Returns
+  // RMS(split - gpu) / RMS(gpu - gpu_part) (worst over the functions checked).
+  double ane_verify(int n_layers, const std::vector<int>& rows);
+  // Benchmark of split layers [l0, l0 + n) at T rows (real weights, random input); `reps` runs
+  // of each mode, median per layer.
+  AneLayerTimes ane_bench(int l0, int n, int T, int reps, bool stage = true);
+  // Rebuilds the split with another share (calibration); false (and the reason logged) if it fails.
+  bool ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer = -1,
+                   int lanes = 1);
+  // Times one prefill chunk of T rows (random tokens, fresh state; split per the current setup or
+  // the GPU alone), median of `reps` after a warm-up; ms.
+  double ane_bench_chunk(int T, int reps, bool split);
+  struct AneStats {
+    int chunks = 0, evals = 0, reruns = 0;  // evals: ANE evaluations of chunks that held
+    double ane_ms = 0;
+  };
+  const AneStats& ane_stats() const { return ane_stats_; }
 
   std::unique_ptr<Seq> new_seq(int cap);
   // Clears recurrent state (KV entries are overwritten by position, so they need no reset).
@@ -161,6 +201,15 @@ class Qwen35 {
   void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T);
   void enc_mlp(Encoder& e, const Layer& L);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
+  // ANE split (qwen35_ane.cpp)
+  void init_ane();
+  void ane_begin_chunk(int T);
+  void enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& x);
+  // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)
+  int ane_wave_rows(int T) const;
+  void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
+  void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
+  void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
   QLinear own_qlin(const class WeightStore& w, const std::string& name);
   // speculative decoding helpers (qwen35_spec.cpp)
@@ -197,6 +246,11 @@ class Qwen35 {
   bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
+
+  std::unique_ptr<ane::FfnSplit> ane_;
+  bool ane_chunk_ = false;  // the chunk being encoded runs the split
+  bool ane_on_ = true;      // benchmarks: false runs the GPU alone
+  AneStats ane_stats_;
 
   // state
   Buffer x_, xn_, logits_;

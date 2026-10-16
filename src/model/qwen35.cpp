@@ -1,4 +1,5 @@
 #include "model/qwen35.h"
+#include "ane/ffn_split.h"
 #include "model/kparams.h"
 #include "util/log.h"
 
@@ -183,7 +184,10 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   alloc_state();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0);
+  if (env_on("NI_ANE")) init_ane();
 }
+
+Qwen35::~Qwen35() = default;
 
 void Qwen35::alloc_state() {
   Gpu& g = Gpu::get();
@@ -809,6 +813,53 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   e.dispatch((T + qb - 1) / qb, gy, 1, th);
 }
 
+// The token mixer (GDN or attention) of layer i for T rows at positions pos0.., residual rows x.
+void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& xbuf) {
+  const int D = cfg_.hidden;
+  const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
+  const int VD = cfg_.lin_hv * cfg_.lin_dv;
+  enc_rows_half(e, xbuf, L.in_norm, xh_, T, D);
+  if (L.linear) {
+    enc_qmm(e, L.qkv, xh_, qkv_, T, false);
+    enc_qmm(e, L.z, xh_, zb_, T, false);
+    enc_qmm(e, L.b, xh_, bb_, T, false);
+    enc_qmm(e, L.a, xh_, ab_, T, false);
+    if (gdn_par()) {
+      enc_gdn_prefill_par(e, s, i, L, T);
+    } else {
+      kp::GdnPrep pp{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C};
+      e.use(pipe("gdn_prep"));
+      e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
+      e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
+      e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
+      e.val(12, pp);
+      e.dispatch(C / 128, 1, 1, 128);
+      kp::GdnStep sp2{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), cfg_.eps};
+      e.use(pipe("gdn_step"));
+      e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
+      e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
+      e.val(9, sp2);
+      e.dispatch(cfg_.lin_hv, 1, 1, 1024);
+      enc_rows_half(e, gout_, nullptr, hh_, T, VD);
+    }
+    enc_qmm(e, L.out, hh_, xbuf, T, true);
+  } else {
+    enc_qmm(e, L.q, xh_, qg_, T, false);
+    enc_qmm(e, L.k, xh_, kr_, T, false);
+    enc_qmm(e, L.v, xh_, vr_, T, false);
+    kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
+                    uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
+    e.use(pipe("attn_prep"));
+    e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
+    e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
+    e.val(8, ap);
+    e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
+    enc_attn_prefill(e, s.kc[i], s.vc[i], T, pos0, s.cap);
+    enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
+    enc_qmm(e, L.o, hh_, xbuf, T, true);
+  }
+}
+
 void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample) {
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
@@ -818,52 +869,18 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, x_);
   e.val(5, ep);
   e.dispatch((D / 8 + 63) / 64, T, 1, 64);
-  const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
-  const int VD = cfg_.lin_hv * cfg_.lin_dv;
-  for (int i = 0; i < cfg_.layers; ++i) {
-    const Layer& L = layers_[i];
-    enc_rows_half(e, x_, L.in_norm, xh_, T, D);
-    if (L.linear) {
-      enc_qmm(e, L.qkv, xh_, qkv_, T, false);
-      enc_qmm(e, L.z, xh_, zb_, T, false);
-      enc_qmm(e, L.b, xh_, bb_, T, false);
-      enc_qmm(e, L.a, xh_, ab_, T, false);
-      if (gdn_par()) {
-        enc_gdn_prefill_par(e, s, i, L, T);
-      } else {
-        kp::GdnPrep pp{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C};
-        e.use(pipe("gdn_prep"));
-        e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
-        e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
-        e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
-        e.val(12, pp);
-        e.dispatch(C / 128, 1, 1, 128);
-        kp::GdnStep sp2{uint32_t(T), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), cfg_.eps};
-        e.use(pipe("gdn_step"));
-        e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
-        e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
-        e.val(9, sp2);
-        e.dispatch(cfg_.lin_hv, 1, 1, 1024);
-        enc_rows_half(e, gout_, nullptr, hh_, T, VD);
-      }
-      enc_qmm(e, L.out, hh_, x_, T, true);
-    } else {
-      enc_qmm(e, L.q, xh_, qg_, T, false);
-      enc_qmm(e, L.k, xh_, kr_, T, false);
-      enc_qmm(e, L.v, xh_, vr_, T, false);
-      kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
-                      uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
-      e.use(pipe("attn_prep"));
-      e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
-      e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
-      e.val(8, ap);
-      e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
-      enc_attn_prefill(e, s.kc[i], s.vc[i], T, pos0, s.cap);
-      enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
-      enc_qmm(e, L.o, hh_, x_, T, true);
+  ane_chunk_ = ane_splits(T);  // NI_ANE=1: dense FFN split with the Neural Engine
+  if (ane_chunk_) ane_begin_chunk(T);
+  if (ane_chunk_ && ane_wave_rows(T)) {
+    enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
+  } else {
+    for (int i = 0; i < cfg_.layers; ++i) {
+      const Layer& L = layers_[i];
+      enc_mixer_prefill(e, s, i, L, pos0, T, x_);
+      if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
+      else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);
+      else enc_mlp_prefill(e, L, T, x_);
     }
-    if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
-    else enc_mlp_prefill(e, L, T, x_);
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
 }

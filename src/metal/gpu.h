@@ -35,13 +35,18 @@ class Gpu {
   static Gpu& get();
   std::string name() const;
   size_t recommended_working_set() const;
+  size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
+  static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 
   // tracked=false skips Metal's hazard tracking: only for buffers the GPU never writes after
   // upload (weights). Everything the GPU writes stays tracked so consecutive command buffers
   // are ordered.
   Buffer alloc(size_t bytes, const char* label = nullptr, bool tracked = true);
-  // Wrap existing page-aligned memory (e.g. mmap) without copying.
-  Buffer wrap(void* ptr, size_t bytes, const char* label = nullptr);
+  // Wrap existing page-aligned memory (e.g. mmap) without copying. tracked=true keeps Metal's
+  // hazard tracking (memory the GPU writes, e.g. IOSurfaces shared with the Neural Engine).
+  Buffer wrap(void* ptr, size_t bytes, const char* label = nullptr, bool tracked = false);
+  // A new MTLSharedEvent (retained; id<MTLSharedEvent>), for ordering GPU work with the ANE.
+  void* new_shared_event();
   void release(Buffer& b);
 
   // Compiles the embedded kernel library on first use. Extra source can be appended
@@ -86,7 +91,14 @@ class Encoder {
   // Memory barrier between dependent dispatches in a concurrent encoder.
   void barrier();
   void commit();             // non-blocking
-  void wait();               // waits for this command buffer
+  void wait();               // waits for this command buffer (and the ones signal_event committed)
+  // Shared-event steps (ANE split): signal_event ends the current command buffer with a signal of
+  // `value` and commits it (so the signal is never held back behind later dispatches), then
+  // continues in a new command buffer; if the signalling buffer fails, the CPU sets the event to
+  // `value` so a waiter on it does not hang. wait_event makes the GPU wait until the event reaches
+  // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
+  void signal_event(void* event, uint64_t value);
+  void wait_event(void* event, uint64_t value);
   void commit_and_wait() { commit(); wait(); }
   double gpu_ms() const;     // GPU time of the finished command buffer
   ~Encoder();
@@ -98,8 +110,10 @@ class Encoder {
 
  private:
   friend class Gpu;
+  void open_encoder();
   void* cb_ = nullptr;
   void* enc_ = nullptr;
+  std::vector<void*> prev_;   // command buffers committed by signal_event (retained)
   const char* cur_name_ = "";
   bool concurrent_ = false;
 };

@@ -341,9 +341,27 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   while (p < n) {
     int T = std::min(C, n - p);
     if (boundary > p && boundary < p + T) T = boundary - p;  // split so the checkpoint lands exactly
+    // NI_ANE=1: a chunk that runs the GPU + Neural Engine FFN split saves the recurrent state and
+    // is waited for, so that it can run again on the GPU alone if the split fails.
+    const bool split = model_->ane_splits(T);
+    if (split) {
+      if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
+      model_->save(*e, s, *ane_ck_, p);
+    }
     model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    if (split) {
+      e->commit_and_wait();
+      if (!model_->ane_finish_chunk()) {
+        e = g.begin();
+        model_->restore(*e, s, *ane_ck_);
+        model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+        if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+        e->commit_and_wait();
+      }
+      e = g.begin();
+    }
     last_chunk_row = n - 1 - p;
     p += T;
     if (p == boundary) {
