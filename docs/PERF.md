@@ -89,6 +89,90 @@ Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k
 Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
 the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
 
+## 27B prefill with the Neural Engine (opt-in `NI_ANE=1`)
+M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Design and
+background: `research/inference/ane/ANE_DESIGN.md`; code: `src/ane/`, `src/kernels/ane_ffn.metal`,
+`src/model/qwen35_ane.cpp`. Each dense FFN layer of a prefill chunk (>= 512 rows) is split by intermediate
+channel between the GPU (4-bit GEMMs) and the ANE (one W8A8 MIL program, Hadamard-rotated int8, private
+`AppleNeuralEngine.framework`); the ANE's partial down projection is joined in fp32. Schedules:
+- plain (`NI_ANE_WAVE=0`): per layer, mixer on the GPU, then the FFN split with GPU and ANE concurrent. The
+  ANE idles during the mixer, so the best share balances the FFN: 27 of 34 units here.
+- wavefront (the default): each chunk runs as two row halves in a skewed schedule, so the ANE computes the FFN
+  of one half while the GPU runs the mixer of the other. The ANE is then hidden under the mixer and takes the
+  whole FFN (34/34 units); the GPU runs the mixer, rotate/pack/join and the int8 staging. Bitwise equal to
+  the plain split at the same share.
+
+Cold prefill, `ni_run`, `NI_NO_MTP=1`, n_gen 1 (marked runs: n_gen 64/65), every run under the GPU lock and
+reported; A/B blocks interleave modes. Thermal state (`NSProcessInfo.thermalState`) at the end of each run.
+
+| block (start) | prompt | GPU only (default) | NI_ANE=1 | speedup |
+|---|---|---|---|---|
+| plain 25 units (16:20, n_gen 4) | p700 | 109.7 | 186.0 (fair) | 1.70x |
+| plain 25 units (16:58, n_gen 64) | p4000 | 107.9 (nominal) | 204.2 (nominal) | 1.89x |
+| plain 27 units, block 1 (18:30) | p4000 | 111.0 (nominal) | 217.4 (nominal) | 1.96x |
+| | p16000 | 106.5 (fair) | 195.5 (fair) | 1.84x |
+| plain 27 units, block 2 (18:43, reversed) | p16000 | 101.1 (fair) | 200.1 (nominal) | 1.98x |
+| | p4000 | 105.4 (fair) | 206.3 (fair) | 1.96x |
+| plain 27 units (18:56, n_gen 65) | p4000 | 111.5 | 217.9 (nominal) | 1.95x |
+| wavefront 25 / 29 / 33 units (18:27, n_gen 64) | p4000 | 107.9 (16:58) | 213.7 (fair) / 234.7 (fair) / 298.8 (nominal) | 1.98 / 2.18 / 2.77x |
+| wavefront 34 units (18:56, n_gen 65) | p4000 | 111.5 | 320.5 (nominal) | 2.87x |
+| **wavefront 34 units, block 1 (19:08)** | p4000 | 110.4 (fair) | **317.8** (fair) | **2.88x** |
+| | p16000 | 101.7 (fair) | **246.7** (fair) | **2.43x** |
+| **wavefront 34 units, block 2 (19:17, reversed)** | p16000 | 100.7 (fair) | **264.5** (nominal) | **2.63x** |
+| | p4000 | 98.6 (fair) | **277.3** (fair) | **2.81x** |
+
+The last p4000 pair ran after two 16k prompts (throttled: the GPU alone fell to 98.6). Decode is unchanged
+(14.3-14.6 tok/s plain in both modes); the 35B MoE never uses the split.
+
+Calibration (`ane_calib`; split layers on real weights, random post-norm input, layers 8-15, median of 2):
+| units | GPU alone FFN (2048 rows) | split's GPU part | ANE alone | split layer |
+|---|---|---|---|---|
+| 21 | 203.4 ms | 79.2 | 40.7 | 77.7 |
+| 23 | 191.8 | 65.2 | 44.4 | 67.1 |
+| 25 | 199.6 | 55.7 | 47.9 | 56.9 |
+| 26 | 192.2 | 48.3 | 50.3 | 54.3 |
+| **27** | 205.7 | 45.5 | 52.0 | **54.1** |
+| 29 | 192.8 | 32.1 | 55.3 | 56.8 |
+ANE 1.93 ms per 512-channel unit at 2048 rows (17 TOPS), GPU part 6.2 ms per GPU unit; the split layer is
+max(ANE, GPU part) + 2-4 ms. 512-row chunks gain too (15.2 vs 48.2 ms at 27 units). `ane_calib --wave`
+(whole 2048-row chunks, 64 layers): GPU alone 18.6 s (110.1 tok/s); 31 units 8.40 s (243.9), 33 units 7.40 s
+(276.8), **34 units 7.20 s (284.3, 2.58x)**. Both results are stored in
+`~/.cache/nace-infer-models/ane-cache/calibration.txt` (keyed by chip, macOS build and model) and used by
+`NI_ANE=1`.
+
+Where the wavefront's time goes (4k, 34 units): about 98-113 ms per layer per 2048-row chunk, against about
+290 ms on the GPU alone, of which the FFN is about 190 ms. The GPU now runs only the mixer plus the split's small
+kernels, so the mixer (GDN/attention and their projections, ~100 ms) is the limit. The ANE is busy 9.2 s of 12.6 s:
+256 evaluations of 1024 rows x 17408 channels, 35.8 ms each, 15.3 TOPS. At 16k, attention grows and the gain
+falls to 2.4-2.6x.
+
+Accuracy (`kl.py` / `klall.py`: KL(GPU alone || split) of the next-token distribution; "65 positions" = the
+last prompt position plus 64 greedy decode steps, whose contexts are identical because the tokens agree):
+| case | KL | greedy tokens |
+|---|---|---|
+| p4000, plain 27 units, 65 positions | mean 9.1e-6, median 4.5e-7, max 1.6e-4 | 64/64 identical |
+| p4000, wavefront 34 units, 65 positions | mean 1.4e-5, median 7.2e-7, max 2.9e-4 | 64/64 identical |
+| p4000 last position: 25 / 27 / 29 / 33 / 34 units | 6.5e-6 / 8.6e-6 / 2.3e-5 / 3.5e-5 / 7.2e-7 | 64/64 for 25, 29, 33 (wave) |
+| p16000 last position: plain 27 / wavefront 34 | 3.4e-9 / 2.5e-8 | - |
+| code_27b (85 tokens, split forced: `NI_ANE_MIN_ROWS=64 NI_ANE_FNS=128`), 65 positions | mean 1.1e-4, median 3.1e-6, max 3.0e-3 (last prompt position) | 256/256 identical (25 units), 64/64 (27) |
+| p700 last position, plain 25 | 5.8e-8 | 4/4 |
+The GPU alone is chunk-size invariant (NI_CHUNK=1024 or 64: bitwise-identical logits), so there is no GPU
+noise floor to compare with. Startup check (2 layers, 512 and 2048 rows, NaN-filled ANE output): the split
+differs from the GPU alone by 0.75-0.88% of the ANE's contribution. Split runs are bitwise reproducible.
+Fault injection (`NI_ANE_FAULT=10`: the ANE job of layer 10 never starts): the 2 s watchdog retires the split, the
+chunk reruns on the GPU from the recurrent-state checkpoint, and logits and tokens equal the GPU alone bit for bit.
+
+Memory (p4000 / p16000): split surfaces 454 MB (25 units), 486 MB (27), 629 MB (wavefront 34: two activation
+lanes); process footprint 16,975 -> 17,965 MB and 17,492 -> 18,481 MB (+0.99 GB: surfaces + the 157 MB
+recurrent-state checkpoint for reruns + rotation scratch); Metal allocated +0.91 GB. The ANE service's own
+buffers are not in any process footprint: system wired memory rose 43-55 MB at the program load and 0.95-1.13 GB
+by the end of the first split chunk, which also wires the surfaces and checkpoint (0.79 GB), leaving roughly
+0.17-0.34 GB for the service (noisy: other processes).
+
+Startup: compiling the 13-function program takes 31-40 s (MIL 115-133 KB, 13-18 MB rotation constant); a later
+process finds it in the ANE daemon's cache (1-3 ms) and loads it in 44-78 ms, but the daemon evicted it once
+within 40 minutes. Row scales: 0.1 s computed, cached on disk (4-5 MB per share). Startup check 0.65-1.0 s.
+
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
 `ni_kstats --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
@@ -134,6 +218,7 @@ UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
 |---|---|---|---|
 | nace-infer plain | 16.0 | 111 | - |
 | nace-infer MTP depth 1 | 23.9-25.3 | (same) | - |
+| nace-infer `NI_ANE=1` (GPU + Neural Engine, wavefront) | (same) | 277-321 | 247-265 |
 | mlx-lm | 10.7-11.4 | 125 | 101 |
 | oMLX | 11.8-12.0 | 128 | (memory guard) |
 | MTPLX (MTP) | 20.6-30.8 | 113-125 | 101-110 |
