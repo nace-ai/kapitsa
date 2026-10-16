@@ -100,6 +100,9 @@ int main(int argc, char** argv) {
 
   httplib::Server srv;
   srv.set_payload_max_length(64u << 20);
+  // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
+  // the previous one (the client's delayed ACK), which can hold the first token of a fast request.
+  srv.set_tcp_nodelay(!getenv("NI_TCP_NODELAY") || env_on("NI_TCP_NODELAY"));
   srv.set_pre_routing_handler([&](const httplib::Request& req, httplib::Response& res) {
     if (api_key.empty() || req.path == "/health") return httplib::Server::HandlerResponse::Unhandled;
     if (req.get_header_value("Authorization") == "Bearer " + api_key) return httplib::Server::HandlerResponse::Unhandled;

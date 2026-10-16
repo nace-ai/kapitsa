@@ -273,7 +273,7 @@ void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out) con
   for (auto& w : words) bpe(w, out);
 }
 
-std::vector<int> Tokenizer::encode(const std::string& text) const {
+std::vector<int> Tokenizer::encode(const std::string& text, size_t split_at, int* split_index) const {
   std::vector<int> out;
   size_t start = 0, i = 0;
   while (i < text.size()) {
@@ -282,6 +282,7 @@ std::vector<int> Tokenizer::encode(const std::string& text) const {
       for (auto& [content, id] : added_) {
         if (text.compare(i, content.size(), content) == 0) {
           encode_plain(text.substr(start, i - start), out);
+          if (split_index && i == split_at) *split_index = int(out.size());
           out.push_back(id);
           i += content.size();
           start = i;

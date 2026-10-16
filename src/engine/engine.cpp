@@ -275,6 +275,7 @@ class OutputParser {
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
   std::lock_guard<std::mutex> lk(mu_);
+  const double t_req = now_ms();
   ChatResult res;
   Gpu& g = Gpu::get();
   std::string text, base;
@@ -286,14 +287,18 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     res.error = std::string("chat template: ") + ex.what();
     return res;
   }
-  std::vector<int> prompt = tok_.encode(text);
   // Checkpoint at the end of the conversation so far (before the assistant header): the next
   // turn re-renders this turn's answer without its reasoning, so it diverges right after it.
+  // The generation prompt starts with an added token (<|im_start|>), so the boundary falls out of
+  // the one encode; otherwise the conversation is encoded separately and compared.
   int boundary = -1;
-  if (text.compare(0, base.size(), base) == 0) {
+  const bool prefix_ok = text.compare(0, base.size(), base) == 0;
+  std::vector<int> prompt = tok_.encode(text, prefix_ok ? base.size() : std::string::npos, &boundary);
+  if (boundary < 0 && prefix_ok) {
     std::vector<int> bt = tok_.encode(base);
     if (bt.size() < prompt.size() && std::equal(bt.begin(), bt.end(), prompt.begin())) boundary = int(bt.size());
   }
+  if (boundary >= int(prompt.size())) boundary = -1;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
   Slot& slot = pick_slot(prompt);
@@ -329,6 +334,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   std::copy(prompt.begin(), prompt.end(), s.tokens());
 
   // ---- prefill ----
+  const double tok_ms = now_ms() - t_req;  // template + tokenizer + slot pick
   SamplingParams sp;
   sp.temperature = r.temperature;
   sp.top_p = r.top_p;
@@ -338,20 +344,28 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const int C = model_->prefill_chunk();
   int p = start;
   int last_chunk_row = 0;
+  auto oldest_ckpt = [&]() {
+    Checkpoint* c = &slot.ckpts[0];
+    for (auto& k : slot.ckpts)
+      if (k.pos < c->pos) c = &k;  // overwrite the oldest / invalid one
+    return c;
+  };
+  // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
+  // the whole new suffix); otherwise the chunk is split so the checkpoint lands exactly.
+  const bool in_pass = model_->can_snapshot();
   while (p < n) {
     int T = std::min(C, n - p);
-    if (boundary > p && boundary < p + T) T = boundary - p;  // split so the checkpoint lands exactly
-    model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+    Checkpoint* snap = nullptr;
+    if (boundary > p && boundary < p + T) {
+      if (in_pass) snap = oldest_ckpt();
+      else T = boundary - p;
+    }
+    model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? boundary - p : 0);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
     last_chunk_row = n - 1 - p;
     p += T;
-    if (p == boundary) {
-      Checkpoint* c = &slot.ckpts[0];
-      for (auto& k : slot.ckpts)
-        if (k.pos < c->pos) c = &k;  // overwrite the oldest / invalid one
-      model_->save(*e, s, *c, boundary);
-    }
+    if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);
     e->commit();
     if (p < n) e = g.begin();
   }
@@ -482,8 +496,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  logi("chat: prompt %d (cached %d) in %.0f ms, %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, gen,
-       res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str());
+  logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize), %d tokens in %.0f ms (%.1f tok/s), %s", n,
+       start, res.prefill_ms, tok_ms, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
+       finish.c_str());
   return res;
 }
 

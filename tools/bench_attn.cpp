@@ -1,6 +1,9 @@
 // Prefill attention microbenchmark: T queries (positions L-T..L-1) against L cached keys, D=256,
 // 16 query heads / 2 kv heads (Qwen3.5/3.6 shapes; NI_HQ=24 NI_HKV=4 for the 27B's G=6).
 // usage: bench_attn [T] [L] kernels...
+// Short-prefill forms (NI_SHORTPF): attn_prefill11g (rows = (query, head) pairs of one KV head),
+// attn_prefill11gs:NS (the same with the keys split over NS threadgroups + attn11_reduce;
+// NS = auto: the engine's choice).
 // Each kernel's output is checked against a CPU reference (double precision) on a few sampled
 // queries (block edges, the last partial block) x all heads: err = max |gpu - ref| / max |ref|.
 #include "metal/gpu.h"
@@ -78,24 +81,57 @@ int main(int argc, char** argv) {
       }
   }
 
+  const uint32_t max_rows = 1024;  // nsplit * T rows per head (as the engine's part_o_)
+  Buffer part_o = g.alloc(size_t(Hq) * max_rows * D * 4), part_ml = g.alloc(size_t(Hq) * max_rows * 2 * 4);
   for (int k = 3; k < argc; ++k) {
     std::string name = argv[k];
+    uint32_t ns = 0;
+    const bool gq = name.rfind("attn_prefill11g", 0) == 0;
+    if (name.find(':') != std::string::npos) {
+      std::string a = name.substr(name.find(':') + 1);
+      name = name.substr(0, name.find(':'));
+      const uint32_t nqb = gq ? (T * G + 31) / 32 : (T + 31) / 32, gy = gq ? Hkv : Hq, tiles = (L + 31) / 32;
+      if (a == "auto") {
+        ns = (100 + nqb * gy - 1) / (nqb * gy);
+        ns = std::min({ns, tiles / 8, max_rows / T, 16u});
+      } else {
+        ns = atoi(a.c_str());
+      }
+      if (ns * T > max_rows) fatal("nsplit %u x T %u > %u", ns, T, max_rows);
+    }
     Pipeline pl = g.pipeline(name);
+    static Pipeline red = g.pipeline("attn11_reduce");
     uint32_t qb = (name == "attn_prefill" || name == "attn_prefill5" || name == "attn_prefill6" || name.rfind("attn_prefill7", 0) == 0) ? 4 : 8;
     uint32_t th = name == "attn_prefill" ? 128 : 256, gy = Hkv;
     if (name.rfind("attn_prefill8_q", 0) == 0 || name.rfind("attn_prefill9_q", 0) == 0) { qb = atoi(name.c_str() + 15); th = qb * 64; }
     if (name.rfind("attn_prefill10_q", 0) == 0) { qb = atoi(name.c_str() + 16); th = qb * 64; }
     if (name.rfind("attn_prefill10u_q", 0) == 0) { qb = atoi(name.c_str() + 17); th = qb * 64; }
     if (name.rfind("attn_prefill11", 0) == 0) { qb = 32; th = 256; gy = Hq; }  // 32 queries of one q head
-    auto run = [&]() {
+    const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
+    if (gq) gy = Hkv;
+    auto run = [&](int n = 1) {  // n back-to-back calls in one command buffer, ms per call
       auto e = g.begin();
-      e->use(pl);
-      e->buf(0, q); e->buf(1, kc); e->buf(2, vc); e->buf(3, qg); e->buf(4, out);
-      e->val(5, p);
-      e->dispatch((T + qb - 1) / qb, gy, 1, th);
+      for (int r = 0; r < n; ++r) {
+        e->use(pl);
+        e->buf(0, q); e->buf(1, kc); e->buf(2, vc); e->buf(3, qg); e->buf(4, out);
+        e->val(5, p);
+        if (ns) {
+          e->buf(6, part_o); e->buf(7, part_ml);
+          e->val(8, ns);
+          e->dispatch(nblk, gy, ns, th);
+          e->use(red);
+          e->buf(0, part_o); e->buf(1, part_ml); e->buf(2, qg); e->buf(3, out);
+          e->val(4, p);
+          e->val(5, ns);
+          e->dispatch(T, Hq, 1, D);
+        } else {
+          e->dispatch(nblk, gy, 1, th);
+        }
+      }
       e->commit_and_wait();
-      return e->gpu_ms();
+      return e->gpu_ms() / n;
     };
+    if (ns) name += ":" + std::to_string(ns);
     memset(out.ptr(), 0xff, out.size);  // NaN: rows a kernel fails to write show up as errors
     run();
     double err = 0;
@@ -109,11 +145,15 @@ int main(int argc, char** argv) {
           else err = std::max(err, e);
         }
     if (nan) err = NAN;
-    double best = 1e9;
-    for (int i = 0; i < 3; ++i) best = std::min(best, run());
+    // median of 9 trials of 8 calls each (BENCH_ATTN_REPS overrides the 8)
+    static const int nrep = getenv("BENCH_ATTN_REPS") ? atoi(getenv("BENCH_ATTN_REPS")) : 8;
+    std::vector<double> tv;
+    for (int i = 0; i < 9; ++i) tv.push_back(run(nrep));
+    std::sort(tv.begin(), tv.end());
+    const double best = tv[tv.size() / 2];
     double cs = 0;
     for (int i = 0; i < 1000; ++i) cs += out.as<float>()[i * 37 % (T * Hq * D)];
-    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.1f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f\n", name.c_str(), T, L, Hq,
+    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f\n", name.c_str(), T, L, Hq,
            Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12, err / ref_max, cs);
   }
 }

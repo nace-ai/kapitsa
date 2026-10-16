@@ -23,5 +23,8 @@ Options: `--ctx` (per-slot context), `--slots` (conversations kept warm), `--spe
 - `src/tokenizer/`: byte-level BPE identical to HF tokenizers.
 - `tools/`: `ni_run` (raw generation, `--spec N`, `NI_PROFILE=1` per-kernel GPU profile), kernel benchmarks.
 - `tests/test_server.py`: end-to-end API checks.
+- `bench/shortpf/`: cached-turn / short-prompt TTFT through the server with the benchmark harness's request
+  pattern (`serve_ttft.sh` + `cached_ttft.py`, `--cold-check` compares a cached turn with the same conversation
+  sent cold), `serve_test.sh` (server + test_server.py), `cmp_logits.py`.
 
 Performance notes and history: `docs/PERF.md`. Third-party (MIT): nlohmann/json, minja, cpp-httplib.
