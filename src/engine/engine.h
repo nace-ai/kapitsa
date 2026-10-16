@@ -27,6 +27,7 @@ struct EngineOptions {
   int context = 32768;         // capacity of each slot (tokens)
   int slots = 2;               // conversations kept warm at once (each has its own KV/state)
   int prefill_chunk = 2048;
+  int spec_depth = 1;          // MTP draft tokens per cycle (0 = plain decoding)
 };
 
 struct ChatRequest {
@@ -89,6 +90,8 @@ class Engine {
   std::mutex mu_;
   uint64_t clock_ = 0;
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
+  bool spec_ = false;
+  long spec_cycles_ = 0, spec_accepted_ = 0;
 };
 
 } // namespace ni

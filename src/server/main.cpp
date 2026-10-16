@@ -90,6 +90,7 @@ int main(int argc, char** argv) {
     else if (a == "--port") port = std::stoi(next());
     else if (a == "--ctx") opt.context = std::stoi(next());
     else if (a == "--slots") opt.slots = std::stoi(next());
+    else if (a == "--spec") opt.spec_depth = std::stoi(next());
     else if (a == "--prefill-chunk") opt.prefill_chunk = std::stoi(next());
     else if (a == "--api-key") api_key = next();
     else fatal("unknown option %s", a.c_str());

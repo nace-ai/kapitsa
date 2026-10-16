@@ -46,6 +46,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  spec_ = opts_.spec_depth > 0 && model_->has_mtp();
+  if (opts_.spec_depth > Qwen35::kMaxVerify - 1) opts_.spec_depth = Qwen35::kMaxVerify - 1;
 
   auto add_slot = [&](int cap) {
     Slot s;
@@ -55,7 +57,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
-  logi("engine ready: %s, context %d, %d slots", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots));
+  logi("engine ready: %s, context %d, %d slots, %s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
+       spec_ ? ("MTP speculative decoding depth " + std::to_string(opts_.spec_depth)).c_str() : "plain decoding");
 }
 
 Engine::~Engine() = default;
@@ -333,10 +336,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   double t0 = now_ms();
   const int C = model_->prefill_chunk();
   int p = start;
+  int last_chunk_row = 0;
   while (p < n) {
     int T = std::min(C, n - p);
     if (boundary > p && boundary < p + T) T = boundary - p;  // split so the checkpoint lands exactly
     model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
+    // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
+    if (spec_) model_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    last_chunk_row = n - 1 - p;
     p += T;
     if (p == boundary) {
       Checkpoint* c = &slot.ckpts[0];
@@ -358,58 +365,110 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   double t1 = now_ms();
   int gen = 0;
   std::string content_so_far;
-  std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
-  int pos = n;                    // position of the newest sampled token
-  auto encode_at = [&](int q) {
-    auto x = g.begin();
-    model_->encode_step(*x, s, q, sp, uint32_t(q), true);
-    x->commit();
-    return x;
-  };
-  if (r.max_tokens > 1) next = encode_at(pos);
   std::string finish;
-  while (true) {
-    int t = s.tokens()[pos];  // available: produced by the previous (completed) command buffer
+  // Handles one generated token; returns false when generation must stop (finish is set).
+  auto handle = [&](int t) -> bool {
     ++gen;
-    bool is_eos = std::find(eos.begin(), eos.end(), t) != eos.end();
-    if (is_eos) {
+    if (std::find(eos.begin(), eos.end(), t) != eos.end()) {
       finish = "stop";
-    } else {
-      ChatDelta d = parser.push(t);
-      bool keep = true;
-      if (!d.content.empty()) {
-        content_so_far += d.content;
-        for (auto& st : r.stop) {
-          size_t at = st.empty() ? std::string::npos : content_so_far.find(st);
-          if (at != std::string::npos) {
-            size_t over = content_so_far.size() - at;
-            d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
-            finish = "stop";
-            break;
-          }
+      return false;
+    }
+    ChatDelta d = parser.push(t);
+    if (!d.content.empty()) {
+      content_so_far += d.content;
+      for (auto& st : r.stop) {
+        size_t at = st.empty() ? std::string::npos : content_so_far.find(st);
+        if (at != std::string::npos) {
+          size_t over = content_so_far.size() - at;
+          d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
+          finish = "stop";
+          break;
         }
       }
-      res.reasoning += d.reasoning;
-      res.content += d.content;
-      for (auto& tc : d.tool_calls) res.tool_calls.push_back(tc);
-      if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty()) keep = on_delta(d);
-      if (!keep) finish = "cancelled";
-      if (finish.empty() && gen >= r.max_tokens) finish = "length";
-      if (finish.empty() && pos + 2 >= s.cap) finish = "length";
     }
-    if (!finish.empty()) break;
-    // the step feeding token `pos` is in flight; queue the one after it, then wait
-    auto cur = std::move(next);
-    next = encode_at(pos + 1);
-    cur->wait();
-    ++pos;
-  }
-  // Drain: the step feeding the last token (if encoded) completes, so the live state covers
-  // tokens [0, pos] when it ran, else [0, pos).
-  int fed_until = pos;  // exclusive
-  if (next) {
-    next->wait();
-    fed_until = pos + 1;
+    res.reasoning += d.reasoning;
+    res.content += d.content;
+    for (auto& tc : d.tool_calls) res.tool_calls.push_back(tc);
+    if (!d.reasoning.empty() || !d.content.empty() || !d.tool_calls.empty())
+      if (!on_delta(d)) finish = "cancelled";
+    if (finish.empty() && gen >= r.max_tokens) finish = "length";
+    return finish.empty();
+  };
+  int fed_until = n;  // exclusive: tokens whose effect is in the live state
+  const int depth = spec_ ? opts_.spec_depth : 0;
+  if (depth > 0) {
+    // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
+    // with the pending token, accepted rows are committed through the DeltaNet tape.
+    int P = n, c = 1, h_row0 = last_chunk_row;
+    bool go = handle(s.tokens()[n]);
+    while (go) {
+      if (P + depth + 2 >= s.cap) {
+        finish = "length";
+        break;
+      }
+      auto e2 = g.begin();
+      model_->encode_mtp(*e2, s, P - c, c, P - c + 1, model_->hidden_rows(), h_row0, P + 1);
+      for (int k = 2; k <= depth; ++k)
+        model_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, model_->mtp_post(), k == 2 ? c - 1 : 0, P + k);
+      model_->encode_verify(*e2, s, P, depth + 1, sp, uint32_t(P));
+      e2->commit_and_wait();
+      const int* y = model_->samples();
+      int* tk = s.tokens();
+      int a = 0;
+      while (a < depth && tk[P + 1 + a] == y[a]) ++a;
+      tk[P + a + 1] = y[a];
+      // emit up to a+1 tokens; m = how many were consumed before stopping
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      spec_accepted_ += a;
+      model_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
+      c = m;
+      h_row0 = 0;
+      P += m;
+    }
+    // finish: history rows for the last committed rows, then fold the tape into the state
+    auto e3 = g.begin();
+    if (c > 0 && P - c >= 0) model_->encode_mtp(*e3, s, P - c, c, P - c + 1, model_->hidden_rows(), h_row0, -1);
+    model_->encode_flush(*e3, s);
+    e3->commit_and_wait();
+    fed_until = P;
+  } else {
+    std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
+    int pos = n;                    // position of the newest sampled token
+    auto encode_at = [&](int q) {
+      auto x = g.begin();
+      model_->encode_step(*x, s, q, sp, uint32_t(q), true);
+      x->commit();
+      return x;
+    };
+    if (r.max_tokens > 1) next = encode_at(pos);
+    while (true) {
+      bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
+      if (go && pos + 2 >= s.cap) {
+        finish = "length";
+        go = false;
+      }
+      if (!go) break;
+      // the step feeding token `pos` is in flight; queue the one after it, then wait
+      auto cur = std::move(next);
+      next = encode_at(pos + 1);
+      cur->wait();
+      ++pos;
+    }
+    // Drain: the step feeding the last token (if encoded) completes, so the live state covers
+    // tokens [0, pos] when it ran, else [0, pos).
+    fed_until = pos;
+    if (next) {
+      next->wait();
+      fed_until = pos + 1;
+    }
   }
   ChatDelta tail = parser.finish();
   res.reasoning += tail.reasoning;
@@ -417,6 +476,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (!tail.reasoning.empty() || !tail.content.empty()) on_delta(tail);
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   res.completion_tokens = gen;
+  if (depth > 0 && spec_cycles_ > 0)
+    logd("spec: %.2f accepted/drafted over %d cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
