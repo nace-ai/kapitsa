@@ -169,9 +169,13 @@ buffers are not in any process footprint: system wired memory rose 43-55 MB at t
 by the end of the first split chunk, which also wires the surfaces and checkpoint (0.79 GB), leaving roughly
 0.17-0.34 GB for the service (noisy: other processes).
 
+Server (`nace-infer-server`, 27B default MTP depth 2, two ~4,575-token chat requests with 48 new tokens each):
+21.0 s per request with `NI_ANE=1` against 45.1 / 44.7 s on the GPU alone, with identical replies (the engine
+waits for each split chunk and would rerun a failed one).
+
 Startup: compiling the 13-function program takes 31-40 s (MIL 115-133 KB, 13-18 MB rotation constant); a later
-process finds it in the ANE daemon's cache (1-3 ms) and loads it in 44-78 ms, but the daemon evicted it once
-within 40 minutes. Row scales: 0.1 s computed, cached on disk (4-5 MB per share). Startup check 0.65-1.0 s.
+process finds it in the ANE daemon's cache (1-3 ms) and loads it in 44-78 ms, but the daemon evicts it:
+twice today, after 10-40 minutes (other processes use the ANE too), so a cold start can pay the compile again. Row scales: 0.1 s computed, cached on disk (4-5 MB per share). Startup check 0.65-1.0 s.
 
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
