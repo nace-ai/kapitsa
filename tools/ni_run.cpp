@@ -169,6 +169,19 @@ int main(int argc, char** argv) {
     }
     if (end != n) { fprintf(stderr, "plan: the last pass ends at %d, not at the prompt length %d\n", end, n); return 1; }
     std::copy(ids.begin(), ids.end(), s.tokens());  // tokens[n] holds the sampled first token
+  } else if (tbt && dump_all) {
+    // teacher-forced: every prompt position's logits through the decode path (one step per command
+    // buffer; the sampled token is replaced by the prompt's next token), then decoding continues
+    FILE* f = fopen(dump_all, "wb");
+    for (int q = 0; q < n; ++q) {
+      auto e = g.begin();
+      m.encode_step(*e, s, q, sp, 0, true);
+      e->commit_and_wait();
+      fwrite(m.logits(), 4, m.config().vocab, f);  // row q predicts token q + 1
+      if (q + 1 < n) s.tokens()[q + 1] = ids[q + 1];
+    }
+    fclose(f);
+    dump_all = nullptr;  // the decode loop below appends nothing
   } else if (tbt) {
     // token by token through the decode path (reference for the batched prefill)
     for (int p = 0; p < n; p += 32) {
