@@ -749,7 +749,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.buf(0, inv_freq_); e.buf(1, rope_cs_);
     e.val(2, Pk);
     e.buf(3, gst_);
-    e.dispatch(8, 1, 1, 64);  // 512 precise sin/cos: spread over 8 threadgroups (1 x 512 took ~50-100 us)
+    e.dispatch(1, 1, 1, 512);
   }
   uint32_t lo, chunk, nsplit;
   dfl_attn_plan(P, uint32_t(max_splits_), 0, &lo, &chunk, &nsplit, d.valid_lo);

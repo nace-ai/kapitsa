@@ -207,7 +207,7 @@ struct DflConvParams {
 
 // ---- attention ----
 // cos/sin of the 8 block positions P + r for the 64 frequencies (shared by every draft layer):
-// cs[r * 64 + i] = (cos, sin)(float(P + r) * inv_freq[i]). grid: 512 threads (8 x 64).
+// cs[r * 64 + i] = (cos, sin)(float(P + r) * inv_freq[i]). grid 1 x 512.
 [[kernel]] void dfl_rope_table(const device float* inv_freq [[buffer(0)]], device float2* cs [[buffer(1)]],
                                constant uint& P [[buffer(2)]], const device uint* gst [[buffer(3)]],
                                uint i [[thread_position_in_grid]]) {
