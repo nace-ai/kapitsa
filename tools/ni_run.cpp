@@ -97,15 +97,13 @@ int main(int argc, char** argv) {
       t0 = now_ms();
     }
     if (split && (split <= prefix || split >= n)) { fprintf(stderr, "--split must be in (prefix, n)\n"); return 1; }
-    for (int rep = 0; rep < pf_reps; ++rep) {
-      if (rep) {
-        if (!prefix) m.reset(s);
-        t0 = now_ms();
-      }
+    // one timed prefill of ids[prefix, n) as the server runs it (checkpoint at --split); returns GPU ms
+    auto prefill_pass = [&]() {
       double gpu = 0;
       int p = prefix;
       auto e = g.begin();
       if (prefix) m.restore(*e, s, ck0);
+      else m.reset(s);
       while (p < n) {
         int T = std::min(C, n - p);
         Checkpoint* snap = nullptr;
@@ -123,6 +121,11 @@ int main(int argc, char** argv) {
         gpu += e->gpu_ms();
         if (p < n) e = g.begin();
       }
+      return gpu;
+    };
+    for (int rep = 0; rep < pf_reps; ++rep) {
+      if (rep) t0 = now_ms();
+      const double gpu = prefill_pass();
       if (pf_reps > 1)
         fprintf(stderr, "prefill rep %d: %d tok in %.2f ms (GPU %.2f ms)\n", rep, n - prefix, now_ms() - t0, gpu);
       if (pf_reps > 1 && Encoder::profiling()) Encoder::profile_report(1);
@@ -150,6 +153,10 @@ int main(int argc, char** argv) {
       }
       fprintf(stderr, "snapshot at %d vs separate prefill: conv max|d| %.3g, state max|d| %.3g (max|state| %.3g)\n",
               split, dc, dr, mr);
+      // the reference prefill replaced the live state: run the timed pass again before decoding
+      const double tk = now_ms();
+      prefill_pass();
+      t0 += now_ms() - tk;
     }
   }
   double t_prompt = now_ms() - t0;
