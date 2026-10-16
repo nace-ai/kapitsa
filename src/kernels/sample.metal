@@ -111,10 +111,12 @@ NI_INLINE uint pcg_hash(uint v) {
   if (tid == 0) {
     uint chosen = topi[0];
     if (p.temp > 0.0f && K > 1) {
+      // top-p is taken on the untempered distribution (llama.cpp's and mlx-lm's order: top-k,
+      // top-p, then temperature), then the kept candidates are sampled at temperature p.temp.
       float probs[64];
       float tot = 0.0f;
       for (uint r = 0; r < K; ++r) {
-        probs[r] = metal::precise::exp((topv[r] - topv[0]) / p.temp);
+        probs[r] = metal::precise::exp(topv[r] - topv[0]);
         tot += probs[r];
       }
       // top-p over the sorted candidates (always keep the first)
@@ -125,7 +127,10 @@ NI_INLINE uint pcg_hash(uint v) {
         if (cum >= p.top_p) { keep = r + 1; break; }
       }
       float kt = 0.0f;
-      for (uint r = 0; r < keep; ++r) kt += probs[r];
+      for (uint r = 0; r < keep; ++r) {
+        probs[r] = metal::precise::exp((topv[r] - topv[0]) / p.temp);
+        kt += probs[r];
+      }
       float u = float(pcg_hash(p.seed ^ pcg_hash(p.step)) & 0xffffff) / 16777216.0f * kt;
       chosen = topi[keep - 1];
       float acc = 0.0f;

@@ -89,6 +89,119 @@ Plain decode reads 15.1 GB/token: 16.0 tok/s = 242 GB/s. Prefill 111 tok/s at 4k
 Small-batch kernels on M4 Pro are FMA-bound beyond 2 rows: the simdgroup-matrix route pads rows to 8 and runs on
 the same ALUs, and the prefill GEMM kernel reaches only ~70 GB/s at 4-16 rows (tile staging per step).
 
+## Dense prefill GEMM v2: qmr (opt-in `NI_QMM=1`, + `NI_QMM_GU=1`), macOS 27.0.1
+`src/kernels/qmm3.metal`, selected in `Qwen35::enc_qmm` / `enc_qmm_gu`. All numbers below on macOS
+27.0.1 (MSL 3.1 source, runtime-compiled). The GPU was shared all day and its speed drifted by up to
+~20% between sessions, so compare numbers within one row/session only (all A/B runs interleaved).
+
+simdgroup-matrix ceiling (`bench_mma`: 8x8x8 MMAs on registers only, 2048 x 128 threads): half x half
+-> float 7.41 TFLOP/s, float x float 7.44-7.59, half -> half 7.84 (fp32 FMA loop 6.75). The MMAs plus
+the B-fragment loads of the qmr kernel alone (ablation below) reach 7.51.
+
+Kernel TFLOP/s, M = 2048 (bench_qmm medians; MLX 0.32.4 `mx.quantized_matmul`, same 4-bit g64 data,
+fp16 / bf16 activations, 3 timed loops after warm-up):
+| shape (27B) | qmm_b4_m64_n64 (old default) | qmm2_b4_m64_n64 | MLX fp16 / bf16 | qmr_k32_w14_m32_n128 |
+|---|---|---|---|---|
+| session A (morning, cool) | | | | |
+| 2048x17408x5120 gate/up | 6.15-6.20 | 6.34-6.51 | 6.26-6.58 / 6.23-6.32 | 7.10-7.13 |
+| 2048x5120x17408 down | 5.90-6.01 | 6.23-6.37 | 6.44-6.48 / 6.43-6.49 | 6.99-7.04 |
+| 2048x5120x6144 out_proj | 5.98-6.15 | 5.99-6.45 | 6.59-6.65 / 6.61-6.64 | 6.88-7.13 |
+| 2048x16384x5120 qkv+z | 6.06-6.18 | 6.27-6.61 | 6.57-6.62 / 6.59-6.67 | 7.16-7.17 |
+| session B (11:35, one locked script, GPU ~15% slower) | | | | |
+| gate/up | 5.30 | 5.62 | 5.29-5.85 / 5.00-5.24 | 6.19 |
+| down | 5.02 | 5.34 | 4.97-5.07 / 4.96-5.10 | 5.96 |
+| out_proj | 5.07 | 5.39 | 5.03-5.18 / 5.14-5.20 | 6.00 |
+| qkv+z | 5.07 | 5.36 | 5.20-5.27 / 5.32-5.36 | 5.95 |
+35B shapes (session A, us): 2048x8192x2048 10896 -> 9498 (6.31 -> 7.24 TFLOP/s), 2048x4096x2048
+5497 -> 4799, 2048x2048x4096 5704 -> 4893, 2048x512x2048 764 -> 639, 2048x2048x512 716 -> 622,
+2048x1024x5120 3664 -> 3080, 2048x12288x5120 42925 -> 36982; N = 48 (GDN b/a): 578 -> 265
+(qmr_k64_w14_m16_n64, picked for N <= 64).
+
+What MLX runs (v0.32.4, `affine_qmm_t`). The M4 Pro is `applegpu_g16s`: `is_nax_available()` needs
+macOS 26.2+ AND architecture generation >= 17, so the macOS 26/27 NAX (neural accelerator) kernels are
+never used on this GPU, and macOS 27 changes nothing in MLX's choice. `QuantizedMatmul::eval_gpu` ->
+`qmm_splitk` -> split_k = 512 / (N/32 * M/32) = 1 for these shapes -> `qmm`:
+* tile BM = BN = BK = 32, 128 threads as 2 x 2 simdgroups of 16 x 16 (2 x 2 fragments each);
+  threadgroup memory Xs[32 x 40] + Ws[32 x 40] of T (5 KB); no double buffering, no register
+  prefetch, no swizzle (grid x = N tiles: neighbouring threadgroups share the X tile).
+* X: steel `BlockLoader`, one 8-element vector per thread per K step.
+* W: `QuantizedBlockLoader` dequantizes into threadgroup memory: each thread reads 4 bytes (8 values)
+  and one scale/bias (the pointer advances every second step: group 64 / BK 32), computes in float
+  `s * (b & 0x0f) + bias` and `(s / 16) * (b & 0xf0) + bias` (no shifts), stores 8 scalars of T.
+* K loop: barrier, load X, dequantize W, barrier, `BlockMMA::mma`: per 8-wide K slice, per-lane loads
+  of the A and B fragments from threadgroup memory converted to float (A/B are `float` simdgroup
+  matrices), `simdgroup_barrier(mem_none)` fences, 4 float MMAs.
+* epilogue: each lane stores its 2 accumulator elements straight to device memory (as T).
+Its dequantization work per MMA is twice ours (32 instead of 64 rows share a W tile) and every operand
+passes through threadgroup memory, but the small footprint (5 KB, few registers) keeps many threadgroups
+per core, which hides barriers and dequant: 85-90% of the MMA ceiling. The old `qmm_b4_m64_n64` has
+the same structure with a 4x larger tile (10 KB, 52 GPRs) but 8-byte X loads, 2-byte W stores, a
+scale/bias reload per word and an epilogue staged through threadgroup memory with simdgroup barriers;
+`qmm2_b4_m64_n64` (16-byte loads/stores, unrolled, register epilogue) is at MLX's level.
+
+qmr keeps W out of threadgroup memory:
+* C = W_tile * X_tile^T with W as the A operand. In an 8x8 A fragment a lane holds row r and columns
+  2c, 2c+1. The K order inside each 32-block is permuted (fragment f, column 2c+e <-> nibble (f%4)+4e of
+  word c) so that a lane's A elements for the 4 K-slices of a step are exactly the 8 nibbles of ONE
+  packed word of its row. `((w >> 4j) & 0x000F000F) | 0x34003400` is the half2
+  (0.25 + q_j/4096, 0.25 + q_j+4/4096); minus 0.25, times 4096*scale, plus bias (half2 FMA) gives the
+  dequantized pair: ~2.5 instructions per weight, each weight dequantized once per threadgroup
+  (simdgroups split N) straight into registers. The 4096 factor keeps both factors of q*s normal halfs
+  (a plain half scale is subnormal below 6.1e-5: 2162 scales of the 27B, 14818 of the 35B's dense
+  projections; checked with `QMM_SCALE=1e-3 / 1e-4`).
+* X is staged once per threadgroup in the same permuted K order (4 x 4-byte stores per 16-byte chunk)
+  and read as the transposed B operand with `simdgroup_load`.
+* tile 32 (M) x 128 (N), BK 32, 4 simdgroups along N, each 32 x 32 (4 x 4 fragments: per K slice 4
+  dequantized A fragments + 4 B loads feed 16 MMAs). 80 GPRs, no stack, 5 KB threadgroup memory.
+  Register epilogue (fp32, optional +=). M < 64 or N <= 64: `qmr_k64_w14_m16_n64` (44 GPRs);
+  M <= 8: `qmr_k64_w12_m8_n64`.
+* Ablation (gate/up and down shapes, session B-like GPU, med TFLOP/s): full 6.89 / 6.42; no dequant
+  math 7.22 / 6.78; no X staging 7.31 / 6.81; no X staging or barriers 7.35 / 6.88; no W loads 7.32 /
+  6.80; only MMAs + B loads 7.51 / 7.05. Overhead left: ~8% over the MMA ceiling, spread over the
+  dequant (~5%), X staging and W load latency.
+Tried, not better (within ~1-2% or slower): BK 64 (93 GPRs) and 128 (spills), 64 x 64 tiles (1 x 4 or
+2 x 2 simdgroups), 64 x 128 and 32 x 256 with 8 simdgroups, two X buffers with one barrier per step,
+register prefetch of the next step's X and W (96 GPRs + spill) or of W only (92 GPRs), M-tile swizzle
+(2 or 3 tile rows walked together). `qmr_k64_w12_m32_n64` (2 simdgroups) is as fast but sits at 96
+GPRs with 16 B of stack.
+
+Short prefills (old path: qmm_b4_m32_n32 below 64 rows), us: N=17408 K=5120 at M = 8 / 16 / 32 / 48:
+1201 / 1213 / 1234 / 2339 -> 302 (m8) / 479 / 889 / 1294-1317 (m16_n64); M=63 N=5120 K=17408 2647 ->
+1799; M=16 N=5120 K=17408 1325 -> 543; M=48 N=5120 K=6144 908 -> 488.
+
+`NI_QMM_GU=1` (needs NI_QMM): `qmr_gu_*` computes gate and up from one X tile (simdgroup tile 32 x
+(16 gate + 16 up) rows) and writes half(silu(g) * u): no fp32 hg/hu (2 x 143 MB per 27B layer at 2048
+rows) and no swiglu pass; also used for the 35B's dense shared expert. Kernel: 6.95-6.98 TFLOP/s
+counting both projections vs 6.88 for qmr on each (2048 x 17408 x 5120, same session); identical
+fp32 accumulation order, so outputs are bit-identical to NI_QMM=1 alone (checked on 27B and 35B logits).
+
+End to end (ni_run n_gen 1, tok/s, interleaved in one locked script per row; the first run of a
+script pays a warm-up, marked *):
+| model, prompt | default | NI_QMM=1 | NI_QMM=1 NI_QMM_GU=1 |
+|---|---|---|---|
+| 27B p4000, 08:35 | 102.8, 101.6 | 122.6, 125.6 | |
+| 27B p4000, 08:50 (with --dump-logits) | 108.7 | 131.4 | |
+| 27B p4000, 13:34 (slow GPU) | 90.5* | 108.7 | 109.1 |
+| 27B p4000, reverse order | (pending) | | |
+| 27B p16000 | (pending) | | |
+| 35B p4000, 08:40 | 939.3, 940.2 | 1009.4, 1011.9 | |
+| 35B p4000, 14:47 | 771.7*, 932.7 | 984.6, 992.7 | 1000.8, 987.5 |
+| 35B p16000, 14:48 | 738.4, 701.2 | | 753.0, 727.5 |
+MLX 0.32.4 (mlx_lm.stream_generate prompt_tps, same weights and ids), 27B p4000 at 08:30: 122.3, 124.7.
+
+Correctness vs the default path:
+* 27B code_27b, 256 greedy tokens: identical (NI_QMM=1 and NI_QMM=1 NI_QMM_GU=1).
+* 27B p4000 logits: max |diff| 0.016, rms 0.0035, KL 1.8e-9, same top-1, top-2 margin 7.709 vs 7.707.
+* 35B code_35b, 256 greedy tokens: identical. 35B p4000 logits: max |diff| 0.79, rms 0.17, KL 2.0e-5,
+  same top-1 (margin 7.54 vs 7.46). That is the 35B's own rounding-noise band (routing near-ties
+  amplify it): the default path against itself with `NI_MATH_SAFE=1` differs by max 0.86, rms 0.165,
+  KL 2.5e-5. Against MLX 0.32.4 (bf16) logits: default rms 0.301 / KL 1.0e-4, qmr rms 0.307 / KL 1.5e-4.
+* bench_qmm error (max relative over 64 sampled outputs vs a double reference on the dequantized
+  halfs) 2.5e-6 - 3.9e-5 for qmr, same range as qmm_b4 / qmm2; qmr_gu 2.4e-4 - 4.5e-4 (half output).
+
+Tools on macOS 27: `ni_kstats --stats` prints "regs n/a" (the AGX pipeline object layout changed);
+`NI_ARCHIVE_DIR=<dir> ni_compile <kernels>` still reports GPRs and stack.
+
 ## Register spills (`ni_kstats --stats`)
 The AGX pipeline object records each kernel's temporary registers and stack spill per thread;
 `ni_kstats --stats [kernels]` prints them (no GPU work). The 32-row GEMM "tile anomaly" is a spill:
