@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <set>
+#include <thread>
 #include <unordered_map>
 
 namespace ni {
@@ -188,6 +190,48 @@ void Qwen35::enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buff
   e.dispatch(tg, (M + t.bm - 1) / t.bm, 1, t.th);
 }
 
+// Creates the compute pipelines the prefill paths can pick (every short-prefill variant the row
+// count can select, and the large-prefill GEMM / attention / MoE / GDN kernels) at load, in
+// parallel, instead of at first use: on a binary whose kernels are not in the system shader cache
+// yet each first use compiles (the first cached turns of a new build took 250-330 ms instead of
+// 90-120 ms). With a warm cache this takes ~0.1 s. NI_PREWARM=0 skips it.
+void Qwen35::prewarm_pipelines() {
+  if (getenv("NI_PREWARM") && !strcmp(getenv("NI_PREWARM"), "0")) return;
+  const double t0 = now_ms();
+  std::set<std::string> names = {"embed_q4", "rows_to_half", "attn_prep", "attn_prefill11", "swiglu_half",
+                                 "moe_topk_rows", "moe_bucket", "moe_bucket2", "moe_combine", "copy_u32",
+                                 "gdn_prep_par", "gdn_step_par_l16", "gdn_gnorm", "topk_stage1", "sample_stage2",
+                                 "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
+                                 "qmr_gu_k32_w14_m32_n64", "qmr_gu_k64_w14_m16_n64", "qmr_gu_k64_w12_m8_n32",
+                                 "qmm_b8_m32_n32", "qmm_moe_gu_b4_m64_n32", "qmm_moe_dn_b4_m64_n64"};
+  if (shortpf()) {
+    for (int M = 1; M <= std::max(1, shortpf_max()); ++M) {
+      names.insert(short_tile(M, false, false).name);
+      names.insert(short_tile(M, false, true).name);
+      names.insert(short_tile(M, true, false).name);
+    }
+    for (int b : {4, 8})
+      for (int t = 1; t <= 8; ++t) {
+        names.insert("qmms_b" + std::to_string(b) + "_t" + std::to_string(t));
+        names.insert("qmms_gu_b" + std::to_string(b) + "_t" + std::to_string(t));
+      }
+    for (const char* n : {"qmms_moe_gu_b4", "qmms_moe_dn_b4", "attn_prefill11g", "attn_prefill11gs", "attn11_reduce",
+                          "gdn_prep_par_snap", "gdn_step_par_snap_l16"})
+      names.insert(n);
+  }
+  std::vector<std::string> v(names.begin(), names.end());
+  Gpu& g = Gpu::get();
+  g.pipeline(v[0]);  // compiles the library once, before the threads
+  const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+  std::vector<std::thread> th;
+  for (unsigned i = 0; i < nt; ++i)
+    th.emplace_back([&, i] {
+      for (size_t j = i; j < v.size(); j += nt) g.pipeline(v[j], false);
+    });
+  for (auto& t : th) t.join();
+  logi("prewarmed %zu prefill pipelines in %.0f ms", v.size(), now_ms() - t0);
+}
+
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   json t = root.contains("text_config") ? root["text_config"] : root;
@@ -338,6 +382,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   if (!getenv("NI_NO_MTP")) load_mtp(dir);
   Gpu::get().make_resident(ws_.buffers());
   alloc_state();
+  prewarm_pipelines();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0);
 }

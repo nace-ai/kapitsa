@@ -140,6 +140,7 @@ class Qwen35 {
   void load_config(const std::string& dir);
   QLinear qlin(const std::string& name, bool required = true);
   void alloc_state();
+  void prewarm_pipelines();
 
   void enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, const Buffer* resid,
                const Tensor* norm);
