@@ -37,6 +37,9 @@ struct Surface {
   std::string buffer_type(uint32_t r, uint32_t w) const;
 };
 Surface make_surface(uint32_t rows, uint32_t width, bool fp16);  // throws std::runtime_error
+// The same rows/width/stride/bytes as make_surface, with no IOSurface or Metal buffer: enough to
+// generate MIL that addresses such a surface (FfnSplit compile-only mode).
+Surface surface_layout(uint32_t rows, uint32_t width, bool fp16);
 void free_surface(Surface& s);
 
 // MIL blob storage v2 holding one fp16 constant at offset 64 (data at 128).

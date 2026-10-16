@@ -1,6 +1,8 @@
 // Qwen3.5 / 3.6 / 3.8 hybrid model (Gated DeltaNet + gated full attention, 3:1), dense or MoE,
 // MLX affine-quantized safetensors.
 #pragma once
+#include <atomic>
+#include <thread>
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
 
@@ -13,6 +15,8 @@ namespace ni {
 
 namespace ane {
 class FfnSplit;
+struct FfnConfig;
+struct FfnLayer;
 }
 
 struct QLinear {
@@ -125,6 +129,9 @@ class Qwen35 {
     double ane_ms = 0;
   };
   const AneStats& ane_stats() const { return ane_stats_; }
+  // NI_ANE_ASYNC (the server): finish the Neural Engine split once its background compile is done.
+  // Call between requests (it runs the startup check through the model's buffers).
+  void ane_poll();
 
   std::unique_ptr<Seq> new_seq(int cap);
   // Clears recurrent state (KV entries are overwritten by position, so they need no reset).
@@ -228,6 +235,18 @@ class Qwen35 {
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
   // ANE split (qwen35_ane.cpp)
   void init_ane();
+  void ane_finish_init();  // builds the split (program from the daemon's cache when warm) + startup check
+  ane::FfnConfig ane_cfg(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
+                         int lanes) const;
+  std::vector<ane::FfnLayer> ane_layers() const;
+  struct AneInit {
+    uint32_t units = 0, min_rows = 0;
+    std::vector<uint32_t> fns;
+    int fault = -1, lanes = 1;
+    const char* source = "";
+  } ane_init_;
+  std::thread ane_thread_;                           // NI_ANE_ASYNC: background compile of the program
+  std::shared_ptr<std::atomic<int>> ane_async_st_;   // 1 compiling, 2 compiled, 3 failed
   void ane_begin_chunk(int T);
   void enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& x,
                          Checkpoint* snap = nullptr, int snap_row = 0);

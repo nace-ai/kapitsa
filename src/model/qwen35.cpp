@@ -391,7 +391,10 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   if (!cfg_.moe && !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0"))) init_ane();
 }
 
-Qwen35::~Qwen35() = default;
+Qwen35::~Qwen35() {
+  // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
+  if (ane_thread_.joinable()) ane_thread_.detach();
+}
 
 void Qwen35::alloc_state() {
   Gpu& g = Gpu::get();

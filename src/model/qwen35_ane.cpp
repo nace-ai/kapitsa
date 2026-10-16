@@ -112,8 +112,48 @@ void Qwen35::init_ane() {
   }
   const int fault = getenv("NI_ANE_FAULT") ? atoi(getenv("NI_ANE_FAULT")) : -1;
   const int lanes = wave ? 2 : 1;
-  if (!ane_rebuild(units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes)) return;
-  const char* source = getenv("NI_ANE_UNITS") ? "NI_ANE_UNITS" : have_cal ? "calibration" : "default for this chip";
+  ane_init_ = {units, min_rows, parse_rows(getenv("NI_ANE_FNS")), fault, lanes,
+               getenv("NI_ANE_UNITS") ? "NI_ANE_UNITS" : have_cal ? "calibration" : "default for this chip"};
+  if (env_on("NI_ANE_ASYNC")) {
+    // The server path: the ANE daemon compiles the program in the background (~40 s when it has
+    // evicted it, ~0.1 s when it still holds it); prefill runs on the GPU alone until ane_poll()
+    // sees the compilation done and builds the split from the daemon's cache.
+    ane::FfnConfig c = ane_cfg(units, min_rows, ane_init_.fns, fault, lanes);
+    c.compile_only = true;
+    auto st = std::make_shared<std::atomic<int>>(1);
+    ane_async_st_ = st;
+    ane_thread_ = std::thread([st, c, ls = ane_layers()]() mutable {
+      const double t0 = now_ms();
+      try {
+        ane::FfnSplit warm(c, std::move(ls));
+        logi("NI_ANE: Neural Engine program ready in the background (%s, %.1f s)", warm.startup_note().c_str(),
+             (now_ms() - t0) / 1000);
+        st->store(2);
+      } catch (const std::exception& e) {
+        logi("NI_ANE: Neural Engine split unavailable (%s); the GPU runs the prefill FFN alone", e.what());
+        st->store(3);
+      }
+    });
+    logi("NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready");
+    return;
+  }
+  ane_finish_init();
+}
+
+void Qwen35::ane_poll() {
+  if (!ane_async_st_) return;
+  const int st = ane_async_st_->load();
+  if (st == 1) return;  // still compiling
+  if (ane_thread_.joinable()) ane_thread_.join();
+  ane_async_st_.reset();
+  if (st == 2) ane_finish_init();
+}
+
+void Qwen35::ane_finish_init() {
+  const uint32_t units = ane_init_.units, min_rows = ane_init_.min_rows;
+  const int fault = ane_init_.fault, lanes = ane_init_.lanes;
+  if (!ane_rebuild(units, min_rows, ane_init_.fns, fault, lanes)) return;
+  const char* source = ane_init_.source;
   logi("NI_ANE: Neural Engine FFN split%s: %u/%d units (%u channels; GPU %u) from the %s, chunks >= %u rows; %s; "
        "%.1f MB Metal; ready in %.1f s",
        lanes > 1 ? " (wavefront)" : "", units, cfg_.dense_I / 512, ane_->ane_channels(), ane_->gpu_channels(), source,
@@ -147,9 +187,8 @@ void Qwen35::init_ane() {
   }
 }
 
-bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
-                         int lanes) {
-  ane_.reset();
+ane::FfnConfig Qwen35::ane_cfg(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
+                               int lanes) const {
   ane::FfnConfig c;
   c.lanes = lanes;
   c.units = units;
@@ -158,13 +197,23 @@ bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<ui
   c.fault_layer = fault_layer;
   c.cache_dir = ane::cache_dir();
   c.model_key = ane::model_key(dir_);
+  return c;
+}
+
+std::vector<ane::FfnLayer> Qwen35::ane_layers() const {
   std::vector<ane::FfnLayer> ls;
   for (const Layer& L : layers_)
     ls.push_back({{L.mg.w->buf, L.mg.s->buf, L.mg.b->buf, L.mg.N, L.mg.K},
                   {L.mu.w->buf, L.mu.s->buf, L.mu.b->buf, L.mu.N, L.mu.K},
                   {L.md.w->buf, L.md.s->buf, L.md.b->buf, L.md.N, L.md.K}});
+  return ls;
+}
+
+bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<uint32_t>& fn_rows, int fault_layer,
+                         int lanes) {
+  ane_.reset();
   try {
-    ane_ = std::make_unique<ane::FfnSplit>(c, std::move(ls));
+    ane_ = std::make_unique<ane::FfnSplit>(ane_cfg(units, min_rows, fn_rows, fault_layer, lanes), ane_layers());
   } catch (const std::exception& e) {
     logi("NI_ANE: Neural Engine split unavailable (%s); the GPU runs the prefill FFN alone", e.what());
     ane_.reset();

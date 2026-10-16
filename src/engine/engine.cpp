@@ -274,6 +274,7 @@ class OutputParser {
 } // namespace
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
+  model_->ane_poll();  // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled
   std::lock_guard<std::mutex> lk(mu_);
   const double t_req = now_ms();
   ChatResult res;

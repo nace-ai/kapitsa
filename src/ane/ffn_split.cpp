@@ -94,6 +94,11 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
   for (uint32_t r : fn_rows_)
     if (r % 32 || r > kMaxRows) throw std::runtime_error("function rows must be multiples of 32 up to 2048");
 
+  if (c.compile_only) {
+    compile_program_only();
+    startup_ms_ = now_ms() - t0;
+    return;
+  }
   // Everything below allocates: a failure (e.g. the ANE refuses the program) must free what was
   // made so far, since the caller falls back to the GPU and keeps running.
   try {
@@ -163,18 +168,9 @@ void FfnSplit::init_resources() {
   const double scales_ms = now_ms() - t1;
 
   // ---- the program: one function per row count ----
-  std::string mil = "program(1.3)\n{\n";
-  for (uint32_t r : fn_rows_) mil += function(r);
-  mil += "}\n";
-  std::vector<_Float16> rot(size_t(ane_) * kBlock);
-  const float nrm = 1.f / std::sqrt(float(kBlock));
-  for (uint32_t ch = 0; ch < ane_; ++ch)
-    for (uint32_t i = 0; i < kBlock; ++i) {
-      const uint32_t o = ch % kBlock;
-      const float h = (std::popcount(o & i) & 1) ? -1.f : 1.f;
-      rot[size_t(ch) * kBlock + i] = _Float16(signs_host_[o] * h * nrm);
-    }
-  const std::vector<uint8_t> blob = fp16_blob(rot.data(), rot.size());
+  std::string mil;
+  std::vector<uint8_t> blob;
+  program_source(mil, blob);
   const double t2 = now_ms();
   wired0_ = wired_mb();
   prog_ = std::make_unique<Program>(mil, blob, "nace-infer-ane");
@@ -223,6 +219,51 @@ void FfnSplit::init_resources() {
 }
 
 FfnSplit::~FfnSplit() { free_all(); }
+
+void FfnSplit::program_source(std::string& mil, std::vector<uint8_t>& blob) {
+  mil = "program(1.3)\n{\n";
+  for (uint32_t r : fn_rows_) mil += function(r);
+  mil += "}\n";
+  std::vector<_Float16> rot(size_t(ane_) * kBlock);
+  const float nrm = 1.f / std::sqrt(float(kBlock));
+  for (uint32_t ch = 0; ch < ane_; ++ch)
+    for (uint32_t i = 0; i < kBlock; ++i) {
+      const uint32_t o = ch % kBlock;
+      const float h = (std::popcount(o & i) & 1) ? -1.f : 1.f;
+      rot[size_t(ch) * kBlock + i] = _Float16(signs_host_[o] * h * nrm);
+    }
+  blob = fp16_blob(rot.data(), rot.size());
+}
+
+// FfnConfig::compile_only: the same MIL and blob as init_resources (so the same daemon cache key),
+// generated from layout-only surfaces; compiles (unless the daemon already holds it), loads, and
+// unloads again. No Metal or IOSurface allocation, so it can run on a background thread.
+void FfnSplit::compile_program_only() {
+  const uint32_t nin = hidden_ / kSeg;
+  Lane& L = lane_[0];
+  for (uint32_t k = 0; k < nin; ++k) L.x.push_back(surface_layout(kSeg, kMaxRows, false));
+  L.tx = surface_layout(1, kMaxRows, true);
+  L.y = surface_layout(hidden_ + 1, kMaxRows, true);
+  Set& S = set_[0];
+  for (uint32_t k = 0; k < nin; ++k) {
+    S.wg.push_back(surface_layout(ane_, kSeg, false));
+    S.wu.push_back(surface_layout(ane_, kSeg, false));
+  }
+  for (uint32_t d : dseg_) S.wd.push_back(surface_layout(hidden_, d, false));
+  S.sg = surface_layout(ane_, 1, true);
+  S.su = surface_layout(ane_, 1, true);
+  S.sd = surface_layout(hidden_, 1, true);
+  signs_host_ = make_signs();
+  std::string mil;
+  std::vector<uint8_t> blob;
+  program_source(mil, blob);
+  {
+    Program p(mil, blob, "nace-infer-ane");
+    note_ = p.was_cached ? "program was cached" : "program compiled in " + std::to_string(int(p.compile_ms)) + " ms";
+  }
+  L = Lane{};
+  S = Set{};
+}
 
 void FfnSplit::free_all() {
   h_.reset();

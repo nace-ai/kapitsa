@@ -107,6 +107,9 @@ int main(int argc, char** argv) {
     else fatal("unknown option %s", a.c_str());
   }
   if (opt.model_dir.empty()) fatal("--model is required");
+  // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
+  // daemon evicted it); ni_run and the benchmarks build it synchronously
+  setenv("NI_ANE_ASYNC", "1", 0);
   Engine engine(opt);
 
   httplib::Server srv;

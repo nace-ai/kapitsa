@@ -186,12 +186,17 @@ std::string Surface::buffer_type(uint32_t r, uint32_t w) const {
          "], strides=" + strides(rows) + ", interleave_factors=[1, 1, 1, 1]>";
 }
 
-Surface make_surface(uint32_t rows, uint32_t width, bool fp16) {
+Surface surface_layout(uint32_t rows, uint32_t width, bool fp16) {
   Surface s;
   s.rows = rows, s.width = width, s.fp16 = fp16, s.elem = fp16 ? 2 : 1;
   s.stride = (width * s.elem + 63) / 64 * 64;
   const size_t page = 16384;
   s.bytes = (size_t(s.stride) * rows + page - 1) / page * page;
+  return s;
+}
+
+Surface make_surface(uint32_t rows, uint32_t width, bool fp16) {
+  Surface s = surface_layout(rows, width, fp16);
   @autoreleasepool {
     NSDictionary* props = @{
       (id)kIOSurfaceWidth : @(width),

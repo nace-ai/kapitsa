@@ -39,6 +39,7 @@ struct FfnConfig {
   std::string model_key;            // identifies the weights in the cache
   int fault_layer = -1;             // test: never start the ANE job of this layer (first chunk)
   int lanes = 1;                    // activation surface sets (2: the two-half wavefront schedule)
+  bool compile_only = false;        // only compile the program into the ANE daemon's cache, allocate nothing
 };
 
 class FfnSplit {
@@ -98,6 +99,8 @@ class FfnSplit {
 
  private:
   void init_resources();  // surfaces, row scales, program, bindings, handoff (the constructor's)
+  void compile_program_only();  // FfnConfig::compile_only: layout-only surfaces, compile, unload
+  void program_source(std::string& mil, std::vector<uint8_t>& blob);  // needs lane_[0]/set_[0] layouts + signs
   void free_all();        // releases whatever exists (destructor; a constructor that throws)
   struct Set {
     std::vector<Surface> wg, wu, wd;

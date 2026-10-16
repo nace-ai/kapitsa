@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
+# before project(): CMake reads the deployment target when it sets up the compilers
+set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OBJCXX_STANDARD 20)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "")
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
