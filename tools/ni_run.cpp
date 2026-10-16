@@ -6,6 +6,7 @@
 #include "model/qwen35.h"
 #include "util/log.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <deque>
@@ -40,10 +41,19 @@ int main(int argc, char** argv) {
   const char* dump = nullptr;
   bool tbt = false;
   int spec = 0;
+  int pf_reps = 1;  // --pf-reps R: time the prefill R times (state reset in between), report each
+  // --prefix P: prefill ids[0, P) once untimed and checkpoint it; the timed prefill then restores that
+  // checkpoint and runs only ids[P, n) (a cached-turn suffix). --split B (P < B < n): a turn boundary
+  // inside the suffix, checkpointed like the server does (split pass, or in-pass with NI_SHORTPF);
+  // afterwards the in-pass checkpoint is compared with a separate prefill of ids[P, B).
+  int prefix = 0, split = 0;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (!strcmp(argv[i], "--tbt")) tbt = true;
     if (i + 1 < argc && !strcmp(argv[i], "--spec")) spec = atoi(argv[i + 1]);
+    if (i + 1 < argc && !strcmp(argv[i], "--pf-reps")) pf_reps = atoi(argv[i + 1]);
+    if (i + 1 < argc && !strcmp(argv[i], "--prefix")) prefix = atoi(argv[i + 1]);
+    if (i + 1 < argc && !strcmp(argv[i], "--split")) split = atoi(argv[i + 1]);
   }
 
   Gpu& g = Gpu::get();
@@ -70,15 +80,76 @@ int main(int argc, char** argv) {
       e->commit_and_wait();
     }
   } else {
-    int C = m.prefill_chunk();
-    for (int p = 0; p < n; p += C) {
-      int T = std::min(C, n - p);
+    const int C = m.prefill_chunk();
+    Checkpoint ck0 = m.new_checkpoint(), ck1 = m.new_checkpoint();
+    if (prefix > 0) {
+      if (prefix >= n) { fprintf(stderr, "--prefix must be < prompt length\n"); return 1; }
+      for (int p = 0; p < prefix; p += C) {
+        int T = std::min(C, prefix - p);
+        auto e = g.begin();
+        m.encode_prefill(*e, s, p, T, sp, 0, false);
+        if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, T, 0);
+        if (p + T == prefix) m.save(*e, s, ck0, prefix);
+        e->commit_and_wait();
+      }
+      if (Encoder::profiling()) Encoder::profile_report(1);
+      fprintf(stderr, "prefix %d tok prefilled; timing ids[%d, %d)\n", prefix, prefix, n);
+      t0 = now_ms();
+    }
+    if (split && (split <= prefix || split >= n)) { fprintf(stderr, "--split must be in (prefix, n)\n"); return 1; }
+    for (int rep = 0; rep < pf_reps; ++rep) {
+      if (rep) {
+        if (!prefix) m.reset(s);
+        t0 = now_ms();
+      }
+      double gpu = 0;
+      int p = prefix;
       auto e = g.begin();
-      m.encode_prefill(*e, s, p, T, sp, 0, p + T == n);
-      // MTP history rows i in [p, min(p+T, n-1)): pairs (h_i, t_{i+1})
-      if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+      if (prefix) m.restore(*e, s, ck0);
+      while (p < n) {
+        int T = std::min(C, n - p);
+        Checkpoint* snap = nullptr;
+        if (split > p && split < p + T) {
+          if (m.can_snapshot()) snap = &ck1;
+          else T = split - p;
+        }
+        m.encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? split - p : 0);
+        // MTP history rows i in [p, min(p+T, n-1)): pairs (h_i, t_{i+1})
+        if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+        last_chunk = p;
+        p += T;
+        if (p == split) m.save(*e, s, ck1, split);
+        e->commit_and_wait();
+        gpu += e->gpu_ms();
+        if (p < n) e = g.begin();
+      }
+      if (pf_reps > 1)
+        fprintf(stderr, "prefill rep %d: %d tok in %.2f ms (GPU %.2f ms)\n", rep, n - prefix, now_ms() - t0, gpu);
+      if (pf_reps > 1 && Encoder::profiling()) Encoder::profile_report(1);
+    }
+    if (split && m.can_snapshot()) {
+      // reference: the state after a separate prefill of ids[prefix, split)
+      std::vector<std::vector<float>> conv, rec;
+      for (size_t i = 0; i < ck1.rec.size(); ++i) {
+        conv.emplace_back(ck1.conv[i] ? std::vector<float>(ck1.conv[i].as<float>(), ck1.conv[i].as<float>() + ck1.conv[i].size / 4) : std::vector<float>());
+        rec.emplace_back(ck1.rec[i] ? std::vector<float>(ck1.rec[i].as<float>(), ck1.rec[i].as<float>() + ck1.rec[i].size / 4) : std::vector<float>());
+      }
+      auto e = g.begin();
+      if (prefix) m.restore(*e, s, ck0);
+      else m.reset(s);
+      for (int p = prefix; p < split; p += C) m.encode_prefill(*e, s, p, std::min(C, split - p), sp, 0, false);
       e->commit_and_wait();
-      last_chunk = p;
+      double dc = 0, dr = 0, mr = 0;
+      for (size_t i = 0; i < rec.size(); ++i) {
+        if (rec[i].empty()) continue;
+        for (size_t j = 0; j < conv[i].size(); ++j) dc = std::max(dc, double(std::fabs(conv[i][j] - s.conv[i].as<float>()[j])));
+        for (size_t j = 0; j < rec[i].size(); ++j) {
+          dr = std::max(dr, double(std::fabs(rec[i][j] - s.rec[i].as<float>()[j])));
+          mr = std::max(mr, double(std::fabs(s.rec[i].as<float>()[j])));
+        }
+      }
+      fprintf(stderr, "snapshot at %d vs separate prefill: conv max|d| %.3g, state max|d| %.3g (max|state| %.3g)\n",
+              split, dc, dr, mr);
     }
   }
   double t_prompt = now_ms() - t0;

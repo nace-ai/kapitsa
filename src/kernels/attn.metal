@@ -1684,11 +1684,16 @@ NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint 
   NI_UNROLL for (uint u = 0; u < BK / 8; ++u) dst[u] = r[u];
 }
 
-template <uint BK, bool XS>
+// SPLIT (attn_prefill11s, NI_SHORTPF): the block's key tiles are divided over grid.z = nsplit
+// threadgroups, each writing its unnormalized O rows, running max and sum to part_o / part_ml
+// ([split][t][head]); attn11_reduce combines them. For few queries over a long cached prefix,
+// where (ceil(T/32) x Hq) threadgroups alone cannot fill the GPU.
+template <uint BK, bool XS, bool SPLIT = false>
 NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
                                    const device float* qg, device float* out, constant AttnPrefParams& p,
                                    uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
-                                   threadgroup float2* xs) {
+                                   threadgroup float2* xs, uint split = 0, uint nsplit = 1,
+                                   device float* part_o = nullptr, device float2* part_ml = nullptr) {
   constexpr uint NC = BK / 8;                     // key fragments per tile
   constexpr uint KLD = attn11_kld<BK>();
   const uint G = p.Hq / p.Hkv;
@@ -1704,6 +1709,12 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   const uint qpos_rg = p.pos0 + t0 + rg * 8;      // first query position of the row group
   const uint kend = p.pos0 + min(t0 + kBQ11, p.T); // keys needed by the block
   const uint ntiles = (kend + BK - 1) / BK;
+  uint it_begin = 0, it_end = ntiles;
+  if (SPLIT) {
+    const uint per = (ntiles + nsplit - 1) / nsplit;
+    it_begin = min(split * per, ntiles);
+    it_end = min(it_begin + per, ntiles);
+  }
 
   // Q straight from device into fragments (own 128 dims), scaled by 1/sqrt(D) (a power of two:
   // the half rounding is v10's). Rows past T are zero and never stored.
@@ -1726,7 +1737,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   const threadgroup half* kfr = kv + (dh * kDH + frow) * KLD + fcol;     // K^T fragment base
   const threadgroup half* vfr = kv + frow * kVLD11 + dh * kDH + fcol;   // V fragment base
 
-  for (uint it = 0; it < ntiles; ++it) {
+  for (uint it = it_begin; it < it_end; ++it) {
     const uint k0 = it * BK;
     uint4 r[BK / 8];
     attn11_fetch_k<BK>(r, kb, k0, kend, tid);
@@ -1805,6 +1816,16 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     }
   }
 
+  if (SPLIT) {
+    if (t < p.T) {
+      const uint row = (split * p.T + t) * p.Hq + h;
+      device float* dst = part_o + row * kHD + dh * kDH + fcol;
+      NI_UNROLL for (uint j = 0; j < kDH / 8; ++j)
+        *(device float2*)(dst + j * 8) = float2(o[j].thread_elements()[0], o[j].thread_elements()[1]);
+      if (dh == 0 && fcol == 0) part_ml[row] = float2(m_row, l_row);
+    }
+    return;
+  }
   if (t < p.T) {
     const float inv = 1.0f / l_row;   // l_row >= 1: the row's maximum contributed exp2(0)
     const device float* gate = qg + (t * p.Hq + h) * 2 * kHD + kHD + dh * kDH + fcol;
@@ -1828,6 +1849,39 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     threadgroup float2 xs[XS ? attn11_xs<BK>() : 1];                                                         \
     attn_prefill11_impl<BK, XS>(q, kc, vc, qg, out, p, tg, tid, sg, lane, (threadgroup half*)kvm, xs);      \
   }
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11s(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    device float* part_o [[buffer(6)]], device float2* part_ml [[buffer(7)]], constant uint& nsplit [[buffer(8)]],
+    uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  threadgroup float2 xs[1];
+  attn_prefill11_impl<32, false, true>(q, kc, vc, qg, out, p, tg.xy, tid, sg, lane, (threadgroup half*)kvm, xs, tg.z,
+                                       nsplit, part_o, part_ml);
+}
+
+// Combines attn_prefill11s partials: out[t, h*D + d] = (sum_s 2^(m_s - m) o_s[d]) / (sum_s 2^(m_s - m) l_s)
+// * sigmoid(gate). grid: (T, Hq) x 256 threads (one per head dim).
+[[kernel]] void attn11_reduce(const device float* part_o [[buffer(0)]], const device float2* part_ml [[buffer(1)]],
+                              const device float* qg [[buffer(2)]], device float* out [[buffer(3)]],
+                              constant AttnPrefParams& p [[buffer(4)]], constant uint& nsplit [[buffer(5)]],
+                              uint2 tg [[threadgroup_position_in_grid]], uint d [[thread_index_in_threadgroup]]) {
+  const uint t = tg.x, h = tg.y;
+  float m = kNeg11;
+  for (uint s = 0; s < nsplit; ++s) m = max(m, part_ml[(s * p.T + t) * p.Hq + h].x);
+  float l = 0.0f, o = 0.0f;
+  for (uint s = 0; s < nsplit; ++s) {
+    const uint row = (s * p.T + t) * p.Hq + h;
+    const float2 ml = part_ml[row];
+    const float w = ml.y > 0.0f ? metal::fast::exp2(ml.x - m) : 0.0f;
+    l += w * ml.y;
+    o += w * part_o[row * kHD + d];
+  }
+  const float g = qg[(t * p.Hq + h) * 2 * kHD + kHD + d];
+  out[(t * p.Hq + h) * kHD + d] = o / l * sigmoid(g);
+}
+
 NI_ATTN11(attn_prefill11, 32, false)         // 20 KB, exchange in the K tile (MLX)
 NI_ATTN11(attn_prefill11_x, 32, true)        // 28 KB, own exchange buffer, 2 barriers fewer per tile
 NI_ATTN11(attn_prefill11_k16, 16, false)     // 16-key tiles: 12 KB, fewer registers

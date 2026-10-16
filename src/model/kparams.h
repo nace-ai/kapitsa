@@ -90,6 +90,11 @@ struct Qmm2 {
   uint32_t N, K, x_ld, y_ld, gs, w_expert_stride, s_expert_stride, shared_e;
 };
 
+struct Qmms {
+  uint32_t K, T, x_ld, nseg, ks;
+  uint32_t N[4], y_ld[4], add[4], tg_begin[5];
+};
+
 struct Rows {
   uint32_t D, norm;
   float eps;

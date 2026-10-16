@@ -99,8 +99,13 @@ class Qwen35 {
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true);
   // Encodes T prompt tokens tokens[pos0 .. pos0+T) as one batch (T <= prefill_chunk).
   // With `sample`, also samples tokens[pos0+T] from the last position.
-  void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample);
+  // With `snap` (requires can_snapshot(), 0 < snap_row < T): also saves the recurrent state as it
+  // stands after the first snap_row tokens into `snap` (pos = pos0 + snap_row), inside the pass.
+  void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                      Checkpoint* snap = nullptr, int snap_row = 0);
   int prefill_chunk() const { return tmax_; }
+  // NI_SHORTPF: checkpoints can be captured inside a prefill pass (encode_prefill's `snap`).
+  bool can_snapshot() const;
 
   // ---- speculative decoding with the model's MTP head ----
   bool has_mtp() const { return mtp_loaded_; }
@@ -158,8 +163,20 @@ class Qwen35 {
   void enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, int T, int pos0, int cap);
   bool enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& x);
   // NI_GDN_PAR=1: GDN conv/prep, recurrence and gated norm of T rows; leaves the half rows in hh_
-  void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T);
+  void enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int T, Checkpoint* snap = nullptr,
+                           int snap_row = 0);
   void enc_mlp(Encoder& e, const Layer& L);
+  // NI_SHORTPF: register-streaming GEMMs for T <= 64 rows (qmms.metal)
+  struct SegQ {
+    const QLinear* L;
+    Buffer y;
+    bool add;
+  };
+  bool small_t(int T) const;
+  bool qmms_ok(const QLinear& L) const;
+  void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
+  bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
+  bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
   QLinear own_qlin(const class WeightStore& w, const std::string& name);

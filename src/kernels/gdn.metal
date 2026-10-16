@@ -163,15 +163,15 @@ NI_INLINE float gdn_conv_in(const device float* qkv, const device float* conv_st
 // simdgroup of gdn_prep) and a simd_sum over those four. The block holding tokens 0..2 is the only
 // reader of conv_state for its channels and rolls it at the end (same lanes, ascending rows).
 // grid: x = ceil(T/32) threadgroups x 128 threads (4 token blocks), y = C/128 + 1 (last row: g, beta).
-[[kernel]] void gdn_prep_par(const device float* qkv [[buffer(0)]], const device float* a [[buffer(1)]],
-                             const device float* bb [[buffer(2)]], device float* conv_state [[buffer(3)]],
-                             const device bfloat* conv_w [[buffer(4)]], const device bfloat* A_log [[buffer(5)]],
-                             const device bfloat* dt_bias [[buffer(6)]], device float* q_out [[buffer(7)]],
-                             device float* k_out [[buffer(8)]], device float* v_out [[buffer(9)]],
-                             device float* g_out [[buffer(10)]], device float* beta_out [[buffer(11)]],
-                             constant GdnPrepParams& p [[buffer(12)]], uint2 tg [[threadgroup_position_in_grid]],
-                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                             uint lane [[thread_index_in_simdgroup]]) {
+// With SNAP (gdn_prep_par_snap, NI_SHORTPF): also copies the conv window as it stands after the
+// first `snap` tokens (concat rows snap..snap+2) to conv_snap, for a checkpoint inside the pass.
+template <bool SNAP>
+NI_INLINE void gdn_prep_par_impl(const device float* qkv, const device float* a, const device float* bb,
+                                 device float* conv_state, const device bfloat* conv_w, const device bfloat* A_log,
+                                 const device bfloat* dt_bias, device float* q_out, device float* k_out,
+                                 device float* v_out, device float* g_out, device float* beta_out,
+                                 constant GdnPrepParams& p, device float* conv_snap, uint snap, uint2 tg, uint sg,
+                                 uint nsg, uint lane) {
   constexpr uint D = 128, TB = 8;
   const uint t0 = (tg.x * nsg + sg) * TB;
   if (t0 >= p.T) return;
@@ -228,12 +228,45 @@ NI_INLINE float gdn_conv_in(const device float* qkv, const device float* conv_st
   }
   // Roll the conv window (as gdn_prep): new rows = concat[T..T+2]; ascending r only reads rows > r.
   if (t0 == 0) {
+    if (SNAP)  // before the roll: rows < 3 still hold the old window
+      for (uint r = 0; r < 3; ++r)
+        for (uint i = 0; i < 4; ++i) {
+          uint c = c0 + 32 * i;
+          conv_snap[r * C + c] = gdn_conv_in(qkv, conv_state, snap + r, C, c);
+        }
     for (uint r = 0; r < 3; ++r)
       for (uint i = 0; i < 4; ++i) {
         uint c = c0 + 32 * i;
         conv_state[r * C + c] = gdn_conv_in(qkv, conv_state, p.T + r, C, c);
       }
   }
+}
+
+[[kernel]] void gdn_prep_par(const device float* qkv [[buffer(0)]], const device float* a [[buffer(1)]],
+                             const device float* bb [[buffer(2)]], device float* conv_state [[buffer(3)]],
+                             const device bfloat* conv_w [[buffer(4)]], const device bfloat* A_log [[buffer(5)]],
+                             const device bfloat* dt_bias [[buffer(6)]], device float* q_out [[buffer(7)]],
+                             device float* k_out [[buffer(8)]], device float* v_out [[buffer(9)]],
+                             device float* g_out [[buffer(10)]], device float* beta_out [[buffer(11)]],
+                             constant GdnPrepParams& p [[buffer(12)]], uint2 tg [[threadgroup_position_in_grid]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                             uint lane [[thread_index_in_simdgroup]]) {
+  gdn_prep_par_impl<false>(qkv, a, bb, conv_state, conv_w, A_log, dt_bias, q_out, k_out, v_out, g_out, beta_out, p,
+                           nullptr, 0, tg, sg, nsg, lane);
+}
+
+[[kernel]] void gdn_prep_par_snap(const device float* qkv [[buffer(0)]], const device float* a [[buffer(1)]],
+                                  const device float* bb [[buffer(2)]], device float* conv_state [[buffer(3)]],
+                                  const device bfloat* conv_w [[buffer(4)]], const device bfloat* A_log [[buffer(5)]],
+                                  const device bfloat* dt_bias [[buffer(6)]], device float* q_out [[buffer(7)]],
+                                  device float* k_out [[buffer(8)]], device float* v_out [[buffer(9)]],
+                                  device float* g_out [[buffer(10)]], device float* beta_out [[buffer(11)]],
+                                  constant GdnPrepParams& p [[buffer(12)]], device float* conv_snap [[buffer(13)]],
+                                  constant uint& snap [[buffer(14)]], uint2 tg [[threadgroup_position_in_grid]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                  uint lane [[thread_index_in_simdgroup]]) {
+  gdn_prep_par_impl<true>(qkv, a, bb, conv_state, conv_w, A_log, dt_bias, q_out, k_out, v_out, g_out, beta_out, p,
+                          conv_snap, snap, tg, sg, nsg, lane);
 }
 
 // Recurrence over T tokens with the value rows of a head spread over simdgroups and threadgroups:
@@ -253,11 +286,11 @@ NI_INLINE float gdn_row_sum(thread float* part) {
   return s;
 }
 
-template <uint L>
+template <uint L, bool SNAP = false>
 NI_INLINE void gdn_step_par_impl(const device float* q, const device float* k, const device float* v,
                                  const device float* g, const device float* beta, device float* state,
                                  device float* out, constant GdnStepParams& p, uint tg, uint sg, uint nsg,
-                                 uint lane) {
+                                 uint lane, device float* snap_state = nullptr, uint snap = 0) {
   constexpr uint D = 128, N = 32 / L;
   const uint tph = D / (N * nsg);  // threadgroups per head
   const uint h = tg / tph;
@@ -287,6 +320,8 @@ NI_INLINE void gdn_step_par_impl(const device float* q, const device float* k, c
     }
     float o = gdn_row_sum<N, L>(part);
     if (li == 0) out[(t * p.Hv + h) * D + dv] = o;
+    if (SNAP && t + 1 == snap)  // state after the first `snap` tokens (checkpoint inside the pass)
+      for (uint j = 0; j < N; ++j) *(device float4*)(snap_state + (S - state) + j * 4) = st[j];
   }
   for (uint j = 0; j < N; ++j) *(device float4*)(S + j * 4) = st[j];
 }
@@ -306,6 +341,23 @@ NI_GDN_STEP_PAR(gdn_step_par_l4, 4)
 NI_GDN_STEP_PAR(gdn_step_par_l8, 8)
 NI_GDN_STEP_PAR(gdn_step_par_l16, 16)
 NI_GDN_STEP_PAR(gdn_step_par_l32, 32)
+
+#define NI_GDN_STEP_PAR_SNAP(NAME, L)                                                                      \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],           \
+                       const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],           \
+                       const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],          \
+                       device float* out [[buffer(6)]], constant GdnStepParams& p [[buffer(7)]],           \
+                       device float* snap_state [[buffer(8)]], constant uint& snap [[buffer(9)]],          \
+                       uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]], \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    gdn_step_par_impl<L, true>(q, k, v, g, beta, state, out, p, tg, sg, nsg, lane, snap_state, snap);     \
+  }
+
+// NI_SHORTPF: the same recurrence, also writing the state after the first `snap` tokens
+NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l4, 4)
+NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l8, 8)
+NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l16, 16)
+NI_GDN_STEP_PAR_SNAP(gdn_step_par_snap_l32, 32)
 
 // gdn_step's epilogue as its own pass, fused with rows_to_half:
 //   y[t, h*128 + dv] = half(rmsnorm(o[t, h, :])[dv] * w[dv] * silu(z[t, h, dv]))
