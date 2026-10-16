@@ -516,12 +516,14 @@ void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
 void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
   const int D = cfg_.hidden;
   enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
-  enc_qmm(e, L.mg, xh_, hg_, T, false);
-  enc_qmm(e, L.mu, xh_, hu_, T, false);
-  uint32_t n = uint32_t(T) * L.mg.N;
-  e.use(pipe("swiglu_half"));
-  e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
-  e.dispatch((n + 255) / 256, 1, 1, 256);
+  if (!enc_qmm_gu(e, L.mg, L.mu, xh_, hhalf_, T)) {
+    enc_qmm(e, L.mg, xh_, hg_, T, false);
+    enc_qmm(e, L.mu, xh_, hu_, T, false);
+    uint32_t n = uint32_t(T) * L.mg.N;
+    e.use(pipe("swiglu_half"));
+    e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  }
   enc_qmm(e, L.md, hhalf_, xbuf, T, true);
 }
 
@@ -648,6 +650,25 @@ void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
   e.val(5, p);
   e.dispatch((L.N + BN - 1) / BN, (M + BM - 1) / BM, 1, 128);
+}
+
+// NI_QMM_GU (boolean, read once, needs NI_QMM): dense MLP / shared-expert gate and up projections
+// and SwiGLU in one qmr_gu dispatch writing the half h rows (no fp32 hg/hu, no swiglu pass).
+bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M) {
+  static const bool on = env_on("NI_QMM_GU") && qmr_sel().on;
+  auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K) return false;
+  const char* n = "qmr_gu_k32_w14_m32_n64";
+  uint32_t bm = 32, bn = 64, th = 128;
+  if (M <= 8) n = "qmr_gu_k64_w12_m8_n32", bm = 8, bn = 32, th = 64;
+  else if (M < 64) n = "qmr_gu_k64_w14_m16_n64", bm = 16, bn = 64, th = 128;
+  e.use(pipe(n));
+  kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+  e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+  e.val(5, p);
+  e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+  e.dispatch((G.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
+  return true;
 }
 
 void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, const Buffer& xrows,
@@ -779,12 +800,14 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   }
   if (!fold) {
     // shared expert on all rows (as in enc_moe_prefill)
-    enc_qmm(e, L.sg, xh_, sgb_, T, false);
-    enc_qmm(e, L.su, xh_, sub_, T, false);
-    uint32_t ns = uint32_t(T * cfg_.shared_I);
-    e.use(pipe("swiglu_half"));
-    e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
-    e.dispatch((ns + 255) / 256, 1, 1, 256);
+    if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
+      enc_qmm(e, L.sg, xh_, sgb_, T, false);
+      enc_qmm(e, L.su, xh_, sub_, T, false);
+      uint32_t ns = uint32_t(T * cfg_.shared_I);
+      e.use(pipe("swiglu_half"));
+      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+      e.dispatch((ns + 255) / 256, 1, 1, 256);
+    }
     enc_qmm(e, L.sd, hh_, ys_, T, false);
   }
   kp::Combine cp{uint32_t(D), uint32_t(k)};

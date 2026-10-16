@@ -150,6 +150,8 @@ class Qwen35 {
   // prefill
   void enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D);
   void enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
+  // NI_QMM + NI_QMM_GU: h = half(silu(xh G^T) * (xh U^T)) in one dispatch; false when off/unsupported
+  bool enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M);
   void enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, const Buffer& xrows,
                    const Buffer& yrows, int P, int bm);
   void enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, const SamplingParams& sp, uint32_t step);

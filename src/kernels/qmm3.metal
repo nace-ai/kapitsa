@@ -8,11 +8,13 @@
 // lane's columns over the BK/8 fragments are exactly the 8 (BK=32) or 16 (BK=64) nibbles of its own
 // 4/8 bytes of the packed row: fragment f, column 2c+e <-> nibble (f%4) + 4e of word
 // (BK/32)*c + f/4. A fragment element pair is then one shift/mask/or of the word (nibbles j and
-// j+4 land in the two 16-bit halves), as half2 1024+q (0x6400 | q), minus 1024, times the scale plus
-// the bias (half2 FMA). X is staged in threadgroup memory in the same permuted K order and read as
-// the transposed B operand. Each W element is dequantized once per threadgroup (simdgroups split N)
-// when WM == 1, and W never touches threadgroup memory.
-// Requirements (host): bits 4, gs 64, K % BK == 0.
+// j+4 land in the two 16-bit halves) giving half2 0.25 + q/4096, minus 0.25, times 4096*scale plus
+// the bias (half2 FMA; see qr_pair). X is staged in threadgroup memory in the same permuted K order
+// and read as the transposed B operand. Each W element is dequantized once per threadgroup
+// (simdgroups split N) when WM == 1, and W never touches threadgroup memory. No double buffering:
+// several threadgroups per core hide the barriers (a two-buffer, one-barrier variant and a
+// register-prefetch variant measured no faster; prefetch costs registers and spills).
+// Requirements (host): bits 4, gs 64, K % 64 == 0, X rows 16-byte aligned (x_ld % 8 == 0).
 
 // lane -> (row, column pair) of an 8x8 fragment (same layout as q2_lane_rc)
 NI_INLINE uint2 qr_rc(uint lane) {
@@ -21,10 +23,13 @@ NI_INLINE uint2 qr_rc(uint lane) {
 }
 
 // One A-fragment element pair: nibbles j and j+4 of w (j = 0..3), dequantized as half2;
-// sb = (scale, bias).
+// sb = (scale * 4096, bias). 0x3400 | q is the half 0.25 + q/4096 (exact), so the pair costs a
+// shift, mask, or, subtract and FMA. Both factors of q*s stay normal halfs for scales in
+// [1.5e-8, 16] (a plain half scale goes subnormal below 6.1e-5: 2162 scales of the 27B, 14818 of
+// the 35B's dense projections); the FMA rounds once.
 NI_INLINE half2 qr_pair(uint w, uint j, half2 sb) {
-  uint t = ((w >> (4 * j)) & 0x000F000Fu) | 0x64006400u;
-  return fma(as_type<half2>(t) - half2(1024.0h), half2(sb.x), half2(sb.y));
+  uint t = ((w >> (4 * j)) & 0x000F000Fu) | 0x34003400u;
+  return fma(as_type<half2>(t) - half2(0.25h), half2(sb.x), half2(sb.y));
 }
 
 // X staging: chunk i (8 halfs, physical k0+8q..) of tile row r -> permuted threadgroup positions.
@@ -57,32 +62,37 @@ NI_INLINE void qr_store_x(threadgroup half* xs, uint tid, thread const uint4* xr
   }
 }
 
-// This lane's packed words of its FA rows for the K step at k0, and their (scale, bias): the lane's
-// 8*WPL values lie in one 64-group, (k0 + 8*WPL*c) / 64.
-template <int FA, int BK>
-NI_INLINE void qr_load_w(const device uint32_t* W, const device bfloat* S, const device bfloat* B,
-                         thread const uint* wrow, uint wpr, uint gpr, uint k0, uint c, thread uint* wr,
-                         thread half2* sb) {
+// This lane's packed words of its FA rows of each of the NP matrices for the K step at k0, and
+// their (scale, bias): the lane's 8*WPL values lie in one 64-group, (k0 + 8*WPL*c) / 64.
+// wr[(p*FA + a)*WPL + u], sb[p*FA + a].
+template <int FA, int BK, int NP>
+NI_INLINE void qr_load_w(const device uint32_t* const thread* W, const device bfloat* const thread* S,
+                         const device bfloat* const thread* B, thread const uint* wrow, uint wpr, uint gpr,
+                         uint k0, uint c, thread uint* wr, thread half2* sb) {
   constexpr int WPL = BK / 32;
   const uint g = (k0 + 8 * WPL * c) / 64;
   _Pragma("clang loop unroll(full)")
-  for (int a = 0; a < FA; ++a) {
-    const device uint* wp = W + wrow[a] * wpr + k0 / 8 + WPL * c;
-    if (WPL == 4) {
-      uint4 v = *(const device uint4*)wp;
-      wr[a * 4 + 0] = v.x; wr[a * 4 + 1] = v.y; wr[a * 4 + 2] = v.z; wr[a * 4 + 3] = v.w;
-    } else if (WPL == 2) {
-      uint2 v = *(const device uint2*)wp;
-      wr[a * 2 + 0] = v.x; wr[a * 2 + 1] = v.y;
-    } else {
-      wr[a] = wp[0];
+  for (int p = 0; p < NP; ++p)
+    _Pragma("clang loop unroll(full)")
+    for (int a = 0; a < FA; ++a) {
+      const int i = p * FA + a;
+      const device uint* wp = W[p] + wrow[a] * wpr + k0 / 8 + WPL * c;
+      if (WPL == 4) {
+        uint4 v = *(const device uint4*)wp;
+        wr[i * 4 + 0] = v.x; wr[i * 4 + 1] = v.y; wr[i * 4 + 2] = v.z; wr[i * 4 + 3] = v.w;
+      } else if (WPL == 2) {
+        uint2 v = *(const device uint2*)wp;
+        wr[i * 2 + 0] = v.x; wr[i * 2 + 1] = v.y;
+      } else {
+        wr[i] = wp[0];
+      }
+      if (BK >= 64 || (k0 & 63) == 0)
+        sb[i] = half2(half(float(S[p][wrow[a] * gpr + g]) * 4096.0f), half(float(B[p][wrow[a] * gpr + g])));
     }
-    if (BK >= 64 || (k0 & 63) == 0)
-      sb[a] = half2(half(float(S[wrow[a] * gpr + g])), half(float(B[wrow[a] * gpr + g])));
-  }
 }
 
-template <int FA, int FB, int BK, int TM>
+// acc[a][b] += A_a(f) * X_b(f)^T over the BK/8 fragments of one K step; A_a from this lane's words.
+template <int FA, int FB, int BK, int TM, int ABL>
 NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup const half* xs, uint sgm,
                       thread const uint* wr, thread const half2* sb) {
   constexpr int LD = BK + 8, WPL = BK / 32, NF = BK / 8;
@@ -91,7 +101,7 @@ NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup cons
     simdgroup_half8x8 af[FA];
     _Pragma("clang loop unroll(full)")
     for (int a = 0; a < FA; ++a) {
-      half2 v = qr_pair(wr[a * WPL + f / 4], f % 4, sb[a]);
+      half2 v = (ABL & 1) ? as_type<half2>(wr[a * WPL + f / 4]) : qr_pair(wr[a * WPL + f / 4], f % 4, sb[a]);
       af[a].thread_elements()[0] = v.x;
       af[a].thread_elements()[1] = v.y;
     }
@@ -105,126 +115,170 @@ NI_INLINE void qr_mma(thread simdgroup_float8x8 (&acc)[FA][FB], threadgroup cons
   }
 }
 
-// MODE 0: load X/W, stage X, barrier, MMAs, barrier (one X buffer).
-// MODE 1: two X buffers, one barrier per step; the next X tile's device loads are in flight during
-// the MMAs, W words for the next step are loaded after them.
-template <int BM, int BN, int WM, int WN, int BK, int MODE>
-NI_INLINE void qr_tile(const device half* X, const device uint32_t* W, const device bfloat* S,
-                       const device bfloat* B, device float* Y, constant QmmParams& p, uint m0, uint n0,
-                       threadgroup half* xs, uint tid, uint sg, uint lane) {
+// Accumulates the BM x BN tile (per simdgroup TM = BM/WM rows m, TN = BN/WN rows n of each of the NP
+// matrices) into acc[p*FA + a][b] = C_p[n = n0 + sgn*TN + 8a + rc.x][m = m0 + sgm*TM + 8b + rc.y + e].
+// One X buffer: load X/W, stage X, barrier, MMAs, barrier. ABL (bench-only ablations): 1 no dequant
+// math, 2 no X staging, 4 no barriers, 8 no W loads; 16 (not an ablation) prefetches W one step ahead.
+template <int BM, int BN, int WM, int WN, int BK, int NP, int ABL>
+NI_INLINE void qr_acc(const device half* X, const device uint32_t* const thread* W,
+                      const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
+                      uint K, uint x_ld, uint m0, uint n0, threadgroup half* xs, uint tid, uint sgm, uint sgn,
+                      uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8]) {
   constexpr int NT = WM * WN * 32;
   constexpr int TM = BM / WM, TN = BN / WN;
   constexpr int FB = TM / 8, FA = TN / 8;
   constexpr int CPR = BK / 8, XL = (BM * CPR + NT - 1) / NT;
   constexpr int WPL = BK / 32;
-  constexpr int XT = BM * (BK + 8);  // halfs per X buffer
-  const uint sgm = sg / WN, sgn = sg % WN;
-  const uint2 rc = qr_rc(lane);
   const uint c = rc.y / 2;
-
-  simdgroup_float8x8 acc[FA][FB];
   _Pragma("clang loop unroll(full)")
-  for (int a = 0; a < FA; ++a)
+  for (int a = 0; a < NP * FA; ++a)
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FB; ++b) acc[a][b] = simdgroup_float8x8(0);
 
-  const uint K = p.K, wpr = K / 8, gpr = K / 64, x_ld8 = p.x_ld / 8;
+  const uint wpr = K / 8, gpr = K / 64, x_ld8 = x_ld / 8;
   // this lane's W rows (clamped: rows past N compute garbage that is never stored)
   uint wrow[FA];
   _Pragma("clang loop unroll(full)")
-  for (int a = 0; a < FA; ++a) wrow[a] = min(n0 + sgn * TN + a * 8 + rc.x, p.N - 1);
+  for (int a = 0; a < FA; ++a) wrow[a] = min(n0 + sgn * TN + a * 8 + rc.x, N - 1);
   const device uint4* X4 = (const device uint4*)X;
 
   uint4 xr[XL];
-  uint wr[FA * WPL];
-  half2 sb[FA];
-  if (MODE == 1) {
-    qr_load_x<BM, BK, NT>(X4, x_ld8, p.M, m0, 0, tid, xr);
-    qr_load_w<FA, BK>(W, S, B, wrow, wpr, gpr, 0, c, wr, sb);
-    qr_store_x<BM, BK, NT>(xs, tid, xr);
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    uint cur = 0;
+  uint wr[NP * FA * WPL];
+  half2 sb[NP * FA];
+  if (ABL & 16) {
+    // W prefetch: the next step's words are loaded before this step's MMAs (registers: +FA*WPL+FA)
+    qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, 0, c, wr, sb);
     for (uint k0 = 0; k0 < K; k0 += BK) {
-      const bool more = k0 + BK < K;
-      if (more) qr_load_x<BM, BK, NT>(X4, x_ld8, p.M, m0, k0 + BK, tid, xr);
-      qr_mma<FA, FB, BK, TM>(acc, xs + cur * XT, sgm, wr, sb);
-      if (more) {
-        qr_store_x<BM, BK, NT>(xs + (cur ^ 1) * XT, tid, xr);
-        qr_load_w<FA, BK>(W, S, B, wrow, wpr, gpr, k0 + BK, c, wr, sb);
-      }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      cur ^= 1;
-    }
-  } else {
-    for (uint k0 = 0; k0 < K; k0 += BK) {
-      qr_load_x<BM, BK, NT>(X4, x_ld8, p.M, m0, k0, tid, xr);
-      qr_load_w<FA, BK>(W, S, B, wrow, wpr, gpr, k0, c, wr, sb);
+      qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
       qr_store_x<BM, BK, NT>(xs, tid, xr);
       threadgroup_barrier(mem_flags::mem_threadgroup);
-      qr_mma<FA, FB, BK, TM>(acc, xs, sgm, wr, sb);
+      uint wn[NP * FA * WPL];
+      half2 sn[NP * FA];
+      _Pragma("clang loop unroll(full)")
+      for (int a = 0; a < NP * FA; ++a) sn[a] = sb[a];
+      if (k0 + BK < K) qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, k0 + BK, c, wn, sn);
+      qr_mma<NP * FA, FB, BK, TM, 0>(acc, xs, sgm, wr, sb);
+      _Pragma("clang loop unroll(full)")
+      for (int u = 0; u < NP * FA * WPL; ++u) wr[u] = wn[u];
+      _Pragma("clang loop unroll(full)")
+      for (int a = 0; a < NP * FA; ++a) sb[a] = sn[a];
       threadgroup_barrier(mem_flags::mem_threadgroup);
     }
+    return;
   }
-
-  // epilogue: lane holds C[n = rc.x][m = rc.y + e] of each fragment
-  _Pragma("clang loop unroll(full)")
-  for (int a = 0; a < FA; ++a) {
-    const uint n = n0 + sgn * TN + a * 8 + rc.x;
-    if (n >= p.N) continue;
-    _Pragma("clang loop unroll(full)")
-    for (int b = 0; b < FB; ++b) {
-      _Pragma("clang loop unroll(full)")
-      for (int e = 0; e < 2; ++e) {
-        const uint m = m0 + sgm * TM + b * 8 + rc.y + e;
-        if (m < p.M) {
-          device float* dst = Y + m * p.y_ld + n;
-          float v = acc[a][b].thread_elements()[e];
-          *dst = p.add ? *dst + v : v;
-        }
-      }
+  for (uint k0 = 0; k0 < K; k0 += BK) {
+    if (!(ABL & 2)) qr_load_x<BM, BK, NT>(X4, x_ld8, M, m0, k0, tid, xr);
+    if (!(ABL & 8)) {
+      qr_load_w<FA, BK, NP>(W, S, B, wrow, wpr, gpr, k0, c, wr, sb);
+    } else {
+      for (int u = 0; u < NP * FA * WPL; ++u) wr[u] = k0 + u;
+      for (int a = 0; a < NP * FA; ++a) sb[a] = half2(0.01h, 0.1h);
     }
+    if (!(ABL & 2)) qr_store_x<BM, BK, NT>(xs, tid, xr);
+    if (!(ABL & 4)) threadgroup_barrier(mem_flags::mem_threadgroup);
+    qr_mma<NP * FA, FB, BK, TM, ABL>(acc, xs, sgm, wr, sb);
+    if (!(ABL & 4)) threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 
-// SW: rasterization swizzle, log2 of the number of M tiles walked together (0: row-major, N fastest)
-#define NI_QMR(NAME, BM, BN, WM, WN, BK, MODE, SW)                                                        \
+// Dense GEMM with qmm_b4_*'s interface (QmmParams, buffers 0-5): Y (+)= X W^T, fp32 Y.
+#define NI_QMRA(NAME, BM, BN, WM, WN, BK, ABL)                                                            \
   [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
-      const device half* X [[buffer(0)]], const device uint32_t* W [[buffer(1)]],                          \
-      const device bfloat* S [[buffer(2)]], const device bfloat* B [[buffer(3)]],                          \
+      const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                         \
+      const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                        \
       device float* Y [[buffer(4)]], constant QmmParams& p [[buffer(5)]],                                   \
-      uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],                      \
-      uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],                 \
-      uint lane [[thread_index_in_simdgroup]]) {                                                           \
-    threadgroup uint4 xs4[(MODE == 1 ? 2 : 1) * BM * (BK + 8) / 8];                                        \
-    uint tm = tg.y, tn = tg.x;                                                                             \
-    if (SW > 0) {                                                                                          \
-      const uint G = 1u << SW, t = tg.y * ntg.x + tg.x, grp = t / (G * ntg.x);                             \
-      const uint rows = min(G, ntg.y - grp * G), r = t - grp * G * ntg.x;                                  \
-      tm = grp * G + r % rows;                                                                             \
-      tn = r / rows;                                                                                       \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
+    constexpr int TM = BM / WM, TN = BN / WN;                                                              \
+    threadgroup uint4 xs4[BM * (BK + 8) / 8];                                                              \
+    const device uint32_t* W[1] = {Wd};                                                                    \
+    const device bfloat* S[1] = {Sd};                                                                      \
+    const device bfloat* B[1] = {Bd};                                                                      \
+    const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
+    const uint2 rc = qr_rc(lane);                                                                          \
+    simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                \
+    qr_acc<BM, BN, WM, WN, BK, 1, ABL>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,  \
+                                       tid, sgm, sgn, rc, acc);                                            \
+    _Pragma("clang loop unroll(full)")                                                                     \
+    for (int a = 0; a < TN / 8; ++a) {                                                                     \
+      const uint n = n0 + sgn * TN + a * 8 + rc.x;                                                         \
+      if (n >= p.N) continue;                                                                              \
+      _Pragma("clang loop unroll(full)")                                                                   \
+      for (int b = 0; b < TM / 8; ++b)                                                                     \
+        _Pragma("clang loop unroll(full)")                                                                 \
+        for (int e = 0; e < 2; ++e) {                                                                      \
+          const uint m = m0 + sgm * TM + b * 8 + rc.y + e;                                                 \
+          if (m < p.M) {                                                                                   \
+            device float* dst = Y + m * p.y_ld + n;                                                        \
+            const float v = acc[a][b].thread_elements()[e];                                                \
+            *dst = p.add ? *dst + v : v;                                                                   \
+          }                                                                                                \
+        }                                                                                                  \
     }                                                                                                      \
-    qr_tile<BM, BN, WM, WN, BK, MODE>(X, W, S, B, Y, p, tm * BM, tn * BN, (threadgroup half*)xs4, tid, sg, \
-                                      lane);                                                               \
+  }
+#define NI_QMR(NAME, BM, BN, WM, WN, BK) NI_QMRA(NAME, BM, BN, WM, WN, BK, 0)
+
+// Fused dense MLP gate/up: H[m, n] = half(silu(X Wg^T) * (X Wu^T)) (y_ld: halfs per H row); both
+// projections share the X tile. Buffers 0-5 as the dense kernel (W/S/B = gate, Y = H), 6-8 up.
+#define NI_QMR_GU(NAME, BM, BN, WM, WN, BK)                                                               \
+  [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
+      const device half* X [[buffer(0)]], const device uint32_t* Wg [[buffer(1)]],                         \
+      const device bfloat* Sg [[buffer(2)]], const device bfloat* Bg [[buffer(3)]],                        \
+      device half* H [[buffer(4)]], constant QmmParams& p [[buffer(5)]],                                    \
+      const device uint32_t* Wu [[buffer(6)]], const device bfloat* Su [[buffer(7)]],                      \
+      const device bfloat* Bu [[buffer(8)]],                                                               \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                  \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                \
+    constexpr int TM = BM / WM, TN = BN / WN, FA = TN / 8;                                                 \
+    threadgroup uint4 xs4[BM * (BK + 8) / 8];                                                              \
+    const device uint32_t* W[2] = {Wg, Wu};                                                                \
+    const device bfloat* S[2] = {Sg, Su};                                                                  \
+    const device bfloat* B[2] = {Bg, Bu};                                                                  \
+    const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
+    const uint2 rc = qr_rc(lane);                                                                          \
+    simdgroup_float8x8 acc[2 * FA][TM / 8];                                                                \
+    qr_acc<BM, BN, WM, WN, BK, 2, 0>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4,    \
+                                     tid, sgm, sgn, rc, acc);                                              \
+    _Pragma("clang loop unroll(full)")                                                                     \
+    for (int a = 0; a < FA; ++a) {                                                                         \
+      const uint n = n0 + sgn * TN + a * 8 + rc.x;                                                         \
+      if (n >= p.N) continue;                                                                              \
+      _Pragma("clang loop unroll(full)")                                                                   \
+      for (int b = 0; b < TM / 8; ++b)                                                                     \
+        _Pragma("clang loop unroll(full)")                                                                 \
+        for (int e = 0; e < 2; ++e) {                                                                      \
+          const uint m = m0 + sgm * TM + b * 8 + rc.y + e;                                                 \
+          const float g = acc[a][b].thread_elements()[e], u = acc[FA + a][b].thread_elements()[e];        \
+          if (m < p.M) H[m * p.y_ld + n] = half(silu(g) * u);                                              \
+        }                                                                                                  \
+    }                                                                                                      \
   }
 
-// naming: qmr[d][s<SW>]_k{BK}_w{WM}{WN}_m{BM}_n{BN}  (d: MODE 1)
-NI_QMR(qmr_k32_w14_m64_n64, 64, 64, 1, 4, 32, 0, 0)
-NI_QMR(qmr_k64_w14_m64_n64, 64, 64, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k128_w14_m64_n64, 64, 64, 1, 4, 128, 0, 0)
-NI_QMR(qmr_k32_w14_m32_n128, 32, 128, 1, 4, 32, 0, 0)
-NI_QMR(qmr_k64_w14_m32_n128, 32, 128, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k128_w14_m32_n128, 32, 128, 1, 4, 128, 0, 0)
-NI_QMR(qmr_k64_w14_m32_n64, 32, 64, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k64_w14_m16_n128, 16, 128, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k64_w12_m32_n64, 32, 64, 1, 2, 64, 0, 0)
-NI_QMR(qmr_k128_w12_m32_n64, 32, 64, 1, 2, 128, 0, 0)
-NI_QMR(qmrd_k32_w14_m32_n128, 32, 128, 1, 4, 32, 1, 0)
-NI_QMR(qmrd_k64_w14_m32_n128, 32, 128, 1, 4, 64, 1, 0)
-NI_QMR(qmrd_k64_w14_m64_n64, 64, 64, 1, 4, 64, 1, 0)
-NI_QMR(qmrd_k128_w14_m32_n128, 32, 128, 1, 4, 128, 1, 0)
-NI_QMR(qmrs2_k64_w14_m32_n128, 32, 128, 1, 4, 64, 0, 2)
-NI_QMR(qmr_k64_w12_m16_n64, 16, 64, 1, 2, 64, 0, 0)
-NI_QMR(qmr_k64_w14_m16_n64, 16, 64, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k64_w14_m8_n128, 8, 128, 1, 4, 64, 0, 0)
-NI_QMR(qmr_k64_w12_m8_n64, 8, 64, 1, 2, 64, 0, 0)
-NI_QMR(qmr_k32_w12_m32_n64, 32, 64, 1, 2, 32, 0, 0)
+// naming: qmr[_gu]_k{BK}_w{WM}{WN}_m{BM}_n{BN}; threads 32*WM*WN; host requires bits 4, gs 64,
+// K % 64 == 0 (x_ld % 8 == 0). Rows/columns past M/N are computed on clamped rows and not stored.
+NI_QMR(qmr_k32_w14_m32_n128, 32, 128, 1, 4, 32)   // default for M >= 64: 80 GPRs, no stack
+NI_QMR(qmr_k64_w14_m32_n128, 32, 128, 1, 4, 64)
+NI_QMR(qmr_k64_w12_m32_n64, 32, 64, 1, 2, 64)     // as fast, but 96 GPRs + 16 B stack
+NI_QMR(qmr_k32_w14_m64_n64, 64, 64, 1, 4, 32)
+NI_QMR(qmr_k64_w14_m64_n64, 64, 64, 1, 4, 64)
+NI_QMR(qmr_k64_w14_m32_n64, 32, 64, 1, 4, 64)
+NI_QMR(qmr_k64_w14_m16_n128, 16, 128, 1, 4, 64)
+NI_QMR(qmr_k64_w14_m16_n64, 16, 64, 1, 4, 64)     // M < 64 or N <= 64
+NI_QMR(qmr_k64_w12_m16_n64, 16, 64, 1, 2, 64)
+NI_QMR(qmr_k64_w12_m8_n64, 8, 64, 1, 2, 64)       // M <= 8
+NI_QMR_GU(qmr_gu_k32_w14_m32_n64, 32, 64, 1, 4, 32)
+NI_QMR_GU(qmr_gu_k64_w14_m32_n64, 32, 64, 1, 4, 64)
+NI_QMR_GU(qmr_gu_k32_w12_m32_n32, 32, 32, 1, 2, 32)
+NI_QMR_GU(qmr_gu_k64_w14_m16_n64, 16, 64, 1, 4, 64)
+NI_QMR_GU(qmr_gu_k64_w12_m8_n32, 8, 32, 1, 2, 64)
+// ablations (bench only): 1 no dequant math, 2 no X staging, 4 no barriers, 8 no W loads
+NI_QMRA(qmra1_k32_w14_m32_n128, 32, 128, 1, 4, 32, 1)
+NI_QMRA(qmra2_k32_w14_m32_n128, 32, 128, 1, 4, 32, 2)
+NI_QMRA(qmra6_k32_w14_m32_n128, 32, 128, 1, 4, 32, 6)
+NI_QMRA(qmra8_k32_w14_m32_n128, 32, 128, 1, 4, 32, 8)
+NI_QMRA(qmra9_k32_w14_m32_n128, 32, 128, 1, 4, 32, 9)
+NI_QMRA(qmra15_k32_w14_m32_n128, 32, 128, 1, 4, 32, 15)
+NI_QMRA(qmrw_k32_w14_m32_n128, 32, 128, 1, 4, 32, 16)
+NI_QMRA(qmrw_k64_w14_m32_n128, 32, 128, 1, 4, 64, 16)
+NI_QMRA(qmrw_k32_w12_m32_n64, 32, 64, 1, 2, 32, 16)
+NI_QMRA(qmrw_k32_w14_m64_n64, 64, 64, 1, 4, 32, 16)
