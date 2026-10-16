@@ -36,7 +36,7 @@ static int moe_fused() {
 // paths for cached-turn suffixes and short prompts.
 //  * the engine captures the turn-boundary checkpoint inside the prefill pass (gdn_*_snap kernels)
 //    instead of splitting the suffix into two passes that each read every weight;
-//  * passes of at most NI_SHORTPF_MAX (default 64, cap 128) rows run their projections on the
+//  * passes of at most NI_SHORTPF_MAX (default and cap 128) rows run their projections on the
 //    short-prefill GEMMs (NI_SHORTPF_GEMM below), with the projections that share an input in one
 //    dispatch; MoE experts in 8-row tiles (NI_SHORTPF_MOE_MAX); attention over a long cached prefix
 //    as (query, head) rows with the keys split over threadgroups (NI_SHORTPF_ATTN_MAX).
@@ -48,7 +48,7 @@ static bool shortpf() {
   return on;
 }
 static int shortpf_max() {
-  static const int v = getenv("NI_SHORTPF_MAX") && *getenv("NI_SHORTPF_MAX") ? atoi(getenv("NI_SHORTPF_MAX")) : 64;
+  static const int v = getenv("NI_SHORTPF_MAX") && *getenv("NI_SHORTPF_MAX") ? atoi(getenv("NI_SHORTPF_MAX")) : 128;
   return std::clamp(v, 0, 128);
 }
 static int env_int(const char* n, int def) {
@@ -58,13 +58,13 @@ static int env_int(const char* n, int def) {
 // Row limits of the other short-prefill paths (read once; 0 turns a path off):
 //   NI_SHORTPF_ATTN_MAX (default 128): attention as (query, head) rows of one KV head with the keys
 //     split over threadgroups (attn_prefill11g / 11gs + attn11_reduce)
-//   NI_SHORTPF_MOE_MAX (default 64): MoE experts in 8-row tiles (qmms_moe_gu / qmms_moe_dn)
+//   NI_SHORTPF_MOE_MAX (default 128): MoE experts in 8-row tiles (qmms_moe_gu / qmms_moe_dn)
 static int shortpf_attn_max() {
   static const int v = std::clamp(env_int("NI_SHORTPF_ATTN_MAX", 128), 0, 512);
   return v;
 }
 static int shortpf_moe_max() {
-  static const int v = std::clamp(env_int("NI_SHORTPF_MOE_MAX", 64), 0, 128);
+  static const int v = std::clamp(env_int("NI_SHORTPF_MOE_MAX", 128), 0, 128);
   return v;
 }
 // NI_SHORTPF_GEMM (read once): kernels for the projections of passes of at most NI_SHORTPF_MAX rows

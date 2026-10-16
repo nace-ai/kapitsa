@@ -403,4 +403,3 @@ NI_INLINE void qs_tile(constant Qmm2Params& p, const device uint* tiles, uint t,
     if (r < rows) Y[yrows[m0 + r] * p.y_ld + n] = acc.thread_elements()[j];
   }
 }
-
