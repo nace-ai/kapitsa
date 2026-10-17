@@ -66,6 +66,21 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  // A reply ends at the config's eos ids or at the tokenizer's eos token: the small Qwen3.5 checkpoints
+  // (Qwen/Qwen3.5-4B and its MLX conversions) list only <|endoftext|> in config.json and keep the chat
+  // turn's end, <|im_end|>, in tokenizer_config.json, so their replies never stopped.
+  stop_ids_ = model_->config().eos;
+  {
+    auto tc = nlohmann::json::parse(read_file(opts_.model_dir + "/tokenizer_config.json"), nullptr, false);
+    std::string end = "<|im_end|>";
+    if (!tc.is_discarded() && tc.contains("eos_token")) {
+      const auto& e = tc["eos_token"];
+      if (e.is_string()) end = e.get<std::string>();
+      else if (e.is_object()) end = e.value("content", end);
+    }
+    const int id = tok_.find(end);
+    if (id >= 0 && std::find(stop_ids_.begin(), stop_ids_.end(), id) == stop_ids_.end()) stop_ids_.push_back(id);
+  }
   const bool spec_off = opts_.spec_depth == 0;  // --spec 0: no speculative decoding at all
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
@@ -376,7 +391,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }();
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
                       think_tools);
-  const auto& eos = model_->config().eos;
+  const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
   std::string content_so_far;
