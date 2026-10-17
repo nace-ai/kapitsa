@@ -793,11 +793,11 @@ response's checkpoint, which both rules keep; the new query took 6.21 / 6.12 s b
 after. With `reasoning_content` sent back (Pi replays it), the tool steps continue the live state and the
 new query took 8.03 / 7.64 s before (2 / 3 calls) and 2.07 / 3.03 s after.
 
-With opt/moe35's history prefill (scratch merge of 57df0c2 with this branch, not kept): after the answer the
-engine renders the conversation as the next query will and prefills it from the query's checkpoint in the
-idle gap. With the old rule it found no checkpoint after 2-3 tool calls; with this one it runs every time
-("history: prefilled 2240 tokens of the rendered reply (from 16665) in 3280 ms") and the new query prefills
-only its own 31 tokens (58-72 ms on the server):
+With opt/moe35's history prefill (first measured on a scratch merge of 57df0c2, since merged into main): after
+the answer the engine renders the conversation as the next query will and prefills it from the query's
+checkpoint in the idle gap. With the old rule it found no checkpoint after 2-3 tool calls; with this one it
+runs every time ("history: prefilled 2240 tokens of the rendered reply (from 16665) in 3280 ms") and the new
+query prefills only its own 31 tokens (58-72 ms on the server):
 | new query TTFT, s | 4k: 1 / 2 / 3 tool calls | 16k: 1 / 2 / 3 tool calls |
 |---|---|---|
 | history prefill, old rule | 0.25 / 5.88 / 6.79 | 0.61 / 21.76 / 23.60 |
@@ -807,16 +807,20 @@ only its own 31 tokens (58-72 ms on the server):
 With a 1 s gap the history prefill (0.95-3.28 s) is still running when the query arrives, so the query waits
 for its rest. With 5 s it is done, and the query's own GPU work is 78-83 ms; the rest is the GPU waking up
 after the idle gap ("GPU start +98 / +413 / +419 ms" in the log, the same with the old rule at 1 call).
+Again on this branch merged with main 8a05d3a (history prefill on main), 5 s gap, new query after 1 / 2 / 3
+tool calls: 16k 0.54 / 21.14 / 22.23 s with `NI_QUERY_CKPT=0` vs 0.51 / 0.11 / 0.13 s with the default, 4k
+0.54 / 6.31 / 7.13 vs 0.52 / 0.53 / 0.54 s (the query's own GPU work 63-95 ms, the GPU's start after the pause
+21-473 ms); replies identical, tests/test_server.py 13/13 on both models.
 
 Correctness (greedy; every request's reasoning, content and tool calls compared for the same seeded
 conversation across servers):
-* 0 differences in 68 conversations: 24 thinking off (4k / 16k, 1-3 tool calls, 3 rounds: flag on vs main
-  and flag off), 16 in the 1-call A/B, 2 with the default flipped vs `NI_QUERY_CKPT=0`, 4 thinking on
+* 0 differences in 74 conversations: 24 thinking off (4k / 16k, 1-3 tool calls, 3 rounds: flag on vs main and
+  flag off), 16 in the 1-call A/B, 8 with the default vs `NI_QUERY_CKPT=0` (2 + 6 on the merge), 4 thinking on
   (reasoning echoed and not), 10 whose new query asks for a detailed explanation after 2-3 tool calls (4k and
   16k, answers of 300-400 tokens, nine of them run to the limit: a cold re-prefill before, a restored
   checkpoint after), 3 on the 27B, 9 through the opt/moe35 merge. The restored path is the cached path every
-  follow-up already takes, which is not bitwise a cold prefill (different chunking; opt/moe35 measured KL
-  1e-4 - 6e-3 between them and saw greedy texts split at near-ties): none of these conversations hit one.
+  follow-up already takes, which is not bitwise a cold prefill (different chunking; opt/moe35 measured KL 1e-4
+  to 6e-3 between them and saw greedy texts split at near-ties): none of these conversations hit one.
 * main and `NI_QUERY_CKPT=0`: the same prompt and cached tokens for every request of every conversation.
 * tests/test_server.py (bench/shortpf/serve_test.sh): 13/13 on the 35B with `NI_QUERY_CKPT=1` and `=0`, and
   with the new default (no variable) on the 35B and the 27B.
