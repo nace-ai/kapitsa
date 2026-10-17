@@ -432,6 +432,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- prefill ----
   const double tok_ms = now_ms() - t_req;  // template + tokenizer + slot pick
+  const Qwen35::AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
   sp.top_p = r.top_p;
@@ -505,6 +506,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   e->wait();
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
+  // Neural Engine split: how busy the ANE was over the prefill. Near 100% it, not the GPU, is the bottleneck (a
+  // smaller share would be faster: ane_calib --wave --write); the share is set for the GPU to be the bottleneck.
+  if (const Qwen35::AneStats& a1 = model_->ane_stats(); a1.chunks > ane0.chunks)
+    logi("prefill: Neural Engine busy %.0f%% of %.0f ms over %d split chunks (%d evaluations)",
+         100 * (a1.ane_ms - ane0.ane_ms) / std::max(res.prefill_ms, 1.0), res.prefill_ms, a1.chunks - ane0.chunks,
+         a1.evals - ane0.evals);
   const double gpu_last = e->gpu_ms();
   // last chunk: commit -> GPU start, GPU end -> this thread awake (host clock)
   const double lat_start = e->gpu_start_host_ms() - h_commit, lat_wake = h_woke - e->gpu_end_host_ms();
