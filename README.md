@@ -41,9 +41,10 @@ curl http://127.0.0.1:8000/v1/chat/completions \
   }'
 ```
 
-Thinking follows the model's default, which is on. `"reasoning_effort": "none"` or
-`"chat_template_kwargs": {"enable_thinking": false}` turns it off. Every response reports its `usage`, including the
-cached prompt tokens of a follow-up.
+Coding agents and apps that speak the OpenAI API connect to `http://127.0.0.1:8000/v1`; any API key works unless
+the server was started with `--api-key`. Thinking follows the model's default, which is on. `"reasoning_effort": "none"`
+or `"chat_template_kwargs": {"enable_thinking": false}` turns it off. Every response reports its `usage`, including
+the cached prompt tokens of a follow-up.
 [API details](DEVELOPMENT.md#server)
 
 ## Models
