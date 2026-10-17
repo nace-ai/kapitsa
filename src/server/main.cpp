@@ -184,8 +184,9 @@ static void print_help() {
 
 static void print_serve_help() {
   printf("kapitsa serve [--model MODEL] [options]\n\n"
-         "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help), org/name[@revision], or a model\n"
-         "                         folder. Default: the best model for this Mac. Downloaded on first use.\n"
+         "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
+         "                         precision), org/name[@revision], or a model folder. Default: the best model\n"
+         "                         for this Mac. Downloaded on first use.\n"
          "  --host HOST            listen address (default 127.0.0.1; 0.0.0.0 serves your network)\n"
          "  --port PORT            default 8000\n"
          "  --api-key KEY          require \"Authorization: Bearer KEY\" (the chat page asks for it once)\n"
@@ -203,7 +204,7 @@ static void print_serve_help() {
 static void print_pull_help() {
   printf("kapitsa pull MODEL... [--from DIR]...\n\n"
          "Downloads a model with the files that speed it up (MTP head, DFlash2 drafter) into\n"
-         "%s/<name>, verifies every file, and continues an interrupted download.\n\n"
+         "%s/<name>-<variant>, verifies every file, and continues an interrupted download.\n\n"
          "  --from DIR   take files that are already on this Mac from DIR (a folder from `hf download --local-dir`,\n"
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
