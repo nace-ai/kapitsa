@@ -341,7 +341,8 @@ HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint
       if (b <= a || (r.status == 206 && r.body.size() == b - a)) return r;
       r.error = "short read";
     }
-    if (!retryable(r) || i >= attempts || g_stop) return r;
+    // offline: one more try a second later (Wi-Fi waking up), then say so rather than wait
+    if (!retryable(r) || i >= attempts || g_stop || (r.offline && i >= 2)) return r;
     nap(0.5 * (1 << i));
   }
 }
