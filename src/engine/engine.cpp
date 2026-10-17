@@ -305,9 +305,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- decode ----
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
-  // NI_THINK_TOOLCALLS=1: a tool call written inside the reasoning, with nothing after it but the end of the
-  // turn, is returned as a tool call (Qwen3.6 sometimes stops without closing its think block); see OutputParser.
-  static const bool think_tools = env_on("NI_THINK_TOOLCALLS");
+  // A tool call written inside the reasoning, with nothing after it but the end of the turn, is returned as a
+  // tool call (Qwen3.6 sometimes stops without closing its think block); see OutputParser. NI_THINK_TOOLCALLS=0
+  // leaves it in the reasoning, as before.
+  static const bool think_tools = [] {
+    const char* v = getenv("NI_THINK_TOOLCALLS");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
                       think_tools);
   const auto& eos = model_->config().eos;

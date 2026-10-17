@@ -832,3 +832,54 @@ conversation across servers):
 Made the default after these runs (`NI_QUERY_CKPT=0` restores "oldest first"): the default build against
 `NI_QUERY_CKPT=0` on the same 4k conversations, new query after 2 / 3 tool calls: 1.95 / 2.76 s (restored the
 query's checkpoint) vs 6.57 / 7.42 s (from token 0), replies identical.
+
+## Tool calls written inside the reasoning (`NI_THINK_TOOLCALLS`, default on; macOS 27.0.1)
+
+Qwen3.6 sometimes writes its tool call inside the think block and ends the turn without ever writing
+`</think>`: "The user wants me to read notes/step3.txt next. Let me do that.\n\n<tool_call>...</tool_call>",
+then `<|im_end|>`. The parser treated everything before `</think>` as reasoning, so the call went out as
+reasoning_content and the reply had no content and no tool_calls: an agent saw an empty final answer and the
+loop stopped. Found in bench/ckpt's thinking tool loops; the Qwen team says it cannot be fixed in the model yet
+and points to the application layer (QwenLM/Qwen3.6#125).
+
+What other engines do (default branches read on 2026-10-17): vLLM, mlx-lm and Ollama end the reasoning at the
+first `<tool_call>`, so a call drafted in mid-thought is executed too and the rest of the reasoning becomes
+content (vLLM #58227); SGLang does the same when streaming, but without streaming splits there only if no
+`</think>` follows (its open PR #42030 holds the streamed text until `</think>` or the end); llama.cpp
+constrains sampling (after a `<tool_call>` in the reasoning its grammar allows only more calls or the end);
+oMLX, the app's other engine, promotes calls found in the reasoning at the end of the turn when the content has
+none, filtered by tool name.
+
+Kapitsa: a `<tool_call>` inside the reasoning is held back with the tokens after it instead of being streamed.
+If the reasoning goes on (non-whitespace text, a call after `</think>`, content, a stray tag), the held tokens
+are replayed through the parser as before: a drafted call stays reasoning, and the stream only differs in
+arriving in one piece. If the turn ends with the call(s), with nothing after them but whitespace or `</think>`
+and whitespace, and the model stopped by itself (not max_tokens, not a cancelled request), the complete calls
+that name one of the request's tools are returned as tool calls (finish_reason `tool_calls`) and the reasoning
+ends before them. An unknown function, an unterminated call or a cut turn stays reasoning. The parser moved to
+src/engine/output_parser.h; `tools/parser_test <model dir>` runs 26 checks on real token ids (both models'
+tokenizers, CPU only): unchanged streams for every turn without a call in the reasoning, the old results for
+drafts, the call returned in the cases above, no call markup streamed as reasoning, deltas adding up.
+
+How often (bench/ckpt/tool_loop_ttft.py --think --no-q2: thinking on, 4k-token context, loops of 3 tool calls,
+the same seeded conversations with the switch off and on, 35B unless noted). A loop is cut short when a step's
+reply is empty with the call left in the reasoning; the client then takes it as the final answer:
+| sampling, history | conversations | cut short (off) | cut short (on) | calls returned from the reasoning (on) |
+|---|---|---|---|---|
+| greedy, reasoning not sent back | 8 | 3 | 0 | 3 |
+| T = 0.6 (seeded per request), not sent back | 6 | 2 | 0 | 2 |
+| greedy, reasoning sent back (as Pi does) | 6 | 0 | 0 | 0 |
+| T = 0.6, sent back | 6 | 0 | 0 | 0 |
+| 27B, greedy, sent back | 3 | 0 | 0 | 0 |
+All five hits were the third call ("The user wants me to read notes/step3.txt next. Let me do that." and the
+call, then `<|im_end|>`): with the earlier assistant turns rendered with empty think blocks (reasoning not sent
+back), 5 of 14 loops broke; with the reasoning sent back, 0 of 15.
+
+Correctness: every conversation without a hit has the same replies (every request's reasoning, content and
+tool calls) with the switch off and on: 21 on the 35B, 2 of 3 on the 27B (the third splits in its second
+request's reasoning because one server compiled the Neural Engine program at start, so that conversation's
+first prefill ran on the GPU alone there and with the split on the other; no call was held in either). The
+five with a hit are the same up to that step and then go on with the returned call. tests/test_server.py 14/14
+(new: thinking + tools returns read_file as a tool call) on both models with the switch off, on and at the
+default; parser_test 26/26 with both tokenizers. Made the default after these runs; `NI_THINK_TOOLCALLS=0`
+leaves such calls in the reasoning.

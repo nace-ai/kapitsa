@@ -44,8 +44,8 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
 - `src/model/qwen35*.cpp`: the model (decode, chunked prefill with in-pass checkpoints, MTP speculative
   decoding: draft chain, multi-row verify, tape commit).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries (a user query's outlives the tool responses after it), streaming parser for reasoning /
-  content / tool calls.
+  boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
+  reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
@@ -57,7 +57,7 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
   `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
   how turn boundaries are classified (`kind_probe.py`).
-- `tests/test_server.py`: end-to-end API checks (13).
+- `tests/test_server.py`: end-to-end API checks (14).
 
 ## Switches (environment, read once at start; the `NI_` prefix predates the name)
 
@@ -77,6 +77,7 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
 | `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
 | `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |
+| `NI_THINK_TOOLCALLS` | on | a tool call the model writes inside its reasoning and ends the turn with is returned as a tool call; `0` = left in the reasoning |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
 | `NI_DUP` | off | `NI_DUP=<kernel>[,...]`: dispatch those kernels twice (in-pipeline cost; idempotent kernels only) |
