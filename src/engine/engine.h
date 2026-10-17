@@ -154,6 +154,7 @@ class Engine {
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
+  std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)
   int context_fit_ = 0;  // see context_fit()
