@@ -347,10 +347,16 @@ static int serve(int argc, char** argv, int first) {
         if (!fits && !(best_model(opt, budget, &alt, nullptr) && variant_fits(alt, opt, budget) == 1)) alt = {};
         const bool other = alt.variant && alt.variant != ref.variant;
         char msg[768];
-        snprintf(msg, sizeof msg, "%s needs %.1f GB of GPU memory with %s, and this Mac (%.0f GB) allows %.1f GB, so it "
-                 "would not start.%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
-                 budget / 1e9, other ? " This one fits: kapitsa serve --model " : "",
-                 other ? hub::short_name(*alt.model, *alt.variant).c_str() : "");
+        if (need.weights > budget)  // nothing but another variant helps
+          snprintf(msg, sizeof msg, "%s does not fit this Mac: its weights alone (%.1f GB, %s) exceed the %.1f GB of GPU "
+                   "memory Kapitsa may use here (%.0f GB of RAM).%s%s", ref.name.c_str(), need.weights / 1e9,
+                   need.formats.c_str(), budget / 1e9, ram_gb(), other ? " This one fits: kapitsa serve --model " : "",
+                   other ? hub::short_name(*alt.model, *alt.variant).c_str() : "");
+        else
+          snprintf(msg, sizeof msg, "%s needs %.1f GB of GPU memory with %s, and this Mac (%.0f GB) allows %.1f GB, so it "
+                   "would not start.%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
+                   budget / 1e9, other ? " This one fits: kapitsa serve --model " : "",
+                   other ? hub::short_name(*alt.model, *alt.variant).c_str() : "");
         return fail(msg);
       }
     }

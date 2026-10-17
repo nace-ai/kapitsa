@@ -242,11 +242,16 @@ bool conversation_fits(const std::string& model_dir, int context, int slots, siz
 }
 
 int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budget) {
-  const std::string dir = hub::plan_dir(ref);
-  if (dir.empty()) return -1;
-  if (!conversation_fits(dir, opt.context, opt.slots, budget)) return 0;
-  const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
-  return lp.dflash_left_out.empty() ? 1 : 0;
+  try {
+    const std::string dir = hub::plan_dir(ref);
+    if (dir.empty()) return -1;
+    if (!conversation_fits(dir, opt.context, opt.slots, budget)) return 0;
+    const LoadPlan lp =
+        plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
+    return lp.dflash_left_out.empty() ? 1 : 0;
+  } catch (const std::exception&) {  // headers that cannot be planned (a damaged download): unknown
+    return -1;
+  }
 }
 
 hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits) {
