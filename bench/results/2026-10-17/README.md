@@ -1,6 +1,7 @@
 # Results, 2026-10-16/17
 
-The result files behind [docs/benchmarks.md](../../../docs/benchmarks.md): one run per engine configuration, written by
+The result files behind [docs/benchmarks.md](../../../docs/benchmarks.md): one run per engine configuration
+(two extra Kapitsa runs are in [confirmations](confirmations/), outside the tables), written by
 [bench/harness](../../harness/README.md) on a MacBook Pro (M4 Pro, 48 GB, macOS 27.0.1). Rebuild the tables with
 
 ```bash

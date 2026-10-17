@@ -97,31 +97,29 @@ optimization.
 Measured on a MacBook Pro (M4 Pro, 20-core GPU, 48 GB) with macOS 27.0.1: the same prompts for every engine, each at
 its latest release and its own best settings, the same 4-bit weights wherever the engine accepts them (GGUF engines
 on Q4_K_M), thinking off, 32K context, one slot, median of 5 runs, nothing else on the GPU. Ratios are against the
-next-fastest engine measured.
-
-<!-- 27B ratios re-measured in the confirmation run -->
+next-fastest engine measured, which ran in the same session as Kapitsa.
 
 | Metric | Qwen3.6-35B-A3B | Qwen3.8-27B |
 | --- | ---: | ---: |
-| Decode · coding prompt, temperature 0.6 | 154 tok/s (1.2×) | 62 tok/s (2.0×) |
-| Decode · greedy | 179 tok/s (1.4×) | 66 tok/s (1.9×) |
-| Prefill · 4K prompt | 1,169 tok/s (1.1×) | 395 tok/s (3.1×) |
-| Prefill · 16K prompt | 986 tok/s (1.1×) | 330 tok/s (2.7×) |
-| Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.7×) | 0.23 / 0.25 s (1.4× / 1.6×) |
-| Peak memory | 21.1 GB (lowest) | 20.5 GB (tied lowest) |
+| Decode · coding prompt, temperature 0.6 | 154 tok/s (1.2×) | 63 tok/s (1.4×) |
+| Decode · greedy | 179 tok/s (1.4×) | 67 tok/s (1.5×) |
+| Prefill · 4K prompt | 1,169 tok/s (1.1×) | 389 tok/s (2.9×) |
+| Prefill · 16K prompt | 986 tok/s (1.1×) | 335 tok/s (2.6×) |
+| Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.6× / 1.7×) | 0.28 / 0.27 s (1.2× / 1.5×) |
+| Peak memory | 21.1 GB (lowest) | 19.4 GB (lowest) |
 
 Against the engines people use, decode at temperature 0.6 in tok/s, each engine in its fastest setup:
 
 | Engine | 35B-A3B | 27B |
 | --- | ---: | ---: |
 | llama.cpp (+ MTP) | 69 | 18 |
-| Ollama (MLX runner, MTP) | 89 | 31 |
+| Ollama (MLX runner, MTP) | 89 | 32 |
 | LM Studio (MLX engine) | 86 | 15 |
-| MTPLX | 80 | 30 |
-| oMLX + DFlash2 | 127 | 30 |
-| **Kapitsa** | **154** | **62** |
+| MTPLX | 80 | 36 |
+| oMLX + DFlash2 | 127 | 45 |
+| **Kapitsa** | **154** | **63** |
 
-Prefill is up to 3× faster on the 27B (GPU + Neural Engine), and a follow-up turn starts in 0.06-0.25 s. Every
+Prefill is up to 2.9× faster on the 27B (GPU + Neural Engine), and a follow-up turn starts in 0.06-0.28 s. Every
 engine passes the same tool-call checks.
 [Measurement details](docs/benchmarks.md) ·
 [Run benchmarks locally](bench/harness/README.md) ·
