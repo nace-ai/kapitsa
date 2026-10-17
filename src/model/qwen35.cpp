@@ -878,10 +878,10 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
       for (auto& [f, n] : other) m.formats += " + " + std::to_string(n) + " modules " + f;
     }
   }
-  // dense FFN at 4-bit group 64: the only one the Neural Engine split reads (init_ane)
+  // dense FFN in a format the Neural Engine split stages its int8 weights from (init_ane checks every layer)
   if (!c.moe) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
-    m.ffn_q4 = ff.first == 4 && ff.second == 64;
+    m.ffn_ane = format_supported(ff.first, ff.second);
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
   {

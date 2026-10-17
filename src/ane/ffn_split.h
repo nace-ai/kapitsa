@@ -2,8 +2,8 @@
 // of T rows (T >= min_rows):
 //   GPU: rotate + pack the post-norm input to int8 (IOSurfaces), signal `ready`
 //   ANE: (queued) wait `ready`, run the W8A8 program on channels [gpu, I) -> partial, signal `done`
-//   GPU: meanwhile its own channels [0, gpu) (4-bit GEMMs, caller-encoded, adding into x), then
-//        stage layer l+1's rotated int8 weights from the 4-bit planes into the other weight set
+//   GPU: meanwhile its own channels [0, gpu) (the model's GEMMs, caller-encoded, adding into x), then
+//        stage layer l+1's rotated int8 weights from the model's weights (any format) into the other weight set
 //   GPU: wait `done`, join x += partial * scales (fp32)
 // The ANE share is `units` x 512 intermediate channels. Weights are not stored twice: each chunk
 // re-quantizes them one layer ahead into two double-buffered weight sets (~2 x 200 MB); only the
@@ -23,9 +23,10 @@
 
 namespace ni::ane {
 
-struct Proj {  // MLX affine 4-bit, group 64: w uint32 [N][K/8], s/b bf16 [N][K/64]
+struct Proj {  // MLX affine `bits`-bit, group `gs` (w uint32 [N][K * bits / 32], s/b bf16 [N][K / gs]), or bf16 (bits 16)
   Buffer w, s, b;
   uint32_t N = 0, K = 0;
+  int bits = 4, gs = 64;
 };
 struct FfnLayer {
   Proj gate, up, down;

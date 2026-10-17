@@ -81,12 +81,20 @@ void Qwen35::init_ane() {
     logi("NI_ANE: off under NI_PROFILE");
     return;
   }
-  for (const Layer& L : layers_)
+  // the split stages its int8 weights from any format (ane_ffn.metal, wfmt.metal); the GPU's share of a layer runs
+  // gate and up as one fused GEMM, so the two need one format
+  for (const Layer& L : layers_) {
     for (const QLinear* q : {&L.mg, &L.mu, &L.md})
-      if (q->bits != 4 || q->gs != 64) {
-        logi("NI_ANE: the split needs 4-bit group-64 FFN weights; GPU only");
+      if (!format_supported(q->bits, q->gs)) {
+        logi("NI_ANE: no split for %s FFN weights; GPU only", format_name(q->bits, q->gs).c_str());
         return;
       }
+    if (!L.mg.same_format(L.mu)) {
+      logi("NI_ANE: FFN gate and up in different formats (%s, %s); GPU only", format_name(L.mg.bits, L.mg.gs).c_str(),
+           format_name(L.mu.bits, L.mu.gs).c_str());
+      return;
+    }
+  }
   const std::string chip = Gpu::get().name();
   const std::string mkey = ane::model_key(dir_);
   // the two-half wavefront is the default schedule (NI_ANE_WAVE=0: the plain split)
@@ -143,7 +151,7 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   AnePlan a;
   a.total = m.dense ? uint32_t(m.ffn / 512) : 0;
   if (!m.dense) return a.source = "MoE: GPU", a;
-  if (!m.ffn_q4) return a.source = "the split reads 4-bit group-64 FFN weights; GPU", a;
+  if (!m.ffn_ane) return a.source = "FFN weight format not staged by the split; GPU", a;
   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
   if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
@@ -232,15 +240,21 @@ ane::FfnConfig Qwen35::ane_cfg(uint32_t units, uint32_t min_rows, const std::vec
   c.fault_layer = fault_layer;
   c.cache_dir = ane::cache_dir();
   c.model_key = ane::model_key(dir_);
+  // the test transforms (NI_REQUANT / NI_DEQUANT) change the weights the row scales come from: their own cache file
+  for (const char* v : {"NI_REQUANT", "NI_DEQUANT"})
+    if (const char* t = getenv(v); t && *t) {
+      c.model_key += std::string("-") + (v[3] == 'R' ? "rq" : "dq");
+      for (const char* q = t; *q; ++q) c.model_key += isalnum((unsigned char)*q) ? *q : '_';
+    }
   return c;
 }
 
 std::vector<ane::FfnLayer> Qwen35::ane_layers() const {
   std::vector<ane::FfnLayer> ls;
   for (const Layer& L : layers_)
-    ls.push_back({{L.mg.w->buf, L.mg.s->buf, L.mg.b->buf, L.mg.N, L.mg.K},
-                  {L.mu.w->buf, L.mu.s->buf, L.mu.b->buf, L.mu.N, L.mu.K},
-                  {L.md.w->buf, L.md.s->buf, L.md.b->buf, L.md.N, L.md.K}});
+    ls.push_back({{L.mg.w->buf, L.mg.s->buf, L.mg.b->buf, L.mg.N, L.mg.K, L.mg.bits, L.mg.gs},
+                  {L.mu.w->buf, L.mu.s->buf, L.mu.b->buf, L.mu.N, L.mu.K, L.mu.bits, L.mu.gs},
+                  {L.md.w->buf, L.md.s->buf, L.md.b->buf, L.md.N, L.md.K, L.md.bits, L.md.gs}});
   return ls;
 }
 
@@ -270,23 +284,43 @@ bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<ui
 void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   if (!g) return;  // the ANE takes every channel
   const uint32_t D = uint32_t(cfg_.hidden), I = L.mg.N;
-  for (int k = 0; k < 2; ++k) {
-    const QLinear& Q = k ? L.mu : L.mg;
-    e.use(kpipe("qmm_b4_m64_n64"));
-    kp::Qmm p{uint32_t(T), g, Q.K, Q.K, g, 0, uint32_t(Q.gs), 0, 0};
-    e.buf(0, xh_); e.buf(1, Q.w->buf); e.buf(2, Q.s->buf); e.buf(3, Q.b->buf); e.buf(4, k ? hu_ : hg_);
-    e.val(5, p);
-    e.dispatch((g + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  const bool q4 = L.mg.q4() && L.mu.q4() && L.md.q4();
+  // gate/up of the leading g rows and SwiGLU into hhalf_ [T, g]: 4-bit as two GEMMs into fp32 hg_ / hu_; the other
+  // formats fused, on the prefill path's GEMMs for the format
+  bool fused = false;
+  if (!q4) {
+    QLinear G = L.mg, U = L.mu;
+    G.N = U.N = g;
+    fused = enc_qmm_gu(e, G, U, xh_, hhalf_, T);
+    if (!fused && !(L.mg.q4() && L.mu.q4())) fatal("NI_ANE: no fused gate/up GEMM for %s", L.mg.fmt().c_str());
   }
-  const uint32_t n = uint32_t(T) * g;
-  e.use(kpipe("swiglu_half"));
-  e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
-  e.dispatch((n + 255) / 256, 1, 1, 256);
-  kp::QmmLd p{{uint32_t(T), D, g, g, D, 1u, uint32_t(L.md.gs), 0, 0}, I / 8, I / uint32_t(L.md.gs)};
-  e.use(kpipe("qmm_b4_m64_n64_ld"));
-  e.buf(0, hhalf_); e.buf(1, L.md.w->buf); e.buf(2, L.md.s->buf); e.buf(3, L.md.b->buf); e.buf(4, x);
+  if (!fused) {
+    for (int k = 0; k < 2; ++k) {
+      const QLinear& Q = k ? L.mu : L.mg;
+      e.use(kpipe("qmm_b4_m64_n64"));
+      kp::Qmm p{uint32_t(T), g, Q.K, Q.K, g, 0, uint32_t(Q.gs), 0, 0};
+      e.buf(0, xh_); e.buf(1, Q.w->buf); e.buf(2, Q.s->buf); e.buf(3, Q.b->buf); e.buf(4, k ? hu_ : hg_);
+      e.val(5, p);
+      e.dispatch((g + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+    }
+    const uint32_t n = uint32_t(T) * g;
+    e.use(kpipe("swiglu_half"));
+    e.buf(0, hg_); e.buf(1, hu_); e.buf(2, hhalf_); e.val(3, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  }
+  // down over the leading g inputs of its rows (row stride I), added into x
+  const QLinear& Dn = L.md;
+  const uint32_t wld = Dn.dense() ? I / 2 : I * uint32_t(Dn.bits) / 32, sld = Dn.dense() ? 1u : I / uint32_t(Dn.gs);
+  kp::QmmLd p{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, wld, sld};
+  static const bool mf = !getenv("NI_QRF16_MF") || atoi(getenv("NI_QRF16_MF")) != 0;  // as enc_qrf
+  const bool mfast = Dn.dense() && mf;
+  e.use(kpipe(Dn.q4() ? std::string("qmm_b4_m64_n64_ld")
+                      : "qrf_" + Dn.fmt() + (mfast ? "_m32_n128_mf_ld" : "_m32_n128_ld")));
+  e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
   e.val(5, p);
-  e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  if (Dn.q4()) e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
+  else if (mfast) e.dispatch((uint32_t(T) + 31) / 32, (D + 127) / 128, 1, 128);
+  else e.dispatch((D + 127) / 128, (uint32_t(T) + 31) / 32, 1, 128);
 }
 
 // NI_ANE_WAVE=1: the chunk runs as two row halves A and B in a skewed schedule, so the ANE's

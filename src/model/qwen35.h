@@ -221,7 +221,7 @@ class Qwen35 {
     size_t decode_params = 0;   // weights one plain decode step multiplies (MoE: the routed experts only)
     int hidden = 0, layers = 0, ffn = 0;  // ffn: the dense FFN's intermediate size (0 for MoE)
     bool dense = false;
-    bool ffn_q4 = true;         // dense FFN weights 4-bit group 64 (the Neural Engine split reads only those)
+    bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
     std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
     size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
   };

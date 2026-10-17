@@ -8,8 +8,9 @@
 // FFN inputs and gate/up weight rows rotate in blocks of 128 along the hidden dim; down's weight
 // rows rotate in blocks of 512 along the ANE's intermediate channels (the ANE program rotates its
 // intermediate the same way). int8 codes are read by the ANE as code/128 (fp16 sums cannot
-// overflow), so every scale carries a factor 128. Weights are MLX affine 4-bit, group 64:
-// w uint32 [N][K/8] (value j of a word at bits 4j), scales and biases bf16 [N][K/64].
+// overflow), so every scale carries a factor 128. Weights: MLX affine 4-bit, group 64 (w uint32 [N][K/8], value j
+// of a word at bits 4j, scales and biases bf16 [N][K/64]) here; the other formats (bf16, MLX affine 3/5/6/8-bit,
+// 4-bit group 32: wfmt.metal's packing) through ane_wf4, instantiated in wfmt.metal's second library.
 // Our code; Splash's ideas.
 
 constant constexpr float kAnePeak = 127.0f;
@@ -131,10 +132,30 @@ NI_INLINE float4 ane_mlx4(const device uint32_t* W, const device bfloat* S, cons
   return float4(float(q & 15u), float((q >> 4) & 15u), float((q >> 8) & 15u), float(q >> 12)) * s + b;
 }
 
+// ane_mlx4 for format F (wfmt.metal's: F-bit codes as a little-endian bit stream per row, w = s * q + b per group
+// of GS; F = 16 bf16): 4 values at inputs [k, k+4) of row n, k a multiple of 4.
+template <int F, int GS>
+NI_INLINE float4 ane_wf4(const device uint32_t* W, const device bfloat* S, const device bfloat* B, uint n, uint k,
+                         uint wpr, uint gpr) {
+  if (F == 4 && GS == 64) return ane_mlx4(W, S, B, n, k, wpr, gpr);
+  const device uint32_t* row = W + n * wpr;
+  if (F == 16) {
+    const uint2 u = *(const device uint2*)(row + k / 2);
+    return float4(as_type<float>(u.x << 16), as_type<float>(u.x & 0xFFFF0000u), as_type<float>(u.y << 16),
+                  as_type<float>(u.y & 0xFFFF0000u));
+  }
+  const uint bit = uint(F) * k, w0 = bit / 32, sh = bit % 32;
+  uint v = row[w0] >> sh;
+  if (sh + 4 * F > 32) v |= row[w0 + 1] << (32 - sh);
+  const uint m = (1u << F) - 1u;
+  const float s = float(S[n * gpr + k / GS]), b = float(B[n * gpr + k / GS]);
+  return float4(float(v & m), float((v >> F) & m), float((v >> (2 * F)) & m), float((v >> (3 * F)) & m)) * s + b;
+}
+
 // Per-row int8 scale of the rotated rows (once, at load): absmax over the row's [col0, col0 +
 // width) after the rotation in K*128 blocks, / 127 * 128, as half. One simdgroup per row, 8 rows
 // per threadgroup. grid: rows/8 x 256 threads.
-template <uint K>
+template <uint K, int F = 4, int GS = 64>
 NI_INLINE void ane_row_scale_body(const device uint32_t* W, const device bfloat* S, const device bfloat* B,
                                   device half* rs, const device float* sign, constant AneWParams& p, uint tg,
                                   uint sg, uint lane) {
@@ -143,7 +164,7 @@ NI_INLINE void ane_row_scale_body(const device uint32_t* W, const device bfloat*
   for (uint blk = 0; blk < p.width; blk += K * 128) {
     float v[K][4];
     for (uint k = 0; k < K; ++k) {
-      const float4 f = ane_mlx4(W, S, B, n, p.col0 + blk + k * 128 + lane * 4, p.wpr, p.gpr);
+      const float4 f = ane_wf4<F, GS>(W, S, B, n, p.col0 + blk + k * 128 + lane * 4, p.wpr, p.gpr);
       for (uint e = 0; e < 4; ++e) v[k][e] = f[e];
     }
     ane_rotate_block<K>(v, lane, sign);
@@ -157,14 +178,14 @@ NI_INLINE void ane_row_scale_body(const device uint32_t* W, const device bfloat*
 // Stages rows [row0, +rows) x inputs [col0, +width) as rotated int8 under the row scales `rs`
 // (from ane_row_scale) into out (stride bytes per row) and copies the scales into the ANE's scale
 // surface. One simdgroup per row and K*128-block; grid: (rows/8, width/(K*128)) x 256 threads.
-template <uint K>
+template <uint K, int F = 4, int GS = 64>
 NI_INLINE void ane_stage_body(const device uint32_t* W, const device bfloat* S, const device bfloat* B,
                               const device half* rs, device char* out, device half* sout, const device float* sign,
                               constant AneWParams& p, uint2 tg, uint sg, uint lane) {
   const uint r = tg.x * 8 + sg, n = p.row0 + r, blk = tg.y * K * 128;
   float v[K][4];
   for (uint k = 0; k < K; ++k) {
-    const float4 f = ane_mlx4(W, S, B, n, p.col0 + blk + k * 128 + lane * 4, p.wpr, p.gpr);
+    const float4 f = ane_wf4<F, GS>(W, S, B, n, p.col0 + blk + k * 128 + lane * 4, p.wpr, p.gpr);
     for (uint e = 0; e < 4; ++e) v[k][e] = f[e];
   }
   ane_rotate_block<K>(v, lane, sign);
@@ -197,6 +218,43 @@ NI_INLINE void ane_stage_body(const device uint32_t* W, const device bfloat* S, 
 
 NI_ANE_W(b128, 1)  // gate/up rows over the hidden inputs
 NI_ANE_W(b512, 4)  // down rows over the ANE's intermediate channels
+
+// The other weight formats: ane_row_scale_<fmt>_b128 ... (instantiated in wfmt.metal under NI_WF_INST).
+#define NI_ANE_WF(SFX, F, GS)                                                                                     \
+  [[kernel]] void ane_row_scale_##SFX##_b128(const device uint32_t* W [[buffer(0)]],                              \
+                                             const device bfloat* S [[buffer(1)]], const device bfloat* B [[buffer(2)]], \
+                                             device half* rs [[buffer(3)]], const device float* sign [[buffer(4)]], \
+                                             constant AneWParams& p [[buffer(5)]], uint tg [[threadgroup_position_in_grid]], \
+                                             uint sg [[simdgroup_index_in_threadgroup]],                          \
+                                             uint lane [[thread_index_in_simdgroup]]) {                           \
+    ane_row_scale_body<1, F, GS>(W, S, B, rs, sign, p, tg, sg, lane);                                             \
+  }                                                                                                               \
+  [[kernel]] void ane_row_scale_##SFX##_b512(const device uint32_t* W [[buffer(0)]],                              \
+                                             const device bfloat* S [[buffer(1)]], const device bfloat* B [[buffer(2)]], \
+                                             device half* rs [[buffer(3)]], const device float* sign [[buffer(4)]], \
+                                             constant AneWParams& p [[buffer(5)]], uint tg [[threadgroup_position_in_grid]], \
+                                             uint sg [[simdgroup_index_in_threadgroup]],                          \
+                                             uint lane [[thread_index_in_simdgroup]]) {                           \
+    ane_row_scale_body<4, F, GS>(W, S, B, rs, sign, p, tg, sg, lane);                                             \
+  }                                                                                                               \
+  [[kernel]] void ane_stage_##SFX##_b128(const device uint32_t* W [[buffer(0)]], const device bfloat* S [[buffer(1)]], \
+                                         const device bfloat* B [[buffer(2)]], const device half* rs [[buffer(3)]],  \
+                                         device char* out [[buffer(4)]], device half* sout [[buffer(5)]],          \
+                                         const device float* sign [[buffer(6)]], constant AneWParams& p [[buffer(7)]], \
+                                         uint2 tg [[threadgroup_position_in_grid]],                                \
+                                         uint sg [[simdgroup_index_in_threadgroup]],                               \
+                                         uint lane [[thread_index_in_simdgroup]]) {                                \
+    ane_stage_body<1, F, GS>(W, S, B, rs, out, sout, sign, p, tg, sg, lane);                                      \
+  }                                                                                                               \
+  [[kernel]] void ane_stage_##SFX##_b512(const device uint32_t* W [[buffer(0)]], const device bfloat* S [[buffer(1)]], \
+                                         const device bfloat* B [[buffer(2)]], const device half* rs [[buffer(3)]],  \
+                                         device char* out [[buffer(4)]], device half* sout [[buffer(5)]],          \
+                                         const device float* sign [[buffer(6)]], constant AneWParams& p [[buffer(7)]], \
+                                         uint2 tg [[threadgroup_position_in_grid]],                                \
+                                         uint sg [[simdgroup_index_in_threadgroup]],                               \
+                                         uint lane [[thread_index_in_simdgroup]]) {                                \
+    ane_stage_body<4, F, GS>(W, S, B, rs, out, sout, sign, p, tg, sg, lane);                                      \
+  }
 
 // x[t][c] += Y[c][t] * Y[D][t] * tx[t] in fp32 for t < T (Y = the ANE's partial down projection,
 // fp16 [D+1][ystride], row D = per-token intermediate scale; tx = per-token input scale). A

@@ -840,7 +840,8 @@ template <int F, int GS, int BM, int BN, int WM, int WN, int NP>
 NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread* W,
                        const device bfloat* const thread* S, const device bfloat* const thread* B, uint M, uint N,
                        uint K, uint x_ld, uint m0, uint n0, threadgroup half* xs, uint tid, uint sgm, uint sgn,
-                       uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8]) {
+                       uint2 rc, thread simdgroup_float8x8 (&acc)[NP * (BN / WN / 8)][BM / WM / 8], uint w_ld = 0,
+                       uint s_ld = 0) {
   constexpr int BK = 32, NT = WM * WN * 32;
   constexpr int TM = BM / WM, TN = BN / WN;
   constexpr int FB = TM / 8, FA = TN / 8;
@@ -850,7 +851,8 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
   for (int a = 0; a < NP * FA; ++a)
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < FB; ++b) acc[a][b] = simdgroup_float8x8(0);
-  const uint wpr = wf_wpr(F, K), spr = F == 16 ? 1u : K / uint(GS), x_ld8 = x_ld / 8;
+  // row strides: the rows' own K, or (w_ld, s_ld: words / groups) for the leading K columns of wider rows
+  const uint wpr = w_ld ? w_ld : wf_wpr(F, K), spr = F == 16 ? 1u : s_ld ? s_ld : K / uint(GS), x_ld8 = x_ld / 8;
   uint wrow[FA];
   _Pragma("clang loop unroll(full)")
   for (int a = 0; a < FA; ++a) wrow[a] = min(n0 + sgn * TN + a * 8 + rc.x, N - 1);
@@ -887,6 +889,45 @@ NI_INLINE void qrf_acc(const device half* X, const device uint32_t* const thread
     simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                   \
     qrf_acc<F, GS, BM, BN, WM, WN, 1>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4, tid, \
                                       sgm, sgn, rc, acc);                                                     \
+    _Pragma("clang loop unroll(full)")                                                                        \
+    for (int a = 0; a < TN / 8; ++a) {                                                                        \
+      const uint n = n0 + sgn * TN + a * 8 + rc.x;                                                            \
+      if (n >= p.N) continue;                                                                                 \
+      _Pragma("clang loop unroll(full)")                                                                      \
+      for (int b = 0; b < TM / 8; ++b)                                                                        \
+        _Pragma("clang loop unroll(full)")                                                                    \
+        for (int e = 0; e < 2; ++e) {                                                                         \
+          const uint m = m0 + sgm * TM + b * 8 + rc.y + e;                                                    \
+          if (m < p.M) {                                                                                      \
+            device float* dst = Y + m * p.y_ld + n;                                                           \
+            const float v = acc[a][b].thread_elements()[e];                                                   \
+            *dst = p.add ? *dst + v : v;                                                                      \
+          }                                                                                                   \
+        }                                                                                                     \
+    }                                                                                                         \
+  }
+
+// Y (+)= X W[:, :K]^T over the leading K columns of rows w_ld words / s_ld groups long (QmmLdParams, as
+// qmm_b4_m64_n64_ld): the GPU's share of the down projection in the Neural Engine split.
+#define NI_QRF_LD(NAME, F, GS, BM, BN, WM, WN, MFAST)                                                        \
+  [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                       \
+      const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                            \
+      const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                           \
+      device float* Y [[buffer(4)]], constant QmmLdParams& pl [[buffer(5)]],                                   \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                     \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                   \
+    constexpr int TM = BM / WM, TN = BN / WN;                                                                 \
+    constant QmmParams& p = pl.q;                                                                             \
+    threadgroup uint4 xs4[BM * (32 + 8) / 8];                                                                 \
+    const device uint32_t* W[1] = {Wd};                                                                       \
+    const device bfloat* S[1] = {Sd};                                                                         \
+    const device bfloat* B[1] = {Bd};                                                                         \
+    const uint mt = MFAST ? tg.x : tg.y, nt = MFAST ? tg.y : tg.x;                                            \
+    const uint sgm = sg / WN, sgn = sg % WN, m0 = mt * BM, n0 = nt * BN;                                      \
+    const uint2 rc = qr_rc(lane);                                                                             \
+    simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                   \
+    qrf_acc<F, GS, BM, BN, WM, WN, 1>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4, tid, \
+                                      sgm, sgn, rc, acc, pl.w_ld, pl.s_ld);                                   \
     _Pragma("clang loop unroll(full)")                                                                        \
     for (int a = 0; a < TN / 8; ++a) {                                                                        \
       const uint n = n0 + sgn * TN + a * 8 + rc.x;                                                            \
@@ -1479,6 +1520,11 @@ NI_MOEG_GU_ROWS(moeg_gu_rows_f3g64_f8g64, 3, 64, 8, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64, 3, 64, 8, 64)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f4g64_f4g64, 4, 64, 4, 64)
 NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64)
+
+// Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection
+#define NI_WF_ANE(SFX, F, GS) NI_ANE_WF(SFX, F, GS) NI_QRF_LD(qrf_##SFX##_m32_n128_ld, F, GS, 32, 128, 1, 4, false)
+NI_WF_ALL(NI_WF_ANE)
+NI_QRF_LD(qrf_f16_m32_n128_mf_ld, 16, 64, 32, 128, 1, 4, true)
 
 NI_WF_DEQUANT(f4g64, 4, 64)
 NI_WF_DEQUANT(f8g64, 8, 64)

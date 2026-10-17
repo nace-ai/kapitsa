@@ -35,6 +35,17 @@ struct JoinP {
 
 Pipeline pipe(const char* n) { return Gpu::get().pipeline(n); }
 
+// The staging kernels of a projection's format (`base`_b128 / _b512 for 4-bit group 64, `base`_<fmt>_<blk> from
+// wfmt.metal's library for the others) and its row strides in words / scale groups.
+Pipeline wpipe(const char* base, const Proj& P, const char* blk) {
+  std::string n = base;
+  if (P.bits == 16) n += "_f16";
+  else if (P.bits != 4 || P.gs != 64) n += "_f" + std::to_string(P.bits) + "g" + std::to_string(P.gs);
+  return Gpu::get().pipeline(n + "_" + blk);
+}
+uint32_t wpr(const Proj& P) { return P.bits == 16 ? P.K / 2 : P.K * uint32_t(P.bits) / 32; }
+uint32_t gpr(const Proj& P) { return P.bits == 16 ? 1u : P.K / uint32_t(P.gs); }
+
 }  // namespace
 
 // System-wide wired memory (MB): the ANE service's buffers are wired kernel memory that no
@@ -422,7 +433,6 @@ void FfnSplit::compute_row_scales() {
     }
   }
   auto e = Gpu::get().begin();
-  Pipeline p128 = pipe("ane_row_scale_b128"), p512 = pipe("ane_row_scale_b512");
   for (size_t li = 0; li < layers_.size(); ++li) {
     const FfnLayer& L = layers_[li];
     for (int which = 0; which < 3; ++which) {
@@ -430,13 +440,13 @@ void FfnSplit::compute_row_scales() {
       WP w{};
       uint32_t rows;
       if (which < 2) {
-        w = WP{gpu_, 0, hidden_, hidden_ / 8, hidden_ / 64, 0, 0};
+        w = WP{gpu_, 0, hidden_, wpr(P), gpr(P), 0, 0};
         rows = ane_;
-        e->use(p128);
+        e->use(wpipe("ane_row_scale", P, "b128"));
       } else {
-        w = WP{0, gpu_, ane_, inter_ / 8, inter_ / 64, 0, 0};
+        w = WP{0, gpu_, ane_, wpr(P), gpr(P), 0, 0};
         rows = hidden_;
-        e->use(p512);
+        e->use(wpipe("ane_row_scale", P, "b512"));
       }
       e->buf(0, P.w);
       e->buf(1, P.s);
@@ -482,13 +492,13 @@ void FfnSplit::begin_chunk(int T) {
 void FfnSplit::stage_layer(Encoder& e, int li, int set) {
   const FfnLayer& L = layers_.at(li);
   const Set& S = set_[set];
-  e.use(pipe("ane_stage_b128"));
-  for (size_t k = 0; k < S.wg.size(); ++k)
-    for (int which = 0; which < 2; ++which) {
-      const Proj& P = which == 0 ? L.gate : L.up;
+  for (int which = 0; which < 2; ++which) {
+    const Proj& P = which == 0 ? L.gate : L.up;
+    e.use(wpipe("ane_stage", P, "b128"));
+    for (size_t k = 0; k < S.wg.size(); ++k) {
       const Surface& out = which == 0 ? S.wg[k] : S.wu[k];
       const Surface& so = which == 0 ? S.sg : S.su;
-      WP w{gpu_, uint32_t(k * kSeg), kSeg, hidden_ / 8, hidden_ / 64, out.stride, so.stride / 2};
+      WP w{gpu_, uint32_t(k * kSeg), kSeg, wpr(P), gpr(P), out.stride, so.stride / 2};
       e.buf(0, P.w);
       e.buf(1, P.s);
       e.buf(2, P.b);
@@ -499,10 +509,11 @@ void FfnSplit::stage_layer(Encoder& e, int li, int set) {
       e.val(7, w);
       e.dispatch(ane_ / 8, kSeg / 128, 1, 256);
     }
-  e.use(pipe("ane_stage_b512"));
+  }
+  e.use(wpipe("ane_stage", L.down, "b512"));
   uint32_t col = gpu_;
   for (size_t i = 0; i < S.wd.size(); ++i) {
-    WP w{0, col, dseg_[i], inter_ / 8, inter_ / 64, S.wd[i].stride, S.sd.stride / 2};
+    WP w{0, col, dseg_[i], wpr(L.down), gpr(L.down), S.wd[i].stride, S.sd.stride / 2};
     e.buf(0, L.down.w);
     e.buf(1, L.down.s);
     e.buf(2, L.down.b);
