@@ -82,6 +82,10 @@ wherever the engine accepts them. In brackets: the fastest other engine measured
 | Prefill · 16K prompt | 832 tok/s | **247-265 tok/s** (Splash 209) |
 | Cached time to first token · 4K / 16K prefix | **0.12 / 0.16 s** (llama.cpp 0.18 / 0.20) | **0.25 / 0.28 s** (Ollama 0.50 / 0.58) |
 
+The decode row predates the DFlash2 drafter, the default since 2026-10-17 when it is installed: on the same coding
+prompt (`ni_run`, 512 tokens, interleaved with MTP) it decodes 170 tok/s greedy / 152 at T = 0.6 on the 35B (MTP: 121)
+and 61 / 53 on the 27B (MTP: 31); the fair-harness run is still to be repeated with it.
+
 Against the engines most people use, on the same Mac: 35B decode 1.5-1.7x Ollama and llama.cpp (each with
 its MTP speculation on); 27B prefill about 3x mlx-lm, Ollama and llama.cpp.
 

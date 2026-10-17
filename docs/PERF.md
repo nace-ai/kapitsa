@@ -1320,3 +1320,206 @@ skip / pad: odd cycles run the given knobs, prints GPU ms per cycle of both halv
 `NI_DFLASH_QT` (walk temperature factor), `NI_DFLASH_HEAD` / `NI_DFLASH_HEAD_IDS` (draft head rows / ranked list),
 `NI_V8_*` (knob defaults), `bench_v8 cmp` (interleaved kernel / tiling comparison), `ni_v8check` with
 `NI_V8CHECK_DUMP=<file>` (verify logits for bitwise A/B with `cmp`).
+
+## DFlash2 on main: every prefill path, on by default, Kapitsa's own draft head (merge/dflash2, 2026-10-17)
+
+main c3bcc53 + opt/dflash2 cc8e556 (drafter, 8-row verify, double-buffered loop, review fixes) + opt/dfl27 9fbadd6
+(27B cycle: reduced draft head, faster verify GEMMs, split GDN verify), then the changes below. Every run under
+`lockf -k -t 3000 ~/.cache/nace-gpu.lock` in spans under ~10 minutes (one 27B multi-turn span took 11), from frozen
+binaries; the reference is a clean build of c3bcc53. macOS 27.0.1, M4 Pro; other agents shared the lock, so absolute
+speeds drift between spans: compare within a table.
+
+**The drafter's capture in every prefill path.** The hook copies each target layer's final output (mixer and FFN
+added) of the prompt rows the drafter can still see, `[max(start, n - 2047), n)`; the prompt commit projects them into
+the ring after the last chunk.
+
+| prefill path | capture point | check |
+|---|---|---|
+| plain layer loop (GPU; short prefills; in-pass checkpoint chunks) | after the FFN of each target layer | logits after prefill with the hook armed bitwise equal to c3bcc53 (both models; code / p700 / p4000) |
+| NI_ANE plain split (27B chunks of >= 512 rows) | after `encode_layer`'s join | 27B p700 (one split chunk): the same; the wavefront check below |
+| NI_ANE wavefront (27B default: two row halves, skewed) | half A after join FFN_i(A); half B after join FFN_i(B), one skew step later; the last layer after the final join | prompt captures and logits bitwise equal to the plain split at the same share (34/34 units), p4000 and p16000 |
+| a chunk rerun after a failed split | the hook stays armed until the prompt commit, which is encoded after the rerun | `NI_ANE_FAULT=10`: ni_run p4000 captures, logits and ids bitwise equal to `NI_ANE=0`; through the engine (rerun in `chat()`, and in the history prefill) text and tok/cycle equal to `NI_ANE=0` |
+| work after the first token (`NI_MTP_DEFER`) | with DFlash2 there are no MTP history rows; the prompt commit (and the ring snapshot below) takes their place behind the trunk's last command buffer, encoded after the trunk is committed | the first drafting pass is queued after it |
+| idle history prefill (`NI_HISTORY_PREFILL`) | the ring goes back to the restored checkpoint (with its snapshot) and the prefilled answer is captured and committed like prompt rows; split chunks are now checkpointed, waited for and rerun as in `chat()` (it never called `ane_finish_chunk`) | multi-turn checks below |
+
+**Ring and checkpoints.** The ring has 2048 slots per draft layer, so after more than ~2048 committed rows it no longer
+holds the window before an older checkpoint, and `DFlash2::rewind` left the drafter only the rows prefilled after the
+restore. Each engine checkpoint now has a ring snapshot (`DFlash2::encode_ring_copy`, 50 / 42 MB per checkpoint on the
+35B / 27B, a ~0.3 ms GPU copy), taken right after the prompt commit of the request that saved the checkpoint and
+restored with it in `chat()` and in the history prefill. 27B, thinking on, three turns of 3000 tokens (each restoring
+the first turn's boundary): turn 2 3.60 -> 3.67 tok/cycle (a cold prefill of the same prompt: 3.675), turn 3 3.95 ->
+4.04 (outputs cut inside the reasoning, not comparable with the cold run).
+
+**Defaults.** `kapitsa serve` uses DFlash2 when `DFlash2::find` finds a drafter for the model (`<model>/dflash2`,
+`<model>/drafter`, or `*-DFlash2` next to the model, in `<parent>/drafters` and in `~/.cache/nace-infer-models/drafters`
+whose name minus `-DFlash2` is the model directory's name up to a `-`, with the loader's SPEC §1 checks against the
+target: `qwen3.6-35b-a3b-4bit` -> `Qwen3.6-35B-A3B-DFlash2`, `qwen3.8-27b-4bit-mtp` -> `Qwen3.8-27B-DFlash2`), MTP
+otherwise. `--dflash none` / `NI_DFLASH=0` keep MTP, `--spec 0` turns both off, `--dflash <dir>` names a drafter. The
+branch's dynamic verify depth defaults stay (MoE 0.5 / 0.3, dense off) and so does the Neural Engine prefill split.
+The drafter's and the 8-row verify's 82 pipelines are created at load (`DFlash2::prewarm_pipelines`, 1-12 ms with a warm
+shader cache). `ni_run` stays plain unless `--spec` / `--dflash` is given.
+
+**Reduced draft head: Kapitsa's own list.** opt/dfl27 drafts from the target LM head rows of a ranked id list read from
+`<drafter>/head-ranked.u32` (Pulsar's frequency ranking, a third-party file) and used the full head without one. The
+default needs no file now: the lowest 98304 token ids, i.e. the byte-level BPE tokenizer's merge order (a frequency
+proxy, as for the MTP draft head), plus every added / special token, gathered at load (283 MB on the 27B, 113 MB on the 35B). `NI_DFLASH_HEAD_IDS=<file>`
+still takes a ranked list (65536 rows by default), `NI_DFLASH_HEAD=n` sets the rows, `0` the full head. Id order needs
+more rows than a frequency ranking; tokens outside each set:
+
+| text | Pulsar 65536 | ids < 65536 | ids < 81920 | ids < 98304 |
+|---|---|---|---|---|
+| greedy outputs, 512 tokens (code / p700 / p4000, both models) | 0.00-1.17% | 0.78-3.71% | 0.20-1.37% | 0.00-0.20% |
+| Python (bench corpus, 35k tokens) | 0.22% | 2.81% | 1.30% | 0.03% |
+| C++ (Kapitsa sources, 78k) | 0.73% | 1.29% | 0.36% | 0.05% |
+| English technical docs (PERF.md + SPEC.md, 44k) | 0.41% | 1.41% | 0.67% | 0.16% |
+| TypeScript (the Nace Agent app, 2.2M) | 0.36% | 0.97% | 0.37% | 0.02% |
+
+Interleaved ni_run, 512 tokens `--ignore-eos`; tok/s (tok/cycle); greedy = 2 rounds, T = 0.6 = seeds 1-4 (35B) / 1-3
+(27B):
+
+| model, prompt, T | Pulsar 65536 | **Kapitsa 98304** | id order 81920 | full head |
+|---|---|---|---|---|
+| 27B code_27b, 0 | 60.7 (4.776) | **61.1 (4.776)** | 61.0 (4.688) | 60.5 (4.776) |
+| 27B p700, 0 | 63.2 (5.010) | **63.1 (5.010)** | 63.0 (4.961) | 61.2 (5.010) |
+| 27B prose, 0 | 33.7 (2.594) | **33.5 (2.594)** | 33.7 (2.594) | 32.5 (2.581) |
+| 27B code_27b, 0.6 | 57.1 (4.748) | **58.3 (4.869)** | | |
+| 27B p700, 0.6 | 59.4 (5.007) | **58.9 (5.007)** | | |
+| 27B prose, 0.6 | 32.8 (2.758) | **33.0 (2.804)** | | |
+| 35B code_35b, 0 | 174.5 (3.340) | **177.5 (3.430)** | 176.7 (3.384) | 170.2 (3.430) |
+| 35B p700, 0 | 201.2 (4.294)* | **204.3 (4.405)** | 188.6 (3.992)* | 196.5 (4.405) |
+| 35B prose, 0 | 127.1 (2.222)* | **123.2 (2.174)** | 121.0 (2.129)* | 117.5 (2.174) |
+| 35B prose, 0, the 184 tokens all outputs share | 143.5 (2.614) | **142.2 (2.614)** | | 135.2 (2.614) |
+| 35B code_35b, 0.6 | 163.7 (3.518) | **164.1 (3.542)** | | |
+| 35B p700, 0.6 | 194.2 (4.594) | **192.8 (4.613)** | | |
+| 35B prose, 0.6 | 121.3 (2.455) | **121.2 (2.476)** | | |
+
+\* output differs from the full head's from token 500 (p700) / 184 (prose) on: on the MoE 35B the verify's numerics,
+and with them near-tie outputs, depend on the drafted rows. On the 27B the outputs do not, and Kapitsa's list drafts like
+Pulsar's and the full head on all three prompts at +0.1-0.7 ms per cycle for the 50% larger head (-0.6 to +0.7% tok/s
+greedy). On the 35B code (same output everywhere) it accepts more (3.430 vs 3.340, +1.7% tok/s); over prose's common
+184 tokens it is -0.9%; sampled, the means are within -0.8 to +2.1%. So Kapitsa's list is within ~1% of Pulsar's
+wherever the texts agree, and it is the default; the Pulsar files in the drafter directories of this Mac are no longer
+read.
+
+**Validation.** All on the final code, except that runs made before the last engine change (the ring snapshot) used a
+build that differs from it only in `Engine`, which `ni_run` and the tools do not use, and the head comparison above
+selected its lists explicitly.
+
+*DFlash2 off: bitwise vs c3bcc53* (`ni_run <m> @<p> 64 0 --dump-logits`, `NI_DFLASH=0`; MTP at the model's default depth):
+
+| | 35B code_35b / p700 / p4000 | 27B code_27b / p700 (one plain-split chunk) / p4000 (two wavefront chunks) |
+|---|---|---|
+| logits after prefill | bitwise identical, 3/3 | bitwise identical, 3/3 |
+| plain greedy, 64 ids | identical, 3/3 | identical, 3/3 |
+| MTP greedy, 64 ids (depth 1 / 2) | identical, 3/3 | identical, 3/3 |
+| logits after prefill with the drafter loaded (`--dflash auto`: capture armed, prompt commit) | bitwise identical, 3/3 | bitwise identical, 3/3 |
+
+*DFlash2 greedy vs plain greedy* (`--ignore-eos`, `--ref` = the plain run; G2 at a difference: the two tokens' logits
+from plain decoding, from the DFlash2 verify row, and from one prefill of the prefix):
+
+| model, prompt, tokens | result | DFlash2 tok/s (plain), tok/cycle |
+|---|---|---|
+| 35B code_35b, 512 | identical 512/512 | 164.8 (104.2), 3.430 |
+| 35B p700, 512 | first difference at token 90: plain gap +0.118, verify row -0.054, one prefill +0.038 | 191.9 (102.5), 4.405 |
+| 35B p4000, 256 | first difference at token 119: plain gap +0.160 (a third token 0.029 above the DFlash2 one), verify row -0.328, one prefill -0.002 to the third token | 202.5 (98.8), 5.312 |
+| 27B code_27b, 512 | identical 512/512 | 56.1 (14.2), 4.776 |
+| 27B p4000, 256 (wavefront prefill) | identical 256/256 | 83.4 (14.5), 7.286 |
+
+The two 35B differences are near-ties at the 8-row verify's noise on this MoE target: `ni_v8drift` on 35B p700 (512 rows,
+R = 8, final build): |change of the plain top-2 gap| median / p95 / p99 / max 0.0024 / 0.19 / 0.43 / 1.47 with the verify
+on the plain state (0 argmax flips) and 0.092 / 0.39 / 0.68 / 3.18 when the verify builds the state (6 flips, at plain gaps
+0.03-0.33); the review measured 0.095 / 0.56 / -, 1.35 and 5 flips on its build (MTP depth 1 stays identical).
+
+*The capture in the Neural Engine schedules* (27B, DFlash2 greedy, `NI_DFLASH_DUMP_CAPT` = the 2047 prompt-capture rows
+x 5 target layers):
+
+| prompt, tokens | prefill: wavefront / plain split (34 units) / GPU alone | wavefront vs plain split | wavefront vs GPU alone | tok/cycle |
+|---|---|---|---|---|
+| p4000, 256 | 10.7 / 18.8 / 29.3 s | captures, logits, 256 ids bitwise identical | captures rel. L2 2.5e-3 (layer 5) .. 4.3e-2 (layer 61), the same in every 256-row block (a wrong layer: 0.95, rows off by one: 0.90); 256 ids identical | 7.286 / 7.286 / 7.286 |
+| p16000, 256 | 47.2 / 79.3 / 121.7 s | captures, logits, 256 ids bitwise identical | 2.4e-3 .. 5.5e-2, uniform; outputs part at token 5, as plain decoding does after the two prefills (48 tokens, no drafter) | 6.071 / 6.071 / 6.375 (other text) |
+
+*Neural Engine failure* (`NI_ANE_FAULT=10`: the ANE job of layer 10 of the first split chunk never starts, the 2 s
+watchdog retires the split, the chunk reruns on the GPU, which then runs every later prefill alone):
+ni_run p4000: prompt captures, logits and 64 ids bitwise identical to `NI_ANE=0` (7.875 tok/cycle both). engine_turns,
+rerun of a `chat()` prefill (turn 3): three turns' text and tok/cycle (5.12 / 3.79 / 5.06) identical to `NI_ANE=0`.
+engine_turns with thinking and the split from 192 rows, so the first split chunk is the idle history prefill of turn 1's
+answer (499 rows): rerun there, then three turns' text and tok/cycle (6.06 / 3.31 / 4.13) identical to `NI_ANE=0`.
+
+*S1* (`dflash_accept_test 40000 3 7` and `40000 7 11`): all cases pass (p 0.029-1.0), `dfl_dist_rows` equals the CPU
+sampler, the biased depth rule is rejected (chi2 344.6 / 386.6).
+
+*Sampled exactness through the engine's loop* (`dflash_seedtest`, prose prompt, start = prompt + 24 greedy tokens,
+T = 0.6, top_k 20, top_p 0.95; chi-square p of (t1), (t1, t2), (t1, t2, t3) against the plain law, which the 8-row
+verify law matches within 0.001 per probability here). 35B, 4000 trials per set:
+
+| arm, seed base | t1 | t1, t2 | t1, t2, t3 |
+|---|---:|---:|---:|
+| DFlash2, 101 | 0.185 | 0.066 | 0.0006 |
+| DFlash2, 1000000 | 0.062 | 0.136 | 0.014 |
+| DFlash2, 2000000 | 0.386 | 0.453 | 0.281 |
+| DFlash2, 5000000 | 0.252 | 0.794 | 0.957 |
+| DFlash2, 6000000 | 0.736 | 0.287 | 0.729 |
+| DFlash2, 7000000 | 0.359 | 0.628 | 0.389 |
+| plain sampler, 303 / 3000000 / 4000000 | 0.136 / 0.432 / 0.585 | 0.261 / 0.304 / 0.013 | 0.094 / 0.137 / 0.138 |
+| pooled: DFlash2 101 + 1e6 + 2e6 (12000) | 0.0097 | 0.018 | < 1e-4 |
+| pooled: DFlash2 5e6 + 6e6 + 7e6 (12000) | 0.241 | 0.468 | 0.477 |
+| pooled: plain sampler (12000) | 0.962 | 0.866 | 0.209 |
+
+The first three sets were the low ones, and in them the first token, which the plain sampler draws in every arm from the
+1-token prefill, is already skewed (pooled p 0.0097; Monte-Carlo-calibrated 0.003): replaying the seeds on the CPU
+(`pcg_hash` uniform, the law's cumulative bounds) reproduces all 12000 first tokens, so that law is exact and the skew is
+in those seeds' uniforms, which also drive the acceptance and residual draws. Three fresh sets pass at every level,
+pooled too. A Monte-Carlo calibration of the same statistics (triples drawn from the law) gives the same p-values; the
+plain sampler's own sets come out at 0.010 / 0.14 / 0.165 calibrated at the third token. 27B: DFlash2 seed base 201 (800 trials) 0.353 / 0.177 / 0.355, base 500000 (1600 trials) 0.360 /
+0.551 / 0.881.
+
+*Server* (`bench/shortpf/serve_test.sh`, defaults = DFlash2 found automatically): tests/test_server.py 13/13 on both
+models (before and after the ring snapshot).
+
+*Cached turns* (`bench/shortpf/serve_ttft.sh --sizes 4000,16000 --greedy --cold-check --seed 11`, history prefill on;
+c3bcc53 = MTP default, then this build = DFlash2 default, back to back; prefill = turn-1 prompt / TTFT):
+
+| model, build | prefill 4k / 16k tok/s | cached TTFT 4k / 16k s (3 follow-ups) | cold check 4k / 16k | 256-token follow-up: tok/s, tok/cycle (cold check run) |
+|---|---|---|---|---|
+| 35B c3bcc53 | 1107 / 919 | 0.0645 (0.065, 0.068, 0.061) / 0.0766 (0.077, 0.081, 0.072) | yes / no (char 63) | 125.7 (126.0) |
+| 35B this build | 1141 / 947 | 0.0616 (0.062, 0.068, 0.053) / 0.0694 (0.069, 0.080, 0.069) | yes / no (char 63) | 208.3, 5.10 (199.9, 5.10) |
+| 27B c3bcc53 | 374 / 326 | 0.234 (0.234, 0.296, 0.227) / 0.259 (0.259, 0.315, 0.245) | yes / yes | 33.2 (33.2) |
+| 27B this build | 382 / 337 | 0.227 (0.227, 0.284, 0.227) / 0.261 (0.261, 0.318, 0.244) | yes / yes | 69.7, 5.80 (68.5, 5.80) |
+
+The 35B's 16k cold check parts at the same character with c3bcc53 (main's PERF records the same split for seed 11: the
+cached path and one cold prefill chunk differently at a near-tie). With DFlash2 the history prefill ran after every
+"stop" reply (17-46 rows), and the cached 256-token follow-up drafts exactly as a cold prefill of the same prompt does
+(same tok/cycle, same text). Prefill is +2-3%: the MTP history rows are gone, the drafter's commit runs after the
+first token.
+
+*Multi-turn* (`engine_turns`, `Engine::prefill_history` after each reply as the server runs it; then `ni_run` with one
+prefill of each turn's prompt):
+* 27B, thinking on, short answers, `NI_ANE=0 NI_SHORTPF=0` (the GPU's large-prefill kernels are chunk-size invariant,
+  so the cached state equals a cold prefill's): turn 1 5.08 tok/cycle (cold 5.083); turn 2 continues the history-prefilled
+  state 3.33 (cold 3.335); turn 3 restores turn 1's checkpoint with its ring snapshot 4.11 (cold 4.112); all three answers
+  identical to the cold runs.
+* 35B, short answers (history prefill after each): 3.58 / 2.64 / 4.64 tok/cycle, cold 3.583 / 2.875 (another text: the
+  MoE cached path and a cold prefill part at a near-tie) / 4.643. 35B, 1500-token answers: 3.66 / 3.35 / 3.48, cold 3.656 /
+  3.346 / 3.426.
+
+*Speed*, interleaved (`ni_run`, code_* 512 tokens; c3bcc53 has no `--ignore-eos` and runs to 512 anyway):
+
+| model, T | c3bcc53 MTP (default depth) | this build, MTP (`NI_DFLASH=0`) | this build, DFlash2 (default) | DFlash2 tok/cycle, ms/cycle |
+|---|---|---|---|---|
+| 35B, greedy | 121.2 / 121.8 / 121.5 | 121.1 / 121.7 / 122.4 | **170.4 / 171.0 / 170.5** (+40%) | 3.430, 20.0-20.1 |
+| 35B, T = 0.6 | 122.1 / 121.6 / 121.0 | 121.0 / 120.9 / 121.5 | **152.4 / 151.2 / 152.6** (+25%) | 3.318, 21.7-21.9 |
+| 27B, greedy | 29.7 / 31.1 | 31.1 / 31.1 | **60.2 / 61.5** (+98%) | 4.776, 77.5-79.2 |
+| 27B, T = 0.6 | 30.6 / 30.6 | 30.6 / 30.8 | **52.8 / 53.3** (+73%) | 4.121, 77.2-77.9 |
+
+Prefill (`ni_run`, n_gen 1; "+ DFlash2" times the capture and the prompt commit too, which the server runs after the
+first token), ms:
+
+| | 35B p4000 | 35B p16000 | 27B p4000 (wavefront) | 27B p16000 (wavefront) |
+|---|---|---|---|---|
+| c3bcc53 | 3466 / 3450 / 3457 | 16363 / 16351 / 16462 | 10239 / 10176 | 48142 / 47846 |
+| this build, DFlash2 off | 3463 / 3430 / 3431 | 16374 / 16367 / 17253 | 10230 / 10168 | 48062 / 47863 |
+| this build, + DFlash2 capture and prompt commit | 3488 / 3472 / 3474 | 16410 / 16388 / 16962 | 10379 / 10318 | 48174 / 48049 |
+
+Memory: the drafter with its reduced head is 0.62 GB resident on the 35B (process footprint +0.59 GB at load) and
+1.61 GB on the 27B (+1.47-1.55 GB); per slot the ring and its two snapshots add 151 / 126 MB and the prompt-capture
+buffer 67 / 105 MB (35B / 27B). The MTP head stays loaded when the drafter replaces it (a possible saving).
