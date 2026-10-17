@@ -13,7 +13,7 @@ the model's safetensors into aligned GPU buffers, with no converted copy on disk
 
 ## 27B prefill with the Neural Engine (opt-in `NI_ANE=1`)
 M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Design and
-background: `research/inference/ane/ANE_DESIGN.md`; code: `src/ane/`, `src/kernels/ane_ffn.metal`,
+code: `src/ane/`, `src/kernels/ane_ffn.metal`,
 `src/model/qwen35_ane.cpp`. Each dense FFN layer of a prefill chunk (>= 512 rows) is split by intermediate
 channel between the GPU (4-bit GEMMs) and the ANE (one W8A8 MIL program, Hadamard-rotated int8, private
 `AppleNeuralEngine.framework`); the ANE's partial down projection is joined in fp32. Schedules:

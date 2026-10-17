@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the held-out token sequences for quality measurements (ni_eval, research/inference/quant/eval_*.py).
+"""Builds the held-out token sequences for quality measurements (tools/ni_eval, eval_mlx.py, eval_stream.py).
 
   make_heldout.py <model dir with tokenizer.json (+ chat template)> [out dir]
 
