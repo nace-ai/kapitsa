@@ -273,5 +273,25 @@ check("thinking + tools: read_file returned as a tool call",
       r6["finish"] == "tool_calls" and len(tc6) >= 1 and tc6[0]["function"]["name"] == "read_file",
       str(r6["finish"]) + " " + json.dumps(tc6)[:200] + " reasoning tail " + repr(r6["reasoning"][-200:]))
 
+# 7. one-offs never evict the conversation in progress, whatever their length (2 slots): a long one-off,
+#    then a 3-turn conversation shorter than it, a new one-off and a title request, then the conversation
+#    continues. Evicting the slot with the fewest cached tokens dropped the conversation at the new one-off.
+def turn(m, n):
+    return post({"messages": m, "max_tokens": n, "temperature": 0, "top_k": 1,
+                 "chat_template_kwargs": {"enable_thinking": False}})
+turn([{"role": "user", "content": "Write a detailed 500-word essay about the history of the printing press."}], 700)
+m7 = [{"role": "user", "content": "Let's plan a small Python CLI that counts words in a file. What's step one?"}]
+for q in ["Okay. What's step two?", "And how do I test it?", None]:
+    a7 = turn(m7, 60)
+    m7 += [{"role": "assistant", "content": a7["choices"][0]["message"]["content"]}]
+    if q:
+        m7 += [{"role": "user", "content": q}]
+held = a7["usage"]["prompt_tokens"]
+turn([{"role": "user", "content": "Use one sentence: what is a hash map?"}], 40)
+turn([{"role": "user", "content": "Title for: word counting CLI"}], 12)
+r7 = turn(m7 + [{"role": "user", "content": "Great, summarize the plan in one line."}], 40)
+check("one-offs keep the conversation in progress", r7["usage"]["prompt_tokens_details"]["cached_tokens"] >= held // 2,
+      json.dumps(r7["usage"]))
+
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

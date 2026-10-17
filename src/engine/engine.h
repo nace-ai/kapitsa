@@ -146,6 +146,7 @@ class Engine {
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
+    int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
   };
   Slot& pick_slot(const std::vector<int>& prompt);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other

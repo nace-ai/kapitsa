@@ -238,6 +238,7 @@ void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
+  slot.turns = 0;
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -309,17 +310,23 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   }
   if (!best) return slots_[0];
   if (best_lcp < 64) {
-    // Nothing worth reusing: take the slot that is cheapest to rebuild later (fewest cached
-    // tokens, so empty slots first), least recently used on ties.
+    // Nothing worth reusing: a new conversation. It takes an empty slot, else one holding a one-off
+    // (a conversation never continued, like an agent's title or commit-message request), and only
+    // then a continued conversation; least recently used first within each. So one-offs never evict
+    // the conversation in progress, however long an older one-off was, and a new conversation
+    // replaces the conversation idle longest.
+    auto rank = [](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 ? 1 : 2; };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (int(prompt.size()) + 64 > s.seq->limit) continue;
-      if (!pick || s.tokens.size() < pick->tokens.size() ||
-          (s.tokens.size() == pick->tokens.size() && s.last_used < pick->last_used))
-        pick = &s;
+      if (!pick || rank(s) < rank(*pick) || (rank(s) == rank(*pick) && s.last_used < pick->last_used)) pick = &s;
     }
-    if (pick) return *pick;
+    if (pick) {
+      pick->turns = 1;
+      return *pick;
+    }
   }
+  ++best->turns;
   return *best;
 }
 
