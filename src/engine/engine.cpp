@@ -137,7 +137,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                                  &per_slot, &at_prefill);
       logi("DFlash2: %.3f GB allocated at load (planned %.3f GB); %.3f GB more for %d slots' rings and %.3f GB at the "
            "first prefill", (Gpu::get().allocated_bytes() - a0) / 1e9, (planned - at_prefill - (size_t(4) << 20)) / 1e9,
-           3.0 * per_slot * std::max(1, opts_.slots) / 1e9, at_prefill / 1e9);
+           3.0 * per_slot * std::max(1, opts_.slots) / 1e9, std::max(1, opts_.slots), at_prefill / 1e9);
     }
   }
 
