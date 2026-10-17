@@ -65,8 +65,11 @@ struct Layer {
 
 // One conversation's state: token buffer, recurrent (GDN) states, attention KV cache.
 struct Seq {
-  int cap = 0;                     // max positions
-  Buffer tok;                      // int32 [cap + 8]
+  // Positions the attention caches hold now, which is also their row stride (every kernel takes it as
+  // max_seq). It grows on demand up to `limit` (Qwen35::reserve); encoding past it is a fatal "context full".
+  int cap = 0;
+  int limit = 0;                   // the conversation's context: max positions
+  Buffer tok;                      // int32 [limit + 8]
   std::vector<Buffer> conv, rec;   // per layer (linear layers only)
   std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]
   // speculative decoding: rows accepted by the last verify, not yet folded into conv/rec
@@ -133,8 +136,48 @@ class Qwen35 {
   // NI_ANE_ASYNC (the server): finish the Neural Engine split once its background compile is done.
   // Call between requests (it runs the startup check through the model's buffers).
   void ane_poll();
+  // Frees the split's memory for good (prefill on the GPU alone from then on): a conversation's KV cache
+  // needs the room. False if there was no split.
+  bool ane_release();
 
-  std::unique_ptr<Seq> new_seq(int cap);
+  // ---- memory ----
+  // A sequence of up to `limit` positions. Its attention caches hold `initial` positions (default: all)
+  // and grow with reserve(); 0 allocates them on first use.
+  std::unique_ptr<Seq> new_seq(int limit, int initial = -1);
+  // Makes s's attention caches hold `need` positions (<= s.limit): new buffers, a GPU copy of the old
+  // positions, the old buffers released, in batches so the overlap stays small. Grows by at least a
+  // quarter (in 1024-position steps) when the memory budget allows, else exactly. Synchronous: no
+  // command buffer that uses s may be in flight. False (nothing changed) if the budget does not allow it.
+  bool reserve(Seq& s, int need);
+  // Frees s's attention caches (cap 0; positions must be prefilled again). Nothing using s in flight.
+  void drop_kv(Seq& s);
+  // Bytes of attention cache per position of a sequence (every attention layer and the MTP head, K + V)
+  size_t kv_bytes_per_pos() const;
+  // Upper limit for Metal allocations (bytes) that reserve() and the Neural Engine split respect; 0 = none
+  void set_mem_budget(size_t bytes) { mem_budget_ = bytes; }
+  size_t mem_budget() const { return mem_budget_; }
+  // What a model needs, from config.json and the safetensors headers only (no weights read): for fit
+  // checks before loading and `kapitsa doctor`. Bytes.
+  struct MemPlan {
+    size_t weights = 0;      // trunk (vision tower and MTP excluded), as loaded
+    size_t mtp = 0;          // MTP head as loaded (bf16 linears become 8-bit), 0 without mtp.safetensors
+    size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
+    size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
+    size_t kv_per_pos = 0;   // per slot and position
+    size_t decode_bytes = 0; // weights one plain decode step reads (MoE: the routed share of the experts)
+    int hidden = 0, layers = 0, ffn = 0;  // ffn: the dense FFN's intermediate size (0 for MoE)
+    bool dense = false;
+    size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
+  };
+  static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
+  // The Neural Engine split this Mac would build for the model (dense FFN): its share in units of 512 channels
+  // (0 = none), where it comes from, and its memory (surfaces + the engine's rerun checkpoint), as init_ane decides.
+  struct AnePlan {
+    uint32_t units = 0, total = 0;
+    std::string source;  // "calibration" or "default for this chip"; why not, when units == 0
+    size_t bytes = 0;
+  };
+  static AnePlan ane_plan(const std::string& model_dir, const MemPlan& m);
   // Clears recurrent state (KV entries are overwritten by position, so they need no reset).
   void reset(Seq& s);
   Checkpoint new_checkpoint();
@@ -188,6 +231,14 @@ class Qwen35 {
 
  private:
   void load_config(const std::string& dir);
+  struct ActBuf {
+    Buffer Qwen35::*member;
+    size_t bytes;
+    const char* label;
+  };
+  static std::vector<ActBuf> act_layout(const Qwen35Config& c, int T, int max_verify, bool mtp, size_t hgu_rows);
+  size_t dense_hgu_rows() const;
+  void ensure_hgu(size_t bytes);
   QLinear qlin(const std::string& name, bool required = true);
   void alloc_state();
   void prewarm_pipelines();
@@ -298,6 +349,10 @@ class Qwen35 {
   bool full_draft_ = false;  // draft over the whole vocabulary (see load_mtp; NI_FULL_DRAFT=0/1 overrides)
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
+
+  size_t mem_budget_ = 0;
+  void grow_kv(Seq& s, int cap);
+  void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
   std::unique_ptr<ane::FfnSplit> ane_;
   bool ane_chunk_ = false;  // the chunk being encoded runs the split

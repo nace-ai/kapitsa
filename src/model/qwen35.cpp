@@ -5,6 +5,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <dirent.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -30,6 +32,13 @@ static bool qmm8_on();
 static int env_int(const char* n, int def) {
   const char* v = getenv(n);
   return v && *v ? atoi(v) : def;
+}
+
+// GPU cores (Gpu::core_count; NI_GPU_CORES overrides). The dispatch heuristics below that size grids to fill the
+// GPU were tuned on the 20-core M4 Pro and scale with it, so they are unchanged there.
+static uint32_t gpu_cores() {
+  static const uint32_t n = uint32_t(std::max(1, Gpu::get().core_count()));
+  return n;
 }
 
 
@@ -300,52 +309,57 @@ void Qwen35::prewarm_pipelines() {
   logi("prewarmed %zu prefill pipelines in %.0f ms", v.size(), now_ms() - t0);
 }
 
-void Qwen35::load_config(const std::string& dir) {
-  json root = read_json(dir + "/config.json");
+static void parse_config(const json& root, Qwen35Config& cfg) {
   json t = root.contains("text_config") ? root["text_config"] : root;
-  quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
-  cfg_.group_size = quant_cfg_.value("group_size", 64);
-  cfg_.hidden = t["hidden_size"];
-  cfg_.layers = t["num_hidden_layers"];
-  cfg_.vocab = t["vocab_size"];
-  cfg_.eps = t.value("rms_norm_eps", 1e-6f);
-  cfg_.lin_hk = t["linear_num_key_heads"];
-  cfg_.lin_hv = t["linear_num_value_heads"];
-  cfg_.lin_dk = t["linear_key_head_dim"];
-  cfg_.lin_dv = t["linear_value_head_dim"];
-  cfg_.conv_k = t.value("linear_conv_kernel_dim", 4);
-  cfg_.hq = t["num_attention_heads"];
-  cfg_.hkv = t["num_key_value_heads"];
-  cfg_.head_dim = t.value("head_dim", cfg_.hidden / cfg_.hq);
+  json quant = root.contains("quantization") ? root["quantization"] : json::object();
+  cfg.group_size = quant.value("group_size", 64);
+  cfg.hidden = t["hidden_size"];
+  cfg.layers = t["num_hidden_layers"];
+  cfg.vocab = t["vocab_size"];
+  cfg.eps = t.value("rms_norm_eps", 1e-6f);
+  cfg.lin_hk = t["linear_num_key_heads"];
+  cfg.lin_hv = t["linear_num_value_heads"];
+  cfg.lin_dk = t["linear_key_head_dim"];
+  cfg.lin_dv = t["linear_value_head_dim"];
+  cfg.conv_k = t.value("linear_conv_kernel_dim", 4);
+  cfg.hq = t["num_attention_heads"];
+  cfg.hkv = t["num_key_value_heads"];
+  cfg.head_dim = t.value("head_dim", cfg.hidden / cfg.hq);
   float prf = 0.25f;
   if (t.contains("rope_parameters")) {
     auto& rp = t["rope_parameters"];
-    cfg_.theta = rp.value("rope_theta", 1e7f);
+    cfg.theta = rp.value("rope_theta", 1e7f);
     prf = rp.value("partial_rotary_factor", 0.25f);
   } else {
-    cfg_.theta = t.value("rope_theta", 1e7f);
+    cfg.theta = t.value("rope_theta", 1e7f);
     prf = t.value("partial_rotary_factor", 0.25f);
   }
-  cfg_.rot_dims = int(cfg_.head_dim * prf);
+  cfg.rot_dims = int(cfg.head_dim * prf);
   int interval = t.value("full_attention_interval", 4);
-  cfg_.is_linear.resize(cfg_.layers);
+  cfg.is_linear.resize(cfg.layers);
   if (t.contains("layer_types") && t["layer_types"].is_array()) {
-    for (int i = 0; i < cfg_.layers; ++i) cfg_.is_linear[i] = t["layer_types"][i] == "linear_attention";
+    for (int i = 0; i < cfg.layers; ++i) cfg.is_linear[i] = t["layer_types"][i] == "linear_attention";
   } else {
-    for (int i = 0; i < cfg_.layers; ++i) cfg_.is_linear[i] = (i + 1) % interval != 0;
+    for (int i = 0; i < cfg.layers; ++i) cfg.is_linear[i] = (i + 1) % interval != 0;
   }
-  cfg_.experts = t.value("num_experts", 0);
-  cfg_.moe = cfg_.experts > 0;
-  cfg_.top_k = t.value("num_experts_per_tok", 0);
-  cfg_.moe_I = t.value("moe_intermediate_size", 0);
-  cfg_.shared_I = t.value("shared_expert_intermediate_size", 0);
-  cfg_.dense_I = t.value("intermediate_size", 0);
-  cfg_.norm_topk = t.value("norm_topk_prob", true);
+  cfg.experts = t.value("num_experts", 0);
+  cfg.moe = cfg.experts > 0;
+  cfg.top_k = t.value("num_experts_per_tok", 0);
+  cfg.moe_I = t.value("moe_intermediate_size", 0);
+  cfg.shared_I = t.value("shared_expert_intermediate_size", 0);
+  cfg.dense_I = t.value("intermediate_size", 0);
+  cfg.norm_topk = t.value("norm_topk_prob", true);
   auto eos = root.contains("eos_token_id") ? root["eos_token_id"] : t["eos_token_id"];
   if (eos.is_array())
-    for (auto& e : eos) cfg_.eos.push_back(e);
+    for (auto& e : eos) cfg.eos.push_back(e);
   else
-    cfg_.eos.push_back(eos);
+    cfg.eos.push_back(eos);
+}
+
+void Qwen35::load_config(const std::string& dir) {
+  json root = read_json(dir + "/config.json");
+  quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
+  parse_config(root, cfg_);
 }
 
 QLinear Qwen35::qlin(const std::string& name, bool required) {
@@ -493,117 +507,330 @@ Qwen35::~Qwen35() {
   if (ane_thread_.joinable()) ane_thread_.detach();
 }
 
-void Qwen35::alloc_state() {
-  Gpu& g = Gpu::get();
-  const int D = cfg_.hidden;
-  const int T = tmax_; // activation buffers hold a whole prefill chunk; decode uses row 0
-  const int C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
-  const int VD = cfg_.lin_hv * cfg_.lin_dv;
-  x_ = g.alloc(size_t(T) * D * 4, "x");
-  xn_ = g.alloc(size_t(D) * 4, "xn");
-  logits_ = g.alloc(size_t(cfg_.vocab) * kMaxVerify * 4, "logits");
-  qkv_ = g.alloc(size_t(T) * C * 4);
-  zb_ = g.alloc(size_t(T) * VD * 4);
-  ab_ = g.alloc(size_t(T) * cfg_.lin_hv * 4);
-  bb_ = g.alloc(size_t(T) * cfg_.lin_hv * 4);
-  gq_ = g.alloc(size_t(T) * cfg_.lin_hk * cfg_.lin_dk * 4);
-  gk_ = g.alloc(size_t(T) * cfg_.lin_hk * cfg_.lin_dk * 4);
-  gv_ = g.alloc(size_t(T) * VD * 4);
-  gg_ = g.alloc(size_t(T) * cfg_.lin_hv * 4);
-  gbeta_ = g.alloc(size_t(T) * cfg_.lin_hv * 4);
-  gout_ = g.alloc(size_t(T) * VD * 4);
-  qg_ = g.alloc(size_t(T) * cfg_.hq * cfg_.head_dim * 2 * 4);
-  kr_ = g.alloc(size_t(T) * cfg_.hkv * cfg_.head_dim * 4);
-  vr_ = g.alloc(size_t(T) * cfg_.hkv * cfg_.head_dim * 4);
-  qo_ = g.alloc(size_t(T) * cfg_.hq * cfg_.head_dim * 4);
-  attn_out_ = g.alloc(size_t(T) * cfg_.hq * cfg_.head_dim * 4);
-  const int max_chunks = 1024;
-  part_o_ = g.alloc(size_t(cfg_.hq) * max_chunks * cfg_.head_dim * 4);
-  part_ml_ = g.alloc(size_t(cfg_.hq) * max_chunks * 2 * 4);
-  eidx_ = g.alloc(64 * 4);
-  ewts_ = g.alloc(64 * 4);
-  eh_ = g.alloc(size_t(kMaxVerify * cfg_.top_k + 1) * kMaxVerify * std::max(cfg_.moe_I, cfg_.shared_I) * 4 + 16);
-  ue_ = g.alloc(size_t(kMaxVerify) * 64 * 4, "uniq_experts");
-  uw_ = g.alloc(size_t(kMaxVerify) * 64 * kMaxVerify * 4, "uniq_weights");
-  un_ = g.alloc(16, "uniq_count");
-  cand_v_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
-  cand_i_ = g.alloc(size_t(kMaxVerify) * (cfg_.vocab / 2048 + 2) * 64 * 4);
-  mtp_e_ = g.alloc(size_t(T) * D * 4, "mtp_e");
-  mtp_u_ = g.alloc(size_t(T) * 2 * D * 4, "mtp_u");
-  mtp_x_ = g.alloc(size_t(T) * D * 4, "mtp_x");
-  mtp_post_ = g.alloc(size_t(kMaxVerify) * D * 4, "mtp_post");
-  xrn_ = g.alloc(size_t(kMaxVerify) * std::max(D, VD) * 4, "xrn");
-  samp_ = g.alloc(64, "samples");
-  dlog_ = g.alloc(size_t(cfg_.vocab) * 4, "draft_logits");
-  mh_ = g.alloc(size_t(kMaxVerify) * std::max(cfg_.dense_I, 1) * 4, "mlp_h");
-  sprob_ = g.alloc(64 * 4);
-  {
-    const size_t P = size_t(T) * std::max(cfg_.top_k, 1);
-    const int I = std::max({cfg_.moe_I, cfg_.shared_I, cfg_.dense_I, 1});
-    // fused MoE prefill: T shared-expert rows after the P pair rows (hg/hu stay: a layer the
-    // fused kernels do not support falls back to the original path)
-    const size_t S = cfg_.moe && moe_fused() ? size_t(T) : 0;
-    const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim, cfg_.dense_I}); // widest half input row
-    xh_ = g.alloc(size_t(T) * W * 2, "xh");
-    hh_ = g.alloc(size_t(T) * W * 2, "hh");
-    ridx_ = g.alloc(P * 4);
-    rwts_ = g.alloc(size_t(T) * (cfg_.top_k + 1) * 4 + 16);
-    spair_ = g.alloc((P + S) * 4);
-    stok_ = g.alloc((P + S) * 4);
-    tiles_ = g.alloc((P + S + size_t(std::max(cfg_.experts, 1)) + 1) * 3 * 4);
-    ntiles_ = g.alloc(16);
-    hg_ = g.alloc(P * I * 4);
-    hu_ = g.alloc(P * I * 4);
-    hhalf_ = g.alloc((P + S) * I * 2);
-    yd_ = g.alloc((P + S) * D * 4);
-    sgb_ = g.alloc(size_t(T) * I * 4);
-    sub_ = g.alloc(size_t(T) * I * 4);
-    ys_ = g.alloc(size_t(T) * D * 4);
-    rlog_ = g.alloc(size_t(T) * std::max(cfg_.experts, 1) * 4);
-    slog_ = g.alloc(size_t(T) * 4 + 16);
-  }
+// NI_QMM_GU without its log line (enc_qmm_gu logs it): the dense gate/up/SwiGLU fused on qmr
+static bool qmm_gu_enabled() {
+  static const bool v = [] {
+    const char* g = getenv("NI_QMM_GU");
+    return !(g && !strcmp(g, "0")) && qmr_sel().on;
+  }();
+  return v;
 }
 
-std::unique_ptr<Seq> Qwen35::new_seq(int cap) {
+// The activation buffers and their sizes for prefill chunks of T rows: alloc_state allocates exactly
+// these and plan() adds them up, so a fit check counts what loading will allocate. hgu_rows: rows of the
+// dense FFN's fp32 gate/up outputs (hg_/hu_; see alloc_state).
+std::vector<Qwen35::ActBuf> Qwen35::act_layout(const Qwen35Config& c, int T, int maxv, bool mtp, size_t hgu_rows) {
+  const size_t D = size_t(c.hidden), V = size_t(c.vocab), Tz = size_t(T);
+  const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv, VD = size_t(c.lin_hv) * c.lin_dv;
+  const size_t HQD = size_t(c.hq) * c.head_dim, KVD = size_t(c.hkv) * c.head_dim;
+  const size_t mtp_rows = mtp ? Tz : size_t(maxv);  // MTP history passes take up to a chunk of rows
+  const size_t max_chunks = 1024;
+  std::vector<ActBuf> v = {
+      {&Qwen35::x_, Tz * D * 4, "x"},
+      {&Qwen35::xn_, D * 4, "xn"},
+      {&Qwen35::logits_, V * maxv * 4, "logits"},
+      {&Qwen35::qkv_, Tz * C * 4, "qkv"},
+      {&Qwen35::zb_, Tz * VD * 4, "zb"},
+      {&Qwen35::ab_, Tz * c.lin_hv * 4, "ab"},
+      {&Qwen35::bb_, Tz * c.lin_hv * 4, "bb"},
+      {&Qwen35::gq_, Tz * c.lin_hk * c.lin_dk * 4, "gq"},
+      {&Qwen35::gk_, Tz * c.lin_hk * c.lin_dk * 4, "gk"},
+      {&Qwen35::gv_, Tz * VD * 4, "gv"},
+      {&Qwen35::gg_, Tz * c.lin_hv * 4, "gg"},
+      {&Qwen35::gbeta_, Tz * c.lin_hv * 4, "gbeta"},
+      {&Qwen35::gout_, Tz * VD * 4, "gout"},
+      {&Qwen35::qg_, Tz * HQD * 2 * 4, "qg"},
+      {&Qwen35::kr_, Tz * KVD * 4, "kr"},
+      {&Qwen35::vr_, Tz * KVD * 4, "vr"},
+      {&Qwen35::qo_, Tz * HQD * 4, "qo"},
+      {&Qwen35::attn_out_, Tz * HQD * 4, "attn_out"},
+      {&Qwen35::part_o_, size_t(c.hq) * max_chunks * c.head_dim * 4, "part_o"},
+      {&Qwen35::part_ml_, size_t(c.hq) * max_chunks * 2 * 4, "part_ml"},
+      {&Qwen35::eidx_, 64 * 4, "eidx"},
+      {&Qwen35::ewts_, 64 * 4, "ewts"},
+      {&Qwen35::eh_, size_t(maxv * c.top_k + 1) * maxv * std::max(c.moe_I, c.shared_I) * 4 + 16, "eh"},
+      {&Qwen35::ue_, size_t(maxv) * 64 * 4, "uniq_experts"},
+      {&Qwen35::uw_, size_t(maxv) * 64 * maxv * 4, "uniq_weights"},
+      {&Qwen35::un_, 16, "uniq_count"},
+      {&Qwen35::cand_v_, size_t(maxv) * (V / 2048 + 2) * 64 * 4, "cand_v"},
+      {&Qwen35::cand_i_, size_t(maxv) * (V / 2048 + 2) * 64 * 4, "cand_i"},
+      {&Qwen35::mtp_e_, mtp_rows * D * 4, "mtp_e"},
+      {&Qwen35::mtp_u_, mtp_rows * 2 * D * 4, "mtp_u"},
+      {&Qwen35::mtp_x_, mtp_rows * D * 4, "mtp_x"},
+      {&Qwen35::mtp_post_, size_t(maxv) * D * 4, "mtp_post"},
+      {&Qwen35::xrn_, size_t(maxv) * std::max(D, VD) * 4, "xrn"},
+      {&Qwen35::samp_, 64, "samples"},
+      {&Qwen35::dlog_, V * 4, "draft_logits"},
+      {&Qwen35::mh_, size_t(maxv) * std::max(c.dense_I, 1) * 4, "mlp_h"},
+      {&Qwen35::sprob_, 64 * 4, "sprob"},
+  };
+  const size_t P = Tz * std::max(c.top_k, 1);
+  const size_t I = size_t(std::max({c.moe_I, c.shared_I, c.dense_I, 1}));
+  // fused MoE prefill: T shared-expert rows after the P pair rows (hg/hu stay: a layer the fused kernels
+  // do not support falls back to the original path)
+  const size_t S = c.moe && moe_fused() ? Tz : 0;
+  const size_t W = size_t(std::max({c.hidden, c.lin_hv * c.lin_dv, c.hq * c.head_dim, c.dense_I}));  // widest half row
+  // MoE-only buffers (routing, sorted pairs, expert outputs, the shared expert's fallback rows) take one
+  // row on dense models
+  const size_t Pm = c.moe ? P : 1, Tm = c.moe ? Tz : 1;
+  const std::vector<ActBuf> w = {
+      {&Qwen35::xh_, Tz * W * 2, "xh"},
+      {&Qwen35::hh_, Tz * W * 2, "hh"},
+      {&Qwen35::ridx_, Pm * 4, "ridx"},
+      {&Qwen35::rwts_, Tm * (c.top_k + 1) * 4 + 16, "rwts"},
+      {&Qwen35::spair_, (Pm + S) * 4, "spair"},
+      {&Qwen35::stok_, (Pm + S) * 4, "stok"},
+      {&Qwen35::tiles_, (Pm + S + size_t(std::max(c.experts, 1)) + 1) * 3 * 4, "tiles"},
+      {&Qwen35::ntiles_, 16, "ntiles"},
+      {&Qwen35::hg_, (c.moe ? P : hgu_rows) * I * 4, "hg"},
+      {&Qwen35::hu_, (c.moe ? P : hgu_rows) * I * 4, "hu"},
+      {&Qwen35::hhalf_, (P + S) * I * 2, "hhalf"},
+      {&Qwen35::yd_, (Pm + S) * D * 4, "yd"},
+      {&Qwen35::sgb_, Tm * I * 4, "sgb"},
+      {&Qwen35::sub_, Tm * I * 4, "sub"},
+      {&Qwen35::ys_, Tm * D * 4, "ys"},
+      {&Qwen35::rlog_, Tm * std::max(c.experts, 1) * 4, "rlog"},
+      {&Qwen35::slog_, Tm * 4 + 16, "slog"},
+  };
+  v.insert(v.end(), w.begin(), w.end());
+  return v;
+}
+
+// Rows of the dense FFN's fp32 gate/up buffers (hg_/hu_): the whole chunk for the unfused fallback
+// (NI_QMM_GU=0); the Neural Engine split's GPU part takes chunk x its own channels (ane_rebuild grows
+// them; the split's startup check and benchmarks use their own scratch); else only the MTP head's
+// small-batch rows (enc_mlp_rows). 27B: 2 x 143 MB -> 2 x 0.3 MB without the split.
+static bool qmm8_for(const QLinear& L);
+// enc_qmm_gu's large-prefill condition: when it holds, enc_qmm_gu takes the pair at every row count
+static bool gu_fused(const QLinear& G, const QLinear& U) {
+  if (!qmm_gu_enabled() || G.N != U.N || G.K != U.K) return false;
+  auto ok4 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0 && qmm8_for(q); };
+  return (ok4(G) && ok4(U)) || (ok8(G) && ok8(U));
+}
+size_t Qwen35::dense_hgu_rows() const {
+  bool fused = true;
+  for (const Layer& L : layers_)
+    if (L.mg) fused = fused && gu_fused(L.mg, L.mu);
+  if (mtp_loaded_ && mtp_.mg) fused = fused && gu_fused(mtp_.mg, mtp_.mu);  // MTP history passes: up to a chunk
+  return fused ? size_t(kMaxVerify) : size_t(tmax_);
+}
+
+// Sums the tensors the loader would keep from one safetensors file (256-byte aligned, as it stores them);
+// `mtp`: only mtp.* tensors, with 2-D bf16 linears as the 8-bit copies load_mtp makes.
+static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr) {
+  std::ifstream f(path, std::ios::binary);
+  uint64_t n = 0;
+  if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
+  std::string h(n, '\0');
+  if (!f.read(h.data(), std::streamsize(n))) return 0;
+  json j;
+  try {
+    j = json::parse(h);
+  } catch (...) {
+    return 0;
+  }
+  size_t total = 0;
+  for (auto& [name, v] : j.items()) {
+    if (name == "__metadata__") continue;
+    const bool is_mtp = name.rfind("mtp.", 0) == 0;
+    if (mtp != is_mtp || name.find("vision_tower") != std::string::npos || name.find("visual.") != std::string::npos)
+      continue;
+    size_t b = v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>();
+    if (mtp && v["dtype"] == "BF16" && v["shape"].size() == 2 && name.size() > 7 &&
+        name.compare(name.size() - 7, 7, ".weight") == 0 && name.find("norm") == std::string::npos) {
+      const size_t N = v["shape"][0], K = v["shape"][1];
+      b = N * K + 2 * (N * K / 64) * 2;  // quantize8: codes + bf16 scales and biases per 64
+    }
+    total += (b + 255) / 256 * 256;
+    if (decode && name.find("embed_tokens") == std::string::npos)
+      *decode += name.find("switch_mlp") != std::string::npos ? size_t(double(b) * expert_share) : b;
+  }
+  return total;
+}
+
+Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
+  MemPlan m;
+  Qwen35Config c;
+  parse_config(read_json(dir + "/config.json"), c);
+  std::vector<std::string> files;
+  if (DIR* d = opendir(dir.c_str())) {
+    while (dirent* e = readdir(d)) {
+      const std::string n = e->d_name;
+      if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) files.push_back(n);
+    }
+    closedir(d);
+  }
+  bool has_mtp = false;
+  const double share = c.moe && c.experts ? double(c.top_k) / c.experts : 1.0;
+  size_t embed = 0;  // tied models read the embedding table as their output layer
+  for (const std::string& f : files) {
+    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes);
+    if (f == "mtp.safetensors" && !getenv("NI_NO_MTP")) {
+      m.mtp = st_bytes(dir + "/" + f, true);
+      has_mtp = m.mtp > 0;
+    }
+  }
+  m.dense = !c.moe;
+  m.hidden = c.hidden;
+  m.layers = c.layers;
+  m.ffn = c.moe ? 0 : c.dense_I;
+  {
+    const json r = read_json(dir + "/config.json");
+    const json t = r.contains("text_config") ? r["text_config"] : r;
+    if (t.value("tie_word_embeddings", r.value("tie_word_embeddings", false))) {
+      const size_t words = size_t(c.vocab) * c.hidden * 4 / 32, groups = size_t(c.vocab) * (c.hidden / 64);
+      embed = words * 4 + groups * 4;  // 4-bit codes + bf16 scales and biases
+    }
+  }
+  m.decode_bytes += embed;
+  // hg_/hu_: the verify rows when the dense FFN takes the fused path (4-bit g64), as dense_hgu_rows()
+  const json root = read_json(dir + "/config.json");
+  const json q = root.contains("quantization") ? root["quantization"] : json::object();
+  const bool fused = qmm_gu_enabled() && q.value("bits", 4) == 4 && q.value("group_size", 64) == 64;
+  for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, has_mtp, fused ? size_t(kMaxVerify) : size_t(chunk)))
+    m.activations += a.bytes;
+  const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
+  int lin = 0, att = 0;
+  for (int i = 0; i < c.layers; ++i) (c.is_linear[i] ? lin : att) += 1;
+  const size_t state = size_t(lin) * (3 * C * 4 + size_t(c.lin_hv) * c.lin_dv * c.lin_dk * 4);
+  const size_t tape = size_t(lin) * kMaxVerify * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
+  m.slot_state = 3 * state + tape;  // live state + the engine's two checkpoints + the verify tape
+  m.kv_per_pos = size_t(att + (has_mtp ? 1 : 0)) * 2 * c.hkv * c.head_dim * 2;
+  return m;
+}
+
+void Qwen35::alloc_state() {
+  Gpu& g = Gpu::get();
+  for (const ActBuf& a : act_layout(cfg_, tmax_, kMaxVerify, mtp_loaded_, dense_hgu_rows()))
+    this->*(a.member) = g.alloc(a.bytes, a.label);
+}
+
+// Grows hg_/hu_ to hold `bytes` each (between command buffers: nothing in flight may use them).
+void Qwen35::ensure_hgu(size_t bytes) {
+  if (hg_.size >= bytes) return;
+  Gpu& g = Gpu::get();
+  g.release(hg_);
+  g.release(hu_);
+  hg_ = g.alloc(bytes, "hg");
+  hu_ = g.alloc(bytes, "hu");
+}
+
+std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
   Gpu& g = Gpu::get();
   auto s = std::make_unique<Seq>();
-  s->cap = cap;
-  s->tok = g.alloc(size_t(cap + 8) * 4, "tokens");
+  s->limit = limit;
+  s->tok = g.alloc(size_t(limit + 8) * 4, "tokens");
   const int C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   size_t bytes = 0;
   for (int i = 0; i < cfg_.layers; ++i) {
+    // attention caches: allocated by grow_kv below (or later, by reserve)
+    s->kc.push_back(Buffer{});
+    s->vc.push_back(Buffer{});
     if (cfg_.is_linear[i]) {
       s->conv.push_back(g.alloc(size_t(3) * C * 4, "conv_state"));
       s->rec.push_back(g.alloc(size_t(cfg_.lin_hv) * cfg_.lin_dv * cfg_.lin_dk * 4, "gdn_state"));
-      s->kc.push_back(Buffer{});
-      s->vc.push_back(Buffer{});
       bytes += s->conv.back().size + s->rec.back().size;
       s->pend_qkv.push_back(g.alloc(size_t(kMaxVerify) * C * 4, "pend_qkv"));
       s->pend_k.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dk * 4, "pend_k"));
       s->pend_g.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * 4, "pend_g"));
       s->pend_d.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dv * 4, "pend_d"));
     } else {
-      size_t kvb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
       s->conv.push_back(Buffer{});
       s->rec.push_back(Buffer{});
-      s->kc.push_back(g.alloc(kvb, "k_cache"));
-      s->vc.push_back(g.alloc(kvb, "v_cache"));
-      bytes += 2 * kvb;
       s->pend_qkv.push_back(Buffer{});
       s->pend_k.push_back(Buffer{});
       s->pend_g.push_back(Buffer{});
       s->pend_d.push_back(Buffer{});
     }
   }
-  if (mtp_loaded_) {
-    size_t kvb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
-    s->mtp_kc = g.alloc(kvb, "mtp_k_cache");
-    s->mtp_vc = g.alloc(kvb, "mtp_v_cache");
-    bytes += 2 * kvb;
-  }
-  logd("sequence: %.0f MB (KV for %d tokens)", bytes / 1e6, cap);
+  const int cap = initial < 0 ? limit : std::min(initial, limit);
+  if (cap > 0) grow_kv(*s, cap);
+  logd("sequence: recurrent state %.0f MB, KV for %d of %d tokens (%.0f MB)", bytes / 1e6, s->cap, limit,
+       double(kv_bytes_per_pos()) * s->cap / 1e6);
   reset(*s);
   return s;
+}
+
+size_t Qwen35::kv_bytes_per_pos() const {
+  int att = 0;
+  for (int i = 0; i < cfg_.layers; ++i) att += !cfg_.is_linear[i];
+  return size_t(att + (mtp_loaded_ ? 1 : 0)) * 2 * cfg_.hkv * cfg_.head_dim * 2;
+}
+
+// Copies positions [0, old_cap) of every kv head of a [Hkv, old_cap, D] cache into a [Hkv, new_cap, D] one.
+void Qwen35::enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap) {
+  const uint32_t n16 = uint32_t(cfg_.head_dim) * 2 / 16;  // 16-byte words per position
+  const uint32_t p[4] = {uint32_t(old_cap) * n16, uint32_t(new_cap) * n16, uint32_t(cfg_.hkv), 0};  // uint3: 16 bytes
+  e.use(pipe("kv_regrow"));
+  e.buf(0, src);
+  e.buf(1, dst);
+  e.bytes(2, p, sizeof p);
+  e.dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
+}
+
+void Qwen35::grow_kv(Seq& s, int cap) {
+  Gpu& g = Gpu::get();
+  const int old = s.cap;
+  std::vector<std::pair<Buffer*, const char*>> bufs;  // every attention cache of the sequence
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (!cfg_.is_linear[i]) {
+      bufs.push_back({&s.kc[i], "k_cache"});
+      bufs.push_back({&s.vc[i], "v_cache"});
+    }
+  if (mtp_loaded_) {
+    bufs.push_back({&s.mtp_kc, "mtp_k_cache"});
+    bufs.push_back({&s.mtp_vc, "mtp_v_cache"});
+  }
+  const size_t nb = size_t(cfg_.hkv) * cap * cfg_.head_dim * 2;
+  // In batches of ~256 MB: a batch's new buffers are filled from the old ones, then the old ones are
+  // released, so growing never holds two copies of the whole cache.
+  for (size_t i = 0; i < bufs.size();) {
+    std::vector<Buffer> olds;
+    std::unique_ptr<Encoder> e;
+    for (size_t batch = 0; i < bufs.size() && (batch == 0 || batch + nb <= (size_t(256) << 20)); ++i, batch += nb) {
+      Buffer& b = *bufs[i].first;
+      Buffer nbuf = g.alloc(nb, bufs[i].second);
+      if (old > 0 && b) {
+        if (!e) e = g.begin();
+        enc_kv_regrow(*e, b, nbuf, old, cap);
+      }
+      olds.push_back(b);
+      b = nbuf;
+    }
+    if (e) e->commit_and_wait();
+    for (auto& b : olds) g.release(b);
+  }
+  s.cap = cap;
+}
+
+bool Qwen35::reserve(Seq& s, int need) {
+  if (need <= s.cap) return true;
+  if (need > s.limit) return false;
+  const size_t per = kv_bytes_per_pos();
+  auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
+  auto fits = [&](int c) {
+    // final size; the batched copy overlaps at most ~256 MB more for a moment
+    return !mem_budget_ || Gpu::get().allocated_bytes() + size_t(c - s.cap) * per + (size_t(256) << 20) <= mem_budget_;
+  };
+  // at least a quarter more (fewer copies while a conversation fills), in 1024-position steps
+  int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));
+  if (!fits(target)) target = std::min(s.limit, round_up(need, 256));
+  if (!fits(target)) return false;
+  const double t0 = now_ms();
+  const int old = s.cap;
+  grow_kv(s, target);
+  logd("KV cache %d -> %d positions (%.0f MB) in %.1f ms", old, target, double(per) * target / 1e6, now_ms() - t0);
+  return true;
+}
+
+void Qwen35::drop_kv(Seq& s) {
+  Gpu& g = Gpu::get();
+  for (auto* v : {&s.kc, &s.vc})
+    for (auto& b : *v) g.release(b);
+  g.release(s.mtp_kc);
+  g.release(s.mtp_vc);
+  s.cap = 0;
 }
 
 void Qwen35::reset(Seq& s) {
@@ -755,8 +982,10 @@ void Qwen35::enc_attn(Encoder& e, Seq& s, int li, const Layer& L, int pos) {
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, 1, 1, cfg_.head_dim);
 
   const uint32_t Lk = uint32_t(pos + 1);
-  // aim for >= ~40 threadgroups overall, chunks of at least 64 positions
-  uint32_t chunk = std::max<uint32_t>(64, (Lk + 19) / 20);
+  // split-K: one chunk per GPU core and kv head (35B: 2 x 20 threadgroups on the M4 Pro), chunks of at
+  // least 64 positions
+  const uint32_t cores = gpu_cores();
+  uint32_t chunk = std::max<uint32_t>(64, (Lk + cores - 1) / cores);
   chunk = (chunk + 15) / 16 * 16;
   uint32_t nch = (Lk + chunk - 1) / chunk;
   kp::AttnDec dp{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), Lk, chunk, uint32_t(s.cap),
@@ -979,7 +1208,9 @@ static uint32_t qmms_row_groups(uint32_t tg, int T) {
   static const int mode = env_int("NI_QMMS_TY", 1);
   const uint32_t tb = uint32_t((T + 7) / 8);
   if (!mode || tb <= 1) return 1;
-  uint32_t gy = tg >= 96 ? 1u : std::min(tb, (128 + tg - 1) / tg);
+  // thresholds per GPU core: 96 and 128 threadgroups on the 20-core M4 Pro
+  const uint32_t enough = 24 * gpu_cores() / 5, want = 32 * gpu_cores() / 5;
+  uint32_t gy = tg >= enough ? 1u : std::min(tb, (want + tg - 1) / tg);
   if (mode == 2) gy = std::max(gy, (tb + 3) / 4);
   return gy;
 }
@@ -1445,7 +1676,8 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
     const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv);
     const uint32_t nqb = (uint32_t(T) * G + 31) / 32, gy = uint32_t(cfg_.hkv), tiles = (uint32_t(pos0 + T) + 31) / 32;
     static const int ns_env = getenv("NI_ATTN_SPLIT") && *getenv("NI_ATTN_SPLIT") ? atoi(getenv("NI_ATTN_SPLIT")) : 0;
-    uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (100 + nqb * gy - 1) / (nqb * gy);
+    const uint32_t target = 5 * gpu_cores();  // ~5 threadgroups per core (100 on the 20-core M4 Pro)
+    uint32_t ns = ns_env > 0 ? uint32_t(ns_env) : (target + nqb * gy - 1) / (nqb * gy);
     ns = std::min({ns, tiles / 8, 1024u / uint32_t(T), 16u});
     if (ns < 2) {
       e.use(pipe("attn_prefill11g"));

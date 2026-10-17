@@ -463,7 +463,9 @@ void Qwen35::enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const B
   e.val(8, ap);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   const uint32_t Lmax = uint32_t(pos + R);
-  uint32_t chunk = std::max<uint32_t>(64, (Lmax + 19) / 20);
+  // split-K as in Qwen35::enc_attn: one chunk per GPU core and kv head
+  const uint32_t cores = uint32_t(std::max(1, Gpu::get().core_count()));
+  uint32_t chunk = std::max<uint32_t>(64, (Lmax + cores - 1) / cores);
   chunk = (chunk + 15) / 16 * 16;
   uint32_t nch = (Lmax + chunk - 1) / chunk;
   if (nch * R > 1024) fatal("attention rows: too many chunks");

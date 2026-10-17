@@ -27,9 +27,18 @@ struct EngineOptions {
   std::string model_id;        // id reported by /v1/models (default: directory name)
   int context = 32768;         // capacity of each slot (tokens)
   int slots = 2;               // conversations kept warm at once (each has its own KV/state)
-  int prefill_chunk = 2048;
+  int prefill_chunk = 0;       // rows per prefill pass; 0 = 2048, or 1024 when that leaves too little memory
   int spec_depth = -1;         // MTP draft tokens per cycle (0 = plain decoding, -1 = model default)
+  double mem_budget_gb = 0;    // GPU memory Kapitsa may hold (GB); 0 = default_mem_budget()
 };
+
+// GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
+// (recommendedMaxWorkingSetSize, which macOS sizes from the RAM) minus a margin (4%, at least 512 MB) for
+// the Neural Engine service's buffers and other GPU users. NI_MEM_BUDGET=<GB> overrides it.
+size_t default_mem_budget();
+// The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
+// less than one conversation of `context` tokens in the budget (activations scale with the chunk)
+int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
 
 struct ChatRequest {
   ojson messages = ojson::array();
@@ -72,6 +81,8 @@ class Engine {
   ~Engine();
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
+  // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
+  int context_fit() const { return context_fit_; }
   // Renders the prompt for a request (for debugging / token counting).
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
   // Runs one request. `on_delta` returns false to cancel. Serialized across threads.
@@ -94,6 +105,10 @@ class Engine {
     uint64_t gen = 0;                 // requests run on this slot
   };
   Slot& pick_slot(const std::vector<int>& prompt);
+  // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
+  // slots (least recently used first: their conversations are prefilled again when they come back).
+  // Nothing using the slots may be in flight. False if even that leaves too little memory.
+  bool reserve_kv(Slot& slot, int need);
 
   EngineOptions opts_;
   std::unique_ptr<Qwen35> model_;
@@ -106,6 +121,8 @@ class Engine {
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   bool spec_ = false;
+  size_t budget_ = 0;    // GPU memory budget (bytes)
+  int context_fit_ = 0;  // see context_fit()
   long spec_cycles_ = 0, spec_accepted_ = 0;
 };
 

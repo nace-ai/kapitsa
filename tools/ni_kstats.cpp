@@ -35,11 +35,35 @@ static bool agx_stats(void* pso, uint32_t* regs, uint32_t* spill) {
 int main(int argc, char** argv) {
   ni::Gpu& g = ni::Gpu::get();
   g.compile();
-  bool stats = false;
+  bool stats = false, limits = false;
   std::vector<std::string> names;
   for (int i = 1; i < argc; ++i) {
     if (!strcmp(argv[i], "--stats")) stats = true;
+    else if (!strcmp(argv[i], "--limits")) limits = true;
     else names.push_back(argv[i]);
+  }
+  if (limits) {
+    // --limits: every kernel's static threadgroup memory against 32 KB (Apple7-Apple10, the Metal feature set
+    // tables: M5 is Apple10 with the same 32 KB) and this device's limit, and pipelines whose compiled maximum
+    // threads per threadgroup is below 1024 (a dispatch above it fails; Encoder::dispatch checks)
+    const size_t dev = g.max_threadgroup_memory();
+    printf("%s: %d GPU cores (%s), max threadgroup memory %zu B, Apple10 %s\n", g.name().c_str(), g.core_count(),
+           g.core_count_measured() ? "IORegistry" : "not measured", dev, g.apple10() ? "yes" : "no");
+    int over = 0;
+    for (auto& n : names.empty() ? g.function_names() : names) {
+      ni::Pipeline p = g.pipeline(n, false);
+      if (!p.pso) {
+        printf("%-36s pipeline creation FAILED\n", n.c_str());
+        ++over;
+        continue;
+      }
+      if (p.tg_mem > 32768 || p.tg_mem > dev || p.max_threads < 1024)
+        printf("%-36s threadgroup memory %6u B  max threads %4u%s\n", n.c_str(), p.tg_mem, p.max_threads,
+               p.tg_mem > 32768 ? "  <-- over 32 KB" : "");
+      over += p.tg_mem > 32768;
+    }
+    printf("%d kernel(s) over 32 KB of threadgroup memory\n", over);
+    return over ? 1 : 0;
   }
   if (stats && names.empty()) names = g.function_names();
   int failed = 0;

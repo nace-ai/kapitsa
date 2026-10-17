@@ -94,7 +94,7 @@ void Qwen35::init_ane() {
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
   ane::Calibration cal;
   const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
-  uint32_t units = have_cal ? cal.units : ane::default_units(chip, wave);
+  uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), uint32_t(cfg_.dense_I / 512), wave);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
   if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
   if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
@@ -138,6 +138,41 @@ void Qwen35::init_ane() {
     return;
   }
   ane_finish_init();
+}
+
+Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
+  AnePlan a;
+  a.total = m.dense ? uint32_t(m.ffn / 512) : 0;
+  if (!m.dense) return a.source = "MoE: GPU", a;
+  if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
+  if (m.hidden % int(ane::FfnSplit::kSeg)) return a.source = "hidden size not supported", a;
+  if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
+  const std::string chip = Gpu::get().name();
+  const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
+  ane::Calibration cal;
+  if (ane::read_calibration(ane::machine_key(chip, ane::model_key(dir)) + (wave ? "|wave" : ""), cal))
+    a.units = cal.units, a.source = "calibration";
+  else
+    a.units = ane::default_units(chip, Gpu::get().core_count(), a.total, wave), a.source = "default for this chip";
+  if (getenv("NI_ANE_UNITS")) a.units = uint32_t(atoi(getenv("NI_ANE_UNITS"))), a.source = "NI_ANE_UNITS";
+  if (!a.units || a.units > a.total) {
+    a.units = 0;
+    a.source = "no share for this chip (ane_calib --wave --write)";
+    return a;
+  }
+  a.bytes = ane::split_bytes(uint32_t(m.hidden), uint32_t(m.ffn), a.units, m.layers, wave ? 2 : 1) + m.slot_state / 3;
+  return a;
+}
+
+bool Qwen35::ane_release() {
+  if (ane_async_st_) {  // a compile still running in the background: never build the split
+    if (ane_thread_.joinable()) ane_thread_.detach();
+    ane_async_st_.reset();
+  }
+  if (!ane_) return false;
+  logi("NI_ANE: releasing the Neural Engine split (%.0f MB) for KV cache; prefill runs on the GPU alone", ane_->metal_bytes() / 1e6);
+  ane_.reset();
+  return true;
 }
 
 void Qwen35::ane_poll() {
@@ -216,6 +251,14 @@ bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<ui
     ane_ = std::make_unique<ane::FfnSplit>(ane_cfg(units, min_rows, fn_rows, fault_layer, lanes), ane_layers());
   } catch (const std::exception& e) {
     logi("NI_ANE: Neural Engine split unavailable (%s); the GPU runs the prefill FFN alone", e.what());
+    ane_.reset();
+    return false;
+  }
+  // the split's GPU part writes its channels' fp32 gate/up rows of a whole chunk into hg_/hu_
+  ensure_hgu(size_t(std::min(int(ane::FfnSplit::kMaxRows), tmax_)) * std::max<uint32_t>(ane_->gpu_channels(), 1) * 4);
+  if (mem_budget_ && Gpu::get().allocated_bytes() > mem_budget_) {
+    logi("NI_ANE: the Neural Engine split's %.0f MB would exceed the memory budget (%.1f GB); GPU only",
+         ane_->metal_bytes() / 1e6, mem_budget_ / 1e9);
     ane_.reset();
     return false;
   }
@@ -319,19 +362,21 @@ double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
   n_layers = std::min(n_layers, cfg_.layers);
   fill_random_half(xh_, size_t(Tm) * D, 20261016);
   ScratchBufs bufs;
-  bufs.v.reserve(3);
+  bufs.v.reserve(5);
   Buffer out[3];
   for (auto& o : out) o = bufs.add(size_t(Tm) * D * 4, "ane verify");
+  // the GPU-alone reference's fp32 gate/up rows (hg_/hu_ hold only the split's GPU channels)
+  Buffer sg = bufs.add(size_t(Tm) * cfg_.dense_I * 4, "ane verify g"), su = bufs.add(size_t(Tm) * cfg_.dense_I * 4, "ane verify u");
   auto gpu_only = [&](Buffer& o) {
     memset(o.ptr(), 0, o.size);
     auto e = g.begin();
     for (int l = 0; l < n_layers; ++l) {
       const Layer& L = layers_[l];
-      enc_qmm(*e, L.mg, xh_, hg_, Tm, false);
-      enc_qmm(*e, L.mu, xh_, hu_, Tm, false);
+      enc_qmm(*e, L.mg, xh_, sg, Tm, false);
+      enc_qmm(*e, L.mu, xh_, su, Tm, false);
       const uint32_t n = uint32_t(Tm) * L.mg.N;
       e->use(kpipe("swiglu_half"));
-      e->buf(0, hg_); e->buf(1, hu_); e->buf(2, hhalf_); e->val(3, n);
+      e->buf(0, sg); e->buf(1, su); e->buf(2, hhalf_); e->val(3, n);
       e->dispatch((n + 255) / 256, 1, 1, 256);
       enc_qmm(*e, L.md, hhalf_, o, Tm, true);
     }
@@ -378,6 +423,7 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
   ScratchBufs bufs;
   Buffer o = bufs.add(size_t(T) * D * 4, "ane bench");
   memset(o.ptr(), 0, o.size);
+  Buffer sg = bufs.add(size_t(T) * cfg_.dense_I * 4, "ane bench g"), su = bufs.add(size_t(T) * cfg_.dense_I * 4, "ane bench u");
   AneLayerTimes r;
   std::vector<double> go, gp, an, sp, ai;
   const uint32_t gc = ane_->gpu_channels();
@@ -386,11 +432,11 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
       auto e = g.begin();
       for (int l = l0; l < l0 + n; ++l) {
         const Layer& L = layers_[l];
-        enc_qmm(*e, L.mg, xh_, hg_, T, false);
-        enc_qmm(*e, L.mu, xh_, hu_, T, false);
+        enc_qmm(*e, L.mg, xh_, sg, T, false);
+        enc_qmm(*e, L.mu, xh_, su, T, false);
         const uint32_t nn = uint32_t(T) * L.mg.N;
         e->use(kpipe("swiglu_half"));
-        e->buf(0, hg_); e->buf(1, hu_); e->buf(2, hhalf_); e->val(3, nn);
+        e->buf(0, sg); e->buf(1, su); e->buf(2, hhalf_); e->val(3, nn);
         e->dispatch((nn + 255) / 256, 1, 1, 256);
         enc_qmm(*e, L.md, hhalf_, o, T, true);
       }
