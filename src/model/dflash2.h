@@ -72,8 +72,15 @@ class DFlash2 {
   // then `*-DFlash2` directories next to the model, in <parent>/drafters and in
   // ~/.cache/nace-infer-models/drafters whose name (minus -DFlash2, case-insensitive) is a prefix of
   // the model directory's name up to a '-', and whose config.json is a DFlash2DraftModel with the
-  // target's hidden size, vocabulary and layer count. The longest name match wins.
+  // target's hidden size, vocabulary and layer count that passes the load-time checks (SPEC §1).
+  // The longest name match wins.
   static std::string find(const std::string& model_dir, const Qwen35Config& target);
+  // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
+  static bool supports(const Qwen35& target);
+  // Creates the drafter's and the 8-row verify's pipelines up front (in parallel, as Qwen35 does for its
+  // prefill), so the first request does not create them inside its prompt commit and first cycles.
+  // NI_PREWARM=0 skips it.
+  static void prewarm_pipelines();
 
   std::unique_ptr<DFlashSeq> new_seq();
   // Prefix reuse: entries at positions >= pos no longer belong to the sequence (the target state was

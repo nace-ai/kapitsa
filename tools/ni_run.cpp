@@ -1,10 +1,12 @@
 // Runs a prompt (token ids) through the engine and generates tokens.
 //   ni_run <model_dir> <ids: comma-separated> [n_gen=32] [temp=0] [--dump-logits file]
-//          [--spec D] [--dflash <drafter dir>|auto]   (NI_DFLASH=<dir>|auto works too) [--ignore-eos]
+//          [--spec D] [--dflash <drafter dir> | auto | none] [--ignore-eos]
+// Plain decoding unless --spec (MTP) or --dflash is given (the server defaults to DFlash2 instead).
 // --dflash: DFlash2 speculative decoding (research/inference/dflash2/SPEC.md): drafting pass, 8-row
 // target verify with captures, on-GPU acceptance (greedy, or exact speculative sampling at temp > 0),
-// ring commit of the kept rows. The prompt rows are captured for the drafter in whichever prefill runs
-// (chunks, --prefix/--split, --plan, --tbt, NI_ANE split or wavefront, a rerun after a failed split).
+// ring commit of the kept rows; "auto" = DFlash2::find. NI_DFLASH=<dir>|auto does the same, NI_DFLASH=0 /
+// --dflash none is off. The prompt rows are captured for the drafter in whichever prefill runs (chunks,
+// --prefix/--split, --plan, --tbt, NI_ANE split or wavefront, a rerun after a failed split).
 // --ignore-eos: keep generating past end-of-sequence tokens (benchmarks, equality tests).
 // --ref <file with an "ids:" line> (with --dflash, T = 0): at the first token that differs from that
 // reference (plain greedy), prints the target's logits of both tokens three ways (SPEC §12 G2): the
@@ -103,6 +105,8 @@ int main(int argc, char** argv) {
   std::string dflash_dir = getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "";
   for (int i = 1; i + 1 < argc; ++i)
     if (!strcmp(argv[i], "--dflash")) dflash_dir = argv[i + 1];
+  if (dflash_dir == "0" || dflash_dir == "none" || dflash_dir == "off") dflash_dir.clear();
+  if (dflash_dir == "1" || dflash_dir == "on") dflash_dir = "auto";
 
   Gpu& g = Gpu::get();
   Qwen35 m(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : 2048);
@@ -127,6 +131,7 @@ int main(int argc, char** argv) {
   }
   if (!dflash_dir.empty()) {
     dfl = std::make_unique<DFlash2>(m, dflash_dir);
+    DFlash2::prewarm_pipelines();
     dseq = dfl->new_seq();
     dfl->begin_prefill(int(ids.size()));
   }

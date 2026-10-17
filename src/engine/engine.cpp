@@ -49,18 +49,28 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  const bool spec_off = opts_.spec_depth == 0;  // --spec 0: no speculative decoding at all
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  // Opt-in DFlash2 drafter (research/inference/dflash2/SPEC.md); when it loads it replaces MTP.
-  if (opts_.dflash.empty() && getenv("NI_DFLASH") && *getenv("NI_DFLASH")) opts_.dflash = getenv("NI_DFLASH");
-  if (!opts_.dflash.empty()) {
-    std::string dir = opts_.dflash == "auto" ? DFlash2::find(opts_.model_dir, model_->config()) : opts_.dflash;
+  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
+  // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
+  // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off.
+  std::string want = opts_.dflash;
+  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
+  if (want == "1" || want == "on") want = "auto";
+  const bool dfl_off = want == "none" || want == "0" || want == "off" || (want == "auto" && spec_off);
+  if (!dfl_off) {
+    const bool auto_dir = want == "auto";
+    const std::string dir = auto_dir ? DFlash2::find(opts_.model_dir, model_->config()) : want;
     if (dir.empty()) {
       logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
            opts_.model_dir.c_str());
+    } else if (auto_dir && !DFlash2::supports(*model_)) {
+      logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
     } else {
       dfl_ = std::make_unique<DFlash2>(*model_, dir);
+      DFlash2::prewarm_pipelines();
       spec_ = false;
     }
   }

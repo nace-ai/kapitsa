@@ -41,11 +41,68 @@ static Pipeline dpipe(const std::string& n) {
   return it->second;
 }
 
+// SPEC §1 checks of a drafter's config.json against the target (the kernels hard-code this geometry): the
+// failed checks, empty for a supported drafter. find() applies them too, so the default ("auto") only picks
+// drafters that load.
+static std::vector<std::string> config_problems(const json& c, const Qwen35Config& t) {
+  std::vector<std::string> bad;
+  auto check = [&](bool ok, const char* what) {
+    if (!ok) bad.push_back(what);
+  };
+  const json dc = c.value("dflash_config", json::object());
+  const int NL = c.value("num_hidden_layers", 0), H = c.value("hidden_size", 0), I = c.value("intermediate_size", 0);
+  const int vocab = c.value("vocab_size", 0), nq = c.value("num_attention_heads", 0), nkv = c.value("num_key_value_heads", 0);
+  const int hd = c.value("head_dim", nq ? H / nq : 0), window = c.value("sliding_window", 0);
+  const int mask = dc.value("mask_token_id", -1);
+  double theta = 0;
+  std::string rope_type = "default";
+  if (c.contains("rope_parameters")) {
+    theta = c["rope_parameters"].value("rope_theta", 0.0);
+    rope_type = c["rope_parameters"].value("rope_type", "default");
+  } else {
+    theta = c.value("rope_theta", 0.0);
+  }
+  check(c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}), "architecture");
+  check(c.contains("dflash_config"), "dflash_config");
+  check(c.contains("is_causal") && c["is_causal"] == false, "is_causal false");
+  bool sliding = NL > 0 && c.contains("layer_types") && c["layer_types"].size() == size_t(NL);
+  if (sliding)
+    for (auto& lt : c["layer_types"]) sliding = sliding && lt == "sliding_attention";
+  check(sliding && window == DFlash2::kWin, "all layers sliding, window 2048");
+  check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
+  check(dc.value("conv_group_size", 0) == 16, "conv group 16");
+  check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
+        "selector rank 256 / top-k 16");
+  check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
+  check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
+  check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
+  check(c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
+  check(dc.value("input_embedding_scale", 1.0) == 1.0 && dc.value("output_multiplier", 1.0) == 1.0 &&
+            dc.value("final_logit_softcapping", json()).is_null() && c.value("final_logit_softcapping", json()).is_null(),
+        "neutral embedding/output scales, no softcap");
+  check(!c.value("tie_word_embeddings", false), "untied");
+  check(H == t.hidden, "draft hidden == target hidden");
+  check(vocab == t.vocab, "vocab == target vocab");
+  bool in_range = dc.contains("target_layer_ids") && dc["target_layer_ids"].is_array() && !dc["target_layer_ids"].empty();
+  if (in_range)
+    for (auto& v : dc["target_layer_ids"]) in_range = in_range && v.is_number_integer() && v >= 0 && v < t.layers;
+  check(in_range, "target_layer_ids in range");
+  check(H % 64 == 0 && I % 64 == 0, "hidden/intermediate multiples of 64");
+  check(mask >= 0 && mask < vocab, "mask id");
+  return bad;
+}
+
 void DFlash2::load_config(const std::string& dir) {
   std::ifstream f(dir + "/config.json");
   if (!f) fatal("DFlash2: cannot read %s/config.json", dir.c_str());
   json c = json::parse(f);
   if (!c.contains("dflash_config")) fatal("DFlash2: %s has no dflash_config", dir.c_str());
+  const std::vector<std::string> bad = config_problems(c, tg_.config());
+  if (!bad.empty()) {
+    std::string s;
+    for (auto& b : bad) s += " [" + b + "]";
+    fatal("DFlash2: unsupported drafter config in %s:%s", dir.c_str(), s.c_str());
+  }
   const json& dc = c["dflash_config"];
   cfg_.H = c["hidden_size"];
   cfg_.NL = c["num_hidden_layers"];
@@ -62,49 +119,15 @@ void DFlash2::load_config(const std::string& dir) {
   cfg_.topk = dc["selector_top_k"];
   for (auto& v : dc["target_layer_ids"]) cfg_.target_layers.push_back(v);
   cfg_.window = c.value("sliding_window", 0);
-  double theta = 0;
-  std::string rope_type = "default";
-  if (c.contains("rope_parameters")) {
-    theta = c["rope_parameters"].value("rope_theta", 0.0);
-    rope_type = c["rope_parameters"].value("rope_type", "default");
-  } else {
-    theta = c.value("rope_theta", 0.0);
-  }
-  cfg_.theta = float(theta);
-  // SPEC §1 load-time checks: the kernels hard-code this geometry.
-  std::vector<std::string> bad;
-  auto check = [&](bool ok, const char* what) {
-    if (!ok) bad.push_back(what);
-  };
-  check(c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}), "architecture");
-  check(c.contains("is_causal") && c["is_causal"] == false, "is_causal false");
-  bool sliding = c.contains("layer_types") && c["layer_types"].size() == size_t(cfg_.NL);
-  if (sliding)
-    for (auto& t : c["layer_types"]) sliding = sliding && t == "sliding_attention";
-  check(sliding && cfg_.window == kWin, "all layers sliding, window 2048");
-  check(int(dc.value("conv_kernel_size", 0)) == 2, "conv taps 2");
-  check(cfg_.conv_gs == 16, "conv group 16");
-  check(cfg_.rank == kRank && cfg_.topk == kTopK, "selector rank 256 / top-k 16");
-  check(cfg_.block == kB, "block 8");
-  check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
-  check(cfg_.nq == 32 && cfg_.nkv == 8 && cfg_.hd == 128, "heads 32/8 x 128");
-  check(cfg_.eps == 1e-6f, "eps 1e-6");
-  check(dc.value("input_embedding_scale", 1.0) == 1.0 && dc.value("output_multiplier", 1.0) == 1.0 &&
-            dc.value("final_logit_softcapping", json()).is_null() && c.value("final_logit_softcapping", json()).is_null(),
-        "neutral embedding/output scales, no softcap");
-  check(!c.value("tie_word_embeddings", false), "untied");
-  check(cfg_.H == tg_.config().hidden, "draft hidden == target hidden");
-  check(cfg_.vocab == tg_.config().vocab, "vocab == target vocab");
-  bool in_range = !cfg_.target_layers.empty();
-  for (int l : cfg_.target_layers) in_range = in_range && l >= 0 && l < tg_.config().layers;
-  check(in_range, "target_layer_ids in range");
-  check(cfg_.H % 64 == 0 && cfg_.I % 64 == 0, "hidden/intermediate multiples of 64");
-  check(cfg_.mask_id >= 0 && cfg_.mask_id < cfg_.vocab, "mask id");
-  if (!bad.empty()) {
-    std::string s;
-    for (auto& b : bad) s += " [" + b + "]";
-    fatal("DFlash2: unsupported drafter config in %s:%s", dir.c_str(), s.c_str());
-  }
+  if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
+  else cfg_.theta = float(c.value("rope_theta", 0.0));
+}
+
+bool DFlash2::supports(const Qwen35& t) {
+  const QLinear& emb = t.embed_table();
+  const QLinear& head = t.lm_head();
+  return emb.bits == 4 && emb.gs % 64 == 0 && head.gs == 64 && (head.bits == 4 || head.bits == 8) &&
+         head.K == uint32_t(t.config().hidden);
 }
 
 const Tensor* DFlash2::own(const Tensor& t, const char* label) {
@@ -234,10 +257,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
   load_config(dir);
-  const QLinear& emb = tg_.embed_table();
-  const QLinear& head = tg_.lm_head();
-  if (emb.bits != 4 || emb.gs % 64 || head.gs != 64 || (head.bits != 4 && head.bits != 8) || head.K != uint32_t(cfg_.H))
-    fatal("DFlash2: target embedding must be 4-bit and lm_head 4/8-bit g64");
+  if (!supports(tg_)) fatal("DFlash2: target embedding must be 4-bit and lm_head 4/8-bit g64");
   {
     WeightStore w;  // bf16 checkpoint, released after quantization
     w.open_dir(dir);
@@ -483,9 +503,7 @@ std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) 
     if (!f) return false;
     try {
       json c = json::parse(f);
-      return c.value("architectures", json::array()) == json::array({"DFlash2DraftModel"}) && c.contains("dflash_config") &&
-             c.value("hidden_size", 0) == tc.hidden && c.value("vocab_size", 0) == tc.vocab &&
-             c.value("num_target_layers", tc.layers) == tc.layers;
+      return c.value("num_target_layers", tc.layers) == tc.layers && config_problems(c, tc).empty();
     } catch (...) {
       return false;
     }
@@ -1084,6 +1102,33 @@ void DFlash2::encode_cycle_draft_gpu(Encoder& e, Seq& s, DFlashSeq& d, int P_max
 void DFlash2::encode_cycle(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_prev, int K, const SamplingParams& sp) {
   encode_cycle_draft(e, s, d, P, m_prev, sp);
   encode_cycle_verify(e, s, P, K, sp);
+}
+
+void DFlash2::prewarm_pipelines() {
+  if (getenv("NI_PREWARM") && !strcmp(getenv("NI_PREWARM"), "0")) return;
+  const double t0 = now_ms();
+  Gpu& g = Gpu::get();
+  // spec_dflash.metal (dfl_*), verify8.metal (qmm8*, x8_*, moe8*, attn8*, gdn_step_verify8) and the verify's
+  // shared kernels; the prompt commit's prefill GEMMs
+  static const char* prefixes[] = {"dfl_", "qmm8", "x8_", "moe8", "attn8", "gdn_step_verify8", "gdn_prep_verify",
+                                   "attn_prep", "attn_rows_reduce", "topk_stage1_rows", "sample_stage2_rows",
+                                   "qmm_b4_m64_n64", "qmm_b4_m32_n32", "qmm_b8_m64_n64", "qmm_b8_m32_n32", "copy_u32"};
+  std::vector<std::string> v;
+  for (const std::string& n : g.function_names())
+    for (const char* pre : prefixes)
+      if (n.rfind(pre, 0) == 0) {
+        v.push_back(n);
+        break;
+      }
+  if (v.empty()) return;
+  const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+  std::vector<std::thread> th;
+  for (unsigned i = 0; i < nt; ++i)
+    th.emplace_back([&, i] {
+      for (size_t j = i; j < v.size(); j += nt) g.pipeline(v[j], false);
+    });
+  for (auto& t : th) t.join();
+  logi("DFlash2: prewarmed %zu pipelines in %.0f ms", v.size(), now_ms() - t0);
 }
 
 } // namespace ni
