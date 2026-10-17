@@ -110,7 +110,8 @@ int main(int argc, char** argv) {
   };
   auto enc_step_par = [&](Encoder& e, Path& P, const std::string& name) {
     uint32_t lanes = uint32_t(atoi(name.c_str() + name.rfind("_l") + 2));
-    uint32_t rows_tg = lanes && lanes <= 32 ? sgs * (32 / lanes) : 0;
+    const uint32_t rpl = name.rfind("gdn_step_parr", 0) == 0 ? uint32_t(atoi(name.c_str() + 13)) : 1u;
+    uint32_t rows_tg = lanes && lanes <= 32 ? sgs * (32 / lanes) * rpl : 0;
     if (!rows_tg || 128 % rows_tg) fatal("%s with %u simdgroups: bad layout", name.c_str(), sgs);
     e.use(g.pipeline(name));
     e.buf(0, P.q); e.buf(1, P.k); e.buf(2, P.v); e.buf(3, P.gg); e.buf(4, P.beta);

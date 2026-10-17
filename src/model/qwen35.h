@@ -25,6 +25,7 @@ struct QLinear {
   const Tensor* b = nullptr;
   uint32_t N = 0, K = 0;
   int bits = 4, gs = 64;
+  bool mtp = false;  // part of the MTP head (NI_QMM8=1 selects its 8-bit prefill GEMM)
   explicit operator bool() const { return w != nullptr; }
 };
 
@@ -229,6 +230,7 @@ class Qwen35 {
   void enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int T);
   // projections sharing xh: one dispatch where the short-prefill kernels allow it
   void enc_proj(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
+  void enc_topk_rows(Encoder& e, uint32_t E, uint32_t k, bool norm, int T);
   void enc_qmr_short(Encoder& e, const std::vector<SegQ>& segs, const Buffer& xh, int M);
   bool enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T);
   bool enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& x);
@@ -261,6 +263,9 @@ class Qwen35 {
   void load_mtp(const std::string& dir);
   QLinear quantize8(const Tensor& w);
   const Tensor* own_copy(const Tensor& t);
+  // A float parameter the kernels read as bf16 (norms, conv, A_log, dt_bias): t itself when it is
+  // bf16, else an owned bf16 copy (++lossy when a value is not a bf16 number)
+  const Tensor* bf16_param(const Tensor* t, int& lossy);
   QLinear stack_experts(const class WeightStore& w, const std::string& prefix, const std::string& proj);
   void enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D);
   void enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add,

@@ -44,7 +44,9 @@ struct Kern {
   int bm, bn;
   uint32_t threads;
   bool gu;  // fused gate/up/SwiGLU (qmr_gu_*): second weight set in buffers 6-8, half H output
+  int bits; // 8 for qmr8_* / *_b8_* kernels, else 4
 };
+static int bits_for(const std::string& n) { return n.rfind("qmr8", 0) == 0 || n.find("_b8_") != std::string::npos ? 8 : 4; }
 
 static uint32_t threads_for(const std::string& name) {
   if (getenv("QMM_THREADS")) return atoi(getenv("QMM_THREADS"));
@@ -63,7 +65,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
       std::string n = argv[i];
       if (!std::regex_match(n, mt, full)) fatal("not a kernel name: %s", n.c_str());
-      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), n.find("_gu_") != std::string::npos});
+      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), n.find("_gu_") != std::string::npos, bits_for(n)});
     }
   } else {
     std::vector<std::pair<int, int>> tiles = {{32, 32}, {64, 64}};
@@ -73,7 +75,7 @@ int main(int argc, char** argv) {
     }
     for (auto [bm, bn] : tiles) {
       std::string n = a1 + "_m" + std::to_string(bm) + "_n" + std::to_string(bn);
-      kerns.push_back({n, bm, bn, threads_for(n), n.find("_gu_") != std::string::npos});
+      kerns.push_back({n, bm, bn, threads_for(n), n.find("_gu_") != std::string::npos, bits_for(n)});
     }
   }
   const int trials = getenv("QMM_TRIALS") ? atoi(getenv("QMM_TRIALS")) : 5;
@@ -96,12 +98,13 @@ int main(int argc, char** argv) {
   }
   for (auto sh : shapes) {
     const uint32_t M = sh.M, N = sh.N, K = sh.K;
-    Buffer W = g.alloc(size_t(N) * K / 2), S = g.alloc(size_t(N) * K / 64 * 2), B = g.alloc(size_t(N) * K / 64 * 2);
+    // weights sized for 8 bits (4-bit kernels read the first half)
+    Buffer W = g.alloc(size_t(N) * K), S = g.alloc(size_t(N) * K / 64 * 2), B = g.alloc(size_t(N) * K / 64 * 2);
     Buffer X = g.alloc(size_t(M) * K * 2), Y = g.alloc(size_t(M) * N * 4);
-    Buffer W2 = g.alloc(size_t(N) * K / 2), S2 = g.alloc(size_t(N) * K / 64 * 2), B2 = g.alloc(size_t(N) * K / 64 * 2);
+    Buffer W2 = g.alloc(size_t(N) * K), S2 = g.alloc(size_t(N) * K / 64 * 2), B2 = g.alloc(size_t(N) * K / 64 * 2);
     std::uniform_real_distribution<float> d(-1, 1);
     for (auto [w, sc, bi] : {std::tuple{&W, &S, &B}, std::tuple{&W2, &S2, &B2}}) {
-      for (size_t i = 0; i < size_t(N) * K / 8; ++i) w->as<uint32_t>()[i] = rng();
+      for (size_t i = 0; i < size_t(N) * K / 4; ++i) w->as<uint32_t>()[i] = rng();
       for (size_t i = 0; i < size_t(N) * K / 64; ++i) {
         sc->as<uint16_t>()[i] = f32_to_bf16(scale_mul * 0.01f * (1.0f + d(rng)));
         bi->as<uint16_t>()[i] = f32_to_bf16(0.05f * d(rng));
@@ -140,7 +143,9 @@ int main(int argc, char** argv) {
         auto dot = [&](const Buffer& w, const Buffer& sc, const Buffer& bi) {
           double r = 0;
           for (uint32_t k = 0; k < K; ++k) {
-            uint32_t q = (w.as<uint32_t>()[(size_t(n) * K + k) / 8] >> (4 * (k % 8))) & 15;
+            const size_t ik = size_t(n) * K + k;
+            uint32_t q = kerns[ki].bits == 8 ? (w.as<uint32_t>()[ik / 4] >> (8 * (k % 4))) & 255
+                                             : (w.as<uint32_t>()[ik / 8] >> (4 * (k % 8))) & 15;
             float wv = bf16_to_f32(sc.as<uint16_t>()[(size_t(n) * K + k) / 64]) * q + bf16_to_f32(bi.as<uint16_t>()[(size_t(n) * K + k) / 64]);
             r += double(float(__fp16(wv))) * h2f(X.as<uint16_t>()[size_t(m) * K + k]);
           }

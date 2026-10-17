@@ -3,7 +3,7 @@
 benchmark harness (research/inference/scripts/bench.py: warmup + t_prefill). Stdlib only.
 
 usage: cached_ttft.py [--base http://127.0.0.1:8097/v1] [--sizes 4000,16000] [--greedy] [--cold-check]
-                      [--short] [--no-warmup] [--tag T] [--out results.jsonl]
+                      [--short] [--no-warmup] [--tag T] [--out results.jsonl] [--seed N]
 
 Per size: turn 1 = system "[session <nonce>] SYS + repository context" (frozen corpus, 4.25 chars per
 token) + the harness question, max_tokens 256; then 3 follow-up user turns (the harness FOLLOWUPS)
@@ -45,7 +45,10 @@ ap.add_argument("--short-reps", type=int, default=3)
 ap.add_argument("--no-warmup", action="store_true")
 ap.add_argument("--tag", default="")
 ap.add_argument("--out", default="")
+ap.add_argument("--seed", type=int, default=None, help="seed the nonces (paired A/B runs see the same prompts)")
 a = ap.parse_args()
+if a.seed is not None:
+    random.seed(a.seed)
 
 CHARS_PER_TOKEN = 4.25
 WARM_TOKENS, WARM_OFFSET_CHARS = 2700, 100000

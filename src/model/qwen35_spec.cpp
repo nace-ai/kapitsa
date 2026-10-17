@@ -36,6 +36,25 @@ const Tensor* Qwen35::own_copy(const Tensor& t) {
   return &owned_.back();
 }
 
+const Tensor* Qwen35::bf16_param(const Tensor* t, int& lossy) {
+  if (!t || t->dtype == DType::BF16) return t;
+  if (t->dtype != DType::F32 && t->dtype != DType::F16) fatal("parameter tensor of unsupported dtype");
+  const size_t n = size_t(t->numel());
+  Buffer b = Gpu::get().alloc(n * 2, "param_bf16", /*tracked=*/false);
+  uint16_t* d = b.as<uint16_t>();
+  for (size_t i = 0; i < n; ++i) {
+    const float v = t->dtype == DType::F32 ? t->buf.as<float>()[i] : float(t->buf.as<_Float16>()[i]);
+    d[i] = f32_to_bf16(v);
+    if (bf16_to_f32(d[i]) != v) ++lossy;
+  }
+  owned_bufs_.push_back(b);
+  Tensor c = *t;
+  c.buf = b;
+  c.dtype = DType::BF16;
+  owned_.push_back(c);
+  return &owned_.back();
+}
+
 // bf16 [N, K] -> MLX affine 8-bit, group 64 (near lossless; halves the bytes the head reads).
 QLinear Qwen35::quantize8(const Tensor& w) {
   if (w.dtype != DType::BF16 || w.shape.size() != 2) fatal("quantize8: expected a 2-D bf16 tensor");
@@ -167,23 +186,31 @@ void Qwen35::load_mtp(const std::string& dir) {
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
-    return w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+    QLinear L = w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+    L.mtp = true;
+    return L;
   };
-  mtp_pre_e_ = own_copy(get("mtp.pre_fc_norm_embedding.weight"));
-  mtp_pre_h_ = own_copy(get("mtp.pre_fc_norm_hidden.weight"));
-  mtp_norm_ = own_copy(get("mtp.norm.weight"));
+  // norms: the kernels read bf16 (an f32/f16 file gets an owned bf16 copy)
+  int lossy = 0;
+  auto norm = [&](const std::string& n) {
+    const Tensor& t = get(n);
+    return t.dtype == DType::BF16 ? own_copy(t) : bf16_param(&t, lossy);
+  };
+  mtp_pre_e_ = norm("mtp.pre_fc_norm_embedding.weight");
+  mtp_pre_h_ = norm("mtp.pre_fc_norm_hidden.weight");
+  mtp_norm_ = norm("mtp.norm.weight");
   mtp_fc_ = lin("mtp.fc");
   const std::string p = "mtp.layers.0.";
   Layer& L = mtp_;
   L.linear = false;
-  L.in_norm = own_copy(get(p + "input_layernorm.weight"));
-  L.post_norm = own_copy(get(p + "post_attention_layernorm.weight"));
+  L.in_norm = norm(p + "input_layernorm.weight");
+  L.post_norm = norm(p + "post_attention_layernorm.weight");
   L.q = lin(p + "self_attn.q_proj");
   L.k = lin(p + "self_attn.k_proj");
   L.v = lin(p + "self_attn.v_proj");
   L.o = lin(p + "self_attn.o_proj");
-  L.q_norm = own_copy(get(p + "self_attn.q_norm.weight"));
-  L.k_norm = own_copy(get(p + "self_attn.k_norm.weight"));
+  L.q_norm = norm(p + "self_attn.q_norm.weight");
+  L.k_norm = norm(p + "self_attn.k_norm.weight");
   if (cfg_.moe) {
     L.router = lin(p + "mlp.gate");
     L.shared_gate = lin(p + "mlp.shared_expert_gate");
