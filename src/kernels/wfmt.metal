@@ -616,6 +616,160 @@ NI_INLINE void qmm8g_impl(const device uint32_t* const thread* Wv, const device 
     qmm8g_impl<F, GS, NF>(Wv, Sv, Bv, Yv, table, sums, p, red, tg, sg, nsg, lane);                           \
   }
 
+// ---- 8-row MoE verify (verify8.metal's moe8_* passes: experts de-duplicated over the 8 rows) for any formats ----
+// moe8g_gu: gate/up + SwiGLU of every touched expert's tile (moe8_plan's tiles; the shared expert is tile
+// 0xffffffff) into its h table, as qmm8_gu1k2 (8 column slices x KS k-slices); routed experts in FE/GE, the shared
+// expert in FS/GSS. Qmm8GuParams: w_stride / s_stride in words / groups of the routed format.
+template <int FE, int GE, int FS, int GSS, int KS>
+NI_INLINE void moe8g_gu_impl(const device uint32_t* Wg, const device ushort* Sg, const device ushort* Bg,
+                             const device uint32_t* Wu, const device ushort* Su, const device ushort* Bu,
+                             const device uint32_t* SWg, const device ushort* SSg, const device ushort* SBg,
+                             const device uint32_t* SWu, const device ushort* SSu, const device ushort* SBu,
+                             const device half* table, const device float* sums, device half* hT, device float* hS,
+                             constant Qmm8GuParams& p, const device uint* tiles, const device uint* ntiles, uint2 tg,
+                             uint sg, uint lane, threadgroup float* red, threadgroup float2* kred) {
+  constexpr uint NSG = 8;
+  if (tg.y >= ntiles[0]) return;
+  const uint e = tiles[tg.y];
+  const bool shared = e == 0xffffffffu;
+  const uint gpr = p.K / 64;
+  const uint2 rc = v8_lane(lane);
+  const uint fm = rc.x, fn = rc.y, q = fn / 2;
+  const uint ci = sg / KS, kslice = sg % KS;
+  const uint row = tg.x * 64 + ci * 8 + fm;
+  const uint gper = (gpr + KS - 1) / KS, g0 = min(kslice * gper, gpr), g1 = min(g0 + gper, gpr);
+  float2 acc[2] = {float2(0.0f), float2(0.0f)};
+  if (shared) {
+    const uint wpr = wf_wpr(FS, p.K), spr = FS == 16 ? 1u : p.K / uint(GSS);
+    const device uint32_t* wr[2] = {SWg + row * wpr, SWu + row * wpr};
+    const device ushort* sr[2] = {SSg + row * spr, SSu + row * spr};
+    const device ushort* br[2] = {SBg + row * spr, SBu + row * spr};
+    v8g_run<FS, GSS, 2>(wr, sr, br, table, sums, g0, g1, lane, fn, q, acc);
+  } else {
+    const uint wpr = wf_wpr(FE, p.K), spr = FE == 16 ? 1u : p.K / uint(GE);
+    const uint wo = e * p.w_stride, so = e * p.s_stride;
+    const device uint32_t* wr[2] = {Wg + wo + row * wpr, Wu + wo + row * wpr};
+    const device ushort* sr[2] = {Sg + so + row * spr, Su + so + row * spr};
+    const device ushort* br[2] = {Bg + so + row * spr, Bu + so + row * spr};
+    v8g_run<FE, GE, 2>(wr, sr, br, table, sums, g0, g1, lane, fn, q, acc);
+  }
+  if (KS > 1) v8_reduce<2>(acc, kred, KS, sg, lane);
+  const bool lead = kslice == 0;
+  device half* ht = hT + tg.y * p.h_stride;
+  float2 ps = float2(0.0f);
+  if (lead) {
+    const uint kk = ci * 8 + fm;
+    _Pragma("clang loop unroll(full)")
+    for (int k2 = 0; k2 < 2; ++k2) {
+      const half h = half(silu(acc[0][k2]) * acc[1][k2]);
+      ht[v8_tab(tg.x, kk, fn + k2)] = h;
+      ps[k2] += float(h);
+    }
+  }
+  ps += simd_shuffle_xor(ps, 2u);
+  ps += simd_shuffle_xor(ps, 4u);
+  ps += simd_shuffle_xor(ps, 16u);
+  if (lead && fm == 0) {
+    red[ci * kV8 + fn] = ps.x;
+    red[ci * kV8 + fn + 1] = ps.y;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg == 0 && lane < kV8) {
+    float t = red[lane];
+    for (uint i = 1; i < NSG; ++i) t += red[i * kV8 + lane];
+    hS[tg.y * p.hs_stride + tg.x * kV8 + lane] = t;
+  }
+}
+
+#define NI_MOE8G_GU(NAME, FE, GE, FS, GSS)                                                                     \
+  [[kernel]] void NAME(const device uint32_t* Wg [[buffer(0)]], const device ushort* Sg [[buffer(1)]],          \
+                       const device ushort* Bg [[buffer(2)]], const device uint32_t* Wu [[buffer(3)]],          \
+                       const device ushort* Su [[buffer(4)]], const device ushort* Bu [[buffer(5)]],            \
+                       const device uint32_t* SWg [[buffer(6)]], const device ushort* SSg [[buffer(7)]],        \
+                       const device ushort* SBg [[buffer(8)]], const device uint32_t* SWu [[buffer(9)]],        \
+                       const device ushort* SSu [[buffer(10)]], const device ushort* SBu [[buffer(11)]],        \
+                       const device half* table [[buffer(12)]], const device float* sums [[buffer(13)]],        \
+                       device half* hT [[buffer(14)]], device float* hS [[buffer(15)]],                         \
+                       constant Qmm8GuParams& p [[buffer(16)]], const device uint* tiles [[buffer(17)]],        \
+                       const device uint* ntiles [[buffer(18)]], uint2 tg [[threadgroup_position_in_grid]],     \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {   \
+    threadgroup float red[8 * kV8];                                                                            \
+    threadgroup float2 kred[8 * 2 * 2 * 32];                                                                   \
+    moe8g_gu_impl<FE, GE, FS, GSS, 2>(Wg, Sg, Bg, Wu, Su, Bu, SWg, SSg, SBg, SWu, SSu, SBu, table, sums, hT, hS, p, \
+                                      tiles, ntiles, tg, sg, lane, red, kred);                                 \
+  }
+
+// moe8g_down: each tile's down projection to per (row, slot) outputs (as moe8_down_nf2), any formats.
+template <int FE, int GE, int FD, int GD, int NF>
+NI_INLINE void moe8g_down_impl(const device uint32_t* W, const device ushort* S, const device ushort* B,
+                               const device uint32_t* SW, const device ushort* SS, const device ushort* SB,
+                               const device half* hT, const device float* hS, device float* out,
+                               device float* sh_out, constant Moe8DownParams& p, const device uint* tiles,
+                               const device uint* ntiles, const device uint* slot, uint2 tg, uint sg, uint nsg,
+                               uint lane) {
+  if (tg.y >= ntiles[0]) return;
+  const uint e = tiles[tg.y];
+  const bool shared = e == 0xffffffffu;
+  const uint gpr = p.K / 64;
+  const uint2 rc = v8_lane(lane);
+  const uint fm = rc.x, fn = rc.y, q = fn / 2;
+  const uint n0 = (tg.x * nsg + sg) * 8 * NF;
+  const device half* ht = hT + tg.y * p.h_stride;
+  const device float* hs = hS + tg.y * p.hs_stride;
+  float2 acc[NF];
+  _Pragma("clang loop unroll(full)")
+  for (int f = 0; f < NF; ++f) acc[f] = float2(0.0f);
+  if (shared) {
+    const uint wpr = wf_wpr(FD, p.K), spr = FD == 16 ? 1u : p.K / uint(GD);
+    const device uint32_t* wr[NF];
+    const device ushort* sr[NF];
+    const device ushort* br[NF];
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) {
+      const uint row = n0 + 8 * f + fm;
+      wr[f] = SW + row * wpr;
+      sr[f] = SS + row * spr;
+      br[f] = SB + row * spr;
+    }
+    v8g_run<FD, GD, NF>(wr, sr, br, ht, hs, 0, gpr, lane, fn, q, acc);
+  } else {
+    const uint wpr = wf_wpr(FE, p.K), spr = FE == 16 ? 1u : p.K / uint(GE);
+    const device uint32_t* wr[NF];
+    const device ushort* sr[NF];
+    const device ushort* br[NF];
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) {
+      const uint row = n0 + 8 * f + fm;
+      wr[f] = W + e * p.w_stride + row * wpr;
+      sr[f] = S + e * p.s_stride + row * spr;
+      br[f] = B + e * p.s_stride + row * spr;
+    }
+    v8g_run<FE, GE, NF>(wr, sr, br, ht, hs, 0, gpr, lane, fn, q, acc);
+  }
+  _Pragma("clang loop unroll(full)")
+  for (int e2 = 0; e2 < 2; ++e2) {
+    const uint t = fn + e2, j = slot[tg.y * 8 + t];
+    if (j == 0xffffffffu) continue;
+    device float* o = shared ? sh_out + t * p.N : out + (t * p.k + j) * p.N;
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) o[n0 + 8 * f + fm] = acc[f][e2];
+  }
+}
+
+#define NI_MOE8G_DOWN(NAME, FE, GE, FD, GD)                                                                    \
+  [[kernel]] void NAME(const device uint32_t* W [[buffer(0)]], const device ushort* S [[buffer(1)]],           \
+                       const device ushort* B [[buffer(2)]], const device uint32_t* SW [[buffer(3)]],          \
+                       const device ushort* SS [[buffer(4)]], const device ushort* SB [[buffer(5)]],           \
+                       const device half* hT [[buffer(6)]], const device float* hS [[buffer(7)]],              \
+                       device float* out [[buffer(8)]], device float* sh_out [[buffer(9)]],                    \
+                       constant Moe8DownParams& p [[buffer(10)]], const device uint* tiles [[buffer(11)]],     \
+                       const device uint* ntiles [[buffer(12)]], const device uint* slot [[buffer(13)]],       \
+                       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {     \
+    moe8g_down_impl<FE, GE, FD, GD, 2>(W, S, B, SW, SS, SB, hT, hS, out, sh_out, p, tiles, ntiles, slot, tg, sg, nsg, \
+                                       lane);                                                                  \
+  }
+
 // ---- prefill GEMMs on the qmr design (qmm3.metal) for any format: qrf_* ----
 // Same tiles, lane layout and X staging as qmr (BK = 32: the lane's 8 weights of a row per K step are
 // k0 + 8c .. + 7). The weights go to registers as the four A pairs (w_f, w_{f+4}) of the lane's fragments:
@@ -1293,6 +1447,18 @@ NI_QRF_GU(qrf_gu_f16_m32_n64_mf, 16, 64, 32, 64, 1, 4, true)
   NI_QMMSF_GU(qmmsf_gu_##SFX##_t5, F, GS, 5) NI_QMMSF_GU(qmmsf_gu_##SFX##_t6, F, GS, 6)                       \
   NI_QMMSF_GU(qmmsf_gu_##SFX##_t7, F, GS, 7) NI_QMMSF_GU(qmmsf_gu_##SFX##_t8, F, GS, 8)
 NI_WF_NO8(NI_WF_SHORT)
+
+// 8-row MoE verify: routed experts x shared expert formats (gate/up; down)
+#define NI_MOE8G(SFX, FE, GE, FS, GSS) NI_MOE8G_GU(moe8g_gu_##SFX, FE, GE, FS, GSS) \
+                                       NI_MOE8G_DOWN(moe8g_down_##SFX, FE, GE, FS, GSS)
+NI_MOE8G(f16_f16, 16, 64, 16, 64)
+NI_MOE8G(f8g64_f8g64, 8, 64, 8, 64)
+NI_MOE8G(f6g64_f6g64, 6, 64, 6, 64)
+NI_MOE8G(f6g64_f8g64, 6, 64, 8, 64)
+NI_MOE8G(f5g64_f5g64, 5, 64, 5, 64)
+NI_MOE8G(f5g64_f8g64, 5, 64, 8, 64)
+NI_MOE8G(f4g64_f8g64, 4, 64, 8, 64)
+NI_MOE8G(f3g64_f8g64, 3, 64, 8, 64)
 
 // MoE rows: routed experts x shared expert formats seen in MLX packs
 NI_MOEG_GU_ROWS(moeg_gu_rows_f16_f16, 16, 64, 16, 64)

@@ -11,6 +11,7 @@
 #include "util/log.h"
 
 #include <algorithm>
+#include <set>
 #include <cmath>
 #include <unordered_map>
 
@@ -405,10 +406,20 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
 void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
-  if (!(L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4())) {
-    // other expert formats: the per-row MoE (router, top-k and expert matvecs per row; row-independent)
-    enc_moe_rows(e, L, R, x_, false);
-    return;
+  // other expert formats: wfmt.metal's moe8g_* passes for the format pairs they have (the experts de-duplicated over
+  // the rows, as the 4-bit passes; no scalar small-expert pass), else the per-row MoE (router, top-k and expert
+  // matvecs per row; row-independent)
+  const bool q4 = L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4();
+  std::string combo;
+  if (!q4) {
+    static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
+                                               "f5g64_f5g64", "f5g64_f8g64", "f4g64_f8g64", "f3g64_f8g64"};
+    combo = L.eg.fmt() + "_" + L.sg.fmt();
+    if (!have.count(combo) || !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
+        !L.sg.same_format(L.sd)) {
+      enc_moe_rows(e, L, R, x_, false);
+      return;
+    }
   }
   if (cfg_.shared_I != cfg_.moe_I || I % 64 || E > 1024 || k > 8 || D % 64) fatal("moe8: unsupported expert layout");
   // two-term (~22-bit) inputs and exact codes for the router: keeps the top-8 choice at fp32 level
@@ -416,7 +427,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
   // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify; docs/PERF.md)
   static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
-  const int small = v8_moe_exact_ ? 0 : small_env;
+  const int small = v8_moe_exact_ || !q4 ? 0 : small_env;
   enc_x8(e, x_, R, D, L.post_norm, precise, 0, small ? &v8xn_ : nullptr);
   enc_qmm8(e, {{&L.router, rlog_, uint32_t(E)}, {&L.shared_gate, slog_, 1u}}, R, v8t_, v8s_, precise);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
@@ -437,10 +448,11 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.buf(6, v8ustat_); e.buf(7, v8sm_);
   e.buf(8, v8_rlim_ ? *v8_rlim_ : v8nt_);
   e.dispatch(1, 1, 1, uint32_t(std::max(32, (E + 31) / 32 * 32)));
-  // gate/up + SwiGLU per touched expert (+ the shared expert), one h table per tile
-  const uint32_t wstride = I * (uint32_t(D) / 8), sstride = I * (uint32_t(D) / 64);
+  // gate/up + SwiGLU per touched expert (+ the shared expert), one h table per tile; strides in the routed format's
+  // words / scale groups
+  const uint32_t wstride = uint32_t(size_t(I) * L.eg.row_bytes() / 4), sstride = L.eg.dense() ? 0u : I * (uint32_t(D) / L.eg.gs);
   kp::Qmm8Gu gp{uint32_t(D), I, wstride, sstride, 1u, I * 8, I / 64 * 8};
-  e.use(pipe8(gu_kernel(uint32_t(D))));
+  e.use(pipe8(q4 ? gu_kernel(uint32_t(D)) : "moe8g_gu_" + combo));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
   e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
   e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
@@ -448,11 +460,12 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
   e.val(16, gp);
   e.buf(17, v8tiles_); e.buf(18, v8nt_);
-  e.dispatch_indirect(v8args_, 0, gu_threads());
+  e.dispatch_indirect(v8args_, 0, q4 ? gu_threads() : 512u);
   // down per tile -> per (row, slot) outputs, then the fixed-order combine
-  const uint32_t dw = uint32_t(D) * (I / 8), ds = uint32_t(D) * (I / 64);
+  const uint32_t dw = uint32_t(size_t(D) * L.ed.row_bytes() / 4), ds = L.ed.dense() ? 0u : uint32_t(D) * (I / L.ed.gs);
   kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
-  e.use(pipe8("moe8_down_nf" + std::to_string(dn_nf)));
+  if (!q4 && dn_nf != 2) fatal("moe8g: NI_V8_MOE_NF must be 2 for %s experts", L.eg.fmt().c_str());
+  e.use(pipe8(q4 ? "moe8_down_nf" + std::to_string(dn_nf) : "moe8g_down_" + combo));
   e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
   e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
   e.buf(6, v8h_); e.buf(7, v8hs_); e.buf(8, v8out_); e.buf(9, v8sh_);

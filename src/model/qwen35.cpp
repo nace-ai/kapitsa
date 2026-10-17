@@ -322,6 +322,7 @@ void Qwen35::prewarm_pipelines() {
       if (L.eg && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
         names.insert(moe_rows_kernel(true, L.eg, L.sg));
         names.insert(moe_rows_kernel(false, L.ed, L.sd));
+        names.insert("moe8g_gu_" + L.eg.fmt() + "_" + L.sg.fmt());  // when instantiated (else not created)
       }
     }
     see(lm_head_);
@@ -622,8 +623,8 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   Gpu::get().make_resident(owned_bufs_);  // converted / copied tensors (bf16 copies, test transforms, MTP head)
   alloc_state();
   prewarm_pipelines();
-  logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms", dir.c_str(), cfg_.layers,
-       cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0);
+  logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
+       cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
   // GPU + Neural Engine split of the dense prefill FFN: on by default for dense models with a
   // calibration or a default share for this chip (27B 4k prefill ~2.8x); NI_ANE=0 keeps the GPU alone.
   if (!cfg_.moe && !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0"))) init_ane();

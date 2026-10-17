@@ -178,6 +178,7 @@ Pipeline Gpu::pipeline(const std::string& fn, bool required) {
   compile();
   @autoreleasepool {
     id<MTLFunction> f = find_function(*this, library_, impl_, fn);
+    if (!f && !required) return Pipeline{};
     if (!f) fatal("kernel %s not found", fn.c_str());
     NSError* err = nil;
     id<MTLComputePipelineState> pso = [dev(device_) newComputePipelineStateWithFunction:f error:&err];
