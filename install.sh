@@ -30,6 +30,7 @@ if [ "$(uname -m)" != arm64 ]; then
 fi
 macos=$(sw_vers -productVersion)
 [ "${macos%%.*}" -ge 14 ] || die "Kapitsa needs macOS 14 or later; this Mac runs macOS $macos."
+[ "${macos%%.*}" -ge 15 ] || say "Note: Kapitsa is tested on macOS 15 and later; this Mac runs $macos. Continuing."
 
 # 2. Apple's Command Line Tools (compilers; Xcode itself is not needed)
 if ! xcode-select -p > /dev/null 2>&1 || ! xcrun --find clang++ > /dev/null 2>&1; then
