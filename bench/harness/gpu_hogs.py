@@ -243,7 +243,7 @@ class GpuLock:
 
     def acquire(self):
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        self.fd = os.open(self.path, os.O_RDONLY | os.O_CREAT, 0o644)
         t0 = time.time()
         try:
             fcntl.flock(self.fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
