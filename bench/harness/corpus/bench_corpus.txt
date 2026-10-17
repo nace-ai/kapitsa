@@ -1,0 +1,3483 @@
+
+
+### FILE: modeling_granite_speech.py
+```python
+# Copyright 2025 The HuggingFace Inc. team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+from dataclasses import dataclass
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from ... import initialization as init
+from ...cache_utils import Cache
+from ...generation import GenerationMixin
+from ...modeling_outputs import BaseModelOutputWithPast, BaseModelOutputWithPooling, ModelOutput
+from ...modeling_utils import PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import (
+    TransformersKwargs,
+    auto_docstring,
+    can_return_tuple,
+    is_peft_available,
+    logging,
+    torch_compilable_check,
+)
+from ...utils.generic import merge_with_config_defaults
+from ...utils.output_capturing import capture_outputs
+from ..auto import AutoModel
+from .configuration_granite_speech import GraniteSpeechConfig, GraniteSpeechEncoderConfig
+
+
+logger = logging.get_logger(__name__)
+
+
+@auto_docstring(
+    custom_intro="""
+    Base class for Granite Speech outputs, with hidden states and attentions.
+    """
+)
+@dataclass
+class GraniteSpeechModelOutputWithPast(BaseModelOutputWithPast):
+    r"""
+    audio_hidden_states (`torch.FloatTensor`, *optional*):
+        Projected audio hidden states.
+    """
+
+    audio_hidden_states: torch.FloatTensor | None = None
+
+
+@auto_docstring(
+    custom_intro="""
+    Base class for Granite Speech causal language model (or autoregressive) outputs.
+    """
+)
+@dataclass
+class GraniteSpeechCausalLMOutputWithPast(ModelOutput):
+    r"""
+    loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
+        Language modeling loss (for next-token prediction).
+    logits (`torch.FloatTensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
+        Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
+    past_key_values (`Cache`, *optional*, returned when `use_cache=True` is passed or when `config.use_cache=True`):
+        It is a [`~cache_utils.Cache`] instance. For more details, see our [kv cache guide](https://huggingface.co/docs/transformers/en/kv_cache).
+
+        Contains pre-computed hidden-states (key and values in the self-attention blocks) that can be used (see
+        `past_key_values` input) to speed up sequential decoding.
+    audio_hidden_states (`torch.FloatTensor`, *optional*):
+        Projected audio hidden states.
+    """
+
+    loss: torch.FloatTensor | None = None
+    logits: torch.FloatTensor | None = None
+    past_key_values: Cache | None = None
+    hidden_states: tuple[torch.FloatTensor] | None = None
+    attentions: tuple[torch.FloatTensor] | None = None
+    audio_hidden_states: torch.FloatTensor | None = None
+
+
+### Projector
+class GraniteSpeechEncoderProjector(nn.Module):
+    def __init__(self, config: GraniteSpeechConfig):
+        super().__init__()
+        self.hidden_size = config.projector_config.hidden_size
+        self.downsample_rate = config.downsample_rate
+        self.window_size = config.window_size
+        self.num_queries = config.window_size // config.downsample_rate
+
+        self.query = nn.Parameter(torch.zeros(1, self.num_queries, config.projector_config.hidden_size))
+        self.query.data.normal_(mean=0.0, std=1.0)
+
+        # By default, this will be a blip_2_qformer config
+        self.qformer = AutoModel.from_config(config.projector_config)
+        self.linear = nn.Linear(config.projector_config.hidden_size, config.text_config.hidden_size)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        batch_size, seq_len, dim = hidden_states.size()
+        nblocks = math.ceil(seq_len / self.window_size)
+        pad = nblocks * self.window_size - seq_len
+        hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad), "constant", 0)
+        hidden_states = hidden_states.view(batch_size * nblocks, self.window_size, dim)
+
+        query_output = self.qformer(
+            query_embeds=self.query,
+            encoder_hidden_states=hidden_states,
+            encoder_attention_mask=None,
+            return_dict=True,
+        )
+        query_proj = self.linear(
+            query_output.last_hidden_state.view(batch_size, nblocks * self.window_size // self.downsample_rate, -1)
+        )
+        return query_proj
+
+
+### Encoder - conformer is adapted from: https://github.com/lucidrains/conformer.git
+class GraniteSpeechConformerFeedForward(nn.Module):
+    """Feedforward module for conformer encoder blocks."""
+
+    def __init__(self, config: GraniteSpeechEncoderConfig):
+        super().__init__()
+        self.pre_norm = nn.LayerNorm(config.hidden_dim)
+        self.up_proj = nn.Linear(config.hidden_dim, config.hidden_dim * config.feedforward_mult)
+        self.silu = nn.SiLU()
+        self.dropout = nn.Dropout(config.dropout)
+        self.down_proj = nn.Linear(config.hidden_dim * config.feedforward_mult, config.hidden_dim)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.pre_norm(hidden_states)
+        hidden_states = self.up_proj(hidden_states)
+        hidden_states = self.dropout(self.silu(hidden_states))
+        hidden_states = self.down_proj(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        return hidden_states
+
+
+class GraniteSpeechConformerAttention(nn.Module):
+    """Attention for conformer blocks using Shaw's relative positional embeddings.
+    See the following [paper](https://huggingface.co/papers/1803.02155) for more details.
+    """
+
+    def __init__(self, config: GraniteSpeechEncoderConfig):
+        super().__init__()
+
+        inner_dim = config.dim_head * config.num_heads
+        self.max_pos_emb = config.max_pos_emb
+        self.context_size = config.context_size
+        self.num_heads = config.num_heads
+        self.dim_head = config.dim_head
+        self.scale = self.dim_head**-0.5
+        self.pre_norm = nn.LayerNorm(config.hidden_dim)
+        self.to_q = nn.Linear(config.hidden_dim, inner_dim, bias=False)
+        self.to_kv = nn.Linear(config.hidden_dim, inner_dim * 2, bias=False)
+        self.to_out = nn.Linear(inner_dim, config.hidden_dim)
+        self.rel_pos_emb = nn.Embedding(2 * self.max_pos_emb + 1, self.dim_head)
+        self.dropout = nn.Dropout(config.dropout)
+
+        if self.context_size <= 0 or self.context_size > self.max_pos_emb:
+            raise ValueError("Context size is either less than 0 or exceeds the max_pos_emb")
+
+    def forward(self, hidden_states: torch.Tensor, attention_dists: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.pre_norm(hidden_states)
+        bsz, num_features, _ = hidden_states.shape
+
+        num_blocks = math.ceil(num_features / self.context_size)
+        remainder = num_features % self.context_size
+        if remainder > 0:
+            # right padding to reach block size
+            hidden_states = torch.nn.functional.pad(hidden_states, (0, 0, 0, self.context_size - remainder))
+
+        query_states = self.to_q(hidden_states)
+        key_states, value_states = self.to_kv(hidden_states).chunk(2, dim=-1)
+
+        flat_bsz = bsz * num_blocks
+        query_states = query_states.reshape(flat_bsz, self.context_size, self.num_heads, -1).transpose(1, 2)
+        key_states = key_states.reshape(flat_bsz, self.context_size, self.num_heads, -1).transpose(1, 2)
+        value_states = value_states.reshape(flat_bsz, self.context_size, self.num_heads, -1).transpose(1, 2)
+
+        # shaw's relative positional embedding
+        rel_pos_emb = self.rel_pos_emb(attention_dists)
+        # alternative computation of `pos_attn` - for readability
+        # rel_pos_emb_expanded = rel_pos_emb.view([1, 1] + list(rel_pos_emb.shape))
+        # pos_attn = torch.sum(query_states.unsqueeze(-2) * rel_pos_emb_expanded, dim=-1) * self.scale
+        # einsum implementation of pos_attn - gives x30 speedup over the alternative
+        # TODO (@avihu111) find a fast alternative to einsum
+        pos_attn = torch.einsum("b h c d, c r d -> b h c r", query_states, rel_pos_emb) * self.scale
+
+        if remainder > 0:
+            # masked attention in the extended block
+            mask = torch.ones(self.context_size, self.context_size, dtype=bool, device=hidden_states.device)
+            mask[:remainder, :remainder] = 0
+            mask_value = -torch.finfo(pos_attn.dtype).max
+            pos_attn[num_blocks - 1 : pos_attn.shape[0] : num_blocks].masked_fill_(mask, mask_value)
+
+        with torch.nn.attention.sdpa_kernel(torch.nn.attention.SDPBackend.MATH):
+            out = F.scaled_dot_product_attention(
+                query_states, key_states, value_states, attn_mask=pos_attn, scale=self.scale
+            )
+        out = out.transpose(1, 2).reshape(bsz, hidden_states.shape[1], -1)
+        out = self.to_out(out[:, :num_features, :])
+        return self.dropout(out)
+
+
+class GraniteSpeechConformerDepthWiseConv1d(nn.Module):
+    """Wrapper for padded 1D pointwise convolution."""
+
+    def __init__(self, chan_in: int, chan_out: int, kernel_size: int):
+        super().__init__()
+        # Padding for the 1D conv is symmetric or close (i.e., offset by one).
+        pad = kernel_size // 2
+        pad_offset = (kernel_size + 1) % 2
+        self.padding = (pad, pad - pad_offset)
+
+        self.conv = nn.Conv1d(chan_in, chan_out, kernel_size, groups=chan_in, bias=False)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = F.pad(hidden_states, self.padding)
+        return self.conv(hidden_states)
+
+
+class GraniteSpeechConformerConvModule(nn.Module):
+    """Conformer conv module consisting of several 1D/depthwise 1D convolutional layers."""
+
+    def __init__(self, config: GraniteSpeechEncoderConfig):
+        super().__init__()
+        inner_dim = config.hidden_dim * config.conv_expansion_factor
+
+        self.norm = nn.LayerNorm(config.hidden_dim)
+        self.up_conv = nn.Conv1d(config.hidden_dim, inner_dim * 2, 1)
+        self.glu = nn.GLU(dim=1)
+        self.depth_conv = GraniteSpeechConformerDepthWiseConv1d(
+            inner_dim,
+            inner_dim,
+            kernel_size=config.conv_kernel_size,
+        )
+        self.silu = nn.SiLU()
+        self.batch_norm = nn.BatchNorm1d(inner_dim)
+        self.down_conv = nn.Conv1d(inner_dim, config.hidden_dim, 1)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.norm(hidden_states)
+        hidden_states = self.up_conv(hidden_states.permute(0, 2, 1))
+        hidden_states = self.glu(hidden_states)
+        hidden_states = self.depth_conv(hidden_states)
+        hidden_states = self.silu(self.batch_norm(hidden_states))
+        hidden_states = self.down_conv(hidden_states).permute(0, 2, 1)
+        hidden_states = self.dropout(hidden_states)
+        return hidden_states
+
+
+class GraniteSpeechConformerBlock(nn.Module):
+    """Conformer block, consisting largely of linear layers, attention, and convolutional layers."""
+
+    def __init__(self, config: GraniteSpeechEncoderConfig):
+        super().__init__()
+        self.ff1 = GraniteSpeechConformerFeedForward(config)
+        self.attn = GraniteSpeechConformerAttention(config)
+        self.conv = GraniteSpeechConformerConvModule(config)
+        self.ff2 = GraniteSpeechConformerFeedForward(config)
+        self.post_norm = nn.LayerNorm(config.hidden_dim)
+
+    def forward(self, hidden_states: torch.Tensor, attention_dists: torch.Tensor) -> torch.Tensor:
+        hidden_states = 0.5 * self.ff1(hidden_states) + hidden_states
+        hidden_states = self.attn(hidden_states, attention_dists=attention_dists) + hidden_states
+        hidden_states = self.conv(hidden_states) + hidden_states
+        hidden_states = 0.5 * self.ff2(hidden_states) + hidden_states
+        hidden_states = self.post_norm(hidden_states)
+        return hidden_states
+
+
+@auto_docstring
+class GraniteSpeechPreTrainedModel(PreTrainedModel):
+    config: GraniteSpeechConfig
+    input_modalities = ("audio", "text")
+    base_model_prefix = "model"
+
+    _supports_flash_attn = False  # `blip_2_qformer` dependency does not allow for this
+    _supports_sdpa = True
+    _supports_attention_backend = True
+
+    @torch.no_grad()
+    def _init_weights(self, module: nn.Module):
+        """Initialize the weights."""
+        super()._init_weights(module)
+        if isinstance(module, GraniteSpeechEncoderProjector):
+            init.normal_(module.query)
+        elif isinstance(module, GraniteSpeechCTCEncoder):
+            context_size = module.config.context_size
+            seq = torch.arange(context_size)
+            relpos_dist = seq.view(-1, 1) - seq.view(1, -1)
+            attention_dists = torch.clamp(relpos_dist, -context_size, context_size) + module.config.max_pos_emb
+            init.copy_(module.attention_dists, attention_dists)
+
+
+class GraniteSpeechCTCEncoder(GraniteSpeechPreTrainedModel):
+    config: GraniteSpeechEncoderConfig
+    input_modalities = "audio"
+    _can_record_outputs = {
+        "hidden_states": GraniteSpeechConformerBlock,
+        "attentions": GraniteSpeechConformerAttention,
+    }
+
+    def __init__(self, config: GraniteSpeechEncoderConfig):
+        super().__init__(config)
+
+        # Precompute clamped relative positional encoding distances
+        seq = torch.arange(config.context_size)
+        relpos_dist = seq.view(-1, 1) - seq.view(1, -1)
+        attention_dists = torch.clamp(relpos_dist, -config.context_size, config.context_size) + config.max_pos_emb
+        self.attention_dists = nn.Buffer(attention_dists, persistent=False)
+        self.input_linear = nn.Linear(config.input_dim, config.hidden_dim, bias=True)
+        self.layers = nn.ModuleList([GraniteSpeechConformerBlock(config) for _ in range(config.num_layers)])
+
+        self.out = nn.Linear(config.hidden_dim, config.output_dim, bias=True)
+        self.out_mid = nn.Linear(config.output_dim, config.hidden_dim, bias=True)
+        self.num_layers = config.num_layers
+        self.post_init()
+
+    @merge_with_config_defaults
+    @capture_outputs
+    def forward(
+        self, hidden_states: torch.Tensor, **kwargs: Unpack[TransformersKwargs]
+    ) -> tuple | BaseModelOutputWithPooling:
+        hidden_states = self.input_linear(hidden_states)
+        for idx, layer in enumerate(self.layers, start=1):
+            hidden_states = layer(hidden_states, attention_dists=self.attention_dists)
+
+            if idx == self.num_layers // 2:
+                hidden_states_mid = hidden_states.clone()
+                hidden_states_mid = self.out(hidden_states_mid)
+                hidden_states += self.out_mid(nn.Softmax(dim=-1)(hidden_states_mid))
+
+        return BaseModelOutputWithPooling(last_hidden_state=hidden_states)
+
+
+@auto_docstring(
+    custom_intro="""
+    The Granite Speech model, which consists of an audio encoder, projector, and language model,
+    without a language modeling head.
+    """
+)
+class GraniteSpeechModel(GraniteSpeechPreTrainedModel):
+    def __init__(self, config: GraniteSpeechConfig):
+        super().__init__(config)
+        self.encoder = GraniteSpeechCTCEncoder(config.encoder_config)
+        self.projector = GraniteSpeechEncoderProjector(config)
+        self.language_model = AutoModel.from_config(config.text_config)
+        self.post_init()
+
+    @can_return_tuple
+    @auto_docstring
+    def get_audio_features(
+        self, input_features: torch.Tensor, **kwargs: Unpack[TransformersKwargs]
+    ) -> tuple | BaseModelOutputWithPooling:
+        audio_outputs = self.encoder(input_features, return_dict=True, **kwargs)
+        projected_embeds = self.projector(audio_outputs.last_hidden_state)
+        audio_outputs.pooler_output = projected_embeds
+
+        return audio_outputs
+
+    def get_placeholder_mask(
+        self, input_ids: torch.LongTensor, inputs_embeds: torch.FloatTensor, audio_features: torch.FloatTensor
+    ):
+        """
+        Obtains multimodal placeholder mask from `input_ids` or `inputs_embeds`, and checks that the placeholder token count is
+        equal to the length of multimodal features. If the lengths are different, an error is raised.
+        """
+        if input_ids is None:
+            special_audio_mask = inputs_embeds == self.get_input_embeddings()(
+                torch.full((), self.config.audio_token_id, dtype=torch.long, device=inputs_embeds.device)
+            )
+            special_audio_mask = special_audio_mask.all(-1)
+        else:
+            special_audio_mask = input_ids == self.config.audio_token_id
+
+        n_audio_tokens = special_audio_mask.sum()
+        n_audio_features = audio_features.shape[0]
+        special_audio_mask = special_audio_mask.unsqueeze(-1).expand_as(inputs_embeds).to(inputs_embeds.device)
+        torch_compilable_check(
+            inputs_embeds[special_audio_mask].numel() == audio_features.numel(),
+            f"Audio features and audio tokens do not match, tokens: {n_audio_tokens}, features: {n_audio_features}",
+        )
+        return special_audio_mask
+
+    def get_merged_audio_embeddings(
+        self, input_ids: torch.Tensor, audio_features: torch.Tensor, input_features_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """
+        Adds the audio token to the model's LLM vocabulary so that we can pass it
+        through the tokenizer; it's assumed that the embeddings corresponding to the
+        <|audio|> token will be clobbered with speech features.
+
+        Args:
+            input_ids (`torch.Tensor`):
+                Input IDs containing one or more audio tokens.
+            audio_features (`torch.Tensor`):
+                Audio features to be masked into the language embeddings to form multimodal embeddings.
+            input_features_mask (`torch.Tensor`, *optional*, defaults to `None`)
+                Mask to be applied to audio features prior to scattering into the language embeddings.
+        """
+        is_audio_index = input_ids == self.config.audio_token_id
+        llm_input_ids = torch.where(is_audio_index, 0, input_ids)
+        inputs_embeds = self.language_model.get_input_embeddings()(llm_input_ids)  # [bsz, # features, hidden size]
+
+        audio_features = audio_features.to(inputs_embeds.device, inputs_embeds.dtype)
+        if input_features_mask is not None:
+            audio_features = audio_features[input_features_mask]
+
+        special_audio_mask = self.get_placeholder_mask(
+            input_ids, inputs_embeds=inputs_embeds, audio_features=audio_features
+        )
+        inputs_embeds = inputs_embeds.masked_scatter(special_audio_mask, audio_features)
+        return inputs_embeds
+
+    @can_return_tuple
+    @auto_docstring
+    def forward(
+        self,
+        input_ids: torch.LongTensor | None = None,
+        input_features: torch.FloatTensor | None = None,
+        input_features_mask: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        past_key_values: Cache | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        use_cache: bool | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple | GraniteSpeechModelOutputWithPast:
+        r"""
+        input_features_mask (`torch.Tensor`, *optional*):
+            Mask to be applied to audio features prior to scattering into the language embeddings.
+        """
+        if (input_ids is None) ^ (inputs_embeds is not None):
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
+
+        if inpu
+```
+
+### FILE: modeling_modernvbert.py
+```python
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+#           This file was automatically generated from src/transformers/models/modernvbert/modular_modernvbert.py.
+#               Do NOT edit this file manually as any edits will be overwritten by the generation of
+#             the file from the modular. If any change should be done, please apply the change to the
+#                          modular_modernvbert.py file directly. One of our CI enforces this.
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+# Copyright 2026 Illuin Technology and contributors, and The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+from dataclasses import dataclass
+
+import torch
+import torch.nn as nn
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+
+from ... import initialization as init
+from ...activations import ACT2FN
+from ...modeling_outputs import (
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+    MaskedLMOutput,
+    SequenceClassifierOutput,
+    TokenClassifierOutput,
+)
+from ...modeling_utils import PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import TransformersKwargs, auto_docstring, torch_compilable_check
+from ...utils.generic import can_return_tuple
+from ..auto import AutoModel
+from .configuration_modernvbert import ModernVBertConfig
+
+
+@dataclass
+class ModernVBertBaseModelOutput(BaseModelOutput):
+    """
+    Base class for ModernVBERT model's outputs.
+    Args:
+        last_hidden_state (`torch.FloatTensor` of shape `(batch_size, sequence_length, hidden_size)`):
+            Sequence of hidden-states at the output of the last layer of the model.
+            If `past_key_values` is used only the last hidden-state of the sequences of shape `(batch_size, 1,
+            hidden_size)` is output.
+        hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
+            Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
+            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
+            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
+        attentions (`tuple(torch.FloatTensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
+            Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
+            sequence_length)`.
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+        image_hidden_states (`tuple(torch.FloatTensor)`, *optional*):
+            Tuple of `torch.FloatTensor` (one for the output of the image embeddings, `(batch_size, num_images,
+            sequence_length, hidden_size)`.
+            image_hidden_states of the model produced by the vision encoder
+    """
+
+    last_hidden_state: torch.FloatTensor = None
+    hidden_states: tuple[torch.FloatTensor] | None = None
+    attentions: tuple[torch.FloatTensor] | None = None
+    image_hidden_states: tuple[torch.FloatTensor] | None = None
+
+
+@dataclass
+class ModernVBertMaskedLMOutput(MaskedLMOutput):
+    """
+    Base class for ModernVBERT model's outputs with masked language modeling loss.
+    Args:
+        loss (`torch.FloatTensor`, *optional*, returned when `labels` is provided):
+            Masked language modeling (MLM) loss.
+        logits (`torch.FloatTensor`):
+            Prediction scores of the language modeling head (scores for each vocabulary token before SoftMax).
+        hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
+            Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
+            one for the output of each layer) of shape `(batch_size, sequence_length, hidden_size)`.
+            Hidden-states of the model at the output of each layer plus the optional initial embedding outputs.
+        attentions (`tuple(torch.FloatTensor)`, *optional*, returned when `output_attentions=True` is passed or when `config.output_attentions=True`):
+            Tuple of `torch.FloatTensor` (one for each layer) of shape `(batch_size, num_heads, sequence_length,
+            sequence_length)`.
+            Attentions weights after the attention softmax, used to compute the weighted average in the self-attention
+            heads.
+        image_hidden_states (`tuple(torch.FloatTensor)`, *optional*):
+            Tuple of `torch.FloatTensor` (one for the output of the image embeddings, `(batch_size, num_images,
+            sequence_length, hidden_size)`.
+            image_hidden_states of the model produced by the vision encoder
+    """
+
+    loss: torch.FloatTensor | None = None
+    logits: torch.FloatTensor = None
+    hidden_states: tuple[torch.FloatTensor, ...] | None = None
+    attentions: tuple[torch.FloatTensor, ...] | None = None
+    image_hidden_states: torch.FloatTensor | None = None
+
+
+class ModernVBertConnector(nn.Module):
+    """
+    Connector module for ModernVBERT. It performs a pixel shuffle operation followed by a linear projection to match the text model's hidden size.
+    Based on https://pytorch.org/docs/stable/generated/torch.nn.PixelShuffle.html
+    """
+
+    def __init__(self, config):
+        super().__init__()
+        self.pixel_shuffle_factor = config.pixel_shuffle_factor
+        self.modality_projection = nn.Linear(
+            config.vision_config.hidden_size * (config.pixel_shuffle_factor**2),
+            config.text_config.hidden_size,
+            bias=False,
+        )
+
+    def pixel_shuffle(self, image_hidden_states, pixel_shuffle_factor):
+        batch_size, seq_length, embed_dim = image_hidden_states.size()
+        height = width = int(seq_length**0.5)
+        image_hidden_states = image_hidden_states.view(batch_size, height, width, embed_dim)
+        image_hidden_states = image_hidden_states.view(
+            batch_size, height, int(width / pixel_shuffle_factor), embed_dim * pixel_shuffle_factor
+        )
+        image_hidden_states = image_hidden_states.permute(0, 2, 1, 3)
+        image_hidden_states = image_hidden_states.reshape(
+            batch_size,
+            int(width / pixel_shuffle_factor),
+            int(height / pixel_shuffle_factor),
+            embed_dim * (pixel_shuffle_factor**2),
+        )
+        image_hidden_states = image_hidden_states.permute(0, 2, 1, 3)
+        return image_hidden_states.reshape(
+            batch_size, int(seq_length / (pixel_shuffle_factor**2)), embed_dim * (pixel_shuffle_factor**2)
+        )
+
+    def forward(self, image_hidden_states):
+        image_hidden_states = self.pixel_shuffle(image_hidden_states, self.pixel_shuffle_factor)
+        return self.modality_projection(image_hidden_states)
+
+
+@auto_docstring
+class ModernVBertPreTrainedModel(PreTrainedModel):
+    config: ModernVBertConfig
+    base_model_prefix = "model"
+    input_modalities = ("image", "text")
+    supports_gradient_checkpointing = True
+    _no_split_modules = []
+    _skip_keys_device_placement = ["past_key_values"]
+    _supports_flash_attn = True
+    _supports_sdpa = True
+    _supports_flex_attn = True
+    _supports_attention_backend = True
+    config_class = ModernVBertConfig
+
+    @torch.no_grad()
+    def _init_weights(self, module):
+        super()._init_weights(module)
+
+        def init_weight(module: nn.Module, std: float):
+            cutoff_factor = getattr(self.config, "initializer_cutoff_factor", 2.0)
+            init.trunc_normal_(
+                module.weight,
+                mean=0.0,
+                std=std,
+                a=-cutoff_factor * std,
+                b=cutoff_factor * std,
+            )
+
+            if isinstance(module, (nn.Linear, nn.Conv2d)):
+                if module.bias is not None:
+                    init.zeros_(module.bias)
+
+        if isinstance(module, ModernVBertConnector):
+            out_std = self.config.initializer_range / math.sqrt(2.0 * self.config.text_config.num_hidden_layers)
+            init_weight(module.modality_projection, out_std)
+        elif isinstance(module, ModernVBertForMaskedLM):
+            out_std = self.config.initializer_range / math.sqrt(2.0 * self.config.text_config.num_hidden_layers)
+            init_weight(module.lm_head, out_std)
+        elif isinstance(
+            module,
+            (
+                ModernVBertForSequenceClassification,
+                ModernVBertForTokenClassification,
+            ),
+        ):
+            final_out_std = self.config.initializer_range / math.sqrt(self.config.text_config.hidden_size)
+            init_weight(module.classifier, final_out_std)
+
+
+@auto_docstring(
+    custom_intro="""
+    ModernVBertModel is a model that combines a vision encoder (SigLIP) and a text encoder (ModernBert).
+
+    ModernVBert is the base model of the visual retriever ColModernVBert, and was introduced in the following paper:
+    [*ModernVBERT: Towards Smaller Visual Document Retrievers*](https://arxiv.org/abs/2510.01149).
+    """
+)
+class ModernVBertModel(ModernVBertPreTrainedModel):
+    """
+    A subclass of Idefics3Model. We do *not* remove or block the call to inputs_merger
+    in forward. Instead, we override inputs_merger here with custom logic.
+    """
+
+    def __init__(self, config: ModernVBertConfig):
+        super().__init__(config)
+        self.padding_idx = self.config.text_config.pad_token_id
+        self.vocab_size = self.config.text_config.vocab_size
+        self.vision_model = AutoModel.from_config(config.vision_config)
+
+        # init components
+        self.connector = ModernVBertConnector(config)
+        self.text_model = AutoModel.from_config(config.text_config)
+
+        self.image_seq_len = int(
+            ((config.vision_config.image_size // config.vision_config.patch_size) ** 2)
+            / (config.pixel_shuffle_factor**2)
+        )
+        self.image_token_id = self.config.image_token_id
+
+        self.post_init()
+
+    def get_input_embeddings(self):
+        return self.text_model.get_input_embeddings()
+
+    def set_input_embeddings(self, value):
+        self.text_model.set_input_embeddings(value)
+
+    def inputs_merger(
+        self, input_ids: torch.LongTensor, inputs_embeds: torch.Tensor, image_hidden_states: torch.Tensor
+    ):
+        """
+        This method aims at merging the token embeddings with the image hidden states into one single sequence of vectors that are fed to the transformer LM.
+        The merging happens as follows:
+        - The text token sequence is: `tok_1 tok_2 tok_3 <fake_token_around_image> <image> <image> ... <image> <fake_token_around_image> tok_4`.
+        - We get the image hidden states for the image through the vision encoder and that hidden state, after a pixel shuffle operation, is then projected into the text embedding space.
+        We thus have a sequence of image hidden states of size (1, image_seq_len, hidden_dim), where 1 is for batch_size of 1 image and hidden_dim is the hidden_dim of the LM transformer.
+        - The merging happens so that we obtain the following sequence: `vector_tok_1 vector_tok_2 vector_tok_3 vector_fake_tok_around_image {sequence of image_seq_len image hidden states} vector_fake_toke_around_image vector_tok_4`. That sequence is fed to the LM.
+        - To fit the format of that sequence, `input_ids`, `inputs_embeds`, `attention_mask` are all 3 adapted to insert the image hidden states.
+        """
+        _, patch_size, _ = image_hidden_states.shape
+
+        if input_ids is None:
+            image_mask = inputs_embeds == self.get_input_embeddings()(
+                torch.full((), self.config.image_token_id, dtype=torch.long, device=inputs_embeds.device)
+            )
+            image_mask = image_mask[..., 0]  # slice off the hidden dim
+        else:
+            image_mask = input_ids == self.config.image_token_id
+
+        num_image_tokens = image_mask.sum(dim=1)
+        torch_compilable_check(
+            torch.all(num_image_tokens % patch_size == 0),
+            "At least one sample has <image> tokens not divisible by patch_size.",
+        )
+        blocks_per_sample = num_image_tokens // patch_size
+
+        offsets = torch.nn.functional.pad(blocks_per_sample.cumsum(dim=0), (1, 0), value=0)
+        block_offset = offsets[:-1]
+        row_cum = image_mask.cumsum(dim=-1)
+        chunk_idx = (row_cum - 1) // patch_size
+        local_idx = (row_cum - 1) % patch_size
+        block_idx = block_offset.unsqueeze(1) + chunk_idx
+
+        image_embeds = torch.zeros_like(inputs_embeds)
+        image_embeds[image_mask] = image_hidden_states[block_idx[image_mask], local_idx[image_mask], :]
+
+        merged_embeds = torch.where(image_mask.unsqueeze(-1), image_embeds, inputs_embeds)
+        return merged_embeds
+
+    @can_return_tuple
+    @auto_docstring(
+        custom_intro="Encodes images into continuous embeddings that can be forwarded to the language model."
+    )
+    def get_image_features(
+        self,
+        pixel_values: torch.FloatTensor,
+        pixel_attention_mask: torch.LongTensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple | BaseModelOutputWithPooling:
+        r"""
+        pixel_values (`torch.FloatTensor` of shape `(batch_size, num_channels, image_size, image_size)`):
+            The tensors corresponding to the input images.
+        pixel_attention_mask (`torch.LongTensor`, *optional*):
+            The attention mask indicating padded regions in the image.
+        """
+        batch_size, num_images, num_channels, height, width = pixel_values.shape
+        pixel_values = pixel_values.to(dtype=self.dtype)  # fp16 compatibility
+        pixel_values = pixel_values.view(batch_size * num_images, *pixel_values.shape[2:])
+
+        # Remove padding images - padding images are full 0.
+        nb_values_per_image = pixel_values.shape[1:].numel()
+        real_images_inds = (pixel_values == 0.0).sum(dim=(-1, -2, -3)) != nb_values_per_image
+
+        # If no images, leave one empty image.
+        real_images_inds[0] |= ~torch.any(real_images_inds)
+
+        pixel_values = pixel_values[real_images_inds].contiguous()
+        # Handle the vision attention mask
+        if pixel_attention_mask is None:
+            pixel_attention_mask = torch.ones(
+                size=[pixel_values.shape[i] for i in (0, 2, 3)],
+                dtype=torch.bool,
+                device=pixel_values.device,
+            )
+        else:
+            # Remove padding images from the mask
+            pixel_attention_mask = pixel_attention_mask.view(batch_size * num_images, *pixel_attention_mask.shape[2:])
+            pixel_attention_mask = pixel_attention_mask[real_images_inds].contiguous()
+        patch_size = self.config.vision_config.patch_size
+        patches_subgrid = pixel_attention_mask.unfold(dimension=1, size=patch_size, step=patch_size)
+        patches_subgrid = patches_subgrid.unfold(dimension=2, size=patch_size, step=patch_size)
+        patch_attention_mask = (patches_subgrid.sum(dim=(-1, -2)) > 0).bool()
+
+        # Get sequence from the vision encoder
+        image_outputs = self.vision_model(
+            pixel_values=pixel_values, patch_attention_mask=patch_attention_mask, return_dict=True, **kwargs
+        )
+        image_hidden_states = image_outputs.last_hidden_state
+
+        # Modality projection & resampling
+        image_features = self.connector(image_hidden_states)
+        image_outputs.pooler_output = image_features
+
+        return image_outputs
+
+    @can_return_tuple
+    @auto_docstring(
+        custom_intro="""
+        Inputs fed to the model can have an arbitrary number of images. To account for this, pixel_values fed to
+        the model have image padding -> (batch_size, max_num_images, 3, max_heights, max_widths) where
+        max_num_images is the maximum number of images among the batch_size samples in the batch.
+        Padding images are not needed beyond padding the pixel_values at the entrance of the model.
+        For efficiency, we only pass through the vision_model's forward the real images by
+        discarding the padding images i.e. pixel_values of size (image_batch_size, 3, height, width) where
+        image_batch_size would be 7 when num_images_per_sample=[1, 3, 1, 2] and max_num_images would be 3.
+        """,
+        checkpoint="ModernVBERT/modernvbert",
+    )
+    def forward(
+        self,
+        input_ids: torch.LongTensor = None,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        pixel_values: torch.FloatTensor | None = None,
+        pixel_attention_mask: torch.BoolTensor | None = None,
+        image_hidden_states: torch.FloatTensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple | ModernVBertBaseModelOutput:
+        r"""
+        pixel_attention_mask (`torch.Tensor` of shape `(batch_size, image_size, image_size)`, *optional*):
+            Mask to avoid performing attention on padding pixel indices.
+        image_hidden_states (`torch.FloatTensor` of shape `(batch_size, num_channels, image_size, image_size)`):
+            The hidden states of the image encoder after modality projection.
+        """
+
+        if inputs_embeds is None:
+            inputs_embeds = self.text_model.get_input_embeddings()(input_ids).to(input_ids.device)
+
+        # Images processing
+        if pixel_values is not None:
+            image_hidden_states = self.get_image_features(
+                pixel_values=pixel_values, pixel_attention_mask=pixel_attention_mask
+            ).pooler_output
+
+        # Merge image and text embeddings
+        if image_hidden_states is not None:
+            image_hidden_states = image_hidden_states.to(dtype=inputs_embeds.dtype, device=inputs_embeds.device)
+            inputs_embeds = self.inputs_merger(
+                input_ids=input_ids, inputs_embeds=inputs_embeds, image_hidden_states=image_hidden_states
+            )
+
+        # Language model pass
+        outputs = self.text_model(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            **kwargs,
+        )
+
+        return ModernVBertBaseModelOutput(
+            last_hidden_state=outputs.last_hidden_state,
+            hidden_states=outputs.hidden_states,
+            attentions=outputs.attentions,
+            image_hidden_states=image_hidden_states,
+        )
+
+
+class ModernVBertPredictionHead(nn.Module):
+    def __init__(self, config: ModernVBertConfig):
+        super().__init__()
+        self.config = config
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size, config.classifier_bias)
+        self.act = ACT2FN[config.classifier_activation]
+        self.norm = nn.LayerNorm(config.hidden_size, eps=config.norm_eps, bias=config.norm_bias)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return self.norm(self.act(self.dense(hidden_states)))
+
+
+@auto_docstring
+class ModernVBertForMaskedLM(ModernVBertPreTrainedModel):
+    _tied_weights_keys = {"lm_head.weight": "model.text_model.embeddings.tok_embeddings.weight"}
+
+    def __init__(self, config: ModernVBertConfig):
+        super().__init__(config)
+
+        sel
+```
+
+### FILE: modeling_altclip.py
+```python
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+#           This file was automatically generated from src/transformers/models/altclip/modular_altclip.py.
+#               Do NOT edit this file manually as any edits will be overwritten by the generation of
+#             the file from the modular. If any change should be done, please apply the change to the
+#                          modular_altclip.py file directly. One of our CI enforces this.
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+# Copyright 2022 The BAAI Teams Authors and The HuggingFace Inc. team. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+import torch.nn as nn
+
+from ... import initialization as init
+from ...activations import ACT2FN
+from ...masking_utils import create_bidirectional_mask
+from ...modeling_layers import GradientCheckpointingLayer
+from ...modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, BaseModelOutputWithPoolingAndProjection
+from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from ...processing_utils import Unpack
+from ...pytorch_utils import apply_chunking_to_forward
+from ...utils import ModelOutput, TransformersKwargs, auto_docstring, can_return_tuple, torch_int
+from ...utils.generic import merge_with_config_defaults
+from ...utils.output_capturing import capture_outputs
+from .configuration_altclip import AltCLIPConfig, AltCLIPTextConfig, AltCLIPVisionConfig
+
+
+@auto_docstring
+@dataclass
+class AltCLIPOutput(ModelOutput):
+    r"""
+    loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `return_loss` is `True`):
+        Contrastive loss for image-text similarity.
+    logits_per_image (`torch.FloatTensor` of shape `(image_batch_size, text_batch_size)`):
+        The scaled dot product scores between `image_embeds` and `text_embeds`. This represents the image-text
+        similarity scores.
+    logits_per_text (`torch.FloatTensor` of shape `(text_batch_size, image_batch_size)`):
+        The scaled dot product scores between `text_embeds` and `image_embeds`. This represents the text-image
+        similarity scores.
+    text_embeds (`torch.FloatTensor` of shape `(batch_size, output_dim`):
+        The text embeddings obtained by applying the projection layer to the pooled output of [`AltCLIPTextModel`].
+    image_embeds (`torch.FloatTensor` of shape `(batch_size, output_dim`):
+        The image embeddings obtained by applying the projection layer to the pooled output of [`AltCLIPVisionModel`].
+    text_model_output (`BaseModelOutputWithPooling`):
+        The output of the [`AltCLIPTextModel`].
+    vision_model_output (`BaseModelOutputWithPooling`):
+        The output of the [`AltCLIPVisionModel`].
+    """
+
+    loss: torch.FloatTensor | None = None
+    logits_per_image: torch.FloatTensor | None = None
+    logits_per_text: torch.FloatTensor | None = None
+    text_embeds: torch.FloatTensor | None = None
+    image_embeds: torch.FloatTensor | None = None
+    text_model_output: BaseModelOutputWithPooling = None
+    vision_model_output: BaseModelOutputWithPooling = None
+
+    def to_tuple(self) -> tuple[Any]:
+        return tuple(v.to_tuple() if isinstance(v, ModelOutput) else v for v in self.values())
+
+
+class AltRobertaEmbeddings(nn.Module):
+    """Construct the embeddings from word, position and token_type embeddings."""
+
+    def __init__(self, config):
+        super().__init__()
+        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        # position_ids (1, len position emb) is contiguous in memory and exported when serialized
+        self.position_ids = nn.Buffer(torch.arange(config.max_position_embeddings).expand((1, -1)), persistent=False)
+        self.token_type_ids = nn.Buffer(torch.zeros(self.position_ids.size(), dtype=torch.long), persistent=False)
+
+        self.padding_idx = config.pad_token_id
+        self.position_embeddings = nn.Embedding(
+            config.max_position_embeddings, config.hidden_size, padding_idx=self.padding_idx
+        )
+
+    def forward(
+        self,
+        input_ids: torch.LongTensor | None = None,
+        token_type_ids: torch.LongTensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        past_key_values_length: int = 0,
+    ) -> torch.Tensor:
+        if position_ids is None:
+            if input_ids is not None:
+                # Create the position ids from the input token ids. Any padded tokens remain padded.
+                position_ids = self.create_position_ids_from_input_ids(
+                    input_ids, self.padding_idx, past_key_values_length
+                )
+            else:
+                position_ids = self.create_position_ids_from_inputs_embeds(inputs_embeds, self.padding_idx)
+
+        if input_ids is not None:
+            input_shape = input_ids.size()
+        else:
+            input_shape = inputs_embeds.size()[:-1]
+
+        batch_size, seq_length = input_shape
+
+        # Setting the token_type_ids to the registered buffer in constructor where it is all zeros, which usually occurs
+        # when its auto-generated, registered buffer helps users when tracing the model without passing token_type_ids, solves
+        # issue #5664
+        if token_type_ids is None:
+            if hasattr(self, "token_type_ids"):
+                # NOTE: We assume either pos ids to have bsz == 1 (broadcastable) or bsz == effective bsz (input_shape[0])
+                buffered_token_type_ids = self.token_type_ids.to(position_ids.device).expand(position_ids.shape[0], -1)
+                buffered_token_type_ids = torch.gather(buffered_token_type_ids, dim=1, index=position_ids)
+                token_type_ids = buffered_token_type_ids.expand(batch_size, seq_length)
+            else:
+                token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=self.position_ids.device)
+
+        if inputs_embeds is None:
+            inputs_embeds = self.word_embeddings(input_ids)
+        token_type_embeddings = self.token_type_embeddings(token_type_ids)
+        embeddings = inputs_embeds + token_type_embeddings
+
+        position_embeddings = self.position_embeddings(position_ids)
+        embeddings = embeddings + position_embeddings
+
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+        return embeddings
+
+    @staticmethod
+    def create_position_ids_from_inputs_embeds(inputs_embeds, padding_idx):
+        """
+        We are provided embeddings directly. We cannot infer which are padded so just generate sequential position ids.
+
+        Args:
+            inputs_embeds: torch.Tensor
+
+        Returns: torch.Tensor
+        """
+        input_shape = inputs_embeds.size()[:-1]
+        sequence_length = input_shape[1]
+
+        position_ids = torch.arange(
+            padding_idx + 1, sequence_length + padding_idx + 1, dtype=torch.long, device=inputs_embeds.device
+        )
+        return position_ids.unsqueeze(0).expand(input_shape)
+
+    @staticmethod
+    def create_position_ids_from_input_ids(input_ids, padding_idx, past_key_values_length=0):
+        """
+        Replace non-padding symbols with their position numbers. Position numbers begin at padding_idx+1. Padding symbols
+        are ignored. This is modified from fairseq's `utils.make_positions`.
+
+        Args:
+            x: torch.Tensor x:
+
+        Returns: torch.Tensor
+        """
+        # The series of casts and type-conversions here are carefully balanced to both work with ONNX export and XLA.
+        mask = input_ids.ne(padding_idx).int()
+        incremental_indices = (torch.cumsum(mask, dim=1).type_as(mask) + past_key_values_length) * mask
+        return incremental_indices.long() + padding_idx
+
+
+def eager_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dropout: float = 0.0,
+    **kwargs,
+):
+    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
+
+    attn_output = torch.matmul(attn_weights, value)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+    return attn_output, attn_weights
+
+
+class AltRobertaSelfAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        if config.hidden_size % config.num_attention_heads != 0 and not hasattr(config, "embedding_size"):
+            raise ValueError(
+                f"The hidden size ({config.hidden_size}) is not a multiple of the number of attention "
+                f"heads ({config.num_attention_heads})"
+            )
+
+        self.config = config
+        self.num_attention_heads = config.num_attention_heads
+        self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
+        self.all_head_size = self.num_attention_heads * self.attention_head_size
+
+        self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        self.key = nn.Linear(config.hidden_size, self.all_head_size)
+        self.value = nn.Linear(config.hidden_size, self.all_head_size)
+
+        self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.attention_dropout = config.attention_probs_dropout_prob
+        self.scaling = self.attention_head_size**-0.5
+        self.is_causal = False
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.FloatTensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.attention_head_size)
+
+        query_states = self.query(hidden_states).view(hidden_shape).transpose(1, 2)
+        key_states = self.key(hidden_states).view(hidden_shape).transpose(1, 2)
+        value_states = self.value(hidden_states).view(hidden_shape).transpose(1, 2)
+
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
+
+        attn_output, attn_weights = attention_interface(
+            self,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            dropout=0.0 if not self.training else self.attention_dropout,
+            scaling=self.scaling,
+            **kwargs,
+        )
+
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        return attn_output, attn_weights
+
+
+class AltRobertaSelfOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+
+class AltRobertaAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.self = AltRobertaSelfAttention(config)
+        self.output = AltRobertaSelfOutput(config)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.FloatTensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> torch.Tensor:
+        residual = hidden_states
+        hidden_states, _ = self.self(
+            hidden_states,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+        hidden_states = self.output(hidden_states, residual)
+        return hidden_states
+
+
+class AltRobertaIntermediate(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        if isinstance(config.hidden_act, str):
+            self.intermediate_act_fn = ACT2FN[config.hidden_act]
+        else:
+            self.intermediate_act_fn = config.hidden_act
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.intermediate_act_fn(hidden_states)
+        return hidden_states
+
+
+class AltRobertaOutput(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+        self.dropout = nn.Dropout(config.hidden_dropout_prob)
+
+    def forward(self, hidden_states: torch.Tensor, input_tensor: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)
+        return hidden_states
+
+
+class AltRobertaLayer(GradientCheckpointingLayer):
+    def __init__(self, config):
+        super().__init__()
+        self.chunk_size_feed_forward = config.chunk_size_feed_forward
+        self.seq_len_dim = 1
+        self.attention = AltRobertaAttention(config)
+        self.intermediate = AltRobertaIntermediate(config)
+        self.output = AltRobertaOutput(config)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.FloatTensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> torch.Tensor:
+        hidden_states = self.attention(
+            hidden_states,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+
+        hidden_states = apply_chunking_to_forward(
+            self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, hidden_states
+        )
+
+        return hidden_states
+
+    def feed_forward_chunk(self, attention_output):
+        intermediate_output = self.intermediate(attention_output)
+        layer_output = self.output(intermediate_output, attention_output)
+        return layer_output
+
+
+class AltRobertaEncoder(nn.Module):
+    """
+    Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
+    [`AltRobertaEncoderLayer`].
+
+    Args:
+        config: AltCLIPTextConfig
+    """
+
+    def __init__(self, config: AltCLIPTextConfig):
+        super().__init__()
+        self.config = config
+        self.layers = nn.ModuleList([AltRobertaLayer(config) for _ in range(config.num_hidden_layers)])
+        self.gradient_checkpointing = False
+
+    def forward(
+        self,
+        inputs_embeds,
+        attention_mask: torch.Tensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> BaseModelOutput:
+        hidden_states = inputs_embeds
+        for encoder_layer in self.layers:
+            hidden_states = encoder_layer(
+                hidden_states,
+                attention_mask,
+                **kwargs,
+            )
+
+        return BaseModelOutput(
+            last_hidden_state=hidden_states,
+        )
+
+
+class AltRobertaPooler(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.activation = nn.Tanh()
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # We "pool" the model by simply taking the hidden state corresponding
+        # to the first token.
+        first_token_tensor = hidden_states[:, 0]
+        pooled_output = self.dense(first_token_tensor)
+        pooled_output = self.activation(pooled_output)
+        return pooled_output
+
+
+class AltCLIPAttention(nn.Module):
+    """Multi-headed attention from 'Attention Is All You Need' paper"""
+
+    def __init__(self, config: AltCLIPVisionConfig | AltCLIPTextConfig):
+        super().__init__()
+        self.config = config
+        self.embed_dim = config.hidden_size
+        self.num_heads = config.num_attention_heads
+        self.head_dim = self.embed_dim // self.num_heads
+        self.scale = self.head_dim**-0.5
+        self.dropout = config.attention_dropout
+        self.is_causal = False
+
+        self.k_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.v_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.q_proj = nn.Linear(self.embed_dim, self.embed_dim)
+        self.out_proj = nn.Linear(self.embed_dim, self.embed_dim)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        """Input shape: Batch x Time x Channel"""
+
+        input_shape = hidden_states.shape[:-1]
+
+        hidden_shape = (*input_shape, -1, self.head_dim)
+        queries = self.q_proj(hidden_states)
+        keys = self.k_proj(hidden_states)
+        values = self.v_proj(hidden_states)
+
+        queries = queries.view(hidden_shape).transpose(1, 2)
+        keys = keys.view(hidden_shape).transpose(1, 2)
+        values = values.view(hidden_shape).transpose(1, 2)
+
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
+
+        attn_output, attn_weights = attention_interface(
+            self,
+            queries,
+            keys,
+            values,
+            attention_mask,
+            scaling=self.scale,
+            dropout=0.0 if not self.training else self.dropout,
+            **kwargs,
+        )
+
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        attn_output = self.out_proj(attn_output)
+
+        return attn_output, attn_weights
+
+
+class AltCLIPMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.activation_fn = ACT2FN[config.hidden_act]
+        self.fc1 = nn.Linear(config.hidden_size, config.intermediate_size)
+        self.fc2 = nn.Linear(config.intermediate_size, config.hidden_size)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.fc1(hidden_states)
+        hidden_states = self.activation_fn(hidden_states)
+        hidden_states = self.fc2(hidden_states)
+        return hidden_states
+
+
+class AltCLIPEncoderLayer(GradientCheckpointingLayer):
+    def __init__(self, config: AltCLIPVisionConfig):
+        super().__init__()
+        self.embed_dim = config.hidden_size
+        self.self_attn = AltCLIPAttention(config)
+        self.layer_norm1 = nn.LayerNorm(self.embed_dim, eps=config.layer_norm_eps)
+        self.mlp = AltCLIPMLP(config)
+        self.layer_norm2 = nn.LayerNorm(self.embed_dim, eps=config.layer_norm_eps)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor,
+        
+```
+
+### FILE: modeling_xcodec.py
+```python
+# Copyright 2025 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Transformers Xcodec model."""
+
+import math
+from dataclasses import dataclass
+from functools import lru_cache
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from ... import initialization as init
+from ...audio_utils import conv1d_output_length
+from ...modeling_utils import PreTrainedAudioTokenizerBase
+from ...processing_utils import Unpack
+from ...utils import (
+    ModelOutput,
+    TransformersKwargs,
+    auto_docstring,
+    can_return_tuple,
+)
+from ..auto import AutoModel
+from .configuration_xcodec import XcodecConfig
+
+
+@dataclass
+class XcodecOutput(ModelOutput):
+    """
+    Args:
+        audio_codes (`torch.LongTensor`  of shape `(batch_size, num_quantizers, codes_length)`, *optional*):
+            Discrete code indices computed using `model.encode`.
+        audio_values (`torch.FloatTensor` of shape `(batch_size, channels, num_samples)`, *optional*)
+            Decoded audio values obtained using the decoder part of Xcodec.
+    """
+
+    audio_codes: torch.LongTensor | None = None
+    audio_values: torch.FloatTensor | None = None
+
+
+@dataclass
+class XcodecEncoderOutput(ModelOutput):
+    """
+    Args:
+        audio_codes (`torch.LongTensor`  of shape `(batch_size, num_quantizers, codes_length)`, *optional*):
+            Discrete code indices computed using `model.encode`.
+    """
+
+    audio_codes: torch.LongTensor | None = None
+
+
+@dataclass
+class XcodecDecoderOutput(ModelOutput):
+    """
+    Args:
+        audio_values (`torch.FloatTensor`  of shape `(batch_size, channels, num_samples)`, *optional*):
+            Decoded audio values obtained using the decoder part of Xcodec.
+    """
+
+    audio_values: torch.FloatTensor | None = None
+
+
+class XcodecResidualUnit(nn.Module):
+    """Residual block for SemanticEncoder and SemanticDecoder used in Xcodec."""
+
+    def __init__(self, config: XcodecConfig, in_channels: int, out_channels: int, dilation: int):
+        super().__init__()
+        self.activation = nn.ELU()
+        padding = ((config.unit_kernel_size - 1) // 2) * dilation
+        self.conv1 = nn.Conv1d(
+            in_channels,
+            out_channels,
+            config.unit_kernel_size,
+            stride=1,
+            padding=padding,
+            dilation=dilation,
+            groups=1,
+            bias=False,
+        )
+        self.conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=1, bias=False)
+
+    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+        output_tensor = self.activation(hidden_state)
+        output_tensor = self.conv1(output_tensor)
+        output_tensor = self.activation(output_tensor)
+        output_tensor = self.conv2(output_tensor)
+        return hidden_state + output_tensor
+
+
+class XcodecSemanticEncoderBlock(nn.Module):
+    def __init__(self, config: XcodecConfig, in_channels: int, out_channels: int, stride: int):
+        super().__init__()
+        self.res_units = nn.ModuleList(
+            [XcodecResidualUnit(config, in_channels, in_channels, dilation) for dilation in config.block_dilations]
+        )
+
+        # special case: stride=1, do not use kernel=2
+        kernel = 3 if stride == 1 else (2 * stride)
+        padding = (kernel - 1) // 2
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel, stride=stride, padding=padding, bias=True)
+
+    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+        for unit in self.res_units:
+            hidden_state = unit(hidden_state)
+        hidden_state = self.conv(hidden_state)
+        return hidden_state
+
+
+class SemanticEncoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        if len(config.strides) != len(config.channel_ratios):
+            raise ValueError("Number of strides must match the number of channel_ratios.")
+        self.conv = nn.Conv1d(
+            config.semantic_hidden_size,
+            config.semantic_hidden_size,
+            config.kernel_size,
+            1,
+            config.kernel_size // 2,
+            bias=False,
+        )
+
+        in_channels = config.semantic_hidden_size
+        conv_blocks = []
+        for i, stride in enumerate(config.strides):
+            out_channels = int(config.semantic_hidden_size * config.channel_ratios[i])
+            conv_blocks += [XcodecSemanticEncoderBlock(config, in_channels, out_channels, stride)]
+            in_channels = out_channels
+
+        self.conv_blocks = nn.ModuleList(conv_blocks)
+
+    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+        hidden_state = self.conv(hidden_state)
+        for block in self.conv_blocks:
+            hidden_state = block(hidden_state)
+        return hidden_state
+
+
+class SemanticDecoderBlock(nn.Module):
+    def __init__(self, config: XcodecConfig, in_channels: int, out_channels: int, stride: int):
+        super().__init__()
+        if stride == 1:
+            self.conv = nn.Conv1d(
+                in_channels,
+                out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=True,
+            )
+        else:
+            kernel_size = 2 * stride
+            padding = (stride + 1) // 2
+            output_padding = 1 if stride % 2 == 1 else 0
+            self.conv = nn.ConvTranspose1d(
+                in_channels, out_channels, kernel_size, stride, padding, output_padding, bias=False
+            )
+
+        self.res_units = nn.ModuleList(
+            [XcodecResidualUnit(config, out_channels, out_channels, dilation) for dilation in config.block_dilations]
+        )
+
+    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+        hidden_state = self.conv(hidden_state)
+        for unit in self.res_units:
+            hidden_state = unit(hidden_state)
+        return hidden_state
+
+
+class SemanticDecoder(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.conv1 = nn.Conv1d(
+            in_channels=config.semantic_hidden_size,
+            out_channels=int(config.semantic_hidden_size * config.channel_ratios[0]),
+            kernel_size=config.kernel_size,
+            stride=1,
+            padding=config.kernel_size // 2,
+            bias=False,
+        )
+        conv_blocks = []
+        for i, stride in enumerate(config.strides):
+            in_channels = int(config.semantic_hidden_size * config.channel_ratios[i])
+
+            if i < (len(config.channel_ratios) - 1):
+                out_channels = int(config.semantic_hidden_size * config.channel_ratios[i + 1])
+            else:
+                out_channels = config.semantic_hidden_size
+
+            conv_blocks += [SemanticDecoderBlock(config, in_channels, out_channels, stride)]
+
+        self.conv_blocks = nn.ModuleList(conv_blocks)
+        self.conv2 = nn.Conv1d(
+            config.semantic_hidden_size,
+            config.semantic_hidden_size,
+            config.kernel_size,
+            stride=1,
+            padding=config.kernel_size // 2,
+            bias=False,
+        )
+
+    def forward(self, hidden_state: torch.Tensor) -> torch.Tensor:
+        hidden_state = self.conv1(hidden_state)
+        for block in self.conv_blocks:
+            hidden_state = block(hidden_state)
+        hidden_state = self.conv2(hidden_state)
+        return hidden_state
+
+
+class XcodecEuclideanCodebook(nn.Module):
+    """Codebook with Euclidean distance."""
+
+    def __init__(self, config):
+        super().__init__()
+        embed = torch.zeros(config.codebook_size, config.codebook_dim)
+        self.codebook_size = config.codebook_size
+        self.inited = nn.Buffer(torch.Tensor([True]))
+        self.cluster_size = nn.Buffer(torch.zeros(config.codebook_size))
+        self.embed = nn.Buffer(embed)
+        self.embed_avg = nn.Buffer(embed.clone())
+
+    # Copied from transformers.models.encodec.modeling_encodec.EncodecEuclideanCodebook.quantize
+    def quantize(self, hidden_states):
+        embed = self.embed.t()
+        scaled_states = hidden_states.pow(2).sum(1, keepdim=True)
+        dist = -(scaled_states - 2 * hidden_states @ embed + embed.pow(2).sum(0, keepdim=True))
+        embed_ind = dist.max(dim=-1).indices
+        return embed_ind
+
+    def encode(self, hidden_states):
+        shape = hidden_states.shape
+        hidden_states = hidden_states.reshape((-1, shape[-1]))
+        embed_ind = self.quantize(hidden_states)
+        embed_ind = embed_ind.view(*shape[:-1])
+        return embed_ind
+
+    def decode(self, embed_ind):
+        quantized = F.embedding(embed_ind.to(self.embed.device), self.embed)
+        return quantized
+
+
+class XcodecVectorQuantization(nn.Module):
+    """
+    Vector quantization implementation. Currently supports only euclidean distance.
+    """
+
+    def __init__(self, config: XcodecConfig):
+        super().__init__()
+        self.codebook = XcodecEuclideanCodebook(config)
+
+    # Copied from transformers.models.encodec.modeling_encodec.EncodecVectorQuantization.encode
+    def encode(self, hidden_states):
+        hidden_states = hidden_states.permute(0, 2, 1)
+        embed_in = self.codebook.encode(hidden_states)
+        return embed_in
+
+    # Copied from transformers.models.encodec.modeling_encodec.EncodecVectorQuantization.decode
+    def decode(self, embed_ind):
+        quantize = self.codebook.decode(embed_ind)
+        quantize = quantize.permute(0, 2, 1)
+        return quantize
+
+
+class XcodecResidualVectorQuantization(nn.Module):
+    """
+    Residual vector quantization implementation. Follows Algorithm 1 in https://huggingface.co/papers/2107.03312
+    """
+
+    def __init__(self, config: XcodecConfig):
+        super().__init__()
+        self.quantizers = nn.ModuleList([XcodecVectorQuantization(config) for _ in range(config.num_quantizers)])
+        self.frame_rate = config.frame_rate
+        self.codebook_size = config.codebook_size
+        self.num_quantizers = config.num_quantizers
+
+    def get_bandwidth_per_quantizer(self):
+        """Return bandwidth per quantizer."""
+        return math.log2(self.codebook_size) * self.frame_rate / 1000
+
+    def get_num_quantizers_for_bandwidth(self, bandwidth=None) -> int:
+        """Return num_quantizers based on specified target bandwidth."""
+        bw_per_q = self.get_bandwidth_per_quantizer()
+        num_quantizers = self.num_quantizers
+        if bandwidth is not None and bandwidth > 0.0:
+            num_quantizers = int(max(1, math.floor(bandwidth / bw_per_q)))
+        return num_quantizers
+
+    def encode(self, embeddings: torch.Tensor, bandwidth=None) -> torch.Tensor:
+        """
+        Encode the input tensor into discrete indices using RVQ, with the number of quantizers selected based on the given bandwidth.
+        Each quantizer /codebook residually quantizes the input and returns the nearest indices in terms of Euclidean distance.
+        """
+        num_quantizers = self.get_num_quantizers_for_bandwidth(bandwidth)
+        residual = embeddings
+        all_indices = []
+        for quantizer in self.quantizers[:num_quantizers]:
+            indices = quantizer.encode(residual)
+            quantized = quantizer.decode(indices)
+            residual = residual - quantized
+            all_indices.append(indices)
+        out_indices = torch.stack(all_indices)
+        return out_indices
+
+    def decode(self, codes: torch.Tensor) -> torch.Tensor:
+        """Decode the given codes to their quantized representation."""
+        quantized_out = torch.full((), 0.0, device=codes.device)
+        for i, indices in enumerate(codes):
+            quantizer = self.quantizers[i]
+            quantized = quantizer.decode(indices)
+            quantized_out = quantized_out + quantized.to(codes.device)
+        return quantized_out
+
+
+@auto_docstring
+class XcodecPreTrainedModel(PreTrainedAudioTokenizerBase):
+    """
+    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
+    models.
+    """
+
+    config_class = XcodecConfig
+    base_model_prefix = "xcodec"
+    main_input_name = "input_values"
+    input_modalities = "audio"
+    _no_split_modules = ["XcodecResidualVectorQuantization"]
+
+    @torch.no_grad()
+    def _init_weights(self, module):
+        """Initialize the weights"""
+        if isinstance(module, nn.Linear):
+            init.normal_(module.weight, mean=0.0, std=self.config.initializer_range)
+            if module.bias is not None:
+                init.zeros_(module.bias)
+        elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
+            init.zeros_(module.bias)
+            init.ones_(module.weight)
+        elif isinstance(module, nn.Conv1d):
+            init.kaiming_normal_(module.weight)
+            if module.bias is not None:
+                k = math.sqrt(module.groups / (module.in_channels * module.kernel_size[0]))
+                init.uniform_(module.bias, a=-k, b=k)
+        elif module.__class__.__name__ == "Snake1d":
+            init.ones_(module.alpha)
+        elif isinstance(module, nn.ConvTranspose1d):
+            module.reset_parameters()
+        elif isinstance(module, nn.Embedding):
+            init.normal_(module.weight, mean=0.0, std=0.02)
+        elif isinstance(module, XcodecModel):
+            # The conv1d are not handled correctly, as `self.acoustic_encoder/decoder` are initialized from a PreTrainedModel,
+            # but then only the submodules are used (which are not PreTrainedModels...) -> here we reinit them as in DacModel
+            for submodule in module.acoustic_encoder.modules():
+                if isinstance(submodule, nn.Conv1d):
+                    init.trunc_normal_(submodule.weight, std=0.02)
+                    init.constant_(submodule.bias, 0)
+            for submodule in module.acoustic_decoder.modules():
+                if isinstance(submodule, nn.Conv1d):
+                    init.trunc_normal_(submodule.weight, std=0.02)
+                    init.constant_(submodule.bias, 0)
+        elif isinstance(module, XcodecEuclideanCodebook):
+            init.copy_(module.inited, torch.Tensor([True]))
+            init.zeros_(module.cluster_size)
+            init.zeros_(module.embed)
+            init.zeros_(module.embed_avg)
+
+    def apply_weight_norm(self):
+        """Apply weight norm in the acoustic encoder and decoder because the original checkpoint has weight norm applied."""
+        weight_norm = torch.nn.utils.parametrizations.weight_norm
+
+        weight_norm(self.acoustic_encoder.conv1)
+        weight_norm(self.acoustic_encoder.conv2)
+
+        for block in self.acoustic_encoder.block:
+            weight_norm(block.conv1)
+            for res_unit in (block.res_unit1, block.res_unit2, block.res_unit3):
+                weight_norm(res_unit.conv1)
+                weight_norm(res_unit.conv2)
+
+        weight_norm(self.acoustic_decoder.conv1, name="weight")
+        weight_norm(self.acoustic_decoder.conv2, name="weight")
+
+        for block in self.acoustic_decoder.block:
+            weight_norm(block.conv_t1, name="weight")
+            for res_unit in (block.res_unit1, block.res_unit2, block.res_unit3):
+                weight_norm(res_unit.conv1, name="weight")
+                weight_norm(res_unit.conv2, name="weight")
+
+    def remove_weight_norm(self):
+        """Remove the weight norm from the acoustic encoder and decoder."""
+        for module in (self.acoustic_encoder, self.acoustic_decoder):
+            for m in module.modules():
+                try:
+                    torch.nn.utils.remove_weight_norm(m, name="weight")
+                except (ValueError, AttributeError):
+                    pass
+                if hasattr(m, "parametrizations") and "weight" in m.parametrizations:
+                    torch.nn.utils.parametrize.remove_parametrizations(m, "weight", leave_parametrized=True)
+
+    @lru_cache
+    def _get_conv1d_layers(self, module):
+        """
+        Recursively iterate to fetch all Conv1d layers.
+        """
+
+        def get_conv1d_layers_recursive(module: nn.Module):
+            params_list = []
+
+            if isinstance(module, nn.Conv1d):
+                params_list.append(module)
+
+            # Recursively check all child modules
+            for child in module.children():
+                params_list.extend(get_conv1d_layers_recursive(child))
+
+            return params_list
+
+        return tuple(get_conv1d_layers_recursive(module))
+
+    def _get_conv1d_output_lengths(self, input_length, module=None):
+        """
+        For a given module, compute the output length that would be obtained after all Conv1d layers.
+        """
+        if module is None:
+            module = self
+
+        conv1d_layers = self._get_conv1d_layers(module)
+
+        for layer in conv1d_layers:
+            input_length = conv1d_output_length(layer, input_length)
+
+        return input_length
+
+
+@auto_docstring(custom_intro="""The Xcodec neural audio codec model.""")
+class XcodecModel(XcodecPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.config = config
+        self.pad = config.hop_length // 2
+        acoustic_model = AutoModel.from_config(config.acoustic_model_config)
+        self.acoustic_encoder = acoustic_model.encoder
+        self.acoustic_decoder = acoustic_model.decoder
+        self._adjust_dac_decoder(self.acoustic_decoder)
+        self.encoder_semantic = SemanticEncoder(config)
+        self.decoder_semantic = SemanticDecoder(config)
+        self.semantic_model = AutoModel.from_config(config.semantic_model_config).eval()
+        self.fc = nn.Linear(config.hidden_size, config.hidden_size)
+        self.fc1 = nn.Linear(config.hidden_size, config.semantic_model_config.hidden_size)
+        self.fc2 = nn.Linear(config.hidden_size, config.acoustic_model_config.hidden_size)
+        self.quantizer = XcodecResidualVectorQuantization(config)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @staticmethod
+    def _adjust_dac_decoder(decoder: nn.Module):
+        r"""
+        DAC implemented in Xcodec is slightly different from the HF version.
+        DAC in Xcodec adjusts the output padding in every ConvTranspose1d in the decoder and removes
+        the final `nn.Tanh` activation function.
+        """
+        for module in decoder.modules():
+            if isinstance(module, nn.ConvTranspose1d):
+                stride = module.stride[0] if isinstance(module.stride, tuple) else module.stride
+                module.output_padding = (stride % 2,)
+        if hasattr(decoder, "tanh") and isinstance(decoder.tanh, nn.Tanh):
+            decoder.tanh = nn.Identity()
+
+    def _extract_semantic_features(self, input_values: torch.FloatTensor) -> torch.FloatTensor:
+        input_values = input_values[:, 0, :]
+        input_values = F.pad(input_values, (self.pad, self.pad))
+        with torch.no_grad():
+            outputs = self.semantic_model(input_values, output_hidden_states=True)
+            hidden_states = outputs.hidden_states
+
+        stacked = torch.stack(hidden_states, dim=1)
+        return stacked.mean(dim=1)
+
+    @auto_docstring
+    def encode(
+        self,
+        input_values: torch.Tensor,
+        bandwidth: float | None = None,
+        return_dict: bool | None = None,
+    ) -> torch.Tensor | XcodecEncoderOutput:
+        r"""
+        input_values (`torch.FloatTensor` of shape `(batch_size, channels, num_samples)`):
+            Float values of the input audio waveform.
+        bandwidth (`float`, *optional*):
+            The target bandwidth in (kbps)
+```
+
+### FILE: modeling_t5.py
+```python
+# Copyright 2018 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""PyTorch T5 model."""
+
+import copy
+import math
+from collections.abc import Callable
+
+import torch
+from torch import nn
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+
+from ... import initialization as init
+from ...activations import ACT2FN
+from ...cache_utils import Cache, DynamicCache, EncoderDecoderCache
+from ...generation import GenerationMixin
+from ...masking_utils import create_bidirectional_mask, create_causal_mask
+from ...modeling_layers import GradientCheckpointingLayer
+from ...modeling_outputs import (
+    BaseModelOutput,
+    BaseModelOutputWithPastAndCrossAttentions,
+    Seq2SeqLMOutput,
+    Seq2SeqModelOutput,
+    Seq2SeqQuestionAnsweringModelOutput,
+    Seq2SeqSequenceClassifierOutput,
+    TokenClassifierOutput,
+)
+from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import DUMMY_INPUTS, DUMMY_MASK, TransformersKwargs, auto_docstring, logging, torch_compilable_check
+from ...utils.generic import can_return_tuple, merge_with_config_defaults
+from ...utils.output_capturing import OutputRecorder, capture_outputs
+from .configuration_t5 import T5Config
+
+
+logger = logging.get_logger(__name__)
+
+
+class T5LayerNorm(nn.Module):
+    def __init__(self, hidden_size, eps=1e-6):
+        """
+        Construct a layernorm module in the T5 style. No bias and no subtraction of mean.
+        """
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, hidden_states):
+        # T5 uses a layer_norm which only scales and doesn't shift, which is also known as Root Mean
+        # Square Layer Normalization https://huggingface.co/papers/1910.07467 thus variance is calculated
+        # w/o mean and there is no bias. Additionally we want to make sure that the accumulation for
+        # half-precision inputs is done in fp32
+
+        variance = hidden_states.to(torch.float32).pow(2).mean(-1, keepdim=True)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+
+        # convert into half-precision if necessary
+        if self.weight.dtype in [torch.float16, torch.bfloat16]:
+            hidden_states = hidden_states.to(self.weight.dtype)
+
+        return self.weight * hidden_states
+
+
+class T5DenseActDense(nn.Module):
+    def __init__(self, config: T5Config):
+        super().__init__()
+        self.wi = nn.Linear(config.d_model, config.d_ff, bias=False)
+        self.wo = nn.Linear(config.d_ff, config.d_model, bias=False)
+        self.dropout = nn.Dropout(config.dropout_rate)
+        self.act = ACT2FN[config.dense_act_fn]
+
+    def forward(self, hidden_states):
+        hidden_states = self.wi(hidden_states)
+        hidden_states = self.act(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        if (
+            isinstance(self.wo.weight, torch.Tensor)
+            and hidden_states.dtype != self.wo.weight.dtype
+            and self.wo.weight.dtype != torch.int8
+        ):
+            hidden_states = hidden_states.to(self.wo.weight.dtype)
+        hidden_states = self.wo(hidden_states)
+        return hidden_states
+
+
+class T5DenseGatedActDense(nn.Module):
+    def __init__(self, config: T5Config):
+        super().__init__()
+        self.wi_0 = nn.Linear(config.d_model, config.d_ff, bias=False)
+        self.wi_1 = nn.Linear(config.d_model, config.d_ff, bias=False)
+        self.wo = nn.Linear(config.d_ff, config.d_model, bias=False)
+        self.dropout = nn.Dropout(config.dropout_rate)
+        self.act = ACT2FN[config.dense_act_fn]
+
+    def forward(self, hidden_states):
+        hidden_gelu = self.act(self.wi_0(hidden_states))
+        hidden_linear = self.wi_1(hidden_states)
+        hidden_states = hidden_gelu * hidden_linear
+        hidden_states = self.dropout(hidden_states)
+
+        # To make 8bit quantization work for google/flan-t5-xxl, self.wo is kept in float32.
+        # See https://github.com/huggingface/transformers/issues/20287
+        # we also make sure the weights are not in `int8` in case users will force `_keep_in_fp32_modules` to be `None``
+        if (
+            isinstance(self.wo.weight, torch.Tensor)
+            and hidden_states.dtype != self.wo.weight.dtype
+            and self.wo.weight.dtype != torch.int8
+        ):
+            hidden_states = hidden_states.to(self.wo.weight.dtype)
+
+        hidden_states = self.wo(hidden_states)
+        return hidden_states
+
+
+class T5LayerFF(nn.Module):
+    def __init__(self, config: T5Config):
+        super().__init__()
+        if config.is_gated_act:
+            self.DenseReluDense = T5DenseGatedActDense(config)
+        else:
+            self.DenseReluDense = T5DenseActDense(config)
+
+        self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.dropout = nn.Dropout(config.dropout_rate)
+
+    def forward(self, hidden_states):
+        forwarded_states = self.layer_norm(hidden_states)
+        forwarded_states = self.DenseReluDense(forwarded_states)
+        hidden_states = hidden_states + self.dropout(forwarded_states)
+        return hidden_states
+
+
+def eager_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float | None = None,
+    dropout: float = 0.0,
+    position_bias: torch.Tensor | None = None,
+    **kwargs: Unpack[TransformersKwargs],
+):
+    if scaling is None:
+        scaling = query.size(-1) ** -0.5
+
+    # Take the dot product between "query" and "key" to get the raw attention scores.
+    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+
+    if position_bias is not None:
+        attn_weights = attn_weights + position_bias
+
+    if attention_mask is not None:
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
+
+    attn_output = torch.matmul(attn_weights, value)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+
+    return attn_output, attn_weights
+
+
+class T5Attention(nn.Module):
+    def __init__(
+        self,
+        config: T5Config,
+        has_relative_attention_bias=False,
+        layer_idx: int | None = None,
+        is_causal: bool = False,
+    ):
+        super().__init__()
+        self.config = config
+        self.is_decoder = config.is_decoder
+        self.is_causal = is_causal
+        self.has_relative_attention_bias = has_relative_attention_bias
+        self.relative_attention_num_buckets = config.relative_attention_num_buckets
+        self.relative_attention_max_distance = config.relative_attention_max_distance
+        self.d_model = config.d_model
+        self.key_value_proj_dim = config.d_kv
+        self.n_heads = config.num_heads
+        self.dropout = config.dropout_rate
+        self.inner_dim = self.n_heads * self.key_value_proj_dim
+        # T5 folds the relative position bias into the attention scores and does not scale the query/key dot product.
+        self.scaling = 1.0
+        self.layer_idx = layer_idx
+        if layer_idx is None and self.is_decoder:
+            logger.warning_once(
+                f"Instantiating a decoder {self.__class__.__name__} without passing `layer_idx` is not recommended and "
+                "will to errors during the forward call, if caching is used. Please make sure to provide a `layer_idx` "
+                "when creating this class."
+            )
+
+        self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.k = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.v = nn.Linear(self.d_model, self.inner_dim, bias=False)
+        self.o = nn.Linear(self.inner_dim, self.d_model, bias=False)
+
+        if self.has_relative_attention_bias:
+            self.relative_attention_bias = nn.Embedding(self.relative_attention_num_buckets, self.n_heads)
+
+        self.gradient_checkpointing = False
+
+    @staticmethod
+    def _relative_position_bucket(relative_position, bidirectional=True, num_buckets=32, max_distance=128):
+        """
+        Adapted from Mesh Tensorflow:
+        https://github.com/tensorflow/mesh/blob/0cb87fe07da627bf0b7e60475d59f95ed6b5be3d/mesh_tensorflow/transformer/transformer_layers.py#L593
+
+        Translate relative position to a bucket number for relative attention. The relative position is defined as
+        memory_position - query_position, i.e. the distance in tokens from the attending position to the attended-to
+        position. If bidirectional=False, then positive relative positions are invalid. We use smaller buckets for
+        small absolute relative_position and larger buckets for larger absolute relative_positions. All relative
+        positions >=max_distance map to the same bucket. All relative positions <=-max_distance map to the same bucket.
+        This should allow for more graceful generalization to longer sequences than the model has been trained on
+
+        Args:
+            relative_position: an int32 Tensor
+            bidirectional: a boolean - whether the attention is bidirectional
+            num_buckets: an integer
+            max_distance: an integer
+
+        Returns:
+            a Tensor with the same shape as relative_position, containing int32 values in the range [0, num_buckets)
+        """
+        relative_buckets = 0
+        if bidirectional:
+            num_buckets //= 2
+            relative_buckets += (relative_position > 0).to(torch.long) * num_buckets
+            relative_position = torch.abs(relative_position)
+        else:
+            relative_position = -torch.min(relative_position, torch.zeros_like(relative_position))
+        # now relative_position is in the range [0, inf)
+
+        # half of the buckets are for exact increments in positions
+        max_exact = num_buckets // 2
+        is_small = relative_position < max_exact
+
+        # The other half of the buckets are for logarithmically bigger bins in positions up to max_distance
+        relative_position_if_large = max_exact + (
+            torch.log(relative_position.float() / max_exact)
+            / math.log(max_distance / max_exact)
+            * (num_buckets - max_exact)
+        ).to(torch.long)
+        relative_position_if_large = torch.min(
+            relative_position_if_large, torch.full_like(relative_position_if_large, num_buckets - 1)
+        )
+
+        relative_buckets += torch.where(is_small, relative_position, relative_position_if_large)
+        return relative_buckets
+
+    def compute_bias(self, query_length, key_length, device=None, past_seen_tokens=0):
+        """Compute binned relative position bias"""
+        if device is None:
+            device = self.relative_attention_bias.weight.device
+        context_position = torch.arange(query_length, dtype=torch.long, device=device)[:, None] + past_seen_tokens
+        memory_position = torch.arange(key_length, dtype=torch.long, device=device)[None, :]
+        relative_position = memory_position - context_position  # shape (query_length, key_length)
+        relative_position_bucket = self._relative_position_bucket(
+            relative_position,  # shape (query_length, key_length)
+            bidirectional=(not self.is_decoder),
+            num_buckets=self.relative_attention_num_buckets,
+            max_distance=self.relative_attention_max_distance,
+        )
+        values = self.relative_attention_bias(relative_position_bucket)  # shape (query_length, key_length, num_heads)
+        values = values.permute([2, 0, 1]).unsqueeze(0)  # shape (1, num_heads, query_length, key_length)
+        return values
+
+    def forward(
+        self,
+        hidden_states,
+        mask=None,
+        key_value_states=None,
+        position_bias=None,
+        past_key_values=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        """
+        Self-attention (if key_value_states is None) or attention over source sentence (provided by key_value_states).
+        """
+        # Input is (batch_size, seq_length, dim)
+        # Mask is (batch_size, 1, 1, key_length) (non-causal encoder) or (batch_size, 1, seq_length, key_length) (causal decoder)
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.key_value_proj_dim)
+        past_seen_tokens = past_key_values.get_seq_length(self.layer_idx) if past_key_values is not None else 0
+        # We clone here for StaticCache, as we get the value before updating it, but use it after and it's the same ref
+        past_seen_tokens = past_seen_tokens.clone() if isinstance(past_seen_tokens, torch.Tensor) else past_seen_tokens
+
+        # if key_value_states are provided this layer is used as a cross-attention layer for the decoder
+        is_cross_attention = key_value_states is not None
+
+        query_states = self.q(hidden_states).view(hidden_shape).transpose(1, 2)
+
+        # Check is encoder-decoder model is being used. Otherwise we'll get `DynamicCache`
+        is_updated = False
+        if isinstance(past_key_values, EncoderDecoderCache):
+            is_updated = past_key_values.is_updated.get(self.layer_idx)
+            if is_cross_attention:
+                # after the first generated id, we can subsequently re-use all key/value_states from cache
+                curr_past_key_values = past_key_values.cross_attention_cache
+            else:
+                curr_past_key_values = past_key_values.self_attention_cache
+        else:
+            curr_past_key_values = past_key_values
+
+        current_states = key_value_states if is_cross_attention else hidden_states
+        if is_cross_attention and past_key_values is not None and is_updated:
+            # reuse k,v, cross_attentions
+            key_states = curr_past_key_values.layers[self.layer_idx].keys
+            value_states = curr_past_key_values.layers[self.layer_idx].values
+        else:
+            kv_shape = (*current_states.shape[:-1], -1, self.key_value_proj_dim)
+            key_states = self.k(current_states).view(kv_shape).transpose(1, 2)
+            value_states = self.v(current_states).view(kv_shape).transpose(1, 2)
+
+            if past_key_values is not None:
+                key_states, value_states = curr_past_key_values.update(key_states, value_states, self.layer_idx)
+                # set flag that curr layer for cross-attn is already updated so we can re-use in subsequent calls
+                if is_cross_attention and isinstance(past_key_values, EncoderDecoderCache):
+                    past_key_values.is_updated[self.layer_idx] = True
+
+        # compute scores, equivalent of torch.einsum("bnqd,bnkd->bnqk", query_states, key_states), compatible with onnx op>9
+        if position_bias is None:
+            key_length = key_states.shape[-2]
+            if not self.has_relative_attention_bias:
+                position_bias = torch.zeros(
+                    (1, self.n_heads, input_shape[1], key_length),
+                    device=query_states.device,
+                    dtype=query_states.dtype,
+                )
+                if self.gradient_checkpointing and self.training:
+                    position_bias.requires_grad = True
+            else:
+                position_bias = self.compute_bias(
+                    input_shape[1], key_length, device=query_states.device, past_seen_tokens=past_seen_tokens
+                )
+
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
+
+        attn_output, attn_weights = attention_interface(
+            self,
+            query_states,
+            key_states,
+            value_states,
+            mask,
+            dropout=0.0 if not self.training else self.dropout,
+            scaling=self.scaling,
+            position_bias=position_bias,
+            **kwargs,
+        )
+
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        attn_output = self.o(attn_output)
+
+        return attn_output, position_bias, attn_weights
+
+
+class T5LayerSelfAttention(nn.Module):
+    def __init__(self, config, has_relative_attention_bias=False, layer_idx: int | None = None):
+        super().__init__()
+        self.SelfAttention = T5Attention(
+            config,
+            has_relative_attention_bias=has_relative_attention_bias,
+            layer_idx=layer_idx,
+            is_causal=config.is_decoder,
+        )
+        self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.dropout = nn.Dropout(config.dropout_rate)
+
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_bias=None,
+        past_key_values=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        normed_hidden_states = self.layer_norm(hidden_states)
+        attention_output, position_bias, attn_weights = self.SelfAttention(
+            normed_hidden_states,
+            mask=attention_mask,
+            position_bias=position_bias,
+            past_key_values=past_key_values,
+            **kwargs,
+        )
+        attention_output = hidden_states + self.dropout(attention_output)
+        return attention_output, position_bias, attn_weights
+
+
+class T5LayerCrossAttention(nn.Module):
+    def __init__(self, config, layer_idx: int | None = None):
+        super().__init__()
+        self.EncDecAttention = T5Attention(
+            config, has_relative_attention_bias=False, layer_idx=layer_idx, is_causal=False
+        )
+        self.layer_norm = T5LayerNorm(config.d_model, eps=config.layer_norm_epsilon)
+        self.dropout = nn.Dropout(config.dropout_rate)
+
+    def forward(
+        self,
+        hidden_states,
+        key_value_states,
+        attention_mask=None,
+        position_bias=None,
+        past_key_values=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        normed_hidden_states = self.layer_norm(hidden_states)
+        attention_output, position_bias, attn_weights = self.EncDecAttention(
+            normed_hidden_states,
+            mask=attention_mask,
+            key_value_states=key_value_states,
+            position_bias=position_bias,
+            past_key_values=past_key_values,
+            **kwargs,
+        )
+        layer_output = hidden_states + self.dropout(attention_output)
+        return layer_output, position_bias, attn_weights
+
+
+class T5Block(GradientCheckpointingLayer):
+    def __init__(self, config, has_relative_attention_bias=False, layer_idx: int | None = None):
+        super().__init__()
+        self.is_decoder = config.is_decoder
+        self.layer = nn.ModuleList()
+        self.layer.append(
+            T5LayerSelfAttention(config, has_relative_attention_bias=has_relative_attention_bias, layer_idx=layer_idx)
+        )
+        if self.is_decoder:
+            self.layer.append(T5LayerCrossAttention(config, layer_idx=layer_idx))
+
+        self.layer.append(T5LayerFF(config))
+
+    def forward(
+        self,
+        hidden_states,
+        attention_mask=None,
+        position_bias=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        encoder_decoder_position_bias=None,
+        past_key_values=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        hidden_states, self_attn_position_bias, _ = self.layer[0](
+            hidden_states,
+            attention_mask=a
+```
+
+### FILE: modeling_ctrl.py
+```python
+# Copyright 2018 Salesforce and HuggingFace Inc. team.
+# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""PyTorch CTRL model."""
+
+from collections.abc import Callable
+
+import numpy as np
+import torch
+from torch import nn
+from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
+
+from ... import initialization as init
+from ...cache_utils import Cache, DynamicCache
+from ...generation import GenerationMixin
+from ...masking_utils import create_causal_mask
+from ...modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast, SequenceClassifierOutput
+from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import (
+    TransformersKwargs,
+    auto_docstring,
+    can_return_tuple,
+    logging,
+)
+from ...utils.generic import merge_with_config_defaults
+from ...utils.output_capturing import capture_outputs
+from .configuration_ctrl import CTRLConfig
+
+
+logger = logging.get_logger(__name__)
+
+
+def angle_defn(pos, i, d_model_size):
+    angle_rates = 1 / torch.pow(10000, (2 * (i // 2)) / d_model_size)
+    return pos * angle_rates
+
+
+def positional_encoding(position, d_model_size, dtype):
+    # create the sinusoidal pattern for the positional encoding
+    angle_rads = angle_defn(
+        torch.arange(position, dtype=torch.int64).to(dtype).unsqueeze(1),
+        torch.arange(d_model_size, dtype=torch.int64).to(dtype).unsqueeze(0),
+        d_model_size,
+    )
+
+    sines = torch.sin(angle_rads[:, 0::2])
+    cosines = torch.cos(angle_rads[:, 1::2])
+
+    pos_encoding = torch.cat([sines, cosines], dim=-1)
+    return pos_encoding
+
+
+# Copied from transformers.models.bert.modeling_bert.eager_attention_forward
+def eager_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float | None = None,
+    dropout: float = 0.0,
+    **kwargs: Unpack[TransformersKwargs],
+):
+    if scaling is None:
+        scaling = query.size(-1) ** -0.5
+
+    # Take the dot product between "query" and "key" to get the raw attention scores.
+    attn_weights = torch.matmul(query, key.transpose(2, 3)) * scaling
+
+    if attention_mask is not None:
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
+
+    attn_output = torch.matmul(attn_weights, value)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+
+    return attn_output, attn_weights
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, config, layer_idx=None):
+        super().__init__()
+        self.config = config
+        self.num_heads = config.n_head
+        self.d_model_size = config.n_embd
+        self.layer_idx = layer_idx
+        self.is_causal = True
+
+        self.head_dim = int(self.d_model_size / self.num_heads)
+        self.scaling = self.head_dim**-0.5
+
+        self.Wq = nn.Linear(self.d_model_size, self.d_model_size)
+        self.Wk = nn.Linear(self.d_model_size, self.d_model_size)
+        self.Wv = nn.Linear(self.d_model_size, self.d_model_size)
+
+        self.dense = nn.Linear(self.d_model_size, self.d_model_size)
+
+    def forward(
+        self,
+        v,
+        k,
+        q,
+        layer_past=None,
+        attention_mask=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        input_shape = q.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
+
+        query_states = self.Wq(q).view(hidden_shape).transpose(1, 2)
+        key_states = self.Wk(k).view(hidden_shape).transpose(1, 2)
+        value_states = self.Wv(v).view(hidden_shape).transpose(1, 2)
+
+        if layer_past is not None:
+            key_states, value_states = layer_past.update(key_states, value_states, self.layer_idx)
+
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
+
+        attn_output, attn_weights = attention_interface(
+            self,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            dropout=0.0,
+            scaling=self.scaling,
+            **kwargs,
+        )
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        attn_output = self.dense(attn_output)
+        return attn_output, attn_weights
+
+
+def point_wise_feed_forward_network(d_model_size, dff):
+    return nn.Sequential(nn.Linear(d_model_size, dff), nn.ReLU(), nn.Linear(dff, d_model_size))
+
+
+class EncoderLayer(nn.Module):
+    def __init__(self, config, layer_idx=None):
+        super().__init__()
+
+        self.multi_head_attention = MultiHeadAttention(config, layer_idx=layer_idx)
+        self.ffn = point_wise_feed_forward_network(config.n_embd, config.dff)
+
+        self.layernorm1 = nn.LayerNorm(config.n_embd, eps=1e-6)
+        self.layernorm2 = nn.LayerNorm(config.n_embd, eps=1e-6)
+
+        self.dropout1 = nn.Dropout(config.resid_pdrop)
+        self.dropout2 = nn.Dropout(config.resid_pdrop)
+
+    def forward(
+        self,
+        x,
+        layer_past=None,
+        attention_mask=None,
+        **kwargs: Unpack[TransformersKwargs],
+    ):
+        normed = self.layernorm1(x)
+        attn_output, _ = self.multi_head_attention(
+            normed,
+            normed,
+            normed,
+            layer_past=layer_past,
+            attention_mask=attention_mask,
+            **kwargs,
+        )
+        attn_output = self.dropout1(attn_output)
+        out1 = x + attn_output
+
+        out2 = self.layernorm2(out1)
+        ffn_output = self.ffn(out2)
+        ffn_output = self.dropout2(ffn_output)
+        out2 = out1 + ffn_output
+
+        return out2
+
+
+@auto_docstring
+class CTRLPreTrainedModel(PreTrainedModel):
+    config: CTRLConfig
+    base_model_prefix = "transformer"
+    _supports_flash_attn = True
+    _supports_sdpa = True
+    _supports_flex_attn = True
+    _supports_attention_backend = True
+    _can_record_outputs = {
+        "hidden_states": EncoderLayer,
+        "attentions": MultiHeadAttention,
+    }
+
+    def _init_weights(self, module):
+        super()._init_weights(module)
+        if isinstance(module, CTRLModel):
+            init.copy_(
+                module.pos_encoding, positional_encoding(module.config.n_positions, module.d_model_size, torch.float)
+            )
+
+
+@auto_docstring
+class CTRLModel(CTRLPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.d_model_size = config.n_embd
+        self.num_layers = config.n_layer
+
+        self.w = nn.Embedding(config.vocab_size, config.n_embd)
+
+        self.dropout = nn.Dropout(config.embd_pdrop)
+        self.h = nn.ModuleList([EncoderLayer(config, layer_idx=i) for i in range(config.n_layer)])
+        self.layernorm = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+
+        self.pos_encoding = nn.Buffer(
+            positional_encoding(config.n_positions, self.d_model_size, torch.float), persistent=False
+        )
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def get_input_embeddings(self):
+        return self.w
+
+    def set_input_embeddings(self, new_embeddings):
+        self.w = new_embeddings
+
+    @merge_with_config_defaults
+    @capture_outputs
+    @auto_docstring
+    def forward(
+        self,
+        input_ids: torch.LongTensor | None = None,
+        past_key_values: Cache | None = None,
+        attention_mask: torch.FloatTensor | None = None,
+        token_type_ids: torch.LongTensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        use_cache: bool | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> BaseModelOutputWithPast:
+        r"""
+        Example:
+
+        ```python
+        >>> from transformers import AutoTokenizer, CTRLModel
+        >>> import torch
+
+        >>> tokenizer = AutoTokenizer.from_pretrained("Salesforce/ctrl")
+        >>> model = CTRLModel.from_pretrained("Salesforce/ctrl")
+
+        >>> # CTRL was trained with control codes as the first token
+        >>> inputs = tokenizer("Opinion My dog is cute", return_tensors="pt")
+        >>> assert inputs["input_ids"][0, 0].item() in tokenizer.control_codes.values()
+
+        >>> outputs = model(**inputs)
+
+        >>> last_hidden_states = outputs.last_hidden_state
+        >>> list(last_hidden_states.shape)
+        [1, 5, 1280]
+        ```"""
+        use_cache = use_cache if use_cache is not None else self.config.use_cache
+
+        if input_ids is not None and inputs_embeds is not None:
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
+        if input_ids is not None:
+            inputs_embeds = self.w(input_ids)
+        elif inputs_embeds is None:
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
+
+        input_shape = inputs_embeds.shape[:-1]
+        batch_size = inputs_embeds.shape[0]
+        device = inputs_embeds.device
+
+        if use_cache and past_key_values is None:
+            past_key_values = DynamicCache(config=self.config)
+
+        past_length = past_key_values.get_seq_length() if past_key_values is not None else 0
+        if position_ids is None:
+            position_ids = torch.arange(past_length, input_shape[-1] + past_length, dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0)
+
+        if token_type_ids is not None:
+            token_type_embeds = self.w(token_type_ids)
+            token_type_embeds *= np.sqrt(self.d_model_size)
+        else:
+            token_type_embeds = 0
+
+        if attention_mask is not None and isinstance(attention_mask, torch.Tensor) and attention_mask.ndim < 4:
+            attention_mask = attention_mask.view(batch_size, -1)
+
+        causal_mask = create_causal_mask(
+            config=self.config,
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            past_key_values=past_key_values,
+            position_ids=position_ids,
+        )
+
+        inputs_embeds *= np.sqrt(self.d_model_size)
+
+        # `self.pos_encoding` won't be sent to the correct device and dtype along the model, so we do it manually.
+        self.pos_encoding = self.pos_encoding.to(device=device, dtype=inputs_embeds.dtype)
+        pos_embeds = self.pos_encoding[position_ids, :]
+
+        hidden_states = inputs_embeds + pos_embeds + token_type_embeds
+
+        hidden_states = self.dropout(hidden_states)
+
+        for h in self.h:
+            hidden_states = h(
+                hidden_states,
+                layer_past=past_key_values,
+                attention_mask=causal_mask,
+                **kwargs,
+            )
+
+        hidden_states = self.layernorm(hidden_states)
+
+        return BaseModelOutputWithPast(
+            last_hidden_state=hidden_states,
+            past_key_values=past_key_values if use_cache else None,
+        )
+
+
+@auto_docstring(
+    custom_intro="""
+    The CTRL Model transformer with a language modeling head on top (linear layer with weights tied to the input
+    embeddings).
+    """
+)
+class CTRLLMHeadModel(CTRLPreTrainedModel, GenerationMixin):
+    _tied_weights_keys = {"lm_head.weight": "transformer.w.weight"}
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.transformer = CTRLModel(config)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=True)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @can_return_tuple
+    @auto_docstring
+    def forward(
+        self,
+        input_ids: torch.LongTensor | None = None,
+        past_key_values: Cache | None = None,
+        attention_mask: torch.FloatTensor | None = None,
+        token_type_ids: torch.LongTensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        labels: torch.LongTensor | None = None,
+        use_cache: bool | None = None,
+        logits_to_keep: int | torch.Tensor = 0,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> CausalLMOutputWithPast:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+            Labels for language modeling. Note that the labels **are shifted** inside the model, i.e. you can set
+            `labels = input_ids` Indices are selected in `[-100, 0, ..., config.vocab_size]` All labels set to `-100`
+            are ignored (masked), the loss is only computed for labels in `[0, ..., config.vocab_size]`
+
+        Example:
+
+        ```python
+        >>> import torch
+        >>> from transformers import AutoTokenizer, CTRLLMHeadModel
+
+        >>> tokenizer = AutoTokenizer.from_pretrained("Salesforce/ctrl")
+        >>> model = CTRLLMHeadModel.from_pretrained("Salesforce/ctrl")
+
+        >>> # CTRL was trained with control codes as the first token
+        >>> inputs = tokenizer("Wikipedia The llama is", return_tensors="pt")
+        >>> assert inputs["input_ids"][0, 0].item() in tokenizer.control_codes.values()
+
+        >>> sequence_ids = model.generate(inputs["input_ids"])
+        >>> sequences = tokenizer.batch_decode(sequence_ids)
+        >>> sequences
+        ['Wikipedia The llama is a member of the family Bovidae. It is native to the Andes of Peru,']
+
+        >>> outputs = model(**inputs, labels=inputs["input_ids"])
+        >>> round(outputs.loss.item(), 2)
+        9.21
+
+        >>> list(outputs.logits.shape)
+        [1, 5, 246534]
+        ```"""
+        transformer_outputs = self.transformer(
+            input_ids,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            **kwargs,
+        )
+
+        hidden_states = transformer_outputs[0]
+        # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
+        slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
+        logits = self.lm_head(hidden_states[:, slice_indices, :])
+
+        loss = None
+        if labels is not None:
+            loss = self.loss_function(
+                logits,
+                labels,
+                vocab_size=self.config.vocab_size,
+                **kwargs,
+            )
+
+        return CausalLMOutputWithPast(
+            loss=loss,
+            logits=logits,
+            past_key_values=transformer_outputs.past_key_values,
+            hidden_states=transformer_outputs.hidden_states,
+            attentions=transformer_outputs.attentions,
+        )
+
+    def prepare_inputs_for_generation(
+        self, input_ids, past_key_values=None, use_cache=None, is_first_iteration=False, **kwargs
+    ):
+        # Overwritten -- `token_type_ids` are created in custom way inside model`
+
+        model_inputs = super().prepare_inputs_for_generation(
+            input_ids,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            is_first_iteration=is_first_iteration,
+            **kwargs,
+        )
+
+        # token_type_ids are computed on CTRLModel.forward()
+        model_inputs.pop("token_type_ids", None)
+
+        return model_inputs
+
+
+@auto_docstring(
+    custom_intro="""
+    The CTRL Model transformer with a sequence classification head on top (linear layer).
+    [`CTRLForSequenceClassification`] uses the last token in order to do the classification, as other causal models
+    (e.g. GPT-2) do. Since it does classification on the last token, it requires to know the position of the last
+    token. If a `pad_token_id` is defined in the configuration, it finds the last token that is not a padding token in
+    each row. If no `pad_token_id` is defined, it simply takes the last value in each row of the batch. Since it cannot
+    guess the padding tokens when `inputs_embeds` are passed instead of `input_ids`, it does the same (take the last
+    value in each row of the batch).
+    """
+)
+class CTRLForSequenceClassification(CTRLPreTrainedModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.num_labels = config.num_labels
+        self.transformer = CTRLModel(config)
+        self.classifier = nn.Linear(config.n_embd, self.num_labels, bias=False)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @can_return_tuple
+    @auto_docstring
+    def forward(
+        self,
+        input_ids: torch.LongTensor | None = None,
+        past_key_values: Cache | None = None,
+        attention_mask: torch.FloatTensor | None = None,
+        token_type_ids: torch.LongTensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        inputs_embeds: torch.FloatTensor | None = None,
+        labels: torch.LongTensor | None = None,
+        use_cache: bool | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> SequenceClassifierOutput:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
+            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
+            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+
+        Example of single-label classification:
+
+        ```python
+        >>> import torch
+        >>> from transformers import AutoTokenizer, CTRLForSequenceClassification
+
+        >>> tokenizer = AutoTokenizer.from_pretrained("Salesforce/ctrl")
+        >>> model = CTRLForSequenceClassification.from_pretrained("Salesforce/ctrl")
+
+        >>> # CTRL was trained with control codes as the first token
+        >>> inputs = tokenizer("Opinion My dog is cute", return_tensors="pt")
+        >>> assert inputs["input_ids"][0, 0].item() in tokenizer.control_codes.values()
+
+        >>> with torch.no_grad():
+        ...     logits = model(**inputs).logits
+
+        >>> predicted_class_id = logits.argmax().item()
+        >>> model.config.id2label[predicted_class_id]
+        'LABEL_0'
+        ```
+
+        ```python
+        >>> import torch
+
+        >>> torch.manual_seed(42)  # doctest: +IGNORE_RESULT
+        >>> # To train a model on `num_labels` classes, you can pass `num_labels=num_labels` to `.from_pretrained(...)`
+        >>> num_labels = len(model.config.id2label)
+        >>> model = CTRLForSequenceClassification.from_pretrained("Salesforce/ctrl", num_labels=num_labels)
+
+        >>> labels = torch.tensor(1)
+        >>> loss = model(**inputs, labels=labels).loss
+        >>> round(loss.item(), 2)
+        0.93
+        ```
+
+        Example of multi-label classification:
+
+        ```python
+        >>> import torch
+        >>> from transformers import AutoTokenizer, CTRLForSequenceClassification
+
+        >>> tokenizer = AutoTokenizer.from_pretrained("Salesforce/ctrl")
+        >>> model = CTRLForSequenceClassification.from_pretrained(
+        ...     "Salesforce/ctrl", problem_type="multi_label_classification"
+        ... )
+
+        >>> # CTRL was trained with control codes as the first token
+        >>> inputs = tokenizer("Opinion My dog is cute", return_tensors="pt")
+        >>> assert inputs["input_
+```
+
+### FILE: modeling_emu3.py
+```python
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+#           This file was automatically generated from src/transformers/models/emu3/modular_emu3.py.
+#               Do NOT edit this file manually as any edits will be overwritten by the generation of
+#             the file from the modular. If any change should be done, please apply the change to the
+#                          modular_emu3.py file directly. One of our CI enforces this.
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+# Copyright 2024 HuggingFace Inc. team. All rights reserved.
+#
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import cached_property
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from ... import initialization as init
+from ...activations import ACT2FN
+from ...cache_utils import Cache, DynamicCache
+from ...generation import GenerationMixin
+from ...integrations import use_kernel_forward_from_hub, use_kernelized_func
+from ...masking_utils import create_causal_mask
+from ...modeling_layers import GradientCheckpointingLayer
+from ...modeling_outputs import BaseModelOutputWithPast, BaseModelOutputWithPooling, CausalLMOutputWithPast
+from ...modeling_rope_utils import ROPE_INIT_FUNCTIONS, dynamic_rope_update
+from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import TransformersKwargs, auto_docstring, can_return_tuple, torch_compilable_check
+from ...utils.deprecation import deprecate_kwarg
+from ...utils.generic import maybe_autocast, merge_with_config_defaults
+from ...utils.output_capturing import capture_outputs
+from .configuration_emu3 import Emu3Config, Emu3TextConfig, Emu3VQVAEConfig
+
+
+@auto_docstring
+@dataclass
+class Emu3VQVAEModelOutput(BaseModelOutputWithPooling):
+    r"""
+    image_tokens (`torch.LongTensor` of shape `(batch_size, config.vocab_size`):
+        Indices of the image tokens predicted by the VQ-VAE model.
+    """
+
+    image_tokens: torch.LongTensor | None = None
+
+
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+@use_kernel_forward_from_hub("rotary_pos_emb")
+def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=1):
+    """Applies Rotary Position Embedding to the query and key tensors.
+
+    Args:
+        q (`torch.Tensor`): The query tensor.
+        k (`torch.Tensor`): The key tensor.
+        cos (`torch.Tensor`): The cosine part of the rotary embedding.
+        sin (`torch.Tensor`): The sine part of the rotary embedding.
+        unsqueeze_dim (`int`, *optional*, defaults to 1):
+            The 'unsqueeze_dim' argument specifies the dimension along which to unsqueeze cos[position_ids] and
+            sin[position_ids] so that they can be properly broadcasted to the dimensions of q and k. For example, note
+            that cos[position_ids] and sin[position_ids] have the shape [batch_size, seq_len, head_dim]. Then, if q and
+            k have the shape [batch_size, heads, seq_len, head_dim], then setting unsqueeze_dim=1 makes
+            cos[position_ids] and sin[position_ids] broadcastable to the shapes of q and k. Similarly, if q and k have
+            the shape [batch_size, seq_len, heads, head_dim], then set unsqueeze_dim=2.
+    Returns:
+        `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
+    """
+    cos = cos.unsqueeze(unsqueeze_dim)
+    sin = sin.unsqueeze(unsqueeze_dim)
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
+
+def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """
+    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
+    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
+    """
+    batch, num_key_value_heads, slen, head_dim = hidden_states.shape
+    if n_rep == 1:
+        return hidden_states
+    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
+    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+
+
+def eager_attention_forward(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dropout: float = 0.0,
+    **kwargs: Unpack[TransformersKwargs],
+):
+    key_states = repeat_kv(key, module.num_key_value_groups)
+    value_states = repeat_kv(value, module.num_key_value_groups)
+
+    attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        attn_weights = attn_weights + attention_mask
+
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
+    attn_output = torch.matmul(attn_weights, value_states)
+    attn_output = attn_output.transpose(1, 2).contiguous()
+
+    return attn_output, attn_weights
+
+
+@use_kernelized_func(apply_rotary_pos_emb)
+class Emu3Attention(nn.Module):
+    """Multi-headed attention from 'Attention Is All You Need' paper"""
+
+    def __init__(self, config: Emu3Config, layer_idx: int):
+        super().__init__()
+        self.config = config
+        self.layer_idx = layer_idx
+        self.head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
+        self.scaling = self.head_dim**-0.5
+        self.attention_dropout = config.attention_dropout
+        self.is_causal = True
+
+        self.q_proj = nn.Linear(
+            config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
+        )
+        self.k_proj = nn.Linear(
+            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
+        )
+        self.v_proj = nn.Linear(
+            config.hidden_size, config.num_key_value_heads * self.head_dim, bias=config.attention_bias
+        )
+        self.o_proj = nn.Linear(
+            config.num_attention_heads * self.head_dim, config.hidden_size, bias=config.attention_bias
+        )
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        position_embeddings: tuple[torch.Tensor, torch.Tensor] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        past_key_values: Cache | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        input_shape = hidden_states.shape[:-1]
+        hidden_shape = (*input_shape, -1, self.head_dim)
+
+        query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+        value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
+
+        cos, sin = position_embeddings
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
+
+        if past_key_values is not None:
+            key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
+
+        attention_interface: Callable = ALL_ATTENTION_FUNCTIONS.get_interface(
+            self.config._attn_implementation, eager_attention_forward
+        )
+
+        attn_output, attn_weights = attention_interface(
+            self,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            dropout=0.0 if not self.training else self.attention_dropout,
+            scaling=self.scaling,
+            **kwargs,
+        )
+
+        attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+        attn_output = self.o_proj(attn_output)
+        return attn_output, attn_weights
+
+
+@use_kernel_forward_from_hub("RMSNorm")
+class Emu3RMSNorm(nn.Module):
+    def __init__(self, hidden_size, eps: float = 1e-6) -> None:
+        """
+        Emu3RMSNorm is equivalent to T5LayerNorm
+        """
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.variance_epsilon = eps
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        input_dtype = hidden_states.dtype
+        hidden_states = hidden_states.to(torch.float32)
+        variance = hidden_states.pow(2).mean(-1, keepdim=True)
+        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
+        return self.weight * hidden_states.to(input_dtype)
+
+    def extra_repr(self):
+        return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
+
+
+class Emu3MLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.hidden_size = config.hidden_size
+        self.intermediate_size = config.intermediate_size
+        self.gate_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
+        self.up_proj = nn.Linear(self.hidden_size, self.intermediate_size, bias=config.mlp_bias)
+        self.down_proj = nn.Linear(self.intermediate_size, self.hidden_size, bias=config.mlp_bias)
+        self.act_fn = ACT2FN[config.hidden_act]
+
+    def forward(self, x):
+        down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+        return down_proj
+
+
+class Emu3DecoderLayer(GradientCheckpointingLayer):
+    def __init__(self, config: Emu3Config, layer_idx: int):
+        super().__init__()
+        self.hidden_size = config.hidden_size
+
+        self.self_attn = Emu3Attention(config=config, layer_idx=layer_idx)
+
+        self.mlp = Emu3MLP(config)
+        self.input_layernorm = Emu3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = Emu3RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.dropout = nn.Dropout(config.attention_dropout)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        past_key_values: Cache | None = None,
+        use_cache: bool | None = False,
+        position_embeddings: tuple[torch.Tensor, torch.Tensor] | None = None,
+        **kwargs: Unpack[TransformersKwargs],
+    ) -> torch.Tensor:
+        residual = hidden_states
+        hidden_states = self.input_layernorm(hidden_states)
+
+        hidden_states, _ = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            use_cache=use_cache,
+            position_embeddings=position_embeddings,
+            **kwargs,
+        )
+        hidden_states = residual + self.dropout(hidden_states)
+
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + self.dropout(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAEVectorQuantizer(nn.Module):
+    """
+    A module for vector quantization using learned embedding vectors.
+
+    This module implements the quantization process similar to the one described in
+    the VQ-VAE (Vector Quantized Variational AutoEncoder) paper. It quantizes continuous
+    input vectors into discrete codebook vectors, which are learned during training.
+    Current implementation improves over previous ones by avoiding costly matrix multiplications
+    and allowing for post-hoc remapping of indices.
+    """
+
+    def __init__(self, config: Emu3VQVAEConfig):
+        super().__init__()
+        self.embedding = nn.Embedding(config.codebook_size, config.embed_dim)
+        self.embedding.weight.data.uniform_(-1.0 / config.codebook_size, 1.0 / config.codebook_size)
+
+    def forward(self, hidden_state: torch.Tensor):
+        batch_size, temporal, channels, height, width = hidden_state.shape
+        hidden_state = hidden_state.permute(0, 1, 3, 4, 2).contiguous()
+        hidden_state_flattened = hidden_state.view(-1, channels)
+
+        # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
+        hidden_state_sum = torch.sum(hidden_state_flattened**2, dim=1, keepdim=True)
+        embedding_sum = torch.sum(self.embedding.weight**2, dim=1)
+
+        # "bd,dn->bn",
+        distances = 2 * torch.matmul(hidden_state_flattened, self.embedding.weight.transpose(0, 1))
+        distances = hidden_state_sum + embedding_sum - distances
+
+        min_encoding_indices = torch.argmin(distances, dim=1)
+        min_encoding_indices = min_encoding_indices.view(batch_size, temporal, height, width)
+        return min_encoding_indices
+
+
+class Emu3VQVAEEncoderConvDownsample(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=2, padding=0)
+
+    def forward(self, hidden_states):
+        # no asymmetric padding in torch conv, must do it ourselves
+        hidden_states = F.pad(hidden_states, pad=(0, 1, 0, 1), mode="constant", value=0)
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAEEncoderConvUpsample(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, in_channels, kernel_size=3, stride=1, padding=1)
+
+    def forward(self, hidden_states):
+        hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest")
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAEConv3d(nn.Module):
+    def __init__(
+        self,
+        in_channel: int,
+        out_channel: int,
+        kernel_size: tuple[int],
+        stride: tuple[int],
+    ):
+        super().__init__()
+
+        padding_sizes = [one_kernel - one_stride for one_kernel, one_stride in zip(kernel_size[1:], stride[1:])]
+        self.padding = ()
+        for pad_size in padding_sizes[::-1]:
+            self.padding += (pad_size // 2 + pad_size % 2, pad_size // 2)
+        self.padding += (2, 0)
+
+        self.conv = nn.Conv3d(
+            in_channel,
+            out_channel,
+            kernel_size,
+            stride=stride,
+        )
+
+    def forward(self, hidden_states: torch.Tensor):
+        hidden_states = F.pad(hidden_states, self.padding)
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAESpatialNorm(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ):
+        super().__init__()
+        self.norm_layer = nn.GroupNorm(
+            num_channels=out_channels,
+            num_groups=32,
+            eps=1e-6,
+            affine=True,
+        )
+
+        self.conv_y = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
+        self.conv_b = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
+
+    def forward(self, hidden_states: torch.Tensor, quant_states: torch.Tensor):
+        quant_states = F.interpolate(quant_states, size=hidden_states.shape[-2:], mode="nearest")
+        hidden_states = self.norm_layer(hidden_states)
+        hidden_states = hidden_states * self.conv_y(quant_states) + self.conv_b(quant_states)
+        return hidden_states
+
+
+class Emu3VQVAETemporalUpsample(nn.Module):
+    def __init__(
+        self,
+        in_channel: int,
+        out_channel: int,
+    ):
+        super().__init__()
+        self.conv = Emu3VQVAEConv3d(
+            in_channel,
+            out_channel,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+        )
+
+    def forward(self, hidden_states: torch.Tensor):
+        batch_size, channels, temporal, height, width = hidden_states.shape
+        hidden_states = hidden_states.permute(0, 1, 3, 4, 2).contiguous().view(batch_size, -1, temporal)
+        hidden_states = F.interpolate(hidden_states, scale_factor=2.0, mode="nearest")
+        hidden_states = hidden_states.view(batch_size, channels, height, width, -1).permute(0, 1, 4, 2, 3).contiguous()
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAETemporalDownsample(nn.Module):
+    def __init__(
+        self,
+        in_channel: int,
+        out_channel: int,
+    ):
+        super().__init__()
+        self.conv = Emu3VQVAEConv3d(
+            in_channel,
+            out_channel,
+            kernel_size=(4, 3, 3),
+            stride=(2, 1, 1),
+        )
+
+    def forward(self, hidden_states: torch.Tensor):
+        hidden_states = self.conv(hidden_states)
+        return hidden_states
+
+
+class Emu3VQVAETemporalResnetBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        out_channels=None,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = in_channels if out_channels is None else out_channels
+
+        self.norm1 = nn.BatchNorm3d(in_channels)
+        self.conv1 = Emu3VQVAEConv3d(
+            in_channels,
+            out_channels,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+        )
+        self.norm2 = nn.BatchNorm3d(out_channels)
+        self.conv2 = Emu3VQVAEConv3d(
+            out_channels,
+            out_channels,
+            kernel_size=(3, 3, 3),
+            stride=(1, 1, 1),
+        )
+        if self.in_channels != self.out_channels:
+            self.nin_shortcut = nn.Conv3d(
+                in_channels,
+                out_channels,
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            )
+
+    def forward(self, hidden_states):
+        residual = hidden_states
+        hidden_states = self.norm1(hidden_states)
+        hidden_states *= torch.sigmoid(hidden_states)
+        hidden_states = self.conv1(hidden_states)
+
+        hidden_states = self.norm2(hidden_states)
+        hidden_states *= torch.sigmoid(hidden_states)
+        hidden_states = self.conv2(hidden_states)
+
+        if self.in_channels != self.out_channels:
+            residual = self.nin_shortcut(residual)
+
+        return residual + hidden_states
+
+
+class Emu3VQVAEResnetBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int | None = None,
+        quant_channels: int | None = None,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        out_channels = in_channels if out_channels is None else out_channels
+        self.out_channels = out_channels
+        self.quant_channels = quant_channels
+
+        if quant_channels is None:
+            self.norm1 = nn.GroupNorm(num_channels=in_channels, num_groups=32, eps=1e-6, affine=True)
+            self.norm2 = nn.GroupNorm(num_channels=out_channels, num_groups=32, eps=1e-6, affine=True)
+        else:
+            self.norm1 = Emu3VQVAESpatialNorm(quant_channels, in_channels)
+            self.norm2 = Emu3VQVAESpatialNorm(quant_channels, out_channels)
+
+        self.conv1 = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
+
+        se
+```
+
+### FILE: modeling_videoprism.py
+```python
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+#           This file was automatically generated from src/transformers/models/videoprism/modular_videoprism.py.
+#               Do NOT edit this file manually as any edits will be overwritten by the generation of
+#             the file from the modular. If any change should be done, please apply the change to the
+#                          modular_videoprism.py file directly. One of our CI enforces this.
+#                🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨
+# Copyright 2026 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from ... import initialization as init
+from ...activations import ACT2FN
+from ...masking_utils import create_causal_mask
+from ...modeling_layers import GradientCheckpointingLayer
+from ...modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, ImageClassifierOutput
+from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from ...processing_utils import Unpack
+from ...utils import ModelOutput, TransformersKwargs, auto_docstring, can_return_tuple, torch_int
+from ...utils.generic import merge_with_config_defaults
+from ...utils.output_capturing import capture_outputs
+from .configuration_videoprism import VideoPrismConfig, VideoPrismTextConfig, VideoPrismVisionConfig
+
+
+@auto_docstring(custom_intro="""Base class for model outputs that include spatial and temporal states.""")
+@dataclass
+class BaseModelOutputWithSpatialAndTemporalStates(BaseModelOutput):
+    r"""
+    last_temporal_hidden_state (`torch.FloatTensor`, *optional*):
+        The last hidden state of the temporal encoder, typically of shape
+        `(batch_size * num_patches, num_frames, hidden_size)`.
+    last_spatial_hidden_state (`torch.FloatTensor`, *optional*):
+        The last hidden state of the spatial encoder, typically of shape
+        `(batch_size * num_frames, num_patches, hidden_size)`.
+    """
+
+    last_temporal_hidden_state: torch.FloatTensor | None = None
+    last_spatial_hidden_state: torch.FloatTensor | None = None
+
+
+@auto_docstring(
+    custom_intro="""Base class for VideoPrismClipModel outputs.""",
+)
+@dataclass
+class VideoPrismClipOutput(ModelOutput):
+    r"""
+    logits_per_video (`torch.FloatTensor` of shape `(video_batch_size, text_batch_size)`):
+        The scaled dot product scores between `video_embeds` and `text_embeds`. This represents the video-text
+        similarity scores.
+    logits_per_text (`torch.FloatTensor` of shape `(text_batch_size, video_batch_size)`):
+        The scaled dot product scores between `text_embeds` and `video_embeds`. This represents the text-video
+        similarity scores.
+    video_embeds (`torch.FloatTensor` of shape `(batch_size, output_dim)`):
+        The video embeddings obtained by applying the projection layer to the pooled output of [`VideoPrismVideoModel`].
+    text_embeds (`torch.FloatTensor` of shape `(batch_size, output_dim)`):
+        The text embeddings obtained by applying the projection layer to the pooled output of [`VideoPrismTextModel`].
+    video_model_output (`BaseModelOutputWithPooling`):
+        The output of [`VideoPrismVideoModel`].
+    text_model_output (`BaseModelOutputWithPooling`):
+        The output of the [`VideoPrismTextModel`].
+    loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `return_loss` is `True`):
+        Contrastive loss for video-text similarity.
+    """
+
+    log

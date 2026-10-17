@@ -1,0 +1,71 @@
+[
+ {
+  "label": "q36-35b-ollama-mtp",
+  "display": "Ollama GGUF + MTP (shipped depth 2)",
+  "engine": "ollama",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "ollama:qwen3.6:35b-a3b-mtp-q4_K_M",
+  "cmd": ["{env:OLLAMA_BIN={first:ollama|/Applications/Ollama.app/Contents/Resources/ollama}}", "serve"],
+  "env": {"OLLAMA_HOST": "127.0.0.1:8085", "OLLAMA_MODELS": "{env:OLLAMA_MODELS=~/.ollama/models}", "OLLAMA_NOPRUNE": "1",
+          "OLLAMA_CONTEXT_LENGTH": "32768", "OLLAMA_NUM_PARALLEL": "1", "OLLAMA_MAX_LOADED_MODELS": "1",
+          "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_FLASH_ATTENTION": "1", "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"},
+  "env_clear_prefixes": ["OLLAMA_", "LLAMA_ARG_"],
+  "base_url": "http://127.0.0.1:8085/v1",
+  "model": "qwen3.6:35b-a3b-mtp-q4_K_M",
+  "requires_ollama_tag": "qwen3.6:35b-a3b-mtp-q4_K_M",
+  "note": "A dedicated `ollama serve` on :8085 over your model store (OLLAMA_NOPRUNE: startup never prunes blobs another server is pulling), so the desktop app's settings and loaded models do not leak in. The tag's own Modelfile is used as shipped: MTP on at depth 2 (draft_num_predict). Explicit tag: on Apple silicon the bare qwen3.6:35b-a3b tag resolves to the MLX NVFP4 build. 32K context and one slot like every engine; flash attention forced on. Every request overrides the tag's presence_penalty 1.5 with 0; thinking is switched off only by reasoning_effort none (Ollama ignores chat_template_kwargs). GGUF weights are mmap'd, so memory shows them as resident mapped files."
+ },
+ {
+  "label": "q36-35b-ollama-nomtp",
+  "extends": "q36-35b-ollama-mtp",
+  "display": "Ollama GGUF (MTP off)",
+  "model_path": "ollama:qwen3.6-35b-a3b-nomtp",
+  "model": "qwen3.6-35b-a3b-nomtp",
+  "requires_ollama_tag": "qwen3.6-35b-a3b-nomtp",
+  "note": "The same blob with speculation off: a derived model, `FROM qwen3.6:35b-a3b-mtp-q4_K_M` + `PARAMETER draft_num_predict 0` (README.md, Ollama)."
+ },
+ {
+  "label": "q36-35b-ollama-mlx-q4",
+  "extends": "q36-35b-ollama-mtp",
+  "display": "Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "env": {"OLLAMA_HOST": "127.0.0.1:8193", "OLLAMA_MODELS": "{env:OLLAMA_MLX_MODELS={models}/ollama-mlx}"},
+  "base_url": "http://127.0.0.1:8193/v1",
+  "model": "nace/qwen3.6:35b-a3b-mlx-4bit-mtp",
+  "requires_ollama_tag": "nace/qwen3.6:35b-a3b-mlx-4bit-mtp",
+  "ready_timeout": 300,
+  "adaptive_warm": true,
+  "log_grep": ["starting runner|ollama runner|mlx runner is ready", "speculative decode stats",
+               "Loaded tensors|memory|model weights", "version|inference compute", "dequantizing|warn|WARN|error|Error"],
+  "note": "Ollama's MLX runner on the same MLX 4-bit weights Kapitsa, mlx-lm, oMLX and MTPLX read, with the pack's MTP head, imported into a dedicated store without copying (tools/ollama_mlx_import.py: APFS clones with Ollama's tensor names; plain `ollama create` would copy 21 GB and mislabel the 8-bit router gates as 4-bit). Ollama's own speculation: built-in MTP with its adaptive depth controller (no knobs; the depth persists across requests, hence the 3 extra warm-up decodes). Parameters mirror the official qwen3.6 tag; requests override presence_penalty and sampling as for every engine. The official MLX tag (qwen3.6:35b-a3b-nvfp4) is a different, larger quantization (NVFP4, BF16 head and MTP experts)."
+ },
+ {
+  "label": "q38-27b-ollama-mtp",
+  "extends": "q36-35b-ollama-mtp",
+  "display": "Ollama GGUF + MTP (shipped depth 4)",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "ollama:qwen3.8:27b-mtp-q4_K_M",
+  "model": "qwen3.8:27b-mtp-q4_K_M",
+  "requires_ollama_tag": "qwen3.8:27b-mtp-q4_K_M",
+  "note": "As the 35B: dedicated server, the tag as shipped (MTP depth 4). Without reasoning_effort none the 27B thinks at xhigh effort."
+ },
+ {
+  "label": "q38-27b-ollama-nomtp",
+  "extends": "q38-27b-ollama-mtp",
+  "display": "Ollama GGUF (MTP off)",
+  "model_path": "ollama:qwen3.8-27b-nomtp",
+  "model": "qwen3.8-27b-nomtp",
+  "requires_ollama_tag": "qwen3.8-27b-nomtp",
+  "note": "Derived model: `FROM qwen3.8:27b-mtp-q4_K_M` + `PARAMETER draft_num_predict 0`."
+ },
+ {
+  "label": "q38-27b-ollama-mlx-q4",
+  "extends": "q36-35b-ollama-mlx-q4",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "model": "nace/qwen3.8:27b-mlx-4bit-mtp",
+  "requires_ollama_tag": "nace/qwen3.8:27b-mlx-4bit-mtp",
+  "note": "Ollama's MLX runner on the same MLX 4-bit trunk + MTP head as the other MLX engines, imported without copying (tools/ollama_mlx_import.py). Built-in MTP with the adaptive depth controller; parameters as the official qwen3.8 tag. The official MLX tag (qwen3.8:27b-nvfp4) is a different quantization."
+ }
+]

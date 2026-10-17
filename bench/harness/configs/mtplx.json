@@ -1,0 +1,34 @@
+[
+ {
+  "label": "q36-35b-mtplx",
+  "display": "MTPLX (sustained profile, depth 1)",
+  "engine": "mtplx",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": ["{env:MTPLX_BIN=mtplx}", "serve", "--model", "{models}/qwen3.6-35b-a3b-4bit",
+          "--host", "127.0.0.1", "--port", "8082", "--no-auth", "--yes", "--context-window", "32768",
+          "--no-stats-footer", "--mtp", "--profile", "sustained", "--depth", "1"],
+  "env": {"MTPLX_SESSION_POSTCOMMIT_MODE": "inline", "HF_HUB_OFFLINE": "1"},
+  "stop": ["{env:MTPLX_BIN=mtplx}", "stop", "--port", "8082"],
+  "adaptive_warm": true,
+  "base_url": "http://127.0.0.1:8082/v1",
+  "model": "mtplx-qwen36-35b-a3b-optimized-speed",
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/mtplx_runtime.json"],
+  "note": "The weights are MTPLX's own release (Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed), and the settings are the ones its mtplx_runtime.json recommends: profile sustained, measured best depth 1 (acceptance 0.89). Inline post-commit so follow-up turns hit MTPLX's session cache. Request id = the pack's served_model_id."
+ },
+ {
+  "label": "q38-27b-mtplx",
+  "extends": "q36-35b-mtplx",
+  "display": "MTPLX (turbo profile, depth 3)",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "cmd": ["{env:MTPLX_BIN=mtplx}", "serve", "--model", "{models}/qwen3.8-27b-4bit-mtp", "--model-id", "qwen3.8-27b",
+          "--host", "127.0.0.1", "--port", "8082", "--no-auth", "--yes", "--context-window", "32768",
+          "--no-stats-footer", "--mtp", "--profile", "turbo", "--depth", "3"],
+  "model": "qwen3.8-27b",
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/mtplx_runtime.json", "{models}/qwen3.8-27b-4bit-mtp/mtp.safetensors"],
+  "log_grep": ["profile|depth|verify|contract|MTP|mtp", "warn|WARN|error|Error"],
+  "note": "The lmstudio-community trunk every engine reads plus the MTP head and mtplx_runtime.json of MTPLX's own 27B release (Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed), with the settings that file recommends: profile turbo, depth 3. MTPLX's release pairs the head with a group-32 trunk; here the trunk is group-64 (the weights every engine reads): MTPLX's runtime-contract check passes and its log shows no warnings. Inline post-commit so follow-up turns hit the session cache."
+ }
+]

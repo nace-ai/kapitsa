@@ -1,0 +1,248 @@
+# Cross-engine benchmark harness
+
+The harness behind [docs/benchmarks.md](../../docs/benchmarks.md). It runs Kapitsa and other local inference engines
+through the same client-side benchmark, one engine at a time on an otherwise idle GPU, and records enough provenance
+to audit every number. Any engine with an OpenAI-compatible `/v1/chat/completions` endpoint works.
+
+Requirements: a Mac with Apple silicon, Python 3.9 or later (standard library only; macOS's own `python3` works),
+and the engines you want to compare. Memory, GPU load and the GPU lock use macOS tools (`footprint`, `ioreg`,
+`vm_stat`, `lockf`), so the harness runs on macOS only.
+
+## Quick start
+
+```bash
+cd bench/harness
+cp local.env.example local.env          # where your weights and engines are; see "Weights" and "Engines"
+python3 compare_engines.py configs/*.json --list
+python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json --dry-run   # resolve everything, start nothing
+python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json --only 'q36-35b-*'
+python3 compare_table.py                # tables of the newest clean run per config, from runs/results
+```
+
+`--dry-run` prints, per config, whether it is ready (or what is missing), the exact server command, environment,
+preparation steps, the benchmark command and where the result will go. One config takes 2 to 20 minutes (the slow
+engines on the dense 27B take longest). The published runs used a 48 GB Mac; several engines need more than 32 GB
+for the 35B and 27B models.
+
+To tabulate the published runs: `python3 compare_table.py ../results/2026-10-17 --out /tmp/table`.
+
+## What a run measures
+
+`compare_engines.py` starts the engine's server, waits until it answers, warms it up, waits for a quiet GPU and runs
+`bench.py`, which talks to the server over HTTP like a coding agent does:
+
+| Measurement | How |
+| --- | --- |
+| Decode, T = 0.6 | A 512-token coding answer (an LRU cache module with tests), streamed; 5 runs, median with min and max. The rate is taken over the middle of the stream (first 16 and last 4 tokens dropped), so time to first token is not counted and engines that send several tokens per event are not flattered. Sampling: temperature 0.6, top_p 0.95, top_k 20 (Qwen's recommendation). |
+| Decode, greedy | The same prompt at temperature 0 (plus top_k 1, top_p 1), 5 runs. With the same weights every engine writes nearly the same text, so this removes differences in what was sampled. |
+| Prefill, 4K and 16K | A cold prompt of 4,133 / 16,286 tokens (source code from the frozen corpus) with a random nonce right after `<\|im_start\|>system`, so no engine can reuse a cached prefix. Rate = prompt tokens / time to first token. |
+| Cached TTFT, 4K and 16K | After that prompt, three follow-up user turns on the growing conversation (append-only, 1 s apart, as an agent loop), median time to first token. Engines that cache prefixes answer from the cache. |
+| Tool calls | Streaming and non-streaming requests with two tools, with thinking off and on, plus a tool-result round trip. "pass" = every check passed. |
+| Peak memory | `phys_footprint_peak` of the server's whole process tree, in bytes, after every phase. Memory-mapped weights (llama.cpp's default mmap, Ollama's GGUF runner) are not part of `phys_footprint`; they are recorded separately as resident mapped files. |
+
+## What makes a run count
+
+Each engine has different hidden defaults. The harness sends everything explicitly and checks the answers:
+
+- **One engine at a time.** Every run holds an exclusive lock on `~/.cache/nace-gpu.lock` (BSD `flock`, the same
+  lock `lockf -k` takes; `BENCH_GPU_LOCK` names another file) from server start until its memory is released. Run
+  every other GPU job on the Mac under the same lock (`lockf -k ~/.cache/nace-gpu.lock <command>`), or close it.
+- **Quiet GPU.** After the warm-up the harness waits (up to 5 minutes) until no other process uses more than 5% of
+  the GPU for 15 s and the server itself is idle; if that never happens, it measures anyway and lets the monitor flag
+  the run. A contention monitor samples every process's GPU time every 2 s during the benchmark; foreign load above
+  5% for three samples in a row, or on average, flags the result `CONTENTION` (per phase, with the culprit).
+  WindowServer and *ambient* processes (macOS's photo and media analysis daemons, plus anything in
+  `BENCH_GPU_AMBIENT`) never block or flag a run; their load is recorded separately.
+- **Thinking off, checked.** Every request sends both `chat_template_kwargs.enable_thinking=false` and
+  `reasoning_effort: "none"` (Ollama and LM Studio honour only the second, mlx-lm and MTPLX only the first). Any
+  reasoning text, or `<think>` in the answer, makes the run INVALID.
+- **Same sampler everywhere.** Every request sets temperature, top_p, top_k, `min_p 0`, presence and frequency
+  penalty 0 and `repeat_penalty 1.0`, because llama.cpp defaults `min_p` to 0.05 and Ollama's qwen3.6 tag sets
+  presence_penalty 1.5. `repetition_penalty` is never sent (mlx-lm adds a logits processor for any non-zero value).
+- **Same prompts.** Long prompts are cut from the frozen corpus (`corpus/`, sha256 recorded in every result). Cold
+  prompts must come back within ±1% of the reference token count (catches truncation and chat-template drift) and
+  must not report cached tokens.
+- **Honest decode numbers.** A decode run must end on `length` at exactly 512 tokens (else flagged); every text is
+  saved, and a distinct-4-gram ratio below 0.5 flags a repetition loop, which inflates speculative decoding.
+- **Warm-up.** One-time costs are paid before timing: a ~2.9K-token prompt with a 64-token answer and a tool call;
+  for engines whose speculation adapts across requests (Ollama's MLX runner, MTPLX, oMLX's drafter), also three full
+  decodes.
+- **Provenance.** Each result records the exact server command and environment (secrets redacted), detected engine
+  versions, weight files and sizes, macOS version, power source and power mode, swap, GPU memory, the harness's git
+  revision, every contention sample and the server log lines that matter.
+
+`compare_table.py` takes, per config, the newest run with no INVALID reason and no contention flag (else the newest
+valid one, marked), and marks invalid cells with `!`.
+
+## Weights
+
+Every MLX engine reads the same 4-bit weights (MLX affine 4-bit, group 64), from one folder per model under
+`BENCH_MODELS` (default `~/models`). llama.cpp and Ollama read Ollama's Q4_K_M GGUF of each model.
+
+```bash
+M=~/models   # = BENCH_MODELS
+# Qwen3.6-35B-A3B: mlx-community/Qwen3.6-35B-A3B-4bit with its MTP head (MTPLX's release of it)
+hf download Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed --revision 95460516fbfe34c48f577f67c9ed191f5d61fbaf --local-dir $M/qwen3.6-35b-a3b-4bit
+# Qwen3.8-27B: lmstudio-community's 4-bit trunk, plus the MTP head and MTPLX runtime file of MTPLX's release
+hf download lmstudio-community/Qwen3.8-27B-MLX-4bit --revision 6067b15cf581666a4aecf6af3afaba4bb5efc20c --local-dir $M/qwen3.8-27b-4bit-mtp
+hf download Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed mtp.safetensors mtplx_runtime.json --revision 1d5087d2062c02b279180a53e4016cf9cd7a3d7e --local-dir $M/qwen3.8-27b-4bit-mtp
+# DFlash2 drafters (Kapitsa and oMLX)
+hf download incoai/Qwen3.6-35B-A3B-DFlash2 --revision 51ef7b6923ad6c14cb1bb41c37a9041446496ab6 --local-dir $M/drafters/Qwen3.6-35B-A3B-DFlash2
+hf download incoai/Qwen3.8-27B-DFlash2 --revision 015e795645c74b1a0eeef3b570031fb62e769bc5 --local-dir $M/drafters/Qwen3.8-27B-DFlash2
+# Optional, the small model for a quick check of the setup (configs/kapitsa.json, q35-4b-kapitsa)
+hf download lmstudio-community/Qwen3.5-4B-MLX-4bit --revision c43ee1d65576a5d98de1e8405cac93c371a655c1 --local-dir $M/qwen3.5-4b-4bit-mtp
+python3 ../../tools/mtp_sidecar.py Qwen/Qwen3.5-4B $M/qwen3.5-4b-4bit-mtp/mtp.safetensors
+# GGUF (llama.cpp and Ollama): see "Ollama"
+```
+
+These are the files the published runs read (checked against the Hub at these revisions: every file by size, the
+MTP heads and drafters by sha256). Folders may be symlinks.
+
+## Engines
+
+Each engine runs at its latest release at the time of measuring and with its own best settings for these models:
+speculative decoding where it has it (each MTP depth measured where it is a knob), 32K context, one conversation
+slot, flash attention where it is a switch. The configs' `note` fields say why each setting was chosen. Versions in
+brackets are the ones in [docs/benchmarks.md](../../docs/benchmarks.md); `version: auto` records what you have.
+
+### Kapitsa (`configs/kapitsa.json`)
+
+Build this checkout (`cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j`); the config uses
+`build/kapitsa`, else `kapitsa` on PATH, or `KAPITSA_BIN`. Default settings, with the DFlash2 drafter named
+explicitly so a missing drafter fails the run instead of falling back to MTP; `--slots 1` for parity with the other
+engines' single slot. The version is the checkout's git revision.
+
+### llama.cpp (`configs/llama.cpp.json`) [0.7.0, build b11669]
+
+The official release (`llama-<build>-bin-macos-arm64.tar.gz` from github.com/ggml-org/llama.cpp/releases) or
+`brew install llama.cpp`; set `LLAMA_SERVER` unless `llama-server` is on PATH. Four configs per model: plain and MTP
+with `--spec-draft-n-max` 1, 2 and 3 (the MTP head is inside the GGUF). Settings: `-c 32768 -np 1 -ngl 999 -fa on
+-b 2048 -ub 2048 -lm none --jinja`, the official Qwen chat template from the MLX folder (Ollama's GGUFs carry none),
+`--min-p 0`. `-lm none` loads the weights instead of mapping them, so they count in the memory column like everyone
+else's. `flag_check` maps flags a newer llama-server renamed; `--dry-run --check-flags` shows the mapping.
+
+### Ollama (`configs/ollama.json`) [0.40.5]
+
+The Ollama app (ollama.com or github.com/ollama/ollama/releases); `ollama` on PATH or the app is found, else set
+`OLLAMA_BIN`. The harness starts its own `ollama serve` on another port over your model store, with 32K context, one
+slot and flash attention, so the app's settings do not leak in.
+
+- **GGUF, MTP on (as shipped):** `ollama pull qwen3.6:35b-a3b-mtp-q4_K_M` and `ollama pull qwen3.8:27b-mtp-q4_K_M`
+  (explicit tags: on Apple silicon the bare tags resolve to the MLX builds). Ollama's own MTP depth is used: 2 for the
+  35B, 4 for the 27B. These blobs are also llama.cpp's weights.
+- **GGUF, MTP off:** a derived tag on the same blob, e.g. for the 35B a Modelfile with
+  `FROM qwen3.6:35b-a3b-mtp-q4_K_M` and `PARAMETER draft_num_predict 0`, then
+  `ollama create qwen3.6-35b-a3b-nomtp -f Modelfile` (and `qwen3.8-27b-nomtp` likewise).
+- **MLX runner:** Ollama's MLX runner on the same MLX 4-bit weights as the other engines, imported into a separate
+  store without copying by `tools/ollama_mlx_import.py` (APFS clones with Ollama's tensor names; needs numpy and
+  the store on the same volume as the weights; `tools/ollama_mlx_verify.py` checks it tensor by tensor). Start a
+  dedicated server on that store, then import (the 27B: `--renderer qwen3.8 --parser qwen3.5 --requires 0.32.12`,
+  default `--mtp-quant`, `presence_penalty 0`):
+
+  ```bash
+  S=~/models/ollama-mlx   # = OLLAMA_MLX_MODELS
+  OLLAMA_HOST=127.0.0.1:8193 OLLAMA_MODELS=$S OLLAMA_NOPRUNE=1 ollama serve &
+  python3 tools/ollama_mlx_import.py --src ~/models/qwen3.6-35b-a3b-4bit --name nace/qwen3.6:35b-a3b-mlx-4bit-mtp \
+      --models $S --work /tmp/ollama-mlx-work --mtp-quant 4:32 --renderer qwen3.5 --parser qwen3.5 --requires 0.19.0 \
+      --params '{"min_p": 0, "presence_penalty": 1.5, "repeat_penalty": 1, "temperature": 1, "top_k": 20, "top_p": 0.95}'
+  ```
+
+  The runner's MTP depth adapts across requests and has no knobs.
+
+### LM Studio (`configs/lmstudio.json`) [llmster 0.0.25-1, MLX runtime 1.13.1]
+
+Headless LM Studio: `curl -fsSL https://lmstudio.ai/install.sh | bash`, then `lms runtime update --all`. Get LM Studio's
+staff picks as its users do: `lms get qwen/qwen3.6-35b-a3b` and `lms get qwen/qwen3.8-27b`, MLX 4-bit variants
+(lmstudio-community's MLX repos: the same shards as the MLX folders above, so you can link those files into
+`~/.lmstudio/models/lmstudio-community/<repo>/` instead of downloading them again, but keep the hub entry: only
+its `model.yaml` lets `reasoning_effort: "none"` switch thinking off). `launchers/lmstudio_serve.sh` starts a fresh
+daemon per run, loads the model with `--context-length 32768 --parallel 1`, starts the server and streams LM
+Studio's logs. Its MLX engine has no speculative decoding for these models, and nothing else to tune.
+
+### mlx-lm (`configs/mlx-lm.json`) [0.32.2, mlx 0.32.4]
+
+`uv tool install mlx-lm` (or a venv with `pip install mlx-lm`); set `MLX_LM_SERVER` unless `mlx_lm.server` is on PATH.
+mlx-lm has no MTP or drafter path for these models. Prompt cache for follow-up turns, 2048-token prefill steps,
+`HF_HUB_OFFLINE=1` (the server downloads whatever model a request names otherwise).
+
+### oMLX (`configs/omlx.json`) [0.7.1rc1, mlx 0.32.4]
+
+The release wheel from github.com/jundot/omlx/releases into its own venv (`uv venv && uv pip install <wheel URL>`);
+set `OMLX_BIN`. Best measured setting: DFlash2 speculative decoding with the same drafter as Kapitsa, quantized to
+4-bit at load, block 5 (the DFlash2 authors' oMLX recipe), verify mode `adaptive` on the 35B and `dflash` on the 27B
+(whichever was faster in smoke tests). Plain configs for comparison. The harness builds oMLX's model folder and
+settings file in its state directory and empties oMLX's SSD KV cache before each run.
+
+### MTPLX (`configs/mtplx.json`) [2.12.2]
+
+`uv tool install mtplx` (or `pip install mtplx`); set `MTPLX_BIN` unless `mtplx` is on PATH. The settings are the
+ones the weights' `mtplx_runtime.json` recommends: profile `sustained`, depth 1 for the 35B (whose folder is MTPLX's
+own release), and `turbo`, depth 3 for the 27B (the runtime file of MTPLX's 27B release). Inline session post-commit,
+so follow-up turns hit its session cache.
+
+## Configs
+
+`configs/*.json` are lists of configs; `compare_engines.py` merges the files you pass, in order. Keep labels stable:
+tables group runs by label. The full field list is in `compare_engines.py`'s docstring; the main ones:
+
+| Field | Meaning |
+| --- | --- |
+| `label`, `display`, `engine`, `model_name` | Result file name and table grouping; engine kind (`kapitsa`, `llama.cpp`, `ollama`, `lmstudio`, `mlx-lm`, `omlx`, `mtplx` get version detection; anything else works without). |
+| `cmd`, `env`, `env_clear_prefixes` | Server command (a bare program name is looked up on PATH), extra environment, inherited variables to drop. `cmd: null` benchmarks a server that is already running. |
+| `base_url`, `model` | OpenAI base URL and the model id requests name. |
+| `extends`, `cmd_append` | Inherit an earlier config (also across files) and add server arguments. |
+| `requires_paths`, `requires_ollama_tag` | Skip with a message when something is missing. |
+| `prepare` | `symlink`, `write_json`, `link_files` (per-file symlinks) and `clean_dir` (only inside `{state}`) steps before start. |
+| `stop`, `pid_file` | Extra stop command; pid file of a server that detaches from its launcher (its process tree is measured). |
+| `adaptive_warm`, `ready_timeout`, `flag_check`, `gguf_expect` | Three extra warm-up decodes; start-up timeout; llama-server flag mapping; expected GGUF blob digest. |
+| `sampling_overrides`, `no_think_style`, `bench_args` | Passed to `bench.py` for an engine that rejects a field (`{"repeat_penalty": null}` drops it). |
+| `version`, `version_cmd`, `log_grep`, `note` | Fixed version string or `auto`; a command whose output is recorded; server-log lines to keep; free text. |
+
+Placeholders, usable in `cmd`, `env`, `prepare`, `stop`, `requires_paths`, `pid_file` and `model_path`:
+
+| Placeholder | Value |
+| --- | --- |
+| `{models}` | `BENCH_MODELS`, default `~/models` |
+| `{repo}`, `{harness}` | This Kapitsa checkout; `bench/harness` |
+| `{out}`, `{state}` | The output directory (`--out-dir`, `BENCH_OUT`, default `runs/`); its `state/` subfolder for engine state |
+| `{home}` | Your home folder (a leading `~` is expanded too) |
+| `{env:NAME}`, `{env:NAME=DEFAULT}` | An environment variable (or `local.env` entry), else `DEFAULT` (which may hold placeholders) |
+| `{first:A\|B}` | The first alternative that is an existing file or a command on PATH |
+| `{ollama_gguf:TAG\|TAG2}` | The GGUF weights blob of an Ollama tag, read from the store's manifests |
+
+Environment variables (or `local.env`): `BENCH_MODELS`, `BENCH_OUT`, `BENCH_GPU_LOCK`, `BENCH_GPU_AMBIENT`, and the
+engine locations in `local.env.example`.
+
+## Output
+
+Under `runs/` (or `--out-dir`): `results/<label>-<time>.json` (every request's timings and text, the summaries,
+flags, contention samples, memory per phase and the provenance), `logs/<label>-<time>.log` (the server's own log)
+and `state/` (engine state the harness owns). `compare_table.py [results dirs]` writes `compare_table.md` and
+`compare_table.csv`.
+
+## Benchmarking a server by hand
+
+`bench.py` runs against any server that is already up and takes the GPU lock itself:
+
+```bash
+python3 bench.py --base-url http://127.0.0.1:8000/v1 --model qwen3.6-35b-a3b --label my-run --pid <server pid>
+```
+
+`--pid` measures that process tree's memory; `--decode-runs`, `--sizes`, `--skip decode,greedy,prefill,tools` and
+the sampling flags change the run (`--help`). Wrap your own server's whole lifetime in the lock instead, and tell
+`bench.py` so: `lockf -k ~/.cache/nace-gpu.lock sh -c 'start server; NACE_GPU_LOCK_HELD=1 python3 bench.py ...'`.
+`python3 gpu_hogs.py` lists what is using the GPU right now.
+
+## Files
+
+| File | What it does |
+| --- | --- |
+| `bench.py` | The benchmark client: one server, all measurements, one result JSON |
+| `compare_engines.py` | Runs configs one at a time: lock, start, warm up, quiet wait, `bench.py`, stop, provenance |
+| `compare_table.py` | Markdown and CSV tables from result files |
+| `gpu_hogs.py` | GPU load per process (ioreg), the GPU lock, the quiet wait and the contention monitor |
+| `configs/` | One file per engine, both models |
+| `corpus/` | The frozen prompt corpus and its notice (Apache-2.0 excerpts of Hugging Face Transformers) |
+| `launchers/lmstudio_serve.sh` | LM Studio's daemon as a foreground benchmark server |
+| `tools/ollama_mlx_import.py`, `tools/ollama_mlx_verify.py` | Zero-copy import of MLX weights for Ollama's MLX runner, and its check |
+| `local.env.example` | Paths for this Mac, copied to `local.env` |

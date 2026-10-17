@@ -1,0 +1,36 @@
+[
+ {
+  "label": "q36-35b-lmstudio",
+  "display": "LM Studio (MLX engine)",
+  "engine": "lmstudio",
+  "version": "auto",
+  "lms_format": "safetensors",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.6-35B-A3B-MLX-4bit",
+  "cmd": ["{harness}/launchers/lmstudio_serve.sh", "serve", "8197", "qwen/qwen3.6-35b-a3b", "q36-35b-lmstudio",
+          "--context-length", "32768", "--parallel", "1"],
+  "env": {"LMS": "{env:LMS_BIN=~/.lmstudio/bin/lms}"},
+  "stop": ["{harness}/launchers/lmstudio_serve.sh", "stop"],
+  "pid_file": "~/.lmstudio/.internal/llmster-pid.lock",
+  "base_url": "http://127.0.0.1:8197/v1",
+  "model": "q36-35b-lmstudio",
+  "ready_timeout": 600,
+  "requires_paths": ["{env:LMS_BIN=~/.lmstudio/bin/lms}",
+                     "~/.lmstudio/hub/models/qwen/qwen3.6-35b-a3b/model.yaml",
+                     "~/.lmstudio/models/lmstudio-community/Qwen3.6-35B-A3B-MLX-4bit/config.json"],
+  "note": "LM Studio as its users run it: headless (llmster) with the newest runtimes, LM Studio's staff pick qwen/qwen3.6-35b-a3b (`lms get`), whose Mac variant is lmstudio-community/Qwen3.6-35B-A3B-MLX-4bit (the same shards as the MLX pack the other engines read), on the MLX engine. `lms load ... --context-length 32768 --parallel 1`: 32K like every engine (LM Studio's default 8192 is too small for the 16K prompt), one slot for parity (the default, 4, measured the same). Nothing else to tune: on these vision checkpoints the MLX engine has no speculative decoding (a draft model is refused, MTP is a llama.cpp/GGUF feature) and no KV quantization. Thinking switches off only through the hub model.yaml's enableThinking field via reasoning_effort none (chat_template_kwargs is ignored; a bare folder would think). LM Studio stops at max_tokens-1 (511 of 512), so decode runs carry a completion_tokens flag; rates use the reported count. Memory is the whole llmster tree (daemon + engine worker)."
+ },
+ {
+  "label": "q38-27b-lmstudio",
+  "extends": "q36-35b-lmstudio",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.8-27B-MLX-4bit",
+  "cmd": ["{harness}/launchers/lmstudio_serve.sh", "serve", "8197", "qwen/qwen3.8-27b", "q38-27b-lmstudio",
+          "--context-length", "32768", "--parallel", "1"],
+  "model": "q38-27b-lmstudio",
+  "requires_paths": ["{env:LMS_BIN=~/.lmstudio/bin/lms}",
+                     "~/.lmstudio/hub/models/qwen/qwen3.8-27b/model.yaml",
+                     "~/.lmstudio/models/lmstudio-community/Qwen3.8-27B-MLX-4bit/config.json"],
+  "note": "As the 35B: staff pick qwen/qwen3.8-27b, whose Mac variant lmstudio-community/Qwen3.8-27B-MLX-4bit is exactly the trunk the other MLX engines read (without the MTP head), MLX engine, 32K, one slot. Not measured: LM Studio's llama.cpp runtime on its Q4_K_M GGUF with MTP drafting, which could decode faster than its MLX engine on this model (standalone llama.cpp + MTP: 18.3 vs 15.3 tok/s) at a slower prefill."
+ }
+]
