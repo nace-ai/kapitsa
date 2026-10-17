@@ -1,113 +1,142 @@
 # Kapitsa
 
-**The fastest way to run Qwen on a Mac.** A from-scratch inference engine for Apple silicon.
+**Fast local Qwen for Apple silicon.**
 
-Kapitsa runs Qwen3.5, 3.6 and 3.8 (dense and mixture-of-experts) on one Mac behind an OpenAI-compatible
-server, for coding agents and chat apps. It is written in C++ and Metal for one job: the hybrid Gated
-DeltaNet + attention architecture these models use. It decodes several tokens per step with speculative
-decoding, prefills dense models on the GPU and the Neural Engine together, and picks a conversation back up
-without re-reading what it has already seen. No MLX, no llama.cpp, no Xcode.
-
-<!-- Numbers below are preliminary (2026-10-16) and get replaced by the final fair-harness run. -->
+Kapitsa runs Qwen3.6, Qwen3.8 and Qwen3.5 on one Mac behind an OpenAI-compatible server, for coding agents
+and chat apps, with a built-in chat page. It is a C++ and Metal engine written for one architecture, the hybrid
+Gated DeltaNet + attention design of the Qwen3.5 family. It drafts several tokens per step with DFlash2 and MTP
+speculative decoding, prefills dense models on the GPU and the Neural Engine together, and picks a conversation
+back up without reading it again. On a 48 GB MacBook Pro it is the fastest of the engines we compared it with
+(see [Performance](#performance)). No Python, MLX, llama.cpp or Xcode needed.
 
 ## Quick start
 
-Apple silicon Mac, macOS 15 or later (tested on an M4 Pro with macOS 15.3 and 27.0), CMake and the Xcode
-Command Line Tools. The 4-bit 35B and 27B models need 48 GB of unified memory (about 20 and 16 GB of weights).
+An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro), the Xcode Command Line Tools and CMake. The
+installer offers to install CMake with Homebrew. The 4B runs on 16 GB. The 35B-A3B and 27B need 32 GB, and 48 GB is
+recommended.
 
 ```bash
-git clone https://github.com/nace-ai/kapitsa && cd kapitsa
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
-hf download Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed --local-dir ~/models/qwen3.6-35b-a3b-4bit
-# optional, faster decoding: the model's DFlash2 drafter, found automatically here or next to the model
-hf download incoai/Qwen3.6-35B-A3B-DFlash2 --local-dir ~/.cache/nace-infer-models/drafters/Qwen3.6-35B-A3B-DFlash2
-./build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b
+git clone https://github.com/nace-ai/kapitsa && cd kapitsa && ./install.sh
+kapitsa serve --model qwen3.6-35b
 ```
 
-The server listens on `127.0.0.1:8000`. Kernels compile at load in a few seconds; the first request is
-then as fast as every later one.
+The first run downloads the model and its DFlash2 draft model (22 GB) and prints `Ready`. Later starts reuse the
+download, offline too. Without `--model`, Kapitsa picks the best model that fits this Mac.
+
+Once it prints `Ready`, open <http://127.0.0.1:8000> to chat, or point a coding agent or any OpenAI-compatible app
+at `http://127.0.0.1:8000/v1`. Press Ctrl+C to stop.
 
 ## Use the API
 
-OpenAI Chat Completions with streaming, reasoning (`reasoning_content`) and tool calls:
+OpenAI Chat Completions, with streaming, reasoning (`reasoning_content`) and tool calls:
 
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "qwen3.6-35b-a3b",
-    "messages": [{"role": "user", "content": "Explain speculative decoding in one sentence."}],
-    "reasoning_effort": "none"
+    "messages": [{"role": "user", "content": "Explain speculative decoding in one sentence."}]
   }'
 ```
 
-`"reasoning_effort": "none"` or `"chat_template_kwargs": {"enable_thinking": false}` turns thinking off.
-Point any OpenAI-compatible agent at `http://127.0.0.1:8000/v1`.
+Thinking follows the model's default, which is on. `"reasoning_effort": "none"` or
+`"chat_template_kwargs": {"enable_thinking": false}` turns it off. Every response reports its `usage`, including the
+cached prompt tokens of a follow-up.
+[API details](DEVELOPMENT.md#server)
 
 ## Models
 
-| Model | Weights (MLX affine 4-bit, group 64) | Speculative decoding |
-| --- | --- | --- |
-| Qwen3.6-35B-A3B (MoE, 256 experts) | [`Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) (body = `mlx-community/Qwen3.6-35B-A3B-4bit`, plus its MTP head) | DFlash2 drafter [`incoai/Qwen3.6-35B-A3B-DFlash2`](https://huggingface.co/incoai/Qwen3.6-35B-A3B-DFlash2) when installed; MTP head, depth 1, otherwise |
-| Qwen3.8-27B (dense) | [`lmstudio-community/Qwen3.8-27B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) + `mtp.safetensors` from [`Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) | DFlash2 drafter [`incoai/Qwen3.8-27B-DFlash2`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) when installed; MTP head, depth 2, otherwise |
+| Model | `--model` | Download | Speed-up included |
+| --- | --- | ---: | --- |
+| Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | 22.1 GB | DFlash2 draft model, MTP head |
+| Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | 20.2 GB | DFlash2 draft model, MTP head |
+| Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | 3.3 GB | MTP head |
 
-Other Qwen3.5-family checkpoints in the same MLX format are untested; the defaults are tuned on these two.
-Decoding is lossless: sampled output follows the model's own distribution exactly, and greedy output is the same
-as without speculation except where the top two tokens are within the rounding noise of the multi-token verify
-(near-ties, which the 35B mixture-of-experts meets now and then with the drafter's 8-token verify).
+All three are 4-bit MLX weights at pinned, tested revisions. Speculative decoding is lossless: the output follows
+the model's own distribution, and greedy output matches decoding without it except at near-ties within rounding
+noise. Other Qwen3.5-family models in MLX 4- or 8-bit format load from a Hugging Face repo
+(`--model mlx-community/Qwen3.5-9B-4bit`) or a folder (`--model ~/models/my-qwen`). The defaults are tuned on the
+three above.
+
+`kapitsa pull 27b` downloads a model without starting it, `kapitsa list` shows what is downloaded, and
+`kapitsa rm 27b` deletes it. Downloads resume after an interruption and are checked against their checksums. Files
+already in the Hugging Face cache are reused, and so is a folder you name with `--from`.
+[Model storage](DEVELOPMENT.md#models-and-downloads)
 
 ## Settings
 
+Add these to `kapitsa serve`:
+
 | Option | Purpose |
 | --- | --- |
-| `--ctx 32768` | Context per conversation slot. |
-| `--slots 2` | Conversations kept warm for instant follow-ups. |
-| `--dflash auto\|none\|DIR` | DFlash2 drafter: `auto` (default) uses a `<model>-DFlash2` drafter found next to the model or in `~/.cache/nace-infer-models/drafters`, `none` keeps MTP. |
-| `--spec N` | MTP draft depth when no drafter is used (default per model); `0` turns speculation off. |
-| `--api-key KEY` | Require a bearer token. |
-| `--host`, `--port` | Listen address. |
+| `--ctx 32768` | Set the context per conversation. |
+| `--slots 2` | Keep this many conversations ready for instant follow-ups. |
+| `--dflash none` | Decode with the model's MTP head instead of its DFlash2 draft model. |
+| `--spec 0` | Turn speculative decoding off. |
+| `--api-key KEY` | Require a bearer token. The chat page asks for it once. |
+| `--host 0.0.0.0` | Serve your network. Default: this Mac only (`127.0.0.1:8000`; `--port` changes the port). |
 
-Everything else, including the switches behind each optimization, is in [DEVELOPMENT.md](DEVELOPMENT.md).
+Models are stored in `~/.cache/kapitsa/models`, and `KAPITSA_HOME` moves them. `HF_TOKEN` is used for downloads
+when set. `kapitsa serve --help` lists every option, and [DEVELOPMENT.md](DEVELOPMENT.md) has the switches behind each
+optimization.
 
 ## Performance
 
-Measured on one MacBook Pro (M4 Pro, 20-core GPU, 48 GB, macOS 27.0.1) against every engine we could get
-running on the same machine, at its latest release and its own best settings, on the same 4-bit weights
-wherever the engine accepts them. In brackets: the fastest other engine measured.
+<!-- TBD cells: the final head-to-head on the M4 Pro fills them (research/inference/scripts in the Nace Agent repo). -->
+
+Measured on a MacBook Pro (M4 Pro, 20-core GPU, 48 GB), with the same coding prompts over HTTP for every engine.
+Ratios compare with the next-fastest engine measured.
 
 | Metric | Qwen3.6-35B-A3B | Qwen3.8-27B |
 | --- | ---: | ---: |
-| Decode · coding prompt, greedy | 116-124 tok/s (Splash 125-132) | 29-30 tok/s (Splash 55) |
-| Prefill · 4K prompt | 960-1,050 tok/s (Splash 1,011-1,071) | **277-321 tok/s** (Splash 203-232) |
-| Prefill · 16K prompt | 832 tok/s | **247-265 tok/s** (Splash 209) |
-| Cached time to first token · 4K / 16K prefix | **0.12 / 0.16 s** (llama.cpp 0.18 / 0.20) | **0.25 / 0.28 s** (Ollama 0.50 / 0.58) |
+| Writing speed (decode) | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
+| Reading speed (prefill) · 4K-token prompt | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
+| Reading speed (prefill) · 16K-token prompt | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
+| Cached follow-up · time to first token, 4K / 16K | TBD / TBD s (TBD×) | TBD / TBD s (TBD×) |
 
-The decode row predates the DFlash2 drafter, the default since 2026-10-17 when it is installed: on the same coding
-prompt (`ni_run`, 512 tokens, interleaved with MTP) it decodes 170 tok/s greedy / 152 at T = 0.6 on the 35B (MTP: 121)
-and 61 / 53 on the 27B (MTP: 31); the fair-harness run is still to be repeated with it.
+The engines people run on Macs, each at its latest release with its own best settings (speculative decoding where
+it has it), on the same 4-bit weights where it accepts them. Decode and prefill are in tokens per second, follow-ups
+in seconds to the first token:
 
-Against the engines most people use, on the same Mac: 35B decode 1.5-1.7x Ollama and llama.cpp (each with
-its MTP speculation on); 27B prefill about 3x mlx-lm, Ollama and llama.cpp.
+| Qwen3.6-35B-A3B | Decode | Prefill 4K | Prefill 16K | Follow-up 4K | Follow-up 16K |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Kapitsa** | **TBD** | **TBD** | **TBD** | **TBD** | **TBD** |
+| llama.cpp | TBD | TBD | TBD | TBD | TBD |
+| Ollama | TBD | TBD | TBD | TBD | TBD |
+| LM Studio | TBD | TBD | TBD | TBD | TBD |
+| mlx-lm | TBD | TBD | TBD | TBD | TBD |
+| oMLX | TBD | TBD | TBD | TBD | TBD |
+| MTPLX | TBD | TBD | TBD | TBD | TBD |
 
-Engines in the comparison: Splash, MTPLX, oMLX, mlx-lm, Ollama (GGUF and MLX runners), llama.cpp (with and without MTP),
-TensorFold, mlx-dspark, dflash-mlx, Darkbloom, lithos-metal, Lily, Tatara, Pulsar, AX Engine, Rapid-MLX,
-vpipe, mlx-serve, scratchy, PureDrive. Method: the same prompts, a GPU lock so nothing else runs during a
-measurement, median of 5 runs, thinking off, identical sampling settings, cold prompts cache-busted.
+| Qwen3.8-27B | Decode | Prefill 4K | Prefill 16K | Follow-up 4K | Follow-up 16K |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Kapitsa** | **TBD** | **TBD** | **TBD** | **TBD** | **TBD** |
+| llama.cpp | TBD | TBD | TBD | TBD | TBD |
+| Ollama | TBD | TBD | TBD | TBD | TBD |
+| LM Studio | TBD | TBD | TBD | TBD | TBD |
+| mlx-lm | TBD | TBD | TBD | TBD | TBD |
+| oMLX | TBD | TBD | TBD | TBD | TBD |
+| MTPLX | TBD | TBD | TBD | TBD | TBD |
+
+One engine runs at a time on an otherwise idle Mac, with thinking off and the same sampling settings. Each figure is
+the median of 5 runs, and cold prompts are cache-busted. A follow-up is the next turn of a conversation that already
+holds 4K or 16K tokens.
+[Every optimization and its measurements](docs/PERF.md)
 
 ## Design
 
-Each model gets kernels for its exact shapes: quantized matrix kernels that decode weights straight into the
-GPU's matrix registers, a token-parallel DeltaNet scan, flash-style attention, fused mixture-of-experts GEMMs,
-and verify kernels that check several drafted tokens for the price of one. Speculative decoding drafts a block of
-seven tokens with a DFlash2 drafter (fed by the model's own hidden states, captured during prefill and verify) or
-with the model's MTP head, and verifies the draft in one pass; DeltaNet's recurrent state rolls back through a
-tape, so a rejected draft costs nothing. On dense models, prefill splits every feed-forward layer between the GPU
-and the Neural Engine, which run side by side (chunks of 512 tokens and more). Conversations keep their KV cache and a recurrent-state
-checkpoint at each turn boundary, so a follow-up only processes the new message. Weights load straight from
-the model's safetensors into aligned GPU buffers, with no converted copy on disk.
+Each model gets Metal kernels for its exact shapes. Quantized matrix kernels decode weights straight into the GPU's
+matrix registers. The DeltaNet scan runs token-parallel, attention is flash-style, and the mixture-of-experts layers
+use fused grouped GEMMs. Speculative decoding drafts a block of tokens with the model's DFlash2 draft model, or its
+own MTP head, and verifies them in one pass. DeltaNet's recurrent state rolls back through a tape, so a rejected
+draft costs nothing. On dense models, prefill splits each feed-forward layer between the GPU and the Neural Engine.
+Each conversation keeps its KV cache and a recurrent-state checkpoint at every turn boundary, so a follow-up
+processes only the new message. Weights load from the model's safetensors straight into GPU buffers, with no
+converted copy on disk.
 
 ## More
 
-- [DEVELOPMENT.md](DEVELOPMENT.md): build, server options, internals, switches, benchmarks.
+- [DEVELOPMENT.md](DEVELOPMENT.md): building from source, the server, model downloads, internals, switches,
+  benchmarks.
 - [docs/PERF.md](docs/PERF.md): every optimization with its measurements.
 - Third-party code: nlohmann/json, minja and cpp-httplib (MIT). Model weights keep their own licenses.
