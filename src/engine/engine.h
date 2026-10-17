@@ -96,6 +96,7 @@ class Engine {
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
     std::vector<int> tokens;          // tokens whose effect is in the live state
     std::vector<Checkpoint> ckpts;    // recurrent-state snapshots
+    std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
   };

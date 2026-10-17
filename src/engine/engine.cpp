@@ -71,6 +71,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (dfl_) s.dseq = dfl_->new_seq();
     s.ckpts.push_back(model_->new_checkpoint());
     s.ckpts.push_back(model_->new_checkpoint());
+    if (dfl_)
+      for (size_t i = 0; i < s.ckpts.size(); ++i) s.dckpts.push_back(dfl_->new_seq());
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
@@ -348,6 +350,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (best) {
       model_->restore(*e, s, *best);
       start = best->pos;
+      // the drafter ring as it was at that checkpoint (the live ring may have overwritten its window since)
+      if (dfl_) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
     } else {
       model_->reset(s);
     }
@@ -373,10 +377,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const int C = model_->prefill_chunk();
   int p = start;
   int last_chunk_row = 0;
+  int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
   auto oldest_ckpt = [&]() {
     Checkpoint* c = &slot.ckpts[0];
     for (auto& k : slot.ckpts)
       if (k.pos < c->pos) c = &k;  // overwrite the oldest / invalid one
+    saved_ckpt = int(c - slot.ckpts.data());
     return c;
   };
   // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
@@ -438,9 +444,15 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
     // the drafter's ring: behind the trunk's command buffer, encoded while the GPU runs it (the first token
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
+    // The ring snapshot of the checkpoint saved by this prefill (at the turn boundary, near n) is taken right after
+    // the commit: it then holds the window before the checkpoint for a later restore.
     const bool dfl_commit = dfl_ && p == n;
+    auto commit_ring = [&](Encoder& en) {
+      dfl_->encode_prefill_commit(en, *slot.dseq);
+      if (saved_ckpt >= 0) dfl_->encode_ring_copy(en, *slot.dseq, *slot.dckpts[size_t(saved_ckpt)]);
+    };
     if (dfl_commit) dfl_->end_prefill();
-    if (dfl_commit && !mtp_defer) dfl_->encode_prefill_commit(*e, *slot.dseq);
+    if (dfl_commit && !mtp_defer) commit_ring(*e);
     e->commit();
     if (p == n) {
       t_enc = now_ms() - t0;  // until the last chunk's commit
@@ -448,7 +460,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     if (dfl_commit && mtp_defer) {
       mtp_e = g.begin();
-      dfl_->encode_prefill_commit(*mtp_e, *slot.dseq);
+      commit_ring(*mtp_e);
     }
     if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) e = g.begin();
@@ -731,6 +743,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   // DFlash2: the drafter's context ring goes back to the checkpoint with the target state, and the rows
   // prefilled here enter it like prompt rows (captured by every pass, projected after the last chunk)
   if (dfl_) {
+    dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
     DFlash2::rewind(*slot.dseq, start);
     dfl_->begin_prefill(n, start);
   }

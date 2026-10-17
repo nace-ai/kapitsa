@@ -80,6 +80,10 @@ class DFlash2 {
   // restored to pos); afterwards d.ctx = pos. reset() empties the ring.
   static void rewind(DFlashSeq& d, int pos);
   static void reset(DFlashSeq& d) { d.ctx = d.valid_lo = 0; }
+  // Ring snapshot (the engine keeps one per recurrent-state checkpoint): copies src's ring into dst on the GPU,
+  // in order with the work in `e`, and its ctx / valid_lo. Restoring a checkpoint with its snapshot (then
+  // rewind() to the checkpoint) gives the drafter the context it had there, however much was committed since.
+  void encode_ring_copy(Encoder& e, const DFlashSeq& src, DFlashSeq& dst);
 
   // ---- context path (SPEC §6) ----
   // Prefill of prompt rows [start, n) (start > 0: a reused prefix, d.ctx == start): begin_prefill

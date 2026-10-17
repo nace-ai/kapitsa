@@ -531,6 +531,21 @@ void DFlash2::rewind(DFlashSeq& d, int pos) {
   d.valid_lo = std::min(oldest, pos);
 }
 
+void DFlash2::encode_ring_copy(Encoder& e, const DFlashSeq& src, DFlashSeq& dst) {
+  for (int kv = 0; kv < 2; ++kv) {
+    const Buffer& a = kv ? src.ring_v : src.ring_k;
+    const Buffer& b = kv ? dst.ring_v : dst.ring_k;
+    const uint32_t n = uint32_t(std::min(a.size, b.size) / 16);
+    e.use(dpipe("copy_u32"));
+    e.buf(0, a);
+    e.buf(1, b);
+    e.val(2, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  }
+  dst.ctx = src.ctx;
+  dst.valid_lo = src.valid_lo;
+}
+
 // ---- encoders ----
 
 void DFlash2::dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes) {
