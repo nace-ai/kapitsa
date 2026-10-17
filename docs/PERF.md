@@ -1324,7 +1324,10 @@ skip / pad: odd cycles run the given knobs, prints GPU ms per cycle of both halv
 ## DFlash2 on main: every prefill path, on by default, Kapitsa's own draft head (merge/dflash2, 2026-10-17)
 
 main c3bcc53 + opt/dflash2 cc8e556 (drafter, 8-row verify, double-buffered loop, review fixes) + opt/dfl27 9fbadd6
-(27B cycle: reduced draft head, faster verify GEMMs, split GDN verify), then the changes below. Every run under
+(27B cycle: reduced draft head, faster verify GEMMs, split GDN verify), then the changes below; main's 8a05d3a (tied
+embeddings for the small Qwen3.5 models, f32 parameter tensors to bf16) merged in at the end, after which the quick
+checks were re-run on the final build against a build of 8a05d3a: the DFlash2-off bitwise table below (all 24 checks, both
+models), greedy code_* 512 identical to plain (35B 174.7 tok/s, 27B 61.4), S1 and test_server 13/13 on both models. Every run under
 `lockf -k -t 3000 ~/.cache/nace-gpu.lock` in spans under ~10 minutes (one 27B multi-turn span took 11), from frozen
 binaries; the reference is a clean build of c3bcc53. macOS 27.0.1, M4 Pro; other agents shared the lock, so absolute
 speeds drift between spans: compare within a table.
