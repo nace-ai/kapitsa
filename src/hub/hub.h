@@ -89,6 +89,13 @@ bool is_complete(const std::string& dir);
 // Finished, and (catalog models) at the revisions this Kapitsa pins: ensure() needs no network.
 bool is_current(const ModelRef& ref);
 
+// What a memory plan reads for a model, without its weights: config.json and each safetensors file's header (the
+// 8-byte length and the JSON, no tensor data), the companions' too (the MTP head's, the drafter's in dflash2/). For a
+// downloaded model, a local folder: the model's own folder. For a catalog model not downloaded yet: fetched once into
+// ~/.cache/kapitsa/plans/<name> (a few hundred KB; pinned revisions, so it never changes). "" when that fails
+// (offline) or for a repo outside the catalog.
+std::string plan_dir(const ModelRef& ref);
+
 // A model in the store, for `kapitsa list`.
 struct Installed {
   std::string name, dir, repo, commit;

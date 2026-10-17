@@ -33,6 +33,7 @@
 #include <ctime>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -1372,6 +1373,95 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
   }
   fprintf(stderr, "wrote %s: %zu tensors, %.1f MB, base_hidden_variant %s\n", out.c_str(), p.pieces.size(),
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
+}
+
+std::string plan_dir(const ModelRef& ref) {
+  if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
+  if (ref.kind != ModelRef::kCatalog) return "";
+  const CatalogModel& m = *ref.model;
+  const std::string dir = home_dir() + "/plans/" + m.name, mark = dir + "/.complete";
+  std::string want = m.repo + "@" + m.revision;
+  for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
+  if (read_text(mark) == want) return dir;
+  unlink(mark.c_str());
+  // the repos' file lists, then config.json whole and each safetensors file's header, all in parallel (a few hundred
+  // small requests' worth of latency otherwise)
+  struct Repo {
+    std::string repo, revision, sub;
+    std::vector<std::string> only;
+    Listing L;
+  };
+  std::vector<Repo> repos{{m.repo, m.revision, "", {}, {}}};
+  const Companion* sidecar = nullptr;
+  for (const Companion& c : m.companions) {
+    if (c.kind == "mtp-sidecar") sidecar = &c;
+    else repos.push_back({c.repo, c.revision, c.subdir.empty() ? "" : c.subdir + "/", c.files, {}});
+  }
+  std::atomic<bool> bad{false};
+  auto parallel = [&](size_t n, const std::function<void(size_t, HttpClient&)>& job) {
+    std::atomic<size_t> next{0};
+    std::vector<std::thread> th;
+    for (size_t t = 0; t < std::min<size_t>(n, 8); ++t)
+      th.emplace_back([&] {
+        HttpClient http(20);
+        for (size_t i; !bad && (i = next++) < n;) {
+          try {
+            job(i, http);
+          } catch (...) {
+            bad = true;
+          }
+        }
+      });
+    for (auto& x : th) x.join();
+  };
+  std::string head4b;
+  parallel(repos.size() + (sidecar ? 1 : 0), [&](size_t i, HttpClient& http) {
+    if (i < repos.size()) {
+      repos[i].L = list_repo(http, repos[i].repo, repos[i].revision);
+      return;
+    }
+    SidecarSource s;
+    s.src = sidecar->repo;
+    s.rev = sidecar->revision;
+    s.http = &http;
+    head4b = plan_sidecar(s, sidecar->repo, "post_norm").head;
+  });
+  if (bad) return "";
+  struct Job {
+    std::string url, dest;
+    bool header;
+  };
+  std::vector<Job> jobs;
+  for (const Repo& r : repos)
+    for (const auto& f : r.L.files) {
+      if (!r.only.empty() && std::find(r.only.begin(), r.only.end(), f.path) == r.only.end()) continue;
+      const bool st = f.path.size() > 12 && f.path.compare(f.path.size() - 12, 12, ".safetensors") == 0;
+      if (st || f.path == "config.json") jobs.push_back({file_url(r.repo, r.L.commit, f.path), dir + "/" + r.sub + f.path, st});
+    }
+  parallel(jobs.size(), [&](size_t i, HttpClient& http) {
+    const Job& j = jobs[i];
+    if (!j.header) {
+      HttpResult r = get_retry(http, j.url);
+      if (!r.ok()) throw Error(r.error);
+      write_atomic(j.dest, r.body);
+      return;
+    }
+    HttpResult r = get_retry(http, j.url, 0, 8);
+    if (!r.ok() || r.status != 206) throw Error(r.error);
+    const uint64_t n = le64(r.body);
+    if (n > (64u << 20)) throw Error("not a safetensors file");
+    HttpResult h = get_retry(http, j.url, 8, 8 + n);
+    if (!h.ok() || h.status != 206) throw Error(h.error);
+    write_atomic(j.dest, r.body + h.body);
+  });
+  if (bad) return "";
+  try {
+    if (sidecar) write_atomic(dir + "/" + (sidecar->subdir.empty() ? "" : sidecar->subdir + "/") + "mtp.safetensors", head4b);
+    write_atomic(mark, want);
+  } catch (const Error&) {
+    return "";
+  }
+  return dir;
 }
 
 std::vector<Installed> installed() {
