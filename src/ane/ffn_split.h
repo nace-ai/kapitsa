@@ -45,6 +45,8 @@ struct FfnConfig {
 class FfnSplit {
  public:
   static constexpr uint32_t kUnit = 512, kSeg = 2560, kMaxRows = 2048;
+  // ane_rotate's simdgroups for a hidden size (its 128-blocks split evenly, <= 8 each); 0 = not supported
+  static uint32_t rotate_simdgroups(uint32_t hidden);
 
   // Allocates the surfaces, computes (or loads) the row scales, compiles/loads the program.
   // Throws std::runtime_error with the reason when the split cannot be used.

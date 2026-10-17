@@ -79,9 +79,7 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
   if (hidden_ % kSeg) throw std::runtime_error("hidden size is not whole 2560-channel segments");
   // ane_rotate: the hidden's 128-blocks split evenly over at most 8 simdgroups, at most 8 blocks each
   // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4)
-  rot_sg_ = 0;
-  for (uint32_t g = 8; g >= 1 && !rot_sg_; --g)
-    if ((hidden_ / 128) % g == 0 && hidden_ / 128 / g <= 8) rot_sg_ = g;
+  rot_sg_ = rotate_simdgroups(hidden_);
   if (!rot_sg_) throw std::runtime_error("hidden size ane_rotate does not take");
   if (inter_ % kUnit || inter_ < 2 * kUnit) throw std::runtime_error("intermediate size is not whole 512-channel units");
   if (c.units < 1 || c.units > inter_ / kUnit)
@@ -224,6 +222,13 @@ void FfnSplit::init_resources() {
 }
 
 FfnSplit::~FfnSplit() { free_all(); }
+
+uint32_t FfnSplit::rotate_simdgroups(uint32_t hidden) {
+  if (hidden % kSeg) return 0;
+  for (uint32_t g = 8; g >= 1; --g)
+    if ((hidden / 128) % g == 0 && hidden / 128 / g <= 8) return g;
+  return 0;
+}
 
 void FfnSplit::program_source(std::string& mil, std::vector<uint8_t>& blob) {
   mil = "program(1.3)\n{\n";

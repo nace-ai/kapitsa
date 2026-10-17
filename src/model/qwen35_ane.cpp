@@ -145,7 +145,7 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   a.total = m.dense ? uint32_t(m.ffn / 512) : 0;
   if (!m.dense) return a.source = "MoE: GPU", a;
   if (getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0")) return a.source = "NI_ANE=0", a;
-  if (m.hidden % int(ane::FfnSplit::kSeg)) return a.source = "hidden size not supported", a;
+  if (!ane::FfnSplit::rotate_simdgroups(uint32_t(m.hidden))) return a.source = "hidden size not supported", a;
   if (const std::string& why = ane::unavailable(); !why.empty()) return a.source = "Neural Engine unavailable", a;
   const std::string chip = Gpu::get().name();
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
