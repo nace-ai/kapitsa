@@ -612,13 +612,14 @@ void dfl_enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh
     if (s.L->K != K || s.L->gs != 64 || (s.L->bits != 4 && s.L->bits != 8)) fatal("enc_qmm8: K/group/bits mismatch");
     rbs_total += (s.L->N + 7) / 8;
   }
-  // K split (bench_qmm8 sweep, M4 Pro): no split once there are >= 1024 threadgroups (LM head);
-  // otherwise the largest split that leaves every simdgroup >= 8 groups of 64.
+  // K split (bench_qmm8 sweep, M4 Pro): no split once there are >= 1024 threadgroups (LM head) on its 20 GPU cores,
+  // ~51 per core (Gpu::core_count); otherwise the largest split that leaves every simdgroup >= 8 groups of 64.
   static const int ks_env = getenv("NI_DFLASH_KS") ? atoi(getenv("NI_DFLASH_KS")) : 0;
+  static const uint32_t many = 1024u * uint32_t(std::max(1, Gpu::get().core_count())) / 20u;
   uint32_t ks = 1;
   if (ks_req > 0) ks = uint32_t(ks_req);
   else if (ks_env > 0) ks = uint32_t(ks_env);
-  else if (rbs_total / 8 < 1024)
+  else if (rbs_total / 8 < many)
     while (ks < 8 && (K / 64) / (ks * 2) >= 8) ks *= 2;
   p.ks = ks;
   // NI_DFLASH_RF=2: 16 weight rows per simdgroup (the X gather shared by two fragments)
