@@ -110,5 +110,15 @@ r5 = post({"messages": msgs, "tools": TOOLS, "max_tokens": 512, "chat_template_k
 check("main slot survives side request", r5["usage"]["prompt_tokens_details"]["cached_tokens"] > first_prompt // 2,
       json.dumps(r5["usage"]))
 
+# 6. thinking on + tools: the call comes back as a tool call (Qwen3.6 sometimes writes it inside its think
+#    block and stops without closing it; the server returns such a call as a tool call, NI_THINK_TOOLCALLS)
+r6 = post({"messages": [{"role": "system", "content": "You are a coding agent. Use tools to answer."},
+                        {"role": "user", "content": "Read the file /etc/hosts and tell me how many lines it has."}],
+           "tools": TOOLS, "max_tokens": 4096, "temperature": 0, "top_k": 1, "stream": True}, stream=True)
+tc6 = r6["tool_calls"]
+check("thinking + tools: read_file returned as a tool call",
+      r6["finish"] == "tool_calls" and len(tc6) >= 1 and tc6[0]["function"]["name"] == "read_file",
+      str(r6["finish"]) + " " + json.dumps(tc6)[:200] + " reasoning tail " + repr(r6["reasoning"][-200:]))
+
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

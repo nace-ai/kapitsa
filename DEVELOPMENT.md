@@ -110,7 +110,8 @@ family) taking the dense models' whole FFN. A fanless Air also slows down after 
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
   the double-buffered decode cycle). Math: `research/inference/dflash2/SPEC.md` in the Nace Agent repo.
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries, streaming parser for reasoning / content / tool calls.
+  boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
+  reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
@@ -128,8 +129,10 @@ family) taking the dense models' whole FFN. A fanless Air also slows down after 
   pipelines below 1024 threads), `mtp_sidecar.py` (an MTP head for an MLX model that dropped it, from the official
   checkpoint by HTTP range requests: `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <model dir>/mtp.safetensors`).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
-  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server.
-- `tests/test_server.py`: end-to-end API checks (13).
+  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
+  `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
+  how turn boundaries are classified (`kind_probe.py`).
+- `tests/test_server.py`: end-to-end API checks (14).
 
 ## Switches (environment, read once at start; the `NI_` prefix predates the name)
 
@@ -159,6 +162,8 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_ANE`, `NI_ANE_UNITS` | dense models, where the chip has a share | GPU + Neural Engine split of the dense prefill FFN (two-half wavefront); `0` = GPU only; `NI_ANE_UNITS` = the Neural Engine's share in 512-channel units. The drafter capture follows every schedule |
 | `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
 | `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
+| `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |
+| `NI_THINK_TOOLCALLS` | on | a tool call the model writes inside its reasoning and ends the turn with is returned as a tool call; `0` = left in the reasoning |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
 | `NI_DUP` | off | `NI_DUP=<kernel>[,...]`: dispatch those kernels twice (in-pipeline cost; idempotent kernels only) |
@@ -169,7 +174,7 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_GPU_CORES` | IORegistry `gpu-core-count` | GPU cores the dispatch heuristics assume (tests of the 8/10-core choices on a bigger GPU) |
 | `NI_PREWARM` | on | create all pipelines at load |
 | `NI_PROFILE` | off | per-kernel GPU profile (isolated dispatches; timings of the whole run are not meaningful) |
-| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters) |
+| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters, checkpoint restores and overwrites) |
 | `NI_MATH_SAFE` | off | compile kernels without fast math (bitwise A/B checks only; slower) |
 
 ## Benchmarks

@@ -1,4 +1,5 @@
 #include "engine/engine.h"
+#include "engine/output_parser.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -23,12 +24,28 @@ static std::string read_file(const std::string& p) {
   return ss.str();
 }
 
-static std::string random_id(const char* prefix) {
-  static std::mt19937_64 rng(std::random_device{}());
-  static const char* al = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  std::string s = prefix;
-  for (int i = 0; i < 24; ++i) s += al[rng() % 62];
-  return s;
+// Whether the conversation ends with a user query, by the Qwen3.5+ template's own test: a user message
+// whose trimmed text is not wrapped in <tool_response> ... </tool_response>. Tool results (role "tool",
+// rendered inside a user turn, or such a wrapped user message) are not queries.
+static bool ends_with_query(const ojson& messages) {
+  if (!messages.is_array() || messages.empty()) return false;
+  const ojson& m = messages.back();
+  if (!m.is_object() || m.value("role", "") != "user") return false;
+  std::string text;
+  if (m.contains("content") && m["content"].is_string()) {
+    text = m["content"].get<std::string>();
+  } else if (m.contains("content") && m["content"].is_array()) {
+    for (auto& part : m["content"]) {
+      if (!part.is_object() || !part.contains("text") || !part["text"].is_string()) return true;  // image, video
+      text += part["text"].get<std::string>();
+    }
+  }
+  const size_t a = text.find_first_not_of(" \n\r\t"), b = text.find_last_not_of(" \n\r\t");
+  if (a == std::string::npos) return true;
+  static const std::string open = "<tool_response>", close = "</tool_response>";
+  const bool wrapped = b + 1 - a >= open.size() + close.size() && text.compare(a, open.size(), open) == 0 &&
+                       text.compare(b + 1 - close.size(), close.size(), close) == 0;
+  return !wrapped;
 }
 
 Engine::Engine(const EngineOptions& o) : opts_(o) {
@@ -113,8 +130,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     Slot s;
     s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
     if (dfl_) s.dseq = dfl_->new_seq();
-    s.ckpts.push_back(model_->new_checkpoint());
-    s.ckpts.push_back(model_->new_checkpoint());
+    s.ckpts.push_back({model_->new_checkpoint()});
+    s.ckpts.push_back({model_->new_checkpoint()});
     if (dfl_)
       for (size_t i = 0; i < s.ckpts.size(); ++i) s.dckpts.push_back(dfl_->new_seq());
     slots_.push_back(std::move(s));
@@ -190,7 +207,10 @@ void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
-  for (auto& c : slot.ckpts) c.pos = -1;
+  for (auto& c : slot.ckpts) {
+    c.pos = -1;
+    c.query = false;
+  }
   ++slot.gen;  // an idle history prefill for it gives up
 }
 
@@ -272,162 +292,6 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   return *best;
 }
 
-namespace {
-
-// Streaming parser for Qwen3.5+ output: <think>...</think> reasoning, content, <tool_call> XML.
-class OutputParser {
- public:
-  OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
-               bool parse_tools, const ojson& tools)
-      : dec_(t), think_open_(think_open), think_close_(think_close), tc_open_(tc_open), tc_close_(tc_close),
-        in_think_(start_in_think), parse_tools_(parse_tools), tools_(tools) {}
-
-  // Returns the delta produced by this token.
-  ChatDelta push(int id) {
-    ChatDelta d;
-    if (id == think_open_) {
-      flush_text(d);
-      in_think_ = true;
-      return d;
-    }
-    if (id == think_close_) {
-      flush_text(d);
-      held_.clear();  // drop whitespace before </think>
-      in_think_ = false;
-      skip_leading_ws_ = true;
-      return d;
-    }
-    if (parse_tools_ && id == tc_open_ && !in_think_) {
-      flush_text(d);
-      held_.clear();
-      in_tool_ = true;
-      tool_buf_.clear();
-      return d;
-    }
-    if (parse_tools_ && id == tc_close_ && in_tool_) {
-      tool_buf_ += dec_.flush();
-      in_tool_ = false;
-      ToolCall tc;
-      if (parse_tool(tool_buf_, tc)) d.tool_calls.push_back(tc);
-      else emit(d, "<tool_call>" + tool_buf_ + "</tool_call>");
-      skip_leading_ws_ = true;
-      return d;
-    }
-    std::string s = dec_.push(id);
-    if (in_tool_) {
-      tool_buf_ += s;
-      return d;
-    }
-    emit(d, s);
-    return d;
-  }
-
-  ChatDelta finish() {
-    ChatDelta d;
-    std::string s = dec_.flush();
-    if (in_tool_) {
-      // unterminated tool call: surface as text
-      emit(d, "<tool_call>" + tool_buf_ + s);
-      in_tool_ = false;
-    } else {
-      emit(d, s);
-    }
-    held_.clear();  // trailing whitespace
-    return d;
-  }
-
-  bool in_think() const { return in_think_; }
-
- private:
-  // Holds back trailing whitespace so it can be dropped before </think>, <tool_call> or the end.
-  void emit(ChatDelta& d, const std::string& s) {
-    if (s.empty()) return;
-    std::string t = held_ + s;
-    held_.clear();
-    if (skip_leading_ws_) {
-      size_t k = t.find_first_not_of(" \n\r\t");
-      if (k == std::string::npos) return;
-      t = t.substr(k);
-      skip_leading_ws_ = false;
-    }
-    size_t e = t.find_last_not_of(" \n\r\t");
-    if (e == std::string::npos) {
-      held_ = t;
-      return;
-    }
-    held_ = t.substr(e + 1);
-    t.resize(e + 1);
-    (in_think_ ? d.reasoning : d.content) += t;
-  }
-  void flush_text(ChatDelta& d) { emit(d, dec_.flush()); }
-
-  static std::string trim_nl(const std::string& v) {
-    size_t a = 0, b = v.size();
-    if (a < b && v[a] == '\n') ++a;
-    if (b > a && v[b - 1] == '\n') --b;
-    return v.substr(a, b - a);
-  }
-
-  std::string param_type(const std::string& fn, const std::string& param) const {
-    for (auto& t : tools_) {
-      const ojson& f = t.contains("function") ? t["function"] : t;
-      if (f.value("name", "") != fn) continue;
-      if (f.contains("parameters") && f["parameters"].contains("properties") &&
-          f["parameters"]["properties"].contains(param)) {
-        const ojson& p = f["parameters"]["properties"][param];
-        if (p.contains("type") && p["type"].is_string()) return p["type"];
-        return "any";
-      }
-    }
-    return "string";
-  }
-
-  bool parse_tool(const std::string& body, ToolCall& tc) const {
-    size_t f = body.find("<function=");
-    if (f == std::string::npos) return false;
-    size_t fe = body.find('>', f);
-    if (fe == std::string::npos) return false;
-    tc.name = body.substr(f + 10, fe - f - 10);
-    ojson args = ojson::object();
-    size_t p = fe + 1;
-    while (true) {
-      size_t ps = body.find("<parameter=", p);
-      if (ps == std::string::npos) break;
-      size_t pe = body.find('>', ps);
-      if (pe == std::string::npos) break;
-      std::string pname = body.substr(ps + 11, pe - ps - 11);
-      size_t ve = body.find("</parameter>", pe);
-      if (ve == std::string::npos) ve = body.find("</function>", pe);
-      if (ve == std::string::npos) ve = body.size();
-      std::string val = trim_nl(body.substr(pe + 1, ve - pe - 1));
-      std::string type = param_type(tc.name, pname);
-      if (type == "string") {
-        args[pname] = val;
-      } else {
-        try {
-          args[pname] = ojson::parse(val);
-        } catch (...) {
-          args[pname] = val;
-        }
-      }
-      p = ve + 1;
-    }
-    tc.arguments = args.dump();
-    tc.id = random_id("call_");
-    return true;
-  }
-
-  StreamDecoder dec_;
-  int think_open_, think_close_, tc_open_, tc_close_;
-  bool in_think_;
-  bool parse_tools_;
-  const ojson& tools_;
-  bool in_tool_ = false, skip_leading_ws_ = false;
-  std::string tool_buf_, held_;
-};
-
-} // namespace
-
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
   ++requests_;
   std::lock_guard<std::mutex> lk(mu_);
@@ -500,7 +364,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (common == slot.tokens.size() && int(common) < n) {
     start = int(common);  // live state continues
   } else {
-    const Checkpoint* best = nullptr;
+    const TurnCheckpoint* best = nullptr;
     for (auto& c : slot.ckpts)
       if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
     if (best) {
@@ -511,6 +375,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     } else {
       model_->reset(s);
     }
+    logd("checkpoints: prompt diverges at %zu of %d, %s", common, n,
+         best ? (std::string("restored ") + (best->query ? "query" : "tool") + " checkpoint at " +
+                 std::to_string(best->pos)).c_str()
+              : "none usable, prefill from 0");
   }
   if (dfl_) {
     // the drafter ring keeps the entries of the reused prefix [0, start) that are still in its window
@@ -535,10 +403,27 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   int p = start;
   int last_chunk_row = 0;
   int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
-  auto oldest_ckpt = [&]() {
-    Checkpoint* c = &slot.ckpts[0];
+  // The checkpoint this request's turn boundary overwrites: an invalid one, else one saved at a tool
+  // response, else the oldest (NI_QUERY_CKPT=0: the oldest of all, as before). The template renders the
+  // assistant turns after the last user query with their reasoning and those before it without, so when
+  // the next query arrives, the prompt diverges from the live state right after the previous query: only
+  // that query's checkpoint can be restored. Every request of a tool loop saves a checkpoint at its tool
+  // response, and with "oldest first" two tool calls evicted the query's, so the next query re-prefilled
+  // the whole conversation. Kept this way: the newest query checkpoint and the newest one (the tool
+  // response a tool loop's next request restores when it diverges).
+  static const bool keep_query = [] {
+    const char* v = getenv("NI_QUERY_CKPT");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  const bool query = ends_with_query(r.messages);
+  auto victim = [&]() {
+    auto rank = [&](const TurnCheckpoint& k) { return k.pos < 0 ? 0 : keep_query && k.query ? 2 : 1; };
+    TurnCheckpoint* c = &slot.ckpts[0];
     for (auto& k : slot.ckpts)
-      if (k.pos < c->pos) c = &k;  // overwrite the oldest / invalid one
+      if (rank(k) < rank(*c) || (rank(k) == rank(*c) && k.pos < c->pos)) c = &k;
+    logd("checkpoints: %s boundary at %d overwrites %s", query ? "query" : "tool", boundary,
+         c->pos < 0 ? "an empty one" : (std::string(c->query ? "query" : "tool") + " at " + std::to_string(c->pos)).c_str());
+    c->query = query;
     saved_ckpt = int(c - slot.ckpts.data());
     return c;
   };
@@ -565,7 +450,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (boundary > p && boundary < p + T) {
       // NI_SHORTPF captures the checkpoint inside the pass; a chunk the NI_ANE split would run is cut at
       // the boundary instead (the split's two-half wavefront does not capture mid-chunk state).
-      if (in_pass && !model_->ane_splits(T)) snap = oldest_ckpt();
+      if (in_pass && !model_->ane_splits(T)) snap = victim();
       else T = boundary - p;
     }
     // NI_ANE=1: a chunk that runs the GPU + Neural Engine FFN split saves the recurrent state and
@@ -597,7 +482,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     last_chunk_row = n - 1 - p;
     p += T;
-    if (p == boundary) model_->save(*e, s, *oldest_ckpt(), boundary);
+    if (p == boundary) model_->save(*e, s, *victim(), boundary);
     // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
     // the drafter's ring: behind the trunk's command buffer, encoded while the GPU runs it (the first token
     // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
@@ -638,7 +523,15 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- decode ----
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools);
+  // A tool call written inside the reasoning, with nothing after it but the end of the turn, is returned as a
+  // tool call (Qwen3.6 sometimes stops without closing its think block); see OutputParser. NI_THINK_TOOLCALLS=0
+  // leaves it in the reasoning, as before.
+  static const bool think_tools = [] {
+    const char* v = getenv("NI_THINK_TOOLCALLS");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
+                      think_tools);
   const auto& eos = model_->config().eos;
   double t1 = now_ms();
   int gen = 0;
@@ -840,10 +733,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
-  ChatDelta tail = parser.finish();
+  ChatDelta tail = parser.finish(finish == "stop");
   res.reasoning += tail.reasoning;
   res.content += tail.content;
-  if (!tail.reasoning.empty() || !tail.content.empty()) on_delta(tail);
+  for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);
+  if (!tail.reasoning.empty() || !tail.content.empty() || !tail.tool_calls.empty()) on_delta(tail);
+  if (parser.promoted() > 0)
+    logi("chat: %d tool call(s) written inside the reasoning returned as tool calls", parser.promoted());
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   res.completion_tokens = gen;
   if (dfl_ && spec_cycles_ > 0)
@@ -911,7 +807,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   while (common < slot.tokens.size() && common < t2.size() && slot.tokens[common] == t2[common]) ++common;
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
-  const Checkpoint* best = nullptr;
+  const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
     if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;

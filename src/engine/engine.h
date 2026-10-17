@@ -120,11 +120,16 @@ class Engine {
   void prefill_history(const ChatRequest& r, const ChatResult& res);
 
  private:
+  // Recurrent-state snapshot at a turn boundary. `query`: the request that saved it ended with a user
+  // query (not a tool response); those are kept through tool loops (see Engine::chat).
+  struct TurnCheckpoint : Checkpoint {
+    bool query = false;
+  };
   struct Slot {
     std::unique_ptr<Seq> seq;
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
-    std::vector<int> tokens;          // tokens whose effect is in the live state
-    std::vector<Checkpoint> ckpts;    // recurrent-state snapshots
+    std::vector<int> tokens;             // tokens whose effect is in the live state
+    std::vector<TurnCheckpoint> ckpts;   // recurrent-state snapshots
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot

@@ -1527,6 +1527,167 @@ Memory: the drafter with its reduced head is 0.62 GB resident on the 35B (proces
 1.61 GB on the 27B (+1.47-1.55 GB); per slot the ring and its two snapshots add 151 / 126 MB and the prompt-capture
 buffer 67 / 105 MB (35B / 27B). The MTP head stays loaded when the drafter replaces it (a possible saving).
 
+## Turn-boundary checkpoints through tool loops (`NI_QUERY_CKPT`, default on; macOS 27.0.1)
+
+Each slot keeps two recurrent-state checkpoints, and every request saves one at its turn boundary (the end
+of the rendered conversation, before the assistant header). The Qwen3.6 template renders the assistant
+turns after the last user query with their `<think>` block and the turns before it without, so when a new
+user query arrives the prompt diverges from the live state three tokens after the previous query
+(`<|im_start|>assistant\n`, then the think block the new render drops): only the checkpoint saved at that
+query can be restored. In an agent loop (query -> tool call -> tool response -> ... -> final answer -> new
+query) every request after the query ends with a tool response, and each saved its checkpoint over the
+one with the lowest position: after two tool calls the query's checkpoint was gone, and the new query
+prefilled the whole conversation from token 0. opt/moe35's history prefill (`Engine::prefill_history`,
+which re-renders the answer in the idle gap after it) restores the same checkpoint and gave up there.
+
+The change: a checkpoint records whether its request ended with a user query (the template's own test: a
+user message not wrapped in `<tool_response>`; role `tool` and assistant continuations are not), and a new
+boundary overwrites an invalid checkpoint first, then a tool-response one, then the oldest query one. A
+slot thus holds the newest query checkpoint and the newest checkpoint, which is the one a tool loop's next
+request restores when the client's re-render of the last assistant turn differs from the generated tokens
+(for example a client that does not send the reasoning back). Conversations without tools choose exactly as
+before (all their checkpoints are query ones), and so does `NI_QUERY_CKPT=0` in every case. Memory is
+unchanged: two checkpoints per slot, 65.9 MB each on the 35B and 156.9 MB on the 27B. A third checkpoint
+was not added: on its own it moves the cliff from two tool calls to three, and beside the new rule it would
+only keep the second-newest tool response, which only a client that rewinds one tool step would restore.
+
+The 27B is not affected: its template keeps every think block unless `preserve_thinking=false`, so its new
+query continues the live state (4k, 1 / 2 / 3 tool calls: 0.30 s and only the query's own 32 tokens
+prefilled, with the rule and without).
+
+Through the server (bench/ckpt/tool_loop_ttft.py; Qwen3.6-35B-A3B 4-bit, greedy, thinking off, `--ctx 32768`
+with the default 2 slots, MTP on): system prompt with 4k / 16k tokens of repository context plus two tools,
+the query asks the model to read notes/step1.txt and follow the instruction at its end, each file (~600
+tokens of code) names the next one and the last says to stop and answer, the model's replies are sent back
+as they came (content + tool_calls, as Pi does), and the new query follows the answer after 1 s (the
+harness's turn gap). The model made exactly the requested 1, 2 or 3 tool calls every time. Same seeded
+conversations on every server, interleaved spans under the GPU lock; before = main d6d2ed0 and this branch
+with `NI_QUERY_CKPT=0` (2 runs each), after = `NI_QUERY_CKPT=1` (3 runs). Seconds to the first token of
+the new query, server prefill in the log within 10 ms of it:
+| context, tool calls | new query: prompt tokens | cached before / after | before | after |
+|---|---|---|---|---|
+| 4k, 1 | 5,394 | 4,511 / 4,511 | 1.05-1.10 | 1.07-1.18 |
+| 4k, 2 | 6,118 | 0 / 4,514 | 6.21-6.42 | 1.87-1.93 |
+| 4k, 3 | 6,793 | 0 / 4,513 | 7.05-7.42 | 2.65-2.75 |
+| 16k, 1 | 17,534 | 16,665 / 16,665 | 1.43-1.48 | 1.49-1.58 |
+| 16k, 2 | 18,274 | 0 / 16,666 | 22.2-22.9 | 2.58-2.68 |
+| 16k, 3 | 18,931 | 0 / 16,665 | 23.4-24.2 | 3.64-3.78 |
+Every other request of these conversations has the same prompt and cached tokens in all variants (main and
+`NI_QUERY_CKPT=0` request for request) and the same timing within the spans' drift (cold 16k prompt
+19.9-20.5 s, a tool step 0.85-1.5 s: the tool loop continues the live state, since the reply is sent back as
+generated). What the new query still pays is re-prefilling the tool turns without their think blocks:
+~730 tokens per tool step (the call and its ~600-token result), ~0.8 s each at 4k and ~1.1 s at 16k. With one
+tool call both rules restore the same checkpoint and run the same passes; a targeted A/B of that case (two
+pairs of spans with paired seeds, off-on then on-off, 4 conversations per size and span) measured
+1.047-1.109 s (off) vs 1.036-1.075 s (on) at 4k and 1.426-1.563 vs 1.436-1.492 s at 16k, the later span of each
+pair the slower one on every request, cold prompts included: the spread in the table's 1-call rows is drift
+between server sessions.
+
+With thinking on (4k, 2 tool calls; the second conversation was asked for 3 but the model wrote its third call
+inside an unclosed think block, which the parser leaves in the reasoning, so it stopped after 2): with the
+reasoning not sent back, every tool step diverges at its think block and restores the previous tool
+response's checkpoint, which both rules keep; the new query took 6.21 / 6.12 s before and 1.79 / 1.73 s
+after. With `reasoning_content` sent back (Pi replays it), the tool steps continue the live state and the
+new query took 8.03 / 7.64 s before (2 / 3 calls) and 2.07 / 3.03 s after.
+
+With opt/moe35's history prefill (first measured on a scratch merge of 57df0c2, since merged into main): after
+the answer the engine renders the conversation as the next query will and prefills it from the query's
+checkpoint in the idle gap. With the old rule it found no checkpoint after 2-3 tool calls; with this one it
+runs every time ("history: prefilled 2240 tokens of the rendered reply (from 16665) in 3280 ms") and the new
+query prefills only its own 31 tokens (58-72 ms on the server):
+| new query TTFT, s | 4k: 1 / 2 / 3 tool calls | 16k: 1 / 2 / 3 tool calls |
+|---|---|---|
+| history prefill, old rule | 0.25 / 5.88 / 6.79 | 0.61 / 21.76 / 23.60 |
+| history prefill + this rule (1 s gap) | 0.26 / 0.98 / 1.69 | 0.57 / 1.60 / 2.60 |
+| history prefill, old rule (5 s gap) | | 0.51 / 20.88 / 22.00 |
+| history prefill + this rule (5 s gap) | | 0.50 / 0.50 / 0.18 |
+With a 1 s gap the history prefill (0.95-3.28 s) is still running when the query arrives, so the query waits
+for its rest. With 5 s it is done, and the query's own GPU work is 78-83 ms; the rest is the GPU waking up
+after the idle gap ("GPU start +98 / +413 / +419 ms" in the log, the same with the old rule at 1 call).
+Again on this branch merged with main 8a05d3a (history prefill on main), 5 s gap, new query after 1 / 2 / 3
+tool calls: 16k 0.54 / 21.14 / 22.23 s with `NI_QUERY_CKPT=0` vs 0.51 / 0.11 / 0.13 s with the default, 4k
+0.54 / 6.31 / 7.13 vs 0.52 / 0.53 / 0.54 s (the query's own GPU work 63-95 ms, the GPU's start after the pause
+21-473 ms); replies identical, tests/test_server.py 13/13 on both models.
+
+Correctness (greedy; every request's reasoning, content and tool calls compared for the same seeded
+conversation across servers):
+* 0 differences in 74 conversations: 24 thinking off (4k / 16k, 1-3 tool calls, 3 rounds: flag on vs main and
+  flag off), 16 in the 1-call A/B, 8 with the default vs `NI_QUERY_CKPT=0` (2 + 6 on the merge), 4 thinking on
+  (reasoning echoed and not), 10 whose new query asks for a detailed explanation after 2-3 tool calls (4k and
+  16k, answers of 300-400 tokens, nine of them run to the limit: a cold re-prefill before, a restored
+  checkpoint after), 3 on the 27B, 9 through the opt/moe35 merge. The restored path is the cached path every
+  follow-up already takes, which is not bitwise a cold prefill (different chunking; opt/moe35 measured KL 1e-4
+  to 6e-3 between them and saw greedy texts split at near-ties): none of these conversations hit one.
+* main and `NI_QUERY_CKPT=0`: the same prompt and cached tokens for every request of every conversation.
+* tests/test_server.py (bench/shortpf/serve_test.sh): 13/13 on the 35B with `NI_QUERY_CKPT=1` and `=0`, and
+  with the new default (no variable) on the 35B and the 27B.
+* bench/ckpt/kind_probe.py (one-token requests, NI_LOG=2): a plain query, a user query after a tool response,
+  a user message that only starts with `<tool_response>` and multi-part text are query boundaries; role
+  `tool`, a user message wrapped in `<tool_response>` (whitespace around it, or split over text parts) and an
+  assistant continuation are not (all 8 as expected).
+
+Made the default after these runs (`NI_QUERY_CKPT=0` restores "oldest first"): the default build against
+`NI_QUERY_CKPT=0` on the same 4k conversations, new query after 2 / 3 tool calls: 1.95 / 2.76 s (restored the
+query's checkpoint) vs 6.57 / 7.42 s (from token 0), replies identical.
+
+## Tool calls written inside the reasoning (`NI_THINK_TOOLCALLS`, default on; macOS 27.0.1)
+
+Qwen3.6 sometimes writes its tool call inside the think block and ends the turn without ever writing
+`</think>`: "The user wants me to read notes/step3.txt next. Let me do that.\n\n<tool_call>...</tool_call>",
+then `<|im_end|>`. The parser treated everything before `</think>` as reasoning, so the call went out as
+reasoning_content and the reply had no content and no tool_calls: an agent saw an empty final answer and the
+loop stopped. Found in bench/ckpt's thinking tool loops; the Qwen team says it cannot be fixed in the model yet
+and points to the application layer (QwenLM/Qwen3.6#125).
+
+What other engines do (default branches read on 2026-10-17): vLLM, mlx-lm and Ollama end the reasoning at the
+first `<tool_call>`, so a call drafted in mid-thought is executed too and the rest of the reasoning becomes
+content (vLLM #58227); SGLang does the same when streaming, but without streaming splits there only if no
+`</think>` follows (its open PR #42030 holds the streamed text until `</think>` or the end); llama.cpp
+constrains sampling (after a `<tool_call>` in the reasoning its grammar allows only more calls or the end);
+oMLX, the app's other engine, promotes calls found in the reasoning at the end of the turn when the content has
+none, filtered by tool name.
+
+Kapitsa: a `<tool_call>` inside the reasoning is held back with the tokens after it instead of being streamed.
+If the reasoning goes on (non-whitespace text, a call after `</think>`, content, a stray tag), the held tokens
+are replayed through the parser as before: a drafted call stays reasoning, and the stream only differs in
+arriving in one piece. If the turn ends with the call(s), with nothing after them but whitespace or `</think>`
+and whitespace, and the model stopped by itself (not max_tokens, not a cancelled request), the complete calls
+that name one of the request's tools are returned as tool calls (finish_reason `tool_calls`) and the reasoning
+ends before them. An unknown function, an unterminated call or a cut turn stays reasoning. The parser moved to
+src/engine/output_parser.h; `tools/parser_test <model dir>` runs 26 checks on real token ids (both models'
+tokenizers, CPU only): unchanged streams for every turn without a call in the reasoning, the old results for
+drafts, the call returned in the cases above, no call markup streamed as reasoning, deltas adding up.
+
+How often (bench/ckpt/tool_loop_ttft.py --think --no-q2: thinking on, 4k-token context, loops of 3 tool calls,
+the same seeded conversations with the switch off and on, 35B unless noted). A loop is cut short when a step's
+reply is empty with the call left in the reasoning; the client then takes it as the final answer:
+| sampling, history | conversations | cut short (off) | cut short (on) | calls returned from the reasoning (on) |
+|---|---|---|---|---|
+| greedy, reasoning not sent back | 8 | 3 | 0 | 3 |
+| T = 0.6 (seeded per request), not sent back | 6 | 2 | 0 | 2 |
+| greedy, reasoning sent back (as Pi does) | 6 | 0 | 0 | 0 |
+| T = 0.6, sent back | 6 | 0 | 0 | 0 |
+| 27B, greedy, sent back | 3 | 0 | 0 | 0 |
+All five hits were the third call ("The user wants me to read notes/step3.txt next. Let me do that." and the
+call, then `<|im_end|>`): with the earlier assistant turns rendered with empty think blocks (reasoning not sent
+back), 5 of 14 loops broke; with the reasoning sent back, 0 of 15.
+
+Correctness: every conversation without a hit has the same replies (every request's reasoning, content and
+tool calls) with the switch off and on: 21 on the 35B, 2 of 3 on the 27B (the third splits in its second
+request's reasoning because one server compiled the Neural Engine program at start, so that conversation's
+first prefill ran on the GPU alone there and with the split on the other; no call was held in either). The
+five with a hit are the same up to that step and then go on with the returned call. tests/test_server.py 14/14
+(new: thinking + tools returns read_file as a tool call) on both models with the switch off, on and at the
+default; parser_test 26/26 with both tokenizers. Made the default after these runs; `NI_THINK_TOOLCALLS=0`
+leaves such calls in the reasoning.
+
+Both switches re-checked on this branch merged with main b457a52 (DFlash2 on by default, history prefill),
+before landing: tests/test_server.py 14/14 on the 35B and the 27B at the defaults; new user query after 2 / 3
+tool calls (5 s pause) 16k 0.54 / 0.12 s and 4k 0.54 / 0.53 s by default vs 19.49 / 20.34 s and 5.76 / 6.42 s
+with `NI_QUERY_CKPT=0` (the history prefill ran in 4 of 4 conversations vs 0), replies identical; thinking tool
+loops (6 conversations, reasoning not sent back, greedy, DFlash2 decoding) 6 of 6 complete with 2 calls returned
+from the reasoning vs 4 of 6 with `NI_THINK_TOOLCALLS=0`, the other 4 identical.
+
 ## Qwen3.5-4B and smaller Macs (branch opt/air, 2026-10-17)
 Targets: Qwen3.5-4B, Qwen3.8-27B, Qwen3.6-35B-A3B on this MacBook Pro (M4 Pro 20-core GPU, 48 GB) and the MacBook
 Airs (M4: 8/10-core GPU, 120 GB/s; M5: 10-core, ~153 GB/s; 16/24/32 GB). Every GPU run under the shared lock; A/B

@@ -1,0 +1,279 @@
+// Streaming parser for Qwen3.5+ output: <think>...</think> reasoning, content, and tool calls in the
+// template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas.
+#pragma once
+#include "engine/engine.h"
+#include "tokenizer/tokenizer.h"
+
+#include <random>
+#include <string>
+#include <vector>
+
+namespace ni {
+
+inline std::string random_id(const char* prefix) {
+  static std::mt19937_64 rng(std::random_device{}());
+  static const char* al = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  std::string s = prefix;
+  for (int i = 0; i < 24; ++i) s += al[rng() % 62];
+  return s;
+}
+
+class OutputParser {
+ public:
+  // think_tools (NI_THINK_TOOLCALLS): a <tool_call> the model writes inside its reasoning is held back
+  // instead of streamed as reasoning. If the turn ends with it (nothing but whitespace, or </think> and
+  // whitespace, follows) and it names one of the request's tools, finish() returns it as a tool call:
+  // Qwen3.6 sometimes writes its call and stops without ever closing the think block. If the reasoning
+  // goes on instead (a call drafted while thinking), the held tokens are replayed as reasoning, exactly
+  // as without think_tools.
+  OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
+               bool parse_tools, const ojson& tools, bool think_tools = false)
+      : dec_(t), hdec_(t), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
+        tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools), think_tools_(think_tools && parse_tools),
+        tools_(tools) {}
+
+  // Returns the delta produced by this token.
+  ChatDelta push(int id) {
+    ChatDelta d;
+    if (think_tools_ && (holding_ || (in_think_ && id == tc_open_))) hold(d, id);
+    else push_plain(d, id);
+    return d;
+  }
+
+  // End of the turn. `ended`: the model stopped by itself (not cut by max_tokens or the client), which
+  // a held call needs to become the turn's tool call.
+  ChatDelta finish(bool ended = true) {
+    ChatDelta d;
+    if (holding_) {
+      std::vector<ToolCall> calls;
+      if (ended && held_calls(calls)) {
+        held_.clear();  // whitespace before the call
+        d.tool_calls = std::move(calls);
+        promoted_ += int(d.tool_calls.size());
+        std::vector<int>().swap(hold_ids_);
+        end_hold();
+      } else {
+        replay(d);
+      }
+    }
+    std::string s = dec_.flush();
+    if (in_tool_) {
+      // unterminated tool call: surface as text
+      emit(d, "<tool_call>" + tool_buf_ + s);
+      in_tool_ = false;
+    } else {
+      emit(d, s);
+    }
+    held_.clear();  // trailing whitespace
+    return d;
+  }
+
+  bool in_think() const { return in_think_; }
+  int promoted() const { return promoted_; }  // tool calls returned from the reasoning (think_tools)
+
+ private:
+  void push_plain(ChatDelta& d, int id) {
+    if (id == think_open_) {
+      flush_text(d);
+      in_think_ = true;
+      return;
+    }
+    if (id == think_close_) {
+      flush_text(d);
+      held_.clear();  // drop whitespace before </think>
+      in_think_ = false;
+      skip_leading_ws_ = true;
+      return;
+    }
+    if (parse_tools_ && id == tc_open_ && !in_think_) {
+      flush_text(d);
+      held_.clear();
+      in_tool_ = true;
+      tool_buf_.clear();
+      return;
+    }
+    if (parse_tools_ && id == tc_close_ && in_tool_) {
+      tool_buf_ += dec_.flush();
+      in_tool_ = false;
+      ToolCall tc;
+      if (parse_tool(tool_buf_, tc)) d.tool_calls.push_back(tc);
+      else emit(d, "<tool_call>" + tool_buf_ + "</tool_call>");
+      skip_leading_ws_ = true;
+      return;
+    }
+    std::string s = dec_.push(id);
+    if (in_tool_) {
+      tool_buf_ += s;
+      return;
+    }
+    emit(d, s);
+  }
+
+  // think_tools: holds the tokens of a <tool_call> written inside the reasoning, and what follows it,
+  // while the turn may still end with it. Anything else (more reasoning, a call after </think>, content,
+  // malformed tags) replays the held tokens through push_plain, i.e. as reasoning.
+  void hold(ChatDelta& d, int id) {
+    if (!holding_) {
+      flush_text(d);  // the reasoning before the call (its trailing whitespace stays held)
+      holding_ = true;
+      in_body_ = false;
+      closed_ = false;
+      bodies_.clear();
+      body_.clear();
+    }
+    hold_ids_.push_back(id);
+    bool goes_on = false;
+    if (in_body_) {
+      if (id == tc_close_) {
+        body_ += hdec_.flush();
+        bodies_.push_back(body_);
+        body_.clear();
+        in_body_ = false;
+      } else if (id == tc_open_ || id == think_open_ || id == think_close_) {
+        goes_on = true;
+      } else {
+        body_ += hdec_.push(id);
+      }
+    } else if (id == tc_open_) {
+      if (closed_) goes_on = true;  // a call after </think>: the held ones were drafts
+      else in_body_ = true;
+    } else if (id == think_close_ && !closed_) {
+      closed_ = true;
+    } else if (id == think_open_ || id == think_close_ || id == tc_close_) {
+      goes_on = true;
+    } else if (hdec_.push(id).find_first_not_of(" \n\r\t") != std::string::npos) {
+      goes_on = true;
+    }
+    if (goes_on) replay(d);
+  }
+
+  void replay(ChatDelta& d) {
+    std::vector<int> ids;
+    ids.swap(hold_ids_);
+    end_hold();
+    for (int i : ids) push_plain(d, i);
+  }
+
+  void end_hold() {
+    holding_ = false;
+    in_body_ = false;
+    closed_ = false;
+    bodies_.clear();
+    body_.clear();
+    hdec_.flush();
+  }
+
+  // The held calls, if all of them are complete, parse and name a tool of the request.
+  bool held_calls(std::vector<ToolCall>& calls) const {
+    if (in_body_ || bodies_.empty()) return false;
+    for (auto& b : bodies_) {
+      ToolCall tc;
+      if (!parse_tool(b, tc) || !has_tool(tc.name)) return false;
+      calls.push_back(tc);
+    }
+    return true;
+  }
+
+  bool has_tool(const std::string& name) const {
+    for (auto& t : tools_) {
+      const ojson& f = t.contains("function") ? t["function"] : t;
+      if (f.value("name", "") == name) return true;
+    }
+    return false;
+  }
+
+  // Holds back trailing whitespace so it can be dropped before </think>, <tool_call> or the end.
+  void emit(ChatDelta& d, const std::string& s) {
+    if (s.empty()) return;
+    std::string t = held_ + s;
+    held_.clear();
+    if (skip_leading_ws_) {
+      size_t k = t.find_first_not_of(" \n\r\t");
+      if (k == std::string::npos) return;
+      t = t.substr(k);
+      skip_leading_ws_ = false;
+    }
+    size_t e = t.find_last_not_of(" \n\r\t");
+    if (e == std::string::npos) {
+      held_ = t;
+      return;
+    }
+    held_ = t.substr(e + 1);
+    t.resize(e + 1);
+    (in_think_ ? d.reasoning : d.content) += t;
+  }
+  void flush_text(ChatDelta& d) { emit(d, dec_.flush()); }
+
+  static std::string trim_nl(const std::string& v) {
+    size_t a = 0, b = v.size();
+    if (a < b && v[a] == '\n') ++a;
+    if (b > a && v[b - 1] == '\n') --b;
+    return v.substr(a, b - a);
+  }
+
+  std::string param_type(const std::string& fn, const std::string& param) const {
+    for (auto& t : tools_) {
+      const ojson& f = t.contains("function") ? t["function"] : t;
+      if (f.value("name", "") != fn) continue;
+      if (f.contains("parameters") && f["parameters"].contains("properties") &&
+          f["parameters"]["properties"].contains(param)) {
+        const ojson& p = f["parameters"]["properties"][param];
+        if (p.contains("type") && p["type"].is_string()) return p["type"];
+        return "any";
+      }
+    }
+    return "string";
+  }
+
+  bool parse_tool(const std::string& body, ToolCall& tc) const {
+    size_t f = body.find("<function=");
+    if (f == std::string::npos) return false;
+    size_t fe = body.find('>', f);
+    if (fe == std::string::npos) return false;
+    tc.name = body.substr(f + 10, fe - f - 10);
+    ojson args = ojson::object();
+    size_t p = fe + 1;
+    while (true) {
+      size_t ps = body.find("<parameter=", p);
+      if (ps == std::string::npos) break;
+      size_t pe = body.find('>', ps);
+      if (pe == std::string::npos) break;
+      std::string pname = body.substr(ps + 11, pe - ps - 11);
+      size_t ve = body.find("</parameter>", pe);
+      if (ve == std::string::npos) ve = body.find("</function>", pe);
+      if (ve == std::string::npos) ve = body.size();
+      std::string val = trim_nl(body.substr(pe + 1, ve - pe - 1));
+      std::string type = param_type(tc.name, pname);
+      if (type == "string") {
+        args[pname] = val;
+      } else {
+        try {
+          args[pname] = ojson::parse(val);
+        } catch (...) {
+          args[pname] = val;
+        }
+      }
+      p = ve + 1;
+    }
+    tc.arguments = args.dump();
+    tc.id = random_id("call_");
+    return true;
+  }
+
+  StreamDecoder dec_;
+  StreamDecoder hdec_;  // text of held tokens (think_tools)
+  int think_open_, think_close_, tc_open_, tc_close_;
+  bool in_think_;
+  bool parse_tools_, think_tools_;
+  const ojson& tools_;
+  bool in_tool_ = false, skip_leading_ws_ = false;
+  std::string tool_buf_, held_;
+  // think_tools hold: token ids, complete call bodies, the body being read, </think> seen after them
+  bool holding_ = false, in_body_ = false, closed_ = false;
+  std::vector<int> hold_ids_;
+  std::vector<std::string> bodies_;
+  std::string body_;
+  int promoted_ = 0;
+};
+
+} // namespace ni
