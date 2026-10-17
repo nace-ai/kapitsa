@@ -50,12 +50,25 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (want == "1" || want == "on") want = "auto";
   const bool dfl_off = want == "none" || want == "0" || want == "off" || (want == "auto" && spec_off);
   const bool auto_dir = want == "auto";
-  const std::string dfl_dir =
+  std::string dfl_dir =
       dfl_off ? std::string() : auto_dir ? DFlash2::find(opts_.model_dir, Qwen35::read_config(opts_.model_dir)) : want;
   size_t dfl_bytes = 0;
+  bool dfl_mem_skip = false;
   if (!dfl_dir.empty()) {
     size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
     dfl_bytes = DFlash2::plan_bytes(dfl_dir, &per_slot) + 3 * per_slot * size_t(std::max(1, opts_.slots));
+    // auto: a drafter that would keep one conversation from its full context (where the model alone keeps it) is
+    // left out on this Mac; MTP (or plain decoding) instead. Context before speed.
+    const Qwen35::MemPlan p = Qwen35::plan(opts_.model_dir, 1024);
+    const size_t one = p.fixed(std::max(1, opts_.slots)) + Qwen35::ane_plan(opts_.model_dir, p).bytes +
+                       p.kv_per_pos * size_t(opts_.context);
+    if (auto_dir && one + dfl_bytes > budget_ && one <= budget_) {
+      logi("DFlash2: %s left out: its %.2f GB would keep a %d-token conversation from fitting the %.1f GB budget",
+           dfl_dir.c_str(), dfl_bytes / 1e9, opts_.context, budget_ / 1e9);
+      dfl_dir.clear();
+      dfl_bytes = 0;
+      dfl_mem_skip = true;
+    }
   }
   {
     const int slots = std::max(1, opts_.slots), min_ctx = std::min(opts_.context, 8192);
@@ -94,7 +107,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  if (!dfl_off) {
+  if (!dfl_off && !dfl_mem_skip) {
     const std::string& dir = dfl_dir;
     if (dir.empty()) {
       logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
