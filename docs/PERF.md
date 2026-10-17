@@ -1680,3 +1680,10 @@ five with a hit are the same up to that step and then go on with the returned ca
 (new: thinking + tools returns read_file as a tool call) on both models with the switch off, on and at the
 default; parser_test 26/26 with both tokenizers. Made the default after these runs; `NI_THINK_TOOLCALLS=0`
 leaves such calls in the reasoning.
+
+Both switches re-checked on this branch merged with main b457a52 (DFlash2 on by default, history prefill),
+before landing: tests/test_server.py 14/14 on the 35B and the 27B at the defaults; new user query after 2 / 3
+tool calls (5 s pause) 16k 0.54 / 0.12 s and 4k 0.54 / 0.53 s by default vs 19.49 / 20.34 s and 5.76 / 6.42 s
+with `NI_QUERY_CKPT=0` (the history prefill ran in 4 of 4 conversations vs 0), replies identical; thinking tool
+loops (6 conversations, reasoning not sent back, greedy, DFlash2 decoding) 6 of 6 complete with 2 calls returned
+from the reasoning vs 4 of 6 with `NI_THINK_TOOLCALLS=0`, the other 4 identical.
