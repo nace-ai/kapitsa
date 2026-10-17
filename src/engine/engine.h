@@ -134,6 +134,9 @@ class Engine {
   // slots (least recently used first: their conversations are prefilled again when they come back).
   // Nothing using the slots may be in flight. False if even that leaves too little memory.
   bool reserve_kv(Slot& slot, int need);
+  // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
+  // starts at position 0 from the live state), no tokens, no checkpoints
+  void drop_slot(Slot& slot);
 
   EngineOptions opts_;
   std::unique_ptr<Qwen35> model_;

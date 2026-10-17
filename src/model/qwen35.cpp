@@ -816,8 +816,10 @@ bool Qwen35::reserve(Seq& s, int need) {
   const size_t per = kv_bytes_per_pos();
   auto round_up = [](int v, int m) { return (v + m - 1) / m * m; };
   auto fits = [&](int c) {
-    // final size; the batched copy overlaps at most ~256 MB more for a moment
-    return !mem_budget_ || Gpu::get().allocated_bytes() + size_t(c - s.cap) * per + (size_t(256) << 20) <= mem_budget_;
+    // final size; the batched copy holds a batch's old buffers a moment longer (at most ~256 MB, and at most the old
+    // cache: nothing when the cache starts empty)
+    const size_t copy = std::min(size_t(256) << 20, size_t(s.cap) * per);
+    return !mem_budget_ || Gpu::get().allocated_bytes() + size_t(c - s.cap) * per + copy <= mem_budget_;
   };
   // at least a quarter more (fewer copies while a conversation fills), in 1024-position steps
   int target = std::min(s.limit, round_up(std::max(need, s.cap + s.cap / 4), 1024));

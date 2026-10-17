@@ -177,6 +177,14 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   return lp;
 }
 
+void Engine::drop_slot(Slot& slot) {
+  model_->drop_kv(*slot.seq);
+  model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
+  slot.tokens.clear();
+  for (auto& c : slot.ckpts) c.pos = -1;
+  ++slot.gen;  // an idle history prefill for it gives up
+}
+
 bool Engine::reserve_kv(Slot& slot, int need) {
   Seq& s = *slot.seq;
   if (model_->reserve(s, need)) return true;
@@ -187,10 +195,7 @@ bool Engine::reserve_kv(Slot& slot, int need) {
   for (Slot* o : others) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for a %d-token context in slot %d",
          int(o - slots_.data()), int(o->tokens.size()), need, int(&slot - slots_.data()));
-    model_->drop_kv(*o->seq);
-    o->tokens.clear();
-    for (auto& c : o->ckpts) c.pos = -1;
-    ++o->gen;  // an idle history prefill for it gives up
+    drop_slot(*o);
     if (model_->reserve(s, need)) return true;
   }
   // last: the Neural Engine split's surfaces and its rerun checkpoint (the prefill then runs on the GPU alone)
@@ -456,11 +461,24 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return res;
   }
 
+  // ---- prefix reuse ----
+  size_t common = 0;
+  while (common < slot.tokens.size() && common < prompt.size() && slot.tokens[common] == prompt[common]) ++common;
+
   // ---- KV cache for the prompt and the first part of the answer (it grows further while decoding) ----
-  // other slots' caches are given up only when the prompt itself does not fit
-  const int kv_min = std::min(s.limit, n + 32);
-  if (!model_->reserve(s, std::min(s.limit, n + std::clamp(r.max_tokens, 0, 1024) + 32)) && !model_->reserve(s, kv_min) &&
-      !reserve_kv(slot, kv_min)) {
+  // other slots' caches are given up only when the prompt itself does not fit; before them this slot's own, when
+  // the prompt reuses none of it (no live state to continue, no checkpoint inside the common prefix: the prefill
+  // starts at 0), so the new cache starts empty: nothing to copy, no transient second copy
+  const int kv_min = std::min(s.limit, n + 32), kv_want = std::min(s.limit, n + std::clamp(r.max_tokens, 0, 1024) + 32);
+  auto fit_kv = [&] { return model_->reserve(s, kv_want) || model_->reserve(s, kv_min); };
+  bool kv_ok = fit_kv();
+  bool reuses = common > 0 && common == slot.tokens.size() && int(common) < n;
+  for (auto& c : slot.ckpts) reuses = reuses || (c.pos > 0 && c.pos <= int(common) && c.pos < n);
+  if (!kv_ok && !reuses && s.cap > 0) {
+    drop_slot(slot);
+    kv_ok = fit_kv();
+  }
+  if (!kv_ok && !reserve_kv(slot, kv_min)) {
     const size_t per = model_->kv_bytes_per_pos(), used = g.allocated_bytes();
     const size_t fit = size_t(s.cap) + (budget_ > used ? budget_ - used : 0) / per;
     res.finish_reason = "error";
@@ -468,10 +486,6 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
                 "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
     return res;
   }
-
-  // ---- prefix reuse ----
-  size_t common = 0;
-  while (common < slot.tokens.size() && common < prompt.size() && slot.tokens[common] == prompt[common]) ++common;
   int start = 0;
   auto e = g.begin();
   if (common == slot.tokens.size() && int(common) < n) {
