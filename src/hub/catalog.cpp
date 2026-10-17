@@ -2,16 +2,14 @@
 // variant (another precision of the same model) or change a model's default variant. Nothing else needs to change:
 // the downloader, `pull`, `list`, `--help` and the folder names (<name>-<variant>) follow this table.
 //
-// - Models are listed best first: `kapitsa serve` without --model takes the first whose default variant fits the
-//   Mac's GPU memory.
+// - Models are listed best first: `kapitsa serve` without --model takes the first whose default variant's memory
+//   plan (the engine's own, on its headers) leaves room for one --ctx conversation on this Mac.
 // - A variant pins its weights to a revision (a commit), so a download is always the same bytes; every file of the
 //   repo but .gitattributes is fetched. Its companions are fetched with it: an MTP head ("mtp": files taken from a
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
 //   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first). A drafter runs only with
 //   a 4-bit embedding table, so higher-precision variants carry the MTP head alone.
-// - download_gb is shown before a download; fixed_gb and kv_bytes_per_token are the memory the engine plans for the
-//   variant (`kapitsa doctor --json --ctx 32768 --slots 2` on its files: weights + MTP head + prefill buffers + two
-//   slots' state + the Neural Engine split, plus the drafter's resident size) and its KV cache per token.
+// - download_gb is shown before a download. Memory needs no entry: the engine plans it from the variant's headers.
 // - The repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
 #include "hub/hub.h"
 
@@ -35,9 +33,7 @@ const std::vector<CatalogModel>& catalog() {
                             .revision = "51ef7b6923ad6c14cb1bb41c37a9041446496ab6",
                             .files = {"config.json", "model.safetensors", "LICENSE"},
                             .subdir = "dflash2"}},
-            .download_gb = 22.07,
-            .fixed_gb = 21.21 + 0.58,
-            .kv_bytes_per_token = 22528},
+            .download_gb = 22.07},
        }},
       {.name = "qwen3.8-27b",
        .aliases = {"27b"},
@@ -60,9 +56,7 @@ const std::vector<CatalogModel>& catalog() {
                             .revision = "015e795645c74b1a0eeef3b570031fb62e769bc5",
                             .files = {"config.json", "model.safetensors"},
                             .subdir = "dflash2"}},
-            .download_gb = 20.17,
-            .fixed_gb = 18.08 + 1.54,
-            .kv_bytes_per_token = 69632},
+            .download_gb = 20.17},
        }},
       {.name = "qwen3.5-4b",
        .aliases = {"4b"},
@@ -81,9 +75,7 @@ const std::vector<CatalogModel>& catalog() {
                             .revision = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
                             .sha256 = "4f491dd27975520ec9c9bfa970ca215cc7f12a0328761d3656ab7b9f388e472a",
                             .size = 241200816}},
-            .download_gb = 3.30,
-            .fixed_gb = 3.66,
-            .kv_bytes_per_token = 36864},
+            .download_gb = 3.30},
        }},
   };
   return c;

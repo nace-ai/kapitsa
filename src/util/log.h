@@ -26,7 +26,7 @@ inline int& log_level() {
 // Exits with status 1 (NI_ABORT=1: abort() instead, for a backtrace in a debugger or crash report). Most fatal
 // errors are the user's to fix (a missing file, not enough memory), and abort()'s "Abort trap" and crash report
 // would only bury the message.
-[[noreturn]] inline void fatal(const char* fmt, ...) {
+[[noreturn]] __attribute__((format(printf, 1, 2))) inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   fprintf(stderr, "[kapitsa] fatal: ");
@@ -38,7 +38,7 @@ inline int& log_level() {
   _exit(1);
 }
 
-inline void logi(const char* fmt, ...) {
+__attribute__((format(printf, 1, 2))) inline void logi(const char* fmt, ...) {
   if (log_level() < 1) return;
   va_list ap;
   va_start(ap, fmt);
@@ -48,7 +48,7 @@ inline void logi(const char* fmt, ...) {
   va_end(ap);
 }
 
-inline void logd(const char* fmt, ...) {
+__attribute__((format(printf, 1, 2))) inline void logd(const char* fmt, ...) {
   if (log_level() < 2) return;
   va_list ap;
   va_start(ap, fmt);

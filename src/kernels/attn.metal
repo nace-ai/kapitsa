@@ -50,6 +50,15 @@ struct AttnPrepParams {
   else kc[((h - p.Hq) * p.max_seq + pos) * D + tid] = half(x);
 }
 
+// ---- KV cache growth (Qwen35::reserve): positions [0, old_cap) of every kv head of a [H, old_cap, D]
+// cache into a [H, new_cap, D] one, in 16-byte words. p = (old_cap, new_cap) in words per head, H.
+// grid: x = ceil(p.x / 256) threadgroups of 256 threads, y = H.
+[[kernel]] void kv_regrow(const device uint4* src [[buffer(0)]], device uint4* dst [[buffer(1)]],
+                          constant uint3& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  if (gid.x >= p.x) return;
+  dst[gid.y * p.y + gid.x] = src[gid.y * p.x + gid.x];
+}
+
 // ---- Decode attention, split-K over the cache ("flash decoding") ----
 // One threadgroup per (chunk, kv head); its G = Hq/Hkv simdgroups are the query heads sharing that
 // kv head, so K/V tiles are read from memory once and reused from threadgroup memory.

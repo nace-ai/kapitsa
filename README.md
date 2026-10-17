@@ -12,7 +12,8 @@ back up without reading it again. On a 48 GB MacBook Pro it is the fastest of th
 ## Quick start
 
 An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro), the Xcode Command Line Tools and CMake. The 4B
-runs on 16 GB. The 35B-A3B and 27B need 32 GB, and 48 GB is recommended.
+runs on a 16 GB MacBook Air. The 35B-A3B and 27B need 32 GB, and 48 GB is recommended. `kapitsa doctor` shows what
+fits this Mac.
 
 ```bash
 git clone https://github.com/nace-ai/kapitsa && cd kapitsa && ./install.sh
@@ -58,9 +59,9 @@ the cached prompt tokens of a follow-up.
 A variant is the precision of the weights: `--model 27b` takes the model's default, and `--model 27b:<variant>`
 picks another as more are added (`kapitsa list` shows them all). Each variant is pinned to a tested revision.
 Speculative decoding is lossless: the output follows the model's own distribution, and greedy output matches
-decoding without it except at near-ties within rounding noise. Other Qwen3.5-family models in MLX 4- or 8-bit format load from a Hugging Face repo
-(`--model mlx-community/Qwen3.5-9B-4bit`) or a folder (`--model ~/models/my-qwen`). The defaults are tuned on the
-three above.
+decoding without it except at near-ties within rounding noise. Other Qwen3.5-family models in MLX 4- or 8-bit
+format load from a Hugging Face repo (`--model mlx-community/Qwen3.5-9B-4bit`) or a folder
+(`--model ~/models/my-qwen`). The defaults are tuned on the three above.
 
 `kapitsa pull 27b` downloads a model without starting it, `kapitsa list` shows what is downloaded, and
 `kapitsa rm 27b` deletes it. Downloads resume after an interruption and are checked against their checksums. Files
@@ -78,6 +79,7 @@ Add these to `kapitsa serve`:
 | `--slots 2` | Keep this many conversations ready for instant follow-ups. |
 | `--dflash none` | Decode with the model's MTP head instead of its DFlash2 draft model. |
 | `--spec 0` | Turn speculative decoding off. |
+| `--mem-budget 20` | Cap the GPU memory Kapitsa holds, in GB. Default: what macOS recommends for this Mac's GPU, a little less. |
 | `--api-key KEY` | Require a bearer token. The chat page asks for it once. |
 | `--host 0.0.0.0` | Serve your network. Default: this Mac only (`127.0.0.1:8000`; `--port` changes the port). |
 

@@ -66,7 +66,23 @@ int main(int argc, char** argv) {
     int bits, gs, rows, nt;
   };
   std::vector<Case> cases;
-  if (getenv("V2")) {
+  static std::vector<std::string> keep;  // kernel names of SHAPES cases
+  if (const char* sh = getenv("SHAPES")) {
+    // SHAPES=kernel:N:K:rows[,...] e.g. qmv2_b4_g64_r4:2560:4096:4 (simdgroups per threadgroup: argv[1])
+    std::string all = sh;
+    for (size_t p = 0; p < all.size();) {
+      size_t q = all.find(',', p);
+      std::string item = all.substr(p, q == std::string::npos ? std::string::npos : q - p);
+      char name[128];
+      unsigned N = 0, K = 0, r = 0;
+      if (sscanf(item.c_str(), "%127[^:]:%u:%u:%u", name, &N, &K, &r) == 4) {
+        keep.push_back(name);
+        cases.push_back({nullptr, N, K, 4, 64, int(r), 1});
+      }
+      p = q == std::string::npos ? all.size() : q + 1;
+    }
+    for (size_t i = 0; i < cases.size(); ++i) cases[i].kernel = keep[i].c_str();
+  } else if (getenv("V2")) {
     int r = atoi(getenv("V2"));
     std::string s = "qmv2_b4_g64_r" + std::to_string(r);
     static std::vector<std::string> names = {s, s + "_norm"};

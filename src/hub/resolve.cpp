@@ -58,14 +58,6 @@ std::string short_name(const CatalogModel& m, const Variant& v) {
   return v.name == m.default_variant ? short_name(m) : short_name(m) + ":" + v.name;
 }
 
-double comfortable_gb(const Variant& v) { return v.fixed_gb + 16384.0 * v.kv_bytes_per_token / 1e9; }
-
-const CatalogModel& best_fit(size_t budget_bytes) {
-  for (const auto& m : catalog())
-    if (const Variant* v = m.variant(); v && comfortable_gb(*v) * 1e9 <= double(budget_bytes)) return m;
-  return catalog().back();
-}
-
 static std::string user_home() {
   if (const char* h = getenv("HOME"); h && *h) return h;
   if (const passwd* pw = getpwuid(getuid()); pw && pw->pw_dir) return pw->pw_dir;

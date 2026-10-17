@@ -40,9 +40,6 @@ struct Variant {
   std::string repo, revision;         // the weights (every file but .gitattributes)
   std::vector<Companion> companions;
   double download_gb = 0;             // weights + companions
-  // GPU memory at load with the companions (2 slots, 2048-row prefill buffers, the Neural Engine split) and the KV
-  // cache per token of conversation: how `serve` without --model judges a model that is not downloaded yet
-  double fixed_gb = 0, kv_bytes_per_token = 0;
 };
 
 // The models of the catalog (src/hub/catalog.cpp), best first.
@@ -66,11 +63,6 @@ std::string short_name(const CatalogModel& m);                     // its shorte
 std::string full_name(const CatalogModel& m, const Variant& v);
 std::string short_name(const CatalogModel& m, const Variant& v);
 
-// GPU memory a variant needs to start with room for a 16k-token conversation.
-double comfortable_gb(const Variant& v);
-// The best catalog model for a GPU memory budget (bytes): the first model (best first) whose default variant fits
-// comfortably, else the last.
-const CatalogModel& best_fit(size_t budget_bytes);
 
 std::string home_dir();     // $KAPITSA_HOME, else ~/.cache/kapitsa
 std::string models_dir();   // home_dir() + "/models"

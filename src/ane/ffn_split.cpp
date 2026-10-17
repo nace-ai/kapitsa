@@ -77,7 +77,10 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
         L.down.K != inter_)
       throw std::runtime_error("FFN layers differ in shape");
   if (hidden_ % kSeg) throw std::runtime_error("hidden size is not whole 2560-channel segments");
-  if ((hidden_ / 128) % 8 || hidden_ / 128 / 8 > 8) throw std::runtime_error("hidden size ane_rotate does not take");
+  // ane_rotate: the hidden's 128-blocks split evenly over at most 8 simdgroups, at most 8 blocks each
+  // (27B: 40 blocks, 8 x 5; 4B: 20 blocks, 5 x 4)
+  rot_sg_ = rotate_simdgroups(hidden_);
+  if (!rot_sg_) throw std::runtime_error("hidden size ane_rotate does not take");
   if (inter_ % kUnit || inter_ < 2 * kUnit) throw std::runtime_error("intermediate size is not whole 512-channel units");
   if (c.units < 1 || c.units > inter_ / kUnit)
     throw std::runtime_error("units must be in 1.." + std::to_string(inter_ / kUnit));
@@ -219,6 +222,13 @@ void FfnSplit::init_resources() {
 }
 
 FfnSplit::~FfnSplit() { free_all(); }
+
+uint32_t FfnSplit::rotate_simdgroups(uint32_t hidden) {
+  if (hidden % kSeg) return 0;
+  for (uint32_t g = 8; g >= 1; --g)
+    if ((hidden / 128) % g == 0 && hidden / 128 / g <= 8) return g;
+  return 0;
+}
 
 void FfnSplit::program_source(std::string& mil, std::vector<uint8_t>& blob) {
   mil = "program(1.3)\n{\n";
@@ -515,7 +525,7 @@ void FfnSplit::pack(Encoder& e, int lane, const Buffer& xh, int T) {
   e.buf(2, rot_);
   e.buf(3, La.tx.buf);
   e.val(4, RotP{uint32_t(T), hidden_});
-  e.dispatch(R, 1, 1, 256);
+  e.dispatch(R, 1, 1, 32 * rot_sg_);
   e.use(pipe("ane_pack"));
   for (size_t k = 0; k < La.x.size(); ++k) {
     e.buf(0, rot_);
@@ -666,12 +676,41 @@ bool write_calibration(const std::string& key, const Calibration& c) {
   return bool(f);
 }
 
-uint32_t default_units(const std::string& chip, bool wave) {
-  // M4 Pro (20-core GPU, 16-core ANE), measured (docs/PERF.md): the plain split balances at 25-27 of
-  // 34 units; the wavefront hides the ANE under the GPU's mixer, so it gives the ANE nearly all
-  // channels. An ane_calib run on the Mac overrides this.
-  if (chip == "Apple M4 Pro") return wave ? 33 : 27;
-  return 0;
+size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, int lanes) {
+  (void)inter;
+  const size_t nin = hidden / FfnSplit::kSeg, ane = size_t(units) * FfnSplit::kUnit, R = FfnSplit::kMaxRows;
+  auto surf = [](size_t rows, size_t width, bool f16) {  // rows padded to 64 bytes, size to 16 KB pages
+    const size_t stride = (width * (f16 ? 2 : 1) + 63) / 64 * 64;
+    return (rows * stride + 16383) / 16384 * 16384;
+  };
+  size_t b = 0;
+  for (int l = 0; l < lanes; ++l) b += nin * surf(FfnSplit::kSeg, R, false) + surf(1, R, true) + surf(hidden + 1, R, true);
+  size_t dseg = 0;
+  for (size_t c = 0; c < ane; c += FfnSplit::kSeg) dseg += surf(hidden, std::min<size_t>(FfnSplit::kSeg, ane - c), false);
+  b += 2 * (2 * nin * surf(ane, FfnSplit::kSeg, false) + dseg + 2 * surf(ane, 1, true) + surf(hidden, 1, true));
+  b += R * hidden * 2 + 512 * 4 + 16 + size_t(layers) * (2 * ane + hidden) * 2;  // rotation scratch, signs, row scales
+  return b;
+}
+
+uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave) {
+  // Measured on the M4 Pro (20-core GPU, 16-core ANE; docs/PERF.md, 27B): the wavefront hides the ANE's
+  // FFN of one row half under the GPU's mixer of the other, and the GPU stays the bottleneck up to the
+  // whole FFN (34 of 34 units: 7.20 s per 2048-row chunk vs 7.40 at 33, 8.40 at 31); the plain split
+  // balances at 27 of 34. Per layer and chunk, the ANE takes ~1.94 ms per unit (fixed for the chip family)
+  // and the GPU ~100 ms of mixer plus 6.2 ms per unit it keeps, both scaling with 20 / cores. So the GPU
+  // stays the bottleneck at the whole FFN up to ~30 cores (MacBook Airs: 8-10), and a bigger GPU (M4 Max:
+  // 40 cores) balances at u = (100 + 6.2 x 34) x 20 / cores / (1.94 + 6.2 x 20 / cores) ~ 31 of 34. A
+  // larger ANE share also keeps a fanless Air cooler: the ANE draws a fraction of the GPU's power for the
+  // same work. M4 and M5 family only (the W8A8 program was verified on the M4's ANE; older ANEs are left to
+  // a calibration: ane_calib --wave --write).
+  if (!total || (chip.find("M4") == std::string::npos && chip.find("M5") == std::string::npos)) return 0;
+  const double c = std::max(1, cores), k = 20.0 / c;
+  const double u34 = (100.0 + 6.2 * 34) * k / (1.94 + 6.2 * k);  // on the 27B's 34 units
+  // plain split: ANE and GPU part concurrent per layer, balanced at u = g U / (a + g), matched to the 27 of 34
+  // measured at 20 cores
+  const double plain = 27.0 / 34 * (6.2 * k / (1.94 + 6.2 * k)) / (6.2 / (1.94 + 6.2));
+  const double frac = std::min(1.0, wave ? u34 / 34 : plain);
+  return std::max<uint32_t>(1, std::min<uint32_t>(total, uint32_t(std::lround(frac * total))));
 }
 
 }  // namespace ni::ane

@@ -2,13 +2,15 @@
 // chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
 //                 [--ctx 32768] [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
-//                 [--api-key K]                      no --model: the best catalog model for this Mac's memory
+//                 [--api-key K] [--mem-budget GB]    no --model: the best catalog model for this Mac's memory
+//   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
 //   kapitsa list [--json]
 //   kapitsa rm MODEL...
 //   kapitsa mtp-sidecar SRC OUT [--revision REV] [--hidden post_norm|pre_norm]   (tools/mtp_sidecar.py, same bytes)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
+#include "engine/doctor.h"
 #include "engine/engine.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
@@ -137,12 +139,28 @@ static double ram_gb() {
   return double(m) / 1073741824.0;
 }
 
-// GPU memory Kapitsa may hold on this Mac: Metal's recommended working set less 4% (at least 512 MB) for the Neural
-// Engine service and other GPU users, as the engine budgets it; NI_MEM_BUDGET (GB) overrides.
-static size_t memory_budget() {
-  if (const char* v = getenv("NI_MEM_BUDGET"); v && *v) return size_t(atof(v) * 1e9);
-  const size_t rws = Gpu::get().recommended_working_set();
-  return rws - std::max<size_t>(size_t(512) << 20, rws / 25);
+static double to_gb(const std::string& opt, const std::string& v, const char* help) {
+  char* end = nullptr;
+  const double x = strtod(v.c_str(), &end);
+  if (v.empty() || *end || !(x > 0)) usage_error(opt + " needs a size in GB, not \"" + v + "\"", help);
+  return x;
+}
+
+// The best catalog model for this Mac: the first (the catalog is best first) whose memory plan, the engine's own
+// (conversation_fits: plan_load's test before it keeps a drafter), leaves room for one conversation of --ctx tokens
+// within the budget. A model not downloaded yet is planned from its headers (hub::plan_dir: a few hundred KB, fetched
+// once); one that cannot be planned (offline) cannot be downloaded either and is skipped. nullptr if none can.
+static const hub::CatalogModel* best_model(const EngineOptions& opt, size_t budget, std::string* why) {
+  const hub::CatalogModel* fallback = nullptr;
+  for (const auto& m : hub::catalog()) {
+    const std::string dir = hub::plan_dir(hub::resolve(m.name));
+    if (dir.empty()) continue;
+    if (conversation_fits(dir, opt.context, opt.slots, budget)) return &m;
+    fallback = &m;  // plannable but too big: the smallest such is the last resort
+  }
+  if (!fallback && why) *why = "Can't reach huggingface.co to see which model fits this Mac (offline?), and none is "
+                               "downloaded. Connect to the internet, or pass --model with a model folder.";
+  return fallback;
 }
 
 static std::string models_table() {
@@ -177,7 +195,8 @@ static void print_help() {
          "  serve        start the server: chat page at /, OpenAI API at /v1 (kapitsa serve --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
          "  list         downloaded models, their size and what they include\n"
-         "  rm MODEL     delete a downloaded model\n\n"
+         "  rm MODEL     delete a downloaded model\n"
+         "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
 }
@@ -196,7 +215,9 @@ static void print_serve_help() {
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
          "                         none decodes with the model's MTP head\n"
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation)\n"
-         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048)\n\n"
+         "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
+         "                         little less; kapitsa doctor shows it)\n"
+         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions, GET /v1/models, GET /health.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
 }
@@ -266,38 +287,44 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--dflash") opt.dflash = next();
     else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
     else if (a == "--api-key") api_key = next();
+    else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
 
   // the model: a name, a repo or a folder; downloaded (or completed) first if needed
+  const size_t budget = opt.mem_budget_gb > 0 ? size_t(opt.mem_budget_gb * 1e9) : default_mem_budget();
   hub::ModelRef ref;
   try {
     if (model.empty()) {
-      const hub::CatalogModel& m = hub::best_fit(memory_budget());
-      ref = hub::resolve(m.name);
+      std::string why;
+      const hub::CatalogModel* m = best_model(opt, budget, &why);
+      if (!m) return fail(why);
+      ref = hub::resolve(m->name);
       fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
-              m.name.c_str(), Gpu::get().name().c_str(), ram_gb());
+              m->name.c_str(), Gpu::get().name().c_str(), ram_gb());
     } else {
       ref = hub::resolve(expand_home(model));
     }
   } catch (const hub::Error& e) {
     return fail(e.what(), 2);
   }
-  if (ref.kind == hub::ModelRef::kCatalog && !model.empty()) {
-    // before a long download: a model that cannot start on this Mac (its weights, buffers and an 8k-token
-    // conversation over the GPU memory budget) is refused, with the one that fits
-    const double need = ref.variant->fixed_gb + 8192.0 * ref.variant->kv_bytes_per_token / 1e9;
-    const size_t budget = memory_budget();
-    if (need * 1e9 > double(budget)) {
-      const hub::CatalogModel& fit = hub::best_fit(budget);
-      char msg[512];
-      snprintf(msg, sizeof msg,
-               "%s needs about %.0f GB of GPU memory and this Mac (%.0f GB) allows %.1f GB, so it would not start. "
-               "%s fits: kapitsa serve --model %s",
-               ref.name.c_str(), need, ram_gb(), double(budget) / 1e9, fit.name.c_str(), hub::short_name(fit).c_str());
-      return fail(msg);
+  if (ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
+    // before a long download: the engine's own start check on the model's headers; a model that would not start
+    // here is refused, with the one that fits
+    if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
+      const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
+      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, opt.context, opt.slots);
+      if (need.bytes > budget) {
+        const hub::CatalogModel* fit = best_model(opt, budget, nullptr);
+        char msg[640];
+        snprintf(msg, sizeof msg, "%s needs %.1f GB of GPU memory with %s, and this Mac (%.0f GB) allows %.1f GB, so it "
+                 "would not start.%s%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
+                 budget / 1e9, fit && fit != ref.model ? " This one fits: kapitsa serve --model " : "",
+                 fit && fit != ref.model ? hub::short_name(*fit).c_str() : "", fit && fit != ref.model ? "" : "");
+        return fail(msg);
+      }
     }
   }
   if (ref.kind == hub::ModelRef::kLocal) {
@@ -355,7 +382,9 @@ static int serve(int argc, char** argv, int first) {
            {"data", json::array({json{{"id", engine.model_id()},
                                       {"object", "model"},
                                       {"owned_by", "nace"},
-                                      {"context_length", engine.context_length()}}})}};
+                                      {"context_length", engine.context_length()},
+                                      // tokens one conversation can hold within this Mac's memory budget
+                                      {"context_fit", engine.context_fit()}}})}};
     res.set_content(j.dump(), "application/json");
   });
   srv.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {
@@ -668,6 +697,7 @@ int main(int argc, char** argv) {
   if (cmd == "list" || cmd == "ls") return list(argc, argv);
   if (cmd == "rm") return rm(argc, argv);
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
+  if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }
