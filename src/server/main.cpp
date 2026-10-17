@@ -1,8 +1,11 @@
 // kapitsa: OpenAI-compatible HTTP server (chat completions, streaming, tools).
 //   kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--slots 2]
 //                 [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048] [--api-key K]
+//                 [--mem-budget GB]
+//   kapitsa doctor [--model DIR]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]
 // ("serve" is optional; build/nace-infer-server is a symlink kept for older scripts.)
 #include <cstring>
+#include "engine/doctor.h"
 #include "engine/engine.h"
 #include "util/log.h"
 
@@ -84,13 +87,17 @@ int main(int argc, char** argv) {
   int port = 8000;
   int first = 1;
   if (argc > 1 && !strcmp(argv[1], "serve")) first = 2;
+  if (argc > 1 && !strcmp(argv[1], "doctor")) return ni::run_doctor(argc - 2, argv + 2);
   if (argc > 1 && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h") || !strcmp(argv[1], "help"))) {
     printf("Kapitsa: fast Qwen inference on Apple silicon\n"
            "usage: kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768]\n"
            "                     [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]\n"
-           "                     [--api-key KEY]\n"
+           "                     [--api-key KEY] [--mem-budget GB]\n"
+           "       kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--dflash auto] [--json]   this Mac, and\n"
+           "                      which models fit\n"
            "  --dflash: DFlash2 speculative decoding, default auto (a drafter matching the model next to it or in\n"
-           "            ~/.cache/nace-infer-models/drafters; MTP when none is found); none = MTP. --spec 0 = neither.\n");
+           "            ~/.cache/nace-infer-models/drafters; MTP when none is found or where its memory would keep\n"
+           "            one --ctx conversation from fitting); none = MTP. --spec 0 = neither.\n");
     return 0;
   }
   for (int i = first; i < argc; ++i) {
@@ -109,6 +116,7 @@ int main(int argc, char** argv) {
     else if (a == "--dflash") opt.dflash = next();
     else if (a == "--prefill-chunk") opt.prefill_chunk = std::stoi(next());
     else if (a == "--api-key") api_key = next();
+    else if (a == "--mem-budget") opt.mem_budget_gb = std::stod(next());
     else fatal("unknown option %s", a.c_str());
   }
   if (opt.model_dir.empty()) fatal("--model is required");
@@ -137,7 +145,9 @@ int main(int argc, char** argv) {
            {"data", json::array({json{{"id", engine.model_id()},
                                       {"object", "model"},
                                       {"owned_by", "nace"},
-                                      {"context_length", engine.context_length()}}})}};
+                                      {"context_length", engine.context_length()},
+                                      // tokens one conversation can hold within this Mac's memory budget
+                                      {"context_fit", engine.context_fit()}}})}};
     res.set_content(j.dump(), "application/json");
   });
   srv.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {

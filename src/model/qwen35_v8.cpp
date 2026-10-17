@@ -163,7 +163,7 @@ void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
 
 // Tiling of the qmm8 grid: nf fragments (8 rows each) per simdgroup, cs column blocks per threadgroup,
 // ks k-slices per column block (fixed-order sum in threadgroup memory), cs * ks <= 8 simdgroups.
-// k-slices are added until the grid has ~1280 simdgroups (64 per core) or a slice would drop below
+// k-slices are added until the grid has ~64 simdgroups per GPU core (1280 here) or a slice would drop below
 // 4 groups of 64 inputs. NI_V8_NF / NI_V8_CS / NI_V8_KS override (tuning).
 struct V8Plan {
   int nf, cs, ks;
@@ -175,14 +175,16 @@ struct V8Plan {
 static V8Plan v8_plan(uint32_t N, uint32_t K, int nf_def) {
   static const int nf_env = env_int("NI_V8_NF", 0), cs_env = env_int("NI_V8_CS", 0), ks_env = env_int("NI_V8_KS", 0);
   static const bool plan1 = env_int("NI_V8_PLAN", 2) == 1;
+  // 64 simdgroups per GPU core: 1280 on the 20-core M4 Pro the plans were tuned on (Gpu::core_count)
+  static const uint32_t full = 64u * uint32_t(std::max(1, Gpu::get().core_count()));
   V8Plan p{nf_env ? nf_env : nf_def, cs_env ? cs_env : 4, 1};
   const uint32_t blocks = (N + 8 * p.nf - 1) / (8 * p.nf), gpr = K / 64;
   if (ks_env) p.ks = ks_env;
   else if (plan1)
-    while (p.ks < 8 && blocks * p.ks < 1280 && gpr / (p.ks * 2) >= 4) p.ks *= 2;
+    while (p.ks < 8 && blocks * p.ks < full && gpr / (p.ks * 2) >= 4) p.ks *= 2;
   else {
     p.ks = gpr >= 16 ? 4 : gpr >= 8 ? 2 : 1;
-    if (p.ks == 4 && gpr >= 32 && blocks * 4 < 1280) p.ks = 8;
+    if (p.ks == 4 && gpr >= 32 && blocks * 4 < full) p.ks = 8;
     if (!cs_env) p.cs = 8;
     // kplan (V8Knobs): with >= 8 groups per slice, 8 k-slices x 1 column block per threadgroup (kplan 1), and 16
     // k-slices (512 threads) for K >= 16384 (kplan 2). bench_v8 cmp, CM 1 + pairs, 27B shapes (min of 12 interleaved

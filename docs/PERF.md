@@ -1687,3 +1687,172 @@ tool calls (5 s pause) 16k 0.54 / 0.12 s and 4k 0.54 / 0.53 s by default vs 19.4
 with `NI_QUERY_CKPT=0` (the history prefill ran in 4 of 4 conversations vs 0), replies identical; thinking tool
 loops (6 conversations, reasoning not sent back, greedy, DFlash2 decoding) 6 of 6 complete with 2 calls returned
 from the reasoning vs 4 of 6 with `NI_THINK_TOOLCALLS=0`, the other 4 identical.
+
+## Qwen3.5-4B and smaller Macs (branch opt/air, 2026-10-17)
+Targets: Qwen3.5-4B, Qwen3.8-27B, Qwen3.6-35B-A3B on this MacBook Pro (M4 Pro 20-core GPU, 48 GB) and the MacBook
+Airs (M4: 8/10-core GPU, 120 GB/s; M5: 10-core, ~153 GB/s; 16/24/32 GB). Every GPU run under the shared lock; A/B
+runs interleaved. The GPU was shared with other sessions' jobs all morning, so absolute speeds drift between rounds.
+
+### 4B correctness: A_log stored as f32
+The 4B's MLX conversion (lmstudio-community, via mlx_vlm) stores each DeltaNet layer's `A_log` as f32 (bf16 values
+widened: 0 of 768 have low mantissa bits); the 27B and 35B store bf16, and every GDN kernel reads bf16. Read as bf16
+the f32 bytes gave wrong decay rates in all 24 DeltaNet layers: KL 5.8e-2 against mlx-lm at the code prompt's last
+position (prefill and the token-by-token decode path alike: every Kapitsa variant agreed with every other), greedy
+text off after a dozen tokens. Float parameters that are not bf16 now get an owned bf16 copy at load (exact here).
+Against mlx-lm with the model cast to fp32 (`model.set_dtype(mx.float32)`, a higher-precision reference than its
+default bf16 run):
+| check | Kapitsa | mlx-lm default (bf16) |
+|---|---|---|
+| teacher-forced decode path, code prompt + 120 tokens (205 positions): KL mean / median / max | 9.3e-8 / 2.6e-8 / 3.7e-6 | 5.5e-4 / 2.6e-4 / 8.6e-3 |
+| argmax equal to fp32 | 205/205 | 203/205 |
+| prefill, last position: p700 / p4000 / p16000 KL | 3.2e-10 / 5.8e-11 / 5.2e-10 | 9.4e-8 / 2.6e-7 / 1.9e-7 |
+| greedy 256 tokens equal to fp32 mlx-lm: code / prose | 256 / 256 | 7 / 226 |
+The coordinator's "agrees with mlx-lm for 12 tokens": after the fix the first split from bf16 mlx-lm is at token 7,
+a tie inside mlx-lm itself (0.457 vs 0.457); the fp32 reference and Kapitsa agree throughout.
+
+### 4B speed against mlx-lm (same weights and token ids, raw generation, 2026-10-17 ~05:30)
+| | Kapitsa (ni_run) | mlx-lm 0.32.2 (stream_generate, prefill step 2048) |
+|---|---|---|
+| prefill p4000 | 4440-4461 ms per rep (897-901 tok/s), GPU alone | 839-840 tok/s |
+| prefill p16000 | 20688-20836 ms (768-773 tok/s), GPU alone | 725 tok/s |
+| decode, code prompt, 512 greedy tokens | 83.0 / 83.1 tok/s plain | 80.0 |
+Prefill is compute bound (7.1 GFLOP per token: 3.6 G non-embedding weights). The Neural Engine split now runs on the
+4B too (below): 4k ~2000 tok/s. Decode reads 2.36 GB per token (the tied 4-bit embedding is the 357 MB output
+layer): 83 tok/s = 196 GB/s; the 4B's small matrices (N 2560, K 2560-9216) reach 147-221 GB/s per kernel against
+the 27B's ~240.
+
+### 4B speculative decoding: the official MTP head
+MLX conversions of the small Qwen3.5 models drop `mtp.*`. The official Qwen/Qwen3.5-4B checkpoint (Apache-2.0) has
+the head as 15 bf16 tensors (241 MB of 9.3 GB); `tools/mtp_sidecar.py` fetches only those with HTTP range requests
+and writes `mtp.safetensors` with the RMSNorm weights + 1 (Hugging Face stores them zero-centred: trunk layer 0
+0.139 against the MLX file's 1.139) and the trunk hidden it reads in the header. ni_run, 256 greedy tokens:
+| hidden / draft vocabulary | depth 1 | depth 2 | depth 3 |
+|---|---|---|---|
+| pre-norm, full vocabulary (code) | 106.8 tok/s, 1.73 tok/cycle, 0.74 accepted | 101.6, 2.16, 0.59 | 58.9, 2.34, 0.46 |
+| post-norm, full vocabulary (code) | 110.3 / 115.8, 1.76, 0.76 | 106.6 / 108.9, 2.18, 0.59 | 64.1, 2.38, 0.47 |
+| post-norm, ids < 32768 + specials (code) | **119.5**, 1.67, 0.67 | 116.6, 2.04, 0.52 | |
+| post-norm, full (prose) | 112.0, 1.70, 0.71 | 102.8, 2.06, 0.53 | |
+| post-norm, ids < 32768 + specials (prose) | **120.9**, 1.69, 0.70 | 112.4, 1.99, 0.50 | |
+Plain decoding 83 tok/s. A depth-1 cycle is 13.9 ms against a 12.0 ms step: the 2-row verify (qmvrc1, two
+single-row threadgroups per weight block) costs about one step, the draft ~1.1 ms. Depth 3 (a 4-row verify on the
+FMA kernels) collapses. Defaults: depth 1 below a hidden size of 4096 (27B stays at 2); the full-vocabulary draft
+only where the lm_head is < 10% of the weights (27B 4.5%, 4B 13%). Depth-1 output equals plain decoding for all 256
+tokens on both prompts; depth 2 splits at token 81 on both, each a near-tie of plain decoding itself (top-2 logit
+margins 0.0094 / 0.0053: the 3-row verify's half-precision products). Through the server (MTP by default):
+tests/test_server.py 12/13; the failing check expects the tool-result turn to reuse the whole first prompt, but the
+4B's own tool-call text is not the template's rendering of it, so the turn restores the turn-boundary checkpoint
+(cached 371 of 378).
+DFlash2 drafter: the community nchapman/Qwen3.5-4B-DFlash2 (1.32 GB bf16) declares no license and is the
+`speculators` variant (5 full-attention layers, 16 q / 4 kv heads x 256, block 16, RoPE theta 1e4), not the z-lab /
+inco geometry Kapitsa's DFlash2 kernels take (32 / 8 x 128, block 8, window 2048, RoPE 1e7); z-lab's
+Qwen3.5-4B-DFlash is DFlash v1. Not used.
+
+### Memory: KV caches that grow, a budget, a fit check
+(Design: DEVELOPMENT.md, Memory.) Before: every slot's KV cache for the whole context at start (the app measured
+35B 22.6 GiB and 27B 25.6 GiB with 2 slots x 64k: a slot's whole cache becomes resident with its first conversation,
+since Metal wires a buffer whole when a command buffer binds it). Bitwise checks, ni_run, base 2006b21 against this
+branch with the caches allocated whole and with `--kv-grow` (empty, grown before every chunk and step, the
+engine's path): identical logits (prompt and every decode step) and greedy ids, plain and MTP, on the 4B (p4000, 64
+tokens, depth 1), the 35B (p4000, 32, depth 1) and the 27B (p700 through the Neural Engine split, 16, depth 2).
+Metal allocations (ni_run sizes its sequence at 8192 positions; base / trimmed buffers / grown to need):
+4B 3901 / 3558 / 3407 MB, 35B 21196 / 21196 / 21103, 27B 18817 / 18163 / 17664; process footprint 27B 18074 /
+17795 / 17321 MB (the 27B's fp32 gate/up rows, 2 x 143 MB, were bound by the MTP head's verify and so resident).
+
+### GPU cores (MacBook Airs: 8-10)
+`Gpu::core_count()` reads the AGXAccelerator's `gpu-core-count` from the IORegistry (20 here; `NI_GPU_CORES`
+overrides). Host-side choices that sized grids for 20 cores now scale with it and keep their constants at 20 (so
+nothing changes on this Mac): the decode and MTP-verify attention split-K (one chunk per core and kv head, >= 64
+positions), the short-prefill attention key split (~5 threadgroups per core) and the qmms token-block split (below
+24/5 x cores threadgroups, aiming at 32/5 x cores; bitwise neutral). Prefill GEMM grids are 100+ threadgroups at
+any chunk and need no change. No kernel waits for another threadgroup (threadgroup-local atomics and one status flag
+only), so fewer cores cannot deadlock; the Neural Engine handoff waits only on events signalled by committed command
+buffers, with a 2 s watchdog. Limits: Apple's feature set tables give Apple10 (M5) the same 32 KB of threadgroup
+memory and 1024 threads per threadgroup as Apple7-Apple9; `ni_kstats --limits` finds no production kernel above
+32 KB (only the bench kernel attn_prefill9_q8_k32, 33280 B, already known) and every kernel below 1024 threads
+dispatched within its limit; `Encoder::dispatch` now names a kernel dispatched above its pipeline's
+maxTotalThreadsPerThreadgroup instead of failing the command buffer.
+
+### Neural Engine: the 4B split and a default share per chip family
+Before, the split had a share for the M4 Pro alone and `ane_rotate` needed hidden/128 to split over 8 simdgroups
+(the 27B's 40 blocks). It now picks 1-8 simdgroups that split the blocks evenly (4B: 20 blocks, 5 x 4), and the
+default share comes from the chip family and GPU size: M4 and M5 family, the wavefront with the whole FFN up to ~30
+GPU cores (the measured M4 Pro balance: per layer and 2048-row chunk the ANE takes ~1.94 ms per 512-channel unit,
+the GPU ~100 ms of mixer + 6.2 ms per unit it keeps, both GPU terms scaling with 20 / cores; so on an Air's 8-10
+cores the GPU is even more the bottleneck and the whole FFN on the ANE also takes heat off the fanless GPU), ~31 of
+34 units at 40 cores, the plain split scaled the same way; older chips GPU only unless `ane_calib --wave --write`
+calibrated them. A calibration on the Mac still wins (the 27B here: 34/34 either way).
+4B on this M4 Pro (ni_run, NI_NO_MTP, 18/18 units, two interleaved rounds, the second under other sessions' load;
+ms per prefill rep):
+| round | GPU alone p4000 | split p4000 | GPU alone p16000 | split p16000 |
+|---|---|---|---|---|
+| 1 | 4537, 4494 (887 tok/s) | 1996, 1995 (2004 tok/s, 2.25x) | 20306, 20621 (783 tok/s) | 13635, 16065 (1077 tok/s) |
+| 2 | 6762, 6531 | 2869, 2924 (2.29x) | 27502, 26212 | 14237, 13936 (1.90x) |
+Logits against the GPU alone, last prompt position + 32 greedy steps: p4000 KL mean 8.2e-5, median 1.6e-6, max
+1.2e-3, 33/33 tokens; p16000 the tokens split at step 13 where the GPU alone has a near-tie (0.241 vs 0.219; split
+0.243 vs 0.197), KL up to 1.7e-3 before it. For scale, mlx-lm's default bf16 path sits at KL mean 5.5e-4 from fp32
+on this model. Startup check 2.1% of the ANE's part (27B 0.75-0.88%). Program: 13 functions, compiled in 15 s once
+(the ANE daemon's cache afterwards), 188 MB of surfaces.
+
+### With DFlash2, the tool-loop checkpoints and the eos fix (main b457a52, 73285c7, 30d430a merged into opt/air)
+Bitwise checks, ni_run, main against opt/air after the merges, same session: 35B p4000 + 32 plain, 27B p700 + 16
+plain (Neural Engine split) and 4B p4000 + 32 plain (GPU alone): logits of every step bitwise equal; MTP (35B code
+128 tokens depth 1, 27B code 64 depth 2, 4B code 128 depth 1) and DFlash2 greedy (35B code 256, 27B code 128): token
+ids equal (main's ni_run is byte-identical between 73285c7 and 30d430a). tests/test_server.py (14 checks) through
+the server with the defaults, KV caches starting empty and growing, on the merge with 30d430a: 4B with MTP 14/14
+(also GPU alone), 35B with DFlash2 14/14, 27B with DFlash2 14/14. Before main's eos fix the 4B failed two (its
+replies ran on past <|im_end|>). parser_test passes on the merged build (35B and 4B tokenizers).
+
+Speed A/B, main 30d430a against opt/air, ni_run, interleaved, two rounds (tok/s; prefill per rep):
+| | main | opt/air | opt/air / main |
+|---|---|---|---|
+| 35B prefill p4000 (3 reps x 2) | 1083.7, 1126.9, 1127.4, 1095.6, 1123.4, 1129.9 (mean 1114.5) | 1098.3, 1126.0, 1129.2, 1110.5, 1128.1, 1129.2 (mean 1120.2) | 1.005 |
+| 35B prefill p16000 (2 reps x 2) | 939.0, 944.2, 940.4, 944.2 | 942.4, 943.9, 939.3, 943.8 | 1.000 |
+| 35B DFlash2 greedy, code 256 tokens | 149.3, 148.2 | 148.0, 149.0 | 0.998 |
+| 35B MTP depth 1, code 256 tokens | 111.3, 112.2 | 110.8, 111.8 | 0.996 |
+| 27B prefill p4000, Neural Engine split (2 reps x 2) | 385.4, 385.6, 386.0, 385.6 | 386.4, 386.0, 384.7, 385.1 | 1.000 |
+| 27B DFlash2 greedy, code 128 tokens | 41.5, 40.4 | 41.1, 41.1 | 1.004 |
+| 27B MTP depth 2, code 128 tokens | 25.6, 25.3 | 25.7, 25.8 | 1.012 |
+(Absolute decode speeds are below the DFlash2 sections' 512-token runs: short runs, and a Mac shared with other
+sessions' jobs all day; the A/B is interleaved.)
+
+DFlash2 memory: the fit check's plan of the drafter (DFlash2::plan_bytes) missed the bf16 codebooks (254 MB), the
+reduced draft head (98304 rows of the target's LM head: 35B 114 MB, 27B 284 MB), the first prefill's prompt-capture
+and commit buffers (115 / 168 MB) and the ring scratch; it now sizes what the code allocates: 1.04 GB (35B) and
+2.03 GB (27B) with 2 slots, not 0.67 / 1.41. At load the engine logs the plan against the allocation: 35B 0.623 GB
+planned / 0.623 allocated, 27B 1.606 / 1.607 (the rings, 0.30 / 0.25 GB for 2 slots, are exact by construction).
+`--dflash auto` keeps the drafter only where one full `--ctx` conversation fits beside it (before: also where the
+model alone could not hold one, then taking most of what was left: 35B on a 32 GB Mac at 2/3 49.6k -> 19.5k tokens;
+at a 17.4-18.8 GB budget the 27B would not have started).
+Through the server, 35B `--ctx 65536 --slots 2`: `--mem-budget 21.99` (a 32 GB Mac at 2/3) leaves the drafter out,
+takes 1024-row prefill chunks and decodes with MTP, KV room 49.5k tokens; `--mem-budget 25.73` (78%) loads it, KV
+room 158k tokens.
+
+Slot eviction: a slot whose KV cache was given up for another conversation kept its DeltaNet / conv state, and its
+next prompt, starting at position 0 with no tokens left, prefilled on top of it. A dropped slot now starts from a
+zero state. Server test (4B, GPU alone, a budget for one ~4k conversation and not two; A, B, A again, B again, each
+evicting the other slot, greedy 48 tokens): before the fix the repeated replies differ from the first ones (A and B),
+after it they are identical. A prompt that reuses nothing of its slot also gives up the slot's own cache before
+other slots' (no copy, no transient), and a cache that starts empty needs no 256 MB copy margin.
+
+DFlash2 with a growing KV cache: through the server (`--ctx 65536 --slots 2`, GPU alone), a ~3.4k-token prompt and a
+long greedy answer, so the cache grows inside the DFlash2 loop (35B 0 -> 5120 -> 7168 positions over 2500 tokens,
+27B the same over 1800): the replies are identical to main's, whose caches are allocated whole at start (35B 100.4
+vs 102.3 tok/s, 27B 31.4 vs 31.5 on this essay prompt; the growth step took 8.5 / 17.5 ms).
+
+Process footprint through the server (`--ctx 65536 --slots 2`, the app's settings; at load, after a 4k
+conversation, after a second 4k one in the other slot, after a 15k one), main 30d430a against opt/air:
+| model | main | opt/air |
+|---|---|---|
+| 4B (MTP) | 2.48 / 5.58 / 7.89 / 7.89 GiB | 2.48 / 3.64 / 3.84 / 4.26 GiB |
+| 35B (DFlash2) | 19.70 / 21.82 / 23.15 / 23.15 GiB | 19.70 / 20.67 / 20.82 / 21.09 GiB |
+| 27B (DFlash2, Neural Engine split) | 16.35 / 22.61 / 26.79 / 26.79 GiB | 16.35 / 18.66 / 19.08 / 19.90 GiB |
+(main allocates both slots' 64k-token caches at start and a slot's becomes resident with its first conversation;
+opt/air grows each cache to what its conversation uses.)
+
+GPU cores, simulated with `NI_GPU_CORES` on this Mac (ni_run, GPU alone): at 10 and 8 cores against 20, greedy ids
+are identical for the 4B and the 35B (p4000 + 64 tokens, plain and MTP depth 1) and the 27B (p700 + 32, plain and
+MTP depth 2), and DFlash2 greedy for the 35B (code 256 tokens) and the 27B (code 128); logits differ only by
+summation order (KL max: 4B 9e-9, 27B 4e-10, 35B 3.9e-4 where the split-K decode attention changes the MoE routing
+inputs by rounding), the short-prefill suffix logits likewise (35B 5.4e-5, 4B 1.8e-10, 27B 1.5e-10). Speed on this
+Mac does not change with the setting (DFlash2 35B 147.4 / 147.5 / 147.1 tok/s at 20 / 10 / 8): it only sizes grids.
+

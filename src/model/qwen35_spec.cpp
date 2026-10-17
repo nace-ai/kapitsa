@@ -199,8 +199,23 @@ void Qwen35::load_mtp(const std::string& dir) {
       if (j.contains("forge_provenance") && j["forge_provenance"].contains("mtp_contract"))
         variant = j["forge_provenance"]["mtp_contract"].value("base_hidden_variant", "");
     }
+    if (variant.empty()) {  // a sidecar made by tools/mtp_sidecar.py records it in its own header
+      std::ifstream f(dir + "/mtp.safetensors", std::ios::binary);
+      uint64_t n = 0;
+      if (f.read(reinterpret_cast<char*>(&n), 8) && n < (64u << 20)) {
+        std::string h(n, '\0');
+        if (f.read(h.data(), std::streamsize(n))) {
+          try {
+            auto j = nlohmann::json::parse(h);
+            if (j.contains("__metadata__")) variant = j["__metadata__"].value("base_hidden_variant", "");
+          } catch (...) {
+          }
+        }
+      }
+    }
     // a head read from a Hugging Face checkpoint's shards: the official models feed it the final-norm hidden
     if (variant.empty() && in_shards && hf_norms_) variant = "post_norm";
+    if (const char* v = getenv("NI_MTP_HIDDEN"); v && *v) variant = std::string(v) + "_norm";  // pre | post
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
@@ -252,8 +267,22 @@ void Qwen35::load_mtp(const std::string& dir) {
   // </think> or <|im_end|>. 286 MB per draft step becomes ~37 MB.
   draft_split_ = std::min<uint32_t>(32768, uint32_t(cfg_.vocab));
   // Dense 27B: the full-vocabulary draft raises acceptance (depth 2: 0.73 -> 0.83) for ~1% of the
-  // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain.
-  full_draft_ = getenv("NI_FULL_DRAFT") && *getenv("NI_FULL_DRAFT") ? env_on("NI_FULL_DRAFT") : !cfg_.moe;
+  // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain. So does
+  // the 4B's: its lm_head is 15% of the bytes a decode step reads (27B: 5%), and the reduced draft head
+  // measured faster at depth 1 (code 119.5 vs 115.8 tok/s, prose 120.9 vs 112.0) though it accepts
+  // fewer drafts (0.67 vs 0.76 on code). Full vocabulary for dense models whose lm_head is < 10% of a step.
+  double trunk_bytes = 0;  // the linears a decode step reads (any format; bf16 has no scales / biases)
+  auto lbytes = [](const QLinear& q) {
+    return q ? double(q.w->buf.size) + (q.dense() ? 0.0 : double(q.s->buf.size + q.b->buf.size)) : 0.0;
+  };
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.mg, &L.mu, &L.md, &L.eg, &L.eu,
+                             &L.ed, &L.sg, &L.su, &L.sd, &L.router, &L.shared_gate})
+      trunk_bytes += lbytes(*q);
+  const double head_bytes = lbytes(lm_head_);
+  trunk_bytes += head_bytes;
+  full_draft_ = getenv("NI_FULL_DRAFT") && *getenv("NI_FULL_DRAFT") ? env_on("NI_FULL_DRAFT")
+                                                                     : !cfg_.moe && head_bytes < 0.1 * trunk_bytes;
   draft_special0_ = uint32_t(cfg_.eos.empty() ? cfg_.vocab : *std::min_element(cfg_.eos.begin(), cfg_.eos.end()));
   auto rows_view = [&](const QLinear& src, uint32_t r0, uint32_t n) {
     QLinear v = src;
@@ -275,8 +304,8 @@ void Qwen35::load_mtp(const std::string& dir) {
   draft_head_[0] = rows_view(lm_head_, 0, draft_split_);
   draft_head_[1] = rows_view(lm_head_, draft_special0_, uint32_t(cfg_.vocab) - draft_special0_);
   mtp_loaded_ = true;
-  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
-       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm");
+  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s, drafts over %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
+       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm", full_draft_ ? "the full vocabulary" : "ids < 32768 + specials");
 }
 
 // ---- small-batch encoders ----
@@ -475,7 +504,9 @@ void Qwen35::enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const B
   e.val(8, ap);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   const uint32_t Lmax = uint32_t(pos + R);
-  uint32_t chunk = std::max<uint32_t>(64, (Lmax + 19) / 20);
+  // split-K as in Qwen35::enc_attn: one chunk per GPU core and kv head
+  const uint32_t cores = uint32_t(std::max(1, Gpu::get().core_count()));
+  uint32_t chunk = std::max<uint32_t>(64, (Lmax + cores - 1) / cores);
   chunk = (chunk + 15) / 16 * 16;
   uint32_t nch = (Lmax + chunk - 1) / chunk;
   if (nch * R > 1024) fatal("attention rows: too many chunks");

@@ -2,6 +2,7 @@
 #import <Metal/Metal.h>
 
 #include "metal/gpu.h"
+#include <IOKit/IOKitLib.h>
 #include <mach/mach_time.h>
 #include "util/log.h"
 
@@ -48,6 +49,59 @@ Gpu::Gpu() : impl_(new Impl) {
 std::string Gpu::name() const { return [[dev(device_) name] UTF8String]; }
 size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMaxWorkingSetSize; }
 size_t Gpu::allocated_bytes() const { return dev(device_).currentAllocatedSize; }
+size_t Gpu::max_threadgroup_memory() const { return dev(device_).maxThreadgroupMemoryLength; }
+bool Gpu::apple10() const {
+  // MTLGPUFamilyApple10 = 1010 (macOS 26 SDK); the raw value keeps older SDKs building
+  return [dev(device_) supportsFamily:(MTLGPUFamily)1010];
+}
+
+static int ioreg_core_count() {
+  int cores = 0;
+  io_iterator_t it = 0;
+  if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("AGXAccelerator"), &it) != KERN_SUCCESS) return 0;
+  for (io_object_t e; (e = IOIteratorNext(it)); IOObjectRelease(e)) {
+    CFTypeRef v = IORegistryEntryCreateCFProperty(e, CFSTR("gpu-core-count"), kCFAllocatorDefault, 0);
+    if (v) {
+      if (CFGetTypeID(v) == CFNumberGetTypeID()) CFNumberGetValue((CFNumberRef)v, kCFNumberIntType, &cores);
+      CFRelease(v);
+    }
+    if (cores > 0) {
+      IOObjectRelease(e);
+      break;
+    }
+  }
+  IOObjectRelease(it);
+  return cores;
+}
+
+static int cores_cached(bool* measured) {
+  static int src = 0;  // 1 measured, 2 override, 3 name fallback
+  static const int n = [] {
+    if (const char* v = getenv("NI_GPU_CORES"); v && atoi(v) > 0) {
+      src = 2;
+      return atoi(v);
+    }
+    if (int c = ioreg_core_count(); c > 0) {
+      src = 1;
+      return c;
+    }
+    // smallest GPU of the tier (M1-M5: 7-10 base, 14-20 Pro, 24-40 Max, 48-80 Ultra)
+    src = 3;
+    const std::string name = [MTLCreateSystemDefaultDevice() name].UTF8String;
+    if (name.find("Ultra") != std::string::npos) return 48;
+    if (name.find("Max") != std::string::npos) return 24;
+    if (name.find("Pro") != std::string::npos) return 14;
+    return 8;
+  }();
+  if (measured) *measured = src == 1;
+  return n;
+}
+int Gpu::core_count() const { return cores_cached(nullptr); }
+bool Gpu::core_count_measured() const {
+  bool m = false;
+  cores_cached(&m);
+  return m;
+}
 const char* Gpu::thermal_state() {
   switch ([NSProcessInfo processInfo].thermalState) {
     case NSProcessInfoThermalStateNominal: return "nominal";
@@ -188,7 +242,7 @@ Pipeline Gpu::pipeline(const std::string& fn, bool required) {
     }
     if (!pso) fatal("pipeline %s: %s", fn.c_str(), [[err description] UTF8String]);
     Pipeline p{(__bridge_retained void*)pso, strdup(fn.c_str()), (uint32_t)pso.maxTotalThreadsPerThreadgroup,
-               (uint32_t)pso.threadExecutionWidth};
+               (uint32_t)pso.threadExecutionWidth, (uint32_t)pso.staticThreadgroupMemoryLength};
     std::lock_guard<std::mutex> lk(impl_->mu);
     impl_->pipelines[fn] = p;
     return p;
@@ -268,6 +322,7 @@ static inline id<MTLComputeCommandEncoder> E(void* p) { return (__bridge id<MTLC
 void Encoder::use(const Pipeline& p) {
   [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)p.pso];
   cur_name_ = p.name;
+  cur_max_threads_ = p.max_threads;
 }
 
 namespace {
@@ -336,6 +391,10 @@ static bool dup_kernel(const char* name) {
 }
 
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
+  // A GPU whose compiler gives a kernel fewer threads per threadgroup than it is dispatched with (register
+  // pressure differs between GPU families) would fail the command buffer: name the kernel instead.
+  if (cur_max_threads_ && tx * ty * tz > cur_max_threads_)
+    fatal("kernel %s: %u threads per threadgroup, this GPU allows %u", cur_name_, tx * ty * tz, cur_max_threads_);
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
     [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];

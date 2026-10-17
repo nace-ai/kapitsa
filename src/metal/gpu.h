@@ -26,6 +26,7 @@ struct Pipeline {
   const char* name = "";
   uint32_t max_threads = 0;
   uint32_t simd_width = 32;
+  uint32_t tg_mem = 0;  // static threadgroup memory (bytes)
 };
 
 class Encoder;
@@ -35,6 +36,12 @@ class Gpu {
   static Gpu& get();
   std::string name() const;
   size_t recommended_working_set() const;
+  // GPU cores: the AGXAccelerator IORegistry entry's "gpu-core-count" (NI_GPU_CORES=<n> overrides: tests of
+  // the core-scaled dispatch choices); without it a minimum per chip tier from the device name.
+  int core_count() const;
+  bool core_count_measured() const;  // read from the IORegistry (not the override or the name fallback)
+  size_t max_threadgroup_memory() const;  // MTLDevice maxThreadgroupMemoryLength
+  bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 
@@ -126,6 +133,7 @@ class Encoder {
   void* enc_ = nullptr;
   std::vector<void*> prev_;   // command buffers committed by signal_event (retained)
   const char* cur_name_ = "";
+  uint32_t cur_max_threads_ = 0;  // the pipeline's maxTotalThreadsPerThreadgroup (dispatch checks it)
   bool concurrent_ = false;
 };
 

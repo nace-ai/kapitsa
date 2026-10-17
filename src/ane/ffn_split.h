@@ -45,6 +45,8 @@ struct FfnConfig {
 class FfnSplit {
  public:
   static constexpr uint32_t kUnit = 512, kSeg = 2560, kMaxRows = 2048;
+  // ane_rotate's simdgroups for a hidden size (its 128-blocks split evenly, <= 8 each); 0 = not supported
+  static uint32_t rotate_simdgroups(uint32_t hidden);
 
   // Allocates the surfaces, computes (or loads) the row scales, compiles/loads the program.
   // Throws std::runtime_error with the reason when the split cannot be used.
@@ -113,6 +115,7 @@ class FfnSplit {
 
   std::vector<FfnLayer> layers_;
   uint32_t hidden_ = 0, inter_ = 0, units_ = 0, ane_ = 0, gpu_ = 0, min_rows_ = 0;
+  uint32_t rot_sg_ = 8;  // ane_rotate's simdgroups: they split the hidden's 128-blocks evenly, <= 8 each
   std::vector<uint32_t> dseg_, fn_rows_;
   struct Lane {
     std::vector<Surface> x;  // int8 [2560][2048] per hidden segment
@@ -148,7 +151,11 @@ struct Calibration {
 };
 bool read_calibration(const std::string& key, Calibration& out);
 bool write_calibration(const std::string& key, const Calibration& c);
-// Measured default share for a chip without a calibration (0 = none known).
-uint32_t default_units(const std::string& chip, bool wave);
+// Metal memory of a split (surfaces, rotation scratch, row scales) for an FFN of hidden x inter channels with
+// `units` x 512 of them on the ANE, `layers` layers and `lanes` activation lanes (FfnSplit::metal_bytes)
+size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, int lanes);
+// Default share (units of 512 channels) for a chip without a calibration, for an FFN of `total` units
+// on a GPU of `cores` cores; 0 = the GPU alone.
+uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave);
 
 }  // namespace ni::ane

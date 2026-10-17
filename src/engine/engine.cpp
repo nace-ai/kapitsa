@@ -5,6 +5,7 @@
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstring>
 #include <deque>
@@ -53,7 +54,46 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     while (!d.empty() && d.back() == '/') d.pop_back();
     opts_.model_id = d.substr(d.find_last_of('/') + 1);
   }
+  // Memory: fail before reading any weights when the model, its buffers and the slots' state with a minimal
+  // KV cache cannot fit the budget; the KV caches then grow as conversations fill (Qwen35::reserve).
+  budget_ = opts_.mem_budget_gb > 0 ? size_t(opts_.mem_budget_gb * 1e9) : default_mem_budget();
+  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
+  // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
+  // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off. Found before
+  // the model loads, so its memory counts in the fit check; auto leaves it out where it would cost context.
+  const LoadPlan lp = plan_load(opts_.model_dir, opts_.dflash, opts_.spec_depth == 0, opts_.context, opts_.slots,
+                                budget_, opts_.prefill_chunk);
+  if (!lp.dflash_left_out.empty())
+    logi("DFlash2: %s left out: its %.2f GB would keep a %d-token conversation from fitting the %.1f GB budget",
+         lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, opts_.context, budget_ / 1e9);
+  const size_t dfl_bytes = lp.dflash_bytes;
+  {
+    const int slots = std::max(1, opts_.slots), min_ctx = std::min(opts_.context, 8192);
+    if (opts_.prefill_chunk <= 0) {
+      opts_.prefill_chunk = lp.prefill_chunk;
+      if (opts_.prefill_chunk != 2048)
+        logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
+             opts_.prefill_chunk, opts_.context, budget_ / 1e9);
+    }
+    const Qwen35::MemPlan mp = Qwen35::plan(opts_.model_dir, opts_.prefill_chunk);
+    const size_t need = mp.fixed(slots) + dfl_bytes + mp.kv_per_pos * size_t(min_ctx);
+    const size_t rws = Gpu::get().recommended_working_set();
+    if (mp.weights > budget_)  // nothing but a smaller variant helps: say so before the itemized message
+      fatal("%s does not fit this Mac: its weights alone (%.1f GB, %s) exceed the GPU memory Kapitsa may use here "
+            "(%.1f GB of Metal's %.1f GB working set). Use a quantized variant of the model (8-bit and 6-bit weights are "
+            "about 1/2 and 2/5 of bf16) or a Mac with more memory.",
+            opts_.model_dir.c_str(), mp.weights / 1e9, mp.formats.c_str(), budget_ / 1e9, rws / 1e9);
+    if (need > budget_)
+      fatal("insufficient memory: %s needs %.1f GB of GPU memory with %d slot%s (weights %.1f GB, MTP head %.1f, "
+            "DFlash2 drafter %.1f, buffers for %d-token prefill chunks %.1f, conversation state %.1f, KV cache for %d "
+            "tokens %.1f); this Mac's budget is %.1f GB (Metal's recommended working set %.1f GB). Fewer --slots, "
+            "--prefill-chunk 1024, no drafter, a smaller model or --mem-budget can help.",
+            opts_.model_dir.c_str(), need / 1e9, slots, slots > 1 ? "s" : "", mp.weights / 1e9, mp.mtp / 1e9,
+            dfl_bytes / 1e9, opts_.prefill_chunk, mp.activations / 1e9, slots * mp.slot_state / 1e9, min_ctx,
+            mp.kv_per_pos * min_ctx / 1e9, budget_ / 1e9, rws / 1e9);
+  }
   model_ = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
+  model_->set_mem_budget(budget_);
   tok_.load(opts_.model_dir + "/tokenizer.json");
   std::string src = read_file(opts_.model_dir + "/chat_template.jinja");
   if (src.empty()) {
@@ -81,35 +121,34 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const int id = tok_.find(end);
     if (id >= 0 && std::find(stop_ids_.begin(), stop_ids_.end(), id) == stop_ids_.end()) stop_ids_.push_back(id);
   }
-  const bool spec_off = opts_.spec_depth == 0;  // --spec 0: no speculative decoding at all
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
-  // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
-  // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off.
-  std::string want = opts_.dflash;
-  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
-  if (want == "1" || want == "on") want = "auto";
-  const bool dfl_off = want == "none" || want == "0" || want == "off" || (want == "auto" && spec_off);
-  if (!dfl_off) {
-    const bool auto_dir = want == "auto";
-    const std::string dir = auto_dir ? DFlash2::find(opts_.model_dir, model_->config()) : want;
+  if (!lp.dflash_off && lp.dflash_left_out.empty()) {
+    const std::string& dir = lp.dflash;
     if (dir.empty()) {
       logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
            opts_.model_dir.c_str());
-    } else if (auto_dir && !DFlash2::supports(*model_)) {
+    } else if (lp.dflash_auto && !DFlash2::supports(*model_)) {
       logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
     } else {
+      const size_t a0 = Gpu::get().allocated_bytes();
       dfl_ = std::make_unique<DFlash2>(*model_, dir);
       DFlash2::prewarm_pipelines();
       spec_ = false;
+      // the plan against what loading took (rings and the first prefill's buffers come later)
+      size_t per_slot = 0, at_prefill = 0;
+      const size_t planned = DFlash2::plan_bytes(dir, model_->config(), Qwen35::plan(opts_.model_dir, 1024).head_row_bytes,
+                                                 &per_slot, &at_prefill);
+      logi("DFlash2: %.3f GB allocated at load (planned %.3f GB); %.3f GB more for %d slots' rings and %.3f GB at the "
+           "first prefill", (Gpu::get().allocated_bytes() - a0) / 1e9, (planned - at_prefill - (size_t(4) << 20)) / 1e9,
+           3.0 * per_slot * std::max(1, opts_.slots) / 1e9, std::max(1, opts_.slots), at_prefill / 1e9);
     }
   }
 
-  auto add_slot = [&](int cap) {
+  auto add_slot = [&](int limit) {
     Slot s;
-    s.seq = model_->new_seq(cap);
+    s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
     if (dfl_) s.dseq = dfl_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
@@ -118,6 +157,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
+  Gpu& g = Gpu::get();
+  const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
+  const size_t room = budget_ > used ? budget_ - used : 0;
+  context_fit_ = int(std::min<size_t>(size_t(opts_.context), room / per));
+  logi("GPU: %s, %d cores%s", g.name().c_str(), g.core_count(), g.core_count_measured() ? "" : " (not measured: NI_GPU_CORES or the tier's smallest)");
+  logi("memory: %.2f GB allocated (model, buffers, %d slots' state), budget %.1f GB (recommended working set %.1f GB): "
+       "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
+       used / 1e9, std::max(1, opts_.slots), budget_ / 1e9, g.recommended_working_set() / 1e9, room / 1e9, room / per,
+       per / 1024.0, context_fit_, opts_.context);
   const std::string mode = dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");
@@ -126,6 +174,90 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
 }
 
 Engine::~Engine() = default;
+
+size_t default_mem_budget() {
+  if (const char* v = getenv("NI_MEM_BUDGET"); v && *v) return size_t(atof(v) * 1e9);
+  const size_t rws = Gpu::get().recommended_working_set();
+  return rws - std::max<size_t>(size_t(512) << 20, rws / 25);
+}
+
+int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
+  // 1024-row buffers need ~45% less than 2048-row ones (35B: 0.75 -> 0.38 GB, 27B: 0.94 -> 0.52) for a few % of
+  // prefill speed
+  const Qwen35::MemPlan p = Qwen35::plan(model_dir, 2048);
+  const size_t ane = Qwen35::ane_plan(model_dir, p).bytes;
+  return p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) <= budget ? 2048 : 1024;
+}
+
+LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
+                   size_t budget, int prefill_chunk) {
+  LoadPlan lp;
+  std::string want = dflash;
+  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
+  if (want == "1" || want == "on") want = "auto";
+  lp.dflash_auto = want == "auto";
+  lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
+  slots = std::max(1, slots);
+  if (!lp.dflash_off) {
+    lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
+    if (!lp.dflash.empty()) {
+      // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding
+      // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
+      // conversation come first
+      const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024);
+      size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
+      lp.dflash_bytes = lp.dflash_found_bytes =
+          DFlash2::plan_bytes(lp.dflash, Qwen35::read_config(model_dir), p.head_row_bytes, &per_slot) +
+          3 * per_slot * size_t(slots);
+      const size_t one = p.fixed(slots) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context);
+      if (lp.dflash_auto && one + lp.dflash_bytes > budget) {
+        lp.dflash_left_out = lp.dflash;
+        lp.dflash.clear();
+        lp.dflash_bytes = 0;
+      }
+    }
+  }
+  lp.prefill_chunk = prefill_chunk > 0 ? prefill_chunk
+                                       : auto_prefill_chunk(model_dir, context, slots,
+                                                            budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0);
+  return lp;
+}
+
+void Engine::drop_slot(Slot& slot) {
+  model_->drop_kv(*slot.seq);
+  model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
+  slot.tokens.clear();
+  for (auto& c : slot.ckpts) {
+    c.pos = -1;
+    c.query = false;
+  }
+  ++slot.gen;  // an idle history prefill for it gives up
+}
+
+bool Engine::reserve_kv(Slot& slot, int need) {
+  Seq& s = *slot.seq;
+  if (model_->reserve(s, need)) return true;
+  std::vector<Slot*> others;
+  for (auto& o : slots_)
+    if (&o != &slot && o.seq->cap > 0) others.push_back(&o);
+  std::sort(others.begin(), others.end(), [](const Slot* a, const Slot* b) { return a->last_used < b->last_used; });
+  for (Slot* o : others) {
+    logi("memory: dropping the KV cache of slot %d (%d tokens cached) for a %d-token context in slot %d",
+         int(o - slots_.data()), int(o->tokens.size()), need, int(&slot - slots_.data()));
+    drop_slot(*o);
+    if (model_->reserve(s, need)) return true;
+  }
+  // last: the Neural Engine split's surfaces and its rerun checkpoint (the prefill then runs on the GPU alone)
+  if (model_->ane_release()) {
+    if (ane_ck_) {
+      for (auto* v : {&ane_ck_->conv, &ane_ck_->rec})
+        for (auto& b : *v) Gpu::get().release(b);
+      ane_ck_.reset();
+    }
+    if (model_->reserve(s, need)) return true;
+  }
+  return false;
+}
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
   minja::chat_template_inputs in;
@@ -157,7 +289,7 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   Slot* best = nullptr;
   int best_lcp = 0;
   for (auto& s : slots_) {
-    if (int(prompt.size()) + 64 > s.seq->cap) continue;
+    if (int(prompt.size()) + 64 > s.seq->limit) continue;
     int u = usable(s);
     if (!best || u > best_lcp) {
       best = &s;
@@ -170,7 +302,7 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
     // tokens, so empty slots first), least recently used on ties.
     Slot* pick = nullptr;
     for (auto& s : slots_) {
-      if (int(prompt.size()) + 64 > s.seq->cap) continue;
+      if (int(prompt.size()) + 64 > s.seq->limit) continue;
       if (!pick || s.tokens.size() < pick->tokens.size() ||
           (s.tokens.size() == pick->tokens.size() && s.last_used < pick->last_used))
         pick = &s;
@@ -216,15 +348,37 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
-  if (n + 1 >= s.cap) {
+  if (n + 1 >= s.limit) {
     res.finish_reason = "error";
-    res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(s.cap) + ")";
+    res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(s.limit) + ")";
     return res;
   }
 
   // ---- prefix reuse ----
   size_t common = 0;
   while (common < slot.tokens.size() && common < prompt.size() && slot.tokens[common] == prompt[common]) ++common;
+
+  // ---- KV cache for the prompt and the first part of the answer (it grows further while decoding) ----
+  // other slots' caches are given up only when the prompt itself does not fit; before them this slot's own, when
+  // the prompt reuses none of it (no live state to continue, no checkpoint inside the common prefix: the prefill
+  // starts at 0), so the new cache starts empty: nothing to copy, no transient second copy
+  const int kv_min = std::min(s.limit, n + 32), kv_want = std::min(s.limit, n + std::clamp(r.max_tokens, 0, 1024) + 32);
+  auto fit_kv = [&] { return model_->reserve(s, kv_want) || model_->reserve(s, kv_min); };
+  bool kv_ok = fit_kv();
+  bool reuses = common > 0 && common == slot.tokens.size() && int(common) < n;
+  for (auto& c : slot.ckpts) reuses = reuses || (c.pos > 0 && c.pos <= int(common) && c.pos < n);
+  if (!kv_ok && !reuses && s.cap > 0) {
+    drop_slot(slot);
+    kv_ok = fit_kv();
+  }
+  if (!kv_ok && !reserve_kv(slot, kv_min)) {
+    const size_t per = model_->kv_bytes_per_pos(), used = g.allocated_bytes();
+    const size_t fit = size_t(s.cap) + (budget_ > used ? budget_ - used : 0) / per;
+    res.finish_reason = "error";
+    res.error = "insufficient memory: a " + std::to_string(n) + "-token prompt needs more KV cache than this Mac's "
+                "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
+    return res;
+  }
   int start = 0;
   auto e = g.begin();
   if (common == slot.tokens.size() && int(common) < n) {
@@ -258,6 +412,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- prefill ----
   const double tok_ms = now_ms() - t_req;  // template + tokenizer + slot pick
+  const Qwen35::AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
   sp.top_p = r.top_p;
@@ -375,6 +530,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   e->wait();
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
+  // Neural Engine split: how busy the ANE was over the prefill. Near 100% it, not the GPU, is the bottleneck (a
+  // smaller share would be faster: ane_calib --wave --write); the share is set for the GPU to be the bottleneck.
+  if (const Qwen35::AneStats& a1 = model_->ane_stats(); a1.chunks > ane0.chunks)
+    logi("prefill: Neural Engine busy %.0f%% of %.0f ms over %d split chunks (%d evaluations)",
+         100 * (a1.ane_ms - ane0.ane_ms) / std::max(res.prefill_ms, 1.0), res.prefill_ms, a1.chunks - ane0.chunks,
+         a1.evals - ane0.evals);
   const double gpu_last = e->gpu_ms();
   // last chunk: commit -> GPU start, GPU end -> this thread awake (host clock)
   const double lat_start = e->gpu_start_host_ms() - h_commit, lat_wake = h_woke - e->gpu_end_host_ms();
@@ -439,6 +600,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     req_cycles = 0;
     bool go = handle(s.tokens()[n]);
     std::unique_ptr<Encoder> next_draft;  // committed drafting half of the coming cycle
+    // KV cache room for the first cycles (it grows between cycles below): nothing may use the old buffers,
+    // so the deferred prompt work completes first
+    if (go && P + 8 + 8 + DFlash2::kB + 3 > s.cap && s.cap < s.limit) {
+      if (mtp_e) mtp_e->wait();
+      reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3));
+    }
     if (go && P + 8 + DFlash2::kB + 2 < s.cap) {
       // host write of the drafter state: nothing in flight reads it (the prefill is done; its deferred
       // prompt commit, if still running, is host-driven)
@@ -456,6 +623,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       auto e2 = g.begin();
       dfl_->encode_cycle_verify(*e2, s, P, K, sp);
       e2->commit();
+      if (P + 8 + 8 + DFlash2::kB + 3 > s.cap && s.cap < s.limit) {
+        // the KV cache grows here: the verify in flight (and the drafting half before it) complete first, so
+        // this cycle's drafting half is not overlapped with it
+        e2->wait();
+        reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3));
+      }
       if (P + 8 + 8 + DFlash2::kB + 2 < s.cap) {  // the next anchor is at most P + 8
         next_draft = g.begin();
         dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P + 8, sp);
@@ -502,8 +675,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     bool go = handle(s.tokens()[n]);
     while (go) {
       if (P + depth + 2 >= s.cap) {
-        finish = "length";
-        break;
+        // the KV cache grows between cycles; only the prompt's deferred MTP history can still be in flight
+        if (mtp_e) mtp_e->wait();
+        if (P + depth + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, P + depth + 3))) {
+          finish = "length";
+          break;
+        }
       }
       auto e2 = g.begin();
       model_->encode_mtp(*e2, s, P - c, c, P - c + 1, model_->hidden_rows(), h_row0, P + 1);
@@ -551,8 +728,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     while (true) {
       bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
       if (go && pos + 2 >= s.cap) {
-        finish = "length";
-        go = false;
+        // the KV cache grows between steps: the step in flight writes it, so it completes first
+        if (next) next->wait();
+        if (pos + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, pos + 3))) {
+          finish = "length";
+          go = false;
+        }
       }
       if (!go) break;
       // the step feeding token `pos` is in flight; queue the one after it, then wait
@@ -650,7 +831,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   for (auto& c : slot.ckpts)
     if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
-  if (!best || n + 64 >= s.cap) return;
+  if (!best || n + 64 >= s.limit || !model_->reserve(s, n + 64)) return;
   Gpu& g = Gpu::get();
   auto e = g.begin();
   model_->restore(*e, s, *best);

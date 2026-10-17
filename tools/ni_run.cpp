@@ -81,6 +81,9 @@ int main(int argc, char** argv) {
   // (inside the pass where the model can, as the server does); "restore S" restores that checkpoint.
   // The last pass must end at the prompt length; decoding then continues from the given ids.
   const char* plan = nullptr;
+  // --kv-grow: the KV cache starts empty and grows before each prefill chunk and decode step / cycle (the
+  // engine's path; decode then runs one step at a time); outputs must equal the fully allocated cache's
+  bool kv_grow = false;
   for (int i = 1; i < argc; ++i) {
     if (i + 1 < argc && !strcmp(argv[i], "--dump-logits")) dump = argv[i + 1];
     if (i + 1 < argc && !strcmp(argv[i], "--dump-all-logits")) dump_all = argv[i + 1];
@@ -101,6 +104,7 @@ int main(int argc, char** argv) {
     if (i + 1 < argc && !strcmp(argv[i], "--split")) split = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--pf-gap")) pf_gap = atoi(argv[i + 1]);
     if (i + 1 < argc && !strcmp(argv[i], "--plan")) plan = argv[i + 1];
+    if (!strcmp(argv[i], "--kv-grow")) kv_grow = true;
   }
   std::string dflash_dir = getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "";
   for (int i = 1; i + 1 < argc; ++i)
@@ -110,7 +114,11 @@ int main(int argc, char** argv) {
 
   Gpu& g = Gpu::get();
   Qwen35 m(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : 2048);
-  auto seq = m.new_seq(std::max(8192, int(ids.size()) + n_gen + 64));
+  if (kv_grow && !dflash_dir.empty()) fatal("--kv-grow covers the plain, MTP and teacher-forced paths, not --dflash");
+  auto seq = m.new_seq(std::max(8192, int(ids.size()) + n_gen + 64), kv_grow ? 0 : -1);
+  auto grow = [&](int need) {
+    if (kv_grow && !m.reserve(*seq, need)) fatal("--kv-grow: cannot grow the KV cache to %d positions", need);
+  };
   Seq& s = *seq;
   SamplingParams sp;
   sp.temperature = temp;
@@ -163,7 +171,7 @@ int main(int argc, char** argv) {
         std::string f;
         ls >> f;
         std::vector<int> v = read_ids(f);
-        if (int(v.size()) + 1 >= s.cap) { fprintf(stderr, "plan: %s too long\n", f.c_str()); return 1; }
+        if (int(v.size()) + 1 >= s.limit) { fprintf(stderr, "plan: %s too long\n", f.c_str()); return 1; }
         std::copy(v.begin(), v.end(), s.tokens());
       } else if (op == "restore") {
         int at = -1;
@@ -218,6 +226,7 @@ int main(int argc, char** argv) {
     // buffer; the sampled token is replaced by the prompt's next token), then decoding continues
     FILE* f = fopen(dump_all, "wb");
     for (int q = 0; q < n; ++q) {
+      grow(q + 2);
       auto e = g.begin();
       m.encode_step(*e, s, q, sp, 0, true);
       e->commit_and_wait();
@@ -229,6 +238,7 @@ int main(int argc, char** argv) {
   } else if (tbt) {
     // token by token through the decode path (reference for the batched prefill)
     for (int p = 0; p < n; p += 32) {
+      grow(std::min(n, p + 32) + 1);
       auto e = g.begin();
       for (int q = p; q < std::min(n, p + 32); ++q) m.encode_step(*e, s, q, sp, 0, q == n - 1);
       e->commit_and_wait();
@@ -241,6 +251,7 @@ int main(int argc, char** argv) {
       if (prefix >= n) { fprintf(stderr, "--prefix must be < prompt length\n"); return 1; }
       for (int p = 0; p < prefix; p += C) {
         int T = std::min(C, prefix - p);
+        grow(p + T + 1);
         auto e = g.begin();
         m.encode_prefill(*e, s, p, T, sp, 0, false);
         if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, T, 0);
@@ -274,6 +285,7 @@ int main(int argc, char** argv) {
           if (!ane_ck) ane_ck = std::make_unique<Checkpoint>(m.new_checkpoint());
           m.save(*e, s, *ane_ck, p);
         }
+        grow(p + T + 1);  // nothing in flight: every chunk is waited for
         m.encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? split - p : 0);
         // MTP history rows i in [p, min(p+T, n-1)): pairs (h_i, t_{i+1})
         if (spec && m.has_mtp()) m.encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
@@ -617,6 +629,7 @@ int main(int argc, char** argv) {
     bool stop2 = false;
     while (int(out.size()) < n_gen && !stop2) {
       double tc0 = now_ms();
+      grow(P + D + 3);  // nothing in flight: every cycle is waited for
       auto e = g.begin();
       m.encode_mtp(*e, s, P - c, c, P - c + 1, m.hidden_rows(), h_row0, P + 1);
       for (int k = 2; k <= D; ++k)
@@ -669,12 +682,13 @@ int main(int argc, char** argv) {
   double gpu_total = 0;
   int gpu_n = 0;
   for (int step = 1; step < n_gen && !stop; ++step) {
+    grow(pos + 2);  // under --kv-grow nothing is in flight here (steps are waited for one by one)
     auto e = g.begin();
     m.encode_step(*e, s, pos, sp, uint32_t(step), true);
     e->commit();
     inflight.push_back(std::move(e));
     ++pos;
-    while (inflight.size() > (fall ? 0 : 2) || (step == n_gen - 1 && !inflight.empty())) {
+    while (inflight.size() > (fall || kv_grow ? 0 : 2) || (step == n_gen - 1 && !inflight.empty())) {
       inflight.front()->wait();
       if (fall) fwrite(m.logits(), 4, m.config().vocab, fall);
       gpu_total += inflight.front()->gpu_ms();

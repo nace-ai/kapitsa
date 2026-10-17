@@ -28,13 +28,39 @@ struct EngineOptions {
   std::string model_id;        // id reported by /v1/models (default: directory name)
   int context = 32768;         // capacity of each slot (tokens)
   int slots = 2;               // conversations kept warm at once (each has its own KV/state)
-  int prefill_chunk = 2048;
+  int prefill_chunk = 0;       // rows per prefill pass; 0 = 2048, or 1024 when that leaves too little memory
   int spec_depth = -1;         // MTP draft tokens per cycle (0 = no speculative decoding, -1 = model default)
+  double mem_budget_gb = 0;    // GPU memory Kapitsa may hold (GB); 0 = default_mem_budget()
   // DFlash2 block drafter (replaces MTP when loaded): "auto" = DFlash2::find() next to the model / in
   // ~/.cache/nace-infer-models/drafters (MTP when none matches), "none" = MTP, or a drafter directory.
   // "" = NI_DFLASH if set (auto | none | 0 | <dir>), else auto. spec_depth 0 turns "auto" off too.
   std::string dflash;
 };
+
+// GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
+// (recommendedMaxWorkingSetSize, which macOS sizes from the RAM) minus a margin (4%, at least 512 MB) for
+// the Neural Engine service's buffers and other GPU users. NI_MEM_BUDGET=<GB> overrides it.
+size_t default_mem_budget();
+// The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
+// less than one conversation of `context` tokens in the budget (activations scale with the chunk)
+int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
+
+// What the engine settles before it loads a model, from the safetensors headers alone (its constructor and
+// `kapitsa doctor` share it): the DFlash2 drafter and the prefill chunk.
+struct LoadPlan {
+  bool dflash_auto = false;       // the drafter is looked for (--dflash auto)
+  bool dflash_off = false;        // --dflash none, or auto with --spec 0
+  std::string dflash;             // the drafter to load ("" = none: MTP or plain decoding)
+  std::string dflash_left_out;    // the drafter auto found and leaves out (it would cost context, below)
+  size_t dflash_bytes = 0;        // the loaded drafter's weights and rings (live + one per checkpoint, every slot)
+  size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
+  int prefill_chunk = 2048;
+};
+// dflash: "auto", "none" / "0" / "off", a drafter directory, or "" (NI_DFLASH if set, else auto); spec_off: --spec 0.
+// auto leaves a drafter out where one conversation of `context` tokens would not fit the budget beside it (context
+// before speed); prefill_chunk 0 = auto_prefill_chunk with the drafter's memory set aside.
+LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
+                   size_t budget, int prefill_chunk);
 
 struct ChatRequest {
   ojson messages = ojson::array();
@@ -77,6 +103,8 @@ class Engine {
   ~Engine();
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
+  // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
+  int context_fit() const { return context_fit_; }
   // Renders the prompt for a request (for debugging / token counting).
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
   // Runs one request. `on_delta` returns false to cancel. Serialized across threads.
@@ -107,6 +135,13 @@ class Engine {
     uint64_t gen = 0;                 // requests run on this slot
   };
   Slot& pick_slot(const std::vector<int>& prompt);
+  // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
+  // slots (least recently used first: their conversations are prefilled again when they come back).
+  // Nothing using the slots may be in flight. False if even that leaves too little memory.
+  bool reserve_kv(Slot& slot, int need);
+  // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
+  // starts at position 0 from the live state), no tokens, no checkpoints
+  void drop_slot(Slot& slot);
 
   EngineOptions opts_;
   std::unique_ptr<Qwen35> model_;
@@ -121,6 +156,8 @@ class Engine {
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
   std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
   bool spec_ = false;
+  size_t budget_ = 0;    // GPU memory budget (bytes)
+  int context_fit_ = 0;  // see context_fit()
   long spec_cycles_ = 0, spec_accepted_ = 0;
 };
 

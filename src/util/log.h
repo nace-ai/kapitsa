@@ -22,7 +22,7 @@ inline int& log_level() {
   return lvl;
 }
 
-[[noreturn]] inline void fatal(const char* fmt, ...) {
+[[noreturn]] __attribute__((format(printf, 1, 2))) inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
   fprintf(stderr, "[kapitsa] fatal: ");
@@ -32,7 +32,7 @@ inline int& log_level() {
   abort();
 }
 
-inline void logi(const char* fmt, ...) {
+__attribute__((format(printf, 1, 2))) inline void logi(const char* fmt, ...) {
   if (log_level() < 1) return;
   va_list ap;
   va_start(ap, fmt);
@@ -42,7 +42,7 @@ inline void logi(const char* fmt, ...) {
   va_end(ap);
 }
 
-inline void logd(const char* fmt, ...) {
+__attribute__((format(printf, 1, 2))) inline void logd(const char* fmt, ...) {
   if (log_level() < 2) return;
   va_list ap;
   va_start(ap, fmt);
