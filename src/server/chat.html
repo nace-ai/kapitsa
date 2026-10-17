@@ -46,15 +46,20 @@ th,td{border:1px solid var(--line);padding:4px 10px;text-align:left}
 blockquote{margin:8px 0;padding-left:12px;border-left:3px solid var(--line);color:var(--muted)}
 a{color:var(--accent)}
 footer{padding:8px 16px 14px}
-form{max-width:780px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;background:var(--bg)}
+#form{max-width:780px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;background:var(--bg)}
+#form:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 textarea{flex:1;border:0;outline:0;resize:none;background:transparent;max-height:40vh;padding:6px 0;line-height:1.5}
+textarea:focus-visible{outline:0}
 #send,#stop{border:0;border-radius:10px;padding:7px 14px;background:var(--fg);color:var(--bg);font-weight:600}
 #send:disabled{opacity:.35;cursor:default}
 #stop{background:var(--soft);color:var(--fg);border:1px solid var(--line)}
 .hint{max-width:780px;margin:6px auto 0;color:var(--muted);font-size:12px;text-align:center}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--fg);padding:18px;max-width:420px}
 dialog::backdrop{background:#0006}
-dialog input{width:100%;margin:10px 0;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+dialog form{display:grid;gap:10px}
+dialog p{margin:0;color:var(--muted);font-size:13px}
+dialog input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+dialog .btn{justify-self:end}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 </style>
 </head>
@@ -80,7 +85,7 @@ dialog input{width:100%;margin:10px 0;padding:8px;border:1px solid var(--line);b
 <dialog id="keydlg">
   <form method="dialog" id="keyform">
     <strong>This server needs an API key</strong>
-    <div style="color:var(--muted);font-size:13px">It was started with <code>--api-key</code>. The key stays in this browser.</div>
+    <p>It was started with <code>--api-key</code>. The key stays in this browser.</p>
     <label class="sr" for="key">API key</label>
     <input id="key" type="password" autocomplete="off" placeholder="API key">
     <button class="btn" value="ok">Save</button>
@@ -173,8 +178,11 @@ function md(src) {
 }
 
 // ---- view
+// follow the answer while the reader is at the bottom; scrolling up stops that, scrolling back down resumes it
 function nearBottom() { return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80; }
 function toBottom() { scroller.scrollTop = scroller.scrollHeight; }
+let stick = true;
+scroller.addEventListener("scroll", () => { stick = nearBottom(); }, { passive: true });
 function statsText(s) {
   if (!s) return "";
   const p = [];
@@ -261,6 +269,7 @@ async function ask() {
   messages.push(m);
   const el = addMessage(m);
   toBottom();
+  stick = true;
   const ctrl = new AbortController();
   busy = ctrl;
   send.hidden = true; stop.hidden = false;
@@ -273,7 +282,7 @@ async function ask() {
   };
   const t0 = performance.now();
   let tFirst = null, tThinkEnd = null, frame = 0;
-  const paint = () => { frame = 0; const stick = nearBottom(); renderBot(el, m, true); if (stick) toBottom(); };
+  const paint = () => { frame = 0; renderBot(el, m, true); if (stick) toBottom(); };
   try {
     let r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body), signal: ctrl.signal });
     if (r.status === 401) { await askKey(); r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body), signal: ctrl.signal }); }
@@ -294,7 +303,11 @@ async function ask() {
           const c = JSON.parse(data);
           if (c.error) throw new Error(c.error.message || "error");
           const d = (c.choices && c.choices[0] && c.choices[0].delta) || {};
-          if (d.reasoning_content || d.content) { const now = performance.now(); if (tFirst === null) tFirst = now; if (d.content && tThinkEnd === null && m.reasoning) tThinkEnd = now; }
+          if (d.reasoning_content || d.content) {
+            const now = performance.now();
+            if (tFirst === null) tFirst = now;
+            if (d.content && tThinkEnd === null && m.reasoning) { tThinkEnd = now; m.stats.think = (now - tFirst) / 1000; }
+          }
           if (d.reasoning_content) m.reasoning += d.reasoning_content;
           if (d.content) m.content += d.content;
           if (c.usage) {
@@ -317,6 +330,7 @@ async function ask() {
   busy = null;
   send.hidden = false; stop.hidden = true;
   renderBot(el, m, false);
+  if (stick) toBottom();
   $("status").textContent = m.error ? "Error: " + m.error : "Answer complete. " + statsText(m.stats);
   if (m.error && !m.content) messages.splice(-2, 2); else store.set("chat", messages);
   updateSend();
