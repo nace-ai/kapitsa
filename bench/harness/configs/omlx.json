@@ -1,0 +1,101 @@
+[
+ {
+  "label": "q36-35b-omlx-best",
+  "display": "oMLX + DFlash2 (drafter 4-bit, block 5, adaptive verify)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.6-35b-a3b-4bit", "dst": "{state}/omlx/q36-35b-best/models/qwen3.6-35b-a3b-4bit"}},
+   {"write_json": {"path": "{state}/omlx/q36-35b-best/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.6-35b-a3b-4bit": {
+                     "dflash_enabled": true, "dflash_draft_model": "{models}/drafters/Qwen3.6-35B-A3B-DFlash2",
+                     "dflash_draft_quant_enabled": true, "dflash_draft_quant_weight_bits": 4, "dflash_draft_quant_group_size": 64,
+                     "dflash_block_size": 5, "dflash_verify_mode": "adaptive"}}}}},
+   {"clean_dir": "{state}/omlx/q36-35b-best/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q36-35b-best/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8141", "--base-path", "{state}/omlx/q36-35b-best/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q36-35b-best/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "env": {"HF_HUB_OFFLINE": "1"},
+  "env_clear_prefixes": ["OMLX_"],
+  "base_url": "http://127.0.0.1:8141/v1",
+  "model": "qwen3.6-35b-a3b-4bit",
+  "ready_timeout": 300,
+  "adaptive_warm": true,
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/model.safetensors.index.json",
+                     "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
+  "log_grep": ["MTP\\[|Lightning MTP|Speculative backend|MTP path|parked", "DFlash|drafter", "memory|guard",
+               "[Ll]oaded model|Discovered model", "[Ee]rror|Traceback|WARNING"],
+  "note": "oMLX's fastest setting measured on this model: DFlash2 speculative decoding inside its batched engine with the same incoai drafter Kapitsa uses, quantized to 4-bit g64 at load, block 5 (the DFlash2 authors' oMLX recipe), verify mode 'adaptive' (oMLX's default; it beat 'dflash' on this mixture of experts, where each extra verified row reads more experts). Smoke tests before the run (median of 11 short decodes): this setting 131 tok/s, verify 'dflash' 117, Lightning MTP 123. The model directory is a link to the same weights the other MLX engines read; its MTP side-car is not indexed there, so no MTP head is attached. The SSD KV cache is emptied before each run; memory guard 'aggressive' (with 'balanced', oMLX refused the 27B's 16K prompt in an earlier run)."
+ },
+ {
+  "label": "q36-35b-omlx",
+  "display": "oMLX (no speculation)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.6-35b-a3b-4bit", "dst": "{state}/omlx/q36-35b/models/qwen3.6-35b-a3b-4bit"}},
+   {"write_json": {"path": "{state}/omlx/q36-35b/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.6-35b-a3b-4bit": {"mtp_enabled": false}}}}},
+   {"clean_dir": "{state}/omlx/q36-35b/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q36-35b/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8084", "--base-path", "{state}/omlx/q36-35b/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q36-35b/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "env": {"HF_HUB_OFFLINE": "1"},
+  "env_clear_prefixes": ["OMLX_"],
+  "base_url": "http://127.0.0.1:8084/v1",
+  "model": "qwen3.6-35b-a3b-4bit",
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/model.safetensors.index.json"],
+  "note": "oMLX's plain autoregressive baseline on the same weights (settings file schema {version, models: {id: {...}}}). Not re-run on the final harness for the 2026-10-17 tables."
+ },
+ {
+  "label": "q38-27b-omlx-best",
+  "extends": "q36-35b-omlx-best",
+  "display": "oMLX + DFlash2 (drafter 4-bit, block 5, verify dflash)",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.8-27b-4bit-mtp", "dst": "{state}/omlx/q38-27b-best/models/qwen3.8-27b-4bit-mtp"}},
+   {"write_json": {"path": "{state}/omlx/q38-27b-best/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.8-27b-4bit-mtp": {
+                     "dflash_enabled": true, "dflash_draft_model": "{models}/drafters/Qwen3.8-27B-DFlash2",
+                     "dflash_draft_quant_enabled": true, "dflash_draft_quant_weight_bits": 4, "dflash_draft_quant_group_size": 64,
+                     "dflash_block_size": 5, "dflash_verify_mode": "dflash"}}}}},
+   {"clean_dir": "{state}/omlx/q38-27b-best/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q38-27b-best/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8141", "--base-path", "{state}/omlx/q38-27b-best/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q38-27b-best/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "model": "qwen3.8-27b-4bit-mtp",
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/model.safetensors.index.json",
+                     "{models}/drafters/Qwen3.8-27B-DFlash2/model.safetensors"],
+  "note": "oMLX's fastest setting measured on this model: DFlash2 with the incoai drafter quantized to 4-bit g64 at load, block 5, verify mode 'dflash' (the DFlash2 authors' recipe). Smoke tests before the run (median of 6 short decodes): this setting 40.9 tok/s, verify 'adaptive' 35.9, Lightning MTP 33.3; block 8 had a higher median (42.3) but ranged 31-43 when sampling. The Neural Engine prefill option was tried and rejected (partial compile failures, +8% prefill, +6 GB, 3 min load)."
+ },
+ {
+  "label": "q38-27b-omlx",
+  "extends": "q36-35b-omlx",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.8-27b-4bit-mtp", "dst": "{state}/omlx/q38-27b/models/qwen3.8-27b-4bit-mtp"}},
+   {"write_json": {"path": "{state}/omlx/q38-27b/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.8-27b-4bit-mtp": {"mtp_enabled": false}}}}},
+   {"clean_dir": "{state}/omlx/q38-27b/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q38-27b/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8084", "--base-path", "{state}/omlx/q38-27b/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q38-27b/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "model": "qwen3.8-27b-4bit-mtp",
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/model.safetensors.index.json"],
+  "note": "oMLX's plain autoregressive baseline on the same weights. Its prefix cache did not reuse the follow-up turns on this model (cached TTFT 38.5 / 157.5 s), so the DFlash2 row is oMLX's representative one."
+ }
+]

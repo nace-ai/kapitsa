@@ -3,47 +3,152 @@
 Building Kapitsa, internals, tuning switches and tools. For what the engine is and how fast it runs, see
 [README.md](README.md); measured history lives in [docs/PERF.md](docs/PERF.md).
 
-## Build
+## Build from source
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+./install.sh                     # checks the Mac and the tools, builds, installs kapitsa on the PATH
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j   # everything, tools included
 ```
 
-Needs CMake and the Xcode Command Line Tools only. Metal kernels are embedded as source and compiled at
+Needs CMake 3.24+ and the Xcode Command Line Tools only. Metal kernels are embedded as source and compiled at
 runtime by the OS (`newLibraryWithSource`), so no offline `metal` compiler or Xcode is required. Pipelines are
 created at load (`NI_PREWARM=0` skips that and creates them on first use).
+
+`install.sh` checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line Tools (opens
+their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa` target in
+Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
+overrides), with a note when that folder is not on the PATH. Run it again to update. To uninstall, delete the binary
+and `~/.cache/kapitsa`. `packaging/homebrew/kapitsa.rb` is a Homebrew formula for a public release: it needs a tag,
+the tarball's sha256 and a tap (see the file); nothing is published.
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `kapitsa serve [--model M] [options]` | Starts the server (below). `M`: a catalog name or alias with an optional `:<variant>`, `org/name[@revision]`, or a folder; downloads it first if needed. No `--model`: the first catalog model (best first: 35B-A3B, 27B, 4B) whose memory plan, the engine's own (`conversation_fits`: one conversation of `--ctx` tokens beside the model, its buffers, the slots' state and the Neural Engine split, the test plan_load applies before it keeps a drafter), fits this Mac's budget; a model not downloaded yet is planned from its headers (`hub::plan_dir`). An explicit catalog model the engine would refuse (`start_need` over the budget) is refused before its download, naming the one that fits. |
+| `kapitsa pull M... [--from DIR]...` | Downloads without serving. `--dry-run [--json]` prints what `M` resolves to (no network). |
+| `kapitsa list [--json]` | The models in the store: size on disk, complete or not, MTP head / DFlash2 drafter. |
+| `kapitsa rm M...` | Deletes downloaded models (only folders in the store). |
+| `kapitsa doctor [--model M]... [--json]` | This Mac and what fits it (below). |
+| `kapitsa mtp-sidecar SRC OUT [--revision R] [--hidden post_norm\|pre_norm]` | `tools/mtp_sidecar.py` in C++, same bytes (see below). |
+| `kapitsa --help`, `serve --help`, `pull --help`, `--version` | |
+
+Exit codes: 0, 1 for failures (download, port, model), 2 for usage errors (unknown option or model), 130 after
+Ctrl+C during a download (the parts are kept). `fatal()` exits with 1 (`NI_ABORT=1` aborts instead, for a backtrace).
+Options without a command still mean `serve` (`kapitsa --model DIR`), and `build/nace-infer-server` stays a symlink
+to `kapitsa` for scripts from before the rename.
 
 ## Server
 
 ```bash
-./build/kapitsa serve --model <model dir> --model-id <id>   # build/nace-infer-server is an alias
+kapitsa serve --model 35b                        # or ./build/kapitsa serve --model <folder> --model-id <id>
 ```
 
 | Option | Purpose |
 | --- | --- |
-| `--model <dir>` | MLX-format model directory (affine 4/8-bit; the MTP head may live in `mtp.safetensors`). Required. |
-| `--model-id <id>` | Name reported by `/v1/models`. |
+| `--model <name\|org/name[@rev]\|dir>` | The model (above). A folder is an MLX-format model directory (affine 4/8-bit; the MTP head may live in `mtp.safetensors`), used as is. |
+| `--model-id <id>` | Name reported by `/v1/models` (default: the catalog name, the repo id, or the folder's name). |
 | `--host`, `--port` | Listen address (default `127.0.0.1:8000`). |
 | `--ctx <tokens>` | Context per conversation slot (default 32768). Its KV cache grows as the conversation fills (Memory). |
 | `--slots <n>` | Conversations kept warm for prefix reuse (default 2). |
 | `--spec <n>` | MTP draft depth when no DFlash2 drafter is used; default per model (35B MoE 1, 27B 2, 4B 1); `0` turns speculative decoding off (MTP and DFlash2). |
-| `--dflash auto\|none\|<dir>` | DFlash2 block drafter (default `auto`: a `*-DFlash2` drafter matching the model in the model's directory, next to it, in `<parent>/drafters` or in `~/.cache/nace-infer-models/drafters`; MTP when none is found, or where the drafter's memory would keep one `--ctx` conversation from fitting the memory budget). `none` keeps MTP. `NI_DFLASH` sets the same when the option is absent (`0` = none). |
+| `--dflash auto\|none\|<dir>` | DFlash2 block drafter (default `auto`: a drafter in the model's `dflash2/` or `drafter/` folder, else a `*-DFlash2` drafter matching the model next to it, in `<parent>/drafters` or in `~/.cache/nace-infer-models/drafters`; MTP when none is found, or where the drafter's memory would keep one `--ctx` conversation from fitting the memory budget). `none` keeps MTP. `NI_DFLASH` sets the same when the option is absent (`0` = none). |
 | `--prefill-chunk <rows>` | Prefill chunk size (default 2048; 1024 when 2048-row buffers would keep one conversation from its full context). |
 | `--mem-budget <GB>` | GPU memory Kapitsa may hold (default: Metal's recommended working set minus 4%, at least 512 MB; `NI_MEM_BUDGET`). |
-| `--api-key <key>` | Require `Authorization: Bearer <key>` (except `/health`). |
+| `--api-key <key>` | Require `Authorization: Bearer <key>` (except `GET /`, `/favicon.ico` and `/health`). |
 
-`kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--dflash auto|none|DIR] [--json]` prints this Mac (chip,
-GPU cores, RAM, Metal's recommended working set, the memory budget, the Neural Engine) and, for each model directory
-(default: the ones under `~/.cache/nace-infer-models`, `~/.cache/nace-agent-models`, `~/.nace/models`), what the
+`kapitsa doctor [--model MODEL]... [--ctx 65536] [--slots 2] [--dflash auto|none|DIR] [--json]` prints this Mac (chip,
+GPU cores, RAM, Metal's recommended working set, the memory budget, the Neural Engine) and, for each model, what the
 engine would decide at that context and slot count, from the safetensors headers alone (`plan_load`, shared with the
 engine): its memory (with the DFlash2 drafter where the engine would load it), whether it starts, how many tokens of
-KV cache fit, the decoding (DFlash2, MTP or plain), the Neural Engine share, rough speeds. `--json` is the same for
-programs (the app's fit check: `starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, `dflash_used`).
+KV cache fit, the decoding (DFlash2, MTP or plain), the Neural Engine share, rough speeds. `--model` takes what
+`serve --model` takes; by default it shows the catalog's models (one not downloaded yet is planned from its headers,
+fetched once into `~/.cache/kapitsa/plans`), then the models under `~/.cache/kapitsa/models`,
+`~/.cache/nace-infer-models`, `~/.cache/nace-agent-models` and `~/.nace/models`. `--json` is the same for programs
+(the app's fit check: `starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, `dflash_used`).
 
-Endpoints: `POST /v1/chat/completions` (SSE or JSON; `reasoning_content`; Qwen XML tool calls returned as
-OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usage`), `GET /v1/models` (also
-`context_fit`: the tokens one conversation can hold within the memory budget), `GET /health`. Thinking:
+Endpoints: `GET /` (the chat page), `POST /v1/chat/completions` (SSE or JSON; `reasoning_content`; Qwen XML tool
+calls returned as OpenAI `tool_calls`; `usage` in the final chunk), `GET /v1/models` (also `context_fit`: the
+tokens one conversation can hold within the memory budget), `GET /health`. Thinking:
 `chat_template_kwargs.enable_thinking=false` or `reasoning_effort: "none"`.
+
+Startup: the port is checked before anything loads (a busy port is an error: the socket does not use httplib's
+default `SO_REUSEPORT`, which would let a second server bind it too), the model is downloaded if needed, the engine
+loads, and one line on stdout says `Ready: chat at http://127.0.0.1:8000, API at http://127.0.0.1:8000/v1 ...`.
+Logs go to stderr with a `[kapitsa]` prefix.
+
+The chat page is `src/server/chat.html`, embedded at build time (`cmake/embed_file.cmake`). One file, 17 KB: no
+libraries, no requests anywhere but this server (the response's Content-Security-Policy enforces it). It streams
+`/v1/chat/completions`, shows the reasoning in a collapsible block, has a thinking switch, a stop button and code
+blocks with a copy button, shows the model name and each answer's tokens, tok/s (from `usage.completion_tokens`
+over the time from the first to the last streamed token), time to first token and cached prompt tokens, and keeps
+the conversation in the browser's localStorage. With `--api-key` it asks for the key once (also kept in
+localStorage). Markdown is rendered by a small escaping renderer (code fences, inline code, headings, lists, tables,
+quotes, bold/italic, http(s) links); model output never reaches the page as HTML.
+
+## Models and downloads
+
+The store is `~/.cache/kapitsa/models/<name>/` (`KAPITSA_HOME` replaces `~/.cache/kapitsa`): a catalog model under
+its name, a repo `org/name[@rev]` as `org--name[@rev]`. In a model folder:
+
+```
+<file>                          finished, verified files (the drafter in dflash2/, which --dflash auto finds)
+.kapitsa/parts/<file>.part      a file being downloaded, written at its byte offsets
+.kapitsa/parts/<file>.part.json the byte ranges written so far (resume)
+.kapitsa/manifest.json          written last: repo, revision, commit, every file with its size (and sha256), companions
+```
+
+A model whose manifest lists every file at its size is complete: `serve` uses it without any network access. A
+catalog model is also checked against the revisions this build pins; after an update that pins newer ones, the
+next start lists the repos again, checks the files that are there by hash, and fetches what changed (offline, it
+keeps using the old copy and says so).
+
+The catalog is one table, `src/hub/catalog.cpp`: models, best first, each with one or more variants (the precision
+of its weights: `4bit`, `8bit`, `bf16` ...) and one default. A variant pins its repo to a revision and lists its
+companions and its download size; its memory comes from the engine's plan of its headers. `--model <name>` takes the default variant,
+`--model <name>:<variant>` another; its folder is `<name>-<variant>`, and `list` and `pull --dry-run` show it. The API
+names a default variant by the model's name (`qwen3.5-4b`) and any other as `<name>:<variant>`. To add a variant or
+change a default, edit that table only: the downloader, `pull`, `list` and `--help` follow it. The repos and
+revisions are the same as the Nace Agent app's model catalog, so the app and the CLI fetch the same bytes:
+
+| Name (alias) | Variant | Weights | Companions |
+| --- | --- | --- | --- |
+| `qwen3.6-35b-a3b` (`qwen3.6-35b`, `35b`) | `4bit` (default) | `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` @ `95460516` (`mlx-community/Qwen3.6-35B-A3B-4bit` plus its MTP head) | DFlash2 drafter `incoai/Qwen3.6-35B-A3B-DFlash2` @ `51ef7b69` (config.json, model.safetensors, LICENSE) in `dflash2/` |
+| `qwen3.8-27b` (`27b`) | `4bit` (default) | `lmstudio-community/Qwen3.8-27B-MLX-4bit` @ `6067b15c` | MTP head: `mtp.safetensors` + `mtplx_runtime.json` from `Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed` @ `1d5087d2`; DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` @ `015e7956` in `dflash2/` |
+| `qwen3.5-4b` (`4b`) | `4bit` (default) | `lmstudio-community/Qwen3.5-4B-MLX-4bit` @ `c43ee1d6` | MTP head built from `Qwen/Qwen3.5-4B` @ `851bf6e8` (below), sha256 `4f491dd2...` |
+
+Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
+- The file list comes from the Hub API with sizes and checksums (`/api/models/<repo>/revision/<rev>?blobs=true`:
+  sha256 for LFS files, the git blob id for the others). Every file is checked after download: sha256, or the
+  blob id (sha1 of `blob <size>\0` + content) for small files. A mismatch deletes the part and says so.
+- NSURLSession (part of macOS: system proxies and trust store, no library): 8 connections, one session each so
+  they are separate TCP flows (a single flow is capped well below the link on some networks; 8 ranges measured ~4x
+  one stream here), 64 MB ranges taken from a queue, small files first. Each range retries 8 times with backoff
+  from where it stopped. `Authorization` is not forwarded when the Hub redirects to its CDN.
+- Resume: the part's written ranges are saved every 2 s and on Ctrl+C (the first stops cleanly, a second quits at
+  once). Running the same command continues; a part whose listing changed starts over.
+- Before downloading: the free disk space must cover what is left plus 1 GB, or it stops with what is needed.
+  One download per model folder at a time (a lock file). A first attempt that fails before any file arrives leaves
+  no folder behind.
+- Reuse before download: the same file in the Hugging Face cache (`HF_HUB_CACHE`, `HF_HOME/hub`, else
+  `~/.cache/huggingface/hub`, at the pinned commit; the blob's name proves its content), files under `--from`
+  folders, and for a catalog model the Nace Agent app's copy (`~/.nace/models/<key>` with its companions); in
+  folders, any name up to 3 levels deep, matched by size and then by checksum. They are placed as APFS clones (no
+  extra space), or copied across volumes.
+- `HF_TOKEN` (or the token `hf auth login` saved) is sent for gated or private repos; `HF_ENDPOINT` points at a
+  mirror. Errors say what to do: offline, not found, gated, rate-limited, out of disk.
+- A repo outside the catalog takes its top-level files except other formats (`.gguf`, `.bin`, `.pth`, images,
+  ...). Its config.json is read first: a model that is not a Qwen3.5-family hybrid (`linear_num_value_heads`) in
+  MLX affine 4- or 8-bit is refused before any weights download. Such models get no companions (an MTP head inside
+  the repo is used).
+
+The 4B's MTP head: MLX conversions of the small Qwen3.5 models drop it, and the official checkpoint keeps it as 15
+bf16 tensors named `mtp.*` (241 MB of 9.3 GB). `kapitsa mtp-sidecar` (and `pull` for the 4B) fetches the index,
+each shard's safetensors header and only those tensors' byte ranges, adds 1 to the RMSNorm weights (Hugging Face
+stores them zero-centred, MLX conversions as w + 1), keeps the linears bf16 (Kapitsa quantizes them at load) and
+writes the header with `base_hidden_variant`: byte for byte what `tools/mtp_sidecar.py` and the Nace Agent app make
+(same sha256 for the real head; `tests/test_sidecar.py` compares the two on a checkpoint with every finite bf16
+value). It takes 19 s here with parallel ranges; the Python tool, one stream, 94 s.
 
 ## Memory
 
@@ -120,10 +225,14 @@ cycle) as much as bandwidth bound, and its drafting pass is compute.
   the 8-row verify of DFlash2 in `qwen35_v8.cpp` + `verify8.metal`).
 - `src/model/dflash2.*`, `src/kernels/spec_dflash.metal`: the DFlash2 block drafter (load-time 4-bit
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
-  the double-buffered decode cycle). Math: `research/inference/dflash2/SPEC.md` in the Nace Agent repo.
+  the double-buffered decode cycle).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
   boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
   reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
+- `src/hub/`: the model catalog (`catalog.cpp`: the table of models and variants), `--model` resolution
+  (`resolve.cpp`), downloads, reuse, verification, the manifest and the MTP sidecar builder (`fetch.cpp`), the
+  NSURLSession transport (`http.mm`).
+- `src/server/`: the command line and the HTTP server (`main.cpp`), the chat page (`chat.html`).
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
@@ -144,7 +253,11 @@ cycle) as much as bandwidth bound, and its drafting pass is compute.
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
   `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
   how turn boundaries are classified (`kind_probe.py`).
-- `tests/test_server.py`: end-to-end API checks (14).
+- `tests/test_server.py`: end-to-end API checks against a running server (the chat page, the API, tool calls,
+  prefix reuse, thinking + tools; `--api-key KEY` adds the key checks), and with `--cli build/kapitsa` offline checks
+  of the command line (names and aliases at the app's pinned revisions, repo ids, folders, refusals, a finished
+  download used without network, list, rm, the early port check). `tests/test_sidecar.py build/kapitsa`: the sidecar
+  builder against `tools/mtp_sidecar.py`.
 
 ## Switches (environment, read once at start; the `NI_` prefix predates the name)
 
@@ -182,21 +295,31 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_FULL_DRAFT` | dense with lm_head < 10% of the weights (27B) | MTP drafts over the full vocabulary (else ids < 32768 + specials) |
 | `NI_NO_MTP` | off | do not load the MTP head |
 | `NI_MTP_HIDDEN` | the pack's metadata | `pre` / `post`: the trunk hidden the MTP head reads (before / after the final norm) |
-| `NI_MEM_BUDGET` | recommended working set - 4% | GPU memory budget in GB (`--mem-budget`) |
+| `NI_MEM_BUDGET` | recommended working set - 4% | GPU memory budget in GB (`--mem-budget`); `serve` without `--model` picks the model by it |
 | `NI_GPU_CORES` | IORegistry `gpu-core-count` | GPU cores the dispatch heuristics assume (tests of the 8/10-core choices on a bigger GPU) |
 | `NI_PREWARM` | on | create all pipelines at load |
 | `NI_PROFILE` | off | per-kernel GPU profile (isolated dispatches; timings of the whole run are not meaningful) |
 | `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters, checkpoint restores and overwrites) |
 | `NI_MATH_SAFE` | off | compile kernels without fast math (bitwise A/B checks only; slower) |
+| `NI_ABORT` | off | `fatal()` calls abort() (a backtrace in a crash report or debugger) instead of exiting with 1 |
 
 ## Benchmarks
 
-A/B on the GPU only while holding the shared lock (`lockf -k ~/.cache/nace-gpu.lock <cmd>`), interleave the
-runs, and report all of them. Defaults change only after an interleaved A/B plus a greedy/logits check against
-the old path (differences allowed only at near-ties). The cross-engine harness lives in the Nace Agent repo
-(`research/inference/scripts`: `bench.py`, `compare_engines.py`, `compare_table.py`).
+A/B on the GPU only while nothing else runs on it (we hold a shared lock: `lockf -k ~/.cache/nace-gpu.lock <cmd>`),
+interleave the runs, and report all of them. Defaults change only after an interleaved A/B plus a greedy/logits check
+against the old path (differences allowed only at near-ties). `bench/` has the in-repo pieces: token-id prompts for
+`ni_run` A/Bs (`bench/prompts/`), cached-turn and short-prompt TTFT through the server (`bench/shortpf/cached_ttft.py
+--corpus FILE`) and tool-loop TTFT (`bench/ckpt/`).
+
+### Run benchmarks locally
+
+[Run benchmarks locally](bench/harness/README.md): the cross-engine harness behind the README's tables (the same
+prompts over HTTP for every engine, one engine at a time on an otherwise idle Mac, median of 5 runs, thinking off,
+identical sampling settings, cold prompts cache-busted, each engine at its latest release and its own best settings).
+Every table, with all columns and engines: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Third-party
 
-MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib. Ideas credited in code comments
-where they come from other engines (Splash, MLX, MTPLX).
+MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib; the tokenizer's Unicode ranges come from
+the Unicode Character Database. Their notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Ideas credited in code
+comments where they come from other engines; the code is Kapitsa's own.

@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kapitsa</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23111'/%3E%3Cpath d='M10 7v18M22 7l-9 9 9 9' stroke='%23fff' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1a1a1a;--muted:#6b6b6b;--line:#e3e3e3;--soft:#f4f4f4;--accent:#1f6feb;--err:#b42318;--code:#f6f6f6}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1b1b;--fg:#ececec;--muted:#a3a3a3;--line:#343434;--soft:#262626;--accent:#6ea8fe;--err:#ff8a80;--code:#232323}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+#model{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+.tool{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);user-select:none}
+.tool input{margin:0}
+.btn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:5px 10px;font-size:13px}
+.btn:hover{background:var(--soft)}
+main{flex:1;overflow-y:auto}
+#log{max-width:780px;margin:0 auto;padding:20px 16px 8px}
+.empty{color:var(--muted);text-align:center;margin-top:18vh}
+.empty b{display:block;color:var(--fg);font-size:20px;font-weight:600;margin-bottom:6px}
+.msg{margin:0 0 22px}
+.user{display:flex;justify-content:flex-end}
+.user .text{background:var(--soft);border-radius:16px;padding:8px 14px;max-width:85%;white-space:pre-wrap;overflow-wrap:anywhere}
+.bot .text{overflow-wrap:anywhere}
+.bot .text>:first-child{margin-top:0}
+.bot .text>:last-child{margin-bottom:0}
+details.think{margin:0 0 10px;border-left:2px solid var(--line);padding:0 0 0 12px;color:var(--muted);font-size:14px}
+details.think summary{cursor:pointer;list-style-position:outside;margin-left:14px}
+details.think div{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}
+.stats{color:var(--muted);font-size:12px;margin-top:8px}
+.error{color:var(--err)}
+pre{position:relative;background:var(--code);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:13px;line-height:1.5}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+:not(pre)>code{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:0 4px}
+pre .copy{position:absolute;top:6px;right:6px;font-size:12px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--muted)}
+table{border-collapse:collapse;margin:8px 0;display:block;overflow-x:auto}
+th,td{border:1px solid var(--line);padding:4px 10px;text-align:left}
+blockquote{margin:8px 0;padding-left:12px;border-left:3px solid var(--line);color:var(--muted)}
+a{color:var(--accent)}
+footer{padding:8px 16px 14px}
+#form{max-width:780px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:14px;padding:8px 8px 8px 14px;background:var(--bg)}
+#form:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+textarea{flex:1;border:0;outline:0;resize:none;background:transparent;max-height:40vh;padding:6px 0;line-height:1.5}
+textarea:focus-visible{outline:0}
+#send,#stop{border:0;border-radius:10px;padding:7px 14px;background:var(--fg);color:var(--bg);font-weight:600}
+#send:disabled{opacity:.35;cursor:default}
+#stop{background:var(--soft);color:var(--fg);border:1px solid var(--line)}
+.hint{max-width:780px;margin:6px auto 0;color:var(--muted);font-size:12px;text-align:center}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--fg);padding:18px;max-width:420px}
+dialog::backdrop{background:#0006}
+dialog form{display:grid;gap:10px}
+dialog p{margin:0;color:var(--muted);font-size:13px}
+dialog input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+dialog .btn{justify-self:end}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Kapitsa</h1>
+  <span id="model" title="Model">connecting…</span>
+  <span class="spacer"></span>
+  <label class="tool" title="Let the model reason before it answers"><input type="checkbox" id="think" checked> Thinking</label>
+  <button class="btn" id="new" type="button">New chat</button>
+</header>
+<main id="scroll"><div id="log" aria-label="Conversation"></div></main>
+<footer>
+  <form id="form">
+    <label class="sr" for="input">Message</label>
+    <textarea id="input" rows="1" placeholder="Message Kapitsa" autocomplete="off" autofocus></textarea>
+    <button id="send" type="submit" disabled>Send</button>
+    <button id="stop" type="button" hidden>Stop</button>
+  </form>
+  <p class="hint">Enter sends, Shift+Enter adds a line. Runs on this Mac; nothing leaves it.</p>
+  <p class="sr" id="status" aria-live="polite"></p>
+</footer>
+<dialog id="keydlg">
+  <form method="dialog" id="keyform">
+    <strong>This server needs an API key</strong>
+    <p>It was started with <code>--api-key</code>. The key stays in this browser.</p>
+    <label class="sr" for="key">API key</label>
+    <input id="key" type="password" autocomplete="off" placeholder="API key">
+    <button class="btn" value="ok">Save</button>
+  </form>
+</dialog>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const log = $("log"), scroller = $("scroll"), input = $("input"), send = $("send"), stop = $("stop");
+const store = { get(k, d) { try { const v = localStorage.getItem("kapitsa." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+                set(k, v) { try { localStorage.setItem("kapitsa." + k, JSON.stringify(v)); } catch {} } };
+let messages = store.get("chat", []);   // {role, content, reasoning?, stats?}
+let modelId = "", busy = null;
+$("think").checked = store.get("think", true);
+$("think").onchange = () => store.set("think", $("think").checked);
+
+function headers() {
+  const h = { "Content-Type": "application/json" };
+  const k = store.get("key", "");
+  if (k) h.Authorization = "Bearer " + k;
+  return h;
+}
+function askKey() {
+  return new Promise((done) => {
+    const d = $("keydlg");
+    $("key").value = "";
+    d.onclose = () => { store.set("key", $("key").value.trim()); done(); };
+    d.showModal();
+  });
+}
+
+// ---- markdown, safely: everything is escaped, only these tags are produced
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function inline(s) {
+  const codes = [];
+  s = s.replace(/`([^`\n]+)`/g, (_, c) => (codes.push(c), "\u0000" + (codes.length - 1) + "\u0000"));
+  s = esc(s)
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*(?=[^*\w]|$)/g, "$1<em>$2</em>")
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => "<code>" + esc(codes[+i]) + "</code>");
+}
+function md(src) {
+  const lines = src.replace(/\r/g, "").split("\n"), out = [];
+  let i = 0, para = [];
+  const flush = () => { if (para.length) out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; };
+  const cells = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  while (i < lines.length) {
+    const l = lines[i];
+    let m;
+    if ((m = l.match(/^\s*(```+|~~~+)\s*([\w+#.-]*)/))) {
+      flush();
+      const fence = m[1], body = [];
+      for (i++; i < lines.length && !lines[i].trim().startsWith(fence); i++) body.push(lines[i]);
+      i++;
+      out.push('<pre><button class="copy" type="button">Copy</button><code' + (m[2] ? ' data-lang="' + esc(m[2]) + '"' : "") + ">" + esc(body.join("\n")) + "</code></pre>");
+      continue;
+    }
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) { flush(); const n = Math.min(6, m[1].length + 2); out.push("<h" + n + ">" + inline(m[2]) + "</h" + n + ">"); i++; continue; }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(l)) { flush(); out.push("<hr>"); i++; continue; }
+    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      flush();
+      const head = cells(l);
+      let t = "<table><thead><tr>" + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>";
+      for (i += 2; i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i]); i++) t += "<tr>" + cells(lines[i]).map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>";
+      out.push(t + "</tbody></table>");
+      continue;
+    }
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(l)) {
+      flush();
+      const ordered = /^\s*\d/.test(l), items = [];
+      for (; i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i]); i++) items.push(lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ""));
+      const tag = ordered ? "ol" : "ul";
+      out.push("<" + tag + ">" + items.map((x) => "<li>" + inline(x) + "</li>").join("") + "</" + tag + ">");
+      continue;
+    }
+    if (/^\s*>/.test(l)) {
+      flush();
+      const q = [];
+      for (; i < lines.length && /^\s*>/.test(lines[i]); i++) q.push(lines[i].replace(/^\s*>\s?/, ""));
+      out.push("<blockquote>" + md(q.join("\n")) + "</blockquote>");
+      continue;
+    }
+    if (!l.trim()) { flush(); i++; continue; }
+    para.push(l);
+    i++;
+  }
+  flush();
+  return out.join("");
+}
+
+// ---- view
+// follow the answer while the reader is at the bottom; scrolling up stops that, scrolling back down resumes it
+function nearBottom() { return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80; }
+function toBottom() { scroller.scrollTop = scroller.scrollHeight; }
+let stick = true;
+scroller.addEventListener("scroll", () => { stick = nearBottom(); }, { passive: true });
+function statsText(s) {
+  if (!s) return "";
+  const p = [];
+  if (s.tokens) p.push(s.tokens + " tokens");
+  if (s.tps) p.push(s.tps.toFixed(1) + " tok/s");
+  if (s.ttft != null) p.push(s.ttft.toFixed(2) + " s to first token");
+  if (s.cached) p.push(s.cached + " prompt tokens cached");
+  if (s.stopped) p.push("stopped");
+  return p.join(" · ");
+}
+function renderBot(el, m, live) {
+  let think = el.querySelector("details.think");
+  if (m.reasoning) {
+    if (!think) {
+      think = document.createElement("details");
+      think.className = "think";
+      think.innerHTML = "<summary></summary><div></div>";
+      think.open = live && !m.content;
+      think.querySelector("summary").addEventListener("click", () => { think.dataset.user = "1"; });
+      el.prepend(think);
+    }
+    think.querySelector("summary").textContent = live && !m.content ? "Thinking…" : "Thought for " + (m.stats && m.stats.think != null ? m.stats.think.toFixed(1) + " s" : "a moment");
+    think.querySelector("div").textContent = m.reasoning;
+    if (live && m.content && !think.dataset.user) think.open = false;
+  }
+  el.querySelector(".text").innerHTML = m.content ? md(m.content) : "";
+  el.querySelector(".stats").textContent = m.error ? "" : statsText(m.stats);
+  const er = el.querySelector(".error");
+  er.textContent = m.error || "";
+  er.hidden = !m.error;
+}
+function addMessage(m) {
+  const empty = log.querySelector(".empty");
+  if (empty) empty.remove();
+  const el = document.createElement("div");
+  el.className = "msg " + (m.role === "user" ? "user" : "bot");
+  if (m.role === "user") {
+    el.innerHTML = '<div class="text"></div>';
+    el.querySelector(".text").textContent = m.content;
+  } else {
+    el.innerHTML = '<div class="text"></div><p class="error" hidden></p><div class="stats"></div>';
+    renderBot(el, m, false);
+  }
+  log.append(el);
+  return el;
+}
+function renderAll() {
+  log.textContent = "";
+  if (!messages.length) log.innerHTML = '<div class="empty"><b>What can I help with?</b>Ask anything. Kapitsa runs the model on this Mac.</div>';
+  for (const m of messages) addMessage(m);
+  toBottom();
+}
+log.addEventListener("click", (e) => {
+  const b = e.target.closest("button.copy");
+  if (!b) return;
+  const text = b.parentElement.querySelector("code").textContent;
+  const done = () => { b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1500); };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done);
+  else { const t = document.createElement("textarea"); t.value = text; document.body.append(t); t.select(); document.execCommand("copy"); t.remove(); done(); }
+});
+
+// ---- talking to the server
+async function loadModel() {
+  try {
+    let r = await fetch("/v1/models", { headers: headers() });
+    if (r.status === 401) { await askKey(); r = await fetch("/v1/models", { headers: headers() }); }
+    const j = await r.json();
+    modelId = (j.data && j.data[0] && j.data[0].id) || "";
+    $("model").textContent = modelId || "no model";
+    document.title = modelId ? "Kapitsa · " + modelId : "Kapitsa";
+  } catch {
+    $("model").textContent = "server not reachable";
+  }
+}
+
+async function ask() {
+  const text = input.value.trim();
+  if (!text || busy) return;
+  input.value = "";
+  grow();
+  messages.push({ role: "user", content: text });
+  addMessage(messages[messages.length - 1]);
+  const m = { role: "assistant", content: "", reasoning: "", stats: {} };
+  messages.push(m);
+  const el = addMessage(m);
+  toBottom();
+  stick = true;
+  const ctrl = new AbortController();
+  busy = ctrl;
+  send.hidden = true; stop.hidden = false;
+  $("status").textContent = "Kapitsa is writing.";
+  const body = {
+    model: modelId || "default",
+    messages: messages.slice(0, -1).map((x) => ({ role: x.role, content: x.content })),
+    stream: true, stream_options: { include_usage: true },
+    chat_template_kwargs: { enable_thinking: $("think").checked },
+  };
+  const t0 = performance.now();
+  let tFirst = null, tThinkEnd = null, frame = 0;
+  const paint = () => { frame = 0; renderBot(el, m, true); if (stick) toBottom(); };
+  try {
+    let r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body), signal: ctrl.signal });
+    if (r.status === 401) { await askKey(); r = await fetch("/v1/chat/completions", { method: "POST", headers: headers(), body: JSON.stringify(body), signal: ctrl.signal }); }
+    if (!r.ok) { let msg = "HTTP " + r.status; try { msg = (await r.json()).error.message; } catch {} throw new Error(msg); }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let k;
+      while ((k = buf.indexOf("\n\n")) >= 0) {
+        const ev = buf.slice(0, k); buf = buf.slice(k + 2);
+        for (const line of ev.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (data === "[DONE]") continue;
+          const c = JSON.parse(data);
+          if (c.error) throw new Error(c.error.message || "error");
+          const d = (c.choices && c.choices[0] && c.choices[0].delta) || {};
+          if (d.reasoning_content || d.content) {
+            const now = performance.now();
+            if (tFirst === null) tFirst = now;
+            if (d.content && tThinkEnd === null && m.reasoning) { tThinkEnd = now; m.stats.think = (now - tFirst) / 1000; }
+          }
+          if (d.reasoning_content) m.reasoning += d.reasoning_content;
+          if (d.content) m.content += d.content;
+          if (c.usage) {
+            const n = c.usage.completion_tokens, secs = (performance.now() - (tFirst || t0)) / 1000;
+            m.stats.tokens = n;
+            if (n > 1 && secs > 0) m.stats.tps = (n - 1) / secs;
+            m.stats.cached = c.usage.prompt_tokens_details && c.usage.prompt_tokens_details.cached_tokens;
+          }
+        }
+        if (!frame) frame = requestAnimationFrame(paint);
+      }
+    }
+  } catch (e) {
+    if (e.name === "AbortError") m.stats.stopped = true;
+    else m.error = String(e.message || e) === "Failed to fetch" ? "Can't reach Kapitsa. Is it still running?" : String(e.message || e);
+  }
+  if (frame) cancelAnimationFrame(frame);
+  if (tFirst !== null) m.stats.ttft = (tFirst - t0) / 1000;
+  if (m.reasoning) m.stats.think = ((tThinkEnd || performance.now()) - (tFirst || t0)) / 1000;
+  busy = null;
+  send.hidden = false; stop.hidden = true;
+  renderBot(el, m, false);
+  if (stick) toBottom();
+  $("status").textContent = m.error ? "Error: " + m.error : "Answer complete. " + statsText(m.stats);
+  if (m.error && !m.content) messages.splice(-2, 2); else store.set("chat", messages);
+  updateSend();
+  input.focus();
+}
+
+function grow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, innerHeight * 0.4) + "px"; }
+function updateSend() { send.disabled = !input.value.trim() || !!busy; }
+input.addEventListener("input", () => { grow(); updateSend(); });
+input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
+$("form").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
+stop.onclick = () => busy && busy.abort();
+$("new").onclick = () => { if (busy) busy.abort(); messages = []; store.set("chat", messages); renderAll(); input.focus(); };
+renderAll();
+loadModel();
+</script>
+</body>
+</html>

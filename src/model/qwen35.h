@@ -105,7 +105,7 @@ struct Checkpoint {
   std::vector<Buffer> conv, rec;
 };
 
-// Target hidden capture for a block drafter (DFlash2, research/inference/dflash2/SPEC.md §6.1):
+// Target hidden capture for a block drafter (DFlash2):
 // after target layer l (mixer + FFN residual add), every row whose position p lies in
 // [pos_base, pos_base + rows) is copied (fp32 -> bf16) to dst row p - pos_base, columns
 // [slot[l] * H, (slot[l] + 1) * H). Unset (the default) adds no work anywhere.

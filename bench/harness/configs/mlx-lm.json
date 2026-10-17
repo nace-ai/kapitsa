@@ -1,0 +1,29 @@
+[
+ {
+  "label": "q36-35b-mlxlm",
+  "display": "mlx-lm",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": ["{env:MLX_LM_SERVER=mlx_lm.server}", "--model", "{models}/qwen3.6-35b-a3b-4bit",
+          "--host", "127.0.0.1", "--port", "8081", "--prompt-cache-size", "4", "--prompt-cache-bytes", "8589934592",
+          "--max-tokens", "16384", "--prefill-step-size", "2048"],
+  "env": {"HF_HUB_OFFLINE": "1"},
+  "base_url": "http://127.0.0.1:8081/v1",
+  "model": "default_model",
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/config.json"],
+  "note": "mlx-lm's own server on the same weights directory as Kapitsa (it has no MTP or drafter path for these models; the mtp.safetensors side-car is ignored). Prompt cache for 4 sequences / 8 GB so follow-up turns reuse the prefix; 2048-token prefill steps (mlx-lm's default). HF_HUB_OFFLINE: mlx_lm.server would otherwise download whatever model a request names. Request id default_model = the model given with --model. Not re-run on the final harness for the 2026-10-17 tables."
+ },
+ {
+  "label": "q38-27b-mlxlm",
+  "extends": "q36-35b-mlxlm",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "cmd": ["{env:MLX_LM_SERVER=mlx_lm.server}", "--model", "{models}/qwen3.8-27b-4bit-mtp",
+          "--host", "127.0.0.1", "--port", "8081", "--prompt-cache-size", "4", "--prompt-cache-bytes", "8589934592",
+          "--max-tokens", "16384", "--prefill-step-size", "2048"],
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/config.json"],
+  "note": "Same weights directory as Kapitsa (the mtp.safetensors side-car is ignored); no speculative decoding. Same server settings as the 35B."
+ }
+]

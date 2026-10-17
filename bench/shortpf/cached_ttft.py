@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Cached-turn and short-prompt TTFT against a running server, with the request pattern of the
-benchmark harness (research/inference/scripts/bench.py: warmup + t_prefill). Stdlib only.
+cross-engine benchmark harness (warmup + t_prefill). Stdlib only.
 
 usage: cached_ttft.py [--base http://127.0.0.1:8097/v1] [--sizes 4000,16000] [--greedy] [--cold-check]
-                      [--short] [--no-warmup] [--tag T] [--out results.jsonl] [--seed N]
+                      [--short] [--no-warmup] [--tag T] [--out results.jsonl] [--seed N] [--corpus FILE]
+
+--corpus: the text the prompts are cut from (default bench/corpus.txt: the harness's frozen corpus, see
+bench/harness/corpus/NOTICE.md; another text works, but its numbers are not comparable with the harness's).
 
 Per size: turn 1 = system "[session <nonce>] SYS + repository context" (frozen corpus, 4.25 chars per
 token) + the harness question, max_tokens 256; then 3 follow-up user turns (the harness FOLLOWUPS)
@@ -19,23 +22,14 @@ import argparse, json, os, random, statistics, sys, time, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def find_corpus():
-    # the harness's frozen corpus: <Nace Agent>/research/inference/bench_corpus.txt, found by walking up
-    # (the main checkout is <Nace Agent>/nace-infer, worktrees sit one level deeper)
-    d = HERE
-    for _ in range(6):
-        c = os.path.join(d, "research", "inference", "bench_corpus.txt")
-        if os.path.exists(c):
-            return c
-        d = os.path.dirname(d)
-    return "bench_corpus.txt"
+DEFAULT_CORPUS = os.path.join(HERE, "..", "corpus.txt")
 
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--base", default="http://127.0.0.1:8097/v1")
 ap.add_argument("--model", default="x")
 ap.add_argument("--sizes", default="4000,16000")
-ap.add_argument("--corpus", default=find_corpus())
+ap.add_argument("--corpus", default=DEFAULT_CORPUS)
 ap.add_argument("--samples", type=int, default=3)
 ap.add_argument("--turn-gap", type=float, default=1.0)
 ap.add_argument("--greedy", action="store_true")
@@ -66,6 +60,8 @@ TOOLS = [{"type": "function", "function": {
 SHORT = ["Write a Python function that reverses a string.",
          "What is the difference between a process and a thread? Answer in two sentences.",
          "Explain what this shell command does: find . -name '*.py' -mtime -1 | xargs grep -n TODO"]
+if not os.path.exists(a.corpus):
+    sys.exit(f"no corpus at {a.corpus}: pass --corpus FILE (a large text the prompts are cut from)")
 corpus = open(a.corpus, encoding="utf-8", newline="").read()
 out_f = open(a.out, "a") if a.out else None
 

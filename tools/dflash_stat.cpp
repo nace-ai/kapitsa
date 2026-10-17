@@ -1,4 +1,4 @@
-// S2 (research/inference/dflash2/SPEC.md §12): end-to-end exactness of the sampled DFlash2 loop on the real
+// S2: end-to-end exactness of the sampled DFlash2 loop on the real
 // target and drafter. After a prompt, plain greedy steps move the start point to the first position whose
 // sampler distribution is uncertain (>= 3 kept tokens, top probability <= 0.8); with the anchor y0 there,
 // every trial runs DFlash2 cycles (fresh seed, state restored) until two tokens are out, and the empirical

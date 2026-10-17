@@ -3,6 +3,7 @@
 #include "engine/doctor.h"
 #include "ane/ffn_split.h"
 #include "engine/engine.h"
+#include "hub/hub.h"
 #include "metal/gpu.h"
 #include "model/qwen35.h"
 
@@ -12,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -101,19 +103,35 @@ int run_doctor(int argc, char** argv) {
     else if (a == "--json") as_json = true;
     else {
       fprintf(stderr,
-              "usage: kapitsa doctor [--model DIR]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
+              "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
               "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n");
       return 2;
     }
   }
+  // --model takes what `kapitsa serve --model` takes: a name or alias, org/name, or a folder; a catalog model that is
+  // not downloaded is planned from its headers (hub::plan_dir, fetched once)
+  for (std::string& m : models) {
+    try {
+      const hub::ModelRef r = hub::resolve(m);
+      const std::string d = hub::plan_dir(r);
+      m = d.empty() ? r.dir : d;
+    } catch (const hub::Error&) {
+    }
+  }
   if (models.empty()) {
     if (roots.empty()) {
+      // the catalog's models first (downloaded or not: what fits this Mac before a download), then the store and the
+      // folders other tools keep models in
+      for (const auto& c : hub::catalog())
+        if (const std::string d = hub::plan_dir(hub::resolve(c.name)); !d.empty()) models.push_back(d);
       const char* h = getenv("HOME");
       const std::string home = h ? h : "";
-      roots = {home + "/.cache/nace-infer-models", home + "/.cache/nace-agent-models", home + "/.nace/models"};
+      roots = {hub::models_dir(), home + "/.cache/nace-infer-models", home + "/.cache/nace-agent-models",
+               home + "/.nace/models"};
     }
     for (const std::string& r : roots)
-      for (const std::string& m : scan(r)) models.push_back(m);
+      for (const std::string& m : scan(r))
+        if (std::find(models.begin(), models.end(), m) == models.end()) models.push_back(m);
   }
 
   Gpu& g = Gpu::get();
@@ -204,6 +222,7 @@ int run_doctor(int argc, char** argv) {
     arr.push_back(o);
     if (as_json) continue;
     std::string name = dir.substr(dir.find_last_of('/') + 1);
+    if (dir.rfind(hub::home_dir() + "/plans/", 0) == 0) name += ", not downloaded: planned from its headers";
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
     printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d slot%s' state %.2f, KV %.0f KB/token%s%s\n",

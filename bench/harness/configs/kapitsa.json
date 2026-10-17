@@ -1,0 +1,45 @@
+[
+ {
+  "label": "q36-35b-kapitsa",
+  "display": "Kapitsa (DFlash2 drafter)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.6-35b-a3b-4bit", "--model-id", "qwen3.6-35b-a3b",
+          "--dflash", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "env_clear_prefixes": ["NI_", "KAPITSA_"],
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "qwen3.6-35b-a3b",
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/config.json", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
+  "note": "Kapitsa's default settings. --dflash names the drafter that the default (--dflash auto) finds next to the model, so a missing drafter fails the run instead of silently falling back to MTP. --slots 1 for parity with llama.cpp -np 1 (the default, 2, only keeps a second conversation warm). Inherited NI_*/KAPITSA_* experiment variables are cleared."
+ },
+ {
+  "label": "q38-27b-kapitsa",
+  "extends": "q36-35b-kapitsa",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.8-27b-4bit-mtp", "--model-id", "qwen3.8-27b",
+          "--dflash", "{models}/drafters/Qwen3.8-27B-DFlash2",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "model": "qwen3.8-27b",
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/config.json", "{models}/drafters/Qwen3.8-27B-DFlash2/model.safetensors"],
+  "note": "Kapitsa's default settings: DFlash2 drafter, dense prefill split between the GPU and the Neural Engine (the first start after a new build compiles the Neural Engine program in the background; the warm-up covers it). --slots 1 for parity with llama.cpp -np 1."
+ },
+ {
+  "label": "q35-4b-kapitsa",
+  "extends": "q36-35b-kapitsa",
+  "display": "Kapitsa (MTP head)",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtp",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-4bit-mtp", "--model-id", "qwen3.5-4b",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "model": "qwen3.5-4b",
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors"],
+  "note": "Smoke test of the harness on a small model (3.3 GB): Qwen3.5-4B has no DFlash2 drafter, so Kapitsa decodes with its MTP head. Not part of the published comparison."
+ }
+]

@@ -203,8 +203,8 @@ Tools on macOS 27: `ni_kstats --stats` prints "regs n/a" (the AGX pipeline objec
 `NI_ARCHIVE_DIR=<dir> ni_compile <kernels>` still reports GPRs and stack.
 
 ## 27B prefill with the Neural Engine (opt-in `NI_ANE=1`)
-M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Design and
-background: `research/inference/ane/ANE_DESIGN.md`; code: `src/ane/`, `src/kernels/ane_ffn.metal`,
+M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Code:
+`src/ane/`, `src/kernels/ane_ffn.metal`,
 `src/model/qwen35_ane.cpp`. Each dense FFN layer of a prefill chunk (>= 512 rows) is split by intermediate
 channel between the GPU (4-bit GEMMs) and the ANE (one W8A8 MIL program, Hadamard-rotated int8, private
 `AppleNeuralEngine.framework`); the ANE's partial down projection is joined in fp32. Schedules:
@@ -502,7 +502,7 @@ Estimate at 2048-token chunks: expert GEMMs 23 -> ~17-19 ms/layer, swiglu pass a
 (64 MB written + 80 MB swiglu traffic per layer) gone: prefill +5-10% (4k ~800-840 tok/s).
 
 ## Same Mac, other engines (tok/s, M4 Pro)
-nace-infer from the tables above (ni_run); the others from research/inference/REPORT.md (servers,
+nace-infer from the tables above (ni_run); the others from the cross-engine harness (servers,
 TTFT on real 4,133 / 16,285-token prompts, MTPLX-optimized 4-bit MLX weights; llama.cpp on GGUF
 UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
 
@@ -620,7 +620,7 @@ Through the server, the harness's pattern (bench/shortpf/cached_ttft.py: same co
 questions, sampling, thinking off, 1 s turn gap; median of 3 follow-ups; `--slots 1 --ctx 32768`,
 default MTP), seconds to the first token. before = main cc776e5 (qmr + fused gate/up, which already
 took the 27B from 0.83 to 0.35 s), after = this branch; competitors from the harness runs of the same
-day (research/inference/results):
+day:
 | cached turn TTFT | 45705ec (harness) | before (cc776e5) | after | Ollama | llama.cpp | mlx-lm |
 |---|---|---|---|---|---|---|
 | 27B, 4k prefix | 0.829 | 0.347 | 0.247 (0.242) | 0.50-0.52 | 0.60-0.65 | 0.573 |
@@ -861,7 +861,7 @@ not after the "length" ones, and the 16k cold turn and the tools phase never wai
 
 ## DFlash2 block drafter (opt/dflash2-draft; opt-in `ni_run --dflash <drafter dir>` / `NI_DFLASH`)
 
-Spec and oracle: `research/inference/dflash2/SPEC.md`, `dflash2_ref.py` (MLX). Code: `src/model/dflash2.{h,cpp}`,
+Checked against a Python/MLX reference implementation. Code: `src/model/dflash2.{h,cpp}`,
 `src/kernels/spec_dflash.metal`, capture hook in `Qwen35` (`CaptureHook`, `set_capture`), tools
 `dflash_check` (oracle dumps, timing, `--sim` replay), `bench_qmm8`, `dflash_attn_test`, `dflash_qtest`.
 
@@ -1069,7 +1069,7 @@ oracle's 3.65 on purpose (dynamic depth; all 7 verified: 3.70); the 27B's 4.78 m
 Longer context, p4000 + 256 greedy: 35B 183.9 tok/s (4.72 tok/cycle, 25.6 ms/cycle), 27B 80.1 tok/s (7.29 tok/cycle,
 90.6 ms/cycle; a raw code continuation, plain 13.5).
 
-Server (`research/inference/scripts/bench.py` decode phases against `nace-infer-server`, the app's streaming API:
+Server (the cross-engine harness's decode phases against `nace-infer-server`, the app's streaming API:
 middle-window decode rate, median of 3 x 512 tokens, thinking off; T = 0.6 / top_p 0.95 / top_k 20 and T = 0):
 
 | model | default server (MTP) T = 0.6 / T = 0 | `--dflash auto` T = 0.6 / T = 0 |
@@ -1375,7 +1375,7 @@ more rows than a frequency ranking; tokens outside each set:
 | Python (bench corpus, 35k tokens) | 0.22% | 2.81% | 1.30% | 0.03% |
 | C++ (Kapitsa sources, 78k) | 0.73% | 1.29% | 0.36% | 0.05% |
 | English technical docs (PERF.md + SPEC.md, 44k) | 0.41% | 1.41% | 0.67% | 0.16% |
-| TypeScript (the Nace Agent app, 2.2M) | 0.36% | 0.97% | 0.37% | 0.02% |
+| TypeScript (an app's sources, 2.2M) | 0.36% | 0.97% | 0.37% | 0.02% |
 
 Interleaved ni_run, 512 tokens `--ignore-eos`; tok/s (tok/cycle); greedy = 2 rounds, T = 0.6 = seeds 1-4 (35B) / 1-3
 (27B):
@@ -1707,8 +1707,8 @@ default bf16 run):
 | argmax equal to fp32 | 205/205 | 203/205 |
 | prefill, last position: p700 / p4000 / p16000 KL | 3.2e-10 / 5.8e-11 / 5.2e-10 | 9.4e-8 / 2.6e-7 / 1.9e-7 |
 | greedy 256 tokens equal to fp32 mlx-lm: code / prose | 256 / 256 | 7 / 226 |
-The coordinator's "agrees with mlx-lm for 12 tokens": after the fix the first split from bf16 mlx-lm is at token 7,
-a tie inside mlx-lm itself (0.457 vs 0.457); the fp32 reference and Kapitsa agree throughout.
+An earlier check had Kapitsa "agree with mlx-lm for 12 tokens": after the fix the first split from bf16 mlx-lm is
+at token 7, a tie inside mlx-lm itself (0.457 vs 0.457); the fp32 reference and Kapitsa agree throughout.
 
 ### 4B speed against mlx-lm (same weights and token ids, raw generation, 2026-10-17 ~05:30)
 | | Kapitsa (ni_run) | mlx-lm 0.32.2 (stream_generate, prefill step 2048) |
@@ -1855,4 +1855,22 @@ MTP depth 2), and DFlash2 greedy for the 35B (code 256 tokens) and the 27B (code
 summation order (KL max: 4B 9e-9, 27B 4e-10, 35B 3.9e-4 where the split-K decode attention changes the MoE routing
 inputs by rounding), the short-prefill suffix logits likewise (35B 5.4e-5, 4B 1.8e-10, 27B 1.5e-10). Speed on this
 Mac does not change with the setting (DFlash2 35B 147.4 / 147.5 / 147.1 tok/s at 20 / 10 / 8): it only sizes grids.
+
+4B through the cross-engine harness (bench/harness/compare_engines.py, sizes 4000 / 16000, same
+token ids for all; every run flagged: Chrome's GPU process held 48-74% of the GPU throughout, so all three engines
+ran under the same contention):
+| | Kapitsa (MTP depth 1, Neural Engine split) | mlx-lm 0.32.2 | oMLX 0.7.1rc1 |
+|---|---|---|---|
+| decode tok/s, T=0.6 / greedy (512 tokens, median of 5) | 112.5 / 111.7 | 66.7 / 69.4 | 71.2 / 71.6 |
+| prefill 4k / 16k, tok/s (cold) | 1701 / 1348 | 747 / 698 | 742 / 669 |
+| cached TTFT 4k / 16k | 0.05 / 0.07 s | 0.25 / 0.34 s | 0.26 / 0.38 s |
+| tool calls, thinking off / on | ok / ok | ok / ok | ok / ok |
+| peak footprint | 4.08 GB | 7.35 GB | 6.17 GB |
+
+Tried and left out: for the 4B's 2-row MTP verify, the row-cache kernels (NI_RC=1, or one multi-projection
+dispatch for its 2560 x 4096 in-projections) were slower than the default qmvrc1 per projection (code / prose,
+two rounds: 76-89 against 87-96 tok/s). bench_qmv on the 4B's decode shapes: 8 simdgroups per threadgroup beat 4
+on the 2560-row matrices (29-31 against 34-36 us at K 4096, 65-68 against 76-81 us at K 9216), 4 beat 8 on the
+248320-row output layer (1440-1564 against 1631-1641 us at 4 rows): about 1% of a decode step, inside this
+session's noise, not changed.
 

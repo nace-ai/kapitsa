@@ -2,7 +2,7 @@
 //   ni_run <model_dir> <ids: comma-separated> [n_gen=32] [temp=0] [--dump-logits file]
 //          [--spec D] [--dflash <drafter dir> | auto | none] [--ignore-eos]
 // Plain decoding unless --spec (MTP) or --dflash is given (the server defaults to DFlash2 instead).
-// --dflash: DFlash2 speculative decoding (research/inference/dflash2/SPEC.md): drafting pass, 8-row
+// --dflash: DFlash2 speculative decoding: drafting pass, 8-row
 // target verify with captures, on-GPU acceptance (greedy, or exact speculative sampling at temp > 0),
 // ring commit of the kept rows; "auto" = DFlash2::find. NI_DFLASH=<dir>|auto does the same, NI_DFLASH=0 /
 // --dflash none is off. The prompt rows are captured for the drafter in whichever prefill runs (chunks,

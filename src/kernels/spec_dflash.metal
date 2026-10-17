@@ -1,6 +1,6 @@
 #include "common.h"
 
-// ---- DFlash2 block drafter (research/inference/dflash2/SPEC.md §4-§7) ----
+// ---- DFlash2 block drafter ----
 // One drafting pass = the block [anchor, mask x 7] at positions P..P+7 through NL qwen3-style
 // layers with two-tap grouped dynamic convolutions, bidirectional attention over the committed
 // context ring + the block itself, the target's LM head, per-position top-16 and the rank-256

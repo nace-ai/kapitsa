@@ -61,6 +61,21 @@ struct LoadPlan {
 // before speed); prefill_chunk 0 = auto_prefill_chunk with the drafter's memory set aside.
 LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
                    size_t budget, int prefill_chunk);
+// What the engine needs to start a model (it refuses to load it past the budget): the weights, the MTP head, the
+// drafter plan_load keeps, prefill buffers for `prefill_chunk` rows, the slots' state and an 8k-token conversation
+// (min(context, 8192)). From config.json and the safetensors headers alone, so `kapitsa serve` can check a model
+// before downloading it (hub::plan_dir).
+struct StartNeed {
+  size_t bytes = 0;
+  std::string parts;  // what each part needs, for the "insufficient memory" message
+  size_t weights = 0;   // the weights alone
+  std::string formats;  // their formats ("bf16", "4-bit g64 + 8-bit g64" ...)
+};
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots);
+// One conversation of `context` tokens fits within `budget` beside the model (1024-row prefill buffers, the slots'
+// state, the Neural Engine split): plan_load's test before it keeps a drafter, and the test `kapitsa serve` without
+// --model applies to pick the best model for this Mac.
+bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget);
 
 struct ChatRequest {
   ojson messages = ojson::array();
@@ -133,6 +148,7 @@ class Engine {
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
+    int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
   };
   Slot& pick_slot(const std::vector<int>& prompt);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other

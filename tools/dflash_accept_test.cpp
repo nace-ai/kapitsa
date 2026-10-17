@@ -1,4 +1,4 @@
-// S1 (research/inference/dflash2/SPEC.md §12): exactness of the on-GPU acceptance on synthetic inputs,
+// S1: exactness of the on-GPU acceptance on synthetic inputs,
 // no model needed.
 //   dflash_accept_test [trials=40000] [K=3]
 // 1. dfl_dist_rows against a CPU transcription of the plain sampler's distribution (sample_stage2_rows:

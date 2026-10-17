@@ -1,0 +1,84 @@
+[
+ {
+  "label": "q36-35b-llamacpp",
+  "display": "llama.cpp",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "Ollama's GGUF of qwen3.6:35b-a3b-mtp-q4_K_M (Q4_K_M, blob d372de8e)",
+  "cmd": ["{env:LLAMA_SERVER={first:llama-server|/opt/homebrew/bin/llama-server}}",
+          "-m", "{env:QWEN36_35B_GGUF={ollama_gguf:qwen3.6:35b-a3b-mtp-q4_K_M|qwen3.6-35b-a3b-nomtp}}",
+          "--host", "127.0.0.1", "--port", "8083", "-a", "qwen3.6-35b-a3b", "-c", "32768", "-np", "1", "-ngl", "999",
+          "-fa", "on", "-b", "2048", "-ub", "2048", "-lm", "none", "--jinja",
+          "--chat-template-file", "{models}/qwen3.6-35b-a3b-4bit/chat_template.jinja",
+          "--reasoning-format", "deepseek", "--cache-ram", "8192", "--ctx-checkpoints", "32",
+          "--temp", "0.6", "--top-p", "0.95", "--top-k", "20", "--min-p", "0", "--no-webui"],
+  "env": {"GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"},
+  "env_clear_prefixes": ["LLAMA_ARG_"],
+  "base_url": "http://127.0.0.1:8083/v1",
+  "model": "qwen3.6-35b-a3b",
+  "flag_check": "llama-server",
+  "gguf_expect": "d372de8e",
+  "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/chat_template.jinja"],
+  "note": "Plain llama-server on the GGUF Ollama ships for this model (read from the Ollama store, so llama.cpp and Ollama run the same file; set QWEN36_35B_GGUF to use a copy elsewhere). -c 32768 -np 1 (the default -np auto means 4 slots and 4x the recurrent state); -b/-ub 2048, the 2048-token prefill chunks the MLX engines and Kapitsa use (MoE prefill reads every expert once per ubatch); -lm none so the weights count in phys_footprint like everyone else's (no speed change on unified memory); the official Qwen3.6 chat template (Ollama's GGUFs carry none, and llama.cpp would fall back to chatml); --min-p 0 (llama.cpp's default is 0.05); prompt cache and context checkpoints at their defaults; GGML_METAL_RESIDENCY_KEEP_ALIVE_S keeps the weights wired through the quiet-GPU wait."
+ },
+ {
+  "label": "q36-35b-llamacpp-mtp1",
+  "extends": "q36-35b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 1)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "1"],
+  "note": "MTP speculative decoding with the head in the same GGUF (blk.40.nextn.*, no -md). The best n-max on this MoE is not obvious (each extra verified row can pull 8 more experts), so 1, 2 and 3 are all measured and the table reports each."
+ },
+ {
+  "label": "q36-35b-llamacpp-mtp2",
+  "extends": "q36-35b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 2)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
+  "note": "n-max 2: Ollama's shipped depth for this model and the ggml-org/unsloth model-card recommendation."
+ },
+ {
+  "label": "q36-35b-llamacpp-mtp3",
+  "extends": "q36-35b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 3)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"],
+  "note": "n-max 3: llama-server's default depth."
+ },
+ {
+  "label": "q38-27b-llamacpp",
+  "extends": "q36-35b-llamacpp",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "Ollama's GGUF of qwen3.8:27b-mtp-q4_K_M (Q4_K_M, blob f5f1dd89)",
+  "cmd": ["{env:LLAMA_SERVER={first:llama-server|/opt/homebrew/bin/llama-server}}",
+          "-m", "{env:QWEN38_27B_GGUF={ollama_gguf:qwen3.8:27b-mtp-q4_K_M|qwen3.8-27b-nomtp}}",
+          "--host", "127.0.0.1", "--port", "8083", "-a", "qwen3.8-27b", "-c", "32768", "-np", "1", "-ngl", "999",
+          "-fa", "on", "-b", "2048", "-ub", "2048", "-lm", "none", "--jinja",
+          "--chat-template-file", "{models}/qwen3.8-27b-4bit-mtp/chat_template.jinja",
+          "--reasoning-format", "deepseek", "--cache-ram", "8192", "--ctx-checkpoints", "32",
+          "--temp", "0.6", "--top-p", "0.95", "--top-k", "20", "--min-p", "0", "--no-webui"],
+  "model": "qwen3.8-27b",
+  "gguf_expect": "f5f1dd89",
+  "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/chat_template.jinja"],
+  "note": "Same settings as the 35B, official Qwen3.8 chat template. This GGUF reads about 10% more bytes per token than the MLX 4-bit pack (Q6_K output head), a small handicap on bandwidth-bound decode."
+ },
+ {
+  "label": "q38-27b-llamacpp-mtp1",
+  "extends": "q38-27b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 1)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "1"],
+  "note": "MTP head read from blk.64.nextn.* in the same GGUF (no -md)."
+ },
+ {
+  "label": "q38-27b-llamacpp-mtp2",
+  "extends": "q38-27b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 2)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"],
+  "note": "n-max 2: unsloth's recommended depth."
+ },
+ {
+  "label": "q38-27b-llamacpp-mtp3",
+  "extends": "q38-27b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 3)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"],
+  "note": "n-max 3: llama-server's default depth, the fastest of the three on this model."
+ }
+]

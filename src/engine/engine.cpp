@@ -57,7 +57,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // Memory: fail before reading any weights when the model, its buffers and the slots' state with a minimal
   // KV cache cannot fit the budget; the KV caches then grow as conversations fill (Qwen35::reserve).
   budget_ = opts_.mem_budget_gb > 0 ? size_t(opts_.mem_budget_gb * 1e9) : default_mem_budget();
-  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
+  // DFlash2 block drafter (src/model/dflash2.h), default "auto": a drafter matching the model
   // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
   // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off. Found before
   // the model loads, so its memory counts in the fit check; auto leaves it out where it would cost context.
@@ -66,31 +66,26 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (!lp.dflash_left_out.empty())
     logi("DFlash2: %s left out: its %.2f GB would keep a %d-token conversation from fitting the %.1f GB budget",
          lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, opts_.context, budget_ / 1e9);
-  const size_t dfl_bytes = lp.dflash_bytes;
   {
-    const int slots = std::max(1, opts_.slots), min_ctx = std::min(opts_.context, 8192);
+    const int slots = std::max(1, opts_.slots);
     if (opts_.prefill_chunk <= 0) {
       opts_.prefill_chunk = lp.prefill_chunk;
       if (opts_.prefill_chunk != 2048)
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
              opts_.prefill_chunk, opts_.context, budget_ / 1e9);
     }
-    const Qwen35::MemPlan mp = Qwen35::plan(opts_.model_dir, opts_.prefill_chunk);
-    const size_t need = mp.fixed(slots) + dfl_bytes + mp.kv_per_pos * size_t(min_ctx);
+    const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
     const size_t rws = Gpu::get().recommended_working_set();
-    if (mp.weights > budget_)  // nothing but a smaller variant helps: say so before the itemized message
+    if (need.weights > budget_)  // nothing but a smaller variant helps: say so before the itemized message
       fatal("%s does not fit this Mac: its weights alone (%.1f GB, %s) exceed the GPU memory Kapitsa may use here "
-            "(%.1f GB of Metal's %.1f GB working set). Use a quantized variant of the model (8-bit and 6-bit weights are "
-            "about 1/2 and 2/5 of bf16) or a Mac with more memory.",
-            opts_.model_dir.c_str(), mp.weights / 1e9, mp.formats.c_str(), budget_ / 1e9, rws / 1e9);
-    if (need > budget_)
-      fatal("insufficient memory: %s needs %.1f GB of GPU memory with %d slot%s (weights %.1f GB, MTP head %.1f, "
-            "DFlash2 drafter %.1f, buffers for %d-token prefill chunks %.1f, conversation state %.1f, KV cache for %d "
-            "tokens %.1f); this Mac's budget is %.1f GB (Metal's recommended working set %.1f GB). Fewer --slots, "
-            "--prefill-chunk 1024, no drafter, a smaller model or --mem-budget can help.",
-            opts_.model_dir.c_str(), need / 1e9, slots, slots > 1 ? "s" : "", mp.weights / 1e9, mp.mtp / 1e9,
-            dfl_bytes / 1e9, opts_.prefill_chunk, mp.activations / 1e9, slots * mp.slot_state / 1e9, min_ctx,
-            mp.kv_per_pos * min_ctx / 1e9, budget_ / 1e9, rws / 1e9);
+            "(%.1f GB of Metal's %.1f GB working set). Use a quantized variant of the model (`kapitsa list` shows each "
+            "model's variants; 8-bit and 6-bit weights are about 1/2 and 2/5 of bf16) or a Mac with more memory.",
+            opts_.model_dir.c_str(), need.weights / 1e9, need.formats.c_str(), budget_ / 1e9, rws / 1e9);
+    if (need.bytes > budget_)
+      fatal("insufficient memory: %s needs %.1f GB of GPU memory with %s; this Mac's budget is %.1f GB (Metal's "
+            "recommended working set %.1f GB). Fewer --slots, --prefill-chunk 1024, no drafter, a smaller model or "
+            "--mem-budget can help.",
+            opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
   model_ = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
   model_->set_mem_budget(budget_);
@@ -209,8 +204,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       lp.dflash_bytes = lp.dflash_found_bytes =
           DFlash2::plan_bytes(lp.dflash, Qwen35::read_config(model_dir), p.head_row_bytes, &per_slot) +
           3 * per_slot * size_t(slots);
-      const size_t one = p.fixed(slots) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context);
-      if (lp.dflash_auto && one + lp.dflash_bytes > budget) {
+      if (lp.dflash_auto &&
+          !conversation_fits(model_dir, context, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0)) {
         lp.dflash_left_out = lp.dflash;
         lp.dflash.clear();
         lp.dflash_bytes = 0;
@@ -223,10 +218,34 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   return lp;
 }
 
+StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefill_chunk, int context, int slots) {
+  slots = std::max(1, slots);
+  const int min_ctx = std::min(context, 8192);
+  const Qwen35::MemPlan mp = Qwen35::plan(model_dir, prefill_chunk);
+  StartNeed n;
+  n.bytes = mp.fixed(slots) + lp.dflash_bytes + mp.kv_per_pos * size_t(min_ctx);
+  n.weights = mp.weights;
+  n.formats = mp.formats;
+  char b[400];
+  snprintf(b, sizeof b,
+           "%d slot%s (weights %.1f GB, MTP head %.1f, DFlash2 drafter %.1f, buffers for %d-token prefill chunks %.1f, "
+           "conversation state %.1f, KV cache for %d tokens %.1f)",
+           slots, slots > 1 ? "s" : "", mp.weights / 1e9, mp.mtp / 1e9, lp.dflash_bytes / 1e9, prefill_chunk,
+           mp.activations / 1e9, slots * mp.slot_state / 1e9, min_ctx, mp.kv_per_pos * min_ctx / 1e9);
+  n.parts = b;
+  return n;
+}
+
+bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget) {
+  const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024);
+  return p.fixed(std::max(1, slots)) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context) <= budget;
+}
+
 void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
+  slot.turns = 0;
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -298,17 +317,23 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   }
   if (!best) return slots_[0];
   if (best_lcp < 64) {
-    // Nothing worth reusing: take the slot that is cheapest to rebuild later (fewest cached
-    // tokens, so empty slots first), least recently used on ties.
+    // Nothing worth reusing: a new conversation. It takes an empty slot, else one holding a one-off
+    // (a conversation never continued, like an agent's title or commit-message request), and only
+    // then a continued conversation; least recently used first within each. So one-offs never evict
+    // the conversation in progress, however long an older one-off was, and a new conversation
+    // replaces the conversation idle longest.
+    auto rank = [](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 ? 1 : 2; };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (int(prompt.size()) + 64 > s.seq->limit) continue;
-      if (!pick || s.tokens.size() < pick->tokens.size() ||
-          (s.tokens.size() == pick->tokens.size() && s.last_used < pick->last_used))
-        pick = &s;
+      if (!pick || rank(s) < rank(*pick) || (rank(s) == rank(*pick) && s.last_used < pick->last_used)) pick = &s;
     }
-    if (pick) return *pick;
+    if (pick) {
+      pick->turns = 1;
+      return *pick;
+    }
   }
+  ++best->turns;
   return *best;
 }
 
