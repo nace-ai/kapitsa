@@ -1,6 +1,6 @@
 # Kapitsa
 
-**Fast local Qwen for Apple silicon.**
+**Fast local Qwen for Apple silicon.** Kapitsa by [Nace AI](https://nace.ai).
 
 Kapitsa runs Qwen3.6, Qwen3.8 and Qwen3.5 on one Mac behind an OpenAI-compatible server, for coding agents
 and chat apps, with a built-in chat page. It is a C++ and Metal engine written for one architecture, the hybrid
@@ -49,15 +49,16 @@ the cached prompt tokens of a follow-up.
 
 ## Models
 
-| Model | `--model` | Download | Speed-up included |
-| --- | --- | ---: | --- |
-| Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | 22.1 GB | DFlash2 draft model, MTP head |
-| Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | 20.2 GB | DFlash2 draft model, MTP head |
-| Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | 3.3 GB | MTP head |
+| Model | `--model` | Variants | Download | Speed-up included |
+| --- | --- | --- | ---: | --- |
+| Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | `4bit` (default) | 22.1 GB | DFlash2 draft model, MTP head |
+| Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | `4bit` (default) | 20.2 GB | DFlash2 draft model, MTP head |
+| Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | `4bit` (default) | 3.3 GB | MTP head |
 
-All three are 4-bit MLX weights at pinned, tested revisions. Speculative decoding is lossless: the output follows
-the model's own distribution, and greedy output matches decoding without it except at near-ties within rounding
-noise. Other Qwen3.5-family models in MLX 4- or 8-bit format load from a Hugging Face repo
+A variant is the precision of the weights: `--model 27b` takes the model's default, and `--model 27b:<variant>`
+picks another as more are added (`kapitsa list` shows them all). Each variant is pinned to a tested revision.
+Speculative decoding is lossless: the output follows the model's own distribution, and greedy output matches
+decoding without it except at near-ties within rounding noise. Other Qwen3.5-family models in MLX 4- or 8-bit format load from a Hugging Face repo
 (`--model mlx-community/Qwen3.5-9B-4bit`) or a folder (`--model ~/models/my-qwen`). The defaults are tuned on the
 three above.
 
@@ -86,7 +87,7 @@ optimization.
 
 ## Performance
 
-<!-- TBD cells: the final head-to-head on the M4 Pro fills them (research/inference/scripts in the Nace Agent repo). -->
+<!-- TBD cells: filled by the final head-to-head on the M4 Pro. -->
 
 Measured on a MacBook Pro (M4 Pro, 20-core GPU, 48 GB), with the same coding prompts over HTTP for every engine.
 Ratios compare with the next-fastest engine measured.
@@ -143,4 +144,8 @@ converted copy on disk.
 - [DEVELOPMENT.md](DEVELOPMENT.md): building from source, the server, model downloads, internals, switches,
   benchmarks.
 - [docs/PERF.md](docs/PERF.md): every optimization with its measurements.
-- Third-party code: nlohmann/json, minja and cpp-httplib (MIT). Model weights keep their own licenses.
+- [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+Kapitsa is licensed under the [Apache License 2.0](LICENSE), Copyright 2026 Nace AI. It includes cpp-httplib, minja
+and nlohmann/json (MIT) and Unicode data ([third-party notices](THIRD_PARTY_NOTICES)). Model weights keep their own
+licenses.
