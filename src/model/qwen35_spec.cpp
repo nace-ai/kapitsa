@@ -270,6 +270,12 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
                       uint32_t y_ld) {
   if (L.gs != 64) fatal("qmvr: group %d", L.gs);
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
+  if (R > 4) {  // 5-8 rows (deep MTP drafts): the 8-row MMA GEMM
+    v8_alloc();
+    enc_x8(e, x, R, int(L.K), nullptr, false, int(x_ld ? x_ld : L.K));
+    enc_qmm8(e, {{&L, y, y_ld ? y_ld : L.N, add}}, R, v8t_, v8s_);
+    return;
+  }
   // Two rows: one small single-row threadgroup per (row, 8-row weight block), rows fastest. The pair
   // shares each weight block through the core's cache, so verifying 2 rows costs ~1 row
   // (bench_qmvr: 17408x5120 208 us for 1 or 2 rows, vs 240 us for the 2-rows-in-registers kernel).
@@ -616,7 +622,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
 void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0) {
   if (!mtp_loaded_ || R <= 0) return;
   const int D = cfg_.hidden;
-  if (R <= kMaxVerify) {
+  if (R <= kMaxMtpRows) {
     encode_mtp(e, s, pos0, R, pos0 + 1, x_, h_row0, -1);
     return;
   }
@@ -653,8 +659,21 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
 
 // ---- trunk verify ----
 
-void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
+uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
+  const uint32_t V = uint32_t(cfg_.vocab), ntg = (V + 2047) / 2048;
+  const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  return ntg * K;
+}
+
+void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
   if (R < 1 || R > kMaxVerify) fatal("encode_verify: R=%d", R);
+  // NI_V8=1: the 8-row path for any R >= 2 (A/B); by default only R >= 5 takes it, so MTP verifies
+  // (R <= 4) run exactly the kernels they always did.
+  static const bool v8_all = env_on("NI_V8");
+  if (R > 4 || v8 || (v8_all && R > 1)) {
+    encode_verify8(e, s, pos, R, sp, step);
+    return;
+  }
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
@@ -688,6 +707,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     }
     if (cfg_.moe) enc_moe_rows(e, L, R, x_, false);
     else enc_mlp_rows(e, L, R, x_);
+    if (cap_) enc_capture(e, i, pos, R);
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   enc_rows_norm(e, x_, final_norm_, xrn_, R, D);

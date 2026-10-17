@@ -255,6 +255,8 @@ void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, con
 // so the ANE runs FFN_i(A) under mixer_i(B) and FFN_i(B) under mixer_{i+1}(A). B's mixer follows
 // A's within a layer (GDN state and causal KV flow from A to B, as between two chunks). Each half
 // has its own activation surfaces (lane); both use layer i's weight set i & 1.
+// A block drafter's capture (DFlash2, Qwen35::set_capture) takes each half's rows when they hold the
+// layer's final output: A's after join FFN_i(A), B's after join FFN_i(B), one step of the skew later.
 int Qwen35::ane_wave_rows(int T) const {
   if (!ane_ || ane_->lanes() < 2) return 0;
   const int h = (T / 2 + 127) / 128 * 128;
@@ -275,16 +277,21 @@ void Qwen35::enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h) {
     A.pack(e, 0, xh_, TA);
     A.launch(e, 0, i, TA);
     enc_mlp_gpu_part(e, L, TA, g, xA);
-    if (i > 0) A.join(e, 1, xB, TB);
+    if (i > 0) {
+      A.join(e, 1, xB, TB);
+      if (cap_) enc_capture(e, i - 1, pos0 + TA, TB, &xB);  // layer i-1 is complete in B's rows
+    }
     enc_mixer_prefill(e, s, i, L, pos0 + TA, TB, xB);
     enc_rows_half(e, xB, L.post_norm, xh_, TB, D);
     A.pack(e, 1, xh_, TB);
     A.launch(e, 1, i, TB);
     if (i + 1 < cfg_.layers) A.stage_layer(e, i + 1, (i + 1) & 1);
     A.join(e, 0, xA, TA);
+    if (cap_) enc_capture(e, i, pos0, TA, &xA);  // layer i is complete in A's rows
     enc_mlp_gpu_part(e, L, TB, g, xB);
   }
   A.join(e, 1, xB, TB);
+  if (cap_) enc_capture(e, cfg_.layers - 1, pos0 + TA, TB, &xB);
 }
 
 void Qwen35::enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x) {

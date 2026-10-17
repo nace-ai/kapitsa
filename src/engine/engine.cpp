@@ -73,20 +73,48 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  const bool spec_off = opts_.spec_depth == 0;  // --spec 0: no speculative decoding at all
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
-  if (opts_.spec_depth > Qwen35::kMaxVerify - 1) opts_.spec_depth = Qwen35::kMaxVerify - 1;
+  if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
+  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
+  // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
+  // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off.
+  std::string want = opts_.dflash;
+  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
+  if (want == "1" || want == "on") want = "auto";
+  const bool dfl_off = want == "none" || want == "0" || want == "off" || (want == "auto" && spec_off);
+  if (!dfl_off) {
+    const bool auto_dir = want == "auto";
+    const std::string dir = auto_dir ? DFlash2::find(opts_.model_dir, model_->config()) : want;
+    if (dir.empty()) {
+      logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
+           opts_.model_dir.c_str());
+    } else if (auto_dir && !DFlash2::supports(*model_)) {
+      logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
+    } else {
+      dfl_ = std::make_unique<DFlash2>(*model_, dir);
+      DFlash2::prewarm_pipelines();
+      spec_ = false;
+    }
+  }
 
   auto add_slot = [&](int cap) {
     Slot s;
     s.seq = model_->new_seq(cap);
+    if (dfl_) s.dseq = dfl_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
+    if (dfl_)
+      for (size_t i = 0; i < s.ckpts.size(); ++i) s.dckpts.push_back(dfl_->new_seq());
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
+  const std::string mode = dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
+                         : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
+                                 : std::string("plain decoding");
   logi("engine ready: %s, context %d, %d slots, %s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
-       spec_ ? ("MTP speculative decoding depth " + std::to_string(opts_.spec_depth)).c_str() : "plain decoding");
+       mode.c_str());
 }
 
 Engine::~Engine() = default;
@@ -356,6 +384,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (best) {
       model_->restore(*e, s, *best);
       start = best->pos;
+      // the drafter ring as it was at that checkpoint (the live ring may have overwritten its window since)
+      if (dfl_) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
     } else {
       model_->reset(s);
     }
@@ -363,6 +393,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
          best ? (std::string("restored ") + (best->query ? "query" : "tool") + " checkpoint at " +
                  std::to_string(best->pos)).c_str()
               : "none usable, prefill from 0");
+  }
+  if (dfl_) {
+    // the drafter ring keeps the entries of the reused prefix [0, start) that are still in its window
+    if (start == 0) DFlash2::reset(*slot.dseq);
+    else DFlash2::rewind(*slot.dseq, start);
   }
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
@@ -380,6 +415,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const int C = model_->prefill_chunk();
   int p = start;
   int last_chunk_row = 0;
+  int saved_ckpt = -1;  // the checkpoint this prefill saves (DFlash2: its ring snapshot follows the prompt commit)
   // The checkpoint this request's turn boundary overwrites: an invalid one, else one saved at a tool
   // response, else the oldest (NI_QUERY_CKPT=0: the oldest of all, as before). The template renders the
   // assistant turns after the last user query with their reasoning and those before it without, so when
@@ -401,6 +437,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     logd("checkpoints: %s boundary at %d overwrites %s", query ? "query" : "tool", boundary,
          c->pos < 0 ? "an empty one" : (std::string(c->query ? "query" : "tool") + " at " + std::to_string(c->pos)).c_str());
     c->query = query;
+    saved_ckpt = int(c - slot.ckpts.data());
     return c;
   };
   // NI_SHORTPF: a checkpoint inside a chunk is captured by the pass itself (one weight pass for
@@ -408,12 +445,18 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const bool in_pass = model_->can_snapshot();
   // NI_MTP_DEFER (default on): the last chunk's MTP history rows go into their own command buffer behind
   // the trunk's, so the first token (sampled by the trunk pass) is out before they run; the first
-  // speculative cycle is queued after them. 0 keeps them in the trunk's command buffer.
+  // speculative cycle is queued after them. 0 keeps them in the trunk's command buffer. With DFlash2 the
+  // same switch defers the drafter's context commit of the prompt rows (the first drafting pass reads it).
   static const bool mtp_defer = [] {
     const char* v = getenv("NI_MTP_DEFER");
     return !(v && !strcmp(v, "0"));
   }();
   std::unique_ptr<Encoder> mtp_e;
+  // DFlash2: every prefill pass below (each schedule, in-pass checkpoints, a chunk rerun after a failed
+  // Neural Engine split) captures the target layers' outputs of the prompt rows the drafter can still see,
+  // [max(start, n - 2047), n); the drafter projects them into its context ring after the last chunk.
+  if (dfl_) dfl_->begin_prefill(n, start);
+  double t_enc = 0, h_commit = 0;  // the last chunk's commit: ms since t0, host clock
   while (p < n) {
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
@@ -441,6 +484,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (split) {
       e->commit_and_wait();
       if (!model_->ane_finish_chunk()) {
+        // rerun on the GPU alone; it captures the chunk's rows for the drafter again (the hook is armed)
         e = g.begin();
         model_->restore(*e, s, *ane_ck_);
         model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n);
@@ -452,12 +496,30 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     last_chunk_row = n - 1 - p;
     p += T;
     if (p == boundary) model_->save(*e, s, *victim(), boundary);
+    // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
+    // the drafter's ring: behind the trunk's command buffer, encoded while the GPU runs it (the first token
+    // does not wait for it; the first drafting pass is queued after it), or in it with NI_MTP_DEFER=0
+    // The ring snapshot of the checkpoint saved by this prefill (at the turn boundary, near n) is taken right after
+    // the commit: it then holds the window before the checkpoint for a later restore.
+    const bool dfl_commit = dfl_ && p == n;
+    auto commit_ring = [&](Encoder& en) {
+      dfl_->encode_prefill_commit(en, *slot.dseq);
+      if (saved_ckpt >= 0) dfl_->encode_ring_copy(en, *slot.dseq, *slot.dckpts[size_t(saved_ckpt)]);
+    };
+    if (dfl_commit) dfl_->end_prefill();
+    if (dfl_commit && !mtp_defer) commit_ring(*e);
     e->commit();
+    if (p == n) {
+      t_enc = now_ms() - t0;  // until the last chunk's commit
+      h_commit = Encoder::host_ms();
+    }
+    if (dfl_commit && mtp_defer) {
+      mtp_e = g.begin();
+      commit_ring(*mtp_e);
+    }
     if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
     if (p < n) e = g.begin();
   }
-  const double t_enc = now_ms() - t0;  // until the last chunk's commit
-  const double h_commit = Encoder::host_ms();
   e->wait();
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
@@ -503,8 +565,77 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return finish.empty();
   };
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
+  int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
-  if (depth > 0) {
+  if (dfl_) {
+    // DFlash2, double-buffered: each cycle's verify (8-row target forward with captures + on-GPU
+    // acceptance) is committed, then right behind it the NEXT cycle's drafting half (ring commit of the
+    // rows this acceptance keeps + drafting pass from the anchor it picks; both read the GPU-side state
+    // the acceptance writes), and only then does the host wait and read the accepted count. The GPU never
+    // waits for the host between cycles; the host encodes each verify while the drafting half runs.
+    DFlashSeq& d = *slot.dseq;
+    const int K = DFlash2::verify_depth();
+    int P = n, m = 0, a_last = 0;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    std::unique_ptr<Encoder> next_draft;  // committed drafting half of the coming cycle
+    if (go && P + 8 + DFlash2::kB + 2 < s.cap) {
+      // host write of the drafter state: nothing in flight reads it (the prefill is done; its deferred
+      // prompt commit, if still running, is host-driven)
+      dfl_->gpu_state_reset(P);
+      next_draft = g.begin();
+      dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P, sp);
+      next_draft->commit();
+    }
+    while (go) {
+      if (!next_draft) {  // no room for another drafting pass
+        finish = "length";
+        break;
+      }
+      next_draft.reset();
+      auto e2 = g.begin();
+      dfl_->encode_cycle_verify(*e2, s, P, K, sp);
+      e2->commit();
+      if (P + 8 + 8 + DFlash2::kB + 2 < s.cap) {  // the next anchor is at most P + 8
+        next_draft = g.begin();
+        dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P + 8, sp);
+        next_draft->commit();
+      }
+      e2->wait();
+      const int a = dfl_->accepted();
+      a_last = a;
+      const int* tk = s.tokens();
+      m = 0;  // tokens consumed before stopping = rows committed
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      model_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
+      P += m;
+      d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
+    }
+    // finish: the ring rows of the last cycle (unless the committed drafting half already wrote them),
+    // then fold the tape into the recurrent state
+    auto e3 = g.begin();
+    if (!next_draft && m > 0) {
+      d.ctx = P - m;
+      dfl_->encode_commit(*e3, d, m);
+    }
+    // The committed drafting half wrote all a_last + 1 rows of the last acceptance (positions P - m ..
+    // P - m + a_last) to the ring. When the host kept fewer (a stop token or the budget inside the
+    // accepted chain), the rows past d.ctx overwrote the slots of the window's oldest positions, which a
+    // later rewind (prefix reuse) would otherwise still treat as valid context.
+    if (next_draft && m < a_last + 1) d.valid_lo = std::max(d.valid_lo, P - m + a_last + 1 - DFlash2::kWin);
+    model_->encode_flush(*e3, s);
+    e3->commit_and_wait();
+    fed_until = P;
+  } else if (depth > 0) {
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
     // with the pending token, accepted rows are committed through the DeltaNet tape.
     int P = n, c = 1, h_row0 = last_chunk_row;
@@ -587,15 +718,19 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (!tail.reasoning.empty() || !tail.content.empty()) on_delta(tail);
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   res.completion_tokens = gen;
-  if (depth > 0 && spec_cycles_ > 0)
-    logd("spec: %.2f accepted/drafted over %d cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
+  if (dfl_ && spec_cycles_ > 0)
+    logd("dflash: %.2f tokens/cycle over %ld cycles", double(spec_accepted_) / spec_cycles_, spec_cycles_);
+  else if (depth > 0 && spec_cycles_ > 0)
+    logd("spec: %.2f accepted/drafted over %ld cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
   res.decode_ms = now_ms() - t1;
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
+  char cyc[64] = "";
+  if (dfl_ && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s", n, start, res.prefill_ms, tok_ms,
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s", n, start, res.prefill_ms, tok_ms,
        t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
-       finish.c_str());
+       finish.c_str(), cyc);
   return res;
 }
 
@@ -648,7 +783,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   while (common < slot.tokens.size() && common < t2.size() && slot.tokens[common] == t2[common]) ++common;
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
-  const Checkpoint* best = nullptr;
+  const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
     if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
@@ -660,13 +795,42 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   std::copy(t2.begin(), t2.end(), s.tokens());
+  // DFlash2: the drafter's context ring goes back to the checkpoint with the target state, and the rows
+  // prefilled here enter it like prompt rows (captured by every pass, projected after the last chunk)
+  if (dfl_) {
+    dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
+    DFlash2::rewind(*slot.dseq, start);
+    dfl_->begin_prefill(n, start);
+  }
   SamplingParams sp;
   const int C = model_->prefill_chunk();
   for (int p = start; p < n;) {
     const int T = std::min(C, n - p);
+    // as in chat(): a chunk the NI_ANE split runs is checkpointed and waited for, and rerun on the GPU
+    // alone if the split failed (the rerun captures its rows for the drafter again)
+    const bool split = model_->ane_splits(T);
+    if (split) {
+      if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
+      model_->save(*e, s, *ane_ck_, p);
+    }
     model_->encode_prefill(*e, s, p, T, sp, 0, false);
     if (spec_) model_->encode_mtp_prefill(*e, s, p, T, 0);  // next tokens known up to t2[n]
+    if (split) {
+      e->commit_and_wait();
+      if (!model_->ane_finish_chunk()) {
+        e = g.begin();
+        model_->restore(*e, s, *ane_ck_);
+        model_->encode_prefill(*e, s, p, T, sp, 0, false);
+        if (spec_) model_->encode_mtp_prefill(*e, s, p, T, 0);
+        e->commit_and_wait();
+      }
+      e = g.begin();
+    }
     p += T;
+    if (dfl_ && p == n) {
+      dfl_->end_prefill();
+      dfl_->encode_prefill_commit(*e, *slot.dseq);
+    }
     e->commit();
     if (p < n) e = g.begin();
   }

@@ -83,6 +83,17 @@ struct Checkpoint {
   std::vector<Buffer> conv, rec;
 };
 
+// Target hidden capture for a block drafter (DFlash2, research/inference/dflash2/SPEC.md §6.1):
+// after target layer l (mixer + FFN residual add), every row whose position p lies in
+// [pos_base, pos_base + rows) is copied (fp32 -> bf16) to dst row p - pos_base, columns
+// [slot[l] * H, (slot[l] + 1) * H). Unset (the default) adds no work anywhere.
+struct CaptureHook {
+  Buffer dst;              // bf16 [rows, ld]
+  uint32_t ld = 0;         // elements per dst row (slots * H)
+  int pos_base = 0, rows = 0;
+  std::vector<int> slot;   // per target layer: capture slot, or -1
+};
+
 struct SamplingParams {
   float temperature = 0.0f;
   float top_p = 1.0f;
@@ -98,6 +109,28 @@ struct AneLayerTimes {
   double split = 0;      // both, concurrently
   double ane_in_split = 0;  // ANE time inside the split (event reached ready -> report)
 };
+
+// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp; docs/PERF.md "27B DFlash2 cycle"). Defaults
+// are the measured-fastest settings; the environment (NI_V8_CM, NI_V8_PAIR, NI_V8_KPLAN, NI_V8_GUSPLIT,
+// NI_V8_GDNSPLIT, NI_V8_PREPU) overrides them, and tools may change them between encodes: ni_run's NI_AB alternates
+// two settings per decode cycle so both are timed under the same GPU conditions.
+struct V8Knobs {
+  int cm = 1;       // GEMM operands: 0 = codes as 1024 + q, 1 = codes as exact half subnormals q * 2^-24
+  int pair = 1;     // 1: two 64-groups per inner step (scale / bias pairs in one load each)
+  int kplan = 2;    // 1: 8 k-slices x 1 column block per threadgroup when K >= 4096; 2: also 16 k-slices for K >= 16384
+  int gusplit = 1;  // 1: dense MLP gate / up as two segments of one GEMM (fp32) + swiglu_x8, instead of qmm8_gu1k2
+  int gdnsplit = 256;  // GDN step over value-row blocks of this many threads + gdn_gnorm_x8 (0: one threadgroup per head)
+  int prepu = 1;    // 1: x8_prep2's row norms with 4 independent load chains
+  // timing only (wrong outputs): skip kernel groups of a dense verify / drafting pass. Verify: 1 GDN step, 2 attention
+  // core, 4 GDN prep, 8 MLP down, 16 MLP gate/up, 32 GDN in_proj, 64 GDN out / attention o, 128 LM head + sampling,
+  // 256 normed X8 preps, 512 attention q|k|v; drafter: 1024 MLP gate/up, 2048 MLP down, 4096 LM head,
+  // 8192 conv / attention projections, 16384 ring commit. With NI_AB: the in-pipeline cost of those kernels.
+  int skip = 0;
+  int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
+};
+V8Knobs& v8_knobs();
+// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad); unknown keys are fatal
+V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
 class Qwen35 {
  public:
@@ -159,7 +192,10 @@ class Qwen35 {
   bool has_mtp() const { return mtp_loaded_; }
   // Measured best MTP draft depth for this model (M4 Pro): MoE 35B-A3B 1, dense 27B 2.
   int default_spec_depth() const { return cfg_.moe ? 1 : 2; }
-  static constexpr int kMaxVerify = 4;  // rows per verify (pending token + up to 3 drafts)
+  // Rows per verify (pending token + up to 7 drafts). R <= 4 runs the MTP-era small-batch kernels
+  // (unchanged); R >= 5 (or NI_V8=1 for any R >= 2) the 8-row MMA path (qwen35_v8.cpp).
+  static constexpr int kMaxVerify = 8;
+  static constexpr int kMaxMtpRows = 4;  // MTP history rows per encode_mtp on the default path
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
   // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
@@ -169,7 +205,8 @@ class Qwen35 {
   // Trunk forward of tokens[pos .. pos+R) (R <= kMaxVerify) without committing the recurrent
   // state: the rows go to the tape; samples() gets one sampled token per row and hidden_rows()
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
-  void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
+  // v8: take the 8-row path for any R >= 1 (a block drafter verifying fewer than 4 proposals).
+  void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8 = false);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   void encode_flush(Encoder& e, Seq& s);
@@ -177,12 +214,52 @@ class Qwen35 {
   // prefill chunk (row offset h_row0 in hidden_rows()); tokens[i + 1] must be known.
   void encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0);
   const int* samples() { return samp_.as<int>(); }
+  // MoE models, after an 8-row verify: distinct routed experts of each layer (0 for dense layers)
+  const uint32_t* verify8_experts() { return v8ustat_ ? v8ustat_.as<uint32_t>() : nullptr; }
   Buffer hidden_rows() { return x_; }
   Buffer mtp_post() { return mtp_post_; }
   float* logits() { return logits_.as<float>(); }
   // Debug: copy of the residual stream after the last step.
   const float* hidden() { return x_.as<float>(); }
   Buffer debug_buf(const std::string& name);
+
+  // ---- block drafter support ----
+  // Arms (or with nullptr disarms) the capture of target layer outputs in encode_step,
+  // encode_prefill (every schedule: the plain layer loop, the NI_ANE split and its two-half wavefront,
+  // in-pass checkpoints, short prefills) and encode_verify. The hook is read at encode time and must
+  // outlive the encodes that use it. A prefill chunk re-encoded after a failed NI_ANE split captures
+  // its rows again, so the hook must stay armed until the chunk has completed or been rerun.
+  void set_capture(const CaptureHook* h) { cap_ = h; }
+  const QLinear& embed_table() const { return embed_; }
+  const QLinear& lm_head() const { return lm_head_; }
+  // Drafter's dynamic verify depth (DFlash2, MoE only): while set, the 8-row verify routes experts only
+  // for rows < min(R, rows[0]) (uint read by the GPU); later rows' outputs are garbage and must not be used.
+  void set_verify_row_limit(const Buffer* rows) { v8_rlim_ = rows; }
+  // Row-independent MoE numerics in the 8-row verify (every routed expert as an MMA tile, no scalar
+  // passes for 1-2-row experts): a row's logits then depend only on the rows before it, not on how the
+  // other rows route. A speculative sampler that needs p(. | prefix) exactly sets it (~3% slower verify).
+  void set_verify_moe_exact(bool on) { v8_moe_exact_ = on; }
+  // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
+  // (verify8.metal layout: half operands in fragment order + per-64 group sums), R <= 8 live rows.
+  struct Seg8 {
+    const QLinear* L;
+    Buffer y;
+    uint32_t y_ld = 0;  // 0: N
+    bool add = false;   // y += X W^T
+  };
+  // y_i[R, N_i] = X W_i^T for up to 4 matrices sharing K and bits (x2: two-term hi+lo inputs)
+  void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
+                bool x2 = false);
+  // h = half(silu(X Wg^T) * (X Wu^T)) written as the down projection's X8 table h + sums hs (4-bit, N % 64 == 0)
+  void enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
+               const Buffer& h, const Buffer& hs);
+  // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
+  // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
+  Buffer verify_cand_vals() const { return cand_v_; }
+  Buffer verify_cand_ids() const { return cand_i_; }
+  Buffer verify_samples() const { return samp_; }
+  // candidates per verify row for these sampling parameters (stage-1 chunks x top-k)
+  uint32_t verify_candidates(const SamplingParams& sp) const;
 
  private:
   void load_config(const std::string& dir);
@@ -268,6 +345,9 @@ class Qwen35 {
   const Tensor* bf16_param(const Tensor* t, int& lossy);
   QLinear stack_experts(const class WeightStore& w, const std::string& prefix, const std::string& proj);
   void enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D);
+  // block-drafter capture of rows [0, T) of x (default x_) at positions pos0.. after layer `layer` (no-op
+  // unless armed); x must hold the layer's final output for those rows (mixer and FFN added)
+  void enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x = nullptr);
   void enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add,
                 uint32_t x_ld = 0, uint32_t y_ld = 0);
   // fused (norm +) projections of R rows sharing the input; falls back to separate kernels
@@ -276,6 +356,15 @@ class Qwen35 {
   void enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
                      const Buffer& x);
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer);
+  // ---- 8-row verify path (qwen35_v8.cpp) ----
+  void v8_alloc();
+  void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
+  // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table
+  void enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
+              const Buffer* xn_out = nullptr);
+  void enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
+  void enc_mlp8(Encoder& e, const Layer& L, int R);
+  void enc_moe8(Encoder& e, const Layer& L, int R, int li);
 
   std::string dir_;
   std::string prefix_;
@@ -294,6 +383,9 @@ class Qwen35 {
   QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
   uint32_t draft_split_ = 0, draft_special0_ = 0;
   bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
+  const CaptureHook* cap_ = nullptr;
+  const Buffer* v8_rlim_ = nullptr;
+  bool v8_moe_exact_ = false;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 
@@ -311,6 +403,11 @@ class Qwen35 {
   // prefill-only
   Buffer mtp_e_, mtp_u_, mtp_x_, mtp_post_, xrn_, samp_, dlog_, ue_, uw_, un_, mh_;
   Buffer xh_, hh_, ridx_, rwts_, spair_, stok_, tiles_, ntiles_, hg_, hu_, hhalf_, yd_, sgb_, sub_, ys_;
+  // 8-row verify (allocated on first use)
+  bool v8_ready_ = false;
+  Buffer v8g_, v8u_;  // split MLP: fp32 gate / up rows [8][I]
+  Buffer v8cnt_;      // gdn_step_verify8s: per-head arrival counters (zero between dispatches)
+  Buffer v8t_, v8s_, v8tl_, v8sl_, v8h_, v8hs_, v8tiles_, v8nt_, v8slot_, v8args_, v8out_, v8sh_, v8ustat_, v8sm_, v8hsc_, v8xn_;
 };
 
 } // namespace ni
