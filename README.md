@@ -52,16 +52,21 @@ the cached prompt tokens of a follow-up.
 
 | Model | `--model` | Variants | Download | Speed-up included |
 | --- | --- | --- | ---: | --- |
-| Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | `4bit` (default) | 22.1 GB | DFlash2 draft model, MTP head |
-| Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | `4bit` (default) | 20.2 GB | DFlash2 draft model, MTP head |
-| Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | `4bit` (default) | 3.3 GB | MTP head |
+| Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | 22.1 GB | DFlash2 draft model, MTP head |
+| Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | 20.2 GB | DFlash2 draft model, MTP head |
+| Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | `4bit` (default), `6bit`, `8bit`, `bf16` | 3.3 GB | MTP head |
 
-A variant is the precision of the weights: `--model 27b` takes the model's default, and `--model 27b:<variant>`
-picks another as more are added (`kapitsa list` shows them all). Each variant is pinned to a tested revision.
-Speculative decoding is lossless: the output follows the model's own distribution, and greedy output matches
-decoding without it except at near-ties within rounding noise. Other Qwen3.5-family models in MLX 4- or 8-bit
-format load from a Hugging Face repo (`--model mlx-community/Qwen3.5-9B-4bit`) or a folder
-(`--model ~/models/my-qwen`). The defaults are tuned on the three above.
+A variant is the precision of the weights: `--model 35b` takes the default, `--model 35b:6bit` another. The default
+is the fastest; for the best quality take `6bit`: its answers stay closer to the full-precision model (about 96% of
+next tokens agree with bf16, against 88% at 4-bit; a fifth of the divergence) and it decodes 25-30% slower. `bf16`
+runs unquantized where it fits (the 4B; the 27B and 35B in bf16 need a 96 GB Mac). Every variant uses the model's
+draft model and MTP head. The speeds under [Performance](#performance) are the 4-bit variants.
+[Quality and speed of every variant](docs/PERF.md#weight-formats-and-default-precisions)
+
+Each variant is pinned to a tested revision. Speculative decoding is lossless: the output follows the model's own
+distribution, and greedy output matches decoding without it except at near-ties within rounding noise. Other
+Qwen3.5-family models load from a Hugging Face repo (`--model mlx-community/Qwen3.5-9B-6bit`) or a folder (`--model
+~/models/my-qwen`) in MLX format, bf16 or MLX's 3- to 8-bit quantizations. The defaults are tuned on the three above.
 
 `kapitsa pull 27b` downloads a model without starting it, `kapitsa list` shows what is downloaded, and
 `kapitsa rm 27b` deletes it. Downloads resume after an interruption and are checked against their checksums. Files

@@ -4,7 +4,7 @@
 //           @ids1 [@ids2 ...]
 //  --ref-model M  both models run in this process; per position the exact KL(ref || model) over the vocabulary
 //  --dump-ref F   writes this model's per-position top-K log-probs (default K = 256) and the realized next
-//                 token's log-prob: a reference file (also written by research/inference/quant/eval_stream.py)
+//                 token's log-prob: a reference file (also written by bench/quality/eval_stream.py)
 //  --ref F        compares with such a file: KL over the reference's top-K with the rest of the mass lumped
 //                 (a lower bound of the exact KL; with --ref-model both are printed)
 // Scores positions [skip, n - 1) of each sequence (n tokens: position p predicts token p + 1). Prints one JSON

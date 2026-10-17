@@ -46,7 +46,7 @@ kapitsa serve --model 35b                        # or ./build/kapitsa serve --mo
 
 | Option | Purpose |
 | --- | --- |
-| `--model <name\|org/name[@rev]\|dir>` | The model (above). A folder is an MLX-format model directory (affine 4/8-bit; the MTP head may live in `mtp.safetensors`), used as is. |
+| `--model <name\|org/name[@rev]\|dir>` | The model (above). A folder is an MLX-format model directory (bf16 or MLX affine 3-8-bit, see Weight formats; the MTP head may live in `mtp.safetensors`), used as is. |
 | `--model-id <id>` | Name reported by `/v1/models` (default: the catalog name, the repo id, or the folder's name). |
 | `--host`, `--port` | Listen address (default `127.0.0.1:8000`). |
 | `--ctx <tokens>` | Context per conversation slot (default 32768). Its KV cache grows as the conversation fills (Memory). |
@@ -103,19 +103,24 @@ catalog model is also checked against the revisions this build pins; after an up
 next start lists the repos again, checks the files that are there by hash, and fetches what changed (offline, it
 keeps using the old copy and says so).
 
-The catalog is one table, `src/hub/catalog.cpp`: models, best first, each with one or more variants (the precision
-of its weights: `4bit`, `8bit`, `bf16` ...) and one default. A variant pins its repo to a revision and lists its
-companions and its download size; its memory comes from the engine's plan of its headers. `--model <name>` takes the default variant,
-`--model <name>:<variant>` another; its folder is `<name>-<variant>`, and `list` and `pull --dry-run` show it. The API
-names a default variant by the model's name (`qwen3.5-4b`) and any other as `<name>:<variant>`. To add a variant or
-change a default, edit that table only: the downloader, `pull`, `list` and `--help` follow it. The repos and
-revisions are the same as the Nace Agent app's model catalog, so the app and the CLI fetch the same bytes:
+The catalog is one table, `src/hub/catalog.cpp`: models, best first, each with variants (the precision of its
+weights: `4bit`, `5bit`, `6bit`, `8bit`, `bf16`), a default and (optional) fallbacks. A variant pins its repo to a
+revision and lists its companions and its download size; its memory comes from the engine's plan of its headers.
+`--model <name>` takes the default variant where that plan leaves room for one `--ctx` conversation with its drafter,
+else the first fallback that does (`pick_variant`, src/engine/engine.cpp; `pull`, `serve` without `--model` and
+`doctor` decide the same way); `--model <name>:<variant>` takes that one. Its folder is `<name>-<variant>`, and `list`
+and `pull --dry-run` show it. The API names a default variant by the model's name (`qwen3.5-4b`) and any other as
+`<name>:<variant>`. To add a variant or change a default, edit that table only: the downloader, `pull`, `list` and
+`--help` follow it. The default is the highest-quality variant whose decode with speculative decoding stays within
+~10% of the 4-bit variant's (today 4-bit everywhere; docs/PERF.md, Weight formats and default precisions); every
+precision of a model shares its MTP head and DFlash2 drafter. The 4-bit variants are the Nace Agent app's repos and
+revisions, so the app and the CLI fetch the same bytes for them:
 
-| Name (alias) | Variant | Weights | Companions |
+| Name (alias) | Variants | Weights | Companions |
 | --- | --- | --- | --- |
-| `qwen3.6-35b-a3b` (`qwen3.6-35b`, `35b`) | `4bit` (default) | `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` @ `95460516` (`mlx-community/Qwen3.6-35B-A3B-4bit` plus its MTP head) | DFlash2 drafter `incoai/Qwen3.6-35B-A3B-DFlash2` @ `51ef7b69` (config.json, model.safetensors, LICENSE) in `dflash2/` |
-| `qwen3.8-27b` (`27b`) | `4bit` (default) | `lmstudio-community/Qwen3.8-27B-MLX-4bit` @ `6067b15c` | MTP head: `mtp.safetensors` + `mtplx_runtime.json` from `Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed` @ `1d5087d2`; DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` @ `015e7956` in `dflash2/` |
-| `qwen3.5-4b` (`4b`) | `4bit` (default) | `lmstudio-community/Qwen3.5-4B-MLX-4bit` @ `c43ee1d6` | MTP head built from `Qwen/Qwen3.5-4B` @ `851bf6e8` (below), sha256 `4f491dd2...` |
+| `qwen3.6-35b-a3b` (`qwen3.6-35b`, `35b`) | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | 4bit: `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` @ `95460516` (`mlx-community/Qwen3.6-35B-A3B-4bit` plus its MTP head); `mlx-community/Qwen3.6-35B-A3B-5bit` @ `c90c1a8b`, `-6bit` @ `cb7e092e` (= lmstudio-community's), `-8bit` @ `e06a74e6`, `-bf16` @ `04bbe07c` | DFlash2 drafter `incoai/Qwen3.6-35B-A3B-DFlash2` @ `51ef7b69` (config.json, model.safetensors, LICENSE) in `dflash2/`; the other variants also take the 4bit repo's MTP head (`mtp.safetensors`, `mtplx_runtime.json`) |
+| `qwen3.8-27b` (`27b`) | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | `lmstudio-community/Qwen3.8-27B-MLX-4bit` @ `6067b15c`, `-5bit` @ `b9ad7b92`, `-6bit` @ `05f38c1f`, `-8bit` @ `241ebb5f`; `mlx-community/Qwen3.8-27B-bf16` @ `6f265714` | MTP head: `mtp.safetensors` + `mtplx_runtime.json` from `Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed` @ `1d5087d2`; DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` @ `015e7956` in `dflash2/` |
+| `qwen3.5-4b` (`4b`) | `4bit` (default), `6bit`, `8bit`, `bf16` | `lmstudio-community/Qwen3.5-4B-MLX-4bit` @ `c43ee1d6`, `mlx-community/Qwen3.5-4B-6bit` @ `fbb1092a`, `lmstudio-community/Qwen3.5-4B-MLX-8bit` @ `59098e5f`, `mlx-community/Qwen3.5-4B-bf16` @ `491fdc7c` | MTP head built from `Qwen/Qwen3.5-4B` @ `851bf6e8` (below), sha256 `4f491dd2...` |
 
 Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
 - The file list comes from the Hub API with sizes and checksums (`/api/models/<repo>/revision/<rev>?blobs=true`:
@@ -138,9 +143,9 @@ Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
 - `HF_TOKEN` (or the token `hf auth login` saved) is sent for gated or private repos; `HF_ENDPOINT` points at a
   mirror. Errors say what to do: offline, not found, gated, rate-limited, out of disk.
 - A repo outside the catalog takes its top-level files except other formats (`.gguf`, `.bin`, `.pth`, images,
-  ...). Its config.json is read first: a model that is not a Qwen3.5-family hybrid (`linear_num_value_heads`) in
-  MLX affine 4- or 8-bit is refused before any weights download. Such models get no companions (an MTP head inside
-  the repo is used).
+  ...). Its config.json is read first: a model that is not a Qwen3.5-family hybrid (`linear_num_value_heads`) in a
+  format Kapitsa runs (bf16, MLX affine 3/4/5/6/8-bit; Weight formats) is refused before any weights download. Such
+  models get no companions (an MTP head inside the repo is used).
 
 The 4B's MTP head: MLX conversions of the small Qwen3.5 models drop it, and the official checkpoint keeps it as 15
 bf16 tensors named `mtp.*` (241 MB of 9.3 GB). `kapitsa mtp-sidecar` (and `pull` for the 4B) fetches the index,
@@ -195,6 +200,10 @@ in all, and the decoding the engine picks with the drafters installed:
 | MacBook Air / Pro 32 GB | 22.0 - 25.7 GB | 497k - 598k, MTP | 62k with MTP (73k without the split) - 80k with DFlash2 | 50k with MTP - 153k with DFlash2 |
 | MacBook Pro 48 GB (this M4 Pro) | 33.0 - 38.6 GB | 795k - 947k, MTP | 184k - 265k, DFlash2 | 475k - 724k, DFlash2 |
 
+These are the 4-bit variants, the defaults (the app's too); `kapitsa doctor` lists every variant and what it needs
+(the 35B in 6-bit, 28.2 GB of weights, fits a 48 GB Mac with a full conversation and its drafter; in 8-bit, 36.8 GB,
+only with shorter ones).
+
 Where a full 64k conversation would not fit beside the prefill buffers, the engine takes 1024-row prefill chunks
 (27B and 35B on 32 GB at 2/3: 0.45 / 0.37 GB less); a conversation that outgrows the budget takes the KV caches of
 idle slots, then the Neural Engine split's memory, then is refused with `insufficient memory`.
@@ -213,13 +222,58 @@ family) taking the dense models' whole FFN. A fanless Air also slows down after 
 The DFlash2 estimates are rougher: its 8-row verify of the 27B is compute bound on 10 cores (2 x 8 x 27e9 flops per
 cycle) as much as bandwidth bound, and its drafting pass is compute.
 
+## Weight formats
+
+Kapitsa reads MLX-format checkpoints (and, for dense models, the official Hugging Face layout) in these formats,
+each linear in its own (a checkpoint's `quantization` block may give every module another one):
+
+| Format | Where it is found | Kernels |
+| --- | --- | --- |
+| MLX affine 4-bit, group 64 | the `-4bit` packs | the specialized kernels (qmv2/qmv3, qmr, qmms, qmm8, MoE) |
+| MLX affine 8-bit, group 64 | `-8bit` packs, routers and shared-expert gates of every MoE pack, mixed recipes | specialized where they exist (qmv2_b8, qmv3_b8, qmr8, qmms_b8, qmm8_b8), `wfmt.metal` for the rest |
+| MLX affine 3, 5, 6-bit, group 64; 4-bit, group 32 | `-3bit`/`-5bit`/`-6bit` packs, mixed recipes, the MTPLX 27B pack (4-bit group 32) | `wfmt.metal` (MoE experts: 3/5/6/8-bit and bf16; 4-bit group 32 dense only, no MoE pack uses it) |
+| bf16 | `-bf16` conversions, the official Hugging Face checkpoints (dense) | `wfmt.metal` |
+
+`src/kernels/wfmt.metal` has a format-generic form of every weight-reading kernel: decode matvecs (single, several
+projections sharing an input, fused gate/up), the embedding lookup, per-row MoE (decode and MTP verify), the 8-row
+verify GEMM and MoE passes (DFlash2), the prefill GEMMs on the qmr design (dense, fused gate/up, MoE experts), the
+short-prefill GEMMs, and the Neural Engine split's weight staging. MLX packs b-bit codes as one little-endian bit
+stream per row (value j at bits [b*j, b*j + b)), so a lane's run of 16 values is b/2 words, word-aligned for even b
+and 16-bit aligned for odd b; codes become exact half operands (1024 + q, or 0.25 + q/4096 in the qmr design) and
+the dequantization arithmetic is the 4-bit kernels'. bf16 weights are the MMAs' half operands (exact for |w| in
+[6.1e-5, 65504]) and fp32 in the matvecs. These kernels are a second Metal library compiled on first use (~5 s once,
+then the system's shader cache), so a 4-bit model never pays for them. Each format's kernels are instantiated in the
+lists at the end of `wfmt.metal`: a format missing from a list fails at load with the kernel's name.
+
+The Neural Engine split stages its rotated int8 weights from any of these formats (the same bytes as from 4-bit:
+bitwise-equal outputs when only the FFN is re-encoded), and the DFlash2 drafter and the MTP heads run with a trunk
+of any format (the drafter makes an 8-bit copy of the rows of an LM head that is neither 4- nor 8-bit). The Hugging
+Face layout of the dense models (`model.language_model.*`, zero-centred RMSNorm weights, conv1d as stored) is
+converted at load; MoE checkpoints in that layout (fused expert tensors) are refused with a message, as are MLX's
+`mxfp4` / `nvfp4` / `mxfp8` modes (`kapitsa pull` refuses such repos before downloading).
+
+A model whose weights alone exceed the memory budget is refused before anything loads (`... does not fit this Mac:
+its weights alone (69.3 GB, bf16) exceed ...`), from the same plan of the safetensors headers as the fit check
+(`Qwen35::plan`, formats per module).
+
+Testing formats without downloading them: `NI_REQUANT=<bits>[:<spec>]` re-encodes a 4-bit model's linears exactly as
+8, 6, 5-bit or 4-bit group 32 (codes q << (bits - 4), scales / 2^(bits - 4)), and `NI_DEQUANT=<spec>` makes them bf16
+(w = s q + b rounded to bf16), at load (`spec`: `all`, `embed`, `head`, `attn`, `gdn`, `router`, `experts`, `shared`,
+`mlp`, after an optional layer range `a-b:`). The function stays the 4-bit model's, so outputs must match it to
+rounding, and the kernels run at the speed of a real model in that format. `tools/ni_eval` scores a model
+teacher-forced on token-id sequences (next-token KL against a reference: another model in the same process, exact, or
+a reference file of top-K log-probs; top-1 agreement, perplexity), and `bench/quality/` holds the held-out sequences
+and the MLX-side tools (`eval_stream.py` evaluates models too big for the Mac against their bf16 checkpoint streamed
+from Hugging Face one layer at a time).
+
 ## Layout
 
 - `src/kernels/*.metal`: quantized matvec/GEMM (MLX affine 4/8-bit; `qmm3.metal` = qmr prefill GEMM with
   weights dequantized into MMA registers, `qmms.metal` = short-prefill GEMMs, `qmm_moe.metal` = fused MoE
   grouped GEMMs), Gated DeltaNet (decode, token-parallel prefill, verify with a rollback tape), attention
   (split-K decode, prefill v11, split-key prefix attention), MoE routing, on-GPU sampling, speculative
-  verify kernels (`verify.metal`).
+  verify kernels (`verify.metal`); `wfmt.metal`: every weight-reading kernel for the other formats (bf16, 3/5/6/8-bit,
+  4-bit group 32; Weight formats above).
 - `src/model/qwen35*.cpp`: the model (decode, chunked prefill with in-pass checkpoints, the GPU + Neural
   Engine FFN split (`qwen35_ane.cpp`), MTP speculative decoding: draft chain, multi-row verify, tape commit;
   the 8-row verify of DFlash2 in `qwen35_v8.cpp` + `verify8.metal`).
@@ -249,6 +303,10 @@ cycle) as much as bandwidth bound, and its drafting pass is compute.
   pipeline state), `ni_kstats --limits` (every kernel's threadgroup memory against the 32 KB of Apple7-Apple10,
   pipelines below 1024 threads), `mtp_sidecar.py` (an MTP head for an MLX model that dropped it, from the official
   checkpoint by HTTP range requests: `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <model dir>/mtp.safetensors`).
+- `tools/ni_eval`: teacher-forced quality of a model against a reference (`ni_eval <model> @ids... --ref-model
+  <dir>` exact, `--dump-ref f` / `--ref f` top-K reference files; JSON lines per sequence and in total).
+- `bench/quality/`: held-out token ids (C++, Python, English prose, a coding-agent chat with tool calls; 4 x 1024
+  tokens per tokenizer) and the quantization measurement tools (Weight formats above; `README.md` there).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
   `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
@@ -269,7 +327,9 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_SHORTPF` | on | short-prefill paths (one weight pass per suffix, short-T GEMM choice); `0` = off |
 | `NI_MOE_FUSED` | 2 | fused MoE prefill GEMMs (1 = shared expert folded in, 0 = original) |
 | `NI_MOE_QMR` | 32 | the fused MoE prefill's expert GEMMs on the qmr design (qrm, 32- or 16-row tiles); `0` = qmm_moe |
-| `NI_QMM8` | 1 | 8-bit prefill GEMMs on qmr8: 1 = the MTP head, 2 = also the trunk's router / shared gate, 0 = off |
+| `NI_QMM8` | 1 | 8-bit prefill GEMMs on qmr8: 1 = every 8-bit linear but the trunk's MoE router and shared-expert gate (the MTP head, an 8-bit trunk), 2 = also those two, 0 = off |
+| `NI_QRF16_MF` | on | bf16 large-prompt prefill GEMMs with the M tiles along grid x (threadgroups in flight share a weight tile through the cache); `0` = N tiles first |
+| `NI_REQUANT`, `NI_DEQUANT` | unset | tests: a 4-bit model's linears re-encoded at load as `8`/`6`/`5`/`4g32` (`NI_REQUANT=6:experts`) or dequantized to bf16 (`NI_DEQUANT=0-3:all,head`): the same function at another format's speed (Weight formats) |
 | `NI_SHORTPF_MOE_FMA` | on | short-prefill experts of <= 2 rows as FMA matvecs (qmms_moe2); `0` = 8-row MMA for all |
 | `NI_QMMS_TY` | 1 | small qmms dispatches split their token blocks over grid.y (2 = also any > 4 blocks); `0` = off |
 | `NI_MOE_BUCKET3`, `NI_TOPK8` | on | parallel-scan MoE bucketing and 8-tokens-per-threadgroup top-k (bitwise equal) |

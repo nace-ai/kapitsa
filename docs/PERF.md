@@ -1874,3 +1874,200 @@ on the 2560-row matrices (29-31 against 34-36 us at K 4096, 65-68 against 76-81 
 248320-row output layer (1440-1564 against 1631-1641 us at 4 rows): about 1% of a decode step, inside this
 session's noise, not changed.
 
+## Weight formats and default precisions
+(branch opt/quant, 2026-10-17) Kapitsa ran MLX affine 4-bit group 64 (8-bit only for routers and MTP heads). It now
+runs bf16 and every MLX affine format the MLX packs use, on every path, and each catalog model has variants (`35b:6bit`,
+`4b:bf16` ...). The defaults stay 4-bit: no other precision decodes within ~10% of it with speculative decoding
+(Defaults, below); `6bit` is the quality choice. Formats: DEVELOPMENT.md, Weight formats. All runs on this M4 Pro
+under the shared GPU lock; the GPU ran 10-30% below this morning's figures in the afternoon (27B 4-bit plain decode
+11.7 against 16.0 tok/s), so compare within a table.
+
+### What runs
+| format | kernels |
+|---|---|
+| MLX affine 4-bit group 64 | the specialized kernels, unchanged (bitwise) |
+| MLX affine 8-bit group 64 | specialized where they existed (qmv2/qmv3_b8, qmr8, qmms_b8, qmm8_b8); `wfmt.metal` for the rest: embedding, dense MLP decode, MoE decode / verify / prefill |
+| MLX affine 3/5/6-bit group 64, 4-bit group 32 | `wfmt.metal` (MoE: 3/5/6/8-bit and bf16 experts; 4-bit group 32 is dense only, as no MoE pack uses it) |
+| bf16 | `wfmt.metal` (MLX `-bf16` conversions; the official Hugging Face layout of the dense models) |
+| per module (mixed recipes) | each linear in its own format |
+| MLX `mxfp4` / `nvfp4` / `mxfp8` | refused with a message (below: no better than affine at the same size) |
+
+`wfmt.metal` holds a format-generic form of every weight-reading kernel (decode matvecs, embedding, per-row MoE,
+8-row verify GEMM and MoE passes for DFlash2, qmr-design prefill GEMMs dense / gate-up / experts, short-prefill GEMMs,
+the Neural Engine split's staging); a lane takes a run of 16 (or 8) values: MLX packs b-bit codes as one little-endian
+bit stream per row, so a run is b/2 words, word-aligned for even b and 16-bit aligned for odd b. Codes become exact
+half operands (1024 + q, or 0.25 + q/4096 in the qmr design), so the dequantization arithmetic is the 4-bit
+kernels'; bf16 weights are the MMAs' half operands and fp32 in the matvecs. The bf16 large prefill tiles run their M
+tiles along grid x (threadgroups in flight share a weight tile through the cache). They form a second Metal library
+compiled on first use (~5 s once, then the system's shader cache): 4-bit models start as before.
+
+The Neural Engine split of the dense prefill FFN staged its int8 weights from 4-bit planes only; it now stages them
+from any format (and runs the GPU's share of a layer on the format's GEMMs), so a 27B in 8-bit keeps the split's
+prefill speed (below).
+
+### Correctness
+Same weights in another format (`NI_REQUANT` re-encodes a 4-bit model's linears exactly as 8/6/5-bit or 4-bit group
+32, `NI_DEQUANT` makes them bf16), teacher-forced over bench/quality (4 x 1024 tokens: C++, Python, prose, a
+coding-agent chat with tool calls; `tools/ni_eval` against the 4-bit model's own logits), GPU alone:
+| model | 8-bit | 6-bit | 5-bit | 4-bit g32 | bf16 (dequantized) |
+|---|---|---|---|---|---|
+| 4B | KL 1.3e-6, top-1 99.9% | 1.3e-6 | 1.3e-6 | 1.3e-6 | 3.5e-5 |
+| 27B | 1.9e-6, 99.95% | | | 1.9e-6 | 1.1e-4 (layers 0-3, embedding, head) |
+| 35B | experts and shared expert of layers 0-19: 0 (bitwise) | 3.2e-3, 98.8% | 3.2e-3 | (no MoE kernels: refused) | 4.6e-3 (layers 0-3, embedding, head) |
+The generic kernels agree with each other bitwise (equal KL across formats; the 35B's 8-bit expert kernels are
+bitwise the 4-bit ones'); the dense 1.3e-6 is the specialized 4-bit kernels' own summation order. The 35B's 3e-3 is
+its routing noise (the attention and DeltaNet projections' summation order moves the router's inputs by rounding):
+the 4-bit model on its other MoE prefill kernels (`NI_MOE_QMR=0`, `NI_MOE_FUSED=0`) is at KL 1.6e-3 (top-1 99.1%)
+from its default, `NI_QMM8=2` at 1.4e-3. Greedy ids (ni_run) of the re-encoded models against the 4-bit model:
+identical, 35B (5-bit, 6-bit, 8-bit experts, bf16 layers 0-3 + embedding + head) and 27B (8-bit, 4-bit g32, bf16
+layers 0-3 ...) over 128 tokens plain, 64 tokens after a cached 3950-token prefix (short-prefill paths), 128 with
+MTP, 256 with DFlash2 (35B 3.07 / 3.04 tokens per cycle, 27B 4.25 for all).
+
+Neural Engine split on other formats: with only the FFN re-encoded (`NI_REQUANT=8:mlp`, `6:mlp`) and the whole FFN
+on the Neural Engine, 4B and 27B logits are bitwise equal to the 4-bit model's split (the staged int8 weights are
+the same bytes). Its startup check (split against the GPU alone, 2 layers of random rows) is equal for every format:
+4B 2.11% (18/18 units), 2.09% (9/18: the GPU's share then runs the format's GEMMs), 27B 0.75%. (The split's own
+effect, teacher-forced over every prompt position: KL 1.9e-3 (4B) and 4.5e-3 (27B, max 6.1 at a few chat positions)
+from the GPU alone; on decode positions PERF.md's earlier measurement stands, ~1e-5.)
+
+bf16 against MLX (mlx-community/Qwen3.5-4B-bf16, teacher-forced, 4092 positions): MLX with fp32 activations KL 5.0e-6,
+top-1 100% (max 0.014); MLX's default bf16 activations KL 1.6e-3, top-1 99.5% (its own rounding: max 3.37 in the
+chat sequence). Greedy (128 tokens) equal to MLX fp32 up to token 7, a near-tie (top-2 margin 0.0013 nats).
+
+The official Hugging Face checkpoint (Qwen/Qwen3.5-4B, text and MTP tensors only) loads directly: logits bitwise
+equal to the MLX bf16 conversion's over all 4092 positions (zero-centred RMSNorm weights read as 1 + w, the conv1d
+layout as stored), the MTP head from its shards (2.14 tokens per cycle at depth 2, as with the sidecar).
+
+A model whose weights alone exceed the budget is refused before loading from the plan of its headers: the 35B bf16
+(69.3 GB) and 27B bf16 (53.8 GB) here, `kapitsa serve --model 35b:bf16`: "qwen3.6-35b-a3b:bf16 does not fit this Mac:
+its weights alone (69.3 GB, bf16) exceed the 38.6 GB of GPU memory Kapitsa may use here (48 GB of RAM). This one fits:
+kapitsa serve --model 35b".
+
+### Quality against bf16
+Teacher-forced next-token distributions over bench/quality (4092 positions) against the bf16 model computed with
+fp32 activations (no bf16 rounding in either model): KL(bf16 || candidate) mean, top-1 agreement, perplexity.
+Candidates are round-to-nearest from the bf16 weights as `mlx_lm.convert` makes them (the 4B's published packs are
+bitwise that, `check_rtn.py --gpu`; Kapitsa on the 35B's published 4-bit pack lands on the recipe's numbers, below),
+plus the distilled / mixed packs as published. 4B: the bf16
+checkpoint is on this Mac. 27B / 35B: their bf16 checkpoints (55 / 70 GB) fit neither the RAM nor the disk, so
+bench/quality/eval_stream.py streams them from Hugging Face one decoder layer at a time (range requests; none of it on
+disk) and runs every candidate beside the bf16 layer on its own hidden states in MLX, `--f32`; the head compares fp32
+log-probs over the whole vocabulary. (With MLX's bf16 activations the 4B's 8-bit reads KL 0.0080 instead of 0.0028:
+their rounding noise dominates near-lossless candidates.)
+
+Qwen3.5-4B (bf16 perplexity 6.784):
+| candidate | KL mean | top-1 | PPL | weights in memory |
+|---|---:|---:|---:|---:|
+| 8-bit | 0.0028 | 98.8% | 6.769 | 4.47 GB |
+| 6-bit group 32 | 0.0092 | 97.4% | 6.793 | ~3.69 GB |
+| mxfp8 | 0.0182 | 96.6% | 6.827 | ~4.34 GB |
+| 6-bit | 0.0217 | 96.4% | 6.812 | 3.42 GB |
+| 5-bit | 0.0411 | 94.0% | 6.886 | ~2.90 GB |
+| 4-bit, attention / DeltaNet / embedding 8-bit | 0.0506 | 93.1% | 6.774 | ~3.34 GB |
+| 4-bit, MLP 8-bit | 0.0768 | 90.5% | 6.867 | ~3.50 GB |
+| 4-bit group 32 | 0.1005 | 89.5% | 7.019 | ~2.63 GB |
+| 4-bit (the packs) | 0.1129 | 87.8% | 6.921 | 2.37 GB |
+| mxfp4 / nvfp4 | 0.160 / 0.164 | 85.5 / 84.8% | 7.173 / 6.978 | ~2.24 / ~2.37 GB |
+| 3-bit (group 64 / 32) | 0.416 / 0.326 | 75.4 / 77.6% | 8.606 / 8.148 | ~1.84 / ~2.11 GB |
+Kapitsa itself (exact KL, both models in one process): 4-bit pack against bf16 0.1137, top-1 88.1%, PPL 6.907.
+
+Qwen3.6-35B-A3B (bf16 perplexity 5.570; routing noise floor ~0.0016, above):
+| candidate | KL mean | top-1 | PPL | weights in memory |
+|---|---:|---:|---:|---:|
+| 8-bit | 0.0152 | 97.0% | 5.563 | 36.83 GB |
+| 6-bit | 0.0240 | 95.8% | 5.622 | 28.17 GB |
+| 4-bit experts, the rest 8-bit (unsloth UD-MLX-4bit's recipe) | 0.0389 | 94.0% | 5.637 | ~20.7 GB |
+| mlx-community OptiQ-4bit (as published) | 0.0407 | 94.3% | 5.628 | ~23.8 GB |
+| mlx-community 4bit-DWQ (as published; distilled) | 0.0421 | 93.5% | 5.639 | ~19.8 GB |
+| 4-bit experts + shared, attention / DeltaNet 8-bit | 0.0542 | 91.7% | 5.780 | ~20.2 GB |
+| 5-bit | 0.0571 | 92.8% | 5.658 | 23.84 GB |
+| 4-bit group 32 | 0.1013 | 89.8% | 5.625 | ~21.7 GB |
+| 4-bit (the default pack) | 0.1136 | 88.8% | 5.744 | 19.51 GB |
+Kapitsa on the published 4-bit pack (the default) against the streamed reference (top-256 KL, which reads a little
+low): 0.110, top-1 89.2%, PPL 5.767.
+
+Qwen3.8-27B: not measured (its streamed bf16 run was stopped after layer 54 of 64 at the wrap-up; the 35B and the 4B
+give the same ordering of the formats).
+
+### Speed per format
+ni_run, greedy; prefill p4000 with the default schedule (dense: GPU + Neural Engine split), decode 256 tokens plain
+and 512 with DFlash2 (verify 7, the drafter of every variant), two runs each, interleaved by format in one session.
+27B / 35B formats as the 4-bit weights re-encoded at load (`NI_REQUANT`: the real shapes, routing and DFlash2
+acceptance at the format's cost per byte).
+
+Qwen3.6-35B-A3B:
+| format | prefill 4k | decode plain | decode DFlash2 (tokens/cycle) |
+|---|---:|---:|---:|
+| 4-bit | 1074-1077 | 87.2-87.5 | 144.6-146.1 (3.43) |
+| 5-bit | 1045 | 73.1-73.7 | 121.2-123.5 (3.41) |
+| 6-bit | 1043-1045 | 64.7-65.7 | 106.7-107.9 (3.34) |
+| 4-bit experts, the rest 8-bit | 1068-1070 | 60.4-60.8 | 112.2-112.5 (3.43) |
+(8-bit, 37.7 GB, leaves no room for a full conversation with the drafter in this Mac's 38.6 GB budget.)
+
+Qwen3.8-27B:
+| format | prefill 4k (split; GPU alone) | decode plain | decode DFlash2 (tokens/cycle) |
+|---|---:|---:|---:|
+| 4-bit | 372 (134) | 11.7-11.8 | 47.3-47.9 (4.78) |
+| 5-bit | 357-359 (132) | 10.0-10.1 | 37.5-37.8 (4.78) |
+| 6-bit | 353-356 (131) | 8.6-8.7 | 34.3-34.5 (4.78) |
+| 8-bit | 364-365 (133) | 6.9 | 27.5-27.6 (4.78) |
+| 4-bit group 32 | 364 | 11.1 | 40.9 (4.78) |
+
+Qwen3.5-4B, the real packs (ni_run, three runs each; MTP at depth 2 here; MLX = mlx-lm 0.32.2 on the same files,
+its quality with its default bf16 activations):
+| pack | Kapitsa KL / top-1 / PPL | prefill 4k: Kapitsa (split) / MLX | decode plain: Kapitsa / MLX | Kapitsa MTP (tokens/cycle) |
+|---|---|---:|---:|---:|
+| bf16 (mlx-community) | 0 (the reference) / 6.784 | 1762 (861 GPU alone) / 855 | 25.5 / 22.9 | 46.6 (2.14) |
+| 8-bit (lmstudio-community) | 0.0029 / 98.8% / 6.771 | 1786-1787 / 756 | 37.3-37.8 / 37.1-38.7 | 55.8-56.9 (2.22) |
+| 6-bit (mlx-community) | 0.0215 / 96.3% / 6.810 | 1753-1792 / 738 | 50.7-53.1 / 46.4 | 74.2-78.0 (2.02) |
+| 4-bit (lmstudio-community) | 0.110 / 88.1% / 6.907 | 1885-1917 / 819 | 75.4-77.4 / 75.9 | 106.7-106.9 (2.04) |
+| 3-bit (mlx-community) | 0.401 / 75.4% / 8.605 | 1765-1776 / - | 77.5-78.0 / - | 102.2-104.6 (2.16) |
+Kapitsa's KL of each pack equals the round-to-nearest recipe's above (6-bit 0.0215 against 0.0217), as the
+mlx-community packs are bitwise GPU round-to-nearest (`check_rtn.py --gpu`, 6-bit: 8 of 8 tensors). The 3-bit decode
+is not faster than 4-bit: its 16-value runs take more ALU to unpack than the bytes save at 3 bits (143 GB/s), not
+worth a kernel for its quality. Kapitsa's bf16, 6-bit and 4-bit decode is ahead of or level with MLX's, 8-bit level.
+
+### Defaults
+Rule: the default is the highest-quality variant whose decode with the model's speculative decoding (35B / 27B
+DFlash2, 4B MTP), greedy and at T = 0.6, stays within ~10% of the 4-bit variant's on this Mac; any other variant is a
+documented choice. Kapitsa's goal is the fastest engine, and the quality choice is one flag away. Measured with ni_run
+under the GPU lock, every variant interleaved with the 4-bit one: decode at T = 0.6 (top-p 0.95) the mean of 4 seeds
+x 512 tokens, greedy the mean of 2 rounds (35B 512 tokens, 27B 256, 4B 256), plain greedy decode one run, prefill a
+4k prompt (dense models through the Neural Engine split) the mean of 2; 35B / 27B formats as the 4-bit weights
+re-encoded at load, the 4B's 6-bit the real pack (`NI_REQUANT=8` for its 8-bit). Speculative decoding accepted
+about as many tokens per cycle in every precision (T = 0.6: 35B 3.49-3.54, 27B 4.57-4.74, 4B 1.73-1.75), so the
+differences are the cycle's cost.
+
+| model, decoding | variant | KL from bf16 / top-1 | decode T = 0.6 | decode greedy | plain greedy | prefill 4k |
+|---|---|---|---:|---:|---:|---:|
+| 35B-A3B, DFlash2 | `4bit` (default) | 0.114 / 88.8% | 151.5 | 150.7 | 97.7 | 1068 |
+| | `5bit` | 0.057 / 92.8% | 125.7 (-17%) | 128.9 (-14%) | 82.8 (-15%) | 1039 (-3%) |
+| | `6bit` | 0.024 / 95.8% | 111.1 (-27%) | 111.9 (-26%) | 72.3 (-26%) | 1054 (-1%) |
+| 27B, DFlash2 | `4bit` (default) | not measured | 51.3 | 46.0 | 13.3 | 379 |
+| | `5bit` | not measured | 38.4 (-25%) | 36.5 (-21%) | 11.1 (-17%) | 371 (-2%) |
+| | `6bit` | not measured | 35.6 (-31%) | 32.8 (-29%) | 9.4 (-29%) | 370 (-2%) |
+| | `8bit` | not measured | 28.5 (-44%) | 25.9 (-44%) | 6.8 (-49%) | 355 (-6%) |
+| 4B, MTP depth 1 | `4bit` (default) | 0.113 / 87.8% | 108.7 | 105.5 | 70.0 | 1897 |
+| | `6bit` | 0.022 / 96.4% | 77.8 (-28%) | 75.3 (-29%) | 51.7 (-26%) | 1834 (-3%) |
+| | `8bit` | 0.0028 / 98.8% | 65.5 (-40%) | 64.9 (-39%) | 39.5 (-44%) | 1865 (-2%) |
+(35B `8bit`: 36.8 GB of weights leave this Mac's 38.6 GB budget no room for a full conversation with the drafter;
+`bf16` 4B: plain 25.5, MTP depth 2 46.6 tok/s, in another session.)
+
+No variant passes: every step up in precision reads more bytes per decoded token (5-bit +22%, 6-bit +44%, 8-bit
++89%), and the decode kernels already stream them at the 4-bit kernels' bandwidth (plain decode in the speed_big
+session, GB/s at 4 / 5 / 6 / 8-bit: 35B 146 / 150 / 157, 27B 169 / 177 / 180 / 188, 4B 181 / - / 176 / 168; per kernel
+(NI_PROFILE, 4B): fused gate/up 191 / 205 / 201 GB/s at 4 / 6 / 8-bit, the output layer 225 / 239 / 218), so decode
+slows by about the byte ratio. The one place a generic kernel costs more than its bytes is DFlash2's 8-row verify
+of odd widths and of 4-bit group 32 (27B 5-bit: verify cycle 1.27x a plain step against 1.18x at 4-bit), worth ~7%
+there; a 5-bit verify kernel would still leave the 27B 15% behind 4-bit. So `4bit` stays the default of all three,
+and `6bit` is the documented quality choice: a fifth of 4-bit's divergence from bf16 (35B 0.024 against 0.114, 4B
+0.022 against 0.113), about 96% of next tokens as bf16's, for 25-30% of decode speed. Prefill barely changes with the
+format (-1 to -6%).
+
+Also measured and left as choices or out: 8-bit (35B: KL 0.015, 30% more bytes per token than 6-bit, and its 37 GB
+leave a 48 GB Mac no room for a full conversation with the drafter; 4B: 0.0028), the 4-bit/8-bit mixes (DWQ,
+unsloth's dynamic and OptiQ recipes, KL 0.039-0.042: worse than uniform 6-bit and no faster, their 8-bit attention
+and DeltaNet being most of a token's reads: plain 60.6 against 65.2 tok/s, DFlash2 112 against 107), 4-bit group 32
+(KL 0.10, 6-14% slower than group 64), MLX's mxfp4 / nvfp4 (worse than affine 4-bit at the same size) and mxfp8 (KL
+0.018: worse than affine 8-bit at its size). The head-to-head numbers in README.md are the 4-bit variants (the same
+weights as the other engines).
