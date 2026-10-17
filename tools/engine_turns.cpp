@@ -5,6 +5,9 @@
 //                [--dump-ids <prefix>]   (writes each turn's prompt ids to <prefix>_turnN.txt, for ni_run)
 //                [--history]   (after each reply, Engine::prefill_history as the server runs it: the rendered
 //                               answer is prefilled from the turn-boundary checkpoint once the engine is idle)
+//                [--think]     (thinking on: the next turn renders an answer without its reasoning, so the
+//                               history prefill has work with templates that keep empty think blocks)
+//                [--ask <question>]  (turn 1's question about the file; default: explain the first three functions)
 // The engine's defaults apply (DFlash2 when a drafter is found); NI_LOG=1 prints each request's tok/cycle.
 // Turn 1: the first N lines of the text file (a long prompt) + a question. Turn 2: the conversation so
 // far + a follow-up (reuses the turn-1 checkpoint: the re-rendered answer differs from the live tokens
@@ -30,16 +33,19 @@ int main(int argc, char** argv) {
   o.model_dir = argv[1];
   o.context = 16384;
   int lines = 320, max_tokens = 160;
-  std::string dump_ids;
-  bool history = false;
-  for (int i = 3; i < argc; ++i)
+  std::string dump_ids, ask = "Explain in detail what the first three functions do.";
+  bool history = false, think = false;
+  for (int i = 3; i < argc; ++i) {
     if (!strcmp(argv[i], "--history")) history = true;
+    if (!strcmp(argv[i], "--think")) think = true;
+  }
   for (int i = 3; i + 1 < argc; ++i) {
     if (!strcmp(argv[i], "--dflash")) o.dflash = argv[i + 1];
     if (!strcmp(argv[i], "--lines")) lines = atoi(argv[i + 1]);
     if (!strcmp(argv[i], "--max-tokens")) max_tokens = atoi(argv[i + 1]);
     if (!strcmp(argv[i], "--spec")) o.spec_depth = atoi(argv[i + 1]);
     if (!strcmp(argv[i], "--dump-ids")) dump_ids = argv[i + 1];
+    if (!strcmp(argv[i], "--ask")) ask = argv[i + 1];
   }
   std::string text;
   {
@@ -56,7 +62,7 @@ int main(int argc, char** argv) {
     r.messages = msgs;
     r.temperature = 0.0f;
     r.max_tokens = max_tokens;
-    r.template_kwargs = ojson{{"enable_thinking", false}};
+    r.template_kwargs = ojson{{"enable_thinking", think}};
     ++turn_no;
     if (!dump_ids.empty()) {
       const std::vector<int> ids = tok.encode(eng.render(r, true));
@@ -77,7 +83,7 @@ int main(int argc, char** argv) {
   msgs.push_back({{"role", "system"}, {"content", "You are a careful senior C++ reviewer."}});
   msgs.push_back({{"role", "user"},
                   {"content", "Here is a source file:\n\n```cpp\n" + text +
-                                  "```\n\nExplain in detail what the first three functions do."}});
+                                  "```\n\n" + ask}});
   const std::string a1 = turn(msgs, "turn 1");
   ojson m2 = msgs;
   m2.push_back({{"role", "assistant"}, {"content", a1}});
