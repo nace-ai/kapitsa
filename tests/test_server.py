@@ -170,6 +170,8 @@ def cli_checks(kapitsa):
     s.close()
     rc, _, err = run("serve", "--model", "nonsense")
     check("cli: serve with an unknown model", rc == 2 and "Unknown model" in err, err)
+    rc, _, err = run("serve", "--port", str(busy))
+    check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     rc, out, _ = run("--help")
     check("cli: --help names the commands and models", rc == 0 and all(w in out for w in ("serve", "pull", "list", "35b", "27b", "4b")), out)
 
