@@ -108,16 +108,16 @@ next-fastest engine measured, which ran in the same session as Kapitsa.
 | Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.6× / 1.7×) | 0.28 / 0.27 s (1.2× / 1.5×) |
 | Peak memory | 21.1 GB (lowest) | 19.4 GB (lowest) |
 
-Against the engines people use, decode at temperature 0.6 in tok/s, each engine in its fastest setup:
+Against the engines people use, writing speed (decode at temperature 0.6), each engine in its fastest setup:
 
 | Engine | 35B-A3B | 27B |
 | --- | ---: | ---: |
-| llama.cpp (+ MTP) | 69 | 18 |
-| Ollama (MLX runner, MTP) | 89 | 32 |
-| LM Studio (MLX engine) | 86 | 15 |
-| MTPLX | 80 | 36 |
-| oMLX + DFlash2 | 127 | 45 |
-| **Kapitsa** | **154** | **63** |
+| llama.cpp (+ MTP) | 69 tok/s | 18 tok/s |
+| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
+| LM Studio (MLX engine) | 86 tok/s | 15 tok/s |
+| MTPLX | 80 tok/s | 36 tok/s |
+| oMLX + DFlash2 | 127 tok/s | 45 tok/s |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** |
 
 Prefill is up to 2.9× faster on the 27B (GPU + Neural Engine), and a follow-up turn starts in 0.06-0.28 s. Every
 engine passes the same tool-call checks.
