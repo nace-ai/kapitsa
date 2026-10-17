@@ -1,5 +1,5 @@
 // GPU + Neural Engine split of the dense prefill FFN (NI_ANE). See src/ane/ffn_split.h.
-// Design ideas from Splash (incoai/splash, Apache-2.0); our code.
+// Design ideas from Splash (incoai/splash, Apache-2.0). See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES.
 //
 //   NI_ANE=1            enable (dense models; the MoE path is unchanged)
 //   NI_ANE_UNITS=<u>    ANE share in 512-channel units (default: calibration, else per-chip default)

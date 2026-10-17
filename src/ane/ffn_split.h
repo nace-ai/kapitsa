@@ -11,7 +11,8 @@
 //
 // Design from Splash (incoai/splash, Apache-2.0: runtime/ops/AneFfn.cpp): channel split with a
 // partial down projection joined in fp32, weights as IOSurface inputs of one multi-function MIL
-// program, Hadamard rotations, the scale layout, one-layer-ahead staging. Our code.
+// program, Hadamard rotations, the scale layout, one-layer-ahead staging.
+// See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES for upstream references and license notices.
 #pragma once
 #include "ane/ane.h"
 #include "metal/gpu.h"

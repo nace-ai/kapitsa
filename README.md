@@ -1,6 +1,6 @@
 # Kapitsa
 
-**Fast local Qwen for Apple silicon.** Kapitsa by [Nace AI](https://nace.ai).
+**Fast local Qwen for Apple silicon.** Kapitsa is an inference engine by [Nace.AI](https://nace.ai).
 
 Kapitsa runs Qwen3.6, Qwen3.8 and Qwen3.5 on one Mac behind an OpenAI-compatible server, for coding agents
 and chat apps, with a built-in chat page. It is a C++ and Metal engine written for one architecture, the hybrid
@@ -143,6 +143,18 @@ converted copy on disk.
   benchmarks.
 - [docs/PERF.md](docs/PERF.md): every optimization with its measurements.
 - [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+## Acknowledgments
+
+Kapitsa builds on work from the wider inference community. [Splash](https://github.com/incoai/splash) informs
+its GPU/Neural Engine integration and speculative-decoding kernels, including the adapted ANE interface
+declarations and rotation helper. [MLX](https://github.com/ml-explore/mlx) provides reference layouts for
+attention and quantized weights. The default DFlash2 draft models are published by
+[Inco](https://huggingface.co/incoai); the target models are Qwen, with conversions and MTP packs from
+mlx-community, LM Studio and MTPLX contributors.
+
+See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md) for the components and source references, and
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for license notices. These credits do not imply upstream endorsement.
 
 Kapitsa is licensed under the [Apache License 2.0](LICENSE), Copyright 2026 Nace AI. It includes cpp-httplib, minja
 and nlohmann/json (MIT) and Unicode data ([third-party notices](THIRD_PARTY_NOTICES)). Model weights keep their own
