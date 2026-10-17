@@ -24,13 +24,21 @@ struct QMat {
 
 static QMat make_mat(Gpu& g, uint32_t N, uint32_t K, int bits, int gs, std::mt19937& rng) {
   QMat m;
+  std::uniform_real_distribution<float> d(-0.02f, 0.02f);
+  if (bits == 16) {  // bf16 weights; scales / biases unused
+    m.w = g.alloc(size_t(N) * K * 2);
+    auto* w = m.w.as<uint16_t>();
+    for (size_t i = 0; i < size_t(N) * K; ++i) w[i] = f32_to_bf16(d(rng));
+    m.s = g.alloc(16);
+    m.b = g.alloc(16);
+    return m;
+  }
   size_t words = size_t(N) * K * bits / 32, groups = size_t(N) * K / gs;
   m.w = g.alloc(words * 4);
   m.s = g.alloc(groups * 2);
   m.b = g.alloc(groups * 2);
   auto* w = m.w.as<uint32_t>();
   for (size_t i = 0; i < words; ++i) w[i] = rng();
-  std::uniform_real_distribution<float> d(-0.02f, 0.02f);
   auto* s = m.s.as<uint16_t>();
   auto* b = m.b.as<uint16_t>();
   for (size_t i = 0; i < groups; ++i) {
@@ -41,18 +49,36 @@ static QMat make_mat(Gpu& g, uint32_t N, uint32_t K, int bits, int gs, std::mt19
 }
 
 static float cpu_row(const QMat& m, uint32_t K, int bits, int gs, const float* x, uint32_t row) {
+  double acc = 0;
+  if (bits == 16) {
+    const uint16_t* w = m.w.as<uint16_t>() + size_t(row) * K;
+    for (uint32_t k = 0; k < K; ++k) acc += double(bf16_to_f32(w[k])) * x[k];
+    return float(acc);
+  }
+  // MLX packing: value k of a row at bits [bits * k, bits * k + bits) of the row's little-endian word stream
   const uint32_t* w = m.w.as<uint32_t>() + size_t(row) * K * bits / 32;
   const uint16_t* s = m.s.as<uint16_t>() + size_t(row) * K / gs;
   const uint16_t* b = m.b.as<uint16_t>() + size_t(row) * K / gs;
-  int per = 32 / bits;
   uint32_t mask = (1u << bits) - 1;
-  double acc = 0;
   for (uint32_t k = 0; k < K; ++k) {
-    uint32_t q = (w[k / per] >> (bits * (k % per))) & mask;
+    uint64_t bit = uint64_t(bits) * k;
+    uint64_t pair = w[bit / 32] | (bit / 32 + 1 < uint64_t(K) * bits / 32 ? uint64_t(w[bit / 32 + 1]) << 32 : 0);
+    uint32_t q = uint32_t(pair >> (bit % 32)) & mask;
     float wr = bf16_to_f32(s[k / gs]) * float(q) + bf16_to_f32(b[k / gs]);
     acc += double(wr) * x[k];
   }
   return float(acc);
+}
+
+// bits / group size of a kernel name's format: "..._f16_..." = bf16, "..._f<b>g<gs>_..." (wfmt.metal), else 4/64 or
+// "_b8" for the 8-bit kernels
+static void fmt_of(const std::string& k, int& bits, int& gs) {
+  bits = 4, gs = 64;
+  if (k.find("_f16") != std::string::npos) { bits = 16; return; }
+  size_t p = k.find("_f");
+  int b = 0, g = 0;
+  if (p != std::string::npos && sscanf(k.c_str() + p, "_f%dg%d", &b, &g) == 2) { bits = b, gs = g; return; }
+  if (k.find("_b8") != std::string::npos) bits = 8;
 }
 
 int main(int argc, char** argv) {
@@ -68,7 +94,8 @@ int main(int argc, char** argv) {
   std::vector<Case> cases;
   static std::vector<std::string> keep;  // kernel names of SHAPES cases
   if (const char* sh = getenv("SHAPES")) {
-    // SHAPES=kernel:N:K:rows[,...] e.g. qmv2_b4_g64_r4:2560:4096:4 (simdgroups per threadgroup: argv[1])
+    // SHAPES=kernel:N:K:rows[,...] e.g. qmv2_b4_g64_r4:2560:4096:4 or qmvg_f16_r2:9216:2560:2 (simdgroups per
+    // threadgroup: argv[1]; the weight format follows the kernel name: _f16 bf16, _f<b>g<gs>, _b8, else 4-bit)
     std::string all = sh;
     for (size_t p = 0; p < all.size();) {
       size_t q = all.find(',', p);
@@ -77,7 +104,9 @@ int main(int argc, char** argv) {
       unsigned N = 0, K = 0, r = 0;
       if (sscanf(item.c_str(), "%127[^:]:%u:%u:%u", name, &N, &K, &r) == 4) {
         keep.push_back(name);
-        cases.push_back({nullptr, N, K, 4, 64, int(r), 1});
+        int bits, gs;
+        fmt_of(name, bits, gs);
+        cases.push_back({nullptr, N, K, bits, gs, int(r), 1});
       }
       p = q == std::string::npos ? all.size() : q + 1;
     }
@@ -103,7 +132,7 @@ int main(int argc, char** argv) {
   memcpy(nw.ptr(), nwv.data(), 8192 * 2);
 
   for (auto& c : cases) {
-    size_t bytes_per = size_t(c.N) * c.K * c.bits / 8 + size_t(c.N) * c.K / c.gs * 4;
+    size_t bytes_per = c.bits == 16 ? size_t(c.N) * c.K * 2 : size_t(c.N) * c.K * c.bits / 8 + size_t(c.N) * c.K / c.gs * 4;
     int copies = std::max<int>(1, int(1.0e9 / bytes_per));
     copies = std::min(copies, 200);
     std::vector<QMat> mats;
