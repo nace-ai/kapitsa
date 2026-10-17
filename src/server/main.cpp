@@ -276,6 +276,21 @@ static int serve(int argc, char** argv, int first) {
   } catch (const hub::Error& e) {
     return fail(e.what(), 2);
   }
+  if (ref.kind == hub::ModelRef::kCatalog && !model.empty()) {
+    // before a long download: a model that cannot start on this Mac (its weights, buffers and an 8k-token
+    // conversation over the GPU memory budget) is refused, with the one that fits
+    const double need = ref.model->fixed_gb + 8192.0 * ref.model->kv_bytes_per_token / 1e9;
+    const size_t budget = memory_budget();
+    if (need * 1e9 > double(budget)) {
+      const hub::CatalogModel& fit = hub::best_fit(budget);
+      char msg[512];
+      snprintf(msg, sizeof msg,
+               "%s needs about %.0f GB of GPU memory and this Mac (%.0f GB) allows %.1f GB, so it would not start. "
+               "%s fits: kapitsa serve --model %s",
+               ref.name.c_str(), need, ram_gb(), double(budget) / 1e9, fit.name.c_str(), hub::short_name(fit).c_str());
+      return fail(msg);
+    }
+  }
   if (ref.kind == hub::ModelRef::kLocal) {
     struct stat st;
     if (stat((ref.dir + "/config.json").c_str(), &st) != 0)
