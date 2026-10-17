@@ -51,6 +51,7 @@ using ojson = nlohmann::ordered_json;
 namespace {
 
 constexpr uint64_t kChunk = 64ull << 20;  // one range request; workers take the next one when done
+constexpr uint64_t kTailChunk = 8ull << 20, kTail = 512ull << 20;  // the last 512 MB in 8 MB ranges: no lone tail
 constexpr int kWorkers = 8;               // parallel connections (8 measured ~4x one stream on this network)
 constexpr int kAttempts = 8;              // per range, with backoff up to 15 s, resuming where it stopped
 
@@ -646,8 +647,15 @@ bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog
 void download(std::vector<Target*>& todo, Progress& prog) {
   std::deque<Chunk> q;
   std::stable_sort(todo.begin(), todo.end(), [](const Target* a, const Target* b) { return a->size < b->size; });
+  uint64_t total = 0;
   for (Target* t : todo) {
     prepare(*t);
+    total += t->left;
+  }
+  // In queue order (small files first), 64 MB ranges, then 8 MB ones for the last 512 MB: one connection alone on a
+  // big last range would hold the end of the download (a few MB/s per connection on a high-latency link).
+  uint64_t queued = 0;
+  for (Target* t : todo) {
     const auto miss = t->done.missing(t->size);
     for (const Piece& p : t->pieces) {
       bool whole = false;
@@ -658,11 +666,21 @@ void download(std::vector<Target*>& todo, Progress& prog) {
           whole = true;
           break;
         }
-        for (uint64_t x = lo; x < hi; x += kChunk) q.push_back({t, &p, x - p.dst, std::min(kChunk, hi - x)});
+        for (uint64_t x = lo; x < hi;) {
+          const uint64_t step = queued + kChunk + kTail > total ? kTailChunk : kChunk;
+          const uint64_t n = std::min(step, hi - x);
+          q.push_back({t, &p, x - p.dst, n});
+          x += n;
+          queued += n;
+        }
       }
-      if (whole) q.push_back({t, &p, 0, p.len});  // written at once, so never partly done
+      if (whole) {  // written at once, so never partly done
+        q.push_back({t, &p, 0, p.len});
+        queued += p.len;
+      }
     }
   }
+  prog.total = total;  // what is fetched now (a part's header written above and resumed ranges are not)
   std::mutex qm;
   std::atomic<bool> failed{false};
   std::string first_error;
@@ -1283,12 +1301,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
             n_hf + n_from, n_hf + n_from == 1 ? "" : "s",
             n_hf ? (n_from ? "from the Hugging Face cache and other folders; " : "from the Hugging Face cache; ") : "");
   if (!todo.empty()) {
-    uint64_t left = 0;
-    for (Target* t : todo) left += t->size - part_bytes(*t);
-    Progress prog;
+    Progress prog;  // its total is set by download(): what is fetched now
     prog.show = opt.progress;
     prog.tty = isatty(2);
-    prog.total = left;
     if (opt.progress) {
       std::string what = "weights " + fmt_bytes(weights_bytes);
       for (const auto& e : extras) what += ", " + e;
@@ -1297,8 +1312,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     }
     download(todo, prog);
     if (opt.progress)
-      fprintf(stderr, "Downloaded %s in %s (%.0f MB/s).\n", fmt_bytes(left).c_str(), fmt_duration(prog.secs()).c_str(),
-              double(left) / 1e6 / std::max(0.001, prog.secs()));
+      fprintf(stderr, "Downloaded %s in %s (%.0f MB/s).\n", fmt_bytes(prog.total).c_str(), fmt_duration(prog.secs()).c_str(),
+              double(prog.total) / 1e6 / std::max(0.001, prog.secs()));
   }
   ojson m{{"name", ref.name},      {"repo", main.repo},     {"revision", main.revision}, {"commit", main.commit},
           {"files", mfiles},       {"companions", mcomp},   {"total_bytes", total},     {"completed_at", now_iso()},
@@ -1367,7 +1382,6 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
     t.state_path = out + ".part.json";
     Progress prog;
     prog.tty = isatty(2);
-    prog.total = p.size - p.head.size();
     std::vector<Target*> todo{&t};
     download(todo, prog);
   }
