@@ -1707,8 +1707,8 @@ default bf16 run):
 | argmax equal to fp32 | 205/205 | 203/205 |
 | prefill, last position: p700 / p4000 / p16000 KL | 3.2e-10 / 5.8e-11 / 5.2e-10 | 9.4e-8 / 2.6e-7 / 1.9e-7 |
 | greedy 256 tokens equal to fp32 mlx-lm: code / prose | 256 / 256 | 7 / 226 |
-The coordinator's "agrees with mlx-lm for 12 tokens": after the fix the first split from bf16 mlx-lm is at token 7,
-a tie inside mlx-lm itself (0.457 vs 0.457); the fp32 reference and Kapitsa agree throughout.
+An earlier check had Kapitsa "agree with mlx-lm for 12 tokens": after the fix the first split from bf16 mlx-lm is
+at token 7, a tie inside mlx-lm itself (0.457 vs 0.457); the fp32 reference and Kapitsa agree throughout.
 
 ### 4B speed against mlx-lm (same weights and token ids, raw generation, 2026-10-17 ~05:30)
 | | Kapitsa (ni_run) | mlx-lm 0.32.2 (stream_generate, prefill step 2048) |
@@ -1855,4 +1855,22 @@ MTP depth 2), and DFlash2 greedy for the 35B (code 256 tokens) and the 27B (code
 summation order (KL max: 4B 9e-9, 27B 4e-10, 35B 3.9e-4 where the split-K decode attention changes the MoE routing
 inputs by rounding), the short-prefill suffix logits likewise (35B 5.4e-5, 4B 1.8e-10, 27B 1.5e-10). Speed on this
 Mac does not change with the setting (DFlash2 35B 147.4 / 147.5 / 147.1 tok/s at 20 / 10 / 8): it only sizes grids.
+
+4B through the cross-engine harness (bench/harness/compare_engines.py, sizes 4000 / 16000, same
+token ids for all; every run flagged: Chrome's GPU process held 48-74% of the GPU throughout, so all three engines
+ran under the same contention):
+| | Kapitsa (MTP depth 1, Neural Engine split) | mlx-lm 0.32.2 | oMLX 0.7.1rc1 |
+|---|---|---|---|
+| decode tok/s, T=0.6 / greedy (512 tokens, median of 5) | 112.5 / 111.7 | 66.7 / 69.4 | 71.2 / 71.6 |
+| prefill 4k / 16k, tok/s (cold) | 1701 / 1348 | 747 / 698 | 742 / 669 |
+| cached TTFT 4k / 16k | 0.05 / 0.07 s | 0.25 / 0.34 s | 0.26 / 0.38 s |
+| tool calls, thinking off / on | ok / ok | ok / ok | ok / ok |
+| peak footprint | 4.08 GB | 7.35 GB | 6.17 GB |
+
+Tried and left out: for the 4B's 2-row MTP verify, the row-cache kernels (NI_RC=1, or one multi-projection
+dispatch for its 2560 x 4096 in-projections) were slower than the default qmvrc1 per projection (code / prose,
+two rounds: 76-89 against 87-96 tok/s). bench_qmv on the 4B's decode shapes: 8 simdgroups per threadgroup beat 4
+on the 2560-row matrices (29-31 against 34-36 us at K 4096, 65-68 against 76-81 us at K 9216), 4 beat 8 on the
+248320-row output layer (1440-1564 against 1631-1641 us at 4 rows): about 1% of a decode step, inside this
+session's noise, not changed.
 
