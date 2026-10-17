@@ -2,7 +2,7 @@
 //   kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768] [--slots 2]
 //                 [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048] [--api-key K]
 //                 [--mem-budget GB]
-//   kapitsa doctor [--model DIR]... [--ctx N] [--slots N] [--json]
+//   kapitsa doctor [--model DIR]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]
 // ("serve" is optional; build/nace-infer-server is a symlink kept for older scripts.)
 #include <cstring>
 #include "engine/doctor.h"
@@ -93,9 +93,11 @@ int main(int argc, char** argv) {
            "usage: kapitsa serve --model <dir> [--model-id ID] [--host 127.0.0.1] [--port 8000] [--ctx 32768]\n"
            "                     [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]\n"
            "                     [--api-key KEY] [--mem-budget GB]\n"
-           "       kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--json]   this Mac, and which models fit\n"
+           "       kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--dflash auto] [--json]   this Mac, and\n"
+           "                      which models fit\n"
            "  --dflash: DFlash2 speculative decoding, default auto (a drafter matching the model next to it or in\n"
-           "            ~/.cache/nace-infer-models/drafters; MTP when none is found); none = MTP. --spec 0 = neither.\n");
+           "            ~/.cache/nace-infer-models/drafters; MTP when none is found or where its memory would keep\n"
+           "            one --ctx conversation from fitting); none = MTP. --spec 0 = neither.\n");
     return 0;
   }
   for (int i = first; i < argc; ++i) {

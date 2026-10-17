@@ -45,6 +45,23 @@ size_t default_mem_budget();
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk)
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
 
+// What the engine settles before it loads a model, from the safetensors headers alone (its constructor and
+// `kapitsa doctor` share it): the DFlash2 drafter and the prefill chunk.
+struct LoadPlan {
+  bool dflash_auto = false;       // the drafter is looked for (--dflash auto)
+  bool dflash_off = false;        // --dflash none, or auto with --spec 0
+  std::string dflash;             // the drafter to load ("" = none: MTP or plain decoding)
+  std::string dflash_left_out;    // the drafter auto found and leaves out (it would cost context, below)
+  size_t dflash_bytes = 0;        // the loaded drafter's weights and rings (live + one per checkpoint, every slot)
+  size_t dflash_found_bytes = 0;  // the same for the drafter found, loaded or left out
+  int prefill_chunk = 2048;
+};
+// dflash: "auto", "none" / "0" / "off", a drafter directory, or "" (NI_DFLASH if set, else auto); spec_off: --spec 0.
+// auto leaves a drafter out where one conversation of `context` tokens would not fit the budget beside it (context
+// before speed); prefill_chunk 0 = auto_prefill_chunk with the drafter's memory set aside.
+LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
+                   size_t budget, int prefill_chunk);
+
 struct ChatRequest {
   ojson messages = ojson::array();
   ojson tools = ojson::array();

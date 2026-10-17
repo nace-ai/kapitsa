@@ -4,7 +4,6 @@
 #include "ane/ffn_split.h"
 #include "engine/engine.h"
 #include "metal/gpu.h"
-#include "model/dflash2.h"
 #include "model/qwen35.h"
 
 #include <nlohmann/json.hpp>
@@ -86,6 +85,7 @@ const char* yesno(bool b) { return b ? "yes" : "no"; }
 int run_doctor(int argc, char** argv) {
   std::vector<std::string> models, roots;
   int ctx = 65536, slots = 2, chunk = 0;  // chunk 0: as the engine picks it (auto_prefill_chunk)
+  std::string dflash;                      // as the server's --dflash ("": NI_DFLASH or auto)
   bool as_json = false;
   double budget_gb = 0;
   for (int i = 0; i < argc; ++i) {
@@ -97,11 +97,12 @@ int run_doctor(int argc, char** argv) {
     else if (a == "--slots") slots = std::stoi(next());
     else if (a == "--prefill-chunk") chunk = std::stoi(next());
     else if (a == "--mem-budget") budget_gb = std::stod(next());
+    else if (a == "--dflash") dflash = next();
     else if (a == "--json") as_json = true;
     else {
       fprintf(stderr,
               "usage: kapitsa doctor [--model DIR]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
-              "                      [--mem-budget GB] [--json]\n");
+              "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n");
       return 2;
     }
   }
@@ -150,31 +151,26 @@ int run_doctor(int argc, char** argv) {
   }
   nlohmann::ordered_json arr = nlohmann::ordered_json::array();
   for (const std::string& dir : models) {
+    // the engine's own decisions before it loads: the drafter (auto leaves it out where it costs context) and the
+    // prefill chunk
     Qwen35::MemPlan m;
-    const int ch = chunk > 0 ? chunk : auto_prefill_chunk(dir, ctx, slots, budget);
+    LoadPlan lp;
     try {
-      m = Qwen35::plan(dir, ch);
+      lp = plan_load(dir, dflash, false, ctx, slots, budget, chunk);
+      m = Qwen35::plan(dir, lp.prefill_chunk);
     } catch (const std::exception& e) {
       if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
       continue;
     }
+    const int ch = lp.prefill_chunk;
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
     const Qwen35::AnePlan ap = Qwen35::ane_plan(dir, m);
     const uint32_t units = ap.units, total = ap.total;
     const size_t ane_bytes = ap.bytes;
     const std::string src = ap.source;
-    // a DFlash2 drafter next to the model or in the drafter cache (the engine's default when it finds one)
-    std::string dfl;
-    size_t dfl_bytes = 0;
-    try {
-      dfl = DFlash2::find(dir, Qwen35::read_config(dir));
-    } catch (...) {
-    }
-    if (!dfl.empty()) {
-      size_t per = 0;
-      dfl_bytes = DFlash2::plan_bytes(dfl, &per) + 3 * per * size_t(slots);  // live ring + one per checkpoint
-    }
-    const size_t fixed = m.fixed(slots) + ane_bytes;
+    // a DFlash2 drafter next to the model or in the drafter cache counts when the engine loads it
+    const std::string dfl = lp.dflash.empty() ? lp.dflash_left_out : lp.dflash;
+    const size_t fixed = m.fixed(slots) + ane_bytes + lp.dflash_bytes;
     const size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
     const size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
     const size_t room = budget > fixed ? budget - fixed : 0;
@@ -199,18 +195,20 @@ int run_doctor(int argc, char** argv) {
     o["fits_full_context"] = full_need <= budget;
     o["kv_tokens_in_budget"] = tokens;
     o["dflash_drafter"] = dfl;
-    o["dflash_bytes"] = dfl_bytes;
-    o["kv_tokens_in_budget_with_dflash"] = budget > fixed + dfl_bytes ? (budget - fixed - dfl_bytes) / std::max<size_t>(m.kv_per_pos, 1) : 0;
+    o["dflash_used"] = !lp.dflash.empty();
+    o["dflash_bytes"] = lp.dflash_found_bytes;
+    o["decoding"] = !lp.dflash.empty() ? "dflash2" : m.mtp ? "mtp" : "plain";
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
     if (as_json) continue;
     std::string name = dir.substr(dir.find_last_of('/') + 1);
     printf("  %s (%s, %d layers, hidden %d)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden);
-    printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d slot%s' state %.2f, KV %.0f KB/token%s\n",
+    printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d slot%s' state %.2f, KV %.0f KB/token%s%s\n",
            m.weights / 1e9, m.mtp / 1e9, ch, m.activations / 1e9, slots, slots > 1 ? "s" : "",
            slots * m.slot_state / 1e9, m.kv_per_pos / 1024.0,
-           ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "");
+           ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "",
+           lp.dflash_bytes ? (", DFlash2 drafter " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
     if (start_need > budget)
       printf("    fits: NO: needs %.1f GB with an 8k-token conversation, the budget is %.1f GB\n", start_need / 1e9,
              budget / 1e9);
@@ -218,10 +216,15 @@ int run_doctor(int argc, char** argv) {
       printf("    fits: yes; %d x %d tokens %s (%.1f GB); room for %zu tokens of KV cache in all%s\n", slots, ctx,
              full_need <= budget ? "fit" : "do not all fit at once", full_need / 1e9, tokens,
              full_need <= budget ? "" : " (the KV cache grows with each conversation; idle slots give theirs up)");
-    if (!dfl.empty())
-      printf("    DFlash2 drafter (used by default): %s, %.2f GB with %d slot%s; with it room for %zu tokens of KV cache\n",
-             dfl.c_str(), dfl_bytes / 1e9, slots, slots > 1 ? "s" : "",
-             budget > fixed + dfl_bytes ? (budget - fixed - dfl_bytes) / std::max<size_t>(m.kv_per_pos, 1) : size_t(0));
+    if (!lp.dflash.empty())
+      printf("    decoding: DFlash2 drafter %s (%.2f GB with %d slot%s, counted above)\n", lp.dflash.c_str(),
+             lp.dflash_bytes / 1e9, slots, slots > 1 ? "s" : "");
+    else if (!lp.dflash_left_out.empty())
+      printf("    decoding: %s; the DFlash2 drafter %s is left out here: its %.2f GB would keep a %d-token conversation "
+             "from fitting\n",
+             m.mtp ? "MTP" : "plain", lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, ctx);
+    else
+      printf("    decoding: %s%s\n", m.mtp ? "MTP" : "plain", lp.dflash_off ? "" : " (no DFlash2 drafter found)");
     if (m.dense)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()

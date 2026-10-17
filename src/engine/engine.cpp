@@ -43,37 +43,17 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
   // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
   // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off. Found before
-  // the model loads, so its memory counts in the fit check.
-  const bool spec_off = opts_.spec_depth == 0;  // --spec 0: no speculative decoding at all
-  std::string want = opts_.dflash;
-  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
-  if (want == "1" || want == "on") want = "auto";
-  const bool dfl_off = want == "none" || want == "0" || want == "off" || (want == "auto" && spec_off);
-  const bool auto_dir = want == "auto";
-  std::string dfl_dir =
-      dfl_off ? std::string() : auto_dir ? DFlash2::find(opts_.model_dir, Qwen35::read_config(opts_.model_dir)) : want;
-  size_t dfl_bytes = 0;
-  bool dfl_mem_skip = false;
-  if (!dfl_dir.empty()) {
-    size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
-    dfl_bytes = DFlash2::plan_bytes(dfl_dir, &per_slot) + 3 * per_slot * size_t(std::max(1, opts_.slots));
-    // auto: a drafter that would keep one conversation from its full context (where the model alone keeps it) is
-    // left out on this Mac; MTP (or plain decoding) instead. Context before speed.
-    const Qwen35::MemPlan p = Qwen35::plan(opts_.model_dir, 1024);
-    const size_t one = p.fixed(std::max(1, opts_.slots)) + Qwen35::ane_plan(opts_.model_dir, p).bytes +
-                       p.kv_per_pos * size_t(opts_.context);
-    if (auto_dir && one + dfl_bytes > budget_ && one <= budget_) {
-      logi("DFlash2: %s left out: its %.2f GB would keep a %d-token conversation from fitting the %.1f GB budget",
-           dfl_dir.c_str(), dfl_bytes / 1e9, opts_.context, budget_ / 1e9);
-      dfl_dir.clear();
-      dfl_bytes = 0;
-      dfl_mem_skip = true;
-    }
-  }
+  // the model loads, so its memory counts in the fit check; auto leaves it out where it would cost context.
+  const LoadPlan lp = plan_load(opts_.model_dir, opts_.dflash, opts_.spec_depth == 0, opts_.context, opts_.slots,
+                                budget_, opts_.prefill_chunk);
+  if (!lp.dflash_left_out.empty())
+    logi("DFlash2: %s left out: its %.2f GB would keep a %d-token conversation from fitting the %.1f GB budget",
+         lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, opts_.context, budget_ / 1e9);
+  const size_t dfl_bytes = lp.dflash_bytes;
   {
     const int slots = std::max(1, opts_.slots), min_ctx = std::min(opts_.context, 8192);
     if (opts_.prefill_chunk <= 0) {
-      opts_.prefill_chunk = auto_prefill_chunk(opts_.model_dir, opts_.context, slots, budget_ > dfl_bytes ? budget_ - dfl_bytes : 0);
+      opts_.prefill_chunk = lp.prefill_chunk;
       if (opts_.prefill_chunk != 2048)
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
              opts_.prefill_chunk, opts_.context, budget_ / 1e9);
@@ -107,12 +87,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  if (!dfl_off && !dfl_mem_skip) {
-    const std::string& dir = dfl_dir;
+  if (!lp.dflash_off && lp.dflash_left_out.empty()) {
+    const std::string& dir = lp.dflash;
     if (dir.empty()) {
       logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
            opts_.model_dir.c_str());
-    } else if (auto_dir && !DFlash2::supports(*model_)) {
+    } else if (lp.dflash_auto && !DFlash2::supports(*model_)) {
       logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
     } else {
       dfl_ = std::make_unique<DFlash2>(*model_, dir);
@@ -162,6 +142,39 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
   const Qwen35::MemPlan p = Qwen35::plan(model_dir, 2048);
   const size_t ane = Qwen35::ane_plan(model_dir, p).bytes;
   return p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) <= budget ? 2048 : 1024;
+}
+
+LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool spec_off, int context, int slots,
+                   size_t budget, int prefill_chunk) {
+  LoadPlan lp;
+  std::string want = dflash;
+  if (want.empty()) want = getenv("NI_DFLASH") && *getenv("NI_DFLASH") ? getenv("NI_DFLASH") : "auto";
+  if (want == "1" || want == "on") want = "auto";
+  lp.dflash_auto = want == "auto";
+  lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
+  slots = std::max(1, slots);
+  if (!lp.dflash_off) {
+    lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
+    if (!lp.dflash.empty()) {
+      size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
+      lp.dflash_bytes = lp.dflash_found_bytes =
+          DFlash2::plan_bytes(lp.dflash, &per_slot) + 3 * per_slot * size_t(slots);
+      // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding
+      // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
+      // conversation come first
+      const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024);
+      const size_t one = p.fixed(slots) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context);
+      if (lp.dflash_auto && one + lp.dflash_bytes > budget) {
+        lp.dflash_left_out = lp.dflash;
+        lp.dflash.clear();
+        lp.dflash_bytes = 0;
+      }
+    }
+  }
+  lp.prefill_chunk = prefill_chunk > 0 ? prefill_chunk
+                                       : auto_prefill_chunk(model_dir, context, slots,
+                                                            budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0);
+  return lp;
 }
 
 bool Engine::reserve_kv(Slot& slot, int need) {
