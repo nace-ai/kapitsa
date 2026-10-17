@@ -31,7 +31,8 @@ const std::vector<CatalogModel>& catalog() {
        22.07,
        21.21 + 0.58,
        22528,
-       "MoE, 3B active per token: fast replies and fast reading"},
+       "MoE, 3B active per token: fast replies and fast reading",
+       "qwen3.6-35b-a3b-4bit"},
       {"qwen3.8-27b",
        {"27b"},
        "Qwen3.8-27B",
@@ -46,7 +47,8 @@ const std::vector<CatalogModel>& catalog() {
        20.17,
        18.08 + 1.54,
        69632,
-       "dense: the strongest coder of the three, slower to write"},
+       "dense: the strongest coder of the three, slower to write",
+       "qwen3.8-27b-4bit"},
       {"qwen3.5-4b",
        {"4b"},
        "Qwen3.5-4B",
@@ -59,7 +61,8 @@ const std::vector<CatalogModel>& catalog() {
        3.30,
        3.66,
        36864,
-       "small and quick: for 16-24 GB Macs and simple tasks"},
+       "small and quick: for 16-24 GB Macs and simple tasks",
+       "qwen3.5-4b-4bit"},
   };
   return c;
 }

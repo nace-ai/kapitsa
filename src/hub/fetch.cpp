@@ -1212,12 +1212,20 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     }
   }
 
-  // what is already here: finished files, the Hugging Face cache, --from folders (or files)
+  // what is already here: finished files, the Hugging Face cache, --from folders (or files), and the Nace Agent
+  // app's copy of a catalog model (~/.nace/models/<key>, companions included): exact checksum matches only
   FromIndex from;
   for (const auto& d : opt.from) {
     uint64_t sz;
     if (is_dir(d)) from.scan(d, 3);
     else if (file_size(d, sz)) from.by_size.emplace(sz, d);
+  }
+  if (ref.kind == ModelRef::kCatalog && !ref.model->app_key.empty()) {
+    const std::string app = user_home() + "/.nace/models/" + ref.model->app_key;
+    if (is_dir(app)) {
+      from.scan(app, 3);
+      if (opt.progress) fprintf(stderr, "Checking Nace Agent's copy in %s...\n", tilde(app).c_str());
+    }
   }
   if (opt.progress && !opt.from.empty()) fprintf(stderr, "Checking the files in %s against the pinned checksums...\n",
                                                   opt.from.size() == 1 ? tilde(opt.from[0]).c_str() : "the --from folders");
@@ -1270,9 +1278,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
                 tilde(models_dir()) + ". Free some space, or set KAPITSA_HOME to a folder on a bigger disk.");
   for (auto& [src, t] : reuse) place(src, t->final_path);
   if (opt.progress && (n_hf || n_from))
-    fprintf(stderr, "Reused %d file%s already on this Mac%s%s (checksums match; APFS clones take no extra space).\n",
-            n_hf + n_from, n_hf + n_from == 1 ? "" : "s", n_hf ? " from the Hugging Face cache" : "",
-            n_from ? (n_hf ? " and --from" : " from --from") : "");
+    fprintf(stderr, "Reused %d file%s already on this Mac (%schecksums match; APFS clones take no extra space).\n",
+            n_hf + n_from, n_hf + n_from == 1 ? "" : "s",
+            n_hf ? (n_from ? "from the Hugging Face cache and other folders; " : "from the Hugging Face cache; ") : "");
   if (!todo.empty()) {
     uint64_t left = 0;
     for (Target* t : todo) left += t->size - part_bytes(*t);

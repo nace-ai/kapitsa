@@ -42,6 +42,7 @@ struct CatalogModel {
   double fixed_gb = 0;               // GPU memory at load with its companions (2 slots, see catalog.cpp)
   double kv_bytes_per_token = 0;     // KV cache per token of conversation
   std::string about;                 // one line for `kapitsa list`
+  std::string app_key;               // the Nace Agent app's folder for it (~/.nace/models/<app_key>), reused if there
 };
 
 const std::vector<CatalogModel>& catalog();
