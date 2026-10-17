@@ -389,7 +389,9 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   else fatal("unrecognized weight naming");
 
   embed_ = qlin("model.embed_tokens");
-  lm_head_ = qlin("lm_head");
+  // tied embeddings (the small Qwen3.5 models): the output layer is the embedding table, stored in the
+  // same quantized [vocab, hidden] layout
+  lm_head_ = ws_.has(prefix_ + "lm_head.weight") ? qlin("lm_head") : embed_;
   final_norm_ = &ws_.get(prefix_ + "model.norm.weight");
   layers_.resize(cfg_.layers);
   for (int i = 0; i < cfg_.layers; ++i) {
@@ -434,6 +436,34 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
       L.mu = qlin(m + "up_proj");
       L.md = qlin(m + "down_proj");
     }
+  }
+  // The kernels read every float parameter as bf16. Checkpoints differ: the Qwen3.5-4B MLX conversion
+  // stores A_log as f32 (bf16 values widened), the 27B / 35B as bf16; read as bf16, f32 data gave wrong
+  // decay rates in every DeltaNet layer (logits KL 6e-2 vs MLX, greedy text off after a dozen tokens).
+  {
+    int lossy = 0, converted = 0;
+    auto fix = [&](const Tensor*& t) {
+      if (t && t->dtype != DType::BF16) {
+        t = bf16_param(t, lossy);
+        ++converted;
+      }
+    };
+    for (Layer& L : layers_)
+      for (const Tensor** t : {&L.in_norm, &L.post_norm, &L.conv_w, &L.A_log, &L.dt_bias, &L.gnorm, &L.q_norm, &L.k_norm})
+        fix(*t);
+    fix(final_norm_);
+    if (converted)
+      logi("converted %d parameter tensors to bf16 at load (%d values not exactly representable)", converted, lossy);
+    auto check = [](const QLinear& q) {
+      if (q && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
+        fatal("quantized weights with non-bf16 scales/biases are not supported");
+    };
+    check(embed_);
+    check(lm_head_);
+    for (const Layer& L : layers_)
+      for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.router, &L.shared_gate, &L.eg,
+                               &L.eu, &L.ed, &L.sg, &L.su, &L.sd, &L.mg, &L.mu, &L.md})
+        check(*q);
   }
   // Checks the kernels' assumptions.
   if (cfg_.lin_dk != 128 || cfg_.lin_dv != 128) fatal("GDN head dims must be 128");

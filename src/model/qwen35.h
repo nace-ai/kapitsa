@@ -340,6 +340,9 @@ class Qwen35 {
   void load_mtp(const std::string& dir);
   QLinear quantize8(const Tensor& w);
   const Tensor* own_copy(const Tensor& t);
+  // A float parameter the kernels read as bf16 (norms, conv, A_log, dt_bias): t itself when it is
+  // bf16, else an owned bf16 copy (++lossy when a value is not a bf16 number)
+  const Tensor* bf16_param(const Tensor* t, int& lossy);
   QLinear stack_experts(const class WeightStore& w, const std::string& prefix, const std::string& proj);
   void enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D);
   // block-drafter capture of rows [0, T) of x (default x_) at positions pos0.. after layer `layer` (no-op
