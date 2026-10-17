@@ -148,7 +148,8 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
 
 // The best catalog model for this Mac: the first (the catalog is best first) with a variant whose memory plan, the
 // engine's own, leaves room for one conversation of --ctx tokens within the budget and keeps its drafter (each model
-// takes its default variant, else the first of its fallbacks that fits: pick_variant). A model not downloaded yet is
+// takes its default variant, else the first of its fallbacks that fits: pick_variant), or failing that whose smallest
+// variant holds the conversation without the drafter (MTP decoding). A model not downloaded yet is
 // planned from its headers (hub::plan_dir: a few hundred KB, fetched once); one that cannot be planned (offline)
 // cannot be downloaded either and is skipped. False if none can be planned.
 static bool best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
@@ -160,7 +161,16 @@ static bool best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* o
       *out = r;
       return true;
     }
-    if (variant_fits(r, opt, budget) == 0) *out = r, have = true;  // too big: the smallest such is the last resort
+    if (variant_fits(r, opt, budget) != 0) continue;  // not plannable (offline)
+    // its smallest variant without the drafter: one --ctx conversation still fits (MTP decoding instead)
+    try {
+      if (conversation_fits(hub::plan_dir(r), opt.context, opt.slots, budget)) {
+        *out = r;
+        return true;
+      }
+    } catch (const std::exception&) {
+    }
+    *out = r, have = true;  // too big: the smallest such is the last resort
   }
   if (!have && why) *why = "Can't reach huggingface.co to see which model fits this Mac (offline?), and none is "
                            "downloaded. Connect to the internet, or pass --model with a model folder.";
