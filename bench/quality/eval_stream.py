@@ -367,6 +367,8 @@ def main():
     ap.add_argument("--chunk", type=int, default=256, help="positions per head chunk")
     ap.add_argument("--max-tokens", type=int, default=0, help="truncate the sequences (tests)")
     ap.add_argument("--cpu", action="store_true", help="run on the CPU (tests; no GPU lock)")
+    ap.add_argument("--f32", action="store_true",
+                    help="activations, norms and dequantized weights in fp32 (no bf16 rounding noise in either model)")
     a = ap.parse_args()
     if a.cpu:
         mx.set_default_device(mx.cpu)
@@ -417,7 +419,19 @@ def main():
         return k[:k.index(".layers.") + len(".layers.")] + f"{u[1]}."
 
     ids = mx.array(seqs)
-    hidden = OrderedDict()  # model name -> [B, N, H] bf16
+    hidden = OrderedDict()  # model name -> [B, N, H] bf16 (fp32 with --f32)
+
+    def f32(m):
+        """--f32: a module's floating-point parameters (bf16 weights, norms, quantization scales and biases) in fp32;
+        quantized codes stay as they are, so a quantized matmul dequantizes exactly (s * q + b in fp32)."""
+        if a.f32:
+            from mlx.utils import tree_map
+            m.update(tree_map(lambda x: x.astype(mx.float32) if x.dtype in (mx.bfloat16, mx.float16) else x,
+                              m.parameters()))
+        return m
+
+    def act(h):
+        return h.astype(mx.float32) if a.f32 else h
 
     # embeddings
     parts, _ = pf.get("embed")
@@ -425,7 +439,7 @@ def main():
     bt = parts[0]
     emb_name = next(k for k in bt if k.endswith("embed_tokens.weight"))
     E = bt[emb_name]
-    hidden["bf16"] = E[ids]
+    hidden["bf16"] = act(E[ids])
     embeds = {"bf16": E}
     ri = 1
     for name, kind, obj in cands:
@@ -447,7 +461,7 @@ def main():
                 m = m.to_quantized(group_size=q["group_size"], bits=q["bits"], mode=q["mode"])
             m.load_weights(list(ew.items()))
         embeds[name] = m
-        hidden[name] = m(ids)
+        hidden[name] = act(m(ids))
     mx.eval(list(hidden.values()))
     pf.done("embed")
     log(f"embeddings done ({pf.rate():.1f} MB/s)")
@@ -459,19 +473,19 @@ def main():
         tl = time.time()
         pre = prefix_of(base, u)
         bw = strip(parts[0], pre)
-        layer = load_layer(targs, i, bw)
+        layer = f32(load_layer(targs, i, bw))
         hidden["bf16"] = layer(hidden["bf16"], mask="causal" if not layer.is_linear else None)
         mx.eval(hidden["bf16"])
         del layer
         ri = 1
         for name, kind, obj in cands:
             if kind == "rtn":
-                lyr = rtn_layer(targs, i, bw, obj)
+                lyr = f32(rtn_layer(targs, i, bw, obj))
             else:
                 t = parts[ri]
                 ri += 1
                 cp = prefix_of(obj, u)
-                lyr = load_layer(targs, i, strip(t, cp), repo_qcfg(obj.config, cp))
+                lyr = f32(load_layer(targs, i, strip(t, cp), repo_qcfg(obj.config, cp)))
             hidden[name] = lyr(hidden[name], mask="causal" if not lyr.is_linear else None)
             mx.eval(hidden[name])
             del lyr
@@ -539,7 +553,9 @@ def main():
     for b in range(B):
         seq = seqs[b]
         tgt = mx.array(seq[1:])
-        hn = {name: mx.fast.rms_norm(h[b, : n - 1], norms[name], eps).astype(mx.float32) for name, h in hidden.items()}
+        hn = {name: mx.fast.rms_norm(h[b, : n - 1].astype(mx.float32) if a.f32 else h[b, : n - 1],
+                                     norms[name].astype(mx.float32) if a.f32 else norms[name], eps).astype(mx.float32)
+              for name, h in hidden.items()}
         top_rows = []
         for c0 in range(0, n - 1, a.chunk):
             c1 = min(n - 1, c0 + a.chunk)
