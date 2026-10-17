@@ -1,8 +1,11 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
-// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models.
+// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors) and
+// Nemotron-H models (NVIDIA's safetensors).
 #pragma once
 #include "hub/hub.h"
 #include "model/dflash2.h"
+#include "model/lilicorr.h"
+#include "model/nemotron_h.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
 
@@ -129,6 +132,9 @@ class Engine {
   int context_length() const { return opts_.context; }
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
+  // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
+  // else Qwen's recommended 0.6 / 0.95 / 20.
+  ChatRequest request_defaults() const { return defaults_; }
   // Renders the prompt for a request (for debugging / token counting).
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
   // Runs one request. `on_delta` returns false to cancel. Serialized across threads.
@@ -152,6 +158,8 @@ class Engine {
   struct Slot {
     std::unique_ptr<Seq> seq;
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
+    std::unique_ptr<LiliSeq> lseq;    // drafter context (LiLiCorr only)
+    std::vector<std::unique_ptr<LiliSeq>> lckpts;   // LiLiCorr: the drafter context as it was at ckpts[i]
     std::vector<int> tokens;             // tokens whose effect is in the live state
     std::vector<TurnCheckpoint> ckpts;   // recurrent-state snapshots
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
@@ -169,9 +177,12 @@ class Engine {
   void drop_slot(Slot& slot);
 
   EngineOptions opts_;
-  std::unique_ptr<Qwen35> model_;
+  std::unique_ptr<Model> model_;
+  Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split)
+  NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
+  std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;
@@ -184,6 +195,7 @@ class Engine {
   size_t budget_ = 0;    // GPU memory budget (bytes)
   int context_fit_ = 0;  // see context_fit()
   long spec_cycles_ = 0, spec_accepted_ = 0;
+  ChatRequest defaults_;
 };
 
 } // namespace ni

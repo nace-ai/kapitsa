@@ -64,8 +64,8 @@ static json normalize_messages(const json& in) {
   return out;
 }
 
-static ChatRequest parse_request(const json& b) {
-  ChatRequest r;
+static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
+  ChatRequest r = defaults;
   r.messages = normalize_messages(b.at("messages"));
   if (b.contains("tools") && b["tools"].is_array()) r.tools = b["tools"];
   if (b.contains("tool_choice") && b["tool_choice"].is_string() && b["tool_choice"] == "none") r.tools = json::array();
@@ -85,6 +85,8 @@ static ChatRequest parse_request(const json& b) {
     std::string e = b["reasoning_effort"];
     if (e == "none") r.template_kwargs["enable_thinking"] = false;
     else if (!r.template_kwargs.contains("reasoning_effort")) r.template_kwargs["reasoning_effort"] = e;
+    // Nemotron 3.5's template: shorter reasoning on request
+    if ((e == "low" || e == "medium") && !r.template_kwargs.contains("medium_effort")) r.template_kwargs["medium_effort"] = true;
   }
   return r;
 }
@@ -436,7 +438,7 @@ static int serve(int argc, char** argv, int first) {
     ChatRequest r;
     try {
       body = json::parse(req.body);
-      r = parse_request(body);
+      r = parse_request(body, engine.request_defaults());
     } catch (const std::exception& ex) {
       res.status = 400;
       res.set_content(json{{"error", {{"message", std::string("bad request: ") + ex.what()}, {"type", "invalid_request_error"}}}}.dump(),
@@ -554,7 +556,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
                         r.variant->name == r.model->default_variant ? ", the default" : "");
   if (r.variant)
     for (const auto& c : r.variant->companions)
-      printf("  %-11s %s @ %s%s\n", (c.kind == "dflash2" ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
+      printf("  %-11s %s @ %s%s\n", (c.kind == "dflash2" || c.kind == "lilicorr" ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
              c.kind == "mtp-sidecar" ? " (its mtp.* tensors, made into mtp.safetensors)" : "");
   printf("  API name:   %s\n", r.id.c_str());
 }

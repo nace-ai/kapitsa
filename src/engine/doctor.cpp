@@ -5,6 +5,7 @@
 #include "engine/engine.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
+#include "model/nemotron_h.h"
 #include "model/qwen35.h"
 
 #include <nlohmann/json.hpp>
@@ -176,18 +177,20 @@ int run_doctor(int argc, char** argv) {
   for (const std::string& dir : models) {
     // the engine's own decisions before it loads: the drafter (auto leaves it out where it costs context) and the
     // prefill chunk
-    Qwen35::MemPlan m;
+    MemPlan m;
     LoadPlan lp;
+    const bool nemotron = NemotronH::is_model(dir);
+    const char* drafter = nemotron ? "LiLiCorr drafter" : "DFlash2 drafter";
     try {
       lp = plan_load(dir, dflash, false, ctx, slots, budget, chunk);
-      m = Qwen35::plan(dir, lp.prefill_chunk);
+      m = nemotron ? NemotronH::plan(dir, lp.prefill_chunk) : Qwen35::plan(dir, lp.prefill_chunk);
     } catch (const std::exception& e) {
       if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
       continue;
     }
     const int ch = lp.prefill_chunk;
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
-    const Qwen35::AnePlan ap = Qwen35::ane_plan(dir, m);
+    const Qwen35::AnePlan ap = nemotron ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0} : Qwen35::ane_plan(dir, m);
     const uint32_t units = ap.units, total = ap.total;
     const size_t ane_bytes = ap.bytes;
     const std::string src = ap.source;
@@ -221,7 +224,7 @@ int run_doctor(int argc, char** argv) {
     o["dflash_drafter"] = dfl;
     o["dflash_used"] = !lp.dflash.empty();
     o["dflash_bytes"] = lp.dflash_found_bytes;
-    o["decoding"] = !lp.dflash.empty() ? "dflash2" : m.mtp ? "mtp" : "plain";
+    o["decoding"] = !lp.dflash.empty() ? (nemotron ? "lilicorr" : "dflash2") : m.mtp ? "mtp" : "plain";
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
@@ -234,7 +237,7 @@ int run_doctor(int argc, char** argv) {
            m.weights / 1e9, m.mtp / 1e9, ch, m.activations / 1e9, slots, slots > 1 ? "s" : "",
            slots * m.slot_state / 1e9, m.kv_per_pos / 1024.0,
            ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "",
-           lp.dflash_bytes ? (", DFlash2 drafter " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
+           lp.dflash_bytes ? (std::string(", ") + drafter + " " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
     if (start_need > budget)
       printf("    fits: NO: needs %.1f GB with an 8k-token conversation, the budget is %.1f GB\n", start_need / 1e9,
              budget / 1e9);
@@ -243,22 +246,22 @@ int run_doctor(int argc, char** argv) {
              full_need <= budget ? "fit" : "do not all fit at once", full_need / 1e9, tokens,
              full_need <= budget ? "" : " (the KV cache grows with each conversation; idle slots give theirs up)");
     if (!lp.dflash.empty())
-      printf("    decoding: DFlash2 drafter %s (%.2f GB with %d slot%s, counted above)\n", lp.dflash.c_str(),
+      printf("    decoding: %s %s (%.2f GB with %d slot%s, counted above)\n", drafter, lp.dflash.c_str(),
              lp.dflash_bytes / 1e9, slots, slots > 1 ? "s" : "");
     else if (!lp.dflash_left_out.empty())
-      printf("    decoding: %s; the DFlash2 drafter %s is left out here: its %.2f GB would keep a %d-token conversation "
+      printf("    decoding: %s; the %s %s is left out here: its %.2f GB would keep a %d-token conversation "
              "from fitting\n",
-             m.mtp ? "MTP" : "plain", lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, ctx);
+             m.mtp ? "MTP" : "plain", drafter, lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, ctx);
     else
-      printf("    decoding: %s%s\n", m.mtp ? "MTP" : "plain", lp.dflash_off ? "" : " (no DFlash2 drafter found)");
+      printf("    decoding: %s%s\n", m.mtp ? "MTP" : "plain", lp.dflash_off ? "" : (std::string(" (no ") + drafter + " found)").c_str());
     if (m.dense)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()
                    : ("off: " + src).c_str());
     if (dec > 0)
-      printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; MTP / Neural "
-             "Engine add their measured factors (DEVELOPMENT.md)\n",
-             dec, m.decode_bytes / 1e9, pf);
+      printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; %s add their "
+             "measured factors (DEVELOPMENT.md)\n",
+             dec, m.decode_bytes / 1e9, pf, nemotron ? "the LiLiCorr drafter and the IQ2_XXS kernels" : "MTP / Neural Engine");
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;

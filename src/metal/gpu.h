@@ -61,12 +61,17 @@ class Gpu {
   // Compiles the weight-format kernels (src/kernels/wfmt.metal instantiations: bf16, 3/5/6-bit, ...) as a
   // second library; pipeline() does it on the first kernel the base library lacks.
   void compile_formats();
+  // Compiles another embedded kernel source as a library of its own, once per key (the Nemotron-H kernels:
+  // a model family's kernels, compiled only when such a model loads). pipeline() looks in these libraries
+  // after the base library and before the weight-format one.
+  void compile_extra(const std::string& key, const char* source);
   // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
   // ni_compile reads code size, stack (spills) and GPR count from it.
   bool archive(const std::string& fn, const std::string& path);
   // required=false returns an empty Pipeline (pso null) instead of exiting when creation fails
   Pipeline pipeline(const std::string& fn, bool required = true);
-  std::vector<std::string> function_names(bool formats = false);  // kernels in the library (+ the format kernels)
+  // kernels in the library and the extra libraries (+ the format kernels)
+  std::vector<std::string> function_names(bool formats = false);
 
   // Command buffer that holds one compute encoder. Commit is non-blocking.
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between

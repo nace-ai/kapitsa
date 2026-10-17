@@ -25,6 +25,8 @@ struct Gpu::Impl {
   // the base library lacks, so 4-bit models never pay its compile (~2 s uncached).
   id<MTLLibrary> wf = nil;
   std::mutex wf_mu;
+  // compile_extra's libraries, in the order compiled
+  std::vector<std::pair<std::string, id<MTLLibrary>>> extra;
 };
 
 static inline id<MTLDevice> dev(void* p) { return (__bridge id<MTLDevice>)p; }
@@ -171,9 +173,14 @@ void Gpu::release(Buffer& b) {
   b = Buffer{};
 }
 
-static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms) {
+static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms,
+                                      bool metal32 = false) {
   MTLCompileOptions* o = [MTLCompileOptions new];
+  // extra libraries (Nemotron-H) use Metal 3.2 for device-scope fences (atomic_thread_fence with thread_scope_device)
   o.languageVersion = MTLLanguageVersion3_1;
+  if (metal32) {
+    if (@available(macOS 15.0, *)) o.languageVersion = MTLLanguageVersion3_2;
+  }
   // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
   // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
   // kernels only agree to the last bit or so; with safe math they must agree exactly.
@@ -214,11 +221,30 @@ void Gpu::compile_formats() {
   }
 }
 
-// The function `fn` from the base library, else from the weight-format library (compiled on first need).
+void Gpu::compile_extra(const std::string& key, const char* source) {
+  compile();
+  std::lock_guard<std::mutex> lk(impl_->wf_mu);
+  for (auto& [k, lib] : impl_->extra)
+    if (k == key) return;
+  @autoreleasepool {
+    double ms = 0;
+    id<MTLLibrary> lib = compile_library(dev(device_), std::string(source), false, &ms, true);
+    impl_->extra.push_back({key, lib});
+    logi("compiled the %s kernels in %.0f ms", key.c_str(), ms);
+  }
+}
+
+// The function `fn` from the base library, else from an extra library, else from the weight-format library
+// (compiled on first need).
 static id<MTLFunction> find_function(Gpu& g, void* base, Gpu::Impl* impl, const std::string& fn) {
   NSString* n = [NSString stringWithUTF8String:fn.c_str()];
   id<MTLFunction> f = [(__bridge id<MTLLibrary>)base newFunctionWithName:n];
   if (f) return f;
+  {
+    std::lock_guard<std::mutex> lk(impl->wf_mu);
+    for (auto& [k, lib] : impl->extra)
+      if ((f = [lib newFunctionWithName:n])) return f;
+  }
   g.compile_formats();
   return [impl->wf newFunctionWithName:n];
 }
@@ -277,6 +303,11 @@ std::vector<std::string> Gpu::function_names(bool formats) {
   if (formats) {
     compile_formats();
     for (NSString* n in [impl_->wf functionNames]) v.push_back([n UTF8String]);
+  }
+  {
+    std::lock_guard<std::mutex> lk(impl_->wf_mu);
+    for (auto& [k, lib] : impl_->extra)
+      for (NSString* n in [lib functionNames]) v.push_back([n UTF8String]);
   }
   std::sort(v.begin(), v.end());
   v.erase(std::unique(v.begin(), v.end()), v.end());
