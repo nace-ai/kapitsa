@@ -146,7 +146,8 @@ value). It takes 19 s here with parallel ranges; the Python tool, one stream, 94
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
   the double-buffered decode cycle). Math: `research/inference/dflash2/SPEC.md` in the Nace Agent repo.
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries, streaming parser for reasoning / content / tool calls.
+  boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
+  reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
 - `src/hub/`: the model catalog and `--model` resolution (`catalog.cpp`), downloads, reuse, verification, the
   manifest and the MTP sidecar builder (`fetch.cpp`), the NSURLSession transport (`http.mm`).
 - `src/server/`: the command line and the HTTP server (`main.cpp`), the chat page (`chat.html`).
@@ -162,12 +163,14 @@ value). It takes 19 s here with parallel ranges; the Python tool, one stream, 94
   `bench_mma`), `ni_compile` (compile-check; `NI_ARCHIVE_DIR=<dir>` prints code size, stack and GPRs),
   `ni_kstats --stats` (registers and spills from the pipeline state).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
-  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server.
+  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
+  `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
+  how turn boundaries are classified (`kind_probe.py`).
 - `tests/test_server.py`: end-to-end API checks against a running server (the chat page, the API, tool calls,
-  prefix reuse; `--api-key KEY` adds the key checks), and with `--cli build/kapitsa` offline checks of the command
-  line (names and aliases at the app's pinned revisions, repo ids, folders, refusals, a finished download used without
-  network, list, rm, the early port check). `tests/test_sidecar.py build/kapitsa`: the sidecar builder against
-  `tools/mtp_sidecar.py`.
+  prefix reuse, thinking + tools; `--api-key KEY` adds the key checks), and with `--cli build/kapitsa` offline checks
+  of the command line (names and aliases at the app's pinned revisions, repo ids, folders, refusals, a finished
+  download used without network, list, rm, the early port check). `tests/test_sidecar.py build/kapitsa`: the sidecar
+  builder against `tools/mtp_sidecar.py`.
 
 ## Switches (environment, read once at start; the `NI_` prefix predates the name)
 
@@ -197,6 +200,8 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_ANE` | dense on | GPU + Neural Engine split of the dense prefill FFN (two-half wavefront); `0` = GPU only. The drafter capture follows every schedule |
 | `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
 | `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
+| `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |
+| `NI_THINK_TOOLCALLS` | on | a tool call the model writes inside its reasoning and ends the turn with is returned as a tool call; `0` = left in the reasoning |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
 | `NI_DUP` | off | `NI_DUP=<kernel>[,...]`: dispatch those kernels twice (in-pipeline cost; idempotent kernels only) |
@@ -204,7 +209,7 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_NO_MTP` | off | do not load the MTP head |
 | `NI_PREWARM` | on | create all pipelines at load |
 | `NI_PROFILE` | off | per-kernel GPU profile (isolated dispatches; timings of the whole run are not meaningful) |
-| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters) |
+| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters, checkpoint restores and overwrites) |
 | `NI_MATH_SAFE` | off | compile kernels without fast math (bitwise A/B checks only; slower) |
 | `NI_ABORT` | off | `fatal()` calls abort() (a backtrace in a crash report or debugger) instead of exiting with 1 |
 | `NI_MEM_BUDGET` | Metal's recommended working set - 4% | GPU memory budget in GB; `serve` without `--model` picks the model by it |
