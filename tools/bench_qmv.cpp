@@ -109,6 +109,8 @@ int main(int argc, char** argv) {
     std::vector<QMat> mats;
     for (int i = 0; i < copies; ++i) mats.push_back(make_mat(g, c.N, c.K, c.bits, c.gs, rng));
     Buffer x = g.alloc(size_t(c.K) * c.nt * 4), y = g.alloc(size_t(c.N) * c.nt * 4);
+    Buffer z = g.alloc(size_t(c.N) * c.nt * 4);  // the residual the _add kernels read: zero, so y = W x
+    memset(z.ptr(), 0, z.size);
     std::normal_distribution<float> nd(0, 1);
     for (uint32_t i = 0; i < c.K * c.nt; ++i) x.as<float>()[i] = nd(rng);
     Pipeline p = g.pipeline(c.kernel);
@@ -122,7 +124,7 @@ int main(int argc, char** argv) {
       for (int r = 0; r < reps; ++r)
         for (auto& m : mats) {
           e->buf(0, m.w); e->buf(1, m.s); e->buf(2, m.b); e->buf(3, x); e->buf(4, y);
-          e->val(5, prm); e->buf(6, y); e->buf(7, nw);
+          e->val(5, prm); e->buf(6, z); e->buf(7, nw);
           e->dispatch(ntg, 1, 1, 32 * nsg);
         }
       e->commit_and_wait();
@@ -150,6 +152,6 @@ int main(int argc, char** argv) {
     printf("%-26s N=%6u K=%5u x%-3d %7.1f us/mat  %6.1f GB/s  maxrel=%.2e\n", c.kernel, c.N, c.K, copies,
            ms * 1000 / copies, gbs, maxrel);
     for (auto& m : mats) { g.release(m.w); g.release(m.s); g.release(m.b); }
-    g.release(x); g.release(y);
+    g.release(x); g.release(y); g.release(z);
   }
 }
