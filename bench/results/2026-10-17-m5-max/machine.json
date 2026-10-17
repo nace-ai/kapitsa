@@ -1,0 +1,31 @@
+{
+  "captured_at": "2026-10-17T23:24:14.127948+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "Battery Power:\n Sleep On Power Button 1\n powermode            0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         20\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           1\n tcpkeepalive         1\n disksleep            0\nAC Power:\n Sleep On Power Button 1\n powermode            0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         30\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            0",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22872163)\t18%; charging; 3:24 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "cmake": "cmake version 4.3.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.14.6",
+  "source_commit": "c36bfe3759ac5a2127a7abdc06ecfb88f1028dd8",
+  "binary_sha256": "7b6ed70eeccbbc401519c7c3323dd66bb5b4040d789de1aed38ffd7269473535",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build --target kapitsa -j 6"
+  ]
+}

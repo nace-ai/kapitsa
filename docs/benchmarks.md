@@ -26,6 +26,9 @@ Ratios are computed from the unrounded results. Measured on one MacBook Pro (M4 
 next fastest engine on every metric ran in the same session as Kapitsa (35B: the morning of 2026-10-17; 27B: one
 evening session on the final build). The [conditions](#conditions) section lists what differed between sessions.
 
+For an additional Kapitsa-only run on a different machine, see the [M5 Max / 128 GB report](benchmarks-m5-max.md).
+Those runs include background GPU contention and are reported separately from the comparison below.
+
 ## Results
 
 Decode figures are the median of 5 runs, with the range in brackets. Prefill is tokens per second of a cold prompt.

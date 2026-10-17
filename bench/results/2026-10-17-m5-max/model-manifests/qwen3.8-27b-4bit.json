@@ -1,0 +1,113 @@
+{
+  "name": "qwen3.8-27b:4bit",
+  "repo": "lmstudio-community/Qwen3.8-27B-MLX-4bit",
+  "revision": "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+  "commit": "6067b15cf581666a4aecf6af3afaba4bb5efc20c",
+  "variant": "4bit",
+  "quant": "MLX affine 4-bit, group 64",
+  "files": [
+    {
+      "path": "README.md",
+      "size": 2187
+    },
+    {
+      "path": "chat_template.jinja",
+      "size": 8952
+    },
+    {
+      "path": "config.json",
+      "size": 4932
+    },
+    {
+      "path": "generation_config.json",
+      "size": 202
+    },
+    {
+      "path": "model-00001-of-00003.safetensors",
+      "size": 5343268752,
+      "sha256": "471a9a81b54dddbfef43e8a71960ca24ad3c727891c6b0750a9db9a214aab504"
+    },
+    {
+      "path": "model-00002-of-00003.safetensors",
+      "size": 5354185100,
+      "sha256": "e7474b8f968f4078dfd4889925961c5b0da9939219b614dba08eb63c46590de7"
+    },
+    {
+      "path": "model-00003-of-00003.safetensors",
+      "size": 5357087747,
+      "sha256": "1038989bed1346ecdb541a45c078df2aae99a9509f35bfd51e7a04802a5d8402"
+    },
+    {
+      "path": "model.safetensors.index.json",
+      "size": 218281
+    },
+    {
+      "path": "preprocessor_config.json",
+      "size": 390
+    },
+    {
+      "path": "processor_config.json",
+      "size": 991
+    },
+    {
+      "path": "tokenizer.json",
+      "size": 19989325,
+      "sha256": "06b9509352d2af50381ab2247e083b80d32d5c0aba91c272ca9ff729b6a0e523"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size": 10404
+    },
+    {
+      "path": "video_preprocessor_config.json",
+      "size": 385
+    },
+    {
+      "path": "vocab.json",
+      "size": 6722759
+    },
+    {
+      "path": "mtp.safetensors",
+      "size": 238934249,
+      "sha256": "c58feddc584f37971c72af1f0da95e0099478487009936b3c26ddd88844fab10"
+    },
+    {
+      "path": "mtplx_runtime.json",
+      "size": 6566
+    },
+    {
+      "path": "dflash2/config.json",
+      "size": 1239
+    },
+    {
+      "path": "dflash2/model.safetensors",
+      "size": 3848817896,
+      "sha256": "67fc76d68dc5a9415511a4f394ef744d67510cd20e93b37cc2cc7d28e4bab65c"
+    }
+  ],
+  "companions": [
+    {
+      "kind": "mtp",
+      "repo": "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed",
+      "revision": "1d5087d2062c02b279180a53e4016cf9cd7a3d7e",
+      "commit": "1d5087d2062c02b279180a53e4016cf9cd7a3d7e",
+      "files": [
+        "mtp.safetensors",
+        "mtplx_runtime.json"
+      ]
+    },
+    {
+      "kind": "dflash2",
+      "repo": "incoai/Qwen3.8-27B-DFlash2",
+      "revision": "015e795645c74b1a0eeef3b570031fb62e769bc5",
+      "commit": "015e795645c74b1a0eeef3b570031fb62e769bc5",
+      "files": [
+        "dflash2/config.json",
+        "dflash2/model.safetensors"
+      ]
+    }
+  ],
+  "total_bytes": 20169260357,
+  "completed_at": "2026-10-17T23:31:08Z",
+  "kapitsa": "0.1.0"
+}

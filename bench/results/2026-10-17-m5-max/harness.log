@@ -1,0 +1,52 @@
+
+===== q36-35b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version c36bfe3
+[16:31:20] q36-35b-kapitsa: GPU lock acquired after 0.0s wait
+[16:31:20] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/.cache/kapitsa/benchmark-models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[16:31:28] q36-35b-kapitsa: ready after 8s (pid 97304, listener 97304)
+[16:31:30] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (1.6s)
+[16:31:30] q36-35b-kapitsa:  warm-up tools: ok (0.34s)
+[16:32:30] q36-35b-kapitsa: gpu busy (60s): cmux[755] 6%
+[16:33:31] q36-35b-kapitsa: gpu busy (121s): cmux[755] 5%
+[16:34:37] q36-35b-kapitsa: GPU quiet after 187s; benchmarking
+== q36-35b-kapitsa
+  decode T=0.6: 245.06 tok/s (e2e 243.95; 512 tok, finish=length, d4=0.7358)
+  decode T=0.6: 257.26 tok/s (e2e 254.80; 512 tok, finish=length, d4=0.9254)
+  decode T=0.6: 249.83 tok/s (e2e 251.65; 512 tok, finish=length, d4=0.9853)
+  decode T=0.6: 236.73 tok/s (e2e 237.40; 512 tok, finish=length, d4=0.6751)
+  decode T=0.6: 300.21 tok/s (e2e 297.25; 512 tok, finish=length, d4=0.9675)
+  decode median 249.83 (min 236.73, max 300.21) over 5/5 valid
+  decode T=0: median 297.36 (min 275.27, max 300.69) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 1.86s -> 2224 tok/s, cold cached=0 | cached TTFT median 0.03s over 3 turns (cached [4170, 4201, 4240])
+  prefill 16000: 16287 tok (ref 16286), TTFT 8.10s -> 2011 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [16323, 16373, 16420])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 20.96 GB, resident mapped files 0.01 GB, swap used 24445.38 MB
+  -> <run-root>/results/q36-35b-kapitsa-20261017-163120.json
+[16:35:24] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[16:35:24] q36-35b-kapitsa: GPU lock released after 244.4s held
+[16:35:24] q36-35b-kapitsa: -> <run-root>/results/q36-35b-kapitsa-20261017-163120.json  flags: 1
+
+===== q38-27b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version c36bfe3
+[16:35:24] q38-27b-kapitsa: GPU lock acquired after 0.0s wait
+[16:35:24] q38-27b-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --dflash ~/.cache/kapitsa/benchmark-models/drafters/Qwen3.8-27B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[16:35:28] q38-27b-kapitsa: ready after 4s (pid 12399, listener 12399)
+[16:35:40] q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (11.91s)
+[16:35:43] q38-27b-kapitsa:  warm-up tools: ok (2.24s)
+[16:36:01] q38-27b-kapitsa: GPU quiet after 19s; benchmarking
+== q38-27b-kapitsa
+  decode T=0.6: 65.72 tok/s (e2e 64.64; 512 tok, finish=length, d4=0.5661)
+  decode T=0.6: 77.15 tok/s (e2e 77.09; 512 tok, finish=length, d4=0.8732)
+  decode T=0.6: 69.09 tok/s (e2e 70.40; 512 tok, finish=length, d4=0.9681)
+  decode T=0.6: 83.55 tok/s (e2e 80.03; 512 tok, finish=length, d4=0.8691)
+  decode T=0.6: 72.92 tok/s (e2e 73.91; 512 tok, finish=length, d4=0.9381)
+  decode median 72.92 (min 65.72, max 83.55) over 5/5 valid
+  decode T=0: median 83.7 (min 79.61, max 92.72) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 9.62s -> 430 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4174, 4209, 4252])
+  prefill 16000: 16285 tok (ref 16286), TTFT 40.70s -> 400 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16333, 16376, 16425])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 19.43 GB, resident mapped files 0.01 GB, swap used 24437.38 MB
+  -> <run-root>/results/q38-27b-kapitsa-20261017-163524.json
+[16:38:36] q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[16:38:36] q38-27b-kapitsa: GPU lock released after 191.7s held
+[16:38:36] q38-27b-kapitsa: -> <run-root>/results/q38-27b-kapitsa-20261017-163524.json  flags: 1
