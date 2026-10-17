@@ -1,4 +1,4 @@
-// DFlash2 drafter check against the Python/MLX oracle dumps (research/inference/dflash2/dumps).
+// DFlash2 drafter check against the dumps of a Python/MLX reference implementation (<dump_dir>).
 //   dflash_check <target_dir> <drafter_dir> <dump_dir> [--bits 4|8] [--time N] [--live] [--long P]
 //                [--no-h0] [--out dir] [--sim N]
 // 1. Context commit of the dump's exact prompt captures (ctx_x_bf16) -> ring; compares c, K, V.

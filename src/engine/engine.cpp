@@ -70,7 +70,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = model_->default_spec_depth();
   spec_ = opts_.spec_depth > 0 && model_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  // DFlash2 block drafter (research/inference/dflash2/SPEC.md), default "auto": a drafter matching the model
+  // DFlash2 block drafter (src/model/dflash2.h), default "auto": a drafter matching the model
   // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
   // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off.
   std::string want = opts_.dflash;

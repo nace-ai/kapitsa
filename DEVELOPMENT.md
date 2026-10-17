@@ -90,14 +90,19 @@ catalog model is also checked against the revisions this build pins; after an up
 next start lists the repos again, checks the files that are there by hash, and fetches what changed (offline, it
 keeps using the old copy and says so).
 
-The catalog (`src/hub/catalog.cpp`) pins the same repos and revisions as Nace Agent's
-`packages/nace-runtime/src/catalog-data.ts`, so the app and the CLI fetch the same bytes:
+The catalog is one table, `src/hub/catalog.cpp`: models, best first, each with one or more variants (the precision
+of its weights: `4bit`, `8bit`, `bf16` ...) and one default. A variant pins its repo to a revision and lists its
+companions, its download size and the memory the engine plans for it. `--model <name>` takes the default variant,
+`--model <name>:<variant>` another; its folder is `<name>-<variant>`, and `list` and `pull --dry-run` show it. The API
+names a default variant by the model's name (`qwen3.5-4b`) and any other as `<name>:<variant>`. To add a variant or
+change a default, edit that table only: the downloader, `pull`, `list` and `--help` follow it. The repos and
+revisions are the same as the Nace Agent app's model catalog, so the app and the CLI fetch the same bytes:
 
-| Name (alias) | Weights | Companions |
-| --- | --- | --- |
-| `qwen3.6-35b-a3b` (`qwen3.6-35b`, `35b`) | `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` @ `95460516` (`mlx-community/Qwen3.6-35B-A3B-4bit` plus its MTP head) | DFlash2 drafter `incoai/Qwen3.6-35B-A3B-DFlash2` @ `51ef7b69` (config.json, model.safetensors, LICENSE) in `dflash2/` |
-| `qwen3.8-27b` (`27b`) | `lmstudio-community/Qwen3.8-27B-MLX-4bit` @ `6067b15c` | MTP head: `mtp.safetensors` + `mtplx_runtime.json` from `Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed` @ `1d5087d2`; DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` @ `015e7956` in `dflash2/` |
-| `qwen3.5-4b` (`4b`) | `lmstudio-community/Qwen3.5-4B-MLX-4bit` @ `c43ee1d6` | MTP head built from `Qwen/Qwen3.5-4B` @ `851bf6e8` (below), sha256 `4f491dd2...` |
+| Name (alias) | Variant | Weights | Companions |
+| --- | --- | --- | --- |
+| `qwen3.6-35b-a3b` (`qwen3.6-35b`, `35b`) | `4bit` (default) | `Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed` @ `95460516` (`mlx-community/Qwen3.6-35B-A3B-4bit` plus its MTP head) | DFlash2 drafter `incoai/Qwen3.6-35B-A3B-DFlash2` @ `51ef7b69` (config.json, model.safetensors, LICENSE) in `dflash2/` |
+| `qwen3.8-27b` (`27b`) | `4bit` (default) | `lmstudio-community/Qwen3.8-27B-MLX-4bit` @ `6067b15c` | MTP head: `mtp.safetensors` + `mtplx_runtime.json` from `Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed` @ `1d5087d2`; DFlash2 drafter `incoai/Qwen3.8-27B-DFlash2` @ `015e7956` in `dflash2/` |
+| `qwen3.5-4b` (`4b`) | `4bit` (default) | `lmstudio-community/Qwen3.5-4B-MLX-4bit` @ `c43ee1d6` | MTP head built from `Qwen/Qwen3.5-4B` @ `851bf6e8` (below), sha256 `4f491dd2...` |
 
 Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
 - The file list comes from the Hub API with sizes and checksums (`/api/models/<repo>/revision/<rev>?blobs=true`:
@@ -144,12 +149,13 @@ value). It takes 19 s here with parallel ranges; the Python tool, one stream, 94
   the 8-row verify of DFlash2 in `qwen35_v8.cpp` + `verify8.metal`).
 - `src/model/dflash2.*`, `src/kernels/spec_dflash.metal`: the DFlash2 block drafter (load-time 4-bit
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
-  the double-buffered decode cycle). Math: `research/inference/dflash2/SPEC.md` in the Nace Agent repo.
+  the double-buffered decode cycle).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
   boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
   reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
-- `src/hub/`: the model catalog and `--model` resolution (`catalog.cpp`), downloads, reuse, verification, the
-  manifest and the MTP sidecar builder (`fetch.cpp`), the NSURLSession transport (`http.mm`).
+- `src/hub/`: the model catalog (`catalog.cpp`: the table of models and variants), `--model` resolution
+  (`resolve.cpp`), downloads, reuse, verification, the manifest and the MTP sidecar builder (`fetch.cpp`), the
+  NSURLSession transport (`http.mm`).
 - `src/server/`: the command line and the HTTP server (`main.cpp`), the chat page (`chat.html`).
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
@@ -216,16 +222,21 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 
 ## Benchmarks
 
-A/B on the GPU only while holding the shared lock (`lockf -k ~/.cache/nace-gpu.lock <cmd>`), interleave the
-runs, and report all of them. Defaults change only after an interleaved A/B plus a greedy/logits check against
-the old path (differences allowed only at near-ties). The cross-engine harness lives in the Nace Agent repo
-(`research/inference/scripts`: `bench.py`, `compare_engines.py`, `compare_table.py`): the same prompts over HTTP for
-every engine, a GPU lock so nothing else runs during a measurement, median of 5 runs, thinking off, identical
-sampling settings, cold prompts cache-busted, each engine at its latest release and its own best settings. The
-README compares with llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX; the internal tables cover more engines
-(docs/PERF.md, research/inference in the Nace Agent repo).
+A/B on the GPU only while nothing else runs on it (we hold a shared lock: `lockf -k ~/.cache/nace-gpu.lock <cmd>`),
+interleave the runs, and report all of them. Defaults change only after an interleaved A/B plus a greedy/logits check
+against the old path (differences allowed only at near-ties). `bench/` has the in-repo pieces: token-id prompts for
+`ni_run` A/Bs (`bench/prompts/`), cached-turn and short-prompt TTFT through the server (`bench/shortpf/cached_ttft.py
+--corpus FILE`) and tool-loop TTFT (`bench/ckpt/`).
+
+### Run benchmarks locally
+
+TBD: the cross-engine harness behind the README's tables (the same prompts over HTTP for every engine, one engine at a
+time on an otherwise idle Mac, median of 5 runs, thinking off, identical sampling settings, cold prompts cache-busted,
+each engine at its latest release and its own best settings) and its frozen prompt corpus are to be added to this
+repository, with how to run it.
 
 ## Third-party
 
-MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib. Ideas credited in code comments
-where they come from other engines (Splash, MLX, MTPLX).
+MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib; the tokenizer's Unicode ranges come from
+the Unicode Character Database. Their notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Ideas credited in code
+comments where they come from other engines (Splash, MLX, MTPLX); the code is Kapitsa's own.

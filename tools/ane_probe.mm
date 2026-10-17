@@ -1,5 +1,5 @@
 // ane_probe: phase-0 probe for a GPU + Neural Engine split of the dense prefill FFN
-// (design: research/inference/ane/ANE_DESIGN.md). Standalone: it does not touch the engine.
+// Standalone: it does not touch the engine.
 //
 // It drives Apple's private AppleNeuralEngine.framework the way Splash does (incoai/splash,
 // Apache-2.0, runtime/ane/Program.mm and runtime/ops/AneFfn.cpp): the _ANEClient / _ANEModel /

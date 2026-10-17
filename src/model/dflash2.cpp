@@ -1,5 +1,5 @@
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
-// Math: research/inference/dflash2/SPEC.md §4-§7 (kernels in src/kernels/spec_dflash.metal).
+// Kernels in src/kernels/spec_dflash.metal.
 // Ideas credited to Splash (github.com/incoai/splash, Apache-2.0): MLX af4g64 quantization of the
 // drafter at load, the per-row window bound of the draft attention, exact-code MMA operands, the
 // separate block K/V scratch; the code is our own.

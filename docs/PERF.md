@@ -203,8 +203,8 @@ Tools on macOS 27: `ni_kstats --stats` prints "regs n/a" (the AGX pipeline objec
 `NI_ARCHIVE_DIR=<dir> ni_compile <kernels>` still reports GPRs and stack.
 
 ## 27B prefill with the Neural Engine (opt-in `NI_ANE=1`)
-M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Design and
-background: `research/inference/ane/ANE_DESIGN.md`; code: `src/ane/`, `src/kernels/ane_ffn.metal`,
+M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Code:
+`src/ane/`, `src/kernels/ane_ffn.metal`,
 `src/model/qwen35_ane.cpp`. Each dense FFN layer of a prefill chunk (>= 512 rows) is split by intermediate
 channel between the GPU (4-bit GEMMs) and the ANE (one W8A8 MIL program, Hadamard-rotated int8, private
 `AppleNeuralEngine.framework`); the ANE's partial down projection is joined in fp32. Schedules:
@@ -502,7 +502,7 @@ Estimate at 2048-token chunks: expert GEMMs 23 -> ~17-19 ms/layer, swiglu pass a
 (64 MB written + 80 MB swiglu traffic per layer) gone: prefill +5-10% (4k ~800-840 tok/s).
 
 ## Same Mac, other engines (tok/s, M4 Pro)
-nace-infer from the tables above (ni_run); the others from research/inference/REPORT.md (servers,
+nace-infer from the tables above (ni_run); the others from the cross-engine harness (servers,
 TTFT on real 4,133 / 16,285-token prompts, MTPLX-optimized 4-bit MLX weights; llama.cpp on GGUF
 UD-Q4_K_M). Not one harness, so treat differences under ~5% as noise.
 
@@ -620,7 +620,7 @@ Through the server, the harness's pattern (bench/shortpf/cached_ttft.py: same co
 questions, sampling, thinking off, 1 s turn gap; median of 3 follow-ups; `--slots 1 --ctx 32768`,
 default MTP), seconds to the first token. before = main cc776e5 (qmr + fused gate/up, which already
 took the 27B from 0.83 to 0.35 s), after = this branch; competitors from the harness runs of the same
-day (research/inference/results):
+day:
 | cached turn TTFT | 45705ec (harness) | before (cc776e5) | after | Ollama | llama.cpp | mlx-lm |
 |---|---|---|---|---|---|---|
 | 27B, 4k prefix | 0.829 | 0.347 | 0.247 (0.242) | 0.50-0.52 | 0.60-0.65 | 0.573 |
@@ -861,7 +861,7 @@ not after the "length" ones, and the 16k cold turn and the tools phase never wai
 
 ## DFlash2 block drafter (opt/dflash2-draft; opt-in `ni_run --dflash <drafter dir>` / `NI_DFLASH`)
 
-Spec and oracle: `research/inference/dflash2/SPEC.md`, `dflash2_ref.py` (MLX). Code: `src/model/dflash2.{h,cpp}`,
+Checked against a Python/MLX reference implementation. Code: `src/model/dflash2.{h,cpp}`,
 `src/kernels/spec_dflash.metal`, capture hook in `Qwen35` (`CaptureHook`, `set_capture`), tools
 `dflash_check` (oracle dumps, timing, `--sim` replay), `bench_qmm8`, `dflash_attn_test`, `dflash_qtest`.
 
@@ -1069,7 +1069,7 @@ oracle's 3.65 on purpose (dynamic depth; all 7 verified: 3.70); the 27B's 4.78 m
 Longer context, p4000 + 256 greedy: 35B 183.9 tok/s (4.72 tok/cycle, 25.6 ms/cycle), 27B 80.1 tok/s (7.29 tok/cycle,
 90.6 ms/cycle; a raw code continuation, plain 13.5).
 
-Server (`research/inference/scripts/bench.py` decode phases against `nace-infer-server`, the app's streaming API:
+Server (the cross-engine harness's decode phases against `nace-infer-server`, the app's streaming API:
 middle-window decode rate, median of 3 x 512 tokens, thinking off; T = 0.6 / top_p 0.95 / top_k 20 and T = 0):
 
 | model | default server (MTP) T = 0.6 / T = 0 | `--dflash auto` T = 0.6 / T = 0 |
@@ -1375,7 +1375,7 @@ more rows than a frequency ranking; tokens outside each set:
 | Python (bench corpus, 35k tokens) | 0.22% | 2.81% | 1.30% | 0.03% |
 | C++ (Kapitsa sources, 78k) | 0.73% | 1.29% | 0.36% | 0.05% |
 | English technical docs (PERF.md + SPEC.md, 44k) | 0.41% | 1.41% | 0.67% | 0.16% |
-| TypeScript (the Nace Agent app, 2.2M) | 0.36% | 0.97% | 0.37% | 0.02% |
+| TypeScript (an app's sources, 2.2M) | 0.36% | 0.97% | 0.37% | 0.02% |
 
 Interleaved ni_run, 512 tokens `--ignore-eos`; tok/s (tok/cycle); greedy = 2 rounds, T = 0.6 = seeds 1-4 (35B) / 1-3
 (27B):

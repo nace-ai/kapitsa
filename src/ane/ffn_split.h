@@ -1,5 +1,5 @@
-// GPU + Neural Engine split of a dense SwiGLU FFN during prefill (opt-in NI_ANE=1; design:
-// research/inference/ane/ANE_DESIGN.md). Per layer and prefill chunk of T rows (T >= min_rows):
+// GPU + Neural Engine split of a dense SwiGLU FFN during prefill (NI_ANE). Per layer and prefill chunk
+// of T rows (T >= min_rows):
 //   GPU: rotate + pack the post-norm input to int8 (IOSurfaces), signal `ready`
 //   ANE: (queued) wait `ready`, run the W8A8 program on channels [gpu, I) -> partial, signal `done`
 //   GPU: meanwhile its own channels [0, gpu) (4-bit GEMMs, caller-encoded, adding into x), then

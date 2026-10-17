@@ -1,4 +1,4 @@
-// DFlash2 block drafter (research/inference/dflash2/SPEC.md): loads a DFlash2DraftModel
+// DFlash2 block drafter: loads a DFlash2DraftModel
 // checkpoint (bf16 safetensors), quantizes its projections to MLX affine 4-bit (or 8-bit) g64 at
 // load, keeps the per-sequence context K/V ring fed from the target's captured hidden states, and
 // encodes one drafting pass (anchor + 7 mask rows -> 7 proposals) into a command buffer.
