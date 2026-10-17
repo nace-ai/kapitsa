@@ -69,8 +69,9 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"qwen3.6-35b", "35b", "35b-a3b"},
        .title = "Qwen3.6-35B-A3B",
        .about = "MoE, 3B active per token: fast replies and fast reading",
-       .default_variant = "4bit",
-       .fallbacks = {},
+       // 6-bit: KL 0.024 from bf16 (4-bit 0.114), decode 0.74x of 4-bit; 5-bit / 4-bit where 6-bit does not fit
+       .default_variant = "6bit",
+       .fallbacks = {"5bit", "4bit"},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
@@ -147,8 +148,9 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"4b"},
        .title = "Qwen3.5-4B",
        .about = "small and quick: for 16-24 GB Macs and simple tasks",
-       .default_variant = "4bit",
-       .fallbacks = {},
+       // 6-bit: KL 0.022 from bf16 (4-bit 0.113); 4-bit where 6-bit does not fit
+       .default_variant = "6bit",
+       .fallbacks = {"4bit"},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",

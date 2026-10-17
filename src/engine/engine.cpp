@@ -5,6 +5,8 @@
 #include <minja/chat-template.hpp>
 #include <minja/minja.hpp>
 
+#include <sys/stat.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -257,7 +259,7 @@ int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budg
 hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits) {
   std::vector<std::string> order{m.default_variant};
   order.insert(order.end(), m.fallbacks.begin(), m.fallbacks.end());
-  hub::ModelRef smallest, downloaded;
+  hub::ModelRef smallest, downloaded, present;
   bool planned = false;
   for (const std::string& v : order) {
     hub::ModelRef r = hub::resolve(m.name + ":" + v);
@@ -269,12 +271,14 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
     }
     if (f == 0) smallest = r, planned = true;
     if (downloaded.dir.empty() && hub::is_current(r)) downloaded = r;
+    struct stat st;
+    if (present.dir.empty() && stat(r.dir.c_str(), &st) == 0) present = r;  // a download to finish
   }
   if (fits) *fits = false;
   if (planned) return smallest;
   if (!downloaded.dir.empty()) return downloaded;
-  hub::ModelRef d = hub::resolve(m.name);
-  return d;
+  if (!present.dir.empty()) return present;
+  return hub::resolve(m.name);
 }
 
 void Engine::drop_slot(Slot& slot) {
