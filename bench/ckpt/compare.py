@@ -28,9 +28,11 @@ for tag, rs in by_tag.items():
     print(f"== {tag}")
     for r in rs:
         loop = [s for s in r["steps"] if s["kind"] == "tool"]
-        print(f"  size {r['size']:>5} calls {r['calls']}/{r['calls_asked']}  q2 ttft {r['q2_ttft']:7.3f} s  prompt "
-              f"{r['q2_prompt']:>6} cached {r['q2_cached']:>6}  | q1 {r['steps'][0]['ttft']:.3f} s, loop "
-              + " ".join(f"{s['ttft']:.3f}({s['cached']})" for s in loop))
+        q2 = (f"q2 ttft {r['q2_ttft']:7.3f} s  prompt {r['q2_prompt']:>6} cached {r['q2_cached']:>6}"
+              if r.get("q2_ttft") is not None else "no new query")
+        tc = f"  calls left in reasoning {r['think_calls']}" if r.get("think_calls") else ""
+        print(f"  size {r['size']:>5} calls {r['calls']}/{r['calls_asked']}  {q2}  | q1 {r['steps'][0]['ttft']:.3f} s, "
+              "loop " + " ".join(f"{s['ttft']:.3f}({s['cached']})" for s in loop) + tc)
 
 # same conversation (nonce) across tags: replies must be identical
 groups = defaultdict(dict)
@@ -66,7 +68,8 @@ print(f"replies compared: {same} identical, {diffs} different")
 # medians per (tag group, size, calls)
 med = defaultdict(list)
 for r in convs:
-    med[(r["tag"].rsplit("-r", 1)[0], r["size"], r["calls"])].append(r["q2_ttft"])
+    if r.get("q2_ttft") is not None:
+        med[(r["tag"].rsplit("-r", 1)[0], r["size"], r["calls"])].append(r["q2_ttft"])
 print("median q2 TTFT (s) per tag group / size / tool calls:")
 for k in sorted(med):
     v = med[k]

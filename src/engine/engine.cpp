@@ -1,4 +1,5 @@
 #include "engine/engine.h"
+#include "engine/output_parser.h"
 #include "util/log.h"
 
 #include <minja/chat-template.hpp>
@@ -20,14 +21,6 @@ static std::string read_file(const std::string& p) {
   std::stringstream ss;
   ss << f.rdbuf();
   return ss.str();
-}
-
-static std::string random_id(const char* prefix) {
-  static std::mt19937_64 rng(std::random_device{}());
-  static const char* al = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  std::string s = prefix;
-  for (int i = 0; i < 24; ++i) s += al[rng() % 62];
-  return s;
 }
 
 // Whether the conversation ends with a user query, by the Qwen3.5+ template's own test: a user message
@@ -143,162 +136,6 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   }
   return *best;
 }
-
-namespace {
-
-// Streaming parser for Qwen3.5+ output: <think>...</think> reasoning, content, <tool_call> XML.
-class OutputParser {
- public:
-  OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
-               bool parse_tools, const ojson& tools)
-      : dec_(t), think_open_(think_open), think_close_(think_close), tc_open_(tc_open), tc_close_(tc_close),
-        in_think_(start_in_think), parse_tools_(parse_tools), tools_(tools) {}
-
-  // Returns the delta produced by this token.
-  ChatDelta push(int id) {
-    ChatDelta d;
-    if (id == think_open_) {
-      flush_text(d);
-      in_think_ = true;
-      return d;
-    }
-    if (id == think_close_) {
-      flush_text(d);
-      held_.clear();  // drop whitespace before </think>
-      in_think_ = false;
-      skip_leading_ws_ = true;
-      return d;
-    }
-    if (parse_tools_ && id == tc_open_ && !in_think_) {
-      flush_text(d);
-      held_.clear();
-      in_tool_ = true;
-      tool_buf_.clear();
-      return d;
-    }
-    if (parse_tools_ && id == tc_close_ && in_tool_) {
-      tool_buf_ += dec_.flush();
-      in_tool_ = false;
-      ToolCall tc;
-      if (parse_tool(tool_buf_, tc)) d.tool_calls.push_back(tc);
-      else emit(d, "<tool_call>" + tool_buf_ + "</tool_call>");
-      skip_leading_ws_ = true;
-      return d;
-    }
-    std::string s = dec_.push(id);
-    if (in_tool_) {
-      tool_buf_ += s;
-      return d;
-    }
-    emit(d, s);
-    return d;
-  }
-
-  ChatDelta finish() {
-    ChatDelta d;
-    std::string s = dec_.flush();
-    if (in_tool_) {
-      // unterminated tool call: surface as text
-      emit(d, "<tool_call>" + tool_buf_ + s);
-      in_tool_ = false;
-    } else {
-      emit(d, s);
-    }
-    held_.clear();  // trailing whitespace
-    return d;
-  }
-
-  bool in_think() const { return in_think_; }
-
- private:
-  // Holds back trailing whitespace so it can be dropped before </think>, <tool_call> or the end.
-  void emit(ChatDelta& d, const std::string& s) {
-    if (s.empty()) return;
-    std::string t = held_ + s;
-    held_.clear();
-    if (skip_leading_ws_) {
-      size_t k = t.find_first_not_of(" \n\r\t");
-      if (k == std::string::npos) return;
-      t = t.substr(k);
-      skip_leading_ws_ = false;
-    }
-    size_t e = t.find_last_not_of(" \n\r\t");
-    if (e == std::string::npos) {
-      held_ = t;
-      return;
-    }
-    held_ = t.substr(e + 1);
-    t.resize(e + 1);
-    (in_think_ ? d.reasoning : d.content) += t;
-  }
-  void flush_text(ChatDelta& d) { emit(d, dec_.flush()); }
-
-  static std::string trim_nl(const std::string& v) {
-    size_t a = 0, b = v.size();
-    if (a < b && v[a] == '\n') ++a;
-    if (b > a && v[b - 1] == '\n') --b;
-    return v.substr(a, b - a);
-  }
-
-  std::string param_type(const std::string& fn, const std::string& param) const {
-    for (auto& t : tools_) {
-      const ojson& f = t.contains("function") ? t["function"] : t;
-      if (f.value("name", "") != fn) continue;
-      if (f.contains("parameters") && f["parameters"].contains("properties") &&
-          f["parameters"]["properties"].contains(param)) {
-        const ojson& p = f["parameters"]["properties"][param];
-        if (p.contains("type") && p["type"].is_string()) return p["type"];
-        return "any";
-      }
-    }
-    return "string";
-  }
-
-  bool parse_tool(const std::string& body, ToolCall& tc) const {
-    size_t f = body.find("<function=");
-    if (f == std::string::npos) return false;
-    size_t fe = body.find('>', f);
-    if (fe == std::string::npos) return false;
-    tc.name = body.substr(f + 10, fe - f - 10);
-    ojson args = ojson::object();
-    size_t p = fe + 1;
-    while (true) {
-      size_t ps = body.find("<parameter=", p);
-      if (ps == std::string::npos) break;
-      size_t pe = body.find('>', ps);
-      if (pe == std::string::npos) break;
-      std::string pname = body.substr(ps + 11, pe - ps - 11);
-      size_t ve = body.find("</parameter>", pe);
-      if (ve == std::string::npos) ve = body.find("</function>", pe);
-      if (ve == std::string::npos) ve = body.size();
-      std::string val = trim_nl(body.substr(pe + 1, ve - pe - 1));
-      std::string type = param_type(tc.name, pname);
-      if (type == "string") {
-        args[pname] = val;
-      } else {
-        try {
-          args[pname] = ojson::parse(val);
-        } catch (...) {
-          args[pname] = val;
-        }
-      }
-      p = ve + 1;
-    }
-    tc.arguments = args.dump();
-    tc.id = random_id("call_");
-    return true;
-  }
-
-  StreamDecoder dec_;
-  int think_open_, think_close_, tc_open_, tc_close_;
-  bool in_think_;
-  bool parse_tools_;
-  const ojson& tools_;
-  bool in_tool_ = false, skip_leading_ws_ = false;
-  std::string tool_buf_, held_;
-};
-
-} // namespace
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
   ++requests_;
@@ -468,7 +305,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- decode ----
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
-  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools);
+  // NI_THINK_TOOLCALLS=1: a tool call written inside the reasoning, with nothing after it but the end of the
+  // turn, is returned as a tool call (Qwen3.6 sometimes stops without closing its think block); see OutputParser.
+  static const bool think_tools = env_on("NI_THINK_TOOLCALLS");
+  OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
+                      think_tools);
   const auto& eos = model_->config().eos;
   double t1 = now_ms();
   int gen = 0;
@@ -581,10 +422,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
-  ChatDelta tail = parser.finish();
+  ChatDelta tail = parser.finish(finish == "stop");
   res.reasoning += tail.reasoning;
   res.content += tail.content;
-  if (!tail.reasoning.empty() || !tail.content.empty()) on_delta(tail);
+  for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);
+  if (!tail.reasoning.empty() || !tail.content.empty() || !tail.tool_calls.empty()) on_delta(tail);
+  if (parser.promoted() > 0)
+    logi("chat: %d tool call(s) written inside the reasoning returned as tool calls", parser.promoted());
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
   res.completion_tokens = gen;
   if (depth > 0 && spec_cycles_ > 0)

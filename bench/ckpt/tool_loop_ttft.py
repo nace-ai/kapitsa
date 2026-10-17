@@ -21,7 +21,7 @@ Sampling: greedy (T 0, top_k 1, top_p 1) unless --temp; thinking off (chat_templ
 reasoning_effort none) unless --think. --seed fixes the session nonces, so runs against two servers
 see the same conversations and their texts can be compared ("texts" holds every reply).
 """
-import argparse, json, os, random, statistics, sys, time, urllib.request
+import argparse, hashlib, json, os, random, statistics, sys, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -50,6 +50,7 @@ ap.add_argument("--tool-tokens", type=int, default=600)
 ap.add_argument("--q2-tokens", type=int, default=128)
 ap.add_argument("--q2-gap", type=float, default=1.0)
 ap.add_argument("--q2", default="", help="the new user query (default: a one-sentence question)")
+ap.add_argument("--no-q2", action="store_true", help="end each conversation after the tool loop")
 ap.add_argument("--corpus", default=find_corpus())
 ap.add_argument("--no-warmup", action="store_true")
 ap.add_argument("--tag", default="")
@@ -98,10 +99,12 @@ def sampling():
     return {"temperature": a.temp, "top_p": 0.95, "top_k": 20}
 
 
-def body(msgs, max_tokens):
+def body(msgs, max_tokens, seed=None):
     b = {"model": a.model, "messages": msgs, "tools": TOOLS, "tool_choice": "auto", "max_tokens": max_tokens,
          "min_p": 0.0, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repeat_penalty": 1.0, **sampling(),
          "stream": True, "stream_options": {"include_usage": True}}
+    if a.temp is not None and seed is not None:
+        b["seed"] = seed  # sampled runs repeat request for request across servers
     if not a.think:
         b["chat_template_kwargs"] = {"enable_thinking": False}
         b["reasoning_effort"] = "none"
@@ -162,8 +165,15 @@ def emit(rec):
 
 
 def step_rec(kind, r):
+    # think_call: the reply is empty but its reasoning holds a tool call (the model wrote the call inside an
+    # unclosed think block and the server left it there)
+    think_call = not r["tool_calls"] and not r["content"].strip() and "<tool_call>" in r["reasoning"]
     return {"kind": kind, "ttft": r["ttft"], "prompt": r["prompt"], "cached": r["cached"],
-            "completion": r["completion"], "finish": r["finish"]}
+            "completion": r["completion"], "finish": r["finish"], "think_call": think_call}
+
+
+def seed_of(nonce, turn):
+    return int(hashlib.sha256(f"{nonce}/{turn}".encode()).hexdigest()[:8], 16) & 0x7FFFFFFF
 
 
 def conversation(size, calls, nonce, word):
@@ -171,7 +181,7 @@ def conversation(size, calls, nonce, word):
     msgs = [{"role": "system", "content": sysmsg}, {"role": "user", "content": Q1}]
     steps, texts, made = [], [], 0
     for turn in range(calls + 3):
-        r = chat(body(msgs, 4096 if a.think else 1024))
+        r = chat(body(msgs, 4096 if a.think else 1024, seed_of(nonce, turn)))
         steps.append(step_rec("q1" if turn == 0 else "tool", r))
         texts.append({"reasoning": r["reasoning"], "content": r["content"], "tool_calls": [
             {"name": c["function"]["name"], "arguments": c["function"]["arguments"]} for c in r["tool_calls"]]})
@@ -199,9 +209,11 @@ def conversation(size, calls, nonce, word):
             m["reasoning_content"] = r["reasoning"]
         msgs.append(m)
         break
+    if a.no_q2:
+        return steps, texts, made
     msgs.append({"role": "user", "content": a.q2 or Q2})
     time.sleep(a.q2_gap)  # the user reads the answer and types (the harness's turn gap)
-    r = chat(body(msgs, a.q2_tokens))
+    r = chat(body(msgs, a.q2_tokens, seed_of(nonce, "q2")))
     steps.append(step_rec("q2", r))
     texts.append({"reasoning": r["reasoning"], "content": r["content"], "tool_calls": [
         {"name": c["function"]["name"], "arguments": c["function"]["arguments"]} for c in r["tool_calls"]]})
@@ -219,6 +231,7 @@ if not a.no_warmup:
     emit({"kind": "warmup", "s": round(time.perf_counter() - t0, 2)})
 
 q2 = {}
+totals = {"conversations": 0, "complete": 0, "think_calls": 0}
 for size in [int(x) for x in a.sizes.split(",") if x]:
     for calls in [int(x) for x in a.calls.split(",") if x]:
         for rep in range(a.reps):
@@ -226,9 +239,15 @@ for size in [int(x) for x in a.sizes.split(",") if x]:
             word = WORDS[rng.randrange(len(WORDS))]
             steps, texts, made = conversation(size, calls, nonce, word)
             last = steps[-1]
-            q2.setdefault((size, calls), []).append(last["ttft"])
+            if last["kind"] == "q2":
+                q2.setdefault((size, calls), []).append(last["ttft"])
+            think_calls = sum(1 for st in steps if st.get("think_call"))
+            totals["conversations"] += 1
+            totals["complete"] += made == calls
+            totals["think_calls"] += think_calls
+            q = last if last["kind"] == "q2" else {}
             emit({"kind": "conversation", "size": size, "calls_asked": calls, "calls": made, "rep": rep,
-                  "nonce": nonce, "q2_ttft": last["ttft"], "q2_prompt": last["prompt"], "q2_cached": last["cached"],
-                  "steps": steps, "texts": texts})
+                  "nonce": nonce, "q2_ttft": q.get("ttft"), "q2_prompt": q.get("prompt"), "q2_cached": q.get("cached"),
+                  "think_calls": think_calls, "steps": steps, "texts": texts})
 summary = {f"{s}/{c}": round(statistics.median(v), 4) for (s, c), v in q2.items()}
-print("SUMMARY", a.tag, json.dumps(summary), flush=True)
+print("SUMMARY", a.tag, json.dumps(summary), json.dumps(totals), flush=True)
