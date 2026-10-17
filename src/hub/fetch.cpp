@@ -1,0 +1,1435 @@
+// Model downloads: Hugging Face listing, reuse of files already on the Mac, parallel resumable range downloads,
+// size + checksum verification, the MTP sidecar builder, the manifest and the store listing (see hub.h).
+//
+// On disk, per model folder:
+//   <dir>/<file>                           finished, verified files (companions in <dir>/<subdir>/)
+//   <dir>/.kapitsa/parts/<file>.part       a file being downloaded, written at its byte offsets
+//   <dir>/.kapitsa/parts/<file>.part.json  which byte ranges of the part are written (resume)
+//   <dir>/.kapitsa/manifest.json           written last: the model is complete
+#include "hub/hub.h"
+#include "hub/http.h"
+
+#include <CommonCrypto/CommonDigest.h>
+#include <nlohmann/json.hpp>
+
+#include <copyfile.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <pwd.h>
+#include <signal.h>
+#include <sys/clonefile.h>
+#include <sys/file.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cerrno>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <deque>
+#include <fstream>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <thread>
+
+#ifndef KAPITSA_VERSION
+#define KAPITSA_VERSION "0.1.0"
+#endif
+
+namespace ni::hub {
+
+using json = nlohmann::json;
+using ojson = nlohmann::ordered_json;
+
+namespace {
+
+constexpr uint64_t kChunk = 64ull << 20;  // one range request; workers take the next one when done
+constexpr int kWorkers = 8;               // parallel connections (8 measured ~4x one stream on this network)
+constexpr int kAttempts = 8;              // per range, with backoff up to 15 s, resuming where it stopped
+
+std::atomic<bool> g_stop{false};  // Ctrl+C during a download
+
+// ---------------------------------------------------------------- small helpers
+
+std::string env_str(const char* k) {
+  const char* v = getenv(k);
+  return v && *v ? v : "";
+}
+
+std::string user_home() {
+  if (const char* h = getenv("HOME"); h && *h) return h;
+  if (const passwd* pw = getpwuid(getuid()); pw && pw->pw_dir) return pw->pw_dir;
+  return "/tmp";
+}
+
+std::string trim(std::string s) {
+  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
+  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) s.erase(s.begin());
+  return s;
+}
+
+std::string read_text(const std::string& p) {
+  std::ifstream f(p, std::ios::binary);
+  if (!f) return "";
+  std::stringstream ss;
+  ss << f.rdbuf();
+  return ss.str();
+}
+
+bool file_size(const std::string& p, uint64_t& size) {
+  struct stat st;
+  if (stat(p.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) return false;
+  size = uint64_t(st.st_size);
+  return true;
+}
+
+bool is_dir(const std::string& p) {
+  struct stat st;
+  return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+std::string dirname_of(const std::string& p) {
+  const size_t s = p.find_last_of('/');
+  return s == std::string::npos ? "." : s == 0 ? "/" : p.substr(0, s);
+}
+
+void mkdirs(const std::string& d) {
+  if (d.empty() || is_dir(d)) return;
+  mkdirs(dirname_of(d));
+  if (mkdir(d.c_str(), 0755) != 0 && errno != EEXIST)
+    throw Error("Can't create the folder " + tilde(d) + ": " + strerror(errno) + ".");
+}
+
+void write_atomic(const std::string& path, const std::string& data) {
+  mkdirs(dirname_of(path));
+  const std::string tmp = path + ".tmp";
+  {
+    std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+    f << data;
+    if (!f) throw Error("Can't write " + tilde(path) + ": " + strerror(errno) + ".");
+  }
+  if (rename(tmp.c_str(), path.c_str()) != 0) throw Error("Can't write " + tilde(path) + ": " + strerror(errno) + ".");
+}
+
+}  // namespace
+
+std::string fmt_bytes(uint64_t b) {
+  char s[32];
+  if (b >= 999500000ull) snprintf(s, sizeof s, "%.2f GB", double(b) / 1e9);
+  else if (b >= 999500ull) snprintf(s, sizeof s, "%.0f MB", double(b) / 1e6);
+  else snprintf(s, sizeof s, "%.0f KB", std::ceil(double(b) / 1e3));
+  return s;
+}
+
+namespace {
+
+std::string fmt_duration(double s) {
+  char b[32];
+  if (s < 0 || !std::isfinite(s)) return "?";
+  if (s < 60) snprintf(b, sizeof b, "%.0fs", std::max(1.0, s));
+  else if (s < 3600) snprintf(b, sizeof b, "%dm %02ds", int(s) / 60, int(s) % 60);
+  else snprintf(b, sizeof b, "%dh %02dm", int(s) / 3600, int(s) % 3600 / 60);
+  return b;
+}
+
+std::string endpoint() {
+  std::string e = env_str("HF_ENDPOINT");
+  if (e.empty()) e = "https://huggingface.co";
+  while (!e.empty() && e.back() == '/') e.pop_back();
+  return e;
+}
+
+std::string endpoint_host() {
+  const std::string e = endpoint();
+  const size_t p = e.find("://");
+  return p == std::string::npos ? e : e.substr(p + 3);
+}
+
+// HF_TOKEN, else the token `hf auth login` saved
+std::string hf_token() {
+  for (const char* k : {"HF_TOKEN", "HUGGING_FACE_HUB_TOKEN"})
+    if (std::string v = env_str(k); !v.empty()) return trim(v);
+  std::string path = env_str("HF_TOKEN_PATH");
+  if (path.empty()) {
+    const std::string hf_home = env_str("HF_HOME");
+    path = (hf_home.empty() ? user_home() + "/.cache/huggingface" : hf_home) + "/token";
+  }
+  return trim(read_text(path));
+}
+
+Headers hub_headers() {
+  Headers h{{"User-Agent", "kapitsa/" KAPITSA_VERSION}};
+  if (const std::string t = hf_token(); !t.empty()) h.push_back({"Authorization", "Bearer " + t});
+  return h;
+}
+
+std::string url_path(const std::string& p) {
+  static const char* hexd = "0123456789ABCDEF";
+  std::string o;
+  for (unsigned char c : p) {
+    if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~' || c == '/') {
+      o += char(c);
+    } else {
+      o += '%';
+      o += hexd[c >> 4];
+      o += hexd[c & 15];
+    }
+  }
+  return o;
+}
+
+std::string file_url(const std::string& repo, const std::string& commit, const std::string& path) {
+  return endpoint() + "/" + repo + "/resolve/" + commit + "/" + url_path(path);
+}
+
+std::string hf_cache_root() {
+  for (const char* k : {"HF_HUB_CACHE", "HUGGINGFACE_HUB_CACHE"})
+    if (std::string v = env_str(k); !v.empty()) return v;
+  if (std::string h = env_str("HF_HOME"); !h.empty()) return h + "/hub";
+  return user_home() + "/.cache/huggingface/hub";
+}
+
+std::string hex(const unsigned char* d, size_t n) {
+  static const char* x = "0123456789abcdef";
+  std::string s(2 * n, '0');
+  for (size_t i = 0; i < n; ++i) {
+    s[2 * i] = x[d[i] >> 4];
+    s[2 * i + 1] = x[d[i] & 15];
+  }
+  return s;
+}
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+// sha256 and/or the git blob id (sha1 of "blob <size>\0" + content, Hugging Face's id of a small file)
+bool hash_file(const std::string& path, std::string* sha256, std::string* git_sha1) {
+  const int fd = open(path.c_str(), O_RDONLY);
+  if (fd < 0) return false;
+  fcntl(fd, F_NOCACHE, 1);
+  struct stat st;
+  fstat(fd, &st);
+  CC_SHA256_CTX s;
+  CC_SHA1_CTX g;
+  if (sha256) CC_SHA256_Init(&s);
+  if (git_sha1) {
+    CC_SHA1_Init(&g);
+    const std::string h = "blob " + std::to_string(uint64_t(st.st_size));
+    CC_SHA1_Update(&g, h.c_str(), CC_LONG(h.size() + 1));  // with its '\0'
+  }
+  std::vector<unsigned char> buf(8u << 20);
+  ssize_t n;
+  while ((n = read(fd, buf.data(), buf.size())) > 0) {
+    if (sha256) CC_SHA256_Update(&s, buf.data(), CC_LONG(n));
+    if (git_sha1) CC_SHA1_Update(&g, buf.data(), CC_LONG(n));
+  }
+  close(fd);
+  if (n < 0) return false;
+  if (sha256) {
+    unsigned char d[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_Final(d, &s);
+    *sha256 = hex(d, sizeof d);
+  }
+  if (git_sha1) {
+    unsigned char d[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1_Final(d, &g);
+    *git_sha1 = hex(d, sizeof d);
+  }
+  return true;
+}
+#pragma clang diagnostic pop
+
+bool pwrite_all(int fd, const void* data, size_t n, uint64_t off) {
+  const char* p = static_cast<const char*>(data);
+  while (n) {
+    const ssize_t w = pwrite(fd, p, n, off_t(off));
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
+    p += w;
+    n -= size_t(w);
+    off += uint64_t(w);
+  }
+  return true;
+}
+
+std::string disk_error(int err, const std::string& path) {
+  if (err == ENOSPC) return "The disk is full while writing " + tilde(path) + ". Free some space and run the same command again (finished parts are kept).";
+  return "Can't write " + tilde(path) + ": " + strerror(err) + ".";
+}
+
+// sleeps `s` seconds unless Ctrl+C
+void nap(double s) {
+  for (double t = 0; t < s && !g_stop; t += 0.1) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+// ---------------------------------------------------------------- Hugging Face listing
+
+struct RemoteFile {
+  std::string path;
+  uint64_t size = 0;
+  std::string sha256;  // LFS files
+  std::string blob;    // git blob id (the content's id for a non-LFS file)
+};
+
+struct Listing {
+  std::string repo, revision, commit;
+  std::vector<RemoteFile> files;
+  const RemoteFile* find(const std::string& p) const {
+    for (const auto& f : files)
+      if (f.path == p) return &f;
+    return nullptr;
+  }
+};
+
+std::string failure(const HttpResult& r, const std::string& repo, const std::string& rev, const std::string& what) {
+  const std::string host = endpoint_host();
+  if (r.offline)
+    return "Can't reach " + host + ": this Mac looks offline. Connect to the internet and run the same command again "
+           "(a download picks up where it stopped).";
+  if (!r.error.empty())
+    return "Can't download " + what + " from " + host + " (" + r.error + "). Run the same command again; finished files are kept.";
+  const bool token = !hf_token().empty();
+  std::string body = r.body;
+  for (auto& c : body) c = char(std::tolower(static_cast<unsigned char>(c)));
+  if (r.status == 401 || r.status == 403) {
+    if (body.find("not found") != std::string::npos)
+      return repo + " was not found on Hugging Face" + (token ? "" : " (or it is private: then set HF_TOKEN)") + ". Check the name.";
+    return "Hugging Face refused access to " + repo + " (HTTP " + std::to_string(r.status) + "). " +
+           (token ? "Your token (HF_TOKEN) has no access to it: accept its terms on https://huggingface.co/" + repo + "."
+                  : "It is gated or private: accept its terms on https://huggingface.co/" + repo +
+                        ", then set HF_TOKEN to a token with access (or run `hf auth login`).");
+  }
+  if (r.status == 404) {
+    if (body.find("revision") != std::string::npos || body.find("invalid rev") != std::string::npos)
+      return repo + " has no revision \"" + rev + "\" on Hugging Face.";
+    return repo + " was not found on Hugging Face (" + what + "). Check the name.";
+  }
+  if (r.status == 429)
+    return std::string("Hugging Face is rate-limiting this Mac (HTTP 429). Wait a minute and run the same command again") +
+           (token ? "." : "; a token (HF_TOKEN) raises the limit.");
+  if (r.range_ignored) return "The download server ignored a byte-range request for " + what + ". Run the same command again.";
+  return "Hugging Face answered HTTP " + std::to_string(r.status) + " for " + what + ". Try again in a minute.";
+}
+
+bool retryable(const HttpResult& r) {
+  if (!r.error.empty() || r.range_ignored) return true;  // transport errors (offline included: it may come back)
+  return r.status == 429 || r.status >= 500 || r.status == 0 || r.status == 200 || r.status == 206;
+}
+
+// A range download that keeps failing.
+std::string chunk_failure(const HttpResult& r, const std::string& label) {
+  if (r.offline || r.status == 401 || r.status == 403 || r.status == 429) return failure(r, label, "", label);
+  if (r.range_ignored) return "The download server ignored a byte-range request for " + label + ". Run the same command again.";
+  if (!r.error.empty())
+    return "The download of " + label + " keeps failing (" + r.error + "). Run the same command again; it continues where it stopped.";
+  if (r.status == 404 || r.status == 410) return label + " is no longer on Hugging Face (HTTP " + std::to_string(r.status) + ").";
+  return "Hugging Face answered HTTP " + std::to_string(r.status) + " for " + label +
+         ". Run the same command again in a minute; it continues where it stopped.";
+}
+
+HttpResult get_retry(HttpClient& c, const std::string& url, uint64_t a = 0, uint64_t b = 0, int attempts = 4) {
+  for (int i = 1;; ++i) {
+    HttpResult r = c.get(url, hub_headers(), a, b);
+    if (r.ok()) {
+      if (b <= a || (r.status == 206 && r.body.size() == b - a)) return r;
+      r.error = "short read";
+    }
+    if (!retryable(r) || i >= attempts || g_stop) return r;
+    nap(0.5 * (1 << i));
+  }
+}
+
+Listing list_repo(HttpClient& c, const std::string& repo, const std::string& revision) {
+  const std::string rev = revision.empty() ? "main" : revision;
+  const std::string url = endpoint() + "/api/models/" + repo + "/revision/" + url_path(rev) + "?blobs=true";
+  HttpResult r = get_retry(c, url);
+  if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+  if (!r.ok()) throw Error(failure(r, repo, rev, "the file list of " + repo));
+  Listing L;
+  L.repo = repo;
+  L.revision = rev;
+  try {
+    const json j = json::parse(r.body);
+    L.commit = j.value("sha", rev);
+    for (const auto& s : j.at("siblings")) {
+      RemoteFile f;
+      f.path = s.at("rfilename").get<std::string>();
+      if (!s.contains("size")) throw std::runtime_error("no sizes");
+      f.size = s.at("size").get<uint64_t>();
+      f.blob = s.value("blobId", "");
+      if (s.contains("lfs") && s["lfs"].is_object()) f.sha256 = s["lfs"].value("sha256", "");
+      L.files.push_back(f);
+    }
+  } catch (const std::exception&) {
+    throw Error("Unexpected answer from Hugging Face for " + repo + " (its file list). Try again later.");
+  }
+  return L;
+}
+
+// ---------------------------------------------------------------- download engine
+
+struct Ranges {
+  std::vector<std::pair<uint64_t, uint64_t>> v;  // sorted, disjoint
+  void add(uint64_t a, uint64_t b) {
+    if (a >= b) return;
+    v.emplace_back(a, b);
+    std::sort(v.begin(), v.end());
+    std::vector<std::pair<uint64_t, uint64_t>> m;
+    for (const auto& r : v) {
+      if (!m.empty() && r.first <= m.back().second) m.back().second = std::max(m.back().second, r.second);
+      else m.push_back(r);
+    }
+    v.swap(m);
+  }
+  uint64_t covered() const {
+    uint64_t n = 0;
+    for (const auto& r : v) n += r.second - r.first;
+    return n;
+  }
+  std::vector<std::pair<uint64_t, uint64_t>> missing(uint64_t size) const {
+    std::vector<std::pair<uint64_t, uint64_t>> out;
+    uint64_t c = 0;
+    for (const auto& r : v) {
+      if (r.first > c) out.emplace_back(c, std::min(r.first, size));
+      c = std::max(c, r.second);
+    }
+    if (c < size) out.emplace_back(c, size);
+    return out;
+  }
+};
+
+// Bytes [dst, dst + len) of a target come from bytes [src, src + len) at `url`.
+struct Piece {
+  std::string url;
+  uint64_t src = 0, dst = 0, len = 0;
+  bool plus_one = false;  // bf16 values + 1 (the sidecar's norm weights): fetched whole, converted, written
+};
+
+// One file to produce.
+struct Target {
+  std::string label, final_path, part_path, state_path;
+  uint64_t size = 0;
+  std::string sha256, blob;  // expected content (either; both empty: size only)
+  std::string id;            // identifies the content a part file holds (a changed listing restarts it)
+  std::string head;          // bytes written at offset 0 before any piece (the sidecar's header)
+  std::vector<Piece> pieces;
+  std::string hf_cached;     // the same file in the Hugging Face cache, if it is there
+  // download state
+  int fd = -1;
+  std::mutex mu;
+  Ranges done;
+  uint64_t left = 0;
+  bool finished = false;
+};
+
+void save_state(Target& t) {
+  json j;
+  {
+    std::lock_guard<std::mutex> l(t.mu);
+    if (t.finished) return;
+    j = json{{"id", t.id}, {"size", t.size}, {"done", t.done.v}};
+  }
+  try {
+    write_atomic(t.state_path, j.dump());
+  } catch (const Error&) {
+  }
+}
+
+uint64_t part_bytes(const Target& t) {  // already downloaded bytes of an unfinished part (no open)
+  uint64_t sz;
+  if (!file_size(t.part_path, sz) || sz != t.size) return 0;
+  try {
+    const json j = json::parse(read_text(t.state_path));
+    if (j.value("id", "") != t.id || j.value("size", uint64_t(0)) != t.size) return 0;
+    Ranges r;
+    for (const auto& p : j.at("done")) r.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
+    return r.covered();
+  } catch (...) {
+    return 0;
+  }
+}
+
+void prepare(Target& t) {
+  mkdirs(dirname_of(t.part_path));
+  t.done = Ranges();
+  uint64_t sz = 0;
+  bool keep = file_size(t.part_path, sz) && sz == t.size;
+  if (keep) {
+    try {
+      const json j = json::parse(read_text(t.state_path));
+      keep = j.value("id", "") == t.id && j.value("size", uint64_t(0)) == t.size;
+      if (keep)
+        for (const auto& p : j.at("done")) t.done.add(p.at(0).get<uint64_t>(), p.at(1).get<uint64_t>());
+    } catch (...) {
+      keep = false;
+    }
+  }
+  if (!keep) {
+    unlink(t.part_path.c_str());
+    t.done = Ranges();
+  }
+  t.fd = open(t.part_path.c_str(), O_RDWR | O_CREAT, 0644);
+  if (t.fd < 0) throw Error(disk_error(errno, t.part_path));
+  if (ftruncate(t.fd, off_t(t.size)) != 0) throw Error(disk_error(errno, t.part_path));
+  if (!t.head.empty() && t.done.covered() < t.head.size()) {
+    if (!pwrite_all(t.fd, t.head.data(), t.head.size(), 0)) throw Error(disk_error(errno, t.part_path));
+    t.done.add(0, t.head.size());
+  }
+  t.left = t.size - t.done.covered();
+  t.finished = false;
+}
+
+// bf16 values + 1, exactly as tools/mtp_sidecar.py's bf16_plus_one: bf16 -> float32, + 1 in double precision, back
+// to float32 (round to nearest even), then to bf16 rounding to nearest even.
+std::string plus_one(const std::string& raw) {
+  std::string out(raw.size(), '\0');
+  for (size_t i = 0; i + 1 < raw.size(); i += 2) {
+    const uint32_t h = uint32_t(uint8_t(raw[i])) | uint32_t(uint8_t(raw[i + 1])) << 8;
+    const uint32_t bits = h << 16;
+    float f;
+    memcpy(&f, &bits, 4);
+    const float g = float(double(f) + 1.0);
+    uint32_t u;
+    memcpy(&u, &g, 4);
+    const uint64_t v = (uint64_t(u) + 0x7FFF + ((u >> 16) & 1)) >> 16;
+    out[i] = char(v & 0xFF);
+    out[i + 1] = char((v >> 8) & 0xFF);
+  }
+  return out;
+}
+
+// Verifies a finished part and moves it into place.
+bool finalize(Target& t, std::string& err) {
+  if (t.fd >= 0) close(t.fd);
+  t.fd = -1;
+  uint64_t sz = 0;
+  if (!file_size(t.part_path, sz) || sz != t.size) {
+    err = t.label + ": size mismatch after download. Run the same command again.";
+    return false;
+  }
+  if (!t.sha256.empty() || !t.blob.empty()) {
+    std::string s256, s1;
+    const bool ok = hash_file(t.part_path, t.sha256.empty() ? nullptr : &s256, t.sha256.empty() ? &s1 : nullptr);
+    if (!ok || (!t.sha256.empty() ? s256 != t.sha256 : s1 != t.blob)) {
+      unlink(t.part_path.c_str());
+      unlink(t.state_path.c_str());
+      err = t.label + " arrived corrupted (checksum mismatch) and was deleted. Run the same command again to download it again.";
+      return false;
+    }
+  }
+  try {
+    mkdirs(dirname_of(t.final_path));
+  } catch (const Error& e) {
+    err = e.what();
+    return false;
+  }
+  if (rename(t.part_path.c_str(), t.final_path.c_str()) != 0) {
+    err = disk_error(errno, t.final_path);
+    return false;
+  }
+  unlink(t.state_path.c_str());
+  return true;
+}
+
+struct Progress {
+  std::string title;
+  uint64_t total = 0;
+  std::atomic<uint64_t> done{0};
+  bool show = true, tty = false;
+  std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+  std::deque<std::pair<double, uint64_t>> samples;
+  double last_line = -1e9;
+  double secs() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); }
+  void print(bool final) {
+    if (!show) return;
+    const double now = secs();
+    const uint64_t d = std::min(done.load(), total);
+    samples.emplace_back(now, d);
+    while (samples.size() > 2 && now - samples.front().first > 8) samples.pop_front();
+    const double dt = now - samples.front().first;
+    const double rate = dt > 0.5 ? double(d - samples.front().second) / dt : 0;
+    const double eta = rate > 0 ? double(total - d) / rate : -1;
+    char line[160];
+    snprintf(line, sizeof line, "  %s of %s  %3d%%  %5.1f MB/s  %s left", fmt_bytes(d).c_str(),
+             fmt_bytes(total).c_str(), total ? int(100.0 * double(d) / double(total)) : 100, rate / 1e6,
+             final ? "0s" : fmt_duration(eta).c_str());
+    if (tty) {
+      fprintf(stderr, "\r\033[K%s", line);
+      if (final) fprintf(stderr, "\n");
+    } else if (final || now - last_line >= 15) {
+      fprintf(stderr, "%s\n", line);
+      last_line = now;
+    }
+    fflush(stderr);
+  }
+};
+
+struct Chunk {
+  Target* t;
+  const Piece* p;
+  uint64_t off, len;  // [off, off + len) of the piece
+};
+
+// One range, retried from where it stopped. False with `err` set when it cannot be completed.
+bool fetch_chunk(HttpClient& c, const Headers& h, const Chunk& k, Progress& prog, const std::atomic<bool>& failed,
+                 std::string& err) {
+  Target& t = *k.t;
+  const Piece& p = *k.p;
+  uint64_t got = 0;
+  for (int attempt = 1;; ++attempt) {
+    if (g_stop || failed) return false;
+    const uint64_t a = p.src + k.off + got, b = p.src + k.off + k.len;
+    HttpResult r;
+    std::string werr;
+    if (p.plus_one) {
+      r = c.get(p.url, h, a, b);
+      if (r.ok() && r.status == 206 && r.body.size() == k.len) {
+        const std::string v = plus_one(r.body);
+        if (!pwrite_all(t.fd, v.data(), v.size(), p.dst + k.off)) {
+          err = disk_error(errno, t.final_path);
+          return false;
+        }
+        {
+          std::lock_guard<std::mutex> l(t.mu);
+          t.done.add(p.dst + k.off, p.dst + k.off + k.len);
+          t.left -= k.len;
+        }
+        prog.done += k.len;
+        return true;
+      }
+    } else {
+      uint64_t pos = p.dst + k.off + got;
+      const uint64_t end = p.dst + k.off + k.len;
+      auto sink = [&](const uint8_t* d, size_t n) -> bool {
+        if (g_stop || failed) return false;
+        const size_t m = size_t(std::min<uint64_t>(n, end - pos));
+        if (m && !pwrite_all(t.fd, d, m, pos)) {
+          werr = disk_error(errno, t.final_path);
+          return false;
+        }
+        {
+          std::lock_guard<std::mutex> l(t.mu);
+          t.done.add(pos, pos + m);
+          t.left -= m;
+        }
+        pos += m;
+        got += m;
+        prog.done += m;
+        return pos < end;
+      };
+      r = c.stream(p.url, h, a, b, sink);
+      if (!werr.empty()) {
+        err = werr;
+        return false;
+      }
+      if (got == k.len) return true;
+    }
+    if (g_stop || failed) return false;
+    if (!retryable(r) || attempt >= kAttempts) {
+      err = chunk_failure(r, t.label);
+      return false;
+    }
+    nap(std::min(15.0, 0.5 * double(1 << attempt)));
+  }
+}
+
+// Downloads every target (8 connections, 64 MB ranges, small files first), verifying each as it completes.
+void download(std::vector<Target*>& todo, Progress& prog) {
+  std::deque<Chunk> q;
+  std::stable_sort(todo.begin(), todo.end(), [](const Target* a, const Target* b) { return a->size < b->size; });
+  for (Target* t : todo) {
+    prepare(*t);
+    const auto miss = t->done.missing(t->size);
+    for (const Piece& p : t->pieces) {
+      bool whole = false;
+      for (const auto& [a, b] : miss) {
+        const uint64_t lo = std::max(a, p.dst), hi = std::min(b, p.dst + p.len);
+        if (lo >= hi) continue;
+        if (p.plus_one) {  // small: always the whole piece, written at once
+          whole = true;
+          break;
+        }
+        for (uint64_t x = lo; x < hi; x += kChunk) q.push_back({t, &p, x - p.dst, std::min(kChunk, hi - x)});
+      }
+      if (whole) q.push_back({t, &p, 0, p.len});  // written at once, so never partly done
+    }
+  }
+  std::mutex qm;
+  std::atomic<bool> failed{false};
+  std::string first_error;
+  auto fail = [&](const std::string& e) {
+    std::lock_guard<std::mutex> l(qm);
+    if (!failed) first_error = e;
+    failed = true;
+  };
+  auto worker = [&] {
+    HttpClient c(60);
+    const Headers h = hub_headers();
+    for (;;) {
+      Chunk k;
+      {
+        std::lock_guard<std::mutex> l(qm);
+        if (q.empty() || failed || g_stop) return;
+        k = q.front();
+        q.pop_front();
+      }
+      std::string err;
+      if (!fetch_chunk(c, h, k, prog, failed, err)) {
+        if (!err.empty()) fail(err);
+        return;
+      }
+      bool last = false;
+      {
+        std::lock_guard<std::mutex> l(k.t->mu);
+        last = k.t->left == 0 && !k.t->finished;
+        if (last) k.t->finished = true;
+      }
+      if (last && !finalize(*k.t, err)) {
+        fail(err);
+        return;
+      }
+    }
+  };
+  // a target with nothing left to fetch (a resumed part that was complete)
+  for (Target* t : todo)
+    if (t->left == 0 && !t->finished) {
+      t->finished = true;
+      std::string err;
+      if (!finalize(*t, err)) throw Error(err);
+    }
+  std::vector<std::thread> th;
+  const int n = int(std::min<size_t>(kWorkers, std::max<size_t>(1, q.size())));
+  std::atomic<int> running{n};
+  for (int i = 0; i < n; ++i)
+    th.emplace_back([&] {
+      worker();
+      --running;
+    });
+  double last_save = prog.secs();
+  while (running > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    prog.print(false);
+    if (prog.secs() - last_save > 2) {
+      for (Target* t : todo) save_state(*t);
+      last_save = prog.secs();
+    }
+  }
+  for (auto& x : th) x.join();
+  for (Target* t : todo) {
+    save_state(*t);
+    if (t->fd >= 0) close(t->fd);
+    t->fd = -1;
+  }
+  if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+  if (failed) throw Error(first_error);
+  prog.print(true);
+}
+
+// Ctrl+C stops a download cleanly (parts and their state are kept); a second one quits at once.
+struct SignalGuard {
+  struct sigaction old_int {}, old_term {};
+  SignalGuard() {
+    g_stop = false;
+    struct sigaction sa {};
+    sa.sa_handler = [](int) {
+      if (g_stop) _exit(130);
+      g_stop = true;
+    };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, &old_int);
+    sigaction(SIGTERM, &sa, &old_term);
+  }
+  ~SignalGuard() {
+    sigaction(SIGINT, &old_int, nullptr);
+    sigaction(SIGTERM, &old_term, nullptr);
+  }
+};
+
+// One download at a time per model folder.
+struct FolderLock {
+  int fd = -1;
+  explicit FolderLock(const std::string& dir) {
+    mkdirs(dir + "/.kapitsa");
+    fd = open((dir + "/.kapitsa/lock").c_str(), O_RDWR | O_CREAT, 0644);
+    if (fd >= 0 && flock(fd, LOCK_EX | LOCK_NB) != 0)
+      throw Error("Another kapitsa is downloading into " + tilde(dir) + ". Wait for it to finish, or stop it first.");
+  }
+  ~FolderLock() {
+    if (fd >= 0) close(fd);
+  }
+};
+
+// ---------------------------------------------------------------- reuse of files already on this Mac
+
+struct FromIndex {
+  std::multimap<uint64_t, std::string> by_size;
+  void scan(const std::string& dir, int depth) {
+    DIR* d = opendir(dir.c_str());
+    if (!d) return;
+    while (dirent* e = readdir(d)) {
+      if (e->d_name[0] == '.') continue;
+      const std::string p = dir + "/" + e->d_name;
+      struct stat st;
+      if (stat(p.c_str(), &st) != 0) continue;
+      if (S_ISDIR(st.st_mode)) {
+        if (depth > 0) scan(p, depth - 1);
+      } else if (S_ISREG(st.st_mode)) {
+        by_size.emplace(uint64_t(st.st_size), p);
+      }
+    }
+    closedir(d);
+  }
+};
+
+// The path of a file with the target's content, from the Hugging Face cache or the --from folders; "" if none.
+std::string reusable(const Target& t, const FromIndex& from, bool& from_hf) {
+  from_hf = false;
+  if (!t.hf_cached.empty()) {
+    struct stat st;
+    if (lstat(t.hf_cached.c_str(), &st) == 0) {
+      uint64_t sz = 0;
+      if (file_size(t.hf_cached, sz) && sz == t.size) {
+        // the cache names each blob by its sha256 (LFS) or git blob id: the link proves the content
+        bool ok = false;
+        if (S_ISLNK(st.st_mode)) {
+          char buf[4096];
+          const ssize_t n = readlink(t.hf_cached.c_str(), buf, sizeof buf - 1);
+          if (n > 0) {
+            buf[n] = 0;
+            const std::string target = buf, base = target.substr(target.find_last_of('/') + 1);
+            ok = base == (t.sha256.empty() ? t.blob : t.sha256);
+          }
+        }
+        if (!ok) {
+          std::string s256, s1;
+          ok = hash_file(t.hf_cached, t.sha256.empty() ? nullptr : &s256, t.sha256.empty() ? &s1 : nullptr) &&
+               (t.sha256.empty() ? s1 == t.blob : s256 == t.sha256);
+        }
+        if (ok) {
+          from_hf = true;
+          return t.hf_cached;
+        }
+      }
+    }
+  }
+  if (t.sha256.empty() && t.blob.empty()) return "";  // nothing to check a candidate against
+  const auto range = from.by_size.equal_range(t.size);
+  for (auto it = range.first; it != range.second; ++it) {
+    std::string s256, s1;
+    if (hash_file(it->second, t.sha256.empty() ? nullptr : &s256, t.sha256.empty() ? &s1 : nullptr) &&
+        (t.sha256.empty() ? s1 == t.blob : s256 == t.sha256))
+      return it->second;
+  }
+  return "";
+}
+
+dev_t device_of(const std::string& path) {
+  std::string p = path;
+  struct stat st;
+  while (stat(p.c_str(), &st) != 0) {
+    if (p == "/" || p == ".") return 0;
+    p = dirname_of(p);
+  }
+  return st.st_dev;
+}
+
+// An APFS clone (no extra disk) of `src` at `dst`, or a copy across volumes.
+void place(const std::string& src, const std::string& dst) {
+  char real[PATH_MAX];
+  const std::string from = realpath(src.c_str(), real) ? std::string(real) : src;
+  mkdirs(dirname_of(dst));
+  const std::string tmp = dst + ".kapitsa-tmp";
+  unlink(tmp.c_str());
+  if (clonefile(from.c_str(), tmp.c_str(), 0) != 0 && copyfile(from.c_str(), tmp.c_str(), nullptr, COPYFILE_DATA) != 0) {
+    const int e = errno;
+    unlink(tmp.c_str());
+    throw Error(disk_error(e, dst));
+  }
+  if (rename(tmp.c_str(), dst.c_str()) != 0) throw Error(disk_error(errno, dst));
+}
+
+uint64_t free_bytes(const std::string& path) {
+  std::string p = path;
+  struct statfs s;
+  while (statfs(p.c_str(), &s) != 0) {
+    if (p == "/" || p == ".") return UINT64_MAX;
+    p = dirname_of(p);
+  }
+  return uint64_t(s.f_bavail) * uint64_t(s.f_bsize);
+}
+
+// ---------------------------------------------------------------- MTP sidecar (tools/mtp_sidecar.py)
+
+uint64_t le64(const std::string& b) {
+  uint64_t v = 0;
+  for (int i = 7; i >= 0; --i) v = (v << 8) | uint8_t(b[size_t(i)]);
+  return v;
+}
+
+std::string le64_bytes(uint64_t v) {
+  std::string s(8, '\0');
+  for (int i = 0; i < 8; ++i) s[size_t(i)] = char((v >> (8 * i)) & 0xFF);
+  return s;
+}
+
+bool is_norm(const std::string& k) {
+  auto ends = [&](const char* s) {
+    const size_t n = strlen(s);
+    return k.size() >= n && k.compare(k.size() - n, n, s) == 0;
+  };
+  return ends("norm.weight") || ends("norm_embedding.weight") || ends("norm_hidden.weight");
+}
+
+// Where the checkpoint's bytes come from: a Hugging Face repo at a revision, or a local folder.
+struct SidecarSource {
+  bool local = false;
+  std::string src, rev;
+  HttpClient* http = nullptr;
+  std::string url(const std::string& file) const {
+    return local ? src + "/" + file : file_url(src, rev, file);
+  }
+  std::string read(const std::string& file, uint64_t a, uint64_t b) const {
+    if (local) {
+      std::ifstream f(src + "/" + file, std::ios::binary);
+      std::string out(b - a, '\0');
+      f.seekg(std::streamoff(a));
+      if (!f.read(out.data(), std::streamsize(b - a))) throw Error("Can't read " + src + "/" + file + ".");
+      return out;
+    }
+    HttpResult r = get_retry(*http, url(file), a, b);
+    if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+    if (!r.ok() || r.status != 206) throw Error(failure(r, src, rev, file + " of " + src));
+    return r.body;
+  }
+  json header(const std::string& file, uint64_t& data0) const {
+    const uint64_t n = le64(read(file, 0, 8));
+    if (n > (64u << 20)) throw Error(file + " of " + src + " is not a safetensors file.");
+    data0 = 8 + n;
+    return json::parse(read(file, 8, 8 + n));
+  }
+  std::map<std::string, std::string> weight_map() const {
+    std::string text;
+    if (local) {
+      text = read_text(src + "/model.safetensors.index.json");
+      if (text.empty()) {  // no index: every *.safetensors file's tensors
+        std::map<std::string, std::string> wm;
+        if (DIR* d = opendir(src.c_str())) {
+          while (dirent* e = readdir(d)) {
+            const std::string n = e->d_name;
+            if (n.size() > 12 && n.compare(n.size() - 12, 12, ".safetensors") == 0) {
+              uint64_t d0;
+              const json h = header(n, d0);  // named: a temporary would die before the loop runs
+              for (const auto& [k, v] : h.items()) wm[k] = n;
+            }
+          }
+          closedir(d);
+        }
+        return wm;
+      }
+    } else {
+      HttpResult r = get_retry(*http, url("model.safetensors.index.json"));
+      if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+      if (!r.ok()) throw Error(failure(r, src, rev, "the weight index of " + src));
+      text = r.body;
+    }
+    std::map<std::string, std::string> wm;
+    const json index = json::parse(text);
+    for (const auto& [k, v] : index.at("weight_map").items()) wm[k] = v.get<std::string>();
+    return wm;
+  }
+};
+
+struct SidecarPlan {
+  std::string head;  // 8-byte length + JSON header
+  std::vector<Piece> pieces;
+  uint64_t size = 0;
+};
+
+SidecarPlan plan_sidecar(const SidecarSource& s, const std::string& source_name, const std::string& hidden) {
+  std::map<std::string, std::vector<std::string>> shards;  // file -> mtp.* tensors, files in name order
+  for (const auto& [k, f] : s.weight_map())
+    if (k.rfind("mtp.", 0) == 0) shards[f].push_back(k);
+  if (shards.empty()) throw Error(source_name + " has no mtp.* tensors.");
+  struct T {
+    std::string file;
+    json shape;
+    uint64_t a, b;
+  };
+  std::map<std::string, T> tensors;  // by name: the file's order
+  for (auto& [file, keys] : shards) {
+    uint64_t data0 = 0;
+    const json hdr = s.header(file, data0);
+    std::sort(keys.begin(), keys.end());
+    for (const auto& k : keys) {
+      const json& t = hdr.at(k);
+      if (t.at("dtype") != "BF16") throw Error(k + ": expected bf16, found " + t.at("dtype").get<std::string>() + ".");
+      const uint64_t a = t.at("data_offsets").at(0), b = t.at("data_offsets").at(1);
+      tensors[k] = T{file, t.at("shape"), data0 + a, data0 + b};
+    }
+  }
+  ojson meta;
+  meta["__metadata__"] = ojson{{"format", "mlx"}, {"source", source_name}, {"norms", "mlx (+1)"}, {"base_hidden_variant", hidden}};
+  uint64_t off = 0;
+  for (const auto& [k, t] : tensors) {
+    meta[k] = ojson{{"dtype", "BF16"}, {"shape", t.shape}, {"data_offsets", ojson::array({off, off + (t.b - t.a)})}};
+    off += t.b - t.a;
+  }
+  std::string h = meta.dump(-1, ' ', true);  // Python's json.dumps(separators=(",", ":")), ASCII
+  h.append((8 - h.size() % 8) % 8, ' ');
+  SidecarPlan p;
+  p.head = le64_bytes(h.size()) + h;
+  uint64_t dst = p.head.size();
+  for (const auto& [k, t] : tensors) {
+    p.pieces.push_back(Piece{s.url(t.file), t.a, dst, t.b - t.a, is_norm(k)});
+    dst += t.b - t.a;
+  }
+  p.size = dst;
+  return p;
+}
+
+std::string plan_id(const SidecarPlan& p) {
+  std::string all = p.head;
+  for (const auto& x : p.pieces) all += x.url + ":" + std::to_string(x.src) + ":" + std::to_string(x.len) + (x.plus_one ? "+" : "") + "\n";
+  unsigned char d[CC_SHA256_DIGEST_LENGTH];
+  CC_SHA256(all.data(), CC_LONG(all.size()), d);
+  return hex(d, sizeof d);
+}
+
+// ---------------------------------------------------------------- manifest
+
+std::string manifest_path(const std::string& dir) { return dir + "/.kapitsa/manifest.json"; }
+
+std::string now_iso() {
+  char b[32];
+  const time_t t = time(nullptr);
+  struct tm g;
+  gmtime_r(&t, &g);
+  strftime(b, sizeof b, "%Y-%m-%dT%H:%M:%SZ", &g);
+  return b;
+}
+
+// A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model, MLX affine 4- or 8-bit.
+void check_supported(HttpClient& c, const Listing& L) {
+  const RemoteFile* cfg = L.find("config.json");
+  bool st = false;
+  for (const auto& f : L.files)
+    if (f.path.size() > 12 && f.path.compare(f.path.size() - 12, 12, ".safetensors") == 0) st = true;
+  const std::string runs = " Kapitsa runs Qwen3.5-family models (Qwen3.5, 3.6, 3.8) in MLX format, 4- or 8-bit.";
+  if (!cfg || !st) throw Error(L.repo + " has no " + (cfg ? "safetensors weights" : "config.json") + "." + runs);
+  HttpResult r = get_retry(c, file_url(L.repo, L.commit, "config.json"));
+  if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
+  if (!r.ok()) throw Error(failure(r, L.repo, L.revision, "config.json of " + L.repo));
+  json j;
+  try {
+    j = json::parse(r.body);
+  } catch (...) {
+    throw Error(L.repo + ": its config.json is not valid JSON.");
+  }
+  const json t = j.contains("text_config") ? j["text_config"] : j;
+  if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))
+    throw Error(L.repo + " is a " + j.value("model_type", std::string("different")) + " model." + runs);
+  const json q = j.value("quantization", json::object());
+  const int bits = q.is_object() ? q.value("bits", 0) : 0;
+  const std::string mode = q.is_object() ? q.value("mode", std::string("affine")) : "";
+  if ((bits != 4 && bits != 8) || mode != "affine")
+    throw Error(L.repo + (bits ? " is quantized as " + mode + " " + std::to_string(bits) + "-bit." : " is not quantized.") +
+                runs + " Try its MLX 4-bit conversion.");
+}
+
+bool keep_file(const std::string& p) {  // files of a generic repo worth fetching: the top level, no other formats
+  if (p.find('/') != std::string::npos || p == ".gitattributes") return false;
+  for (const char* x : {".gguf", ".bin", ".pt", ".pth", ".onnx", ".h5", ".msgpack", ".ckpt", ".png", ".jpg", ".jpeg",
+                        ".gif", ".webp", ".mp4"}) {
+    const size_t n = strlen(x);
+    if (p.size() >= n && p.compare(p.size() - n, n, x) == 0) return false;
+  }
+  return true;
+}
+
+}  // namespace
+
+// ---------------------------------------------------------------- public
+
+std::string sha256_file(const std::string& path) {
+  std::string s;
+  if (!hash_file(path, &s, nullptr)) throw Error("Can't read " + tilde(path) + ".");
+  return s;
+}
+
+bool is_complete(const std::string& dir) {
+  try {
+    const json m = json::parse(read_text(manifest_path(dir)));
+    for (const auto& f : m.at("files")) {
+      uint64_t sz;
+      if (!file_size(dir + "/" + f.at("path").get<std::string>(), sz) || sz != f.at("size").get<uint64_t>()) return false;
+    }
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+bool is_current(const ModelRef& ref) {
+  if (ref.kind == ModelRef::kLocal) return true;
+  if (!is_complete(ref.dir)) return false;
+  if (ref.kind != ModelRef::kCatalog) return true;
+  // a catalog model: the files of the revisions this Kapitsa pins (a newer Kapitsa may pin newer ones)
+  try {
+    const json m = json::parse(read_text(manifest_path(ref.dir)));
+    std::vector<std::string> have, want;
+    for (const auto& c : m.at("companions")) have.push_back(c.at("kind").get<std::string>() + " " + c.at("repo").get<std::string>() + "@" + c.at("revision").get<std::string>());
+    for (const auto& c : ref.model->companions) want.push_back(c.kind + " " + c.repo + "@" + c.revision);
+    std::sort(have.begin(), have.end());
+    std::sort(want.begin(), want.end());
+    return m.at("revision").get<std::string>() == ref.revision && have == want;
+  } catch (...) {
+    return false;
+  }
+}
+
+namespace {
+
+// After a failed first attempt: drop a model folder that holds nothing yet (a mistyped repo leaves no trace).
+void remove_if_empty(const std::string& dir) {
+  bool content = false;
+  std::vector<std::string> stack{dir};
+  while (!stack.empty() && !content) {
+    const std::string d = stack.back();
+    stack.pop_back();
+    if (DIR* dd = opendir(d.c_str())) {
+      while (dirent* e = readdir(dd)) {
+        const std::string n = e->d_name;
+        if (n == "." || n == "..") continue;
+        const std::string p = d + "/" + n;
+        if (is_dir(p)) stack.push_back(p);
+        else if (!(d == dir + "/.kapitsa" && n == "lock")) content = true;
+      }
+      closedir(dd);
+    }
+  }
+  if (!content) {
+    unlink((dir + "/.kapitsa/lock").c_str());
+    rmdir((dir + "/.kapitsa/parts").c_str());
+    rmdir((dir + "/.kapitsa").c_str());
+    rmdir(dir.c_str());
+  }
+}
+
+std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
+  for (const auto& d : opt.from) {
+    uint64_t sz;
+    if (!is_dir(d) && !file_size(d, sz)) throw Error("--from " + d + ": no such folder or file.");
+  }
+  SignalGuard sig;
+  mkdirs(ref.dir);
+  FolderLock lock(ref.dir);
+  if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
+  HttpClient api(30);
+  if (opt.progress) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
+
+  const Listing main = list_repo(api, ref.repo, ref.revision);
+  if (ref.kind == ModelRef::kRepo) check_supported(api, main);
+
+  std::vector<std::unique_ptr<Target>> targets;
+  ojson mfiles = ojson::array(), mcomp = ojson::array();
+  uint64_t weights_bytes = 0;
+  auto add = [&](const Listing& L, const RemoteFile& f, const std::string& subdir) {
+    auto t = std::make_unique<Target>();
+    const std::string rel = subdir.empty() ? f.path : subdir + "/" + f.path;
+    t->label = rel;
+    t->size = f.size;
+    t->sha256 = f.sha256;
+    t->blob = f.sha256.empty() ? f.blob : "";
+    t->id = !f.sha256.empty() ? f.sha256 : f.blob;
+    t->final_path = ref.dir + "/" + rel;
+    t->part_path = ref.dir + "/.kapitsa/parts/" + rel + ".part";
+    t->state_path = t->part_path + ".json";
+    t->pieces.push_back(Piece{file_url(L.repo, L.commit, f.path), 0, 0, f.size, false});
+    std::string cache_repo = L.repo;
+    for (size_t p; (p = cache_repo.find('/')) != std::string::npos;) cache_repo.replace(p, 1, "--");
+    t->hf_cached = hf_cache_root() + "/models--" + cache_repo + "/snapshots/" + L.commit + "/" + f.path;
+    ojson e{{"path", rel}, {"size", f.size}};
+    if (!f.sha256.empty()) e["sha256"] = f.sha256;
+    mfiles.push_back(e);
+    targets.push_back(std::move(t));
+  };
+  for (const auto& f : main.files) {
+    if (ref.kind == ModelRef::kCatalog ? f.path == ".gitattributes" : !keep_file(f.path)) continue;
+    add(main, f, "");
+    weights_bytes += f.size;
+  }
+  std::vector<std::string> extras;
+  if (ref.kind == ModelRef::kCatalog) {
+    for (const Companion& c : ref.model->companions) {
+      if (c.kind == "mtp-sidecar") {
+        SidecarSource s;
+        s.src = c.repo;
+        s.rev = c.revision;
+        s.http = &api;
+        const SidecarPlan p = plan_sidecar(s, c.repo, "post_norm");
+        auto t = std::make_unique<Target>();
+        const std::string rel = c.subdir.empty() ? "mtp.safetensors" : c.subdir + "/mtp.safetensors";
+        t->label = rel + " (MTP head built from " + c.repo + ")";
+        t->size = p.size;
+        t->sha256 = c.sha256;
+        t->id = c.sha256.empty() ? plan_id(p) : c.sha256;
+        t->head = p.head;
+        t->pieces = p.pieces;
+        t->final_path = ref.dir + "/" + rel;
+        t->part_path = ref.dir + "/.kapitsa/parts/" + rel + ".part";
+        t->state_path = t->part_path + ".json";
+        if (c.size && c.size != p.size)
+          throw Error("The MTP head of " + ref.name + " would be " + std::to_string(p.size) + " bytes, not the expected " +
+                      std::to_string(c.size) + ": " + c.repo + " changed. Please report this.");
+        ojson e{{"path", rel}, {"size", p.size}};
+        if (!c.sha256.empty()) e["sha256"] = c.sha256;
+        mfiles.push_back(e);
+        mcomp.push_back(ojson{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"files", ojson::array({rel})}});
+        targets.push_back(std::move(t));
+        extras.push_back("MTP head " + fmt_bytes(p.size));
+        continue;
+      }
+      const Listing L = list_repo(api, c.repo, c.revision);
+      ojson cf = ojson::array();
+      uint64_t cbytes = 0;
+      for (const auto& name : c.files) {
+        const RemoteFile* f = L.find(name);
+        if (!f) throw Error(c.repo + " has no " + name + " at " + c.revision.substr(0, 7) + ". Please report this.");
+        add(L, *f, c.subdir);
+        cf.push_back(c.subdir.empty() ? name : c.subdir + "/" + name);
+        cbytes += f->size;
+      }
+      mcomp.push_back(ojson{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"commit", L.commit}, {"files", cf}});
+      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : "MTP head ") + fmt_bytes(cbytes));
+    }
+  }
+
+  // what is already here: finished files, the Hugging Face cache, --from folders (or files)
+  FromIndex from;
+  for (const auto& d : opt.from) {
+    uint64_t sz;
+    if (is_dir(d)) from.scan(d, 3);
+    else if (file_size(d, sz)) from.by_size.emplace(sz, d);
+  }
+  if (opt.progress && !opt.from.empty()) fprintf(stderr, "Checking the files in %s against the pinned checksums...\n",
+                                                  opt.from.size() == 1 ? tilde(opt.from[0]).c_str() : "the --from folders");
+  const dev_t dest_dev = device_of(ref.dir);
+  std::vector<Target*> todo;
+  std::vector<std::pair<std::string, Target*>> reuse;
+  uint64_t need = 0, total = 0, have = 0;
+  int n_hf = 0, n_from = 0;
+  // A manifest that is no longer current (a file went missing, or this Kapitsa pins newer revisions): drop it now
+  // that the new file list is in, check the files that are here against it, and write it again at the end.
+  const bool recheck = unlink(manifest_path(ref.dir).c_str()) == 0;
+  if (recheck && opt.progress) fprintf(stderr, "Checking the files already in %s...\n", tilde(ref.dir).c_str());
+  for (auto& t : targets) {
+    total += t->size;
+    uint64_t sz;
+    if (file_size(t->final_path, sz) && sz == t->size) {
+      bool ok = true;
+      if (recheck && (!t->sha256.empty() || !t->blob.empty())) {
+        std::string s256, s1;
+        ok = hash_file(t->final_path, t->sha256.empty() ? nullptr : &s256, t->sha256.empty() ? &s1 : nullptr) &&
+             (t->sha256.empty() ? s1 == t->blob : s256 == t->sha256);
+        if (!ok) unlink(t->final_path.c_str());
+      }
+      if (ok) {
+        have += t->size;
+        continue;
+      }
+    }
+    if (t->size == 0) {
+      write_atomic(t->final_path, "");
+      continue;
+    }
+    bool hf = false;
+    const std::string src = reusable(*t, from, hf);
+    if (!src.empty()) {
+      reuse.emplace_back(src, t.get());
+      (hf ? n_hf : n_from)++;
+      if (device_of(src) != dest_dev) need += t->size;
+      continue;
+    }
+    const uint64_t part = part_bytes(*t);
+    have += part;
+    need += t->size - part;
+    todo.push_back(t.get());
+  }
+  const uint64_t free = free_bytes(ref.dir), margin = 1ull << 30;
+  if (need + margin > free)
+    throw Error("Not enough disk space for " + ref.name + ": it needs " + fmt_bytes(need) + " more and " +
+                fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping 1 GB spare) on the disk of " +
+                tilde(models_dir()) + ". Free some space, or set KAPITSA_HOME to a folder on a bigger disk.");
+  for (auto& [src, t] : reuse) place(src, t->final_path);
+  if (opt.progress && (n_hf || n_from))
+    fprintf(stderr, "Reused %d file%s already on this Mac%s%s (checksums match; APFS clones take no extra space).\n",
+            n_hf + n_from, n_hf + n_from == 1 ? "" : "s", n_hf ? " from the Hugging Face cache" : "",
+            n_from ? (n_hf ? " and --from" : " from --from") : "");
+  if (!todo.empty()) {
+    uint64_t left = 0;
+    for (Target* t : todo) left += t->size - part_bytes(*t);
+    Progress prog;
+    prog.show = opt.progress;
+    prog.tty = isatty(2);
+    prog.total = left;
+    if (opt.progress) {
+      std::string what = "weights " + fmt_bytes(weights_bytes);
+      for (const auto& e : extras) what += ", " + e;
+      fprintf(stderr, "Downloading %s (%s) into %s%s\n", ref.name.c_str(), what.c_str(), tilde(ref.dir).c_str(),
+              have ? (", " + fmt_bytes(have) + " already here").c_str() : "");
+    }
+    download(todo, prog);
+    if (opt.progress)
+      fprintf(stderr, "Downloaded %s in %s (%.0f MB/s).\n", fmt_bytes(left).c_str(), fmt_duration(prog.secs()).c_str(),
+              double(left) / 1e6 / std::max(0.001, prog.secs()));
+  }
+  ojson m{{"name", ref.name},      {"repo", main.repo},     {"revision", main.revision}, {"commit", main.commit},
+          {"files", mfiles},       {"companions", mcomp},   {"total_bytes", total},     {"completed_at", now_iso()},
+          {"kapitsa", KAPITSA_VERSION}};
+  write_atomic(manifest_path(ref.dir), m.dump(2) + "\n");
+  rmdir((ref.dir + "/.kapitsa/parts").c_str());  // empty now (fails harmlessly otherwise)
+  return ref.dir;
+}
+
+}  // namespace
+
+std::string ensure(const ModelRef& ref, const PullOptions& opt) {
+  if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
+  const bool existed = is_dir(ref.dir);
+  try {
+    return ensure_impl(ref, opt);
+  } catch (const Stopped&) {
+    throw;
+  } catch (const Error& e) {
+    // a finished download of older pinned revisions still runs: better than nothing while offline
+    if (is_complete(ref.dir)) {
+      fprintf(stderr, "Using the copy of %s already here (it could not be updated: %s)\n", ref.name.c_str(), e.what());
+      return ref.dir;
+    }
+    if (!existed) remove_if_empty(ref.dir);
+    throw;
+  } catch (...) {
+    if (!existed) remove_if_empty(ref.dir);
+    throw;
+  }
+}
+
+void build_mtp_sidecar(const std::string& src, const std::string& revision, const std::string& out,
+                       const std::string& hidden) {
+  SignalGuard sig;
+  HttpClient http(30);
+  SidecarSource s;
+  s.local = is_dir(src);
+  s.src = src;
+  s.rev = revision.empty() ? "main" : revision;
+  s.http = &http;
+  if (!s.local) {  // pin the revision's commit, like a download
+    const Listing L = list_repo(http, src, s.rev);
+    s.rev = L.commit;
+  }
+  const SidecarPlan p = plan_sidecar(s, src, hidden);
+  if (s.local) {  // straight from the files
+    std::string data = p.head;
+    for (const Piece& x : p.pieces) {
+      std::ifstream f(x.url, std::ios::binary);
+      std::string b(x.len, '\0');
+      f.seekg(std::streamoff(x.src));
+      if (!f.read(b.data(), std::streamsize(x.len))) throw Error("Can't read " + x.url + ".");
+      data += x.plus_one ? plus_one(b) : b;
+    }
+    write_atomic(out, data);
+  } else {
+    Target t;
+    t.label = out;
+    t.size = p.size;
+    t.id = plan_id(p);
+    t.head = p.head;
+    t.pieces = p.pieces;
+    t.final_path = out;
+    t.part_path = out + ".part";
+    t.state_path = out + ".part.json";
+    Progress prog;
+    prog.tty = isatty(2);
+    prog.total = p.size - p.head.size();
+    std::vector<Target*> todo{&t};
+    download(todo, prog);
+  }
+  fprintf(stderr, "wrote %s: %zu tensors, %.1f MB, base_hidden_variant %s\n", out.c_str(), p.pieces.size(),
+          double(p.size - p.head.size()) / 1e6, hidden.c_str());
+}
+
+std::vector<Installed> installed() {
+  std::vector<Installed> out;
+  DIR* d = opendir(models_dir().c_str());
+  if (!d) return out;
+  std::vector<std::string> names;
+  while (dirent* e = readdir(d))
+    if (e->d_name[0] != '.' && is_dir(models_dir() + "/" + e->d_name)) names.push_back(e->d_name);
+  closedir(d);
+  std::sort(names.begin(), names.end());
+  for (const auto& n : names) {
+    Installed m;
+    m.dir = models_dir() + "/" + n;
+    m.name = n;
+    if (!is_dir(m.dir + "/.kapitsa") && !is_dir(m.dir + "/dflash2")) {  // a folder put here by hand
+      uint64_t sz;
+      if (!file_size(m.dir + "/config.json", sz)) continue;
+    }
+    try {
+      const json j = json::parse(read_text(manifest_path(m.dir)));
+      m.name = j.value("name", n);
+      m.repo = j.value("repo", "");
+      m.commit = j.value("commit", "");
+      m.total = j.value("total_bytes", uint64_t(0));
+    } catch (...) {
+    }
+    m.complete = is_complete(m.dir);
+    // bytes on disk: finished files and the written ranges of parts
+    std::vector<std::string> stack{m.dir};
+    while (!stack.empty()) {
+      const std::string dir = stack.back();
+      stack.pop_back();
+      if (DIR* dd = opendir(dir.c_str())) {
+        while (dirent* e = readdir(dd)) {
+          const std::string fn = e->d_name;
+          if (fn == "." || fn == "..") continue;
+          const std::string p = dir + "/" + fn;
+          struct stat st;
+          if (lstat(p.c_str(), &st) != 0) continue;
+          if (S_ISDIR(st.st_mode)) {
+            stack.push_back(p);
+          } else if (fn.size() > 10 && fn.compare(fn.size() - 10, 10, ".part.json") == 0) {
+            try {
+              Ranges r;
+              const json state = json::parse(read_text(p));
+              for (const auto& x : state.at("done")) r.add(x.at(0).get<uint64_t>(), x.at(1).get<uint64_t>());
+              m.bytes += r.covered();
+            } catch (...) {
+            }
+          } else if (S_ISREG(st.st_mode) && !(fn.size() > 5 && fn.compare(fn.size() - 5, 5, ".part") == 0) &&
+                     fn != "manifest.json" && fn != "lock") {
+            m.bytes += uint64_t(st.st_size);
+          } else if (S_ISLNK(st.st_mode)) {
+            uint64_t sz;
+            if (file_size(p, sz)) m.bytes += sz;
+          }
+        }
+        closedir(dd);
+      }
+    }
+    uint64_t sz;
+    if (file_size(m.dir + "/mtp.safetensors", sz)) m.extras.push_back("MTP head");
+    if (file_size(m.dir + "/dflash2/model.safetensors", sz)) m.extras.push_back("DFlash2 drafter");
+    out.push_back(m);
+  }
+  return out;
+}
+
+}  // namespace ni::hub

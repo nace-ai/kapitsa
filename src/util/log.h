@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
 
 namespace ni {
 
@@ -22,6 +23,9 @@ inline int& log_level() {
   return lvl;
 }
 
+// Exits with status 1 (NI_ABORT=1: abort() instead, for a backtrace in a debugger or crash report). Most fatal
+// errors are the user's to fix (a missing file, not enough memory), and abort()'s "Abort trap" and crash report
+// would only bury the message.
 [[noreturn]] inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
@@ -29,7 +33,9 @@ inline int& log_level() {
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
   va_end(ap);
-  abort();
+  if (env_on("NI_ABORT")) abort();
+  fflush(stdout);
+  _exit(1);
 }
 
 inline void logi(const char* fmt, ...) {
