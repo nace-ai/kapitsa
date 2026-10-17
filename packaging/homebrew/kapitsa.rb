@@ -1,4 +1,4 @@
-# Homebrew formula for Kapitsa, prepared for a public release and not published anywhere yet.
+# Homebrew formula for Kapitsa (by Nace AI, https://nace.ai), prepared for a public release and not published yet.
 # At release: tag vX.Y.Z, set `url` to that tag's tarball and `sha256` to its checksum
 # (curl -sL <url> | shasum -a 256), then put this file in a tap (e.g. nace-ai/homebrew-tap as Formula/kapitsa.rb),
 # so that `brew install nace-ai/tap/kapitsa` works. Until then, ./install.sh in a clone is the way to install.
@@ -7,6 +7,7 @@ class Kapitsa < Formula
   homepage "https://github.com/nace-ai/kapitsa"
   url "https://github.com/nace-ai/kapitsa/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000" # replace at release
+  license "Apache-2.0"
   head "https://github.com/nace-ai/kapitsa.git", branch: "main"
 
   depends_on "cmake" => :build
