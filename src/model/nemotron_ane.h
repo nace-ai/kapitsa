@@ -26,10 +26,12 @@ struct NhAneConfig {
   double in_share = 0.7;    // fraction of in_proj rows on the ANE
   double out_share = 0.7;   // fraction of out_proj rows on the ANE
   bool ffn = true;          // the shared expert on the ANE
+  bool ffn_a16 = true;      // its intermediate in fp16 (W8A16 down projection) instead of int8 per token
   uint32_t min_rows = 512;  // smallest chunk that splits
   std::vector<uint32_t> fn_rows;  // ANE functions (rows); default 512, 1024, 1536, 2048
   std::string cache_dir, model_key;
   bool compile_only = false;  // only compile the program into the ANE daemon's cache
+  bool in_first = true;       // the ANE takes in_proj's first rows (z, then x), the GPU the rest (x, B, C, dt)
 };
 
 class NhAne {
@@ -41,12 +43,13 @@ class NhAne {
 
   bool splits(int T) const;
   uint32_t gpu_in() const { return gin_; }    // in_proj rows the GPU computes
+  uint32_t gpu_in0() const { return cfg_.in_first ? ain_ : 0; }  // the first of them
   uint32_t gpu_out() const { return gout_; }  // out_proj rows the GPU computes
   bool ffn() const { return cfg_.ffn; }
   // Starts a chunk of T rows and stages the first layers' weights.
   void begin_chunk(Encoder& e, int T);
   // Mamba layer li: xh = its normed rows (half [T][hidden]); zx = in_proj's fp32 rows [T][in_proj] (the ANE's rows go
-  // to columns gpu_in()..); yh = the gated norm's output (half [T][d_inner]); x = the residual (fp32 [T][hidden]).
+  // to columns [0, ain) with in_first, else [gpu_in, in_proj)); yh = the gated norm's output (half [T][d_inner]); x = the residual (fp32 [T][hidden]).
   void in_launch(Encoder& e, int li, const Buffer& xh, int T);
   void in_join(Encoder& e, int li, const Buffer& zx, int T);
   void out_launch(Encoder& e, int li, const Buffer& yh, int T);
@@ -77,6 +80,7 @@ class NhAne {
   void wait_join(Encoder& e);
   int next_layer(int which, int li) const;  // the next layer after li with this op, -1 if none
   int fn_for(int T) const;
+  uint32_t ain0() const { return cfg_.in_first ? 0 : gin_; }  // the ANE's first in_proj row
 
   NemotronH& m_;
   NhAneConfig cfg_;

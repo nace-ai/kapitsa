@@ -346,25 +346,25 @@ struct NhRouteParams {
   uint E, k, norm;
   float scale;
   uint logit_stride;
+  uint rows;  // rows of the pass (nh_moe_route1)
 };
-// One simdgroup per row (E <= 512: 16 experts per lane in registers, top-k by k simdgroup argmax rounds, no barriers).
-// Same selection and weights as nh_moe_route. grid: R threadgroups x 32 threads.
-[[kernel]] void nh_moe_route1(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],
-                              device int* eid [[buffer(2)]], device float* ew [[buffer(3)]],
-                              constant NhRouteParams& p [[buffer(4)]], const device uint* live [[buffer(5)]],
-                              uint r [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]]) {
-  if (r >= live[0]) return;
+
+// Sigmoid router selection of one row by one simdgroup (E <= 512: 16 experts per lane in registers): k argmax rounds
+// over prob + bias (lowest index on ties), weights = the selected probs (normalized by their sum + 1e-20 if norm),
+// times scale. The per-lane arrays are only indexed with constants (a dynamic index would move them to memory).
+NI_INLINE void nh_route_row(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
+                            uint lane, device int* eid, device float* ew) {
   constexpr uint V = 16;
   float prob[V], sel[V];
   for (uint j = 0; j < V; ++j) {
     const uint e = lane + 32 * j;
-    const bool live = e < p.E;
-    prob[j] = live ? 1.0f / (1.0f + metal::precise::exp(-logits[size_t(r) * p.logit_stride + e])) : 0.0f;
+    const bool live = e < E;
+    prob[j] = live ? 1.0f / (1.0f + metal::precise::exp(-lg[e])) : 0.0f;
     sel[j] = live ? prob[j] + bias[e] : -INFINITY;
   }
   float sum = 1e-20f, mine = 0.0f;
   uint mine_i = 0;
-  for (uint k = 0; k < p.k; ++k) {
+  for (uint k = 0; k < K; ++k) {
     float v = -INFINITY;
     uint i = 0xffffffffu;
     for (uint j = 0; j < V; ++j)
@@ -375,18 +375,33 @@ struct NhRouteParams {
       if (ov > v || (ov == v && oi < i)) { v = ov; i = oi; }
     }
     float w = 0.0f;
-    if (i % 32 == lane) {
-      w = prob[i / 32];
-      sel[i / 32] = -INFINITY;
-    }
+    const bool own = i % 32 == lane;
+    const uint jj = i / 32;
+    for (uint j = 0; j < V; ++j)
+      if (own && j == jj) {
+        w = prob[j];
+        sel[j] = -INFINITY;
+      }
     w = simd_shuffle(w, ushort(i % 32));
     sum += w;
     if (lane == k) { mine = w; mine_i = i; }
   }
-  if (lane < p.k) {
-    eid[r * p.k + lane] = int(mine_i);
-    ew[r * p.k + lane] = (p.norm ? mine / sum : mine) * p.scale;
+  if (lane < K) {
+    eid[lane] = int(mine_i);
+    ew[lane] = (norm ? mine / sum : mine) * scale;
   }
+}
+
+// One simdgroup per row, 8 rows per threadgroup. Same selection and weights as nh_moe_route.
+// grid: ceil(rows / 8) threadgroups x 256 threads.
+[[kernel]] void nh_moe_route1(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],
+                              device int* eid [[buffer(2)]], device float* ew [[buffer(3)]],
+                              constant NhRouteParams& p [[buffer(4)]], const device uint* live [[buffer(5)]],
+                              uint tg [[threadgroup_position_in_grid]], uint sgi [[simdgroup_index_in_threadgroup]],
+                              uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint r = tg * nsg + sgi;
+  if (r >= p.rows || r >= live[0]) return;
+  nh_route_row(logits + size_t(r) * p.logit_stride, bias, p.E, p.k, p.norm, p.scale, lane, eid + r * p.k, ew + r * p.k);
 }
 
 [[kernel]] void nh_moe_route(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],

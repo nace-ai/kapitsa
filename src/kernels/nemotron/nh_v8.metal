@@ -1,5 +1,5 @@
 // ---- 8-row MMA matrix products (the verify8 design, for Nemotron-H's formats) ----
-// Up to 8 token rows at once (a speculative verify block, the drafter's block, a routed expert's tokens): every
+// Up to 8 token rows at once (a speculative verify block, the drafter's block): every
 // projection runs as Y^T[n, t] = W[n, :] . X^T[:, t] on 8x8x8 simdgroup MMAs, the weights as the A operand decoded
 // straight into registers as exact halves, the 8 token rows as B:
 //   Q8   int8 codes; one MMA chain per 32-element block, closed by c += scale[n] * chain (fp32)
@@ -22,11 +22,9 @@ struct NhV8P {
   uint N, K;      // outputs, inputs
   uint x_ld;      // halfs per X row
   uint y_ld;      // elements per Y row
-  uint R;         // live token rows (dense mode)
+  uint R;         // live token rows
   float gs;       // tensor scale (FP4), else 1
   uint epi;       // 0 store fp32, 1 add fp32, 2 relu^2 -> half, 3 store half
-  uint q_estride, s_estride;  // bytes between experts' codes / scales (MoE)
-  uint k;         // experts per token (MoE up: token = sorted pair / k)
 };
 
 NI_INLINE void nh_v8_mma(thread float2& c, half2 a, half2 b) {
@@ -61,7 +59,7 @@ NI_INLINE void nh_v8_fp4_lut(threadgroup half2* lut, uint tid, uint ntg) {
 
 template <int FMT>
 NI_INLINE float nh_v8_a(const device uchar* q, const device uchar* s, uint K, uint n, uint g, uint part,
-                        thread half2 (&a)[4], threadgroup const half2* lut, constant uint4* gh, uint lane_ = 0) {
+                        thread half2 (&a)[4], threadgroup const half2* lut, constant uint4* gh) {
   if (FMT == 0) {  // Q8: codes [N][K], half scales [N][K/32]
     const uint2 w = *(const device uint2*)(q + size_t(n) * K + g * 32 + part * 8);
     for (int st = 0; st < 4; ++st) {
@@ -69,17 +67,6 @@ NI_INLINE float nh_v8_a(const device uchar* q, const device uchar* s, uint K, ui
       a[st] = half2(half(as_type<char>(uchar(word >> sh))), half(as_type<char>(uchar(word >> (sh + 8)))));
     }
     return float(((const device half*)s)[size_t(n) * (K / 32) + g]);
-  } else if (FMT == 3) {  // FP4, the nibble values from a 16-entry table held across the simdgroup's lanes
-    const uint blk = g * 2 + (part >> 1);
-    const uint w = *(const device uint*)(q + size_t(n) * (K / 2) + blk * 8 + (part & 1u) * 4);
-    const half sc = half(nh_ue4m3(s[size_t(n) * (K / 16) + blk]));
-    const ushort tab = nh_fp4_h2(lane_ & 15u);
-    for (int st = 0; st < 4; ++st) {
-      const uint b = (w >> (8 * st)) & 0xFFu;
-      const ushort lo = simd_shuffle(tab, ushort(b & 15u)), hi = simd_shuffle(tab, ushort(b >> 4));
-      a[st] = half2(as_type<half>(lo), as_type<half>(hi)) * sc;
-    }
-    return 1.0f;
   } else if (FMT == 1) {  // FP4: codes [N][K/2] (16-blocks: byte i = elements i, i + 8), UE4M3 [N][K/16]
     // the lane's pairs are the two nibbles of 4 bytes: 16-block part >> 1, bytes (part & 1) * 4 + step
     const uint blk = g * 2 + (part >> 1);
@@ -100,41 +87,24 @@ NI_INLINE float nh_v8_a(const device uchar* q, const device uchar* s, uint K, ui
   }
 }
 
-// MODE 0: dense, B columns = X rows 0..7 (rows >= R are zero), Y row t.
-// MODE 1: MoE up, a tile (expert, first sorted pair, pairs): B column j = X row sorted[i0 + j] / k (the token),
-//         Y row i0 + j (sorted order).
-// MODE 2: MoE down: B column j = X row i0 + j, Y row sorted[i0 + j] (the pair).
-// NB row blocks of 8 per simdgroup; grid: (ceil(N / (8 NB nsg)), tiles) x (32 nsg).
-// SPLIT: the threadgroup's simdgroups share one block of 8 NB rows and split K (interleaved 32-blocks), reduced
-// through threadgroup memory (red: nsg * NB * 32 float2); else each simdgroup has its own rows.
-template <int FMT, int MODE, int NB, bool SPLIT = false>
-NI_INLINE void nh_v8_impl(const device half* X, const device uchar* Wq, const device uchar* Ws, device void* Y,
-                          constant NhV8P& p, const device uint4* tiles, const device uint* ntiles,
-                          const device uint* sorted, uint2 tg, uint sg, uint nsg, uint lane,
-                          threadgroup const half2* lut, constant uint4* gh, threadgroup float2* red = nullptr) {
+// Y^T for X rows 0..R-1 (B columns; rows >= R are zero). The threadgroup's simdgroups share one block of 8 NB output
+// rows and split K (interleaved 32-blocks), reduced through threadgroup memory (red: nsg * NB * 32 float2).
+// grid: ceil(N / (8 NB)) x (32 nsg).
+template <int FMT, int NB>
+NI_INLINE void nh_v8_impl(const device half* X, const device uchar* q, const device uchar* s, device void* Y,
+                          constant NhV8P& p, uint tg, uint sg, uint nsg, uint lane, threadgroup const half2* lut,
+                          constant uint4* gh, threadgroup float2* red) {
   const uint q4 = lane >> 2;
   const uint fm = (q4 & 4u) | ((lane >> 1) & 3u), fn = ((q4 & 2u) << 1) | ((lane & 1u) << 1);
-  const device uchar* q = Wq;
-  const device uchar* s = Ws;
-  uint cols = p.R, i0 = 0;
-  if (MODE != 0) {
-    if (tg.y >= ntiles[0]) return;
-    const uint4 t = tiles[tg.y];
-    q += size_t(t.x) * p.q_estride;
-    s += size_t(t.x) * p.s_estride;
-    i0 = t.y;
-    cols = min(t.z, 8u);
-  }
   // the B rows of this lane's two columns (fn, fn + 1); a missing column reads row 0 and is masked
   uint xr[2];
   bool live[2];
   for (int c = 0; c < 2; ++c) {
     const uint j = fn + uint(c);
-    live[c] = j < cols;
-    const uint jj = live[c] ? j : 0u;
-    xr[c] = MODE == 0 ? jj : MODE == 1 ? sorted[i0 + jj] / p.k : i0 + jj;
+    live[c] = j < p.R;
+    xr[c] = live[c] ? j : 0u;
   }
-  const uint nb0 = SPLIT ? tg.x * (8 * NB) : (tg.x * nsg + sg) * (8 * NB);
+  const uint nb0 = tg * (8 * NB);
   if (nb0 >= p.N) return;
   float2 acc[NB];
   for (int b = 0; b < NB; ++b) acc[b] = float2(0.0f);
@@ -142,10 +112,10 @@ NI_INLINE void nh_v8_impl(const device half* X, const device uchar* Wq, const de
   // lane), FP4 16 ((fm >> 1) >> 1) + ((fm >> 1) & 1) 4 + s + 8 (fm & 1) (the two nibbles of 4 bytes per lane)
   const uint part = fm >> 1;
   const uint G = p.K / 32;
-  for (uint g = SPLIT ? sg : 0; g < G; g += SPLIT ? nsg : 1) {
+  for (uint g = sg; g < G; g += nsg) {
     half2 bv[4];
     for (int st = 0; st < 4; ++st) {
-      const uint k = (FMT == 1 || FMT == 3) ? g * 32 + 16 * (part >> 1) + (part & 1u) * 4 + uint(st) + 8 * (fm & 1u)
+      const uint k = FMT == 1 ? g * 32 + 16 * (part >> 1) + (part & 1u) * 4 + uint(st) + 8 * (fm & 1u)
                               : g * 32 + part * 8 + 2 * st + (fm & 1u);
       const half x0 = live[0] ? X[size_t(xr[0]) * p.x_ld + k] : half(0);
       const half x1 = live[1] ? X[size_t(xr[1]) * p.x_ld + k] : half(0);
@@ -154,8 +124,8 @@ NI_INLINE void nh_v8_impl(const device half* X, const device uchar* Wq, const de
     for (int b = 0; b < NB; ++b) {
       const uint n = min(nb0 + 8 * b + fm, p.N - 1);
       half2 av[4];
-      const float sc = nh_v8_a<FMT>(q, s, p.K, n, g, fn >> 1, av, lut, gh, lane);
-      if (FMT == 1 || FMT == 3) {
+      const float sc = nh_v8_a<FMT>(q, s, p.K, n, g, fn >> 1, av, lut, gh);
+      if (FMT == 1) {
         for (int st = 0; st < 4; ++st) nh_v8_mma(acc[b], av[st], bv[st]);
       } else {
         float2 ch = float2(0.0f);
@@ -164,23 +134,19 @@ NI_INLINE void nh_v8_impl(const device half* X, const device uchar* Wq, const de
       }
     }
   }
-  if (SPLIT) {
-    for (int b = 0; b < NB; ++b) red[(sg * NB + uint(b)) * 32 + lane] = acc[b];
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (sg != 0) return;
-    for (int b = 0; b < NB; ++b)
-      for (uint j = 1; j < nsg; ++j) acc[b] += red[(j * NB + uint(b)) * 32 + lane];
-  }
-  // C: row n = nb0 + 8 b + fm, columns (tokens / pairs) fn, fn + 1
+  for (int b = 0; b < NB; ++b) red[(sg * NB + uint(b)) * 32 + lane] = acc[b];
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg != 0) return;
+  for (int b = 0; b < NB; ++b)
+    for (uint j = 1; j < nsg; ++j) acc[b] += red[(j * NB + uint(b)) * 32 + lane];
+  // C: row n = nb0 + 8 b + fm, columns (tokens) fn, fn + 1
   for (int b = 0; b < NB; ++b) {
     const uint n = nb0 + 8 * b + fm;
     if (n >= p.N) continue;
     for (int c = 0; c < 2; ++c) {
       if (!live[c]) continue;
-      const uint j = fn + uint(c);
-      const uint yrow = MODE == 0 ? j : MODE == 1 ? i0 + j : sorted[i0 + j];
       float v = acc[b][c] * p.gs;
-      const size_t o = size_t(yrow) * p.y_ld + n;
+      const size_t o = size_t(fn + uint(c)) * p.y_ld + n;
       if (p.epi == 0) ((device float*)Y)[o] = v;
       else if (p.epi == 1) ((device float*)Y)[o] += v;
       else if (p.epi == 2) { v = max(v, 0.0f); ((device half*)Y)[o] = half(v * v); }
@@ -189,52 +155,27 @@ NI_INLINE void nh_v8_impl(const device half* X, const device uchar* Wq, const de
   }
 }
 
-#define NH_V8(NAME, FMT, MODE, NB)                                                                                  \
+#define NH_V8S(NAME, FMT, NB)                                                                                       \
   [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                    \
                        const device uchar* Ws [[buffer(2)]], device void* Y [[buffer(3)]],                         \
-                       constant NhV8P& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],                   \
-                       const device uint* ntiles [[buffer(6)]], const device uint* sorted [[buffer(7)]],           \
-                       constant uint4* gh [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],                \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],        \
-                       uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {        \
-    threadgroup half2 lut[FMT == 1 ? 256 : 1];                                                                      \
-    if (FMT == 1) nh_v8_fp4_lut(lut, tid, 32 * nsg);                                                                \
-    nh_v8_impl<FMT, MODE, NB>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, tg, sg, nsg, lane, lut, gh);                  \
-  }
-
-#define NH_V8S(NAME, FMT, MODE, NB)                                                                                 \
-  [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                    \
-                       const device uchar* Ws [[buffer(2)]], device void* Y [[buffer(3)]],                         \
-                       constant NhV8P& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],                   \
-                       const device uint* ntiles [[buffer(6)]], const device uint* sorted [[buffer(7)]],           \
-                       constant uint4* gh [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],                \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],        \
-                       uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {        \
+                       constant NhV8P& p [[buffer(4)]], constant uint4* gh [[buffer(8)]],                          \
+                       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],      \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       uint tid [[thread_index_in_threadgroup]]) {                                                  \
     threadgroup half2 lut[FMT == 1 ? 256 : 1];                                                                      \
     threadgroup float2 red[8 * NB * 32];                                                                            \
     if (FMT == 1) nh_v8_fp4_lut(lut, tid, 32 * nsg);                                                                \
-    nh_v8_impl<FMT, MODE, NB, true>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, tg, sg, nsg, lane, lut, gh, red);       \
+    nh_v8_impl<FMT, NB>(X, Wq, Ws, Y, p, tg.x, sg, nsg, lane, lut, gh, red);                                        \
   }
-// split-K: grid ceil(N / (8 NB)) threadgroups (dense) x (32 nsg), nsg <= 8
-NH_V8S(nh_v8_q8_s1, 0, 0, 1)
-NH_V8S(nh_v8_q8_s2, 0, 0, 2)
-NH_V8S(nh_v8_fp4_s1, 1, 0, 1)
-NH_V8S(nh_v8_fp4_s2, 1, 0, 2)
-NH_V8S(nh_v8_fp4x_s1, 3, 0, 1)
-NH_V8S(nh_v8_fp4x_s2, 3, 0, 2)
-NH_V8S(nh_v8_iq2_s1, 2, 0, 1)
-NH_V8S(nh_v8_iq2_s2, 2, 0, 2)
-NH_V8S(nh_v8_iq2_moe_up_s1, 2, 1, 1)
-NH_V8S(nh_v8_iq2_moe_dn_s1, 2, 2, 1)
-
-// name: nh_v8_<fmt>[_moe_up|_moe_dn]_b<row blocks per simdgroup>
-NH_V8(nh_v8_q8_b1, 0, 0, 1)
-NH_V8(nh_v8_q8_b2, 0, 0, 2)
-NH_V8(nh_v8_fp4_b1, 1, 0, 1)
-NH_V8(nh_v8_fp4_b2, 1, 0, 2)
-NH_V8(nh_v8_iq2_b1, 2, 0, 1)
-NH_V8(nh_v8_iq2_b2, 2, 0, 2)
-NH_V8(nh_v8_iq2_moe_up_b1, 2, 1, 1)
-NH_V8(nh_v8_iq2_moe_up_b2, 2, 1, 2)
-NH_V8(nh_v8_iq2_moe_dn_b1, 2, 2, 1)
-NH_V8(nh_v8_iq2_moe_dn_b2, 2, 2, 2)
+// split-K: grid ceil(N / (8 NB)) threadgroups (dense) x (32 nsg), nsg <= 8. The engine runs NB 4 for 4k-32k outputs and
+// NB 2 otherwise (enc_gemm); NB 1 and FP4's NB 8 are kept for nh_bench.
+NH_V8S(nh_v8_q8_s1, 0, 1)
+NH_V8S(nh_v8_q8_s2, 0, 2)
+NH_V8S(nh_v8_q8_s4, 0, 4)
+NH_V8S(nh_v8_fp4_s1, 1, 1)
+NH_V8S(nh_v8_fp4_s2, 1, 2)
+NH_V8S(nh_v8_fp4_s4, 1, 4)
+NH_V8S(nh_v8_fp4_s8, 1, 8)
+NH_V8S(nh_v8_iq2_s1, 2, 1)
+NH_V8S(nh_v8_iq2_s2, 2, 2)
+NH_V8S(nh_v8_iq2_s4, 2, 4)

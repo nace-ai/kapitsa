@@ -212,7 +212,7 @@ static MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   return NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk) : Qwen35::plan(model_dir, prefill_chunk);
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
-  return NemotronH::is_model(model_dir) ? 0 : Qwen35::ane_plan(model_dir, p).bytes;
+  return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
@@ -331,6 +331,18 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
   if (!downloaded.dir.empty()) return downloaded;
   if (!present.dir.empty()) return present;
   return hub::resolve(m.name);
+}
+
+// Commits a chunk that runs a GPU + Neural Engine split and waits for it. A split job that never reports would keep
+// the GPU waiting on its event (each job has a 2 s watchdog; this bounds the whole chunk as a last resort): the split
+// is given up, the GPU's waits are released, and ane_finish_chunk() then reruns the chunk on the GPU alone.
+void Engine::wait_split(Encoder& e) {
+  e.commit();
+  if (!e.wait_for(60000)) {
+    logi("NI_ANE: a split prefill chunk has not finished in 60 s; giving up the Neural Engine split");
+    model_->ane_abort("a split chunk did not finish within 60 s");
+  }
+  e.wait();
 }
 
 void Engine::drop_slot(Slot& slot) {
@@ -612,7 +624,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       q35_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);
     }
     if (split) {
-      e->commit_and_wait();
+      wait_split(*e);
       if (!model_->ane_finish_chunk()) {
         // rerun on the GPU alone; it captures the chunk's rows for the drafter again (the hook is armed)
         e = g.begin();
@@ -748,7 +760,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       if (m_prev > 0) lili_->encode_commit(*e1, d, m_prev);
       lili_->encode_draft(*e1, s, d, P);
       e1->commit();
-      auto e2 = g.begin();
+      auto e2 = nh_->grouped_passes() ? g.begin_grouped() : g.begin();
       lili_->arm_verify(P);
       nh_->set_dynamic_rows(true);  // the drafter's pass chose how many of the block's rows to verify
       nh_->encode_verify(*e2, s, P, B);
@@ -909,7 +921,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     std::unique_ptr<Encoder> next;  // step feeding the newest sampled token
     int pos = n;                    // position of the newest sampled token
     auto encode_at = [&](int q) {
-      auto x = g.begin();
+      auto x = model_->grouped_passes() ? g.begin_grouped() : g.begin();
       model_->encode_step(*x, s, q, sp, uint32_t(q), true);
       x->commit();
       return x;
@@ -1056,7 +1068,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
     model_->encode_prefill(*e, s, p, T, sp, 0, false);
     if (spec_) q35_->encode_mtp_prefill(*e, s, p, T, 0);  // next tokens known up to t2[n]
     if (split) {
-      e->commit_and_wait();
+      wait_split(*e);
       if (!model_->ane_finish_chunk()) {
         e = g.begin();
         model_->restore(*e, s, *ane_ck_);

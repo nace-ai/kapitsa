@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
+#include <unistd.h>
 #include "metal/gpu.h"
 #include <IOKit/IOKitLib.h>
 #include <mach/mach_time.h>
@@ -40,11 +41,10 @@ Gpu::Gpu() : impl_(new Impl) {
   id<MTLDevice> d = MTLCreateSystemDefaultDevice();
   if (!d) fatal("no Metal device");
   device_ = (__bridge_retained void*)d;
-  // NI_ANE=1 (the GPU + Neural Engine FFN split) ends a command buffer at every event signal: a
-  // 2048-row chunk of the 27B is 65 command buffers, with up to two chunks queued, so the queue
-  // must allow more than the default path's 64 in flight (fewer would deadlock on the waits).
-  const bool split = env_on("NI_ANE") || env_on("NI_ANE_QUEUE");
-  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:split ? 512 : 64];
+  // The GPU + Neural Engine prefill splits end a command buffer at every event signal: a 2048-row chunk of the 27B
+  // is 65 command buffers and one of Nemotron-H 121, with up to two chunks queued, so the queue must allow more than
+  // Metal's default 64 in flight (fewer would deadlock on the waits). Nemotron-H splits by default, so always 512.
+  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:512];
   queue_ = (__bridge_retained void*)q;
 }
 
@@ -326,6 +326,12 @@ std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
   return e;
 }
 
+std::unique_ptr<Encoder> Gpu::begin_grouped() {
+  auto e = begin(true);
+  e->auto_barrier_ = true;
+  return e;
+}
+
 void Gpu::make_resident(const std::vector<Buffer>& bufs) {
   if (@available(macOS 15.0, *)) {
     @autoreleasepool {
@@ -421,11 +427,20 @@ static bool dup_kernel(const char* name) {
   return false;
 }
 
+// grouped encoders: a barrier before each dispatch but the second and later of a group
+void Encoder::pre_dispatch() {
+  if (!auto_barrier_) return;
+  if (dispatched_ && (!in_group_ || group_first_)) barrier();
+  group_first_ = false;
+  dispatched_ = true;
+}
+
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
   // A GPU whose compiler gives a kernel fewer threads per threadgroup than it is dispatched with (register
   // pressure differs between GPU families) would fail the command buffer: name the kernel instead.
   if (cur_max_threads_ && tx * ty * tz > cur_max_threads_)
     fatal("kernel %s: %u threads per threadgroup, this GPU allows %u", cur_name_, tx * ty * tz, cur_max_threads_);
+  pre_dispatch();
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
     [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
@@ -446,6 +461,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
   }
 }
 void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty, uint32_t tz) {
+  pre_dispatch();
   [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
                              indirectBufferOffset:args.offset + off
                             threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
@@ -483,6 +499,15 @@ void Encoder::wait() {
   }
   if (cb.status == MTLCommandBufferStatusError)
     fatal("GPU error: %s", [[cb.error description] UTF8String]);
+}
+bool Encoder::wait_for(double timeout_ms) {
+  id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
+  const double t0 = host_ms();
+  while (cb.status < MTLCommandBufferStatusCompleted) {
+    if (host_ms() - t0 > timeout_ms) return false;
+    usleep(500);
+  }
+  return true;
 }
 double Encoder::gpu_start_host_ms() const {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;

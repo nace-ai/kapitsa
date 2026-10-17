@@ -62,6 +62,7 @@ struct AnchorP {
 struct DepthP {
   uint32_t S, K;
   float ratio;
+  uint32_t mode;
 };
 
 }  // namespace
@@ -398,6 +399,7 @@ void LiliCorr::alloc_buffers() {
   scores_ = al(S * K * 4, "lili_scores");
   picks_ = al(S * 4, "lili_picks");
   if (const char* v = getenv("NI_LILI_DYN")) dyn_ratio_ = float(atof(v));
+  if (const char* v = getenv("NI_LILI_DYN_P")) dyn_mode_ = uint32_t(atoi(v));
   cg_ = al(W * H * 4, "lili_cg");
   cgh_ = al(W * H * 2, "lili_cgh");
   ck_ = al(W * size_t(cfg_.hkv) * 128 * 4, "lili_ck");
@@ -790,12 +792,13 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
   e.buf(7, picks_);
   e.dispatch(1, 1, 1, 32 * K);
   // the coming verify's depth (NI_LILI_DYN: the per-row cost ratio; 0 verifies every draft)
-  const DepthP dp{S, K, dyn_ratio_};
+  const DepthP dp{S, K, dyn_ratio_, dyn_mode_};
   e.use(pipe("nh_lili_depth"));
   e.buf(0, clp_);
   e.buf(1, picks_);
   e.buf(2, tg_.live_rows());
   e.val(3, dp);
+  e.buf(4, scores_);
   e.dispatch(1, 1, 1, 1);
 }
 

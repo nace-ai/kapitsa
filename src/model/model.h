@@ -58,6 +58,7 @@ struct MemPlan {
   bool dense = false;
   bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
   std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
+  size_t ane = 0;             // a GPU + Neural Engine prefill split the model runs by default (Nemotron-H)
   size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
 };
 
@@ -94,6 +95,11 @@ class Model {
   // ---- GPU + Neural Engine split of the dense prefill FFN (Qwen35); none elsewhere ----
   virtual bool ane_splits(int) const { return false; }
   virtual bool ane_finish_chunk() { return true; }
+  // Gives up on the split of a chunk still running (a Neural Engine job that never reports): releases the GPU's
+  // waits; ane_finish_chunk() then fails and the chunk reruns on the GPU alone
+  virtual void ane_abort(const std::string& why) { (void)why; }
+  // Decode and verify passes encoded into Gpu::begin_grouped() encoders (independent dispatches overlap)
+  virtual bool grouped_passes() const { return false; }
   virtual void ane_poll() {}
   virtual bool ane_release() { return false; }
   virtual const AneStats& ane_stats() const {

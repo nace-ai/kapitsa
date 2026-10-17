@@ -175,6 +175,7 @@ class Engine {
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
+  void wait_split(Encoder& e);
 
   EngineOptions opts_;
   std::unique_ptr<Model> model_;

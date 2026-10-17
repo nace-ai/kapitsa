@@ -445,12 +445,16 @@ struct NhWalkP {
 // (1 + sum_{i <= K} prod_{s < i} p_s) / (1 + ratio (K + 1)), p_s = the drafter's probability of its pick at slot s
 // (exp of its log-prob over the full head). ratio = per-row cost (the routed experts) over the fixed cost of a cycle;
 // 0: K = S. One thread. ----
+// mode 1: p_s = the LiLiCorr walk's softmax probability of its pick given the previous pick (scores, buffer 4);
+// mode 2: the geometric mean of the two.
 struct NhDepthP {
   uint S, K;
   float ratio;
+  uint mode;
 };
 [[kernel]] void nh_lili_depth(const device float* clp [[buffer(0)]], const device uint* picks [[buffer(1)]],
-                              device uint* live [[buffer(2)]], constant NhDepthP& p [[buffer(3)]]) {
+                              device uint* live [[buffer(2)]], constant NhDepthP& p [[buffer(3)]],
+                              const device float* scores [[buffer(4)]]) {
   if (p.ratio <= 0.0f) {
     live[0] = p.S + 1;
     return;
@@ -458,7 +462,16 @@ struct NhDepthP {
   float prod = 1.0f, exp_tokens = 1.0f, best = 1.0f / (1.0f + p.ratio);
   uint best_k = 0;
   for (uint s = 0; s < p.S; ++s) {
-    prod *= metal::precise::exp(clp[s * p.K + picks[s]]);
+    const float pm = metal::precise::exp(clp[s * p.K + picks[s]]);
+    float pw = 1.0f;
+    if (p.mode != 0) {  // softmax over the slot's K walk scores
+      float mx = -INFINITY;
+      for (uint k = 0; k < p.K; ++k) mx = max(mx, scores[s * p.K + k]);
+      float den = 0.0f;
+      for (uint k = 0; k < p.K; ++k) den += metal::precise::exp(scores[s * p.K + k] - mx);
+      pw = metal::precise::exp(scores[s * p.K + picks[s]] - mx) / den;
+    }
+    prod *= p.mode == 0 ? pm : p.mode == 1 ? pw : metal::precise::sqrt(pm * pw);
     exp_tokens += prod;
     const float v = exp_tokens / (1.0f + p.ratio * float(s + 2));
     if (v > best) { best = v; best_k = s + 1; }

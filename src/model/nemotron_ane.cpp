@@ -346,20 +346,25 @@ std::string NhAne::fn_ffn(uint32_t R) const {
        std::to_string(C / kRotBlock) + "), pad = tensor<int32, [4]>([0, 0, 0, 0]), pad_type = string(\"valid\"), " +
        "strides = tensor<int32, [2]>([1, 1]), weight = rot, x = h4)");
   f16("hr", C, R, "reshape(x = hr4, shape = tensor<int32, [4]>(" + dims(C, R) + "))");
-  f16("ha", C, R, "abs(x = hr)");
-  f16("pk", 1, R, "reduce_max(x = ha, axes = tensor<int32, [1]>([2]), keep_dims = bool(true))");
-  f16("fl", 1, R, "maximum(x = pk, y = " + fp16lit(0x1p-9) + ")");
-  f16("iv", 1, R, "real_div(x = " + fp16lit(127.0) + ", y = fl)");
-  f16("hs", C, R, "mul(x = hr, y = iv)");
-  line(tens("int8", C, R) + " hq = quantize(input = hs, scale = fp16(1), output_dtype = string(\"int8\"))");
-  f16("hd", C, R, "dequantize(input = hq, scale = " + unit + ")");
-  f16("hsc0", 1, R, "mul(x = fl, y = " + fp16lit(128.0 / 127.0) + ")");
-  f16("hsc", 1, R, "mul(x = hsc0, y = tx_t)");
+  // with ffn_a16 the intermediate stays fp16 (relu^2 is heavy-tailed: one int8 scale per token for it costs most of
+  // the split's error); the down projection then reads hr and the scale row is tx
+  const std::string hin = cfg_.ffn_a16 ? "hr" : "hd", hsc = cfg_.ffn_a16 ? "tx_t" : "hsc";
+  if (!cfg_.ffn_a16) {
+    f16("ha", C, R, "abs(x = hr)");
+    f16("pk", 1, R, "reduce_max(x = ha, axes = tensor<int32, [1]>([2]), keep_dims = bool(true))");
+    f16("fl", 1, R, "maximum(x = pk, y = " + fp16lit(0x1p-9) + ")");
+    f16("iv", 1, R, "real_div(x = " + fp16lit(127.0) + ", y = fl)");
+    f16("hs", C, R, "mul(x = hr, y = iv)");
+    line(tens("int8", C, R) + " hq = quantize(input = hs, scale = fp16(1), output_dtype = string(\"int8\"))");
+    f16("hd", C, R, "dequantize(input = hq, scale = " + unit + ")");
+    f16("hsc0", 1, R, "mul(x = fl, y = " + fp16lit(128.0 / 127.0) + ")");
+    f16("hsc", 1, R, "mul(x = hsc0, y = tx_t)");
+  }
   uint32_t begin = 0;
   for (size_t i = 0; i < dseg_.size(); ++i) {
     const uint32_t w = dseg_[i];
     const std::string is = std::to_string(i);
-    f16("hd" + is, w, R, "slice_by_size(x = hd, begin = tensor<int32, [4]>([0, 0, " + std::to_string(begin) +
+    f16("hd" + is, w, R, "slice_by_size(x = " + hin + ", begin = tensor<int32, [4]>([0, 0, " + std::to_string(begin) +
                              ", 0]), size = tensor<int32, [4]>(" + dims(w, R) + "))");
     f16("d" + is + "_d", H_, w, "dequantize(input = d" + is + "_t, scale = " + unit + ")");
     line(tens("fp16", H_, R) + " dm" + is + " = matmul(transpose_x = bool(false), transpose_y = bool(false), x = d" + is +
@@ -373,7 +378,7 @@ std::string NhAne::fn_ffn(uint32_t R) const {
     t = nx;
   }
   f16("ds", H_, R, "mul(x = " + t + ", y = sd_t)");
-  f16("yt", H_ + 1, R, "concat(axis = int32(2), interleave = bool(false), values = (ds, hsc))");
+  f16("yt", H_ + 1, R, "concat(axis = int32(2), interleave = bool(false), values = (ds, " + hsc + "))");
   line(op.y.buffer_type(H_ + 1, R) + " y = tensor_to_tensor_buffer<ios17>(input = yt, interleave_factors = tensor<uint8, "
        "[4]>([1, 1, 1, 1]), strides = tensor<int64, [4]>(" + op.y.strides(op.y.rows) + "))");
   return "    func ffn" + std::to_string(R) + "<ios18>(" + par + ") {\n" + b + "    } -> (y);\n";
@@ -420,8 +425,8 @@ void NhAne::row_scales() {
   for (Buffer* b : bufs) bytes_ += b->size;
   std::string path;
   if (!cfg_.cache_dir.empty() && !cfg_.model_key.empty())
-    path = cfg_.cache_dir + "/nh-rowscales-" + cfg_.model_key + "-" + std::to_string(ain_) + "-" + std::to_string(aout_) +
-           (ffn_ ? "-ffn" : "") + ".bin";
+    path = cfg_.cache_dir + "/nh-rowscales-" + cfg_.model_key + "-" + std::to_string(ain_) + (cfg_.in_first ? "f" : "") +
+           "-" + std::to_string(aout_) + (ffn_ ? "-ffn" : "") + ".bin";
   if (!path.empty()) {
     std::ifstream f(path, std::ios::binary);
     char magic[8] = {0};
@@ -444,7 +449,7 @@ void NhAne::row_scales() {
   for (size_t j = 0; j < nm; ++j) {
     const NhLayer& l = L[size_t(mamba_[j])];
     if (in_) {
-      const WP p{gin_, 0, H_, H_, 0, 0, l.in.gs};
+      const WP p{ain0(), 0, H_, H_, 0, 0, l.in.gs};
       e->use(pipe("nh_ane_rs_fp4_b128"));
       e->buf(0, l.in.q);
       e->buf(1, l.in.s);
@@ -524,7 +529,7 @@ void NhAne::stage(Encoder& e, int which, int li) {
   if (which == 0 || which == 1) {
     Op& op = which == 0 ? *in_ : *out_;
     const NhMat& W = which == 0 ? l.in : l.out;
-    const uint32_t g0 = which == 0 ? gin_ : gout_;
+    const uint32_t g0 = which == 0 ? ain0() : gout_;
     const std::vector<int>& lv = mamba_;
     const size_t j = size_t(std::find(lv.begin(), lv.end(), li) - lv.begin());
     e.use(pipe("nh_ane_stage_fp4_b128"));
@@ -632,7 +637,7 @@ void NhAne::in_launch(Encoder& e, int li, const Buffer& xh, int T) {
 
 void NhAne::in_join(Encoder& e, int li, const Buffer& zx, int T) {
   wait_join(e);
-  const JoinP p{uint32_t(T), ain_, in_->y.stride / 2, NIN_, gin_};
+  const JoinP p{uint32_t(T), ain_, in_->y.stride / 2, NIN_, ain0()};
   e.use(pipe("nh_ane_join_store"));
   e.buf(0, zx);
   e.buf(1, in_->y.buf);

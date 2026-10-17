@@ -98,7 +98,10 @@ class LiliCorr {
   NemotronH& tg_;
   std::string path_;
   int head_rows_ = 0;  // draft head: the target LM head's first rows
-  float dyn_ratio_ = 0.0f;  // dynamic verify depth: per-row cost / fixed cost of a cycle (NI_LILI_DYN; 0 = off)
+  // dynamic verify depth: per-row cost / fixed cost of a cycle (NI_LILI_DYN; 0 = every draft). 0.04 measured best on the
+  // harness's code prompt, 512 tokens: greedy 53.5 tok/s against 50.7 (0) and 52.3 (0.08); T = 0.6 52.2 against 47.3
+  float dyn_ratio_ = 0.04f;
+  uint32_t dyn_mode_ = 0;   // its acceptance estimate (NI_LILI_DYN_P): 0 drafter marginal, 1 LiLiCorr walk, 2 both
   Buffer picks_;            // the walk's chosen candidate per slot
   std::unique_ptr<SafetensorsIndex> st_;  // while loading
   LiliConfig cfg_;

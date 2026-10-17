@@ -226,16 +226,19 @@ NH_GEMM_F32(nh_gemm_bf16, ushort)
 // One threadgroup of 1024 threads (E <= 1024).
 struct NhBucketP {
   uint P, E, BM;  // BM: rows per tile
+  uint k;         // pairs per token row: with live (buffer 6), the pairs of rows >= live[0] are left out
 };
 [[kernel]] void nh_moe_bucket(const device int* eid [[buffer(0)]], device uint* sorted [[buffer(1)]],
                               device uint4* tiles [[buffer(2)]], device uint* ntiles [[buffer(3)]],
                               device uint* rank [[buffer(4)]], constant NhBucketP& p [[buffer(5)]],
+                              const device uint* live [[buffer(6)]],
                               uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
   threadgroup atomic_uint cnt[1024];
   threadgroup uint off[1024], toff[1024];
+  const uint P = p.k && live[0] < p.P / p.k ? live[0] * p.k : p.P;
   for (uint e = tid; e < 1024; e += ntg) atomic_store_explicit(&cnt[e], 0u, memory_order_relaxed);
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  for (uint i = tid; i < p.P; i += ntg) rank[i] = atomic_fetch_add_explicit(&cnt[uint(eid[i])], 1u, memory_order_relaxed);
+  for (uint i = tid; i < P; i += ntg) rank[i] = atomic_fetch_add_explicit(&cnt[uint(eid[i])], 1u, memory_order_relaxed);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   if (tid == 0) {
     uint o = 0, t = 0;
@@ -253,7 +256,7 @@ struct NhBucketP {
     const uint c = atomic_load_explicit(&cnt[e], memory_order_relaxed);
     for (uint j = 0; j * p.BM < c; ++j) tiles[toff[e] + j] = uint4(e, off[e] + j * p.BM, min(p.BM, c - j * p.BM), 0);
   }
-  for (uint i = tid; i < p.P; i += ntg) sorted[off[uint(eid[i])] + rank[i]] = i;
+  for (uint i = tid; i < P; i += ntg) sorted[off[uint(eid[i])] + rank[i]] = i;
 }
 
 // lo[t, d] = half(sum_j w[t, j] * out[t * k + j, d]). grid: T threadgroups x 256 threads

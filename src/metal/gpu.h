@@ -77,6 +77,9 @@ class Gpu {
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between
   // dependent ones.
   std::unique_ptr<Encoder> begin(bool concurrent = false);
+  // A concurrent encoder that keeps serial order on its own: a barrier before every dispatch, except inside a
+  // group (Encoder::group_begin / group_end), whose dispatches may run together.
+  std::unique_ptr<Encoder> begin_grouped();
   // Keeps every resource resident (avoids per-dispatch residency checks).
   void make_resident(const std::vector<Buffer>& bufs);
 
@@ -108,8 +111,15 @@ class Encoder {
   void dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty = 1, uint32_t tz = 1);
   // Memory barrier between dependent dispatches in a concurrent encoder.
   void barrier();
+  // With begin_grouped(): the dispatches between group_begin() and group_end() are independent of each other (none
+  // reads what another writes) and may overlap on the GPU. No effect on other encoders.
+  void group_begin() { in_group_ = true; group_first_ = true; }
+  void group_end() { in_group_ = false; }
+  bool grouped() const { return auto_barrier_; }
   void commit();             // non-blocking
   void wait();               // waits for this command buffer (and the ones signal_event committed)
+  // Waits at most timeout_ms for this command buffer to finish (polling); false if it is still running.
+  bool wait_for(double timeout_ms);
   // Shared-event steps (ANE split): signal_event ends the current command buffer with a signal of
   // `value` and commits it (so the signal is never held back behind later dispatches), then
   // continues in a new command buffer; if the signalling buffer fails, the CPU sets the event to
@@ -140,6 +150,8 @@ class Encoder {
   const char* cur_name_ = "";
   uint32_t cur_max_threads_ = 0;  // the pipeline's maxTotalThreadsPerThreadgroup (dispatch checks it)
   bool concurrent_ = false;
+  bool auto_barrier_ = false, in_group_ = false, group_first_ = false, dispatched_ = false;
+  void pre_dispatch();
 };
 
 } // namespace ni

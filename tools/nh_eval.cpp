@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
     int produced = 1, cycles = 0;
     if (!lili) {
       for (int i = 0; i < gen - 1; ++i) {
-        auto e = g.begin();
+        auto e = m.grouped_passes() ? g.begin_grouped() : g.begin();
         m.encode_step(*e, *s, n + i, sp, uint32_t(n + i), true);
         e->commit_and_wait();
       }
@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
         if (m_prev > 0) lili->encode_commit(*e1, *d, m_prev);
         lili->encode_draft(*e1, *s, *d, P);
         e1->commit();
-        auto e2 = g.begin();
+        auto e2 = m.grouped_passes() ? g.begin_grouped() : g.begin();
         lili->arm_verify(P);
         m.set_dynamic_rows(true);
         m.encode_verify(*e2, *s, P, B);
@@ -191,7 +191,9 @@ int main(int argc, char** argv) {
     printf("prefill %d tokens in %.0f ms (%.1f tok/s); decode %d tokens in %.0f ms (%.2f tok/s)", n, t_pf,
            n / (t_pf / 1000), produced - 1, t_dec, produced > 1 ? (produced - 1) / (t_dec / 1000) : 0.0);
     if (cycles) printf("; %d cycles, %.2f tokens per cycle", cycles, double(produced - 1) / cycles);
-    printf("\n");
+    const AneStats& as = m.ane_stats();
+    if (as.chunks) printf("; ANE %d chunks, busy %.0f ms", as.chunks, as.ane_ms);
+    printf("; thermal %s\n", Gpu::thermal_state());
     if (Encoder::profiling()) Encoder::profile_report(cycles ? cycles : produced - 1);
     return 0;
   }

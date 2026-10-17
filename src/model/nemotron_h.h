@@ -97,6 +97,7 @@ class NemotronH : public Model {
   // checkpoint's llm_config)
   static bool is_model(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
+  static size_t ane_plan_bytes(const NhConfig& c, size_t state);
 
   // ---- Model ----
   void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
@@ -116,6 +117,8 @@ class NemotronH : public Model {
   // GPU + Neural Engine prefill split (NI_ANE; nemotron_ane.h)
   bool ane_splits(int T) const override;
   bool ane_finish_chunk() override;
+  void ane_abort(const std::string& why) override;
+  bool grouped_passes() const override { return group_; }
   bool ane_release() override;
   void ane_poll() override;
   const AneStats& ane_stats() const override { return ane_stats_; }
@@ -187,6 +190,7 @@ class NemotronH : public Model {
   std::unique_ptr<NhAne> ane_;
   bool ane_chunk_ = false;  // the chunk being encoded runs the split
   AneStats ane_stats_;
+  bool group_ = false;  // NI_NH_GROUP
   void init_ane();
   void ane_build();
   void prewarm_pipelines();
@@ -211,7 +215,6 @@ class NemotronH : public Model {
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_, acc_;
   Buffer xnh_, aoh_, loh_, shh_;  // half inputs of the multi-row GEMMs (passes of 2+ rows)
   Buffer part_;                   // routed experts' weighted partial outputs [rows * k][latent]
-  Buffer lath_, vh_, vout_, vsorted_, vrank_, vtiles_, vntiles_;  // verify rows' routed experts (bucketed GEMMs)
   Buffer iq2tab_;                 // IQ2_XXS lookup tables (constant address space in the kernels)
   Buffer live_, live_all_;        // live rows of a verify block (dynamic depth), and the no-limit constant
   bool dyn_rows_ = false;

@@ -1,8 +1,9 @@
-// Nemotron-H decode kernels on synthetic weights of the real shapes: GPU time per call and effective bandwidth,
-// with a CPU reference check of each kernel's output.
-//   nh_bench [kernel-substring ...]   (default: every case)
-// Cases: matvecs per format (FP4 Mamba in/out, Q8 LM head / attention / latent, IQ2 shared expert, F32 router),
-// routed experts up/down, the Mamba step.
+// Nemotron-H kernels on synthetic weights of the real shapes: GPU time per call (10 back-to-back calls per command
+// buffer, median of 5) and effective bandwidth or TFLOP/s, with a CPU reference check of each kernel's output.
+//   nh_bench [case-substring ...]   (default: every case)
+// Cases: one-row matvecs per format ("mv"), routed experts for 1 and 8 token rows ("moe"), the 8-row MMA products of
+// the verify pass ("v8": NB row blocks of 8 per threadgroup), the prefill GEMMs ("gemm").
+// Variants measured slower and removed are listed in docs/PERF.md (Nemotron 3.5 Bolt).
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
@@ -155,93 +156,52 @@ int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   g.compile_extra("Nemotron-H", kNhKernelSource);
   const std::vector<uint64_t> grid = grid_from_source();
+  Buffer gtab = g.alloc(4096, "iq2_grid_half");  // nh_iq2_fill_tables2: the grid as halves (v8 and GEMM kernels)
+  {
+    auto e = g.begin();
+    e->use(g.pipeline("nh_iq2_fill_tables2"));
+    e->buf(0, gtab);
+    e->dispatch(1, 1, 1, 256);
+    e->commit_and_wait();
+  }
   struct Case {
     const char* name;
     NhFmt f;
     uint32_t N, K;
   };
+  // ---- one-row matvecs: the generic kernel against the tuned ones ----
   const Case cases[] = {
-      {"fp4 ssm_in 18560x4096", NhFmt::FP4, 18560, 4096},  {"fp4 ssm_out 4096x8192", NhFmt::FP4, 4096, 8192},
-      {"q8 head 131072x4096", NhFmt::Q8, 131072, 4096},     {"q8 attn_q 4096x4096", NhFmt::Q8, 4096, 4096},
-      {"q8 latent_down 1024x4096", NhFmt::Q8, 1024, 4096},  {"q8 latent_up 4096x1024", NhFmt::Q8, 4096, 1024},
-      {"iq2 shexp_up 5376x4096", NhFmt::IQ2, 5376, 4096},   {"iq2 shexp_down 4096x5376", NhFmt::IQ2, 4096, 5376},
-      {"f32 router 496x4096", NhFmt::F32, 496, 4096},
+      {"mv fp4 ssm_in 18560x4096", NhFmt::FP4, 18560, 4096},  {"mv fp4 ssm_out 4096x8192", NhFmt::FP4, 4096, 8192},
+      {"mv q8 head 131072x4096", NhFmt::Q8, 131072, 4096},     {"mv q8 attn_q 4096x4096", NhFmt::Q8, 4096, 4096},
+      {"mv q8 latent_down 1024x4096", NhFmt::Q8, 1024, 4096},  {"mv q8 latent_up 4096x1024", NhFmt::Q8, 4096, 1024},
+      {"mv iq2 shexp_up 5376x4096", NhFmt::IQ2, 5376, 4096},   {"mv iq2 shexp_down 4096x5376", NhFmt::IQ2, 4096, 5376},
+      {"mv f32 router 496x4096", NhFmt::F32, 496, 4096},
   };
   for (const Case& c : cases) {
     if (!want(c.name)) continue;
     Mat m = make(c.f, c.N, c.K, grid);
     struct Var {
       std::string kn;
-      int R;
-      uint32_t nr;
-      uint32_t persist = 0;  // persistent: threadgroups of 256 threads, at most this many per GPU core
+      uint32_t rows_tg;  // output rows per threadgroup of 128 threads
     };
     std::vector<Var> vars;
     const char* fm = c.f == NhFmt::Q8 ? "q8" : c.f == NhFmt::FP4 ? "fp4" : c.f == NhFmt::IQ2 ? "iq2" : "f32";
-    vars.push_back({std::string("nh_mv_") + fm + "_r1", 1, 4});
+    vars.push_back({std::string("nh_mv_") + fm + "_r1", 16});
     if (c.f == NhFmt::FP4) {
-      vars.push_back({"nh_mv1_fp4", 1, 4});
-      vars.push_back({"nh_mv1_fp4_n8", 1, 8});
-      vars.push_back({"nh_mv1_fp4p", 1, 4, 4});
-      vars.push_back({"nh_mv1_fp4p", 1, 4, 8});
-      vars.push_back({"nh_mv1_fp4p_n2", 1, 2, 8});
-      vars.push_back({"nh_mv1_fp4x", 1, 4});
-      vars.push_back({"nh_mv1_fp4x_n8", 1, 8});
+      vars.push_back({"nh_mv1_fp4", 16});
+      vars.push_back({"nh_mv1_fp4_n8", 32});
     }
-    if (c.f == NhFmt::IQ2) {
-      vars.push_back({"nh_mv1_iq2", 1, 4});
-      vars.push_back({"nh_mv1_iq2_c", 1, 4});
-      vars.push_back({"nh_mv1_iq2_d", 1, 4});
-      vars.push_back({"nh_mv1_iq2p", 1, 4, 4});
-      vars.push_back({"nh_mv1_iq2p", 1, 4, 8});
-      vars.push_back({"nh_mv1_iq2p_n2", 1, 2, 8});
-      vars.push_back({"nh_mv1_iq2_h", 1, 4});
-      vars.push_back({"nh_mv1_iq2_f", 1, 4});
-      vars.push_back({"nh_mv1_iq2_a", 1, 4});
-      vars.push_back({"nh_mv1_iq2_h2", 1, 2});
-      vars.push_back({"nh_mv1_iq2_h8", 1, 8});
-      vars.push_back({"nh_mv1_iq2_q", 1, 4});
-      vars.push_back({"nh_mv1_iq2_q_t", 1, 4});
-      vars.push_back({"nh_mv1_iq2_q8r", 1, 8});
-      vars.push_back({"nh_mv1_iq2_q8r_t", 1, 8});
-    }
-    vars.push_back({std::string("nh_mv_") + fm + "_r8", 8, 1});
+    if (c.f == NhFmt::IQ2) vars.push_back({"nh_mv1_iq2_c", 16});
+    Buffer x = g.alloc(size_t(c.K) * 4, "x"), y = g.alloc(size_t(c.N) * 4, "y");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < c.K; ++i) x.as<float>()[i] = nd(rng);
     for (const Var& var : vars) {
-      if (!want(var.kn) && !want(c.name)) continue;
-      const int R = var.R;
-      Buffer x = g.alloc(size_t(R) * c.K * 4, "x"), y = g.alloc(size_t(R) * c.N * 4, "y");
-      std::normal_distribution<float> nd(0.0f, 1.0f);
-      for (size_t i = 0; i < size_t(R) * c.K; ++i) x.as<float>()[i] = nd(rng);
-      NemotronH* none = nullptr;
-      (void)none;
-      // a NemotronH instance is not needed: build the dispatch as enc_mv does
-      const std::string kn = var.kn;
-      const uint32_t nr = var.nr, nsg = 4;
       struct {
         uint32_t N, K, xs, ys;
         float gs;
         uint32_t R;
-      } p{c.N, c.K, c.K, c.N, 1.0f, uint32_t(R)};
-      Pipeline pl = g.pipeline(kn);
-      static Buffer tab, tab2, tabq;
-      if (!tab) {
-        tab = g.alloc(3072 * 4, "iq2_tab");
-        tab2 = g.alloc(18432, "iq2_tab2");
-        tabq = g.alloc(512, "iq2_codes");
-        auto e = g.begin();
-        e->use(g.pipeline("nh_iq2_fill_codes"));
-        e->buf(0, tabq);
-        e->dispatch(1, 1, 1, 256);
-        e->use(g.pipeline("nh_iq2_fill_tables"));
-        e->buf(0, tab);
-        e->dispatch(1, 1, 1, 256);
-        e->use(g.pipeline("nh_iq2_fill_tables2"));
-        e->buf(0, tab2);
-        e->dispatch(1, 1, 1, 256);
-        e->commit_and_wait();
-      }
-      const bool t2 = kn.rfind("nh_mv1_iq2_", 0) == 0 && kn.size() > 11 && (kn[11] == 'h' || kn[11] == 'f' || kn[11] == 'a');
-      const bool tq = kn.rfind("nh_mv1_iq2_q", 0) == 0;
+      } p{c.N, c.K, c.K, c.N, 1.0f, 1};
+      Pipeline pl = g.pipeline(var.kn);
       const double ms = time_kernel(5, [&](Encoder& e) {
         e.use(pl);
         e.buf(0, m.m.q);
@@ -249,321 +209,149 @@ int main(int argc, char** argv) {
         e.buf(2, x);
         e.buf(3, y);
         e.bytes(4, &p, sizeof p);
-        e.buf(5, tq ? tabq : t2 ? tab2 : tab);
-        if (var.persist) {
-          const uint32_t blocks = (c.N + nr * 8 - 1) / (nr * 8);
-          e.dispatch(std::min<uint32_t>(blocks, var.persist * uint32_t(g.core_count())), 1, 1, 256);
-        } else {
-          e.dispatch((c.N + nr * nsg - 1) / (nr * nsg), 1, 1, 32 * nsg);
-        }
+        e.dispatch((c.N + var.rows_tg - 1) / var.rows_tg, 1, 1, 128);
       });
-      // check a few rows
       double maxerr = 0, maxref = 0;
-      for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64))
-        for (int r = 0; r < R; ++r) {
-          double ref = 0;
-          for (uint32_t k = 0; k < c.K; ++k) ref += double(m.w[size_t(n) * c.K + k]) * x.as<float>()[size_t(r) * c.K + k];
-          maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[size_t(r) * c.N + n]));
-          maxref = std::max(maxref, std::fabs(ref));
-        }
+      for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64)) {
+        double ref = 0;
+        for (uint32_t k = 0; k < c.K; ++k) ref += double(m.w[size_t(n) * c.K + k]) * x.as<float>()[k];
+        maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[n]));
+        maxref = std::max(maxref, std::fabs(ref));
+      }
       const double bytes = double(m.m.q.size) + (m.m.s.mtl != m.m.q.mtl ? double(m.m.s.size) : 0.0);
-      printf("%-28s R=%d %-20s %8.3f ms  %6.1f GB/s  rel.err %.2e\n", c.name, R,
-             (kn + (var.persist ? "/" + std::to_string(var.persist) : std::string())).c_str(), ms, bytes / ms / 1e6,
+      printf("%-30s %-16s %8.3f ms  %6.1f GB/s  rel.err %.2e\n", c.name, var.kn.c_str(), ms, bytes / ms / 1e6,
              maxerr / std::max(maxref, 1e-30));
-      g.release(x);
-      g.release(y);
     }
+    g.release(x);
+    g.release(y);
   }
-  // ---- routed experts (decode): 9 of 368 experts, width 2304, latent 1024 ----
+  // ---- routed experts: 9 of 368 experts (width 2304, latent 1024) per token row, nh_moe2 (one row: decode; 8
+  // rows: a verify block, each row taking 4 of its experts from 12 popular ones: ~52 distinct of 72 pairs) ----
   if (want("moe")) {
     const uint32_t E = 368, I = 2304, D = 1024, k = 9;
     Mat up = make(NhFmt::IQ2, I * E, D, grid), dn = make(NhFmt::IQ2, D * E, I, grid);
+    Buffer live = g.alloc(16, "live");
+    live.as<uint32_t>()[0] = 0xffffffffu;
     for (uint32_t R : {1u, 8u}) {
       Buffer lat = g.alloc(size_t(R) * D * 4, "lat"), h = g.alloc(size_t(R) * k * I * 4, "h"), o = g.alloc(size_t(R) * D * 4, "o");
-      Buffer eid = g.alloc(size_t(R) * k * 4, "eid"), ew = g.alloc(size_t(R) * k * 4, "ew");
+      Buffer eid = g.alloc(size_t(R) * k * 4, "eid"), ew = g.alloc(size_t(R) * k * 4, "ew"), part = g.alloc(size_t(R) * k * D * 4, "part");
       std::normal_distribution<float> nd(0.0f, 1.0f);
       for (size_t i = 0; i < size_t(R) * D; ++i) lat.as<float>()[i] = nd(rng);
-      for (uint32_t i = 0; i < R * k; ++i) {
-        eid.as<int>()[i] = int((i * 37 + 11) % E);
-        ew.as<float>()[i] = 0.1f + 0.01f * float(i % k);
+      std::mt19937 er(7);
+      for (uint32_t r = 0; r < R; ++r) {
+        std::vector<int> got;
+        while (R > 1 && got.size() < 4) {
+          const int v = int(er() % 12);
+          if (std::find(got.begin(), got.end(), v) == got.end()) got.push_back(v);
+        }
+        while (got.size() < k) {
+          const int v = 12 + int(er() % (E - 12));
+          if (std::find(got.begin(), got.end(), v) == got.end()) got.push_back(v);
+        }
+        for (uint32_t j = 0; j < k; ++j) {
+          eid.as<int>()[r * k + j] = got[j];
+          ew.as<float>()[r * k + j] = 0.1f + 0.01f * float(j);
+        }
       }
       struct {
         uint32_t I, D, k, uq, us, dq, ds, hs;
       } mp{I, D, k, uint32_t(up.m.q_row * I), uint32_t(up.m.s_row * I), uint32_t(dn.m.q_row * D), uint32_t(dn.m.s_row * D), I};
       const double bytes_up = double(R * k) * (double(up.m.q_row) + double(up.m.s_row)) * I;
       const double bytes_dn = double(R * k) * (double(dn.m.q_row) + double(dn.m.s_row)) * D;
-      Buffer part = g.alloc(size_t(R) * k * D * 4, "part"), tab2 = g.alloc(18432, "iq2_tab2");
-      {
-        auto e = g.begin();
-        e->use(g.pipeline("nh_iq2_fill_tables2"));
-        e->buf(0, tab2);
-        e->dispatch(1, 1, 1, 256);
-        e->commit_and_wait();
-      }
-      const char* names[] = {"grid", "persistent", "v2 const", "v2 h", "v2 f", "v2 a", "dedup"};
-      for (int v = 0; v < 7; ++v) {
-        if (v == 1 || v == 3 || v == 4) continue;
-        if (v == 6) {
-          // pairs grouped by expert (tiles of <= 8 pairs), each expert row decoded once per 2 tokens
-          const uint32_t P = R * k;
-          Buffer sorted = g.alloc(P * 4, "sorted"), rank = g.alloc(P * 4, "rank"), tiles = g.alloc((P + E + 2) * 16, "tiles"),
-                 ntiles = g.alloc(16, "ntiles"), outp = g.alloc(size_t(P) * D * 4, "outp");
-          struct { uint32_t P, E, BM; } bp{P, E, 8};
-          {
-            auto e = g.begin();
-            e->use(g.pipeline("nh_moe_bucket"));
-            e->buf(0, eid); e->buf(1, sorted); e->buf(2, tiles); e->buf(3, ntiles); e->buf(4, rank);
-            e->bytes(5, &bp, sizeof bp);
-            e->dispatch(1, 1, 1, 1024);
-            e->commit_and_wait();
-          }
-          const uint32_t nt = ntiles.as<uint32_t>()[0];
-          Pipeline p3u = g.pipeline("nh_moe3_up_iq2"), p3d = g.pipeline("nh_moe3_dn_iq2"), pc = g.pipeline("nh_moe_combine");
-          const double ms_up = time_kernel(5, [&](Encoder& e) {
-            e.use(p3u);
-            e.buf(0, up.m.q); e.buf(1, up.m.s); e.buf(2, lat); e.buf(3, h); e.buf(4, tiles); e.buf(5, ntiles);
-            e.buf(6, sorted); e.bytes(7, &mp, sizeof mp);
-            e.dispatch((I + 15) / 16, nt * 4, 1, 128);
-          });
-          Buffer loh = g.alloc(size_t(R) * D * 2, "loh");
-          const double ms_dn = time_kernel(5, [&](Encoder& e) {
-            e.use(p3d);
-            e.buf(0, dn.m.q); e.buf(1, dn.m.s); e.buf(2, h); e.buf(3, outp); e.buf(4, tiles); e.buf(5, ntiles);
-            e.buf(6, sorted); e.bytes(7, &mp, sizeof mp);
-            e.dispatch((D + 15) / 16, nt * 4, 1, 128);
-            struct { uint32_t D, k; } cp{D, k};
-            e.use(pc);
-            e.buf(0, outp); e.buf(1, ew); e.buf(2, loh); e.bytes(3, &cp, sizeof cp);
-            e.dispatch(R, 1, 1, 256);
-          });
-          // row 0 against the CPU (fp32 h; the combine stores half)
-          double maxerr = 0, maxref = 0;
-          std::vector<double> hh(size_t(k) * I);
-          for (uint32_t j = 0; j < k; ++j) {
-            const uint32_t ex = uint32_t(eid.as<int>()[j]);
-            for (uint32_t n = 0; n < I; ++n) {
-              double a = 0;
-              for (uint32_t kk = 0; kk < D; ++kk) a += double(up.w[(size_t(ex) * I + n) * D + kk]) * lat.as<float>()[kk];
-              a = std::max(a, 0.0);
-              hh[size_t(j) * I + n] = a * a;
-            }
-          }
-          for (uint32_t n = 0; n < D; n += 37) {
-            double ref = 0;
-            for (uint32_t j = 0; j < k; ++j) {
-              const uint32_t ex = uint32_t(eid.as<int>()[j]);
-              double a = 0;
-              for (uint32_t kk = 0; kk < I; ++kk) a += double(dn.w[(size_t(ex) * D + n) * I + kk]) * hh[size_t(j) * I + kk];
-              ref += ew.as<float>()[j] * a;
-            }
-            maxerr = std::max(maxerr, std::fabs(ref - float(loh.as<__fp16>()[n])));
-            maxref = std::max(maxref, std::fabs(ref));
-          }
-          printf("moe R=%u %-18s up %7.3f ms %6.1f GB/s, down %7.3f ms %6.1f GB/s  rel.err %.2e (%u tiles)\n", R,
-                 names[v], ms_up, bytes_up / ms_up / 1e6, ms_dn, bytes_dn / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30),
-                 nt);
-          continue;
-        }
-        const char* suf = v == 3 ? "_h" : v == 4 ? "_f" : v == 5 ? "_a" : "";
-        Pipeline pu = g.pipeline(v >= 2 ? std::string("nh_moe2_up_iq2") + suf : v ? "nh_moe1p_up_iq2" : "nh_moe_up_iq2");
-        Pipeline pd = g.pipeline(v >= 2 ? std::string("nh_moe2_dn_iq2") + suf : v ? "nh_moe1p_down_iq2" : "nh_moe_down_iq2");
-        Pipeline ps = g.pipeline("nh_moe2_sum");
-        const uint32_t npairs = R * k;
-        const double ms_up = time_kernel(5, [&](Encoder& e) {
-          e.use(pu);
-          e.buf(0, up.m.q); e.buf(1, up.m.s); e.buf(2, lat); e.buf(3, h); e.buf(4, eid); e.bytes(5, &mp, sizeof mp);
-          if (v >= 3) e.buf(6, tab2);
-          if (v == 1) {
-            e.bytes(6, &npairs, 4);
-            e.dispatch(4 * uint32_t(g.core_count()), 1, 1, 256);
-          } else {
-            e.dispatch((I + 15) / 16, R * k, 1, 128);
-          }
-        });
-        const double ms_dn = time_kernel(5, [&](Encoder& e) {
-          e.use(pd);
-          e.buf(0, dn.m.q); e.buf(1, dn.m.s); e.buf(2, h); e.buf(3, v >= 2 ? part : o); e.buf(4, eid); e.buf(5, ew);
-          e.bytes(6, &mp, sizeof mp);
-          if (v >= 3) e.buf(7, tab2);
-          if (v == 1) {
-            e.bytes(7, &R, 4);
-            e.dispatch(4 * uint32_t(g.core_count()), 1, 1, 256);
-          } else if (v >= 2) {
-            e.dispatch((D + 15) / 16, R * k, 1, 128);
-            e.use(ps);
-            e.buf(0, part); e.buf(1, o); e.bytes(2, &mp, sizeof mp);
-            e.dispatch(R, 1, 1, 256);
-          } else {
-            e.dispatch((D + 15) / 16, R, 1, 128);
-          }
-        });
-        // check o against the CPU for row 0
-        double maxerr = 0, maxref = 0;
-        std::vector<double> hh(size_t(k) * I);
-        for (uint32_t j = 0; j < k; ++j) {
-          const uint32_t e = uint32_t(eid.as<int>()[j]);
-          for (uint32_t n = 0; n < I; ++n) {
-            double a = 0;
-            for (uint32_t kk = 0; kk < D; ++kk) a += double(up.w[(size_t(e) * I + n) * D + kk]) * lat.as<float>()[kk];
-            a = std::max(a, 0.0);
-            hh[size_t(j) * I + n] = a * a;
-          }
-        }
-        for (uint32_t n = 0; n < D; n += 37) {
-          double ref = 0;
-          for (uint32_t j = 0; j < k; ++j) {
-            const uint32_t e = uint32_t(eid.as<int>()[j]);
-            double a = 0;
-            for (uint32_t kk = 0; kk < I; ++kk) a += double(dn.w[(size_t(e) * D + n) * I + kk]) * hh[size_t(j) * I + kk];
-            ref += ew.as<float>()[j] * a;
-          }
-          maxerr = std::max(maxerr, std::fabs(ref - o.as<float>()[n]));
-          maxref = std::max(maxref, std::fabs(ref));
-        }
-        printf("moe R=%u %-18s up %7.3f ms %6.1f GB/s, down %7.3f ms %6.1f GB/s  rel.err %.2e\n", R, names[v], ms_up,
-               bytes_up / ms_up / 1e6, ms_dn, bytes_dn / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30));
-      }
-      g.release(part);
-      g.release(tab2);
-    }
-  }
-  // ---- 8-row MMA products (nh_v8_*): Y[t][n] for 8 token rows, X half ----
-  {
-    const Case vcases[] = {
-        {"v8 fp4 ssm_in 18560x4096", NhFmt::FP4, 18560, 4096}, {"v8 fp4 ssm_out 4096x8192", NhFmt::FP4, 4096, 8192},
-        {"v8 q8 head 131072x4096", NhFmt::Q8, 131072, 4096},  {"v8 q8 attn_q 4096x4096", NhFmt::Q8, 4096, 4096},
-        {"v8 q8 latent_up 4096x1024", NhFmt::Q8, 4096, 1024}, {"v8 iq2 shexp_up 5376x4096", NhFmt::IQ2, 5376, 4096},
-        {"v8 iq2 shexp_down 4096x5376", NhFmt::IQ2, 4096, 5376},
-    };
-    for (const Case& c : vcases) {
-      if (!want(c.name)) continue;
-      Mat m = make(c.f, c.N, c.K, grid);
-      const uint32_t R = 8;
-      Buffer x = g.alloc(size_t(R) * c.K * 2, "xh"), y = g.alloc(size_t(R) * c.N * 4, "y"), dummy = g.alloc(64, "d");
-      Buffer vtab = g.alloc(18432, "iq2_tab2");
-      {
-        auto e = g.begin();
-        e->use(g.pipeline("nh_iq2_fill_tables2"));
-        e->buf(0, vtab);
-        e->dispatch(1, 1, 1, 256);
-        e->commit_and_wait();
-      }
-      std::normal_distribution<float> nd(0.0f, 1.0f);
-      for (size_t i = 0; i < size_t(R) * c.K; ++i) x.as<__fp16>()[i] = __fp16(nd(rng));
-      const char* fm = c.f == NhFmt::Q8 ? "q8" : c.f == NhFmt::FP4 ? "fp4" : "iq2";
-      for (int vi : {1, 2, -1, -2, -11, -12}) {
-        if (vi <= -11 && c.f != NhFmt::FP4) continue;
-        const int nb = vi <= -11 ? -vi - 10 : vi < 0 ? -vi : vi;
-        const bool split = vi < 0;
-        const std::string kn = std::string("nh_v8_") + fm + (vi <= -11 ? "x" : "") + (split ? "_s" : "_b") + std::to_string(nb);
-        struct {
-          uint32_t N, K, x_ld, y_ld, R;
-          float gs;
-          uint32_t epi, qe, se, k;
-        } p{c.N, c.K, c.K, c.N, R, 1.0f, 0, 0, 0, 1};
-        Pipeline pl = g.pipeline(kn);
-        const uint32_t nsg = 4, rows_tg = split ? 8 * uint32_t(nb) : 8 * uint32_t(nb) * nsg;
-        const double ms = time_kernel(5, [&](Encoder& e) {
-          e.use(pl);
-          e.buf(0, x);
-          e.buf(1, m.m.q);
-          e.buf(2, m.m.s);
-          e.buf(3, y);
-          e.bytes(4, &p, sizeof p);
-          e.buf(5, dummy);
-          e.buf(6, dummy);
-          e.buf(7, dummy);
-          e.buf(8, vtab);
-          e.dispatch((c.N + rows_tg - 1) / rows_tg, 1, 1, 32 * nsg);
-        });
-        double maxerr = 0, maxref = 0;
-        for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64))
-          for (uint32_t r = 0; r < R; ++r) {
-            double ref = 0;
-            for (uint32_t k = 0; k < c.K; ++k)
-              ref += double(m.w[size_t(n) * c.K + k]) * double(float(x.as<__fp16>()[size_t(r) * c.K + k]));
-            maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[size_t(r) * c.N + n]));
-            maxref = std::max(maxref, std::fabs(ref));
-          }
-        const double bytes = double(m.m.q.size) + (m.m.s.mtl != m.m.q.mtl ? double(m.m.s.size) : 0.0);
-        printf("%-28s R=8 %-16s %8.3f ms  %6.1f GB/s  rel.err %.2e\n", c.name, kn.c_str(), ms, bytes / ms / 1e6,
-               maxerr / std::max(maxref, 1e-30));
-      }
-      g.release(x);
-      g.release(y);
-    }
-    // routed experts of 8 token rows: 72 (row, expert) pairs over 40 distinct experts, tiles from nh_moe_bucket
-    if (want("v8 moe")) {
-      const uint32_t E = 368, I = 2304, D = 1024, k = 9, R = 8, P = R * k;
-      Mat up = make(NhFmt::IQ2, I * E, D, grid), dn = make(NhFmt::IQ2, D * E, I, grid);
-      Buffer lat = g.alloc(size_t(R) * D * 2, "lat"), h = g.alloc(size_t(P) * I * 2, "h"), o = g.alloc(size_t(P) * D * 4, "o");
-      Buffer eid = g.alloc(P * 4, "eid"), sorted = g.alloc(P * 4, "sorted"), rank = g.alloc(P * 4, "rank");
-      Buffer tiles = g.alloc((P / 16 + E + 2) * 16, "tiles"), ntiles = g.alloc(16, "ntiles");
-      Buffer mtab = g.alloc(18432, "iq2_tab2");
-      {
-        auto e = g.begin();
-        e->use(g.pipeline("nh_iq2_fill_tables2"));
-        e->buf(0, mtab);
-        e->dispatch(1, 1, 1, 256);
-        e->commit_and_wait();
-      }
-      std::normal_distribution<float> nd(0.0f, 1.0f);
-      for (size_t i = 0; i < size_t(R) * D; ++i) lat.as<__fp16>()[i] = __fp16(nd(rng));
-      for (uint32_t t = 0; t < R; ++t)
-        for (uint32_t j = 0; j < k; ++j) eid.as<int>()[t * k + j] = int((j * 41 + t * (j % 3 == 0 ? 0 : 7) + 5) % E);
-      {
-        struct { uint32_t P, E, BM; } bp{P, E, 8};
-        auto e = g.begin();
-        e->use(g.pipeline("nh_moe_bucket"));
-        e->buf(0, eid); e->buf(1, sorted); e->buf(2, tiles); e->buf(3, ntiles); e->buf(4, rank);
-        e->bytes(5, &bp, sizeof bp);
-        e->dispatch(1, 1, 1, 1024);
-        e->commit_and_wait();
-      }
-      const uint32_t nt = ntiles.as<uint32_t>()[0];
-      for (int nb : {1, 2}) {
-        struct {
-          uint32_t N, K, x_ld, y_ld, R;
-          float gs;
-          uint32_t epi, qe, se, k;
-        } pu{I, D, D, I, R, 1.0f, 2, uint32_t(up.m.q_row * I), uint32_t(up.m.s_row * I), k},
-            pd{D, I, I, D, R, 1.0f, 0, uint32_t(dn.m.q_row * D), uint32_t(dn.m.s_row * D), k};
-        const uint32_t nsg = 4, rows_tg = 8 * uint32_t(nb) * nsg;
-        Pipeline plu = g.pipeline("nh_v8_iq2_moe_up_b" + std::to_string(nb));
-        Pipeline pld = g.pipeline("nh_v8_iq2_moe_dn_b" + std::to_string(nb));
-        const double ms_up = time_kernel(5, [&](Encoder& e) {
-          e.use(plu);
-          e.buf(0, lat); e.buf(1, up.m.q); e.buf(2, up.m.s); e.buf(3, h); e.bytes(4, &pu, sizeof pu);
-          e.buf(5, tiles); e.buf(6, ntiles); e.buf(7, sorted); e.buf(8, mtab);
-          e.dispatch((I + rows_tg - 1) / rows_tg, nt, 1, 32 * nsg);
-        });
-        const double ms_dn = time_kernel(5, [&](Encoder& e) {
-          e.use(pld);
-          e.buf(0, h); e.buf(1, dn.m.q); e.buf(2, dn.m.s); e.buf(3, o); e.bytes(4, &pd, sizeof pd);
-          e.buf(5, tiles); e.buf(6, ntiles); e.buf(7, sorted); e.buf(8, mtab);
-          e.dispatch((D + rows_tg - 1) / rows_tg, nt, 1, 32 * nsg);
-        });
-        // check pair 0's output against the CPU (with h rounded to half as the kernel stores it)
-        double maxerr = 0, maxref = 0;
-        const uint32_t pair = 0, tok = pair / k, ex = uint32_t(eid.as<int>()[pair]);
-        std::vector<double> hh(I);
+      Pipeline pu = g.pipeline("nh_moe2_up_iq2"), pd = g.pipeline("nh_moe2_dn_iq2"), ps = g.pipeline("nh_moe2_sum");
+      const double ms_up = time_kernel(5, [&](Encoder& e) {
+        e.use(pu);
+        e.buf(0, up.m.q); e.buf(1, up.m.s); e.buf(2, lat); e.buf(3, h); e.buf(4, eid); e.bytes(5, &mp, sizeof mp);
+        e.buf(7, live);
+        e.dispatch((I + 15) / 16, R * k, 1, 128);
+      });
+      const double ms_dn = time_kernel(5, [&](Encoder& e) {
+        e.use(pd);
+        e.buf(0, dn.m.q); e.buf(1, dn.m.s); e.buf(2, h); e.buf(3, part); e.buf(4, eid); e.buf(5, ew);
+        e.bytes(6, &mp, sizeof mp); e.buf(8, live);
+        e.dispatch((D + 15) / 16, R * k, 1, 128);
+        e.use(ps);
+        e.buf(0, part); e.buf(1, o); e.bytes(2, &mp, sizeof mp); e.buf(3, live);
+        e.dispatch(R, 1, 1, 256);
+      });
+      // row 0 against the CPU
+      double maxerr = 0, maxref = 0;
+      std::vector<double> hh(size_t(k) * I);
+      for (uint32_t j = 0; j < k; ++j) {
+        const uint32_t ex = uint32_t(eid.as<int>()[j]);
         for (uint32_t n = 0; n < I; ++n) {
           double a = 0;
-          for (uint32_t kk = 0; kk < D; ++kk) a += double(up.w[(size_t(ex) * I + n) * D + kk]) * float(lat.as<__fp16>()[tok * D + kk]);
+          for (uint32_t kk = 0; kk < D; ++kk) a += double(up.w[(size_t(ex) * I + n) * D + kk]) * lat.as<float>()[kk];
           a = std::max(a, 0.0);
-          hh[n] = float(__fp16(float(a * a)));
+          hh[size_t(j) * I + n] = a * a;
         }
-        for (uint32_t n = 0; n < D; n += 13) {
+      }
+      for (uint32_t n = 0; n < D; n += 37) {
+        double ref = 0;
+        for (uint32_t j = 0; j < k; ++j) {
+          const uint32_t ex = uint32_t(eid.as<int>()[j]);
+          double a = 0;
+          for (uint32_t kk = 0; kk < I; ++kk) a += double(dn.w[(size_t(ex) * D + n) * I + kk]) * hh[size_t(j) * I + kk];
+          ref += ew.as<float>()[j] * a;
+        }
+        maxerr = std::max(maxerr, std::fabs(ref - o.as<float>()[n]));
+        maxref = std::max(maxref, std::fabs(ref));
+      }
+      printf("moe R=%u nh_moe2         up %7.3f ms %6.1f GB/s, down + sum %7.3f ms %6.1f GB/s  rel.err %.2e\n", R, ms_up,
+             bytes_up / ms_up / 1e6, ms_dn, bytes_dn / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30));
+      for (Buffer* b : {&lat, &h, &o, &eid, &ew, &part}) g.release(*b);
+    }
+  }
+  // ---- 8-row MMA products (nh_v8_*_s<NB>): Y[t][n] for 8 token rows, X half ----
+  const Case vcases[] = {
+      {"v8 fp4 ssm_in 18560x4096", NhFmt::FP4, 18560, 4096}, {"v8 fp4 ssm_out 4096x8192", NhFmt::FP4, 4096, 8192},
+      {"v8 q8 head 131072x4096", NhFmt::Q8, 131072, 4096},  {"v8 q8 attn_q 4096x4096", NhFmt::Q8, 4096, 4096},
+      {"v8 q8 latent_up 4096x1024", NhFmt::Q8, 4096, 1024}, {"v8 q8 latent_down 1024x4096", NhFmt::Q8, 1024, 4096},
+      {"v8 iq2 shexp_up 5376x4096", NhFmt::IQ2, 5376, 4096}, {"v8 iq2 shexp_down 4096x5376", NhFmt::IQ2, 4096, 5376},
+  };
+  for (const Case& c : vcases) {
+    if (!want(c.name)) continue;
+    Mat m = make(c.f, c.N, c.K, grid);
+    const uint32_t R = 8;
+    Buffer x = g.alloc(size_t(R) * c.K * 2, "xh"), y = g.alloc(size_t(R) * c.N * 4, "y");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < size_t(R) * c.K; ++i) x.as<__fp16>()[i] = __fp16(nd(rng));
+    const char* fm = c.f == NhFmt::Q8 ? "q8" : c.f == NhFmt::FP4 ? "fp4" : "iq2";
+    for (uint32_t nb : {1u, 2u, 4u, 8u}) {
+      if (nb == 8 && c.f != NhFmt::FP4) continue;
+      const std::string kn = std::string("nh_v8_") + fm + "_s" + std::to_string(nb);
+      struct {
+        uint32_t N, K, x_ld, y_ld, R;
+        float gs;
+        uint32_t epi;
+      } p{c.N, c.K, c.K, c.N, R, 1.0f, 0};
+      Pipeline pl = g.pipeline(kn);
+      const uint32_t rows_tg = 8 * nb;
+      const double ms = time_kernel(5, [&](Encoder& e) {
+        e.use(pl);
+        e.buf(0, x);
+        e.buf(1, m.m.q);
+        e.buf(2, m.m.s);
+        e.buf(3, y);
+        e.bytes(4, &p, sizeof p);
+        e.buf(8, gtab);
+        e.dispatch((c.N + rows_tg - 1) / rows_tg, 1, 1, 128);
+      });
+      double maxerr = 0, maxref = 0;
+      for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64))
+        for (uint32_t r = 0; r < R; ++r) {
           double ref = 0;
-          for (uint32_t kk = 0; kk < I; ++kk) ref += double(dn.w[(size_t(ex) * D + n) * I + kk]) * hh[kk];
-          maxerr = std::max(maxerr, std::fabs(ref - o.as<float>()[size_t(pair) * D + n]));
+          for (uint32_t k = 0; k < c.K; ++k)
+            ref += double(m.w[size_t(n) * c.K + k]) * double(float(x.as<__fp16>()[size_t(r) * c.K + k]));
+          maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[size_t(r) * c.N + n]));
           maxref = std::max(maxref, std::fabs(ref));
         }
-        const double bu = double(nt) * (up.m.q_row + up.m.s_row) * I, bd = double(nt) * (dn.m.q_row + dn.m.s_row) * D;
-        printf("v8 moe R=8 (%u tiles) b%d up %7.3f ms %6.1f GB/s, down %7.3f ms %6.1f GB/s  rel.err %.2e\n", nt, nb, ms_up,
-               bu / ms_up / 1e6, ms_dn, bd / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30));
-      }
+      const double bytes = double(m.m.q.size) + (m.m.s.mtl != m.m.q.mtl ? double(m.m.s.size) : 0.0);
+      printf("%-30s %-16s %8.3f ms  %6.1f GB/s  rel.err %.2e\n", c.name, kn.c_str(), ms, bytes / ms / 1e6,
+             maxerr / std::max(maxref, 1e-30));
     }
+    g.release(x);
+    g.release(y);
   }
   // ---- prefill GEMMs: Y[M, N] = X W^T, X half ----
   const Case gcases[] = {
@@ -585,14 +373,7 @@ int main(int argc, char** argv) {
         uint32_t epi, qe, se, k;
       } p{M, c.N, c.K, c.K, c.N, 1.0f, 0, 0, 0, 1};
       Pipeline pl = g.pipeline(kn);
-      Buffer dummy = g.alloc(64, "dummy"), gtab = g.alloc(18432, "iq2_tab2");
-      {
-        auto e = g.begin();
-        e->use(g.pipeline("nh_iq2_fill_tables2"));
-        e->buf(0, gtab);
-        e->dispatch(1, 1, 1, 256);
-        e->commit_and_wait();
-      }
+      Buffer dummy = g.alloc(64, "dummy");
       const double ms = time_kernel(3, [&](Encoder& e) {
         e.use(pl);
         e.buf(0, x);
