@@ -146,21 +146,31 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
   return x;
 }
 
-// The best catalog model for this Mac: the first (the catalog is best first) whose memory plan, the engine's own
-// (conversation_fits: plan_load's test before it keeps a drafter), leaves room for one conversation of --ctx tokens
-// within the budget. A model not downloaded yet is planned from its headers (hub::plan_dir: a few hundred KB, fetched
-// once); one that cannot be planned (offline) cannot be downloaded either and is skipped. nullptr if none can.
-static const hub::CatalogModel* best_model(const EngineOptions& opt, size_t budget, std::string* why) {
-  const hub::CatalogModel* fallback = nullptr;
+// The best catalog model for this Mac: the first (the catalog is best first) with a variant whose memory plan, the
+// engine's own, leaves room for one conversation of --ctx tokens within the budget and keeps its drafter (each model
+// takes its default variant, else the first of its fallbacks that fits: pick_variant). A model not downloaded yet is
+// planned from its headers (hub::plan_dir: a few hundred KB, fetched once); one that cannot be planned (offline)
+// cannot be downloaded either and is skipped. False if none can be planned.
+static bool best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
+  bool have = false;
   for (const auto& m : hub::catalog()) {
-    const std::string dir = hub::plan_dir(hub::resolve(m.name));
-    if (dir.empty()) continue;
-    if (conversation_fits(dir, opt.context, opt.slots, budget)) return &m;
-    fallback = &m;  // plannable but too big: the smallest such is the last resort
+    bool fits = false;
+    hub::ModelRef r = pick_variant(m, opt, budget, &fits);
+    if (fits) {
+      *out = r;
+      return true;
+    }
+    if (variant_fits(r, opt, budget) == 0) *out = r, have = true;  // too big: the smallest such is the last resort
   }
-  if (!fallback && why) *why = "Can't reach huggingface.co to see which model fits this Mac (offline?), and none is "
-                               "downloaded. Connect to the internet, or pass --model with a model folder.";
-  return fallback;
+  if (!have && why) *why = "Can't reach huggingface.co to see which model fits this Mac (offline?), and none is "
+                           "downloaded. Connect to the internet, or pass --model with a model folder.";
+  return have;
+}
+
+// --model <name> without a variant: the one for this Mac (pick_variant); anything else as resolved.
+static hub::ModelRef for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size_t budget) {
+  if (ref.kind != hub::ModelRef::kCatalog || ref.variant_given) return ref;
+  return pick_variant(*ref.model, opt, budget);
 }
 
 static std::string models_table() {
@@ -177,6 +187,13 @@ static std::string models_table() {
         snprintf(line, sizeof line, "%s:%s %.1f GB", more.empty() ? "" : ", ", v.name.c_str(), v.download_gb);
         more += line;
       }
+    if (d) s += "                           " + d->name + " (" + d->quant + ")";
+    if (!m.fallbacks.empty()) {
+      std::string fb;
+      for (const auto& f : m.fallbacks) fb += (fb.empty() ? "" : ", then ") + f;
+      s += "; smaller Macs: " + fb;
+    }
+    if (d) s += "\n";
     if (!more.empty()) s += "                           also " + more + "\n";
   }
   return s;
@@ -189,7 +206,7 @@ static void print_help() {
          "Then open http://127.0.0.1:8000 to chat, or point any OpenAI-compatible app at\n"
          "http://127.0.0.1:8000/v1.\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
-         "  or a Hugging Face repo of a Qwen3.5-family model in MLX 4/8-bit (org/name[@revision]),\n"
+         "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
          "  or a model folder.\n\n"
          "Commands:\n"
          "  serve        start the server: chat page at /, OpenAI API at /v1 (kapitsa serve --help)\n"
@@ -299,13 +316,20 @@ static int serve(int argc, char** argv, int first) {
   try {
     if (model.empty()) {
       std::string why;
-      const hub::CatalogModel* m = best_model(opt, budget, &why);
-      if (!m) return fail(why);
-      ref = hub::resolve(m->name);
+      if (!best_model(opt, budget, &ref, &why)) return fail(why);
       fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
-              m->name.c_str(), Gpu::get().name().c_str(), ram_gb());
+              ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
     } else {
-      ref = hub::resolve(expand_home(model));
+      const hub::ModelRef named = hub::resolve(expand_home(model));
+      ref = named;
+      if (named.kind == hub::ModelRef::kCatalog && !named.variant_given) {
+        bool fits = false;
+        ref = pick_variant(*named.model, opt, budget, &fits);
+        if (fits && ref.variant != named.variant)
+          fprintf(stderr, "%s on this Mac (%.0f GB): %s, the largest of its variants that fits (the default, %s, does "
+                  "not). --model %s:<variant> picks another.\n", model.c_str(), ram_gb(), ref.name.c_str(),
+                  named.variant->name.c_str(), hub::short_name(*ref.model).c_str());
+      }
     }
   } catch (const hub::Error& e) {
     return fail(e.what(), 2);
@@ -317,12 +341,16 @@ static int serve(int argc, char** argv, int first) {
       const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
       const StartNeed need = start_need(dir, lp, lp.prefill_chunk, opt.context, opt.slots);
       if (need.bytes > budget) {
-        const hub::CatalogModel* fit = best_model(opt, budget, nullptr);
-        char msg[640];
+        // a variant of the same model that fits, else the best model that does
+        bool fits = false;
+        hub::ModelRef alt = pick_variant(*ref.model, opt, budget, &fits);
+        if (!fits && !(best_model(opt, budget, &alt, nullptr) && variant_fits(alt, opt, budget) == 1)) alt = {};
+        const bool other = alt.variant && alt.variant != ref.variant;
+        char msg[768];
         snprintf(msg, sizeof msg, "%s needs %.1f GB of GPU memory with %s, and this Mac (%.0f GB) allows %.1f GB, so it "
-                 "would not start.%s%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
-                 budget / 1e9, fit && fit != ref.model ? " This one fits: kapitsa serve --model " : "",
-                 fit && fit != ref.model ? hub::short_name(*fit).c_str() : "", fit && fit != ref.model ? "" : "");
+                 "would not start.%s%s", ref.name.c_str(), need.bytes / 1e9, need.parts.c_str(), ram_gb(),
+                 budget / 1e9, other ? " This one fits: kapitsa serve --model " : "",
+                 other ? hub::short_name(*alt.model, *alt.variant).c_str() : "");
         return fail(msg);
       }
     }
@@ -539,10 +567,11 @@ static int pull(int argc, char** argv) {
     }
   }
   if (models.empty()) usage_error("which model? e.g. kapitsa pull 35b", help);
+  EngineOptions eo;  // serve's defaults: one 32k conversation, 2 slots
   for (const auto& name : models) {
     hub::ModelRef ref;
     try {
-      ref = hub::resolve(expand_home(name));
+      ref = for_this_mac(hub::resolve(expand_home(name)), eo, default_mem_budget());
     } catch (const hub::Error& e) {
       return fail(e.what(), 2);
     }
@@ -631,6 +660,20 @@ static int rm(int argc, char** argv) {
       return fail(e.what(), 2);
     }
     struct stat st;
+    if (ref.kind == hub::ModelRef::kCatalog && !ref.variant_given && stat(ref.dir.c_str(), &st) != 0) {
+      // no variant named and the default is not here: the model's one downloaded variant
+      std::vector<hub::ModelRef> have;
+      for (const auto& v : ref.model->variants) {
+        hub::ModelRef r = hub::resolve(ref.model->name + ":" + v.name);
+        if (stat(r.dir.c_str(), &st) == 0) have.push_back(r);
+      }
+      if (have.size() == 1) ref = have[0];
+      else if (have.size() > 1) {
+        std::string names;
+        for (const auto& r : have) names += (names.empty() ? "" : ", ") + hub::short_name(*r.model, *r.variant);
+        return fail("Several variants of " + ref.model->name + " are downloaded: " + names + ". Name one.", 2);
+      }
+    }
     if (ref.kind == hub::ModelRef::kLocal)
       return fail(ref.dir + " is a folder of yours, not a downloaded model: kapitsa rm leaves it alone.", 2);
     if (stat(ref.dir.c_str(), &st) != 0) {

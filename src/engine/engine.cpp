@@ -241,6 +241,37 @@ bool conversation_fits(const std::string& model_dir, int context, int slots, siz
   return p.fixed(std::max(1, slots)) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context) <= budget;
 }
 
+int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budget) {
+  const std::string dir = hub::plan_dir(ref);
+  if (dir.empty()) return -1;
+  if (!conversation_fits(dir, opt.context, opt.slots, budget)) return 0;
+  const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
+  return lp.dflash_left_out.empty() ? 1 : 0;
+}
+
+hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits) {
+  std::vector<std::string> order{m.default_variant};
+  order.insert(order.end(), m.fallbacks.begin(), m.fallbacks.end());
+  hub::ModelRef smallest, downloaded;
+  bool planned = false;
+  for (const std::string& v : order) {
+    hub::ModelRef r = hub::resolve(m.name + ":" + v);
+    r.variant_given = false;
+    const int f = variant_fits(r, opt, budget);
+    if (f == 1) {
+      if (fits) *fits = true;
+      return r;
+    }
+    if (f == 0) smallest = r, planned = true;
+    if (downloaded.dir.empty() && hub::is_current(r)) downloaded = r;
+  }
+  if (fits) *fits = false;
+  if (planned) return smallest;
+  if (!downloaded.dir.empty()) return downloaded;
+  hub::ModelRef d = hub::resolve(m.name);
+  return d;
+}
+
 void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started

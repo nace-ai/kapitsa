@@ -122,8 +122,13 @@ int run_doctor(int argc, char** argv) {
     if (roots.empty()) {
       // the catalog's models first (downloaded or not: what fits this Mac before a download), then the store and the
       // folders other tools keep models in
+      // each model's variant for this Mac: the default where it fits, else a fallback (pick_variant)
+      EngineOptions eo;
+      eo.context = ctx, eo.slots = slots, eo.prefill_chunk = chunk, eo.dflash = dflash;
+      eo.mem_budget_gb = budget_gb;
+      const size_t b = budget_gb > 0 ? size_t(budget_gb * 1e9) : default_mem_budget();
       for (const auto& c : hub::catalog())
-        if (const std::string d = hub::plan_dir(hub::resolve(c.name)); !d.empty()) models.push_back(d);
+        if (const std::string d = hub::plan_dir(pick_variant(c, eo, b)); !d.empty()) models.push_back(d);
       const char* h = getenv("HOME");
       const std::string home = h ? h : "";
       roots = {hub::models_dir(), home + "/.cache/nace-infer-models", home + "/.cache/nace-agent-models",
@@ -255,10 +260,40 @@ int run_doctor(int argc, char** argv) {
              "Engine add their measured factors (DEVELOPMENT.md)\n",
              dec, m.decode_bytes / 1e9, pf);
   }
+  // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
+  EngineOptions eo;
+  eo.context = ctx, eo.slots = slots, eo.prefill_chunk = chunk, eo.dflash = dflash;
+  nlohmann::ordered_json cv = nlohmann::ordered_json::array();
+  if (!as_json) printf("\nCatalog variants on this Mac (--ctx %d, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", ctx, slots);
+  for (const auto& c : hub::catalog()) {
+    bool fits = false;
+    const hub::ModelRef pick = pick_variant(c, eo, budget, &fits);
+    std::string line;
+    for (const auto& v : c.variants) {
+      const hub::ModelRef r = hub::resolve(c.name + ":" + v.name);
+      const int f = variant_fits(r, eo, budget);
+      std::string what = f == 1 ? "fits" : f == 0 ? "too big" : "not planned (offline)";
+      if (f == 0) {
+        const std::string d = hub::plan_dir(r);
+        const LoadPlan lp = plan_load(d, dflash, false, ctx, slots, budget, chunk);
+        const StartNeed need = start_need(d, lp, lp.prefill_chunk, ctx, slots);
+        char b[64];
+        if (need.bytes > budget) snprintf(b, sizeof b, "needs %.1f GB", need.bytes / 1e9);
+        else snprintf(b, sizeof b, "starts, but not with a full --ctx conversation and its drafter");
+        what = b;
+      }
+      const bool chosen = pick.variant == &v;
+      line += (line.empty() ? "" : ", ") + v.name + " " + what + (chosen ? " <- --model " + hub::short_name(c) : "");
+      cv.push_back({{"model", c.name}, {"variant", v.name}, {"fits", f == 1}, {"planned", f >= 0}, {"chosen", chosen},
+                    {"default", v.name == c.default_variant}});
+    }
+    if (!as_json) printf("  %s: %s\n", c.name.c_str(), line.c_str());
+  }
   if (as_json) {
     J["context"] = ctx;
     J["slots"] = slots;
     J["models"] = arr;
+    J["catalog_variants"] = cv;
     printf("%s\n", J.dump(2).c_str());
   }
   return 0;

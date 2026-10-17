@@ -48,7 +48,10 @@ struct CatalogModel {
   std::vector<std::string> aliases;  // "qwen3.6-35b", "35b"
   std::string title;                 // "Qwen3.6-35B-A3B"
   std::string about;                 // one line for --help
-  std::string default_variant;       // the variant `--model <name>` takes
+  std::string default_variant;       // the variant `--model <name>` takes where it fits (the API names it <name>)
+  // On a Mac the default does not fit (the engine's memory plan of its headers: one --ctx conversation with its
+  // drafter), `--model <name>` takes the first of these that fits, else the last: smaller variants, best first.
+  std::vector<std::string> fallbacks;
   std::vector<Variant> variants;
   // The variant named `v` (case-insensitive; "" = the default), nullptr if the model has none of that name.
   const Variant* variant(const std::string& v = "") const;
@@ -77,6 +80,7 @@ struct ModelRef {
   std::string name;                     // for messages and `list`: "qwen3.5-4b:4bit", "org/name[@rev]" or the folder
   std::string id;                       // the API's model id: "qwen3.5-4b" (default variant), "qwen3.5-4b:8bit", ...
   std::string dir;                      // the model's folder
+  bool variant_given = false;           // kCatalog: named by <name>:<variant> or by its repo (not the default)
 };
 // A catalog name or alias with an optional variant ("35b", "qwen3.6-35b", "27b:8bit" ...), a Hugging Face repo id
 // "org/name[@revision]", or a local folder. Throws Error with the choices when `arg` is none of them.

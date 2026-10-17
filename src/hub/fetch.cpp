@@ -1035,13 +1035,16 @@ std::string now_iso() {
   return b;
 }
 
-// A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model, MLX affine 4- or 8-bit.
+// A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model in MLX format, unquantized (bf16) or MLX
+// affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32), one format or mixed per module (the engine's
+// format_supported, model/qwen35.cpp).
 void check_supported(HttpClient& c, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
   for (const auto& f : L.files)
     if (f.path.size() > 12 && f.path.compare(f.path.size() - 12, 12, ".safetensors") == 0) st = true;
-  const std::string runs = " Kapitsa runs Qwen3.5-family models (Qwen3.5, 3.6, 3.8) in MLX format, 4- or 8-bit.";
+  const std::string runs = " Kapitsa runs Qwen3.5-family models (Qwen3.5, 3.6, 3.8) in MLX format: bf16, or MLX affine "
+                           "3/4/5/6/8-bit.";
   if (!cfg || !st) throw Error(L.repo + " has no " + (cfg ? "safetensors weights" : "config.json") + "." + runs);
   HttpResult r = get_retry(c, file_url(L.repo, L.commit, "config.json"));
   if (g_stop) throw Stopped("Download stopped. Run the same command again to continue where it stopped.");
@@ -1056,11 +1059,20 @@ void check_supported(HttpClient& c, const Listing& L) {
   if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))
     throw Error(L.repo + " is a " + j.value("model_type", std::string("different")) + " model." + runs);
   const json q = j.value("quantization", json::object());
-  const int bits = q.is_object() ? q.value("bits", 0) : 0;
-  const std::string mode = q.is_object() ? q.value("mode", std::string("affine")) : "";
-  if ((bits != 4 && bits != 8) || mode != "affine")
-    throw Error(L.repo + (bits ? " is quantized as " + mode + " " + std::to_string(bits) + "-bit." : " is not quantized.") +
-                runs + " Try its MLX 4-bit conversion.");
+  if (!q.is_object() || q.empty()) return;  // unquantized (bf16): runs as is
+  // the default format and every per-module one (mixed recipes)
+  auto check = [&](const json& e) {
+    const int bits = e.value("bits", q.value("bits", 0)), gs = e.value("group_size", q.value("group_size", 64));
+    const std::string mode = e.value("mode", q.value("mode", std::string("affine")));
+    const bool ok = mode == "affine" && ((gs == 64 && (bits == 3 || bits == 4 || bits == 5 || bits == 6 || bits == 8)) ||
+                                         (gs == 32 && bits == 4));
+    if (!ok)
+      throw Error(L.repo + " is quantized as " + mode + " " + std::to_string(bits) + "-bit, group " + std::to_string(gs) +
+                  "." + runs + " Try its MLX 4-bit, 6-bit, 8-bit or bf16 conversion.");
+  };
+  check(q);
+  for (auto& [k, v] : q.items())
+    if (v.is_object()) check(v);
 }
 
 bool keep_file(const std::string& p) {  // files of a generic repo worth fetching: the top level, no other formats

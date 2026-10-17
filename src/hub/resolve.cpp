@@ -174,13 +174,19 @@ ModelRef resolve(const std::string& arg0) {
     const std::string want = colon == std::string::npos ? "" : arg.substr(colon + 1);
     const Variant* v = m->variant(want);
     if (!v) throw Error(m->name + " has no variant \"" + want + "\". Its variants: " + variants_of(*m) + ".");
-    return catalog_ref(*m, *v);
+    ModelRef c = catalog_ref(*m, *v);
+    c.variant_given = !want.empty();
+    return c;
   }
   if (arg.find('/') != std::string::npos && is_dir(arg)) return local(arg);
   std::string repo, rev;
   if (parse_repo(arg, repo, rev)) {
     const CatalogModel* m = nullptr;
-    if (const Variant* v = find_variant_by_repo(repo, rev, &m)) return catalog_ref(*m, *v);  // with its companions
+    if (const Variant* v = find_variant_by_repo(repo, rev, &m)) {  // with its companions
+      ModelRef c = catalog_ref(*m, *v);
+      c.variant_given = true;
+      return c;
+    }
     r.kind = ModelRef::kRepo;
     r.repo = repo;
     r.revision = rev;

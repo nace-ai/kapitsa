@@ -1,6 +1,7 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models.
 #pragma once
+#include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
@@ -76,6 +77,14 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
 // state, the Neural Engine split): plan_load's test before it keeps a drafter, and the test `kapitsa serve` without
 // --model applies to pick the best model for this Mac.
 bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget);
+// A catalog variant on this Mac, from the engine's plan of its headers (its folder when downloaded, else
+// hub::plan_dir's): 1 when one conversation of opt.context tokens fits beside it within `budget` and its DFlash2
+// drafter (if it has one) is kept, 0 when not, -1 when it cannot be planned (not downloaded and offline).
+int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budget);
+// The variant `--model <name>` takes on this Mac: the catalog's default where it fits, else the first of the model's
+// fallbacks that fits, else the smallest that could be planned (the engine then says what it needs); offline with
+// nothing planned, a downloaded one or the default. *fits: whether the returned variant fits.
+hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits = nullptr);
 
 struct ChatRequest {
   ojson messages = ojson::array();
