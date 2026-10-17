@@ -60,8 +60,8 @@ class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
-  // default reduced draft head rows when <drafter>/head-ranked.u32 (or NI_DFLASH_HEAD_IDS) gives a ranked list
-  static constexpr int kHeadRows = 65536;
+  // default reduced draft head rows: from a ranked id list (NI_DFLASH_HEAD_IDS), and in id order (the default)
+  static constexpr int kHeadRows = 65536, kHeadRowsIdOrder = 98304;
   // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4).
   DFlash2(Qwen35& target, const std::string& dir, int bits = 0);
   const DFlash2Config& config() const { return cfg_; }
@@ -230,9 +230,10 @@ class DFlash2 {
   bool v8_ = false;
   Buffer v8t_, v8h_, v8hs_;
   // Reduced draft head (NI_DFLASH_HEAD=n rows, 0 = the full vocabulary): the target lm_head rows of the n
-  // highest-ranked token ids (a ranked id list, NI_DFLASH_HEAD_IDS or <drafter>/head-ranked.u32, else id
-  // order) plus every id >= the first end-of-sequence id (added/special tokens), ascending; the drafter's
-  // top-16 then picks among those ids only (the verify always uses the full head, so outputs are unchanged).
+  // highest-ranked token ids (a ranked id list from NI_DFLASH_HEAD_IDS, kHeadRows by default; else id order =
+  // the tokenizer's BPE merge order, kHeadRowsIdOrder) plus every id >= the first end-of-sequence id
+  // (added/special tokens), ascending; the drafter's top-16 then picks among those ids only (the verify always
+  // uses the full head, so outputs are unchanged).
   QLinear head_sub_;
   Buffer head_ids_;
   uint32_t head_n_ = 0;  // 0: full head

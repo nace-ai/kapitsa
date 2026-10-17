@@ -306,10 +306,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
   }
   alloc_buffers();
-  {  // reduced draft head: NI_DFLASH_HEAD=n (0 = full vocabulary); by default kHeadRows when a ranked list exists
+  {  // reduced draft head (default on): NI_DFLASH_HEAD=n rows (0 = the full vocabulary)
     const char* v = getenv("NI_DFLASH_HEAD");
     if (v && *v) build_head(atoi(v), true);
-    else build_head(kHeadRows, false);
+    else build_head(0, false);
   }
   Gpu::get().make_resident(owned_bufs_);
   // Dynamic verify depth on MoE targets (default tau 0.5, NI_DFLASH_DYN=tau overrides, 0 = off): the expert
@@ -397,20 +397,25 @@ void DFlash2::alloc_buffers() {
 
 void DFlash2::build_head(int n_req, bool explicit_n) {
   const uint32_t V = uint32_t(cfg_.vocab);
-  if (n_req <= 0 || uint32_t(n_req) >= V) return;
   const QLinear& H = tg_.lm_head();
+  // The ranking: NI_DFLASH_HEAD_IDS=<file> (uint32 token ids, most useful first, e.g. counts from a corpus), else
+  // Kapitsa's own: token id order, which for the byte-level BPE tokenizer is its merge order, a frequency proxy
+  // (the same idea as the MTP draft head). Id order needs more rows than a frequency ranking: at 65536 it drafts
+  // worse (27B code_27b 512: 4.52 tok/cycle vs 4.78 for the full head), at 98304 it covers 99.8-100% of the
+  // generated tokens and drafts like the full head (tok/cycle equal on code / p700 / prose, both models).
   std::vector<uint32_t> ranked;
-  const std::string path = getenv("NI_DFLASH_HEAD_IDS") && *getenv("NI_DFLASH_HEAD_IDS") ? getenv("NI_DFLASH_HEAD_IDS")
-                                                                                      : dir_ + "/head-ranked.u32";
-  if (std::ifstream f{path, std::ios::binary}) {
-    f.seekg(0, std::ios::end);
-    ranked.resize(size_t(f.tellg()) / 4);
-    f.seekg(0);
-    f.read(reinterpret_cast<char*>(ranked.data()), std::streamsize(ranked.size() * 4));
+  const char* path = getenv("NI_DFLASH_HEAD_IDS");
+  if (path && *path) {
+    if (std::ifstream f{path, std::ios::binary}) {
+      f.seekg(0, std::ios::end);
+      ranked.resize(size_t(f.tellg()) / 4);
+      f.seekg(0);
+      f.read(reinterpret_cast<char*>(ranked.data()), std::streamsize(ranked.size() * 4));
+    }
+    if (ranked.empty()) logi("DFlash2: NI_DFLASH_HEAD_IDS=%s holds no token ids; the draft head uses id order", path);
   }
-  // without a ranked list only an explicit NI_DFLASH_HEAD builds one (in id order, which drafts worse: 27B
-  // code_27b 512 at 65536 rows 4.52 tok/cycle vs 4.78 for the full head or a frequency-ranked 65536)
-  if (ranked.empty() && !explicit_n) return;
+  if (!explicit_n) n_req = ranked.empty() ? kHeadRowsIdOrder : kHeadRows;
+  if (n_req <= 0 || uint32_t(n_req) >= V) return;
   const auto& eos = tg_.config().eos;
   const uint32_t special0 = eos.empty() ? V : uint32_t(*std::min_element(eos.begin(), eos.end()));
   const size_t n = std::max<size_t>(size_t(n_req), V - std::min(special0, V));
@@ -452,7 +457,7 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
   head_sub_.N = uint32_t(ids.size());
   head_n_ = uint32_t(ids.size());
   logi("DFlash2: reduced draft head, %u of %u ids (%s), %.0f MB", head_n_, V,
-       ranked.empty() ? "id order" : path.c_str(), (w.size + sc.size + bi.size) / 1e6);
+       ranked.empty() ? "id order = BPE merge order" : path, (w.size + sc.size + bi.size) / 1e6);
 }
 
 std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
