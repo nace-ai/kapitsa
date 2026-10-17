@@ -77,11 +77,11 @@ def check(name, ok, detail=""):
     if not ok:
         fails += 1
 
-# The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp); the CLI's defaults
-# (6bit for the 35B and the 4B) are measured choices of their own (docs/PERF.md, Weight formats).
-DEFAULTS = {"qwen3.6-35b-a3b": ("6bit", "mlx-community/Qwen3.6-35B-A3B-6bit", "cb7e092ef8efe540bc3672c8929c4adbe5f4f759"),
+# The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp), which are the
+# defaults (docs/PERF.md, Weight formats and default precisions).
+DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf"),
             "qwen3.8-27b": ("4bit", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c"),
-            "qwen3.5-4b": ("6bit", "mlx-community/Qwen3.5-4B-6bit", "fbb1092aa9daef007603ea9273cd24c225a409f1")}
+            "qwen3.5-4b": ("4bit", "lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1")}
 PINNED = {
     "qwen3.6-35b-a3b": ("Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),

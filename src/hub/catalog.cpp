@@ -5,8 +5,10 @@
 // - Models are listed best first: `kapitsa serve` without --model takes the first with a variant that fits this Mac.
 // - `--model <name>` takes the model's default variant where the engine's memory plan of its headers leaves room for
 //   one --ctx conversation with its drafter, else the first of its fallbacks that does (smaller variants, best
-//   first): so each RAM size gets the best variant it holds. The defaults and fallbacks are chosen from measurements
-//   (docs/PERF.md, "Weight formats and quantization"): quality against the bf16 model, decode and prefill speed.
+//   first). The default is the highest-quality variant whose decode with speculative decoding stays within ~10% of
+//   the 4-bit variant's on a 48 GB M4 Pro (docs/PERF.md, "Weight formats and default precisions": quality against
+//   the bf16 model, decode and prefill speed); today that is 4-bit for every model, as each step up in precision
+//   reads 22% (5-bit) to 89% (8-bit) more bytes per token.
 // - A variant pins its weights to a revision (a commit), so a download is always the same bytes; every file of the
 //   repo but .gitattributes is fetched. Its companions are fetched with it: an MTP head ("mtp": files taken from a
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
@@ -69,9 +71,10 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"qwen3.6-35b", "35b", "35b-a3b"},
        .title = "Qwen3.6-35B-A3B",
        .about = "MoE, 3B active per token: fast replies and fast reading",
-       // 6-bit: KL 0.024 from bf16 (4-bit 0.114), decode 0.74x of 4-bit; 5-bit / 4-bit where 6-bit does not fit
-       .default_variant = "6bit",
-       .fallbacks = {"5bit", "4bit"},
+       // 4-bit: no other precision decodes within 10% of it with DFlash2 (6bit: KL 0.024 from bf16 against 0.114,
+       // decode -26%: the quality choice)
+       .default_variant = "4bit",
+       .fallbacks = {},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
@@ -148,9 +151,10 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"4b"},
        .title = "Qwen3.5-4B",
        .about = "small and quick: for 16-24 GB Macs and simple tasks",
-       // 6-bit: KL 0.022 from bf16 (4-bit 0.113); 4-bit where 6-bit does not fit
-       .default_variant = "6bit",
-       .fallbacks = {"4bit"},
+       // 4-bit: no other precision decodes within 10% of it with MTP (6bit: KL 0.022 from bf16 against 0.113,
+       // decode -28%: the quality choice)
+       .default_variant = "4bit",
+       .fallbacks = {},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
