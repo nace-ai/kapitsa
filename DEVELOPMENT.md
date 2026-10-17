@@ -17,9 +17,11 @@ created at load (`NI_PREWARM=0` skips that and creates them on first use).
 `install.sh` checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line Tools (opens
 their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa` target in
 Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
-overrides), with a note when that folder is not on the PATH. Run it again to update. To uninstall, delete the binary
-and `~/.cache/kapitsa`. `packaging/homebrew/kapitsa.rb` is a Homebrew formula for a public release: it needs a tag,
-the tarball's sha256 and a tap (see the file); nothing is published.
+overrides), with a note when that folder is not on the PATH. It installs `LICENSE`, `THIRD_PARTY_NOTICES` and
+`ACKNOWLEDGMENTS.md` to `../share/kapitsa` relative to that binary folder, and prints the location. Run it again to
+update. To uninstall, delete the binary, that notices folder and `~/.cache/kapitsa`.
+`packaging/homebrew/kapitsa.rb` installs the same documents in Homebrew's package share directory. It is a
+formula for a public release: it needs a tag, the tarball's sha256 and a tap (see the file); nothing is published.
 
 ## Commands
 
@@ -381,5 +383,7 @@ Every table, with all columns and engines: [docs/benchmarks.md](docs/benchmarks.
 ## Third-party
 
 MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib; the tokenizer's Unicode ranges come from
-the Unicode Character Database. Their notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Ideas credited in code
-comments where they come from other engines; the code is Kapitsa's own.
+the Unicode Character Database. Splash and MLX references, including the adapted ANE interface declarations
+and rotation helper, are documented in [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md). Keep the per-file credits and
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) with source and binary distributions; model weights retain their own
+licenses.

@@ -2,7 +2,7 @@
 // Kernels in src/kernels/spec_dflash.metal.
 // Ideas credited to Splash (github.com/incoai/splash, Apache-2.0): MLX af4g64 quantization of the
 // drafter at load, the per-row window bound of the draft attention, exact-code MMA operands, the
-// separate block K/V scratch; the code is our own.
+// separate block K/V scratch. See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES.
 #include "model/dflash2.h"
 #include "model/kparams.h"
 #include "util/bf16.h"

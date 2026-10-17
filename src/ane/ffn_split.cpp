@@ -1,5 +1,5 @@
 // GPU + Neural Engine FFN split (see ffn_split.h). Design from Splash (incoai/splash,
-// Apache-2.0, runtime/ops/AneFfn.cpp); our code.
+// Apache-2.0, runtime/ops/AneFfn.cpp). See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES.
 #include "ane/ffn_split.h"
 #include "util/log.h"
 

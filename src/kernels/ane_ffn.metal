@@ -11,7 +11,10 @@
 // overflow), so every scale carries a factor 128. Weights: MLX affine 4-bit, group 64 (w uint32 [N][K/8], value j
 // of a word at bits 4j, scales and biases bf16 [N][K/64]) here; the other formats (bf16, MLX affine 3/5/6/8-bit,
 // 4-bit group 32: wfmt.metal's packing) through ane_wf4, instantiated in wfmt.metal's second library.
-// Our code; Splash's ideas.
+// ane_rotate_block below is adapted from Splash's ane_ffn_rotate_block (Apache-2.0).
+// Nace AI changes: helper/variable names, direct indexing of v[k], an explicit ushort shuffle mask,
+// and a literal 128-element rotation unit. Other kernels integrate the design with Kapitsa's weight formats.
+// See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES for upstream references and license notices.
 
 constant constexpr float kAnePeak = 127.0f;
 constant constexpr float kAneUnit = 128.0f;

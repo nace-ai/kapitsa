@@ -5,7 +5,8 @@
 // _ANEClient/_ANEModel/_ANERequest selectors, each checked against its type encoding before use;
 // MIL text programs whose weights are IOSurface-backed tensor_buffer inputs; IOSurfaces shared
 // zero-copy with Metal; evaluations ordered with the GPU through one MTLSharedEvent, with a
-// watchdog that releases the GPU if the ANE stops answering. The code here is ours.
+// watchdog that releases the GPU if the ANE stops answering. See ACKNOWLEDGMENTS.md and
+// THIRD_PARTY_NOTICES, including the adapted interface declarations in ane.mm.
 #pragma once
 #include "metal/gpu.h"
 
