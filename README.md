@@ -64,7 +64,7 @@ as without speculation except where the top two tokens are within the rounding n
 | --- | --- |
 | `--ctx 32768` | Context per conversation slot. |
 | `--slots 2` | Conversations kept warm for instant follow-ups. |
-| `--dflash auto\|none\|DIR` | DFlash2 drafter: `auto` (default) uses a `<model>-DFlash2` drafter found next to the model or in `~/.cache/nace-infer-models/drafters`, `none` keeps MTP. |
+| `--dflash auto\|none\|DIR` | DFlash2 drafter: `auto` (default) uses a `<model>-DFlash2` drafter found next to the model or in `~/.cache/nace-infer-models/drafters` (not where its memory would keep one `--ctx` conversation from fitting), `none` keeps MTP. |
 | `--spec N` | MTP draft depth when no drafter is used (default per model); `0` turns speculation off. |
 | `--mem-budget GB` | GPU memory Kapitsa may hold (default: what macOS recommends for this Mac's GPU, a little less). |
 | `--api-key KEY` | Require a bearer token. |

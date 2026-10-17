@@ -1792,3 +1792,67 @@ Logits against the GPU alone, last prompt position + 32 greedy steps: p4000 KL m
 0.243 vs 0.197), KL up to 1.7e-3 before it. For scale, mlx-lm's default bf16 path sits at KL mean 5.5e-4 from fp32
 on this model. Startup check 2.1% of the ANE's part (27B 0.75-0.88%). Program: 13 functions, compiled in 15 s once
 (the ANE daemon's cache afterwards), 188 MB of surfaces.
+
+### With DFlash2, the tool-loop checkpoints and the eos fix (main b457a52, 73285c7, 30d430a merged into opt/air)
+Bitwise checks, ni_run, main against opt/air after the merges, same session: 35B p4000 + 32 plain, 27B p700 + 16
+plain (Neural Engine split) and 4B p4000 + 32 plain (GPU alone): logits of every step bitwise equal; MTP (35B code
+128 tokens depth 1, 27B code 64 depth 2, 4B code 128 depth 1) and DFlash2 greedy (35B code 256, 27B code 128): token
+ids equal (main's ni_run is byte-identical between 73285c7 and 30d430a). tests/test_server.py (14 checks) through
+the server with the defaults, KV caches starting empty and growing, on the merge with 30d430a: 4B with MTP 14/14
+(also GPU alone), 35B with DFlash2 14/14, 27B with DFlash2 14/14. Before main's eos fix the 4B failed two (its
+replies ran on past <|im_end|>). parser_test passes on the merged build (35B and 4B tokenizers).
+
+Speed A/B, main 30d430a against opt/air, ni_run, interleaved, two rounds (tok/s; prefill per rep):
+| | main | opt/air | opt/air / main |
+|---|---|---|---|
+| 35B prefill p4000 (3 reps x 2) | 1083.7, 1126.9, 1127.4, 1095.6, 1123.4, 1129.9 (mean 1114.5) | 1098.3, 1126.0, 1129.2, 1110.5, 1128.1, 1129.2 (mean 1120.2) | 1.005 |
+| 35B prefill p16000 (2 reps x 2) | 939.0, 944.2, 940.4, 944.2 | 942.4, 943.9, 939.3, 943.8 | 1.000 |
+| 35B DFlash2 greedy, code 256 tokens | 149.3, 148.2 | 148.0, 149.0 | 0.998 |
+| 35B MTP depth 1, code 256 tokens | 111.3, 112.2 | 110.8, 111.8 | 0.996 |
+| 27B prefill p4000, Neural Engine split (2 reps x 2) | 385.4, 385.6, 386.0, 385.6 | 386.4, 386.0, 384.7, 385.1 | 1.000 |
+| 27B DFlash2 greedy, code 128 tokens | 41.5, 40.4 | 41.1, 41.1 | 1.004 |
+| 27B MTP depth 2, code 128 tokens | 25.6, 25.3 | 25.7, 25.8 | 1.012 |
+(Absolute decode speeds are below the DFlash2 sections' 512-token runs: short runs, and a Mac shared with other
+sessions' jobs all day; the A/B is interleaved.)
+
+DFlash2 memory: the fit check's plan of the drafter (DFlash2::plan_bytes) missed the bf16 codebooks (254 MB), the
+reduced draft head (98304 rows of the target's LM head: 35B 114 MB, 27B 284 MB), the first prefill's prompt-capture
+and commit buffers (115 / 168 MB) and the ring scratch; it now sizes what the code allocates: 1.04 GB (35B) and
+2.03 GB (27B) with 2 slots, not 0.67 / 1.41. At load the engine logs the plan against the allocation: 35B 0.623 GB
+planned / 0.623 allocated, 27B 1.606 / 1.607 (the rings, 0.30 / 0.25 GB for 2 slots, are exact by construction).
+`--dflash auto` keeps the drafter only where one full `--ctx` conversation fits beside it (before: also where the
+model alone could not hold one, then taking most of what was left: 35B on a 32 GB Mac at 2/3 49.6k -> 19.5k tokens;
+at a 17.4-18.8 GB budget the 27B would not have started).
+Through the server, 35B `--ctx 65536 --slots 2`: `--mem-budget 21.99` (a 32 GB Mac at 2/3) leaves the drafter out,
+takes 1024-row prefill chunks and decodes with MTP, KV room 49.5k tokens; `--mem-budget 25.73` (78%) loads it, KV
+room 158k tokens.
+
+Slot eviction: a slot whose KV cache was given up for another conversation kept its DeltaNet / conv state, and its
+next prompt, starting at position 0 with no tokens left, prefilled on top of it. A dropped slot now starts from a
+zero state. Server test (4B, GPU alone, a budget for one ~4k conversation and not two; A, B, A again, B again, each
+evicting the other slot, greedy 48 tokens): before the fix the repeated replies differ from the first ones (A and B),
+after it they are identical. A prompt that reuses nothing of its slot also gives up the slot's own cache before
+other slots' (no copy, no transient), and a cache that starts empty needs no 256 MB copy margin.
+
+DFlash2 with a growing KV cache: through the server (`--ctx 65536 --slots 2`, GPU alone), a ~3.4k-token prompt and a
+long greedy answer, so the cache grows inside the DFlash2 loop (35B 0 -> 5120 -> 7168 positions over 2500 tokens,
+27B the same over 1800): the replies are identical to main's, whose caches are allocated whole at start (35B 100.4
+vs 102.3 tok/s, 27B 31.4 vs 31.5 on this essay prompt; the growth step took 8.5 / 17.5 ms).
+
+Process footprint through the server (`--ctx 65536 --slots 2`, the app's settings; at load, after a 4k
+conversation, after a second 4k one in the other slot, after a 15k one), main 30d430a against opt/air:
+| model | main | opt/air |
+|---|---|---|
+| 4B (MTP) | 2.48 / 5.58 / 7.89 / 7.89 GiB | 2.48 / 3.64 / 3.84 / 4.26 GiB |
+| 35B (DFlash2) | 19.70 / 21.82 / 23.15 / 23.15 GiB | 19.70 / 20.67 / 20.82 / 21.09 GiB |
+| 27B (DFlash2, Neural Engine split) | 16.35 / 22.61 / 26.79 / 26.79 GiB | 16.35 / 18.66 / 19.08 / 19.90 GiB |
+(main allocates both slots' 64k-token caches at start and a slot's becomes resident with its first conversation;
+opt/air grows each cache to what its conversation uses.)
+
+GPU cores, simulated with `NI_GPU_CORES` on this Mac (ni_run, GPU alone): at 10 and 8 cores against 20, greedy ids
+are identical for the 4B and the 35B (p4000 + 64 tokens, plain and MTP depth 1) and the 27B (p700 + 32, plain and
+MTP depth 2), and DFlash2 greedy for the 35B (code 256 tokens) and the 27B (code 128); logits differ only by
+summation order (KL max: 4B 9e-9, 27B 4e-10, 35B 3.9e-4 where the split-K decode attention changes the MoE routing
+inputs by rounding), the short-prefill suffix logits likewise (35B 5.4e-5, 4B 1.8e-10, 27B 1.5e-10). Speed on this
+Mac does not change with the setting (DFlash2 35B 147.4 / 147.5 / 147.1 tok/s at 20 / 10 / 8): it only sizes grids.
+

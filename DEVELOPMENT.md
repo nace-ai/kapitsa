@@ -27,16 +27,18 @@ created at load (`NI_PREWARM=0` skips that and creates them on first use).
 | `--ctx <tokens>` | Context per conversation slot (default 32768). Its KV cache grows as the conversation fills (Memory). |
 | `--slots <n>` | Conversations kept warm for prefix reuse (default 2). |
 | `--spec <n>` | MTP draft depth when no DFlash2 drafter is used; default per model (35B MoE 1, 27B 2, 4B 1); `0` turns speculative decoding off (MTP and DFlash2). |
-| `--dflash auto\|none\|<dir>` | DFlash2 block drafter (default `auto`: a `*-DFlash2` drafter matching the model in the model's directory, next to it, in `<parent>/drafters` or in `~/.cache/nace-infer-models/drafters`; MTP when none is found). `none` keeps MTP. `NI_DFLASH` sets the same when the option is absent (`0` = none). |
+| `--dflash auto\|none\|<dir>` | DFlash2 block drafter (default `auto`: a `*-DFlash2` drafter matching the model in the model's directory, next to it, in `<parent>/drafters` or in `~/.cache/nace-infer-models/drafters`; MTP when none is found, or where the drafter's memory would keep one `--ctx` conversation from fitting the memory budget). `none` keeps MTP. `NI_DFLASH` sets the same when the option is absent (`0` = none). |
 | `--prefill-chunk <rows>` | Prefill chunk size (default 2048; 1024 when 2048-row buffers would keep one conversation from its full context). |
 | `--mem-budget <GB>` | GPU memory Kapitsa may hold (default: Metal's recommended working set minus 4%, at least 512 MB; `NI_MEM_BUDGET`). |
 | `--api-key <key>` | Require `Authorization: Bearer <key>` (except `/health`). |
 
-`kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--json]` prints this Mac (chip, GPU cores, RAM, Metal's
-recommended working set, the memory budget, the Neural Engine) and, for each model directory (default: the ones under
-`~/.cache/nace-infer-models`, `~/.cache/nace-agent-models`, `~/.nace/models`), its memory at that context and slot count,
-whether it starts and how many tokens of KV cache fit, the Neural Engine share it gets here, and rough speeds.
-`--json` is the same for programs (the app's fit check).
+`kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--dflash auto|none|DIR] [--json]` prints this Mac (chip,
+GPU cores, RAM, Metal's recommended working set, the memory budget, the Neural Engine) and, for each model directory
+(default: the ones under `~/.cache/nace-infer-models`, `~/.cache/nace-agent-models`, `~/.nace/models`), what the
+engine would decide at that context and slot count, from the safetensors headers alone (`plan_load`, shared with the
+engine): its memory (with the DFlash2 drafter where the engine would load it), whether it starts, how many tokens of
+KV cache fit, the decoding (DFlash2, MTP or plain), the Neural Engine share, rough speeds. `--json` is the same for
+programs (the app's fit check: `starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, `dflash_used`).
 
 Endpoints: `POST /v1/chat/completions` (SSE or JSON; `reasoning_content`; Qwen XML tool calls returned as
 OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usage`), `GET /v1/models` (also
@@ -53,33 +55,40 @@ Kapitsa holds at most a budget of GPU memory: Metal's recommended working set fo
   slot the recurrent state with its two checkpoints and the verify tape (4B 0.16 GB, 27B 0.49, 35B 0.21);
 - the KV cache, per slot, of the positions in use: a slot allocates none until its first conversation and then grows
   in steps (by a quarter, in 1024-position steps, or exactly when the budget is short): new buffers, a GPU copy of the
-  old positions, the old ones released in ~256 MB batches. 4B 36 KB per token, 27B 68 KB, 35B 22 KB (MTP head
-  included);
+  old positions, the old ones released in ~256 MB batches (so a growth needs up to 256 MB more for a moment). 4B 36 KB
+  per token, 27B 68 KB, 35B 22 KB (MTP head included);
 - the Neural Engine split (dense models, where the chip has a share): 0.24 GB (4B) / 0.79 GB (27B) of surfaces and
-  scratch, built at the first request after its program compiled.
+  scratch, built at the first request after its program compiled;
+- the DFlash2 drafter where one is used: its weights (projections quantized at load, codebooks as stored), its
+  reduced draft head (rows of the model's LM head), buffers, the first prefill's prompt captures and a 2048-position
+  context ring per slot and checkpoint: 27B 2.03 GB, 35B 1.04 GB with 2 slots (the engine logs what loading took
+  against this plan). `--dflash auto` leaves it out (MTP instead) where one `--ctx` conversation would not fit the
+  budget beside it: context before speed.
 
 Before reading any weights the engine checks that the fixed part plus an 8k-token KV cache fits the budget; if not it
 exits with `insufficient memory: ...` (what each part needs and what would help), which the app treats as a memory
-error. A request whose prompt does not fit gets an `insufficient memory` error; before that, idle slots give up their
-KV caches (least recently used first; their conversations are prefilled again when they return) and, last, the
-Neural Engine split is released (prefill then runs on the GPU alone). A generation that cannot grow its cache ends
-with `length`. `kapitsa doctor` shows the numbers for a Mac before anything loads.
+error. A request whose prompt does not fit gets an `insufficient memory` error; before that, its slot gives up a
+cache the prompt reuses nothing of (the new one starts empty, without a copy), then idle slots give up their KV caches
+(least recently used first; their conversations start from a zero state and are prefilled again when they return)
+and, last, the Neural Engine split is released (prefill then runs on the GPU alone). A generation that cannot grow its
+cache ends with `length`. `kapitsa doctor` shows the numbers for a Mac before anything loads.
 
 ## What runs where
 
 Memory at the app's settings (`--ctx 65536 --slots 2`; `kapitsa doctor --json` computes the same on any Mac).
 Fixed = weights + MTP head + prefill buffers + both slots' recurrent state (+ the Neural Engine split for dense
-models); the rest of the budget is KV cache, shared by the conversations as they fill (one conversation needs at
-most 64k tokens: 4B 2.4 GB, 27B 4.5 GB, 35B 1.4 GB). The budget is Metal's recommended working set less 4%; macOS
-sizes it from the RAM and the fraction differs between macOS versions (78% on this M4 Pro under macOS 27; older
-releases are commonly reported at about 2/3), so both are shown. Tokens of KV cache in all:
+models, + the DFlash2 drafter where it is used); the rest of the budget is KV cache, shared by the conversations as
+they fill (one conversation needs at most 64k tokens: 4B 2.4 GB, 27B 4.5 GB, 35B 1.4 GB). The budget is Metal's
+recommended working set less 4%; macOS sizes it from the RAM and the fraction differs between macOS versions (78% on
+this M4 Pro under macOS 27; older releases are commonly reported at about 2/3), so both are shown. Tokens of KV cache
+in all, and the decoding the engine picks with the drafters installed:
 
-| Mac (RAM) | budget at 2/3 - 78% | Qwen3.5-4B (3.7 GB fixed) | Qwen3.8-27B (17.6-18.1 GB fixed) | Qwen3.6-35B-A3B (20.9-21.2 GB fixed) |
+| Mac (RAM) | budget at 2/3 - 78% | Qwen3.5-4B (3.7 GB fixed) | Qwen3.8-27B (17.6-18.1 GB fixed; drafter +2.03) | Qwen3.6-35B-A3B (20.9-21.2 GB fixed; drafter +1.04) |
 | --- | --- | --- | --- | --- |
-| MacBook Air 16 GB | 10.9 - 12.9 GB | yes: 196k - 249k tokens | no | no |
-| MacBook Air 24 GB | 16.5 - 19.3 GB | yes: 348k - 424k | no at 2/3; at 78% 23k (35k without the split) | no |
-| MacBook Air / Pro 32 GB | 22.0 - 25.7 GB | yes: 497k - 598k | yes: 62k - 109k (74k - 121k without the split) | yes: 50k - 200k |
-| MacBook Pro 48 GB (this M4 Pro) | 33.0 - 38.6 GB | yes | yes: 214k - 294k | yes: 522k - 771k |
+| MacBook Air 16 GB | 11.0 - 12.9 GB | 198k - 249k tokens, MTP | does not fit | does not fit |
+| MacBook Air 24 GB | 16.5 - 19.3 GB | 347k - 424k, MTP | does not fit at 2/3; 23k at 78% (35k once the Neural Engine split is released), MTP | does not fit |
+| MacBook Air / Pro 32 GB | 22.0 - 25.7 GB | 497k - 598k, MTP | 62k with MTP (73k without the split) - 80k with DFlash2 | 50k with MTP - 153k with DFlash2 |
+| MacBook Pro 48 GB (this M4 Pro) | 33.0 - 38.6 GB | 795k - 947k, MTP | 184k - 265k, DFlash2 | 475k - 724k, DFlash2 |
 
 Where a full 64k conversation would not fit beside the prefill buffers, the engine takes 1024-row prefill chunks
 (27B and 35B on 32 GB at 2/3: 0.45 / 0.37 GB less); a conversation that outgrows the budget takes the KV caches of
@@ -90,11 +99,14 @@ GPU, 273 GB/s); the MacBook Air rows are estimates, not measurements: decode sca
 120 GB/s, M5 Air 153 GB/s), GPU prefill by GPU cores (10 of 20), the Neural Engine (the same 16-core unit on the M4
 family) taking the dense models' whole FFN. A fanless Air also slows down after a minute or two of sustained work.
 
-| | decode, plain | decode, speculative (default) | prefill 4k |
+| | decode, plain | decode, speculative (default: DFlash2 where the drafter fits, else MTP) | prefill 4k |
 | --- | --- | --- | --- |
-| M4 Pro 20-core (measured) | 83 / 16 / 105 | 120 (MTP 1) / 29-30 (MTP 2) / 116-124 (MTP 1) | 2000 (GPU + ANE; GPU alone 890) / 277-321 (GPU + ANE; 111) / 960-1077 |
-| M4 Air 10-core (estimate) | ~36 / ~7 / ~46 | ~52 / ~13 / ~53 | ~1000 / ~150 / ~500 |
-| M5 Air 10-core (estimate) | ~46 / ~9 / ~59 | ~67 / ~17 / ~67 | ~1000 / ~150 / ~500 (Kapitsa does not use the M5's GPU neural accelerators yet) |
+| M4 Pro 20-core (measured) | 83 / 16 / 105 | 120 (MTP 1) / 61 greedy, 53 at T 0.6 (DFlash2; MTP 2: 29-31) / 170 greedy, 152 at T 0.6 (DFlash2; MTP 1: 116-124) | 2000 (GPU + ANE; GPU alone 890) / 385-393 (GPU + ANE; GPU alone 111) / 1115-1120 |
+| M4 Air 10-core (estimate) | ~36 / ~7 / ~46 | ~52 / ~25-30 (DFlash2, 32 GB at 78%; MTP ~13) / ~70 (DFlash2, 32 GB at 78%; MTP ~53) | ~1000 / ~190 / ~550 |
+| M5 Air 10-core (estimate) | ~46 / ~9 / ~59 | ~67 / ~30-35 (DFlash2; MTP ~17) / ~90 (DFlash2; MTP ~67) | ~1000 / ~190 / ~550 (Kapitsa does not use the M5's GPU neural accelerators yet) |
+
+The DFlash2 estimates are rougher: its 8-row verify of the 27B is compute bound on 10 cores (2 x 8 x 27e9 flops per
+cycle) as much as bandwidth bound, and its drafting pass is compute.
 
 ## Layout
 
