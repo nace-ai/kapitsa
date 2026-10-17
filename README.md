@@ -12,8 +12,8 @@ back up without reading it again. On a 48 GB MacBook Pro it is the fastest of th
 ## Quick start
 
 An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro), the Xcode Command Line Tools and CMake. The 4B
-runs on a 16 GB MacBook Air. The 35B-A3B and 27B need 32 GB, and 48 GB is recommended. `kapitsa doctor` shows what
-fits this Mac.
+runs on a 16 GB MacBook Air. The 35B-A3B and 27B run on 32 GB Macs with shorter conversations and without the DFlash2
+draft model; 48 GB is recommended. `kapitsa doctor` shows what fits this Mac.
 
 ```bash
 git clone https://github.com/nace-ai/kapitsa && cd kapitsa && ./install.sh
@@ -103,7 +103,7 @@ next-fastest engine measured.
 | Prefill · 4K prompt | 1,169 tok/s (1.1×) | 395 tok/s (3.1×) |
 | Prefill · 16K prompt | 986 tok/s (1.1×) | 330 tok/s (2.7×) |
 | Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.7×) | 0.23 / 0.25 s (1.4× / 1.6×) |
-| Peak memory | 21.1 GB (lowest) | 20.5 GB (lowest) |
+| Peak memory | 21.1 GB (lowest) | 20.5 GB (tied lowest) |
 
 Against the engines people use, decode at temperature 0.6 in tok/s, each engine in its fastest setup:
 
