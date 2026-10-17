@@ -198,6 +198,7 @@ class Qwen35 {
     size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
     size_t kv_per_pos = 0;   // per slot and position
     size_t decode_bytes = 0; // weights one plain decode step reads (MoE: the routed share of the experts)
+    size_t head_row_bytes = 0;  // one vocabulary row of the output layer (codes, scale and bias)
     int hidden = 0, layers = 0, ffn = 0;  // ffn: the dense FFN's intermediate size (0 for MoE)
     bool dense = false;
     size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }

@@ -75,9 +75,13 @@ class DFlash2 {
   // target's hidden size, vocabulary and layer count that passes the load-time checks (SPEC §1).
   // The longest name match wins.
   static std::string find(const std::string& model_dir, const Qwen35Config& target);
-  // Memory a drafter takes as loaded (weights quantized to NI_DFLASH_BITS, default 4, plus buffers) and per slot
-  // (its context ring), from its config.json and safetensors sizes only: the engine's fit check.
-  static size_t plan_bytes(const std::string& dir, size_t* per_slot);
+  // Memory a drafter takes, from its config.json and safetensors headers only (the engine's fit check): what the
+  // constructor allocates (projections quantized to NI_DFLASH_BITS, default 4; norms, codebooks and conv kernels
+  // as stored; buffers; the reduced draft head, rows of the target's LM head of head_row_bytes each), the target's
+  // 8-row verify scratch and the prompt-capture buffers of the first prefill (*at_prefill, included); *per_slot:
+  // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
+  static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
+                           size_t* per_slot, size_t* at_prefill = nullptr);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
   static bool supports(const Qwen35& target);
   // Creates the drafter's and the 8-row verify's pipelines up front (in parallel, as Qwen35 does for its

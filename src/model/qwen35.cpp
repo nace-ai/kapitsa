@@ -624,7 +624,8 @@ size_t Qwen35::dense_hgu_rows() const {
 
 // Sums the tensors the loader would keep from one safetensors file (256-byte aligned, as it stores them);
 // `mtp`: only mtp.* tensors, with 2-D bf16 linears as the 8-bit copies load_mtp makes.
-static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr) {
+static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr,
+                       size_t* lm_head = nullptr) {
   std::ifstream f(path, std::ios::binary);
   uint64_t n = 0;
   if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
@@ -649,6 +650,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
       b = N * K + 2 * (N * K / 64) * 2;  // quantize8: codes + bf16 scales and biases per 64
     }
     total += (b + 255) / 256 * 256;
+    if (lm_head && name.find("lm_head.") != std::string::npos) *lm_head += b;
     if (decode && name.find("embed_tokens") == std::string::npos)
       *decode += name.find("switch_mlp") != std::string::npos ? size_t(double(b) * expert_share) : b;
   }
@@ -670,8 +672,9 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
   bool has_mtp = false;
   const double share = c.moe && c.experts ? double(c.top_k) / c.experts : 1.0;
   size_t embed = 0;  // tied models read the embedding table as their output layer
+  size_t lm_head = 0;
   for (const std::string& f : files) {
-    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes);
+    m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head);
     if (f == "mtp.safetensors" && !getenv("NI_NO_MTP")) {
       m.mtp = st_bytes(dir + "/" + f, true);
       has_mtp = m.mtp > 0;
@@ -690,6 +693,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
     }
   }
   m.decode_bytes += embed;
+  m.head_row_bytes = (lm_head ? lm_head : embed) / std::max(c.vocab, 1);
   // hg_/hu_: the verify rows when the dense FFN takes the fused path (4-bit g64), as dense_hgu_rows()
   const json root = read_json(dir + "/config.json");
   const json q = root.contains("quantization") ? root["quantization"] : json::object();

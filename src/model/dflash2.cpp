@@ -492,26 +492,77 @@ std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
   return d;
 }
 
-size_t DFlash2::plan_bytes(const std::string& dir, size_t* per_slot) {
+size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
+                           size_t* per_slot, size_t* at_prefill) {
   namespace fs = std::filesystem;
-  std::error_code ec;
-  size_t bf16 = 0;
-  for (auto& de : fs::directory_iterator(dir, ec))
-    if (de.path().extension() == ".safetensors") bf16 += size_t(fs::file_size(de.path(), ec));
-  const int bits = getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4;
-  int layers = 5, vocab = 248320;
+  json c;
   if (std::ifstream f(dir + "/config.json"); f) {
     try {
-      json c = json::parse(f);
-      layers = c.value("num_hidden_layers", layers);
-      vocab = c.value("vocab_size", vocab);
+      c = json::parse(f);
     } catch (...) {
     }
   }
+  const json dc = c.contains("dflash_config") ? c["dflash_config"] : json::object();
+  const size_t H = c.value("hidden_size", 2048), NL = c.value("num_hidden_layers", 5), I = c.value("intermediate_size", 6144),
+               V = c.value("vocab_size", 248320), nT = dc.contains("target_layer_ids") ? dc["target_layer_ids"].size() : 5,
+               gs = dc.value("conv_group_size", 16);
+  const size_t bits = getenv("NI_DFLASH_BITS") ? size_t(atoi(getenv("NI_DFLASH_BITS"))) : 4;
+  auto ends = [](const std::string& a, const char* b) {
+    const size_t n = strlen(b);
+    return a.size() >= n && a.compare(a.size() - n, n, b) == 0;
+  };
+  // weights: the 2-D projections quantized at load (codes + bf16 scale and bias per 64), the rest as stored
+  size_t w = 0;
+  std::error_code ec;
+  for (auto& de : fs::directory_iterator(dir, ec)) {
+    if (de.path().extension() != ".safetensors") continue;
+    std::ifstream f(de.path(), std::ios::binary);
+    uint64_t n = 0;
+    if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (64u << 20)) continue;
+    std::string h(n, '\0');
+    if (!f.read(h.data(), std::streamsize(n))) continue;
+    json j;
+    try {
+      j = json::parse(h);
+    } catch (...) {
+      continue;
+    }
+    for (auto& [name, v] : j.items()) {
+      if (name == "__metadata__" || !v.contains("shape")) continue;
+      const auto& sh = v["shape"];
+      if (sh.size() == 2 && (ends(name, "_proj.weight") || name == "fc.weight" || ends(name, "kernel_projection.weight"))) {
+        const size_t N = sh[0], K = sh[1];
+        w += N * K * bits / 8 + 2 * N * (K / 64) * 2;
+      } else if (name.find("norm.weight") != std::string::npos || name.find("codebook") != std::string::npos ||
+                 name.find("base_kernel") != std::string::npos) {
+        w += v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>();
+      }
+    }
+  }
+  // alloc_buffers()
+  const size_t nH = nT * H, Kx = std::max({nH, size_t(4096), H, I}), KV = NL * 2048, G4 = 4 * (H / std::max<size_t>(gs, 1)),
+               ntg = (V + 2047) / 2048;
+  size_t b = 5 * 8 * H * 4 + 8 * Kx * 2 + Kx / 64 * 8 * 4 + 8 * I * 2 + I / 64 * 8 * 4 + 8 * G4 * 4 + 8 * 4096 * 4 +
+             8 * 2048 * 4 + 32 * 8 * 128 * 4 + 2 * 8 * 8 * 128 * 4 + 32 * (32 * 8 * 128 * 4 + 32 * 8 * 2 * 4) + 8 * V * 4 + 8 * kRank * 4 +
+             2 * 7 * ntg * 16 * 4 + 8 * nH * 2 + 8 * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
+  const char* v8 = getenv("NI_DFLASH_V8");
+  if (v8 && *v8 ? atoi(v8) != 0 : H >= 4096) b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
+  // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
+  // end-of-sequence id on)
+  {
+    const char* hv = getenv("NI_DFLASH_HEAD");
+    const char* ids = getenv("NI_DFLASH_HEAD_IDS");
+    const size_t req = hv && *hv ? size_t(std::max(0, atoi(hv))) : ids && *ids ? size_t(kHeadRows) : size_t(kHeadRowsIdOrder);
+    const size_t special0 = target.eos.empty() ? V : std::min<size_t>(V, size_t(*std::min_element(target.eos.begin(), target.eos.end())));
+    if (req > 0 && req < V) b += std::max(req, V - special0) * (head_row_bytes + 4);
+  }
+  b += size_t(4) << 20;  // the target's 8-row verify scratch (Qwen35::v8_alloc): ~1-3 MB
+  // begin_prefill(): the prompt captures and the 512-row context-commit buffers
+  const size_t pf = size_t(kCtxKeep) * nH * 2 + 512 * nH * 2 + 512 * H * 4 + 512 * H * 2 + 512 * KV * 4;
+  if (at_prefill) *at_prefill = pf;
   // ring: [layers][8 kv heads][2048 slots][128] bf16, K and V (DFlash2::new_seq)
-  if (per_slot) *per_slot = size_t(layers) * 8 * kWin * 128 * 2 * 2;
-  // codes + bf16 scale and bias per 64 weights, from 2 bytes per bf16 weight; + logits and scratch
-  return size_t(double(bf16) * (bits / 8.0 + 4.0 / 64) / 2) + size_t(8) * vocab * 4 + (size_t(64) << 20);
+  if (per_slot) *per_slot = NL * 8 * kWin * 128 * 2 * 2;
+  return w + b + pf;
 }
 
 std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) {

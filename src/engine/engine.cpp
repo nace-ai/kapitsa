@@ -95,9 +95,17 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     } else if (lp.dflash_auto && !DFlash2::supports(*model_)) {
       logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
     } else {
+      const size_t a0 = Gpu::get().allocated_bytes();
       dfl_ = std::make_unique<DFlash2>(*model_, dir);
       DFlash2::prewarm_pipelines();
       spec_ = false;
+      // the plan against what loading took (rings and the first prefill's buffers come later)
+      size_t per_slot = 0, at_prefill = 0;
+      const size_t planned = DFlash2::plan_bytes(dir, model_->config(), Qwen35::plan(opts_.model_dir, 1024).head_row_bytes,
+                                                 &per_slot, &at_prefill);
+      logi("DFlash2: %.3f GB allocated at load (planned %.3f GB); %.3f GB more for %d slots' rings and %.3f GB at the "
+           "first prefill", (Gpu::get().allocated_bytes() - a0) / 1e9, (planned - at_prefill - (size_t(4) << 20)) / 1e9,
+           3.0 * per_slot * std::max(1, opts_.slots) / 1e9, at_prefill / 1e9);
     }
   }
 
@@ -156,13 +164,14 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   if (!lp.dflash_off) {
     lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
     if (!lp.dflash.empty()) {
-      size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
-      lp.dflash_bytes = lp.dflash_found_bytes =
-          DFlash2::plan_bytes(lp.dflash, &per_slot) + 3 * per_slot * size_t(slots);
       // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding
       // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
       // conversation come first
       const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024);
+      size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
+      lp.dflash_bytes = lp.dflash_found_bytes =
+          DFlash2::plan_bytes(lp.dflash, Qwen35::read_config(model_dir), p.head_row_bytes, &per_slot) +
+          3 * per_slot * size_t(slots);
       const size_t one = p.fixed(slots) + Qwen35::ane_plan(model_dir, p).bytes + p.kv_per_pos * size_t(context);
       if (lp.dflash_auto && one + lp.dflash_bytes > budget) {
         lp.dflash_left_out = lp.dflash;
