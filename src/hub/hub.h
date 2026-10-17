@@ -20,8 +20,8 @@ struct Stopped : Error {
   using Error::Error;
 };
 
-// Files fetched with a model to make it faster. The repos and revisions are the Nace Agent app's catalog
-// (packages/nace-runtime/src/catalog-data.ts), so the app and the CLI download the same bytes.
+// Files fetched with a model to make it faster. The repos and revisions match the Nace Agent app's model catalog, so
+// the app and the CLI download the same bytes.
 struct Companion {
   std::string kind;                // "mtp": an MTP head's files; "dflash2": a DFlash2 drafter;
                                    // "mtp-sidecar": mtp.safetensors built from an official checkpoint's mtp.* tensors
@@ -32,28 +32,44 @@ struct Companion {
   uint64_t size = 0;               // "mtp-sidecar": its size in bytes
 };
 
+// One way to run a model: its weights at one precision, with the companions that speed them up. `--model
+// <model>:<variant>` picks one, `--model <model>` the model's default.
+struct Variant {
+  std::string name;                   // "4bit", "8bit", "6bit", "bf16" (lower case): what follows the ':'
+  std::string quant;                  // what the weights are: "MLX affine 4-bit, group 64"
+  std::string repo, revision;         // the weights (every file but .gitattributes)
+  std::vector<Companion> companions;
+  double download_gb = 0;             // weights + companions
+  // GPU memory at load with the companions (2 slots, 2048-row prefill buffers, the Neural Engine split) and the KV
+  // cache per token of conversation: how `serve` without --model judges a model that is not downloaded yet
+  double fixed_gb = 0, kv_bytes_per_token = 0;
+};
+
+// The models of the catalog (src/hub/catalog.cpp), best first.
 struct CatalogModel {
-  std::string name;                  // canonical name, the folder and the API's model id: "qwen3.6-35b-a3b"
+  std::string name;                  // "qwen3.6-35b-a3b"; with the variant, the folder (qwen3.6-35b-a3b-4bit)
   std::vector<std::string> aliases;  // "qwen3.6-35b", "35b"
   std::string title;                 // "Qwen3.6-35B-A3B"
-  std::string repo, revision;        // the weights (every file but .gitattributes)
-  std::vector<Companion> companions;
-  double download_gb = 0;            // weights + companions
-  double fixed_gb = 0;               // GPU memory at load with its companions (2 slots, see catalog.cpp)
-  double kv_bytes_per_token = 0;     // KV cache per token of conversation
-  std::string about;                 // one line for `kapitsa list`
-  std::string app_key;               // the Nace Agent app's folder for it (~/.nace/models/<app_key>), reused if there
+  std::string about;                 // one line for --help
+  std::string default_variant;       // the variant `--model <name>` takes
+  std::vector<Variant> variants;
+  // The variant named `v` (case-insensitive; "" = the default), nullptr if the model has none of that name.
+  const Variant* variant(const std::string& v = "") const;
 };
 
 const std::vector<CatalogModel>& catalog();
 const CatalogModel* find_model(const std::string& name_or_alias);  // case-insensitive; nullptr if unknown
-const CatalogModel* find_model_by_repo(const std::string& repo);   // the catalog entry whose weights are `repo`
+// The catalog variant whose weights are `repo` (case-insensitive) at `revision` ("" = any), or nullptr.
+const Variant* find_variant_by_repo(const std::string& repo, const std::string& revision, const CatalogModel** model);
 std::string short_name(const CatalogModel& m);                     // its shortest alias: "35b"
+// "qwen3.5-4b:4bit", and "4b" / "4b:8bit" (a variant other than the default is always named)
+std::string full_name(const CatalogModel& m, const Variant& v);
+std::string short_name(const CatalogModel& m, const Variant& v);
 
-// GPU memory a model needs to start with room for a 16k-token conversation.
-double comfortable_gb(const CatalogModel& m);
-// The best catalog model for a GPU memory budget (bytes): the first of the catalog that fits comfortably, else the
-// smallest. The catalog is ordered best first.
+// GPU memory a variant needs to start with room for a 16k-token conversation.
+double comfortable_gb(const Variant& v);
+// The best catalog model for a GPU memory budget (bytes): the first model (best first) whose default variant fits
+// comfortably, else the last.
 const CatalogModel& best_fit(size_t budget_bytes);
 
 std::string home_dir();     // $KAPITSA_HOME, else ~/.cache/kapitsa
@@ -64,13 +80,14 @@ std::string tilde(const std::string& path);  // $HOME/x -> ~/x, for messages
 struct ModelRef {
   enum Kind { kCatalog, kRepo, kLocal } kind = kLocal;
   const CatalogModel* model = nullptr;  // kCatalog
+  const Variant* variant = nullptr;     // kCatalog
   std::string repo, revision;           // kCatalog, kRepo ("" revision: the repo's main branch)
-  std::string name;                     // for messages: the catalog name, "org/name[@rev]" or the folder
-  std::string id;                       // the API's model id
+  std::string name;                     // for messages and `list`: "qwen3.5-4b:4bit", "org/name[@rev]" or the folder
+  std::string id;                       // the API's model id: "qwen3.5-4b" (default variant), "qwen3.5-4b:8bit", ...
   std::string dir;                      // the model's folder
 };
-// A catalog name or alias ("qwen3.6-35b", "35b" ...), a Hugging Face repo id "org/name[@revision]", or a local
-// folder. Throws Error with the choices when `arg` is none of them.
+// A catalog name or alias with an optional variant ("35b", "qwen3.6-35b", "27b:8bit" ...), a Hugging Face repo id
+// "org/name[@revision]", or a local folder. Throws Error with the choices when `arg` is none of them.
 ModelRef resolve(const std::string& arg);
 
 struct PullOptions {
@@ -98,7 +115,7 @@ std::string plan_dir(const ModelRef& ref);
 
 // A model in the store, for `kapitsa list`.
 struct Installed {
-  std::string name, dir, repo, commit;
+  std::string name, variant, dir, repo, commit;  // name: "qwen3.5-4b:4bit" (catalog), "org/name" or the folder
   bool complete = false;
   uint64_t bytes = 0;                // on disk (finished files + downloaded parts)
   uint64_t total = 0;                // when complete or known

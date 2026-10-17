@@ -77,7 +77,7 @@ def check(name, ok, detail=""):
     if not ok:
         fails += 1
 
-# The app and the CLI download the same pinned files (Nace Agent: packages/nace-runtime/src/catalog-data.ts).
+# The app and the CLI download the same pinned files (the default variants of the catalog, src/hub/catalog.cpp).
 PINNED = {
     "qwen3.6-35b-a3b": ("Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
@@ -101,17 +101,24 @@ def cli_checks(kapitsa):
     models = os.path.join(home, "models")
     rc, out, _ = run("list", "--json")
     check("cli: list --json on an empty store", rc == 0 and json.loads(out) == [], out)
-    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed"]),
-                          ("qwen3.8-27b", ["27b", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"]),
-                          ("qwen3.5-4b", ["4b", "qwen3.5-4b", "lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1"])]:
+    for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B", "35b:4bit",
+                                               "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed"]),
+                          ("qwen3.8-27b", ["27b", "27B:4BIT", "lmstudio-community/Qwen3.8-27B-MLX-4bit",
+                                           "hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"]),
+                          ("qwen3.5-4b", ["4b", "qwen3.5-4b", "qwen3.5-4b:4bit",
+                                          "lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1"])]:
         repo, rev, comps = PINNED[name]
         for a in aliases:
             j = plan(a)
             got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-            check(f"cli: {a} -> {name} at the app's pinned revisions",
-                  j.get("model") == name and j.get("id") == name and j.get("kind") == "catalog" and
-                  j.get("dir") == os.path.join(models, name) and j.get("repo") == repo and j.get("revision") == rev and
-                  got == comps and j.get("downloaded") is False, json.dumps(j))
+            check(f"cli: {a} -> {name}:4bit at the app's pinned revisions",
+                  j.get("model") == name + ":4bit" and j.get("id") == name and j.get("kind") == "catalog" and
+                  j.get("variant") == "4bit" and j.get("dir") == os.path.join(models, name + "-4bit") and
+                  j.get("repo") == repo and j.get("revision") == rev and got == comps and j.get("downloaded") is False,
+                  json.dumps(j))
+    rc, _, err = run("pull", "--dry-run", "4b:9bit")
+    check("cli: an unknown variant is refused with the model's variants",
+          rc == 2 and "has no variant" in err and "4bit (the default)" in err, err)
     j = plan("mlx-community/Qwen3.5-9B-4bit@main")
     check("cli: org/name@rev is a Hugging Face repo",
           j.get("kind") == "repo" and j.get("id") == "mlx-community/Qwen3.5-9B-4bit" and j.get("revision") == "main" and
@@ -131,7 +138,7 @@ def cli_checks(kapitsa):
     check("cli: a failed first pull leaves no folder behind",
           rc == 1 and not os.path.exists(os.path.join(models, "some-org--some-model")), err)
     # a finished download (manifest written last) is reused without any network access, listed, and removed
-    m4 = os.path.join(models, "qwen3.5-4b")
+    m4 = os.path.join(models, "qwen3.5-4b-4bit")
     os.makedirs(os.path.join(m4, ".kapitsa"))
     with open(os.path.join(m4, "config.json"), "w") as f:
         f.write("{}")
@@ -139,15 +146,16 @@ def cli_checks(kapitsa):
         f.write(b"x" * 10)
     with open(os.path.join(m4, ".kapitsa", "manifest.json"), "w") as f:
         repo, rev, comps = PINNED["qwen3.5-4b"]
-        json.dump({"name": "qwen3.5-4b", "repo": repo, "revision": rev, "commit": rev,
+        json.dump({"name": "qwen3.5-4b:4bit", "variant": "4bit", "repo": repo, "revision": rev, "commit": rev,
                    "files": [{"path": "config.json", "size": 2}, {"path": "mtp.safetensors", "size": 10}],
                    "companions": [{"kind": k, "repo": r, "revision": v, "files": ["mtp.safetensors"]} for k, r, v, _ in comps]}, f)
     rc, out, err = run("pull", "4b")
     check("cli: a finished download is reused offline", rc == 0 and "already downloaded" in out, out + err)
     rc, out, _ = run("list", "--json")
     lst = json.loads(out) if rc == 0 else []
-    check("cli: list shows it complete with its MTP head",
-          len(lst) == 1 and lst[0]["name"] == "qwen3.5-4b" and lst[0]["complete"] and "MTP head" in lst[0]["includes"], out)
+    check("cli: list shows it complete, with its variant and MTP head",
+          len(lst) == 1 and lst[0]["name"] == "qwen3.5-4b:4bit" and lst[0]["variant"] == "4bit" and lst[0]["complete"] and
+          "MTP head" in lst[0]["includes"], out)
     os.remove(os.path.join(m4, "mtp.safetensors"))
     rc, out, _ = run("list", "--json")
     check("cli: a missing file makes it incomplete", rc == 0 and not json.loads(out)[0]["complete"], out)
@@ -156,7 +164,7 @@ def cli_checks(kapitsa):
     rc, out, _ = run("list", "--json")
     check("cli: a failed repair keeps what is there", rc == 0 and os.path.exists(os.path.join(m4, ".kapitsa", "manifest.json")), out)
     rc, out, _ = run("rm", "4b")
-    check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b" in out and not os.path.exists(m4), out)
+    check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b:4bit" in out and not os.path.exists(m4), out)
     rc, _, err = run("rm", folder)
     check("cli: rm leaves a folder of yours alone", rc == 2 and os.path.exists(folder), err)
     # the port is checked before the model loads

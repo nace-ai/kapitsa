@@ -149,9 +149,17 @@ static std::string models_table() {
   std::string s;
   char line[256];
   for (const auto& m : hub::catalog()) {
+    const hub::Variant* d = m.variant();
     snprintf(line, sizeof line, "  %-16s %-6s %5.1f GB  %s\n", m.name.c_str(), ("(" + hub::short_name(m) + ")").c_str(),
-             m.download_gb, m.about.c_str());
+             d ? d->download_gb : 0.0, m.about.c_str());
     s += line;
+    std::string more;
+    for (const auto& v : m.variants)
+      if (&v != d) {
+        snprintf(line, sizeof line, "%s:%s %.1f GB", more.empty() ? "" : ", ", v.name.c_str(), v.download_gb);
+        more += line;
+      }
+    if (!more.empty()) s += "                           also " + more + "\n";
   }
   return s;
 }
@@ -162,7 +170,7 @@ static void print_help() {
          "  kapitsa serve --model 27b     start a given model\n\n"
          "Then open http://127.0.0.1:8000 to chat, or point any OpenAI-compatible app at\n"
          "http://127.0.0.1:8000/v1.\n\n"
-         "Models (with the files that speed them up):\n%s"
+         "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX 4/8-bit (org/name[@revision]),\n"
          "  or a model folder.\n\n"
          "Commands:\n"
@@ -279,7 +287,7 @@ static int serve(int argc, char** argv, int first) {
   if (ref.kind == hub::ModelRef::kCatalog && !model.empty()) {
     // before a long download: a model that cannot start on this Mac (its weights, buffers and an 8k-token
     // conversation over the GPU memory budget) is refused, with the one that fits
-    const double need = ref.model->fixed_gb + 8192.0 * ref.model->kv_bytes_per_token / 1e9;
+    const double need = ref.variant->fixed_gb + 8192.0 * ref.variant->kv_bytes_per_token / 1e9;
     const size_t budget = memory_budget();
     if (need * 1e9 > double(budget)) {
       const hub::CatalogModel& fit = hub::best_fit(budget);
@@ -453,9 +461,12 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     j["downloaded"] = hub::is_current(r);
   }
   json comp = json::array();
-  if (r.model)
-    for (const auto& c : r.model->companions)
+  if (r.variant) {
+    j["variant"] = r.variant->name;
+    j["quant"] = r.variant->quant;
+    for (const auto& c : r.variant->companions)
       comp.push_back(json{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"into", c.subdir.empty() ? "." : c.subdir}});
+  }
   j["companions"] = comp;
   if (as_json) {
     printf("%s\n", j.dump().c_str());
@@ -465,8 +476,10 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
   printf("  folder:     %s%s\n", hub::tilde(r.dir).c_str(),
          local ? " (yours, used as is)" : hub::is_current(r) ? " (downloaded)" : " (not downloaded yet)");
   if (!local) printf("  weights:    %s @ %s\n", r.repo.c_str(), r.revision.empty() ? "main" : r.revision.c_str());
-  if (r.model)
-    for (const auto& c : r.model->companions)
+  if (r.variant) printf("  variant:    %s (%s)%s\n", r.variant->name.c_str(), r.variant->quant.c_str(),
+                        r.variant->name == r.model->default_variant ? ", the default" : "");
+  if (r.variant)
+    for (const auto& c : r.variant->companions)
       printf("  %-11s %s @ %s%s\n", (c.kind == "dflash2" ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
              c.kind == "mtp-sidecar" ? " (its mtp.* tensors, made into mtp.safetensors)" : "");
   printf("  API name:   %s\n", r.id.c_str());
@@ -522,7 +535,7 @@ static int pull(int argc, char** argv) {
     }
     printf("%s %s in %s. Start it: kapitsa serve --model %s\n", ref.name.c_str(),
            had ? "is already downloaded" : "is ready", hub::tilde(ref.dir).c_str(),
-           ref.model ? hub::short_name(*ref.model).c_str() : ref.name.c_str());
+           ref.model ? hub::short_name(*ref.model, *ref.variant).c_str() : ref.name.c_str());
   }
   return 0;
 }
@@ -542,8 +555,8 @@ static int list(int argc, char** argv) {
   if (as_json) {
     json a = json::array();
     for (const auto& m : v)
-      a.push_back(json{{"name", m.name}, {"dir", m.dir}, {"repo", m.repo}, {"commit", m.commit}, {"complete", m.complete},
-                       {"bytes", m.bytes}, {"includes", m.extras}});
+      a.push_back(json{{"name", m.name}, {"variant", m.variant}, {"dir", m.dir}, {"repo", m.repo}, {"commit", m.commit},
+                       {"complete", m.complete}, {"bytes", m.bytes}, {"includes", m.extras}});
     printf("%s\n", a.dump(2).c_str());
     return 0;
   }
@@ -559,14 +572,16 @@ static int list(int argc, char** argv) {
     }
   }
   std::string more;
-  for (const auto& c : hub::catalog()) {
-    bool have = false;
-    for (const auto& m : v) have = have || (m.name == c.name && m.complete);
-    if (have) continue;
-    char b[160];
-    snprintf(b, sizeof b, "%s%s (%s, %.1f GB)", more.empty() ? "" : ", ", c.name.c_str(), hub::short_name(c).c_str(), c.download_gb);
-    more += b;
-  }
+  for (const auto& c : hub::catalog())
+    for (const auto& var : c.variants) {
+      bool have = false;
+      for (const auto& m : v) have = have || (m.name == hub::full_name(c, var) && m.complete);
+      if (have) continue;
+      char b[200];
+      snprintf(b, sizeof b, "%s%s (%s, %.1f GB)", more.empty() ? "" : ", ", hub::full_name(c, var).c_str(),
+               hub::short_name(c, var).c_str(), var.download_gb);
+      more += b;
+    }
   if (!more.empty())
     printf("\n%s: %s.\n`kapitsa pull MODEL` downloads one; `kapitsa serve --model MODEL` downloads and starts it.\n",
            v.empty() ? "Available" : "Also available", more.c_str());

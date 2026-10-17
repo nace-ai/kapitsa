@@ -1105,7 +1105,7 @@ bool is_current(const ModelRef& ref) {
     const json m = json::parse(read_text(manifest_path(ref.dir)));
     std::vector<std::string> have, want;
     for (const auto& c : m.at("companions")) have.push_back(c.at("kind").get<std::string>() + " " + c.at("repo").get<std::string>() + "@" + c.at("revision").get<std::string>());
-    for (const auto& c : ref.model->companions) want.push_back(c.kind + " " + c.repo + "@" + c.revision);
+    for (const auto& c : ref.variant->companions) want.push_back(c.kind + " " + c.repo + "@" + c.revision);
     std::sort(have.begin(), have.end());
     std::sort(want.begin(), want.end());
     return m.at("revision").get<std::string>() == ref.revision && have == want;
@@ -1187,7 +1187,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   }
   std::vector<std::string> extras;
   if (ref.kind == ModelRef::kCatalog) {
-    for (const Companion& c : ref.model->companions) {
+    for (const Companion& c : ref.variant->companions) {
       if (c.kind == "mtp-sidecar") {
         SidecarSource s;
         s.src = c.repo;
@@ -1239,8 +1239,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     if (is_dir(d)) from.scan(d, 3);
     else if (file_size(d, sz)) from.by_size.emplace(sz, d);
   }
-  if (ref.kind == ModelRef::kCatalog && !ref.model->app_key.empty()) {
-    const std::string app = user_home() + "/.nace/models/" + ref.model->app_key;
+  if (ref.kind == ModelRef::kCatalog) {
+    const std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
     if (is_dir(app)) {
       from.scan(app, 3);
       if (opt.progress) fprintf(stderr, "Checking Nace Agent's copy in %s...\n", tilde(app).c_str());
@@ -1315,9 +1315,16 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
       fprintf(stderr, "Downloaded %s in %s (%.0f MB/s).\n", fmt_bytes(prog.total).c_str(), fmt_duration(prog.secs()).c_str(),
               double(prog.total) / 1e6 / std::max(0.001, prog.secs()));
   }
-  ojson m{{"name", ref.name},      {"repo", main.repo},     {"revision", main.revision}, {"commit", main.commit},
-          {"files", mfiles},       {"companions", mcomp},   {"total_bytes", total},     {"completed_at", now_iso()},
-          {"kapitsa", KAPITSA_VERSION}};
+  ojson m{{"name", ref.name}, {"repo", main.repo}, {"revision", main.revision}, {"commit", main.commit}};
+  if (ref.variant) {
+    m["variant"] = ref.variant->name;
+    m["quant"] = ref.variant->quant;
+  }
+  m["files"] = mfiles;
+  m["companions"] = mcomp;
+  m["total_bytes"] = total;
+  m["completed_at"] = now_iso();
+  m["kapitsa"] = KAPITSA_VERSION;
   write_atomic(manifest_path(ref.dir), m.dump(2) + "\n");
   rmdir((ref.dir + "/.kapitsa/parts").c_str());  // empty now (fails harmlessly otherwise)
   return ref.dir;
@@ -1392,8 +1399,8 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
 std::string plan_dir(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
   if (ref.kind != ModelRef::kCatalog) return "";
-  const CatalogModel& m = *ref.model;
-  const std::string dir = home_dir() + "/plans/" + m.name, mark = dir + "/.complete";
+  const Variant& m = *ref.variant;
+  const std::string dir = home_dir() + "/plans/" + ref.model->name + "-" + m.name, mark = dir + "/.complete";
   std::string want = m.repo + "@" + m.revision;
   for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
   if (read_text(mark) == want) return dir;
@@ -1498,6 +1505,7 @@ std::vector<Installed> installed() {
     try {
       const json j = json::parse(read_text(manifest_path(m.dir)));
       m.name = j.value("name", n);
+      m.variant = j.value("variant", "");
       m.repo = j.value("repo", "");
       m.commit = j.value("commit", "");
       m.total = j.value("total_bytes", uint64_t(0));
