@@ -24,15 +24,76 @@ created at load (`NI_PREWARM=0` skips that and creates them on first use).
 | `--model <dir>` | MLX-format model directory (affine 4/8-bit; the MTP head may live in `mtp.safetensors`). Required. |
 | `--model-id <id>` | Name reported by `/v1/models`. |
 | `--host`, `--port` | Listen address (default `127.0.0.1:8000`). |
-| `--ctx <tokens>` | Context per conversation slot (default 32768). |
+| `--ctx <tokens>` | Context per conversation slot (default 32768). Its KV cache grows as the conversation fills (Memory). |
 | `--slots <n>` | Conversations kept warm for prefix reuse (default 2). |
-| `--spec <n>` | Speculative draft depth; default per model (MoE 1, dense 2); `0` turns it off. |
-| `--prefill-chunk <rows>` | Prefill chunk size (default 2048). |
+| `--spec <n>` | Speculative draft depth; default per model (35B MoE 1, 27B 2, 4B 1); `0` turns it off. |
+| `--prefill-chunk <rows>` | Prefill chunk size (default 2048; 1024 when 2048-row buffers would keep one conversation from its full context). |
+| `--mem-budget <GB>` | GPU memory Kapitsa may hold (default: Metal's recommended working set minus 4%, at least 512 MB; `NI_MEM_BUDGET`). |
 | `--api-key <key>` | Require `Authorization: Bearer <key>` (except `/health`). |
 
+`kapitsa doctor [--model DIR]... [--ctx 65536] [--slots 2] [--json]` prints this Mac (chip, GPU cores, RAM, Metal's
+recommended working set, the memory budget, the Neural Engine) and, for each model directory (default: the ones under
+`~/.cache/nace-infer-models`, `~/.cache/nace-agent-models`, `~/.nace/models`), its memory at that context and slot count,
+whether it starts and how many tokens of KV cache fit, the Neural Engine share it gets here, and rough speeds.
+`--json` is the same for programs (the app's fit check).
+
 Endpoints: `POST /v1/chat/completions` (SSE or JSON; `reasoning_content`; Qwen XML tool calls returned as
-OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usage`), `GET /v1/models`,
-`GET /health`. Thinking: `chat_template_kwargs.enable_thinking=false` or `reasoning_effort: "none"`.
+OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usage`), `GET /v1/models` (also
+`context_fit`: the tokens one conversation can hold within the memory budget), `GET /health`. Thinking:
+`chat_template_kwargs.enable_thinking=false` or `reasoning_effort: "none"`.
+
+## Memory
+
+Kapitsa holds at most a budget of GPU memory: Metal's recommended working set for this GPU
+(`recommendedMaxWorkingSetSize`, which macOS sizes from the RAM: 40.2 GB, 78%, on this 48 GB M4 Pro under macOS 27;
+`kapitsa doctor` prints it) minus 4% (at least 512 MB) for the Neural Engine service and other GPU users;
+`--mem-budget` / `NI_MEM_BUDGET` set it. What it holds:
+- fixed at start: the weights, the MTP head, prefill buffers for one chunk (they scale with `--prefill-chunk`), and per
+  slot the recurrent state with its two checkpoints and the verify tape (4B 0.16 GB, 27B 0.49, 35B 0.21);
+- the KV cache, per slot, of the positions in use: a slot allocates none until its first conversation and then grows
+  in steps (by a quarter, in 1024-position steps, or exactly when the budget is short): new buffers, a GPU copy of the
+  old positions, the old ones released in ~256 MB batches. 4B 36 KB per token, 27B 68 KB, 35B 22 KB (MTP head
+  included);
+- the Neural Engine split (dense models, where the chip has a share): 0.24 GB (4B) / 0.79 GB (27B) of surfaces and
+  scratch, built at the first request after its program compiled.
+
+Before reading any weights the engine checks that the fixed part plus an 8k-token KV cache fits the budget; if not it
+exits with `insufficient memory: ...` (what each part needs and what would help), which the app treats as a memory
+error. A request whose prompt does not fit gets an `insufficient memory` error; before that, idle slots give up their
+KV caches (least recently used first; their conversations are prefilled again when they return) and, last, the
+Neural Engine split is released (prefill then runs on the GPU alone). A generation that cannot grow its cache ends
+with `length`. `kapitsa doctor` shows the numbers for a Mac before anything loads.
+
+## What runs where
+
+Memory at the app's settings (`--ctx 65536 --slots 2`; `kapitsa doctor --json` computes the same on any Mac).
+Fixed = weights + MTP head + prefill buffers + both slots' recurrent state (+ the Neural Engine split for dense
+models); the rest of the budget is KV cache, shared by the conversations as they fill (one conversation needs at
+most 64k tokens: 4B 2.4 GB, 27B 4.5 GB, 35B 1.4 GB). The budget is Metal's recommended working set less 4%; macOS
+sizes it from the RAM and the fraction differs between macOS versions (78% on this M4 Pro under macOS 27; older
+releases are commonly reported at about 2/3), so both are shown. Tokens of KV cache in all:
+
+| Mac (RAM) | budget at 2/3 - 78% | Qwen3.5-4B (3.7 GB fixed) | Qwen3.8-27B (17.6-18.1 GB fixed) | Qwen3.6-35B-A3B (20.9-21.2 GB fixed) |
+| --- | --- | --- | --- | --- |
+| MacBook Air 16 GB | 10.9 - 12.9 GB | yes: 196k - 249k tokens | no | no |
+| MacBook Air 24 GB | 16.5 - 19.3 GB | yes: 348k - 424k | no at 2/3; at 78% 23k (35k without the split) | no |
+| MacBook Air / Pro 32 GB | 22.0 - 25.7 GB | yes: 497k - 598k | yes: 62k - 109k (74k - 121k without the split) | yes: 50k - 200k |
+| MacBook Pro 48 GB (this M4 Pro) | 33.0 - 38.6 GB | yes | yes: 214k - 294k | yes: 522k - 771k |
+
+Where a full 64k conversation would not fit beside the prefill buffers, the engine takes 1024-row prefill chunks
+(27B and 35B on 32 GB at 2/3: 0.45 / 0.37 GB less); a conversation that outgrows the budget takes the KV caches of
+idle slots, then the Neural Engine split's memory, then is refused with `insufficient memory`.
+
+Speed (tok/s; Qwen3.5-4B / Qwen3.8-27B / Qwen3.6-35B-A3B, 4-bit). Measured on this MacBook Pro (M4 Pro, 20-core
+GPU, 273 GB/s); the MacBook Air rows are estimates, not measurements: decode scaled by memory bandwidth (M4 Air
+120 GB/s, M5 Air 153 GB/s), GPU prefill by GPU cores (10 of 20), the Neural Engine (the same 16-core unit on the M4
+family) taking the dense models' whole FFN. A fanless Air also slows down after a minute or two of sustained work.
+
+| | decode, plain | decode, speculative (default) | prefill 4k |
+| --- | --- | --- | --- |
+| M4 Pro 20-core (measured) | 83 / 16 / 105 | 120 (MTP 1) / 29-30 (MTP 2) / 116-124 (MTP 1) | 2000 (GPU + ANE; GPU alone 890) / 277-321 (GPU + ANE; 111) / 960-1077 |
+| M4 Air 10-core (estimate) | ~36 / ~7 / ~46 | ~52 / ~13 / ~53 | ~1000 / ~150 / ~500 |
+| M5 Air 10-core (estimate) | ~46 / ~9 / ~59 | ~67 / ~17 / ~67 | ~1000 / ~150 / ~500 (Kapitsa does not use the M5's GPU neural accelerators yet) |
 
 ## Layout
 
@@ -48,10 +109,14 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
-- `tools/`: `ni_run` (raw generation: `ni_run <model> @<ids file> <n_gen> <temp> [--spec D] [--dump-logits f]`),
-  kernel benchmarks (`bench_qmm`, `bench_qmvr`, `bench_attn`, `bench_moe`, `bench_gdn`, `bench_qmms`,
-  `bench_mma`), `ni_compile` (compile-check; `NI_ARCHIVE_DIR=<dir>` prints code size, stack and GPRs),
-  `ni_kstats --stats` (registers and spills from the pipeline state).
+- `tools/`: `ni_run` (raw generation: `ni_run <model> @<ids file> <n_gen> <temp> [--spec D] [--dump-logits f]`;
+  `--kv-grow` starts with an empty KV cache and grows it before every chunk / step as the server does;
+  `--tbt --dump-all-logits f` writes the teacher-forced logits of every prompt position), kernel benchmarks
+  (`bench_qmm`, `bench_qmvr`, `bench_attn`, `bench_moe`, `bench_gdn`, `bench_qmms`, `bench_mma`), `ni_compile`
+  (compile-check; `NI_ARCHIVE_DIR=<dir>` prints code size, stack and GPRs), `ni_kstats --stats` (registers and spills
+  from the pipeline state), `ni_kstats --limits` (every kernel's threadgroup memory against the 32 KB of Apple7-Apple10,
+  pipelines below 1024 threads), `mtp_sidecar.py` (an MTP head for an MLX model that dropped it, from the official
+  checkpoint by HTTP range requests: `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <model dir>/mtp.safetensors`).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server.
 - `tests/test_server.py`: end-to-end API checks (13).
@@ -76,8 +141,12 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
 | `NI_DUP` | off | `NI_DUP=<kernel>[,...]`: dispatch those kernels twice (in-pipeline cost; idempotent kernels only) |
-| `NI_FULL_DRAFT` | dense on, MoE off | MTP drafts over the full vocabulary (else ids < 32768 + specials) |
+| `NI_FULL_DRAFT` | dense with lm_head < 10% of the weights (27B) | MTP drafts over the full vocabulary (else ids < 32768 + specials) |
 | `NI_NO_MTP` | off | do not load the MTP head |
+| `NI_MTP_HIDDEN` | the pack's metadata | `pre` / `post`: the trunk hidden the MTP head reads (before / after the final norm) |
+| `NI_MEM_BUDGET` | recommended working set - 4% | GPU memory budget in GB (`--mem-budget`) |
+| `NI_GPU_CORES` | IORegistry `gpu-core-count` | GPU cores the dispatch heuristics assume (tests of the 8/10-core choices on a bigger GPU) |
+| `NI_ANE`, `NI_ANE_UNITS` | on where the chip has a share | Neural Engine prefill split for dense models; `0` = GPU alone; units = its share in 512-channel units |
 | `NI_PREWARM` | on | create all pipelines at load |
 | `NI_PROFILE` | off | per-kernel GPU profile (isolated dispatches; timings of the whole run are not meaningful) |
 | `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters) |

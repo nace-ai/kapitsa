@@ -13,7 +13,8 @@ without re-reading what it has already seen. No MLX, no llama.cpp, no Xcode.
 ## Quick start
 
 Apple silicon Mac, macOS 15 or later (tested on an M4 Pro with macOS 15.3 and 27.0), CMake and the Xcode
-Command Line Tools. The 4-bit 35B and 27B models need 48 GB of unified memory (about 20 and 16 GB of weights).
+Command Line Tools. The 4-bit 35B and 27B models want a 32 GB Mac or larger (about 20 and 16 GB of weights; the KV
+cache grows with each conversation), the 4B runs on a 16 GB MacBook Air. `kapitsa doctor` tells what fits this Mac.
 
 ```bash
 git clone https://github.com/nace-ai/kapitsa && cd kapitsa
@@ -48,8 +49,9 @@ Point any OpenAI-compatible agent at `http://127.0.0.1:8000/v1`.
 | --- | --- | --- |
 | Qwen3.6-35B-A3B (MoE, 256 experts) | [`Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) (body = `mlx-community/Qwen3.6-35B-A3B-4bit`, plus its MTP head) | MTP head, depth 1; DFlash2 drafter (in progress) |
 | Qwen3.8-27B (dense) | [`lmstudio-community/Qwen3.8-27B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) + `mtp.safetensors` from [`Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) | MTP head, depth 2; DFlash2 drafter (in progress) |
+| Qwen3.5-4B (dense, tied embeddings) | [`lmstudio-community/Qwen3.5-4B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.5-4B-MLX-4bit) + `mtp.safetensors` made by `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <dir>/mtp.safetensors` (the official head, 241 MB fetched by range requests) | MTP head, depth 1 |
 
-Other Qwen3.5-family checkpoints in the same MLX format are untested; the defaults are tuned on these two.
+Other Qwen3.5-family checkpoints in the same MLX format are untested; the defaults are tuned on these three.
 Decoding is exact: with speculation on, greedy output is token-for-token the same as without it.
 
 ## Settings
@@ -59,6 +61,7 @@ Decoding is exact: with speculation on, greedy output is token-for-token the sam
 | `--ctx 32768` | Context per conversation slot. |
 | `--slots 2` | Conversations kept warm for instant follow-ups. |
 | `--spec N` | Draft depth (default per model; `0` turns speculation off). |
+| `--mem-budget GB` | GPU memory Kapitsa may hold (default: what macOS recommends for this Mac's GPU, a little less). |
 | `--api-key KEY` | Require a bearer token. |
 | `--host`, `--port` | Listen address. |
 
