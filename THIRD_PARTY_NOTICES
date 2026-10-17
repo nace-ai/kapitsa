@@ -3,6 +3,9 @@ Third-party notices
 Kapitsa (Copyright 2026 Nace AI, Apache-2.0, see LICENSE) includes the following third-party code and data,
 each under its own license. Model weights are not part of Kapitsa: they keep their own licenses.
 
+The benchmark corpus (bench/harness/corpus, Apache-2.0 excerpts of Hugging Face Transformers): see
+bench/harness/corpus/NOTICE.md.
+
 ================================================================================
 cpp-httplib 0.18.3 (third_party/httplib), MIT License
 https://github.com/yhirose/cpp-httplib

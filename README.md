@@ -94,6 +94,8 @@ its latest release and its own best settings, the same 4-bit weights wherever th
 on Q4_K_M), thinking off, 32K context, one slot, median of 5 runs, nothing else on the GPU. Ratios are against the
 next-fastest engine measured.
 
+<!-- 27B ratios re-measured in the confirmation run -->
+
 | Metric | Qwen3.6-35B-A3B | Qwen3.8-27B |
 | --- | ---: | ---: |
 | Decode · coding prompt, temperature 0.6 | 154 tok/s (1.2×) | 62 tok/s (2.0×) |
@@ -117,7 +119,7 @@ Against the engines people use, decode at temperature 0.6 in tok/s, each engine 
 Prefill is up to 3× faster on the 27B (GPU + Neural Engine), and a follow-up turn starts in 0.06-0.25 s. Every
 engine passes the same tool-call checks.
 [Measurement details](docs/benchmarks.md) ·
-[Run benchmarks locally](docs/benchmarks.md) ·
+[Run benchmarks locally](bench/harness/README.md) ·
 [Every optimization and its measurements](docs/PERF.md)
 
 ## Design

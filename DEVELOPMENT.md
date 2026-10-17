@@ -313,13 +313,13 @@ against the old path (differences allowed only at near-ties). `bench/` has the i
 
 ### Run benchmarks locally
 
-TBD: the cross-engine harness behind the README's tables is being added as `bench/harness`, with
-[docs/benchmarks.md](docs/benchmarks.md): every table (all columns, all engines) and how to run it. It sends the same
-prompts over HTTP to every engine, one engine at a time on an otherwise idle Mac, median of 5 runs, thinking off,
-identical sampling settings, cold prompts cache-busted, each engine at its latest release and its own best settings.
+[Run benchmarks locally](bench/harness/README.md): the cross-engine harness behind the README's tables (the same
+prompts over HTTP for every engine, one engine at a time on an otherwise idle Mac, median of 5 runs, thinking off,
+identical sampling settings, cold prompts cache-busted, each engine at its latest release and its own best settings).
+Every table, with all columns and engines: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Third-party
 
 MIT: nlohmann/json, minja (patched: Jinja `undefined` test), cpp-httplib; the tokenizer's Unicode ranges come from
 the Unicode Character Database. Their notices: [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). Ideas credited in code
-comments where they come from other engines (Splash, MLX, MTPLX); the code is Kapitsa's own.
+comments where they come from other engines; the code is Kapitsa's own.
