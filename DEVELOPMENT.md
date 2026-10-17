@@ -230,10 +230,10 @@ against the old path (differences allowed only at near-ties). `bench/` has the i
 
 ### Run benchmarks locally
 
-TBD: the cross-engine harness behind the README's tables (the same prompts over HTTP for every engine, one engine at a
-time on an otherwise idle Mac, median of 5 runs, thinking off, identical sampling settings, cold prompts cache-busted,
-each engine at its latest release and its own best settings) and its frozen prompt corpus are to be added to this
-repository, with how to run it.
+TBD: the cross-engine harness behind the README's tables is being added as `bench/harness`, with
+[docs/benchmarks.md](docs/benchmarks.md): every table (all columns, all engines) and how to run it. It sends the same
+prompts over HTTP to every engine, one engine at a time on an otherwise idle Mac, median of 5 runs, thinking off,
+identical sampling settings, cold prompts cache-busted, each engine at its latest release and its own best settings.
 
 ## Third-party
 

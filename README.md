@@ -87,45 +87,35 @@ optimization.
 
 ## Performance
 
-<!-- TBD cells: filled by the final head-to-head on the M4 Pro. -->
-
-Measured on a MacBook Pro (M4 Pro, 20-core GPU, 48 GB), with the same coding prompts over HTTP for every engine.
-Ratios compare with the next-fastest engine measured.
+Measured on a MacBook Pro (M4 Pro, 20-core GPU, 48 GB) with macOS 27.0.1: the same prompts for every engine, each at
+its latest release and its own best settings, the same 4-bit weights wherever the engine accepts them (GGUF engines
+on Q4_K_M), thinking off, 32K context, one slot, median of 5 runs, nothing else on the GPU. Ratios are against the
+next-fastest engine measured.
 
 | Metric | Qwen3.6-35B-A3B | Qwen3.8-27B |
 | --- | ---: | ---: |
-| Writing speed (decode) | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
-| Reading speed (prefill) · 4K-token prompt | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
-| Reading speed (prefill) · 16K-token prompt | TBD tok/s (TBD×) | TBD tok/s (TBD×) |
-| Cached follow-up · time to first token, 4K / 16K | TBD / TBD s (TBD×) | TBD / TBD s (TBD×) |
+| Decode · coding prompt, temperature 0.6 | 154 tok/s (1.2×) | 62 tok/s (2.0×) |
+| Decode · greedy | 179 tok/s (1.4×) | 66 tok/s (1.9×) |
+| Prefill · 4K prompt | 1,169 tok/s (1.1×) | 395 tok/s (3.1×) |
+| Prefill · 16K prompt | 986 tok/s (1.1×) | 330 tok/s (2.7×) |
+| Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.7×) | 0.23 / 0.25 s (1.4× / 1.6×) |
+| Peak memory | 21.1 GB (lowest) | 20.5 GB (lowest) |
 
-The engines people run on Macs, each at its latest release with its own best settings (speculative decoding where
-it has it), on the same 4-bit weights where it accepts them. Decode and prefill are in tokens per second, follow-ups
-in seconds to the first token:
+Against the engines people use, decode at temperature 0.6 in tok/s, each engine in its fastest setup:
 
-| Qwen3.6-35B-A3B | Decode | Prefill 4K | Prefill 16K | Follow-up 4K | Follow-up 16K |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| **Kapitsa** | **TBD** | **TBD** | **TBD** | **TBD** | **TBD** |
-| llama.cpp | TBD | TBD | TBD | TBD | TBD |
-| Ollama | TBD | TBD | TBD | TBD | TBD |
-| LM Studio | TBD | TBD | TBD | TBD | TBD |
-| mlx-lm | TBD | TBD | TBD | TBD | TBD |
-| oMLX | TBD | TBD | TBD | TBD | TBD |
-| MTPLX | TBD | TBD | TBD | TBD | TBD |
+| Engine | 35B-A3B | 27B |
+| --- | ---: | ---: |
+| llama.cpp (+ MTP) | 69 | 18 |
+| Ollama (MLX runner, MTP) | 89 | 31 |
+| LM Studio (MLX engine) | 86 | 15 |
+| MTPLX | 80 | 30 |
+| oMLX + DFlash2 | 127 | 30 |
+| **Kapitsa** | **154** | **62** |
 
-| Qwen3.8-27B | Decode | Prefill 4K | Prefill 16K | Follow-up 4K | Follow-up 16K |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| **Kapitsa** | **TBD** | **TBD** | **TBD** | **TBD** | **TBD** |
-| llama.cpp | TBD | TBD | TBD | TBD | TBD |
-| Ollama | TBD | TBD | TBD | TBD | TBD |
-| LM Studio | TBD | TBD | TBD | TBD | TBD |
-| mlx-lm | TBD | TBD | TBD | TBD | TBD |
-| oMLX | TBD | TBD | TBD | TBD | TBD |
-| MTPLX | TBD | TBD | TBD | TBD | TBD |
-
-One engine runs at a time on an otherwise idle Mac, with thinking off and the same sampling settings. Each figure is
-the median of 5 runs, and cold prompts are cache-busted. A follow-up is the next turn of a conversation that already
-holds 4K or 16K tokens.
+Prefill is up to 3× faster on the 27B (GPU + Neural Engine), and a follow-up turn starts in 0.06-0.25 s. Every
+engine passes the same tool-call checks.
+[Measurement details](docs/benchmarks.md) ·
+[Run benchmarks locally](docs/benchmarks.md) ·
 [Every optimization and its measurements](docs/PERF.md)
 
 ## Design
