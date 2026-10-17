@@ -49,6 +49,7 @@ ap.add_argument("--temp", type=float, default=None)
 ap.add_argument("--tool-tokens", type=int, default=600)
 ap.add_argument("--q2-tokens", type=int, default=128)
 ap.add_argument("--q2-gap", type=float, default=1.0)
+ap.add_argument("--q2", default="", help="the new user query (default: a one-sentence question)")
 ap.add_argument("--corpus", default=find_corpus())
 ap.add_argument("--no-warmup", action="store_true")
 ap.add_argument("--tag", default="")
@@ -198,7 +199,7 @@ def conversation(size, calls, nonce, word):
             m["reasoning_content"] = r["reasoning"]
         msgs.append(m)
         break
-    msgs.append({"role": "user", "content": Q2})
+    msgs.append({"role": "user", "content": a.q2 or Q2})
     time.sleep(a.q2_gap)  # the user reads the answer and types (the harness's turn gap)
     r = chat(body(msgs, a.q2_tokens))
     steps.append(step_rec("q2", r))

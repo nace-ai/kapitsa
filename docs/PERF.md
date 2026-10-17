@@ -523,3 +523,102 @@ Correctness:
 * tests/test_server.py: 13/13 on both models.
 * bench_qmms / bench_attn check every kernel against double-precision CPU references (GEMM max rel.
   err 1e-6 - 3e-5, fused gate/up 3-4e-4 (half output); attention max err / max |ref| 2-3e-4, as v11).
+
+## Turn-boundary checkpoints through tool loops (`NI_QUERY_CKPT`, default on; macOS 27.0.1)
+
+Each slot keeps two recurrent-state checkpoints, and every request saves one at its turn boundary (the end
+of the rendered conversation, before the assistant header). The Qwen3.6 template renders the assistant
+turns after the last user query with their `<think>` block and the turns before it without, so when a new
+user query arrives the prompt diverges from the live state three tokens after the previous query
+(`<|im_start|>assistant\n`, then the think block the new render drops): only the checkpoint saved at that
+query can be restored. In an agent loop (query -> tool call -> tool response -> ... -> final answer -> new
+query) every request after the query ends with a tool response, and each saved its checkpoint over the
+one with the lowest position: after two tool calls the query's checkpoint was gone, and the new query
+prefilled the whole conversation from token 0. opt/moe35's history prefill (`Engine::prefill_history`,
+which re-renders the answer in the idle gap after it) restores the same checkpoint and gave up there.
+
+The change: a checkpoint records whether its request ended with a user query (the template's own test: a
+user message not wrapped in `<tool_response>`; role `tool` and assistant continuations are not), and a new
+boundary overwrites an invalid checkpoint first, then a tool-response one, then the oldest query one. A
+slot thus holds the newest query checkpoint and the newest checkpoint, which is the one a tool loop's next
+request restores when the client's re-render of the last assistant turn differs from the generated tokens
+(for example a client that does not send the reasoning back). Conversations without tools choose exactly as
+before (all their checkpoints are query ones), and so does `NI_QUERY_CKPT=0` in every case. Memory is
+unchanged: two checkpoints per slot, 65.9 MB each on the 35B and 156.9 MB on the 27B. A third checkpoint
+was not added: on its own it moves the cliff from two tool calls to three, and beside the new rule it would
+only keep the second-newest tool response, which only a client that rewinds one tool step would restore.
+
+The 27B is not affected: its template keeps every think block unless `preserve_thinking=false`, so its new
+query continues the live state (4k, 1 / 2 / 3 tool calls: 0.30 s and only the query's own 32 tokens
+prefilled, with the rule and without).
+
+Through the server (bench/ckpt/tool_loop_ttft.py; Qwen3.6-35B-A3B 4-bit, greedy, thinking off, `--ctx 32768`
+with the default 2 slots, MTP on): system prompt with 4k / 16k tokens of repository context plus two tools,
+the query asks the model to read notes/step1.txt and follow the instruction at its end, each file (~600
+tokens of code) names the next one and the last says to stop and answer, the model's replies are sent back
+as they came (content + tool_calls, as Pi does), and the new query follows the answer after 1 s (the
+harness's turn gap). The model made exactly the requested 1, 2 or 3 tool calls every time. Same seeded
+conversations on every server, interleaved spans under the GPU lock; before = main d6d2ed0 and this branch
+with `NI_QUERY_CKPT=0` (2 runs each), after = `NI_QUERY_CKPT=1` (3 runs). Seconds to the first token of
+the new query, server prefill in the log within 10 ms of it:
+| context, tool calls | new query: prompt tokens | cached before / after | before | after |
+|---|---|---|---|---|
+| 4k, 1 | 5,394 | 4,511 / 4,511 | 1.05-1.10 | 1.07-1.18 |
+| 4k, 2 | 6,118 | 0 / 4,514 | 6.21-6.42 | 1.87-1.93 |
+| 4k, 3 | 6,793 | 0 / 4,513 | 7.05-7.42 | 2.65-2.75 |
+| 16k, 1 | 17,534 | 16,665 / 16,665 | 1.43-1.48 | 1.49-1.58 |
+| 16k, 2 | 18,274 | 0 / 16,666 | 22.2-22.9 | 2.58-2.68 |
+| 16k, 3 | 18,931 | 0 / 16,665 | 23.4-24.2 | 3.64-3.78 |
+Every other request of these conversations has the same prompt and cached tokens in all variants (main and
+`NI_QUERY_CKPT=0` request for request) and the same timing within the spans' drift (cold 16k prompt
+19.9-20.5 s, a tool step 0.85-1.5 s: the tool loop continues the live state, since the reply is sent back as
+generated). What the new query still pays is re-prefilling the tool turns without their think blocks:
+~730 tokens per tool step (the call and its ~600-token result), ~0.8 s each at 4k and ~1.1 s at 16k. With one
+tool call both rules restore the same checkpoint and run the same passes; a targeted A/B of that case (two
+pairs of spans with paired seeds, off-on then on-off, 4 conversations per size and span) measured
+1.047-1.109 s (off) vs 1.036-1.075 s (on) at 4k and 1.426-1.563 vs 1.436-1.492 s at 16k, the later span of each
+pair the slower one on every request, cold prompts included: the spread in the table's 1-call rows is drift
+between server sessions.
+
+With thinking on (4k, 2 tool calls; the second conversation was asked for 3 but the model wrote its third call
+inside an unclosed think block, which the parser leaves in the reasoning, so it stopped after 2): with the
+reasoning not sent back, every tool step diverges at its think block and restores the previous tool
+response's checkpoint, which both rules keep; the new query took 6.21 / 6.12 s before and 1.79 / 1.73 s
+after. With `reasoning_content` sent back (Pi replays it), the tool steps continue the live state and the
+new query took 8.03 / 7.64 s before (2 / 3 calls) and 2.07 / 3.03 s after.
+
+With opt/moe35's history prefill (scratch merge of 57df0c2 with this branch, not kept): after the answer the
+engine renders the conversation as the next query will and prefills it from the query's checkpoint in the
+idle gap. With the old rule it found no checkpoint after 2-3 tool calls; with this one it runs every time
+("history: prefilled 2240 tokens of the rendered reply (from 16665) in 3280 ms") and the new query prefills
+only its own 31 tokens (58-72 ms on the server):
+| new query TTFT, s | 4k: 1 / 2 / 3 tool calls | 16k: 1 / 2 / 3 tool calls |
+|---|---|---|
+| history prefill, old rule | 0.25 / 5.88 / 6.79 | 0.61 / 21.76 / 23.60 |
+| history prefill + this rule (1 s gap) | 0.26 / 0.98 / 1.69 | 0.57 / 1.60 / 2.60 |
+| history prefill, old rule (5 s gap) | | 0.51 / 20.88 / 22.00 |
+| history prefill + this rule (5 s gap) | | 0.50 / 0.50 / 0.18 |
+With a 1 s gap the history prefill (0.95-3.28 s) is still running when the query arrives, so the query waits
+for its rest. With 5 s it is done, and the query's own GPU work is 78-83 ms; the rest is the GPU waking up
+after the idle gap ("GPU start +98 / +413 / +419 ms" in the log, the same with the old rule at 1 call).
+
+Correctness (greedy; every request's reasoning, content and tool calls compared for the same seeded
+conversation across servers):
+* 0 differences in 68 conversations: 24 thinking off (4k / 16k, 1-3 tool calls, 3 rounds: flag on vs main
+  and flag off), 16 in the 1-call A/B, 2 with the default flipped vs `NI_QUERY_CKPT=0`, 4 thinking on
+  (reasoning echoed and not), 10 whose new query asks for a detailed explanation after 2-3 tool calls (4k and
+  16k, answers of 300-400 tokens, nine of them run to the limit: a cold re-prefill before, a restored
+  checkpoint after), 3 on the 27B, 9 through the opt/moe35 merge. The restored path is the cached path every
+  follow-up already takes, which is not bitwise a cold prefill (different chunking; opt/moe35 measured KL
+  1e-4 - 6e-3 between them and saw greedy texts split at near-ties): none of these conversations hit one.
+* main and `NI_QUERY_CKPT=0`: the same prompt and cached tokens for every request of every conversation.
+* tests/test_server.py (bench/shortpf/serve_test.sh): 13/13 on the 35B with `NI_QUERY_CKPT=1` and `=0`, and
+  with the new default (no variable) on the 35B and the 27B.
+* bench/ckpt/kind_probe.py (one-token requests, NI_LOG=2): a plain query, a user query after a tool response,
+  a user message that only starts with `<tool_response>` and multi-part text are query boundaries; role
+  `tool`, a user message wrapped in `<tool_response>` (whitespace around it, or split over text parts) and an
+  assistant continuation are not (all 8 as expected).
+
+Made the default after these runs (`NI_QUERY_CKPT=0` restores "oldest first"): the default build against
+`NI_QUERY_CKPT=0` on the same 4k conversations, new query after 2 / 3 tool calls: 1.95 / 2.76 s (restored the
+query's checkpoint) vs 6.57 / 7.42 s (from token 0), replies identical.

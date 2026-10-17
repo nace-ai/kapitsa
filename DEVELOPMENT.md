@@ -44,7 +44,8 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
 - `src/model/qwen35*.cpp`: the model (decode, chunked prefill with in-pass checkpoints, MTP speculative
   decoding: draft chain, multi-row verify, tape commit).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries, streaming parser for reasoning / content / tool calls.
+  boundaries (a user query's outlives the tool responses after it), streaming parser for reasoning /
+  content / tool calls.
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
@@ -53,7 +54,9 @@ OpenAI `tool_calls`; `usage` in the final chunk with `stream_options.include_usa
   `bench_mma`), `ni_compile` (compile-check; `NI_ARCHIVE_DIR=<dir>` prints code size, stack and GPRs),
   `ni_kstats --stats` (registers and spills from the pipeline state).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
-  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server.
+  `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
+  `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
+  how turn boundaries are classified (`kind_probe.py`).
 - `tests/test_server.py`: end-to-end API checks (13).
 
 ## Switches (environment, read once at start; the `NI_` prefix predates the name)
@@ -64,6 +67,7 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | --- | --- | --- |
 | `NI_QMM`, `NI_QMM_GU` | on | qmr dense prefill GEMM and fused gate/up/SwiGLU; `0` = original kernels |
 | `NI_SHORTPF` | on | short-prefill paths (one weight pass per suffix, short-T GEMM choice); `0` = off |
+| `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |
 | `NI_MOE_FUSED` | 2 | fused MoE prefill GEMMs (1 = shared expert folded in, 0 = original) |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_par_l16` | token-parallel DeltaNet prefill; `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11` | prefill attention kernel name |
@@ -71,7 +75,7 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_NO_MTP` | off | do not load the MTP head |
 | `NI_PREWARM` | on | create all pipelines at load |
 | `NI_PROFILE` | off | per-kernel GPU profile (isolated dispatches; timings of the whole run are not meaningful) |
-| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters) |
+| `NI_LOG` | 1 | 0 quiet, 1 per-request timing, 2 debug (speculation counters, checkpoint restores and overwrites) |
 | `NI_MATH_SAFE` | off | compile kernels without fast math (bitwise A/B checks only; slower) |
 
 ## Benchmarks

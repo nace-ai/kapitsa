@@ -373,15 +373,18 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const int C = model_->prefill_chunk();
   int p = start;
   int last_chunk_row = 0;
-  // The checkpoint this request's turn boundary overwrites: an invalid one, else the oldest.
-  // NI_QUERY_CKPT=1: checkpoints saved at a user query are overwritten after all others. The template
-  // renders the assistant turns after the last user query with their reasoning and those before it
-  // without, so when the next query arrives, the prompt diverges from the live state right after the
-  // previous query: only that query's checkpoint can be restored. Every request of a tool loop saves a
-  // checkpoint at its tool response, and with "oldest first" two tool calls evicted the query's, so the
-  // next query re-prefilled the whole conversation. Kept this way: the newest query checkpoint and the
-  // newest one (the tool response a tool loop's next request restores when it diverges).
-  static const bool keep_query = env_on("NI_QUERY_CKPT");
+  // The checkpoint this request's turn boundary overwrites: an invalid one, else one saved at a tool
+  // response, else the oldest (NI_QUERY_CKPT=0: the oldest of all, as before). The template renders the
+  // assistant turns after the last user query with their reasoning and those before it without, so when
+  // the next query arrives, the prompt diverges from the live state right after the previous query: only
+  // that query's checkpoint can be restored. Every request of a tool loop saves a checkpoint at its tool
+  // response, and with "oldest first" two tool calls evicted the query's, so the next query re-prefilled
+  // the whole conversation. Kept this way: the newest query checkpoint and the newest one (the tool
+  // response a tool loop's next request restores when it diverges).
+  static const bool keep_query = [] {
+    const char* v = getenv("NI_QUERY_CKPT");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
   const bool query = ends_with_query(r.messages);
   auto victim = [&]() {
     auto rank = [&](const TurnCheckpoint& k) { return k.pos < 0 ? 0 : keep_query && k.query ? 2 : 1; };

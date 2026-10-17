@@ -75,7 +75,7 @@ class Engine {
 
  private:
   // Recurrent-state snapshot at a turn boundary. `query`: the request that saved it ended with a user
-  // query (not a tool response); NI_QUERY_CKPT keeps those through tool loops (see Engine::chat).
+  // query (not a tool response); those are kept through tool loops (see Engine::chat).
   struct TurnCheckpoint : Checkpoint {
     bool query = false;
   };
