@@ -123,11 +123,32 @@ void DFlash2::load_config(const std::string& dir) {
   else cfg_.theta = float(c.value("rope_theta", 0.0));
 }
 
+// The target's embedding table is read by dfl_embed_norm (4-bit group 64) or its wfmt.metal form for the other
+// formats; the draft head is the target's LM head (4/8-bit group 64), or an 8-bit copy of its rows for the other
+// formats (bf16, 6-bit, ...: drafting only, the verify uses the target's own head).
 bool DFlash2::supports(const Qwen35& t) {
   const QLinear& emb = t.embed_table();
   const QLinear& head = t.lm_head();
-  return emb.bits == 4 && emb.gs % 64 == 0 && head.gs == 64 && (head.bits == 4 || head.bits == 8) &&
-         head.K == uint32_t(t.config().hidden);
+  return (emb.q4() || format_supported(emb.bits, emb.gs)) && format_supported(head.bits, head.gs) &&
+         head.K == uint32_t(t.config().hidden) && head.K % 64 == 0;
+}
+
+// One row of a linear in any format as bf16 (CPU; draft-head conversion).
+static void row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
+  if (H.dense()) {
+    memcpy(out, H.w->buf.as<uint8_t>() + size_t(row) * H.row_bytes(), size_t(H.K) * 2);
+    return;
+  }
+  const uint32_t* W = reinterpret_cast<const uint32_t*>(H.w->buf.as<uint8_t>() + size_t(row) * H.row_bytes());
+  const uint16_t* S = H.s->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
+  const uint16_t* B = H.b->buf.as<uint16_t>() + size_t(row) * (H.K / H.gs);
+  const uint32_t mask = (1u << H.bits) - 1u;
+  for (uint32_t k = 0; k < H.K; ++k) {
+    const uint32_t bit = k * uint32_t(H.bits), sh = bit % 32;
+    uint32_t v = W[bit / 32] >> sh;
+    if (sh + uint32_t(H.bits) > 32) v |= W[bit / 32 + 1] << (32 - sh);
+    out[k] = f32_to_bf16(bf16_to_f32(S[k / H.gs]) * float(v & mask) + bf16_to_f32(B[k / H.gs]));
+  }
 }
 
 const Tensor* DFlash2::own(const Tensor& t, const char* label) {
@@ -257,7 +278,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
   load_config(dir);
-  if (!supports(tg_)) fatal("DFlash2: target embedding must be 4-bit and lm_head 4/8-bit g64");
+  if (!supports(tg_)) fatal("DFlash2: the target's embedding / LM head format is not supported");
   {
     WeightStore w;  // bf16 checkpoint, released after quantization
     w.open_dir(dir);
@@ -435,7 +456,12 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
     if (ranked.empty()) logi("DFlash2: NI_DFLASH_HEAD_IDS=%s holds no token ids; the draft head uses id order", path);
   }
   if (!explicit_n) n_req = ranked.empty() ? kHeadRowsIdOrder : kHeadRows;
-  if (n_req <= 0 || uint32_t(n_req) >= V) return;
+  // a head without 4/8-bit group-64 kernels on the drafter's path gets an 8-bit copy (the full one if asked)
+  const bool conv = !(H.q4() || H.q8());
+  if (n_req <= 0 || uint32_t(n_req) >= V) {
+    if (!conv) return;
+    n_req = int(V);
+  }
   const auto& eos = tg_.config().eos;
   const uint32_t special0 = eos.empty() ? V : uint32_t(*std::min_element(eos.begin(), eos.end()));
   const size_t n = std::max<size_t>(size_t(n_req), V - std::min(special0, V));
@@ -452,8 +478,42 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
   for (uint32_t t : ranked) add(t);
   for (uint32_t t = 0; t < V && ids.size() < n; ++t) add(t);  // no list (or a short one): id order
   std::sort(ids.begin(), ids.end());
-  const size_t wrow = size_t(H.K) * H.bits / 8, srow = size_t(H.K / H.gs) * 2;
   Gpu& g = Gpu::get();
+  if (conv) {  // 8-bit group 64 with mx.quantize's rounding (dfl_quantize_cpu) from the rows as bf16
+    const uint32_t K = H.K, N = uint32_t(ids.size()), gpr = K / 64;
+    std::vector<uint16_t> tmp(size_t(N) * K);
+    std::vector<const uint16_t*> rowp(N);
+    for (uint32_t i = 0; i < N; ++i) {
+      row_bf16(H, ids[i], tmp.data() + size_t(i) * K);
+      rowp[i] = tmp.data() + size_t(i) * K;
+    }
+    Buffer w = g.alloc(size_t(N) * K, "dfl_head_w8", false), sc = g.alloc(size_t(N) * gpr * 2, "dfl_head_s8", false),
+           bi = g.alloc(size_t(N) * gpr * 2, "dfl_head_b8", false);
+    dfl_quantize_cpu(rowp, K, 8, false, w.as<uint32_t>(), sc.as<uint16_t>(), bi.as<uint16_t>());
+    head_ids_ = g.alloc(size_t(N) * 4, "dfl_head_ids", false);
+    for (uint32_t i = 0; i < N; ++i) head_ids_.as<uint32_t>()[i] = ids[i];
+    for (Buffer* b : {&w, &sc, &bi, &head_ids_}) {
+      owned_bufs_.push_back(*b);
+      resident_ += b->size;
+    }
+    head_sub_ = QLinear{};
+    owned_.push_back(Tensor{w, DType::U32, {int64_t(N), int64_t(K / 4)}});
+    head_sub_.w = &owned_.back();
+    owned_.push_back(Tensor{sc, DType::BF16, {int64_t(N), int64_t(gpr)}});
+    head_sub_.s = &owned_.back();
+    owned_.push_back(Tensor{bi, DType::BF16, {int64_t(N), int64_t(gpr)}});
+    head_sub_.b = &owned_.back();
+    head_sub_.N = N;
+    head_sub_.K = K;
+    head_sub_.bits = 8;
+    head_sub_.gs = 64;
+    head_n_ = N;
+    logi("DFlash2: draft head of %u of %u ids as an 8-bit copy of the %s LM head (%s), %.0f MB", head_n_, V,
+         format_name(H.bits, H.gs).c_str(), ranked.empty() ? "id order = BPE merge order" : path,
+         (w.size + sc.size + bi.size) / 1e6);
+    return;
+  }
+  const size_t wrow = size_t(H.K) * H.bits / 8, srow = size_t(H.K / H.gs) * 2;
   Buffer w = g.alloc(ids.size() * wrow, "dfl_head_w", false), sc = g.alloc(ids.size() * srow, "dfl_head_s", false),
          bi = g.alloc(ids.size() * srow, "dfl_head_b", false);
   head_ids_ = g.alloc(ids.size() * 4, "dfl_head_ids", false);
@@ -859,7 +919,7 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   } else {
     const QLinear& E = tg_.embed_table();
     kp::DflEmbed p{H, uint32_t(E.gs), Pk, uint32_t(cfg_.mask_id), cfg_.eps};
-    e.use(dpipe("dfl_embed_norm"));
+    e.use(dpipe(E.q4() ? std::string("dfl_embed_norm") : "dfl_embed_norm_" + E.fmt()));
     e.buf(0, E.w->buf); e.buf(1, E.s->buf); e.buf(2, E.b->buf); e.buf(3, s.tok); e.buf(4, h_);
     e.buf(5, layers_[0].in_w->buf); e.buf(6, n_); e.buf(7, xh_); e.buf(8, xs_);
     e.val(9, p);

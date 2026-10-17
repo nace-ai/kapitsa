@@ -19,15 +19,34 @@ struct FfnConfig;
 struct FfnLayer;
 }
 
+// A linear layer's weights. Formats (src/kernels/wfmt.metal): MLX affine `bits`-bit codes (2-8; uint32 words, a
+// little-endian bit stream along each row) with bf16 scale and bias per group of `gs` inputs, or bits = 16: bf16
+// weights [N, K] with no scales / biases (s and b then point at w, so buffer bindings stay valid; no kernel
+// reads them).
 struct QLinear {
   const Tensor* w = nullptr;
   const Tensor* s = nullptr;
   const Tensor* b = nullptr;
   uint32_t N = 0, K = 0;
   int bits = 4, gs = 64;
-  bool mtp = false;  // part of the MTP head (NI_QMM8=1 selects its 8-bit prefill GEMM)
+  bool mtp = false;   // part of the MTP head (8-bit prefill GEMM on qmr8 since it was introduced)
+  bool gate = false;  // the trunk's MoE router / shared-expert gate: their 8-bit prefill GEMMs keep the old kernels
   explicit operator bool() const { return w != nullptr; }
+  bool dense() const { return bits == 16; }
+  bool q4() const { return bits == 4 && gs == 64; }  // the specialized 4-bit kernels
+  bool q8() const { return bits == 8 && gs == 64; }  // the specialized 8-bit kernels
+  // kernel-name suffix of the format: "f16" (bf16) or "f<bits>g<gs>"
+  std::string fmt() const { return bits == 16 ? std::string("f16") : "f" + std::to_string(bits) + "g" + std::to_string(gs); }
+  bool same_format(const QLinear& o) const { return bits == o.bits && (bits == 16 || gs == o.gs); }
+  size_t row_bytes() const { return size_t(K) * size_t(bits) / 8; }
+  size_t group_row_bytes() const { return bits == 16 ? 0 : size_t(K / gs) * 2; }  // scales (or biases) per row
 };
+
+// Formats with a full set of kernels: 4-bit and 8-bit group 64 (specialized), and the generic ones of wfmt.metal.
+bool format_supported(int bits, int gs);
+std::string format_name(int bits, int gs);  // "bf16", "4-bit group 64", ...
+// The per-row MoE kernel (gate/up or down) for routed experts e and shared expert s, "" if none exists.
+std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s);
 
 struct Qwen35Config {
   int hidden = 0, layers = 0, vocab = 0;
@@ -261,9 +280,22 @@ class Qwen35 {
   // candidates per verify row for these sampling parameters (stage-1 chunks x top-k)
   uint32_t verify_candidates(const SamplingParams& sp) const;
 
+  // Logits of rows [0, T) of the last prefill chunk (teacher-forced scoring, tools/ni_eval): final norm + LM head
+  // on the prefill GEMM -> out [T, vocab] fp32.
+  void encode_logits_rows(Encoder& e, int T, const Buffer& out);
+  // Token embedding rows tokens[tok_off .. tok_off + T) -> out [T, hidden] (fp32), any embedding format.
+  void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int T, const Buffer& out);
+  // The weight formats this model runs (log line), e.g. "bf16" or "4-bit group 64 (8-bit: router, shared gate)"
+  std::string formats_summary() const;
+
  private:
   void load_config(const std::string& dir);
   QLinear qlin(const std::string& name, bool required = true);
+  std::string tname(const std::string& canonical) const;
+  const Tensor* bf16_copy(const Tensor* t, float offset = 0.0f);
+  void check_formats() const;
+  void test_transforms();  // NI_DEQUANT / NI_REQUANT (tests: other formats from a 4-bit checkpoint)
+  WeightStore::Filter transform_defer() const;  // the tensors test_transforms converts: read only then
   void alloc_state();
   void prewarm_pipelines();
 
@@ -283,6 +315,8 @@ class Qwen35 {
   void enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
   // the large-prefill kernel choice (qmr, else the original qmm tiles), no short-prefill paths
   void enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
+  // the prefill GEMM of wfmt.metal for formats without a specialized one (qrf_*)
+  void enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add);
   // NI_QMM + NI_QMM_GU: h = half(silu(xh G^T) * (xh U^T)) in one dispatch; false when off/unsupported
   bool enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int M);
   void enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, const Buffer& xrows,
@@ -368,6 +402,8 @@ class Qwen35 {
 
   std::string dir_;
   std::string prefix_;
+  bool hf_names_ = false;  // official Hugging Face tensor names (model.language_model.*)
+  bool hf_norms_ = false;  // zero-centred RMSNorm weights (Hugging Face): read as 1 + w
   Qwen35Config cfg_;
   WeightStore ws_;
   std::vector<Layer> layers_;

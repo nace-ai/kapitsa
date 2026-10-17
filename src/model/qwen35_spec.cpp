@@ -159,9 +159,25 @@ QLinear Qwen35::stack_experts(const WeightStore& w, const std::string& prefix, c
 
 void Qwen35::load_mtp(const std::string& dir) {
   WeightStore w;
-  w.open_dir(dir, nullptr, [](const std::string& f) { return f == "mtp.safetensors"; });
+  // Kapitsa's sidecar (mtp.safetensors next to the model: MLX conventions), else the head inside the checkpoint's
+  // own shards (the official Hugging Face checkpoints keep it there, norms zero-centred)
+  bool in_shards = false;
+  {
+    std::ifstream sidecar(dir + "/mtp.safetensors");
+    if (sidecar) {
+      w.open_dir(dir, nullptr, [](const std::string& f) { return f == "mtp.safetensors"; });
+    } else {
+      w.open_dir(dir, [](const std::string& n) { return n.rfind("mtp.", 0) == 0; });
+      in_shards = true;
+    }
+  }
   if (!w.has("mtp.fc.weight")) {
     logi("no MTP head in %s; speculative decoding off", dir.c_str());
+    return;
+  }
+  if (cfg_.moe && !w.has("mtp.layers.0.mlp.experts.0.gate_proj.weight")) {
+    logi("MTP head in %s: experts not in the per-expert layout Kapitsa reads (fused Hugging Face experts?); "
+         "speculative decoding with the MTP head off", dir.c_str());
     return;
   }
   double t0 = now_ms();
@@ -183,6 +199,8 @@ void Qwen35::load_mtp(const std::string& dir) {
       if (j.contains("forge_provenance") && j["forge_provenance"].contains("mtp_contract"))
         variant = j["forge_provenance"]["mtp_contract"].value("base_hidden_variant", "");
     }
+    // a head read from a Hugging Face checkpoint's shards: the official models feed it the final-norm hidden
+    if (variant.empty() && in_shards && hf_norms_) variant = "post_norm";
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
@@ -192,8 +210,10 @@ void Qwen35::load_mtp(const std::string& dir) {
   };
   // norms: the kernels read bf16 (an f32/f16 file gets an owned bf16 copy)
   int lossy = 0;
+  const bool zc = in_shards && hf_norms_;  // zero-centred norms (Hugging Face): 1 + w
   auto norm = [&](const std::string& n) {
     const Tensor& t = get(n);
+    if (zc) return bf16_copy(&t, 1.0f);
     return t.dtype == DType::BF16 ? own_copy(t) : bf16_param(&t, lossy);
   };
   mtp_pre_e_ = norm("mtp.pre_fc_norm_embedding.weight");
@@ -237,13 +257,18 @@ void Qwen35::load_mtp(const std::string& dir) {
   draft_special0_ = uint32_t(cfg_.eos.empty() ? cfg_.vocab : *std::min_element(cfg_.eos.begin(), cfg_.eos.end()));
   auto rows_view = [&](const QLinear& src, uint32_t r0, uint32_t n) {
     QLinear v = src;
-    size_t wrow = size_t(src.K) * src.bits / 8, srow = size_t(src.K / src.gs) * 2;
-    owned_.push_back(Tensor{src.w->buf.view(r0 * wrow, n * wrow), src.w->dtype, {int64_t(n), int64_t(wrow / 4)}});
+    const size_t wrow = src.row_bytes(), srow = src.group_row_bytes();
+    owned_.push_back(Tensor{src.w->buf.view(r0 * wrow, n * wrow), src.w->dtype,
+                            {int64_t(n), int64_t(src.dense() ? src.K : wrow / 4)}});
     v.w = &owned_.back();
-    owned_.push_back(Tensor{src.s->buf.view(r0 * srow, n * srow), src.s->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
-    v.s = &owned_.back();
-    owned_.push_back(Tensor{src.b->buf.view(r0 * srow, n * srow), src.b->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
-    v.b = &owned_.back();
+    if (src.dense()) {
+      v.s = v.b = v.w;
+    } else {
+      owned_.push_back(Tensor{src.s->buf.view(r0 * srow, n * srow), src.s->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
+      v.s = &owned_.back();
+      owned_.push_back(Tensor{src.b->buf.view(r0 * srow, n * srow), src.b->dtype, {int64_t(n), int64_t(src.K / src.gs)}});
+      v.b = &owned_.back();
+    }
     v.N = n;
     return v;
   };
@@ -268,9 +293,9 @@ void Qwen35::enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const B
 
 void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add, uint32_t x_ld,
                       uint32_t y_ld) {
-  if (L.gs != 64) fatal("qmvr: group %d", L.gs);
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
-  if (R > 4) {  // 5-8 rows (deep MTP drafts): the 8-row MMA GEMM
+  // 5-8 rows (deep MTP drafts), and formats without qmvr kernels (bf16, 3/5/6-bit, group 32): the 8-row MMA GEMM
+  if (R > 4 || !(L.q4() || L.q8())) {
     v8_alloc();
     enc_x8(e, x, R, int(L.K), nullptr, false, int(x_ld ? x_ld : L.K));
     enc_qmm8(e, {{&L, y, y_ld ? y_ld : L.N, add}}, R, v8t_, v8s_);
@@ -357,8 +382,11 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
 void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm, int R,
                             const Buffer* xn_out, std::vector<bool> add) {
   const uint32_t K = segs[0].L->K;
+  bool special = true;  // the fused multi-row kernels read 4/8-bit group-64 weights
+  for (auto& sg : segs) special = special && (sg.L->q4() || sg.L->q8());
   static const bool rowcache = env_on("NI_RC");
-  if (rowcache && R > 1 && segs.size() <= 4 && (add.empty() || std::none_of(add.begin(), add.end(), [](bool b) { return b; }))) {
+  if (special && rowcache && R > 1 && segs.size() <= 4 &&
+      (add.empty() || std::none_of(add.begin(), add.end(), [](bool b) { return b; }))) {
     e.use(pipe2("qmvrc_multi_r2"));
     constexpr uint32_t rows = 2, nsg = 8;
     kp::QmvrcMulti p{};
@@ -392,7 +420,7 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
     return;
   }
   static const bool off = env_on("NI_NO_QMVR_MULTI");
-  if (off || (R != 2 && R != 3) || K > 2048 || segs.size() > 4) {
+  if (off || !special || (R != 2 && R != 3) || K > 2048 || segs.size() > 4) {
     const Buffer* xin = &x;
     if (norm) {
       enc_rows_norm(e, x, norm, xrn_, R, int(K));
@@ -478,7 +506,8 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   // opt-in: measured slower than per-row expert reads on M4 Pro (see docs/PERF.md)
   static const bool no_dedupe = !env_on("NI_DEDUPE");
   static const bool rc_moe = env_on("NI_RC");
-  if (!mtp_layer && rc_moe && R > 1 && L.eg.gs == 64 && L.sg.bits == 4 && L.sd.bits == 4 && D <= 4096) {
+  const bool all4 = L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4();
+  if (!mtp_layer && rc_moe && R > 1 && all4 && D <= 4096) {
     struct { uint32_t R, k; } up{uint32_t(R), uint32_t(k)};
     e.use(pipe2("moe_unique_rows"));
     e.buf(0, ridx_); e.buf(1, rwts_); e.buf(2, ue_); e.buf(3, uw_); e.buf(4, un_);
@@ -504,8 +533,7 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
     e.dispatch(R, (D + rows * nsg - 1) / (rows * nsg), 1, 32 * nsg);
     return;
   }
-  if (!mtp_layer && !no_dedupe && (R == 2 || R == 3) && L.eg.gs == 64 && L.sg.bits == 4 && L.sd.bits == 4 &&
-      D <= 2048) {
+  if (!mtp_layer && !no_dedupe && (R == 2 || R == 3) && all4 && D <= 2048) {
     // tokens being verified share experts: read each distinct expert once for all rows
     struct { uint32_t R, k; } up{uint32_t(R), uint32_t(k)};
     e.use(pipe2("moe_unique_rows"));
@@ -533,9 +561,11 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
     e.dispatch((D + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
     return;
   }
-  const bool g32 = L.eg.gs == 32;
-  if (mtp_layer && L.sg.bits != 8) fatal("MTP shared expert must be 8-bit");
-  e.use(pipe2(g32 ? "moe_gate_up_rows_g32_s8" : "moe_gate_up_rows_g64"));
+  const std::string gu_k = moe_rows_kernel(true, L.eg, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd);
+  if (gu_k.empty() || dn_k.empty())
+    fatal("MoE rows: no kernels for %s experts with a %s shared expert%s", format_name(L.eg.bits, L.eg.gs).c_str(),
+          format_name(L.sg.bits, L.sg.gs).c_str(), mtp_layer ? " (MTP head)" : "");
+  e.use(pipe2(gu_k));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
   e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
   e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
@@ -547,7 +577,7 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   const uint32_t I = uint32_t(std::max(cfg_.moe_I, cfg_.shared_I));
   e.dispatch((I + rows * nsg - 1) / (rows * nsg), k + 1, R, 32 * nsg);
   kp::MoeRowsDown dp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), uint32_t(L.sd.bits)};
-  e.use(pipe2(g32 ? "moe_down_rows_g32_s8" : "moe_down_rows_g64"));
+  e.use(pipe2(dn_k));
   e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
   e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
   e.buf(6, eh_); e.buf(7, ridx_); e.buf(8, rwts_); e.buf(9, x);
@@ -575,11 +605,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (!mtp_loaded_) fatal("no MTP head");
   if (R > kMaxVerify) fatal("encode_mtp: R=%d", R);
   const int D = cfg_.hidden;
-  kp::Embed ep{uint32_t(D), uint32_t(embed_.gs), uint32_t(tok0)};
-  e.use(pipe2("embed_q4"));
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, mtp_e_);
-  e.val(5, ep);
-  e.dispatch((D / 8 + 63) / 64, R, 1, 64);
+  enc_embed(e, s.tok, tok0, R, mtp_e_);
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
   const bool post = h_trunk && mtp_post_norm_hidden_;
   e.use(pipe2(post ? "mtp_concat_norm_post" : "mtp_concat_norm"));
@@ -626,11 +652,7 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
     encode_mtp(e, s, pos0, R, pos0 + 1, x_, h_row0, -1);
     return;
   }
-  kp::Embed ep{uint32_t(D), uint32_t(embed_.gs), uint32_t(pos0 + 1)};
-  e.use(pipe2("embed_q4"));
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, mtp_e_);
-  e.val(5, ep);
-  e.dispatch((D / 8 + 63) / 64, R, 1, 64);
+  enc_embed(e, s.tok, pos0 + 1, R, mtp_e_);
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
   e.use(pipe2(mtp_post_norm_hidden_ ? "mtp_concat_norm_post" : "mtp_concat_norm"));
   e.buf(0, mtp_e_); e.buf(1, x_, size_t(h_row0) * D * 4); e.buf(2, mtp_pre_e_->buf); e.buf(3, mtp_pre_h_->buf);
@@ -678,11 +700,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
-  kp::Embed ep{uint32_t(D), uint32_t(embed_.gs), uint32_t(pos)};
-  e.use(pipe2("embed_q4"));
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, x_);
-  e.val(5, ep);
-  e.dispatch((D / 8 + 63) / 64, R, 1, 64);
+  enc_embed(e, s.tok, pos, R, x_);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];

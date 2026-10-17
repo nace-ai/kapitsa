@@ -49,15 +49,17 @@ class Gpu {
   void* new_shared_event();
   void release(Buffer& b);
 
-  // Compiles the embedded kernel library on first use. Extra source can be appended
-  // (tests); `defines` become preprocessor macros.
+  // Compiles the embedded kernel library on first use. Extra source can be appended (tests).
   void compile(const std::string& extra_source = "");
+  // Compiles the weight-format kernels (src/kernels/wfmt.metal instantiations: bf16, 3/5/6-bit, ...) as a
+  // second library; pipeline() does it on the first kernel the base library lacks.
+  void compile_formats();
   // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
   // ni_compile reads code size, stack (spills) and GPR count from it.
   bool archive(const std::string& fn, const std::string& path);
   // required=false returns an empty Pipeline (pso null) instead of exiting when creation fails
   Pipeline pipeline(const std::string& fn, bool required = true);
-  std::vector<std::string> function_names();  // kernels in the compiled library
+  std::vector<std::string> function_names(bool formats = false);  // kernels in the library (+ the format kernels)
 
   // Command buffer that holds one compute encoder. Commit is non-blocking.
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between
@@ -69,13 +71,14 @@ class Gpu {
   void* device() const { return device_; }
   void* queue() const { return queue_; }
 
+  struct Impl;
+
  private:
   Gpu();
   void* device_ = nullptr;
   void* queue_ = nullptr;
   void* library_ = nullptr;
   void* residency_ = nullptr;
-  struct Impl;
   Impl* impl_;
 };
 

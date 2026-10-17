@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""TTFT of a user query that follows an agent tool loop, against a running server. Stdlib only.
+
+usage: tool_loop_ttft.py [--base http://127.0.0.1:8097/v1] [--sizes 4000,16000] [--calls 1,2,3] [--reps 1]
+                         [--seed S] [--think] [--echo-reasoning] [--temp T] [--tool-tokens 600]
+                         [--no-warmup] [--tag T] [--out results.jsonl]
+
+Per (size, calls, rep), one conversation in the agent pattern
+  system ("[session <nonce>] SYS + repository context", frozen corpus, 4.25 chars per token) + tools,
+  user query -> assistant tool call -> tool response -> ... -> final answer -> NEW user query,
+where the tool loop is scripted through the tool results: the query asks the model to read
+notes/step1.txt and follow the instruction at its end; each file holds a corpus excerpt
+(--tool-tokens) and names the next file, the last one says to stop and answer. The model's own
+replies are sent back as they came (content + tool_calls; reasoning_content too with
+--echo-reasoning), as an agent harness does. Recorded per request: TTFT (first content / reasoning /
+tool event), prompt and cached tokens; the record's "calls" is how many tool-call turns the model
+actually made. The new query's TTFT is the measurement ("q2"); it is sent --q2-gap seconds (1) after
+the final answer, the harness's turn gap.
+
+Sampling: greedy (T 0, top_k 1, top_p 1) unless --temp; thinking off (chat_template_kwargs and
+reasoning_effort none) unless --think. --seed fixes the session nonces, so runs against two servers
+see the same conversations and their texts can be compared ("texts" holds every reply).
+"""
+import argparse, hashlib, json, os, random, statistics, sys, time, urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def find_corpus():
+    d = HERE
+    for _ in range(6):
+        c = os.path.join(d, "research", "inference", "bench_corpus.txt")
+        if os.path.exists(c):
+            return c
+        d = os.path.dirname(d)
+    return "bench_corpus.txt"
+
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--base", default="http://127.0.0.1:8097/v1")
+ap.add_argument("--model", default="x")
+ap.add_argument("--sizes", default="4000,16000")
+ap.add_argument("--calls", default="1,2,3")
+ap.add_argument("--reps", type=int, default=1)
+ap.add_argument("--seed", type=int, default=1)
+ap.add_argument("--think", action="store_true")
+ap.add_argument("--echo-reasoning", action="store_true")
+ap.add_argument("--temp", type=float, default=None)
+ap.add_argument("--tool-tokens", type=int, default=600)
+ap.add_argument("--q2-tokens", type=int, default=128)
+ap.add_argument("--q2-gap", type=float, default=1.0)
+ap.add_argument("--q2", default="", help="the new user query (default: a one-sentence question)")
+ap.add_argument("--no-q2", action="store_true", help="end each conversation after the tool loop")
+ap.add_argument("--corpus", default=find_corpus())
+ap.add_argument("--no-warmup", action="store_true")
+ap.add_argument("--tag", default="")
+ap.add_argument("--out", default="")
+a = ap.parse_args()
+
+CHARS_PER_TOKEN = 4.25
+SYS = ("You are Nace, a local coding agent. You help the user with their repository. "
+       "Be precise. Use tools when you need to read files or run commands.")
+TOOLS = [
+    {"type": "function", "function": {
+        "name": "read_file", "description": "Read a UTF-8 text file from the user's workspace and return its contents.",
+        "parameters": {"type": "object", "properties": {
+            "path": {"type": "string", "description": "Workspace-relative path"},
+            "start_line": {"type": "integer", "description": "Optional first line (1-based)"}}, "required": ["path"]}}},
+    {"type": "function", "function": {
+        "name": "run_shell", "description": "Run a shell command in the workspace and return its output.",
+        "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+]
+Q1 = ("Use read_file to open notes/step1.txt and follow the instruction at the end of it. Read one file per "
+      "tool call. When a file says it was the last one, stop calling tools and answer as it says.")
+Q2 = "Thanks. In one sentence: which programming language was the code in those files written in?"
+WORDS = ["amber", "basalt", "cobalt", "dune", "ember", "fjord", "garnet", "harbor"]
+corpus = open(a.corpus, encoding="utf-8", newline="").read()
+out_f = open(a.out, "a") if a.out else None
+rng = random.Random(a.seed)
+
+
+def excerpt(tokens, offset):
+    return corpus[offset:offset + int(tokens * CHARS_PER_TOKEN)]
+
+
+def tool_file(step, calls, word):
+    body = excerpt(a.tool_tokens, 118000 + (step - 1) * 4000)
+    if step < calls:
+        tail = f"Instruction: next, call read_file on notes/step{step + 1}.txt."
+    else:
+        tail = (f"Instruction: this was the last file. Stop calling tools and reply to the user with the code "
+                f"word {word.upper()} and one sentence about what these files contain.")
+    return f"# notes/step{step}.txt\n{body}\n\n{tail}"
+
+
+def sampling():
+    if a.temp is None:
+        return {"temperature": 0.0, "top_p": 1.0, "top_k": 1}
+    return {"temperature": a.temp, "top_p": 0.95, "top_k": 20}
+
+
+def body(msgs, max_tokens, seed=None):
+    b = {"model": a.model, "messages": msgs, "tools": TOOLS, "tool_choice": "auto", "max_tokens": max_tokens,
+         "min_p": 0.0, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repeat_penalty": 1.0, **sampling(),
+         "stream": True, "stream_options": {"include_usage": True}}
+    if a.temp is not None and seed is not None:
+        b["seed"] = seed  # sampl

@@ -46,7 +46,7 @@ struct ReadJob {
 };
 } // namespace
 
-void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter) {
+void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Filter& file_filter, const Filter& defer) {
   DIR* d = opendir(dir.c_str());
   if (!d) fatal("cannot open model dir %s", dir.c_str());
   std::vector<std::string> files;
@@ -90,6 +90,11 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
       size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
       it.src = data0 + b;
       it.len = e - b;
+      if (defer && defer(name)) {  // listed without a buffer; read_deferred() reads it
+        deferred_[name] = Place{path, it.src, it.len};
+        tensors_[name] = it.t;
+        continue;
+      }
       it.dst = total;
       total += (it.len + kAlign - 1) / kAlign * kAlign;
       items.push_back(std::move(it));
@@ -138,6 +143,40 @@ void WeightStore::open_dir(const std::string& dir, const Filter& keep, const Fil
   if (failed) fatal("reading weights from %s failed", dir.c_str());
   double ms = now_ms() - t0;
   logi("read %.2f GB of weights in %.0f ms (%.1f GB/s)", total_ / 1e9, ms, total_ / 1e6 / ms);
+}
+
+void WeightStore::read_deferred(const std::string& name, void* dst) const {
+  auto it = deferred_.find(name);
+  if (it == deferred_.end()) fatal("%s is not a deferred tensor", name.c_str());
+  const Place& p = it->second;
+  int fd = open(p.path.c_str(), O_RDONLY);
+  if (fd < 0) fatal("open %s failed", p.path.c_str());
+  fcntl(fd, F_NOCACHE, 1);
+  // parallel reads of 32 MB pieces
+  constexpr size_t kChunk = 32u << 20;
+  std::atomic<size_t> next{0};
+  std::atomic<bool> failed{false};
+  const size_t n = (p.len + kChunk - 1) / kChunk;
+  const unsigned nth = std::min<unsigned>(8, std::max<size_t>(1, n));
+  std::vector<std::thread> th;
+  for (unsigned i = 0; i < nth; ++i)
+    th.emplace_back([&] {
+      for (size_t k; (k = next.fetch_add(1)) < n;) {
+        const size_t o = k * kChunk, len = std::min(kChunk, p.len - o);
+        size_t done = 0;
+        while (done < len) {
+          ssize_t r = pread(fd, static_cast<uint8_t*>(dst) + o + done, len - done, off_t(p.off + o + done));
+          if (r <= 0) {
+            failed = true;
+            return;
+          }
+          done += size_t(r);
+        }
+      }
+    });
+  for (auto& t : th) t.join();
+  close(fd);
+  if (failed) fatal("reading %s failed", name.c_str());
 }
 
 const Tensor* WeightStore::find(const std::string& name) const {

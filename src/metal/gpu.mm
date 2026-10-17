@@ -19,6 +19,11 @@ struct Gpu::Impl {
   std::mutex mu;
   std::unordered_map<std::string, Pipeline> pipelines;
   NSMutableArray* retained = [NSMutableArray new]; // keeps MTLBuffers alive
+  // The kernels for weight formats without specialized kernels (bf16, 3/5/6-bit, 4-bit group 32, parts of
+  // 8-bit; src/kernels/wfmt.metal): the same source compiled with NI_WF_INST, on the first lookup of a kernel
+  // the base library lacks, so 4-bit models never pay its compile (~2 s uncached).
+  id<MTLLibrary> wf = nil;
+  std::mutex wf_mu;
 };
 
 static inline id<MTLDevice> dev(void* p) { return (__bridge id<MTLDevice>)p; }
@@ -112,31 +117,56 @@ void Gpu::release(Buffer& b) {
   b = Buffer{};
 }
 
+static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms) {
+  MTLCompileOptions* o = [MTLCompileOptions new];
+  o.languageVersion = MTLLanguageVersion3_1;
+  // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
+  // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
+  // kernels only agree to the last bit or so; with safe math they must agree exactly.
+  const bool safe = getenv("NI_MATH_SAFE") && atoi(getenv("NI_MATH_SAFE")) > 0;
+  if (@available(macOS 15.0, *)) {
+    o.mathMode = safe ? MTLMathModeSafe : MTLMathModeFast;
+  } else {
+    o.fastMathEnabled = safe ? NO : YES;
+  }
+  if (wf) o.preprocessorMacros = @{@"NI_WF_INST" : @1};
+  NSError* err = nil;
+  const double t0 = now_ms();
+  id<MTLLibrary> lib = [d newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()] options:o error:&err];
+  if (!lib) fatal("Metal compile failed: %s", err ? [[err description] UTF8String] : "?");
+  *ms = now_ms() - t0;
+  return lib;
+}
+
 void Gpu::compile(const std::string& extra) {
   if (library_) return;
   @autoreleasepool {
-    std::string src = std::string(kKernelSource) + "\n" + extra;
-    MTLCompileOptions* o = [MTLCompileOptions new];
-    o.languageVersion = MTLLanguageVersion3_1;
-    // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
-    // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
-    // kernels only agree to the last bit or so; with safe math they must agree exactly.
-    const bool safe = getenv("NI_MATH_SAFE") && atoi(getenv("NI_MATH_SAFE")) > 0;
-    if (@available(macOS 15.0, *)) {
-      o.mathMode = safe ? MTLMathModeSafe : MTLMathModeFast;
-    } else {
-      o.fastMathEnabled = safe ? NO : YES;
-    }
-    if (safe) logi("NI_MATH_SAFE: kernels compiled without fast math");
-    NSError* err = nil;
-    double t0 = now_ms();
-    id<MTLLibrary> lib = [dev(device_) newLibraryWithSource:[NSString stringWithUTF8String:src.c_str()]
-                                                    options:o
-                                                      error:&err];
-    if (!lib) fatal("Metal compile failed: %s", err ? [[err description] UTF8String] : "?");
+    if (getenv("NI_MATH_SAFE") && atoi(getenv("NI_MATH_SAFE")) > 0) logi("NI_MATH_SAFE: kernels compiled without fast math");
+    double ms = 0;
+    id<MTLLibrary> lib = compile_library(dev(device_), std::string(kKernelSource) + "\n" + extra, false, &ms);
     library_ = (__bridge_retained void*)lib;
-    logi("compiled kernels in %.0f ms", now_ms() - t0);
+    logi("compiled kernels in %.0f ms", ms);
   }
+}
+
+void Gpu::compile_formats() {
+  compile();
+  std::lock_guard<std::mutex> lk(impl_->wf_mu);
+  if (impl_->wf) return;
+  @autoreleasepool {
+    double ms = 0;
+    impl_->wf = compile_library(dev(device_), std::string(kKernelSource), true, &ms);
+    logi("compiled the weight-format kernels in %.0f ms", ms);
+  }
+}
+
+// The function `fn` from the base library, else from the weight-format library (compiled on first need).
+static id<MTLFunction> find_function(Gpu& g, void* base, Gpu::Impl* impl, const std::string& fn) {
+  NSString* n = [NSString stringWithUTF8String:fn.c_str()];
+  id<MTLFunction> f = [(__bridge id<MTLLibrary>)base newFunctionWithName:n];
+  if (f) return f;
+  g.compile_formats();
+  return [impl->wf newFunctionWithName:n];
 }
 
 Pipeline Gpu::pipeline(const std::string& fn, bool required) {
@@ -147,8 +177,7 @@ Pipeline Gpu::pipeline(const std::string& fn, bool required) {
   }
   compile();
   @autoreleasepool {
-    id<MTLLibrary> lib = (__bridge id<MTLLibrary>)library_;
-    id<MTLFunction> f = [lib newFunctionWithName:[NSString stringWithUTF8String:fn.c_str()]];
+    id<MTLFunction> f = find_function(*this, library_, impl_, fn);
     if (!f) fatal("kernel %s not found", fn.c_str());
     NSError* err = nil;
     id<MTLComputePipelineState> pso = [dev(device_) newComputePipelineStateWithFunction:f error:&err];
@@ -168,8 +197,7 @@ Pipeline Gpu::pipeline(const std::string& fn, bool required) {
 bool Gpu::archive(const std::string& fn, const std::string& path) {
   compile();
   @autoreleasepool {
-    id<MTLLibrary> lib = (__bridge id<MTLLibrary>)library_;
-    id<MTLFunction> f = [lib newFunctionWithName:[NSString stringWithUTF8String:fn.c_str()]];
+    id<MTLFunction> f = find_function(*this, library_, impl_, fn);
     if (!f) return false;
     NSError* err = nil;
     id<MTLBinaryArchive> ar = [dev(device_) newBinaryArchiveWithDescriptor:[MTLBinaryArchiveDescriptor new] error:&err];
@@ -187,11 +215,16 @@ bool Gpu::archive(const std::string& fn, const std::string& path) {
   }
 }
 
-std::vector<std::string> Gpu::function_names() {
+std::vector<std::string> Gpu::function_names(bool formats) {
   compile();
   std::vector<std::string> v;
   for (NSString* n in [(__bridge id<MTLLibrary>)library_ functionNames]) v.push_back([n UTF8String]);
+  if (formats) {
+    compile_formats();
+    for (NSString* n in [impl_->wf functionNames]) v.push_back([n UTF8String]);
+  }
   std::sort(v.begin(), v.end());
+  v.erase(std::unique(v.begin(), v.end()), v.end());
   return v;
 }
 

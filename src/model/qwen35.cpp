@@ -1,6 +1,7 @@
 #include "model/qwen35.h"
 #include "ane/ffn_split.h"
 #include "model/kparams.h"
+#include "util/bf16.h"
 #include "util/log.h"
 
 #include <nlohmann/json.hpp>
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -25,6 +27,17 @@ static json read_json(const std::string& path) {
 
 static json quant_cfg_;
 static Pipeline pipe(const std::string& n);
+
+// Formats with kernels on every path: the specialized 4-bit and 8-bit group-64 kernels, and the generic ones
+// (src/kernels/wfmt.metal) for bf16 and the other MLX affine widths MLX packs use.
+bool format_supported(int bits, int gs) {
+  if (bits == 16) return true;
+  if (gs == 64) return bits == 3 || bits == 4 || bits == 5 || bits == 6 || bits == 8;
+  return gs == 32 && bits == 4;
+}
+std::string format_name(int bits, int gs) {
+  return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
+}
 static bool gdn_par();
 static bool qmm8_on();
 static int env_int(const char* n, int def) {
@@ -287,6 +300,51 @@ void Qwen35::prewarm_pipelines() {
                           "qmms_moe2_dn_b4"})
       names.insert(n);
   }
+  // kernels of the weight formats without specialized ones (wfmt.metal), decode paths included
+  {
+    std::set<std::string> fmts;  // generic dense formats
+    bool moe_gen = false;
+    auto see = [&](const QLinear& q) {
+      if (q && !q.q4() && !q.q8()) fmts.insert(q.fmt());
+    };
+    for (const Layer& L : layers_) {
+      for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.router, &L.shared_gate, &L.sg,
+                               &L.su, &L.sd, &L.mg, &L.mu, &L.md})
+        see(*q);
+      if (L.mg && L.mg.q8()) names.insert("mlp_gate_up_f8g64");
+      if (L.eg && !L.eg.q4() && L.eg.bits != 4) {
+        moe_gen = true;
+        names.insert("qrmf_gu_" + L.eg.fmt() + "_m32_n64");
+        names.insert("qrmf_dn_" + L.eg.fmt() + "_m32_n128");
+        names.insert("qmmsf_moe_gu_" + L.eg.fmt());
+        names.insert("qmmsf_moe_dn_" + L.eg.fmt());
+      }
+      if (L.eg && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
+        names.insert(moe_rows_kernel(true, L.eg, L.sg));
+        names.insert(moe_rows_kernel(false, L.ed, L.sd));
+      }
+    }
+    see(lm_head_);
+    if (!embed_.q4()) names.insert("embed_" + embed_.fmt());
+    for (const std::string& f : fmts) {
+      for (const char* t : {"_m32_n128", "_m16_n64", "_m8_n64"}) names.insert("qrf_" + f + t);
+      for (const char* t : {"_m32_n64", "_m16_n64", "_m8_n32"}) names.insert("qrf_gu_" + f + t);
+      if (f == "f16") {
+        names.insert("qrf_f16_m32_n128_mf");
+        names.insert("qrf_gu_f16_m32_n64_mf");
+      }
+      for (int t = 1; t <= 8; ++t) {
+        names.insert("qmmsf_" + f + "_t" + std::to_string(t));
+        names.insert("qmmsf_gu_" + f + "_t" + std::to_string(t));
+      }
+      for (const char* t : {"_r2", "_r4", "_r2_add", "_r2_norm", "_r4_norm"}) names.insert("qmvg_" + f + t);
+      names.insert("qmvg_multi_" + f);
+      names.insert("mlp_gate_up_" + f);
+      names.insert("qmm8g_" + f + "_nf1");
+      names.insert("qmm8g_" + f + "_nf2");
+    }
+    if (!fmts.empty() || moe_gen) names.insert("moe_topk256_rows");
+  }
   std::vector<std::string> v(names.begin(), names.end());
   Gpu& g = Gpu::get();
   g.pipeline(v[0]);  // compiles the library once, before the threads
@@ -348,9 +406,41 @@ void Qwen35::load_config(const std::string& dir) {
     cfg_.eos.push_back(eos);
 }
 
+// Tensor name in the checkpoint for a canonical (MLX) name "model.layers.3.mlp.gate_proj.weight", "lm_head.weight":
+// MLX conversions prefix "language_model." (vision-language packs) or nothing; the official Hugging Face
+// checkpoints name the text model "model.language_model.*" and keep "lm_head.*" at the root.
+std::string Qwen35::tname(const std::string& canonical) const {
+  if (!hf_names_) return prefix_ + canonical;
+  if (canonical.rfind("model.", 0) == 0) return "model.language_model." + canonical.substr(6);
+  return canonical;
+}
+
+// A float tensor as bf16 (t itself when it is bf16, else an owned bf16 copy); `offset` is added first (the
+// zero-centred RMSNorm weights of Hugging Face checkpoints are applied as 1 + w).
+const Tensor* Qwen35::bf16_copy(const Tensor* t, float offset) {
+  if (!t) return t;
+  if (t->dtype == DType::BF16 && offset == 0.0f) return t;
+  if (t->dtype != DType::BF16 && t->dtype != DType::F32 && t->dtype != DType::F16) fatal("float tensor of unsupported dtype");
+  const size_t n = size_t(t->numel());
+  Buffer b = Gpu::get().alloc(n * 2 + 16, "bf16_copy", /*tracked=*/false);
+  uint16_t* d = b.as<uint16_t>();
+  for (size_t i = 0; i < n; ++i) {
+    const float v = t->dtype == DType::F32 ? t->buf.as<float>()[i]
+                    : t->dtype == DType::F16 ? float(t->buf.as<_Float16>()[i])
+                                             : bf16_to_f32(t->buf.as<uint16_t>()[i]);
+    d[i] = f32_to_bf16(v + offset);
+  }
+  owned_bufs_.push_back(b);
+  Tensor c = *t;
+  c.buf = b.view(0, n * 2);
+  c.dtype = DType::BF16;
+  owned_.push_back(c);
+  return &owned_.back();
+}
+
 QLinear Qwen35::qlin(const std::string& name, bool required) {
   QLinear L;
-  std::string full = prefix_ + name;
+  const std::string full = tname(name);
   L.w = ws_.find(full + ".weight");
   if (!L.w) {
     if (required) fatal("missing %s.weight", full.c_str());
@@ -358,48 +448,87 @@ QLinear Qwen35::qlin(const std::string& name, bool required) {
   }
   L.s = ws_.find(full + ".scales");
   L.b = ws_.find(full + ".biases");
-  if (!L.s || !L.b) fatal("%s is not MLX affine-quantized (bf16 linears not supported yet)", full.c_str());
+  if (!L.s && !L.b) {
+    // unquantized: bf16 weights (f16 / f32 ones get a bf16 copy)
+    if (L.w->shape.size() != 2) fatal("%s.weight: expected a 2-D matrix", full.c_str());
+    if (L.w->dtype != DType::BF16) {
+      logi("%s: %s weights converted to bf16 at load", full.c_str(), L.w->dtype == DType::F16 ? "f16" : "f32");
+      L.w = bf16_copy(L.w);
+    }
+    L.bits = 16;
+    L.gs = 64;
+    L.N = uint32_t(L.w->shape[0]);
+    L.K = uint32_t(L.w->shape[1]);
+    L.s = L.b = L.w;
+    if (L.K % 64) fatal("%s: input width %u is not a multiple of 64", full.c_str(), L.K);
+    return L;
+  }
   int bits = quant_cfg_.value("bits", 4), gs = quant_cfg_.value("group_size", 64);
+  std::string mode = quant_cfg_.value("mode", std::string("affine"));
   // per-module overrides are keyed by the module path without ".weight"
   for (auto key : {full, name}) {
     if (quant_cfg_.contains(key) && quant_cfg_[key].is_object()) {
       bits = quant_cfg_[key].value("bits", bits);
       gs = quant_cfg_[key].value("group_size", gs);
+      mode = quant_cfg_[key].value("mode", mode);
     }
   }
+  if (mode != "affine")
+    fatal("%s: MLX \"%s\" quantization is not supported; Kapitsa runs MLX affine quantizations (2-8 bits) and bf16",
+          full.c_str(), mode.c_str());
+  if (!L.s || !L.b) fatal("%s: scales without biases (not an MLX affine quantization)", full.c_str());
   L.bits = bits;
   L.gs = gs;
   int64_t words = L.w->shape.back();
   L.K = uint32_t(words * 32 / bits);
   L.N = uint32_t(L.w->shape[L.w->shape.size() - 2]);
-  if (int64_t(L.K / gs) != L.s->shape.back()) fatal("%s: bits/group mismatch", full.c_str());
+  if (int64_t(L.K / gs) != L.s->shape.back() || L.K % gs) fatal("%s: bits/group mismatch", full.c_str());
+  if (!format_supported(bits, gs))
+    fatal("%s: %s weights are not supported (bf16, 3/4/5/6/8-bit group 64 and 4-bit group 32 are)", full.c_str(),
+          format_name(bits, gs).c_str());
   return L;
 }
 
 Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(prefill_chunk) {
   double t0 = now_ms();
   load_config(dir);
-  // Text-only engine for now: skip the vision tower and (until speculative decoding lands) MTP.
-  ws_.open_dir(dir, [](const std::string& n) {
-    return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
-           n.rfind("mtp.", 0) != 0;
-  });
+  // Text-only engine for now: skip the vision tower and (until speculative decoding lands) MTP. Under the test
+  // transforms (NI_DEQUANT / NI_REQUANT) the linears they select are read only when converted.
+  ws_.open_dir(
+      dir,
+      [](const std::string& n) {
+        return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
+               n.rfind("mtp.", 0) != 0;
+      },
+      nullptr, transform_defer());
   if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
+  else if (ws_.has("model.language_model.embed_tokens.weight")) hf_names_ = true;  // official Hugging Face layout
   else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
   else fatal("unrecognized weight naming");
+  // Hugging Face checkpoints store the RMSNorm weights zero-centred (applied as 1 + w; MLX conversions add the
+  // 1) and conv1d as [C, 1, 4] (MLX: [C, 4, 1]); mlx-lm tells them apart by the conv1d shape, and so does this.
+  for (int i = 0; i < cfg_.layers && !hf_norms_; ++i)
+    if (cfg_.is_linear[i]) {
+      const Tensor* cw = ws_.find(tname("model.layers." + std::to_string(i) + ".linear_attn.conv1d.weight"));
+      hf_norms_ = cw && cw->shape.size() == 3 && cw->shape.back() != 1;
+      break;
+    }
+  if (hf_names_ || hf_norms_)
+    logi("Hugging Face checkpoint layout (%s%s)", hf_names_ ? "model.language_model.* names" : "conv1d [C, 1, 4]",
+         hf_norms_ ? ", RMSNorm weights read as 1 + w" : "");
 
   embed_ = qlin("model.embed_tokens");
   // tied embeddings (the small Qwen3.5 models): the output layer is the embedding table, stored in the
-  // same quantized [vocab, hidden] layout
-  lm_head_ = ws_.has(prefix_ + "lm_head.weight") ? qlin("lm_head") : embed_;
-  final_norm_ = &ws_.get(prefix_ + "model.norm.weight");
+  // same [vocab, hidden] layout
+  lm_head_ = ws_.has(tname("lm_head.weight")) ? qlin("lm_head") : embed_;
+  final_norm_ = &ws_.get(tname("model.norm.weight"));
   layers_.resize(cfg_.layers);
   for (int i = 0; i < cfg_.layers; ++i) {
     Layer& L = layers_[i];
     std::string p = "model.layers." + std::to_string(i) + ".";
     L.linear = cfg_.is_linear[i];
-    L.in_norm = &ws_.get(prefix_ + p + "input_layernorm.weight");
-    L.post_norm = &ws_.get(prefix_ + p + "post_attention_layernorm.weight");
+    L.in_norm = &ws_.get(tname(p + "input_layernorm.weight"));
+    L.post_norm = &ws_.get(tname(p + "post_attention_layernorm.weight"));
     if (L.linear) {
       std::string a = p + "linear_attn.";
       L.qkv = qlin(a + "in_proj_qkv");
@@ -407,23 +536,27 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
       L.a = qlin(a + "in_proj_a");
       L.b = qlin(a + "in_proj_b");
       L.out = qlin(a + "out_proj");
-      L.conv_w = &ws_.get(prefix_ + a + "conv1d.weight");
-      L.A_log = &ws_.get(prefix_ + a + "A_log");
-      L.dt_bias = &ws_.get(prefix_ + a + "dt_bias");
-      L.gnorm = &ws_.get(prefix_ + a + "norm.weight");
+      L.conv_w = &ws_.get(tname(a + "conv1d.weight"));
+      L.A_log = &ws_.get(tname(a + "A_log"));
+      L.dt_bias = &ws_.get(tname(a + "dt_bias"));
+      L.gnorm = &ws_.get(tname(a + "norm.weight"));
     } else {
       std::string a = p + "self_attn.";
       L.q = qlin(a + "q_proj");
       L.k = qlin(a + "k_proj");
       L.v = qlin(a + "v_proj");
       L.o = qlin(a + "o_proj");
-      L.q_norm = &ws_.get(prefix_ + a + "q_norm.weight");
-      L.k_norm = &ws_.get(prefix_ + a + "k_norm.weight");
+      L.q_norm = &ws_.get(tname(a + "q_norm.weight"));
+      L.k_norm = &ws_.get(tname(a + "k_norm.weight"));
     }
     if (cfg_.moe) {
       std::string m = p + "mlp.";
       L.router = qlin(m + "gate");
       L.shared_gate = qlin(m + "shared_expert_gate");
+      L.router.gate = L.shared_gate.gate = true;
+      if (hf_names_ && ws_.has(tname(m + "experts.gate_up_proj")))
+        fatal("%s: Hugging Face MoE checkpoints (fused experts.gate_up_proj) are not supported; use an MLX conversion "
+              "(e.g. mlx-community/<model>-bf16)", dir.c_str());
       L.eg = qlin(m + "switch_mlp.gate_proj");
       L.eu = qlin(m + "switch_mlp.up_proj");
       L.ed = qlin(m + "switch_mlp.down_proj");
@@ -448,6 +581,12 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
         ++converted;
       }
     };
+    if (hf_norms_) {  // 1 + w, rounded once to bf16 (as mlx-lm's sanitize); the DeltaNet gated norm is plain w
+      for (Layer& L : layers_)
+        for (const Tensor** t : {&L.in_norm, &L.post_norm, &L.q_norm, &L.k_norm})
+          if (*t) *t = bf16_copy(*t, 1.0f);
+      final_norm_ = bf16_copy(final_norm_, 1.0f);
+    }
     for (Layer& L : layers_)
       for (const Tensor** t : {&L.in_norm, &L.post_norm, &L.conv_w, &L.A_log, &L.dt_bias, &L.gnorm, &L.q_norm, &L.k_norm})
         fix(*t);
@@ -455,7 +594,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     if (converted)
       logi("converted %d parameter tensors to bf16 at load (%d values not exactly representable)", converted, lossy);
     auto check = [](const QLinear& q) {
-      if (q && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
+      if (q && !q.dense() && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
         fatal("quantized weights with non-bf16 scales/biases are not supported");
     };
     check(embed_);
@@ -475,10 +614,12 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   if (cfg_.moe && (cfg_.experts % 32 || cfg_.experts > 512 || cfg_.top_k > 16)) fatal("MoE: unsupported expert count");
   if (cfg_.moe && (cfg_.hidden > 4096 || cfg_.lin_hv * cfg_.lin_dv > 4096 || cfg_.hq * cfg_.head_dim > 4096))
     fatal("MoE decode kernels stage at most 4096 inputs");
-  if (embed_.bits != 4) fatal("embedding must be 4-bit");
+  test_transforms();
+  check_formats();
 
   if (!getenv("NI_NO_MTP")) load_mtp(dir);
   Gpu::get().make_resident(ws_.buffers());
+  Gpu::get().make_resident(owned_bufs_);  // converted / copied tensors (bf16 copies, test transforms, MTP head)
   alloc_state();
   prewarm_pipelines();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms", dir.c_str(), cfg_.layers,
@@ -653,6 +794,338 @@ void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
     }
 }
 
+// ---- weight formats ----
+// Per-row MoE kernels (decode, verify, MTP rows) for routed experts e and shared expert s: the specialized
+// 4-bit ones, else the generic instantiation of wfmt.metal for the pair, or "" if there is none.
+std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s) {
+  if (e.q4() && s.q4()) return gate_up ? "moe_gate_up_rows_g64" : "moe_down_rows_g64";
+  if (e.bits == 4 && e.gs == 32 && s.q8()) return gate_up ? "moe_gate_up_rows_g32_s8" : "moe_down_rows_g32_s8";
+  static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f4g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
+                                             "f5g64_f5g64", "f5g64_f8g64", "f3g64_f8g64", "f4g64_f4g64"};
+  const std::string pair = e.fmt() + "_" + s.fmt();
+  if (!have.count(pair)) return "";
+  return (gate_up ? "moeg_gu_rows_" : "moeg_down_rows_") + pair;
+}
+// The routed experts' prefill GEMMs: qrm (4-bit group 64) or the generic qrmf / qmmsf_moe forms.
+static bool moe_prefill_format(const QLinear& q) {
+  if (q.bits == 4) return q.gs % 32 == 0;
+  return q.gs == 64 && (q.bits == 3 || q.bits == 5 || q.bits == 6 || q.bits == 8) || q.dense();
+}
+
+// ---- test transforms (NI_DEQUANT, NI_REQUANT): other formats from a 4-bit model, same function ----
+// NI_DEQUANT=<spec>: the selected 4/8-bit (and 4-bit group 32) linears become bf16 (dequantized: w = s q + b rounded
+// to bf16), so the bf16 kernels run on real shapes and the outputs must match the quantized model's to rounding.
+// NI_REQUANT=<bits>[:<spec>] (bits 5, 6 or 8): the selected 4-bit group-64 linears re-encoded exactly as <bits>-bit
+// group 64 (codes q << (bits - 4), scales / 2^(bits - 4)): the same weights, so outputs match the 4-bit model's to
+// rounding, and the kernels run at the speed of a real <bits>-bit model. Both keep the original buffers too
+// (memory: the 4-bit file plus the new copies), so whole large models do not fit.
+// spec: comma list of all | embed | head | attn | gdn | router | experts | shared | mlp, optionally after a layer
+// range "a-b:" (e.g. "0-7:mlp,attn"); default all.
+static bool spec_match(const std::string& spec, const char* role, int layer) {
+  std::string body = spec;
+  const size_t colon = spec.find(':');
+  if (colon != std::string::npos) {
+    int a = 0, b = 1 << 30;
+    if (sscanf(spec.c_str(), "%d-%d", &a, &b) < 1) fatal("bad layer range in %s", spec.c_str());
+    if (layer >= 0 && (layer < a || layer > b)) return false;
+    if (layer < 0) return false;
+    body = spec.substr(colon + 1);
+  }
+  size_t i = 0;
+  while (i <= body.size()) {
+    const size_t j = std::min(body.find(',', i), body.size());
+    const std::string t = body.substr(i, j - i);
+    if (t == "all" || t == role) return true;
+    i = j + 1;
+  }
+  return false;
+}
+
+// role ("embed", "head", "gdn", "attn", "router", "experts", "shared", "mlp") and layer (-1 outside the layers) of a
+// projection tensor (.weight / .scales / .biases of a linear); false for every other tensor
+static bool transform_role(const std::string& n, std::string& role, int& layer) {
+  const auto ends = [&](const char* s) { return n.size() >= strlen(s) && n.compare(n.size() - strlen(s), strlen(s), s) == 0; };
+  if (!ends(".weight") && !ends(".scales") && !ends(".biases")) return false;
+  const auto has = [&](const char* s) { return n.find(s) != std::string::npos; };
+  layer = -1;
+  if (const size_t p = n.find(".layers."); p != std::string::npos) layer = atoi(n.c_str() + p + 8);
+  if (has("embed_tokens.")) role = "embed";
+  else if (has("lm_head.")) role = "head";
+  else if (has(".linear_attn.in_proj_") || has(".linear_attn.out_proj.")) role = "gdn";
+  else if (has(".self_attn.q_proj.") || has(".self_attn.k_proj.") || has(".self_attn.v_proj.") || has(".self_attn.o_proj."))
+    role = "attn";
+  else if (has(".mlp.gate.") || has(".mlp.shared_expert_gate.")) role = "router";
+  else if (has(".mlp.switch_mlp.")) role = "experts";
+  else if (has(".mlp.shared_expert.")) role = "shared";
+  else if (has(".mlp.gate_proj.") || has(".mlp.up_proj.") || has(".mlp.down_proj.")) role = "mlp";
+  else return false;
+  return true;
+}
+
+WeightStore::Filter Qwen35::transform_defer() const {
+  const char* dq = getenv("NI_DEQUANT");
+  const char* rq = getenv("NI_REQUANT");
+  if (!(dq && *dq) && !(rq && *rq)) return nullptr;
+  std::string dspec = dq && *dq ? dq : "", rspec;
+  if (rq && *rq) rspec = strchr(rq, ':') ? strchr(rq, ':') + 1 : "all";
+  return [dspec, rspec](const std::string& n) {
+    std::string role;
+    int layer = -1;
+    if (!transform_role(n, role, layer)) return false;
+    return (!dspec.empty() && spec_match(dspec, role.c_str(), layer)) ||
+           (!rspec.empty() && spec_match(rspec, role.c_str(), layer));
+  };
+}
+
+void Qwen35::test_transforms() {
+  const char* dq = getenv("NI_DEQUANT");
+  const char* rq = getenv("NI_REQUANT");
+  if (!(dq && *dq) && !(rq && *rq)) return;
+  int rbits = 0, rgs = 64;
+  std::string rspec = "all";
+  if (rq && *rq) {
+    rbits = atoi(rq);
+    if (!strncmp(rq, "4g32", 4)) rgs = 32;
+    if (rbits != 5 && rbits != 6 && rbits != 8 && !(rbits == 4 && rgs == 32))
+      fatal("NI_REQUANT=%s: 5, 6, 8 or 4g32", rq);
+    if (const char* c = strchr(rq, ':')) rspec = c + 1;
+  }
+  const std::string dspec = dq && *dq ? dq : "";
+  Gpu& g = Gpu::get();
+  size_t nd = 0, nr = 0, bytes = 0;
+  // tensors the loader deferred (transform_defer): their names, and their bytes on demand in temporary buffers
+  std::map<const Tensor*, std::string> names;
+  for (auto& [n, t] : ws_.all())
+    if (ws_.deferred(n)) names[&t] = n;
+  std::vector<Buffer> temps;
+  auto src = [&](const Tensor* t) -> Buffer {
+    auto it = names.find(t);
+    if (it == names.end()) return t->buf;
+    Buffer b = g.alloc(size_t(t->numel()) * dtype_size(t->dtype) + 16, "deferred", false);
+    ws_.read_deferred(it->second, b.ptr());
+    temps.push_back(b);
+    return b;
+  };
+  auto drop_temps = [&] {
+    for (Buffer& b : temps) g.release(b);
+    temps.clear();
+  };
+  auto dequant = [&](QLinear& q) {
+    if (!q || q.dense()) return;
+    if (!(q.q4() || q.q8() || (q.bits == 4 && q.gs == 32))) fatal("NI_DEQUANT: %s weights", format_name(q.bits, q.gs).c_str());
+    const size_t rows = q.w->numel() / q.w->shape.back();  // N, or E * N for stacked experts
+    Buffer out = g.alloc(rows * q.K * 2 + 16, "dequant_bf16", false);
+    const Buffer sw = src(q.w), ss = src(q.s), sb = src(q.b);
+    auto e = g.begin();
+    e->use(pipe("wf_dequant_" + q.fmt()));
+    e->buf(0, sw); e->buf(1, ss); e->buf(2, sb); e->buf(3, out);
+    const uint32_t nk[2] = {uint32_t(rows), q.K};
+    e->bytes(4, nk, sizeof nk);
+    const uint32_t n = uint32_t(rows) * (q.K / 16);
+    e->dispatch((n + 255) / 256, 1, 1, 256);
+    e->commit_and_wait();
+    drop_temps();
+    owned_bufs_.push_back(out);
+    Tensor t;
+    t.buf = out.view(0, rows * q.K * 2);
+    t.dtype = DType::BF16;
+    t.shape = q.w->shape;
+    t.shape.back() = q.K;
+    owned_.push_back(t);
+    q.w = q.s = q.b = &owned_.back();
+    q.bits = 16;
+    q.gs = 64;
+    ++nd;
+    bytes += out.size;
+  };
+  auto requant = [&](QLinear& q) {
+    if (!q || !q.q4()) return;
+    const size_t rows = q.w->numel() / q.w->shape.back();
+    if (rgs == 32) {  // same codes, each 64-group's scale and bias written for its two 32-groups
+      const uint32_t g64 = q.K / 64;
+      Buffer sc = g.alloc(rows * g64 * 4 + 16, "requant_s32", false), bi = g.alloc(rows * g64 * 4 + 16, "requant_b32", false);
+      const Buffer ss = src(q.s), sb = src(q.b);
+      for (size_t i = 0; i < rows * g64; ++i)
+        for (int h = 0; h < 2; ++h) {
+          sc.as<uint16_t>()[2 * i + h] = ss.as<uint16_t>()[i];
+          bi.as<uint16_t>()[2 * i + h] = sb.as<uint16_t>()[i];
+        }
+      drop_temps();
+      if (names.count(q.w)) {  // the codes are kept: an owned copy of the deferred weight
+        Buffer w = src(q.w);
+        temps.clear();  // kept, not dropped
+        owned_bufs_.push_back(w);
+        Tensor tw = *q.w;
+        tw.buf = w.view(0, size_t(q.w->numel()) * 4);
+        owned_.push_back(tw);
+        q.w = &owned_.back();
+      }
+      owned_bufs_.push_back(sc);
+      owned_bufs_.push_back(bi);
+      Tensor ts = *q.s, tb = *q.b;
+      ts.buf = sc.view(0, rows * g64 * 4);
+      tb.buf = bi.view(0, rows * g64 * 4);
+      ts.shape.back() *= 2;
+      tb.shape.back() *= 2;
+      owned_.push_back(ts);
+      q.s = &owned_.back();
+      owned_.push_back(tb);
+      q.b = &owned_.back();
+      q.gs = 32;
+      ++nr;
+      bytes += sc.size + bi.size;
+      return;
+    }
+    const uint32_t K = q.K, gpr = K / 64, sh = uint32_t(rbits - 4);
+    const size_t wpr = size_t(K) * rbits / 32;
+    Buffer w = g.alloc(rows * wpr * 4 + 16, "requant_w", false), sc = g.alloc(rows * gpr * 2, "requant_s", false);
+    const Buffer sw_buf = src(q.w), ss_buf = src(q.s), sb_buf = src(q.b);
+    const uint32_t* src = sw_buf.as<uint32_t>();
+    const uint16_t* ss = ss_buf.as<uint16_t>();
+    uint32_t* dst = w.as<uint32_t>();
+    uint16_t* ds = sc.as<uint16_t>();
+    auto work = [&](size_t r0, size_t r1) {
+      for (size_t r = r0; r < r1; ++r) {
+        uint32_t* d = dst + r * wpr;
+        std::fill(d, d + wpr, 0u);
+        for (uint32_t k = 0; k < K; ++k) {
+          const uint32_t c = ((src[r * (K / 8) + k / 8] >> (4 * (k % 8))) & 15u) << sh;
+          const uint64_t bit = uint64_t(k) * rbits;
+          d[bit / 32] |= c << (bit % 32);
+          if (bit % 32 + rbits > 32) d[bit / 32 + 1] |= c >> (32 - bit % 32);
+        }
+        for (uint32_t gi = 0; gi < gpr; ++gi) ds[r * gpr + gi] = f32_to_bf16(bf16_to_f32(ss[r * gpr + gi]) / float(1u << sh));
+      }
+    };
+    const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
+    std::vector<std::thread> th;
+    const size_t per = (rows + nth - 1) / nth;
+    for (unsigned t = 0; t < nth; ++t)
+      if (t * per < rows) th.emplace_back(work, t * per, std::min(rows, (t + 1) * per));
+    for (auto& t : th) t.join();
+    owned_bufs_.push_back(w);
+    owned_bufs_.push_back(sc);
+    if (names.count(q.b)) {  // the biases are kept: an owned copy of the deferred one
+      temps.erase(std::find_if(temps.begin(), temps.end(), [&](const Buffer& b) { return b.mtl == sb_buf.mtl; }));
+      owned_bufs_.push_back(sb_buf);
+      Tensor tb = *q.b;
+      tb.buf = sb_buf.view(0, size_t(q.b->numel()) * 2);
+      owned_.push_back(tb);
+      q.b = &owned_.back();
+    }
+    drop_temps();
+    Tensor tw = *q.w, ts = *q.s;
+    tw.buf = w.view(0, rows * wpr * 4);
+    tw.shape.back() = int64_t(wpr);
+    ts.buf = sc;
+    owned_.push_back(tw);
+    q.w = &owned_.back();
+    owned_.push_back(ts);
+    q.s = &owned_.back();
+    q.bits = rbits;
+    ++nr;
+    bytes += w.size + sc.size;
+  };
+  auto apply = [&](QLinear& q, const char* role, int layer) {
+    if (!dspec.empty() && spec_match(dspec, role, layer)) dequant(q);
+    else if (rbits && spec_match(rspec, role, layer)) requant(q);
+  };
+  const bool tied = lm_head_.w == embed_.w;
+  apply(embed_, "embed", -1);
+  if (tied) lm_head_ = embed_;
+  else apply(lm_head_, "head", -1);
+  for (int i = 0; i < cfg_.layers; ++i) {
+    Layer& L = layers_[i];
+    for (QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out}) apply(*q, "gdn", i);
+    for (QLinear* q : {&L.q, &L.k, &L.v, &L.o}) apply(*q, "attn", i);
+    for (QLinear* q : {&L.router, &L.shared_gate}) apply(*q, "router", i);
+    for (QLinear* q : {&L.eg, &L.eu, &L.ed}) apply(*q, "experts", i);
+    for (QLinear* q : {&L.sg, &L.su, &L.sd}) apply(*q, "shared", i);
+    for (QLinear* q : {&L.mg, &L.mu, &L.md}) apply(*q, "mlp", i);
+  }
+  // deferred tensors no transform converted (a format it leaves alone): read as they are
+  size_t kept = 0;
+  auto keep = [&](const Tensor*& t) {
+    if (!t || !names.count(t)) return;
+    Buffer b = src(t);
+    temps.clear();
+    owned_bufs_.push_back(b);
+    Tensor c = *t;
+    c.buf = b.view(0, size_t(t->numel()) * dtype_size(t->dtype));
+    owned_.push_back(c);
+    t = &owned_.back();
+    ++kept;
+  };
+  auto keep_q = [&](QLinear& q) {
+    if (!q) return;
+    const bool d = q.dense();
+    keep(q.w);
+    if (d) q.s = q.b = q.w;
+    else keep(q.s), keep(q.b);
+  };
+  keep_q(embed_);
+  if (tied) lm_head_ = embed_;
+  else keep_q(lm_head_);
+  for (Layer& L : layers_)
+    for (QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.router, &L.shared_gate, &L.eg, &L.eu,
+                       &L.ed, &L.sg, &L.su, &L.sd, &L.mg, &L.mu, &L.md})
+      keep_q(*q);
+  logi("test transforms: %zu linears dequantized to bf16 (NI_DEQUANT=%s), %zu re-encoded as %d-bit (NI_REQUANT=%s), "
+       "%zu deferred tensors kept as they were: %.2f GB in new buffers", nd, dq ? dq : "", nr, rbits, rq ? rq : "", kept,
+       bytes / 1e9);
+}
+
+void Qwen35::check_formats() const {
+  if (!cfg_.moe) return;
+  auto all = [&](const Layer& L, const char* what) {
+    if (!L.eg) return;
+    if (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su))
+      fatal("%s: experts' gate/up/down (or the shared expert's gate/up) differ in format", what);
+    if (!moe_prefill_format(L.eg))
+      fatal("%s: %s routed experts are not supported", what, format_name(L.eg.bits, L.eg.gs).c_str());
+    if (moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd).empty())
+      fatal("%s: no MoE kernels for %s experts with a %s shared expert", what, format_name(L.eg.bits, L.eg.gs).c_str(),
+            format_name(L.sg.bits, L.sg.gs).c_str());
+  };
+  for (size_t i = 0; i < layers_.size(); ++i) all(layers_[i], ("layer " + std::to_string(i)).c_str());
+}
+
+std::string Qwen35::formats_summary() const {
+  std::map<std::string, size_t> bytes;  // format -> weight bytes
+  auto add = [&](const QLinear& q) {
+    if (q) bytes[format_name(q.bits, q.gs)] += q.w->buf.size + (q.dense() ? 0 : q.s->buf.size + q.b->buf.size);
+  };
+  add(embed_);
+  if (lm_head_.w != embed_.w) add(lm_head_);
+  for (const Layer& L : layers_)
+    for (const QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out, &L.q, &L.k, &L.v, &L.o, &L.router, &L.shared_gate,
+                             &L.eg, &L.eu, &L.ed, &L.sg, &L.su, &L.sd, &L.mg, &L.mu, &L.md})
+      add(*q);
+  size_t tot = 0;
+  for (auto& [k, v] : bytes) tot += v;
+  std::string r;
+  for (auto& [k, v] : bytes) {
+    char b[96];
+    snprintf(b, sizeof b, "%s%s %.0f%%", r.empty() ? "" : ", ", k.c_str(), 100.0 * double(v) / double(std::max<size_t>(tot, 1)));
+    r += b;
+  }
+  return r;
+}
+
+void Qwen35::encode_logits_rows(Encoder& e, int T, const Buffer& out) {
+  enc_rows_half(e, x_, final_norm_, xh_, T, cfg_.hidden);
+  enc_qmm(e, lm_head_, xh_, out, T, false);
+}
+
+void Qwen35::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int T, const Buffer& out) {
+  const uint32_t D = uint32_t(cfg_.hidden);
+  kp::Embed ep{D, uint32_t(embed_.gs), uint32_t(tok_off)};
+  e.use(pipe(embed_.q4() ? std::string("embed_q4") : "embed_" + embed_.fmt()));
+  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, tokens); e.buf(4, out);
+  e.val(5, ep);
+  e.dispatch((D / 8 + 63) / 64, uint32_t(T), 1, 64);
+}
+
 // ---- encoders ----
 static constexpr uint32_t kRows = 4, kSg = 2; // qmv: rows per simdgroup, simdgroups per threadgroup
 
@@ -661,11 +1134,19 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
   // Tuned on M4 Pro: huge matrices (lm_head) like 4 rows x 4 simdgroups, the rest 2 rows x 8.
   const bool huge = L.N >= 65536;
   uint32_t rows = huge ? 4 : 2, nsg = huge ? 4 : 8;
-  if (L.gs != 64) fatal("qmv: group size %d unsupported", L.gs);
-  std::string name = "qmv2_b" + std::to_string(L.bits) + "_g64_r" + std::to_string(rows);
-  if (L.K > 4096) {  // wide inputs: x staged in 4096-wide tiles
-    if (L.bits == 8 || resid) rows = 2;
-    name = "qmv3_b" + std::to_string(L.bits) + "_r" + std::to_string(rows);
+  std::string name;
+  if (L.q4() || (L.q8() && norm && L.K <= 4096)) {
+    name = "qmv2_b" + std::to_string(L.bits) + "_g64_r" + std::to_string(rows);
+    if (L.K > 4096) {  // wide inputs: x staged in 4096-wide tiles
+      if (L.bits == 8 || resid) rows = 2;
+      name = "qmv3_b" + std::to_string(L.bits) + "_r" + std::to_string(rows);
+    }
+  } else if (L.q8()) {  // the 8-bit forms the tiled kernel has for any K: plain, _add, _norm
+    rows = 2;
+    name = "qmv3_b8_r2";
+  } else {  // wfmt.metal: any format, any K; rows 2 (also with a residual) or 4 (huge, no residual)
+    if (resid || (!huge && !norm)) rows = 2;
+    name = "qmvg_" + L.fmt() + "_r" + std::to_string(rows);
   }
   if (resid) name += "_add";
   if (norm) name += "_norm";
@@ -687,6 +1168,56 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
 
 void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm,
                            const Buffer* xn_out) {
+  // segments in other formats than 4/8-bit group 64: one generic dispatch per format (the first writes xn_out)
+  bool special = true;
+  for (auto& sg : segs) special = special && (sg.L->q4() || sg.L->q8());
+  if (!special) {
+    std::vector<Seg> rest = segs;
+    bool first = true;
+    while (!rest.empty()) {
+      std::vector<Seg> same, other;
+      const QLinear& f0 = *rest[0].L;
+      const bool sp0 = f0.q4() || f0.q8();
+      for (auto& sg : rest)
+        ((sp0 ? (sg.L->q4() || sg.L->q8()) : sg.L->same_format(f0)) ? same : other).push_back(sg);
+      if (sp0) {
+        enc_qmv_multi(e, same, x, norm, first ? xn_out : nullptr);
+      } else {
+        constexpr uint32_t rows = 2, nsg = 8;
+        e.use(pipe("qmvg_multi_" + f0.fmt()));
+        kp::QmvMulti2 p{};
+        p.K = same[0].L->K;
+        p.nseg = uint32_t(same.size());
+        p.eps = cfg_.eps;
+        p.norm = norm ? 1u : 0u;
+        p.write_xn = first && xn_out ? 1u : 0u;
+        uint32_t tg = 0;
+        for (size_t i = 0; i < 4; ++i) {
+          const Seg& sg = same[std::min(i, same.size() - 1)];
+          if (i < same.size()) {
+            if (sg.L->K != p.K) fatal("qmv_multi: segments must share K");
+            p.N[i] = sg.L->N;
+            p.bits[i] = uint32_t(sg.L->bits);
+            p.tg_begin[i] = tg;
+            tg += (sg.L->N + rows * nsg - 1) / (rows * nsg);
+          }
+          e.buf(int(i * 4 + 0), sg.L->w->buf);
+          e.buf(int(i * 4 + 1), sg.L->s->buf);
+          e.buf(int(i * 4 + 2), sg.L->b->buf);
+          e.buf(int(i * 4 + 3), sg.y);
+        }
+        p.tg_begin[same.size()] = tg;
+        e.buf(16, x);
+        e.val(17, p);
+        e.buf(18, norm ? norm->buf : x);
+        e.buf(19, xn_out ? *xn_out : x);
+        e.dispatch(tg, 1, 1, 32 * nsg);
+      }
+      first = false;
+      rest = other;
+    }
+    return;
+  }
   static Pipeline pp = Gpu::get().pipeline("qmv2_multi_r2");
   static Pipeline pw = Gpu::get().pipeline("qmv3_multi_r2");
   constexpr uint32_t rows = 2, nsg = 8;
@@ -773,6 +1304,12 @@ void Qwen35::enc_attn(Encoder& e, Seq& s, int li, const Layer& L, int pos) {
 }
 
 void Qwen35::enc_moe(Encoder& e, const Layer& L) {
+  // the fused decode kernels read 4-bit group-64 experts and shared expert; other formats run the per-row MoE
+  // (router, top-k, gate/up, down: the verify path at one row)
+  if (!(L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4())) {
+    enc_moe_rows(e, L, 1, x_, false);
+    return;
+  }
   // NI_GU: 2 = fused top-k (v2), 3 = separate top-k dispatch + v3 rows 2, 4 = v3 rows 4
   static int variant = getenv("NI_GU") ? atoi(getenv("NI_GU")) : 3;
   static Pipeline gu = Gpu::get().pipeline(variant == 2 ? "moe_gate_up2" : variant == 3 ? "moe_gate_up3_r2" : "moe_gate_up3_r4");
@@ -812,7 +1349,8 @@ void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
   static Pipeline gu = Gpu::get().pipeline("mlp_gate_up");
   constexpr uint32_t rows = 2, nsg = 8;
   kp::Qmv p{L.mg.N, L.mg.K, L.mg.K, L.mg.N, cfg_.eps};
-  e.use(gu);
+  if (!L.mg.same_format(L.mu)) fatal("dense MLP: gate and up differ in format");
+  e.use(L.mg.q4() ? gu : pipe("mlp_gate_up_" + L.mg.fmt()));
   e.buf(0, L.mg.w->buf); e.buf(1, L.mg.s->buf); e.buf(2, L.mg.b->buf);
   e.buf(3, L.mu.w->buf); e.buf(4, L.mu.s->buf); e.buf(5, L.mu.b->buf);
   e.buf(6, x_); e.buf(7, L.post_norm->buf); e.buf(8, mh_);
@@ -836,15 +1374,8 @@ void Qwen35::enc_mlp_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 }
 
 void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
-  static Pipeline emb = Gpu::get().pipeline("embed_q4");
-  static Pipeline st1 = Gpu::get().pipeline("topk_stage1");
-  static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
-  kp::Embed ep{uint32_t(cfg_.hidden), uint32_t(embed_.gs), uint32_t(pos)};
-  e.use(emb);
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, x_);
-  e.val(5, ep);
-  e.dispatch((cfg_.hidden / 8 + 63) / 64, 1, 1, 64);
+  enc_embed(e, s.tok, pos, 1, x_);
   static int dbg_layers = getenv("NI_DEBUG_LAYERS") ? atoi(getenv("NI_DEBUG_LAYERS")) : -1;
   // profiling aid: NI_SKIP bitmask 1=moe 2=gdn 4=attn 8=head (output becomes garbage)
   static int skip = getenv("NI_SKIP") ? atoi(getenv("NI_SKIP")) : 0;
@@ -912,20 +1443,41 @@ void Qwen35::enc_qmm(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 }
 
 // NI_QMM8 (read once): 8-bit g64 large-prefill GEMMs on qmr8_* (qmm3.metal: the qmr design with 8-bit
-// codes, 1.4-1.5x qmm_b8_m32_n32) instead of qmm_b8_m32_n32. 1 (default): the MTP head's projections
-// (bf16 in the file, quantized to 8 bits at load; they never touch the trunk's logits); 2: also the
-// trunk's 8-bit router and shared-expert gate (changes routing near-ties: p4000 logits KL 2e-4 for
+// codes, 1.4-1.5x qmm_b8_m32_n32) instead of qmm_b8_m32_n32. 1 (default): every 8-bit linear but the trunk's
+// MoE router and shared-expert gate (the MTP head's projections, an 8-bit trunk's attention, DeltaNet and MLP
+// matrices); 2: also the router and shared-expert gate (changes routing near-ties: p4000 logits KL 2e-4 for
 // ~0.3%); 0 = off.
 static int qmm8_mode() {
   static const int v = [] {
     const int m = std::clamp(env_int("NI_QMM8", 1), 0, 2);
-    if (m) logi("NI_QMM8=%d: 8-bit prefill GEMMs on qmr8 (%s)", m, m == 1 ? "MTP head" : "MTP head and trunk router");
+    if (m) logi("NI_QMM8=%d: 8-bit prefill GEMMs on qmr8 (%s)", m, m == 1 ? "all but the MoE router" : "all");
     return m;
   }();
   return v;
 }
 static bool qmm8_on() { return qmm8_mode() > 0; }
-static bool qmm8_for(const QLinear& L) { return qmm8_mode() == 2 || (qmm8_mode() == 1 && L.mtp); }
+static bool qmm8_for(const QLinear& L) { return qmm8_mode() == 2 || (qmm8_mode() == 1 && !L.gate); }
+
+// Prefill GEMM for the formats of wfmt.metal (bf16, 3/5/6-bit, 4-bit group 32): qmr's tiles (m32 x n128 from 64
+// rows, m16 x n64 below, m8 x n64 up to 8). NI_QRF16_MF (read once; default on): bf16 large tiles with the M
+// tiles along grid x, so the threadgroups running together share the weight tile through the cache.
+void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
+  static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
+  std::string n = "qrf_" + L.fmt();
+  uint32_t bm = 32, bn = 128, th = 128;
+  bool mfast = false;
+  if (M <= 8) n += "_m8_n64", bm = 8, bn = 64, th = 64;
+  else if (M < 64 || L.N <= 64) n += "_m16_n64", bm = 16, bn = 64;
+  else if (L.dense() && mf) n += "_m32_n128_mf", mfast = true;
+  else n += "_m32_n128";
+  e.use(pipe(n));
+  kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+  e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+  e.val(5, p);
+  const uint32_t nt = (L.N + bn - 1) / bn, mt = (uint32_t(M) + bm - 1) / bm;
+  if (mfast) e.dispatch(mt, nt, 1, th);
+  else e.dispatch(nt, mt, 1, th);
+}
 
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
@@ -953,6 +1505,10 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
     return;
   }
+  if (!L.q4() && !L.q8()) {  // wfmt.metal's qrf_* (the qmr design for any format)
+    enc_qrf(e, L, xh, y, M, add);
+    return;
+  }
   const bool big = M >= 64 && L.bits == 4;
   const int BM = big ? 64 : 32, BN = big ? 64 : 32;
   std::string n = "qmm_b" + std::to_string(L.bits) + (big ? "_m64_n64" : "_m32_n32");
@@ -968,7 +1524,12 @@ bool Qwen35::small_t(int T) const { return shortpf() && T >= 1 && T <= shortpf_m
 bool Qwen35::can_snapshot() const { return shortpf() && gdn_par(); }
 
 bool Qwen35::qmms_ok(const QLinear& L) const {
-  return L.gs == 64 && (L.bits == 4 || L.bits == 8) && L.K % 64 == 0 && L.N > 0;
+  return (L.q4() || L.q8() || format_supported(L.bits, L.gs)) && L.K % 64 == 0 && L.N > 0;
+}
+// short-prefill kernel family of a format: qmms_b4 / qmms_b8 (specialized) or wfmt.metal's qmmsf_<fmt>
+static std::string qmms_family(const QLinear& L, bool gu) {
+  if (L.q4() || L.q8()) return std::string(gu ? "qmms_gu_b" : "qmms_b") + std::to_string(L.bits);
+  return (gu ? "qmmsf_gu_" : "qmmsf_") + L.fmt();
 }
 
 // NI_QMMS_TY (read once; default 1, 0 = off): a qmms dispatch with fewer than 96 threadgroups (the 35B's router
@@ -992,10 +1553,10 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
   if (segs.empty()) return;
   if (T < 1 || T > 64) fatal("qmms: T=%d", T);
   for (size_t i = 1; i < segs.size(); ++i)
-    if (segs[i].L->bits != segs[0].L->bits || segs[i].L->K != segs[0].L->K) {
-      // mixed widths: split into runs of equal width
+    if (!segs[i].L->same_format(*segs[0].L) || segs[i].L->K != segs[0].L->K) {
+      // mixed formats: split into runs of one format
       std::vector<SegQ> same, rest;
-      for (auto& sq : segs) (sq.L->bits == segs[0].L->bits && sq.L->K == segs[0].L->K ? same : rest).push_back(sq);
+      for (auto& sq : segs) (sq.L->same_format(*segs[0].L) && sq.L->K == segs[0].L->K ? same : rest).push_back(sq);
       enc_qmms(e, same, xh, T);
       enc_qmms(e, rest, xh, T);
       return;
@@ -1034,7 +1595,7 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
   }
   p.tg_begin[segs.size()] = tg;
   const uint32_t gy = qmms_row_groups(tg, T), TB = uint32_t((T + 7) / 8 + gy - 1) / gy;
-  e.use(pipe("qmms_b" + std::to_string(L0.bits) + "_t" + std::to_string(TB)));
+  e.use(pipe(qmms_family(L0, false) + "_t" + std::to_string(TB)));
   e.buf(16, xh);
   e.val(17, p);
   e.dispatch(tg, uint32_t((T + 8 * TB - 1) / (8 * TB)), 1, 32 * nsg);
@@ -1042,7 +1603,7 @@ void Qwen35::enc_qmms(Encoder& e, std::vector<SegQ> segs, const Buffer& xh, int 
 
 // H[T, N] = half(silu(X G^T) * (X U^T)) (row stride N) in one pass over both matrices.
 bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const Buffer& xh, const Buffer& h, int T) {
-  if (!qmms_ok(G) || !qmms_ok(U) || G.bits != U.bits || G.N != U.N || G.K != U.K || T < 1 || T > 64) return false;
+  if (!qmms_ok(G) || !qmms_ok(U) || !G.same_format(U) || G.N != U.N || G.K != U.K || T < 1 || T > 64) return false;
   const uint32_t K = G.K, gpr = K / 64, nsg = 8;
   static const int ks_env = getenv("NI_QMMS_KS") && *getenv("NI_QMMS_KS") ? atoi(getenv("NI_QMMS_KS")) : 0;
   uint32_t ks = ks_env > 0 ? uint32_t(ks_env) : (K >= 4096 ? 8u : 4u);
@@ -1058,7 +1619,7 @@ bool Qwen35::enc_qmms_gu(Encoder& e, const QLinear& G, const QLinear& U, const B
   const uint32_t rbs = nsg / ks, tg = ((G.N + 7) / 8 + rbs - 1) / rbs;
   p.tg_begin[1] = p.tg_begin[2] = tg;
   const uint32_t gy = qmms_row_groups(tg, T), TB = uint32_t((T + 7) / 8 + gy - 1) / gy;
-  e.use(pipe("qmms_gu_b" + std::to_string(G.bits) + "_t" + std::to_string(TB)));
+  e.use(pipe(qmms_family(G, true) + "_t" + std::to_string(TB)));
   e.buf(0, G.w->buf); e.buf(1, G.s->buf); e.buf(2, G.b->buf); e.buf(3, h);
   e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
   e.buf(16, xh);
@@ -1101,7 +1662,10 @@ static bool moe_fma() {
 bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
-  auto fits = [](const QLinear& q) {
+  // generic expert formats (wfmt.metal qmmsf_moe_*: bf16, 8/6/5/3-bit group 64): 8-row MMA tiles, no FMA rows
+  const bool gen = !G.q4() && G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn);
+  auto fits = [gen](const QLinear& q) {
+    if (gen) return q.K % 64 == 0 && q.N % 8 == 0;
     return q.bits == 4 && (q.gs == 64 || (moe_fma() && q.gs == 32)) && q.K % 64 == 0 && q.N % 8 == 0;
   };
   if (!fits(G) || !fits(U) || !fits(Dn) || U.N != G.N || U.K != G.K || G.K != uint32_t(D) || Dn.K != G.N ||
@@ -1114,7 +1678,9 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   // NI_SHORTPF_FOLD=1: the shared expert rides along as expert E (its T rows in 8-row tiles after the
   // routed ones) when it is 4-bit with the routed experts' shapes; else it runs on the dense path
   static const bool fold_on = env_int("NI_SHORTPF_FOLD", 0) != 0;
-  auto same = [&](const QLinear& a, const QLinear& b) { return a.bits == 4 && a.gs == b.gs && a.N == b.N && a.K == b.K; };
+  auto same = [&](const QLinear& a, const QLinear& b) {
+    return (gen ? a.same_format(b) : a.bits == 4 && a.gs == b.gs) && a.N == b.N && a.K == b.K;
+  };
   const bool fold = fold_on && moe_fused() && same(L.sg, G) && same(L.su, U) && same(L.sd, Dn);
   const int S = fold ? T : 0;
   enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
@@ -1129,11 +1695,14 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E + (S + bm - 1) / bm);
   const uint32_t shared_e = fold ? uint32_t(E) : uint32_t(E) + 1;
   {
-    kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), G.N * (G.K / 8), G.N * (G.K / G.gs), shared_e};
+    // expert strides in words / scale groups (generic formats: N rows of row_bytes; bf16 has no groups)
+    const uint32_t gws = uint32_t(size_t(G.N) * G.row_bytes() / 4), gss = G.dense() ? 0u : G.N * (G.K / G.gs);
+    const uint32_t dws = uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4), dss = Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs);
+    kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), gws, gss, shared_e};
     const bool fma = moe_fma();
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U, &SD = fold ? L.sd : Dn;
     {
-      e.use(pipe(fma ? "qmms_moe2_gu_b4" : "qmms_moe_gu_b4"));
+      e.use(pipe(gen ? "qmmsf_moe_gu_" + G.fmt() : fma ? "qmms_moe2_gu_b4" : "qmms_moe_gu_b4"));
       e.buf(0, xh_);
       e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
       e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
@@ -1144,9 +1713,9 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
       e.buf(15, SU.w->buf); e.buf(16, SU.s->buf); e.buf(17, SU.b->buf);
       e.dispatch(G.N / (8 * nsg), max_tiles, 1, 32 * nsg);
     }
-    kp::Qmm2 q{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), Dn.N * (Dn.K / 8), Dn.N * (Dn.K / Dn.gs), shared_e};
+    kp::Qmm2 q{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), dws, dss, shared_e};
     {
-      e.use(pipe(fma ? "qmms_moe2_dn_b4" : "qmms_moe_dn_b4"));
+      e.use(pipe(gen ? "qmmsf_moe_dn_" + Dn.fmt() : fma ? "qmms_moe2_dn_b4" : "qmms_moe_dn_b4"));
       e.buf(0, hhalf_);
       e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);
       e.buf(4, yd_);
@@ -1205,6 +1774,26 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
   auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0; };
   const bool b8 = on && qmm8_for(G) && qmm8_for(U) && ok8(G) && ok8(U) && G.N == U.N && G.K == U.K;
   auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (on && !G.q4() && !G.q8() && G.same_format(U) && G.N == U.N && G.K == U.K) {
+    // wfmt.metal's fused gate/up for the other formats (qrf_gu_*; bf16 large tiles with M along grid x)
+    static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
+    std::string n = "qrf_gu_" + G.fmt();
+    uint32_t bm = 32, bn = 64, th = 128;
+    bool mfast = false;
+    if (M <= 8) n += "_m8_n32", bm = 8, bn = 32, th = 64;
+    else if (M < 64) n += "_m16_n64", bm = 16;
+    else if (G.dense() && mf) n += "_m32_n64_mf", mfast = true;
+    else n += "_m32_n64";
+    e.use(pipe(n));
+    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+    e.val(5, p);
+    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+    const uint32_t nt = (G.N + bn - 1) / bn, mt = (uint32_t(M) + bm - 1) / bm;
+    if (mfast) e.dispatch(mt, nt, 1, th);
+    else e.dispatch(nt, mt, 1, th);
+    return true;
+  }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
   const char* n = "qmr_gu_k32_w14_m32_n64";
   uint32_t bm = 32, bn = 64, th = 128;
@@ -1236,7 +1825,8 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
 
 void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
   if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf)) return;
-  if (moe_fused() && enc_moe_prefill_fused(e, L, T, xbuf)) return;
+  if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf)) return;
+  if (L.eg.bits != 4) fatal("MoE prefill: no kernels for %s experts", format_name(L.eg.bits, L.eg.gs).c_str());
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k;
   enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
@@ -1285,13 +1875,16 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
   // NI_MOE_QMR: qrm_gu (64 + 64 weight rows) / qrm_dn (128 rows) on 32- or 16-row tiles (4-bit g64)
-  const bool qrm = moe_qmr() && G.gs == 64 && U.gs == 64 && Dn.gs == 64 && G.K % 64 == 0 && Dn.K % 64 == 0 &&
+  // generic expert formats: wfmt.metal's qrmf_* (the qrm design, 32-row tiles)
+  const bool gen = G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn) && G.K % 64 == 0 &&
+                   Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
+  const bool qrm = !gen && moe_qmr() && G.gs == 64 && U.gs == 64 && Dn.gs == 64 && G.K % 64 == 0 && Dn.K % 64 == 0 &&
                    G.N % 64 == 0 && Dn.N % 128 == 0;
   // NI_MOE_BM: rows per tile (16, 32 or 64); partial tiles skip their empty 8-row fragments
   static const int bm_env = getenv("NI_MOE_BM") ? atoi(getenv("NI_MOE_BM")) : 64;
-  const int bm = qrm ? moe_qmr() : bm_env;
-  const int kBnGu = qrm ? 64 : 32, kBnDn = qrm ? 128 : 64;
-  auto fits = [](const QLinear& q) { return q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0; };
+  const int bm = gen ? 32 : qrm ? moe_qmr() : bm_env;
+  const int kBnGu = qrm || gen ? 64 : 32, kBnDn = qrm || gen ? 128 : 64;
+  auto fits = [gen](const QLinear& q) { return gen ? q.K % 32 == 0 : q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0; };
   // gate and up share K, strides and the xh_ row stride (D) in one dispatch
   if (!fits(G) || !fits(U) || !fits(Dn) || G.N % kBnGu || Dn.N % kBnDn || U.N != G.N || U.K != G.K ||
       U.gs != G.gs || G.K != uint32_t(D) || Dn.K != G.N || Dn.N != uint32_t(D) || (bm != 16 && bm != 32 && bm != 64)) {
@@ -1301,8 +1894,9 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     return false;
   }
   const bool fold = moe_fused() == 1 && fits(L.sg) && fits(L.su) && fits(L.sd) && L.sg.N == G.N && L.su.N == G.N &&
-                    L.sg.K == G.K && L.su.K == G.K && L.sd.K == Dn.K && L.sd.N == Dn.N && L.sg.gs == G.gs &&
-                    L.su.gs == G.gs && L.sd.gs == Dn.gs;
+                    L.sg.K == G.K && L.su.K == G.K && L.sd.K == Dn.K && L.sd.N == Dn.N && L.sg.same_format(G) &&
+                    L.su.same_format(G) && L.sd.same_format(Dn) && L.sg.gs == G.gs && L.su.gs == G.gs &&
+                    L.sd.gs == Dn.gs;
   const int S = fold ? T : 0;
   enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
@@ -1319,9 +1913,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
   {
     // expert matrices are stacked [E, N, K]: strides in words / groups
-    kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), G.N * (G.K / 8), G.N * (G.K / G.gs), uint32_t(E)};
+    kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), uint32_t(size_t(G.N) * G.row_bytes() / 4),
+               G.dense() ? 0u : G.N * (G.K / G.gs), uint32_t(E)};
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
-    e.use(pipe(qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
+    e.use(pipe(gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
+               : qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
     e.buf(0, xh_);
     e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
     e.buf(4, U.w->buf); e.buf(5, U.s->buf); e.buf(6, U.b->buf);
@@ -1334,9 +1930,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   }
   // down: yd_ row = pair id (shared rows: P + token)
   {
-    kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), Dn.N * (Dn.K / 8), Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
+    kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
+               Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
     const QLinear& SD = fold ? L.sd : Dn;
-    e.use(pipe(qrm ? "qrm_dn" + qm + "_n" + std::to_string(kBnDn) : "qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
+    e.use(pipe(gen ? "qrmf_dn_" + Dn.fmt() + "_m32_n128"
+               : qrm ? "qrm_dn" + qm + "_n" + std::to_string(kBnDn) : "qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
     e.buf(0, hhalf_);
     e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);
     e.buf(4, yd_);
@@ -1531,11 +2129,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
   const int D = cfg_.hidden;
-  kp::Embed ep{uint32_t(D), uint32_t(embed_.gs), uint32_t(pos0)};
-  e.use(pipe("embed_q4"));
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, x_);
-  e.val(5, ep);
-  e.dispatch((D / 8 + 63) / 64, T, 1, 64);
+  enc_embed(e, s.tok, pos0, T, x_);
   // NI_ANE: dense FFN split with the Neural Engine. A chunk carrying an in-pass checkpoint stays on the
   // GPU (the engine cuts such chunks at the boundary instead when the split would apply).
   ane_chunk_ = !snap && ane_splits(T);

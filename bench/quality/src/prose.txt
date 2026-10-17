@@ -1,0 +1,68 @@
+## Design
+
+Each model gets kernels for its exact shapes: quantized matrix kernels that decode weights straight into the
+GPU's matrix registers, a token-parallel DeltaNet scan, flash-style attention, fused mixture-of-experts GEMMs,
+and verify kernels that check several drafted tokens for the price of one. Speculative decoding drafts a block of
+seven tokens with a DFlash2 drafter (fed by the model's own hidden states, captured during prefill and verify) or
+with the model's MTP head, and verifies the draft in one pass; DeltaNet's recurrent state rolls back through a
+tape, so a rejected draft costs nothing. On dense models, prefill splits every feed-forward layer between the GPU
+and the Neural Engine, which run side by side (chunks of 512 tokens and more). Conversations keep their KV cache and a recurrent-state
+checkpoint at each turn boundary, so a follow-up only processes the new message. Weights load straight from
+the model's safetensors into aligned GPU buffers, with no converted copy on disk.
+
+
+## 27B prefill with the Neural Engine (opt-in `NI_ANE=1`)
+M4 Pro (20-core GPU, 16-core ANE), macOS 27.0.1 (26A434), Qwen3.8-27B MLX 4-bit g64, 2026-10-16. Design and
+background: `research/inference/ane/ANE_DESIGN.md`; code: `src/ane/`, `src/kernels/ane_ffn.metal`,
+`src/model/qwen35_ane.cpp`. Each dense FFN layer of a prefill chunk (>= 512 rows) is split by intermediate
+channel between the GPU (4-bit GEMMs) and the ANE (one W8A8 MIL program, Hadamard-rotated int8, private
+`AppleNeuralEngine.framework`); the ANE's partial down projection is joined in fp32. Schedules:
+- plain (`NI_ANE_WAVE=0`): per layer, mixer on the GPU, then the FFN split with GPU and ANE concurrent. The
+  ANE idles during the mixer, so the best share balances the FFN: 27 of 34 units here.
+- wavefront (the default): each chunk runs as two row halves in a skewed schedule, so the ANE computes the FFN
+  of one half while the GPU runs the mixer of the other. The ANE is then hidden under the mixer and takes the
+  whole FFN (34/34 units); the GPU runs the mixer, rotate/pack/join and the int8 staging. Bitwise equal to
+  the plain split at the same share.
+
+Cold prefill, `ni_run`, `NI_NO_MTP=1`, n_gen 1 (marked runs: n_gen 64/65), every run under the GPU lock and
+reported; A/B blocks interleave modes. Thermal state (`NSProcessInfo.thermalState`) at the end of each run.
+
+| block (start) | prompt | GPU only (default) | NI_ANE=1 | speedup |
+|---|---|---|---|---|
+| plain 25 units (16:20, n_gen 4) | p700 | 109.7 | 186.0 (fair) | 1.70x |
+| plain 25 units (16:58, n_gen 64) | p4000 | 107.9 (nominal) | 204.2 (nominal) | 1.89x |
+| plain 27 units, block 1 (18:30) | p4000 | 111.0 (nominal) | 217.4 (nominal) | 1.96x |
+| | p16000 | 106.5 (fair) | 195.5 (fair) | 1.84x |
+| plain 27 units, block 2 (18:43, reversed) | p16000 | 101.1 (fair) | 200.1 (nominal) | 1.98x |
+| | p4000 | 105.4 (fair) | 206.3 (fair) | 1.96x |
+| plain 27 units (18:56, n_gen 65) | p4000 | 111.5 | 217.9 (nominal) | 1.95x |
+| wavefront 25 / 29 / 33 units (18:27, n_gen 64) | p4000 | 107.9 (16:58) | 213.7 (fair) / 234.7 (fair) / 298.8 (nominal) | 1.98 / 2.18 / 2.77x |
+| wavefront 34 units (18:56, n_gen 65) | p4000 | 111.5 | 320.5 (nominal) | 2.87x |
+| **wavefront 34 units, block 1 (19:08)** | p4000 | 110.4 (fair) | **317.8** (fair) | **2.88x** |
+| | p16000 | 101.7 (fair) | **246.7** (fair) | **2.43x** |
+| **wavefront 34 units, block 2 (19:17, reversed)** | p16000 | 100.7 (fair) | **264.5** (nominal) | **2.63x** |
+| | p4000 | 98.6 (fair) | **277.3** (fair) | **2.81x** |
+
+The last p4000 pair ran after two 16k prompts (throttled: the GPU alone fell to 98.6). Decode is unchanged
+(14.3-14.6 tok/s plain in both modes); the 35B MoE never uses the split.
+
+Calibration (`ane_calib`; split layers on real weights, random post-norm input, layers 8-15, median of 2):
+| units | GPU alone FFN (2048 rows) | split's GPU part | ANE alone | split layer |
+|---|---|---|---|---|
+| 21 | 203.4 ms | 79.2 | 40.7 | 77.7 |
+| 23 | 191.8 | 65.2 | 44.4 | 67.1 |
+| 25 | 199.6 | 55.7 | 47.9 | 56.9 |
+| 26 | 192.2 | 48.3 | 50.3 | 54.3 |
+| **27** | 205.7 | 45.5 | 52.0 | **54.1** |
+| 29 | 192.8 | 32.1 | 55.3 | 56.8 |
+ANE 1.93 ms per 512-channel unit at 2048 rows (17 TOPS), GPU part 6.2 ms per GPU unit; the split layer is
+max(ANE, GPU part) + 2-4 ms. 512-row chunks gain too (15.2 vs 48.2 ms at 27 units). `ane_calib --wave`
+(whole 2048-row chunks, 64 layers): GPU alone 18.6 s (110.1 tok/s); 31 units 8.40 s (243.9), 33 units 7.40 s
+(276.8), **34 units 7.20 s (284.3, 2.58x)**. Both results are stored in
+`~/.cache/nace-infer-models/ane-cache/calibration.txt` (keyed by chip, macOS build and model) and used by
+`NI_ANE=1`.
+
+Where the wavefront's time goes (4k, 34 units): about 98-113 ms per layer per 2048-row chunk, against about
+290 ms on the GPU alone, of which the FFN is about 190 ms. The GPU now runs only the mixer plus the split's small
+kernels, so the mixer (GDN/attention and their projections, ~100 ms) is the limit. The ANE is busy 9.2 s of 12.6 s:
+256 evalua

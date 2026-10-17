@@ -32,8 +32,14 @@ class WeightStore {
  public:
   using Filter = std::function<bool(const std::string&)>;
   // Loads every *.safetensors in `dir` (follows HF snapshot symlinks).
-  // `files` limits which *.safetensors are read (by file name); `keep` filters tensors.
-  void open_dir(const std::string& dir, const Filter& keep = nullptr, const Filter& files = nullptr);
+  // `files` limits which *.safetensors are read (by file name); `keep` filters tensors. Tensors `defer` accepts are
+  // not read: they are listed with dtype and shape but no buffer, and read_deferred() fetches their bytes later (a
+  // model converting them at load then never holds both forms).
+  void open_dir(const std::string& dir, const Filter& keep = nullptr, const Filter& files = nullptr,
+                const Filter& defer = nullptr);
+  bool deferred(const std::string& name) const { return deferred_.count(name) != 0; }
+  // the deferred tensor's bytes into dst (its byte size: dtype size x numel)
+  void read_deferred(const std::string& name, void* dst) const;
   bool has(const std::string& name) const { return tensors_.count(name) != 0; }
   const Tensor& get(const std::string& name) const;
   const Tensor* find(const std::string& name) const;
@@ -43,6 +49,11 @@ class WeightStore {
   ~WeightStore();
 
  private:
+  struct Place {
+    std::string path;
+    size_t off = 0, len = 0;
+  };
+  std::map<std::string, Place> deferred_;
   std::map<std::string, Tensor> tensors_;
   std::vector<Buffer> files_;
   size_t total_ = 0;

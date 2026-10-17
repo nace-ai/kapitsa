@@ -88,13 +88,27 @@ int main(int argc, char** argv) {
   ni::Gpu& g = ni::Gpu::get();
   g.compile();
   const char* adir = getenv("NI_ARCHIVE_DIR");
+  // --formats: also the weight-format library (wfmt.metal); --match <s>: every kernel whose name contains s
+  std::vector<std::string> names;
   for (int i = 1; i < argc; ++i) {
-    ni::Pipeline p = g.pipeline(argv[i]);
-    printf("%-36s ok (max threads %u)", argv[i], p.max_threads);
+    if (!strcmp(argv[i], "--formats")) {
+      g.compile_formats();
+    } else if (!strcmp(argv[i], "--match") && i + 1 < argc) {
+      const std::string sub = argv[++i];
+      for (const std::string& n : g.function_names(true))
+        if (n.find(sub) != std::string::npos) names.push_back(n);
+    } else {
+      names.push_back(argv[i]);
+    }
+  }
+  for (const std::string& name : names) {
+    const char* nm = name.c_str();
+    ni::Pipeline p = g.pipeline(name);
+    printf("%-36s ok (max threads %u)", nm, p.max_threads);
     if (adir) {
-      std::string path = std::string(adir) + "/" + argv[i] + ".bin";
+      std::string path = std::string(adir) + "/" + name + ".bin";
       std::ifstream f;
-      if (g.archive(argv[i], path) && (f.open(path, std::ios::binary), f)) {
+      if (g.archive(name, path) && (f.open(path, std::ios::binary), f)) {
         Bytes b((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         long text, stack, gprs;
         kernel_stats(b, &text, &stack, &gprs);

@@ -202,12 +202,54 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
   if (segs.empty() || segs.size() > 4) fatal("qmm8: %zu segments", segs.size());
   const uint32_t K = segs[0].L->K;
   const int bits = segs[0].L->bits;
+  // segments of different formats: one GEMM per format
+  for (size_t i = 1; i < segs.size(); ++i)
+    if (!segs[i].L->same_format(*segs[0].L)) {
+      std::vector<Seg8> same, rest;
+      for (auto& sg : segs) (sg.L->same_format(*segs[0].L) ? same : rest).push_back(sg);
+      enc_qmm8(e, same, R, table, sums, x2);
+      enc_qmm8(e, rest, R, table, sums, x2);
+      return;
+    }
   uint32_t Ntot = 0;
   for (auto& sg : segs) {
-    if (sg.L->K != K || sg.L->bits != bits || sg.L->gs != 64) fatal("qmm8: segments must share K, bits, group 64");
+    if (sg.L->K != K) fatal("qmm8: segments must share K");
     Ntot += sg.L->N;
   }
-  if (bits != 4 && bits != 8) fatal("qmm8: %d-bit weights", bits);
+  if (!segs[0].L->q4() && !segs[0].L->q8()) {  // wfmt.metal's qmm8g_<fmt>: bf16, 3/5/6-bit, group 32
+    V8Plan pl = v8_plan(Ntot, K, 1);
+    pl.nf = std::min(pl.nf, 2);
+    if (pl.cs * pl.ks > 8) pl.ks = 8, pl.cs = 1;
+    kp::Qmm8 p{};
+    p.K = K;
+    p.R = uint32_t(R);
+    p.nseg = uint32_t(segs.size());
+    p.ks = uint32_t(pl.ks);
+    uint32_t tg = 0;
+    e.use(pipe8("qmm8g_" + segs[0].L->fmt() + "_nf" + std::to_string(pl.nf)));
+    for (size_t i = 0; i < 4; ++i) {
+      const Seg8& sg = segs[std::min(i, segs.size() - 1)];
+      if (i < segs.size()) {
+        p.N[i] = sg.L->N;
+        p.y_ld[i] = sg.y_ld ? sg.y_ld : sg.L->N;
+        p.add[i] = sg.add ? 1u : 0u;
+        p.tg_begin[i] = tg;
+        const uint32_t blocks = (sg.L->N + 8 * pl.nf - 1) / (8 * pl.nf);
+        tg += (blocks + pl.cs - 1) / pl.cs;
+      }
+      e.buf(int(i * 4 + 0), sg.L->w->buf);
+      e.buf(int(i * 4 + 1), sg.L->s->buf);
+      e.buf(int(i * 4 + 2), sg.L->b->buf);
+      e.buf(int(i * 4 + 3), sg.y);
+    }
+    p.tg_begin[segs.size()] = tg;
+    e.buf(16, table);
+    e.buf(17, sums);
+    e.val(18, p);
+    e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
+    return;
+  }
+  if (segs[0].L->gs != 64) fatal("qmm8: group %d", segs[0].L->gs);
   V8Plan pl = v8_plan(Ntot, K, bits == 8 ? 1 : 2);
   if (x2) pl.nf = 1;
   else if (bits == 8) pl.nf = std::min(pl.nf, 2);
@@ -322,9 +364,9 @@ void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
                      const Buffer& h, const Buffer& hs) {
   v8_alloc();  // the split path's scratch (a drafter may encode before the first verify)
   const uint32_t I = gate.N, K = gate.K;
-  if (I % 64 || up.N != I || up.K != K || gate.bits != 4 || up.bits != 4 || gate.gs != 64 || up.gs != 64)
-    fatal("gu8: shapes");
-  if (v8_knobs().gusplit && v8g_ && I <= uint32_t(cfg_.dense_I) && I % 256 == 0) {
+  const bool q4 = gate.q4() && up.q4();  // the fused qmm8_gu kernels read 4-bit group 64
+  if (I % 64 || up.N != I || up.K != K || !gate.same_format(up)) fatal("gu8: shapes");
+  if ((v8_knobs().gusplit || !q4) && v8g_ && I <= uint32_t(cfg_.dense_I) && I % 256 == 0) {
     // gate and up as two segments of one GEMM (v8_plan's tiling, fp32 rows) + SwiGLU into the down GEMM's table:
     // the fused qmm8_gu1k2 kernel (8 column slices x 2 k-slices of one 64-column group) streamed ~10% slower
     enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, 8, table, sums);
@@ -335,6 +377,7 @@ void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
     e.dispatch(I / 256, 1, 1, 256);
     return;
   }
+  if (!q4) fatal("gu8: %s gate/up need the split path (an intermediate size multiple of 256)", gate.fmt().c_str());
   kp::Qmm8Gu p{K, I, 0, 0, 0, 0, 0};
   e.use(pipe8(gu_kernel(K)));
   e.buf(0, gate.w->buf); e.buf(1, gate.s->buf); e.buf(2, gate.b->buf);
@@ -351,7 +394,7 @@ void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
 void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   const int D = cfg_.hidden;
   const uint32_t I = L.mg.N;
-  if (I % 64 || L.mu.N != I || L.mg.bits != 4 || L.mu.bits != 4 || L.mg.K != uint32_t(D)) fatal("mlp8: shapes");
+  if (I % 64 || L.mu.N != I || L.mg.K != uint32_t(D)) fatal("mlp8: shapes");
   enc_x8(e, x_, R, D, L.post_norm);
   const int skip = v8_knobs().skip;
   if (!(skip & 16)) enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_);
@@ -362,10 +405,12 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
 void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
-  if (L.eg.gs != 64 || L.eg.bits != 4 || L.eu.bits != 4 || L.ed.bits != 4 || L.sg.bits != 4 || L.su.bits != 4 ||
-      L.sd.bits != 4 || L.sg.gs != 64 || L.sd.gs != 64 || cfg_.shared_I != cfg_.moe_I || I % 64 || E > 1024 ||
-      k > 8 || D % 64)
-    fatal("moe8: unsupported expert layout");
+  if (!(L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4())) {
+    // other expert formats: the per-row MoE (router, top-k and expert matvecs per row; row-independent)
+    enc_moe_rows(e, L, R, x_, false);
+    return;
+  }
+  if (cfg_.shared_I != cfg_.moe_I || I % 64 || E > 1024 || k > 8 || D % 64) fatal("moe8: unsupported expert layout");
   // two-term (~22-bit) inputs and exact codes for the router: keeps the top-8 choice at fp32 level
   static const bool precise = env_int("NI_V8_ROUTER_X2", 1) != 0;
   // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
@@ -445,11 +490,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
-  kp::Embed ep{uint32_t(D), uint32_t(embed_.gs), uint32_t(pos)};
-  e.use(pipe8("embed_q4"));
-  e.buf(0, embed_.w->buf); e.buf(1, embed_.s->buf); e.buf(2, embed_.b->buf); e.buf(3, s.tok); e.buf(4, x_);
-  e.val(5, ep);
-  e.dispatch((D / 8 + 63) / 64, R, 1, 64);
+  enc_embed(e, s.tok, pos, R, x_);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
