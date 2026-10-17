@@ -95,6 +95,9 @@ class Encoder {
   void tgmem(int idx, size_t len);
   // threadgroups x/y/z, threads per threadgroup x/y/z
   void dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty = 1, uint32_t tz = 1);
+  // Threadgroup counts read by the GPU from `args` (3 x uint32 at byte offset `off`), e.g. written by
+  // an earlier dispatch of the same command buffer.
+  void dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty = 1, uint32_t tz = 1);
   // Memory barrier between dependent dispatches in a concurrent encoder.
   void barrier();
   void commit();             // non-blocking

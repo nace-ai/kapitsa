@@ -20,6 +20,8 @@ cache grows with each conversation), the 4B runs on a 16 GB MacBook Air. `kapits
 git clone https://github.com/nace-ai/kapitsa && cd kapitsa
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 hf download Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed --local-dir ~/models/qwen3.6-35b-a3b-4bit
+# optional, faster decoding: the model's DFlash2 drafter, found automatically here or next to the model
+hf download incoai/Qwen3.6-35B-A3B-DFlash2 --local-dir ~/.cache/nace-infer-models/drafters/Qwen3.6-35B-A3B-DFlash2
 ./build/kapitsa serve --model ~/models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b
 ```
 
@@ -47,12 +49,14 @@ Point any OpenAI-compatible agent at `http://127.0.0.1:8000/v1`.
 
 | Model | Weights (MLX affine 4-bit, group 64) | Speculative decoding |
 | --- | --- | --- |
-| Qwen3.6-35B-A3B (MoE, 256 experts) | [`Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) (body = `mlx-community/Qwen3.6-35B-A3B-4bit`, plus its MTP head) | MTP head, depth 1; DFlash2 drafter (in progress) |
-| Qwen3.8-27B (dense) | [`lmstudio-community/Qwen3.8-27B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) + `mtp.safetensors` from [`Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) | MTP head, depth 2; DFlash2 drafter (in progress) |
+| Qwen3.6-35B-A3B (MoE, 256 experts) | [`Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed) (body = `mlx-community/Qwen3.6-35B-A3B-4bit`, plus its MTP head) | DFlash2 drafter [`incoai/Qwen3.6-35B-A3B-DFlash2`](https://huggingface.co/incoai/Qwen3.6-35B-A3B-DFlash2) when installed; MTP head, depth 1, otherwise |
+| Qwen3.8-27B (dense) | [`lmstudio-community/Qwen3.8-27B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.8-27B-MLX-4bit) + `mtp.safetensors` from [`Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed`](https://huggingface.co/Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed) | DFlash2 drafter [`incoai/Qwen3.8-27B-DFlash2`](https://huggingface.co/incoai/Qwen3.8-27B-DFlash2) when installed; MTP head, depth 2, otherwise |
 | Qwen3.5-4B (dense, tied embeddings) | [`lmstudio-community/Qwen3.5-4B-MLX-4bit`](https://huggingface.co/lmstudio-community/Qwen3.5-4B-MLX-4bit) + `mtp.safetensors` made by `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <dir>/mtp.safetensors` (the official head, 241 MB fetched by range requests) | MTP head, depth 1 |
 
 Other Qwen3.5-family checkpoints in the same MLX format are untested; the defaults are tuned on these three.
-Decoding is exact: with speculation on, greedy output is token-for-token the same as without it.
+Decoding is lossless: sampled output follows the model's own distribution exactly, and greedy output is the same
+as without speculation except where the top two tokens are within the rounding noise of the multi-token verify
+(near-ties, which the 35B mixture-of-experts meets now and then with the drafter's 8-token verify).
 
 ## Settings
 
@@ -60,7 +64,8 @@ Decoding is exact: with speculation on, greedy output is token-for-token the sam
 | --- | --- |
 | `--ctx 32768` | Context per conversation slot. |
 | `--slots 2` | Conversations kept warm for instant follow-ups. |
-| `--spec N` | Draft depth (default per model; `0` turns speculation off). |
+| `--dflash auto\|none\|DIR` | DFlash2 drafter: `auto` (default) uses a `<model>-DFlash2` drafter found next to the model or in `~/.cache/nace-infer-models/drafters`, `none` keeps MTP. |
+| `--spec N` | MTP draft depth when no drafter is used (default per model); `0` turns speculation off. |
 | `--mem-budget GB` | GPU memory Kapitsa may hold (default: what macOS recommends for this Mac's GPU, a little less). |
 | `--api-key KEY` | Require a bearer token. |
 | `--host`, `--port` | Listen address. |
@@ -80,6 +85,10 @@ wherever the engine accepts them. In brackets: the fastest other engine measured
 | Prefill · 16K prompt | 832 tok/s | **247-265 tok/s** (Splash 209) |
 | Cached time to first token · 4K / 16K prefix | **0.12 / 0.16 s** (llama.cpp 0.18 / 0.20) | **0.25 / 0.28 s** (Ollama 0.50 / 0.58) |
 
+The decode row predates the DFlash2 drafter, the default since 2026-10-17 when it is installed: on the same coding
+prompt (`ni_run`, 512 tokens, interleaved with MTP) it decodes 170 tok/s greedy / 152 at T = 0.6 on the 35B (MTP: 121)
+and 61 / 53 on the 27B (MTP: 31); the fair-harness run is still to be repeated with it.
+
 Against the engines most people use, on the same Mac: 35B decode 1.5-1.7x Ollama and llama.cpp (each with
 its MTP speculation on); 27B prefill about 3x mlx-lm, Ollama and llama.cpp.
 
@@ -92,9 +101,10 @@ measurement, median of 5 runs, thinking off, identical sampling settings, cold p
 
 Each model gets kernels for its exact shapes: quantized matrix kernels that decode weights straight into the
 GPU's matrix registers, a token-parallel DeltaNet scan, flash-style attention, fused mixture-of-experts GEMMs,
-and verify kernels that check several drafted tokens for the price of one. Speculative decoding drafts with the
-model's own MTP head and verifies the draft in one pass; DeltaNet's recurrent state rolls back through a tape,
-so a rejected draft costs nothing. On dense models, prefill splits every feed-forward layer between the GPU
+and verify kernels that check several drafted tokens for the price of one. Speculative decoding drafts a block of
+seven tokens with a DFlash2 drafter (fed by the model's own hidden states, captured during prefill and verify) or
+with the model's MTP head, and verifies the draft in one pass; DeltaNet's recurrent state rolls back through a
+tape, so a rejected draft costs nothing. On dense models, prefill splits every feed-forward layer between the GPU
 and the Neural Engine, which run side by side (chunks of 512 tokens and more). Conversations keep their KV cache and a recurrent-state
 checkpoint at each turn boundary, so a follow-up only processes the new message. Weights load straight from
 the model's safetensors into aligned GPU buffers, with no converted copy on disk.

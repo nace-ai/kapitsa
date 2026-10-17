@@ -4,6 +4,7 @@
 #include "ane/ffn_split.h"
 #include "engine/engine.h"
 #include "metal/gpu.h"
+#include "model/dflash2.h"
 #include "model/qwen35.h"
 
 #include <nlohmann/json.hpp>
@@ -162,6 +163,17 @@ int run_doctor(int argc, char** argv) {
     const uint32_t units = ap.units, total = ap.total;
     const size_t ane_bytes = ap.bytes;
     const std::string src = ap.source;
+    // a DFlash2 drafter next to the model or in the drafter cache (the engine's default when it finds one)
+    std::string dfl;
+    size_t dfl_bytes = 0;
+    try {
+      dfl = DFlash2::find(dir, Qwen35::read_config(dir));
+    } catch (...) {
+    }
+    if (!dfl.empty()) {
+      size_t per = 0;
+      dfl_bytes = DFlash2::plan_bytes(dfl, &per) + 3 * per * size_t(slots);  // live ring + one per checkpoint
+    }
     const size_t fixed = m.fixed(slots) + ane_bytes;
     const size_t start_need = fixed + m.kv_per_pos * size_t(std::min(ctx, 8192));
     const size_t full_need = fixed + m.kv_per_pos * size_t(ctx) * size_t(slots);
@@ -186,6 +198,9 @@ int run_doctor(int argc, char** argv) {
     o["starts"] = start_need <= budget;
     o["fits_full_context"] = full_need <= budget;
     o["kv_tokens_in_budget"] = tokens;
+    o["dflash_drafter"] = dfl;
+    o["dflash_bytes"] = dfl_bytes;
+    o["kv_tokens_in_budget_with_dflash"] = budget > fixed + dfl_bytes ? (budget - fixed - dfl_bytes) / std::max<size_t>(m.kv_per_pos, 1) : 0;
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
@@ -203,6 +218,10 @@ int run_doctor(int argc, char** argv) {
       printf("    fits: yes; %d x %d tokens %s (%.1f GB); room for %zu tokens of KV cache in all%s\n", slots, ctx,
              full_need <= budget ? "fit" : "do not all fit at once", full_need / 1e9, tokens,
              full_need <= budget ? "" : " (the KV cache grows with each conversation; idle slots give theirs up)");
+    if (!dfl.empty())
+      printf("    DFlash2 drafter (used by default): %s, %.2f GB with %d slot%s; with it room for %zu tokens of KV cache\n",
+             dfl.c_str(), dfl_bytes / 1e9, slots, slots > 1 ? "s" : "",
+             budget > fixed + dfl_bytes ? (budget - fixed - dfl_bytes) / std::max<size_t>(m.kv_per_pos, 1) : size_t(0));
     if (m.dense)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()

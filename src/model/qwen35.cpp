@@ -356,6 +356,12 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
     cfg.eos.push_back(eos);
 }
 
+Qwen35Config Qwen35::read_config(const std::string& dir) {
+  Qwen35Config c;
+  parse_config(read_json(dir + "/config.json"), c);
+  return c;
+}
+
 void Qwen35::load_config(const std::string& dir) {
   json root = read_json(dir + "/config.json");
   quant_cfg_ = root.contains("quantization") ? root["quantization"] : json::object();
@@ -1089,6 +1095,7 @@ void Qwen35::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, 
     if (skip & 1) continue;
     if (cfg_.moe) enc_moe(e, L);
     else enc_mlp(e, L);
+    if (cap_) enc_capture(e, i, pos, 1);
   }
   if (!sample || (skip & 8)) return;
   enc_sample(e, s, x_, pos + 1, sp, step);
@@ -1778,12 +1785,26 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
       const Layer& L = layers_[i];
       enc_mixer_prefill(e, s, i, L, pos0, T, x_, snap, snap_row);
       if (cfg_.moe) enc_moe_prefill(e, L, T, x_);
-      else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);
+      else if (ane_chunk_) enc_mlp_prefill_split(e, i, L, T, x_);  // joins the ANE's part into x_ in the pass
       else enc_mlp_prefill(e, L, T, x_);
+      if (cap_) enc_capture(e, i, pos0, T);  // block-drafter capture (DFlash2), off unless armed
     }
   }
   if (sample) enc_sample(e, s, x_.view(size_t(T - 1) * D * 4, size_t(D) * 4), pos0 + T, sp, step);
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+void Qwen35::enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x) {
+  if (!cap_ || layer >= int(cap_->slot.size()) || cap_->slot[layer] < 0) return;
+  const int lo = std::max(pos0, cap_->pos_base), hi = std::min(pos0 + T, cap_->pos_base + cap_->rows);
+  if (lo >= hi) return;
+  const uint32_t D = uint32_t(cfg_.hidden);
+  kp::DflCapture p{D, cap_->ld, uint32_t(cap_->slot[layer]) * D, uint32_t(lo - cap_->pos_base)};
+  e.use(pipe("dfl_capture"));
+  e.buf(0, x ? *x : x_, size_t(lo - pos0) * D * 4);
+  e.buf(1, cap_->dst);
+  e.val(2, p);
+  e.dispatch((D / 4 + 255) / 256, uint32_t(hi - lo), 1, 256);
 }
 
 Buffer Qwen35::debug_buf(const std::string& n) {
