@@ -699,7 +699,8 @@ void NemotronH::load(int prefill_chunk) {
       const size_t len = (t.off + t.len - off0 + page - 1) / page * page;
       const int fd = open(idx.path(t).c_str(), O_RDONLY);
       if (fd < 0) fatal("open %s failed", idx.path(t).c_str());
-      void* p = mmap(nullptr, len, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, off_t(off0));
+      // shared and read-only: a private mapping's pages count as dirty in the process footprint once Metal wires them
+      void* p = mmap(nullptr, len, PROT_READ, MAP_SHARED, fd, off_t(off0));
       close(fd);
       if (p == MAP_FAILED) fatal("mapping the embedding of %s failed", idx.path(t).c_str());
       // read ahead in the background: the first prompt then finds its rows in the page cache (clean file pages,

@@ -13,6 +13,8 @@
 #include "model/nemotron_h.h"
 #include "util/log.h"
 
+#include <mach/mach.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -132,6 +134,27 @@ int main(int argc, char** argv) {
       d = lili->new_seq();
       lili->begin_prefill(n, 0);
     }
+    // NH_PF_REPS=k: k prefills first (state reset between them), each printed with its GPU start latency and GPU time
+    // (where a prefill's wall time goes)
+    const int reps = getenv("NH_PF_REPS") ? atoi(getenv("NH_PF_REPS")) : 0;
+    for (int rep = 0; rep < reps; ++rep) {
+      m.reset(*s);
+      const double r0 = now_ms();
+      double start_lat = 0, gpu = 0;
+      for (int p0 = 0; p0 < n; p0 += m.prefill_chunk()) {
+        const int T = std::min(m.prefill_chunk(), n - p0);
+        auto e = g.begin();
+        m.encode_prefill(*e, *s, p0, T, sp, 0, p0 + T == n);
+        e->commit();
+        const double hc = Encoder::host_ms();
+        e->wait();
+        start_lat += e->gpu_start_host_ms() - hc;
+        gpu += e->gpu_ms();
+        if (!m.ane_finish_chunk()) fatal("the Neural Engine split failed on a chunk (rerun with NI_ANE=0)");
+      }
+      printf("prefill rep %d: %.1f ms wall, GPU start latency %.1f ms, GPU %.1f ms\n", rep, now_ms() - r0, start_lat, gpu);
+    }
+    if (reps) m.reset(*s);
     double t0 = now_ms();
     for (int p0 = 0; p0 < n; p0 += m.prefill_chunk()) {
       const int T = std::min(m.prefill_chunk(), n - p0);
@@ -148,16 +171,23 @@ int main(int argc, char** argv) {
     if (lili && getenv("NH_FEATURE_STATS")) lili->debug_feature_stats();
     t0 = now_ms();
     int produced = 1, cycles = 0;
+    double spec_gpu_ms = 0;
     if (!lili) {
+      // as the engine: the next step is encoded and queued while the current one runs
+      std::unique_ptr<Encoder> next;
       for (int i = 0; i < gen - 1; ++i) {
         auto e = m.grouped_passes() ? g.begin_grouped() : g.begin();
         m.encode_step(*e, *s, n + i, sp, uint32_t(n + i), true);
-        e->commit_and_wait();
+        e->commit();
+        if (next) next->wait();
+        next = std::move(e);
       }
+      if (next) next->wait();
       produced = gen;
     } else {
       constexpr int B = LiliCorr::kB;
       int P = n, m_prev = 0;
+      double gpu_ms = 0;  // GPU time of the drafting and verify command buffers (the rest of the wall time: host gaps)
       while (produced < gen) {
         auto e1 = g.begin();
         if (m_prev > 0) lili->encode_commit(*e1, *d, m_prev);
@@ -171,6 +201,7 @@ int main(int argc, char** argv) {
         m.encode_accept(*e2, *s, P, B, B - 1, sp);
         m.set_dynamic_rows(false);
         e2->commit_and_wait();
+        gpu_ms += e1->gpu_ms() + e2->gpu_ms();
         const int a = m.accepted();
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
@@ -183,6 +214,7 @@ int main(int argc, char** argv) {
       lili->encode_commit(*e3, *d, m_prev);
       m.encode_flush(*e3, *s);
       e3->commit_and_wait();
+      spec_gpu_ms = gpu_ms;
     }
     const double t_dec = now_ms() - t0;
     printf("generated:");
@@ -190,9 +222,15 @@ int main(int argc, char** argv) {
     printf("\n");
     printf("prefill %d tokens in %.0f ms (%.1f tok/s); decode %d tokens in %.0f ms (%.2f tok/s)", n, t_pf,
            n / (t_pf / 1000), produced - 1, t_dec, produced > 1 ? (produced - 1) / (t_dec / 1000) : 0.0);
-    if (cycles) printf("; %d cycles, %.2f tokens per cycle", cycles, double(produced - 1) / cycles);
+    if (cycles)
+      printf("; %d cycles, %.2f tokens per cycle, %.1f ms per cycle (GPU %.1f)", cycles, double(produced - 1) / cycles,
+             t_dec / cycles, spec_gpu_ms / cycles);
     const AneStats& as = m.ane_stats();
     if (as.chunks) printf("; ANE %d chunks, busy %.0f ms", as.chunks, as.ane_ms);
+    task_vm_info_data_t vi;
+    mach_msg_type_number_t vn = TASK_VM_INFO_COUNT;
+    if (task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vi, &vn) == KERN_SUCCESS)
+      printf("; footprint %.2f GiB (peak %.2f)", vi.phys_footprint / 1073741824.0, vi.ledger_phys_footprint_peak / 1073741824.0);
     printf("; thermal %s\n", Gpu::thermal_state());
     if (Encoder::profiling()) Encoder::profile_report(cycles ? cycles : produced - 1);
     return 0;
