@@ -113,9 +113,10 @@ Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
   One download per model folder at a time (a lock file). A first attempt that fails before any file arrives leaves
   no folder behind.
 - Reuse before download: the same file in the Hugging Face cache (`HF_HUB_CACHE`, `HF_HOME/hub`, else
-  `~/.cache/huggingface/hub`, at the pinned commit; the blob's name proves its content) and files under `--from`
-  folders (any name, up to 3 levels deep, matched by size and then by checksum). They are placed as APFS clones
-  (no extra space), or copied across volumes.
+  `~/.cache/huggingface/hub`, at the pinned commit; the blob's name proves its content), files under `--from`
+  folders, and for a catalog model the Nace Agent app's copy (`~/.nace/models/<key>` with its companions); in
+  folders, any name up to 3 levels deep, matched by size and then by checksum. They are placed as APFS clones (no
+  extra space), or copied across volumes.
 - `HF_TOKEN` (or the token `hf auth login` saved) is sent for gated or private repos; `HF_ENDPOINT` points at a
   mirror. Errors say what to do: offline, not found, gated, rate-limited, out of disk.
 - A repo outside the catalog takes its top-level files except other formats (`.gguf`, `.bin`, `.pth`, images,
