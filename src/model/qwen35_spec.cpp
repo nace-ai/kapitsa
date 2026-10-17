@@ -183,6 +183,21 @@ void Qwen35::load_mtp(const std::string& dir) {
       if (j.contains("forge_provenance") && j["forge_provenance"].contains("mtp_contract"))
         variant = j["forge_provenance"]["mtp_contract"].value("base_hidden_variant", "");
     }
+    if (variant.empty()) {  // a sidecar made by tools/mtp_sidecar.py records it in its own header
+      std::ifstream f(dir + "/mtp.safetensors", std::ios::binary);
+      uint64_t n = 0;
+      if (f.read(reinterpret_cast<char*>(&n), 8) && n < (64u << 20)) {
+        std::string h(n, '\0');
+        if (f.read(h.data(), std::streamsize(n))) {
+          try {
+            auto j = nlohmann::json::parse(h);
+            if (j.contains("__metadata__")) variant = j["__metadata__"].value("base_hidden_variant", "");
+          } catch (...) {
+          }
+        }
+      }
+    }
+    if (const char* v = getenv("NI_MTP_HIDDEN"); v && *v) variant = std::string(v) + "_norm";  // pre | post
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
   auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
@@ -232,8 +247,15 @@ void Qwen35::load_mtp(const std::string& dir) {
   // </think> or <|im_end|>. 286 MB per draft step becomes ~37 MB.
   draft_split_ = std::min<uint32_t>(32768, uint32_t(cfg_.vocab));
   // Dense 27B: the full-vocabulary draft raises acceptance (depth 2: 0.73 -> 0.83) for ~1% of the
-  // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain.
-  full_draft_ = getenv("NI_FULL_DRAFT") && *getenv("NI_FULL_DRAFT") ? env_on("NI_FULL_DRAFT") : !cfg_.moe;
+  // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain. So does
+  // the 4B's: its lm_head is 15% of the bytes a decode step reads (27B: 5%), and the reduced draft head
+  // measured faster at depth 1 (code 119.5 vs 115.8 tok/s, prose 120.9 vs 112.0) though it accepts
+  // fewer drafts (0.67 vs 0.76 on code). Full vocabulary for dense models whose lm_head is < 10% of a step.
+  double trunk_bytes = 0;
+  for (const auto& [name, t] : ws_.all()) trunk_bytes += double(t.buf.size);
+  const double head_bytes = double(lm_head_.w->buf.size + lm_head_.s->buf.size + lm_head_.b->buf.size);
+  full_draft_ = getenv("NI_FULL_DRAFT") && *getenv("NI_FULL_DRAFT") ? env_on("NI_FULL_DRAFT")
+                                                                     : !cfg_.moe && head_bytes < 0.1 * trunk_bytes;
   draft_special0_ = uint32_t(cfg_.eos.empty() ? cfg_.vocab : *std::min_element(cfg_.eos.begin(), cfg_.eos.end()));
   auto rows_view = [&](const QLinear& src, uint32_t r0, uint32_t n) {
     QLinear v = src;
@@ -250,8 +272,8 @@ void Qwen35::load_mtp(const std::string& dir) {
   draft_head_[0] = rows_view(lm_head_, 0, draft_split_);
   draft_head_[1] = rows_view(lm_head_, draft_special0_, uint32_t(cfg_.vocab) - draft_special0_);
   mtp_loaded_ = true;
-  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
-       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm");
+  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s, drafts over %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
+       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm", full_draft_ ? "the full vocabulary" : "ids < 32768 + specials");
 }
 
 // ---- small-batch encoders ----

@@ -157,8 +157,10 @@ class Qwen35 {
 
   // ---- speculative decoding with the model's MTP head ----
   bool has_mtp() const { return mtp_loaded_; }
-  // Measured best MTP draft depth for this model (M4 Pro): MoE 35B-A3B 1, dense 27B 2.
-  int default_spec_depth() const { return cfg_.moe ? 1 : 2; }
+  // Measured best MTP draft depth (M4 Pro): MoE 35B-A3B 1, dense 27B 2, dense 4B 1. A small dense
+  // model's 3-row verify costs ~1.4x a decode step (the 27B's ~1.1x: bandwidth bound) while its head's
+  // second draft is accepted only 59% of the time, so depth 1 wins below a hidden size of 4096.
+  int default_spec_depth() const { return cfg_.moe || cfg_.hidden < 4096 ? 1 : 2; }
   static constexpr int kMaxVerify = 4;  // rows per verify (pending token + up to 3 drafts)
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
@@ -293,7 +295,7 @@ class Qwen35 {
   const Tensor *mtp_norm_ = nullptr, *mtp_pre_e_ = nullptr, *mtp_pre_h_ = nullptr;
   QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
   uint32_t draft_split_ = 0, draft_special0_ = 0;
-  bool full_draft_ = false;  // draft over the whole vocabulary (dense default; NI_FULL_DRAFT=0/1 overrides)
+  bool full_draft_ = false;  // draft over the whole vocabulary (see load_mtp; NI_FULL_DRAFT=0/1 overrides)
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 
