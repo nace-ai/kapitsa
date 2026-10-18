@@ -199,8 +199,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
        per / 1024.0, context_fit_, opts_.context);
   // images: the model's vision tower, loaded on the first image that needs encoding
   if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
-    logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
-    vision_ = std::make_unique<vision::Vision>(std::move(enc));
+    const std::string m0 = enc->image_start(), m1 = enc->image_end();
+    const int i0 = m0.empty() ? -2 : tok_.find(m0), i1 = m1.empty() ? -2 : tok_.find(m1);
+    if (i0 >= 0) img_pre_ = {i0};
+    if (i1 >= 0) img_post_ = {i1};
+    if (i0 == -1 || i1 == -1) {
+      logi("images: off (the tokenizer lacks the image marks %s %s)", enc->image_start().c_str(), enc->image_end().c_str());
+    } else {
+      logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
+      vision_ = std::make_unique<vision::Vision>(std::move(enc));
+    }
   }
   const std::string mode = lili_ ? std::string("LiLiCorr speculative decoding (7-token blocks)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
@@ -533,12 +541,17 @@ static std::vector<vision::Prepared> request_images(vision::Vision* vis, std::ve
   return src->empty() ? std::vector<vision::Prepared>() : vis->prepare(*src);
 }
 
+vision::Prompt Engine::expand_images(const std::vector<int>& ids, const std::vector<vision::Prepared>& images,
+                                     int* index) const {
+  return vision::expand(ids, vision_->encoder().placeholder(), images, index, img_pre_, img_post_);
+}
+
 int Engine::count_tokens(const ChatRequest& r) const {
   std::vector<vision::Source> src;
   const std::vector<vision::Prepared> images = request_images(vision_.get(), &src, r.messages);
   const std::vector<int> ids = tok_.encode(render(r, true));
   if (images.empty()) return int(ids.size());
-  return int(vision::expand(ids, vision_->encoder().placeholder(), images, nullptr).ids.size());  // the images' rows
+  return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
 Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
@@ -645,7 +658,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const vision::Prompt* mmp = nullptr;
   if (!images.empty()) {
     try {
-      mm = vision::expand(prompt, vision_->encoder().placeholder(), images, &boundary);
+      mm = expand_images(prompt, images, &boundary);
     } catch (const vision::Error& ex) {
       res.finish_reason = "error";
       res.invalid_request = true;
@@ -1315,7 +1328,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   const vision::Prompt* mmp = nullptr;
   if (!images.empty()) {
     try {
-      mm = vision::expand(t2, vision_->encoder().placeholder(), images);
+      mm = expand_images(t2, images);
     } catch (...) {
       return;
     }

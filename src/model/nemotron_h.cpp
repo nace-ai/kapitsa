@@ -1488,6 +1488,7 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
   if (R < 1 || R > kMaxRows) fatal("NemotronH: %d rows in one pass", R);
   if (pos0 + R >= s.cap) fatal("context full (%d)", s.cap);
   enc_embed(e, s.tok, pos0, R, x_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, R, x_, cfg_.hidden);  // image rows (a prompt's prefill)
   for (int i = 0; i < cfg_.layers; ++i) {
     const NhLayer& L = layers_[size_t(i)];
     if (cap_) enc_capture(e, i, x_, pos0, R);
@@ -1764,6 +1765,7 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
   alloc_prefill(T);
   const uint32_t H = uint32_t(cfg_.hidden);
   enc_embed(e, s.tok, pos0, T, px_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, px_, cfg_.hidden);  // image rows
   for (int i = 0; i < cfg_.layers; ++i) {
     const NhLayer& L = layers_[size_t(i)];
     if (cap_) enc_capture(e, i, px_, pos0, T);

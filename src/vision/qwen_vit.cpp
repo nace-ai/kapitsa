@@ -4,65 +4,21 @@
 #include "util/bf16.h"
 #include "util/log.h"
 
-#include <nlohmann/json.hpp>
-
-#include <dirent.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <fstream>
 #include <thread>
-#include <unordered_map>
 
 namespace ni::vision {
 
 using json = nlohmann::json;
-
-static json read_json_or_empty(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) return json::object();
-  try {
-    return json::parse(f);
-  } catch (...) {
-    return json::object();
-  }
-}
-
-static Pipeline pipe(const std::string& n) {
-  static std::unordered_map<std::string, Pipeline> cache;
-  static std::mutex mu;
-  std::lock_guard<std::mutex> lk(mu);
-  auto it = cache.find(n);
-  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
-  return it->second;
-}
 
 // ---- configuration ----
 
 // The tensor-name prefix of the vision tower in dir's safetensors ("vision_tower." in MLX conversions,
 // "model.visual." in Hugging Face checkpoints), "" if there is none.
 static std::string vision_prefix(const std::string& dir) {
-  std::vector<std::string> names;
-  const json idx = read_json_or_empty(dir + "/model.safetensors.index.json");
-  if (idx.contains("weight_map") && idx["weight_map"].is_object()) {
-    for (auto& [k, v] : idx["weight_map"].items()) names.push_back(k);
-  } else if (DIR* d = opendir(dir.c_str())) {  // single-file models: the headers
-    while (dirent* e = readdir(d)) {
-      const std::string n = e->d_name;
-      if (n.size() <= 12 || n.compare(n.size() - 12, 12, ".safetensors") != 0) continue;
-      std::ifstream f(dir + "/" + n, std::ios::binary);
-      uint64_t len = 0;
-      if (!f.read(reinterpret_cast<char*>(&len), 8) || len > (256u << 20)) continue;
-      std::string h(len, '\0');
-      if (!f.read(h.data(), std::streamsize(len))) continue;
-      try {
-        for (auto& [k, v] : json::parse(h).items()) names.push_back(k);
-      } catch (...) {
-      }
-    }
-    closedir(d);
-  }
+  const std::vector<std::string> names = vit_tensor_names(dir);
   for (const char* p : {"vision_tower.", "model.visual."})
     for (const std::string& n : names)
       if (n.rfind(std::string(p) + "patch_embed.", 0) == 0) return p;
@@ -70,7 +26,7 @@ static std::string vision_prefix(const std::string& dir) {
 }
 
 bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
-  const json root = read_json_or_empty(dir + "/config.json");
+  const json root = vit_read_json(dir + "/config.json");
   if (!root.contains("vision_config") || !root["vision_config"].is_object()) return false;
   const std::string mt = root.value("model_type", std::string());
   if (mt.rfind("qwen3_5", 0) != 0) return false;
@@ -104,8 +60,8 @@ bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
   if (side * side != q.pos_embeds) return false;
   if (vision_prefix(dir).empty()) return false;  // a text-only conversion of the model
   // the image processor: preprocessor_config.json, then processor_config.json's image_processor over it (as mlx_vlm)
-  json pp = read_json_or_empty(dir + "/preprocessor_config.json");
-  const json pc = read_json_or_empty(dir + "/processor_config.json");
+  json pp = vit_read_json(dir + "/preprocessor_config.json");
+  const json pc = vit_read_json(dir + "/processor_config.json");
   if (pc.contains("image_processor") && pc["image_processor"].is_object())
     for (auto& [k, val] : pc["image_processor"].items()) pp[k] = val;
   if (pp.contains("size") && pp["size"].is_object()) {
@@ -387,75 +343,20 @@ size_t QwenViT::weight_bytes() const {
   return 2 * (block * c_.depth + merger + H * K0 + H + size_t(c_.pos_embeds) * H);
 }
 
-// A bf16 copy of tensor `name` (bf16, f16 or f32 in the file) into dst, row-padded: rows of k values become rows of
-// ld values (zeros after k).
-static void read_bf16(const WeightStore& ws, const std::string& name, uint16_t* dst, size_t rows, size_t k, size_t ld) {
-  const Tensor* t = ws.find(name);
-  if (!t) fatal("vision: missing tensor %s", name.c_str());
-  if (size_t(t->numel()) != rows * k) fatal("vision: %s has %lld values, expected %zu", name.c_str(), (long long)t->numel(), rows * k);
-  std::vector<uint8_t> raw(size_t(t->numel()) * dtype_size(t->dtype));
-  ws.read_deferred(name, raw.data());
-  for (size_t r = 0; r < rows; ++r) {
-    uint16_t* d = dst + r * ld;
-    for (size_t i = 0; i < k; ++i) {
-      const size_t j = r * k + i;
-      switch (t->dtype) {
-        case DType::BF16: d[i] = reinterpret_cast<const uint16_t*>(raw.data())[j]; break;
-        case DType::F16: d[i] = f32_to_bf16(float(reinterpret_cast<const _Float16*>(raw.data())[j])); break;
-        case DType::F32: d[i] = f32_to_bf16(reinterpret_cast<const float*>(raw.data())[j]); break;
-        default: fatal("vision: %s: unsupported dtype", name.c_str());
-      }
-    }
-    std::fill(d + k, d + ld, uint16_t(0));
-  }
-}
-
-QwenViT::Lin QwenViT::load_lin(const std::string& name, uint32_t pad_n, uint32_t pad_k) {
-  const Tensor* t = ws_->find(prefix_ + name + ".weight");
-  if (!t || t->shape.size() != 2) fatal("vision: missing or not 2-D: %s%s.weight", prefix_.c_str(), name.c_str());
-  Lin L;
-  const uint32_t n = uint32_t(t->shape[0]), k = uint32_t(t->shape[1]);
-  L.N = std::max(n, pad_n);
-  L.K = std::max(k, pad_k);
-  Gpu& g = Gpu::get();
-  L.w = g.alloc(size_t(L.N) * L.K * 2 + 16, "vit_w", /*tracked=*/false);
-  memset(L.w.ptr(), 0, L.w.size);
-  read_bf16(*ws_, prefix_ + name + ".weight", L.w.as<uint16_t>(), n, k, L.K);
-  L.b = g.alloc(size_t(L.N) * 2 + 16, "vit_b", false);
-  memset(L.b.ptr(), 0, L.b.size);
-  read_bf16(*ws_, prefix_ + name + ".bias", L.b.as<uint16_t>(), 1, n, n);
-  owned_.push_back(L.w);
-  owned_.push_back(L.b);
-  return L;
-}
-
-Buffer QwenViT::load_vec(const std::string& name) {
-  const Tensor* t = ws_->find(prefix_ + name);
-  if (!t) fatal("vision: missing tensor %s%s", prefix_.c_str(), name.c_str());
-  Buffer b = Gpu::get().alloc(size_t(t->numel()) * 2 + 16, "vit_v", false);
-  read_bf16(*ws_, prefix_ + name, b.as<uint16_t>(), 1, size_t(t->numel()), size_t(t->numel()));
-  owned_.push_back(b);
-  return b;
-}
-
 void QwenViT::load() {
   if (loaded_) return;
-  ws_ = std::make_unique<WeightStore>();
-  const std::string pre = prefix_;
-  ws_->open_dir(dir_, [pre](const std::string& n) { return n.rfind(pre, 0) == 0; }, nullptr,
-                [](const std::string&) { return true; });
+  w_.open(dir_, prefix_);
   const uint32_t H = uint32_t(c_.hidden), P = uint32_t(c_.patch), T = uint32_t(c_.temporal);
   const uint32_t K0 = T * P * P * uint32_t(c_.in_ch);
   // patch embedding: Conv3d [hidden, T, P, P, C] (MLX) or [hidden, C, T, P, P] (Hugging Face), as a linear over
   // (frame, row, column, channel)
   {
-    const Tensor* t = ws_->find(prefix_ + "patch_embed.proj.weight");
+    const Tensor* t = w_.find("patch_embed.proj.weight");
     if (!t || t->numel() != int64_t(H) * K0) fatal("vision: patch_embed.proj.weight missing or of an unexpected size");
-    Gpu& g = Gpu::get();
     patch_.N = H;
     patch_.K = K0;
-    patch_.w = g.alloc(size_t(H) * K0 * 2 + 16, "vit_w", false);
-    read_bf16(*ws_, prefix_ + "patch_embed.proj.weight", patch_.w.as<uint16_t>(), H, K0, K0);
+    patch_.w = w_.alloc(size_t(H) * K0 * 2, "vit_w");
+    w_.read_bf16("patch_embed.proj.weight", patch_.w.as<uint16_t>(), H, K0, K0);
     const bool channels_first = t->shape.size() == 5 && t->shape[1] == c_.in_ch && t->shape[4] != c_.in_ch;
     if (channels_first) {  // (c, t, y, x) -> (t, y, x, c)
       std::vector<uint16_t> row(K0);
@@ -468,38 +369,34 @@ void QwenViT::load() {
         memcpy(w, row.data(), K0 * 2);
       }
     }
-    patch_.b = g.alloc(size_t(H) * 2 + 16, "vit_b", false);
-    read_bf16(*ws_, prefix_ + "patch_embed.proj.bias", patch_.b.as<uint16_t>(), 1, H, H);
-    owned_.push_back(patch_.w);
-    owned_.push_back(patch_.b);
+    patch_.b = w_.alloc(size_t(H) * 2, "vit_b");
+    w_.read_bf16("patch_embed.proj.bias", patch_.b.as<uint16_t>(), 1, H, H);
   }
-  pos_ = load_vec("pos_embed.weight");
+  pos_ = w_.vec("pos_embed.weight");
   blocks_.resize(size_t(c_.depth));
   for (int i = 0; i < c_.depth; ++i) {
     Block& B = blocks_[size_t(i)];
     const std::string b = "blocks." + std::to_string(i) + ".";
-    B.n1w = load_vec(b + "norm1.weight");
-    B.n1b = load_vec(b + "norm1.bias");
-    B.n2w = load_vec(b + "norm2.weight");
-    B.n2b = load_vec(b + "norm2.bias");
-    B.qkv = load_lin(b + "attn.qkv", 0, 0);
-    B.proj = load_lin(b + "attn.proj", 0, 0);
-    B.fc1 = load_lin(b + "mlp.linear_fc1", inter_pad_, 0);  // [4352, hidden]: zero rows past 4304
-    B.fc2 = load_lin(b + "mlp.linear_fc2", 0, inter_pad_);  // [hidden, 4352]: zero columns past 4304
+    B.n1w = w_.vec(b + "norm1.weight");
+    B.n1b = w_.vec(b + "norm1.bias");
+    B.n2w = w_.vec(b + "norm2.weight");
+    B.n2b = w_.vec(b + "norm2.bias");
+    B.qkv = w_.lin(b + "attn.qkv");
+    B.proj = w_.lin(b + "attn.proj");
+    B.fc1 = w_.lin(b + "mlp.linear_fc1", inter_pad_, 0);  // [4352, hidden]: zero rows past 4304
+    B.fc2 = w_.lin(b + "mlp.linear_fc2", 0, inter_pad_);  // [hidden, 4352]: zero columns past 4304
   }
-  mnw_ = load_vec("merger.norm.weight");
-  mnb_ = load_vec("merger.norm.bias");
-  m1_ = load_lin("merger.linear_fc1", 0, 0);
-  m2_ = load_lin("merger.linear_fc2", 0, 0);
-  ws_.reset();
-  Gpu::get().make_resident(owned_);
+  mnw_ = w_.vec("merger.norm.weight");
+  mnb_ = w_.vec("merger.norm.bias");
+  m1_ = w_.lin("merger.linear_fc1");
+  m2_ = w_.lin("merger.linear_fc2");
+  w_.close();
+  w_.make_resident();
   loaded_ = true;
 }
 
 void QwenViT::unload() {
-  Gpu& g = Gpu::get();
-  for (Buffer& b : owned_) g.release(b);
-  owned_.clear();
+  w_.release();
   blocks_.clear();
   loaded_ = false;
 }
@@ -507,18 +404,6 @@ void QwenViT::unload() {
 // ---- the tower on the GPU ----
 
 namespace {
-struct VitLnParams {
-  uint32_t rows, D, x_ld, y_ld;
-  float eps;
-  uint32_t has_pb;
-};
-struct VitActParams {
-  uint32_t rows, N, ld, act, out_ld;
-};
-struct VitAttnParams {
-  uint32_t N, ld, qb0;
-  float scale;
-};
 struct QvitPatchParams {
   uint32_t W, gw, P, T, merge;
 };
@@ -528,84 +413,11 @@ struct QvitEmbedParams {
 struct QvitRopeParams {
   uint32_t rows, r0, N, heads, HD, gw, merge;
 };
-
-constexpr int kRowChunk = 4096;     // rows per GEMM pass of the MLP / qkv (scratch memory)
-constexpr double kCmdGflop = 150;   // work per command buffer (~25 ms): long command buffers hold up the display
-
-// The attention kernel (NI_VIT_ATTN overrides): vit_attn_d72_s{simdgroups}[r{blocks of 8 queries per simdgroup}]
-struct AttnKernel {
-  std::string name;
-  uint32_t sg = 4, rb = 1;
-  uint32_t queries() const { return sg * rb * 8; }
-};
-const AttnKernel& attn_kernel() {
-  static const AttnKernel k = [] {
-    AttnKernel a;
-    a.name = "vit_attn_d72_s4";
-    if (const char* v = getenv("NI_VIT_ATTN"); v && *v) {
-      unsigned sg = 0, rb = 1;
-      if (sscanf(v, "vit_attn_d72_s%ur%u", &sg, &rb) < 1 || (sg != 4 && sg != 8) || (rb != 1 && rb != 2))
-        fatal("NI_VIT_ATTN=%s: expected vit_attn_d72_s{4,8}[r2]", v);
-      a.name = v, a.sg = sg, a.rb = rb;
-    }
-    return a;
-  }();
-  return k;
-}
-
-// GPU work in command buffers of bounded size, committed as they fill; finish() waits for all of them.
-struct CmdSeq {
-  std::vector<std::unique_ptr<Encoder>> done;
-  std::unique_ptr<Encoder> cur;
-  double work = 0;
-  Encoder& at(double gflop) {
-    if (cur && work > 0 && work + gflop > kCmdGflop) {
-      cur->commit();
-      done.push_back(std::move(cur));
-    }
-    if (!cur) {
-      cur = Gpu::get().begin();
-      work = 0;
-    }
-    work += gflop;
-    return *cur;
-  }
-  void finish() {
-    if (cur) {
-      cur->commit();
-      done.push_back(std::move(cur));
-    }
-    for (auto& e : done) e->wait();
-    done.clear();
-  }
-};
 }  // namespace
-
-// Y (+)= X W^T on the bf16 prefill GEMMs (qrf_f16_*; X half rows of x_ld, Y fp32 rows of y_ld).
-void QwenViT::gemm(Encoder& e, const Lin& L, const Buffer& x, uint32_t x_ld, const Buffer& y, uint32_t y_ld, int M,
-                   bool add) {
-  const char* n;
-  uint32_t bm, bn, th;
-  bool mfast = false;
-  if (M >= 64 && L.N > 64) n = "qrf_f16_m32_n128_mf", bm = 32, bn = 128, th = 128, mfast = true;
-  else if (M > 8) n = "qrf_f16_m16_n64", bm = 16, bn = 64, th = 128;
-  else n = "qrf_f16_m8_n64", bm = 8, bn = 64, th = 64;
-  const kp::Qmm p{uint32_t(M), L.N, L.K, x_ld, y_ld, add ? 1u : 0u, 64, 0, 0};
-  e.use(pipe(n));
-  e.buf(0, x);
-  e.buf(1, L.w);
-  e.buf(2, L.w);
-  e.buf(3, L.w);
-  e.buf(4, y);
-  e.val(5, p);
-  const uint32_t mt = (uint32_t(M) + bm - 1) / bm, nt = (L.N + bn - 1) / bn;
-  if (mfast) e.dispatch(mt, nt, 1, th);
-  else e.dispatch(nt, mt, 1, th);
-}
 
 size_t QwenViT::work_bytes(const Prepared& p) const {
   const size_t H = size_t(c_.hidden), N = size_t(p.height / c_.patch) * size_t(p.width / c_.patch);
-  const size_t rc = std::min<size_t>(N, kRowChunk);
+  const size_t rc = std::min<size_t>(N, kVitRowChunk);
   const size_t ym = std::max<size_t>(3 * H, inter_pad_);
   return p.pixels.size() + N * H * 4 /* x */ + N * H * 2 /* xn */ + 3 * N * H * 2 /* q, k, v */ +
          rc * ym * 4 /* y */ + rc * inter_pad_ * 2 /* h */ + 64 * 1024 /* tables */;
@@ -619,7 +431,7 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
   const int gh = p.height / P, gw = p.width / P, N = gh * gw, M = N / (mg * mg);
   const int H = c_.hidden, NH = c_.heads, HD = H / NH, I = int(inter_pad_), H4 = H * mg * mg, O = c_.out_hidden;
   const int K0 = T * P * P * 3;
-  const int RC = std::min(N, kRowChunk);
+  const int RC = std::min(N, kVitRowChunk);
   const int YM = std::max(3 * H, I);
   std::vector<Buffer> scratch;
   auto alloc = [&](size_t bytes, const char* label) {
@@ -656,41 +468,24 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
   Buffer hh = alloc(size_t(RC) * I * 2, "vit_h");
   const Buffer Qb = qkv.view(0, size_t(N) * H * 2), Kb = qkv.view(size_t(N) * H * 2, size_t(N) * H * 2),
                Vb = qkv.view(size_t(2) * N * H * 2, size_t(N) * H * 2);
-  CmdSeq cs;
+  VitCmds cs;
   auto ln = [&](Encoder& e, const Buffer* pb, const Buffer& w, const Buffer& b) {
-    const VitLnParams lp{uint32_t(N), uint32_t(H), uint32_t(H), uint32_t(H), 1e-6f, pb ? 1u : 0u};
-    e.use(pipe("vit_ln"));
-    e.buf(0, x);
-    e.buf(1, pb ? *pb : w);
-    e.buf(2, w);
-    e.buf(3, b);
-    e.buf(4, xn);
-    e.val(5, lp);
-    e.dispatch((uint32_t(N) + 7) / 8, 1, 1, 256);
+    vit_ln(e, x, uint32_t(H), pb, w, b, xn, uint32_t(H), N, H, 1e-6f);
   };
-  auto act = [&](Encoder& e, const char* kernel, const Buffer& src, uint32_t ld, const Buffer& bias, const Buffer& dst,
-                 uint32_t out_ld, int rows, int n, uint32_t a) {
-    const VitActParams ap{uint32_t(rows), uint32_t(n), ld, a, out_ld};
-    e.use(pipe(kernel));
-    e.buf(0, src);
-    e.buf(1, bias);
-    e.buf(2, dst);
-    e.val(3, ap);
-    e.dispatch((ld + 255) / 256, uint32_t(rows), 1, 256);
-  };
+  const auto& act = vit_act;
   // patches -> patch embedding (+ bias, + interpolated position embedding) into x
   {
     Encoder& e = cs.at(2.0 * N * K0 * H / 1e9);
     const QvitPatchParams pp{uint32_t(p.width), uint32_t(gw), uint32_t(P), uint32_t(T), uint32_t(mg)};
-    e.use(pipe("qvit_patchify"));
+    e.use(vit_pipe("qvit_patchify"));
     e.buf(0, pix);
     e.buf(1, lut);
     e.buf(2, qkv);
     e.val(3, pp);
     e.dispatch((uint32_t(P * P * 3) + 255) / 256, uint32_t(N), 1, 256);
-    gemm(e, patch_, qkv, uint32_t(K0), x, uint32_t(H), N, false);
+    vit_gemm(e, patch_, qkv, uint32_t(K0), x, uint32_t(H), N, false);
     const QvitEmbedParams ep{uint32_t(N), uint32_t(H), uint32_t(gw), uint32_t(side), uint32_t(mg)};
-    e.use(pipe("qvit_embed"));
+    e.use(vit_pipe("qvit_embed"));
     e.buf(0, x);
     e.buf(1, patch_.b);
     e.buf(2, pos_);
@@ -701,20 +496,16 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
   }
   const int stop = dbg_stop_ >= 0 ? std::min(dbg_stop_, c_.depth) : c_.depth;
   const Buffer* pending = nullptr;  // the residual bias still to add to x (folded into the next LayerNorm)
-  const AttnKernel& ak = attn_kernel();
-  const double attn_qb_gflop = 4.0 * ak.queries() * double(N) * HD * NH / 1e9;
-  const uint32_t nqb = (uint32_t(N) + ak.queries() - 1) / ak.queries();
-  const uint32_t qb_per = uint32_t(std::max(1.0, std::floor(kCmdGflop / attn_qb_gflop)));
   for (int L = 0; L < stop; ++L) {
     const Block& B = blocks_[size_t(L)];
     ln(cs.at(0.01 * N * H / 1e6), pending, B.n1w, B.n1b);
     for (int r0 = 0; r0 < N; r0 += RC) {
       const int rc = std::min(RC, N - r0);
       Encoder& e = cs.at(2.0 * rc * H * 3 * H / 1e9);
-      gemm(e, B.qkv, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H), y, uint32_t(3 * H), rc, false);
+      vit_gemm(e, B.qkv, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H), y, uint32_t(3 * H), rc, false);
       const QvitRopeParams rp{uint32_t(rc), uint32_t(r0), uint32_t(N), uint32_t(NH), uint32_t(HD), uint32_t(gw),
                               uint32_t(mg)};
-      e.use(pipe("qvit_qkv_rope"));
+      e.use(vit_pipe("qvit_qkv_rope"));
       e.buf(0, y);
       e.buf(1, B.qkv.b);
       e.buf(2, invf);
@@ -725,30 +516,19 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
       const uint32_t nthreads = uint32_t(rc) * NH * (HD / 2);
       e.dispatch((nthreads + 255) / 256, 1, 1, 256);
     }
-    for (uint32_t qb = 0; qb < nqb; qb += qb_per) {
-      const uint32_t n = std::min(qb_per, nqb - qb);
-      Encoder& e = cs.at(attn_qb_gflop * n);
-      const VitAttnParams ap{uint32_t(N), uint32_t(H), qb, 1.0f / std::sqrt(float(HD))};
-      e.use(pipe(ak.name));
-      e.buf(0, Qb);
-      e.buf(1, Kb);
-      e.buf(2, Vb);
-      e.buf(3, xn);
-      e.val(4, ap);
-      e.dispatch(n, uint32_t(NH), 1, ak.sg * 32);
-    }
+    vit_attention(cs, Qb, Kb, Vb, xn, N, H, NH, HD);
     for (int r0 = 0; r0 < N; r0 += RC) {
       const int rc = std::min(RC, N - r0);
-      gemm(cs.at(2.0 * rc * H * H / 1e9), B.proj, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H),
+      vit_gemm(cs.at(2.0 * rc * H * H / 1e9), B.proj, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H),
            x.view(size_t(r0) * H * 4, size_t(rc) * H * 4), uint32_t(H), rc, true);
     }
     ln(cs.at(0.01 * N * H / 1e6), &B.proj.b, B.n2w, B.n2b);
     for (int r0 = 0; r0 < N; r0 += RC) {
       const int rc = std::min(RC, N - r0);
       Encoder& e = cs.at(4.0 * rc * H * I / 1e9);
-      gemm(e, B.fc1, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H), y, uint32_t(I), rc, false);
+      vit_gemm(e, B.fc1, xn.view(size_t(r0) * H * 2, size_t(rc) * H * 2), uint32_t(H), y, uint32_t(I), rc, false);
       act(e, "vit_bias_act_h", y, uint32_t(I), B.fc1.b, hh, uint32_t(I), rc, c_.inter, c_.gelu_tanh ? 1u : 2u);
-      gemm(e, B.fc2, hh, uint32_t(I), x.view(size_t(r0) * H * 4, size_t(rc) * H * 4), uint32_t(H), rc, true);
+      vit_gemm(e, B.fc2, hh, uint32_t(I), x.view(size_t(r0) * H * 4, size_t(rc) * H * 4), uint32_t(H), rc, true);
     }
     pending = &B.fc2.b;
   }
@@ -765,9 +545,9 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
   for (int m0 = 0; m0 < M; m0 += MC) {
     const int mc = std::min(MC, M - m0);
     Encoder& e = cs.at(2.0 * mc * H4 * (H4 + O) / 1e9);
-    gemm(e, m1_, xn.view(size_t(m0) * H4 * 2, size_t(mc) * H4 * 2), uint32_t(H4), y, uint32_t(H4), mc, false);
+    vit_gemm(e, m1_, xn.view(size_t(m0) * H4 * 2, size_t(mc) * H4 * 2), uint32_t(H4), y, uint32_t(H4), mc, false);
     act(e, "vit_bias_act_h", y, uint32_t(H4), m1_.b, hh, uint32_t(H4), mc, H4, 2);
-    gemm(e, m2_, hh, uint32_t(H4), y, uint32_t(O), mc, false);
+    vit_gemm(e, m2_, hh, uint32_t(H4), y, uint32_t(O), mc, false);
     act(e, "vit_bias_act_b", y, uint32_t(O), m2_.b, out.view(size_t(m0) * O * 2, size_t(mc) * O * 2), uint32_t(O), mc,
         O, 0);
   }

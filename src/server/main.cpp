@@ -300,11 +300,13 @@ static void print_serve_help() {
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
-         "  --image-max-pixels N   images: resize larger ones to about N pixels (fewer tokens, faster; default:\n"
-         "                         the model's own limit, 16.7 million for Qwen3.6 / 3.8)\n\n"
+         "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
+         "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
+         "                         tokens; Nemotron 3.5 Bolt 1400000, which its small text needs; more keeps finer\n"
+         "                         detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
-         "Images (Qwen3.6, Qwen3.8: models with a vision tower): OpenAI image_url parts, Anthropic image blocks and\n"
+         "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt): OpenAI image_url parts, Anthropic image blocks and\n"
          "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
   if (term::fancy())  // in a terminal the engine's log goes to a file, unless --verbose

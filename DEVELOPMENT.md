@@ -194,12 +194,14 @@ quotes, bold/italic, http(s) links); model output never reaches the page as HTML
 ## Images
 
 Models with a vision tower take images: the Qwen3.6-35B-A3B and Qwen3.8-27B packs include theirs (bf16, 0.89 /
-0.92 GB). Send OpenAI `image_url` content parts (`{"type": "image_url", "image_url": {"url": ...}}`) with a `data:`
+0.92 GB), Nemotron 3.5 Bolt its C-RADIO ViT-H/16 with the projector (bf16, 1.68 GB). Send OpenAI `image_url` content parts (`{"type": "image_url", "image_url": {"url": ...}}`) with a `data:`
 URL (base64; PNG, JPEG, WebP, GIF, HEIC, TIFF, BMP: whatever ImageIO reads) or an `http(s)` URL (downloaded with a
 32 MB cap and a 30 s limit: `NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S`). The engine takes the images from the chat
-messages, so any API that maps its image blocks to these parts works; a part counts as an image exactly when the chat
-template renders it as one (an `image` or `image_url` key, or `"type": "image"`, also with an Anthropic-style
-`source`); the Anthropic and Responses APIs map their image blocks and `input_image` items to these parts. Images
+messages, so any API that maps its image blocks to these parts works; a part counts as an image when either family's
+chat template would render it as one (the Qwen3.5 family's test: an `image` or `image_url` key, or `"type": "image"`,
+also with an Anthropic-style `source`; Nemotron's: type `image`, `image_url` or `input_image`), and the engine renders
+every image part in the one form both count; the Anthropic and Responses APIs map their image blocks and
+`input_image` items to these parts. Images
 may sit in user, assistant and tool messages. Video is not supported (a 400 that says so). On a model without a vision
 tower an image becomes a short note in the prompt, so agents that attach screenshots keep working. `usage` and
 `/v1/messages/count_tokens` count an image as its rows (a 1280x800 screenshot: 1000 tokens).
@@ -207,27 +209,40 @@ tower an image becomes a short note in the prompt, so agents that attach screens
 The shared part (`src/vision/`: `image.mm`, `encoder.*`, `embed.h`) fetches and decodes images, prepares them
 through the model's encoder, expands each image's placeholder token to its embedding rows, keys those rows for prefix
 reuse, loads the encoder on the first image that needs encoding and keeps it within the memory budget. Per model, an
-`ImageEncoder` holds the processor and the tower (`qwen_vit.*` + `src/kernels/vit.metal` for the Qwen3.5 family: a
-new model's encoder is one more class and one line in `open_encoder`), and the model takes the image rows: its
-prefill puts the embeddings in (`vision::enc_embed_runs` for `Seq::embeds`) and `Model::set_rope_positions` gives
-them positions (Qwen35: interleaved M-RoPE in `attn_prep_m`; the default does nothing, for attention without
-positions such as Nemotron-H's). Nemotron 3.5 Bolt's RADIO encoder is the next one; until it lands, an image sent to
-Bolt becomes the short note.
+`ImageEncoder` holds the processor and the tower (`qwen_vit.*` for the Qwen3.5 family, `radio_vit.*` for Nemotron 3.5
+Bolt; both on the GPU blocks of `vit_common.*` and `src/kernels/vit.metal`: a new model's encoder is one more class
+and one line in `open_encoder`), and the model takes the image rows: its prefill puts the embeddings in
+(`vision::enc_embed_runs` for `Seq::embeds`; Qwen35 and NemotronH do) and `Model::set_rope_positions` gives them
+positions (Qwen35: interleaved M-RoPE in `attn_prep_m`; the default does nothing, for attention without positions as
+in Nemotron-H). An encoder may name tokens its processor puts around an image's rows (`image_start` / `image_end`:
+Bolt's `<img>` and `</img>`).
 
-- Processor: decoded as PIL's `convert("RGB")` decodes (no color management, alpha dropped, the EXIF orientation
-  applied), resized by smart_resize (multiples of 32 within the model's 65536 to 16.7M pixels, `--image-max-pixels`
-  lowers the maximum) with Pillow's bicubic resampling reproduced to the bit, normalized, cut into 16x16 patches over
-  2 frames. `tests/vision/check_cpu.py` checks it against Pillow and Hugging Face's processors (bit-exact with the
-  reference arithmetic; decoding exact for PNG, WebP, GIF, BMP, TIFF; JPEG goes through Apple's decoder, 0.6 levels
-  from libjpeg on average, up to ~20 on edges).
-- Tower: the bf16 prefill GEMMs (`qrf_f16_*`) with a fp32 residual stream, LayerNorm, GELU, 2D RoPE and a
-  non-causal flash attention over the image's patches (head dim 72) in `vit.metal`; the MLP's 4304 columns padded to
-  4352 with zeros at load. Its work goes to the GPU in command buffers of ~25 ms (long ones hold up the display).
-  Scratch is allocated per image and freed after it.
+- Decoding: as PIL's `convert("RGB")` decodes (no color management, alpha dropped, the EXIF orientation applied);
+  exact for PNG, WebP, GIF, BMP, TIFF; JPEG goes through Apple's decoder, 0.6 levels from libjpeg on average, up to
+  ~20 on edges.
+- Size: by default at most 1.2M pixels (about what Anthropic's API lets Claude see), Bolt 1.4M (it lost an 11 pt code
+  line at 1.2M, see Speed); `--image-max-pixels` raises it up to the model's own limit (`0`: Qwen's 16.7M pixels,
+  Bolt's 13312 patches).
+- Qwen processor: smart_resize (multiples of 32, at least 65536 pixels) with Pillow's bicubic resampling reproduced to
+  the bit, normalized, cut into 16x16 patches over 2 frames; `tests/vision/check_cpu.py` checks it against Pillow
+  and Hugging Face's processors (bit-exact with the reference arithmetic).
+- Bolt processor (NVIDIA's NemotronH Omni): one tile per image of 1024 to 13312 16-pixel patches (aspect kept, each
+  side even), torch's antialiased bicubic resize in float32, CLIP's mean and std; bit-exact with the model bundle's
+  own `image_processing_nemotron_h_omni.py` (`tests/vision/check_radio_cpu.py`: the patch grid on 4170 sizes, the
+  resize, the pixel values of real images).
+- Towers: the bf16 prefill GEMMs (`qrf_f16_*`) with a fp32 residual stream, LayerNorm, GELU and a non-causal flash
+  attention over the image's patches in `vit.metal`. Qwen: 27 blocks of width 1152 (head dim 72), 2D RoPE, position
+  embeddings interpolated to the grid, the MLP's 4304 columns padded to 4352 with zeros at load, a 2x2 merger.
+  Bolt (C-RADIO ViT-H/16): 32 blocks of width 1280 (head dim 80) over 10 cls / register tokens and the patches, the
+  position embeddings of a 128 x 128 table resized to the grid's longer side and cropped (`radio_pos`), then the 2x2
+  pixel shuffle with mlp1's RMSNorm (`radio_shuffle_rms`), a linear to 20480, ReLU squared and a linear to 4096. The
+  work goes to the GPU in command buffers of ~25 ms (long ones hold up the display); scratch is allocated per image
+  and freed after it.
 - Prefill: the image rows take the encoder's bf16 rows instead of their placeholder's embedding (`Seq::embeds`,
   also for the MTP head's history pass); attention layers rotate image rows by (t, h, w) and the text after an image
   by its position less the image's saving (`Seq::rope_pos`, `rope_delta`; decode, verify, MTP and DFlash2 follow it).
-  A text-only conversation runs exactly the kernels it ran before.
+  Bolt's rows sit between `<img>` and `</img>`; its attention takes no positions. A text-only conversation runs
+  exactly the kernels it ran before.
 - Prefix reuse and checkpoints compare image rows by keys derived from the image's content (SHA-256 of its decoded
   pixels and size) and check every image in a reused prefix against the slot's, so an image never reuses another's
   state; the same image resent (an agent's screenshot every turn) reuses the cache. The embeddings of recent images
@@ -242,21 +257,32 @@ positions equal `get_rope_index` over 200 random prompts with 1-4 images; the to
 (relative L2) of a float32 reference, where mlx_vlm's bf16 tower is 3.7% off; next-token distributions over answers
 about a chart, a terminal screenshot, a photo and two images at once agree with mlx_vlm to a mean KL of 0.002-0.010
 (35B) and 0.0005-0.003 (27B), top-1 96-100% (text-only prompts: 0.0015-0.0045 and 0.0002-0.0003; part of the image
-cases' divergence is mlx_vlm's own tower error).
+cases' divergence is mlx_vlm's own tower error). Bolt: its tower is within 2.4e-4 / 2.7e-4 (relative L2, hidden states
+after blocks 1 / 32) of NVIDIA's own code in float32 (`tests/vision/ref_radio.py`; the bf16 model it ships is 4.3e-3 /
+7.7e-3 off), its embeddings within 1.8e-3 (float32 rounded to bf16: 1.7e-3); against mlx_vlm running the MLX bundle's
+`nemotron_bolt.py` (`tests/vision/ref_mlx_bolt.py`, `nh_eval --image`) the answers about the same images have a mean KL
+of 0.0013-0.0038, top-1 88-100% (text-only prompts: 0.0012-0.0016, 95-100%).
 
 Speed (M4 Pro, 35B): a 1280x800 screenshot (1000 tokens) encodes in 0.84 s, and its first answer token comes 1.7 s
 after the request (2.3 s for the first image after the server starts: the encoder's 0.9 GB load in ~0.4 s); sent
-again it is cached: 0.02 s. 1920x1080 (2040 tokens): 2.4 s to encode, 4.2 s to the first token; 2880x1800 (5040
-tokens): 10.9 s and 15.5 s. The tower's attention spans all of an image's patches, so its cost grows with their
-square: its GEMMs run at ~7 TFLOP/s and its attention at ~6.7 (59% and 37% of a 1280x800 encode), and
-`--image-max-pixels` trades detail for time. Text-only requests are unchanged: the same outputs bit for bit
-(teacher-forced log-probs on both models, greedy decodes, a multi-turn server conversation) at the same prefill and
-decode speed.
+again it is cached: 0.02 s. A 2880x1800 Retina screenshot becomes 1376x864 (1161 tokens) under the default cap: 1.0 s
+to encode, 2.1 s to the first token; at its full size (5040 tokens, `--image-max-pixels 0`) 10.9 s and 15.5 s. The
+tower's attention spans all of an image's patches, so its cost grows with their square; its GEMMs run at ~7 TFLOP/s
+and its attention at ~6.7 (59% and 37% of a 1280x800 encode). Small text survives the cap: `tests/vision/fineprint.py`
+reads an 11 pt editor line, a 10 pt status bar and 10 pt table cells off 2880x1800 screenshots right at 1.2M pixels as
+at full size (35B: 5 of 5 each, 2.3 s against 17 s). Bolt's tower is bigger (32 blocks of width 1280): a 1280x800
+screenshot encodes in 1.3 s and has its first token 3.9 s after the request, a 2880x1800 one under Bolt's 1.4M cap
+(1504x928, 1363 tokens) 5.0 s, cached 0.06 s; at 1.2M Bolt lost the 11 pt code line (4 of 5), from 1.4M on it reads
+all five (1.4M, 1.6M, 2.4M, full size: 6.2, 6.3, 10.4 and 15.2 s for the first question). Text-only requests are
+unchanged: the same outputs bit for bit (teacher-forced log-probs on the 35B, the 27B and Bolt, greedy decodes,
+multi-turn server conversations) at the same prefill and decode speed.
 
-`tools/vit_check` runs the pieces alone (decode, resize, smart_resize, processor output, M-RoPE positions, the
-tower on raw pixels, kernel checks, encode timing); `tests/vision/ref_tower.py` is the float32 reference of the tower
-(Hugging Face's, on the CPU), `tests/vision/ref_mlx.py` writes mlx_vlm's next-token distributions for
-`ni_eval --image`, `tests/vision/check_server.py` checks answers, prefix reuse and errors through a running server.
+`tools/vit_check` runs the pieces alone (decode, both processors' resizing and output, M-RoPE positions, either tower
+on raw pixels, kernel checks, encode timing); `tests/vision/ref_tower.py` and `ref_radio.py` are float32 references of
+the towers (Hugging Face's Qwen code, NVIDIA's RADIO code from the Bolt bundle, on the CPU), `ref_mlx.py` and
+`ref_mlx_bolt.py` write mlx_vlm's next-token distributions for `ni_eval --image` / `nh_eval --image`,
+`check_server.py` checks answers, prefix reuse and errors through a running server, and `fineprint.py` small text in
+Retina screenshots.
 
 ## Models and downloads
 

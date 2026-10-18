@@ -8,10 +8,14 @@
 //   nh_eval <dir> --gen N [--temp T] [--spec] @ids  prefill + N decoded tokens: ids, prefill and decode speed;
 //                                                       --spec decodes with the LiLiCorr drafter found next to the
 //                                                       model (tokens per cycle, the drafts' acceptance)
+//   --image F (repeatable): the images of the sequences, in order of their runs of <image> tokens (each run as long
+//   as the model's processor makes that image; its <img> / </img> marks already in the ids); --skip N[,N2,...]:
+//   statistics from position N on (e.g. an answer after an image prompt), per sequence or one for all
 #include "metal/gpu.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
+#include "vision/encoder.h"
 
 #include <mach/mach.h>
 
@@ -89,6 +93,8 @@ int main(int argc, char** argv) {
   }
   std::string model = argv[1], ref_file, dump_file;
   int gen = -1, chunk = 512, topk = 64;
+  std::vector<int> skips;
+  std::vector<std::string> image_files;
   bool spec = false;
   float temp = 0.0f;
   std::vector<std::string> seqs;
@@ -105,6 +111,12 @@ int main(int argc, char** argv) {
     else if (a == "--spec") spec = true;
     else if (a == "--chunk") chunk = std::stoi(next());
     else if (a == "--topk") topk = std::stoi(next());
+    else if (a == "--skip") {
+      std::stringstream ss(next());
+      std::string t;
+      while (std::getline(ss, t, ',')) skips.push_back(std::stoi(t));
+    }
+    else if (a == "--image") image_files.push_back(next());
     else seqs.push_back(a);
   }
   if (seqs.empty()) fatal("no sequences");
@@ -114,6 +126,38 @@ int main(int argc, char** argv) {
   NemotronH m(model, chunk);
   const int V = m.vocab();
   Gpu& g = Gpu::get();
+  // --image: each run of the encoder's placeholder takes the next image's rows (encoded at the processor's own sizes)
+  std::unique_ptr<vision::ImageEncoder> enc;
+  if (!image_files.empty() && !(enc = vision::open_encoder(model))) fatal("%s takes no images", model.c_str());
+  size_t next_image = 0;
+  std::vector<Buffer> image_bufs;
+  auto set_images = [&](Seq& s, const std::vector<int>& seq, std::vector<vision::EmbedRun>& runs) {
+    if (!enc) return;
+    const int ph = enc->placeholder(), n = int(seq.size());
+    for (int i = 0; i < n;) {
+      if (seq[i] != ph) {
+        ++i;
+        continue;
+      }
+      int j = i;
+      while (j < n && seq[j] == ph) ++j;
+      if (next_image >= image_files.size()) fatal("more image runs than --image files");
+      const std::string& f = image_files[next_image++];
+      std::ifstream in(f, std::ios::binary);
+      const std::string bytes((std::istreambuf_iterator<char>(in)), {});
+      const vision::Prepared p = enc->prepare(vision::decode(bytes));
+      if (p.tokens != j - i) fatal("%s: %d image tokens in the sequence, the processor makes %d", f.c_str(), j - i, p.tokens);
+      Buffer b = g.alloc(size_t(p.tokens) * enc->out_dim() * 2 + 16, "image_embeddings");
+      const double t0 = now_ms();
+      enc->encode(p, b);
+      fprintf(stderr, "image %s: %dx%d -> %d tokens, encoded in %.0f ms\n", f.c_str(), p.width, p.height, p.tokens,
+              now_ms() - t0);
+      image_bufs.push_back(b);
+      runs.push_back(vision::EmbedRun{i, p.tokens, b, 0, enc->out_dim()});
+      i = j;
+    }
+    s.embeds = runs.empty() ? nullptr : &runs;
+  };
 
   if (gen >= 0) {
     const std::vector<int>& p = ids[0];
@@ -283,6 +327,9 @@ int main(int argc, char** argv) {
     const int n = int(seq.size());
     auto s = m.new_seq(n + 16);
     memcpy(s->tokens(), seq.data(), seq.size() * 4);
+    std::vector<vision::EmbedRun> runs;
+    set_images(*s, seq, runs);
+    const int skip = skips.empty() ? 0 : skips.size() == 1 ? skips[0] : skips.at(q);
     std::vector<double> kl;
     long agree = 0, cnt = 0;
     double nll = 0, nll_ref = 0;
@@ -298,8 +345,10 @@ int main(int argc, char** argv) {
         if (p >= n - 1) continue;
         float* row = lg.as<float>() + size_t(r) * V;
         const int am = log_softmax(row, V);
-        nll -= row[seq[p + 1]];
-        ++cnt;
+        if (p >= skip) {
+          nll -= row[seq[p + 1]];
+          ++cnt;
+        }
         if (dump) {
           mine[p].lp_next = row[seq[p + 1]];
           std::vector<uint32_t> idx(V);
@@ -308,7 +357,7 @@ int main(int argc, char** argv) {
           mine[p].top.resize(topk);
           for (int i = 0; i < topk; ++i) mine[p].top[i] = {idx[i], row[idx[i]]};
         }
-        if (!refpos.empty()) {
+        if (p >= skip && !refpos.empty()) {
           const RefPos& rp = refpos[q][p];
           kl.push_back(std::max(kl_topk(rp, row), 0.0));
           nll_ref -= rp.lp_next;
