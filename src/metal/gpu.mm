@@ -126,6 +126,8 @@ Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
                                                                  : MTLResourceHazardTrackingModeUntracked)];
     if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
     if (label) b.label = [NSString stringWithUTF8String:label];
+    static const bool alog = getenv("NI_ALLOC_LOG") && atoi(getenv("NI_ALLOC_LOG"));
+    if (alog && bytes >= (size_t(4) << 20)) logi("alloc %8.1f MB %s", bytes / 1e6, label ? label : "?");
     std::lock_guard<std::mutex> lk(impl_->mu);
     [impl_->retained addObject:b];
     return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
