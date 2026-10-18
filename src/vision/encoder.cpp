@@ -72,7 +72,9 @@ void Vision::evict(size_t cap, bool keep_current) {
   }
 }
 
-Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bool(size_t)>& make_room) {
+Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bool(size_t)>& make_room,
+                          bool* encoded) {
+  if (encoded) *encoded = false;
   for (auto it = cache_.begin(); it != cache_.end(); ++it)
     if (it->digest == p.digest) {
       it->used = request_;
@@ -106,6 +108,7 @@ Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bo
        p.grid_w, now_ms() - t0);
   cache_.push_front(Entry{p.digest, out, request_});
   cache_bytes_ += out.size;
+  if (encoded) *encoded = true;
   return out;
 }
 

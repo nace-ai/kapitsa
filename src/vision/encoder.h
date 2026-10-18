@@ -63,8 +63,10 @@ class Vision {
   std::vector<Prepared> prepare(const std::vector<Source>& sources);
   // p's embeddings (bf16 rows), from the cache or encoded now (its source decoded again if p came from the cache).
   // `make_room(bytes)` must return true when `bytes` more may be allocated within the memory budget (it may free other
-  // memory). Embeddings handed out stay valid until end_request(). Throws Error.
-  Buffer embeddings(Prepared& p, const Source& src, const std::function<bool(size_t)>& make_room);
+  // memory). Embeddings handed out stay valid until end_request(). *encoded: whether they were encoded now (else
+  // they came from the cache). Throws Error.
+  Buffer embeddings(Prepared& p, const Source& src, const std::function<bool(size_t)>& make_room,
+                    bool* encoded = nullptr);
   // The request's prefill is done: the cache goes back to its size.
   void end_request();
   // Frees the cached embeddings of earlier requests, and with `weights` the encoder's weights too (the KV cache needs

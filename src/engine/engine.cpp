@@ -595,7 +595,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
   // checkpoint, as below), before any state changes, so a failure leaves the slot as it was ----
   std::vector<vision::EmbedRun> runs;
-  int img_encoded = 0;
+  int img_encoded = 0, img_reused = 0;  // images encoded now, from the embeddings of earlier requests
   double img_ms = 0;
   auto image_runs = [&](int from) {
     const double t0 = now_ms();
@@ -605,9 +605,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       bool have = false;
       for (const vision::EmbedRun& run : runs) have = have || run.pos == sp.pos;
       if (have) continue;
-      const Buffer emb = vision_->embeddings(images[k], img_src[k], [&](size_t b) { return make_room(slot, b); });
+      bool encoded = false;
+      const Buffer emb =
+          vision_->embeddings(images[k], img_src[k], [&](size_t b) { return make_room(slot, b); }, &encoded);
       runs.push_back(vision::EmbedRun{sp.pos, sp.n, emb, 0, vision_->encoder().out_dim()});
-      ++img_encoded;
+      ++(encoded ? img_encoded : img_reused);
     }
     img_ms += now_ms() - t0;
     // what one conversation can hold now that the encoder's weights take their share of the budget (/v1/models)
@@ -1073,9 +1075,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   char cyc[64] = "";
   if (dfl_ && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   if (mmp)
-    logi("chat: %zu image(s), %d tokens: %d encoded in %.0f ms (+%.0f ms decode/resize before the request), the "
-         "rest cached", mm.spans.size(), [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded,
-         img_ms, img_prep_ms);
+    logi("chat: %zu image(s), %d tokens: %d encoded in %.0f ms, %d from earlier embeddings, %d in the cached prefix "
+         "(+%.0f ms decode/resize before the request)", mm.spans.size(),
+         [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
+         int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
        "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s", n, start, res.prefill_ms, tok_ms,
        t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
