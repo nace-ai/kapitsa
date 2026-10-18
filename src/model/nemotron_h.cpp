@@ -1007,7 +1007,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.layers = c.layers;
   const bool keep_bf16 = getenv("NI_NH_BF16") && atoi(getenv("NI_NH_BF16"));
   std::string fmts;  // the matrix formats present, Bolt's order
-  bool ane_fmts = true;  // the Neural Engine split stages NVFP4 Mamba projections and an IQ2_XXS shared expert
+  bool ane_fmts = true;  // the Neural Engine split stages NVFP4 / FP8 Mamba projections, an IQ2_XXS / NVFP4 shared expert
   for (const auto& [name, t] : idx.all()) {
     // as loaded: GGUF blocks, NVFP4 and FP8 keep their size (codes and scales apart), BF16 vectors become fp32, BF16
     // latent projections Q8_0 (34 bytes per 32)
@@ -1032,9 +1032,9 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
       const NhFmt lf = to_q8 ? NhFmt::Q8 : f;
       if (fmts.find(fmt_name(lf)) == std::string::npos) fmts += std::string(fmts.empty() ? "" : " / ") + fmt_name(lf);
       if ((name.find("mixer.in_proj.") != std::string::npos || name.find("mixer.out_proj.") != std::string::npos) &&
-          f != NhFmt::FP4)
+          f != NhFmt::FP4 && f != NhFmt::FP8)
         ane_fmts = false;
-      if (name.find("shared_experts.") != std::string::npos && f != NhFmt::IQ2) ane_fmts = false;
+      if (name.find("shared_experts.") != std::string::npos && f != NhFmt::IQ2 && f != NhFmt::FP4) ane_fmts = false;
     }
     if (name.find(".experts.") != std::string::npos && li >= 0 && c.n_exp[size_t(li)] > 0) {
       const double used = double(c.top_k[size_t(li)]) / c.n_exp[size_t(li)];  // each expert: k / E of the tokens

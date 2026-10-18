@@ -68,6 +68,7 @@ class NhAne {
   double startup_ms() const { return startup_ms_; }
 
  private:
+  std::string mfmt_, sfmt_;  // staging kernels' formats: Mamba projections ("fp4" / "fp8"), shared expert ("iq2" / "fp4")
   struct Op;  // one op type's surfaces, bindings and per-layer row scales
   void build();
   void program(std::string& mil, std::vector<uint8_t>& blob);

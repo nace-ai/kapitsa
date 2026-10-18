@@ -1,7 +1,8 @@
 // ---- GPU side of Nemotron-H's GPU + Neural Engine prefill split (src/model/nemotron_ane.cpp) ----
 // The scheme of src/kernels/ane_ffn.metal (W8A8 after a block Hadamard rotation v -> D H v / sqrt(n),
 // per-row weight and per-token input int8 scales, int8 codes read by the ANE as code / 128), for the checkpoint's
-// formats: the Mamba in / out projections (NVFP4) and the shared expert (IQ2_XXS). Weight rows rotate in blocks of
+// formats: the Mamba in / out projections (NVFP4 in Bolt, FP8 in Super-VL) and the shared expert (IQ2_XXS in Bolt,
+// NVFP4 in Super-VL). Weight rows rotate in blocks of
 // 128 along their inputs (in_proj, out_proj, shared up) or of 256 along the shared expert's intermediate (its down
 // projection, matching the ANE program's rotation of the intermediate). The activations are rotated and packed by
 // ane_rotate / ane_pack of the base library.
@@ -51,6 +52,15 @@ NI_INLINE float4 nh_w4(const device uchar* q, const device uchar* s, float gs, u
     const float sc = nh_ue4m3(s[size_t(n) * (K / 16) + blk]) * gs;
     return float4(nh_fp4_lut[(w >> sh) & 15u], nh_fp4_lut[(w >> (8 + sh)) & 15u], nh_fp4_lut[(w >> (16 + sh)) & 15u],
                   nh_fp4_lut[(w >> (24 + sh)) & 15u]) * sc;
+  } else if (FMT == 5) {  // FP8: 16-element groups, byte 4 m + (0, 1, 2, 3) = elements 2 m, 2 m + 1, 2 m + 8, 2 m + 9
+    const device uchar* g = q + size_t(n) * K + (k & ~15u);
+    const uint i0 = k % 16;
+    float4 r;
+    for (uint e = 0; e < 4; ++e) {
+      const uint el = i0 + e, b = g[4 * ((el & 7u) >> 1) + (el & 1u) + 2 * (el >> 3)];
+      r[e] = float(as_type<half>(ushort(((b & 0x80u) << 8) | ((b & 0x7Fu) << 7))));  // x 2^-8: gs holds 2^8
+    }
+    return r * gs;
   } else {  // IQ2: sub-block k / 32, grid point (k % 32) / 8, elements k % 8 .. + 4
     const uint2 aux = *(const device uint2*)(q + size_t(n) * (K / 4) + (k / 32) * 8);
     const float db = float(((const device half*)s)[size_t(n) * (K / 256) + k / 256]) * (0.5f + float(aux.y >> 28)) * 0.25f;
@@ -135,9 +145,11 @@ NI_INLINE void nh_ane_stage(const device uchar* q, const device uchar* s, const 
                                      uint lane [[thread_index_in_simdgroup]]) {                                    \
     nh_ane_stage<FMT, KB>(q, s, rs, out, sout, sign, p, tg, sg, lane);                                            \
   }
-NH_ANE_W(fp4_b128, 1, 1)  // in_proj / out_proj rows
-NH_ANE_W(iq2_b128, 2, 1)  // shared up rows
-NH_ANE_W(iq2_b256, 2, 2)  // shared down rows over the rotated intermediate
+NH_ANE_W(fp4_b128, 1, 1)  // in_proj / out_proj rows (Bolt); shared up rows (Super-VL)
+NH_ANE_W(fp8_b128, 5, 1)  // in_proj / out_proj rows (Super-VL)
+NH_ANE_W(iq2_b128, 2, 1)  // shared up rows (Bolt)
+NH_ANE_W(iq2_b256, 2, 2)  // shared down rows over the rotated intermediate (Bolt)
+NH_ANE_W(fp4_b256, 1, 2)  // the same, NVFP4 (Super-VL)
 
 // A projection's ANE rows into the model's buffers: Y fp16 [rows][ystride] channel-major (row c = output col0 + c),
 // tx the per-token input scale. ADD 0: X[t][col0 + c] = Y[c][t] * tx[t]; 1: +=. A non-finite value sets *status.
