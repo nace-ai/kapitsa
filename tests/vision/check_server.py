@@ -166,6 +166,23 @@ check("anthropic: an image block is read", st_a == 200 and "may" in a_text.lower
       f"{st_a} {a_text[:100]!r} usage {au}")
 check("anthropic count_tokens counts the image's rows", st_c == 200 and ct.get("input_tokens") == a_prompt > 500,
       f"count_tokens {ct.get('input_tokens')}, the request's prompt {a_prompt}")
+# streamed: message_start (sent once the prompt is matched against the cache) counts the image's rows too
+sreq = urllib.request.Request(BASE + "/v1/messages", data=json.dumps(
+    {"model": "x", "max_tokens": 20, "temperature": 0, "stream": True, "messages": amsg}).encode(),
+    headers={"Content-Type": "application/json", "anthropic-version": "2023-06-01"})
+start_usage, s_text = None, ""
+for line in urllib.request.urlopen(sreq, timeout=900):
+    line = line.decode().strip()
+    if not line.startswith("data: "):
+        continue
+    ev = json.loads(line[6:])
+    if ev.get("type") == "message_start":
+        start_usage = ev["message"]["usage"]
+    elif ev.get("type") == "content_block_delta":
+        s_text += ev.get("delta", {}).get("text", "")
+s_prompt = (start_usage or {}).get("input_tokens", 0) + (start_usage or {}).get("cache_read_input_tokens", 0)
+check("anthropic stream: message_start's usage counts the image's rows", s_prompt == a_prompt and "73" in s_text,
+      f"message_start usage {start_usage}, the request's prompt {a_prompt}, text {s_text[:60]!r}")
 st_r, rr = post_api("/v1/responses", {"model": "x", "max_output_tokens": 60, "temperature": 0, "reasoning": {"effort": "none"},
                                       "input": [{"role": "user", "content": [
                                           {"type": "input_image", "image_url": "data:image/png;base64," + b64},
