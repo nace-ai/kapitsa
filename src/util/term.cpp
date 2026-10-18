@@ -280,6 +280,7 @@ std::string repeat(const char* g, int n) {
 std::mutex g_mu;
 std::vector<std::string> g_status;
 int g_drawn = 0;  // rows of the status block on screen (the cursor is at the end of its last one)
+volatile sig_atomic_t g_rows_on_screen = 0;  // the same, for a signal handler
 bool g_ended = false, g_hidden = false;
 
 void put(const std::string& s) {
@@ -297,7 +298,25 @@ void restore_cursor() {
   }
 }
 
+// A signal that ends the process (Ctrl+C): the status block off the screen, the cursor back (write() only)
 void on_signal(int sig) {
+  const int n = g_rows_on_screen;
+  if (n > 0 && (sig == SIGINT || sig == SIGTERM || sig == SIGHUP)) {
+    char b[32];
+    int k = 0;
+    b[k++] = '\r';
+    if (n > 1) {
+      b[k++] = '\033', b[k++] = '[';
+      char d[8];
+      int nd = 0;
+      for (int v = n - 1; v > 0 && nd < 7; v /= 10) d[nd++] = char('0' + v % 10);
+      while (nd > 0) b[k++] = d[--nd];
+      b[k++] = 'A';
+    }
+    b[k++] = '\033', b[k++] = '[', b[k++] = 'J';
+    if (write(2, b, size_t(k)) < 0) {
+    }
+  }
   restore_cursor();
   signal(sig, SIG_DFL);
   raise(sig);
@@ -331,6 +350,7 @@ std::string erase_status() {
   std::string s = "\r";
   if (g_drawn > 1) s += "\033[" + std::to_string(g_drawn - 1) + "A";
   g_drawn = 0;
+  g_rows_on_screen = 0;
   return s + "\033[J";
 }
 
@@ -341,6 +361,7 @@ std::string status_rows() {
   std::string s;
   for (size_t i = 0; i < g_status.size(); ++i) s += (i ? "\n" : "") + clip(g_status[i], w) + "\033[K";
   g_drawn = int(g_status.size());
+  g_rows_on_screen = g_drawn;
   return s;
 }
 
@@ -524,6 +545,7 @@ void keep_status() {
   std::lock_guard<std::mutex> lk(g_mu);
   if (g_drawn > 0) put("\n");
   g_drawn = 0;
+  g_rows_on_screen = 0;
   g_status.clear();
   show_cursor();
 }

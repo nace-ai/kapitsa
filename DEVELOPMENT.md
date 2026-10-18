@@ -41,6 +41,19 @@ from the committed tree; `install.sh` and the Homebrew formula `packaging/homebr
 | `kapitsa import FILE.gguf [--name N] [--mtp F] [--threads N] [--force] [--dry-run]` | Converts a GGUF of a Qwen3.5-family model once into a store folder (Weight formats, GGUF files). `--model FILE.gguf` (serve and the agent launchers) does it on first use. |
 | `kapitsa --help`, `serve --help`, `pull --help`, `--version` | |
 
+In a terminal (stdout and stderr both TTYs) the commands draw a styled screen (src/util/term, src/server/ui and
+src/server/beam): colors (truecolor where COLORTERM says so, else 256 or 16; none with NO_COLOR or TERM=dumb, while
+FORCE_COLOR / CLICOLOR_FORCE turn them back on in a terminal and never style a pipe), tables fitted to the width,
+spinners and progress bars, errors with the fix on its own line, and the Kapitza-Dirac beam: the help screen's logo
+(its intro skips with any key), the loader of `serve` and the agent launchers, and `serve`'s dashboard. There
+`serve` keeps the engine's log in `~/.cache/kapitsa/logs/serve-<port>.log` (`--verbose` or `NI_LOG` show it too;
+warnings and errors always show), prints a ready card and one line per request (client, prompt, cached share, time to
+first token, output, tok/s, tokens per speculative step, finish, images), and while requests are written draws one
+beam per request, fanning out into the tokens its last step accepted (`ChatRequest::live`: relaxed atomic stores
+between decode cycles). Animations need stdin to be a terminal too, the foreground job, colors, and neither `CI` nor
+`KAPITSA_NO_ANIMATION=1`. Anything else (a pipe, a file: the Nace Agent app, the bench harness, scripts) gets the
+plain text, byte for byte as before.
+
 Exit codes: 0, 1 for failures (download, port, model), 2 for usage errors (unknown option or model), 130 after
 Ctrl+C during a download (the parts are kept). `fatal()` exits with 1 (`NI_ABORT=1` aborts instead, for a backtrace).
 Options without a command still mean `serve` (`kapitsa --model DIR`), and `build/nace-infer-server` stays a symlink

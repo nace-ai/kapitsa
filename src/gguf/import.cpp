@@ -896,6 +896,11 @@ class Progress {
       char p[16];
       snprintf(p, sizeof p, "%3d%%", pct);
       std::string tail = std::string(p) + "  " + gb(done_) + term::dim(" of " + gb(total_));
+      if (s > 0.5) {
+        char r[32];
+        snprintf(r, sizeof r, "%.0f MB/s", double(done_) / 1e6 / s);
+        tail += "  " + term::dim(r);
+      }
       if (done_ < total_ && s > 2) tail += "  " + term::dim(fmt_secs(left) + " left");
       const int bw = std::clamp(term::columns() - 6 - term::width(tail) - 3, 8, 40);
       term::status("    " + term::bar(total_ ? double(done_) / double(total_) : 1, bw) + "  " + tail);
