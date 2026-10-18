@@ -162,7 +162,7 @@ void Qwen4Exp::load(const std::string& dir) {
         return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
                n.find(".ngram_embedding.") == std::string::npos;
       },
-      [](const std::string& f) { return f != "ple.safetensors"; });
+      [](const std::string& f) { return f != "ple.safetensors"; }, transform_defer());
   if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
   else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
   else fatal("%s: unrecognized weight naming (expected the MLX qwen4_exp layout)", dir.c_str());
@@ -264,6 +264,7 @@ void Qwen4Exp::load(const std::string& dir) {
                                           (long long)table_.rows(), (long long)hash_.rows);
     if (table_.dim() * hash_.heads != cfg_.hidden) fatal("qwen4_exp: n-gram rows of %d values", table_.dim());
   }
+  test_transforms();  // NI_REQUANT / NI_DEQUANT (e.g. NI_REQUANT=6:gdn,shared,head: the all-dense-6-bit recipe's speed)
   if (!getenv("NI_NO_MTP")) load_mtp4(dir);
   Gpu::get().make_resident(ws_.buffers());
   Gpu::get().make_resident(owned_bufs_);
@@ -394,7 +395,9 @@ void Qwen4Exp::alloc4() {
   ple_v_ = g.alloc(T * D * 4, "ple_value");
   for (Buffer& b : ple_pf_) b = g.alloc(T * D * 2, "ple_rows");
   for (Buffer& b : ple_dec_) b = g.alloc(V * D * 4, "ple_rows_decode");
-  hpart_ = g.alloc((SD / 1024 + 1) * V * R * 4, "hc_part");
+  hpart_ = g.alloc((SD / 1024 + 1) * V * R * 2 * 4, "hc_part");
+  hx2_ = g.alloc(V * SD * 4, "hc_rows");
+  hstat_ = g.alloc((SD / 1024 + 1) * V * 10 * 4, "hc_stat");
   xr2_ = g.alloc(SD * 4, "hc_row");
   hinv_ = g.alloc(64, "hc_inv");
   qidx_ld_ = uint32_t((c4_.ix_budget + c4_.ix_ratio + 3) / 4 * 4);  // budget + ratio - 1 entries, rounded
@@ -581,6 +584,30 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
     e.dispatch(D / 8, 1, 1, 256);
     return;
   }
+  // the whole mix in two dispatches: hc_pre folded into the split-K GEMVs (NI_HC_FOLD=0: hc_pre + the two below;
+  // real pack, M5 Max, p700 decode, 3 interleaved rounds: 74.0 vs 71.2 tok/s, same greedy ids)
+  static const bool fold = !(getenv("NI_HC_FOLD") && !strcmp(getenv("NI_HC_FOLD"), "0"));
+  const bool sk_fmt = g.down.gs == 64 && (g.down.bits == 4 || g.down.bits == 6 || g.down.bits == 8);
+  if (fold && g.down.same_format(g.up) && sk_fmt && SD % 1024 == 0 && rank % 64 == 0 && D % 32 == 0 && S == 4) {
+    const struct {
+      uint32_t R, D, S, rank, kc, u_ld, has_y, has_inj;
+      float eps;
+    } fp{uint32_t(R), D, S, rank, SD / 1024, u_ld, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
+    const std::string b = "_b" + std::to_string(g.down.bits);
+    e.use(pipe("hc_down_sk2" + b));
+    e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
+    e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, g.down.w->buf); e.buf(6, g.down.s->buf);
+    e.buf(7, g.down.b->buf); e.buf(8, hpart_); e.buf(9, hx2_); e.buf(10, hstat_);
+    e.val(11, fp);
+    e.dispatch(rank / 8, SD / 1024, uint32_t(R), 256);
+    e.use(pipe("hc_up_mix2" + b));
+    e.buf(0, hpart_); e.buf(1, hx2_); e.buf(2, hstat_); e.buf(3, g.norm->buf);
+    e.buf(4, g.up.w->buf); e.buf(5, g.up.s->buf); e.buf(6, g.up.b->buf); e.buf(7, u);
+    e.buf(8, X, x_row0 * SD * 4); e.buf(9, yb_); e.buf(10, inj_out);
+    e.val(11, fp);
+    e.dispatch(D / 16, uint32_t(R), 1, 256);
+    return;
+  }
   const HcParams p{uint32_t(R), D, S, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
   e.use(pipe("hc_pre"));
   e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
@@ -590,7 +617,6 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
   // the low-rank mix on two parallel GEMVs (hc_down_sk: split over the inputs; hc_up_mix: up projection, sigmoid and
   // the streams' mean per channel); NI_HC_SK=0: the qmv GEMVs below and hc_mix
   static const bool sk = !(getenv("NI_HC_SK") && !strcmp(getenv("NI_HC_SK"), "0"));
-  const bool sk_fmt = g.down.gs == 64 && (g.down.bits == 4 || g.down.bits == 6 || g.down.bits == 8);
   if (sk && g.down.same_format(g.up) && sk_fmt && SD % 1024 == 0 && rank % 64 == 0 && D % 16 == 0) {
     const struct {
       uint32_t R, D, S, rank, kc, u_ld;

@@ -174,6 +174,7 @@ class Qwen4Exp : public Qwen35 {
   Buffer qmask_;                 // sparse prefill: key bit rows [T, ceil(keys / 32)]
   Buffer xr2_, hinv_;         // one-row gated residual (hc_down / hc_up): the injected row, its streams' inverse RMS
   Buffer hpart_;              // row gated residual: hc_down_sk's partial sums [S*D / 1024, kMaxVerify, rank]
+  Buffer hx2_, hstat_;        // folded gated residual (NI_HC_FOLD): injected rows [kMaxVerify, S*D], per-chunk stats
   uint32_t qidx_ld_ = 0;
   int ple_pf_flip_ = 0, ple_dec_next_ = 0;
   void* ple_ev_ = nullptr;    // MTLSharedEvent: tickets of gathers done by completion handlers

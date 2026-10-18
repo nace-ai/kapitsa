@@ -291,6 +291,83 @@ void test_hc_mix_sk(int bits) {
   report(("hc_down_sk + hc_up_mix" + sfx + ": u").c_str(), err, 1e-4);
 }
 
+// the folded gated residual (hc_down_sk2 + hc_up_mix2: injection, norms, mix, injection weights) against fp64;
+// D = 768 so 1024-input chunks straddle streams mid-chunk as at D = 2560
+void test_hc_fold(int bits) {
+  const uint32_t D = 768, S = 4, SD = S * D, RK = 128, G = 64, R = 3, KC = SD / 1024;
+  for (int mode = 0; mode < 2; ++mode) {
+    Buf X(R * SD), y(R * D), injp(R * S), w(SD), winj(S * SD, 2), inj(R * S), u(R * D);
+    Buf part(KC * R * RK * 2), X2(R * SD), stat(R * KC * 10);
+    Buf Wd(size_t(RK) * SD * bits / 32), Sd(RK * SD / G, 2), Bd(RK * SD / G, 2);
+    Buf Wu(size_t(SD) * RK * bits / 32), Su(SD * RK / G, 2), Bu(SD * RK / G, 2);
+    X.fill(-2, 2), y.fill(-1, 1), injp.fill(0, 2), w.fill(0.5f, 1.5f), winj.fill_bf16(-0.05f, 0.05f);
+    for (size_t i = 0; i < Wd.n; ++i) Wd.b.as<uint32_t>()[i] = uint32_t(rng());
+    for (size_t i = 0; i < Wu.n; ++i) Wu.b.as<uint32_t>()[i] = uint32_t(rng());
+    const float sc = bits == 4 ? 0.004f : 0.0003f;
+    Sd.fill_bf16(sc / 2, sc), Bd.fill_bf16(-sc * (1 << bits) / 2, 0), Su.fill_bf16(sc, 2 * sc), Bu.fill_bf16(-sc * (1 << bits), 0);
+    std::vector<float> X0(X.f(), X.f() + R * SD), y0(y.f(), y.f() + R * D);
+    struct { uint32_t R, D, S, rank, kc, u_ld, has_y, has_inj; float eps; } p{R, D, S, RK, KC, D, uint32_t(mode), uint32_t(mode), 1e-6f};
+    const std::string sfx = "_b" + std::to_string(bits);
+    run(("hc_down_sk2" + sfx).c_str(), [&](Encoder& e) {
+      e.buf(0, X.b); e.buf(1, y.b); e.buf(2, injp.b); e.buf(3, w.b); e.buf(4, winj.b); e.buf(5, Wd.b); e.buf(6, Sd.b);
+      e.buf(7, Bd.b); e.buf(8, part.b); e.buf(9, X2.b); e.buf(10, stat.b); e.val(11, p);
+    }, RK / 8, KC, R, 256);
+    run(("hc_up_mix2" + sfx).c_str(), [&](Encoder& e) {
+      e.buf(0, part.b); e.buf(1, X2.b); e.buf(2, stat.b); e.buf(3, w.b); e.buf(4, Wu.b); e.buf(5, Su.b); e.buf(6, Bu.b);
+      e.buf(7, u.b); e.buf(8, X.b); e.buf(9, y.b); e.buf(10, inj.b); e.val(11, p);
+    }, D / 16, R, 1, 256);
+    auto deq = [&](const Buf& W, const Buf& Sc, const Buf& Bi, uint32_t n, uint32_t k, uint32_t K) {
+      const uint64_t bit = (uint64_t(n) * K + k) * uint64_t(bits);
+      const uint32_t* wq = W.b.as<uint32_t>();
+      uint64_t v = wq[bit / 32];
+      if (bit % 32 + bits > 32) v |= uint64_t(wq[bit / 32 + 1]) << 32;
+      const uint32_t q = uint32_t(v >> (bit % 32)) & ((1u << bits) - 1);
+      return double(bf(Sc, n * (K / G) + k / G)) * q + bf(Bi, n * (K / G) + k / G);
+    };
+    double eu = 0, ex = 0, ei = 0;
+    for (uint32_t r = 0; r < R; ++r) {
+      std::vector<double> rx(SD), rxn(SD), hh(RK);
+      for (uint32_t i = 0; i < SD; ++i) rx[i] = X0[r * SD + i] + (mode ? injp.f()[r * S + i / D] * y0[r * D + i % D] : 0.0);
+      for (uint32_t s2 = 0; s2 < S; ++s2) {
+        double ss = 0;
+        for (uint32_t c = 0; c < D; ++c) ss += rx[s2 * D + c] * rx[s2 * D + c];
+        const double iv = 1 / std::sqrt(ss / D + 1e-6);
+        for (uint32_t c = 0; c < D; ++c) rxn[s2 * D + c] = rx[s2 * D + c] * iv * w.f()[s2 * D + c];
+      }
+      for (uint32_t i = 0; i < SD; ++i) ex = std::max(ex, std::fabs(X.f()[r * SD + i] - rx[i]) / std::max(std::fabs(rx[i]), 1e-3));
+      if (mode)
+        for (uint32_t q = 0; q < S; ++q) {
+          double d = 0;
+          for (uint32_t i = 0; i < SD; ++i) d += bf(winj, q * SD + i) * rxn[i];
+          const double ref = 2 * sigm(d / S);
+          ei = std::max(ei, std::fabs(inj.f()[r * S + q] - ref) / ref);
+        }
+      for (uint32_t n = 0; n < RK; ++n) {
+        double a = 0;
+        for (uint32_t k = 0; k < SD; ++k) a += deq(Wd, Sd, Bd, n, k, SD) * rxn[k];
+        hh[n] = silu(a / S);
+      }
+      for (uint32_t c = 0; c < D; ++c) {
+        double a = 0;
+        for (uint32_t s2 = 0; s2 < S; ++s2) {
+          double m = 0;
+          for (uint32_t k = 0; k < RK; ++k) m += deq(Wu, Su, Bu, s2 * D + c, k, RK) * hh[k];
+          a += sigm(m) * rxn[s2 * D + c];
+        }
+        const double ref = a / S;
+        eu = std::max(eu, std::fabs(ref - u.f()[r * D + c]) / std::max(std::fabs(ref), 1e-2));
+      }
+    }
+    const std::string nm = "hc_down_sk2 + hc_up_mix2" + sfx + (mode ? " inject" : " plain");
+    report((nm + ": u").c_str(), eu, 1e-4);
+    report((nm + ": X").c_str(), ex, 1e-4);  // (x + a y: fma vs fp64, relative to values near 1e-3)
+    if (mode) {
+      report((nm + ": inj").c_str(), ei, 1e-4);
+      report((nm + ": y zeroed").c_str(), cmp(R * D, [&](size_t i) { return y.f()[i]; }, [](size_t) { return 0.0; }, 1.0), 0);
+    }
+  }
+}
+
 // CPU reference of the PLE block over rows [0, R) at positions pos0.. with gvn history `hist` (positions < pos0)
 void ple_ref(uint32_t R, uint32_t D, uint32_t S, uint32_t pos0, const float* key, const float* val, std::vector<double>& X,
              const float* wk, const float* wq, const float* wc, const Buf& cw, std::vector<std::vector<double>>& hist) {
@@ -665,6 +742,9 @@ int kernels() {
   test_hc_mix_sk(4);
   test_hc_mix_sk(6);
   test_hc_mix_sk(8);
+  test_hc_fold(4);
+  test_hc_fold(6);
+  test_hc_fold(8);
   test_ple();
   test_qsa();
   test_qsa_sparse();

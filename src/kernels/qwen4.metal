@@ -900,6 +900,182 @@ NI_HC_UP_MIX(hc_up_mix_b4, 4)
 NI_HC_UP_MIX(hc_up_mix_b6, 6)
 NI_HC_UP_MIX(hc_up_mix_b8, 8)
 
+// ---- The whole gated residual of R rows in two dispatches (hc_pre folded in; NI_HC_FOLD) ----
+// The per-stream norm is linear in the row once its inverse RMS is known, so hc_down_sk2 runs on the unnormalized
+// v = X + a_s y (times the norm weight) and keeps each stream's share of a 1024-input chunk apart (a chunk spans at
+// most two streams: part2[c, r, n, j], j = stream - the chunk's first stream); the threadgroups of row block 0 also
+// write v (X2), the chunk's sums of squares and its four injection dots per stream. hc_up_mix2 turns those into the
+// inverse RMS, scales and sums the partials, and writes u, the injection weights, X = X2 and y = 0.
+struct HcFoldParams {
+  uint R, D, S;
+  uint rank;      // N of W_down, K of W_up
+  uint kc;        // chunks of 1024 inputs (S * D / 1024)
+  uint u_ld;      // floats between u rows
+  uint has_y, has_inj;
+  float eps;
+};
+NI_INLINE float bf_dot4(const device bfloat* w, float4 v) {
+  return v.x * float(w[0]) + v.y * float(w[1]) + v.z * float(w[2]) + v.w * float(w[3]);
+}
+template <int BITS>
+NI_INLINE void hc_down_sk2_impl(const device float* X, const device float* y, const device float* inj_prev,
+                                const device float* w, const device bfloat* winj, const device uint32_t* W,
+                                const device bfloat* Ws, const device bfloat* Wb, device float* part, device float* X2,
+                                device float* stat, constant HcFoldParams& p, uint3 tg, uint tid, uint sg, uint lane,
+                                threadgroup float4* scratch) {
+  const uint SD = p.S * p.D, n = tg.x * 8 + sg, c = tg.y, r = tg.z;
+  const uint s_lo = c * 1024 / p.D;
+  {
+    const uint k0 = c * 1024 + lane * 32, s = k0 / p.D, c0 = k0 - s * p.D;
+    const float a = p.has_y ? inj_prev[r * 4 + s] : 0.0f;
+    const device float4* x4 = (const device float4*)(X + r * SD + k0);
+    const device float4* y4 = (const device float4*)(y + r * p.D + c0);
+    const device float4* w4 = (const device float4*)(w + k0);
+    float xv[32];
+    float xs = 0.0f;
+    for (uint i = 0; i < 8; ++i) {
+      const float4 v = (x4[i] + a * y4[i]) * w4[i];
+      xv[4 * i] = v.x, xv[4 * i + 1] = v.y, xv[4 * i + 2] = v.z, xv[4 * i + 3] = v.w;
+      xs += v.x + v.y + v.z + v.w;
+    }
+    const device uint32_t* wr = W + size_t(n) * (SD * BITS / 32) + k0 * BITS / 32;
+    float q[16], d = 0.0f;
+    const uint g = n * (SD / 64) + k0 / 64;
+    for (uint h = 0; h < 2; ++h) {
+      unpack16<BITS>(wr + h * (16 * BITS / 32), q);
+      for (uint j = 0; j < 16; ++j) d += q[j] * xv[h * 16 + j];
+    }
+    const float val = float(Ws[g]) * d + float(Wb[g]) * xs;
+    const float p0 = simd_sum(s == s_lo ? val : 0.0f), p1 = simd_sum(s == s_lo ? 0.0f : val);
+    if (lane == 0) *(device float2*)(part + ((c * p.R + r) * p.rank + n) * 2) = float2(p0, p1);
+  }
+  if (tg.x != 0) return;
+  // row block 0: X2 = v, the chunk's per-stream sums of squares and injection dots (of v * w, before the scale)
+  const uint k = c * 1024 + tid * 4, s = k / p.D, c0 = k - s * p.D;
+  const float a = p.has_y ? inj_prev[r * 4 + s] : 0.0f;
+  const float4 v = *(const device float4*)(X + r * SD + k) + a * *(const device float4*)(y + r * p.D + c0);
+  *(device float4*)(X2 + r * SD + k) = v;
+  const float4 vw = v * *(const device float4*)(w + k);
+  float4 dj = 0.0f;  // the four injection dots
+  if (p.has_inj) {
+    const device bfloat* wi = winj + k;
+    dj = float4(bf_dot4(wi, vw), bf_dot4(wi + SD, vw), bf_dot4(wi + 2 * SD, vw), bf_dot4(wi + 3 * SD, vw));
+  }
+  const bool lo = s == s_lo;
+  const float ss = metal::dot(v, v);
+  const float4 d0 = tg_sum4(lo ? dj : float4(0.0f), scratch, tid, 256);
+  const float4 d1 = tg_sum4(lo ? float4(0.0f) : dj, scratch, tid, 256);
+  const float4 q2 = tg_sum4(float4(lo ? ss : 0.0f, lo ? 0.0f : ss, 0.0f, 0.0f), scratch, tid, 256);
+  if (tid == 0) {
+    device float* st = stat + (r * p.kc + c) * 10;  // ss[2], dots[2][4]
+    st[0] = q2.x, st[1] = q2.y;
+    *(device float4*)(st + 2) = d0;
+    *(device float4*)(st + 6) = d1;
+  }
+}
+#define NI_HC_DOWN_SK2(NAME, BITS)                                                                             \
+  [[kernel]] void NAME(const device float* X [[buffer(0)]], const device float* y [[buffer(1)]],               \
+                       const device float* inj_prev [[buffer(2)]], const device float* w [[buffer(3)]],        \
+                       const device bfloat* winj [[buffer(4)]], const device uint32_t* W [[buffer(5)]],        \
+                       const device bfloat* Ws [[buffer(6)]], const device bfloat* Wb [[buffer(7)]],           \
+                       device float* part [[buffer(8)]], device float* X2 [[buffer(9)]],                       \
+                       device float* stat [[buffer(10)]], constant HcFoldParams& p [[buffer(11)]],             \
+                       uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],    \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float4 scratch[32];                                                                            \
+    hc_down_sk2_impl<BITS>(X, y, inj_prev, w, winj, W, Ws, Wb, part, X2, stat, p, tg, tid, sg, lane, scratch); \
+  }
+NI_HC_DOWN_SK2(hc_down_sk2_b4, 4)
+NI_HC_DOWN_SK2(hc_down_sk2_b6, 6)
+NI_HC_DOWN_SK2(hc_down_sk2_b8, 8)
+
+template <int BITS>
+NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2, const device float* stat,
+                               const device float* w, const device uint32_t* W, const device bfloat* Ws,
+                               const device bfloat* Wb, device float* u, device float* X, device float* y,
+                               device float* inj, constant HcFoldParams& p, uint2 tg, uint tid, uint sg, uint lane,
+                               threadgroup float* hs, threadgroup float* hsum, threadgroup float* inv) {
+  const uint r = tg.y, SD = p.S * p.D, K = p.rank;
+  if (tid < 4) {  // stream tid's inverse RMS; then its share of the injection dots (threadgroup 0)
+    float ss = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      if (s_lo == tid) ss += stat[(r * p.kc + c) * 10];
+      else if (s_lo + 1 == tid) ss += stat[(r * p.kc + c) * 10 + 1];
+    }
+    inv[tid] = metal::precise::rsqrt(ss / float(p.D) + p.eps);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tg.x == 0 && p.has_inj && tid < 4) {  // inj[q] = 2 sigmoid(sum_s inv[s] dot_s[q] / S)
+    float d = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      const device float* st = stat + (r * p.kc + c) * 10;
+      d += inv[s_lo] * st[2 + tid] + (s_lo + 1 < p.S ? inv[s_lo + 1] * st[6 + tid] : 0.0f);
+    }
+    inj[r * 4 + tid] = 2.0f * sigmoid(d / float(p.S));
+  }
+  for (uint i = tid; i < K; i += 256) {
+    float t = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) {
+      const uint s_lo = c * 1024 / p.D;
+      const float2 pp = *(const device float2*)(part + ((c * p.R + r) * K + i) * 2);
+      t += inv[s_lo] * pp.x + (s_lo + 1 < p.S ? inv[s_lo + 1] * pp.y : 0.0f);
+    }
+    hs[i] = silu(t / float(p.S));
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < K / 16; i += 256) {
+    float t = 0.0f;
+    for (uint j = 0; j < 16; ++j) t += hs[i * 16 + j];
+    hsum[i] = t;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint rl = lane / 4, qq = lane % 4;
+  const uint ch = (tg.x * 8 + sg) * 2 + rl / 4, s = rl % 4;
+  const uint row = s * p.D + ch, per = K / 4;
+  const device uint32_t* wr = W + size_t(row) * (K * BITS / 32);
+  float q[16], m = 0.0f;
+  for (uint k = qq * per; k < (qq + 1) * per; k += 16) {
+    unpack16<BITS>(wr + k * BITS / 32, q);
+    float d = 0.0f;
+    const uint g = row * (K / 64) + k / 64;
+    for (uint j = 0; j < 16; ++j) d += q[j] * hs[k + j];
+    m += float(Ws[g]) * d + float(Wb[g]) * hsum[k / 16];
+  }
+  m += simd_shuffle_xor(m, 1);
+  m += simd_shuffle_xor(m, 2);
+  float v = 0.0f;
+  if (qq == 0) {
+    const float x = X2[r * SD + row];
+    v = sigmoid(m) * x * inv[s] * w[row];
+    X[r * SD + row] = x;
+  }
+  v += simd_shuffle_xor(v, 4);
+  v += simd_shuffle_xor(v, 8);
+  if ((lane & 15) == 0) {
+    u[r * p.u_ld + ch] = v / float(p.S);
+    if (p.has_y) y[r * p.D + ch] = 0.0f;
+  }
+}
+#define NI_HC_UP_MIX2(NAME, BITS)                                                                              \
+  [[kernel]] void NAME(const device float* part [[buffer(0)]], const device float* X2 [[buffer(1)]],           \
+                       const device float* stat [[buffer(2)]], const device float* w [[buffer(3)]],            \
+                       const device uint32_t* W [[buffer(4)]], const device bfloat* Ws [[buffer(5)]],          \
+                       const device bfloat* Wb [[buffer(6)]], device float* u [[buffer(7)]],                   \
+                       device float* X [[buffer(8)]], device float* y [[buffer(9)]], device float* inj [[buffer(10)]], \
+                       constant HcFoldParams& p [[buffer(11)]], uint2 tg [[threadgroup_position_in_grid]],     \
+                       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
+                       uint lane [[thread_index_in_simdgroup]]) {                                              \
+    threadgroup float hs[1024];                                                                                \
+    threadgroup float hsum[64];                                                                                \
+    threadgroup float inv[4];                                                                                  \
+    hc_up_mix2_impl<BITS>(part, X2, stat, w, W, Ws, Wb, u, X, y, inj, p, tg, tid, sg, lane, hs, hsum, inv);    \
+  }
+NI_HC_UP_MIX2(hc_up_mix2_b4, 4)
+NI_HC_UP_MIX2(hc_up_mix2_b6, 6)
+NI_HC_UP_MIX2(hc_up_mix2_b8, 8)
+
 // ---- Router top-k for 512 experts (Qwen3.8-Flash-Next), one row per simdgroup ----
 // The k largest logits are the k largest probabilities: selected on the logits (16 per lane, no exponentials), then
 // weighted by softmax over the selected (norm: the top-k renormalization; else over all 512). wts[k] = sigmoid of the

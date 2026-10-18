@@ -13,7 +13,8 @@
 //   F: float32 logits [n, vocab] (row p = the distribution after token p)
 //   --dump-ref F  instead: ni_eval's NIEVREF2 reference file (top-K log-probs per position, --topk, default 64)
 //   --ref F       compares with such a file: KL over its top-K (+ the lumped rest), top-1 agreement, perplexity
-//                 (--seq i: the file's i-th sequence, for ni_eval's / the converter's files of several)
+//                 (--seq i: the file's i-th sequence, for ni_eval's / the converter's files of several; --split P:
+//                 also the mean KL of positions before P and from P, e.g. 2051 = where the indexer starts selecting)
 #include "metal/gpu.h"
 #include "model/qwen4_exp.h"
 #include "util/log.h"
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
   const std::string dir = argv[1];
   const std::vector<int> ids = read_ids(argv[2]);
   std::string out, xs_out, mode = "prefill", dump_ref, ref;
-  int chunk = 512, rows = 3, hist = 0, topk = 64, seq = 0;
+  int chunk = 512, rows = 3, hist = 0, topk = 64, seq = 0, split = 0;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -83,6 +84,7 @@ int main(int argc, char** argv) {
     else if (a == "--ref") ref = next();
     else if (a == "--topk") topk = std::stoi(next());
     else if (a == "--seq") seq = std::stoi(next());
+    else if (a == "--split") split = std::stoi(next());
     else fatal("unknown option %s", a.c_str());
   }
   const int n = int(ids.size());
@@ -199,6 +201,8 @@ int main(int argc, char** argv) {
     f.read((char*)rid.data(), nr * 4);
     if (rid != ids) fatal("%s: other token ids", ref.c_str());
     std::vector<double> kls;
+    double kl_lo = 0, kl_hi = 0;
+    long n_lo = 0, n_hi = 0;
     double nll = 0, nll_ref = 0;
     long agree = 0, cnt = 0;
     std::vector<std::pair<uint32_t, float>> top(K);
@@ -218,6 +222,8 @@ int main(int argc, char** argv) {
       }
       const double rp = std::max(1.0 - pk, 1e-12), rq = std::max(1.0 - qk, 1e-12);
       kls.push_back(std::max(0.0, kl + rp * (std::log(rp) - std::log(rq))));
+      (p < split ? kl_lo : kl_hi) += kls.back();
+      ++(p < split ? n_lo : n_hi);
       agree += uint32_t(am) == top[0].first;
       nll -= row[ids[size_t(p + shift)]];
       nll_ref -= lp_ref;
@@ -233,6 +239,9 @@ int main(int argc, char** argv) {
            "\"top1_agree\": %.5f, \"ppl\": %.5f, \"ppl_ref\": %.5f}\n",
            mode.c_str(), cnt, mean, pct(0.5), pct(0.99), pct(1.0), cnt ? double(agree) / double(cnt) : 0.0,
            cnt ? std::exp(nll / double(cnt)) : 0.0, cnt ? std::exp(nll_ref / double(cnt)) : 0.0);
+    if (split > 0)
+      printf("{\"kl_mean_before_%d\": %.6g, \"kl_mean_from_%d\": %.6g, \"positions_from\": %ld}\n", split,
+             n_lo ? kl_lo / double(n_lo) : 0.0, split, n_hi ? kl_hi / double(n_hi) : 0.0, n_hi);
   }
   return 0;
 }
