@@ -19,13 +19,11 @@
 //   nh_x4_mv[_l0][_add]   R = 1, NhMvParams [[4]] (x fp32 [K], y fp32 [N]; _add: y += ...). grid ceil(N / 8) x 64
 //                         (4 rows per simdgroup; any simdgroup count works: rows per threadgroup = 4 x simdgroups)
 //   nh_x4_v8[_l0]         R <= 8, NhV8P [[4]] (X half [R][x_ld], Y per p.epi as nh_v8). grid ceil(N / 16) x 256
-//                         (16 rows per threadgroup, exactly 8 simdgroups splitting K)
-//   nh_x4_mm16[_l0]       R <= 16.  grid ceil(N / 32) x 128
-//   nh_x4_mm24[_l0]       R <= 24.  grid ceil(N / 64) x 128
-//   nh_x4_mm24k[_l0]      R <= 24.  grid ceil(N / 32) x 128
-//   nh_x4_mm32[_l0]       R <= 32.  grid ceil(N / 64) x 128
-//   nh_x4_mm32k[_l0]      R <= 32.  grid ceil(N / 32) x 128
-//   (mm*k: two k-groups per threadgroup, for few rows or long K: out_proj; mm24 / mm32 for in_proj-like shapes)
+//                         (16 rows per threadgroup, 8 simdgroups splitting K)
+//   nh_x4_mm16/24/32[_l0] R <= 16 / 24 / 32, NhV8P [[4]], plus part [[5]] and cnt [[6]] (split K, see below).
+//                         grid (SK, ceil(N / 64)) x 128 with SK parts of K: 4 for K <= 8192 (in_proj, out_proj),
+//                         8 above (1 without the buffers: then they are not touched, but must still be bound);
+//                         part >= SK x ceil(N / 64) x 2048 x TB bytes (TB = 2 / 3 / 4), cnt >= ceil(N / 64) uints
 // Requirements: K % 128 == 0 for v8 / mm (K % 32 for mv); X rows 16-byte aligned (x_ld % 8 == 0); UE4M3 scale bytes
 // < 0x7F (0x7F is NaN in E4M3FN, which ModelOpt never writes; nh_x4_mv maps it to 0 like nh_ue4m3, the MMA kernels
 // do not).
@@ -188,10 +186,10 @@ template <int L>
 NI_INLINE void nh_x4_v8_impl(const device half* X, const device uchar* q, const device uchar* s, device void* Y,
                              constant NhV8P& p, uint tg, uint sg, uint nsg, uint lane, threadgroup float2* red,
                              threadgroup const half2* tlh) {
-  constexpr int NF = 2, KS = 8;
+  constexpr int NF = 2;
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
-  const uint ks = sg;  // nsg == KS
+  const uint ks = sg, KS = nsg;  // the simdgroups split K (at most 8: max_total_threads_per_threadgroup(256))
   const uint n0 = tg * 8 * NF;
   const uint N = p.N, K = p.K;
   const bool l0 = fn < p.R, l1 = fn + 1 < p.R;
@@ -252,9 +250,10 @@ NI_INLINE void nh_x4_v8_impl(const device half* X, const device uchar* q, const 
   }
 }
 
-// grid: ceil(N / 16) threadgroups x 256 threads (exactly 8 simdgroups)
+// grid: ceil(N / 16) threadgroups x 256 threads (8 simdgroups split K; fewer work too, more are refused)
 #define NH_X4_V8(NAME, L)                                                                                          \
-  [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                   \
+  [[kernel, max_total_threads_per_threadgroup(256)]] void NAME(                                                    \
+                       const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                   \
                        const device uchar* Ws [[buffer(2)]], device void* Y [[buffer(3)]],                        \
                        constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],                \
                        uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],        \
@@ -267,49 +266,53 @@ NI_INLINE void nh_x4_v8_impl(const device half* X, const device uchar* q, const 
 NH_X4_V8(nh_x4_v8, 2)
 NH_X4_V8(nh_x4_v8_l0, 0)
 
-// ---- up to 32 rows: TB blocks of 8 token rows. A threadgroup = KG k-groups x CS column simdgroups (CS = simdgroups /
-// KG); a simdgroup computes 2 fragments (16 rows) for all TB token blocks, so each weight is decoded once per
-// threadgroup for all rows. k-group g stages X of the steps g, g + KG, ... in its own buffer, in the order the A
-// operands need: xs[t][fr * 8 + j] = X[t][k0 + k(fr, j)] (a step's block p of token t: two uint4 loads, eight 32-bit
-// stores of half pairs; k-slots 2c', 2c' + 1 of fragments 8 (p & 1) + v, c' = p >> 1); B fragments by simdgroup_load.
-// The k-groups' fragments are summed through threadgroup memory (the staging buffer) at the end. ----
+// ---- up to 32 rows: TB blocks of 8 token rows. A threadgroup of 4 simdgroups computes 64 rows (2 fragments of 8 per
+// simdgroup) for all TB token blocks, so each weight is decoded once per threadgroup for all rows; X of a 128-element
+// step is staged in threadgroup memory in the order the A operands need: xs[t][fr * 8 + j] = X[t][k0 + k(fr, j)]
+// (a step's block p of token t: two uint4 loads, eight 32-bit stores of half pairs; k-slots 2c', 2c' + 1 of
+// fragments 8 (p & 1) + v, c' = p >> 1); B fragments by simdgroup_load.
+// Split K (deterministic): the grid's x dimension is SK parts of K per row tile (y). With SK > 1 every part writes its
+// fragments to part (buffer 5) and counts itself in cnt[tile] (buffer 6: zero before the first call, the last part
+// resets it); the last part to arrive sums the SK partials in part order and stores. SK 4 is best or within 1% on
+// in_proj (2-8) and out_proj (2-8), 8 on the drafter's K 12288 / 24576. ----
 constant constexpr uint kX4Ld = 136;  // halfs per staged token row (128 + 8: conflict-free fragment loads)
 
-template <int TB, int KG, int L>
+template <int TB, int L>
 NI_INLINE void nh_x4_mm_impl(const device half* X, const device uchar* q, const device uchar* s, device void* Y,
-                             constant NhV8P& p, uint tg, uint sg, uint nsg, uint lane, uint tid, threadgroup half* xs,
-                             threadgroup const half2* tlh) {
+                             constant NhV8P& p, uint tile, uint pi, uint SK, uint sg, uint nsg, uint lane, uint tid,
+                             threadgroup half* xs, threadgroup const half2* tlh, device float2* part,
+                             device atomic_uint* cnt, threadgroup uint* arrival) {
   constexpr int NF = 2;
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
-  const uint ncs = nsg / KG, kg = sg / ncs, cs = sg % ncs;
-  const uint n0 = (tg * ncs + cs) * 8 * NF;
-  const uint N = p.N, K = p.K, nthr = nsg * 32, S = K / 128;
+  const uint n0 = (tile * nsg + sg) * 8 * NF;
+  const uint N = p.N, K = p.K, nthr = nsg * 32, S_all = K / 128, per = (S_all + SK - 1) / SK;
+  const uint st_lo = min(pi * per, S_all), S = min(st_lo + per, S_all) - st_lo;  // this part's steps
   const device uchar* qr[NF];
   const device uchar* sr[NF];
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < NF; ++f) {
     const uint n = min(n0 + 8 * f + fm, N - 1);
-    qr[f] = q + size_t(n) * (K / 2) + 16 * c;
-    sr[f] = s + size_t(n) * (K / 16) + 2 * c;
+    qr[f] = q + size_t(n) * (K / 2) + 16 * c + st_lo * 64;
+    sr[f] = s + size_t(n) * (K / 16) + 2 * c + st_lo * 8;
   }
+  const device half* xp = X + st_lo * 128;
   simdgroup_float8x8 acc[NF][TB];
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < NF; ++f)
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < TB; ++b) acc[f][b] = simdgroup_float8x8(0);
-  threadgroup half* xg = xs + kg * (8 * TB * kX4Ld);
-  for (uint rd = 0; rd < (S + KG - 1) / KG; ++rd) {
-    // stage the round's steps: item i = (k-group g, token t, block pb)
-    for (uint i = tid; i < KG * 8 * TB * 8; i += nthr) {
-      const uint g = i / (8 * TB * 8), r = i % (8 * TB * 8), t = r >> 3, pb = r & 7, st = rd * KG + g;
+  for (uint st = 0; st < S; ++st) {
+    // stage the step: item i = (token t, block pb)
+    for (uint i = tid; i < 8 * TB * 8; i += nthr) {
+      const uint t = i >> 3, pb = i & 7;
       uint4 v0 = uint4(0), v1 = uint4(0);
-      if (t < p.R && st < S) {
-        const device uint4* src = (const device uint4*)(X + size_t(t) * p.x_ld + st * 128 + 16 * pb);
+      if (t < p.R) {
+        const device uint4* src = (const device uint4*)(xp + size_t(t) * p.x_ld + st * 128 + 16 * pb);
         v0 = src[0];
         v1 = src[1];
       }
-      threadgroup uint* d = (threadgroup uint*)(xs + g * (8 * TB * kX4Ld) + t * kX4Ld + 64 * (pb & 1) + 2 * (pb >> 1));
+      threadgroup uint* d = (threadgroup uint*)(xs + t * kX4Ld + 64 * (pb & 1) + 2 * (pb >> 1));
       d[0] = (v0.x & 0xFFFFu) | (v1.x << 16);
       d[4] = (v0.x >> 16) | (v1.x & 0xFFFF0000u);
       d[8] = (v0.y & 0xFFFFu) | (v1.y << 16);
@@ -319,64 +322,62 @@ NI_INLINE void nh_x4_mm_impl(const device half* X, const device uchar* q, const 
       d[24] = (v0.w & 0xFFFFu) | (v1.w << 16);
       d[28] = (v0.w >> 16) | (v1.w & 0xFFFF0000u);
     }
-    const uint st = rd * KG + kg;
     uint4 cw[NF];
     uint sw[NF];
-    if (st < S)
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) {
+      cw[f] = *(const device uint4*)(qr[f] + st * 64);
+      sw[f] = *(const device ushort*)(sr[f] + st * 8);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    half2 sc[NF];
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) sc[f] = nh_x4_sc2<L>(sw[f]);
+    _Pragma("clang loop unroll(full)")
+    for (int fr = 0; fr < 16; ++fr) {
+      simdgroup_half8x8 A[NF];
       _Pragma("clang loop unroll(full)")
       for (int f = 0; f < NF; ++f) {
-        cw[f] = *(const device uint4*)(qr[f] + st * 64);
-        sw[f] = *(const device ushort*)(sr[f] + st * 8);
+        const half2 av = nh_x4_pair<L>(cw[f][fr >> 2], uint(fr & 3), tlh) * sc[f][fr >> 3];
+        A[f].thread_elements()[0] = av.x;
+        A[f].thread_elements()[1] = av.y;
       }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (st < S) {
-      half2 sc[NF];
       _Pragma("clang loop unroll(full)")
-      for (int f = 0; f < NF; ++f) sc[f] = nh_x4_sc2<L>(sw[f]);
-      _Pragma("clang loop unroll(full)")
-      for (int fr = 0; fr < 16; ++fr) {
-        simdgroup_half8x8 A[NF];
+      for (int b = 0; b < TB; ++b) {
+        simdgroup_half8x8 B;
+        simdgroup_load(B, xs + (8 * b) * kX4Ld + fr * 8, kX4Ld, ulong2(0, 0), true);
         _Pragma("clang loop unroll(full)")
-        for (int f = 0; f < NF; ++f) {
-          const half2 av = nh_x4_pair<L>(cw[f][fr >> 2], uint(fr & 3), tlh) * sc[f][fr >> 3];
-          A[f].thread_elements()[0] = av.x;
-          A[f].thread_elements()[1] = av.y;
-        }
-        _Pragma("clang loop unroll(full)")
-        for (int b = 0; b < TB; ++b) {
-          simdgroup_half8x8 B;
-          simdgroup_load(B, xg + (8 * b) * kX4Ld + fr * 8, kX4Ld, ulong2(0, 0), true);
-          _Pragma("clang loop unroll(full)")
-          for (int f = 0; f < NF; ++f) simdgroup_multiply_accumulate(acc[f][b], A[f], B, acc[f][b]);
-        }
+        for (int f = 0; f < NF; ++f) simdgroup_multiply_accumulate(acc[f][b], A[f], B, acc[f][b]);
       }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
-  if (KG > 1) {
-    // k-groups 1.. add their fragments into k-group 0's, in a fixed order
-    threadgroup float2* red = (threadgroup float2*)xs;
-    for (uint g = 1; g < KG; ++g) {
-      if (kg == g)
-        _Pragma("clang loop unroll(full)")
-        for (int f = 0; f < NF; ++f)
-          _Pragma("clang loop unroll(full)")
-          for (int b = 0; b < TB; ++b)
-            red[((cs * NF + uint(f)) * TB + uint(b)) * 32 + lane] =
-                float2(acc[f][b].thread_elements()[0], acc[f][b].thread_elements()[1]);
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-      if (kg == 0)
-        _Pragma("clang loop unroll(full)")
-        for (int f = 0; f < NF; ++f)
-          _Pragma("clang loop unroll(full)")
-          for (int b = 0; b < TB; ++b) {
-            const float2 o = red[((cs * NF + uint(f)) * TB + uint(b)) * 32 + lane];
-            acc[f][b].thread_elements()[0] += o.x;
-            acc[f][b].thread_elements()[1] += o.y;
-          }
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (SK > 1) {
+    device float2* base = part + size_t(tile) * SK * nsg * (NF * TB * 32);
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f)
+      _Pragma("clang loop unroll(full)")
+      for (int b = 0; b < TB; ++b)
+        base[((pi * nsg + sg) * NF + uint(f)) * (TB * 32) + uint(b) * 32 + lane] =
+            float2(acc[f][b].thread_elements()[0], acc[f][b].thread_elements()[1]);
+    threadgroup_barrier(mem_flags::mem_device);
+    if (tid == 0) {
+      atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+      arrival[0] = atomic_fetch_add_explicit(cnt + tile, 1u, memory_order_relaxed);
+      atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
     }
-    if (kg != 0) return;
+    threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
+    if (arrival[0] != SK - 1) return;
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f)
+      _Pragma("clang loop unroll(full)")
+      for (int b = 0; b < TB; ++b) {
+        float2 v = float2(0.0f);
+        for (uint j = 0; j < SK; ++j) v += base[((j * nsg + sg) * NF + uint(f)) * (TB * 32) + uint(b) * 32 + lane];
+        acc[f][b].thread_elements()[0] = v.x;
+        acc[f][b].thread_elements()[1] = v.y;
+      }
+    if (tid == 0) atomic_store_explicit(cnt + tile, 0u, memory_order_relaxed);
   }
   const float post = p.gs * nh_x4_post_l[L];
   _Pragma("clang loop unroll(full)")
@@ -393,33 +394,36 @@ NI_INLINE void nh_x4_mm_impl(const device half* X, const device uchar* q, const 
   }
 }
 
-// grid: ceil(N / (16 x simdgroups / KG)) threadgroups x (32 x simdgroups) threads; simdgroups a multiple of KG
-// (the defaults above: 4 simdgroups)
-#define NH_X4_MM(NAME, TB, KG, L)                                                                                  \
-  [[kernel]] void NAME(const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                   \
+// grid: (SK, ceil(N / 64)) threadgroups x 128 threads. Buffers 5 (part: SK x ceil(N / 64) x 2048 TB bytes) and 6
+// (cnt: ceil(N / 64) uints, zero before the first call; every call leaves them zero) must be bound; with SK = 1 they
+// are not touched. Two split dispatches that may run at the same time need their own part / cnt.
+#define NH_X4_MM(NAME, TB, L)                                                                                      \
+  [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
+                       const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                   \
                        const device uchar* Ws [[buffer(2)]], device void* Y [[buffer(3)]],                        \
-                       constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],                \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],        \
-                       uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {        \
-    threadgroup half xs[KG * 8 * TB * kX4Ld]; /* after the K loop: the k-groups' reduction buffer */               \
+                       constant NhV8P& p [[buffer(4)]], device float2* part [[buffer(5)]],                        \
+                       device atomic_uint* cnt [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],          \
+                       uint2 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],            \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       uint tid [[thread_index_in_threadgroup]]) {                                                 \
+    threadgroup half xs[8 * TB * kX4Ld];                                                                           \
     threadgroup half2 tlh[L == 0 ? 256 : 1];                                                                       \
+    threadgroup uint arrival[1];                                                                                   \
+    if (ntg.x > 16u) return; /* SK > 16: not a split grid (a 1-D dispatch?); write nothing */                      \
     if (L == 0) nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                               \
-    nh_x4_mm_impl<TB, KG, L>(X, Wq, Ws, Y, p, tg.x, sg, nsg, lane, tid, xs, tlh);                                 \
+    nh_x4_mm_impl<TB, L>(X, Wq, Ws, Y, p, tg.y, tg.x, ntg.x, sg, nsg, lane, tid, xs, tlh, part, cnt, arrival);     \
   }
-NH_X4_MM(nh_x4_mm16, 2, 2, 2)
-NH_X4_MM(nh_x4_mm24, 3, 1, 2)
-NH_X4_MM(nh_x4_mm24k, 3, 2, 2)
-NH_X4_MM(nh_x4_mm32, 4, 1, 2)
-NH_X4_MM(nh_x4_mm32k, 4, 2, 2)
-NH_X4_MM(nh_x4_mm16_l0, 2, 2, 0)
-NH_X4_MM(nh_x4_mm24_l0, 3, 1, 0)
-NH_X4_MM(nh_x4_mm24k_l0, 3, 2, 0)
-NH_X4_MM(nh_x4_mm32_l0, 4, 1, 0)
-NH_X4_MM(nh_x4_mm32k_l0, 4, 2, 0)
+NH_X4_MM(nh_x4_mm16, 2, 2)
+NH_X4_MM(nh_x4_mm24, 3, 2)
+NH_X4_MM(nh_x4_mm32, 4, 2)
+NH_X4_MM(nh_x4_mm16_l0, 2, 0)
+NH_X4_MM(nh_x4_mm24_l0, 3, 0)
+NH_X4_MM(nh_x4_mm32_l0, 4, 0)
 
 // Measured and lost (nh_x4_bench, rotating weights): decode with float2 byte tables in threadgroup (2 KB: bank
 // conflicts) or constant memory, 8 rows per simdgroup, 64 elements per lane, the L1 bit trick with shifts or one
 // multiply after a shift, L2 with two shifts and masks (register spills); 8 rows: 4 fragments per simdgroup (32 rows
 // per step stream at 219 GB/s), 1 fragment, 2 column slices per threadgroup, contiguous k-slices, prefetching the next
 // step (spills), X staged in threadgroup memory (barriers), constant-memory tables; up to 32 rows: 4 fragments per
-// simdgroup (spills), 16-bit staging stores. A token-pair-interleaved X (B pairs without packing) would gain 1.5-2%.
+// simdgroup (spills), 16-bit staging stores, k-groups inside a threadgroup instead of split K (out_proj 0.406 vs
+// 0.332 ms at 32 rows). A token-pair-interleaved X (B pairs without packing) would gain 1.5-2%.

@@ -23,6 +23,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace ni {
@@ -232,9 +233,11 @@ struct KV {
   Kind kind;
   int layout;
   uint32_t rows_tg, threads;
+  uint32_t sk = 1;  // split-K threadgroups per row tile (buffers 5, 6)
   std::string label() const {
     char b[96];
-    snprintf(b, sizeof b, "%s/%u", name.c_str(), threads / 32);
+    if (sk > 1 || name.rfind("nh_x4_mm", 0) == 0) snprintf(b, sizeof b, "%s/%u/s%u", name.c_str(), threads / 32, sk);
+    else snprintf(b, sizeof b, "%s/%u", name.c_str(), threads / 32);
     return b;
   }
 };
@@ -255,9 +258,17 @@ struct NhGemmP_ {
   uint32_t epi, qe, se, k;
 };
 
+// split-K scratch (part) and counters (cnt) of an nh_x4_mm kernel: exactly the documented sizes, so shader
+// validation (MTL_SHADER_VALIDATION=1) catches any write past them
+size_t mm_part_bytes(const KV& kv, uint32_t N, uint32_t M) {
+  const uint32_t tiles = (N + kv.rows_tg - 1) / kv.rows_tg, tb = (M + 7) / 8;
+  return size_t(kv.sk) * tiles * (kv.threads / 32) * 512 * tb;
+}
+size_t mm_cnt_bytes(const KV& kv, uint32_t N) { return size_t((N + kv.rows_tg - 1) / kv.rows_tg) * 4; }
+
 void encode(Encoder& e, const KV& kv, const GpuMat& gm, int copy, const Buffer& x, const Buffer& y, uint32_t N,
             uint32_t K, uint32_t M, uint32_t R, float gs, uint32_t epi, const Buffer& dummy, uint32_t x_ld = 0,
-            uint32_t y_ld = 0) {
+            uint32_t y_ld = 0, const Buffer* part = nullptr, const Buffer* cnt = nullptr) {
   if (!x_ld) x_ld = K;
   if (!y_ld) y_ld = N;
   Gpu& g = Gpu::get();
@@ -278,7 +289,14 @@ void encode(Encoder& e, const KV& kv, const GpuMat& gm, int copy, const Buffer& 
     e.buf(3, y);
     e.bytes(4, &p, sizeof p);
     e.buf(8, dummy);
-    e.dispatch((N + kv.rows_tg - 1) / kv.rows_tg, 1, 1, kv.threads);
+    if (kv.name.rfind("nh_x4_mm", 0) == 0) {  // split-K grid: x parts, y row tiles; buffers 5, 6
+      if (!part || !cnt) fatal("%s: no split-K buffers", kv.name.c_str());
+      e.buf(5, *part);
+      e.buf(6, *cnt);
+      e.dispatch(kv.sk, (N + kv.rows_tg - 1) / kv.rows_tg, 1, kv.threads);
+    } else {
+      e.dispatch((N + kv.rows_tg - 1) / kv.rows_tg, 1, 1, kv.threads);
+    }
   } else {
     const uint32_t bm = kv.rows_tg;  // GEMM: rows_tg holds the tile's token rows
     const NhGemmP_ p{R, N, K, K, N, gs, epi, 0, 0, 1};
@@ -407,8 +425,8 @@ kernel void x4p_cvt(device float* out [[buffer(0)]], uint i [[thread_position_in
 }  // namespace
 
 int main(int argc, char** argv) {
-  int reps = 9, copies = 6;
-  bool gpr = false, rot = true, same = false;
+  int reps = 9, copies = 6, limit = 240;
+  bool gpr = false, rot = true, same = false, small = false;
   std::vector<std::string> only;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
@@ -417,6 +435,8 @@ int main(int argc, char** argv) {
     else if (a == "--gpr") gpr = true;
     else if (a == "--norot") rot = false;
     else if (a == "--same") same = true;
+    else if (a == "--limit" && i + 1 < argc) limit = atoi(argv[++i]);
+    else if (a == "--small") small = true;
     else only.push_back(a);
   }
   auto want = [&](const std::string& n) {
@@ -435,6 +455,12 @@ int main(int argc, char** argv) {
     }
     return false;
   };
+  // a hard wall-clock limit for the whole process (SIGALRM ends it): a hung or runaway GPU job cannot outlive it
+  alarm(unsigned(limit));
+  if (small) {  // validation runs: tiny shapes, one weight copy, few rounds
+    rot = false;
+    reps = std::min(reps, 2);
+  }
   auto want_shape = [&](const char* n) {
     for (auto& o : only)
       if (o.rfind(n, 0) == 0) return true;
@@ -520,7 +546,7 @@ int main(int argc, char** argv) {
     // in_proj-sized codes (18560 x 2048 B), 6 rotating copies
     const uint32_t N = 18560, RB = 2048;
     const int NC = 6;
-    Buffer w = g.alloc(size_t(N) * RB * NC, "stream", false), o = g.alloc(1 << 16, "o");
+    Buffer w = g.alloc(size_t(N) * RB * NC, "stream", false), o = g.alloc(size_t(N) * 4, "o");  // out[tg], tg < N
     memset(w.ptr(), 0x5A, size_t(N) * RB * NC);
     struct SV { int rpi, gg, ks; };
     std::vector<SV> svs = {{1, 4, 4}, {1, 8, 4}, {2, 2, 4}, {2, 4, 4}, {4, 1, 4}, {4, 2, 4}, {8, 1, 4}, {8, 2, 4},
@@ -561,11 +587,17 @@ int main(int argc, char** argv) {
     uint32_t N, K;
     float gs;
   };
-  const Shape shapes[] = {{"in", 18560, 4096, 0.0123f}, {"out", 4096, 8192, 0.37f}, {"odd", 997, 4096, 1.0f},
-                          {"w8", 8192, 8192, 0.5f}};
+  // in / out / odd always; w8 (diagnostic) and the LiLiCorr drafter's fc / gate-up / down only when named
+  const Shape big[] = {{"in", 18560, 4096, 0.0123f}, {"out", 4096, 8192, 0.37f}, {"odd", 997, 4096, 1.0f},
+                       {"w8", 8192, 8192, 0.5f},      {"dfc", 4096, 24576, 0.2f}, {"dup", 12288, 4096, 0.2f},
+                       {"ddn", 4096, 12288, 0.2f}};
+  // --small: every grid edge (rows not a multiple of 8 / 16 / 64, K not a multiple of 1024, uneven split-K parts)
+  const Shape tiny[] = {{"in", 200, 1024, 0.5f}, {"out", 72, 2048, 0.37f}, {"odd", 77, 1152, 1.0f}};
+  std::vector<Shape> shapes(small ? std::begin(tiny) : std::begin(big), small ? std::end(tiny) : std::end(big));
 
   for (const Shape& sh : shapes) {
-    if (!strcmp(sh.name, "w8") && !want_shape("w8")) continue;  // diagnostic shape: only when named
+    const bool named_only = !strcmp(sh.name, "w8") || sh.name[0] == 'd';
+    if (named_only && !want_shape(sh.name)) continue;
     // the variants of this shape
     struct Run {
       KV kv;
@@ -588,19 +620,24 @@ int main(int argc, char** argv) {
     add("nh_v8_fp4_s4", V8, 0, 32, 128, 8, {8, 5});
     add("nh_x4_v8", V8, 2, 16, 256, 8, {8, 5});
     add("nh_x4_v8_l0", V8, 0, 16, 256, 8, {8, 5});
+    auto addm = [&](const char* n, int layout, uint32_t sk, uint32_t M, std::initializer_list<uint32_t> Rs) {
+      for (uint32_t R : Rs) {
+        Run r{{n, V8, layout, 64, 128}, M, R};
+        r.kv.sk = sk;
+        runs.push_back(r);
+      }
+    };
     add("nh_gemm_fp4_m16", GEMM, 0, 16, 128, 16, {16, 13});
-    add("nh_x4_mm16", V8, 2, 32, 128, 16, {16, 13});
-    add("nh_x4_mm16_l0", V8, 0, 32, 128, 16, {16, 13});
     add("nh_gemm_fp4_m32", GEMM, 0, 32, 128, 24, {24, 21});
-    add("nh_x4_mm24", V8, 2, 64, 128, 24, {24, 21});
-    add("nh_x4_mm24k", V8, 2, 32, 128, 24, {24, 21});
-    add("nh_x4_mm24_l0", V8, 0, 64, 128, 24, {24, 21});
-    add("nh_x4_mm24k_l0", V8, 0, 32, 128, 24, {24, 21});
     add("nh_gemm_fp4_m32", GEMM, 0, 32, 128, 32, {32, 29});
-    add("nh_x4_mm32", V8, 2, 64, 128, 32, {32, 29});
-    add("nh_x4_mm32k", V8, 2, 32, 128, 32, {32, 29});
-    add("nh_x4_mm32_l0", V8, 0, 64, 128, 32, {32, 29});
-    add("nh_x4_mm32k_l0", V8, 0, 32, 128, 32, {32, 29});
+    for (uint32_t sk : {1u, 2u, 4u, 8u}) {
+      addm("nh_x4_mm16", 2, sk, 16, {16, 13});
+      addm("nh_x4_mm24", 2, sk, 24, {24, 21});
+      addm("nh_x4_mm32", 2, sk, 32, {32, 29});
+      addm("nh_x4_mm16_l0", 0, sk, 16, {16, 13});
+      addm("nh_x4_mm24_l0", 0, sk, 24, {24, 21});
+      addm("nh_x4_mm32_l0", 0, sk, 32, {32, 29});
+    }
     // filter
     std::vector<Run> sel;
     for (auto& r : runs) {
@@ -619,7 +656,7 @@ int main(int argc, char** argv) {
     std::map<uint32_t, std::vector<double>> refs;
     const double bytes = double(sh.N) * sh.K * 0.5625;
     struct Live {
-      Buffer xb, yb;
+      Buffer xb, yb, part, cnt;
       double err = 0, err_add = -1, err_half = -1;
       bool bad_pad = false;
       std::vector<double> t_rot, t_same;
@@ -644,13 +681,21 @@ int main(int argc, char** argv) {
       Live& L = live[i];
       L.xb = g.alloc(size_t(M) * sh.K * 4, "x");
       L.yb = g.alloc(size_t(M) * sh.N * 4, "y");
+      const bool is_mm = r.kv.name.rfind("nh_x4_mm", 0) == 0;
+      if (is_mm) {
+        L.part = g.alloc(std::max<size_t>(16, r.kv.sk > 1 ? mm_part_bytes(r.kv, sh.N, M) : 16), "x4part");
+        L.cnt = g.alloc(std::max<size_t>(16, mm_cnt_bytes(r.kv, sh.N)), "x4cnt");
+        memset(L.cnt.ptr(), 0, L.cnt.size);
+      }
+      const Buffer* lp = is_mm ? &L.part : nullptr;
+      const Buffer* lc = is_mm ? &L.cnt : nullptr;
       if (r.kv.kind == MV) memcpy(L.xb.ptr(), x.data(), size_t(sh.K) * 4);
       else
         for (size_t k = 0; k < size_t(M) * sh.K; ++k) L.xb.as<__fp16>()[k] = __fp16(x[k]);
       for (size_t k = 0; k < size_t(M) * sh.N; ++k) L.yb.as<float>()[k] = -777.0f;
       {
         auto e = g.begin();
-        encode(*e, r.kv, gm, 0, L.xb, L.yb, sh.N, sh.K, M, r.R, sh.gs, 0, dummy);
+        encode(*e, r.kv, gm, 0, L.xb, L.yb, sh.N, sh.K, M, r.R, sh.gs, 0, dummy, 0, 0, lp, lc);
         e->commit_and_wait();
       }
       double maxerr = 0, maxref = 0;
@@ -666,6 +711,12 @@ int main(int argc, char** argv) {
           maxref = std::max(maxref, std::fabs(rf));
         }
       L.err = maxerr / std::max(maxref, 1e-30);
+      if (is_mm)
+        for (size_t k = 0; k < L.cnt.size / 4; ++k)
+          if (L.cnt.as<uint32_t>()[k]) {
+            printf("%s: split-K counter %zu left at %u\n", r.kv.name.c_str(), k, L.cnt.as<uint32_t>()[k]);
+            break;
+          }
       // the add epilogue on a prefilled y (MV *_add; V8 kinds with X / Y rows 64 halves / 40 floats apart, padding
       // untouched), and V8's half store (epi 3)
       const bool add_mv = r.kv.kind == MV && r.kv.name.size() > 4 && r.kv.name.compare(r.kv.name.size() - 4, 4, "_add") == 0;
@@ -681,7 +732,7 @@ int main(int argc, char** argv) {
         memcpy(y2.ptr(), y0.data(), y0.size() * 4);
         {
           auto e = g.begin();
-          encode(*e, r.kv, gm, 0, x2, y2, sh.N, sh.K, M, r.R, sh.gs, 1, dummy, xl, yl);
+          encode(*e, r.kv, gm, 0, x2, y2, sh.N, sh.K, M, r.R, sh.gs, 1, dummy, xl, yl, lp, lc);
           e->commit_and_wait();
         }
         double me = 0, mr = 0;
@@ -702,7 +753,7 @@ int main(int argc, char** argv) {
         if (r.kv.kind == V8 && r.kv.name.rfind("nh_x4", 0) == 0) {
           for (size_t k = 0; k < size_t(M) * sh.N; ++k) L.yb.as<float>()[k] = -777.0f;
           auto e = g.begin();
-          encode(*e, r.kv, gm, 0, L.xb, L.yb, sh.N, sh.K, M, r.R, sh.gs, 3, dummy);
+          encode(*e, r.kv, gm, 0, L.xb, L.yb, sh.N, sh.K, M, r.R, sh.gs, 3, dummy, 0, 0, lp, lc);
           e->commit_and_wait();
           double mh = 0;
           for (uint32_t t = 0; t < r.R; ++t)
@@ -725,7 +776,8 @@ int main(int argc, char** argv) {
       auto e = g.begin();
       for (int c = 0; c < 10; ++c) {
         const int copy = rot_mode ? (cyc = (cyc + 1) % gm.copies) : 0;
-        encode(*e, r.kv, gm, copy, live[i].xb, live[i].yb, sh.N, sh.K, r.M, r.R, sh.gs, 0, dummy);
+        encode(*e, r.kv, gm, copy, live[i].xb, live[i].yb, sh.N, sh.K, r.M, r.R, sh.gs, 0, dummy, 0, 0,
+               live[i].part.mtl ? &live[i].part : nullptr, live[i].cnt.mtl ? &live[i].cnt : nullptr);
       }
       e->commit_and_wait();
       return e->gpu_ms() / 10;
@@ -761,6 +813,8 @@ int main(int argc, char** argv) {
       printf("\n");
       g.release(live[i].xb);
       g.release(live[i].yb);
+      if (live[i].part.mtl) g.release(live[i].part);
+      if (live[i].cnt.mtl) g.release(live[i].cnt);
     }
     fflush(stdout);
     for (auto& [k, v] : mats) {
