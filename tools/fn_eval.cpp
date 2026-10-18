@@ -13,6 +13,7 @@
 //   F: float32 logits [n, vocab] (row p = the distribution after token p)
 //   --dump-ref F  instead: ni_eval's NIEVREF2 reference file (top-K log-probs per position, --topk, default 64)
 //   --ref F       compares with such a file: KL over its top-K (+ the lumped rest), top-1 agreement, perplexity
+//                 (--seq i: the file's i-th sequence, for ni_eval's / the converter's files of several)
 #include "metal/gpu.h"
 #include "model/qwen4_exp.h"
 #include "util/log.h"
@@ -65,7 +66,7 @@ int main(int argc, char** argv) {
   const std::string dir = argv[1];
   const std::vector<int> ids = read_ids(argv[2]);
   std::string out, xs_out, mode = "prefill", dump_ref, ref;
-  int chunk = 512, rows = 3, hist = 0, topk = 64;
+  int chunk = 512, rows = 3, hist = 0, topk = 64, seq = 0;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -81,6 +82,7 @@ int main(int argc, char** argv) {
     else if (a == "--dump-ref") dump_ref = next();
     else if (a == "--ref") ref = next();
     else if (a == "--topk") topk = std::stoi(next());
+    else if (a == "--seq") seq = std::stoi(next());
     else fatal("unknown option %s", a.c_str());
   }
   const int n = int(ids.size());
@@ -185,8 +187,14 @@ int main(int argc, char** argv) {
     std::ifstream f(ref, std::ios::binary);
     char magic[8];
     uint32_t nseq = 0, Vr = 0, K = 0, nr = 0;
-    f.read(magic, 8); f.read((char*)&nseq, 4); f.read((char*)&Vr, 4); f.read((char*)&K, 4); f.read((char*)&nr, 4);
-    if (!f || memcmp(magic, "NIEVREF2", 8) || nseq < 1 || int(nr) != n) fatal("%s: not a reference for this sequence", ref.c_str());
+    f.read(magic, 8); f.read((char*)&nseq, 4); f.read((char*)&Vr, 4); f.read((char*)&K, 4);
+    if (!f || memcmp(magic, "NIEVREF2", 8) || seq < 0 || uint32_t(seq) >= nseq) fatal("%s: no sequence %d", ref.c_str(), seq);
+    for (int q = 0; q < seq; ++q) {  // skip: n, ids, n - 1 records of (lp, K x (id, lp))
+      f.read((char*)&nr, 4);
+      f.seekg(std::streamoff(nr) * 4 + std::streamoff(nr - 1) * (4 + 8 * std::streamoff(K)), std::ios::cur);
+    }
+    f.read((char*)&nr, 4);
+    if (!f || int(nr) != n) fatal("%s: not a reference for this sequence", ref.c_str());
     std::vector<int> rid(nr);
     f.read((char*)rid.data(), nr * 4);
     if (rid != ids) fatal("%s: other token ids", ref.c_str());
