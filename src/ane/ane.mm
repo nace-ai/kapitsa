@@ -1,5 +1,7 @@
-// Private AppleNeuralEngine client (see ane.h). Ideas from Splash (incoai/splash, Apache-2.0,
-// runtime/ane/Program.mm and Handoff.mm); our code.
+// Private AppleNeuralEngine client (see ane.h). Interface declarations and signature table adapted
+// from Splash (incoai/splash, Apache-2.0, runtime/ane/Program.mm).
+// Nace AI changes: NiAne protocols, local API resolution and service-queue/watchdog integration.
+// License notice: THIRD_PARTY_NOTICES.
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>

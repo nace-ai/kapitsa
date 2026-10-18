@@ -1,8 +1,7 @@
 #include "common.h"
 
 // ---- GPU side of the GPU + Neural Engine split of the dense prefill FFN (NI_ANE=1) ----
-// Design from Splash (incoai/splash, Apache-2.0, runtime/metal/kernels/prefill/ane_ffn.metal):
-// the ANE multiplies int8 weights and int8 activations after a block-diagonal Hadamard rotation
+// The ANE multiplies int8 weights and int8 activations after a block-diagonal Hadamard rotation
 // v -> D H v / sqrt(n) (H Walsh-Hadamard in natural order, D fixed random signs), which keeps dot
 // products of rows rotated alike and spreads outliers before the per-token / per-row int8 scales.
 // FFN inputs and gate/up weight rows rotate in blocks of 128 along the hidden dim; down's weight
@@ -11,7 +10,9 @@
 // overflow), so every scale carries a factor 128. Weights: MLX affine 4-bit, group 64 (w uint32 [N][K/8], value j
 // of a word at bits 4j, scales and biases bf16 [N][K/64]) here; the other formats (bf16, MLX affine 3/5/6/8-bit,
 // 4-bit group 32: wfmt.metal's packing) through ane_wf4, instantiated in wfmt.metal's second library.
-// Our code; Splash's ideas.
+// ane_rotate_block below is adapted from Splash's ane_ffn_rotate_block (incoai/splash, Apache-2.0).
+// Nace AI changes: helper/variable names, direct indexing of v[k], an explicit ushort shuffle mask,
+// and a literal 128-element rotation unit. License notice: THIRD_PARTY_NOTICES.
 
 constant constexpr float kAnePeak = 127.0f;
 constant constexpr float kAneUnit = 128.0f;

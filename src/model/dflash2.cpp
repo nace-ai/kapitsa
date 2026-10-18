@@ -1,8 +1,7 @@
 // DFlash2 block drafter: loading, load-time quantization, context ring and the drafting pass.
 // Kernels in src/kernels/spec_dflash.metal.
-// Ideas credited to Splash (github.com/incoai/splash, Apache-2.0): MLX af4g64 quantization of the
-// drafter at load, the per-row window bound of the draft attention, exact-code MMA operands, the
-// separate block K/V scratch; the code is our own.
+// Techniques: MLX af4g64 quantization of the drafter at load, the per-row window bound of the draft
+// attention, exact-code MMA operands, a separate block K/V scratch.
 #include "model/dflash2.h"
 #include "model/kparams.h"
 #include "util/bf16.h"

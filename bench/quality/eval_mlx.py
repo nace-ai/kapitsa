@@ -42,7 +42,7 @@ def read_ids(a):
 
 ids = [read_ids(s) for s in seqs]
 if not os.environ.get("NI_LOCK_HELD"):  # set by a caller that already holds the lock (lockf ... sh)
-    lock = open(os.path.expanduser("~/.cache/nace-gpu.lock"), "a+")
+    lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 
 

@@ -18,6 +18,7 @@ class Kapitsa < Formula
     system "cmake", "-S", ".", "-B", "build", *std_cmake_args
     system "cmake", "--build", "build", "--target", "kapitsa"
     bin.install "build/kapitsa"
+    pkgshare.install "LICENSE", "THIRD_PARTY_NOTICES"
   end
 
   def caveats

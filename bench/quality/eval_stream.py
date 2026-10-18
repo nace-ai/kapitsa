@@ -56,7 +56,7 @@ class GpuLock:
         if os.environ.get("NI_LOCK_HELD"):  # the caller holds the lock for the whole run
             return
         if GpuLock.held is None:
-            f = open(LOCK, "a+")
+            f = os.fdopen(os.open(LOCK, os.O_RDONLY | os.O_CREAT, 0o644))
             t = time.time()
             fcntl.flock(f, fcntl.LOCK_EX)
             GpuLock.held = f

@@ -1,11 +1,10 @@
 // Client of Apple's private AppleNeuralEngine.framework (the Neural Engine, "ANE"), usable from
 // plain C++. Used by the opt-in GPU + ANE split of the dense prefill FFN (NI_ANE=1, ffn_split.h).
 //
-// The approach is Splash's (incoai/splash, Apache-2.0: runtime/ane/Program.mm, Handoff.mm): the
-// _ANEClient/_ANEModel/_ANERequest selectors, each checked against its type encoding before use;
-// MIL text programs whose weights are IOSurface-backed tensor_buffer inputs; IOSurfaces shared
+// How it works: the _ANEClient/_ANEModel/_ANERequest selectors, each checked against its type encoding
+// before use; MIL text programs whose weights are IOSurface-backed tensor_buffer inputs; IOSurfaces shared
 // zero-copy with Metal; evaluations ordered with the GPU through one MTLSharedEvent, with a
-// watchdog that releases the GPU if the ANE stops answering. The code here is ours.
+// watchdog that releases the GPU if the ANE stops answering.
 #pragma once
 #include "metal/gpu.h"
 
@@ -86,7 +85,7 @@ class Program {
   std::string key_;
 };
 
-// GPU <-> ANE handoff (Splash's Handoff semantics, with two events). The GPU signals `ready`
+// GPU <-> ANE handoff (two events). The GPU signals `ready`
 // values on one MTLSharedEvent and the ANE signals `done` values on another, each increasing in
 // its own order (next_ready() / next_done()), so jobs of two row halves can interleave (the
 // wavefront schedule) without a value ever going back. queue() registers an ANE job that waits

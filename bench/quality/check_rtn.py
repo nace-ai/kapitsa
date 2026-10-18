@@ -35,7 +35,7 @@ cw = {k: mx.array(v[0]).view(mx.bfloat16) if v[1] == "BF16" else mx.array(v[0]) 
     if cw and isinstance(next(iter(cw.values())), tuple) else cw
 lock = None
 if gpu:
-    lock = open(os.path.expanduser("~/.cache/nace-gpu.lock"), "a")
+    lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 qfor = repo_qcfg(cand.config, cp)
 same = diff = 0
