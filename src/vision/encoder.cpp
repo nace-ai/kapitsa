@@ -12,7 +12,7 @@ namespace ni::vision {
 std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixels) {
   QwenViTConfig qc;
   if (QwenViT::supports(dir, &qc)) {
-    if (max_pixels > 0) qc.max_pixels = std::max(max_pixels, qc.min_pixels);
+    if (max_pixels > 0) qc.max_pixels = std::clamp(max_pixels, qc.min_pixels, qc.max_pixels);
     return std::make_unique<QwenViT>(dir, qc);
   }
   // other models' encoders go here, each behind ImageEncoder (Nemotron 3.5 Bolt's RADIO ViT-H/16 with its pixel

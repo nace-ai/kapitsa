@@ -47,8 +47,13 @@ class ImageEncoder {
   virtual void encode(const Prepared& p, const Buffer& out) = 0;
 };
 
+// The servers' default cap on the pixels an image keeps: about what Anthropic's API lets Claude see (a 2880x1800
+// Retina screenshot becomes 1376x864, ~1.2K tokens, in ~1 s instead of ~11 s for its full 5K tokens).
+constexpr long kDefaultImageMaxPixels = 1200000;
+
 // The encoder of the model in `dir`, or null when the model takes no images (no vision tower in its config or files).
-// `max_pixels` > 0 caps the pixels an image keeps (encoders that resize: fewer tokens, faster), else the model's own.
+// `max_pixels` > 0 caps the pixels an image keeps (within the model's own limits: fewer tokens, faster), 0 = the
+// model's own limit.
 std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixels = 0);
 
 // The engine's handle on an encoder: prepares a request's images (data: URLs remembered by content, so the screenshots

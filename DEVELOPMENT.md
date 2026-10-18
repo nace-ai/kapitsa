@@ -198,8 +198,9 @@ positions such as Nemotron-H's). Nemotron 3.5 Bolt's RADIO encoder is the next o
 Bolt becomes the short note.
 
 - Processor: decoded as PIL's `convert("RGB")` decodes (no color management, alpha dropped, the EXIF orientation
-  applied), resized by smart_resize (multiples of 32 within the model's 65536 to 16.7M pixels, `--image-max-pixels`
-  lowers the maximum) with Pillow's bicubic resampling reproduced to the bit, normalized, cut into 16x16 patches over
+  applied), resized by smart_resize (multiples of 32, at least 65536 pixels and by default at most 1.2M: about what
+  Anthropic's API lets Claude see; `--image-max-pixels` up to the model's 16.7M, `0` for that) with Pillow's bicubic
+  resampling reproduced to the bit, normalized, cut into 16x16 patches over
   2 frames. `tests/vision/check_cpu.py` checks it against Pillow and Hugging Face's processors (bit-exact with the
   reference arithmetic; decoding exact for PNG, WebP, GIF, BMP, TIFF; JPEG goes through Apple's decoder, 0.6 levels
   from libjpeg on average, up to ~20 on edges).
@@ -229,10 +230,12 @@ cases' divergence is mlx_vlm's own tower error).
 
 Speed (M4 Pro, 35B): a 1280x800 screenshot (1000 tokens) encodes in 0.84 s, and its first answer token comes 1.7 s
 after the request (2.3 s for the first image after the server starts: the encoder's 0.9 GB load in ~0.4 s); sent
-again it is cached: 0.02 s. 1920x1080 (2040 tokens): 2.4 s to encode, 4.2 s to the first token; 2880x1800 (5040
-tokens): 10.9 s and 15.5 s. The tower's attention spans all of an image's patches, so its cost grows with their
-square: its GEMMs run at ~7 TFLOP/s and its attention at ~6.7 (59% and 37% of a 1280x800 encode), and
-`--image-max-pixels` trades detail for time. Text-only requests are unchanged: the same outputs bit for bit
+again it is cached: 0.02 s. A 2880x1800 Retina screenshot becomes 1376x864 (1161 tokens) under the default cap: 1.0 s
+to encode, 2.1 s to the first token; at its full size (5040 tokens, `--image-max-pixels 0`) 10.9 s and 15.5 s. The
+tower's attention spans all of an image's patches, so its cost grows with their square; its GEMMs run at ~7 TFLOP/s
+and its attention at ~6.7 (59% and 37% of a 1280x800 encode). Small text survives the cap: `tests/vision/fineprint.py`
+reads an 11 pt editor line, a 10 pt status bar and 10 pt table cells off 2880x1800 screenshots right at 1.2M pixels as
+at full size (35B: 5 of 5 each, 2.3 s against 17 s). Text-only requests are unchanged: the same outputs bit for bit
 (teacher-forced log-probs on both models, greedy decodes, a multi-turn server conversation) at the same prefill and
 decode speed.
 

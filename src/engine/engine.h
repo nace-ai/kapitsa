@@ -41,8 +41,8 @@ struct EngineOptions {
   // "" = NI_DFLASH if set (auto | none | 0 | <dir>), else auto. spec_depth 0 turns "auto" off too.
   std::string dflash;
   // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
-  // model's processor resizes); 0 = the model's own limit.
-  long image_max_pixels = 0;
+  // model's processor resizes); 0 = the model's own limit (Qwen3.6 / 3.8: 16.7 million).
+  long image_max_pixels = vision::kDefaultImageMaxPixels;
 };
 
 // GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
