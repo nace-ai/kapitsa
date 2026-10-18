@@ -61,8 +61,8 @@ curl http://127.0.0.1:8000/v1/chat/completions \
   }'
 ```
 
-Images work on Qwen3.6 and Qwen3.8: send OpenAI `image_url` parts, Anthropic image blocks or Responses `input_image`,
-as base64 data or an `http(s)` URL.
+Images work on Qwen3.6, Qwen3.8 and Nemotron 3.5 Bolt: send OpenAI `image_url` parts, Anthropic image blocks or
+Responses `input_image`, as base64 data or an `http(s)` URL.
 
 Coding agents and apps that speak the OpenAI API connect to `http://127.0.0.1:8000/v1`; any API key works unless
 the server was started with `--api-key`. Thinking follows the model's default, which is on. `"reasoning_effort": "none"`

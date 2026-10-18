@@ -15,6 +15,11 @@
 
 namespace ni::vision {
 
+// The servers' default cap for this encoder: the smallest that keeps small text in Retina screenshots readable
+// (tests/vision/fineprint.py on Bolt: 4 of 5 at 1.2M pixels, which lost an 11 pt code line; 5 of 5 at 1.4M, 1.6M, 2.4M
+// and full size)
+constexpr long kRadioDefaultMaxPixels = 1400000;
+
 struct RadioViTConfig {
   int depth = 32, hidden = 1280, heads = 16, inter = 5120, patch = 16;
   int prefix = 10;          // cls + register tokens before the patches

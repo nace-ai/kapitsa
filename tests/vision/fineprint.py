@@ -93,7 +93,8 @@ cases = [
 right = 0
 for path, q, want in cases:
     a, n, dt = ask(path, q)
-    ok = all(w.replace(",", "") in a.replace(",", "") for w in want)
+    digits = lambda t: "".join(c for c in t if c not in ",. ")  # 20,905 = 20.905 = 20905 (locale separators)
+    ok = all(digits(w) in digits(a) for w in want)
     right += ok
     print(("ok   " if ok else "MISS ") + f"{os.path.basename(path)} ({n} prompt tokens, {dt:.1f} s): {q[:48]!r} -> {a.strip()[:60]!r}"
           f" (want {', '.join(want)})", flush=True)

@@ -13,12 +13,14 @@ namespace ni::vision {
 std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixels) {
   QwenViTConfig qc;
   if (QwenViT::supports(dir, &qc)) {
+    if (max_pixels == kModelDefaultPixels) max_pixels = kDefaultImageMaxPixels;
     if (max_pixels > 0) qc.max_pixels = std::clamp(max_pixels, qc.min_pixels, qc.max_pixels);
     return std::make_unique<QwenViT>(dir, qc);
   }
   RadioViTConfig rc;
   if (RadioViT::supports(dir, &rc)) {
-    rc.max_pixels = max_pixels;  // patches = pixels / 256, within the processor's 1024 to 13312
+    // patches = pixels / 256, within the processor's 1024 to 13312
+    rc.max_pixels = max_pixels == kModelDefaultPixels ? kRadioDefaultMaxPixels : std::max(0L, max_pixels);
     return std::make_unique<RadioViT>(dir, rc);
   }
   // other models' encoders go here, each behind ImageEncoder, with the model's prefill calling enc_embed_runs

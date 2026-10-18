@@ -68,12 +68,14 @@ class ImageEncoder {
 };
 
 // The servers' default cap on the pixels an image keeps: about what Anthropic's API lets Claude see (a 2880x1800
-// Retina screenshot becomes 1376x864, ~1.2K tokens, in ~1 s instead of ~11 s for its full 5K tokens).
+// Retina screenshot becomes 1376x864, ~1.2K tokens: the 35B's first token in ~2 s instead of ~15 s at its full 5K).
+// An encoder that needs more for small text in screenshots sets its own (RadioViT: kRadioDefaultMaxPixels).
 constexpr long kDefaultImageMaxPixels = 1200000;
+constexpr long kModelDefaultPixels = -1;  // open_encoder: the model's default cap (the servers' choice)
 
 // The encoder of the model in `dir`, or null when the model takes no images (no vision tower in its config or files).
-// `max_pixels` > 0 caps the pixels an image keeps (within the model's own limits: fewer tokens, faster), 0 = the
-// model's own limit.
+// `max_pixels` > 0 caps the pixels an image keeps (within the model's own limits: fewer tokens, faster),
+// kModelDefaultPixels takes the encoder's default cap, 0 the model's own limit (as its reference processor).
 std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixels = 0);
 
 // The engine's handle on an encoder: prepares a request's images (data: URLs remembered by content, so the screenshots
