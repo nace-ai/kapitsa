@@ -593,6 +593,15 @@ void Encoder::split() {
   cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];
   open_encoder();
 }
+void Gpu::signal_event_cpu(void* event, uint64_t value) { ((__bridge id<MTLSharedEvent>)event).signaledValue = value; }
+
+void Encoder::on_completed(std::function<void()> fn) {
+  auto f = std::make_shared<std::function<void()>>(std::move(fn));
+  [(__bridge id<MTLCommandBuffer>)cb_ addCompletedHandler:^(id<MTLCommandBuffer>) {
+    (*f)();
+  }];
+}
+
 void Encoder::wait_event(void* event, uint64_t value) {
   if (enc_) {
     [E(enc_) endEncoding];

@@ -1,12 +1,13 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
-// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors) and
-// Nemotron-H models (NVIDIA's safetensors).
+// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
+// included) and Nemotron-H models (NVIDIA's safetensors).
 #pragma once
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
+#include "model/qwen4_exp.h"
 #include "tokenizer/tokenizer.h"
 #include "vision/encoder.h"
 
@@ -45,6 +46,9 @@ struct EngineOptions {
   long image_max_pixels = 0;
 };
 
+// The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next
+// or Nemotron-H.
+MemPlan model_plan(const std::string& model_dir, int prefill_chunk);
 // GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
 // (recommendedMaxWorkingSetSize, which macOS sizes from the RAM) minus a margin (4%, at least 512 MB) for
 // the Neural Engine service's buffers and other GPU users. NI_MEM_BUDGET=<GB> overrides it.
@@ -219,7 +223,7 @@ class Engine {
 
   EngineOptions opts_;
   std::unique_ptr<Model> model_;
-  Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split)
+  Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;

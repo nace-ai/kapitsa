@@ -184,7 +184,7 @@ int run_doctor(int argc, char** argv) {
     const char* drafter = nemotron ? "LiLiCorr drafter" : "DFlash2 drafter";
     try {
       lp = plan_load(dir, dflash, false, ctx, slots, budget, chunk);
-      m = nemotron ? NemotronH::plan(dir, lp.prefill_chunk) : Qwen35::plan(dir, lp.prefill_chunk);
+      m = model_plan(dir, lp.prefill_chunk);
     } catch (const std::exception& e) {
       if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
       continue;

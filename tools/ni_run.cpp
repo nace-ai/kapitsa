@@ -17,6 +17,7 @@
 #include "ane/ffn_split.h"
 #include "model/dflash2.h"
 #include "model/qwen35.h"
+#include "model/qwen4_exp.h"
 #include "util/log.h"
 
 #include <algorithm>
@@ -113,7 +114,8 @@ int main(int argc, char** argv) {
   if (dflash_dir == "1" || dflash_dir == "on") dflash_dir = "auto";
 
   Gpu& g = Gpu::get();
-  Qwen35 m(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : 2048);
+  std::unique_ptr<Qwen35> mp = load_qwen(dir, getenv("NI_CHUNK") ? atoi(getenv("NI_CHUNK")) : 2048);
+  Qwen35& m = *mp;
   if (kv_grow && !dflash_dir.empty()) fatal("--kv-grow covers the plain, MTP and teacher-forced paths, not --dflash");
   auto seq = m.new_seq(std::max(8192, int(ids.size()) + n_gen + 64), kv_grow ? 0 : -1);
   auto grow = [&](int need) {

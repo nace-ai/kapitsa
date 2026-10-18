@@ -15,6 +15,7 @@
 //                 each run takes the image's embeddings and M-RoPE positions, as the server does (src/vision)
 #include "metal/gpu.h"
 #include "model/qwen35.h"
+#include "model/qwen4_exp.h"
 #include "util/log.h"
 #include "vision/encoder.h"
 
@@ -249,8 +250,9 @@ int main(int argc, char** argv) {
   }
 
   std::unique_ptr<Qwen35> ref;
-  if (!ref_model.empty()) ref = std::make_unique<Qwen35>(ref_model, chunk);
-  Qwen35 m(model_dir, chunk);
+  if (!ref_model.empty()) ref = load_qwen(ref_model, chunk);
+  std::unique_ptr<Qwen35> mp = load_qwen(model_dir, chunk);
+  Qwen35& m = *mp;
   if (!images.files.empty() && !(images.enc = vision::open_encoder(model_dir))) fatal("%s takes no images", model_dir.c_str());
   if (ref && !images.files.empty()) fatal("--image with --ref-model is not supported");
   const int V = m.config().vocab;

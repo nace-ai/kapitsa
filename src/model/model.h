@@ -27,6 +27,12 @@ struct Seq {
   int pend_pos = 0;                // position of the first pending row (Nemotron-H)
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
+  // Qwen3.8-Flash-Next: per attention layer (and the MTP head's) the sparse-attention indexer's raw index keys
+  // (half [cap, 128]) and block keys (bf16 [cap / 4, 128]), grown with the KV cache; the n-gram embedding's conv
+  // window (fp32 [32, 4 x hidden], position mod 32)
+  std::vector<Buffer> ixk, ixb;
+  Buffer mtp_ixk, mtp_ixb;
+  Buffer pconv;
   int* tokens() { return tok.as<int>(); }
   // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
   // a prompt's prefill; null: text only). Positions (Model::set_rope_positions): rows [0, rope_n) rotate by the
@@ -42,6 +48,7 @@ struct Seq {
 struct Checkpoint {
   int pos = -1;
   std::vector<Buffer> conv, rec;
+  Buffer pconv;  // Qwen3.8-Flash-Next: the n-gram embedding's conv window
 };
 
 struct SamplingParams {

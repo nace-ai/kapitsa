@@ -99,7 +99,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
             "--mem-budget can help.",
             opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
-  if (NemotronH::is_model(opts_.model_dir)) {
+  if (Qwen4Exp::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk);  // Qwen3.8-Flash-Next
+    q35_ = m.get();
+    model_ = std::move(m);
+  } else if (NemotronH::is_model(opts_.model_dir)) {
     auto m = std::make_unique<NemotronH>(opts_.model_dir, opts_.prefill_chunk);
     nh_ = m.get();
     model_ = std::move(m);
@@ -218,8 +222,8 @@ size_t default_mem_budget() {
   return rws - std::max<size_t>(size_t(512) << 20, rws / 25);
 }
 
-// The model's memory plan from its headers: a Nemotron-H or a Qwen3.5-family folder.
-static MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
+MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
+  if (Qwen4Exp::is_model(model_dir)) return Qwen4Exp::plan(model_dir, prefill_chunk);
   return NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk) : Qwen35::plan(model_dir, prefill_chunk);
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
@@ -258,7 +262,7 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
         }
       }
     }
-  } else if (!lp.dflash_off) {
+  } else if (!lp.dflash_off && !Qwen4Exp::is_model(model_dir)) {  // (no block drafter binds to Qwen3.8-Flash-Next)
     lp.dflash = lp.dflash_auto ? DFlash2::find(model_dir, Qwen35::read_config(model_dir)) : want;
     if (!lp.dflash.empty()) {
       // auto: a drafter that would keep one conversation from its full context is left out (MTP or plain decoding

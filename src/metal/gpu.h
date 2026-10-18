@@ -2,6 +2,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -54,6 +55,8 @@ class Gpu {
   Buffer wrap(void* ptr, size_t bytes, const char* label = nullptr, bool tracked = false);
   // A new MTLSharedEvent (retained; id<MTLSharedEvent>), for ordering GPU work with the ANE.
   void* new_shared_event();
+  // Sets the event's value from the CPU (a GPU wait_event on it proceeds once it reaches the waited value)
+  static void signal_event_cpu(void* event, uint64_t value);
   void release(Buffer& b);
 
   // Compiles the embedded kernel library on first use. Extra source can be appended (tests).
@@ -127,6 +130,9 @@ class Encoder {
   // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
   void signal_event(void* event, uint64_t value);
   void wait_event(void* event, uint64_t value);
+  // Runs fn on a Metal thread once the current command buffer has completed (also when it failed); add before the
+  // command buffer is committed
+  void on_completed(std::function<void()> fn);
   // Commits the work so far and continues in a new command buffer (same queue, so in order): long passes are split
   // into short command buffers, which keeps the GPU responsive to the desktop's own work.
   void split();
