@@ -344,9 +344,10 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
     return;
   }
   // Three rows: half-precision inner products with the dequantization shared across rows (the
-  // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x).
-  static const bool half3_off = env_on("NI_NO_QMVH");
-  if (R == 3 && !half3_off && L.bits == 4) {
+  // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x). Not on Apple10 GPUs (M5): there
+  // the fast-math build of qmvht_t3_r4 returns NaN rows (tools/fn_check kernels; the 35B at MTP depth 2 drafted -1s).
+  static const bool half3_off = env_on("NI_NO_QMVH") || Gpu::get().apple10();
+  if (R == 3 && !half3_off && !no_qmvh_ && L.bits == 4) {
     e.use(pipe2("qmvht_t3_r4"));
     kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
     e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);

@@ -468,6 +468,9 @@ class Qwen35 : public Model {
 
   size_t mem_budget_ = 0;
   bool gdn_sigmoid_ = false;  // the gated norm's gate: sigmoid (Qwen3.8-Flash-Next), else silu
+  // 3-row verify GEMVs on the fp32 kernels instead of qmvht_t3_r4's half products (Qwen4Exp: accuracy first; on
+  // Apple10 GPUs qmvht is off for every model)
+  bool no_qmvh_ = false;
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);
 
