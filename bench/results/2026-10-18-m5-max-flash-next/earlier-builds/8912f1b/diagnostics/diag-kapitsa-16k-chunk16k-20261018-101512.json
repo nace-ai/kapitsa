@@ -1,0 +1,577 @@
+{
+ "schema": 2,
+ "label": "diag-kapitsa-16k-chunk16k",
+ "model": "flash-next",
+ "base_url": "http://127.0.0.1:8299/v1",
+ "when": "2026-10-18 10:16:00",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8299/v1",
+  "model": "flash-next",
+  "label": "diag-kapitsa-16k-chunk16k",
+  "pid": 84746,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4133,16000:16286",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,tools",
+  "out": "<diag-root>/results/diag-kapitsa-16k-chunk16k-20261018-101512.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+  "dirty": false
+ },
+ "phases": {
+  "prefill_16000": [
+   1792343760.678,
+   1792343786.44
+  ]
+ },
+ "memory": {
+  "prefill_16000": {
+   "pids": [
+    {
+     "pid": 84746,
+     "name": "kapitsa",
+     "phys_footprint": 85099293408,
+     "phys_footprint_peak": 85130619616,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 4785897472,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 81157.0,
+   "phys_footprint_peak_mb": 81186.9,
+   "mapped_file_clean_mb": 4564.2,
+   "swap_used_mb": 18807.81,
+   "memorystatus_level": 32,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 79.5,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 18807.81,
+  "swapouts": 63240324,
+  "swapins": 53178931,
+  "pageouts": 599845,
+  "memorystatus_level": 91
+ },
+ "prefill": [
+  {
+   "target": 16000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 16286,
+   "expected_prompt_tokens": 16286,
+   "ttft_s": 19.05656520789489,
+   "prefill_tps": 854.6136107073964,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The first file implements the Granite Speech model, which integrates a conformer-based audio encoder, a QFormer projector, and a language model to process and generate speech-aware text outputs.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [
+     {
+      "ttft_s": 0.09119641711004078,
+      "prompt_tokens": 16345,
+      "cached_tokens": 16322,
+      "finish": "stop",
+      "answer": "One function defined in that file is `get_audio_features`."
+     },
+     {
+      "ttft_s": 0.09678512485697865,
+      "prompt_tokens": 16385,
+      "cached_tokens": 16357,
+      "finish": "stop",
+      "answer": "One class defined in that file is `GraniteSpeechModel`."
+     },
+     {
+      "ttft_s": 0.09313650010153651,
+      "prompt_tokens": 16419,
+      "cached_tokens": 16398,
+      "finish": "length",
+      "answer": "The file imports the following modules and packages:\n\n*   **Standard Library:** `math`, `dataclasses` (specifically `dataclass`)\n*   **PyTorch:** `torch`, `torch.nn.functional` (as `F`), `torch.nn` (as `nn`)\n*   **Hugging Face Transformers Internal Modules:**\n    *   `...` (likely `transformers`) for `initialization` (as `init`)\n    *   `...cache_utils` for `Cache`\n    *   `...generation` for `GenerationMixin`\n    *   `...modeling_outputs` for `BaseModelOutputWithPast`, `BaseModelOutputWithPooling`, `ModelOutput`\n    *   `...modeling_utils` for `PreTrainedModel`\n    *   `...processing_utils` for `Unpack`\n    *   `...utils` for `TransformersKwargs`, `auto_docstring`, `can_return_tuple`, `is_peft_available`, `logging`, `torch_compilable_check`\n    *   `...utils.generic` for `merge_with_config_defaults`\n    *   `...utils.output_capturing` for `capture_outputs`"
+     }
+    ],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": 0.0931
+   },
+   "turn2_ttft_s": 0.0931,
+   "turn2_cached_tokens": 16322,
+   "turn2_prompt_tokens": 16345,
+   "turn1_finish": "stop"
+  }
+ ],
+ "peak_rss_mb": 7397,
+ "peak_footprint_mb": 81187,
+ "invalid": [],
+ "flags": [
+  "CONTENTION: sustained foreign GPU load > 5% in ['prefill_16000'] (mean 12.22%, top ['com.apple.WebKit'])"
+ ],
+ "peak_memory_mb": 81186.9,
+ "mapped_file_clean_mb": 4564.2,
+ "vm_end": {
+  "swap_used_mb": 18807.81,
+  "swapouts": 63240324,
+  "swapins": 53179341,
+  "pageouts": 599951,
+  "memorystatus_level": 32
+ },
+ "when_end": "2026-10-18 10:16:26",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 4.13,
+    "prompt_tokens": 2925,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.86,
+    "prompt_tokens": 430,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "contention": {
+  "overall": {
+   "samples": 12,
+   "mean_foreign_gpu_pct": 12.22,
+   "max_foreign_gpu_pct": 16.63,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 12,
+   "longest_busy_run": 12,
+   "top": [
+    "com.apple.WebKit"
+   ],
+   "flagged": true
+  },
+  "phases": {
+   "prefill_16000": {
+    "samples": 12,
+    "mean_foreign_gpu_pct": 12.22,
+    "max_foreign_gpu_pct": 16.63,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 12,
+    "longest_busy_run": 12,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   }
+  },
+  "samples": [
+   [
+    1792343762.606,
+    7.35,
+    "com.apple.WebKit",
+    6.8,
+    0
+   ],
+   [
+    1792343764.646,
+    14.13,
+    "com.apple.WebKit",
+    14.13,
+    0
+   ],
+   [
+    1792343766.683,
+    13.84,
+    "com.apple.WebKit",
+    13.84,
+    0
+   ],
+   [
+    1792343768.728,
+    12.86,
+    "com.apple.WebKit",
+    12.86,
+    0
+   ],
+   [
+    1792343770.763,
+    14.37,
+    "com.apple.WebKit",
+    14.37,
+    0
+   ],
+   [
+    1792343772.8,
+    14.53,
+    "com.apple.WebKit",
+    13.97,
+    0
+   ],
+   [
+    1792343774.844,
+    16.63,
+    "com.apple.WebKit",
+    15.89,
+    0
+   ],
+   [
+    1792343776.886,
+    15.9,
+    "com.apple.WebKit",
+    15.9,
+    0
+   ],
+   [
+    1792343778.937,
+    14.98,
+    "com.apple.WebKit",
+    14.37,
+    0
+   ],
+   [
+    1792343780.982,
+    10.93,
+    "com.apple.WebKit",
+    10.26,
+    0
+   ],
+   [
+    1792343783.021,
+    6.01,
+    "com.apple.WebKit",
+    6.01,
+    0
+   ],
+   [
+    1792343785.062,
+    5.16,
+    "com.apple.WebKit",
+    5.16,
+    0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "diag-kapitsa-16k-chunk16k",
+ "display": "Kapitsa (MTP, depth 1)",
+ "engine": "kapitsa",
+ "version": "8912f1b",
+ "version_config": "auto",
+ "model_name": "Qwen3.8-Flash-Next",
+ "model_path": "{models}/qwen3.8-flash-next-4bit",
+ "note": "diag",
+ "config": {
+  "label": "diag-kapitsa-16k-chunk16k",
+  "display": "Kapitsa (MTP, depth 1)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Qwen3.8-Flash-Next",
+  "model_path": "{models}/qwen3.8-flash-next-4bit",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--spec",
+   "1",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8299",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--prefill-chunk",
+   "16384"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8299/v1",
+  "model": "flash-next",
+  "ready_timeout": 900,
+  "requires_paths": [
+   "{models}/qwen3.8-flash-next-4bit/model.safetensors.index.json",
+   "{models}/qwen3.8-flash-next-4bit/mtp.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286"
+  ],
+  "note": "diag"
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 19232.0,
+    "swapouts": 63240324,
+    "swapins": 53151881,
+    "pageouts": 599611,
+    "memorystatus_level": 89
+   },
+   "gpu_mem": {
+    "in_use": 1967095808,
+    "alloc": 9276162048,
+    "util_pct": 12
+   },
+   "disk_free_bytes": 132866256896,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--spec",
+   "1",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8299",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--prefill-chunk",
+   "16384"
+  ],
+  "cmd_shell": "<repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8299 --ctx 32768 --slots 1 --prefill-chunk 16384",
+  "env": {},
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/qwen3.8-flash-next-4bit",
+   "safetensors_bytes": 105834937496,
+   "safetensors_files": [
+    "model-00001-of-00050.safetensors",
+    "model-00002-of-00050.safetensors",
+    "model-00003-of-00050.safetensors",
+    "model-00004-of-00050.safetensors",
+    "model-00005-of-00050.safetensors",
+    "model-00006-of-00050.safetensors",
+    "model-00007-of-00050.safetensors",
+    "model-00008-of-00050.safetensors",
+    "model-00009-of-00050.safetensors",
+    "model-00010-of-00050.safetensors",
+    "model-00011-of-00050.safetensors",
+    "model-00012-of-00050.safetensors",
+    "model-00013-of-00050.safetensors",
+    "model-00014-of-00050.safetensors",
+    "model-00015-of-00050.safetensors",
+    "model-00016-of-00050.safetensors",
+    "model-00017-of-00050.safetensors",
+    "model-00018-of-00050.safetensors",
+    "model-00019-of-00050.safetensors",
+    "model-00020-of-00050.safetensors",
+    "model-00021-of-00050.safetensors",
+    "model-00022-of-00050.safetensors",
+    "model-00023-of-00050.safetensors",
+    "model-00024-of-00050.safetensors",
+    "model-00025-of-00050.safetensors",
+    "model-00026-of-00050.safetensors",
+    "model-00027-of-00050.safetensors",
+    "model-00028-of-00050.safetensors",
+    "model-00029-of-00050.safetensors",
+    "model-00030-of-00050.safetensors",
+    "model-00031-of-00050.safetensors",
+    "model-00032-of-00050.safetensors",
+    "model-00033-of-00050.safetensors",
+    "model-00034-of-00050.safetensors",
+    "model-00035-of-00050.safetensors",
+    "model-00036-of-00050.safetensors",
+    "model-00037-of-00050.safetensors",
+    "model-00038-of-00050.safetensors",
+    "model-00039-of-00050.safetensors",
+    "model-00040-of-00050.safetensors",
+    "model-00041-of-00050.safetensors",
+    "model-00042-of-00050.safetensors",
+    "model-00043-of-00050.safetensors",
+    "model-00044-of-00050.safetensors",
+    "model-00045-of-00050.safetensors",
+    "model-00046-of-00050.safetensors",
+    "model-00047-of-00050.safetensors",
+    "model-00048-of-00050.safetensors",
+    "model-00049-of-00050.safetensors",
+    "model-00050-of-00050.safetensors",
+    "mtp.safetensors",
+    "ple.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+   "dirty": false
+  },
+  "config_file": "../../../configs/diag.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "LLAMA_SERVER",
+   "MLX_VLM_PYTHON",
+   "OMLX_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+   "head_time": "2026-10-18T08:44:45-07:00",
+   "branch": "HEAD",
+   "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "diff_bytes": 0,
+   "dirty": false,
+   "diff_stat": "",
+   "untracked_files": 0,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "99f0fad25a9ed82fa225f9b8cdd953f00d0bb34431df34e566165accaab9ac45",
+   "mtime": "2026-10-18T08:44:15"
+  },
+  "prepare": [],
+  "env_relevant": {
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "BENCH_OUT": "<diag-root>",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "OMLX_BIN": "~/venvs/omlx/bin/omlx"
+  },
+  "ready_s": 22.1,
+  "server_pid": 84746,
+  "listener_pid": 84746,
+  "gpu_quiet_wait_s": 20.6,
+  "gpu_not_quiet": [
+   "com.apple.WebKit[3316] 7%"
+  ],
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 1977303040,
+   "alloc": 9335963648,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 18807.81,
+   "swapouts": 63240324,
+   "swapins": 53179401,
+   "pageouts": 599951,
+   "memorystatus_level": 92
+  }
+ },
+ "server_log": [
+  "[kapitsa] read 72.94 GB of weights in 12341 ms (5.9 GB/s)",
+  "[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)",
+  "[kapitsa] loaded ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 21055 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped",
+  "[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image",
+  "[kapitsa] engine ready: flash-next, context 32768, 1 slots, MTP speculative decoding depth 1, images on",
+  "[kapitsa] chat: prompt 2925 (cached 0) in 3428 ms (+1.7 ms template/tokenize; last chunk: encoded by 368.4 ms, GPU start +110.5 ms, GPU 2946.2 ms, wake +3.0 ms), 64 tokens in 697 ms (90.4 tok/s), length",
+  "[kapitsa] chat: prompt 430 (cached 0) in 622 ms (+5.6 ms template/tokenize; last chunk: encoded by 55.0 ms, GPU start +-0.3 ms, GPU 564.1 ms, wake +2.7 ms), 27 tokens in 228 ms (114.2 tok/s), tool_calls",
+  "[kapitsa] chat: prompt 16286 (cached 0) in 18292 ms (+753.9 ms template/tokenize; last chunk: encoded by 815.0 ms, GPU start +31.9 ms, GPU 17444.2 ms, wake +0.6 ms), 37 tokens in 589 ms (61.2 tok/s), stop",
+  "[kapitsa] chat: prompt 16345 (cached 16322) in 89 ms (+1.5 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +17.8 ms, GPU 66.1 ms, wake +2.6 ms), 13 tokens in 111 ms (108.2 tok/s), stop",
+  "[kapitsa] chat: prompt 16385 (cached 16357) in 93 ms (+2.0 ms template/tokenize; last chunk: encoded by 4.4 ms, GPU start +18.7 ms, GPU 70.2 ms, wake +0.2 ms), 14 tokens in 135 ms (96.5 tok/s), stop",
+  "[kapitsa] chat: prompt 16419 (cached 16398) in 89 ms (+2.5 ms template/tokenize; last chunk: encoded by 4.1 ms, GPU start +20.0 ms, GPU 64.9 ms, wake +0.2 ms), 256 tokens in 2565 ms (99.4 tok/s), length"
+ ],
+ "server_log_path": "logs/diag-kapitsa-16k-chunk16k-20261018-101512.log"
+}

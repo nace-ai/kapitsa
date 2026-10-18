@@ -1,0 +1,1687 @@
+
+######## 01-kapitsa-start.log
+=== 2026-10-18 09:55:31 pass 1: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, depth 1)  version 8912f1b
+[09:55:31] flash-kapitsa: GPU lock acquired after 0.0s wait
+[09:55:31] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[09:56:03] flash-kapitsa: ready after 32s (pid 21713, listener 21713)
+[09:56:08] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.84s)
+[09:56:09] flash-kapitsa:  warm-up tools: ok (0.86s)
+[09:57:11] flash-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[09:58:11] flash-kapitsa: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa
+  decode T=0.6: 101.79 tok/s (e2e 100.17; 512 tok, finish=length, d4=0.7331)
+  decode T=0.6: 103.55 tok/s (e2e 102.67; 512 tok, finish=length, d4=0.9393)
+  decode T=0.6: 101.05 tok/s (e2e 100.72; 512 tok, finish=length, d4=0.9227)
+  decode T=0.6: 103.23 tok/s (e2e 102.71; 512 tok, finish=length, d4=0.8296)
+  decode T=0.6: 102.88 tok/s (e2e 101.58; 512 tok, finish=length, d4=0.9321)
+  decode median 102.88 (min 101.05, max 103.55) over 5/5 valid
+  decode T=0: median 101.35 (min 99.21, max 103.33) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 4.92s -> 840 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4166, 4231, 4263])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 70.03 GB, resident mapped files 3.62 GB, swap used 19060.69 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-20261018-095531.json
+[09:59:26] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:59:26] flash-kapitsa: GPU lock released after 235.4s held
+[09:59:26] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-095531.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 8912f1b
+[09:59:27] flash-kapitsa-plain: GPU lock ~/.cache/nace-gpu.lock is held by: 21667 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 31145 lockf -k ~/.cache/nace-gpu.lock <tmp>/fn-m; waiting...
+[10:01:42] flash-kapitsa-plain: GPU lock acquired after 135.4s wait
+[10:01:42] flash-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[10:02:10] flash-kapitsa-plain: ready after 28s (pid 42413, listener 42413)
+[10:02:15] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (4.72s)
+[10:02:16] flash-kapitsa-plain:  warm-up tools: ok (0.99s)
+[10:03:18] flash-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:04:18] flash-kapitsa-plain: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain
+  decode T=0.6: 85.93 tok/s (e2e 85.46; 512 tok, finish=length, d4=0.9611)
+  decode T=0.6: 86.16 tok/s (e2e 85.44; 512 tok, finish=length, d4=0.9549)
+  decode T=0.6: 86.48 tok/s (e2e 86.15; 512 tok, finish=length, d4=0.9499)
+  decode T=0.6: 87.07 tok/s (e2e 86.56; 512 tok, finish=length, d4=0.922)
+  decode T=0.6: 86.22 tok/s (e2e 85.92; 512 tok, finish=length, d4=0.9439)
+  decode median 86.22 (min 85.93, max 87.07) over 5/5 valid
+  decode T=0: median 84.86 (min 84.42, max 85.3) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.93s -> 839 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4175, 4203, 4237])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 69.89 GB, resident mapped files 3.39 GB, swap used 18806.44 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-plain-20261018-095926.json
+[10:05:41] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:05:41] flash-kapitsa-plain: GPU lock released after 239.4s held
+[10:05:41] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-095926.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+=== 2026-10-18 10:05:41 pass 1 done (exit 0)
+=== 2026-10-18 10:05:41 pass 2: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, depth 1)  version 8912f1b
+[10:05:41] flash-kapitsa: GPU lock acquired after 0.0s wait
+[10:05:42] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[10:06:08] flash-kapitsa: ready after 26s (pid 54968, listener 54968)
+[10:06:13] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.94s)
+[10:06:14] flash-kapitsa:  warm-up tools: ok (0.98s)
+[10:07:15] flash-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:08:15] flash-kapitsa: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa
+  decode T=0.6: 105.53 tok/s (e2e 104.02; 512 tok, finish=length, d4=0.9447)
+  decode T=0.6: 101.92 tok/s (e2e 101.79; 512 tok, finish=length, d4=0.936)
+  decode T=0.6: 105.14 tok/s (e2e 105.16; 512 tok, finish=length, d4=0.9451)
+  decode T=0.6: 104.03 tok/s (e2e 103.81; 512 tok, finish=length, d4=0.8986)
+  decode T=0.6: 103.03 tok/s (e2e 102.16; 512 tok, finish=length, d4=0.8981)
+  decode median 104.03 (min 101.92, max 105.53) over 5/5 valid
+  decode T=0: median 100.68 (min 98.78, max 104.2) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 5.00s -> 826 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4169, 4234, 4277])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 70.03 GB, resident mapped files 3.46 GB, swap used 19166.06 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-20261018-100541.json
+[10:09:30] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:09:30] flash-kapitsa: GPU lock released after 229.0s held
+[10:09:30] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-100541.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 8912f1b
+[10:09:30] flash-kapitsa-plain: GPU lock acquired after 0.0s wait
+[10:09:31] flash-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[10:09:59] flash-kapitsa-plain: ready after 28s (pid 66840, listener 66840)
+[10:10:05] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (6.01s)
+[10:10:06] flash-kapitsa-plain:  warm-up tools: ok (1.18s)
+[10:11:08] flash-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:12:08] flash-kapitsa-plain: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain
+  decode T=0.6: 85.75 tok/s (e2e 85.56; 512 tok, finish=length, d4=0.6684)
+  decode T=0.6: 85.78 tok/s (e2e 85.35; 512 tok, finish=length, d4=0.8178)
+  decode T=0.6: 86.42 tok/s (e2e 85.64; 512 tok, finish=length, d4=0.883)
+  decode T=0.6: 86.21 tok/s (e2e 85.90; 512 tok, finish=length, d4=0.9124)
+  decode T=0.6: 85.60 tok/s (e2e 85.45; 512 tok, finish=length, d4=0.6749)
+  decode median 85.78 (min 85.6, max 86.42) over 5/5 valid
+  decode T=0: median 85.13 (min 82.74, max 86.49) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 4.90s -> 844 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4176, 4204, 4238])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 69.89 GB, resident mapped files 3.47 GB, swap used 19161.06 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-plain-20261018-100930.json
+[10:13:33] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:13:33] flash-kapitsa-plain: GPU lock released after 242.6s held
+[10:13:33] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-100930.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+=== 2026-10-18 10:13:33 pass 2 done (exit 0)
+
+######## 02-diag.log
+=== 2026-10-18 10:13:56 diag: diag-kapitsa-16k-default
+
+===== diag-kapitsa-16k-default  [kapitsa] Kapitsa (MTP, depth 1)  version 8912f1b
+[10:13:56] diag-kapitsa-16k-default: GPU lock acquired after 0.0s wait
+[10:13:56] diag-kapitsa-16k-default: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8299 --ctx 32768 --slots 1
+[10:14:21] diag-kapitsa-16k-default: ready after 24s (pid 81004, listener 81004)
+[10:14:26] diag-kapitsa-16k-default:  warm-up prefill~2.9k+decode64: ok (5.16s)
+[10:14:27] diag-kapitsa-16k-default:  warm-up tools: ok (0.9s)
+[10:14:47] diag-kapitsa-16k-default: GPU not quiet after 21s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== diag-kapitsa-16k-default
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <diag-root>/results/diag-kapitsa-16k-default-20261018-101356.json
+[10:15:12] diag-kapitsa-16k-default: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:15:12] diag-kapitsa-16k-default: GPU lock released after 76.0s held
+[10:15:12] diag-kapitsa-16k-default: -> <diag-root>/results/diag-kapitsa-16k-default-20261018-101356.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+=== 2026-10-18 10:15:12 diag: diag-kapitsa-16k-chunk16k
+
+===== diag-kapitsa-16k-chunk16k  [kapitsa] Kapitsa (MTP, depth 1)  version 8912f1b
+[10:15:12] diag-kapitsa-16k-chunk16k: GPU lock acquired after 0.0s wait
+[10:15:12] diag-kapitsa-16k-chunk16k: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8299 --ctx 32768 --slots 1 --prefill-chunk 16384
+[10:15:34] diag-kapitsa-16k-chunk16k: ready after 22s (pid 84746, listener 84746)
+[10:15:39] diag-kapitsa-16k-chunk16k:  warm-up prefill~2.9k+decode64: ok (4.13s)
+[10:15:39] diag-kapitsa-16k-chunk16k:  warm-up tools: ok (0.86s)
+[10:16:00] diag-kapitsa-16k-chunk16k: GPU not quiet after 21s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== diag-kapitsa-16k-chunk16k
+  prefill 16000: 16286 tok (ref 16286), TTFT 19.06s -> 855 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16322, 16357, 16398])
+  memory: phys_footprint_peak 79.28 GB, resident mapped files 4.46 GB, swap used 18807.81 MB
+  -> <diag-root>/results/diag-kapitsa-16k-chunk16k-20261018-101512.json
+[10:16:32] diag-kapitsa-16k-chunk16k: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:16:32] diag-kapitsa-16k-chunk16k: GPU lock released after 79.5s held
+[10:16:32] diag-kapitsa-16k-chunk16k: -> <diag-root>/results/diag-kapitsa-16k-chunk16k-20261018-101512.json  flags: 1
+=== 2026-10-18 10:16:32 diag: diag-kapitsa-16k-list
+
+===== diag-kapitsa-16k-list  [kapitsa] Kapitsa (MTP, depth 1)  version 8912f1b
+[10:16:32] diag-kapitsa-16k-list: GPU lock acquired after 0.0s wait
+[10:16:32] diag-kapitsa-16k-list: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8299 --ctx 32768 --slots 1
+[10:16:56] diag-kapitsa-16k-list: ready after 24s (pid 89007, listener 89007)
+[10:17:00] diag-kapitsa-16k-list:  warm-up prefill~2.9k+decode64: ok (4.08s)
+[10:17:01] diag-kapitsa-16k-list:  warm-up tools: ok (0.85s)
+[10:17:22] diag-kapitsa-16k-list: GPU not quiet after 21s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== diag-kapitsa-16k-list
+  prefill 16000: 16286 tok (ref 16286), TTFT 19.39s -> 840 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16331, 16374, 16425])
+  memory: phys_footprint_peak 70.41 GB, resident mapped files 4.43 GB, swap used 19554.31 MB
+  -> <diag-root>/results/diag-kapitsa-16k-list-20261018-101632.json
+[10:17:52] diag-kapitsa-16k-list: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:17:52] diag-kapitsa-16k-list: GPU lock released after 80.6s held
+[10:17:52] diag-kapitsa-16k-list: -> <diag-root>/results/diag-kapitsa-16k-list-20261018-101632.json  flags: 1
+
+######## 03-kapitsa-start-list.log
+=== 2026-10-18 10:18:47 pass 1: flash-kapitsa-list,flash-kapitsa-plain-list
+
+===== flash-kapitsa-list  [kapitsa] Kapitsa (MTP, depth 1; sparse prefill on key lists)  version 8912f1b
+[10:18:47] flash-kapitsa-list: GPU lock acquired after 0.0s wait
+[10:18:47] flash-kapitsa-list: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8286 --ctx 32768 --slots 1
+[10:19:10] flash-kapitsa-list: ready after 23s (pid 95713, listener 95713)
+[10:19:14] flash-kapitsa-list:  warm-up prefill~2.9k+decode64: ok (4.08s)
+[10:19:15] flash-kapitsa-list:  warm-up tools: ok (0.85s)
+[10:20:17] flash-kapitsa-list: gpu busy (62s): com.apple.WebKit[3316] 7%
+[10:21:17] flash-kapitsa-list: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-list
+  decode T=0.6: 104.94 tok/s (e2e 104.11; 512 tok, finish=length, d4=0.9654)
+  decode T=0.6: 103.31 tok/s (e2e 102.53; 512 tok, finish=length, d4=0.9223)
+  decode T=0.6: 105.21 tok/s (e2e 104.33; 512 tok, finish=length, d4=0.9416)
+  decode T=0.6: 102.31 tok/s (e2e 102.26; 512 tok, finish=length, d4=0.9085)
+  decode T=0.6: 104.09 tok/s (e2e 103.53; 512 tok, finish=length, d4=0.9128)
+  decode median 104.09 (min 102.31, max 105.21) over 5/5 valid
+  decode T=0: median 98.78 (min 98.61, max 102.35) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 5.13s -> 805 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4177, 4205, 4239])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 70.04 GB, resident mapped files 3.53 GB, swap used 19122.31 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-list-20261018-101847.json
+[10:22:32] flash-kapitsa-list: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:22:32] flash-kapitsa-list: GPU lock released after 225.1s held
+[10:22:32] flash-kapitsa-list: -> <run-root>/results/flash-kapitsa-list-20261018-101847.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
+
+===== flash-kapitsa-plain-list  [kapitsa] Kapitsa (no speculation; sparse prefill on key lists)  version 8912f1b
+[10:22:32] flash-kapitsa-plain-list: GPU lock acquired after 0.0s wait
+[10:22:33] flash-kapitsa-plain-list: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8287 --ctx 32768 --slots 1
+[10:22:57] flash-kapitsa-plain-list: ready after 24s (pid 8086, listener 8086)
+[10:23:02] flash-kapitsa-plain-list:  warm-up prefill~2.9k+decode64: ok (5.14s)
+[10:23:03] flash-kapitsa-plain-list:  warm-up tools: ok (1.16s)
+[10:24:05] flash-kapitsa-plain-list: gpu busy (62s): com.apple.WebKit[3316] 7%
+[10:25:05] flash-kapitsa-plain-list: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain-list
+  decode T=0.6: 86.22 tok/s (e2e 86.14; 512 tok, finish=length, d4=0.9382)
+  decode T=0.6: 86.62 tok/s (e2e 86.06; 512 tok, finish=length, d4=0.9126)
+  decode T=0.6: 86.52 tok/s (e2e 85.99; 512 tok, finish=length, d4=0.7049)
+  decode T=0.6: 87.69 tok/s (e2e 86.53; 512 tok, finish=length, d4=0.9091)
+  decode T=0.6: 85.97 tok/s (e2e 85.25; 512 tok, finish=length, d4=0.9103)
+  decode median 86.52 (min 85.97, max 87.69) over 5/5 valid
+  decode T=0: median 85.1 (min 82.79, max 86.75) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 5.09s -> 812 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4179, 4207, 4243])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 69.88 GB, resident mapped files 3.43 GB, swap used 18611.75 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-plain-list-20261018-102232.json
+[10:26:30] flash-kapitsa-plain-list: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:26:30] flash-kapitsa-plain-list: GPU lock released after 238.0s held
+[10:26:30] flash-kapitsa-plain-list: -> <run-root>/results/flash-kapitsa-plain-list-20261018-102232.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 2
+=== 2026-10-18 10:26:30 pass 1 done (exit 0)
+=== 2026-10-18 10:26:30 pass 2: flash-kapitsa-list,flash-kapitsa-plain-list
+
+===== flash-kapitsa-list  [kapitsa] Kapitsa (MTP, depth 1; sparse prefill on key lists)  version 8912f1b
+[10:26:31] flash-kapitsa-list: GPU lock acquired after 0.0s wait
+[10:26:31] flash-kapitsa-list: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8286 --ctx 32768 --slots 1
+[10:26:53] flash-kapitsa-list: ready after 22s (pid 20455, listener 20455)
+[10:26:58] flash-kapitsa-list:  warm-up prefill~2.9k+decode64: ok (4.97s)
+[10:26:59] flash-kapitsa-list:  warm-up tools: ok (1.01s)
+[10:28:01] flash-kapitsa-list: gpu busy (62s): com.apple.WebKit[3316] 7%
+[10:29:00] flash-kapitsa-list: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-list
+  decode T=0.6: 105.05 tok/s (e2e 103.90; 512 tok, finish=length, d4=0.897)
+  decode T=0.6: 103.81 tok/s (e2e 102.40; 512 tok, finish=length, d4=0.4639) flags ['repetition loop (distinct-4-gram 0.4639)']
+  decode T=0.6: 103.29 tok/s (e2e 103.05; 512 tok, finish=length, d4=0.9144)
+  decode T=0.6: 106.17 tok/s (e2e 104.94; 512 tok, finish=length, d4=0.8901)
+  decode T=0.6: 103.87 tok/s (e2e 103.18; 512 tok, finish=length, d4=0.9429)
+  decode median 103.87 (min 103.29, max 106.17) over 5/5 valid
+  decode T=0: median 101.7 (min 99.67, max 103.88) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 5.10s -> 809 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4165, 4193, 4227])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 70.03 GB, resident mapped files 3.56 GB, swap used 18555.75 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-list-20261018-102630.json
+[10:30:15] flash-kapitsa-list: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:30:15] flash-kapitsa-list: GPU lock released after 224.5s held
+[10:30:15] flash-kapitsa-list: -> <run-root>/results/flash-kapitsa-list-20261018-102630.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 2
+
+===== flash-kapitsa-plain-list  [kapitsa] Kapitsa (no speculation; sparse prefill on key lists)  version 8912f1b
+[10:30:15] flash-kapitsa-plain-list: GPU lock acquired after 0.0s wait
+[10:30:15] flash-kapitsa-plain-list: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8287 --ctx 32768 --slots 1
+[10:30:39] flash-kapitsa-plain-list: ready after 24s (pid 31894, listener 31894)
+[10:30:45] flash-kapitsa-plain-list:  warm-up prefill~2.9k+decode64: ok (5.92s)
+[10:30:46] flash-kapitsa-plain-list:  warm-up tools: ok (1.15s)
+[10:31:48] flash-kapitsa-plain-list: gpu busy (62s): com.apple.WebKit[3316] 7%
+[10:32:48] flash-kapitsa-plain-list: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain-list
+  decode T=0.6: 86.22 tok/s (e2e 85.82; 512 tok, finish=length, d4=0.9602)
+  decode T=0.6: 87.04 tok/s (e2e 86.54; 512 tok, finish=length, d4=0.9706)
+  decode T=0.6: 86.94 tok/s (e2e 86.49; 512 tok, finish=length, d4=0.9188)
+  decode T=0.6: 87.11 tok/s (e2e 86.60; 512 tok, finish=length, d4=0.9775)
+  decode T=0.6: 85.03 tok/s (e2e 85.05; 512 tok, finish=length, d4=0.8585)
+  decode median 86.94 (min 85.03, max 87.11) over 5/5 valid
+  decode T=0: median 84.21 (min 83.64, max 86.58) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4918)']
+  prefill 4000: 4132 tok (ref 4133), TTFT 5.04s -> 820 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4182, 4210, 4244])
+  prefill 16000: None tok (ref 16286), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=None | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 69.88 GB, resident mapped files 3.48 GB, swap used 18418.75 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/flash-kapitsa-plain-list-20261018-103015.json
+[10:34:12] flash-kapitsa-plain-list: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:34:12] flash-kapitsa-plain-list: GPU lock released after 237.4s held
+[10:34:12] flash-kapitsa-plain-list: -> <run-root>/results/flash-kapitsa-plain-list-20261018-103015.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 2
+=== 2026-10-18 10:34:12 pass 2 done (exit 0)
+
+######## 04-kapitsa-start-4k.log
+=== 2026-10-18 10:38:50 pass 1: flash-kapitsa-4k,flash-kapitsa-plain-4k
+
+===== flash-kapitsa-4k  [kapitsa] Kapitsa (MTP, depth 1), without the 16K prompt  version 8912f1b
+[10:38:51] flash-kapitsa-4k: GPU lock acquired after 0.0s wait
+[10:38:51] flash-kapitsa-4k: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8286 --ctx 32768 --slots 1
+[10:39:07] flash-kapitsa-4k: ready after 16s (pid 58259, listener 58259)
+[10:39:11] flash-kapitsa-4k:  warm-up prefill~2.9k+decode64: ok (4.12s)
+[10:39:12] flash-kapitsa-4k:  warm-up tools: ok (0.86s)
+[10:40:14] flash-kapitsa-4k: gpu busy (62s): com.apple.WebKit[3316] 5%
+[10:41:14] flash-kapitsa-4k: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-4k
+  decode T=0.6: 104.21 tok/s (e2e 102.99; 512 tok, finish=length, d4=0.5598)
+  decode T=0.6: 102.32 tok/s (e2e 101.13; 512 tok, finish=length, d4=0.7108)
+  decode T=0.6: 104.27 tok/s (e2e 103.08; 512 tok, finish=length, d4=0.9413)
+  decode T=0.6: 103.31 tok/s (e2e 102.13; 512 tok, finish=length, d4=0.9488)
+  decode T=0.6: 101.23 tok/s (e2e 100.84; 512 tok, finish=length, d4=0.9527)
+  decode median 103.31 (min 101.23, max 104.27) over 5/5 valid
+  decode T=0: median 101.52 (min 99.89, max 103.0) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.95s -> 836 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4181, 4209, 4243])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.04 GB, resident mapped files 3.67 GB, swap used 18266.75 MB
+  -> <run-root>/results/flash-kapitsa-4k-20261018-103850.json
+[10:42:31] flash-kapitsa-4k: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:42:31] flash-kapitsa-4k: GPU lock released after 220.3s held
+[10:42:31] flash-kapitsa-4k: -> <run-root>/results/flash-kapitsa-4k-20261018-103850.json  flags: 1
+
+===== flash-kapitsa-plain-4k  [kapitsa] Kapitsa (no speculation), without the 16K prompt  version 8912f1b
+[10:42:31] flash-kapitsa-plain-4k: GPU lock acquired after 0.0s wait
+[10:42:31] flash-kapitsa-plain-4k: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8287 --ctx 32768 --slots 1
+[10:42:45] flash-kapitsa-plain-4k: ready after 14s (pid 71022, listener 71022)
+[10:42:50] flash-kapitsa-plain-4k:  warm-up prefill~2.9k+decode64: ok (4.9s)
+[10:42:51] flash-kapitsa-plain-4k:  warm-up tools: ok (1.08s)
+[10:43:53] flash-kapitsa-plain-4k: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:44:53] flash-kapitsa-plain-4k: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain-4k
+  decode T=0.6: 85.28 tok/s (e2e 84.91; 512 tok, finish=length, d4=0.849)
+  decode T=0.6: 85.62 tok/s (e2e 85.64; 512 tok, finish=length, d4=0.9007)
+  decode T=0.6: 86.22 tok/s (e2e 86.03; 512 tok, finish=length, d4=0.9585)
+  decode T=0.6: 85.39 tok/s (e2e 85.52; 512 tok, finish=length, d4=0.9225)
+  decode T=0.6: 86.25 tok/s (e2e 85.88; 512 tok, finish=length, d4=0.9352)
+  decode median 85.62 (min 85.28, max 86.25) over 5/5 valid
+  decode T=0: median 84.79 (min 83.85, max 85.65) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.93s -> 838 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4169, 4197, 4231])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 69.90 GB, resident mapped files 3.55 GB, swap used 18258.75 MB
+  -> <run-root>/results/flash-kapitsa-plain-4k-20261018-104231.json
+[10:46:21] flash-kapitsa-plain-4k: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:46:21] flash-kapitsa-plain-4k: GPU lock released after 230.0s held
+[10:46:21] flash-kapitsa-plain-4k: -> <run-root>/results/flash-kapitsa-plain-4k-20261018-104231.json  flags: 1
+=== 2026-10-18 10:46:21 pass 1 done (exit 0)
+=== 2026-10-18 10:46:21 pass 2: flash-kapitsa-4k,flash-kapitsa-plain-4k
+
+===== flash-kapitsa-4k  [kapitsa] Kapitsa (MTP, depth 1), without the 16K prompt  version 8912f1b
+[10:46:21] flash-kapitsa-4k: GPU lock acquired after 0.0s wait
+[10:46:21] flash-kapitsa-4k: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8286 --ctx 32768 --slots 1
+[10:46:37] flash-kapitsa-4k: ready after 16s (pid 83084, listener 83084)
+[10:46:42] flash-kapitsa-4k:  warm-up prefill~2.9k+decode64: ok (4.78s)
+[10:46:43] flash-kapitsa-4k:  warm-up tools: ok (0.95s)
+[10:47:45] flash-kapitsa-4k: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:48:45] flash-kapitsa-4k: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-4k
+  decode T=0.6: 104.62 tok/s (e2e 103.42; 512 tok, finish=length, d4=0.9941)
+  decode T=0.6: 103.10 tok/s (e2e 101.56; 512 tok, finish=length, d4=0.9372)
+  decode T=0.6: 107.28 tok/s (e2e 106.04; 512 tok, finish=length, d4=0.9365)
+  decode T=0.6: 105.56 tok/s (e2e 104.39; 512 tok, finish=length, d4=0.9301)
+  decode T=0.6: 102.59 tok/s (e2e 101.49; 512 tok, finish=length, d4=0.9308)
+  decode median 104.62 (min 102.59, max 107.28) over 5/5 valid
+  decode T=0: median 102.64 (min 100.37, max 103.72) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.94s -> 836 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4167, 4199, 4233])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.04 GB, resident mapped files 3.75 GB, swap used 18178.75 MB
+  -> <run-root>/results/flash-kapitsa-4k-20261018-104621.json
+[10:50:01] flash-kapitsa-4k: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:50:01] flash-kapitsa-4k: GPU lock released after 219.6s held
+[10:50:01] flash-kapitsa-4k: -> <run-root>/results/flash-kapitsa-4k-20261018-104621.json  flags: 1
+
+===== flash-kapitsa-plain-4k  [kapitsa] Kapitsa (no speculation), without the 16K prompt  version 8912f1b
+[10:50:01] flash-kapitsa-plain-4k: GPU lock acquired after 0.0s wait
+[10:50:01] flash-kapitsa-plain-4k: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8287 --ctx 32768 --slots 1
+[10:50:17] flash-kapitsa-plain-4k: ready after 16s (pid 94653, listener 94653)
+[10:50:23] flash-kapitsa-plain-4k:  warm-up prefill~2.9k+decode64: ok (5.98s)
+[10:50:24] flash-kapitsa-plain-4k:  warm-up tools: ok (1.17s)
+[10:51:26] flash-kapitsa-plain-4k: gpu busy (62s): com.apple.WebKit[3316] 6%
+[10:52:26] flash-kapitsa-plain-4k: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain-4k
+  decode T=0.6: 85.50 tok/s (e2e 85.29; 512 tok, finish=length, d4=0.8852)
+  decode T=0.6: 85.95 tok/s (e2e 85.67; 512 tok, finish=length, d4=0.9247)
+  decode T=0.6: 85.05 tok/s (e2e 86.52; 512 tok, finish=length, d4=0.8568)
+  decode T=0.6: 86.54 tok/s (e2e 86.20; 512 tok, finish=length, d4=0.945)
+  decode T=0.6: 85.69 tok/s (e2e 85.50; 512 tok, finish=length, d4=0.9163)
+  decode median 85.69 (min 85.05, max 86.54) over 5/5 valid
+  decode T=0: median 85.01 (min 83.33, max 86.58) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.95s -> 836 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4179, 4207, 4241])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 69.90 GB, resident mapped files 3.50 GB, swap used 18146.75 MB
+  -> <run-root>/results/flash-kapitsa-plain-4k-20261018-105001.json
+[10:53:55] flash-kapitsa-plain-4k: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:53:55] flash-kapitsa-plain-4k: GPU lock released after 234.6s held
+[10:53:55] flash-kapitsa-plain-4k: -> <run-root>/results/flash-kapitsa-plain-4k-20261018-105001.json  flags: 1
+=== 2026-10-18 10:53:55 pass 2 done (exit 0)
+
+######## 05-smoke-mlxvlm.log
+=== 2026-10-18 10:55:35 smoke: smoke-mlxvlm-mtp-def,smoke-mlxvlm-mtp-b2,smoke-mlxvlm-mtp-b3,smoke-mlxvlm-mtp-b4
+
+===== smoke-mlxvlm-mtp-def  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[10:55:35] smoke-mlxvlm-mtp-def: GPU lock acquired after 0.0s wait
+[10:55:36] smoke-mlxvlm-mtp-def: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8290 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp
+[10:55:44] smoke-mlxvlm-mtp-def: ready after 9s (pid 12575, listener 12575)
+[10:55:53] smoke-mlxvlm-mtp-def:  warm-up prefill~2.9k+decode64: ok (8.56s)
+[10:55:54] smoke-mlxvlm-mtp-def:  warm-up tools: ok (1.07s)
+[10:56:01] smoke-mlxvlm-mtp-def:  warm-up decode512#1: ok (7.75s)
+[10:56:09] smoke-mlxvlm-mtp-def:  warm-up decode512#2: ok (7.13s)
+[10:56:16] smoke-mlxvlm-mtp-def:  warm-up decode512#3: ok (7.39s)
+[10:57:18] smoke-mlxvlm-mtp-def: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-mlxvlm-mtp-def
+  decode T=0.6: 76.03 tok/s (e2e 75.45; 512 tok, finish=length, d4=0.8969)
+  decode T=0.6: 72.98 tok/s (e2e 72.55; 512 tok, finish=length, d4=0.9474)
+  decode median 74.51 (min 72.98, max 76.03) over 2/2 valid
+  decode T=0: median 82.39 (min 81.95, max 82.83) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.00s -> 1034 tok/s, cold cached=0 | cached TTFT median 0.37s over 3 turns (cached [4133, 4203, 4236])
+  memory: phys_footprint_peak 74.64 GB, resident mapped files 3.42 GB, swap used 18042.75 MB
+  -> <smoke-root>/results/smoke-mlxvlm-mtp-def-20261018-105535.json
+[10:58:07] smoke-mlxvlm-mtp-def: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[10:58:07] smoke-mlxvlm-mtp-def: GPU lock released after 151.3s held
+[10:58:07] smoke-mlxvlm-mtp-def: -> <smoke-root>/results/smoke-mlxvlm-mtp-def-20261018-105535.json
+
+===== smoke-mlxvlm-mtp-b2  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[10:58:07] smoke-mlxvlm-mtp-b2: GPU lock acquired after 0.0s wait
+[10:58:07] smoke-mlxvlm-mtp-b2: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8290 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 2
+[10:58:17] smoke-mlxvlm-mtp-b2: ready after 10s (pid 20691, listener 20691)
+[10:58:24] smoke-mlxvlm-mtp-b2:  warm-up prefill~2.9k+decode64: ok (6.47s)
+[10:58:25] smoke-mlxvlm-mtp-b2:  warm-up tools: ok (0.94s)
+[10:58:33] smoke-mlxvlm-mtp-b2:  warm-up decode512#1: ok (8.43s)
+[10:58:41] smoke-mlxvlm-mtp-b2:  warm-up decode512#2: ok (8.0s)
+[10:58:50] smoke-mlxvlm-mtp-b2:  warm-up decode512#3: ok (8.33s)
+[10:59:52] smoke-mlxvlm-mtp-b2: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-mlxvlm-mtp-b2
+  decode T=0.6: 66.04 tok/s (e2e 65.86; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 66.32 tok/s (e2e 66.09; 512 tok, finish=length, d4=0.9229)
+  decode median 66.18 (min 66.04, max 66.32) over 2/2 valid
+  decode T=0: median 67.11 (min 64.8, max 69.41) over 2/2 valid flags ['repetition loop (distinct-4-gram 0.4969)']
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.82s -> 1082 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [4132, 4202, 4235])
+  memory: phys_footprint_peak 74.56 GB, resident mapped files 3.18 GB, swap used 18026.75 MB
+  -> <smoke-root>/results/smoke-mlxvlm-mtp-b2-20261018-105807.json
+[11:00:44] smoke-mlxvlm-mtp-b2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:00:44] smoke-mlxvlm-mtp-b2: GPU lock released after 157.0s held
+[11:00:44] smoke-mlxvlm-mtp-b2: -> <smoke-root>/results/smoke-mlxvlm-mtp-b2-20261018-105807.json  flags: 1
+
+===== smoke-mlxvlm-mtp-b3  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:00:44] smoke-mlxvlm-mtp-b3: GPU lock acquired after 0.0s wait
+[11:00:44] smoke-mlxvlm-mtp-b3: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8290 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 3
+[11:00:54] smoke-mlxvlm-mtp-b3: ready after 10s (pid 29136, listener 29136)
+[11:01:02] smoke-mlxvlm-mtp-b3:  warm-up prefill~2.9k+decode64: ok (7.27s)
+[11:01:03] smoke-mlxvlm-mtp-b3:  warm-up tools: ok (1.03s)
+[11:01:10] smoke-mlxvlm-mtp-b3:  warm-up decode512#1: ok (7.35s)
+[11:01:18] smoke-mlxvlm-mtp-b3:  warm-up decode512#2: ok (8.41s)
+[11:01:26] smoke-mlxvlm-mtp-b3:  warm-up decode512#3: ok (7.68s)
+[11:02:28] smoke-mlxvlm-mtp-b3: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-mlxvlm-mtp-b3
+  decode T=0.6: 78.25 tok/s (e2e 77.02; 512 tok, finish=length, d4=0.8884)
+  decode T=0.6: 76.48 tok/s (e2e 75.99; 512 tok, finish=length, d4=0.8969)
+  decode median 77.36 (min 76.48, max 78.25) over 2/2 valid
+  decode T=0: median 83.51 (min 82.4, max 84.62) over 2/2 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.49s -> 1184 tok/s, cold cached=0 | cached TTFT median 0.37s over 3 turns (cached [4132, 4202, 4235])
+  memory: phys_footprint_peak 74.42 GB, resident mapped files 3.29 GB, swap used 18002.75 MB
+  -> <smoke-root>/results/smoke-mlxvlm-mtp-b3-20261018-110044.json
+[11:03:15] smoke-mlxvlm-mtp-b3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:03:15] smoke-mlxvlm-mtp-b3: GPU lock released after 151.0s held
+[11:03:15] smoke-mlxvlm-mtp-b3: -> <smoke-root>/results/smoke-mlxvlm-mtp-b3-20261018-110044.json
+
+===== smoke-mlxvlm-mtp-b4  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:03:15] smoke-mlxvlm-mtp-b4: GPU lock acquired after 0.0s wait
+[11:03:15] smoke-mlxvlm-mtp-b4: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8290 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 4
+[11:03:25] smoke-mlxvlm-mtp-b4: ready after 10s (pid 37134, listener 37134)
+[11:03:32] smoke-mlxvlm-mtp-b4:  warm-up prefill~2.9k+decode64: ok (6.83s)
+[11:03:33] smoke-mlxvlm-mtp-b4:  warm-up tools: ok (0.93s)
+[11:03:40] smoke-mlxvlm-mtp-b4:  warm-up decode512#1: ok (6.76s)
+[11:03:47] smoke-mlxvlm-mtp-b4:  warm-up decode512#2: ok (6.9s)
+[11:03:54] smoke-mlxvlm-mtp-b4:  warm-up decode512#3: ok (6.89s)
+[11:04:56] smoke-mlxvlm-mtp-b4: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-mlxvlm-mtp-b4
+  decode T=0.6: 79.69 tok/s (e2e 78.34; 512 tok, finish=length, d4=0.8941)
+  decode T=0.6: 81.13 tok/s (e2e 80.44; 512 tok, finish=length, d4=0.8819)
+  decode median 80.41 (min 79.69, max 81.13) over 2/2 valid
+  decode T=0: median 87.47 (min 86.12, max 88.81) over 2/2 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 3.70s -> 1118 tok/s, cold cached=0 | cached TTFT median 0.34s over 3 turns (cached [4134, 4205, 4238])
+  memory: phys_footprint_peak 74.40 GB, resident mapped files 3.29 GB, swap used 17978.75 MB
+  -> <smoke-root>/results/smoke-mlxvlm-mtp-b4-20261018-110315.json
+[11:05:42] smoke-mlxvlm-mtp-b4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:05:42] smoke-mlxvlm-mtp-b4: GPU lock released after 146.9s held
+[11:05:42] smoke-mlxvlm-mtp-b4: -> <smoke-root>/results/smoke-mlxvlm-mtp-b4-20261018-110315.json
+=== 2026-10-18 11:05:42 smoke done (exit 0)
+
+######## 05b-smoke-mlxvlm.log
+=== 2026-10-18 11:05:52 smoke: smoke-mlxvlm-mtp-b5
+
+===== smoke-mlxvlm-mtp-b5  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:05:52] smoke-mlxvlm-mtp-b5: GPU lock acquired after 0.0s wait
+[11:05:52] smoke-mlxvlm-mtp-b5: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8290 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 5
+[11:06:03] smoke-mlxvlm-mtp-b5: ready after 10s (pid 45675, listener 45675)
+[11:06:10] smoke-mlxvlm-mtp-b5:  warm-up prefill~2.9k+decode64: ok (6.77s)
+[11:06:11] smoke-mlxvlm-mtp-b5:  warm-up tools: ok (1.24s)
+[11:06:18] smoke-mlxvlm-mtp-b5:  warm-up decode512#1: ok (7.01s)
+[11:06:25] smoke-mlxvlm-mtp-b5:  warm-up decode512#2: ok (6.99s)
+[11:06:33] smoke-mlxvlm-mtp-b5:  warm-up decode512#3: ok (8.11s)
+[11:07:35] smoke-mlxvlm-mtp-b5: GPU not quiet after 62s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== smoke-mlxvlm-mtp-b5
+  decode T=0.6: 76.62 tok/s (e2e 76.09; 512 tok, finish=length, d4=0.8677)
+  decode T=0.6: 78.37 tok/s (e2e 77.11; 512 tok, finish=length, d4=0.8851)
+  decode median 77.5 (min 76.62, max 78.37) over 2/2 valid
+  decode T=0: median 79.41 (min 78.57, max 80.25) over 2/2 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.61s -> 1145 tok/s, cold cached=0 | cached TTFT median 0.36s over 3 turns (cached [4132, 4199, 4232])
+  memory: phys_footprint_peak 75.01 GB, resident mapped files 3.43 GB, swap used 17970.75 MB
+  -> <smoke-root>/results/smoke-mlxvlm-mtp-b5-20261018-110552.json
+[11:08:23] smoke-mlxvlm-mtp-b5: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:08:23] smoke-mlxvlm-mtp-b5: GPU lock released after 150.5s held
+[11:08:23] smoke-mlxvlm-mtp-b5: -> <smoke-root>/results/smoke-mlxvlm-mtp-b5-20261018-110552.json
+=== 2026-10-18 11:08:23 smoke done (exit 0)
+
+######## 06-mlxvlm.log
+=== 2026-10-18 11:08:35 pass 1: flash-mlxvlm,flash-mlxvlm-mtp
+
+===== flash-mlxvlm  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:08:35] flash-mlxvlm: GPU lock acquired after 0.0s wait
+[11:08:35] flash-mlxvlm: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8282 --prefill-step-size 2048 --max-num-seqs 1
+[11:08:45] flash-mlxvlm: ready after 10s (pid 54477, listener 54477)
+[11:08:52] flash-mlxvlm:  warm-up prefill~2.9k+decode64: ok (7.01s)
+[11:08:54] flash-mlxvlm:  warm-up tools: ok (1.06s)
+[11:09:55] flash-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 7%
+[11:10:55] flash-mlxvlm: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-mlxvlm
+  decode T=0.6: 53.50 tok/s (e2e 53.53; 512 tok, finish=length, d4=0.8618)
+  decode T=0.6: 53.90 tok/s (e2e 53.91; 512 tok, finish=length, d4=0.9038)
+  decode T=0.6: 53.81 tok/s (e2e 53.83; 512 tok, finish=length, d4=0.9038)
+  decode T=0.6: 53.44 tok/s (e2e 53.41; 512 tok, finish=length, d4=0.8941)
+  decode T=0.6: 53.36 tok/s (e2e 53.35; 512 tok, finish=length, d4=0.9209)
+  decode median 53.5 (min 53.36, max 53.9) over 5/5 valid
+  decode T=0: median 54.28 (min 54.17, max 54.49) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.01s -> 1032 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [4133, 4195, 4228])
+  prefill 16000: 16286 tok (ref 16286), TTFT 21.79s -> 747 tok/s, cold cached=0 | cached TTFT median 0.48s over 3 turns (cached [16285, 16348, 16381])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 74.49 GB, resident mapped files 5.03 GB, swap used 17930.75 MB
+  -> <run-root>/results/flash-mlxvlm-20261018-110835.json
+[11:13:36] flash-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:13:36] flash-mlxvlm: GPU lock released after 301.2s held
+[11:13:36] flash-mlxvlm: -> <run-root>/results/flash-mlxvlm-20261018-110835.json  flags: 1
+
+===== flash-mlxvlm-mtp  [mlx-lm] mlx-vlm server + native MTP (block 4)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:13:36] flash-mlxvlm-mtp: GPU lock acquired after 0.0s wait
+[11:13:36] flash-mlxvlm-mtp: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8283 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 4
+[11:13:47] flash-mlxvlm-mtp: ready after 11s (pid 71278, listener 71278)
+[11:13:55] flash-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (7.86s)
+[11:13:56] flash-mlxvlm-mtp:  warm-up tools: ok (1.03s)
+[11:14:03] flash-mlxvlm-mtp:  warm-up decode512#1: ok (7.76s)
+[11:14:11] flash-mlxvlm-mtp:  warm-up decode512#2: ok (7.6s)
+[11:14:19] flash-mlxvlm-mtp:  warm-up decode512#3: ok (7.78s)
+[11:15:21] flash-mlxvlm-mtp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[11:16:20] flash-mlxvlm-mtp: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-mlxvlm-mtp
+  decode T=0.6: 79.64 tok/s (e2e 78.94; 512 tok, finish=length, d4=0.8931)
+  decode T=0.6: 81.07 tok/s (e2e 80.16; 512 tok, finish=length, d4=0.9038)
+  decode T=0.6: 81.28 tok/s (e2e 80.41; 512 tok, finish=length, d4=0.8851)
+  decode T=0.6: 81.03 tok/s (e2e 80.09; 512 tok, finish=length, d4=0.8819)
+  decode T=0.6: 77.42 tok/s (e2e 76.74; 512 tok, finish=length, d4=0.9229)
+  decode median 81.03 (min 77.42, max 81.28) over 5/5 valid
+  decode T=0: median 80.77 (min 79.33, max 82.73) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.89s -> 1062 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [4132, 4194, 4227])
+  prefill 16000: 16285 tok (ref 16286), TTFT 14.33s -> 1136 tok/s, cold cached=0 | cached TTFT median 0.43s over 3 turns (cached [16284, 16351, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 77.10 GB, resident mapped files 5.29 GB, swap used 17914.75 MB
+  -> <run-root>/results/flash-mlxvlm-mtp-20261018-111336.json
+[11:18:22] flash-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:18:22] flash-mlxvlm-mtp: GPU lock released after 285.7s held
+[11:18:22] flash-mlxvlm-mtp: -> <run-root>/results/flash-mlxvlm-mtp-20261018-111336.json  flags: 1
+=== 2026-10-18 11:18:22 pass 1 done (exit 0)
+=== 2026-10-18 11:18:22 pass 2: flash-mlxvlm,flash-mlxvlm-mtp
+
+===== flash-mlxvlm  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:18:22] flash-mlxvlm: GPU lock acquired after 0.0s wait
+[11:18:22] flash-mlxvlm: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8282 --prefill-step-size 2048 --max-num-seqs 1
+[11:18:32] flash-mlxvlm: ready after 10s (pid 86885, listener 86885)
+[11:18:40] flash-mlxvlm:  warm-up prefill~2.9k+decode64: ok (7.53s)
+[11:18:41] flash-mlxvlm:  warm-up tools: ok (1.11s)
+[11:19:43] flash-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 7%
+[11:20:41] flash-mlxvlm: GPU quiet after 120s; benchmarking
+== flash-mlxvlm
+  decode T=0.6: 53.93 tok/s (e2e 53.94; 512 tok, finish=length, d4=0.9209)
+  decode T=0.6: 53.68 tok/s (e2e 53.71; 512 tok, finish=length, d4=0.8677)
+  decode T=0.6: 47.25 tok/s (e2e 47.43; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 48.20 tok/s (e2e 47.99; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 53.04 tok/s (e2e 53.09; 512 tok, finish=length, d4=0.9038)
+  decode median 53.04 (min 47.25, max 53.93) over 5/5 valid
+  decode T=0: median 52.39 (min 48.15, max 53.64) over 5/5 valid
+  prefill 4000: 4129 tok (ref 4133), TTFT 4.36s -> 948 tok/s, cold cached=0 | cached TTFT median 0.43s over 3 turns (cached [4128, 4179, 4212])
+  prefill 16000: 16285 tok (ref 16286), TTFT 15.80s -> 1031 tok/s, cold cached=0 | cached TTFT median 0.55s over 3 turns (cached [16284, 16349, 16382])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 74.34 GB, resident mapped files 5.04 GB, swap used 16356.56 MB
+  -> <run-root>/results/flash-mlxvlm-20261018-111822.json
+[11:23:26] flash-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:23:26] flash-mlxvlm: GPU lock released after 304.6s held
+[11:23:26] flash-mlxvlm: -> <run-root>/results/flash-mlxvlm-20261018-111822.json  flags: 2
+
+===== flash-mlxvlm-mtp  [mlx-lm] mlx-vlm server + native MTP (block 4)  version mlx-vlm 0.7.8, mlx 0.32.4
+[11:23:26] flash-mlxvlm-mtp: GPU lock acquired after 0.0s wait
+[11:23:27] flash-mlxvlm-mtp: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8283 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit-mlxvlm-mtp --draft-kind mtp --draft-block-size 4
+[11:23:37] flash-mlxvlm-mtp: ready after 10s (pid 4292, listener 4292)
+[11:23:52] flash-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (14.76s)
+[11:23:53] flash-mlxvlm-mtp:  warm-up tools: ok (1.0s)
+[11:24:02] flash-mlxvlm-mtp:  warm-up decode512#1: ok (9.06s)
+[11:24:10] flash-mlxvlm-mtp:  warm-up decode512#2: ok (7.81s)
+[11:24:18] flash-mlxvlm-mtp:  warm-up decode512#3: ok (7.81s)
+[11:25:19] flash-mlxvlm-mtp: gpu busy (62s): Google Chrome He[95905] 17%
+[11:26:19] flash-mlxvlm-mtp: GPU not quiet after 122s (['Google Chrome He[95905] 18%']); benchmarking anyway, contention will be flagged
+== flash-mlxvlm-mtp
+  decode T=0.6: 76.86 tok/s (e2e 75.87; 512 tok, finish=length, d4=0.9038)
+  decode T=0.6: 70.13 tok/s (e2e 69.61; 512 tok, finish=length, d4=0.9251)
+  decode T=0.6: 76.75 tok/s (e2e 76.12; 512 tok, finish=length, d4=0.9209)
+  decode T=0.6: 76.97 tok/s (e2e 76.02; 512 tok, finish=length, d4=0.8677)
+  decode T=0.6: 72.97 tok/s (e2e 72.37; 512 tok, finish=length, d4=0.8884)
+  decode median 76.75 (min 70.13, max 76.97) over 5/5 valid
+  decode T=0: median 76.97 (min 72.36, max 77.51) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.01s -> 1030 tok/s, cold cached=0 | cached TTFT median 0.38s over 3 turns (cached [4133, 4195, 4228])
+  prefill 16000: 16285 tok (ref 16286), TTFT 15.52s -> 1049 tok/s, cold cached=0 | cached TTFT median 0.49s over 3 turns (cached [16284, 16349, 16382])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 77.01 GB, resident mapped files 5.29 GB, swap used 16324.56 MB
+  -> <run-root>/results/flash-mlxvlm-mtp-20261018-112326.json
+[11:28:26] flash-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:28:26] flash-mlxvlm-mtp: GPU lock released after 299.4s held
+[11:28:26] flash-mlxvlm-mtp: -> <run-root>/results/flash-mlxvlm-mtp-20261018-112326.json  flags: 1
+=== 2026-10-18 11:28:26 pass 2 done (exit 0)
+
+######## 07-smoke-omlx.log
+=== 2026-10-18 11:28:32 smoke: flash-omlx,smoke-omlx-mtp-adaptive
+
+===== flash-omlx  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:28:32] flash-omlx: GPU lock acquired after 0.0s wait
+[11:28:32] flash-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/flash/models --no-hf-cache --headless --host 127.0.0.1 --port 8284 --base-path <smoke-root>/state/omlx/flash/base --paged-ssd-cache-dir <smoke-root>/state/omlx/flash/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:28:35] flash-omlx: ready after 2s (pid 21101, listener 21101)
+[11:29:47] flash-omlx:  warm-up prefill~2.9k+decode64: ok (72.43s)
+[11:29:49] flash-omlx:  warm-up tools: ok (1.57s)
+[11:30:50] flash-omlx: GPU not quiet after 62s (['Google Chrome He[95905] 19%']); benchmarking anyway, contention will be flagged
+== flash-omlx
+  decode T=0.6: 56.47 tok/s (e2e 55.87; 512 tok, finish=length, d4=0.5328)
+  decode T=0.6: 56.48 tok/s (e2e 56.23; 512 tok, finish=length, d4=0.8129)
+  decode median 56.47 (min 56.47, max 56.48) over 2/2 valid
+  decode T=0: median 56.63 (min 56.59, max 56.67) over 2/2 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 3.51s -> 1177 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4125, 4184, 4217])
+  memory: phys_footprint_peak 100.57 GB, resident mapped files 0.01 GB, swap used 18031.12 MB
+  -> <smoke-root>/results/flash-omlx-20261018-112832.json
+[11:31:54] flash-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:31:54] flash-omlx: GPU lock released after 201.4s held
+[11:31:54] flash-omlx: -> <smoke-root>/results/flash-omlx-20261018-112832.json  flags: 1
+
+===== smoke-omlx-mtp-adaptive  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:31:54] smoke-omlx-mtp-adaptive: GPU lock acquired after 0.0s wait
+[11:31:54] smoke-omlx-mtp-adaptive: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-adaptive/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-adaptive/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-adaptive/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:31:56] smoke-omlx-mtp-adaptive: ready after 2s (pid 31513, listener 31513)
+[11:33:10] smoke-omlx-mtp-adaptive:  warm-up prefill~2.9k+decode64: ok (74.51s)
+[11:33:11] smoke-omlx-mtp-adaptive:  warm-up tools: ok (0.78s)
+[11:33:17] smoke-omlx-mtp-adaptive:  warm-up decode512#1: ok (5.64s)
+[11:33:22] smoke-omlx-mtp-adaptive:  warm-up decode512#2: ok (5.39s)
+[11:33:28] smoke-omlx-mtp-adaptive:  warm-up decode512#3: ok (6.11s)
+[11:34:30] smoke-omlx-mtp-adaptive: GPU not quiet after 62s (['Google Chrome He[95905] 17%']); benchmarking anyway, contention will be flagged
+== smoke-omlx-mtp-adaptive
+  decode T=0.6: 93.72 tok/s (e2e 93.11; 512 tok, finish=length, d4=0.6866)
+  decode T=0.6: 94.96 tok/s (e2e 93.81; 512 tok, finish=length, d4=0.7004)
+  decode median 94.34 (min 93.72, max 94.96) over 2/2 valid
+  decode T=0: median 91.66 (min 89.53, max 93.78) over 2/2 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 3.59s -> 1150 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4128, 4192, 4229])
+  memory: phys_footprint_peak 103.31 GB, resident mapped files 0.01 GB, swap used 18003.31 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-adaptive-20261018-113154.json
+[11:35:11] smoke-omlx-mtp-adaptive: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:35:11] smoke-omlx-mtp-adaptive: GPU lock released after 196.9s held
+[11:35:11] smoke-omlx-mtp-adaptive: -> <smoke-root>/results/smoke-omlx-mtp-adaptive-20261018-113154.json  flags: 1
+=== 2026-10-18 11:35:11 smoke done (exit 0)
+
+######## 07b-smoke-omlx.log
+=== 2026-10-18 11:35:40 smoke: smoke-omlx-mtp-fixed1,smoke-omlx-mtp-fixed2,smoke-omlx-mtp-fixed3
+
+===== smoke-omlx-mtp-fixed1  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:35:40] smoke-omlx-mtp-fixed1: GPU lock acquired after 0.0s wait
+[11:35:40] smoke-omlx-mtp-fixed1: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-fixed1/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-fixed1/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-fixed1/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:35:43] smoke-omlx-mtp-fixed1: ready after 2s (pid 43496, listener 43496)
+[11:36:39] smoke-omlx-mtp-fixed1:  warm-up prefill~2.9k+decode64: ok (56.91s)
+[11:36:40] smoke-omlx-mtp-fixed1:  warm-up tools: ok (0.83s)
+[11:36:47] smoke-omlx-mtp-fixed1:  warm-up decode512#1: ok (6.57s)
+[11:36:53] smoke-omlx-mtp-fixed1:  warm-up decode512#2: ok (6.3s)
+[11:36:59] smoke-omlx-mtp-fixed1:  warm-up decode512#3: ok (6.08s)
+[11:37:18] smoke-omlx-mtp-fixed1: GPU quiet after 19s; benchmarking
+== smoke-omlx-mtp-fixed1
+  decode T=0.6: 86.93 tok/s (e2e 86.80; 512 tok, finish=length, d4=0.8774)
+  decode T=0.6: 86.32 tok/s (e2e 86.38; 512 tok, finish=length, d4=0.9236)
+  decode median 86.63 (min 86.32, max 86.93) over 2/2 valid
+  decode T=0: median 91.9 (min 91.83, max 91.96) over 2/2 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 3.31s -> 1247 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4125, 4179, 4212])
+  memory: phys_footprint_peak 103.23 GB, resident mapped files 0.01 GB, swap used 18864.75 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-fixed1-20261018-113540.json
+[11:37:58] smoke-omlx-mtp-fixed1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:37:58] smoke-omlx-mtp-fixed1: GPU lock released after 138.1s held
+[11:37:58] smoke-omlx-mtp-fixed1: -> <smoke-root>/results/smoke-omlx-mtp-fixed1-20261018-113540.json  flags: 1
+
+===== smoke-omlx-mtp-fixed2  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:37:59] smoke-omlx-mtp-fixed2: GPU lock ~/.cache/nace-gpu.lock is held by: 43482 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 45203 lockf -k ~/.cache/nace-gpu.lock <tmp>/fn-c; waiting...
+[11:39:17] smoke-omlx-mtp-fixed2: GPU lock acquired after 78.6s wait
+[11:39:17] smoke-omlx-mtp-fixed2: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-fixed2/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-fixed2/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-fixed2/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:39:19] smoke-omlx-mtp-fixed2: ready after 2s (pid 54514, listener 54514)
+[11:40:28] smoke-omlx-mtp-fixed2:  warm-up prefill~2.9k+decode64: ok (68.96s)
+[11:40:29] smoke-omlx-mtp-fixed2:  warm-up tools: ok (0.73s)
+[11:40:35] smoke-omlx-mtp-fixed2:  warm-up decode512#1: ok (5.81s)
+[11:40:40] smoke-omlx-mtp-fixed2:  warm-up decode512#2: ok (5.48s)
+[11:40:46] smoke-omlx-mtp-fixed2:  warm-up decode512#3: ok (5.58s)
+[11:41:04] smoke-omlx-mtp-fixed2: GPU quiet after 19s; benchmarking
+== smoke-omlx-mtp-fixed2
+  decode T=0.6: 102.26 tok/s (e2e 101.61; 512 tok, finish=length, d4=1.0)
+  decode T=0.6: 103.16 tok/s (e2e 103.57; 512 tok, finish=length, d4=0.7217)
+  decode median 102.71 (min 102.26, max 103.16) over 2/2 valid
+  decode T=0: median 104.75 (min 102.69, max 106.81) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.25s -> 1272 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4127, 4197, 4230])
+  memory: phys_footprint_peak 103.22 GB, resident mapped files 0.01 GB, swap used 19164.44 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-fixed2-20261018-113758.json
+[11:41:43] smoke-omlx-mtp-fixed2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:41:43] smoke-omlx-mtp-fixed2: GPU lock released after 146.2s held
+[11:41:43] smoke-omlx-mtp-fixed2: -> <smoke-root>/results/smoke-omlx-mtp-fixed2-20261018-113758.json
+
+===== smoke-omlx-mtp-fixed3  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:41:44] smoke-omlx-mtp-fixed3: GPU lock ~/.cache/nace-gpu.lock is held by: 43482 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 54913 lockf -k ~/.cache/nace-gpu.lock <tmp>/fn-c; waiting...
+[11:43:21] smoke-omlx-mtp-fixed3: GPU lock acquired after 97.6s wait
+[11:43:21] smoke-omlx-mtp-fixed3: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-fixed3/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-fixed3/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-fixed3/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:43:23] smoke-omlx-mtp-fixed3: ready after 2s (pid 67384, listener 67384)
+[11:44:28] smoke-omlx-mtp-fixed3:  warm-up prefill~2.9k+decode64: ok (65.11s)
+[11:44:29] smoke-omlx-mtp-fixed3:  warm-up tools: ok (0.7s)
+[11:44:34] smoke-omlx-mtp-fixed3:  warm-up decode512#1: ok (5.13s)
+[11:44:39] smoke-omlx-mtp-fixed3:  warm-up decode512#2: ok (4.91s)
+[11:44:44] smoke-omlx-mtp-fixed3:  warm-up decode512#3: ok (5.4s)
+[11:45:03] smoke-omlx-mtp-fixed3: GPU quiet after 19s; benchmarking
+== smoke-omlx-mtp-fixed3
+  decode T=0.6: 110.45 tok/s (e2e 109.89; 512 tok, finish=length, d4=0.9258)
+  decode T=0.6: 108.84 tok/s (e2e 109.22; 512 tok, finish=length, d4=0.9442)
+  decode median 109.65 (min 108.84, max 110.45) over 2/2 valid
+  decode T=0: median 111.33 (min 110.78, max 111.88) over 2/2 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.23s -> 1278 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4126, 4185, 4218])
+  memory: phys_footprint_peak 103.29 GB, resident mapped files 0.01 GB, swap used 19121.69 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-fixed3-20261018-114143.json
+[11:45:39] smoke-omlx-mtp-fixed3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:45:39] smoke-omlx-mtp-fixed3: GPU lock released after 138.3s held
+[11:45:39] smoke-omlx-mtp-fixed3: -> <smoke-root>/results/smoke-omlx-mtp-fixed3-20261018-114143.json
+=== 2026-10-18 11:45:39 smoke done (exit 0)
+
+######## 07c-smoke-omlx.log
+=== 2026-10-18 11:45:53 smoke: smoke-omlx-mtp-fixed4,smoke-omlx-mtp-fixed5
+
+===== smoke-omlx-mtp-fixed4  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:45:53] smoke-omlx-mtp-fixed4: GPU lock ~/.cache/nace-gpu.lock is held by: 67755 lockf -k ~/.cache/nace-gpu.lock <tmp>/fn-c; 75078 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; waiting...
+[11:46:34] smoke-omlx-mtp-fixed4: GPU lock acquired after 40.9s wait
+[11:46:34] smoke-omlx-mtp-fixed4: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-fixed4/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-fixed4/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-fixed4/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:46:36] smoke-omlx-mtp-fixed4: ready after 2s (pid 77265, listener 77265)
+[11:47:42] smoke-omlx-mtp-fixed4:  warm-up prefill~2.9k+decode64: ok (65.49s)
+[11:47:42] smoke-omlx-mtp-fixed4:  warm-up tools: ok (0.66s)
+[11:47:48] smoke-omlx-mtp-fixed4:  warm-up decode512#1: ok (5.55s)
+[11:47:53] smoke-omlx-mtp-fixed4:  warm-up decode512#2: ok (5.31s)
+[11:47:59] smoke-omlx-mtp-fixed4:  warm-up decode512#3: ok (5.64s)
+[11:48:17] smoke-omlx-mtp-fixed4: GPU quiet after 19s; benchmarking
+== smoke-omlx-mtp-fixed4
+  decode T=0.6: 94.76 tok/s (e2e 96.02; 512 tok, finish=length, d4=0.9837)
+  decode T=0.6: 107.79 tok/s (e2e 107.71; 512 tok, finish=length, d4=0.9413)
+  decode median 101.27 (min 94.76, max 107.79) over 2/2 valid
+  decode T=0: median 99.69 (min 98.76, max 100.61) over 2/2 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 3.24s -> 1277 tok/s, cold cached=0 | cached TTFT median 0.30s over 3 turns (cached [4125, 4183, 4242])
+  memory: phys_footprint_peak 103.21 GB, resident mapped files 0.01 GB, swap used 19999.75 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-fixed4-20261018-114553.json
+[11:48:57] smoke-omlx-mtp-fixed4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:48:57] smoke-omlx-mtp-fixed4: GPU lock released after 143.2s held
+[11:48:57] smoke-omlx-mtp-fixed4: -> <smoke-root>/results/smoke-omlx-mtp-fixed4-20261018-114553.json
+
+===== smoke-omlx-mtp-fixed5  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[11:48:58] smoke-omlx-mtp-fixed5: GPU lock ~/.cache/nace-gpu.lock is held by: 75078 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 77253 lockf -k ~/.cache/nace-gpu.lock <tmp>/fn-c; waiting...
+[11:50:07] smoke-omlx-mtp-fixed5: GPU lock acquired after 70.0s wait
+[11:50:07] smoke-omlx-mtp-fixed5: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-fixed5/models --no-hf-cache --headless --host 127.0.0.1 --port 8291 --base-path <smoke-root>/state/omlx/smoke-fixed5/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-fixed5/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[11:50:09] smoke-omlx-mtp-fixed5: ready after 2s (pid 87940, listener 87940)
+[11:51:13] smoke-omlx-mtp-fixed5:  warm-up prefill~2.9k+decode64: ok (64.05s)
+[11:51:14] smoke-omlx-mtp-fixed5:  warm-up tools: ok (0.68s)
+[11:51:19] smoke-omlx-mtp-fixed5:  warm-up decode512#1: ok (5.16s)
+[11:51:25] smoke-omlx-mtp-fixed5:  warm-up decode512#2: ok (5.65s)
+[11:51:30] smoke-omlx-mtp-fixed5:  warm-up decode512#3: ok (5.5s)
+[11:51:49] smoke-omlx-mtp-fixed5: GPU quiet after 19s; benchmarking
+== smoke-omlx-mtp-fixed5
+  decode T=0.6: 95.39 tok/s (e2e 95.35; 512 tok, finish=length, d4=0.9367)
+  decode T=0.6: 95.01 tok/s (e2e 94.20; 512 tok, finish=length, d4=0.7118)
+  decode median 95.2 (min 95.01, max 95.39) over 2/2 valid
+  decode T=0: median 100.96 (min 99.12, max 102.8) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.25s -> 1274 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4127, 4187, 4220])
+  memory: phys_footprint_peak 103.21 GB, resident mapped files 0.01 GB, swap used 19239.5 MB
+  -> <smoke-root>/results/smoke-omlx-mtp-fixed5-20261018-114857.json
+[11:52:28] smoke-omlx-mtp-fixed5: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:52:28] smoke-omlx-mtp-fixed5: GPU lock released after 140.5s held
+[11:52:28] smoke-omlx-mtp-fixed5: -> <smoke-root>/results/smoke-omlx-mtp-fixed5-20261018-114857.json
+=== 2026-10-18 11:52:28 smoke done (exit 0)
+
+######## 08-kapitsa62-start.log
+=== 2026-10-18 11:52:59 pass 1: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, depth 1)  version 62ab7ed
+[11:52:59] flash-kapitsa: GPU lock acquired after 0.0s wait
+[11:52:59] flash-kapitsa: starting <repo-62ab7ed>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[11:53:24] flash-kapitsa: ready after 24s (pid 97087, listener 97087)
+[11:53:28] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.71s)
+[11:53:29] flash-kapitsa:  warm-up tools: ok (0.86s)
+[11:53:48] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  decode T=0.6: 104.51 tok/s (e2e 103.71; 512 tok, finish=length, d4=0.8858)
+  decode T=0.6: 106.71 tok/s (e2e 105.84; 512 tok, finish=length, d4=0.6969)
+  decode T=0.6: 104.04 tok/s (e2e 103.18; 512 tok, finish=length, d4=0.9021)
+  decode T=0.6: 100.95 tok/s (e2e 100.22; 512 tok, finish=length, d4=0.9502)
+  decode T=0.6: 101.74 tok/s (e2e 100.81; 512 tok, finish=length, d4=0.9212)
+  decode median 104.04 (min 100.95, max 106.71) over 5/5 valid
+  decode T=0: median 103.16 (min 101.62, max 103.92) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.81s -> 858 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4165, 4193, 4227])
+  prefill 16000: 16285 tok (ref 16286), TTFT 18.75s -> 869 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16330, 16354, 16386])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.47 GB, resident mapped files 5.38 GB, swap used 18434.25 MB
+  -> <run-root>/results/flash-kapitsa-20261018-115259.json
+[11:55:27] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:55:27] flash-kapitsa: GPU lock released after 147.5s held
+[11:55:27] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-115259.json  flags: 2
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 62ab7ed
+[11:55:27] flash-kapitsa-plain: GPU lock acquired after 0.0s wait
+[11:55:27] flash-kapitsa-plain: starting <repo-62ab7ed>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[11:55:43] flash-kapitsa-plain: ready after 16s (pid 5121, listener 5121)
+[11:55:47] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (4.4s)
+[11:55:48] flash-kapitsa-plain:  warm-up tools: ok (0.98s)
+[11:56:07] flash-kapitsa-plain: GPU quiet after 19s; benchmarking
+== flash-kapitsa-plain
+  decode T=0.6: 82.83 tok/s (e2e 83.26; 512 tok, finish=length, d4=0.9095)
+  decode T=0.6: 83.61 tok/s (e2e 83.00; 512 tok, finish=length, d4=0.9482)
+  decode T=0.6: 83.74 tok/s (e2e 83.48; 512 tok, finish=length, d4=0.8964)
+  decode T=0.6: 84.79 tok/s (e2e 84.06; 512 tok, finish=length, d4=0.9225)
+  decode T=0.6: 85.53 tok/s (e2e 84.75; 512 tok, finish=length, d4=0.9735)
+  decode median 83.74 (min 82.83, max 85.53) over 5/5 valid
+  decode T=0: median 86.07 (min 84.04, max 86.68) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4969)']
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.67s -> 886 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4179, 4207, 4241])
+  prefill 16000: 16286 tok (ref 16286), TTFT 18.35s -> 887 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16330, 16358, 16394])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.32 GB, resident mapped files 5.27 GB, swap used 18370.25 MB
+  -> <run-root>/results/flash-kapitsa-plain-20261018-115527.json
+[11:58:00] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[11:58:00] flash-kapitsa-plain: GPU lock released after 153.3s held
+[11:58:00] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-115527.json  flags: 2
+=== 2026-10-18 11:58:00 pass 1 done (exit 0)
+=== 2026-10-18 11:58:00 pass 2: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, depth 1)  version 62ab7ed
+[11:58:00] flash-kapitsa: GPU lock acquired after 0.0s wait
+[11:58:00] flash-kapitsa: starting <repo-62ab7ed>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[11:58:16] flash-kapitsa: ready after 16s (pid 13348, listener 13348)
+[11:58:21] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.14s)
+[11:58:21] flash-kapitsa:  warm-up tools: ok (0.88s)
+[11:58:40] flash-kapitsa: GPU quiet after 19s; benchmarking
+== flash-kapitsa
+  decode T=0.6: 103.28 tok/s (e2e 102.98; 512 tok, finish=length, d4=0.9656)
+  decode T=0.6: 102.12 tok/s (e2e 101.13; 512 tok, finish=length, d4=0.9021)
+  decode T=0.6: 100.85 tok/s (e2e 100.07; 512 tok, finish=length, d4=0.9187)
+  decode T=0.6: 100.12 tok/s (e2e 99.71; 512 tok, finish=length, d4=0.447) flags ['repetition loop (distinct-4-gram 0.447)']
+  decode T=0.6: 102.77 tok/s (e2e 101.90; 512 tok, finish=length, d4=0.922)
+  decode median 102.12 (min 100.12, max 103.28) over 5/5 valid
+  decode T=0: median 103.06 (min 95.74, max 103.77) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4969)']
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.61s -> 896 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4169, 4204, 4247])
+  prefill 16000: 16286 tok (ref 16286), TTFT 18.20s -> 895 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16327, 16355, 16389])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.46 GB, resident mapped files 5.45 GB, swap used 18354.25 MB
+  -> <run-root>/results/flash-kapitsa-20261018-115800.json
+[12:00:19] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:00:19] flash-kapitsa: GPU lock released after 138.7s held
+[12:00:19] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-115800.json  flags: 3
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 62ab7ed
+[12:00:19] flash-kapitsa-plain: GPU lock acquired after 0.0s wait
+[12:00:19] flash-kapitsa-plain: starting <repo-62ab7ed>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[12:00:35] flash-kapitsa-plain: ready after 16s (pid 20465, listener 20465)
+[12:00:39] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (4.23s)
+[12:00:40] flash-kapitsa-plain:  warm-up tools: ok (0.94s)
+[12:00:59] flash-kapitsa-plain: GPU quiet after 19s; benchmarking
+== flash-kapitsa-plain
+  decode T=0.6: 83.84 tok/s (e2e 84.32; 512 tok, finish=length, d4=0.8747)
+  decode T=0.6: 84.74 tok/s (e2e 84.50; 512 tok, finish=length, d4=0.8953)
+  decode T=0.6: 85.15 tok/s (e2e 85.61; 512 tok, finish=length, d4=0.9435)
+  decode T=0.6: 86.92 tok/s (e2e 85.20; 512 tok, finish=length, d4=0.9002)
+  decode T=0.6: 86.34 tok/s (e2e 85.54; 512 tok, finish=length, d4=0.9055)
+  decode median 85.15 (min 83.84, max 86.92) over 5/5 valid
+  decode T=0: median 86.84 (min 85.82, max 88.01) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.60s -> 898 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4167, 4193, 4227])
+  prefill 16000: 16286 tok (ref 16286), TTFT 18.06s -> 902 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16332, 16360, 16396])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.32 GB, resident mapped files 5.33 GB, swap used 18322.25 MB
+  -> <run-root>/results/flash-kapitsa-plain-20261018-120019.json
+[12:02:51] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:02:51] flash-kapitsa-plain: GPU lock released after 151.9s held
+[12:02:51] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-120019.json  flags: 1
+=== 2026-10-18 12:02:51 pass 2 done (exit 0)
+
+######## 09-omlx.log
+=== 2026-10-18 12:03:11 pass 1: flash-omlx,flash-omlx-mtp
+
+===== flash-omlx  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:03:11] flash-omlx: GPU lock acquired after 0.0s wait
+[12:03:11] flash-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash/models --no-hf-cache --headless --host 127.0.0.1 --port 8284 --base-path <run-root>/state/omlx/flash/base --paged-ssd-cache-dir <run-root>/state/omlx/flash/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:03:13] flash-omlx: ready after 2s (pid 29670, listener 29670)
+[12:04:17] flash-omlx:  warm-up prefill~2.9k+decode64: ok (64.19s)
+[12:04:18] flash-omlx:  warm-up tools: ok (0.89s)
+[12:04:37] flash-omlx: GPU quiet after 19s; benchmarking
+== flash-omlx
+  decode T=0.6: 58.89 tok/s (e2e 59.40; 512 tok, finish=length, d4=0.8501)
+  decode T=0.6: 60.39 tok/s (e2e 59.42; 512 tok, finish=length, d4=0.847)
+  decode T=0.6: 59.19 tok/s (e2e 59.16; 512 tok, finish=length, d4=0.8975)
+  decode T=0.6: 60.09 tok/s (e2e 59.43; 512 tok, finish=length, d4=0.8965)
+  decode T=0.6: 59.41 tok/s (e2e 59.19; 512 tok, finish=length, d4=0.9311)
+  decode median 59.41 (min 58.89, max 60.39) over 5/5 valid
+  decode T=0: median 59.15 (min 58.99, max 59.53) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4969)']
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.45s -> 1199 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [4127, 4188, 4221])
+  prefill 16000: 16285 tok (ref 16286), TTFT 13.27s -> 1227 tok/s, cold cached=0 | cached TTFT median 0.40s over 3 turns (cached [16278, 16355, 16388])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.37 GB, resident mapped files 0.01 GB, swap used 19282.75 MB
+  -> <run-root>/results/flash-omlx-20261018-120311.json
+[12:06:59] flash-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:06:59] flash-omlx: GPU lock released after 228.4s held
+[12:06:59] flash-omlx: -> <run-root>/results/flash-omlx-20261018-120311.json  flags: 2
+
+===== flash-omlx-mtp  [omlx] oMLX + MTP (Lightning MTP, fixed depth 3)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:06:59] flash-omlx-mtp: GPU lock acquired after 0.0s wait
+[12:06:59] flash-omlx-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8285 --base-path <run-root>/state/omlx/flash-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:07:01] flash-omlx-mtp: ready after 2s (pid 41703, listener 41703)
+[12:07:49] flash-omlx-mtp:  warm-up prefill~2.9k+decode64: ok (47.89s)
+[12:07:50] flash-omlx-mtp:  warm-up tools: ok (0.72s)
+[12:07:56] flash-omlx-mtp:  warm-up decode512#1: ok (5.63s)
+[12:08:01] flash-omlx-mtp:  warm-up decode512#2: ok (5.28s)
+[12:08:06] flash-omlx-mtp:  warm-up decode512#3: ok (5.57s)
+[12:08:25] flash-omlx-mtp: GPU quiet after 19s; benchmarking
+== flash-omlx-mtp
+  decode T=0.6: 102.49 tok/s (e2e 104.56; 512 tok, finish=length, d4=0.8708)
+  decode T=0.6: 111.08 tok/s (e2e 110.69; 512 tok, finish=length, d4=0.9378)
+  decode T=0.6: 106.74 tok/s (e2e 106.84; 512 tok, finish=length, d4=0.9604)
+  decode T=0.6: 105.16 tok/s (e2e 104.91; 512 tok, finish=length, d4=0.8533)
+  decode T=0.6: 108.27 tok/s (e2e 107.50; 512 tok, finish=length, d4=0.9555)
+  decode median 106.74 (min 102.49, max 111.08) over 5/5 valid
+  decode T=0: median 106.17 (min 103.67, max 111.02) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.28s -> 1260 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4126, 4182, 4215])
+  prefill 16000: 16285 tok (ref 16286), TTFT 12.52s -> 1300 tok/s, cold cached=0 | cached TTFT median 0.39s over 3 turns (cached [16278, 16333, 16370])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 104.10 GB, resident mapped files 0.01 GB, swap used 19155.12 MB
+  -> <run-root>/results/flash-omlx-mtp-20261018-120659.json
+[12:09:59] flash-omlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:09:59] flash-omlx-mtp: GPU lock released after 180.1s held
+[12:09:59] flash-omlx-mtp: -> <run-root>/results/flash-omlx-mtp-20261018-120659.json
+=== 2026-10-18 12:09:59 pass 1 done (exit 0)
+=== 2026-10-18 12:09:59 pass 2: flash-omlx,flash-omlx-mtp
+
+===== flash-omlx  [omlx] oMLX (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:09:59] flash-omlx: GPU lock acquired after 0.0s wait
+[12:09:59] flash-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash/models --no-hf-cache --headless --host 127.0.0.1 --port 8284 --base-path <run-root>/state/omlx/flash/base --paged-ssd-cache-dir <run-root>/state/omlx/flash/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:10:02] flash-omlx: ready after 2s (pid 51140, listener 51140)
+[12:10:48] flash-omlx:  warm-up prefill~2.9k+decode64: ok (46.66s)
+[12:10:49] flash-omlx:  warm-up tools: ok (0.9s)
+[12:11:08] flash-omlx: GPU quiet after 19s; benchmarking
+== flash-omlx
+  decode T=0.6: 60.19 tok/s (e2e 59.59; 512 tok, finish=length, d4=0.7005)
+  decode T=0.6: 59.38 tok/s (e2e 59.33; 512 tok, finish=length, d4=0.9296)
+  decode T=0.6: 59.53 tok/s (e2e 59.21; 512 tok, finish=length, d4=0.9281)
+  decode T=0.6: 59.28 tok/s (e2e 59.38; 512 tok, finish=length, d4=0.8989)
+  decode T=0.6: 59.68 tok/s (e2e 59.64; 512 tok, finish=length, d4=0.9278)
+  decode median 59.53 (min 59.28, max 60.19) over 5/5 valid
+  decode T=0: median 59.98 (min 59.71, max 60.16) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.09s -> 1339 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4127, 4187, 4220])
+  prefill 16000: 16288 tok (ref 16286), TTFT 11.69s -> 1394 tok/s, cold cached=0 | cached TTFT median 0.38s over 3 turns (cached [16281, 16342, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.37 GB, resident mapped files 0.01 GB, swap used 19157.81 MB
+  -> <run-root>/results/flash-omlx-20261018-120959.json
+[12:13:25] flash-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:13:25] flash-omlx: GPU lock released after 206.2s held
+[12:13:25] flash-omlx: -> <run-root>/results/flash-omlx-20261018-120959.json
+
+===== flash-omlx-mtp  [omlx] oMLX + MTP (Lightning MTP, fixed depth 3)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:13:25] flash-omlx-mtp: GPU lock acquired after 0.0s wait
+[12:13:26] flash-omlx-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8285 --base-path <run-root>/state/omlx/flash-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:13:28] flash-omlx-mtp: ready after 2s (pid 62346, listener 62346)
+[12:14:19] flash-omlx-mtp:  warm-up prefill~2.9k+decode64: ok (51.63s)
+[12:14:20] flash-omlx-mtp:  warm-up tools: ok (0.7s)
+[12:14:26] flash-omlx-mtp:  warm-up decode512#1: ok (5.51s)
+[12:14:31] flash-omlx-mtp:  warm-up decode512#2: ok (5.39s)
+[12:14:36] flash-omlx-mtp:  warm-up decode512#3: ok (5.21s)
+[12:14:55] flash-omlx-mtp: GPU quiet after 19s; benchmarking
+== flash-omlx-mtp
+  decode T=0.6: 111.18 tok/s (e2e 110.42; 512 tok, finish=length, d4=0.9618)
+  decode T=0.6: 112.06 tok/s (e2e 111.06; 512 tok, finish=length, d4=0.8967)
+  decode T=0.6: 105.99 tok/s (e2e 105.09; 512 tok, finish=length, d4=0.9335)
+  decode T=0.6: 103.24 tok/s (e2e 103.40; 512 tok, finish=length, d4=0.9536)
+  decode T=0.6: 106.53 tok/s (e2e 104.81; 512 tok, finish=length, d4=0.8721)
+  decode median 106.53 (min 103.24, max 112.06) over 5/5 valid
+  decode T=0: median 106.37 (min 105.15, max 108.34) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 3.31s -> 1247 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4128, 4180, 4213])
+  prefill 16000: 16283 tok (ref 16286), TTFT 12.37s -> 1316 tok/s, cold cached=0 | cached TTFT median 0.42s over 3 turns (cached [16276, 16347, 16387])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.91 GB, resident mapped files 0.01 GB, swap used 18917.75 MB
+  -> <run-root>/results/flash-omlx-mtp-20261018-121325.json
+[12:16:29] flash-omlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:16:29] flash-omlx-mtp: GPU lock released after 183.9s held
+[12:16:29] flash-omlx-mtp: -> <run-root>/results/flash-omlx-mtp-20261018-121325.json
+=== 2026-10-18 12:16:29 pass 2 done (exit 0)
+
+######## 11-smoke-oq4e.log
+=== 2026-10-18 12:36:55 smoke: smoke-omlx-oq4e-mtp-fixed3,smoke-omlx-oq4e-mtp-adaptive,smoke-omlx-oq4e-mtp-fixed2,smoke-omlx-oq4e-mtp-fixed4
+
+===== smoke-omlx-oq4e-mtp-adaptive  [omlx] smoke  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:36:55] smoke-omlx-oq4e-mtp-adaptive: GPU lock acquired after 0.0s wait
+[12:36:55] smoke-omlx-oq4e-mtp-adaptive: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-oq4e-adaptive/models --no-hf-cache --headless --host 127.0.0.1 --port 8292 --base-path <smoke-root>/state/omlx/smoke-oq4e-adaptive/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-oq4e-adaptive/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:36:57] smoke-omlx-oq4e-mtp-adaptive: ready after 2s (pid 37736, listener 37736)
+[12:38:22] smoke-omlx-oq4e-mtp-adaptive:  warm-up prefill~2.9k+decode64: ok (84.91s)
+[12:38:23] smoke-omlx-oq4e-mtp-adaptive:  warm-up tools: ok (0.88s)
+[12:38:29] smoke-omlx-oq4e-mtp-adaptive:  warm-up decode512#1: ok (5.34s)
+[12:38:34] smoke-omlx-oq4e-mtp-adaptive:  warm-up decode512#2: ok (5.3s)
+[12:38:40] smoke-omlx-oq4e-mtp-adaptive:  warm-up decode512#3: ok (5.75s)
+[12:39:42] smoke-omlx-oq4e-mtp-adaptive: GPU not quiet after 62s (['Google Chrome He[95905] 17%']); benchmarking anyway, contention will be flagged
+== smoke-omlx-oq4e-mtp-adaptive
+  decode T=0.6: 107.20 tok/s (e2e 105.92; 512 tok, finish=length, d4=0.6898)
+  decode T=0.6: 109.25 tok/s (e2e 106.59; 512 tok, finish=length, d4=0.9572)
+  decode median 108.22 (min 107.2, max 109.25) over 2/2 valid
+  decode T=0: median 97.63 (min 90.32, max 104.95) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 3.45s -> 1197 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [4127, 4195, 4232])
+  memory: phys_footprint_peak 103.18 GB, resident mapped files 0.01 GB, swap used 18081.56 MB
+  -> <smoke-root>/results/smoke-omlx-oq4e-mtp-adaptive-20261018-123655.json
+[12:40:21] smoke-omlx-oq4e-mtp-adaptive: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:40:21] smoke-omlx-oq4e-mtp-adaptive: GPU lock released after 205.9s held
+[12:40:21] smoke-omlx-oq4e-mtp-adaptive: -> <smoke-root>/results/smoke-omlx-oq4e-mtp-adaptive-20261018-123655.json  flags: 1
+
+===== smoke-omlx-oq4e-mtp-fixed2  [omlx] smoke  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:40:21] smoke-omlx-oq4e-mtp-fixed2: GPU lock acquired after 0.0s wait
+[12:40:21] smoke-omlx-oq4e-mtp-fixed2: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-oq4e-fixed2/models --no-hf-cache --headless --host 127.0.0.1 --port 8292 --base-path <smoke-root>/state/omlx/smoke-oq4e-fixed2/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-oq4e-fixed2/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:40:23] smoke-omlx-oq4e-mtp-fixed2: ready after 2s (pid 48366, listener 48366)
+[12:41:24] smoke-omlx-oq4e-mtp-fixed2:  warm-up prefill~2.9k+decode64: ok (60.9s)
+[12:41:25] smoke-omlx-oq4e-mtp-fixed2:  warm-up tools: ok (1.14s)
+[12:41:33] smoke-omlx-oq4e-mtp-fixed2:  warm-up decode512#1: ok (7.9s)
+[12:41:41] smoke-omlx-oq4e-mtp-fixed2:  warm-up decode512#2: ok (7.63s)
+[12:41:48] smoke-omlx-oq4e-mtp-fixed2:  warm-up decode512#3: ok (7.08s)
+[12:42:50] smoke-omlx-oq4e-mtp-fixed2: GPU not quiet after 62s (['Google Chrome He[95905] 17%']); benchmarking anyway, contention will be flagged
+== smoke-omlx-oq4e-mtp-fixed2
+  decode T=0.6: 109.80 tok/s (e2e 111.01; 512 tok, finish=length, d4=0.9378)
+  decode T=0.6: 111.62 tok/s (e2e 109.39; 512 tok, finish=length, d4=0.6865)
+  decode median 110.71 (min 109.8, max 111.62) over 2/2 valid
+  decode T=0: median 105.64 (min 104.75, max 106.54) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.67s -> 1549 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4127, 4183, 4216])
+  memory: phys_footprint_peak 103.26 GB, resident mapped files 0.01 GB, swap used 19523.5 MB
+  -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed2-20261018-124021.json
+[12:43:28] smoke-omlx-oq4e-mtp-fixed2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:43:28] smoke-omlx-oq4e-mtp-fixed2: GPU lock released after 186.8s held
+[12:43:28] smoke-omlx-oq4e-mtp-fixed2: -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed2-20261018-124021.json  flags: 1
+
+===== smoke-omlx-oq4e-mtp-fixed3  [omlx] smoke  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:43:28] smoke-omlx-oq4e-mtp-fixed3: GPU lock acquired after 0.0s wait
+[12:43:28] smoke-omlx-oq4e-mtp-fixed3: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-oq4e-fixed3/models --no-hf-cache --headless --host 127.0.0.1 --port 8292 --base-path <smoke-root>/state/omlx/smoke-oq4e-fixed3/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-oq4e-fixed3/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:43:30] smoke-omlx-oq4e-mtp-fixed3: ready after 2s (pid 58511, listener 58511)
+[12:44:31] smoke-omlx-oq4e-mtp-fixed3:  warm-up prefill~2.9k+decode64: ok (60.6s)
+[12:44:31] smoke-omlx-oq4e-mtp-fixed3:  warm-up tools: ok (0.84s)
+[12:44:37] smoke-omlx-oq4e-mtp-fixed3:  warm-up decode512#1: ok (5.6s)
+[12:44:42] smoke-omlx-oq4e-mtp-fixed3:  warm-up decode512#2: ok (5.36s)
+[12:44:48] smoke-omlx-oq4e-mtp-fixed3:  warm-up decode512#3: ok (5.31s)
+[12:45:49] smoke-omlx-oq4e-mtp-fixed3: GPU not quiet after 62s (['Google Chrome He[95905] 16%', 'Google Chrome He[99304] 5%']); benchmarking anyway, contention will be flagged
+== smoke-omlx-oq4e-mtp-fixed3
+  decode T=0.6: 104.18 tok/s (e2e 103.82; 512 tok, finish=length, d4=0.9259)
+  decode T=0.6: 105.17 tok/s (e2e 102.79; 512 tok, finish=length, d4=0.9249)
+  decode median 104.68 (min 104.18, max 105.17) over 2/2 valid
+  decode T=0: median 101.15 (min 99.34, max 102.96) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 2.75s -> 1501 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4127, 4195, 4232])
+  memory: phys_footprint_peak 103.14 GB, resident mapped files 0.01 GB, swap used 19134.31 MB
+  -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed3-20261018-124328.json
+[12:46:29] smoke-omlx-oq4e-mtp-fixed3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:46:29] smoke-omlx-oq4e-mtp-fixed3: GPU lock released after 181.0s held
+[12:46:29] smoke-omlx-oq4e-mtp-fixed3: -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed3-20261018-124328.json  flags: 1
+
+===== smoke-omlx-oq4e-mtp-fixed4  [omlx] smoke  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:46:29] smoke-omlx-oq4e-mtp-fixed4: GPU lock acquired after 0.0s wait
+[12:46:29] smoke-omlx-oq4e-mtp-fixed4: starting ~/venvs/omlx/bin/omlx serve --model-dir <smoke-root>/state/omlx/smoke-oq4e-fixed4/models --no-hf-cache --headless --host 127.0.0.1 --port 8292 --base-path <smoke-root>/state/omlx/smoke-oq4e-fixed4/base --paged-ssd-cache-dir <smoke-root>/state/omlx/smoke-oq4e-fixed4/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:46:31] smoke-omlx-oq4e-mtp-fixed4: ready after 2s (pid 68081, listener 68081)
+[12:47:32] smoke-omlx-oq4e-mtp-fixed4:  warm-up prefill~2.9k+decode64: ok (60.64s)
+[12:47:32] smoke-omlx-oq4e-mtp-fixed4:  warm-up tools: ok (0.75s)
+[12:47:38] smoke-omlx-oq4e-mtp-fixed4:  warm-up decode512#1: ok (5.77s)
+[12:47:44] smoke-omlx-oq4e-mtp-fixed4:  warm-up decode512#2: ok (5.96s)
+[12:47:50] smoke-omlx-oq4e-mtp-fixed4:  warm-up decode512#3: ok (5.45s)
+[12:48:51] smoke-omlx-oq4e-mtp-fixed4: GPU not quiet after 62s (['Google Chrome He[95905] 18%']); benchmarking anyway, contention will be flagged
+== smoke-omlx-oq4e-mtp-fixed4
+  decode T=0.6: 107.18 tok/s (e2e 108.98; 512 tok, finish=length, d4=0.9588)
+  decode T=0.6: 104.78 tok/s (e2e 102.16; 512 tok, finish=length, d4=0.907)
+  decode median 105.98 (min 104.78, max 107.18) over 2/2 valid
+  decode T=0: median 96.04 (min 94.5, max 97.58) over 2/2 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 2.79s -> 1483 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4124, 4185, 4225])
+  memory: phys_footprint_peak 103.06 GB, resident mapped files 0.01 GB, swap used 19234.81 MB
+  -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed4-20261018-124629.json
+[12:49:31] smoke-omlx-oq4e-mtp-fixed4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:49:31] smoke-omlx-oq4e-mtp-fixed4: GPU lock released after 181.9s held
+[12:49:31] smoke-omlx-oq4e-mtp-fixed4: -> <smoke-root>/results/smoke-omlx-oq4e-mtp-fixed4-20261018-124629.json  flags: 1
+=== 2026-10-18 12:49:31 smoke done (exit 0)
+
+######## 12-omlx-oq4e.log
+=== 2026-10-18 12:49:55 pass 1: flash-omlx-oq4e,flash-omlx-oq4e-mtp
+
+===== flash-omlx-oq4e  [omlx] oMLX, oQ4e (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:49:55] flash-omlx-oq4e: GPU lock acquired after 0.0s wait
+[12:49:55] flash-omlx-oq4e: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-oq4e/models --no-hf-cache --headless --host 127.0.0.1 --port 8288 --base-path <run-root>/state/omlx/flash-oq4e/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-oq4e/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:49:57] flash-omlx-oq4e: ready after 2s (pid 83636, listener 83636)
+[12:50:44] flash-omlx-oq4e:  warm-up prefill~2.9k+decode64: ok (46.59s)
+[12:50:45] flash-omlx-oq4e:  warm-up tools: ok (1.07s)
+[12:51:47] flash-omlx-oq4e: gpu busy (62s): Google Chrome He[95905] 18%
+[12:52:46] flash-omlx-oq4e: GPU not quiet after 122s (['Google Chrome He[95905] 18%']); benchmarking anyway, contention will be flagged
+== flash-omlx-oq4e
+  decode T=0.6: 70.98 tok/s (e2e 70.18; 512 tok, finish=length, d4=0.9472)
+  decode T=0.6: 69.74 tok/s (e2e 69.14; 512 tok, finish=length, d4=0.9205)
+  decode T=0.6: 64.18 tok/s (e2e 64.68; 512 tok, finish=length, d4=0.9343)
+  decode T=0.6: 64.92 tok/s (e2e 64.67; 512 tok, finish=length, d4=0.9242)
+  decode T=0.6: 61.13 tok/s (e2e 61.56; 512 tok, finish=length, d4=0.9287)
+  decode median 64.92 (min 61.13, max 70.98) over 5/5 valid
+  decode T=0: median 63.16 (min 59.41, max 66.93) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 2.95s -> 1399 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4125, 4182, 4222])
+  prefill 16000: 16286 tok (ref 16286), TTFT 11.12s -> 1465 tok/s, cold cached=0 | cached TTFT median 0.42s over 3 turns (cached [16279, 16348, 16397])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.60 GB, resident mapped files 0.01 GB, swap used 18811.25 MB
+  -> <run-root>/results/flash-omlx-oq4e-20261018-124955.json
+[12:54:57] flash-omlx-oq4e: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[12:54:57] flash-omlx-oq4e: GPU lock released after 301.8s held
+[12:54:57] flash-omlx-oq4e: -> <run-root>/results/flash-omlx-oq4e-20261018-124955.json  flags: 1
+
+===== flash-omlx-oq4e-mtp  [omlx] oMLX + MTP, oQ4e (Lightning MTP, fixed depth 2)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[12:54:57] flash-omlx-oq4e-mtp: GPU lock acquired after 0.0s wait
+[12:54:57] flash-omlx-oq4e-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-oq4e-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8289 --base-path <run-root>/state/omlx/flash-oq4e-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-oq4e-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[12:54:59] flash-omlx-oq4e-mtp: ready after 2s (pid 1328, listener 1328)
+[12:56:15] flash-omlx-oq4e-mtp:  warm-up prefill~2.9k+decode64: ok (76.03s)
+[12:56:16] flash-omlx-oq4e-mtp:  warm-up tools: ok (0.94s)
+[12:56:22] flash-omlx-oq4e-mtp:  warm-up decode512#1: ok (5.97s)
+[12:56:28] flash-omlx-oq4e-mtp:  warm-up decode512#2: ok (6.56s)
+[12:56:34] flash-omlx-oq4e-mtp:  warm-up decode512#3: ok (5.85s)
+[12:57:36] flash-omlx-oq4e-mtp: gpu busy (62s): Google Chrome He[95905] 17%
+[12:58:36] flash-omlx-oq4e-mtp: GPU not quiet after 122s (['Google Chrome He[95905] 17%']); benchmarking anyway, contention will be flagged
+== flash-omlx-oq4e-mtp
+  decode T=0.6: 108.85 tok/s (e2e 109.60; 512 tok, finish=length, d4=0.9563)
+  decode T=0.6: 104.20 tok/s (e2e 106.67; 384 tok, finish=stop, d4=0.6533) flags ['finish_reason=stop (expected length)', 'completion_tokens=384 != 512']
+  decode T=0.6: 105.73 tok/s (e2e 104.05; 512 tok, finish=length, d4=0.9614)
+  decode T=0.6: 103.01 tok/s (e2e 101.65; 512 tok, finish=length, d4=0.9258)
+  decode T=0.6: 101.90 tok/s (e2e 100.48; 512 tok, finish=length, d4=0.9504)
+  decode median 104.2 (min 101.9, max 108.85) over 5/5 valid
+  decode T=0: median 99.87 (min 94.85, max 103.18) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 2.91s -> 1418 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4124, 4182, 4213])
+  prefill 16000: 16287 tok (ref 16286), TTFT 11.64s -> 1400 tok/s, cold cached=0 | cached TTFT median 0.45s over 3 turns (cached [16280, 16352, 16400])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 104.25 GB, resident mapped files 0.01 GB, swap used 18644.56 MB
+  -> <run-root>/results/flash-omlx-oq4e-mtp-20261018-125457.json
+[13:00:12] flash-omlx-oq4e-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:00:12] flash-omlx-oq4e-mtp: GPU lock released after 315.8s held
+[13:00:12] flash-omlx-oq4e-mtp: -> <run-root>/results/flash-omlx-oq4e-mtp-20261018-125457.json  flags: 3
+=== 2026-10-18 13:00:13 pass 1 done (exit 0)
+=== 2026-10-18 13:00:13 pass 2: flash-omlx-oq4e,flash-omlx-oq4e-mtp
+
+===== flash-omlx-oq4e  [omlx] oMLX, oQ4e (no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[13:00:13] flash-omlx-oq4e: GPU lock acquired after 0.0s wait
+[13:00:13] flash-omlx-oq4e: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-oq4e/models --no-hf-cache --headless --host 127.0.0.1 --port 8288 --base-path <run-root>/state/omlx/flash-oq4e/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-oq4e/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[13:00:15] flash-omlx-oq4e: ready after 2s (pid 18064, listener 18064)
+[13:01:08] flash-omlx-oq4e:  warm-up prefill~2.9k+decode64: ok (53.44s)
+[13:01:09] flash-omlx-oq4e:  warm-up tools: ok (0.98s)
+[13:02:11] flash-omlx-oq4e: gpu busy (62s): Google Chrome He[95905] 18%
+[13:03:11] flash-omlx-oq4e: GPU not quiet after 122s (['Google Chrome He[95905] 11%']); benchmarking anyway, contention will be flagged
+== flash-omlx-oq4e
+  decode T=0.6: 71.30 tok/s (e2e 71.35; 512 tok, finish=length, d4=0.9271)
+  decode T=0.6: 64.62 tok/s (e2e 63.87; 512 tok, finish=length, d4=0.5262)
+  decode T=0.6: 69.69 tok/s (e2e 69.56; 512 tok, finish=length, d4=0.9401)
+  decode T=0.6: 70.97 tok/s (e2e 69.67; 512 tok, finish=length, d4=0.9567)
+  decode T=0.6: 65.01 tok/s (e2e 65.28; 512 tok, finish=length, d4=0.9526)
+  decode median 69.69 (min 64.62, max 71.3) over 5/5 valid
+  decode T=0: median 66.78 (min 66.43, max 68.65) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 2.72s -> 1521 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4125, 4187, 4227])
+  prefill 16000: 16288 tok (ref 16286), TTFT 9.63s -> 1691 tok/s, cold cached=0 | cached TTFT median 0.34s over 3 turns (cached [16281, 16384, 16418])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.61 GB, resident mapped files 0.01 GB, swap used 19479.5 MB
+  -> <run-root>/results/flash-omlx-oq4e-20261018-130013.json
+[13:05:19] flash-omlx-oq4e: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:05:19] flash-omlx-oq4e: GPU lock released after 306.2s held
+[13:05:19] flash-omlx-oq4e: -> <run-root>/results/flash-omlx-oq4e-20261018-130013.json  flags: 2
+
+===== flash-omlx-oq4e-mtp  [omlx] oMLX + MTP, oQ4e (Lightning MTP, fixed depth 2)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[13:05:19] flash-omlx-oq4e-mtp: GPU lock acquired after 0.0s wait
+[13:05:19] flash-omlx-oq4e-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/flash-oq4e-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8289 --base-path <run-root>/state/omlx/flash-oq4e-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/flash-oq4e-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[13:05:21] flash-omlx-oq4e-mtp: ready after 2s (pid 34192, listener 34192)
+[13:06:30] flash-omlx-oq4e-mtp:  warm-up prefill~2.9k+decode64: ok (69.19s)
+[13:06:31] flash-omlx-oq4e-mtp:  warm-up tools: ok (0.79s)
+[13:06:37] flash-omlx-oq4e-mtp:  warm-up decode512#1: ok (5.54s)
+[13:06:42] flash-omlx-oq4e-mtp:  warm-up decode512#2: ok (5.43s)
+[13:06:47] flash-omlx-oq4e-mtp:  warm-up decode512#3: ok (5.49s)
+[13:07:49] flash-omlx-oq4e-mtp: gpu busy (62s): Google Chrome He[95905] 19%
+[13:08:49] flash-omlx-oq4e-mtp: GPU not quiet after 121s (['Google Chrome He[95905] 16%']); benchmarking anyway, contention will be flagged
+== flash-omlx-oq4e-mtp
+  decode T=0.6: 109.37 tok/s (e2e 110.84; 512 tok, finish=length, d4=0.9167)
+  decode T=0.6: 95.93 tok/s (e2e 94.80; 512 tok, finish=length, d4=0.9712)
+  decode T=0.6: 107.79 tok/s (e2e 106.66; 512 tok, finish=length, d4=0.9295)
+  decode T=0.6: 105.50 tok/s (e2e 103.37; 512 tok, finish=length, d4=0.6557)
+  decode T=0.6: 105.31 tok/s (e2e 104.09; 512 tok, finish=length, d4=0.8871)
+  decode median 105.5 (min 95.93, max 109.37) over 5/5 valid
+  decode T=0: median 98.65 (min 95.86, max 101.51) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 2.96s -> 1395 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [4124, 4178, 4218])
+  prefill 16000: 16286 tok (ref 16286), TTFT 11.77s -> 1383 tok/s, cold cached=0 | cached TTFT median 0.45s over 3 turns (cached [16279, 16351, 16391])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 103.98 GB, resident mapped files 0.01 GB, swap used 19827.25 MB
+  -> <run-root>/results/flash-omlx-oq4e-mtp-20261018-130519.json
+[13:10:29] flash-omlx-oq4e-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:10:29] flash-omlx-oq4e-mtp: GPU lock released after 310.0s held
+[13:10:29] flash-omlx-oq4e-mtp: -> <run-root>/results/flash-omlx-oq4e-mtp-20261018-130519.json  flags: 1
+=== 2026-10-18 13:10:29 pass 2 done (exit 0)
+
+######## 14-smoke-llamacpp.log
+=== 2026-10-18 13:33:47 smoke: smoke-llamacpp-mtp1,smoke-llamacpp-mtp2,smoke-llamacpp-mtp3,smoke-llamacpp-mtp4
+
+===== smoke-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[13:33:47] smoke-llamacpp-mtp1: GPU lock acquired after 0.0s wait
+[13:33:48] smoke-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 1
+[13:34:02] smoke-llamacpp-mtp1: ready after 14s (pid 23682, listener 23682)
+[13:34:06] smoke-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (4.51s)
+[13:34:07] smoke-llamacpp-mtp1:  warm-up tools: ok (1.28s)
+[13:35:09] smoke-llamacpp-mtp1: GPU not quiet after 62s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp1
+  decode T=0.6: 65.54 tok/s (e2e 65.56; 512 tok, finish=length, d4=0.954)
+  decode T=0.6: 65.92 tok/s (e2e 65.97; 512 tok, finish=length, d4=0.8949)
+  decode median 65.73 (min 65.54, max 65.92) over 2/2 valid
+  decode T=0: median 67.08 (min 66.76, max 67.41) over 2/2 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.52s -> 915 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [4176, 4203, 4234])
+  memory: phys_footprint_peak 77.55 GB, resident mapped files 1.20 GB, swap used 18357.75 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp1-20261018-133347.json
+[13:36:01] smoke-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:36:01] smoke-llamacpp-mtp1: GPU lock released after 133.8s held
+[13:36:01] smoke-llamacpp-mtp1: -> <smoke-root>/results/smoke-llamacpp-mtp1-20261018-133347.json  flags: 1
+
+===== smoke-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[13:36:05] smoke-llamacpp-mtp2: GPU lock ~/.cache/nace-gpu.lock is held by: 23662 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 23853 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[13:36:21] smoke-llamacpp-mtp2: GPU lock acquired after 19.7s wait
+[13:36:21] smoke-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 2
+[13:36:33] smoke-llamacpp-mtp2: ready after 12s (pid 31765, listener 31765)
+[13:36:37] smoke-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (3.98s)
+[13:36:38] smoke-llamacpp-mtp2:  warm-up tools: ok (1.14s)
+[13:37:40] smoke-llamacpp-mtp2: GPU not quiet after 62s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp2
+  decode T=0.6: 86.19 tok/s (e2e 86.05; 512 tok, finish=length, d4=0.9044)
+  decode T=0.6: 78.97 tok/s (e2e 78.86; 512 tok, finish=length, d4=0.9599)
+  decode median 82.58 (min 78.97, max 86.19) over 2/2 valid
+  decode T=0: median 86.02 (min 85.15, max 86.88) over 2/2 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.51s -> 917 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [4184, 4218, 4250])
+  memory: phys_footprint_peak 77.66 GB, resident mapped files 1.21 GB, swap used 18205.75 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp2-20261018-133601.json
+[13:38:24] smoke-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:38:24] smoke-llamacpp-mtp2: GPU lock released after 123.1s held
+[13:38:24] smoke-llamacpp-mtp2: -> <smoke-root>/results/smoke-llamacpp-mtp2-20261018-133601.json  flags: 1
+
+===== smoke-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[13:38:24] smoke-llamacpp-mtp3: GPU lock ~/.cache/nace-gpu.lock is held by: 23662 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 31740 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[13:38:53] smoke-llamacpp-mtp3: GPU lock acquired after 28.6s wait
+[13:38:53] smoke-llamacpp-mtp3: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 3
+[13:39:05] smoke-llamacpp-mtp3: ready after 12s (pid 39621, listener 39621)
+[13:39:09] smoke-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (4.05s)
+[13:39:10] smoke-llamacpp-mtp3:  warm-up tools: ok (1.44s)
+[13:40:12] smoke-llamacpp-mtp3: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp3
+  decode T=0.6: 86.61 tok/s (e2e 87.21; 512 tok, finish=length, d4=0.9362)
+  decode T=0.6: 84.32 tok/s (e2e 83.57; 512 tok, finish=length, d4=0.9238)
+  decode median 85.46 (min 84.32, max 86.61) over 2/2 valid
+  decode T=0: median 91.1 (min 90.85, max 91.34) over 2/2 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 4.51s -> 915 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [4172, 4199, 4230])
+  memory: phys_footprint_peak 77.78 GB, resident mapped files 1.26 GB, swap used 18053.75 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp3-20261018-133824.json
+[13:40:54] smoke-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:40:54] smoke-llamacpp-mtp3: GPU lock released after 121.7s held
+[13:40:54] smoke-llamacpp-mtp3: -> <smoke-root>/results/smoke-llamacpp-mtp3-20261018-133824.json  flags: 1
+
+===== smoke-llamacpp-mtp4  [llama.cpp] llama.cpp + MTP (n-max 4)  version 0.7.0-dev (b11669, 620d2225c)
+[13:40:55] smoke-llamacpp-mtp4: GPU lock ~/.cache/nace-gpu.lock is held by: 23662 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 39047 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[13:41:33] smoke-llamacpp-mtp4: GPU lock acquired after 38.2s wait
+[13:41:33] smoke-llamacpp-mtp4: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 4
+[13:41:45] smoke-llamacpp-mtp4: ready after 12s (pid 48470, listener 48470)
+[13:41:49] smoke-llamacpp-mtp4:  warm-up prefill~2.9k+decode64: ok (4.04s)
+[13:41:50] smoke-llamacpp-mtp4:  warm-up tools: ok (1.08s)
+[13:42:52] smoke-llamacpp-mtp4: GPU not quiet after 62s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp4
+  decode T=0.6: 95.23 tok/s (e2e 93.94; 512 tok, finish=length, d4=0.9581)
+  decode T=0.6: 94.20 tok/s (e2e 94.80; 512 tok, finish=length, d4=0.9268)
+  decode median 94.71 (min 94.2, max 95.23) over 2/2 valid
+  decode T=0: median 97.27 (min 97.11, max 97.44) over 2/2 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 4.47s -> 924 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [4171, 4195, 4227])
+  memory: phys_footprint_peak 77.89 GB, resident mapped files 1.25 GB, swap used 17933.75 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp4-20261018-134054.json
+[13:43:30] smoke-llamacpp-mtp4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:43:30] smoke-llamacpp-mtp4: GPU lock released after 117.9s held
+[13:43:30] smoke-llamacpp-mtp4: -> <smoke-root>/results/smoke-llamacpp-mtp4-20261018-134054.json  flags: 1
+=== 2026-10-18 13:43:30 smoke done (exit 0)
+
+######## 14b-smoke-llamacpp.log
+=== 2026-10-18 13:43:55 smoke: smoke-llamacpp-mtp5,smoke-llamacpp-mtp6
+
+===== smoke-llamacpp-mtp5  [llama.cpp] llama.cpp + MTP (n-max 5)  version 0.7.0-dev (b11669, 620d2225c)
+[13:43:55] smoke-llamacpp-mtp5: GPU lock acquired after 0.0s wait
+[13:43:55] smoke-llamacpp-mtp5: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 5
+[13:44:07] smoke-llamacpp-mtp5: ready after 12s (pid 56359, listener 56359)
+[13:44:11] smoke-llamacpp-mtp5:  warm-up prefill~2.9k+decode64: ok (4.09s)
+[13:44:12] smoke-llamacpp-mtp5:  warm-up tools: ok (1.03s)
+[13:45:14] smoke-llamacpp-mtp5: GPU not quiet after 62s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp5
+  decode T=0.6: 93.06 tok/s (e2e 93.80; 512 tok, finish=length, d4=0.902)
+  decode T=0.6: 84.96 tok/s (e2e 85.32; 512 tok, finish=length, d4=0.9488)
+  decode median 89.01 (min 84.96, max 93.06) over 2/2 valid
+  decode T=0: median 100.91 (min 98.1, max 103.72) over 2/2 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 4.48s -> 923 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4165, 4193, 4227])
+  memory: phys_footprint_peak 78.00 GB, resident mapped files 1.32 GB, swap used 17869.75 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp5-20261018-134355.json
+[13:45:54] smoke-llamacpp-mtp5: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:45:54] smoke-llamacpp-mtp5: GPU lock released after 119.7s held
+[13:45:54] smoke-llamacpp-mtp5: -> <smoke-root>/results/smoke-llamacpp-mtp5-20261018-134355.json  flags: 1
+
+===== smoke-llamacpp-mtp6  [llama.cpp] llama.cpp + MTP (n-max 6)  version 0.7.0-dev (b11669, 620d2225c)
+[13:45:55] smoke-llamacpp-mtp6: GPU lock ~/.cache/nace-gpu.lock is held by: 56337 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 59535 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 bash bq.sh; waiting...
+[13:46:18] smoke-llamacpp-mtp6: GPU lock acquired after 23.8s wait
+[13:46:18] smoke-llamacpp-mtp6: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 6
+[13:46:31] smoke-llamacpp-mtp6: ready after 12s (pid 64399, listener 64399)
+[13:46:35] smoke-llamacpp-mtp6:  warm-up prefill~2.9k+decode64: ok (4.09s)
+[13:46:36] smoke-llamacpp-mtp6:  warm-up tools: ok (1.46s)
+[13:47:38] smoke-llamacpp-mtp6: GPU not quiet after 62s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== smoke-llamacpp-mtp6
+  decode T=0.6: 91.34 tok/s (e2e 91.84; 512 tok, finish=length, d4=0.9169)
+  decode T=0.6: 76.07 tok/s (e2e 77.25; 512 tok, finish=length, d4=0.9762)
+  decode median 83.71 (min 76.07, max 91.34) over 2/2 valid
+  decode T=0: median 96.23 (min 95.1, max 97.36) over 2/2 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 4.54s -> 910 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4172, 4198, 4232])
+  memory: phys_footprint_peak 78.11 GB, resident mapped files 1.34 GB, swap used 17838.0 MB
+  -> <smoke-root>/results/smoke-llamacpp-mtp6-20261018-134554.json
+[13:48:20] smoke-llamacpp-mtp6: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:48:20] smoke-llamacpp-mtp6: GPU lock released after 121.4s held
+[13:48:20] smoke-llamacpp-mtp6: -> <smoke-root>/results/smoke-llamacpp-mtp6-20261018-134554.json  flags: 1
+=== 2026-10-18 13:48:20 smoke done (exit 0)
+
+######## 15-llamacpp.log
+=== 2026-10-18 13:48:46 pass 1: flash-llamacpp,flash-llamacpp-mtp4
+
+===== flash-llamacpp  [llama.cpp] llama.cpp (IQ4_NL GGUF, no speculation)  version 0.7.0-dev (b11669, 620d2225c)
+[13:48:46] flash-llamacpp: GPU lock acquired after 0.0s wait
+[13:48:46] flash-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[13:48:58] flash-llamacpp: ready after 12s (pid 72489, listener 72489)
+[13:49:02] flash-llamacpp:  warm-up prefill~2.9k+decode64: ok (4.23s)
+[13:49:04] flash-llamacpp:  warm-up tools: ok (2.19s)
+[13:50:06] flash-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[13:51:06] flash-llamacpp: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-llamacpp
+  decode T=0.6: 45.89 tok/s (e2e 45.91; 512 tok, finish=length, d4=0.9014)
+  decode T=0.6: 45.98 tok/s (e2e 45.99; 512 tok, finish=length, d4=0.9179)
+  decode T=0.6: 45.66 tok/s (e2e 45.64; 512 tok, finish=length, d4=0.9287)
+  decode T=0.6: 44.64 tok/s (e2e 44.70; 512 tok, finish=length, d4=0.9312)
+  decode T=0.6: 45.20 tok/s (e2e 45.22; 512 tok, finish=length, d4=0.9416)
+  decode median 45.66 (min 44.64, max 45.98) over 5/5 valid
+  decode T=0: median 44.11 (min 43.3, max 45.57) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 5.05s -> 819 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4167, 4193, 4225])
+  prefill 16000: 16284 tok (ref 16286), TTFT 19.39s -> 840 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [16311, 16339, 16373])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 79.31 GB, resident mapped files 2.14 GB, swap used 17832.94 MB
+  -> <run-root>/results/flash-llamacpp-20261018-134846.json
+[13:54:06] flash-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:54:06] flash-llamacpp: GPU lock released after 320.7s held
+[13:54:06] flash-llamacpp: -> <run-root>/results/flash-llamacpp-20261018-134846.json  flags: 1
+
+===== flash-llamacpp-mtp4  [llama.cpp] llama.cpp + MTP (n-max 4)  version 0.7.0-dev (b11669, 620d2225c)
+[13:54:07] flash-llamacpp-mtp4: GPU lock ~/.cache/nace-gpu.lock is held by: 72474 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 73023 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 bash bq.sh; waiting...
+[13:54:22] flash-llamacpp-mtp4: GPU lock acquired after 16.0s wait
+[13:54:22] flash-llamacpp-mtp4: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 4
+[13:54:35] flash-llamacpp-mtp4: ready after 12s (pid 92261, listener 92261)
+[13:54:39] flash-llamacpp-mtp4:  warm-up prefill~2.9k+decode64: ok (4.65s)
+[13:54:41] flash-llamacpp-mtp4:  warm-up tools: ok (1.91s)
+[13:55:43] flash-llamacpp-mtp4: gpu busy (62s): com.apple.WebKit[3316] 6%
+[13:56:43] flash-llamacpp-mtp4: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-llamacpp-mtp4
+  decode T=0.6: 95.65 tok/s (e2e 96.27; 512 tok, finish=length, d4=0.933)
+  decode T=0.6: 92.00 tok/s (e2e 92.77; 512 tok, finish=length, d4=0.9468)
+  decode T=0.6: 87.40 tok/s (e2e 88.42; 512 tok, finish=length, d4=0.8818)
+  decode T=0.6: 89.32 tok/s (e2e 89.52; 512 tok, finish=length, d4=0.8881)
+  decode T=0.6: 83.81 tok/s (e2e 85.26; 512 tok, finish=length, d4=0.9231)
+  decode median 89.32 (min 83.81, max 95.65) over 5/5 valid
+  decode T=0: median 94.52 (min 92.97, max 96.29) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.85s -> 852 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4173, 4199, 4232])
+  prefill 16000: 16285 tok (ref 16286), TTFT 18.39s -> 886 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [16331, 16411, 16445])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 83.22 GB, resident mapped files 2.34 GB, swap used 17769.44 MB
+  -> <run-root>/results/flash-llamacpp-mtp4-20261018-135406.json
+[13:58:31] flash-llamacpp-mtp4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[13:58:31] flash-llamacpp-mtp4: GPU lock released after 249.0s held
+[13:58:31] flash-llamacpp-mtp4: -> <run-root>/results/flash-llamacpp-mtp4-20261018-135406.json  flags: 1
+=== 2026-10-18 13:58:31 pass 1 done (exit 0)
+=== 2026-10-18 13:58:31 pass 2: flash-llamacpp,flash-llamacpp-mtp4
+
+===== flash-llamacpp  [llama.cpp] llama.cpp (IQ4_NL GGUF, no speculation)  version 0.7.0-dev (b11669, 620d2225c)
+[13:58:32] flash-llamacpp: GPU lock ~/.cache/nace-gpu.lock is held by: 6771 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /private; 98429 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 ~/nace_ml/worktrees/kapit; waiting...
+[13:58:36] flash-llamacpp: GPU lock acquired after 4.2s wait
+[13:58:36] flash-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[13:58:48] flash-llamacpp: ready after 12s (pid 6951, listener 6951)
+[13:58:53] flash-llamacpp:  warm-up prefill~2.9k+decode64: ok (5.23s)
+[13:58:55] flash-llamacpp:  warm-up tools: ok (1.71s)
+[13:59:57] flash-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[14:00:56] flash-llamacpp: GPU not quiet after 121s (['com.apple.WebKit[3316] 5%']); benchmarking anyway, contention will be flagged
+== flash-llamacpp
+  decode T=0.6: 46.15 tok/s (e2e 46.16; 512 tok, finish=length, d4=0.9127)
+  decode T=0.6: 45.90 tok/s (e2e 45.92; 512 tok, finish=length, d4=0.6772)
+  decode T=0.6: 46.54 tok/s (e2e 46.56; 512 tok, finish=length, d4=0.9185)
+  decode T=0.6: 46.59 tok/s (e2e 46.58; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 46.43 tok/s (e2e 46.43; 512 tok, finish=length, d4=0.907)
+  decode median 46.43 (min 45.9, max 46.59) over 5/5 valid
+  decode T=0: median 45.06 (min 42.61, max 45.66) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.88s -> 848 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [4176, 4202, 4236])
+  prefill 16000: 16284 tok (ref 16286), TTFT 17.83s -> 913 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [16336, 16362, 16396])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 79.31 GB, resident mapped files 2.11 GB, swap used 17185.38 MB
+  -> <run-root>/results/flash-llamacpp-20261018-135831.json
+[14:03:52] flash-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[14:03:52] flash-llamacpp: GPU lock released after 315.9s held
+[14:03:52] flash-llamacpp: -> <run-root>/results/flash-llamacpp-20261018-135831.json  flags: 1
+
+===== flash-llamacpp-mtp4  [llama.cpp] llama.cpp + MTP (n-max 4)  version 0.7.0-dev (b11669, 620d2225c)
+[14:03:52] flash-llamacpp-mtp4: GPU lock ~/.cache/nace-gpu.lock is held by: 6771 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /private; 24772 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 600 ./step1.sh; waiting...
+[14:04:11] flash-llamacpp-mtp4: GPU lock acquired after 19.6s wait
+[14:04:11] flash-llamacpp-mtp4: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf --host 127.0.0.1 --port 8300 -a flash-next -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-gguf/mtp-Qwen3.8-Flash-Next-Q4_0.gguf --spec-draft-n-max 4
+[14:04:23] flash-llamacpp-mtp4: ready after 12s (pid 26100, listener 26100)
+[14:04:28] flash-llamacpp-mtp4:  warm-up prefill~2.9k+decode64: ok (4.49s)
+[14:04:29] flash-llamacpp-mtp4:  warm-up tools: ok (1.16s)
+[14:05:31] flash-llamacpp-mtp4: gpu busy (62s): com.apple.WebKit[3316] 7%
+[14:06:31] flash-llamacpp-mtp4: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-llamacpp-mtp4
+  decode T=0.6: 98.16 tok/s (e2e 98.59; 512 tok, finish=length, d4=0.907)
+  decode T=0.6: 84.88 tok/s (e2e 86.34; 512 tok, finish=length, d4=0.6914)
+  decode T=0.6: 97.72 tok/s (e2e 98.34; 512 tok, finish=length, d4=0.8916)
+  decode T=0.6: 96.09 tok/s (e2e 96.97; 512 tok, finish=length, d4=0.9024)
+  decode T=0.6: 89.63 tok/s (e2e 91.06; 512 tok, finish=length, d4=0.9095)
+  decode median 96.09 (min 84.88, max 98.16) over 5/5 valid
+  decode T=0: median 94.58 (min 92.13, max 99.22) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 4.91s -> 842 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [4186, 4210, 4244])
+  prefill 16000: 16286 tok (ref 16286), TTFT 18.30s -> 890 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [16337, 16362, 16396])
+  tools(think=False): stream ok=False [('run_shell', '{"command":"cd /workspace 2>/dev/null || cd ~/; pwd; echo \'--- tree ---\'; find . -maxdepth 3 -not -path \'*/.git/*\' | head -100"}')] leak=False | nonstream ok=True | roundtrip=False
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 83.22 GB, resident mapped files 2.29 GB, swap used 17170.69 MB
+  -> <run-root>/results/flash-llamacpp-mtp4-20261018-140352.json
+[14:08:18] flash-llamacpp-mtp4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[14:08:18] flash-llamacpp-mtp4: GPU lock released after 246.4s held
+[14:08:18] flash-llamacpp-mtp4: -> <run-root>/results/flash-llamacpp-mtp4-20261018-140352.json  flags: 1
+=== 2026-10-18 14:08:18 pass 2 done (exit 0)
+
+######## 18-ollama.log
+=== 2026-10-18 14:33:09 pass 1: flash-ollama-mlx
+
+===== flash-ollama-mlx  [ollama] Ollama MLX runner (official NVFP4 tag, MTP)  version 0.40.6
+[14:33:09] flash-ollama-mlx: GPU lock acquired after 0.0s wait
+[14:33:09] flash-ollama-mlx: starting <tmp>/ollama-0.40.6/ollama serve
+[14:33:11] flash-ollama-mlx: ready after 2s (pid 17145, listener 17145)
+[14:33:49] flash-ollama-mlx:  warm-up prefill~2.9k+decode64: ok (38.05s)
+[14:33:51] flash-ollama-mlx:  warm-up tools: ok (1.24s)
+[14:33:59] flash-ollama-mlx:  warm-up decode512#1: ok (8.72s)
+[14:34:08] flash-ollama-mlx:  warm-up decode512#2: ok (9.13s)
+[14:34:17] flash-ollama-mlx:  warm-up decode512#3: ok (8.89s)
+[14:35:19] flash-ollama-mlx: gpu busy (62s): com.apple.WebKit[3316] 7%
+[14:36:19] flash-ollama-mlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-ollama-mlx
+  decode T=0.6: 64.31 tok/s (e2e 64.39; 512 tok, finish=length, d4=0.9492)
+  decode T=0.6: 56.97 tok/s (e2e 56.94; 512 tok, finish=length, d4=0.9292)
+  decode T=0.6: 67.04 tok/s (e2e 66.81; 512 tok, finish=length, d4=0.9226)
+  decode T=0.6: 53.78 tok/s (e2e 54.19; 512 tok, finish=length, d4=0.9393)
+  decode T=0.6: 58.17 tok/s (e2e 58.44; 512 tok, finish=length, d4=0.7173)
+  decode median 58.17 (min 53.78, max 67.04) over 5/5 valid
+  decode T=0: median 62.15 (min 58.86, max 63.76) over 5/5 valid
+  prefill 4000: None tok (ref None), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  prefill 16000: None tok (ref None), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 108.19 GB, resident mapped files 0.00 GB, swap used 16366.5 MB
+  INVALID: ['prefill_4000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c', 'prefill_16000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  -> <run-root>/results/flash-ollama-mlx-20261018-143309.json
+[14:38:59] flash-ollama-mlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[14:38:59] flash-ollama-mlx: GPU lock released after 349.6s held
+[14:38:59] flash-ollama-mlx: -> <run-root>/results/flash-ollama-mlx-20261018-143309.json  INVALID: ['prefill_4000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c', 'prefill_16000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']  flags: 4
+=== 2026-10-18 14:38:59 pass 1 done (exit 0)
+=== 2026-10-18 14:38:59 pass 2: flash-ollama-mlx
+
+===== flash-ollama-mlx  [ollama] Ollama MLX runner (official NVFP4 tag, MTP)  version 0.40.6
+[14:38:59] flash-ollama-mlx: GPU lock ~/.cache/nace-gpu.lock is held by: 22008 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 bash bhc.sh; 35904 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; waiting...
+[14:39:07] flash-ollama-mlx: GPU lock acquired after 7.9s wait
+[14:39:07] flash-ollama-mlx: starting <tmp>/ollama-0.40.6/ollama serve
+[14:39:09] flash-ollama-mlx: ready after 2s (pid 36290, listener 36290)
+[14:39:41] flash-ollama-mlx:  warm-up prefill~2.9k+decode64: ok (32.44s)
+[14:39:42] flash-ollama-mlx:  warm-up tools: ok (0.82s)
+[14:39:50] flash-ollama-mlx:  warm-up decode512#1: ok (8.24s)
+[14:39:59] flash-ollama-mlx:  warm-up decode512#2: ok (8.52s)
+[14:40:07] flash-ollama-mlx:  warm-up decode512#3: ok (8.31s)
+[14:41:09] flash-ollama-mlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[14:42:09] flash-ollama-mlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-ollama-mlx
+  decode T=0.6: 64.92 tok/s (e2e 64.60; 512 tok, finish=length, d4=0.919)
+  decode T=0.6: 60.05 tok/s (e2e 60.43; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 61.77 tok/s (e2e 62.23; 512 tok, finish=length, d4=0.9413)
+  decode T=0.6: 57.76 tok/s (e2e 57.72; 512 tok, finish=length, d4=0.9736)
+  decode T=0.6: 58.85 tok/s (e2e 58.83; 512 tok, finish=length, d4=0.9165)
+  decode median 60.05 (min 57.76, max 64.92) over 5/5 valid
+  decode T=0: median 62.81 (min 59.45, max 68.75) over 5/5 valid
+  prefill 4000: None tok (ref None), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  prefill 16000: None tok (ref None), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 108.38 GB, resident mapped files 0.00 GB, swap used 16757.25 MB
+  INVALID: ['prefill_4000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c', 'prefill_16000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']
+  -> <run-root>/results/flash-ollama-mlx-20261018-143859.json
+[14:44:45] flash-ollama-mlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[14:44:45] flash-ollama-mlx: GPU lock released after 338.2s held
+[14:44:45] flash-ollama-mlx: -> <run-root>/results/flash-ollama-mlx-20261018-143859.json  INVALID: ['prefill_4000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c', 'prefill_16000: request failed: RuntimeError(\'HTTP 500: {"error":{"message":"mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.c']  flags: 2
+=== 2026-10-18 14:44:45 pass 2 done (exit 0)
+
+######## 20-kapitsa95.log
+=== 2026-10-18 15:42:51 pass 1: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 95fbcd6
+[15:42:51] flash-kapitsa: GPU lock acquired after 0.0s wait
+[15:42:51] flash-kapitsa: starting <repo-95fbcd6>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[15:43:13] flash-kapitsa: ready after 22s (pid 88669, listener 88669)
+[15:43:18] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.93s)
+[15:43:19] flash-kapitsa:  warm-up tools: ok (0.87s)
+[15:44:21] flash-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[15:45:20] flash-kapitsa: GPU not quiet after 121s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa
+  decode T=0.6: 103.77 tok/s (e2e 102.64; 512 tok, finish=length, d4=0.9365)
+  decode T=0.6: 104.66 tok/s (e2e 103.60; 512 tok, finish=length, d4=0.9578)
+  decode T=0.6: 93.34 tok/s (e2e 92.39; 512 tok, finish=length, d4=0.9653)
+  decode T=0.6: 98.25 tok/s (e2e 97.23; 512 tok, finish=length, d4=0.9697)
+  decode T=0.6: 98.93 tok/s (e2e 97.69; 512 tok, finish=length, d4=0.8765)
+  decode median 98.93 (min 93.34, max 104.66) over 5/5 valid
+  decode T=0: median 102.6 (min 99.34, max 104.67) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 4.90s -> 844 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4176, 4204, 4240])
+  prefill 16000: 16285 tok (ref 16286), TTFT 19.22s -> 847 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16335, 16361, 16397])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.47 GB, resident mapped files 5.58 GB, swap used 15208.5 MB
+  -> <run-root>/results/flash-kapitsa-20261018-154251.json
+[15:47:02] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[15:47:02] flash-kapitsa: GPU lock released after 250.9s held
+[15:47:02] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-154251.json  flags: 1
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 95fbcd6
+[15:47:02] flash-kapitsa-plain: GPU lock ~/.cache/nace-gpu.lock is held by: 88634 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py /privat; 95427 lockf -k ~/.cache/nace-gpu.lock bash -c cd ~/nace_ml/worktrees/kapitsa-flash-next; NI_NO_MTP=1 build/ni_run $HOME/.cache/kapit; waiting...
+[15:47:40] flash-kapitsa-plain: GPU lock acquired after 37.8s wait
+[15:47:40] flash-kapitsa-plain: starting <repo-95fbcd6>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[15:48:00] flash-kapitsa-plain: ready after 20s (pid 98852, listener 98852)
+[15:48:05] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (5.14s)
+[15:48:06] flash-kapitsa-plain:  warm-up tools: ok (0.97s)
+[15:49:08] flash-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 7%
+[15:50:08] flash-kapitsa-plain: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain
+  decode T=0.6: 84.04 tok/s (e2e 83.53; 512 tok, finish=length, d4=0.9194)
+  decode T=0.6: 84.26 tok/s (e2e 83.92; 512 tok, finish=length, d4=0.7165)
+  decode T=0.6: 85.16 tok/s (e2e 85.19; 512 tok, finish=length, d4=0.9429)
+  decode T=0.6: 84.90 tok/s (e2e 84.01; 512 tok, finish=length, d4=0.9218)
+  decode T=0.6: 84.01 tok/s (e2e 83.87; 512 tok, finish=length, d4=0.9922)
+  decode median 84.26 (min 84.01, max 85.16) over 5/5 valid
+  decode T=0: median 84.49 (min 84.0, max 86.08) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 4.79s -> 862 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4184, 4219, 4260])
+  prefill 16000: 16284 tok (ref 16286), TTFT 18.74s -> 869 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16315, 16350, 16391])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.32 GB, resident mapped files 5.27 GB, swap used 15208.5 MB
+  -> <run-root>/results/flash-kapitsa-plain-20261018-154702.json
+[15:51:59] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[15:51:59] flash-kapitsa-plain: GPU lock released after 259.2s held
+[15:51:59] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-154702.json  flags: 1
+=== 2026-10-18 15:51:59 pass 1 done (exit 0)
+=== 2026-10-18 15:51:59 pass 2: flash-kapitsa,flash-kapitsa-plain
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 95fbcd6
+[15:51:59] flash-kapitsa: GPU lock acquired after 0.0s wait
+[15:51:59] flash-kapitsa: starting <repo-95fbcd6>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[15:52:13] flash-kapitsa: ready after 14s (pid 8461, listener 8461)
+[15:52:18] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.57s)
+[15:52:19] flash-kapitsa:  warm-up tools: ok (0.92s)
+[15:53:21] flash-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 7%
+[15:54:21] flash-kapitsa: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa
+  decode T=0.6: 107.82 tok/s (e2e 106.83; 512 tok, finish=length, d4=0.9447)
+  decode T=0.6: 109.05 tok/s (e2e 107.37; 512 tok, finish=length, d4=0.8891)
+  decode T=0.6: 101.84 tok/s (e2e 100.51; 512 tok, finish=length, d4=0.9204)
+  decode T=0.6: 100.59 tok/s (e2e 99.62; 512 tok, finish=length, d4=0.8047)
+  decode T=0.6: 100.95 tok/s (e2e 100.45; 512 tok, finish=length, d4=0.9277)
+  decode median 101.84 (min 100.59, max 109.05) over 5/5 valid
+  decode T=0: median 107.59 (min 103.66, max 109.0) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 4.81s -> 860 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4169, 4197, 4231])
+  prefill 16000: 16287 tok (ref 16286), TTFT 19.17s -> 850 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16330, 16378, 16414])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.46 GB, resident mapped files 5.52 GB, swap used 15200.5 MB
+  -> <run-root>/results/flash-kapitsa-20261018-155159.json
+[15:56:02] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[15:56:02] flash-kapitsa: GPU lock released after 243.0s held
+[15:56:02] flash-kapitsa: -> <run-root>/results/flash-kapitsa-20261018-155159.json  flags: 1
+
+===== flash-kapitsa-plain  [kapitsa] Kapitsa (no speculation)  version 95fbcd6
+[15:56:02] flash-kapitsa-plain: GPU lock acquired after 0.0s wait
+[15:56:02] flash-kapitsa-plain: starting <repo-95fbcd6>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 0 --host 127.0.0.1 --port 8281 --ctx 32768 --slots 1
+[15:56:16] flash-kapitsa-plain: ready after 14s (pid 16925, listener 16925)
+[15:56:21] flash-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (4.62s)
+[15:56:22] flash-kapitsa-plain:  warm-up tools: ok (1.0s)
+[15:57:24] flash-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 7%
+[15:58:24] flash-kapitsa-plain: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa-plain
+  decode T=0.6: 85.14 tok/s (e2e 84.50; 512 tok, finish=length, d4=0.7018)
+  decode T=0.6: 84.60 tok/s (e2e 84.27; 512 tok, finish=length, d4=0.948)
+  decode T=0.6: 84.75 tok/s (e2e 84.36; 512 tok, finish=length, d4=0.9178)
+  decode T=0.6: 84.94 tok/s (e2e 84.79; 512 tok, finish=length, d4=0.9282)
+  decode T=0.6: 85.54 tok/s (e2e 84.97; 512 tok, finish=length, d4=0.9555)
+  decode median 84.94 (min 84.6, max 85.54) over 5/5 valid
+  decode T=0: median 84.79 (min 84.28, max 85.71) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 4.80s -> 862 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4184, 4212, 4246])
+  prefill 16000: 16283 tok (ref 16286), TTFT 18.77s -> 868 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16314, 16349, 16390])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.32 GB, resident mapped files 5.24 GB, swap used 15200.5 MB
+  -> <run-root>/results/flash-kapitsa-plain-20261018-155602.json
+[16:00:17] flash-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[16:00:17] flash-kapitsa-plain: GPU lock released after 255.0s held
+[16:00:17] flash-kapitsa-plain: -> <run-root>/results/flash-kapitsa-plain-20261018-155602.json  flags: 1
+=== 2026-10-18 16:00:17 pass 2 done (exit 0)
+
+######## 21-ollama-gguf.log
+=== 2026-10-18 16:00:44 pass 1: flash-ollama-gguf
+
+===== flash-ollama-gguf  [ollama] Ollama GGUF runner (official Q4_K_M tag)  version 0.40.6
+[16:00:44] flash-ollama-gguf: GPU lock acquired after 0.0s wait
+[16:00:44] flash-ollama-gguf: starting <tmp>/ollama-0.40.6/ollama serve
+[16:00:47] flash-ollama-gguf: ready after 2s (pid 26517, listener 26517)
+[16:01:05] flash-ollama-gguf:  warm-up prefill~2.9k+decode64: ok (18.17s)
+[16:01:06] flash-ollama-gguf:  warm-up tools: ok (1.1s)
+[16:02:08] flash-ollama-gguf: gpu busy (62s): com.apple.WebKit[3316] 6%
+[16:03:08] flash-ollama-gguf: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-ollama-gguf
+  decode T=0.6: 50.28 tok/s (e2e 50.07; 512 tok, finish=length, d4=0.8854)
+  decode T=0.6: 50.19 tok/s (e2e 50.11; 512 tok, finish=length, d4=0.986)
+  decode T=0.6: 50.27 tok/s (e2e 49.98; 512 tok, finish=length, d4=0.9837)
+  decode T=0.6: 49.57 tok/s (e2e 49.74; 512 tok, finish=length, d4=0.9497)
+  decode T=0.6: 49.27 tok/s (e2e 49.02; 512 tok, finish=length, d4=0.9517)
+  decode median 50.19 (min 49.27, max 50.28) over 5/5 valid
+  decode T=0: median 48.34 (min 47.56, max 48.55) over 5/5 valid
+  prefill 4000: 4129 tok (ref 4133), TTFT 5.87s -> 703 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4168, 4192, 4226])
+  prefill 16000: 16288 tok (ref 16286), TTFT 24.12s -> 675 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [16325, 16354, 16390])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 88.05 GB, resident mapped files 2.21 GB, swap used 15251.94 MB
+  -> <run-root>/results/flash-ollama-gguf-20261018-160044.json
+[16:05:59] flash-ollama-gguf: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[16:05:59] flash-ollama-gguf: GPU lock released after 315.0s held
+[16:05:59] flash-ollama-gguf: -> <run-root>/results/flash-ollama-gguf-20261018-160044.json  flags: 1
+=== 2026-10-18 16:05:59 pass 1 done (exit 0)
+=== 2026-10-18 16:05:59 pass 2: flash-ollama-gguf
+
+===== flash-ollama-gguf  [ollama] Ollama GGUF runner (official Q4_K_M tag)  version 0.40.6
+[16:06:00] flash-ollama-gguf: GPU lock acquired after 0.0s wait
+[16:06:00] flash-ollama-gguf: starting <tmp>/ollama-0.40.6/ollama serve
+[16:06:02] flash-ollama-gguf: ready after 2s (pid 37437, listener 37437)
+[16:06:20] flash-ollama-gguf:  warm-up prefill~2.9k+decode64: ok (18.3s)
+[16:06:21] flash-ollama-gguf:  warm-up tools: ok (1.21s)
+[16:07:23] flash-ollama-gguf: gpu busy (62s): com.apple.WebKit[3316] 6%
+[16:08:23] flash-ollama-gguf: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-ollama-gguf
+  decode T=0.6: 50.18 tok/s (e2e 50.10; 512 tok, finish=length, d4=0.9108)
+  decode T=0.6: 50.12 tok/s (e2e 50.60; 512 tok, finish=length, d4=0.5711)
+  decode T=0.6: 50.18 tok/s (e2e 50.11; 512 tok, finish=length, d4=0.9362)
+  decode T=0.6: 49.83 tok/s (e2e 49.85; 512 tok, finish=length, d4=0.9312)
+  decode T=0.6: 49.34 tok/s (e2e 49.24; 512 tok, finish=length, d4=0.9082)
+  decode median 50.12 (min 49.34, max 50.18) over 5/5 valid
+  decode T=0: median 48.33 (min 48.12, max 48.78) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 5.86s -> 705 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4175, 4203, 4239])
+  prefill 16000: 16283 tok (ref 16286), TTFT 24.23s -> 672 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [16315, 16343, 16379])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 88.03 GB, resident mapped files 2.20 GB, swap used 15236.94 MB
+  -> <run-root>/results/flash-ollama-gguf-20261018-160600.json
+[16:11:21] flash-ollama-gguf: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[16:11:21] flash-ollama-gguf: GPU lock released after 321.4s held
+[16:11:21] flash-ollama-gguf: -> <run-root>/results/flash-ollama-gguf-20261018-160600.json  flags: 1
+=== 2026-10-18 16:11:21 pass 2 done (exit 0)

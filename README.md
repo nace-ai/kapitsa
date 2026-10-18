@@ -139,17 +139,22 @@ On Qwen3.8 27B · 4-bit: Kapitsa 150 s, next oMLX + DFlash2 278 s.
 
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
-| Engine | Qwen3.8 27B · 4-bit | Qwen3.6 35B-A3B · 4-bit | Nemotron 3.5 Lightning · NVIDIA NVFP4 | Nemotron 3.5 Super-VL · NVIDIA NVFP4 |
-| --- | ---: | ---: | ---: | ---: |
-| llama.cpp + MTP | — | — | 159 tok/s | 66 tok/s |
-| mlx-lm | — | — | 139 tok/s | 46 tok/s |
-| mlx-vlm | — | — | 137 tok/s | 46 tok/s |
-| oMLX | — | — | 190 tok/s | 52 tok/s |
-| **Kapitsa** | **73 tok/s** ⚠ | **250 tok/s** ⚠ | **239 tok/s** | **85 tok/s** |
+| Engine | Qwen3.8 27B · 4-bit | Qwen3.6 35B-A3B · 4-bit | Qwen3.8-Flash-Next · 4-bit | Nemotron 3.5 Lightning · NVIDIA NVFP4 | Nemotron 3.5 Super-VL · NVIDIA NVFP4 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| llama.cpp + MTP | — | — | 96 tok/s | 159 tok/s | 66 tok/s |
+| mlx-lm | — | — | —<br><sub>no support</sub> | 139 tok/s | 46 tok/s |
+| mlx-vlm | — | — | 77 tok/s ⚠ | 137 tok/s | 46 tok/s |
+| Ollama (MLX runner, MTP) | — | — | 60 tok/s<sup>1</sup> | — | — |
+| oMLX | — | — | **107 tok/s** | 190 tok/s | 52 tok/s |
+| **Kapitsa** | **73 tok/s** ⚠ | **250 tok/s** ⚠ | 102 tok/s | **239 tok/s** | **85 tok/s** |
 
 Kapitsa and mlx-vlm run NVIDIA's NVFP4 checkpoints, oMLX and mlx-lm MLX 4-bit, llama.cpp Q4_0. On Lightning, oMLX
 reads prompts faster than Kapitsa (3,600 vs 1,900 tok/s at 4K;
-[details](docs/benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)).
+[details](docs/benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)). Flash-Next: Kapitsa, oMLX and
+mlx-vlm read the same MLX 4-bit pack, each with the model's MTP head; llama.cpp ggml-org's IQ4_NL GGUF; Ollama its
+NVFP4 tag. oMLX reads prompts faster than Kapitsa there (1,250 vs 860 tok/s at 4K;
+[details](docs/benchmarks.md#qwen38-flash-next-180b-a7b-m5-max-128-gb-2026-10-18)). <sup>1</sup> Ollama's MLX runner
+fails every 4K and 16K prompt on 128 GB (out of GPU memory); its GGUF runner (no MTP) writes 50 tok/s.
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</summary>
@@ -161,6 +166,8 @@ reads prompts faster than Kapitsa (3,600 vs 1,900 tok/s at 4K;
 
 | MacBook Pro · M5 Max · 128 GB | Kapitsa | Best other engine on this Mac |
 | --- | ---: | --- |
+| Qwen3.8-Flash-Next, follow-up 4K / 16K | 0.08 / 0.07 s | Ollama (GGUF), 0.22 / 0.24 s |
+| Qwen3.8-Flash-Next, peak memory | 70.5 GB | mlx-vlm, 74.3 GB ⚠ |
 | Nemotron 3.5 Lightning, follow-up 4K / 16K | 0.07 / 0.09 s | llama.cpp, 0.07 / 0.08 s |
 | Nemotron 3.5 Lightning, peak memory | 18.6 GB | oMLX (MLX 4-bit), 20.9 GB |
 | Nemotron 3.5 Super-VL, follow-up 4K / 16K | 0.22 / 0.26 s | llama.cpp, 0.19 / 0.20 s |

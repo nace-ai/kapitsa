@@ -1,0 +1,20 @@
+{
+  "repo": null,
+  "revision": null,
+  "role": "mlx-vlm + MTP (--draft-model)",
+  "derived_from": "nace-ai/Qwen3.8-Flash-Next-MLX-4bit @ 5d423f9f, mtp.safetensors",
+  "files": [
+    {
+      "path": "config.json",
+      "size": 7184,
+      "sha256": "eaf01a60a9987608535a43530260fc69df7f76697b34b19d883e4263fe7c8cc7"
+    },
+    {
+      "path": "model.safetensors",
+      "size": 1511933470,
+      "sha256": "89e5c0428d899ce00c0acfd884fbd2846ea8b958170d3858bdf54d2356382985"
+    }
+  ],
+  "total_bytes": 1511940654,
+  "note": "Made locally by mlx-vlm 0.7.8's Qwen4ExpMTPSplitter from the pack's mtp.safetensors; its 74 tensors are byte-identical to the pack's (names without the 'mtp.' prefix); config.json names the head's per-module precisions by the drafter's own module paths."
+}

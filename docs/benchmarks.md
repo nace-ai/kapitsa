@@ -2,7 +2,8 @@
 
 How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt and the small Qwen3.5-4B
 have their own sections: [Bolt](#nemotron-35-bolt-74b-a9b-2026-10-18), [4B](#qwen35-4b-2026-10-18), and so have
-Nemotron 3.5 Super-VL and Lightning on the M5 Max:
+Qwen3.8-Flash-Next and Nemotron 3.5 Super-VL and Lightning on the M5 Max:
+[Flash-Next](#qwen38-flash-next-180b-a7b-m5-max-128-gb-2026-10-18),
 [Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
 [Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
 models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
@@ -247,6 +248,78 @@ local paths are replaced by placeholders (`~`, `<bench-root>` for the folder the
 this repository, `<kapitsa-checkout>`, `<build-dir>`); nothing else was changed. `engine: "nace-infer"` and
 `nace_infer_git` are Kapitsa under its earlier name, and `{root}` in the recorded configs is that earlier folder; the
 configs in [bench/harness/configs](../bench/harness/configs) are the same settings in this repository's layout.
+
+## Qwen3.8-Flash-Next 180B-A7B (M5 Max, 128 GB, 2026-10-18)
+
+Qwen's 180B mixture of experts (`qwen4_exp`: 512 experts, 10 active; Gated DeltaNet and sparse attention; a 51B-parameter
+n-gram embedding table), on the M5 Max (40-core GPU, 128 GB, macOS 26.4), against every engine that runs it on a Mac:
+
+- Kapitsa, mlx-vlm 0.7.8 and oMLX 0.7.1rc1 read the same folder, Nace AI's MLX pack
+  (`nace-ai/Qwen3.8-Flash-Next-MLX-4bit`: routed experts, Gated DeltaNet, shared experts and LM head 4-bit, attention and
+  hyper-connections 6-bit, the rest 8-bit; 71.4 GB plus the 32 GB n-gram table at 4-bit and the 1.5 GB MTP head;
+  105.9 GB). Kapitsa and mlx-vlm map the table from the SSD and read its rows on demand; oMLX keeps it in memory. Each
+  engine runs the model's own MTP head: Kapitsa at depth 2 (its default), oMLX at a fixed depth 3, mlx-vlm at block 4
+  (from a drafter folder holding the pack's own head, which mlx-vlm 0.7.8 cannot read from the pack itself).
+- oMLX also runs its author's own quantization, `Jundot/Qwen3.8-Flash-Next-oQ4e-mtp` (oQ4e: an importance-matrix mix of
+  4-8-bit at group 64 / 128, routed experts 4-bit, 106.3 GB, the most downloaded MLX conversion), with MTP at a fixed
+  depth 2.
+- llama.cpp 0.7.0 (b11669, the latest release) runs ggml-org's official IQ4_NL GGUF (routed experts IQ4_NL, dense
+  layers Q8_0, the table Q4_0; 102.0 GB) with ggml-org's MTP GGUF, n-max 4.
+- Ollama 0.40.6 runs the tag it serves on Apple silicon, `qwen3.8-flash-next:125b-mlx` (NVFP4, 104.9 GB), in its MLX
+  runner with its adaptive MTP, and its GGUF tag `125b-a6b-q4_K_M` (Q4_K_M, 120.1 GB; no MTP draft in that tag) in its
+  GGUF runner.
+
+One session on 2026-10-18, every configuration run twice, with
+[configs/flash-next.json](../bench/harness/configs/flash-next.json); the table has each configuration's second valid
+run. Kapitsa is build 95fbcd6 of `opt/flash-next` (MTP at depth 2, its default from that build). Result files,
+recipes, weights and revisions:
+[bench/results/2026-10-18-m5-max-flash-next](../bench/results/2026-10-18-m5-max-flash-next/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB)<sup>3</sup> | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (MTP, depth 2) | 101.8 (100.6–109.0) | **107.6** (103.7–109.0) | 860 | 850 | 0.08 | **0.07** | 70.5 + 5.5 mapped | pass |
+| Kapitsa (no speculation) | 84.9 (84.6–85.5) | 84.8 (84.3–85.7) | 862 | 868 | **0.08** | 0.08 | **70.3** + 5.2 mapped | pass |
+| oMLX 0.7.1rc1 + MTP (fixed depth 3), Nace pack | **106.5** (103.2–112.1) | 106.4 (105.2–108.3) | 1,247 | 1,316 | 0.26 | 0.42 | 103.9 | pass |
+| oMLX, Nace pack (no speculation) | 59.5 (59.3–60.2) | 60.0 (59.7–60.2) | 1,339 | 1,394 | 0.25 | 0.38 | 103.4 | pass |
+| oMLX + MTP (fixed depth 2), oQ4e ⚠ | 105.5 (95.9–109.4) | 98.7 (95.9–101.5) | 1,395 | 1,383 | 0.28 | 0.45 | 104.0 | pass |
+| oMLX, oQ4e (no speculation) ⚠ | 69.7 (64.6–71.3) | 66.8 (66.4–68.7) | **1,521** | **1,691** | 0.25 | 0.34 | 103.6 | pass |
+| llama.cpp 0.7.0 + MTP (n-max 4), IQ4_NL | 96.1 (84.9–98.2) | 94.6 (92.1–99.2) | 842 | 890 | 0.25 | 0.24 | 83.2 + 2.3 mapped | fail<sup>2</sup> |
+| llama.cpp, IQ4_NL (no speculation) | 46.4 (45.9–46.6) | 45.1 (42.6–45.7) | 848 | 913 | 0.23 | 0.23 | 79.3 + 2.1 mapped | pass |
+| mlx-vlm 0.7.8 + MTP (block 4), Nace pack ⚠ | 76.8 (70.1–77.0) | 77.0 (72.4–77.5) | 1,030 | 1,049 | 0.38 | 0.49 | 77.0 + 5.3 mapped | pass |
+| mlx-vlm, Nace pack (no speculation) ⚠ | 53.0 (47.2–53.9) | 52.4 (48.1–53.6) | 948 | 1,031 | 0.43 | 0.55 | 74.3 + 5.0 mapped | pass |
+| Ollama 0.40.6 MLX runner + MTP, NVFP4 tag | 60.0 (57.8–64.9) | 62.8 (59.5–68.8) | —<sup>1</sup> | — | — | — | 108.4 | pass |
+| Ollama GGUF runner, Q4_K_M tag (no MTP) | 50.1 (49.3–50.2) | 48.3 (48.1–48.8) | 705 | 672 | 0.22 | 0.24 | 88.0 + 2.2 mapped | pass |
+
+⚠: contention flagged in the run's decode phases (another app used the GPU while it wrote; see Conditions). Most other
+rows are flagged in their prefill phases only, for a desktop process using 3-6% of the GPU.
+
+1. Ollama's MLX runner fails every 4K and 16K prompt on this Mac: it holds 98-100 GiB with this tag, and the prefill
+   exceeds the 107.5 GiB Metal working-set limit ("Insufficient Memory"). Its decode and tool calls work.
+2. The second run fails one tool-call check (the model listed the workspace with `run_shell` instead of reading the
+   file); the first run passed every check.
+3. Memory is the server's peak footprint. "+ mapped": file pages of memory-mapped weights resident at the end (Kapitsa's
+   and mlx-vlm's n-gram table rows, llama.cpp's and Ollama's GGUF table); oMLX and Ollama's MLX runner hold the 32 GB
+   table in their footprint.
+
+Speculative settings came from smoke tests (two runs each, 4K prompt): oMLX's fixed MTP depth 3 on the pack beat its
+adaptive default (up to 3) and depths 1, 2, 4 and 5, and depth 2 was its best on oQ4e; mlx-vlm's MTP block 4 beat the
+drafter's default and blocks 2, 3 and 5; llama.cpp's n-max 4 beat 1-3, 5 and 6 at T = 0.6. The smoke-test numbers are in
+the results folder's README.
+
+Conditions: desktop apps stayed open. A `com.apple.WebKit` process used 3-6% of the GPU most of the day, so most runs
+are flagged in their prefill phases. A Google Chrome helper used much more during mlx-vlm's second pass (7-10% mean)
+and both oQ4e passes (14-16% mean, peaks of 60%): those rows are flagged in every phase and probably read low (oQ4e's
+MTP smoke test just before gave 110.7 tok/s sampled against the table's 105.5). Downloads did not overlap any run
+except the first `flash-kapitsa` run (the end of the Ollama GGUF download; 98.9 / 102.6 tok/s there). The first run of
+each configuration is in [confirmations](../bench/results/2026-10-18-m5-max-flash-next/confirmations/): sampled decode
+within 5% of the rows above except mlx-vlm + MTP's (81.0 tok/s, before the Chrome load), oQ4e's plain one (64.9) and
+llama.cpp + MTP's (89.3). Not run: mlx-lm (no release supports `qwen4_exp`; only an open pull request, which also drops the MTP head),
+LM Studio and MTPLX.
+
+Earlier Kapitsa builds measured in the same session are kept in the results folder, outside the table: 8912f1b, whose
+server crashed on every 16K prompt (fixed in 62ab7ed: sparse-attention scratch buffers released while still in use),
+and 62ab7ed itself (MTP at depth 1, its default then: 104.0 / 102.1 tok/s sampled, plain 83.7 / 85.2; 4K prefill
+858-898 tok/s, 16K 869-902; follow-ups 0.08 s; 70.5 GB).
 
 ## Nemotron 3.5 Bolt 74B-A9B (2026-10-18)
 

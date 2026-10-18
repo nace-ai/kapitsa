@@ -1,0 +1,327 @@
+time=2026-10-18T14:39:07.357-07:00 level=INFO source=routes.go:2439 msg="server config" env="map[HTTPS_PROXY: HTTP_PROXY: LLAMA_ARG_FIT: LLAMA_ARG_FIT_TARGET: NO_PROXY: OLLAMA_CONTEXT_LENGTH:32768 OLLAMA_CREATE_REMOTE:false OLLAMA_DEBUG:INFO OLLAMA_DEBUG_LOG_REQUESTS:false OLLAMA_EDITOR: OLLAMA_FLASH_ATTENTION:true OLLAMA_GO_TEMPLATE:true OLLAMA_GPU_OVERHEAD:0 OLLAMA_HOST:http://127.0.0.1:8310 OLLAMA_IGPU_ENABLE: OLLAMA_KEEP_ALIVE:2562047h47m16.854775807s OLLAMA_KV_CACHE_TYPE: OLLAMA_LLM_LIBRARY: OLLAMA_LOAD_TIMEOUT:5m0s OLLAMA_MAX_LOADED_MODELS:1 OLLAMA_MAX_QUEUE:512 OLLAMA_MAX_TRANSFER_STREAMS:4 OLLAMA_MODELS:~/.cache/kapitsa/benchmark-models/ollama-flash OLLAMA_NOHISTORY:false OLLAMA_NOPRUNE:true OLLAMA_NO_CLOUD:false OLLAMA_NUM_PARALLEL:1 OLLAMA_ORIGINS:[http://localhost https://localhost http://localhost:* https://localhost:* http://127.0.0.1 https://127.0.0.1 http://127.0.0.1:* https://127.0.0.1:* http://0.0.0.0 https://0.0.0.0 http://0.0.0.0:* https://0.0.0.0:* app://* file://* tauri://* vscode-webview://* vscode-file://*] OLLAMA_REMOTES:[ollama.com] OLLAMA_SCHED_SPREAD:false http_proxy: https_proxy: no_proxy:]"
+time=2026-10-18T14:39:07.357-07:00 level=INFO source=routes.go:2441 msg="Ollama cloud disabled: false"
+time=2026-10-18T14:39:07.367-07:00 level=INFO source=routes.go:2501 msg="Listening on 127.0.0.1:8310 (version 0.40.6)"
+time=2026-10-18T14:39:07.368-07:00 level=INFO source=runner.go:60 msg="discovering available GPUs..."
+time=2026-10-18T14:39:07.517-07:00 level=INFO source=types.go:32 msg="inference compute" id=0 filter_id=0 library=Metal compute=0.0 name=MTL0 description="Apple M5 Max" libdirs="" driver=0.0 pci_id="" type=iGPU total="107.5 GiB" available="107.5 GiB"
+time=2026-10-18T14:39:07.517-07:00 level=INFO source=routes.go:2551 msg="vram-based default context" total_vram="107.5 GiB" default_num_ctx=262144
+time=2026-10-18T14:39:07.595-07:00 level=INFO source=model_recommendations.go:177 msg="model recommendations cache sleep scheduled" wait=3h59m39.274886196s consecutive_failures=0
+[GIN] 2026/10/18 - 14:39:09 | 200 |     23.6645ms |       127.0.0.1 | GET      "/v1/models"
+time=2026-10-18T14:39:09.479-07:00 level=INFO source=sched.go:664 msg="system memory" total="128.0 GiB" free="116.9 GiB" free_swap="0 B"
+time=2026-10-18T14:39:09.479-07:00 level=INFO source=sched.go:671 msg="gpu memory" id=0 library=Metal available="107.0 GiB" free="107.5 GiB" minimum="512.0 MiB" overhead="0 B"
+time=2026-10-18T14:39:09.479-07:00 level=INFO source=client.go:517 msg="starting mlx runner subprocess" model=nace/qwen3.8-flash-next:125b-mlx-32k port=56118
+time=2026-10-18T14:39:09.481-07:00 level=INFO source=images.go:422 msg="template selection" model=registry.ollama.ai/nace/qwen3.8-flash-next:125b-mlx-32k selected=renderer_parser renderer=qwen3.8 parser=qwen3.5 go_template="[completion vision tools thinking]" chat_template=null harmony=null renderer_parser="[completion vision tools thinking]"
+time=2026-10-18T14:39:09.481-07:00 level=INFO source=sched.go:788 msg="loaded runners" count=1
+time=2026-10-18T14:39:09.512-07:00 level=INFO source=server.go:46 msg="MLX engine initialized" "MLX version"=0.32.3-96-gbebd642 device=gpu
+time=2026-10-18T14:39:09.672-07:00 level=INFO source=model.go:137 msg="Model architecture" arch=Qwen4ExpForConditionalGeneration
+time=2026-10-18T14:39:09.833-07:00 level=INFO source=runner.go:285 msg="Loaded tensors from manifest" count=2442
+time=2026-10-18T14:39:22.956-07:00 level=INFO source=grammar.go:79 msg="Structured output initialized" library=xgrammar version=v0.2.7 vocab_size=248320 path=<tmp>/ollama-0.40.6/mlx_metal_v4/libollama_xgrammar.dylib
+time=2026-10-18T14:39:24.566-07:00 level=INFO source=runner.go:331 msg="Starting HTTP server" host=127.0.0.1 port=56118
+time=2026-10-18T14:39:24.583-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=60.167µs status="200 OK"
+time=2026-10-18T14:39:24.586-07:00 level=INFO source=client.go:112 msg="mlx runner is ready" port=56118
+time=2026-10-18T14:39:24.588-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=2925 matched=0 cached=0 left=2925
+time=2026-10-18T14:39:34.782-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2048 total=2925
+time=2026-10-18T14:39:40.160-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2924 total=2925
+[GIN] 2026/10/18 - 14:39:41 | 200 | 32.434601625s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:39:41.898-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=17.311420084s status="200 OK"
+time=2026-10-18T14:39:41.901-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=38 drafted=39 accepted=26 acceptance=0.67 avg_draft=1.03 max_draft=2 avg_accepted=0.68 depth_over_time="0.0/0 1.0/1 1.0/1 1.6/2 1.2/2 1.0/1 1.2/2 1.0/2"
+time=2026-10-18T14:39:41.913-07:00 level=INFO source=pipeline.go:110 msg=memory peak="109.75 GiB" held="98.04 GiB"
+time=2026-10-18T14:39:41.913-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.616167ms status="200 OK"
+time=2026-10-18T14:39:41.915-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=428 matched=2 cached=0 left=428
+time=2026-10-18T14:39:42.307-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=427 total=428
+[GIN] 2026/10/18 - 14:39:42 | 200 |     820.378ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:39:42.722-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=807.6605ms status="200 OK"
+time=2026-10-18T14:39:42.722-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=8 drafted=19 accepted=19 acceptance=1.00 avg_draft=2.38 max_draft=3 avg_accepted=2.38 depth_over_time="2.0/2 2.0/2 2.0/2 2.0/2 2.0/2 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T14:39:42.730-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.64 GiB" held="98.41 GiB"
+time=2026-10-18T14:39:42.730-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=33.375µs status="200 OK"
+time=2026-10-18T14:39:42.731-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=2 cached=2 left=83
+time=2026-10-18T14:39:42.977-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=82 total=83
+[GIN] 2026/10/18 - 14:39:50 | 200 |  8.242098042s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:39:50.964-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.233885417s status="200 OK"
+time=2026-10-18T14:39:50.967-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=138 drafted=514 accepted=374 acceptance=0.73 avg_draft=3.72 max_draft=7 avg_accepted=2.71 depth_over_time="3.2/4 3.1/4 2.3/3 2.2/3 3.1/4 4.2/5 5.5/6 6.2/7"
+time=2026-10-18T14:39:50.993-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.49 GiB" held="98.63 GiB"
+time=2026-10-18T14:39:50.993-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=20.517833ms status="200 OK"
+time=2026-10-18T14:39:50.994-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=2 left=83
+time=2026-10-18T14:39:51.241-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=82 total=83
+[GIN] 2026/10/18 - 14:39:59 | 200 |  8.517144959s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:39:59.482-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.488229958s status="200 OK"
+time=2026-10-18T14:39:59.483-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=126 drafted=610 accepted=386 acceptance=0.63 avg_draft=4.84 max_draft=8 avg_accepted=3.06 depth_over_time="5.1/6 3.0/5 4.0/6 4.6/6 4.5/6 4.9/7 6.8/8 5.9/7"
+time=2026-10-18T14:39:59.520-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.98 GiB" held="98.99 GiB"
+time=2026-10-18T14:39:59.520-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=29.444583ms status="200 OK"
+time=2026-10-18T14:39:59.521-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T14:39:59.725-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:40:07 | 200 |  8.304968875s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:40:07.787-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.266855875s status="200 OK"
+time=2026-10-18T14:40:07.788-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=133 drafted=548 accepted=379 acceptance=0.69 avg_draft=4.12 max_draft=7 avg_accepted=2.85 depth_over_time="5.7/7 3.7/7 4.4/7 2.1/3 2.2/5 5.1/6 5.1/6 4.8/6"
+time=2026-10-18T14:40:07.823-07:00 level=INFO source=pipeline.go:110 msg=memory peak="100.06 GiB" held="99.22 GiB"
+time=2026-10-18T14:42:09.477-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=45.125µs status="200 OK"
+time=2026-10-18T14:42:09.477-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T14:42:09.686-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:42:17 | 200 |  8.207404083s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:42:17.676-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.199183667s status="200 OK"
+time=2026-10-18T14:42:17.677-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=131 drafted=567 accepted=381 acceptance=0.67 avg_draft=4.33 max_draft=6 avg_accepted=2.91 depth_over_time="5.0/5 5.1/6 5.0/5 3.7/5 3.5/5 3.1/4 4.5/6 4.8/6"
+time=2026-10-18T14:42:17.712-07:00 level=INFO source=pipeline.go:110 msg=memory peak="100.21 GiB" held="99.45 GiB"
+time=2026-10-18T14:42:17.712-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=26.110833ms status="200 OK"
+time=2026-10-18T14:42:17.712-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T14:42:17.917-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:42:26 | 200 |  8.775549125s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:42:26.453-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.740767917s status="200 OK"
+time=2026-10-18T14:42:26.453-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=140 drafted=597 accepted=372 acceptance=0.62 avg_draft=4.26 max_draft=6 avg_accepted=2.66 depth_over_time="5.0/5 4.7/5 3.6/5 3.1/4 3.3/5 5.1/6 4.2/6 5.1/6"
+time=2026-10-18T14:42:26.490-07:00 level=INFO source=pipeline.go:110 msg=memory peak="100.55 GiB" held="99.80 GiB"
+time=2026-10-18T14:42:26.490-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=27.747417ms status="200 OK"
+time=2026-10-18T14:42:26.490-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T14:42:26.692-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:42:34 | 200 |  8.529671625s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:42:34.983-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.493258166s status="200 OK"
+time=2026-10-18T14:42:34.984-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=134 drafted=583 accepted=378 acceptance=0.65 avg_draft=4.35 max_draft=6 avg_accepted=2.82 depth_over_time="5.1/6 4.8/6 4.4/6 4.5/6 3.9/6 3.4/5 3.8/6 5.0/6"
+time=2026-10-18T14:42:35.016-07:00 level=INFO source=pipeline.go:110 msg=memory peak="100.90 GiB" held="100.14 GiB"
+time=2026-10-18T14:42:35.016-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=23.133375ms status="200 OK"
+time=2026-10-18T14:42:35.016-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T14:42:35.218-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:42:44 | 200 |  9.166230583s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:42:44.151-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=9.134669708s status="200 OK"
+time=2026-10-18T14:42:44.151-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=155 drafted=571 accepted=357 acceptance=0.63 avg_draft=3.68 max_draft=6 avg_accepted=2.30 depth_over_time="5.1/6 4.3/6 3.2/5 4.7/6 3.3/5 3.0/4 3.0/3 3.0/4"
+time=2026-10-18T14:42:44.188-07:00 level=INFO source=pipeline.go:110 msg=memory peak="101.11 GiB" held="100.38 GiB"
+time=2026-10-18T14:42:44.188-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=27.648708ms status="200 OK"
+time=2026-10-18T14:42:44.189-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T14:42:44.391-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:42:53 | 200 |  8.994623375s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:42:53.146-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.957590917s status="200 OK"
+time=2026-10-18T14:42:53.147-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=161 drafted=505 accepted=351 acceptance=0.70 avg_draft=3.14 max_draft=7 avg_accepted=2.18 depth_over_time="3.0/3 3.0/3 3.0/4 3.0/3 3.0/3 3.0/3 3.0/3 4.0/7"
+time=2026-10-18T14:42:53.187-07:00 level=INFO source=pipeline.go:110 msg=memory peak="101.49 GiB" held="100.61 GiB"
+time=2026-10-18T14:42:53.364-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=44.584µs status="200 OK"
+time=2026-10-18T14:42:53.364-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T14:42:53.568-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:43:01 | 200 |  8.469170125s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:01.824-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.459835583s status="200 OK"
+time=2026-10-18T14:43:01.824-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=129 drafted=597 accepted=383 acceptance=0.64 avg_draft=4.63 max_draft=7 avg_accepted=2.97 depth_over_time="5.8/7 5.1/6 5.1/6 3.1/4 3.2/5 4.1/6 5.4/7 5.2/6"
+time=2026-10-18T14:43:01.857-07:00 level=INFO source=pipeline.go:110 msg=memory peak="101.68 GiB" held="100.85 GiB"
+time=2026-10-18T14:43:01.857-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=22.830292ms status="200 OK"
+time=2026-10-18T14:43:01.858-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T14:43:02.073-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:43:09 | 200 |    7.7743515s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:09.599-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=7.741377208s status="200 OK"
+time=2026-10-18T14:43:09.599-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=114 drafted=561 accepted=398 acceptance=0.71 avg_draft=4.92 max_draft=6 avg_accepted=3.49 depth_over_time="5.1/6 4.6/6 4.7/6 5.1/6 5.0/6 5.1/6 5.1/6 4.7/5"
+time=2026-10-18T14:43:09.627-07:00 level=INFO source=pipeline.go:110 msg=memory peak="101.94 GiB" held="101.19 GiB"
+time=2026-10-18T14:43:09.627-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=17.464375ms status="200 OK"
+time=2026-10-18T14:43:09.627-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T14:43:09.840-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:43:17 | 200 |   8.24935725s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:17.849-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.222390417s status="200 OK"
+time=2026-10-18T14:43:17.850-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=127 drafted=524 accepted=385 acceptance=0.73 avg_draft=4.13 max_draft=7 avg_accepted=3.03 depth_over_time="5.1/6 3.1/4 3.1/4 3.0/3 3.2/5 5.4/7 5.1/6 5.1/6"
+time=2026-10-18T14:43:17.878-07:00 level=INFO source=pipeline.go:110 msg=memory peak="102.41 GiB" held="101.54 GiB"
+time=2026-10-18T14:43:17.878-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=17.929542ms status="200 OK"
+time=2026-10-18T14:43:17.878-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T14:43:18.089-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 14:43:26 | 200 |  8.686613625s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:26.537-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.658862292s status="200 OK"
+time=2026-10-18T14:43:26.540-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=126 drafted=521 accepted=386 acceptance=0.74 avg_draft=4.13 max_draft=8 avg_accepted=3.06 depth_over_time="4.9/6 2.5/4 2.9/5 2.1/3 3.1/5 5.2/6 7.0/8 5.4/7"
+time=2026-10-18T14:43:26.567-07:00 level=INFO source=pipeline.go:110 msg=memory peak="102.87 GiB" held="101.89 GiB"
+time=2026-10-18T14:43:26.567-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=18.202209ms status="200 OK"
+time=2026-10-18T14:43:26.568-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=26 cached=25 left=60
+time=2026-10-18T14:43:26.777-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=59 total=60
+[GIN] 2026/10/18 - 14:43:35 | 200 |  8.979732541s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:35.518-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=8.950340542s status="200 OK"
+time=2026-10-18T14:43:35.519-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=115 drafted=563 accepted=397 acceptance=0.71 avg_draft=4.90 max_draft=7 avg_accepted=3.45 depth_over_time="5.4/6 3.4/6 4.0/6 4.9/6 4.4/6 4.6/6 6.5/7 6.0/7"
+time=2026-10-18T14:43:35.542-07:00 level=INFO source=pipeline.go:110 msg=memory peak="103.10 GiB" held="102.23 GiB"
+time=2026-10-18T14:43:35.733-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=41.375µs status="200 OK"
+time=2026-10-18T14:43:35.736-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=4133 matched=2 cached=2 left=4131
+panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.cpp:73
+	
+	mlx worker stack:
+	goroutine 50 [running, locked to thread]:
+	runtime/debug.Stack()
+		runtime/debug/stack.go:26 +0x64
+	github.com/ollama/ollama/mlx/mlxthread.run.func1()
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:184 +0x34
+	panic({0x1024400e0?, 0x695d855da010?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x695d86bb57e8)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1024400e0?, 0x695d855da010?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x695d86bb5748)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1024400e0?, 0x695d855da010?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x695d86bb5728)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1024400e0?, 0x695d855da010?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlx.mlxCheck[...](...)
+		github.com/ollama/ollama/mlx/mlx.go:91
+	github.com/ollama/ollama/mlx.doEval({0x695d857e2008, 0x7e, 0x800?}, 0x0)
+		github.com/ollama/ollama/mlx/mlx.go:144 +0x1c0
+	github.com/ollama/ollama/mlx.Eval(...)
+		github.com/ollama/ollama/mlx/mlx.go:153
+	github.com/ollama/ollama/mlxrunner.(*Runner).prefill.func2()
+		github.com/ollama/ollama/mlxrunner/pipeline.go:218 +0x138
+	github.com/ollama/ollama/mlx.Scoped(0x695d86bb5240)
+		github.com/ollama/ollama/mlx/scope.go:47 +0x90
+	github.com/ollama/ollama/mlxrunner.(*Runner).prefill(0x695d81cfc000, {0x1025b0a60, 0x695d85726000}, 0x695d8575a000, 0x695d81ee63c0, 0x0)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:205 +0x284
+	github.com/ollama/ollama/mlxrunner.(*Runner).generate(_, {_, _}, {{{0x695d81a71000, 0x43d4}, {0x0, 0x0, 0x0}, {0x695d853ddec8, 0x4, ...}, ...}, ...})
+		github.com/ollama/ollama/mlxrunner/pipeline.go:129 +0x230
+	github.com/ollama/ollama/mlxrunner.(*Runner).TextGenerationPipeline.func1()
+		github.com/ollama/ollama/mlxrunner/pipeline.go:104 +0x64
+	github.com/ollama/ollama/mlx.Scoped(0x695d86bb5b28)
+		github.com/ollama/ollama/mlx/scope.go:47 +0x90
+	github.com/ollama/ollama/mlxrunner.(*Runner).TextGenerationPipeline(_, {_, _}, {{{0x695d81a71000, 0x43d4}, {0x0, 0x0, 0x0}, {0x695d853ddec8, 0x4, ...}, ...}, ...})
+		github.com/ollama/ollama/mlxrunner/pipeline.go:104 +0x60
+	github.com/ollama/ollama/mlxrunner.(*Runner).runRequest.func1()
+		github.com/ollama/ollama/mlxrunner/runner.go:345 +0x64
+	github.com/ollama/ollama/mlx/mlxthread.run(0x0?)
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:188 +0x58
+	github.com/ollama/ollama/mlx/mlxthread.(*Thread).loop(0x695d820897a0, 0x10259d0e0, 0x695d81cf7ce0)
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:148 +0xa0
+	created by github.com/ollama/ollama/mlx/mlxthread.Start in goroutine 1
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:55 +0x10c
+	
+
+goroutine 23 [running]:
+github.com/ollama/ollama/mlx/mlxthread.(*Thread).Do(0x695d82131718?, {0x1025b0a60?, 0x695d85726000?}, 0x100faf9c0?)
+	github.com/ollama/ollama/mlx/mlxthread/thread.go:79 +0x64
+github.com/ollama/ollama/mlxrunner.(*Runner).runRequest(_, {{{0x695d81a71000, 0x43d4}, {0x0, 0x0, 0x0}, {0x695d853ddec8, 0x4, 0x8}, {{0x8000, ...}, ...}, ...}, ...})
+	github.com/ollama/ollama/mlxrunner/runner.go:344 +0x118
+github.com/ollama/ollama/mlxrunner.(*Runner).Run.func1()
+	github.com/ollama/ollama/mlxrunner/runner.go:298 +0x154
+golang.org/x/sync/errgroup.(*Group).Go.func1()
+	golang.org/x/sync@v0.17.0/errgroup/errgroup.go:93 +0x4c
+created by golang.org/x/sync/errgroup.(*Group).Go in goroutine 1
+	golang.org/x/sync@v0.17.0/errgroup/errgroup.go:78 +0x90
+time=2026-10-18T14:43:40.736-07:00 level=WARN source=sched.go:1701 msg="runtime OOM detected; expiring loaded models to clear memory before next request" model=manifest:7f6dff1f228cec215dedc85689127c3f62c52674673a2e40b9f4fb0a9d8890a1 error="mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.cpp:73"
+[GIN] 2026/10/18 - 14:43:40 | 500 |  5.014487083s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:43:40.740-07:00 level=INFO source=client.go:151 msg="stopping mlx runner subprocess" pid=36404
+time=2026-10-18T14:43:40.832-07:00 level=INFO source=sched.go:664 msg="system memory" total="128.0 GiB" free="29.0 GiB" free_swap="0 B"
+time=2026-10-18T14:43:40.833-07:00 level=INFO source=sched.go:671 msg="gpu memory" id=0 library=Metal available="107.0 GiB" free="107.5 GiB" minimum="512.0 MiB" overhead="0 B"
+time=2026-10-18T14:43:40.835-07:00 level=INFO source=client.go:517 msg="starting mlx runner subprocess" model=nace/qwen3.8-flash-next:125b-mlx-32k port=57738
+time=2026-10-18T14:43:40.838-07:00 level=INFO source=images.go:422 msg="template selection" model=registry.ollama.ai/nace/qwen3.8-flash-next:125b-mlx-32k selected=renderer_parser renderer=qwen3.8 parser=qwen3.5 go_template="[completion vision tools thinking]" chat_template=null harmony=null renderer_parser="[completion vision tools thinking]"
+time=2026-10-18T14:43:40.838-07:00 level=INFO source=sched.go:788 msg="loaded runners" count=1
+time=2026-10-18T14:43:40.906-07:00 level=INFO source=server.go:46 msg="MLX engine initialized" "MLX version"=0.32.3-96-gbebd642 device=gpu
+time=2026-10-18T14:43:41.088-07:00 level=INFO source=model.go:137 msg="Model architecture" arch=Qwen4ExpForConditionalGeneration
+time=2026-10-18T14:43:41.277-07:00 level=INFO source=runner.go:285 msg="Loaded tensors from manifest" count=2442
+time=2026-10-18T14:43:54.412-07:00 level=INFO source=grammar.go:79 msg="Structured output initialized" library=xgrammar version=v0.2.7 vocab_size=248320 path=<tmp>/ollama-0.40.6/mlx_metal_v4/libollama_xgrammar.dylib
+time=2026-10-18T14:43:56.016-07:00 level=INFO source=runner.go:331 msg="Starting HTTP server" host=127.0.0.1 port=57738
+time=2026-10-18T14:43:56.040-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=91.708µs status="200 OK"
+time=2026-10-18T14:43:56.040-07:00 level=INFO source=client.go:112 msg="mlx runner is ready" port=57738
+time=2026-10-18T14:43:56.049-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=16287 matched=0 cached=0 left=16287
+time=2026-10-18T14:44:06.304-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2048 total=16287
+panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.cpp:73
+	
+	mlx worker stack:
+	goroutine 50 [running, locked to thread]:
+	runtime/debug.Stack()
+		runtime/debug/stack.go:26 +0x64
+	github.com/ollama/ollama/mlx/mlxthread.run.func1()
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:184 +0x34
+	panic({0x1021480e0?, 0x121cc413a240?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x121cc25137e8)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1021480e0?, 0x121cc413a240?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x121cc2513748)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1021480e0?, 0x121cc413a240?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlxrunner.skipCleanupOnPanic(0x121cc2513728)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:97 +0x40
+	panic({0x1021480e0?, 0x121cc413a240?})
+		runtime/panic.go:860 +0x12c
+	github.com/ollama/ollama/mlx.mlxCheck[...](...)
+		github.com/ollama/ollama/mlx/mlx.go:91
+	github.com/ollama/ollama/mlx.doEval({0x121cc2aa2808, 0x7e, 0x800?}, 0x0)
+		github.com/ollama/ollama/mlx/mlx.go:144 +0x1c0
+	github.com/ollama/ollama/mlx.Eval(...)
+		github.com/ollama/ollama/mlx/mlx.go:153
+	github.com/ollama/ollama/mlxrunner.(*Runner).prefill.func2()
+		github.com/ollama/ollama/mlxrunner/pipeline.go:218 +0x138
+	github.com/ollama/ollama/mlx.Scoped(0x121cc2513240)
+		github.com/ollama/ollama/mlx/scope.go:47 +0x90
+	github.com/ollama/ollama/mlxrunner.(*Runner).prefill(0x121cc2951a40, {0x1022b8a60, 0x121cc36fc000}, 0x121cc3e24000, 0x121cc2a82320, 0x0)
+		github.com/ollama/ollama/mlxrunner/pipeline.go:205 +0x284
+	github.com/ollama/ollama/mlxrunner.(*Runner).generate(_, {_, _}, {{{0x121cc309a000, 0x10d4c}, {0x0, 0x0, 0x0}, {0x121cc2a77d38, 0x4, ...}, ...}, ...})
+		github.com/ollama/ollama/mlxrunner/pipeline.go:129 +0x230
+	github.com/ollama/ollama/mlxrunner.(*Runner).TextGenerationPipeline.func1()
+		github.com/ollama/ollama/mlxrunner/pipeline.go:104 +0x64
+	github.com/ollama/ollama/mlx.Scoped(0x121cc2513b28)
+		github.com/ollama/ollama/mlx/scope.go:47 +0x90
+	github.com/ollama/ollama/mlxrunner.(*Runner).TextGenerationPipeline(_, {_, _}, {{{0x121cc309a000, 0x10d4c}, {0x0, 0x0, 0x0}, {0x121cc2a77d38, 0x4, ...}, ...}, ...})
+		github.com/ollama/ollama/mlxrunner/pipeline.go:104 +0x60
+	github.com/ollama/ollama/mlxrunner.(*Runner).runRequest.func1()
+		github.com/ollama/ollama/mlxrunner/runner.go:345 +0x64
+	github.com/ollama/ollama/mlx/mlxthread.run(0x0?)
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:188 +0x58
+	github.com/ollama/ollama/mlx/mlxthread.(*Thread).loop(0x121cc2655800, 0x1022a50e0, 0x121cc2951960)
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:148 +0xa0
+	created by github.com/ollama/ollama/mlx/mlxthread.Start in goroutine 1
+		github.com/ollama/ollama/mlx/mlxthread/thread.go:55 +0x10c
+	
+
+goroutine 39 [running]:
+github.com/ollama/ollama/mlx/mlxthread.(*Thread).Do(0x121cc2ad7718?, {0x1022b8a60?, 0x121cc36fc000?}, 0x100cb79c0?)
+	github.com/ollama/ollama/mlx/mlxthread/thread.go:79 +0x64
+github.com/ollama/ollama/mlxrunner.(*Runner).runRequest(_, {{{0x121cc309a000, 0x10d4c}, {0x0, 0x0, 0x0}, {0x121cc2a77d38, 0x4, 0x8}, {{0x8000, ...}, ...}, ...}, ...})
+	github.com/ollama/ollama/mlxrunner/runner.go:344 +0x118
+github.com/ollama/ollama/mlxrunner.(*Runner).Run.func1()
+	github.com/ollama/ollama/mlxrunner/runner.go:298 +0x154
+golang.org/x/sync/errgroup.(*Group).Go.func1()
+	golang.org/x/sync@v0.17.0/errgroup/errgroup.go:93 +0x4c
+created by golang.org/x/sync/errgroup.(*Group).Go in goroutine 1
+	golang.org/x/sync@v0.17.0/errgroup/errgroup.go:78 +0x90
+time=2026-10-18T14:44:07.695-07:00 level=WARN source=sched.go:1701 msg="runtime OOM detected; expiring loaded models to clear memory before next request" model=manifest:7f6dff1f228cec215dedc85689127c3f62c52674673a2e40b9f4fb0a9d8890a1 error="mlx runner failed: panic: mlx: [METAL] Command buffer execution failed: Insufficient Memory (00000008:kIOGPUCommandBufferCallbackErrorOutOfMemory). at /Users/runner/work/ollama/ollama/build/darwin-sources/_deps/mlx-c-src/mlx/c/transforms.cpp:73"
+[GIN] 2026/10/18 - 14:44:07 | 500 | 26.889856584s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:07.698-07:00 level=INFO source=client.go:151 msg="stopping mlx runner subprocess" pid=51045
+time=2026-10-18T14:44:07.766-07:00 level=INFO source=sched.go:664 msg="system memory" total="128.0 GiB" free="25.6 GiB" free_swap="0 B"
+time=2026-10-18T14:44:07.766-07:00 level=INFO source=sched.go:671 msg="gpu memory" id=0 library=Metal available="107.0 GiB" free="107.5 GiB" minimum="512.0 MiB" overhead="0 B"
+time=2026-10-18T14:44:07.767-07:00 level=INFO source=client.go:517 msg="starting mlx runner subprocess" model=nace/qwen3.8-flash-next:125b-mlx-32k port=58029
+time=2026-10-18T14:44:07.768-07:00 level=INFO source=images.go:422 msg="template selection" model=registry.ollama.ai/nace/qwen3.8-flash-next:125b-mlx-32k selected=renderer_parser renderer=qwen3.8 parser=qwen3.5 go_template="[completion vision tools thinking]" chat_template=null harmony=null renderer_parser="[completion vision tools thinking]"
+time=2026-10-18T14:44:07.768-07:00 level=INFO source=sched.go:788 msg="loaded runners" count=1
+time=2026-10-18T14:44:07.808-07:00 level=INFO source=server.go:46 msg="MLX engine initialized" "MLX version"=0.32.3-96-gbebd642 device=gpu
+time=2026-10-18T14:44:07.969-07:00 level=INFO source=model.go:137 msg="Model architecture" arch=Qwen4ExpForConditionalGeneration
+time=2026-10-18T14:44:08.147-07:00 level=INFO source=runner.go:285 msg="Loaded tensors from manifest" count=2442
+time=2026-10-18T14:44:21.474-07:00 level=INFO source=grammar.go:79 msg="Structured output initialized" library=xgrammar version=v0.2.7 vocab_size=248320 path=<tmp>/ollama-0.40.6/mlx_metal_v4/libollama_xgrammar.dylib
+time=2026-10-18T14:44:23.169-07:00 level=INFO source=runner.go:331 msg="Starting HTTP server" host=127.0.0.1 port=58029
+time=2026-10-18T14:44:23.169-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=40.875µs status="200 OK"
+time=2026-10-18T14:44:23.169-07:00 level=INFO source=client.go:112 msg="mlx runner is ready" port=58029
+time=2026-10-18T14:44:23.170-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=428 matched=0 cached=0 left=428
+time=2026-10-18T14:44:32.249-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=427 total=428
+time=2026-10-18T14:44:32.839-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=15 drafted=12 accepted=12 acceptance=1.00 avg_draft=0.80 max_draft=2 avg_accepted=0.80 depth_over_time="0.0/0 0.0/0 0.5/1 1.0/1 1.0/1 1.0/1 1.0/1 1.5/2"
+time=2026-10-18T14:44:32.839-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=9.670202708s status="200 OK"
+[GIN] 2026/10/18 - 14:44:32 | 200 | 25.090768042s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:32.847-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.23 GiB" held="97.89 GiB"
+time=2026-10-18T14:44:32.850-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=36.667µs status="200 OK"
+time=2026-10-18T14:44:32.851-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=428 matched=427 cached=423 left=5
+time=2026-10-18T14:44:32.903-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4 total=5
+time=2026-10-18T14:44:33.340-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=489.51625ms status="200 OK"
+time=2026-10-18T14:44:33.341-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=9 drafted=18 accepted=18 acceptance=1.00 avg_draft=2.00 max_draft=2 avg_accepted=2.00 depth_over_time="2.0/2 2.0/2 2.0/2 2.0/2 2.0/2 2.0/2 2.0/2 2.0/2"
+[GIN] 2026/10/18 - 14:44:33 | 200 |  502.790084ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:33.346-07:00 level=INFO source=pipeline.go:110 msg=memory peak="98.35 GiB" held="98.00 GiB"
+time=2026-10-18T14:44:33.352-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=35.125µs status="200 OK"
+time=2026-10-18T14:44:33.353-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=508 matched=454 cached=454 left=54
+time=2026-10-18T14:44:33.561-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=53 total=54
+[GIN] 2026/10/18 - 14:44:35 | 200 |  1.926874792s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:35.271-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=1.918170917s status="200 OK"
+time=2026-10-18T14:44:35.271-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=28 drafted=88 accepted=62 acceptance=0.70 avg_draft=3.14 max_draft=4 avg_accepted=2.21 depth_over_time="3.0/3 3.0/3 3.0/3 3.2/4 3.7/4 3.5/4 2.7/3 3.0/4"
+time=2026-10-18T14:44:35.285-07:00 level=INFO source=pipeline.go:110 msg=memory peak="98.49 GiB" held="98.01 GiB"
+time=2026-10-18T14:44:35.285-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=4.933583ms status="200 OK"
+time=2026-10-18T14:44:35.286-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=452 matched=2 cached=0 left=452
+time=2026-10-18T14:44:35.828-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=451 total=452
+[GIN] 2026/10/18 - 14:44:36 | 200 |  1.262696458s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:36.534-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=1.249011458s status="200 OK"
+time=2026-10-18T14:44:36.534-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=10 drafted=36 accepted=36 acceptance=1.00 avg_draft=3.60 max_draft=4 avg_accepted=3.60 depth_over_time="4.0/4 4.0/4 4.0/4 3.0/3 3.0/3 4.0/4 3.0/3 4.0/4"
+time=2026-10-18T14:44:36.544-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.69 GiB" held="98.37 GiB"
+time=2026-10-18T14:44:36.544-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=262.833µs status="200 OK"
+time=2026-10-18T14:44:36.545-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=452 matched=451 cached=447 left=5
+time=2026-10-18T14:44:36.602-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4 total=5
+[GIN] 2026/10/18 - 14:44:37 | 200 |  798.621958ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:37.333-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=789.246833ms status="200 OK"
+time=2026-10-18T14:44:37.334-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=10 drafted=50 accepted=44 acceptance=0.88 avg_draft=5.00 max_draft=5 avg_accepted=4.40 depth_over_time="5.0/5 5.0/5 5.0/5 5.0/5 5.0/5 5.0/5 5.0/5 5.0/5"
+time=2026-10-18T14:44:37.341-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.18 GiB" held="98.58 GiB"
+time=2026-10-18T14:44:37.343-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=31.083µs status="200 OK"
+time=2026-10-18T14:44:37.344-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=532 matched=450 cached=447 left=85
+time=2026-10-18T14:44:37.659-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=84 total=85
+[GIN] 2026/10/18 - 14:44:39 | 200 |    2.3292655s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T14:44:39.664-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.320162875s status="200 OK"
+time=2026-10-18T14:44:39.664-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=26 drafted=136 accepted=81 acceptance=0.60 avg_draft=5.23 max_draft=6 avg_accepted=3.12 depth_over_time="5.0/5 5.7/6 5.7/6 5.2/6 5.0/5 5.0/5 5.3/6 5.0/5"
+time=2026-10-18T14:44:39.678-07:00 level=INFO source=pipeline.go:110 msg=memory peak="99.63 GiB" held="98.92 GiB"
+time=2026-10-18T14:44:39.889-07:00 level=INFO source=client.go:151 msg="stopping mlx runner subprocess" pid=52533

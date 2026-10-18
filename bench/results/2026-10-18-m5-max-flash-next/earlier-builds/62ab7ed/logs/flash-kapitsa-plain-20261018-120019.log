@@ -1,0 +1,43 @@
+[kapitsa] read 72.94 GB of weights in 9957 ms (7.3 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 7 ms
+[kapitsa] compiled the weight-format kernels in 6 ms
+[kapitsa] prewarmed 125 prefill pipelines in 18 ms
+[kapitsa] loaded ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 14640 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (179 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 74.85 GB allocated (model, buffers, 1 slots' state), budget 110.8 GB (recommended working set 115.4 GB): KV room 35.98 GB = 1138035 tokens (31 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image
+[kapitsa] engine ready: flash-next, context 32768, 1 slots, plain decoding, images on
+[kapitsa] listening on http://127.0.0.1:8281
+Ready: chat at http://127.0.0.1:8281, API at http://127.0.0.1:8281/v1 (model "flash-next"). Ctrl+C stops.
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 2923 (cached 0) in 3429 ms (+1.7 ms template/tokenize; last chunk: encoded by 402.1 ms, GPU start +1960.1 ms, GPU 1064.4 ms, wake +1.8 ms), 64 tokens in 795 ms (79.2 tok/s), length
+[kapitsa] chat: prompt 430 (cached 0) in 619 ms (+6.7 ms template/tokenize; last chunk: encoded by 58.7 ms, GPU start +-0.1 ms, GPU 558.2 ms, wake +1.9 ms), 27 tokens in 310 ms (83.9 tok/s), tool_calls
+[kapitsa] chat: prompt 85 (cached 0) in 754 ms (+1.4 ms template/tokenize; last chunk: encoded by 16.7 ms, GPU start +546.7 ms, GPU 188.6 ms, wake +1.7 ms), 512 tokens in 6073 ms (84.1 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 191 ms (+0.8 ms template/tokenize; last chunk: encoded by 2.6 ms, GPU start +3.7 ms, GPU 184.0 ms, wake +0.2 ms), 512 tokens in 6060 ms (84.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 189 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.3 ms, GPU start +3.7 ms, GPU 183.3 ms, wake +0.1 ms), 512 tokens in 5981 ms (85.4 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 190 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +3.8 ms, GPU 184.5 ms, wake +0.1 ms), 512 tokens in 6035 ms (84.7 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 191 ms (+0.9 ms template/tokenize; last chunk: encoded by 2.6 ms, GPU start +4.5 ms, GPU 183.9 ms, wake +0.1 ms), 512 tokens in 5986 ms (85.4 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 197 ms (+0.7 ms template/tokenize; last chunk: encoded by 4.0 ms, GPU start +3.8 ms, GPU 188.9 ms, wake +0.1 ms), 512 tokens in 5957 ms (85.8 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 189 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +3.5 ms, GPU 183.3 ms, wake +0.1 ms), 512 tokens in 5851 ms (87.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 196 ms (+0.6 ms template/tokenize; last chunk: encoded by 3.8 ms, GPU start +7.0 ms, GPU 184.8 ms, wake +0.2 ms), 512 tokens in 5906 ms (86.5 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 191 ms (+0.6 ms template/tokenize; last chunk: encoded by 2.4 ms, GPU start +3.7 ms, GPU 185.3 ms, wake +0.1 ms), 512 tokens in 5997 ms (85.2 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 195 ms (+0.6 ms template/tokenize; last chunk: encoded by 3.5 ms, GPU start +4.3 ms, GPU 186.9 ms, wake +0.1 ms), 512 tokens in 5923 ms (86.3 tok/s), length
+[kapitsa] chat: prompt 4133 (cached 0) in 4589 ms (+10.2 ms template/tokenize; last chunk: encoded by 2304.8 ms, GPU start +2196.5 ms, GPU 87.9 ms, wake +0.1 ms), 34 tokens in 424 ms (77.9 tok/s), stop
+[kapitsa] chat: prompt 4189 (cached 4167) in 80 ms (+0.5 ms template/tokenize; last chunk: encoded by 5.3 ms, GPU start +5.9 ms, GPU 65.9 ms, wake +2.8 ms), 4 tokens in 50 ms (60.1 tok/s), stop
+[kapitsa] chat: prompt 4220 (cached 4193) in 87 ms (+0.7 ms template/tokenize; last chunk: encoded by 5.4 ms, GPU start +4.7 ms, GPU 76.4 ms, wake +0.1 ms), 7 tokens in 88 ms (67.9 tok/s), stop
+[kapitsa] chat: prompt 4247 (cached 4227) in 70 ms (+0.5 ms template/tokenize; last chunk: encoded by 3.7 ms, GPU start +1.8 ms, GPU 64.1 ms, wake +0.1 ms), 256 tokens in 3140 ms (81.2 tok/s), length
+[kapitsa] chat: prompt 16286 (cached 0) in 18043 ms (+14.4 ms template/tokenize; last chunk: encoded by 13360.4 ms, GPU start +2345.6 ms, GPU 2336.5 ms, wake +0.2 ms), 46 tokens in 582 ms (77.3 tok/s), stop
+[kapitsa] chat: prompt 16354 (cached 16332) in 70 ms (+1.8 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +4.5 ms, GPU 64.9 ms, wake +0.1 ms), 6 tokens in 77 ms (64.9 tok/s), stop
+[kapitsa] chat: prompt 16387 (cached 16360) in 81 ms (+1.6 ms template/tokenize; last chunk: encoded by 0.9 ms, GPU start +4.2 ms, GPU 76.1 ms, wake +0.1 ms), 9 tokens in 134 ms (59.8 tok/s), stop
+[kapitsa] chat: prompt 16416 (cached 16396) in 72 ms (+1.7 ms template/tokenize; last chunk: encoded by 0.8 ms, GPU start +4.2 ms, GPU 63.6 ms, wake +2.9 ms), 256 tokens in 3124 ms (81.6 tok/s), length
+[kapitsa] chat: prompt 430 (cached 0) in 586 ms (+1.6 ms template/tokenize; last chunk: encoded by 5.3 ms, GPU start +1.6 ms, GPU 578.9 ms, wake +0.2 ms), 27 tokens in 305 ms (85.2 tok/s), tool_calls
+[kapitsa] chat: prompt 430 (cached 423) in 29 ms (+0.3 ms template/tokenize; last chunk: encoded by 0.6 ms, GPU start +0.8 ms, GPU 27.0 ms, wake +0.1 ms), 27 tokens in 300 ms (86.6 tok/s), tool_calls
+[kapitsa] chat: prompt 510 (cached 457) in 101 ms (+0.3 ms template/tokenize; last chunk: encoded by 7.5 ms, GPU start +1.0 ms, GPU 92.8 ms, wake +0.1 ms), 109 tokens in 1288 ms (83.9 tok/s), stop
+[kapitsa] chat: prompt 454 (cached 0) in 610 ms (+0.8 ms template/tokenize; last chunk: encoded by 8.1 ms, GPU start +1.5 ms, GPU 597.8 ms, wake +2.7 ms), 53 tokens in 601 ms (86.6 tok/s), tool_calls
+[kapitsa] chat: prompt 454 (cached 449) in 27 ms (+0.3 ms template/tokenize; last chunk: encoded by 0.5 ms, GPU start +0.4 ms, GPU 25.6 ms, wake +0.1 ms), 53 tokens in 592 ms (87.9 tok/s), tool_calls
+[kapitsa] chat: prompt 534 (cached 449) in 188 ms (+0.3 ms template/tokenize; last chunk: encoded by 1.2 ms, GPU start +1.1 ms, GPU 180.2 ms, wake +5.2 ms), 132 tokens in 1516 ms (86.4 tok/s), stop

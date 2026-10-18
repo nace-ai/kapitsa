@@ -1,0 +1,23 @@
+{
+  "repo": "ggml-org/Qwen3.8-Flash-Next-GGUF",
+  "revision": "0a61d2b8d851e0bb9f22b973befd714413d63c6f",
+  "role": "llama.cpp",
+  "files": [
+    {
+      "path": "Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf",
+      "size": 10945440,
+      "sha256": "851652eef30d117a34fdc0d13e05da4c488a8cdad3654d38c4aa69a2d8a1fabc"
+    },
+    {
+      "path": "Qwen3.8-Flash-Next-IQ4_NL-00002-of-00002.gguf",
+      "size": 102037973504,
+      "sha256": "0299b147e42517ff8fa3a4fa66d370c77ce01c44ed8cbc3451b7a42caad5fc10"
+    },
+    {
+      "path": "mtp-Qwen3.8-Flash-Next-Q4_0.gguf",
+      "size": 2199652640,
+      "sha256": "d484e6e541a36b714976f72f7d1a86ae2cc450cff110b81e3656512784abd1c6"
+    }
+  ],
+  "total_bytes": 104248571584
+}

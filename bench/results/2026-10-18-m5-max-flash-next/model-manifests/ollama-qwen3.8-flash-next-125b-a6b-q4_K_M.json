@@ -1,0 +1,43 @@
+{
+ "registry": "registry.ollama.ai",
+ "tag": "library/qwen3.8-flash-next:125b-a6b-q4_K_M",
+ "manifest_digest": "sha256:f79436a1cc83fd1a9b7752cf62247a2e7ad9fd7775c67230da4254fcc1d07f01",
+ "role": "Ollama GGUF runner",
+ "total_bytes": 120058268208,
+ "layers": 4,
+ "note": "Pulled with Ollama 0.40.6, which checks every blob's sha256 against its digest; the pulled manifest's layers equal the registry's.",
+ "manifest": {
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+  "config": {
+   "mediaType": "application/vnd.docker.container.image.v1+json",
+   "digest": "sha256:4634fd1a9e1fa11fbdd6558552755189f3db28463b46f661e191815f460e3e53",
+   "size": 219
+  },
+  "layers": [
+   {
+    "mediaType": "application/vnd.ollama.image.model",
+    "digest": "sha256:89059c880c2f000b24520919d4ba2edd2a8101327c7f8ab33b2280e01addda75",
+    "size": 119150722112,
+    "from": "qwen3.8-flash-next:125b-a6b-q4_K_M"
+   },
+   {
+    "mediaType": "application/vnd.ollama.image.projector",
+    "digest": "sha256:375f156fdc1232f994c42f43813861fac4fdc791f0440a36c85e87b6907a7eee",
+    "size": 907542784,
+    "from": "qwen3.8-flash-next:125b-a6b-q4_K_M"
+   },
+   {
+    "mediaType": "application/vnd.ollama.image.license",
+    "digest": "sha256:9fc8eea719a230d8eae622605f56b5f094183df8b8d446c57eeb2628bc988313",
+    "size": 3220,
+    "from": "qwen3.8-flash-next:125b-a6b-q4_K_M"
+   },
+   {
+    "mediaType": "application/vnd.ollama.image.params",
+    "digest": "sha256:448d29437397713495b408d51b4ccbc5ba95240a7583643efb2304921950b111",
+    "size": 92
+   }
+  ]
+ }
+}

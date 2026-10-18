@@ -1,0 +1,34 @@
+[kapitsa] read 72.94 GB of weights in 13344 ms (5.5 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 2345 ms
+[kapitsa] compiled the weight-format kernels in 4650 ms
+[kapitsa] prewarmed 125 prefill pipelines in 7008 ms
+[kapitsa] loaded ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 29608 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (198 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 74.85 GB allocated (model, buffers, 1 slots' state), budget 110.8 GB (recommended working set 115.4 GB): KV room 35.98 GB = 1138035 tokens (31 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image
+[kapitsa] engine ready: flash-next, context 32768, 1 slots, MTP speculative decoding depth 1, images on
+[kapitsa] listening on http://127.0.0.1:8280
+Ready: chat at http://127.0.0.1:8280, API at http://127.0.0.1:8280/v1 (model "flash-next"). Ctrl+C stops.
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 2925 (cached 0) in 4135 ms (+1.4 ms template/tokenize; last chunk: encoded by 400.8 ms, GPU start +2711.3 ms, GPU 1020.0 ms, wake +3.0 ms), 64 tokens in 705 ms (89.3 tok/s), length
+[kapitsa] chat: prompt 430 (cached 0) in 627 ms (+6.9 ms template/tokenize; last chunk: encoded by 63.7 ms, GPU start +-0.2 ms, GPU 563.0 ms, wake +0.4 ms), 27 tokens in 230 ms (113.0 tok/s), tool_calls
+[kapitsa] chat: prompt 85 (cached 0) in 853 ms (+2.0 ms template/tokenize; last chunk: encoded by 14.2 ms, GPU start +643.1 ms, GPU 195.2 ms, wake +0.6 ms), 512 tokens in 5103 ms (100.1 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 188 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.5 ms, GPU start +3.6 ms, GPU 181.7 ms, wake +0.1 ms), 512 tokens in 4978 ms (102.6 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 190 ms (+0.8 ms template/tokenize; last chunk: encoded by 2.4 ms, GPU start +3.9 ms, GPU 183.8 ms, wake +0.1 ms), 512 tokens in 5075 ms (100.7 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 187 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.2 ms, GPU start +3.6 ms, GPU 181.2 ms, wake +0.1 ms), 512 tokens in 4994 ms (102.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 192 ms (+0.7 ms template/tokenize; last chunk: encoded by 3.9 ms, GPU start +3.9 ms, GPU 183.9 ms, wake +0.1 ms), 512 tokens in 5032 ms (101.5 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 189 ms (+0.7 ms template/tokenize; last chunk: encoded by 2.5 ms, GPU start +3.9 ms, GPU 182.6 ms, wake +0.1 ms), 512 tokens in 5002 ms (102.2 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 194 ms (+0.8 ms template/tokenize; last chunk: encoded by 4.1 ms, GPU start +4.0 ms, GPU 186.1 ms, wake +0.1 ms), 512 tokens in 5063 ms (100.9 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 204 ms (+0.9 ms template/tokenize; last chunk: encoded by 4.5 ms, GPU start +4.2 ms, GPU 195.0 ms, wake +0.1 ms), 512 tokens in 5207 ms (98.1 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 218 ms (+0.9 ms template/tokenize; last chunk: encoded by 25.8 ms, GPU start +4.4 ms, GPU 187.5 ms, wake +0.1 ms), 512 tokens in 5165 ms (98.9 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 197 ms (+0.9 ms template/tokenize; last chunk: encoded by 2.8 ms, GPU start +4.8 ms, GPU 189.5 ms, wake +0.1 ms), 512 tokens in 5093 ms (100.3 tok/s), length
+[kapitsa] chat: prompt 4131 (cached 0) in 4913 ms (+6.5 ms template/tokenize; last chunk: encoded by 2445.3 ms, GPU start +2378.5 ms, GPU 89.4 ms, wake +0.1 ms), 36 tokens in 366 ms (95.6 tok/s), stop
+[kapitsa] chat: prompt 4189 (cached 4166) in 81 ms (+0.6 ms template/tokenize; last chunk: encoded by 3.5 ms, GPU start +7.7 ms, GPU 67.3 ms, wake +2.8 ms), 43 tokens in 481 ms (87.2 tok/s), stop
+[kapitsa] chat: prompt 4259 (cached 4231) in 91 ms (+0.6 ms template/tokenize; last chunk: encoded by 5.0 ms, GPU start +4.8 ms, GPU 77.9 ms, wake +2.9 ms), 5 tokens in 56 ms (70.9 tok/s), stop
+[kapitsa] chat: prompt 4284 (cached 4263) in 66 ms (+0.5 ms template/tokenize; last chunk: encoded by 4.3 ms, GPU start +2.1 ms, GPU 59.4 ms, wake +0.1 ms), 256 tokens in 2568 ms (99.3 tok/s), length
+[kapitsa] fatal: GPU error: Error Domain=MTLCommandBufferErrorDomain Code=9 "Invalid Resource (00000009:kIOGPUCommandBufferCallbackErrorInvalidResource)" UserInfo={NSLocalizedDescription=Invalid Resource (00000009:kIOGPUCommandBufferCallbackErrorInvalidResource), NSUnderlyingError=0x8ed048870 {Error Domain=IOGPUCommandQueueErrorDomain Code=9 "(null)"}}

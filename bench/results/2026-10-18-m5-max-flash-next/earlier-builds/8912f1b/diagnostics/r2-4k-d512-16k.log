@@ -1,0 +1,20 @@
+[kapitsa] read 72.94 GB of weights in 12929 ms (5.6 GB/s)
+[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 22 ms
+[kapitsa] compiled the weight-format kernels in 20 ms
+[kapitsa] prewarmed 125 prefill pipelines in 47 ms
+[kapitsa] loaded ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 20153 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (204 ms)
+[kapitsa] GPU: Apple M5 Max, 40 cores
+[kapitsa] memory: 74.85 GB allocated (model, buffers, 1 slots' state), budget 110.8 GB (recommended working set 115.4 GB): KV room 35.98 GB = 1138035 tokens (31 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image
+[kapitsa] engine ready: flash-next, context 32768, 1 slots, MTP speculative decoding depth 1, images on
+[kapitsa] listening on http://127.0.0.1:8298
+Ready: chat at http://127.0.0.1:8298, API at http://127.0.0.1:8298/v1 (model "flash-next"). Ctrl+C stops.
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 4132 (cached 0) in 4503 ms (+2.0 ms template/tokenize; last chunk: encoded by 2256.3 ms, GPU start +2158.0 ms, GPU 86.2 ms, wake +2.5 ms), 29 tokens in 331 ms (84.7 tok/s), stop
+[kapitsa] chat: prompt 85 (cached 0) in 194 ms (+7.8 ms template/tokenize; last chunk: encoded by 10.8 ms, GPU start +0.2 ms, GPU 180.6 ms, wake +2.9 ms), 512 tokens in 4868 ms (105.0 tok/s), length
+[kapitsa] fatal: GPU error: Error Domain=MTLCommandBufferErrorDomain Code=9 "Invalid Resource (00000009:kIOGPUCommandBufferCallbackErrorInvalidResource)" UserInfo={NSLocalizedDescription=Invalid Resource (00000009:kIOGPUCommandBufferCallbackErrorInvalidResource), NSUnderlyingError=0xbe9048750 {Error Domain=IOGPUCommandQueueErrorDomain Code=9 "(null)"}}

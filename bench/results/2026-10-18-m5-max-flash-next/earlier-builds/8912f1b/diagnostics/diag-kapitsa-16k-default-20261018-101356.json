@@ -1,0 +1,518 @@
+{
+ "schema": 2,
+ "label": "diag-kapitsa-16k-default",
+ "model": "flash-next",
+ "base_url": "http://127.0.0.1:8299/v1",
+ "when": "2026-10-18 10:14:47",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8299/v1",
+  "model": "flash-next",
+  "label": "diag-kapitsa-16k-default",
+  "pid": 81004,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4133,16000:16286",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,tools",
+  "out": "<diag-root>/results/diag-kapitsa-16k-default-20261018-101356.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+  "dirty": false
+ },
+ "phases": {
+  "prefill_16000": [
+   1792343687.988,
+   1792343707.344
+  ]
+ },
+ "memory": {
+  "prefill_16000": {
+   "pids": [],
+   "phys_footprint_mb": 0.0,
+   "phys_footprint_peak_mb": 0.0,
+   "mapped_file_clean_mb": 0.0,
+   "swap_used_mb": 19232.0,
+   "memorystatus_level": 82,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 76.0,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 19312.0,
+  "swapouts": 63240324,
+  "swapins": 53146574,
+  "pageouts": 599518,
+  "memorystatus_level": 89
+ },
+ "prefill": [
+  {
+   "target": 16000,
+   "invalid": [
+    "usage.prompt_tokens missing"
+   ],
+   "flags": [],
+   "prompt_tokens": null,
+   "expected_prompt_tokens": 16286,
+   "ttft_s": null,
+   "prefill_tps": null,
+   "cold_cached_tokens": null,
+   "first_event_chars": null,
+   "timings": null,
+   "finish": null,
+   "answer": "",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [],
+    "invalid": [
+     "turn 1 returned no content; not substituting text, cached test skipped"
+    ],
+    "flags": []
+   }
+  }
+ ],
+ "peak_rss_mb": 5827,
+ "peak_footprint_mb": 72007,
+ "invalid": [
+  "prefill_16000: usage.prompt_tokens missing",
+  "cached_16000: turn 1 returned no content; not substituting text, cached test skipped"
+ ],
+ "flags": [
+  "CONTENTION: sustained foreign GPU load > 5% in ['prefill_16000'] (mean 12.73%, top ['com.apple.WebKit'])"
+ ],
+ "peak_memory_mb": null,
+ "mapped_file_clean_mb": 0.0,
+ "vm_end": {
+  "swap_used_mb": 19232.0,
+  "swapouts": 63240324,
+  "swapins": 53151546,
+  "pageouts": 599611,
+  "memorystatus_level": 83
+ },
+ "when_end": "2026-10-18 10:15:07",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 5.16,
+    "prompt_tokens": 2924,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.9,
+    "prompt_tokens": 430,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "contention": {
+  "overall": {
+   "samples": 9,
+   "mean_foreign_gpu_pct": 12.73,
+   "max_foreign_gpu_pct": 14.33,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 9,
+   "longest_busy_run": 9,
+   "top": [
+    "com.apple.WebKit"
+   ],
+   "flagged": true
+  },
+  "phases": {
+   "prefill_16000": {
+    "samples": 9,
+    "mean_foreign_gpu_pct": 12.73,
+    "max_foreign_gpu_pct": 14.33,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 9,
+    "longest_busy_run": 9,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   }
+  },
+  "samples": [
+   [
+    1792343689.902,
+    7.27,
+    "com.apple.WebKit",
+    7.27,
+    0
+   ],
+   [
+    1792343691.946,
+    13.02,
+    "com.apple.WebKit",
+    13.02,
+    0
+   ],
+   [
+    1792343693.988,
+    10.26,
+    "com.apple.WebKit",
+    10.26,
+    0
+   ],
+   [
+    1792343696.03,
+    13.98,
+    "com.apple.WebKit",
+    13.07,
+    0
+   ],
+   [
+    1792343698.069,
+    14.33,
+    "com.apple.WebKit",
+    13.45,
+    0
+   ],
+   [
+    1792343700.115,
+    14.1,
+    "com.apple.WebKit",
+    12.91,
+    0
+   ],
+   [
+    1792343702.163,
+    13.97,
+    "com.apple.WebKit",
+    12.69,
+    0
+   ],
+   [
+    1792343704.212,
+    13.68,
+    "com.apple.WebKit",
+    12.96,
+    0
+   ],
+   [
+    1792343706.266,
+    13.94,
+    "com.apple.WebKit",
+    13.16,
+    0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "diag-kapitsa-16k-default",
+ "display": "Kapitsa (MTP, depth 1)",
+ "engine": "kapitsa",
+ "version": "8912f1b",
+ "version_config": "auto",
+ "model_name": "Qwen3.8-Flash-Next",
+ "model_path": "{models}/qwen3.8-flash-next-4bit",
+ "note": "diag",
+ "config": {
+  "label": "diag-kapitsa-16k-default",
+  "display": "Kapitsa (MTP, depth 1)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Qwen3.8-Flash-Next",
+  "model_path": "{models}/qwen3.8-flash-next-4bit",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--spec",
+   "1",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8299",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8299/v1",
+  "model": "flash-next",
+  "ready_timeout": 900,
+  "requires_paths": [
+   "{models}/qwen3.8-flash-next-4bit/model.safetensors.index.json",
+   "{models}/qwen3.8-flash-next-4bit/mtp.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286"
+  ],
+  "note": "diag"
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 18808.5,
+    "swapouts": 63178404,
+    "swapins": 53117583,
+    "pageouts": 599269,
+    "memorystatus_level": 92
+   },
+   "gpu_mem": {
+    "in_use": 2186625024,
+    "alloc": 9351659520,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 132870303744,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+   "--model-id",
+   "flash-next",
+   "--dflash",
+   "none",
+   "--spec",
+   "1",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8299",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "<repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --spec 1 --host 127.0.0.1 --port 8299 --ctx 32768 --slots 1",
+  "env": {},
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/qwen3.8-flash-next-4bit",
+   "safetensors_bytes": 105834937496,
+   "safetensors_files": [
+    "model-00001-of-00050.safetensors",
+    "model-00002-of-00050.safetensors",
+    "model-00003-of-00050.safetensors",
+    "model-00004-of-00050.safetensors",
+    "model-00005-of-00050.safetensors",
+    "model-00006-of-00050.safetensors",
+    "model-00007-of-00050.safetensors",
+    "model-00008-of-00050.safetensors",
+    "model-00009-of-00050.safetensors",
+    "model-00010-of-00050.safetensors",
+    "model-00011-of-00050.safetensors",
+    "model-00012-of-00050.safetensors",
+    "model-00013-of-00050.safetensors",
+    "model-00014-of-00050.safetensors",
+    "model-00015-of-00050.safetensors",
+    "model-00016-of-00050.safetensors",
+    "model-00017-of-00050.safetensors",
+    "model-00018-of-00050.safetensors",
+    "model-00019-of-00050.safetensors",
+    "model-00020-of-00050.safetensors",
+    "model-00021-of-00050.safetensors",
+    "model-00022-of-00050.safetensors",
+    "model-00023-of-00050.safetensors",
+    "model-00024-of-00050.safetensors",
+    "model-00025-of-00050.safetensors",
+    "model-00026-of-00050.safetensors",
+    "model-00027-of-00050.safetensors",
+    "model-00028-of-00050.safetensors",
+    "model-00029-of-00050.safetensors",
+    "model-00030-of-00050.safetensors",
+    "model-00031-of-00050.safetensors",
+    "model-00032-of-00050.safetensors",
+    "model-00033-of-00050.safetensors",
+    "model-00034-of-00050.safetensors",
+    "model-00035-of-00050.safetensors",
+    "model-00036-of-00050.safetensors",
+    "model-00037-of-00050.safetensors",
+    "model-00038-of-00050.safetensors",
+    "model-00039-of-00050.safetensors",
+    "model-00040-of-00050.safetensors",
+    "model-00041-of-00050.safetensors",
+    "model-00042-of-00050.safetensors",
+    "model-00043-of-00050.safetensors",
+    "model-00044-of-00050.safetensors",
+    "model-00045-of-00050.safetensors",
+    "model-00046-of-00050.safetensors",
+    "model-00047-of-00050.safetensors",
+    "model-00048-of-00050.safetensors",
+    "model-00049-of-00050.safetensors",
+    "model-00050-of-00050.safetensors",
+    "mtp.safetensors",
+    "ple.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+   "dirty": false
+  },
+  "config_file": "../../../configs/diag.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "LLAMA_SERVER",
+   "MLX_VLM_PYTHON",
+   "OMLX_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "8912f1b0fe2746b135d0df06536094cf90901f4c",
+   "head_time": "2026-10-18T08:44:45-07:00",
+   "branch": "HEAD",
+   "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "diff_bytes": 0,
+   "dirty": false,
+   "diff_stat": "",
+   "untracked_files": 0,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "99f0fad25a9ed82fa225f9b8cdd953f00d0bb34431df34e566165accaab9ac45",
+   "mtime": "2026-10-18T08:44:15"
+  },
+  "prepare": [],
+  "env_relevant": {
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "BENCH_OUT": "<diag-root>",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "OMLX_BIN": "~/venvs/omlx/bin/omlx"
+  },
+  "ready_s": 24.4,
+  "server_pid": 81004,
+  "listener_pid": 81004,
+  "gpu_quiet_wait_s": 20.6,
+  "gpu_not_quiet": [
+   "com.apple.WebKit[3316] 6%"
+  ],
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 1967095808,
+   "alloc": 9276162048,
+   "util_pct": 15
+  },
+  "vm_after": {
+   "swap_used_mb": 19232.0,
+   "swapouts": 63240324,
+   "swapins": 53151881,
+   "pageouts": 599611,
+   "memorystatus_level": 89
+  }
+ },
+ "server_log": [
+  "[kapitsa] read 72.94 GB of weights in 13623 ms (5.4 GB/s)",
+  "[kapitsa] MTP head loaded in 0 ms (drafts over ids < 32768 + specials)",
+  "[kapitsa] loaded ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit: Qwen3.8-Flash-Next, 48 layers (12 attention), 72.9 GB of weights in 22232 ms; 4-bit group 64 97%, 6-bit group 64 1%, 8-bit group 64 1%, bf16 0%; n-gram table 320001536 x 160, 4-bit group 32, 32.0 GB mapped",
+  "[kapitsa] images: Qwen3.5 ViT (27 blocks, width 1152, 16-pixel patches; images of 65536 to 1200000 pixels), 0.90 GB loaded on the first image",
+  "[kapitsa] engine ready: flash-next, context 32768, 1 slots, MTP speculative decoding depth 1, images on",
+  "[kapitsa] chat: prompt 2924 (cached 0) in 4442 ms (+2.0 ms template/tokenize; last chunk: encoded by 420.0 ms, GPU start +2871.6 ms, GPU 1150.1 ms, wake +0.6 ms), 64 tokens in 715 ms (88.1 tok/s), length",
+  "[kapitsa] chat: prompt 430 (cached 0) in 658 ms (+5.2 ms template/tokenize; last chunk: encoded by 57.0 ms, GPU start +-1.0 ms, GPU 601.2 ms, wake +0.4 ms), 27 tokens in 241 ms (107.9 tok/s), tool_calls"
+ ],
+ "server_log_path": "logs/diag-kapitsa-16k-default-20261018-101356.log"
+}

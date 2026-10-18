@@ -1,0 +1,33 @@
+{
+  "captured_at": "2026-10-18T22:07:23.783390+00:00",
+  "hardware": {
+    "hw.model": "Mac17,6",
+    "machdep.cpu.brand_string": "Apple M5 Max",
+    "hw.memsize": "137438953472",
+    "hw.physicalcpu": "18",
+    "hw.logicalcpu": "18"
+  },
+  "gpu": {
+    "_name": "Apple M5 Max",
+    "spdisplays_mtlgpufamilysupport": "spdisplays_metal4",
+    "spdisplays_vendor": "sppci_vendor_Apple",
+    "sppci_bus": "spdisplays_builtin",
+    "sppci_cores": "40",
+    "sppci_device_type": "spdisplays_gpu",
+    "sppci_model": "Apple M5 Max"
+  },
+  "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.4\nBuildVersion:\t\t25E246",
+  "power": "Battery Power:\n Sleep On Power Button 1\n powermode            0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         20\n womp                 0\n networkoversleep     0\n sleep                1\n lessbright           1\n tcpkeepalive         1\n disksleep            0\nAC Power:\n Sleep On Power Button 1\n powermode            0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         30\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            0",
+  "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22872163)\t100%; finishing charge; 0:06 remaining present: true",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.1.1.101)\nTarget: arm64-apple-darwin25.4.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "cmake": "cmake version 4.3.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+  "python": "Python 3.14.6",
+  "swap_at_capture": "total = 16384.00M  used = 15456.06M  free = 927.94M  (encrypted)",
+  "source_commit": "95fbcd6d0d158f4e00e6642cd271e6cbbb6d48d2",
+  "binary_sha256": "8e7766f048d9432201379a70ad5f4d44100cf20e7239e00c773f2972770e6768",
+  "source_note": "Kapitsa built (Release) from opt/flash-next at 95fbcd6 (the table's runs); a copy of build/kapitsa was frozen before the runs and run from a checkout of that commit. Earlier builds in earlier-builds/: 8912f1b (binary sha256 99f0fad25a9ed82fa225f9b8cdd953f00d0bb34431df34e566165accaab9ac45; its --version prints 747b394, the revision CMake last configured, its C++ source equals 8912f1b) and 62ab7ed (sha256 470fe2e03836c2425c887521715230c1848e6bdc4d72683759fe9693f79880c7). The harness ran from a checkout of 8912f1b; its runner (compare_engines.py, bench.py, gpu_hogs.py) is identical at 95fbcd6.",
+  "build_commands": [
+    "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release",
+    "cmake --build build -j"
+  ]
+}
