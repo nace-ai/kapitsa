@@ -331,13 +331,14 @@ def cmd_memtake(a):
     """A reply in progress needs more KV cache while another request waits for memory with its conversation cached
     (before its prefill): the reply takes that cache and runs to max_tokens (it does not end early), and the waiting
     request reads its prompt again from the start once the reply has ended. Sizes follow the budget's KV room (the
-    server's log, --log): conversation W holds 50% of it (two turns, so a new conversation takes another slot), then a
-    reply R (prompt 12%, 45% written) and, --after-s later, W's next turn (90%: it fits alone, not beside R)."""
+    server's log, --log): conversation W holds 45% of it (two turns, so a new conversation takes another slot), then a
+    reply R (prompt 10%, 35% written) and, --after-s later, W's next turn (85%: it fits alone, not beside R). (A cache
+    grows by a copy, old and new side by side: one conversation grows to about half the room of such a small budget.)"""
     room = kv_room(a.log)
     warm(a.base)
     evict(a.base)
     nonce = random.getrandbits(48)
-    msgs = context_messages(int(room * 0.50), f"W {nonce:012x}", "In one sentence, what is the first file about?")
+    msgs = context_messages(int(room * 0.45), f"W {nonce:012x}", "In one sentence, what is the first file about?")
     for follow in ["And in two words?", None]:
         o = stream(a.base, body(msgs, 16))
         msgs = msgs + [{"role": "assistant", "content": o["text"]}]
@@ -346,8 +347,8 @@ def cmd_memtake(a):
     w_cached = (o["usage"] or {}).get("prompt_tokens")
     msgs.append({"role": "user", "content": "More of the repository:\n" +
                  corpus()[90000:90000 + int(room * 0.40 * CHARS_PER_TOKEN)] + "\n\nIn one sentence, what does it do?"})
-    r_tokens = int(room * 0.45)
-    rmsgs = context_messages(int(room * 0.12), f"R {nonce:012x}",
+    r_tokens = int(room * 0.35)
+    rmsgs = context_messages(int(room * 0.10), f"R {nonce:012x}",
                              "Ignore the context above. Count from 1 to 100000, one number per line, nothing else.",
                              offset=60000)
     t0 = time.perf_counter()
