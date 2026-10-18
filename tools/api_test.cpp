@@ -412,6 +412,11 @@ void anthropic_events() {
     ChatResult o = result("error");
     o.error = "something";
     check(messages_failure(o).first == 500 && messages_failure(o).second["error"]["type"] == "api_error", "anthropic: other errors are 500 api_error");
+    ChatResult im = result("error");
+    im.error = "image 1: could not decode it";
+    im.invalid_request = true;
+    check(messages_failure(im).first == 400 && messages_failure(im).second["error"]["type"] == "invalid_request_error",
+          "anthropic: an image that cannot be read is a 400 invalid_request_error");
   }
   {
     ChatResult r = result("tool_calls");
@@ -538,6 +543,11 @@ void responses_events() {
     check(st == 400 && body["error"]["code"] == "context_length_exceeded" && body["error"]["type"] == "invalid_request_error" &&
               body["error"]["param"] == "input",
           "responses: a prompt longer than the context is 400 context_length_exceeded", body.dump());
+    ChatResult im = result("error");
+    im.error = "video input is not supported";
+    im.invalid_request = true;
+    check(responses_failure(im).first == 400 && responses_failure(im).second["error"]["type"] == "invalid_request_error",
+          "responses: a request the engine cannot take (a video) is a 400 invalid_request_error");
   }
   {
     ChatResult r = result("tool_calls");
@@ -819,9 +829,19 @@ void template_checks(const TmplModel& m, const std::string& tag) {
     p = std::string("raised: ") + e.what();
   }
   check(p.find("</tool_response><|im_end|>\n<|im_start|>system\nLater.<|im_end|>\n<|im_start|>user\nLook:\n[image omitted: "
-               "this server can't read images yet]\nwhat?<|im_end|>") != std::string::npos &&
+               "this model can't read images]\nwhat?<|im_end|>") != std::string::npos &&
             p.find("<|vision_start|>") == std::string::npos,
         tag + "template: a later system message is a system turn in place; an image is a note", p.substr(p.size() > 400 ? p.size() - 400 : 0));
+  // with an image encoder: the image renders as the model's placeholder, without its data
+  try {
+    p = render_chat(*m.tmpl, r, true, true);
+  } catch (const std::exception& e) {
+    p = std::string("raised: ") + e.what();
+  }
+  check(p.find("<|im_start|>user\nLook:<|vision_start|><|image_pad|><|vision_end|>what?<|im_end|>") != std::string::npos &&
+            p.find("base64") == std::string::npos,
+        tag + "template: with an image encoder, an image is the image placeholder (its data left out)",
+        p.substr(p.size() > 400 ? p.size() - 400 : 0));
 }
 
 // --dump DIR: the replies of each scenario as the server sends them, for tests/sdk_check.py (the official Python SDKs

@@ -333,7 +333,8 @@ std::pair<int, ojson> responses_failure(const ChatResult& res) {
                                      " tokens > " + std::to_string(res.prompt_limit) +
                                      " maximum). Please adjust your input and try again.",
                                  "invalid_request_error", "context_length_exceeded", "input")};
-  if (res.error.rfind("chat template", 0) == 0) return {400, responses_error(res.error, "invalid_request_error")};
+  if (res.invalid_request || res.error.rfind("chat template", 0) == 0)
+    return {400, responses_error(res.error, "invalid_request_error")};
   return {500, responses_error(res.error.empty() ? "the request failed" : res.error, "server_error", "server_error")};
 }
 

@@ -389,6 +389,8 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
     auto& rp = t["rope_parameters"];
     cfg.theta = rp.value("rope_theta", 1e7f);
     prf = rp.value("partial_rotary_factor", 0.25f);
+    if (rp.contains("mrope_section") && rp["mrope_section"].is_array() && rp["mrope_section"].size() == 3)
+      for (int i = 0; i < 3; ++i) cfg.mrope[i] = rp["mrope_section"][i];
   } else {
     cfg.theta = t.value("rope_theta", 1e7f);
     prf = t.value("partial_rotary_factor", 0.25f);
@@ -1045,6 +1047,48 @@ void Qwen35::drop_kv(Seq& s) {
   s.cap = 0;
 }
 
+int Qwen35::rope_positions(const std::vector<vision::ImageSpan>& spans, std::vector<int32_t>& P) {
+  P.clear();
+  int row = 0, cur = 0;  // next row, its position
+  for (const vision::ImageSpan& sp : spans) {
+    if (sp.pos < row || sp.n != sp.grid_t * sp.grid_h * sp.grid_w) fatal("rope_positions: bad image span");
+    for (; row < sp.pos; ++row, ++cur) P.insert(P.end(), {cur, cur, cur});
+    for (int f = 0; f < sp.grid_t; ++f)
+      for (int y = 0; y < sp.grid_h; ++y)
+        for (int x = 0; x < sp.grid_w; ++x, ++row) P.insert(P.end(), {cur + f, cur + y, cur + x});
+    cur += std::max(sp.grid_h, sp.grid_w);
+  }
+  return cur - row;
+}
+
+void Qwen35::set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) {
+  s.rope_n = 0;
+  s.rope_delta = 0;
+  if (spans.empty()) return;
+  std::vector<int32_t> table;
+  const int delta = rope_positions(spans, table);
+  const int end = int(table.size() / 3);  // rows before the last image's end get explicit positions
+  if (end > n || end > s.limit) fatal("set_rope_positions: images past the prompt");
+  if (!s.rope_pos || s.rope_pos.size < size_t(end) * 12) {
+    Gpu::get().release(s.rope_pos);
+    s.rope_pos = Gpu::get().alloc(size_t((end + 4095) / 4096 * 4096) * 12, "rope_positions");
+  }
+  memcpy(s.rope_pos.ptr(), table.data(), table.size() * 4);
+  s.rope_n = end;
+  s.rope_delta = delta;
+}
+
+// attn_prep_m's buffers 9 and 10 (after attn_prep's): the sequence's M-RoPE positions
+void Qwen35::enc_mrope_args(Encoder& e, const Seq& s) {
+  struct {
+    uint32_t mn;
+    int32_t delta;
+    uint32_t sec1, sec2;
+  } m{uint32_t(s.rope_n), s.rope_delta, uint32_t(3 * cfg_.mrope[1]), uint32_t(3 * cfg_.mrope[2])};
+  e.buf(9, s.rope_pos ? s.rope_pos : qg_);
+  e.val(10, m);
+}
+
 void Qwen35::reset(Seq& s) {
   s.n_pend = 0;
   for (auto& b : s.conv)
@@ -1577,10 +1621,11 @@ void Qwen35::enc_attn(Encoder& e, Seq& s, int li, const Layer& L, int pos) {
   enc_qmv_multi(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, x_, L.in_norm);
   kp::AttnPrep ap{1, uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim), uint32_t(cfg_.rot_dims),
                   uint32_t(pos), uint32_t(s.cap), cfg_.eps, cfg_.theta};
-  e.use(prep);
+  e.use(mrope(s) ? pipe("attn_prep_m") : prep);
   e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
   e.buf(5, qo_); e.buf(6, s.kc[li]); e.buf(7, s.vc[li]);
   e.val(8, ap);
+  if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, 1, 1, cfg_.head_dim);
 
   const uint32_t Lk = uint32_t(pos + 1);
@@ -2415,10 +2460,11 @@ void Qwen35::enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int po
     enc_proj(e, {{&L.q, qg_, false}, {&L.k, kr_, false}, {&L.v, vr_, false}}, xh_, T);
     kp::AttnPrep ap{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                     uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
-    e.use(pipe("attn_prep"));
+    e.use(pipe(mrope(s) ? "attn_prep_m" : "attn_prep"));
     e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
     e.buf(5, qo_); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
     e.val(8, ap);
+    if (mrope(s)) enc_mrope_args(e, s);
     e.dispatch(cfg_.hq + 2 * cfg_.hkv, T, 1, cfg_.head_dim);
     enc_attn_prefill(e, s.kc[i], s.vc[i], T, pos0, s.cap);
     enc_rows_half(e, attn_out_, nullptr, hh_, T, cfg_.hq * cfg_.head_dim);
@@ -2433,6 +2479,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, pos0, T, x_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, x_, D);  // image rows
   // NI_ANE: dense FFN split with the Neural Engine. A chunk carrying an in-pass checkpoint stays on the
   // GPU (the engine cuts such chunks at the boundary instead when the split would apply).
   ane_chunk_ = !snap && ane_splits(T);

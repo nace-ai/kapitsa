@@ -330,7 +330,8 @@ std::pair<int, ojson> messages_failure(const ChatResult& res) {
   if (res.prompt_limit > 0)
     return {400, messages_error("invalid_request_error", "prompt is too long: " + std::to_string(res.prompt_tokens) +
                                                              " tokens > " + std::to_string(res.prompt_limit) + " maximum")};
-  if (res.error.rfind("chat template", 0) == 0) return {400, messages_error("invalid_request_error", res.error)};
+  if (res.invalid_request || res.error.rfind("chat template", 0) == 0)
+    return {400, messages_error("invalid_request_error", res.error)};
   return {500, messages_error("api_error", res.error.empty() ? "the request failed" : res.error)};
 }
 

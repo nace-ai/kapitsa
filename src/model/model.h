@@ -4,6 +4,7 @@
 // their speculative decoding paths (MTP / DFlash2, LiLiCorr) are driven by the engine through the classes.
 #pragma once
 #include "metal/gpu.h"
+#include "vision/embed.h"
 
 #include <memory>
 #include <string>
@@ -27,6 +28,13 @@ struct Seq {
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
   int* tokens() { return tok.as<int>(); }
+  // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
+  // a prompt's prefill; null: text only). Positions (Model::set_rope_positions): rows [0, rope_n) rotate by the
+  // (t, h, w) M-RoPE positions in rope_pos (int32 x 3 per row), later rows by row + rope_delta; rope_n == 0 and
+  // rope_delta == 0: position = row, the text-only path.
+  const std::vector<vision::EmbedRun>* embeds = nullptr;
+  Buffer rope_pos;
+  int rope_n = 0, rope_delta = 0;
 };
 
 // Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
@@ -105,6 +113,14 @@ class Model {
   virtual const AneStats& ane_stats() const {
     static const AneStats none;
     return none;
+  }
+
+  // ---- images ----
+  // The positions of a prompt of n rows whose images sit at `spans`, kept in s for every pass that follows (prefill,
+  // decode, verify, drafts). Qwen35: interleaved M-RoPE. Default: nothing (attention without positions, as
+  // Nemotron-H's). Call between requests (nothing in flight may read s).
+  virtual void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) {
+    (void)s, (void)n, (void)spans;
   }
 };
 

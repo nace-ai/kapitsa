@@ -2,7 +2,8 @@
 // (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
 //                 [--ctx 32768] [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
-//                 [--api-key K] [--mem-budget GB]    no --model: the best catalog model for this Mac's memory
+//                 [--api-key K] [--mem-budget GB] [--image-max-pixels N]
+//                 no --model: the best catalog model for this Mac's memory
 //   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
@@ -263,9 +264,13 @@ static void print_serve_help() {
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
-         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n\n"
+         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
+         "  --image-max-pixels N   images: resize larger ones to about N pixels (fewer tokens, faster; default:\n"
+         "                         the model's own limit, 16.7 million for Qwen3.6 / 3.8)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
+         "Images (Qwen3.6, Qwen3.8: models with a vision tower): OpenAI image_url parts, Anthropic image blocks and\n"
+         "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
 }
 
@@ -439,6 +444,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
+    else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
@@ -532,7 +538,8 @@ static int serve(int argc, char** argv, int first) {
   strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
   api::ResponseStore responses;  // recent responses, for previous_response_id
   httplib::Server srv;
-  srv.set_payload_max_length(64u << 20);
+  // conversations carry their images as base64 every turn (an agent's screenshots: 1-4 MB each)
+  srv.set_payload_max_length(256u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
   // the previous one (the client's delayed ACK), which can hold the first token of a fast request.
   srv.set_tcp_nodelay(!getenv("NI_TCP_NODELAY") || env_on("NI_TCP_NODELAY"));

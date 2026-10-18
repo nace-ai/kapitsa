@@ -307,7 +307,8 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
 }
 
 // Attention block for R rows at positions pos..pos+R-1: x_ += o_proj(attn(norm(x_))).
-void Qwen35::enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R) {
+void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos,
+                       int R) {
   const int D = cfg_.hidden, HD = cfg_.hq * cfg_.head_dim;
   const int skip = v8_knobs().skip;
   enc_x8(e, x_, R, D, L.in_norm);
@@ -318,10 +319,11 @@ void Qwen35::enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffe
   }
   kp::AttnPrep ap{uint32_t(R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                   uint32_t(cfg_.rot_dims), uint32_t(pos), uint32_t(cap), cfg_.eps, cfg_.theta};
-  e.use(pipe8("attn_prep"));
+  e.use(pipe8(mrope(s) ? "attn_prep_m" : "attn_prep"));
   e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
   e.buf(5, qo_); e.buf(6, kc); e.buf(7, vc);
   e.val(8, ap);
+  if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   // NI_V8_ATTN: 1 = attn8m_partial (MMA, all rows and heads of a kv head per threadgroup),
   // 0 = attn8_partial (scalar, RB rows per threadgroup)
@@ -552,7 +554,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       if (!split) enc_x8(e, gout_, R, VD, nullptr);
       if (!(skip & 64)) enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_);
     } else {
-      enc_attn8(e, L, s.kc[i], s.vc[i], s.cap, pos, R);
+      enc_attn8(e, s, L, s.kc[i], s.vc[i], s.cap, pos, R);
     }
     if (cfg_.moe) enc_moe8(e, L, R, i);
     else enc_mlp8(e, L, R);
