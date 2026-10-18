@@ -278,7 +278,7 @@ type's own (1.00 = no added error; measured on Qwen3.5-0.8B / 4B / 3.6-35B-A3B t
 | Q8_0 | 8-bit group 64 | 1.67 of Q8_0's (tiny) error |
 | Q6_K | 8-bit group 64 | 1.09 |
 | Q5_0, Q5_1, Q5_K | 6-bit group 64 | 1.31 (8-bit: 1.02) |
-| IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 | IQ4_XS 1.27 |
+| IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 | IQ4_XS 1.27, NVFP4 1.07 |
 | Q3_K, Q2_K (warning) | 4-bit group 32 | 1.20, 1.03 |
 | MoE experts of 4-bit types | 5-bit group 64 (no group-32 MoE kernels) | 1.31 (4-bit group 64 would be 2.29) |
 
@@ -287,6 +287,12 @@ rounding scale and bias to bf16). A layer's experts share one format (from their
 expert is 8-bit; a dense layer's gate and up share the finer of their formats. The MTP head is written as Kapitsa's
 sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). IQ1 / IQ2 / IQ3 (they need llama.cpp's
 codebooks), ternary and Hadamard-rotated files are refused, as are Qwen3-Next and other architectures.
+
+Checked on Qwen3.5-0.8B Q4_K_M (unsloth, with MTP), teacher-forced over bench/quality (4092 positions): Kapitsa on
+the converted folder against llama.cpp on the GGUF (CPU) KL 0.0077, top-1 96.7%, perplexity 9.69 against 9.73; the
+conversion alone (both weight sets run by llama.cpp in F16) KL 0.0030, top-1 98.0%, less than llama.cpp's own Q4_K
+kernels move the same weights (KL 0.0052 against their F16 run). The converted tokenizer encodes bench/corpus.txt
+and 300 other texts to the original tokenizer's ids, and the chat template renders as with jinja2.
 
 Testing formats without downloading them: `NI_REQUANT=<bits>[:<spec>]` re-encodes a 4-bit model's linears exactly as
 8, 6, 5-bit or 4-bit group 32 (codes q << (bits - 4), scales / 2^(bits - 4)), and `NI_DEQUANT=<spec>` makes them bf16
