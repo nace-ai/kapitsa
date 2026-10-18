@@ -1226,7 +1226,23 @@ def dry_run(c, args, stamp):
     print(f"  result   : {os.path.relpath(p['out'], OUT)} (in {OUT})")
 
 
+_STOPPING = []
+
+
+def _exit_on_signal(signum, frame):
+    """SIGINT, SIGTERM and SIGHUP end the run, and the running config's finally block still stops its server (a
+    detached daemon such as LM Studio's would otherwise keep its model loaded) and releases the GPU lock. Signals
+    that arrive while that teardown runs are ignored, so a second Ctrl+C or a job runner's follow-up SIGTERM cannot
+    cut it short."""
+    if _STOPPING:
+        return
+    _STOPPING.append(signum)
+    raise SystemExit(128 + signum)
+
+
 def main():
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _exit_on_signal)
     ap = argparse.ArgumentParser(description="Run bench.py over engine configs, one at a time, under the GPU lock.")
     ap.add_argument("configs", nargs="+", help="config files (configs/*.json); merged in order")
     ap.add_argument("--only", default="", help="comma list of labels or globs, e.g. q36-*,q38-27b-kapitsa")
