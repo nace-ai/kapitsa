@@ -354,6 +354,51 @@ hf download magnitudedev/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-GGUF
 block sizes come from smoke tests. The 4K / 16K reference prompt lengths (4184 / 16517) were counted with this
 model's tokenizer and chat template.
 
+### Qwen3.8-Flash-Next (`configs/flash-next.json`) [oMLX 0.7.1rc1, mlx-vlm 0.7.8, llama.cpp 0.7.0, Ollama 0.40.6]
+
+A 128 GB model (105.9 GB of weights, a 32 GB n-gram table among them); the published runs used a 128 GB M5 Max.
+Kapitsa, mlx-vlm and oMLX read the same folder, Nace AI's MLX pack (the one `kapitsa pull flash-next` downloads),
+linked as `$M/qwen3.8-flash-next-4bit`. oMLX also runs its author's own quantization (oQ4e), llama.cpp ggml-org's
+official IQ4_NL GGUF with its MTP head, and Ollama the MLX tag it serves on Apple silicon and its GGUF tag:
+
+```bash
+hf download nace-ai/Qwen3.8-Flash-Next-MLX-4bit --revision 5d423f9f563c1f1b7ca7945b268e65c0b92b0eae --local-dir $M/qwen3.8-flash-next-4bit
+hf download Jundot/Qwen3.8-Flash-Next-oQ4e-mtp --revision c4ddfb54a967a9bc74d7da16425f55f0872f8aac --local-dir $M/qwen3.8-flash-next-oq4e-mtp
+hf download ggml-org/Qwen3.8-Flash-Next-GGUF Qwen3.8-Flash-Next-IQ4_NL-00001-of-00002.gguf Qwen3.8-Flash-Next-IQ4_NL-00002-of-00002.gguf \
+    mtp-Qwen3.8-Flash-Next-Q4_0.gguf --revision 0a61d2b8d851e0bb9f22b973befd714413d63c6f --local-dir $M/qwen3.8-flash-next-gguf
+ollama pull qwen3.8-flash-next:125b-mlx      # into OLLAMA_MODELS; then a tag that only sets the context:
+printf 'FROM qwen3.8-flash-next:125b-mlx\nPARAMETER num_ctx 32768\n' > Modelfile
+ollama create nace/qwen3.8-flash-next:125b-mlx-32k -f Modelfile
+ollama pull qwen3.8-flash-next:125b-a6b-q4_K_M   # Ollama's GGUF runner (no MTP draft in this tag)
+```
+
+(`FLASH_NEXT_GGUF_DIR` names another GGUF folder.) The Ollama tag's own parameters set `num_ctx 262144`, which overrides
+`OLLAMA_CONTEXT_LENGTH`, hence the derived tag. mlx-vlm 0.7.8 cannot take the pack folder itself as its MTP drafter
+(its splitter builds the head's 8-bit and 6-bit layers as 4-bit, because the pack names their precisions with the
+`mtp.` prefix the drafter's modules lack), so `flash-mlxvlm-mtp` reads a drafter folder made from the pack's own head
+with mlx-vlm's splitter, the same 74 tensors byte for byte:
+
+```bash
+$MLX_VLM_PYTHON - $M/qwen3.8-flash-next-4bit $M/qwen3.8-flash-next-4bit-mlxvlm-mtp <<'EOF'
+import json, sys
+from pathlib import Path
+import mlx.core as mx
+from mlx_vlm.speculative.drafters.qwen4_exp_mtp.split import Qwen4ExpMTPSplitter
+pack, out = Path(sys.argv[1]), Path(sys.argv[2])
+config, weights = Qwen4ExpMTPSplitter().prepare(pack, source_config=json.load(open(pack / "config.json")))
+q = {k[4:] if k.startswith("mtp.") else k: v for k, v in config["quantization"].items()
+     if not isinstance(v, (dict, bool)) or k.startswith("mtp.")}
+config["quantization"] = config["quantization_config"] = q
+out.mkdir(parents=True, exist_ok=True)
+mx.save_safetensors(str(out / "model.safetensors"), {k.removeprefix("mtp."): v for k, v in weights.items()}, metadata={"format": "mlx"})
+json.dump(config, open(out / "config.json", "w"), indent=1)
+EOF
+```
+
+The configs' notes give each choice; the speculative depths and block sizes come from smoke tests. The 4K / 16K
+reference prompt lengths (4133 / 16286, the harness's defaults) were counted with this model's tokenizer and chat
+template.
+
 ### MTPLX (`configs/mtplx.json`) [2.12.2]
 
 `uv tool install mtplx` (or `pip install mtplx`); set `MTPLX_BIN` unless `mtplx` is on PATH. The settings are the
