@@ -344,10 +344,12 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
     return;
   }
   // Three rows: half-precision inner products with the dequantization shared across rows (the
-  // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x).
+  // fp32 version is ALU-bound at 1.5x a single row; this one measured 1.17-1.32x). Apple10 GPUs (M5) take the
+  // shifted-nibble build: their fast-math compiler turns qmvht_t3_r4 into half sums that overflow (NaN rows).
   static const bool half3_off = env_on("NI_NO_QMVH");
+  static const char* half3 = Gpu::get().apple10() ? "qmvhts_t3_r4" : "qmvht_t3_r4";
   if (R == 3 && !half3_off && L.bits == 4) {
-    e.use(pipe2("qmvht_t3_r4"));
+    e.use(pipe2(half3));
     kp::Qmvr p{L.N, L.K, uint32_t(R), x_ld ? x_ld : L.K, y_ld ? y_ld : L.N, add ? 1u : 0u};
     e.buf(0, L.w->buf); e.buf(1, L.s->buf); e.buf(2, L.b->buf); e.buf(3, x); e.buf(4, y);
     e.val(5, p);

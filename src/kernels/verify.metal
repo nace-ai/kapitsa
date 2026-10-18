@@ -1872,7 +1872,13 @@ NI_QMVH(qmvh_t3_r2, 3, 2)
 NI_QMVH(qmvh_t4_r2, 4, 2)
 NI_QMVH(qmvh_t2_r4, 2, 4)
 
-template <int NT, int ROWS>
+// SHIFT (the qmvhts_* kernels, Apple10 GPUs): each nibble shifted down to 0..15 and x unscaled. The masked form
+// is right as written, but Apple10's fast-math compiler (M5) reassociates the 3- and 4-row builds (and qmvh_*'s)
+// so that the 2^-4j pre-scales come after the masked-weight products are summed (2 rows keep them): those sums
+// (up to 61440 |x| per term) overflow half once |x| passes ~0.4, and inf - inf gives NaN rows (finite under
+// NI_MATH_SAFE=1, and with explicit fma()s or x pre-scaled in threadgroup memory). Weights of 0..15 leave no
+// common factor to move, and the shifts cost nothing measurable there.
+template <int NT, int ROWS, bool SHIFT = false>
 NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales, const device bfloat* biases,
                          const device float* x, threadgroup half* xs, device float* y, constant QmvrParams& p, uint row0,
                           uint tid, uint ntg, uint lane) {
@@ -1903,10 +1909,17 @@ NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales,
       for (int i = 0; i < VPL / 4; ++i) {
         half4 v = ((threadgroup const half4*)(xs + t * TILE + k0))[i];
         xsum[t] += float(v.x) + float(v.y) + float(v.z) + float(v.w);
-        xv[t][i * 4 + 0] = v.x;
-        xv[t][i * 4 + 1] = v.y * half(1.0h / 16.0h);
-        xv[t][i * 4 + 2] = v.z * half(1.0h / 256.0h);
-        xv[t][i * 4 + 3] = v.w * half(1.0h / 4096.0h);
+        if (SHIFT) {
+          xv[t][i * 4 + 0] = v.x;
+          xv[t][i * 4 + 1] = v.y;
+          xv[t][i * 4 + 2] = v.z;
+          xv[t][i * 4 + 3] = v.w;
+        } else {
+          xv[t][i * 4 + 0] = v.x;
+          xv[t][i * 4 + 1] = v.y * half(1.0h / 16.0h);
+          xv[t][i * 4 + 2] = v.z * half(1.0h / 256.0h);
+          xv[t][i * 4 + 3] = v.w * half(1.0h / 4096.0h);
+        }
       }
     }
     const uint g = (kt + k0) / 64, wo = (kt + k0) / 8;
@@ -1917,7 +1930,11 @@ NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales,
       for (int t = 0; t < NT; ++t) d[t] = 0.0h;
       for (int i = 0; i < 4; ++i) {
         ushort u = h4[i];
-        half w0 = half(u & 0x000f), w1 = half(u & 0x00f0), w2 = half(u & 0x0f00), w3 = half(u & 0xf000);
+        half w0, w1, w2, w3;
+        if (SHIFT)
+          w0 = half(u & 0x000f), w1 = half((u >> 4) & 0x000f), w2 = half((u >> 8) & 0x000f), w3 = half(u >> 12);
+        else
+          w0 = half(u & 0x000f), w1 = half(u & 0x00f0), w2 = half(u & 0x0f00), w3 = half(u & 0xf000);
         for (int t = 0; t < NT; ++t)
           d[t] += w0 * xv[t][i * 4] + w1 * xv[t][i * 4 + 1] + w2 * xv[t][i * 4 + 2] + w3 * xv[t][i * 4 + 3];
       }
@@ -1939,7 +1956,7 @@ NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales,
 }
 
 
-#define NI_QMVHT(NAME, NT, ROWS)                                                                          \
+#define NI_QMVHT(NAME, NT, ROWS, SHIFT)                                                                   \
   [[kernel]] void NAME(const device uint32_t* w [[buffer(0)]], const device bfloat* s [[buffer(1)]],      \
                        const device bfloat* b [[buffer(2)]], const device float* x [[buffer(3)]],         \
                        device float* y [[buffer(4)]], constant QmvrParams& p [[buffer(5)]],               \
@@ -1948,9 +1965,10 @@ NI_INLINE void qmvht_impl(const device uint32_t* w, const device bfloat* scales,
                        uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
     threadgroup half xs[NT * (NT <= 3 ? 4096 : 2048)];                                                   \
     uint row0 = (tgp * nsg + sg) * ROWS;                                                                 \
-    qmvht_impl<NT, ROWS>(w, s, b, x, xs, y, p, row0, tid, ntg, lane);                                    \
+    qmvht_impl<NT, ROWS, SHIFT>(w, s, b, x, xs, y, p, row0, tid, ntg, lane);                             \
   }
-NI_QMVHT(qmvht_t2_r4, 2, 4)
-NI_QMVHT(qmvht_t3_r4, 3, 4)
-NI_QMVHT(qmvht_t4_r4, 4, 4)
-NI_QMVHT(qmvht_t4_r2, 4, 2)
+NI_QMVHT(qmvht_t2_r4, 2, 4, false)
+NI_QMVHT(qmvht_t3_r4, 3, 4, false)
+NI_QMVHT(qmvht_t4_r4, 4, 4, false)
+NI_QMVHT(qmvht_t4_r2, 4, 2, false)
+NI_QMVHT(qmvhts_t3_r4, 3, 4, true)  // Apple10 GPUs (M5)
