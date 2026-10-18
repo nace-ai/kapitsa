@@ -75,16 +75,16 @@ and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24
 
 ### MacBook Pro (2024) · M4 Pro · 48 GB
 
-| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
-| --- | ---: | ---: |
-| llama.cpp + MTP | 69 tok/s | 18 tok/s |
-| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
-| LM Studio (MLX engine) | 86 tok/s | 15 tok/s |
-| MTPLX | 80 tok/s | 36 tok/s |
-| oMLX + DFlash2 | 127 tok/s | 45 tok/s |
-| mlx-serve (MTP) | 124 tok/s | 38 tok/s |
-| mlx-serve (DFlash2) | 104 tok/s | 52 tok/s |
-| **Kapitsa** | **154 tok/s** | **63 tok/s** |
+| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit | Qwen3.5 4B · 4-bit |
+| --- | ---: | ---: | ---: |
+| llama.cpp + MTP | 69 tok/s | 18 tok/s | 70 tok/s |
+| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s | 109 tok/s |
+| LM Studio (MLX engine) | 86 tok/s | 15 tok/s | 81 tok/s |
+| MTPLX | 80 tok/s | 36 tok/s | 104 tok/s |
+| oMLX + DFlash2 | 127 tok/s | 45 tok/s | 102 tok/s |
+| mlx-serve (MTP) | 124 tok/s | 38 tok/s | — |
+| mlx-serve (DFlash2) | 104 tok/s | 52 tok/s | — |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** | **122 tok/s** |
 
 | Engine | Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB |
 | --- | ---: |
@@ -95,8 +95,8 @@ and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24
 
 Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. mlx-serve ran a
 day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on the 35B and 57-61 on the 27B in the same session
-([details](docs/benchmarks.md#mlx-serve-2026-10-18)). Qwen3.5 4B: being measured.
-<!-- Qwen3.5 4B slot: a column "Qwen3.5 4B" in the Qwen table above, "N tok/s" per engine. -->
+([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B, which has no DFlash2 drafter, oMLX runs its own
+MTP path; mlx-serve was not run on it ([details](docs/benchmarks.md#qwen35-4b-2026-10-18)).
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (2024) · M4 Pro · 48 GB</summary>
