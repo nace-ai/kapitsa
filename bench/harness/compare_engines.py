@@ -41,7 +41,7 @@ Config files (configs/*.json) are lists of objects; several files are merged in 
   version_cmd   command whose output is recorded   log_grep  regexes copied from the server log
   gguf_expect   expected blob digest prefix        note      free text, copied to the result
 
-Placeholders in cmd, env, prepare, stop, version_cmd, requires_paths, pid_file and model_path ("~" is expanded):
+Placeholders in cmd, env, prepare, stop, version_cmd, requires_paths, pid_file, model_path and model ("~" is expanded):
   {repo}      the Kapitsa checkout this harness is in      {harness}  bench/harness
   {models}    $BENCH_MODELS, default ~/models (the weights layout in README.md)
   {out}       the output directory (--out-dir / $BENCH_OUT, default bench/harness/runs)
@@ -894,7 +894,12 @@ def plan(c, args, stamp):
     p["port"] = port_of(c)
     p["log"] = os.path.join(LOGS, f"{c['label']}-{stamp}.log")
     p["out"] = os.path.join(RESULTS, f"{c['label']}-{stamp}.json")
-    bargs = ["--base-url", c.get("base_url", ""), "--model", c.get("model", ""), "--label", c["label"],
+    try:
+        model_id = expand(c.get("model", ""), ctx)
+    except ResolveError as e:
+        p["errors"].append(str(e))
+        model_id = c.get("model", "")
+    bargs = ["--base-url", c.get("base_url", ""), "--model", model_id, "--label", c["label"],
              "--sizes", args.sizes, "--out", p["out"], "--warmup", "none"]
     if c.get("no_think_style"):
         bargs += ["--no-think-style", c["no_think_style"]]
@@ -1123,7 +1128,7 @@ def dry_run(c, args, stamp):
             print(f"  prepare  : <{e}>")
         print(f"  server   : {shlex.join(cmd)}")
         print(f"  log      : {os.path.relpath(p['log'], OUT)}")
-    print(f"  ready    : GET {c.get('base_url')}/models; request model id {c.get('model')!r}")
+    print(f"  ready    : GET {c.get('base_url')}/models; request model id {p['bench_args'][p['bench_args'].index('--model') + 1]!r}")
     if c.get("pid_file"):
         print(f"  server   : measured as the process tree of the pid in {expand(c['pid_file'], ctx)} (detached daemon)")
     print(f"  lock     : " + ("held externally by the server's launcher (lock=external)" if c.get("lock") == "external"

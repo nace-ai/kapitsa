@@ -6,8 +6,10 @@
 
 // ==== Image encoders (src/vision) ====
 // The building blocks a ViT needs besides the GEMMs (which are the bf16 prefill GEMMs, qrf_f16_*): LayerNorm, bias +
-// activation, non-causal attention over one image's patches. Then the Qwen3.5 ViT's own steps (qvit_*): patches from
-// the resized image, position embeddings interpolated to the grid, 2D RoPE.
+// activation, q / k / v split, non-causal attention over one image's patches. Then each tower's own steps: the Qwen3.5
+// ViT's (qvit_*: patches from the resized image, position embeddings interpolated to the grid, 2D RoPE) and the RADIO
+// ViT's of Nemotron 3.5 (radio_*: position embeddings resized and cropped to the grid, the 2x2 pixel shuffle with the
+// projector's RMSNorm).
 
 // ---- LayerNorm ----
 struct VitLnParams {
@@ -48,7 +50,7 @@ struct VitLnParams {
 // ---- bias + activation ----
 struct VitActParams {
   uint rows, N, ld;  // y rows of ld floats; columns [N, ld) of the output are written 0
-  uint act;          // 0 none, 1 GELU (tanh approximation), 2 GELU (erf)
+  uint act;          // 0 none, 1 GELU (tanh approximation), 2 GELU (erf), 3 ReLU squared
   uint out_ld;       // output row stride (elements)
 };
 
@@ -63,6 +65,10 @@ NI_INLINE float vit_erf(float x) {
 NI_INLINE float vit_act(float v, uint act) {
   if (act == 1) return 0.5f * v * (1.0f + metal::precise::tanh(0.7978845608028654f * (v + 0.044715f * v * v * v)));
   if (act == 2) return 0.5f * v * (1.0f + vit_erf(v * 0.7071067811865476f));
+  if (act == 3) {
+    const float r = metal::max(v, 0.0f);
+    return r * r;
+  }
   return v;
 }
 
@@ -89,6 +95,25 @@ NI_INLINE float vit_act(float v, uint act) {
   const uint c = gid.x, r = gid.y;
   if (c >= p.N || r >= p.rows) return;
   out[size_t(r) * p.out_ld + c] = y[size_t(r) * p.ld + c] + (p.act ? float(bias[c]) : 0.0f);
+}
+
+// ---- q / k / v ----
+// qkv rows (fp32 [rows, 3 * heads * HD], from the GEMM) + bias -> half Q, K, V [heads][N][HD] at rows r0... Thread =
+// (column of q, k and v, row).
+struct VitQkvParams {
+  uint rows, r0, N, heads, HD;
+};
+[[kernel]] void vit_qkv_split(const device float* y [[buffer(0)]], const device bfloat* bias [[buffer(1)]],
+                              device half* Q [[buffer(2)]], device half* K [[buffer(3)]], device half* V [[buffer(4)]],
+                              constant VitQkvParams& p [[buffer(5)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint c = gid.x, rr = gid.y, W = p.heads * p.HD;
+  if (c >= W || rr >= p.rows) return;
+  const uint h = c / p.HD, d = c % p.HD;
+  const device float* yr = y + size_t(rr) * 3 * W;
+  const size_t o = (size_t(h) * p.N + p.r0 + rr) * p.HD + d;
+  Q[o] = half(yr[c] + float(bias[c]));
+  K[o] = half(yr[W + c] + float(bias[W + c]));
+  V[o] = half(yr[2 * W + c] + float(bias[2 * W + c]));
 }
 
 // ---- non-causal attention over the patches of one image ----
@@ -239,6 +264,8 @@ NI_VIT_ATTN(vit_attn_d72_s4, 72, 4, 1)
 NI_VIT_ATTN(vit_attn_d72_s8, 72, 8, 1)
 NI_VIT_ATTN(vit_attn_d72_s4r2, 72, 4, 2)
 NI_VIT_ATTN(vit_attn_d72_s8r2, 72, 8, 2)
+NI_VIT_ATTN(vit_attn_d80_s4, 80, 4, 1)
+NI_VIT_ATTN(vit_attn_d80_s8, 80, 8, 1)
 
 // ==== the Qwen3.5 ViT ====
 
@@ -320,4 +347,68 @@ struct QvitRopeParams {
   }
   V[o] = half(yr[2 * W + c0] + float(bias[2 * W + c0]));
   V[o + half_d] = half(yr[2 * W + c1] + float(bias[2 * W + c1]));
+}
+
+// ==== the RADIO ViT (Nemotron 3.5 Bolt) ====
+
+// x[prefix + r] += the position embedding at patch r = (row, col) of a rows x cols grid: the side x side table resized
+// to max(rows, cols) square (bilinear, align_corners false: PyTorch's source index (i + 0.5) * scale - 0.5, at least 0,
+// scale = side / max(rows, cols) in float) and cropped to the grid's rows and columns. Thread = (channel, patch).
+struct RadioPosParams {
+  uint N, D, cols, side, prefix;
+  float scale;
+};
+[[kernel]] void radio_pos(device float* x [[buffer(0)]], const device bfloat* pos [[buffer(1)]],
+                          constant RadioPosParams& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint i = gid.x, r = gid.y;
+  if (i >= p.D || r >= p.N) return;
+  const uint row = r / p.cols, col = r % p.cols;
+  const float sy = metal::max((float(row) + 0.5f) * p.scale - 0.5f, 0.0f);
+  const float sx = metal::max((float(col) + 0.5f) * p.scale - 0.5f, 0.0f);
+  const uint h0 = uint(sy), w0 = uint(sx);
+  const uint h1 = metal::min(h0 + 1, p.side - 1), w1 = metal::min(w0 + 1, p.side - 1);
+  const float lh = sy - float(h0), lw = sx - float(w0);
+  const float e = (1.0f - lh) * ((1.0f - lw) * float(pos[(h0 * p.side + w0) * p.D + i]) +
+                                 lw * float(pos[(h0 * p.side + w1) * p.D + i])) +
+                  lh * ((1.0f - lw) * float(pos[(h1 * p.side + w0) * p.D + i]) +
+                        lw * float(pos[(h1 * p.side + w1) * p.D + i]));
+  device float* xr = x + size_t(p.prefix + r) * p.D;
+  xr[i] = xr[i] + e;
+}
+
+// The pixel shuffle (2x2 patches -> one row of 4 * D) and the projector's RMSNorm: output row t = (i, j) of the
+// (rows / 2) x (cols / 2) grid is the patches (2i, 2j), (2i, 2j + 1), (2i + 1, 2j), (2i + 1, 2j + 1) side by side,
+// each + the pending bias pb, then y = half(v / sqrt(mean(v^2) + eps) * w). x: fp32 rows, the patches after `prefix`
+// rows. One threadgroup (256 threads) per output row, t0 the first.
+struct RadioShuffleParams {
+  uint D, cols, prefix, t0;
+  float eps;
+};
+[[kernel]] void radio_shuffle_rms(const device float* x [[buffer(0)]], const device bfloat* pb [[buffer(1)]],
+                                  const device bfloat* w [[buffer(2)]], device half* y [[buffer(3)]],
+                                  constant RadioShuffleParams& p [[buffer(4)]],
+                                  uint tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float part[8];
+  const uint t = p.t0 + tg, half_cols = p.cols / 2, i = t / half_cols, j = t % half_cols, W = 4 * p.D;
+  const uint src[4] = {(2 * i) * p.cols + 2 * j, (2 * i) * p.cols + 2 * j + 1, (2 * i + 1) * p.cols + 2 * j,
+                       (2 * i + 1) * p.cols + 2 * j + 1};
+  float ss = 0.0f;
+  for (uint k = tid; k < W; k += 256) {
+    const uint q = k / p.D, c = k % p.D;
+    const float v = x[size_t(p.prefix + src[q]) * p.D + c] + float(pb[c]);
+    ss += v * v;
+  }
+  ss = simd_sum(ss);
+  if (lane == 0) part[sg] = ss;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  float tot = 0.0f;
+  for (uint s2 = 0; s2 < 8; ++s2) tot += part[s2];
+  const float r = metal::precise::rsqrt(tot / float(W) + p.eps);
+  device half* yr = y + size_t(tg) * W;
+  for (uint k = tid; k < W; k += 256) {
+    const uint q = k / p.D, c = k % p.D;
+    const float v = x[size_t(p.prefix + src[q]) * p.D + c] + float(pb[c]);
+    yr[k] = half(float(w[k]) * (v * r));
+  }
 }

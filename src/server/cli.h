@@ -21,6 +21,9 @@ hub::ModelRef for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size_t b
 // Why the server could not listen on host:port, or ""
 std::string port_problem(const std::string& host, int port);
 
+// The executable `name` on the PATH, or ""
+std::string find_in_path(const std::string& name);
+
 // kapitsa claude|codex|opencode: starts the coding agent against a Kapitsa server (one already running on the port,
 // or one it starts and stops); argv[first] is the first argument after the agent's name
 int launch_agent(const std::string& name, int argc, char** argv, int first);

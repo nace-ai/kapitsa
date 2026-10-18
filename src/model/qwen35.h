@@ -107,7 +107,7 @@ struct AneLayerTimes {
   double ane_in_split = 0;  // ANE time inside the split (event reached ready -> report)
 };
 
-// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp; docs/PERF.md "27B DFlash2 cycle"). Defaults
+// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp). Defaults
 // are the measured-fastest settings; the environment (NI_V8_CM, NI_V8_PAIR, NI_V8_KPLAN, NI_V8_GUSPLIT,
 // NI_V8_GDNSPLIT, NI_V8_PREPU) overrides them, and tools may change them between encodes: ni_run's NI_AB alternates
 // two settings per decode cycle so both are timed under the same GPU conditions.

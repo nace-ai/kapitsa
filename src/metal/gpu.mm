@@ -483,6 +483,12 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
   }
 }
 void Encoder::barrier() { [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers]; }
+void Encoder::on_completed(std::function<void()> f) {
+  [(__bridge id<MTLCommandBuffer>)cb_ addCompletedHandler:^(id<MTLCommandBuffer>) {
+    f();
+  }];
+}
+
 void Encoder::commit() {
   if (enc_) {
     [E(enc_) endEncoding];

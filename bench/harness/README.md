@@ -214,7 +214,7 @@ tables group runs by label. The full field list is in `compare_engines.py`'s doc
 | `sampling_overrides`, `no_think_style`, `bench_args` | Passed to `bench.py` for an engine that rejects a field (`{"repeat_penalty": null}` drops it). |
 | `version`, `version_cmd`, `log_grep`, `note` | Fixed version string or `auto`; a command whose output is recorded; server-log lines to keep; free text. |
 
-Placeholders, usable in `cmd`, `env`, `prepare`, `stop`, `requires_paths`, `pid_file` and `model_path`:
+Placeholders, usable in `cmd`, `env`, `prepare`, `stop`, `requires_paths`, `pid_file`, `model_path` and `model`:
 
 | Placeholder | Value |
 | --- | --- |

@@ -2,12 +2,12 @@
 # It installs the release binary that packaging/release/build.sh makes (the same tarball install.sh downloads), so
 # nothing compiles; `brew install --HEAD` builds main from source instead. At each release the workflow
 # .github/workflows/release.yml sets version, url and sha256 and puts this file in the tap nace-ai/homebrew-tap as
-# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works (RELEASING.md).
+# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works.
 class Kapitsa < Formula
   desc "Fast local Qwen inference for Apple silicon, with an OpenAI-compatible server"
   homepage "https://github.com/nace-ai/kapitsa"
-  url "https://github.com/nace-ai/kapitsa/releases/download/v0.1.0/kapitsa-0.1.0-darwin-arm64.tar.gz"
-  version "0.1.0" # Homebrew reads "64" from this file name on hosts other than GitHub
+  url "https://github.com/nace-ai/kapitsa/releases/download/v0.1.31/kapitsa-0.1.31-darwin-arm64.tar.gz"
+  version "0.1.31" # Homebrew reads "64" from this file name on hosts other than GitHub
   sha256 "0000000000000000000000000000000000000000000000000000000000000000" # set by the release workflow
   license "Apache-2.0"
 
@@ -37,7 +37,7 @@ class Kapitsa < Formula
         kapitsa serve
       Then open http://127.0.0.1:8000 to chat, or use the API at http://127.0.0.1:8000/v1
       (OpenAI chat completions and Responses, Anthropic Messages).
-      Or start a coding agent on it in one command: kapitsa claude, kapitsa codex, kapitsa opencode.
+      Or start a coding agent on it in one command: kapitsa claude, kapitsa codex, kapitsa opencode, kapitsa pi.
       Models are stored in ~/.cache/kapitsa/models (KAPITSA_HOME moves them).
     EOS
   end

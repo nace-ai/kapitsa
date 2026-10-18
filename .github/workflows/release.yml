@@ -1,6 +1,6 @@
 # A tag vX.Y.Z (X.Y.Z = KAPITSA_VERSION in CMakeLists.txt) builds the release binary with packaging/release/build.sh,
 # publishes it on the GitHub release (install.sh downloads it from there) and updates the formula in
-# nace-ai/homebrew-tap. Optional secrets (RELEASING.md): MACOS_CERTIFICATE (base64 .p12 of a Developer ID
+# nace-ai/homebrew-tap. Optional secrets: MACOS_CERTIFICATE (base64 .p12 of a Developer ID
 # Application certificate) and MACOS_CERTIFICATE_PASSWORD sign it; NOTARY_KEY (an App Store Connect API .p8 key),
 # NOTARY_KEY_ID and NOTARY_ISSUER_ID also notarize it; TAP_GITHUB_TOKEN pushes the formula to the tap (without it,
 # the job summary shows the formula to commit there).

@@ -39,7 +39,7 @@ struct GuCfg {
 static const GuCfg& gu_cfg() {
   static const GuCfg c = [] {
     const char* v = getenv("NI_V8_GU");
-    const std::string s = v && *v ? v : "1k2";  // measured best on both models (docs/PERF.md)
+    const std::string s = v && *v ? v : "1k2";  // measured best on both models
     const bool pf = env_int("NI_V8_GU_PF", 0) != 0;
     if (s == "1") return GuCfg{pf ? "qmm8_gu1_pf_b4" : "qmm8_gu1_b4", 256u};
     if (s == "2") return GuCfg{pf ? "qmm8_gu_pf_b4" : "qmm8_gu_b4", 128u};
@@ -429,7 +429,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
   // two-term (~22-bit) inputs and exact codes for the router: keeps the top-8 choice at fp32 level
   static const bool precise = env_int("NI_V8_ROUTER_X2", 1) != 0;
   // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
-  // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify; docs/PERF.md)
+  // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify)
   static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
   const int small = v8_moe_exact_ || !q4 ? 0 : small_env;
   enc_x8(e, x_, R, D, L.post_norm, precise, 0, small ? &v8xn_ : nullptr);

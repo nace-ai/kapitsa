@@ -199,8 +199,16 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
        per / 1024.0, context_fit_, opts_.context);
   // images: the model's vision tower, loaded on the first image that needs encoding
   if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
-    logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
-    vision_ = std::make_unique<vision::Vision>(std::move(enc));
+    const std::string m0 = enc->image_start(), m1 = enc->image_end();
+    const int i0 = m0.empty() ? -2 : tok_.find(m0), i1 = m1.empty() ? -2 : tok_.find(m1);
+    if (i0 >= 0) img_pre_ = {i0};
+    if (i1 >= 0) img_post_ = {i1};
+    if (i0 == -1 || i1 == -1) {
+      logi("images: off (the tokenizer lacks the image marks %s %s)", enc->image_start().c_str(), enc->image_end().c_str());
+    } else {
+      logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
+      vision_ = std::make_unique<vision::Vision>(std::move(enc));
+    }
   }
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
@@ -533,12 +541,17 @@ static std::vector<vision::Prepared> request_images(vision::Vision* vis, std::ve
   return src->empty() ? std::vector<vision::Prepared>() : vis->prepare(*src);
 }
 
+vision::Prompt Engine::expand_images(const std::vector<int>& ids, const std::vector<vision::Prepared>& images,
+                                     int* index) const {
+  return vision::expand(ids, vision_->encoder().placeholder(), images, index, img_pre_, img_post_);
+}
+
 int Engine::count_tokens(const ChatRequest& r) const {
   std::vector<vision::Source> src;
   const std::vector<vision::Prepared> images = request_images(vision_.get(), &src, r.messages);
   const std::vector<int> ids = tok_.encode(render(r, true));
   if (images.empty()) return int(ids.size());
-  return int(vision::expand(ids, vision_->encoder().placeholder(), images, nullptr).ids.size());  // the images' rows
+  return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
 Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
@@ -645,7 +658,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const vision::Prompt* mmp = nullptr;
   if (!images.empty()) {
     try {
-      mm = vision::expand(prompt, vision_->encoder().placeholder(), images, &boundary);
+      mm = expand_images(prompt, images, &boundary);
     } catch (const vision::Error& ex) {
       res.finish_reason = "error";
       res.invalid_request = true;
@@ -768,6 +781,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   res.cached_tokens = start;
+  LiveDecode* const live = r.live.get();  // progress for a display: relaxed stores, between cycles only
+  if (live) live->prompt.store(n, std::memory_order_relaxed), live->cached.store(start, std::memory_order_relaxed),
+      live->read.store(start, std::memory_order_relaxed), live->phase.store(1, std::memory_order_relaxed);
   if (on_prompt) on_prompt(res);
   std::copy(prompt.begin(), prompt.end(), s.tokens());
   // images: their positions (M-RoPE; none: the text-only path) and the rows that take their embeddings
@@ -900,6 +916,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     };
     if (lili_commit) lili_->end_prefill();
     if (lili_commit && !mtp_defer) commit_lili(*e);
+    if (live) e->on_completed([lv = r.live, done = p] { lv->read.store(done, std::memory_order_relaxed); });
     e->commit();
     if (p == n) {
       t_enc = now_ms() - t0;  // until the last chunk's commit
@@ -953,6 +970,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // Handles one generated token; returns false when generation must stop (finish is set).
   auto handle = [&](int t) -> bool {
     ++gen;
+    if (live) live->tokens.store(gen, std::memory_order_relaxed);
     if (std::find(eos.begin(), eos.end(), t) != eos.end()) {
       finish = "stop";
       return false;
@@ -983,6 +1001,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
   int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
+  auto cycle_done = [live](int m) {  // a decode cycle wrote m tokens (for a display)
+    if (!live) return;
+    live->last.store(m, std::memory_order_relaxed);
+    live->cycles.fetch_add(1, std::memory_order_relaxed);
+  };
+  if (live) live->spec.store(lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
+      live->phase.store(2, std::memory_order_relaxed);
   if (lili_) {
     // LiLiCorr: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass (7
     // proposals after the anchor tokens[P]), then the target's verify of the 8 rows (capturing the drafter's
@@ -1027,6 +1052,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++spec_cycles_;
       ++req_cycles;
       spec_accepted_ += m;
+      cycle_done(m);
       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       m_prev = m;
       P += m;
@@ -1098,6 +1124,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++spec_cycles_;
       ++req_cycles;
       spec_accepted_ += m;
+      cycle_done(m);
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       P += m;
       d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
@@ -1154,6 +1181,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       }
       ++spec_cycles_;
       spec_accepted_ += a;
+      cycle_done(m);
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
       c = m;
       h_row0 = 0;
@@ -1192,6 +1220,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       next = encode_at(pos + 1);
       cur->wait();
       ++pos;
+      cycle_done(1);
     }
     // Drain: the step feeding the last token (if encoded) completes, so the live state covers
     // tokens [0, pos] when it ran, else [0, pos).
@@ -1201,6 +1230,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       fed_until = pos + 1;
     }
   }
+  if (live) live->phase.store(3, std::memory_order_relaxed);
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
@@ -1300,7 +1330,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   const vision::Prompt* mmp = nullptr;
   if (!images.empty()) {
     try {
-      mm = vision::expand(t2, vision_->encoder().placeholder(), images);
+      mm = expand_images(t2, images);
     } catch (...) {
       return;
     }
