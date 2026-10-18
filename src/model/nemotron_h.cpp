@@ -1006,7 +1006,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.hidden = c.hidden;
   m.layers = c.layers;
   const bool keep_bf16 = getenv("NI_NH_BF16") && atoi(getenv("NI_NH_BF16"));
-  std::string fmts;  // the matrix formats present, Bolt's order
+  std::string fmts;  // the matrix formats present (in tensor-name order)
   bool ane_fmts = true;  // the Neural Engine split stages NVFP4 / FP8 Mamba projections, an IQ2_XXS / NVFP4 shared expert
   for (const auto& [name, t] : idx.all()) {
     // as loaded: GGUF blocks, NVFP4 and FP8 keep their size (codes and scales apart), BF16 vectors become fp32, BF16

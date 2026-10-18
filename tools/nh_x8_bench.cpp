@@ -605,8 +605,7 @@ int main(int argc, char** argv) {
           e.dispatch((cs.T + bq - 1) / bq, cs.Hq / nsg, 1, 32 * nsg);
         }
       };
-      // (under Metal's validation layer nh_attn_prefill's 26 KB of threadgroup memory count double, past 32 KB: no
-      // baseline there)
+      // (Metal's validation layer counts threadgroup memory double: past 32 KB for both kernels, which it refuses)
       const bool validating = getenv("MTL_SHADER_VALIDATION") != nullptr;
       if (!validating) {
         auto e = g.begin();
@@ -614,7 +613,7 @@ int main(int argc, char** argv) {
         e->commit_and_wait();
       }
       for (size_t which = validating ? 1 : 0; which < names.size(); ++which) {
-        if (cs.Hq / cs.Hkv % (which ? uint32_t(names[which][16] - '0') : 1u)) continue;
+        if (cs.Hq / cs.Hkv % (which ? 4u : 1u)) continue;
         {
           auto e = g.begin();
           run(*e, which, O2);

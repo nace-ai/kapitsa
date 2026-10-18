@@ -113,8 +113,8 @@ constant constexpr uint kPfD = 128, kPfLD = kPfD + 8, kPfBQ = 32, kPfBK = 32;
 // registers), so the threadgroup memory is the K / V tiles alone, and a first row block qb0 (a long pass splits into
 // several dispatches, each in a command buffer of its own). The engine runs QR 1, NSG 4, BK 32: the same values as
 // nh_attn_prefill bit for bit, at its speed. Measured and not faster (tools/nh_x8_bench attn, 2048 rows after 14336
-// positions, 327 ms for nh_attn_prefill): 8 heads per threadgroup 334 ms, 16-key tiles (3 threadgroups per core)
-// 379-382, two row fragments per simdgroup 533-643.
+// positions, 327 ms for nh_attn_prefill): 8 heads per threadgroup 334 ms, K staged transposed 330, 16-key tiles (3
+// threadgroups per core) 379-382, two row fragments per simdgroup 533-643.
 // grid: (row blocks, Hq / NSG) x 32 NSG, row block qb = tg.x + p.qb0; Hq / Hkv % NSG == 0.
 struct NhAttnPf2P {
   uint T, pos0, cap, Hq, Hkv;
