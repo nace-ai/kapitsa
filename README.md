@@ -102,11 +102,13 @@ does not enable parallel generation. `brew services start kapitsa` keeps a serve
 ## Benchmarks
 
 Writing speed: tokens per second of a coding answer (decode, temperature 0.6), each engine in the setup that writes
-fastest ([all setups](docs/benchmarks.md)).
+fastest ([all setups](docs/benchmarks.md)). Qwen runs at **4-bit** on every engine: MLX 4-bit (group 64) on Kapitsa
+and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24 GB checkpoint (2-bit experts,
+4-bit NVFP4 Mamba layers, 8-bit elsewhere) on every engine.
 
 ### MacBook Pro (2024) · M4 Pro · 48 GB
 
-| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
 | --- | ---: | ---: |
 | llama.cpp + MTP | 69 tok/s | 18 tok/s |
 | Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
@@ -115,7 +117,7 @@ fastest ([all setups](docs/benchmarks.md)).
 | oMLX + DFlash2 | 127 tok/s | 45 tok/s |
 | **Kapitsa** | **154 tok/s** | **63 tok/s** |
 
-| Engine | Nemotron 3.5 Bolt 74B-A9B |
+| Engine | Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB |
 | --- | ---: |
 | mlx-vlm | 32 tok/s |
 | oMLX | 34 tok/s |
@@ -144,7 +146,7 @@ A follow-up is the time to the first token of an answer in a conversation that a
 
 ### MacBook Pro · M5 Max · 128 GB
 
-| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
 | --- | ---: | ---: |
 | **Kapitsa** | **250 tok/s** | **73 tok/s** |
 | Other engines | — | — |
