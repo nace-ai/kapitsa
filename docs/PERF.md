@@ -2071,3 +2071,132 @@ and DeltaNet being most of a token's reads: plain 60.6 against 65.2 tok/s, DFlas
 (KL 0.10, 6-14% slower than group 64), MLX's mxfp4 / nvfp4 (worse than affine 4-bit at the same size) and mxfp8 (KL
 0.018: worse than affine 8-bit at its size). The head-to-head numbers in README.md are the 4-bit variants (the same
 weights as the other engines).
+
+## Nemotron 3.5 Bolt 74B-A9B (branch opt/bolt, macOS 27.0.1, 2026-10-18)
+
+NVIDIA's 24 GB checkpoint (`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`) read as stored: 88 layers (40 Mamba-2, 8
+attention with 32 query / 2 KV heads and no positional encoding, 40 LatentMoE: latent 1024, sigmoid top-9 of 240-496
+experts, relu^2 experts and a relu^2 shared expert), hidden 4096. Formats: NVFP4 Mamba in/out projections (16-element
+blocks, UE4M3 scales, a tensor scale), IQ2_XXS routed and shared experts, Q8_0 attention, latent projections and LM
+head, BF16 router (fp32 products) and embedding (mapped from its file, shared and read-only: clean pages outside the
+footprint; a private mapping counted 1 GB as dirty once Metal wired it). The loader repacks rows into aligned GPU
+buffers while it reads (no converted copy on disk). Code: `src/model/nemotron_h.cpp`, `src/model/lilicorr.cpp`,
+`src/model/nemotron_ane.cpp`, `src/kernels/nemotron/`; tools `nh_eval`, `nh_bench`, `nh_x4_bench`, `nh_x2_bench`,
+`nh_compile`.
+
+### Correctness
+Teacher-forced next-token distributions against MLX in fp32 (the bundle's own model file `nemotron_bolt.py` in mlx-vlm
+0.7.8, every parameter cast to fp32), 3 sequences of 1024 tokens (C++, Python, prose), KL over the reference's top 64
+plus the lumped rest:
+
+| path | KL mean | KL median | top-1 agreement | perplexity (reference 5.879) |
+| --- | ---: | ---: | ---: | ---: |
+| Kapitsa, prefill GEMMs (GPU only) | 9.3e-4 | 1.9e-4 | 98.96% | 5.876 |
+| Kapitsa, 8-row passes (verify kernels) | 9.5e-4 | 2.0e-4 | 98.73% | 5.879 |
+| Kapitsa, one token at a time (decode kernels) | 9.7e-4 | 2.0e-4 | 98.79% | 5.874 |
+| Kapitsa, GPU + Neural Engine prefill (default) | 1.96e-3 | 6.0e-4 | 97.95% | 5.876 |
+| MLX at its default precision (bf16), for scale | 2.93e-3 | 1.6e-3 | 96.5% | - |
+
+The split's error by part (KL with only that part on the ANE): in_proj 70% of rows 1.6e-3, out_proj 70% 1.5e-3,
+shared expert with an int8 intermediate 3.3e-3 and with an fp16 one 1.4e-3, so the shared expert's relu^2
+intermediate stays fp16 (heavy-tailed: one int8 scale per token costs most of the error; same speed). Greedy decoding
+with the drafter equals plain greedy (256 tokens of the decode prompt; 371 tokens of the harness's code prompt, then
+a near-tie: log-probabilities -0.738 / -0.755 on the one-row path).
+
+### Decode
+`nh_eval`, 512 tokens of the harness's decode prompt, interleaved runs, other processes' GPU time logged per run (the
+desktop's own UI only):
+
+| | plain greedy | LiLiCorr greedy | LiLiCorr T = 0.6 |
+| --- | ---: | ---: | ---: |
+| first kernels (FP4 nh_mv1 / nh_v8, IQ2 constant-grid decode) | 32.8-33.3 tok/s | 52.2-53.7 tok/s (69.5-71.5 ms per cycle) | 50.7-52.5 |
+| x4 + x2 kernels (default) | 35.5-36.1 tok/s | 62.2-63.9 tok/s (58.4-59.9 ms per cycle) | 62.5-63.9 |
+
+The kernels (`nh_x_fp4.metal`, `nh_x_iq2.metal`; written by two helper sessions against a fixed interface, validated
+under Metal shader validation at small edge shapes, checked against fp64; ms on fresh weights, best of 15):
+- IQ2_XXS: a grid point is one 8-byte gather; its magnitude bytes are used directly as fp16 subnormals (b x 2^-24,
+  exact; fp32 FMA and simdgroup MMA take them) and the signs go into each byte's free bit 7 (one multiply per word, a
+  popcount for parity), a rotate and an AND give half2: ~26 instructions per 8 weights against ~45. One row: shared up
+  0.055 -> 0.031 ms (182 GB/s), down 0.060 -> 0.034 (169), routed up 148-197 GB/s (8 rows per simdgroup where the
+  latent fits in registers), routed down 126-165 GB/s (was 85-109: the 2-bit lattice decode had made these ALU-bound).
+  Verify: the block's (row, expert) pairs grouped by expert into tiles of at most 2 (each expert row decoded once for
+  both tokens; indirect dispatches sized by the bucketing): a routed layer at 8 rows 0.36-0.52 ms against 0.55-0.88;
+  the shared expert on 8x8 MMAs with the subnormal weights as A: 0.075 / 0.079 ms against 0.107 / 0.111.
+- NVFP4 (the layout the loader already writes; a threadgroup half2 table per code byte): one row in_proj 0.198 ->
+  0.173 ms (248 GB/s, the measured 16-byte streaming ceiling is ~247), out_proj 0.083 (unchanged); 8 rows (8
+  simdgroups split K) in_proj 0.260 -> 0.207, out_proj 0.141 -> 0.097; 9-32 rows split K in 4-8 parts summed in a
+  fixed order by the last part to arrive (deterministic): in_proj 32 rows 0.910 -> 0.724, out_proj 0.564 -> 0.338.
+- Before these, the IQ2 decodes tried and slower (GB/s on the shared expert's 5376x4096): a float lattice with XORed
+  sign bits (68-84), half or float grids and sign masks in constant, threadgroup or device memory (42-85), 2-bit
+  magnitude codes (52-57), split-K (74-88), 8-lane row groups (77-99); the IQ2 verify experts grouped into MMA tiles
+  (1.02 against 0.82 ms per layer with the old decode).
+The one-token MoE layer runs in 4 dispatches (router, latent down and shared up in one grid; the last router
+threadgroup to finish routes; routed up with shared down; routed down; latent up summing the experts). Dropped after
+measuring: out_proj with the gated norm applied on load (6 ms per token slower), encoders whose independent dispatches
+overlap (`NI_NH_GROUP`, within 1%). Left for later: the FP4 helper's second code layout (~0.8 ms per cycle, ~0.3 ms per token; it needs a repack and every FP4 reader changed).
+
+### Speculative decoding: NVIDIA's LiLiCorr drafter
+5 DFlash2-style layers (sliding window 1024, attention sinks, qk-norm, grouped dynamic convolutions) over 6 captured
+target layers, and the LiLiCorr head: the drafter's top 8 candidates in each of 7 slots become 56 nodes (target
+embedding + slot hidden + confidence features + slot and rank encodings), 2 attention layers over all of them, fused
+with the target state that produced the last verified token, unit out/in vectors, scores sigma cos(o, i), and a greedy
+walk on the GPU in the same command buffer (`lilicorr_draft.py`, ported exactly). Verification is exact: greedy keeps
+drafts that match the argmax; at T > 0 the target samples every row with the request's sampler and a draft is kept
+while it equals the sample, which is rejection sampling with the point-mass proposal.
+- Acceptance on the harness's code prompt (512 tokens): 4.41 tokens per cycle greedy with all 7 drafts verified
+  (oMLX 4.6; NVIDIA reports 4.68), 4.75 over 1800 tokens; 3.73 on the decode prompt with the dynamic depth.
+- Dynamic verify depth (`NI_LILI_DYN`, default 0.04): rows verified = the prefix maximizing expected tokens per cost
+  from the drafter's probabilities (greedy +5.6%, T = 0.6 +10% at 512 tokens; 0 and 0.08 slower).
+- Cycle: 58-60 ms (GPU 58-59 ms: the host adds ~0.5 ms), against 72-75 ms with the first kernels.
+
+### Prefill: GPU + Neural Engine (on by default; `NI_ANE=0` turns it off)
+Per 2048-row chunk, each Mamba layer's in_proj (70% of its rows: z and x; the GPU keeps the rest of x, B, C and dt)
+and out_proj (70%), and every MoE layer's shared expert, run W8A8 on the Neural Engine (block Hadamard rotations,
+per-row weight and per-token input int8 scales; the shared intermediate fp16) while the GPU computes its share; the
+routed experts, the scan, attention and routing stay on the GPU. One 12-function MIL program (512-2048 rows). The
+server compiles it in the background (5-33 s when the daemon has evicted it, 20-40 ms when it holds it) and the
+split's build takes the loaded program over (the daemon did not always keep the compilation: one run recompiled for
+17 s on the request path). A split chunk saves the recurrent state and reruns on the GPU alone if a job fails or never
+reports (2 s per job, 60 s per chunk). Memory: +265 MB surfaces, +172 MB for the rerun checkpoint.
+
+| 4K prompt, 2048-row chunks | GPU only | GPU + ANE |
+| --- | ---: | ---: |
+| nh_eval | 296 tok/s | 481-517 tok/s |
+| the split's GPU work alone (no ANE results awaited) | | 505 tok/s (8.1 s) |
+| server (harness, after the decode phases) | | 436 tok/s (16K: 385) |
+
+**A busy desktop.** While a session is active, the Claude app's GPU process and WindowServer use 20-40% of the GPU
+(ioreg accumulated GPU time). The GPU-only prefill hardly notices (13.6-14.2 s for 4K all day), but the split slowed to
+10-14 s. Command-buffer timestamps (`NI_CB_TRACE=1`) showed why: the GPU work itself stayed at 3.9-4.2 s per chunk,
+while 0.8-2.3 s per chunk went to idle gaps of 100-190 ms, each right after the shared expert's ANE launch, which came
+before the router GEMM. With the launch after the routing (before the expert GEMMs), the gaps fell to 0.03-0.2 s per
+chunk and the 4K prefill to 8.2-8.6 s (480-500 tok/s) under the same load: the GPU's own work, so the ANE is fully
+overlapped (a two-half wavefront has nothing left to gain). Measured and not the cause: the harness's footprint sampler,
+ANE contention (the ANE alone ran at 16-17 TOPS), handoff latency (`NI_ANE_TRACE=1`: the ANE answers in 10 ms for
+in_proj, 5 for out_proj, 12 for the shared expert, inside the GPU's own share), host-held command buffers instead of
+GPU waits (the same), fewer outstanding ANE requests (the same).
+
+GPU-only chunks of 256 rows or more end a command buffer per layer (~80 ms at 2048 rows instead of one of ~7 s;
+1.4 ms of gaps per chunk), so the desktop's own GPU work does not wait behind a long buffer.
+
+Shares (4K): in/out 0.6 449, 0.7 444, 0.75 384, 0.85 326 tok/s (beyond 0.7 the ANE becomes the bottleneck). Short
+prompts stay on the GPU (< 512 rows): 40 tokens 359 ms, 86 tokens 575 ms, 300 tokens 1166 ms; there the routed
+experts dominate (an expert holds ~1.5 rows).
+
+### Server, against the Mac-native engines on the same checkpoint
+One session, back to back on the same folder (NVIDIA's checkpoint, its drafter, the MLX bundle's model file) and the
+same desktop load, `bench/harness` with `configs/bolt.json` (32K context, one slot, thinking off, median of 5; result
+files in `bench/results/2026-10-18`):
+
+| engine | decode T = 0.6 | decode greedy | prefill 4K / 16K | cached follow-up 4K / 16K | peak memory | tools |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| Kapitsa (LiLiCorr, GPU + ANE prefill) | 63.9 tok/s | 67.4 | 436 / 385 | 0.28 / 0.32 s | 22.7 GB (+1.0 mapped) | pass |
+| oMLX 0.7.1rc1 + LiLiCorr (greedy only) | fails at T > 0 | 52.8 | 288 / 297 | 0.75 / 0.84 s | 31.5 GB | pass |
+| oMLX 0.7.1rc1 | 33.9 | 34.1 | 296 / 300 | 0.72 / 0.72 s | 30.3 GB | pass |
+| mlx-vlm 0.7.8 | 31.8 | 32.9 | 300 / 296 | no reuse (14.5 / 57.9 s) | 32.3 GB | pass |
+
+Steady footprint (after each phase): Kapitsa 22.4-22.7 GB, oMLX 23.9-24.3, oMLX + LiLiCorr 25.2-25.6, mlx-vlm 23.2-23.5.
+Kapitsa's peak was 24.9 GB in the same session's earlier run: the weight arena filled 1 GiB buffers in load order and
+left ~3.4 GB of their tails unused but resident (`NI_ALLOC_LOG=1` shows each allocation); packing the tensors biggest
+first into buffers of the size they hold gave the 22.7. One of Kapitsa's five sampled runs looped (distinct-4-gram
+0.43, flagged; 63.6 tok/s, not the fastest): the median without it is 64.2.
