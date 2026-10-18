@@ -1,12 +1,12 @@
 # Benchmarks
 
-How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt has
-[its own section](#nemotron-35-bolt-74b-a9b-2026-10-18)), compared with the engines people run these models with on a
-Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later:
-[its own section](#mlx-serve-2026-10-18)). Each engine ran at its latest release
-with its own best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the
-same checks. The harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file
-behind these tables is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
+How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt and the small Qwen3.5-4B
+have their own sections: [Bolt](#nemotron-35-bolt-74b-a9b-2026-10-18), [4B](#qwen35-4b-2026-10-18)), compared with the
+engines people run these models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a
+day later: [its own section](#mlx-serve-2026-10-18)). Each engine ran at its latest release with its own best
+settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
+harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
+is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
 ## Summary
 
@@ -350,6 +350,118 @@ decodes each; [tuning](../bench/results/2026-10-18-mlx-serve/README.md#tuning)):
   mlx-serve ships no drafter for the 35B and documents DFlash for dense models, but its loader binds this one.
 - PLD (prompt lookup) stays on, its default; mlx-serve runs one speculative mode per request (DFlash, else MTP, else
   PLD), so it never ran. A fresh `HOME` per run, 32K context, one sequence.
+
+## Qwen3.5-4B (2026-10-18)
+
+Qwen3.5-4B, the family's small dense model (32 layers: 24 Gated DeltaNet, 8 full attention), at 4-bit on every
+engine of the [main comparison](#results), through the same harness, requests and checks. Each engine ran in its
+fastest setup for this model: speculative decoding with the model's MTP head wherever the engine has an MTP path
+(there is no DFlash2 drafter for the 4B), oMLX's and MTPLX's settings picked in short runs before the session, and
+llama.cpp's MTP at n-max 1, 2, 3 and 6. Configs: the `q35-4b-*` entries in
+[bench/harness/configs](../bench/harness/configs); result files:
+[bench/results/2026-10-18-4b](../bench/results/2026-10-18-4b/).
+
+Kapitsa was the fastest engine on every metric and used the least memory. It wrote 122 tok/s at T = 0.6, 1.12×
+Ollama's MLX runner with MTP (109.0) and 1.17× MTPLX (104.2, against Kapitsa's 122.0 in the same bracket), read long
+prompts 1.8–2.2× faster than any other engine, and answered follow-ups in 0.05–0.07 s, against 0.09–0.11 s for the
+next fastest (MTPLX). Greedy decoding is the exception to a clear lead: Ollama's MLX runner wrote 123.0 tok/s, 1%
+below Kapitsa's 124.5 in the same bracket, and Kapitsa's greedy medians in bracket B were 120.4 and 125.3, so at
+greedy the two are within run-to-run variation (note 2).
+
+The runs came in two brackets on 2026-10-18, each opened and closed by Kapitsa, one engine at a time under the GPU
+lock, in High Power mode on AC power. Compare each row with Kapitsa's row of the same bracket.
+
+- **A**, 11:04–12:05: every configuration, back to back. Bursts from Slack and Chrome flagged the long-prompt phases
+  of three runs (oMLX without speculation, MTPLX, llama.cpp without MTP). From 11:42 Slack, Chrome and a video call
+  (`cameracaptured`, macOS's camera daemon) used more than 5% of the GPU for sustained stretches, and every run from
+  then on was flagged, Kapitsa's closing run included. The A rows are the unflagged runs between 11:04 and 11:40.
+- **B**, 13:39–14:12: Kapitsa, then the configurations whose A runs were flagged (oMLX without speculation, MTPLX,
+  llama.cpp without MTP and at n-max 6), then Kapitsa again, each engine started after other apps had used less
+  than 3% of the GPU for 60 s. Their flagged A runs, in [superseded](../bench/results/2026-10-18-4b/superseded/),
+  decoded within 4% of their B runs: oMLX without speculation 85.0 / 83.2 tok/s, MTPLX 102.7 / 104.7, llama.cpp
+  64.0 / 63.9, n-max 6 63.9 / 70.7.
+
+| Engine (setting) | Bracket | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (MTP head)<sup>1</sup> | A | **122.4** (119.3–123.4) | **124.5** (119.0–127.0) | **1,796** | 1,337 | 0.06 | 0.07 | **4.1** | pass |
+| **Kapitsa** (MTP head)<sup>1</sup> | B | 122.0 (118.7–124.2) | 120.4 (94.0–123.6) | 1,788 | **1,427** | **0.05** | **0.06** | **4.1** | pass |
+| Ollama, MLX runner + MTP (adaptive depth) | A | 109.0 (99.6–115.6) | 123.0 (116.6–124.9)<sup>2</sup> | 758 | 693 | 0.19 | 0.24 | 12.1 | pass |
+| MTPLX (sustained profile, depth 1) | B | 104.2 (99.5–107.0) | 106.3 (105.0–109.0) | 780 | 711 | 0.09<sup>6</sup> | 0.11 | 14.3 | pass |
+| oMLX + MTP (Lightning MTP) | A | 102.4 (99.5–108.6) | 104.5 (102.8–109.4) | 803 | 726 | 0.25 | 0.48 | 7.3 | pass |
+| oMLX (no speculation) | B | 82.4 (82.0–84.9) | 83.9 (83.0–84.6) | 868 | 784 | 0.26 | 0.36 | 6.1 | pass |
+| LM Studio (MLX engine) | A | 81.3 (80.4–81.5)<sup>3</sup> | 85.1 (84.3–85.5)<sup>3</sup> | 801 | 747 | 0.41 | 0.70 | 8.4 | pass |
+| mlx-lm | A | 73.1 (71.4–75.0) | 76.4 (74.1–78.6) | 784 | 719 | 0.18 | 0.32 | 7.3 | pass |
+| llama.cpp + MTP (n-max 2) | A | 69.6 (68.1–73.0) | 73.4 (70.7–74.3) | 650 | 564 | 0.21 | 0.25 | 11.1 | pass |
+| llama.cpp + MTP (n-max 1) | A | 69.3 (68.3–69.8) | 71.8 (68.9–72.0) | 662 | 587 | 0.25 | 0.32 | 11.6 | pass |
+| Ollama, GGUF + MTP (shipped depth 1) | A | 68.2 (63.4–70.4) | 72.8 (67.0–73.7) | 712 | 575 | 0.15 | 0.25 | 5.7 + 3.2 mapped<sup>4</sup> | pass |
+| llama.cpp + MTP (n-max 3) | A | 65.9 (64.2–71.8) | 77.9 (75.9–78.2) | 687 | 609 | 0.21 | 0.24 | 11.1 | pass |
+| llama.cpp | B | 63.4 (62.7–63.5) | 65.3 (64.9–65.5) | 724 | 655 | 0.19 | 0.25 | 9.2 | pass |
+| llama.cpp + MTP (n-max 6) | B | 62.3 (56.8–69.2) | 71.9 (70.9–75.2) | 689 | 613<sup>5</sup> | 0.16 | 0.27 | 11.3 | pass |
+| Ollama, GGUF (MTP off) | A | 59.9 (46.3–65.3) | 64.5 (64.2–66.0) | 733 | 618 | 0.15 | 0.28 | 5.1 + 2.5 mapped<sup>4</sup> | pass |
+
+1. The Kapitsa rows are each bracket's opening run. Its closing runs were flagged for contention
+   ([confirmations](../bench/results/2026-10-18-4b/confirmations/)). A's, at 12:04 during the video call, gave
+   115.0 / 111.4 tok/s decode, 1,377 / 1,136 tok/s prefill, 0.06 / 0.06 s follow-ups and 4.1 GB. Its prefill
+   dropped the most, probably because the call's camera processing shared the Neural Engine, which runs part of
+   Kapitsa's dense prefill: its log shows the Neural Engine busy for 98% and 81% of the 4K and 16K prefills, against
+   60% and 45% in the opening run. B's closing run, at 14:10 with Slack busy in its long-prompt phases, gave
+   121.4 / 125.3 tok/s, 1,774 / 1,436 tok/s, 0.06 / 0.07 s and 4.1 GB.
+2. One of the five greedy runs looped (distinct-4-gram 0.47), which speculative decoding speeds up; without it the
+   median is 120.8 tok/s. Ollama's MLX runner drafts up to four tokens a step and adapts how many: in the timed
+   answers 2.0 a step on average at greedy and 1.7 at T = 0.6, where Kapitsa drafts one. Deeper drafts pay off when
+   they are accepted, which happens more often in greedy decoding, so it gains 13% from T = 0.6 to greedy and Kapitsa
+   about 2%; at T = 0.6 Kapitsa is 12% faster (122.4 against 109.0).
+3. LM Studio stops at 511 of the 512 requested tokens. Its rates use the 511 tokens it reports.
+4. Ollama's GGUF runner maps the weights from disk instead of loading them: the first figure is the server's memory,
+   the second the resident mapped weights (the model, and with MTP its draft GGUF).
+5. Flagged for contention: Chrome used 9.6% of the GPU on average during this prefill. The only flagged figure in
+   the table; A's run of this setting read 603 tok/s here, also flagged.
+6. MTPLX's SSD session tier writes only what fits above 10 GiB of free disk. Its B run started with 10.0 GiB free,
+   and its log shows that tier skipping its writes ("no disk room"); the benchmark's follow-ups came from its
+   session cache in memory, as fast as in its A run with 19 GiB free (0.10 / 0.12 s). LM Studio's MLX engine, which
+   keeps follow-up checkpoints on disk only while 10 GiB is free, had 18 GiB.
+
+Repetition loops (distinct-4-gram under 0.5; flagged, not invalid) came up in one of the five sampled runs of
+Kapitsa in bracket B (median without it 121.0), oMLX without speculation (82.6), llama.cpp (63.4) and llama.cpp at
+n-max 1, 3 and 6 (69.2, 65.3, 62.9), and in two of mlx-lm's (73.4). Peak memory is the whole run's peak. Kapitsa
+holds the language model only (2.2 GB; it does not run this model's vision tower), while oMLX, LM Studio, MTPLX and
+Ollama's MLX runner also load the file's 0.6 GB vision tower and Ollama's GGUF runner the tag's vision projector.
+Engines that keep earlier conversations for follow-up turns grow through the run, MTPLX's session cache most of all
+(14.3 GB at its peak). Footprint after the sampled decode runs, before any long prompt: mlx-lm 3.0 GB, Kapitsa 3.4,
+oMLX 3.8 (4.6 with MTP), Ollama's MLX runner 4.9, LM Studio 5.2, llama.cpp 6.1 (7.7–8.2 with MTP), MTPLX 6.2, and
+Ollama's GGUF runner 2.9 + 2.5 mapped (3.4 + 3.2 with MTP). Of the engines that hold their weights in their own
+memory, mlx-lm is the only one below Kapitsa there; it grows to 7.3 GB with the 16K prompt.
+
+**Weights.** The MLX engines read lmstudio-community's MLX 4-bit conversion
+([lmstudio-community/Qwen3.5-4B-MLX-4bit](https://huggingface.co/lmstudio-community/Qwen3.5-4B-MLX-4bit) @c43ee1d,
+2.8 GB: 2.2 GB of language model, its embedding tied to the output layer, and a 0.6 GB bf16 vision tower), the file
+`kapitsa pull 4b` and LM Studio's staff pick download. MLX conversions of the small Qwen3.5 models leave out the
+model's MTP head, so each engine with an MTP path got one: Kapitsa its catalog's (Qwen's own head from
+Qwen/Qwen3.5-4B, bf16, 0.2 GB, 8-bit at load), MTPLX, oMLX and Ollama's MLX runner the head of MTPLX's 4B release
+([Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed](https://huggingface.co/Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed)
+@550153b, 4-bit, 0.08 GB, with its runtime file), read beside the same file through APFS clones, an index view
+(`bench/harness/tools/omlx_mtp_farm.py`) and Ollama's zero-copy import. llama.cpp and Ollama's GGUF runner read
+Ollama's `qwen3.5:4b-mtp-q4_K_M` tag: the Q4_K_M model (2.5 GB, blob a9d0a3e1) and, as a separate draft GGUF, its
+MTP layer with a Q8_0 copy of the embedding (0.76 GB, blob 83ba6dc1).
+
+**Settings.** As for the larger models (see [what was compared](#what-was-compared)), except:
+
+| Engine | Version measured | Speculative decoding on the 4B |
+| --- | --- | --- |
+| Kapitsa | 68b7aee, Release build (b3e8fe9 in the result files: the same source under an earlier commit id) | its default for this model: the MTP head, one draft token a step; dense prefill split between the GPU and the Neural Engine |
+| llama.cpp | 0.7.0, build b11669 (620d2225c) | MTP with the tag's draft GGUF (`-md`), `--spec-draft-n-max` 1, 2, 3 and 6 (6 is unsloth's recommendation for this model); and off |
+| Ollama, GGUF | 0.40.6 (bundled llama.cpp 620d2225c; the app had updated itself from 0.40.5) | built-in MTP at the tag's shipped depth, 1; and off |
+| Ollama, MLX runner | 0.40.6 (MLX bebd642) | built-in MTP, adaptive depth up to 4 |
+| LM Studio | llmster 0.0.25-1, MLX runtime 1.13.1 (its staff pick `qwen/qwen3.5-4b`) | none: its MLX engine has none for this model |
+| mlx-lm | 0.32.2 (mlx 0.32.4) | none for this model |
+| oMLX | 0.7.1rc1 | Lightning MTP, oMLX's own MTP path (adaptive depth, up to 3); and none |
+| MTPLX | 2.12.2 | MTP, profile `sustained` (its runtime file's), depth 1 |
+
+oMLX's and MTPLX's settings come from short runs just before the session (three sampled and three greedy 512-token
+answers each; [tuning](../bench/results/2026-10-18-4b/README.md#tuning)). oMLX: Lightning MTP 101.4 / 103.8 tok/s,
+DFlash with z-lab's Qwen3.5-4B drafter (DFlash v1, quantized to 4 bits at load) at most 89.9 / 98.0 (block 5, verify
+`adaptive`; block 9 and verify `dflash` were slower), no speculation 84.9 / 81.8. MTPLX: depth 1 104.5 / 108.6, depth
+2 103.8 / 109.2, and depth 3, its runtime file's default, 87.7 / 102.6.
 
 ## Run benchmarks locally
 
