@@ -400,7 +400,8 @@ static int serve(int argc, char** argv, int first) {
   Engine engine(opt);
 
   httplib::Server srv;
-  srv.set_payload_max_length(64u << 20);
+  // conversations carry their images as base64 every turn (an agent's screenshots: 1-4 MB each)
+  srv.set_payload_max_length(256u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
   // the previous one (the client's delayed ACK), which can hold the first token of a fast request.
   srv.set_tcp_nodelay(!getenv("NI_TCP_NODELAY") || env_on("NI_TCP_NODELAY"));
