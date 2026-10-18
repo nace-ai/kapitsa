@@ -1432,13 +1432,20 @@ NI_INLINE void wf_dequant_bf16(const device uint32_t* W, const device bfloat* S,
     if (i < nk.x * (nk.y / 16)) wf_dequant_bf16<F, GS>(W, S, B, out, nk.y, i);                                  \
   }
 
+// The bf16 GEMMs of the image encoders (src/vision): in the base library, so a 4-bit model's first image does not
+// wait for the second library's compile (~4-5 s the first time a build runs it).
+NI_QRF(qrf_f16_m32_n128_mf, 16, 64, 32, 128, 1, 4, true)
+NI_QRF(qrf_f16_m16_n64, 16, 64, 16, 64, 1, 4, false)
+NI_QRF(qrf_f16_m8_n64, 16, 64, 8, 64, 1, 2, false)
+
 #ifdef NI_WF_INST  // compiled into the second library only (Gpu::compile_formats)
 // ---- instantiations ----
 // Formats: f16 = bf16, f8g64, f6g64, f5g64, f3g64, f4g32 (4-bit group 32, e.g. the MTPLX 27B pack). 4-bit group 64
 // keeps the specialized kernels everywhere, and 8-bit group 64 wherever one exists (qmv3_b8, qmv2_multi, qmm8_b8,
 // qmms_b8, qmr8), so each family below lists only the formats without one (each format costs ~0.3 s of the
 // first, uncached library compile).
-#define NI_WF_NO8(X) X(f16, 16, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f4g32, 4, 32)
+#define NI_WF_LOW(X) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64) X(f4g32, 4, 32)
+#define NI_WF_NO8(X) X(f16, 16, 64) NI_WF_LOW(X)
 #define NI_WF_ALL(X) NI_WF_NO8(X) X(f8g64, 8, 64)
 #define NI_WF_MOE(X) X(f16, 16, 64) X(f8g64, 8, 64) X(f6g64, 6, 64) X(f5g64, 5, 64) X(f3g64, 3, 64)
 
@@ -1461,12 +1468,14 @@ NI_WF_ALL(NI_WF_LOOKUP)
 
 #define NI_WF_PREFILL(SFX, F, GS)                                    \
   NI_QRF(qrf_##SFX##_m32_n128, F, GS, 32, 128, 1, 4, false)          \
-  NI_QRF(qrf_##SFX##_m16_n64, F, GS, 16, 64, 1, 4, false)            \
-  NI_QRF(qrf_##SFX##_m8_n64, F, GS, 8, 64, 1, 2, false)              \
   NI_QRF_GU(qrf_gu_##SFX##_m32_n64, F, GS, 32, 64, 1, 4, false)      \
   NI_QRF_GU(qrf_gu_##SFX##_m16_n64, F, GS, 16, 64, 1, 4, false)      \
   NI_QRF_GU(qrf_gu_##SFX##_m8_n32, F, GS, 8, 32, 1, 2, false)
 NI_WF_NO8(NI_WF_PREFILL)
+#define NI_WF_PREFILL_SMALL(SFX, F, GS)                              \
+  NI_QRF(qrf_##SFX##_m16_n64, F, GS, 16, 64, 1, 4, false)            \
+  NI_QRF(qrf_##SFX##_m8_n64, F, GS, 8, 64, 1, 2, false)
+NI_WF_LOW(NI_WF_PREFILL_SMALL)  // bf16's are in the base library (above)
 
 #define NI_WF_MOE_PREFILL(SFX, F, GS)                                \
   NI_QRMF_GU(qrmf_gu_##SFX##_m32_n64, F, GS, 4, 64, 4)               \
@@ -1474,8 +1483,7 @@ NI_WF_NO8(NI_WF_PREFILL)
   NI_QMMSF_MOE(SFX, F, GS)
 NI_WF_MOE(NI_WF_MOE_PREFILL)
 
-// bf16 large-M tiles with M tiles along grid x (weights shared through the cache)
-NI_QRF(qrf_f16_m32_n128_mf, 16, 64, 32, 128, 1, 4, true)
+// bf16 large-M tiles with M tiles along grid x (weights shared through the cache; qrf_f16_m32_n128_mf: base library)
 NI_QRF(qrf_f16_m64_n64_mf, 16, 64, 64, 64, 1, 4, true)
 NI_QRF_GU(qrf_gu_f16_m32_n64_mf, 16, 64, 32, 64, 1, 4, true)
 
