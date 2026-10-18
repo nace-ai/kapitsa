@@ -87,8 +87,10 @@ files that changed (offline, it keeps using the copy it has). Bolt has one varia
 mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
 Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
 projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding). Dory has two,
-NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format it was pre-trained in, with BF16
-embedding and head; 3.2 GB) and `bf16` (8.0 GB).
+NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format most of its pre-training ran in,
+with BF16 embedding and head; 3.2 GB) and `bf16` (8.0 GB). Along two replies (320 positions), the NVFP4 checkpoint's
+next-token distributions are a KL of 0.020 from the BF16 checkpoint's on average (NVIDIA's code, 2 loops), with the same
+top token at 94% of positions.
 
 ### Other models
 
@@ -268,7 +270,11 @@ chat template and the request say (thinking on by default in Chat Completions an
 - **KV cache (`--loop-kv`):** `last-loop` (the default, NVIDIA's `recurrent_kv_cache_mode: last_loop`) keeps one cache per
   layer, each loop writing over the previous one's, so a conversation's KV cache is the size of a one-loop model's at
   any loop count: 36 KB per token plus 114 MB of sliding-window rings. `per-loop` keeps a cache per loop, as NVIDIA's vLLM
-  and llama.cpp commands run it (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both.
+  and llama.cpp commands run it (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both. The two differ
+  little: on the BF16 weights at 2 loops, along four replies (504 positions), per-loop's next-token distributions are a
+  KL of 0.0009 from last-loop's on average, with the same top token at 99.2% of positions (about a twentieth of the
+  NVFP4 checkpoint's difference from BF16); greedy replies first differ after 10, 88 and 130 tokens, and not within 160
+  on the fourth.
 - **Replies that think to the end:** as NVIDIA's `force_nonempty_content` (on by default here), a reply whose answer is
   empty returns its reasoning as its content too; `"chat_template_kwargs": {"force_nonempty_content": false}` turns it
   off.
