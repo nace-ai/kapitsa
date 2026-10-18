@@ -499,13 +499,29 @@ void Qwen4Exp::gather_rows(const int* tok, int pos0, int R, void* dst, bool half
   std::vector<int64_t> ids(size_t(R) * H);
   for (int r = 0; r < R; ++r) hash_.ids(tok, pos0 + r, ids.data() + size_t(r) * H);
   if (!half_rows) {
+    // NI_PLE_STATS=1: the decode / verify gathers' time (on the GPU's path: the next pass waits for it)
+    static const bool stats = env_on("NI_PLE_STATS");
+    const double t0 = stats ? now_ms() : 0.0;
     table_.gather(ids.data(), R, H, static_cast<float*>(dst));
+    if (stats) {
+      static double sum = 0, mx = 0;
+      static int n = 0;
+      const double dt = now_ms() - t0;
+      sum += dt, mx = std::max(mx, dt);
+      if (++n % 128 == 0) {
+        fprintf(stderr, "[kapitsa] n-gram gathers: %d, mean %.3f ms, max %.3f ms\n", n, sum / 128, mx);
+        sum = 0, mx = 0;
+      }
+    }
     return;
   }
+  static const bool stats = env_on("NI_PLE_STATS");
+  const double t0 = stats ? now_ms() : 0.0;
   std::vector<float> tmp(size_t(R) * D);
   table_.gather(ids.data(), R, H, tmp.data());
   _Float16* h = static_cast<_Float16*>(dst);
   for (size_t i = 0; i < tmp.size(); ++i) h[i] = _Float16(tmp[i]);
+  if (stats) fprintf(stderr, "[kapitsa] n-gram gather of %d prefill rows: %.1f ms\n", R, now_ms() - t0);
 }
 
 Qwen4Exp::PleWait Qwen4Exp::ple_rows_for(Seq& s, int pos) {

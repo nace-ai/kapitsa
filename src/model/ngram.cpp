@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <thread>
 
@@ -200,13 +202,32 @@ std::string NgramTable::describe() const {
   return b;
 }
 
-void NgramTable::row(int64_t r, float* out) const {
+const NgramTable::Map& NgramTable::part_of(int64_t r) const {
   if (r < 0 || r >= rows_) fatal("n-gram row %lld out of range", (long long)r);
   // parts are consecutive: find the one holding r (few parts; usually equal sizes)
   size_t pi = parts_.size() > 1 && parts_[0].rows > 0 ? std::min(parts_.size() - 1, size_t(r / parts_[0].rows)) : 0;
   while (pi > 0 && parts_[pi].first > r) --pi;
   while (pi + 1 < parts_.size() && parts_[pi + 1].first <= r) ++pi;
-  const Map& m = parts_[pi];
+  return parts_[pi];
+}
+
+void NgramTable::prefetch(int64_t r) const {
+  const Map& m = part_of(r);
+  const int64_t lr = r - m.first;
+  static const uintptr_t pg = uintptr_t(getpagesize());
+  auto will = [&](const uint8_t* p, size_t n) {
+    const uintptr_t a = reinterpret_cast<uintptr_t>(p) & ~(pg - 1), e = reinterpret_cast<uintptr_t>(p) + n;
+    madvise(reinterpret_cast<void*>(a), size_t(e - a), MADV_WILLNEED);
+  };
+  will(m.w + size_t(lr) * row_bytes_, row_bytes_);
+  if (fmt_ == Fmt::Affine) {
+    will(m.s + size_t(lr) * group_row_bytes_, group_row_bytes_);
+    will(m.b + size_t(lr) * group_row_bytes_, group_row_bytes_);
+  }
+}
+
+void NgramTable::row(int64_t r, float* out) const {
+  const Map& m = part_of(r);
   const int64_t lr = r - m.first;
   const uint8_t* w = m.w + size_t(lr) * row_bytes_;
   switch (fmt_) {
@@ -244,10 +265,15 @@ void NgramTable::row(int64_t r, float* out) const {
 
 void NgramTable::gather(const int64_t* ids, int T, int heads, float* out) const {
   const size_t n = size_t(T) * size_t(heads);
+  static const bool pre = !(getenv("NI_PLE_PREFETCH") && !strcmp(getenv("NI_PLE_PREFETCH"), "0"));
   auto work = [&](size_t a, size_t b) {
+    for (size_t i = a; pre && i < b; ++i) prefetch(ids[i]);
     for (size_t i = a; i < b; ++i) row(ids[i], out + i * size_t(dim_));
   };
-  // a page fault per uncached row: spread large gathers over threads so the reads overlap
+  // Each worker first asks for all its rows' pages (madvise WILLNEED), then decodes: reads of rows not in the page
+  // cache overlap instead of faulting one after another, and resident pages are mapped in one call each rather than
+  // by faults. Decode (16 rows on the GPU's path: the next pass waits for them), real pack, M5 Max: 1.35-1.48 ms ->
+  // 0.04-0.27 ms per token, 76 -> 87 tok/s (NI_PLE_PREFETCH=0: off). Large gathers (prefill chunks) also take threads.
   const unsigned nt = n >= 256 ? std::max(1u, std::min(8u, std::thread::hardware_concurrency())) : 1u;
   if (nt == 1) {
     work(0, n);

@@ -48,6 +48,8 @@ class NgramTable {
   std::string describe() const;
   // out[dim] = row r
   void row(int64_t r, float* out) const;
+  // asks the kernel to start reading row r's pages (codes, scales, biases) if they are not resident
+  void prefetch(int64_t r) const;
   // out[t, h * dim .. (h + 1) * dim) = row ids[t * heads + h], T rows (threads for large T)
   void gather(const int64_t* ids, int T, int heads, float* out) const;
 
@@ -58,6 +60,7 @@ class NgramTable {
     const uint8_t* b = nullptr;
     int64_t rows = 0, first = 0;
   };
+  const Map& part_of(int64_t r) const;
   std::vector<Map> parts_;
   std::vector<std::pair<void*, size_t>> maps_;
   Fmt fmt_ = Fmt::BF16;
