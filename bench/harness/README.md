@@ -110,11 +110,15 @@ translated the tool calls back for opencode, so the recording and every replay a
 on Kapitsa, all 19 answers come back token for token. `agent_record.py build` refuses to write a trace that still
 names the user, the Mac or the home folder.
 
-Each model replays a session recorded on it: [agent-traces/index.json](agent-traces/index.json) maps a config's
-model to its trace (`opencode-ledger.json` for Qwen3.6-35B-A3B, `opencode-ledger-27b.json` for Qwen3.8-27B, recorded
-the same way on the 27B). Another model's recorded answers would differ from the engine's own at every
-turn, so the next request would make the engine roll its cache back to the previous prompt every time, which no real
-session does; a model without an entry gets no agent phase.
+[agent-traces/index.json](agent-traces/index.json) maps a config's model to the session it replays; a model without
+an entry gets no agent phase. Qwen3.8-27B replays the 35B's session too: recorded the same way on the 27B, opencode
+repeated one shell command from its 14th request on until the proxy stopped it at 80, the task unsolved (greedy
+decoding can lock a model into a loop). With another model's answers in the history, every engine's own answer differs
+from the recorded one at almost every turn, so on the next request each engine restores its cache to the end of the
+previous prompt and reads the recorded answer; that holds for every engine alike, the one that recorded nothing
+included. On the recording model the recording engine has an edge: its answers are the recorded ones, while another
+engine's greedy answers differ wherever rounding decides a close call (9 to 13 of 19 turns on the 35B), and it reads the
+recorded answer instead of finding its own in its cache (`same_answer` per turn shows where).
 
 **The replay.** The requests go out in the recorded order with the recorded messages, never the engine's own
 answers, so every engine reads exactly the same conversation: the same system prompt and tools, the same files and
@@ -140,10 +144,10 @@ wall time), the prefill time (the sum of the TTFTs) and the decode time (the res
 window tokens over all their window time), the first request's TTFT (a cold prompt of about 5.5K tokens) and the median
 and p90 TTFT of the follow-ups (the requests that continue the previous one). A turn whose first event is a held tool
 call has no TTFT of its own: it is left out of the TTFT statistics and its prefill time is estimated as its time minus
-its tokens at the session's writing rate (`prefill_estimated_turns` in the result). Each answer is also compared with
-the recorded one (its text and tool calls, raw or parsed; `same_answers`): after an answer that differs, the next
-request makes the engine roll its cache back to the end of the previous prompt, which the recording engine never
-needed.
+its tokens at the session's writing rate (`prefill_estimated_turns` in the result). The same goes for a turn whose
+first event carries most of the answer (MTPLX, asked without tools, replaces a tool call it will not run with a
+notice it sends at the end). Each answer is also compared with the recorded one (its text and tool calls, raw or
+parsed; `same_answers`), and the time a stream stays open after its last token is summed (`after_last_token_s`).
 
 **Checks.** Thinking text in an answer, a failed request, or a prompt shorter than 90% of the reference length (the
 engine cut the conversation) make the session INVALID; a prompt more than 2% off the reference is flagged. The

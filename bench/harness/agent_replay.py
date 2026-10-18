@@ -168,10 +168,23 @@ def window(r, ct):
     return float(info.get("window_tokens") or 0.0), float(info.get("window_s") or 0.0)
 
 
+HELD_SHARE = 0.5  # a first event with at least this share of an answer's characters held the answer back
+
+
+def held_back(x):
+    """True if a turn's first streamed event came only after most of the answer was written: a parsed tool call
+    (an engine that holds a call until its closing tag, even without tools in the request), or one event carrying at
+    least half of the answer's characters (e.g. an engine that replaces a tool call it will not run with a notice).
+    Such a turn has no time to first token of its own."""
+    if x.get("first_event") == "tool_call":
+        return True
+    ch = x.get("events_chars") or []
+    return bool(ch) and (x.get("completion_tokens") or 0) >= 8 and ch[0] >= HELD_SHARE * sum(ch)
+
+
 def summarize(turns, wall_s, gaps_s):
-    """Session totals. A turn whose first streamed event is a parsed tool call (an engine that holds a call back
-    until its closing tag, even without tools in the request) has no time to first token of its own: its TTFT is
-    left out of the TTFT statistics, and its prefill is estimated as its time minus its tokens at the session's
+    """Session totals. A turn whose answer was held back (held_back) has no time to first token of its own: its TTFT
+    is left out of the TTFT statistics, and its prefill is estimated as its time minus its tokens at the session's
     writing rate (counted in prefill_estimated_turns)."""
     ok = [x for x in turns if not x.get("error")]
     tok = sum(x.get("completion_tokens") or 0 for x in ok)
@@ -179,20 +192,19 @@ def summarize(turns, wall_s, gaps_s):
     wt = sum(x["window_tokens"] for x in ok)
     ws = sum(x["window_s"] for x in ok)
     rate = wt / ws if ws > 0 else None
-    held = [x for x in ok if x.get("first_event") == "tool_call"]
+    held = [x for x in ok if held_back(x)]
     pre, est = 0.0, 0
     for x in ok:
         if x.get("ttft_s") is None:
             pre += x["total_s"]
-        elif x.get("first_event") == "tool_call":
+        elif held_back(x):
             dec = ((x.get("completion_tokens") or 1) - 1) / rate if rate else 0.0
             pre += max(0.0, min(x["total_s"], x["total_s"] - dec))
             est += 1
         else:
             pre += x["ttft_s"]
     fu_all = [x["ttft_s"] for x in ok if x.get("follow_up") and x.get("ttft_s") is not None]
-    fu = [x["ttft_s"] for x in ok if x.get("follow_up") and x.get("ttft_s") is not None
-          and x.get("first_event") != "tool_call"]
+    fu = [x["ttft_s"] for x in ok if x.get("follow_up") and x.get("ttft_s") is not None and not held_back(x)]
     main = [x for x in ok if x["kind"] == "main"]
     first = turns[0] if turns else {}
     s = {"turns": len(turns), "turns_ok": len(ok), "follow_ups": len(fu_all), "followup_ttft_n": len(fu),
@@ -201,8 +213,7 @@ def summarize(turns, wall_s, gaps_s):
          "completion_tokens": tok, "max_tokens": sum(x["max_tokens"] for x in turns),
          "write_tps": round(rate, 2) if rate else None, "window_tokens": round(wt, 1), "window_s": round(ws, 3),
          "e2e_tps": round(tok / eng, 2) if eng > 0 else None,
-         "first_ttft_s": round(first["ttft_s"], 4) if first.get("ttft_s") is not None
-         and first.get("first_event") != "tool_call" else None,
+         "first_ttft_s": round(first["ttft_s"], 4) if first.get("ttft_s") is not None and not held_back(first) else None,
          "followup_ttft_median_s": round(statistics.median(fu), 4) if fu else None,
          "followup_ttft_p90_s": round(pct(fu, 90), 4) if fu else None,
          "followup_ttft_max_s": round(max(fu), 4) if fu else None,
@@ -213,6 +224,8 @@ def summarize(turns, wall_s, gaps_s):
          "prompt_tokens_main_sum": sum(x.get("prompt_tokens") or 0 for x in main),
          "stopped_early": sum(1 for x in ok if (x.get("completion_tokens") or 0) < x["max_tokens"] - 1),
          "held_tool_calls": len(held),
+         "after_last_token_s": round(sum(x["total_s"] - (x.get("events_t_ms") or [0])[-1] / 1000 for x in ok
+                                         if x.get("events_t_ms")), 3),
          "same_answers": sum(1 for x in ok if x.get("same_answer")),
          "cached_tokens_reported": sum(x.get("cached_tokens") or 0 for x in ok) if any(
              x.get("cached_tokens") is not None for x in ok) else None}
@@ -302,14 +315,30 @@ def replay(a, t, mode="rendered", gaps="recorded", max_turns=None, log=print, ti
             f"({r['finish']}), {bench.f2(turn['write_tps'])} tok/s, {turn['total_s']:.2f}s")
     wall = time.perf_counter() - t0
     res["summary"] = s = summarize(res["turns"], wall, gaps_s)
+    res["flags"] += session_flags(s, mode)
+    return res
+
+
+def session_flags(s, mode):
+    out = []
     if s["held_tool_calls"]:
-        res["flags"].append(f"{s['held_tool_calls']} turns came back as a tool call held until complete"
-                            + (" although the request had no tools" if mode == "rendered" else "")
-                            + ": their TTFT includes the call (left out of the TTFT statistics; their prefill "
-                            "time is estimated from the session's writing rate)")
+        out.append(f"{s['held_tool_calls']} answers held back until (most of) the answer was written"
+                   + (" although the request had no tools" if mode == "rendered" else "")
+                   + ": their TTFT includes the answer (left out of the TTFT statistics; their prefill time is "
+                   "estimated from the session's writing rate)")
     if s["max_tokens"] and s["completion_tokens"] < 0.9 * s["max_tokens"]:
-        res["flags"].append(f"wrote {s['completion_tokens']} of the recorded {s['max_tokens']} tokens "
-                            f"({s['stopped_early']} turns stopped early)")
+        out.append(f"wrote {s['completion_tokens']} of the recorded {s['max_tokens']} tokens "
+                   f"({s['stopped_early']} turns stopped early)")
+    return out
+
+
+def resummarize(res):
+    """Recomputes a stored phase result's summary and session flags from its per-turn records (e.g. after a change
+    to the summary rules); invalid reasons and per-turn flags are kept."""
+    keep = [f for f in res.get("flags", []) if f.startswith("turn ")]
+    s = summarize(res["turns"], res["summary"]["wall_s"], res["summary"]["gaps_s"])
+    res["summary"] = s
+    res["flags"] = keep + session_flags(s, res.get("tool_mode", "rendered"))
     return res
 
 
