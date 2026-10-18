@@ -62,7 +62,7 @@ const hub::CatalogModel* best_here() {
     if (!fits) {
       try {
         const std::string d = hub::plan_dir(ref);
-        fits = !d.empty() && conversation_fits(d, opt.context, opt.slots, budget);
+        fits = !d.empty() && conversation_fits(d, opt.context, fit_slots(opt.slots), budget);
       } catch (const std::exception&) {
       }
     }

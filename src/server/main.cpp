@@ -1,7 +1,7 @@
 // kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages
 // (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
-//                 [--ctx 32768] [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
+//                 [--ctx 32768] [--slots N] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
 //                 [--api-key K] [--mem-budget GB] [--image-max-pixels N]
 //                 no --model: the best catalog model for this Mac's memory
 //   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
@@ -190,7 +190,7 @@ bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out,
     if (variant_fits(r, opt, budget) != 0) continue;  // not plannable (offline)
     // its smallest variant without the drafter: one --ctx conversation still fits (MTP decoding instead)
     try {
-      if (conversation_fits(hub::plan_dir(r), opt.context, opt.slots, budget)) {
+      if (conversation_fits(hub::plan_dir(r), opt.context, fit_slots(opt.slots), budget)) {
         *out = r;
         return true;
       }
@@ -298,7 +298,8 @@ static void print_serve_help() {
          "                         it once)\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --ctx TOKENS           context per conversation (default 32768)\n"
-         "  --slots N              conversations kept ready for instant follow-ups (default 2)\n"
+         "  --slots N              requests that run at once, each keeping its conversation ready for instant\n"
+         "                         follow-ups; more wait for a free slot (default: up to 4, as memory allows)\n"
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
          "                         none decodes with the model's MTP head\n"
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation)\n"
@@ -405,7 +406,8 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
           raw->out.push_back(w->begin(prompt));
           raw->started = true;
           raw->cv.notify_all();
-        });
+        },
+        [raw] { return raw->cancelled.load(); });
     std::lock_guard<std::mutex> lk(raw->mu);
     if (raw->started && out.finish_reason != "cancelled") raw->out.push_back(w->end(out));
     raw->result = std::move(out);
@@ -565,8 +567,9 @@ static int serve(int argc, char** argv, int first) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
     // here is refused, with the one that fits
     if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
-      const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
-      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, opt.context, opt.slots);
+      const int slots = opt.slots > 0 ? opt.slots : auto_slots(dir, opt, budget);
+      const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, slots, budget, opt.prefill_chunk);
+      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, opt.context, slots);
       if (need.bytes > budget) {
         // a variant of the same model that fits, else the best model that does
         bool fits = false;
@@ -668,7 +671,9 @@ static int serve(int argc, char** argv, int first) {
                                       {"owned_by", "nace"},
                                       {"context_length", engine.context_length()},
                                       // tokens one conversation can hold within this Mac's memory budget
-                                      {"context_fit", engine.context_fit()}}})},
+                                      {"context_fit", engine.context_fit()},
+                                      // requests that run at once (more wait for a free slot)
+                                      {"slots", engine.slots()}}})},
            {"has_more", false},
            {"first_id", engine.model_id()},
            {"last_id", engine.model_id()}};
@@ -729,17 +734,20 @@ static int serve(int argc, char** argv, int first) {
       };
       if (!send(json{{"role", "assistant"}, {"content", ""}}, nullptr, nullptr)) return false;
       size_t ntool = 0;
-      ChatResult out = engine.chat(r, [&](const ChatDelta& d) {
-        ui::token(meter);
-        bool ok = true;
-        if (!d.reasoning.empty()) ok = ok && send(json{{"reasoning_content", d.reasoning}}, nullptr, nullptr);
-        if (!d.content.empty()) ok = ok && send(json{{"content", d.content}}, nullptr, nullptr);
-        if (!d.tool_calls.empty()) {
-          ok = ok && send(json{{"tool_calls", tool_calls_json(d.tool_calls, ntool, true)}}, nullptr, nullptr);
-          ntool += d.tool_calls.size();
-        }
-        return ok;
-      });
+      ChatResult out = engine.chat(
+          r,
+          [&](const ChatDelta& d) {
+            ui::token(meter);
+            bool ok = true;
+            if (!d.reasoning.empty()) ok = ok && send(json{{"reasoning_content", d.reasoning}}, nullptr, nullptr);
+            if (!d.content.empty()) ok = ok && send(json{{"content", d.content}}, nullptr, nullptr);
+            if (!d.tool_calls.empty()) {
+              ok = ok && send(json{{"tool_calls", tool_calls_json(d.tool_calls, ntool, true)}}, nullptr, nullptr);
+              ntool += d.tool_calls.size();
+            }
+            return ok;
+          },
+          nullptr, [&] { return !sink.is_writable(); });  // a client gone while the request waits for a slot
       if (out.finish_reason == "error") {
         std::string s = "data: " + json{{"error", {{"message", out.error}, {"type", "invalid_request_error"}}}}.dump() + "\n\n";
         sink.write(s.data(), s.size());
@@ -890,7 +898,7 @@ static int serve(int argc, char** argv, int first) {
     card.used = Gpu::get().allocated_bytes();
     card.context = engine.context_length();
     card.context_fit = engine.context_fit();
-    card.slots = std::max(1, opt.slots);
+    card.slots = engine.slots();  // as the engine started (auto_slots when --slots is not given)
     ui::ready(card);
   } else {
     printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
@@ -966,7 +974,7 @@ static int pull(int argc, char** argv) {
     }
   }
   if (models.empty()) usage_error("which model? e.g. kapitsa pull 35b", help);
-  EngineOptions eo;  // serve's defaults: one 32k conversation, 2 slots
+  EngineOptions eo;  // serve's defaults: one 32k conversation, the slots auto_slots picks (fit checks count 2)
   for (const auto& name : models) {
     hub::ModelRef ref;
     try {
