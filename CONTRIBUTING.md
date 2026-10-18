@@ -34,6 +34,7 @@ the full build.
 | `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
 | `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
 | `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
+| `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
 | `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
 | `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
@@ -58,6 +59,8 @@ kill %1
   Metal kernels and runtime.
 - `src/ane/`: the Neural Engine bridge; `src/vision/`: image decoding, processors and vision towers.
 - `src/hub/`: the model catalog, `--model` resolution and downloads; `src/gguf/`: `kapitsa import`.
+- `src/update/`: Kapitsa updating itself (the kind of install, the latest release, the checks, the switch);
+  `src/server/update_cmd.cpp`: `kapitsa update` and the daily background check.
 - `src/bench/`: `kapitsa bench`: the benchmark harness's protocol, the Mac and its conditions, the result file and its
   submission; `bench/community/`: the community results and their checks.
 - `src/loader/`: the safetensors loader; `src/tokenizer/`: byte-level BPE, identical to Hugging Face's tokenizers.

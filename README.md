@@ -29,6 +29,11 @@ git clone https://github.com/nace-ai/kapitsa.git && cd kapitsa && ./install.sh
 
 </details>
 
+Kapitsa keeps itself up to date: installed with `install.sh`, a new release installs itself within a day, and with
+Homebrew a run in a terminal says when `brew upgrade` has one. `kapitsa update` updates now
+([details](docs/usage.md#updating)). Kapitsa 0.1.32 and older don't do this yet: update those once with the installer
+or `brew upgrade nace-ai/tap/kapitsa`.
+
 ## Quick start
 
 ```bash

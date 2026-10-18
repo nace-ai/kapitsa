@@ -15,11 +15,12 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
+| `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
 download (the parts are kept) or when the model question is cancelled; the coding-agent commands exit with the agent's
-code.
+code; `kapitsa update --check` exits 100 when a newer release is out.
 
 ### Which model
 
@@ -392,7 +393,10 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`. |
+| `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
+| `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
+| `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
 | `BENCH_GPU_LOCK` | `~/.cache/nace-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
 | `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
@@ -418,16 +422,60 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 The other `NI_*` switches exist for development and A/B tests.
 
-## Updating and uninstalling
+## Updating
 
-Homebrew and the curl installer work from the first release on. To update:
+`kapitsa update` updates Kapitsa to its latest release, the way it was installed:
 
-```bash
-brew upgrade kapitsa                                                                  # Homebrew
-curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash   # the installer, run again
-git pull && ./install.sh                                                              # a source build, in its clone
-```
+| Installed with | `kapitsa update` | Automatically |
+| --- | --- | --- |
+| `install.sh`, or a copied release binary | Downloads the release and puts it in place (below). | Installed within a day; the next run in a terminal says so. |
+| Homebrew (`/opt/homebrew/Cellar/kapitsa`) | Runs `brew upgrade nace-ai/tap/kapitsa` in a terminal (`--fetch-HEAD` for a `--HEAD` install); elsewhere it prints that command. | A run in a terminal says when a release is out. |
+| A build from source (a `CMakeCache.txt` beside the binary or above it) | Says how: `git -C SRC pull && cmake --build BUILD`. | A run in a terminal says when a release is out. |
+| `./install.sh` in a clone (a binary built from source, copied) | Replaces it with the release build. | A run in a terminal says when a release is out. |
+| An app such as Nace Agent (a binary inside `*.app/Contents/`) | Nothing: the app keeps its own Kapitsa. | Nothing. |
 
-To uninstall: `brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the
-binary `install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to
-that folder. Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`) removes the models and logs.
+An update of an install.sh install downloads the release's tarball and `.sha256` from GitHub into a new folder beside the
+binary and checks the tarball against the checksum. It checks the new binary's code signature (valid, signed as
+Kapitsa releases are, and by the same Developer ID team as the running binary when that one has one) and that its
+`--version` is the release's. Then it renames it over the old binary in one step, after checking that no `kapitsa bench`
+is running from it (a benchmark's servers must all run one binary) and that the file there is still the kapitsa that
+runs. The old binary is kept as `kapitsa.previous` beside the license files (`../share/kapitsa` from the binary's
+folder, where `install.sh` puts them, updated too). A release that fails a check changes nothing. A server that is
+running keeps the version it started with until it restarts. When the binary's folder is not yours to write (say
+`/usr/local/bin`), `kapitsa update` prints the command that works: `sudo /usr/local/bin/kapitsa update`.
+
+- `kapitsa update --check` only says whether a newer release is out: exit 0 when this one is up to date, 100 when a
+  newer one is out, 1 when it can't tell. A build newer than the latest release (or a dev build of it) is up to date.
+- `kapitsa update --rollback` puts `kapitsa.previous` back, and keeps the binary it replaces in its place (a second
+  `--rollback` returns to it). Automatic updates then skip the release rolled back from, until a newer one is out.
+- `kapitsa update --version X.Y.Z` installs that release, an older one too (nothing else ever installs an older one).
+- `kapitsa update --auto off` (and `on`) turns automatic updates off for this `KAPITSA_HOME`.
+
+Automatic updates: once a day, a `kapitsa` command (not `--help`, `--version`, `kapitsa update` or `kapitsa bench`)
+starts a check in the background: a separate process in its own session, at background priority, with a time limit of
+5 minutes (`KAPITSA_UPDATE_TIMEOUT_S`). The command itself does not wait for it and prints nothing more. For a
+Homebrew install, a build from source, a binary built from source, or one in a folder you can't write, the check only
+runs from a command in a terminal and only records a release that is out. The next run in a terminal prints one line: `Updated Kapitsa to
+0.1.33 (from 0.1.32); restart running servers to use it`, or `Kapitsa 0.1.33 is available: brew upgrade
+nace-ai/tap/kapitsa`, or why a release was not installed. A check that can't reach GitHub stays silent and runs again
+the next day. `KAPITSA_NO_AUTO_UPDATE=1`, `kapitsa update --auto off` and `CI` (set, and not `0` or `false`) turn
+automatic updates off; they are also off for root.
+
+What each binary's last check found is in `~/.cache/kapitsa/update.json` (`KAPITSA_HOME`): when it ran, the latest
+release, the result, and a release to skip after a rollback.
+
+Privacy: a check asks only `github.com/nace-ai/kapitsa/releases/latest` where the latest release is (a HEAD request,
+with no GitHub API and so no rate limit). An update downloads two files from the release, through GitHub's file host
+(`*.githubusercontent.com`); no other redirect is followed. Requests carry a fixed User-Agent (`kapitsa`) and
+language, no cookies and nothing about this Mac. There is no telemetry.
+
+Automatic updates start with the release after 0.1.32. Kapitsa 0.1.32 and older update once by hand: run the installer
+again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash`), or
+`brew upgrade nace-ai/tap/kapitsa`, or `git pull && ./install.sh` in a clone.
+
+## Uninstalling
+
+`brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binary
+`install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
+folder (the license files, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
+removes the models, logs and update state.
