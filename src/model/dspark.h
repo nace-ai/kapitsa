@@ -42,7 +42,7 @@ class DSpark : public NhDrafter {
     Buffer attn_norm, ffn_norm, qn, kn, sinks;
     NhMat q, k, v, o, gate, up, down;
   };
-  NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8 (NI_DSPARK_BF16=1: BF16)
+  NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8
   std::vector<float> host(const std::string& name);  // a BF16 / F32 tensor as fp32 on the CPU
   Buffer upload(const void* p, size_t bytes, const char* label);
   Buffer vec(const std::string& name);

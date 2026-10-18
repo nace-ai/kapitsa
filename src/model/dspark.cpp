@@ -186,14 +186,15 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   rank_ = j.value("dspark_markov_rank", j.value("markov_rank", 0));
   // the outputs of target_layer_ids are the inputs of the next layers; the last layer's output (an id of layers - 1)
   // is captured after the trunk (NemotronH: capture slot `layers`)
-  for (auto& v : d["target_layer_ids"]) taps_.push_back(v.get<int>() + 1);
+  if (d.contains("target_layer_ids"))
+    for (auto& v : d["target_layer_ids"]) taps_.push_back(v.get<int>() + 1);
   // block_size counts the anchor when dspark_bonus_anchor is set (8 rows: the anchor + 7 proposals)
   const int block = j.value("block_size", 8) + (j.value("dspark_bonus_anchor", false) ? 0 : 1);
   const bool causal = d.value("causal", j.value("dflash_query_causal", false));
   const std::string rope = j.contains("rope_parameters") && !j["rope_parameters"].is_null() ? "scaled" : "";
   if (H_ != tc.hidden || NL_ <= 0 || block != kB || j.value("head_dim", 128) != 128 || hq_ <= 0 || hkv_ <= 0 ||
       hq_ % hkv_ || mask_id_ < 0 || mask_id_ >= tg_.vocab() || taps_.empty() || !causal || rank_ <= 0 || rank_ % 16 ||
-      rank_ > 1024 || d.value("sample_from_anchor", j.value("sample_from_anchor", true)) || j.value("has_lm_head", false) ||
+      rank_ > 1024 || tg_.vocab() > 64 * 2048 /* the candidates kernel's 64 chunks */ || d.value("sample_from_anchor", j.value("sample_from_anchor", true)) || j.value("has_lm_head", false) ||
       !rope.empty() || j.value("vocab_size", 0) != tg_.vocab() || window_ <= 0)
     fatal("%s: unsupported DSpark drafter (hidden %d, block %d, Markov rank %d)", dir.c_str(), H_, block, rank_);
   for (int l : taps_)
