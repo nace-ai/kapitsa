@@ -483,6 +483,12 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
   }
 }
 void Encoder::barrier() { [E(enc_) memoryBarrierWithScope:MTLBarrierScopeBuffers]; }
+void Encoder::on_completed(std::function<void()> f) {
+  [(__bridge id<MTLCommandBuffer>)cb_ addCompletedHandler:^(id<MTLCommandBuffer>) {
+    f();
+  }];
+}
+
 void Encoder::commit() {
   if (enc_) {
     [E(enc_) endEncoding];
@@ -594,13 +600,6 @@ void Encoder::split() {
   open_encoder();
 }
 void Gpu::signal_event_cpu(void* event, uint64_t value) { ((__bridge id<MTLSharedEvent>)event).signaledValue = value; }
-
-void Encoder::on_completed(std::function<void()> fn) {
-  auto f = std::make_shared<std::function<void()>>(std::move(fn));
-  [(__bridge id<MTLCommandBuffer>)cb_ addCompletedHandler:^(id<MTLCommandBuffer>) {
-    (*f)();
-  }];
-}
 
 void Encoder::wait_event(void* event, uint64_t value) {
   if (enc_) {

@@ -42,8 +42,9 @@ struct EngineOptions {
   // "" = NI_DFLASH if set (auto | none | 0 | <dir>), else auto. spec_depth 0 turns "auto" off too.
   std::string dflash;
   // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
-  // model's processor resizes); 0 = the model's own limit.
-  long image_max_pixels = 0;
+  // model's processor resizes); vision::kModelDefaultPixels = the encoder's default (1.2 million; Nemotron 3.5 Bolt
+  // 1.4 million), 0 = the model's own limit (Qwen3.6 / 3.8: 16.7 million, Bolt: 13312 patches of 16x16).
+  long image_max_pixels = vision::kModelDefaultPixels;
 };
 
 // The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next
@@ -106,6 +107,20 @@ std::string chat_template_source(const std::string& model_dir);
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false);
 
+// One request's progress while it runs, for a live display (`kapitsa serve`'s dashboard in a terminal): the caller
+// passes it in ChatRequest::live and reads it from any thread; the engine writes it with relaxed atomic stores between
+// decode cycles, never on the GPU's path.
+struct LiveDecode {
+  std::atomic<int> phase{0};               // 0 waiting for the engine, 1 reading the prompt, 2 writing, 3 done
+  std::atomic<int> prompt{0}, cached{0};   // prompt tokens, of which reused from the cache
+  std::atomic<int> read{0};                // prompt tokens read so far: the cached ones, then each prefill chunk the
+                                           // GPU has finished
+  std::atomic<int> tokens{0};              // tokens written
+  std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
+  std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
+  std::atomic<int> spec{0};                // 0 plain decoding, 1 MTP, 2 DFlash2, 3 LiLiCorr
+};
+
 struct ChatRequest {
   ojson messages = ojson::array();
   ojson tools = ojson::array();
@@ -116,6 +131,7 @@ struct ChatRequest {
   int top_k = 20;
   uint32_t seed = 0;
   std::vector<std::string> stop;
+  std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
 };
 
 struct ToolCall {
@@ -229,6 +245,10 @@ class Engine {
   std::unique_ptr<DFlash2> dfl_;
   std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
   std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
+  std::vector<int> img_pre_, img_post_;     // the tokens its processor puts around an image's rows (Nemotron: <img>)
+  // `ids` with each image placeholder expanded to its image's rows (vision::expand with the encoder's marks)
+  vision::Prompt expand_images(const std::vector<int>& ids, const std::vector<vision::Prepared>& images,
+                               int* index = nullptr) const;
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;

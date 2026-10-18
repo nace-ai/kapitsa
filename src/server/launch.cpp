@@ -1,4 +1,4 @@
-// kapitsa claude|codex|opencode: a coding agent on Kapitsa in one command. It uses the Kapitsa already serving on
+// kapitsa claude|codex|opencode|pi: a coding agent on Kapitsa in one command. It uses the Kapitsa already serving on
 // 127.0.0.1:<port>, or starts one (`kapitsa serve` from this binary, logging to a file, with a context sized for
 // agents), waits for it, runs the agent pointed at it (src/api/clients.cpp: its environment and options), and stops
 // the server it started when the agent exits, with the agent's exit code.
@@ -6,7 +6,11 @@
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "server/cli.h"
+#include "server/beam.h"
+#include "server/picker.h"
+#include "server/ui.h"
 #include "util/log.h"
+#include "util/term.h"
 
 #include <httplib/httplib.h>
 
@@ -33,10 +37,10 @@ using json = nlohmann::ordered_json;
 namespace {
 
 const char* kHelp =
-    "kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [agent arguments] [-- agent arguments]\n\n"
-    "Starts Claude Code, Codex or opencode on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default 8000), the\n"
-    "agent uses that server; otherwise one is started for it (downloading the model the first time) with the largest\n"
-    "context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
+    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--ctx N] [--api-key K] [agent arguments] [-- agent arguments]\n\n"
+    "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
+    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with the\n"
+    "largest context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
     "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
@@ -46,6 +50,7 @@ const char* kHelp =
     "  kapitsa claude -p \"what does this repo do?\"\n"
     "  kapitsa codex exec \"fix the failing test\"\n"
     "  kapitsa opencode run \"add a --verbose flag\"\n"
+    "  kapitsa pi -p \"list the TODOs in this repo\"\n"
     "Arguments after -- go to the agent too (for its own --model, --port or --help).\n";
 
 // The executable of this process, for the server it starts
@@ -55,22 +60,6 @@ std::string self_path() {
   if (_NSGetExecutablePath(buf, &n) != 0) return "kapitsa";
   char real[PATH_MAX];
   return realpath(buf, real) ? real : buf;
-}
-
-std::string find_in_path(const std::string& name) {
-  const char* p = getenv("PATH");
-  std::string path = p ? p : "/usr/bin:/bin";
-  size_t a = 0;
-  while (a <= path.size()) {
-    size_t b = path.find(':', a);
-    if (b == std::string::npos) b = path.size();
-    const std::string dir = path.substr(a, b - a);
-    const std::string f = (dir.empty() ? "." : dir) + "/" + name;
-    struct stat st;
-    if (stat(f.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(f.c_str(), X_OK) == 0) return f;
-    a = b + 1;
-  }
-  return "";
 }
 
 // What a GET answers: -1 when nothing listens, else the HTTP status and body
@@ -166,6 +155,64 @@ void print_tail(const std::string& path, int lines) {
   for (const auto& l : v) fputs(l.c_str(), stderr);
 }
 
+// What the server's log says about the requests since `from` (its "chat: prompt N (cached M) ..., G tokens in T ms"
+// lines), for the line after the agent exits
+struct Session {
+  int requests = 0;
+  long prompt = 0, cached = 0, out = 0;
+  double decode_ms = 0;
+};
+Session session_since(const std::string& path, long from) {
+  Session s;
+  FILE* f = fopen(path.c_str(), "rb");
+  if (!f) return s;
+  fseek(f, 0, SEEK_END);
+  if (ftell(f) < from) from = 0;  // a new log since (another server)
+  fseek(f, from, SEEK_SET);
+  char buf[4096];
+  while (fgets(buf, sizeof buf, f)) {
+    const char* p = strstr(buf, "chat: prompt ");
+    if (!p) continue;
+    int n = 0, c = 0;
+    if (sscanf(p, "chat: prompt %d (cached %d)", &n, &c) != 2) continue;
+    const char* t = strstr(p, " tokens in ");
+    if (!t) continue;
+    const char* q = t;
+    while (q > p && q[-1] != ' ') --q;
+    int g = atoi(q);
+    double ms = atof(t + 11);
+    ++s.requests, s.prompt += n, s.cached += c, s.out += g, s.decode_ms += ms;
+  }
+  fclose(f);
+  return s;
+}
+
+// Writes `content` to `path` (its folder made first), unless the file already holds it; "" or what went wrong
+std::string write_file(const std::string& path, const std::string& content) {
+  if (FILE* f = fopen(path.c_str(), "rb")) {
+    std::string cur(content.size() + 1, '\0');
+    cur.resize(fread(cur.data(), 1, cur.size(), f));
+    fclose(f);
+    if (cur == content) return "";
+  }
+  for (size_t p = path.find('/', 1); p != std::string::npos; p = path.find('/', p + 1)) mkdir(path.substr(0, p).c_str(), 0755);
+  const std::string tmp = path + ".tmp." + std::to_string(getpid());
+  FILE* f = fopen(tmp.c_str(), "wb");
+  if (!f) return strerror(errno);
+  const bool ok = fwrite(content.data(), 1, content.size(), f) == content.size();
+  if (fclose(f) != 0 || !ok || rename(tmp.c_str(), path.c_str()) != 0) {
+    const std::string e = strerror(errno);
+    unlink(tmp.c_str());
+    return e;
+  }
+  return "";
+}
+
+long file_size_of(const std::string& path) {
+  struct stat st;
+  return stat(path.c_str(), &st) == 0 ? long(st.st_size) : 0;
+}
+
 volatile sig_atomic_t g_signal = 0;  // a stop signal while the server starts
 pid_t g_child_group = 0;             // where stop signals go while the agent runs
 
@@ -219,10 +266,27 @@ int major_version(const std::string& path) {
 
 }  // namespace
 
+std::string find_in_path(const std::string& name) {
+  const char* p = getenv("PATH");
+  std::string path = p ? p : "/usr/bin:/bin";
+  size_t a = 0;
+  while (a <= path.size()) {
+    size_t b = path.find(':', a);
+    if (b == std::string::npos) b = path.size();
+    const std::string dir = path.substr(a, b - a);
+    const std::string f = (dir.empty() ? "." : dir) + "/" + name;
+    struct stat st;
+    if (stat(f.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(f.c_str(), X_OK) == 0) return f;
+    a = b + 1;
+  }
+  return "";
+}
+
 int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string help = "kapitsa " + name + " --help";
   std::string model, key;
   int port = 8000, ctx = 0;
+  bool yes = false;
   std::vector<std::string> args;
   for (int i = first; i < argc; ++i) {
     const std::string a = argv[i];
@@ -240,10 +304,19 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       break;
     }
     if (a == "--help" || a == "-h") {
-      printf(kHelp, hub::tilde(hub::home_dir()).c_str());
+      if (term::fancy()) {
+        char b[4096];
+        snprintf(b, sizeof b, kHelp, hub::tilde(hub::home_dir()).c_str());
+        std::string h = b;  // in a terminal, without --model, it asks which model to start
+        h.insert(h.find("\n\nEvery other argument"), "\n  --yes         don't ask which model to start: the best for this Mac");
+        term::help(h);
+      } else {
+        printf(kHelp, hub::tilde(hub::home_dir()).c_str());
+      }
       return 0;
     }
-    if (is("--model")) model = value("--model");
+    if (a == "--yes") yes = true;
+    else if (is("--model")) model = value("--model");
     else if (is("--port")) port = to_int("--port", value("--port"), help.c_str());
     else if (is("--ctx")) ctx = to_int("--ctx", value("--ctx"), help.c_str());
     else if (is("--api-key")) key = value("--api-key");
@@ -270,6 +343,8 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string log = hub::home_dir() + "/logs/serve-" + std::to_string(port) + ".log";
   const int found = probe(port, key, &run, &why);
   if (found < 0) return fail(why);
+  // no --model in a terminal: which model, asked (picker.h), unless a server already runs on the port
+  const bool ask = model.empty() && ui::can_prompt(yes);
   if (found == 1) {
     if (!model.empty()) {
       hub::ModelRef want;
@@ -281,14 +356,23 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       if (want.id != run.model && want.name != run.model)
         return fail("The Kapitsa on port " + std::to_string(port) + " serves " + run.model + ", not " + model +
                     ". Stop it, or pass --port to start " + model + " on another port.");
+      ui::remember(want);
     }
-    if (ctx > 0 && ctx != run.context)
+    if (ctx > 0 && ctx != run.context && term::fancy())
+      ui::warning("The server on port " + std::to_string(port) + " is already running with a " + term::context(run.context) +
+                  "-token context; --ctx " + std::to_string(ctx) + " applies to a server this command starts.");
+    else if (ctx > 0 && ctx != run.context)
       fprintf(stderr, "kapitsa: the server on port %d is already running with a %d-token context; --ctx %d applies to a "
               "server this command starts.\n", port, run.context, ctx);
   } else {
     // start one: the model (downloaded first, with its progress here), a context sized for agents, then `serve`
     EngineOptions opt;
     const size_t budget = default_mem_budget();
+    if (ask) {
+      const auto pick = ui::pick_model(opt, budget, "kapitsa " + name);
+      if (!pick) return 130;
+      model = *pick;  // as if --model named it
+    }
     hub::ModelRef ref;
     std::string serve_model = model;
     try {
@@ -298,10 +382,12 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
         serve_model = ref.model && ref.variant ? hub::short_name(*ref.model, *ref.variant) : ref.dir;
       } else {
         ref = for_this_mac(hub::resolve(expand_home(model)), opt, budget);
+        ui::remember(ref);
       }
       hub::ensure(ref, hub::PullOptions{});
     } catch (const hub::Stopped& e) {
-      fprintf(stderr, "\n%s\n", e.what());
+      if (term::fancy()) term::status(""), ui::warning(e.what());
+      else fprintf(stderr, "\n%s\n", e.what());
       return 130;
     } catch (const hub::Error& e) {
       return fail(e.what());
@@ -346,9 +432,34 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     const auto t0 = std::chrono::steady_clock::now();
     int shown = -1;
     bool ready = false;
+    // in a terminal: the logo as a loader while the server starts (a spinner where it can't play)
+    const bool tui = term::fancy();
+    const std::string label = term::bold(ref.model ? ref.model->name : ref.name) + term::dim("  " + std::string(term::kDot) + "  ") +
+                              term::context(ctx) + " context";
+    auto secs_since = [t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
+    std::unique_ptr<ui::Loader> wobble;
+    std::unique_ptr<term::Spinner> spinner;
+    if (tui && ui::can_animate()) {
+      term::line("");
+      wobble = std::make_unique<ui::Loader>(
+          [&] {
+            return std::vector<std::string>{"Starting " + label + "  " + term::dim(term::duration(secs_since())),
+                                            term::dim(term::clip(last_log_line(log), std::max(20, term::columns() - ui::kLogoCols - 8)))};
+          },
+          2);
+    } else if (tui) {
+      spinner = std::make_unique<term::Spinner>("Starting " + label);
+    }
     while (!g_signal) {
       int st;
       if (waitpid(server, &st, WNOHANG) == server) {
+        if (tui) {
+          wobble.reset(), spinner.reset();
+          term::status("");
+          term::error("The server stopped while starting. The end of its log (" + hub::tilde(log) + "):");
+          print_tail(log, 15);
+          return 1;
+        }
         if (tty) fprintf(stderr, "\r\033[K");
         fprintf(stderr, "kapitsa: the server stopped while starting. The end of its log (%s):\n", hub::tilde(log).c_str());
         print_tail(log, 15);
@@ -359,7 +470,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
         break;
       }
       const int secs = int(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - t0).count());
-      if (tty) {
+      if (tui) {
+        if (spinner) spinner->detail(term::clip(last_log_line(log), 60));
+      } else if (tty) {
         std::string line = "Starting Kapitsa (" + what + ") " + std::to_string(secs) + "s  " + last_log_line(log);
         if (line.size() > 120) line.resize(120);
         fprintf(stderr, "\r\033[K%s", line.c_str());
@@ -369,7 +482,15 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
-    if (tty) fprintf(stderr, "\r\033[K");
+    if (tui) {
+      const std::string done = term::accent(term::kOk) + " " + label + term::dim("  " + std::string(term::kDot) + "  ready in " +
+                                                                              term::duration(secs_since()));
+      if (wobble) wobble->done({done, ""});
+      else if (spinner) spinner->done(ready ? "  " + done : "");
+      wobble.reset(), spinner.reset();
+    } else if (tty) {
+      fprintf(stderr, "\r\033[K");
+    }
     sigaction(SIGINT, &old_int, nullptr);
     sigaction(SIGTERM, &old_term, nullptr);
     sigaction(SIGHUP, &old_hup, nullptr);
@@ -394,11 +515,17 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   }
   api::AgentLaunch l;
   try {
-    l = api::agent_launch(name, path, s, args, env, name == "opencode" ? major_version(path) : -1);
+    l = api::agent_launch(name, path, s, args, env, name == "opencode" ? major_version(path) : -1,
+                          hub::home_dir() + "/agents");
   } catch (const std::exception& e) {
     if (server > 0) kill(server, SIGTERM), waitpid(server, nullptr, 0);
     return fail(e.what());
   }
+  for (const auto& [file, content] : l.files)
+    if (const std::string e = write_file(file, content); !e.empty()) {
+      if (server > 0) kill(server, SIGTERM), waitpid(server, nullptr, 0);
+      return fail("Can't write " + hub::tilde(file) + ": " + e);
+    }
   for (const auto& u : l.unset) env.erase(u);
   for (const auto& [k, v] : l.set) env[k] = v;
   std::vector<std::string> cenv;
@@ -407,9 +534,28 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   auto ce = c_strings(cenv);
   char ctxs[32];
   snprintf(ctxs, sizeof ctxs, "%d", run.context);
-  fprintf(stderr, "Kapitsa: %s, %s-token context, http://127.0.0.1:%d (%s)\n", run.model.c_str(), ctxs, port,
-          server > 0 ? ("started for this session; log " + hub::tilde(log)).c_str() : "already running");
-  for (const auto& n : l.notes) fprintf(stderr, "%s\n", n.c_str());
+  const bool tui = term::fancy();
+  const long log_from = server > 0 ? 0 : file_size_of(log);  // the requests of this session, for the line at its end
+  if (tui) {
+    if (server == 0 && ask) {  // the question was skipped for it
+      const std::string l = "Using the running server: " + term::bold(ui::model_label(run.model)), why = "stop it to pick another model";
+      if (4 + term::width(l) + 3 + term::width(why) <= term::columns() - 1) ui::ok(l + term::dim(" (" + why + ")"));
+      else ui::ok(l), ui::note(why);
+    } else if (server == 0) {
+      const std::string dot = term::dim("  " + std::string(term::kDot) + "  "),
+                        rest = dot + run.model + dot + term::context(run.context) + " context";
+      const std::string l = "Kapitsa on " + term::bold("http://127.0.0.1:" + std::to_string(port)) + rest + " " + term::dim("(already running)");
+      // in a narrow terminal: shorter
+      ui::ok(4 + term::width(l) <= term::columns() - 1 ? l : "Kapitsa already running on " + term::bold(":" + std::to_string(port)) + rest);
+    } else
+      ui::note("http://127.0.0.1:" + std::to_string(port) + "  " + term::kDot + "  log " + hub::tilde(log));
+    for (const auto& n : l.notes) ui::note(n);
+    term::line("", stderr);
+  } else {
+    fprintf(stderr, "Kapitsa: %s, %s-token context, http://127.0.0.1:%d (%s)\n", run.model.c_str(), ctxs, port,
+            server > 0 ? ("started for this session; log " + hub::tilde(log)).c_str() : "already running");
+    for (const auto& n : l.notes) fprintf(stderr, "%s\n", n.c_str());
+  }
 
   // The agent gets the terminal as if started from the shell: in a process group of its own made the foreground one,
   // so Ctrl+C and Ctrl+Z reach it alone (the server is in its own session). Signals sent to this process go to it.
@@ -484,6 +630,24 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       kill(server, SIGKILL);
       waitpid(server, nullptr, 0);
     }
+  }
+  if (tui) {  // the session in one line: requests, tokens, cache reuse, speed; and the server's fate
+    const Session ss = session_since(log, log_from);
+    const std::string dot = term::dim("  " + std::string(term::kDot) + "  ");
+    std::string l;
+    if (ss.requests > 0) {
+      char b[64];
+      l = std::to_string(ss.requests) + (ss.requests == 1 ? " request" : " requests") + dot + term::count(double(ss.prompt)) +
+          " prompt tokens";
+      if (ss.prompt > 0) snprintf(b, sizeof b, " (%.0f%% cached)", 100.0 * double(ss.cached) / double(ss.prompt)), l += term::dim(b);
+      l += dot + term::count(double(ss.out)) + " out";
+      if (ss.decode_ms > 0 && ss.out > ss.requests)
+        snprintf(b, sizeof b, " at %.0f tok/s", double(ss.out - ss.requests) / (ss.decode_ms / 1000)), l += b;
+      l += dot;
+    }
+    l += server > 0 ? "the server stopped" : "Kapitsa keeps running on :" + std::to_string(port);
+    term::line("", stderr);
+    ui::ok(l);
   }
   if (WIFEXITED(st)) return WEXITSTATUS(st);
   if (WIFSIGNALED(st)) return 128 + WTERMSIG(st);

@@ -79,7 +79,7 @@ def check(name, ok, detail=""):
         fails += 1
 
 # The app and the CLI download the same pinned files for the 4-bit variants (src/hub/catalog.cpp), which are the
-# defaults (docs/PERF.md, Weight formats and default precisions).
+# defaults.
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf"),
             "qwen3.8-27b": ("4bit", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c"),
             "qwen3.5-4b": ("4bit", "lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1")}

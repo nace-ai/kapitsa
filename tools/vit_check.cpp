@@ -2,13 +2,18 @@
 //   vit_check decode IMAGE OUT.rgb                    decoded RGB (PIL's convert("RGB") values); prints "w h digest"
 //   vit_check resize IN.rgb W H OW OH OUT.rgb         Pillow's bicubic resize of raw RGB
 //   vit_check smart H W FACTOR MIN MAX                smart_resize; prints "h w"
-//   vit_check prep MODEL IMAGE OUT.f32                the processor's pixel_values (float32 [patches, C*T*P*P]);
-//                                                     prints "grid_h grid_w tokens" (token grid)
+//   vit_check prep MODEL IMAGE OUT.f32                the processor's pixel_values (float32, the reference's layout:
+//                                                     Qwen [patches, C*T*P*P], RADIO [3, H, W]); prints
+//                                                     "grid_h grid_w tokens width height"
+//   vit_check aaresize IN.rgb W H OW OH OUT.f32       torch's antialiased bicubic interpolate of raw RGB (float32
+//                                                     channel planes, values 0-255)
+//   vit_check patches W H BUDGET MIN                  the RADIO processor's patch grid; prints "cols rows"
+//   vit_check patches FILE                            the same for each line "W H BUDGET MIN" of FILE
 //   vit_check rope SPANS OUT.i32                      M-RoPE positions of a prompt: SPANS = "n pos:gh:gw,..." rows;
 //                                                     writes int32 [n, 3]
-//   vit_check tower MODEL IN.rgb W H OUT [LAYERS]     GPU: the encoder on raw RGB of W x H (multiples of 32, no resize):
-//                                                     bf16 embeddings, or with LAYERS the fp32 hidden state after
-//                                                     that many blocks
+//   vit_check tower MODEL IN.rgb W H OUT [LAYERS]     GPU: the encoder on raw RGB of W x H (a size its processor
+//                                                     keeps: multiples of 32): bf16 embeddings, or with LAYERS the fp32
+//                                                     hidden state of every row after that many blocks
 //   vit_check bench MODEL W H [REPS]                  GPU: encode time of a W x H image (random pixels)
 //   vit_check kernels                                 GPU, tiny synthetic tensors: attn_prep_m vs attn_prep (bitwise
 //                                                     on text rows), vs a CPU M-RoPE on image rows; embed_rows_bf16
@@ -17,6 +22,7 @@
 #include "util/bf16.h"
 #include "util/log.h"
 #include "vision/qwen_vit.h"
+#include "vision/radio_vit.h"
 
 #include <cmath>
 #include <cstdio>
@@ -44,10 +50,10 @@ static void dump(const std::string& p, const void* data, size_t n) {
   fclose(f);
 }
 
-static std::unique_ptr<QwenViT> open_vit(const std::string& dir) {
-  QwenViTConfig c;
-  if (!QwenViT::supports(dir, &c)) fatal("%s: no Qwen3.5 vision tower", dir.c_str());
-  return std::make_unique<QwenViT>(dir, c);
+static std::unique_ptr<ImageEncoder> open_vit(const std::string& dir) {
+  std::unique_ptr<ImageEncoder> e = open_encoder(dir);  // the model's own limits (as the reference processors)
+  if (!e) fatal("%s: no vision tower Kapitsa runs", dir.c_str());
+  return e;
 }
 
 // attn_prep / attn_prep_m on random rows: text rows must match bitwise, image rows a CPU rotation by (t, h, w)
@@ -198,7 +204,29 @@ int main(int argc, char** argv) {
       const Prepared p = vit->prepare(decode(slurp(argv[3])));
       const std::vector<float> pv = vit->pixel_values(p);
       dump(argv[4], pv.data(), pv.size() * 4);
-      printf("%d %d %d\n", p.grid_h, p.grid_w, p.tokens);
+      printf("%d %d %d %d %d\n", p.grid_h, p.grid_w, p.tokens, p.width, p.height);
+      return 0;
+    }
+    if (cmd == "aaresize" && argc == 8) {
+      const std::string raw = slurp(argv[2]);
+      const int w = atoi(argv[3]), h = atoi(argv[4]), ow = atoi(argv[5]), oh = atoi(argv[6]);
+      if (raw.size() != size_t(w) * h * 3) fatal("aaresize: %zu bytes for %d x %d", raw.size(), w, h);
+      const std::vector<float> out = torch_resize_bicubic_aa(std::vector<uint8_t>(raw.begin(), raw.end()), w, h, ow, oh);
+      dump(argv[7], out.data(), out.size() * 4);
+      return 0;
+    }
+    if (cmd == "patches" && argc == 3) {
+      std::ifstream in(argv[2]);
+      int w, h, budget, mn;
+      while (in >> w >> h >> budget >> mn) {
+        const auto [cols, rows] = radio_target_patches(w, h, 16, budget, mn);
+        printf("%d %d\n", cols, rows);
+      }
+      return 0;
+    }
+    if (cmd == "patches" && argc == 6) {
+      const auto [cols, rows] = radio_target_patches(atoi(argv[2]), atoi(argv[3]), 16, atoi(argv[4]), atoi(argv[5]));
+      printf("%d %d\n", cols, rows);
       return 0;
     }
     if (cmd == "rope" && argc == 4) {
@@ -228,25 +256,24 @@ int main(int argc, char** argv) {
     if (cmd == "tower" && (argc == 7 || argc == 8)) {
       auto vit = open_vit(argv[2]);
       const std::string raw = slurp(argv[3]);
-      Prepared p;
-      p.width = atoi(argv[4]);
-      p.height = atoi(argv[5]);
-      if (raw.size() != size_t(p.width) * p.height * 3 || p.width % 32 || p.height % 32)
-        fatal("tower: %zu bytes for %d x %d (multiples of 32)", raw.size(), p.width, p.height);
-      p.pixels.assign(raw.begin(), raw.end());
-      p.grid_h = p.height / 32;
-      p.grid_w = p.width / 32;
-      p.tokens = p.grid_h * p.grid_w;
+      Image im;
+      im.width = atoi(argv[4]);
+      im.height = atoi(argv[5]);
+      if (raw.size() != size_t(im.width) * im.height * 3) fatal("tower: %zu bytes for %d x %d", raw.size(), im.width, im.height);
+      im.rgb.assign(raw.begin(), raw.end());
+      const Prepared p = vit->prepare(im);
+      if (p.width != im.width || p.height != im.height)
+        fatal("tower: the processor resizes %d x %d to %d x %d; give it a size it keeps", im.width, im.height, p.width,
+              p.height);
       const int layers = argc == 8 ? atoi(argv[7]) : -1;
       vit->load();
-      const QwenViTConfig& c = vit->config();
-      const size_t N = size_t(p.height / 16) * (p.width / 16);
-      const size_t bytes = layers >= 0 ? N * c.hidden * 4 : size_t(p.tokens) * c.out_hidden * 2;
+      const size_t bytes = layers >= 0 ? size_t(vit->debug_rows(p)) * vit->debug_width() * 4
+                                       : size_t(p.tokens) * vit->out_dim() * 2;
       Buffer out = Gpu::get().alloc(bytes + 16, "out");
       if (layers >= 0) vit->set_debug_stop(layers);
       const double t0 = now_ms();
       vit->encode(p, out);
-      fprintf(stderr, "encoded %d x %d (%zu patches) in %.1f ms\n", p.width, p.height, N, now_ms() - t0);
+      fprintf(stderr, "encoded %d x %d (%d tokens) in %.1f ms\n", p.width, p.height, p.tokens, now_ms() - t0);
       dump(argv[6], out.ptr(), bytes);
       return 0;
     }

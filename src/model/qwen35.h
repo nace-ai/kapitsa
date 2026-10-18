@@ -108,7 +108,7 @@ struct AneLayerTimes {
   double ane_in_split = 0;  // ANE time inside the split (event reached ready -> report)
 };
 
-// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp; docs/PERF.md "27B DFlash2 cycle"). Defaults
+// Runtime knobs of the 8-row verify kernels (src/model/qwen35_v8.cpp). Defaults
 // are the measured-fastest settings; the environment (NI_V8_CM, NI_V8_PAIR, NI_V8_KPLAN, NI_V8_GUSPLIT,
 // NI_V8_GDNSPLIT, NI_V8_PREPU) overrides them, and tools may change them between encodes: ni_run's NI_AB alternates
 // two settings per decode cycle so both are timed under the same GPU conditions.
@@ -468,8 +468,7 @@ class Qwen35 : public Model {
 
   size_t mem_budget_ = 0;
   bool gdn_sigmoid_ = false;  // the gated norm's gate: sigmoid (Qwen3.8-Flash-Next), else silu
-  // 3-row verify GEMVs on the fp32 kernels instead of qmvht_t3_r4's half products (Qwen4Exp: accuracy first; on
-  // Apple10 GPUs qmvht is off for every model)
+  // 3-row verify GEMVs on the fp32 kernels instead of qmvht_t3_r4's half products (Qwen4Exp: accuracy first)
   bool no_qmvh_ = false;
   virtual void grow_kv(Seq& s, int cap);
   void enc_kv_regrow(Encoder& e, const Buffer& src, const Buffer& dst, int old_cap, int new_cap);

@@ -81,7 +81,7 @@ static int moe_qmr() {
 // NI_QMM (read once): dense prefill GEMM family for 4-bit, group-64 weights.
 //   unset/empty/1 (default): qmr (qmm3.metal: weights dequantized straight into MMA registers, X
 //      staged in threadgroup memory) with the tile picked from M and N; 27B prefill 4k +19-21%,
-//      35B +6-8% on macOS 27 (docs/PERF.md), greedy output identical
+//      35B +6-8% on macOS 27, greedy output identical
 //   0: qmm_b4_m64_n64 (M >= 64) / qmm_b4_m32_n32 (the original kernels)
 //   <kernel name>, e.g. qmr_k64_w12_m32_n64: that kernel for M >= 64 and N > 64 (tile and threads
 //      parsed from the name), the automatic choice otherwise
@@ -152,7 +152,7 @@ static int shortpf_moe_max() {
 }
 // NI_SHORTPF_GEMM (read once): kernels for the projections of passes of at most NI_SHORTPF_MAX rows
 //   auto (default): per projection group, the faster of the two short-prefill families below as
-//         measured with bench_qmms on M4 Pro over the 35B / 27B shapes (docs/PERF.md, short_qmms())
+//         measured with bench_qmms on M4 Pro over the 35B / 27B shapes (short_qmms())
 //   qmms: register-streaming qmms (qmms.metal): weights dequantized straight into simdgroup-matrix
 //         A operands, no threadgroup tiles, K split over simdgroups; any T <= 64 in 8-row blocks
 //   tile: qmr (qmm3.metal) with one row tile holding all rows (two from 49 rows), 8-row steps, so each

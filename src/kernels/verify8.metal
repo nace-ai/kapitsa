@@ -635,7 +635,7 @@ NI_QMM8(qmm8snb_b4_nf1, 4, 1, false, 13)   // CM 1, two groups per step (the def
 NI_QMM8(qmm8snb_b4_nf2, 4, 2, false, 13)
 NI_QMM8_SG(qmm8snb16_b4_nf1, 16, 4, 1, false, 13)  // up to 16 simdgroups (k-slices) per threadgroup
 NI_QMM8_SG(qmm8snb16_b4_nf2, 16, 4, 2, false, 13)
-// Experiments measured in docs/PERF.md (not instantiated to keep the library small; add the line to
+// Experiments measured and dropped (not instantiated to keep the library small; add the line to
 // reproduce): NI_QMM8(qmm8abl1_b4_nf2, 4, 2, false, 4)  no MMAs; NI_QMM8(qmm8abl2_b4_nf2, 4, 2, false, 5)
 // cache-resident weights; NI_QMM8(qmm8t_b4_nf2, 4, 2, false, 6) threadgroup-staged table (ks = 1);
 // NI_QMM8(qmm8abl3_b4_nf2, 4, 2, false, 7) staged table without table reads.

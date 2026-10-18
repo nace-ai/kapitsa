@@ -120,6 +120,9 @@ class Encoder {
   void group_end() { in_group_ = false; }
   bool grouped() const { return auto_barrier_; }
   void commit();             // non-blocking
+  // `f` runs (on a Metal thread) once the GPU has finished this command buffer; set before commit(). For progress
+  // displays: no wait, nothing on the GPU's path.
+  void on_completed(std::function<void()> f);
   void wait();               // waits for this command buffer (and the ones signal_event committed)
   // Waits at most timeout_ms for this command buffer to finish (polling); false if it is still running.
   bool wait_for(double timeout_ms);
@@ -130,9 +133,6 @@ class Encoder {
   // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
   void signal_event(void* event, uint64_t value);
   void wait_event(void* event, uint64_t value);
-  // Runs fn on a Metal thread once the current command buffer has completed (also when it failed); add before the
-  // command buffer is committed
-  void on_completed(std::function<void()> fn);
   // Commits the work so far and continues in a new command buffer (same queue, so in order): long passes are split
   // into short command buffers, which keeps the GPU responsive to the desktop's own work.
   void split();

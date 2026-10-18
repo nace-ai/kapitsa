@@ -29,17 +29,21 @@ static bool typed(const ojson& it, const char* type) {
   return t != it.end() && t->is_string() && t->get_ref<const std::string&>() == type;
 }
 
-// The template's test (`'image' in item or 'image_url' in item or item.type == 'image'`, videos likewise).
+// An image part by any of the chat templates' tests: the Qwen3.5 family's (`'image' in item or 'image_url' in item or
+// item.type == 'image'`) or Nemotron 3.5's (type image, image_url or input_image). The engine renders every image part
+// in the one form all of them count (without_image_data), so templates and images pair up. Videos likewise.
 static bool is_image_part(const ojson& it) {
   if (it.is_string()) {
     const std::string& s = it.get_ref<const std::string&>();
     return s.find("image") != std::string::npos;  // `'image' in item` on a string is a substring test
   }
-  return it.is_object() && (it.contains("image") || it.contains("image_url") || typed(it, "image"));
+  return it.is_object() && (it.contains("image") || it.contains("image_url") || typed(it, "image") ||
+                            typed(it, "input_image"));
 }
 static bool is_video_part(const ojson& it) {
   if (it.is_string()) return it.get_ref<const std::string&>().find("video") != std::string::npos;
-  return it.is_object() && (it.contains("video") || typed(it, "video"));
+  return it.is_object() &&
+         (it.contains("video") || typed(it, "video") || typed(it, "video_url") || typed(it, "input_video"));
 }
 
 static Source source_of(const ojson& it) {
@@ -302,7 +306,7 @@ static void drawn_rgb(CGImageRef img, std::vector<uint8_t>& out) {
   CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   std::vector<uint8_t> rgbx(w * h * 4);
   CGContextRef ctx = CGBitmapContextCreate(rgbx.data(), w, h, 8, w * 4, srgb,
-                                           kCGImageAlphaNoneSkipLast | kCGBitmapByteOrder32Big);
+                                           uint32_t(kCGImageAlphaNoneSkipLast) | uint32_t(kCGBitmapByteOrder32Big));
   CGColorSpaceRelease(srgb);
   if (!ctx) throw Error("can't decode the image (unsupported pixel format)");
   CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), img);

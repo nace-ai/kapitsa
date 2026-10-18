@@ -7,7 +7,7 @@
 # libraries (system ones only) and --version.
 # Signing is ad hoc, unless KAPITSA_SIGN_IDENTITY names a "Developer ID Application" certificate in the keychain
 # (KAPITSA_KEYCHAIN: in that keychain file). KAPITSA_NOTARY_PROFILE, a profile saved with
-# `xcrun notarytool store-credentials`, then also has Apple notarize it. RELEASING.md has the release steps.
+# `xcrun notarytool store-credentials`, then also has Apple notarize it. .github/workflows/release.yml runs it for each release tag.
 set -euo pipefail
 
 die() { printf 'build.sh: %s\n' "$*" >&2; exit 1; }
