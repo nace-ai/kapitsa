@@ -34,12 +34,12 @@ git clone https://github.com/nace-ai/kapitsa.git && cd kapitsa && ./install.sh
 ## Quick start
 
 ```bash
-kapitsa opencode
+kapitsa opencode --model 35b
 ```
 
 This starts Qwen3.6 35B-A3B (a 22.1 GB download the first time) and opens [opencode](https://opencode.ai) on it.
 `kapitsa claude` and `kapitsa codex` work the same way. For the chat page and the API at **http://127.0.0.1:8000**,
-run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16-24 GB Mac add `--model 4b`.
+run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16-24 GB Mac use `--model 4b`.
 `kapitsa doctor` shows which models and context sizes fit your Mac.
 
 <!-- Demo slot: record docs/assets/demo.gif from main once the terminal UI (opt/tui) lands, then uncomment.
