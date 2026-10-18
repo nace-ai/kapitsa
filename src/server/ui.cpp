@@ -261,7 +261,8 @@ void home(const std::string& version) {
                   {"list", "downloaded models, and every precision"},
                   {"rm", "delete a downloaded model"},
                   {"import", "convert a GGUF (LM Studio, Ollama, llama.cpp) into a model"},
-                  {"doctor", "this Mac's GPU and memory, and which models fit"}},
+                  {"doctor", "this Mac's GPU and memory, and which models fit"},
+                  {"bench", "benchmark this Mac and add it to the community results"}},
               4, W);
   paragraph(o, "kapitsa <command> --help shows its options.", 4, W, dim);
   o.push_back("");

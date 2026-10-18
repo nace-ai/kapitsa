@@ -11,6 +11,8 @@
 //   kapitsa rm MODEL...
 //   kapitsa mtp-sidecar SRC OUT [--revision REV] [--hidden post_norm|pre_norm]   (tools/mtp_sidecar.py, same bytes)
 //   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
+//   kapitsa bench [--model M] [--quick] [--json] [--submit [--dry-run]] [--out FILE]; kapitsa bench submit [FILE]
+//                 (bench_cmd.cpp: the harness's protocol on this Mac, its result, the community results)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
 #include "api/anthropic.h"
@@ -279,7 +281,8 @@ static void print_help() {
          "  list         downloaded models, their size and what they include\n"
          "  rm MODEL     delete a downloaded model\n"
          "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
-         "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n\n"
+         "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n"
+         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
 }
@@ -1163,6 +1166,7 @@ int main(int argc, char** argv) {
   if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
   if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
+  if (cmd == "bench") return run_bench(argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

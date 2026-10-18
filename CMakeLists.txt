@@ -41,11 +41,27 @@ add_custom_command(
   DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
   COMMENT "Embedding the Nemotron-H Metal kernels")
 
+# kapitsa bench (src/bench/): the harness's frozen prompt corpus and Apple's names for the Mac models, embedded
+set(NI_BENCH_CORPUS ${CMAKE_BINARY_DIR}/generated/bench_corpus.cpp)
+add_custom_command(
+  OUTPUT ${NI_BENCH_CORPUS}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_BENCH_CORPUS} -DSRC=${CMAKE_SOURCE_DIR}/bench/harness/corpus/bench_corpus.txt
+          -DNAME=kBenchCorpus -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  DEPENDS ${CMAKE_SOURCE_DIR}/bench/harness/corpus/bench_corpus.txt ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  COMMENT "Embedding the benchmark's prompt corpus")
+set(NI_MAC_MODELS ${CMAKE_BINARY_DIR}/generated/mac_models.cpp)
+add_custom_command(
+  OUTPUT ${NI_MAC_MODELS}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_MAC_MODELS} -DSRC=${CMAKE_SOURCE_DIR}/bench/community/mac-models.json
+          -DNAME=kMacModels -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  DEPENDS ${CMAKE_SOURCE_DIR}/bench/community/mac-models.json ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+  COMMENT "Embedding the Mac models")
+
 file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics")
@@ -71,7 +87,7 @@ add_custom_command(
   COMMENT "Embedding the chat page")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
-  ${KAPITSA_CHAT})
+  ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")
