@@ -106,17 +106,21 @@ fastest ([all setups](docs/benchmarks.md)).
 
 ### MacBook Pro (2024) · M4 Pro · 48 GB
 
-| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B | Nemotron 3.5 Bolt 74B-A9B |
-| --- | ---: | ---: | ---: |
-| llama.cpp + MTP | 69 tok/s | 18 tok/s | — |
-| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s | — |
-| LM Studio (MLX engine) | 86 tok/s | 15 tok/s | — |
-| MTPLX | 80 tok/s | 36 tok/s | — |
-| mlx-vlm | — | — | 32 tok/s |
-| oMLX | — | 14 tok/s | 34 tok/s |
-| oMLX + DFlash2 | 127 tok/s | 45 tok/s | — |
-| oMLX + LiLiCorr | — | — | fails when sampling |
-| **Kapitsa** | **154 tok/s** | **63 tok/s** | **64 tok/s** |
+| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| --- | ---: | ---: |
+| llama.cpp + MTP | 69 tok/s | 18 tok/s |
+| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
+| LM Studio (MLX engine) | 86 tok/s | 15 tok/s |
+| MTPLX | 80 tok/s | 36 tok/s |
+| oMLX + DFlash2 | 127 tok/s | 45 tok/s |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** |
+
+| Engine | Nemotron 3.5 Bolt 74B-A9B |
+| --- | ---: |
+| mlx-vlm | 32 tok/s |
+| oMLX | 34 tok/s |
+| oMLX + LiLiCorr | fails when sampling |
+| **Kapitsa** | **64 tok/s** |
 
 Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. Qwen3.5 4B:
 being measured.
@@ -140,12 +144,12 @@ A follow-up is the time to the first token of an answer in a conversation that a
 
 ### MacBook Pro · M5 Max · 128 GB
 
-| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B | Nemotron 3.5 Bolt 74B-A9B |
-| --- | ---: | ---: | ---: |
-| **Kapitsa** | **250 tok/s** | **73 tok/s** | — |
-| Other engines | — | — | — |
+| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| --- | ---: | ---: |
+| **Kapitsa** | **250 tok/s** | **73 tok/s** |
+| Other engines | — | — |
 
-Other engines on this Mac: coming.
+Other engines on this Mac: coming. Nemotron 3.5 Bolt here: not measured yet.
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro · M5 Max · 128 GB</summary>
