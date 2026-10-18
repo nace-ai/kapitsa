@@ -132,6 +132,25 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("variant") == dv and
                   j.get("repo") == repo and j.get("revision") == rev and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # NVIDIA's Nemotron 3.5 checkpoints: one variant each, the LiLiCorr drafter in dflash/
+    for name, dv, repo, rev, comp, aliases in [
+            ("nemotron-3.5-bolt", "24gb", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+             "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr", "abd478065678ee83a93821c4b3f512da24e4cecb",
+              "dflash"), ["bolt", "nemotron-bolt"]),
+            ("nemotron-3.5-super-vl", "nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+             "59b8721646c38111a242da18218859fb2b454322",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+              "292bf1efc06ba39567da7351f2ad7a522afa3959", "dflash"),
+             ["super", "super-vl", "nemotron-super", "NEMOTRON-3.5-SUPER-VL:nvfp4",
+              "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"])]:
+        for a in aliases:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            check(f"cli: {a} -> {name}:{dv} with its LiLiCorr drafter",
+                  j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
+                  j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
+                  j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
