@@ -1,12 +1,10 @@
-<p align="center">
-  <img src="docs/assets/kapitsa-logo.png" width="160" alt="Kapitsa logo, an indigo and mint geometric K">
-</p>
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
+  <img alt="Kapitsa: the fastest inference engine for Qwen and Nemotron on Apple silicon. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
+</picture>
 
-# Kapitsa
-
-**Local Qwen and Nemotron inference for Apple silicon, by [Nace.AI](https://nace.ai).**
-
-Run chat apps and coding agents on your Mac through OpenAI-compatible and Anthropic-compatible APIs.
+By [Nace.AI](https://nace.ai). Run chat apps and coding agents on your Mac through OpenAI-compatible and Anthropic-compatible APIs.
 Kapitsa is a native C++ and Metal engine with speculative decoding, conversation caching, optional Neural Engine
 acceleration, and image input on supported Qwen and Nemotron models.
 
