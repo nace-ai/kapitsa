@@ -1268,7 +1268,11 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         cbytes += f->size;
       }
       mcomp.push_back(ojson{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"commit", L.commit}, {"files", cf}});
-      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : c.kind == "lilicorr" ? "LiLiCorr drafter " : c.kind == "dspark" ? "DSpark drafter " : "MTP head ") +
+      extras.push_back((c.kind == "dflash2"    ? "DFlash2 drafter "
+                        : c.kind == "dflash"   ? "DFlash drafter "
+                        : c.kind == "lilicorr" ? "LiLiCorr drafter "
+                        : c.kind == "dspark"   ? "DSpark drafter "
+                                               : "MTP head ") +
                        fmt_bytes(cbytes));
     }
   }
@@ -1670,7 +1674,15 @@ std::vector<Installed> installed() {
     }
     uint64_t sz;
     if (file_size(m.dir + "/mtp.safetensors", sz)) m.extras.push_back("MTP head");
-    if (file_size(m.dir + "/dflash2/model.safetensors", sz)) m.extras.push_back("DFlash2 drafter");
+    if (file_size(m.dir + "/dflash2/model.safetensors", sz)) {
+      bool v1 = false;  // a DFlash (v1) drafter in the same folder (Qwen3.5-4B's)
+      try {
+        v1 = json::parse(read_text(m.dir + "/dflash2/config.json")).value("architectures", json::array()) ==
+             json::array({"DFlashDraftModel"});
+      } catch (...) {
+      }
+      m.extras.push_back(v1 ? "DFlash drafter" : "DFlash2 drafter");
+    }
     if (file_size(m.dir + "/dflash/model.safetensors", sz)) {
       // Nemotron 3.5's block drafters: DSpark (Lightning) or LiLiCorr (Bolt, Super-VL)
       std::ifstream f(m.dir + "/dflash/config.json");

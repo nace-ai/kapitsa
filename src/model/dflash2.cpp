@@ -49,6 +49,43 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
     if (!ok) bad.push_back(what);
   };
   const json dc = c.value("dflash_config", json::object());
+  if (c.value("architectures", json::array()) == json::array({"DFlashDraftModel"})) {
+    // DFlash (v1): Qwen3 decoder layers over [context features; block], no conv / selector (see DFlash2Config::v1)
+    const int NL = c.value("num_hidden_layers", 0), H = c.value("hidden_size", 0), I = c.value("intermediate_size", 0);
+    const int vocab = c.value("vocab_size", 0), nq = c.value("num_attention_heads", 0),
+              nkv = c.value("num_key_value_heads", 0), hd = c.value("head_dim", nq ? H / nq : 0);
+    const int mask = dc.value("mask_token_id", -1);
+    double theta = 0;
+    std::string rope_type = "default";
+    if (c.contains("rope_parameters")) {
+      theta = c["rope_parameters"].value("rope_theta", 0.0);
+      rope_type = c["rope_parameters"].value("rope_type", "default");
+    } else {
+      theta = c.value("rope_theta", 0.0);
+    }
+    check(c.contains("dflash_config"), "dflash_config");
+    check(!(dc.contains("causal") && dc["causal"] == true) && !(c.contains("is_causal") && c["is_causal"] == true),
+          "non-causal block");
+    bool types = NL > 0 && (!c.contains("layer_types") || c["layer_types"].size() == size_t(NL));
+    if (types && c.contains("layer_types"))
+      for (auto& lt : c["layer_types"]) types = types && (lt == "sliding_attention" || lt == "full_attention");
+    check(types, "layer types sliding / full attention");
+    check(dc.value("block_size", DFlash2::kB) >= DFlash2::kB, "block >= 8");
+    check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
+    check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
+    check(c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
+    check(c.value("final_logit_softcapping", json()).is_null() && !dc.value("attention_sink_bias", false),
+          "no softcap, no attention sinks");
+    check(H == t.hidden, "draft hidden == target hidden");
+    check(vocab == t.vocab, "vocab == target vocab");
+    bool in_range = dc.contains("target_layer_ids") && dc["target_layer_ids"].is_array() && !dc["target_layer_ids"].empty();
+    if (in_range)
+      for (auto& v : dc["target_layer_ids"]) in_range = in_range && v.is_number_integer() && v >= 0 && v < t.layers;
+    check(in_range, "target_layer_ids in range");
+    check(H % 64 == 0 && I % 64 == 0, "hidden/intermediate multiples of 64");
+    check(mask >= 0 && mask < vocab, "mask id");
+    return bad;
+  }
   const int NL = c.value("num_hidden_layers", 0), H = c.value("hidden_size", 0), I = c.value("intermediate_size", 0);
   const int vocab = c.value("vocab_size", 0), nq = c.value("num_attention_heads", 0), nkv = c.value("num_key_value_heads", 0);
   const int hd = c.value("head_dim", nq ? H / nq : 0), window = c.value("sliding_window", 0);
@@ -103,6 +140,7 @@ void DFlash2::load_config(const std::string& dir) {
     fatal("DFlash2: unsupported drafter config in %s:%s", dir.c_str(), s.c_str());
   }
   const json& dc = c["dflash_config"];
+  cfg_.v1 = c.value("architectures", json::array()) == json::array({"DFlashDraftModel"});
   cfg_.H = c["hidden_size"];
   cfg_.NL = c["num_hidden_layers"];
   cfg_.I = c["intermediate_size"];
@@ -111,13 +149,20 @@ void DFlash2::load_config(const std::string& dir) {
   cfg_.nkv = c["num_key_value_heads"];
   cfg_.hd = c.value("head_dim", cfg_.H / cfg_.nq);
   cfg_.eps = c.value("rms_norm_eps", 1e-6f);
-  cfg_.block = dc["block_size"];
   cfg_.mask_id = dc["mask_token_id"];
-  cfg_.conv_gs = dc["conv_group_size"];
-  cfg_.rank = dc["selector_rank"];
-  cfg_.topk = dc["selector_top_k"];
   for (auto& v : dc["target_layer_ids"]) cfg_.target_layers.push_back(v);
-  cfg_.window = c.value("sliding_window", 0);
+  if (cfg_.v1) {  // runs with this pipeline's 8-row block and 2048-position ring (DFlash2Config::v1)
+    cfg_.trained_block = dc.value("block_size", 16);
+    cfg_.trained_window = c.value("sliding_window", 0);
+    cfg_.block = kB;
+    cfg_.window = kWin;
+  } else {
+    cfg_.block = dc["block_size"];
+    cfg_.conv_gs = dc["conv_group_size"];
+    cfg_.rank = dc["selector_rank"];
+    cfg_.topk = dc["selector_top_k"];
+    cfg_.window = c.value("sliding_window", 0);
+  }
   if (c.contains("rope_parameters")) cfg_.theta = float(c["rope_parameters"].value("rope_theta", 0.0));
   else cfg_.theta = float(c.value("rope_theta", 0.0));
 }
@@ -133,7 +178,7 @@ bool DFlash2::supports(const Qwen35& t) {
 }
 
 // One row of a linear in any format as bf16 (CPU; draft-head conversion).
-static void row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
+void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out) {
   if (H.dense()) {
     memcpy(out, H.w->buf.as<uint8_t>() + size_t(row) * H.row_bytes(), size_t(H.K) * 2);
     return;
@@ -202,6 +247,10 @@ void dfl_quantize_cpu(const std::vector<const uint16_t*>& rowp, uint32_t K, int 
       }
     }
   };
+  if (N < 64) {  // a few rows (single rows gathered while decoding): no threads
+    work(0, N);
+    return;
+  }
   const unsigned nth = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
   std::vector<std::thread> th;
   const uint32_t per = (N + nth - 1) / nth;
@@ -289,12 +338,15 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     };
     const int64_t H = cfg_.H, I = cfg_.I, V = cfg_.vocab, G4 = 4 * (cfg_.H / cfg_.conv_gs);
     const int64_t nH = int64_t(cfg_.target_layers.size()) * H;
+    const bool v1 = cfg_.v1;
     fc_ = quantize({&expect("fc.weight", {H, nH})}, "dfl_fc");
-    sel_w_ = quantize({&expect("candidate_selector.hidden_projection.weight", {kRank, H})}, "dfl_sel");
+    if (!v1) sel_w_ = quantize({&expect("candidate_selector.hidden_projection.weight", {kRank, H})}, "dfl_sel");
     hnorm_ = own(expect("hidden_norm.weight", {H}), "dfl_norm");
     norm_ = own(expect("norm.weight", {H}), "dfl_norm");
-    cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
-    cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+    if (!v1) {
+      cbA_ = own(expect("candidate_selector.predecessor_codebook", {V, kRank}), "dfl_codebook");
+      cbB_ = own(expect("candidate_selector.successor_codebook", {V, kRank}), "dfl_codebook");
+    }
     // k|v of every layer stacked: one GEMM projects a committed context row for all layers.
     std::vector<const Tensor*> kv_parts;
     for (int l = 0; l < cfg_.NL; ++l) {
@@ -322,10 +374,12 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
       L.qn = own(expect(p + "self_attn.q_norm.weight", {128}), "dfl_norm");
       owned_.push_back(Tensor{kn_all_->buf.view(size_t(l) * 256, 256), DType::BF16, {128}});
       L.kn = &owned_.back();
-      L.ac_base = own(expect(p + "attention_conv.base_kernel", {2, 2, H}), "dfl_conv");
-      L.mc_base = own(expect(p + "mlp_conv.base_kernel", {2, 2, H}), "dfl_conv");
-      L.ac = quantize({&expect(p + "attention_conv.kernel_projection.weight", {G4, H})}, "dfl_ac");
-      L.mc = quantize({&expect(p + "mlp_conv.kernel_projection.weight", {G4, H})}, "dfl_mc");
+      if (!v1) {
+        L.ac_base = own(expect(p + "attention_conv.base_kernel", {2, 2, H}), "dfl_conv");
+        L.mc_base = own(expect(p + "mlp_conv.base_kernel", {2, 2, H}), "dfl_conv");
+        L.ac = quantize({&expect(p + "attention_conv.kernel_projection.weight", {G4, H})}, "dfl_ac");
+        L.mc = quantize({&expect(p + "mlp_conv.kernel_projection.weight", {G4, H})}, "dfl_mc");
+      }
       L.q = quantize({&expect(p + "self_attn.q_proj.weight", {4096, H})}, "dfl_q");
       L.o = quantize({&expect(p + "self_attn.o_proj.weight", {H, 4096})}, "dfl_o");
       L.gate = quantize({&expect(p + "mlp.gate_proj.weight", {I, H})}, "dfl_gate");
@@ -366,6 +420,9 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
   if (const char* v = getenv("NI_DFLASH_EXACT_MOE")) exact_moe_ = atoi(v) != 0;
   if (const char* v = getenv("NI_DFLASH_QT")) walk_tf_ = std::max(0.0f, float(atof(v)));
+  if (cfg_.v1)
+    logi("DFlash drafter (v1) %s: blocks of %d rows (trained %d), context window %d positions (trained %d)",
+         dir.c_str(), kB, cfg_.trained_block, kCtxKeep, cfg_.trained_window);
   logi("DFlash2 drafter %s: %d layers, hidden %d, %d-bit projections, %.2f GB resident (process footprint %+.2f GB), "
        "loaded in %.0f ms", dir.c_str(), cfg_.NL, cfg_.H, bits_, resident_ / 1e9, footprint_gb() - fp0, now_ms() - t0);
 }
@@ -399,6 +456,7 @@ void DFlash2::alloc_buffers() {
   cand_v_ = g.alloc(7 * 16 * 4, "dfl_cand_v");
   cand_i_ = g.alloc(7 * 16 * 4, "dfl_cand_i");
   edges_ = g.alloc(7 * 256 * 4, "dfl_edges");
+  memset(edges_.ptr(), 0, edges_.size);  // v1 (no candidate selector): the walk's edge scores stay 0
   rope_cs_ = g.alloc(8 * 64 * 8, "dfl_rope_cs");
   walk_s_ = g.alloc(7 * 16 * 4, "dfl_walk_s");
   qprob_ = g.alloc(7 * 16 * 4, "dfl_qprob");
@@ -409,8 +467,11 @@ void DFlash2::alloc_buffers() {
   acc_ = g.alloc(16, "dfl_acc");
   memset(acc_.ptr(), 0, acc_.size);
   {
+    // the target's 8-row verify GEMMs for the drafter's projections (NI_DFLASH_V8=0/1 overrides): the 27B's drafter
+    // (H 5120) and the 4B's (H 2560: 4-bit 4B, code / prose, 178.2 -> 179.8 / 142.1 -> 144.2 tok/s); the 35B's
+    // (H 2048) keeps dfl_qmm8
     const char* v = getenv("NI_DFLASH_V8");
-    v8_ = v && *v ? atoi(v) != 0 : H >= 4096;
+    v8_ = v && *v ? atoi(v) != 0 : H >= 2560;
   }
   if (v8_) {
     v8t_ = g.alloc(8 * H * 2, "dfl_v8_table");
@@ -483,7 +544,7 @@ void DFlash2::build_head(int n_req, bool explicit_n) {
     std::vector<uint16_t> tmp(size_t(N) * K);
     std::vector<const uint16_t*> rowp(N);
     for (uint32_t i = 0; i < N; ++i) {
-      row_bf16(H, ids[i], tmp.data() + size_t(i) * K);
+      dfl_row_bf16(H, ids[i], tmp.data() + size_t(i) * K);
       rowp[i] = tmp.data() + size_t(i) * K;
     }
     Buffer w = g.alloc(size_t(N) * K, "dfl_head_w8", false), sc = g.alloc(size_t(N) * gpr * 2, "dfl_head_s8", false),
@@ -605,7 +666,7 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
              8 * 2048 * 4 + 32 * 8 * 128 * 4 + 2 * 8 * 8 * 128 * 4 + 32 * (32 * 8 * 128 * 4 + 32 * 8 * 2 * 4) + 8 * V * 4 + 8 * kRank * 4 +
              2 * 7 * ntg * 16 * 4 + 8 * nH * 2 + 8 * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
   const char* v8 = getenv("NI_DFLASH_V8");
-  if (v8 && *v8 ? atoi(v8) != 0 : H >= 4096) b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
+  if (v8 && *v8 ? atoi(v8) != 0 : H >= 2560) b += 8 * H * 2 + 8 * I * 2 + I / 64 * 8 * 4;
   // build_head(): rows of the target's LM head (the ranked or id-order rows plus every id from the first
   // end-of-sequence id on)
   {
@@ -650,19 +711,25 @@ std::string DFlash2::find(const std::string& model_dir, const Qwen35Config& tc) 
   if (const char* home = getenv("HOME")) roots.push_back(fs::path(home) / ".cache/nace-infer-models/drafters");
   std::string best;
   size_t best_len = 0;
-  const std::string suffix = "-dflash2";
+  bool best_v2 = false;
   for (auto& r : roots) {
     if (!fs::is_directory(r, ec)) continue;
     for (auto& ent : fs::directory_iterator(r, ec)) {
       if (!ent.is_directory(ec)) continue;
       const std::string dn = lower(ent.path().filename().string());
-      if (dn.size() <= suffix.size() || dn.compare(dn.size() - suffix.size(), suffix.size(), suffix) != 0) continue;
-      const std::string base = dn.substr(0, dn.size() - suffix.size());
-      const bool match = name == base || (name.size() > base.size() && name.compare(0, base.size(), base) == 0 &&
-                                          name[base.size()] == '-');
-      if (match && base.size() > best_len && fits(ent.path())) {
-        best = ent.path().string();
-        best_len = base.size();
+      // <model>-DFlash2 (DFlash2DraftModel) or <model>-DFlash (DFlashDraftModel, v1); DFlash2 wins a tie
+      for (const std::string suffix : {"-dflash2", "-dflash"}) {
+        if (dn.size() <= suffix.size() || dn.compare(dn.size() - suffix.size(), suffix.size(), suffix) != 0) continue;
+        const std::string base = dn.substr(0, dn.size() - suffix.size());
+        const bool v2 = suffix == "-dflash2";
+        const bool match = name == base || (name.size() > base.size() && name.compare(0, base.size(), base) == 0 &&
+                                            name[base.size()] == '-');
+        if (match && (base.size() > best_len || (base.size() == best_len && v2 && !best_v2)) && fits(ent.path())) {
+          best = ent.path().string();
+          best_len = base.size();
+          best_v2 = v2;
+        }
+        break;
       }
     }
   }
@@ -1019,16 +1086,27 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   auto proj = [&](const std::vector<DflSeg8>& segs, uint32_t K) {  // conv / attention projections
     if (!(skip & 8192)) enc_qmm8(e, segs, xh_, xs_, K, K);
   };
+  const bool v1 = cfg_.v1;
+  // v1 (no block conv): h += u, then the next norm into n_ and the X8 table
+  auto res_norm = [&](const Tensor* w) {
+    kp::DflNorm np{H, cfg_.eps, 1.0f, 1u};
+    e.use(dpipe("dfl_res_norm"));
+    e.buf(0, h_); e.buf(1, u_); e.buf(2, w->buf); e.buf(3, n_); e.buf(4, xh_); e.buf(5, xs_);
+    e.val(6, np);
+    e.dispatch(8, 1, 1, 256);
+  };
   for (uint32_t l = 0; l < NL; ++l) {
     const DLayer& Ly = layers_[l];
     const std::string sfx = "_" + std::to_string(l);
     dbg(e, "n" + sfx, n_, size_t(8) * H * 4);
-    proj({{&Ly.ac, dyn_, 4 * G, 1.0f}}, H);
-    dbg(e, "D" + sfx, dyn_, size_t(8) * 4 * G * 4);
-    e.use(dpipe("dfl_conv_prep"));
-    e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.ac_base->buf); e.buf(3, xh_); e.buf(4, xs_);
-    e.val(5, cp);
-    e.dispatch(8, 1, 1, 256);
+    if (!v1) {  // v1: the X8 table already holds the input norm's rows (dfl_embed_norm / the previous res_norm)
+      proj({{&Ly.ac, dyn_, 4 * G, 1.0f}}, H);
+      dbg(e, "D" + sfx, dyn_, size_t(8) * 4 * G * 4);
+      e.use(dpipe("dfl_conv_prep"));
+      e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.ac_base->buf); e.buf(3, xh_); e.buf(4, xs_);
+      e.val(5, cp);
+      e.dispatch(8, 1, 1, 256);
+    }
     dbg(e, "a" + sfx, xh_, size_t(8) * H * 2);
     proj({{&Ly.q, q_, 4096, 1.0f}, {&Ly.kv, kv_, 2048, 1.0f}}, H);
     {
@@ -1065,19 +1143,25 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     dbg(e, "o" + sfx, xh_, size_t(8) * 4096 * 2);
     proj({{&Ly.o, u_, H, 1.0f}}, 4096);
     dbg(e, "u" + sfx, u_, size_t(8) * H * 4);
-    e.use(dpipe("dfl_conv_fin_norm"));
-    e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.ac_base->buf); e.buf(4, Ly.post_w->buf);
-    e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
-    e.val(8, cp);
-    e.dispatch(8, 1, 1, 256);
+    if (v1) {
+      res_norm(Ly.post_w);
+    } else {
+      e.use(dpipe("dfl_conv_fin_norm"));
+      e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.ac_base->buf); e.buf(4, Ly.post_w->buf);
+      e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
+      e.val(8, cp);
+      e.dispatch(8, 1, 1, 256);
+    }
     dbg(e, "h_mid" + sfx, h_, size_t(8) * H * 4);
     dbg(e, "n2" + sfx, n_, size_t(8) * H * 4);
-    proj({{&Ly.mc, dyn_, 4 * G, 1.0f}}, H);
-    dbg(e, "D2" + sfx, dyn_, size_t(8) * 4 * G * 4);
-    e.use(dpipe("dfl_conv_prep"));
-    e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.mc_base->buf); e.buf(3, xh_); e.buf(4, xs_);
-    e.val(5, cp);
-    e.dispatch(8, 1, 1, 256);
+    if (!v1) {
+      proj({{&Ly.mc, dyn_, 4 * G, 1.0f}}, H);
+      dbg(e, "D2" + sfx, dyn_, size_t(8) * 4 * G * 4);
+      e.use(dpipe("dfl_conv_prep"));
+      e.buf(0, n_); e.buf(1, dyn_); e.buf(2, Ly.mc_base->buf); e.buf(3, xh_); e.buf(4, xs_);
+      e.val(5, cp);
+      e.dispatch(8, 1, 1, 256);
+    }
     dbg(e, "mm" + sfx, xh_, size_t(8) * H * 2);
     if (v8_) {  // the target's verify GEMMs (same math; the sums layout is shared, only the table permutes)
       enc_to_v8(e, xh_, H, v8t_);
@@ -1098,11 +1182,15 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     }
     dbg(e, "f" + sfx, u_, size_t(8) * H * 4);
     const Tensor* next = l + 1 < NL ? layers_[l + 1].in_w : norm_;
-    e.use(dpipe("dfl_conv_fin_norm"));
-    e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.mc_base->buf); e.buf(4, next->buf);
-    e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
-    e.val(8, cp);
-    e.dispatch(8, 1, 1, 256);
+    if (v1) {
+      res_norm(next);
+    } else {
+      e.use(dpipe("dfl_conv_fin_norm"));
+      e.buf(0, h_); e.buf(1, u_); e.buf(2, dyn_); e.buf(3, Ly.mc_base->buf); e.buf(4, next->buf);
+      e.buf(5, n_); e.buf(6, xh_); e.buf(7, xs_);
+      e.val(8, cp);
+      e.dispatch(8, 1, 1, 256);
+    }
     dbg(e, "h_" + std::to_string(l + 1), h_, size_t(8) * H * 4);
   }
   dbg(e, "hn", n_, size_t(8) * H * 4);
@@ -1110,6 +1198,13 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
   const QLinear& head = draft_head();
   const uint32_t Vd = draft_vocab();  // draft logit columns: the vocabulary or the reduced head
   if (skip & 4096) {
+  } else if (v1) {  // no candidate selector
+    if (v8_) {
+      enc_to_v8(e, xh_, H, v8t_);
+      tg_.enc_qmm8(e, {{&head, logits_, Vd, false}}, 8, v8t_, xs_);
+    } else {
+      enc_qmm8(e, {{&head, logits_, Vd, 1.0f}}, xh_, xs_, H, H);
+    }
   } else if (v8_ && head.bits == sel_w_.bits) {
     enc_to_v8(e, xh_, H, v8t_);
     tg_.enc_qmm8(e, {{&head, logits_, Vd, false}, {&sel_w_, sel_, uint32_t(kRank), false}}, 8, v8t_, xs_);
@@ -1146,11 +1241,13 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
     e.dispatch(1, 7, 1, 256);
   }
   {
-    e.use(dpipe("dfl_lattice"));
-    e.buf(0, cand_i_); e.buf(1, sel_); e.buf(2, cbA_->buf); e.buf(3, cbB_->buf); e.buf(4, s.tok); e.buf(5, edges_);
-    e.val(6, Pk);
-    e.buf(7, gst_);
-    e.dispatch(7, 1, 1, 256);
+    if (!v1) {  // v1: no selector, the edge scores stay 0 (each proposal from its own row's top-16)
+      e.use(dpipe("dfl_lattice"));
+      e.buf(0, cand_i_); e.buf(1, sel_); e.buf(2, cbA_->buf); e.buf(3, cbB_->buf); e.buf(4, s.tok); e.buf(5, edges_);
+      e.val(6, Pk);
+      e.buf(7, gst_);
+      e.dispatch(7, 1, 1, 256);
+    }
     kp::DflSelect p{Pk, sp.temperature, sp.seed, uint32_t(P + 1), sp.temperature * walk_tf_};
     e.use(dpipe("dfl_walk"));
     e.buf(0, cand_i_); e.buf(1, cand_v_); e.buf(2, edges_); e.buf(3, s.tok); e.buf(4, walk_s_); e.buf(5, qprob_);

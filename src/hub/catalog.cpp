@@ -12,10 +12,11 @@
 // - A variant pins its weights to a revision (a commit), so a download is always the same bytes; every file of the
 //   repo but .gitattributes is fetched. Its companions are fetched with it: an MTP head ("mtp": files taken from a
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
-//   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first). Both run with a trunk of
-//   any precision (the drafter reads the trunk's embedding and output layer in any format). Nemotron 3.5 Bolt's and
-//   Super-VL's companion is NVIDIA's LiLiCorr drafter for each ("lilicorr", in dflash/ as oMLX lays it out),
-//   Lightning's NVIDIA's DSpark drafter ("dspark", in dflash/ too).
+//   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first; "dflash": a DFlash (v1)
+//   drafter, Qwen3.5-4B's, in the same folder). Both run with a trunk of any precision (the drafter reads the trunk's
+//   embedding and output layer in any format). Nemotron 3.5 Bolt's and Super-VL's companion is NVIDIA's LiLiCorr
+//   drafter for each ("lilicorr", in dflash/ as oMLX lays it out), Lightning's NVIDIA's DSpark drafter ("dspark", in
+//   dflash/ too).
 // - download_gb is shown before a download (weights and companions). Memory needs no entry: the engine plans it
 //   from the variant's headers.
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
@@ -57,12 +58,23 @@ Companion dflash27() {
 }
 Companion mtp4() {
   // the MLX packs drop the MTP head: built from the official checkpoint's 15 mtp.* tensors (241 MB by range requests,
-  // not the 9.3 GB checkpoint), byte for byte what tools/mtp_sidecar.py makes; bf16, quantized to 8-bit at load
+  // not the 9.3 GB checkpoint), byte for byte what tools/mtp_sidecar.py makes; bf16, quantized to 4-bit at load
   return {.kind = "mtp-sidecar",
           .repo = "Qwen/Qwen3.5-4B",
           .revision = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           .sha256 = "4f491dd27975520ec9c9bfa970ca215cc7f12a0328761d3656ab7b9f388e472a",
           .size = 241200816};
+}
+
+Companion dflash4() {
+  // z-lab's DFlash (v1) block drafter for Qwen3.5-4B (Apache-2.0; 1.27 GB of bf16, 4-bit at load), in the dflash2/
+  // folder that --dflash auto looks in first: the DFlash2 path runs DFlashDraftModel checkpoints too (no block conv,
+  // no candidate selector)
+  return {.kind = "dflash",
+          .repo = "z-lab/Qwen3.5-4B-DFlash",
+          .revision = "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf",
+          .files = {"config.json", "model.safetensors"},
+          .subdir = "dflash2"};
 }
 
 Companion lilicorr_bolt() {
@@ -192,26 +204,26 @@ const std::vector<CatalogModel>& catalog() {
             .quant = "MLX affine 4-bit, group 64",
             .repo = "lmstudio-community/Qwen3.5-4B-MLX-4bit",
             .revision = "c43ee1d65576a5d98de1e8405cac93c371a655c1",
-            .companions = {mtp4()},
-            .download_gb = 3.30},
+            .companions = {mtp4(), dflash4()},
+            .download_gb = 4.57},
            {.name = "6bit",
             .quant = "MLX affine 6-bit, group 64",
             .repo = "mlx-community/Qwen3.5-4B-6bit",
             .revision = "fbb1092aa9daef007603ea9273cd24c225a409f1",
-            .companions = {mtp4()},
-            .download_gb = 4.35},
+            .companions = {mtp4(), dflash4()},
+            .download_gb = 5.62},
            {.name = "8bit",
             .quant = "MLX affine 8-bit, group 64",
             .repo = "lmstudio-community/Qwen3.5-4B-MLX-8bit",
             .revision = "59098e5fc57e3b33fd18fd3eb6deffa42b320f25",
-            .companions = {mtp4()},
-            .download_gb = 5.40},
+            .companions = {mtp4(), dflash4()},
+            .download_gb = 6.67},
            {.name = "bf16",
             .quant = "bf16, unquantized",
             .repo = "mlx-community/Qwen3.5-4B-bf16",
             .revision = "491fdc7c087ba7fb48adcb1253f8e76d011db783",
-            .companions = {mtp4()},
-            .download_gb = 9.35},
+            .companions = {mtp4(), dflash4()},
+            .download_gb = 10.62},
        }},
       {.name = "nemotron-3.5-bolt",
        .aliases = {"nemotron-bolt", "bolt"},

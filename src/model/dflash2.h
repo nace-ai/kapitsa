@@ -20,6 +20,12 @@ struct DFlash2Config {
   int nq = 32, nkv = 8, hd = 128, block = 8, window = 2048, conv_gs = 16, rank = 256, topk = 16;
   float eps = 1e-6f, theta = 1e7f;
   std::vector<int> target_layers;  // target layer ids whose outputs feed fc, in slot order
+  // DFlash (v1) drafter (DFlashDraftModel, e.g. z-lab/Qwen3.5-4B-DFlash): the same context path and block layout
+  // without the block convolutions and the candidate selector; it runs with the 8-row block and the 2048-position
+  // context ring here (trained with 16-row blocks and a 4096-position window: the block size is a runtime choice,
+  // the shorter window only matters past 2047 tokens of context)
+  bool v1 = false;
+  int trained_block = 0, trained_window = 0;
 };
 
 // Per-sequence drafter state: the context K/V ring of every draft layer.
@@ -49,6 +55,8 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
 // zero), even=true MLX's CPU backend (round half to even).
 void dfl_quantize_cpu(const std::vector<const uint16_t*>& rows, uint32_t K, int bits, bool even, uint32_t* W,
                       uint16_t* S, uint16_t* B);
+// One row of a linear in any format (bf16, or affine bits / group gs) as bf16 values (CPU).
+void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out);
 
 // Draft attention split plan for anchor position P: context [lo, P) cut into nsplit chunks of
 // `chunk` positions (multiple of 32), at least min_chunk each (0: NI_DFLASH_ATTN_CHUNK, default 256),

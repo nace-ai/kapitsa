@@ -32,15 +32,17 @@
  {
   "label": "q35-4b-kapitsa",
   "extends": "q36-35b-kapitsa",
-  "display": "Kapitsa (MTP head)",
+  "display": "Kapitsa (DFlash drafter)",
   "model_name": "Qwen3.5-4B",
   "model_path": "{models}/qwen3.5-4b-4bit-mtp",
   "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
           "--model", "{models}/qwen3.5-4b-4bit-mtp", "--model-id", "qwen3.5-4b",
+          "--dflash", "{models}/drafters/Qwen3.5-4B-DFlash",
           "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
   "model": "qwen3.5-4b",
-  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors"],
-  "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, 8-bit at load). No DFlash2 drafter fits this model, so Kapitsa decodes with the MTP head (its default depth for this size); dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors",
+                     "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"],
+  "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, and z-lab's DFlash drafter z-lab/Qwen3.5-4B-DFlash, the companion the default --dflash auto finds in the model's dflash2/ folder). --dflash names the drafter so a missing one fails the run instead of falling back to the MTP head; dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
  },
  {
   "label": "q35-4b-bf16-kapitsa",
@@ -49,8 +51,31 @@
   "model_path": "{models}/qwen3.5-4b-bf16-mtp",
   "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
           "--model", "{models}/qwen3.5-4b-bf16-mtp", "--model-id", "qwen3.5-4b",
+          "--dflash", "{models}/drafters/Qwen3.5-4B-DFlash",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "requires_paths": ["{models}/qwen3.5-4b-bf16-mtp/config.json", "{models}/qwen3.5-4b-bf16-mtp/mtp.safetensors",
+                     "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"],
+  "note": "Kapitsa's default settings on the full-precision 4B (`kapitsa pull 4b:bf16`: mlx-community/Qwen3.5-4B-bf16 plus the same MTP head and DFlash drafter as the 4-bit variant). --slots 1 for parity with llama.cpp -np 1."
+ },
+ {
+  "label": "q35-4b-mtp-kapitsa",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa (MTP head)",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-4bit-mtp", "--model-id", "qwen3.5-4b", "--dflash", "none",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors"],
+  "note": "The 4B without its drafter (--dflash none): the MTP head at its default depth for this size, as on a Mac whose memory budget leaves the drafter out. --slots 1 for parity with llama.cpp -np 1."
+ },
+ {
+  "label": "q35-4b-bf16-mtp-kapitsa",
+  "extends": "q35-4b-mtp-kapitsa",
+  "model_name": "Qwen3.5-4B (bf16)",
+  "model_path": "{models}/qwen3.5-4b-bf16-mtp",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-bf16-mtp", "--model-id", "qwen3.5-4b", "--dflash", "none",
           "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
   "requires_paths": ["{models}/qwen3.5-4b-bf16-mtp/config.json", "{models}/qwen3.5-4b-bf16-mtp/mtp.safetensors"],
-  "note": "Kapitsa's default settings on the full-precision 4B (`kapitsa pull 4b:bf16`: mlx-community/Qwen3.5-4B-bf16 plus the same MTP head as the 4-bit variant). --slots 1 for parity with llama.cpp -np 1."
+  "note": "The full-precision 4B without its drafter (--dflash none): the MTP head at its default depth. --slots 1 for parity with llama.cpp -np 1."
  }
 ]
