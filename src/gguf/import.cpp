@@ -1,0 +1,1419 @@
+// GGUF -> Kapitsa model folder (see import.h).
+//
+// Layout facts used here (llama.cpp's GGUF for Qwen3.5, arch "qwen35" / "qwen35moe"): tensor dims are stored
+// innermost first, so a [N, K] matrix has ne = {K, N} and rows of K values; blk.N.attn_q holds the query and its
+// output gate interleaved per head (as Hugging Face's q_proj); RMSNorm weights are stored as 1 + w (MLX's
+// convention too) except the DeltaNet's gated norm (ssm_norm); ssm_a is -exp(A_log); ssm_dt.bias is dt_bias;
+// ssm_conv1d is {4, C}; when the DeltaNet has fewer key than value heads, every value-head axis is stored in tiled
+// order (value head v of key group k at v * n_k + k) instead of Hugging Face's grouped order (k * r + v); the MTP
+// block sits after the trunk's layers (block_count includes it, nextn_predict_layers counts it), with eh_proj = fc,
+// enorm / hnorm = pre_fc_norm_embedding / pre_fc_norm_hidden and nextn.shared_head_norm = the head's norm.
+#include "gguf/import.h"
+
+#include "gguf/gguf.h"
+#include "gguf/quant.h"
+#include "hub/hub.h"
+
+#include <nlohmann/json.hpp>
+
+#include <dirent.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/sysctl.h>
+#include <unistd.h>
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <mutex>
+#include <set>
+#include <thread>
+
+#ifndef KAPITSA_VERSION
+#define KAPITSA_VERSION "0.1.0"
+#endif
+
+namespace ni::gguf {
+
+using json = nlohmann::json;
+using ojson = nlohmann::ordered_json;
+
+namespace {
+
+constexpr uint64_t kShardBytes = 5ull << 30;     // MLX's shard size
+constexpr uint64_t kKeepFree = 6ull << 30;       // free disk an import must leave
+constexpr uint64_t kChunkBytes = 64ull << 20;    // source bytes per conversion step
+
+std::atomic<bool> g_stop{false};  // Ctrl+C during a conversion: stop, remove the unfinished folder
+
+// SIGINT / SIGTERM set g_stop while it lives (the previous handlers come back after)
+struct StopGuard {
+  struct sigaction old_int {}, old_term {};
+  StopGuard() {
+    g_stop = false;
+    struct sigaction sa {};
+    sa.sa_handler = [](int) { g_stop = true; };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, &old_int);
+    sigaction(SIGTERM, &sa, &old_term);
+  }
+  ~StopGuard() {
+    sigaction(SIGINT, &old_int, nullptr);
+    sigaction(SIGTERM, &old_term, nullptr);
+  }
+};
+
+// ---------------------------------------------------------------- small helpers
+
+std::string lower(std::string s) {
+  for (auto& c : s) c = char(std::tolower(static_cast<unsigned char>(c)));
+  return s;
+}
+
+bool ends_with(const std::string& s, const std::string& t) {
+  return s.size() >= t.size() && s.compare(s.size() - t.size(), t.size(), t) == 0;
+}
+
+std::string base_name(const std::string& p) {
+  const size_t s = p.find_last_of('/');
+  return s == std::string::npos ? p : p.substr(s + 1);
+}
+
+std::string dir_name(const std::string& p) {
+  const size_t s = p.find_last_of('/');
+  return s == std::string::npos ? "." : s == 0 ? "/" : p.substr(0, s);
+}
+
+bool is_dir(const std::string& p) {
+  struct stat st;
+  return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+bool is_file(const std::string& p) {
+  struct stat st;
+  return stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+uint64_t free_bytes(std::string p) {
+  struct statfs s;
+  while (statfs(p.c_str(), &s) != 0) {
+    if (p == "/" || p.empty()) return 0;
+    p = dir_name(p);
+  }
+  return uint64_t(s.f_bavail) * uint64_t(s.f_bsize);
+}
+
+std::string gb(uint64_t b) { return hub::fmt_bytes(b); }
+
+std::string fmt_secs(double s) {
+  char b[32];
+  if (!(s >= 0) || !std::isfinite(s)) return "?";
+  if (s < 60) snprintf(b, sizeof b, "%.0fs", std::max(1.0, s));
+  else if (s < 3600) snprintf(b, sizeof b, "%dm %02ds", int(s) / 60, int(s) % 60);
+  else snprintf(b, sizeof b, "%dh %02dm", int(s) / 3600, int(s) % 3600 / 60);
+  return b;
+}
+
+void write_text(const std::string& path, const std::string& data) {
+  std::ofstream f(path, std::ios::binary | std::ios::trunc);
+  f << data;
+  if (!f) throw Error("Can't write " + hub::tilde(path) + ": " + strerror(errno) + ".");
+}
+
+// A file name for the models dir: lower case, [a-z0-9._-], no leading dot.
+std::string clean_name(const std::string& s) {
+  std::string o;
+  for (char c : lower(s)) o += (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '_' || c == '-') ? c : '-';
+  while (!o.empty() && (o[0] == '.' || o[0] == '-')) o.erase(o.begin());
+  while (!o.empty() && o.back() == '-') o.pop_back();
+  return o;
+}
+
+int perf_cores() {
+  int n = 0;
+  size_t len = sizeof n;
+  if (sysctlbyname("hw.perflevel0.physicalcpu", &n, &len, nullptr, 0) != 0 || n <= 0)
+    n = int(std::max(1u, std::thread::hardware_concurrency()));
+  return n;
+}
+
+// llama.cpp's file types (general.file_type), for names and messages
+std::string ftype_name(int64_t t) {
+  static const std::map<int64_t, const char*> m = {
+      {0, "F32"},     {1, "F16"},     {2, "Q4_0"},     {3, "Q4_1"},     {7, "Q8_0"},     {8, "Q5_0"},
+      {9, "Q5_1"},    {10, "Q2_K"},   {11, "Q3_K_S"},  {12, "Q3_K_M"},  {13, "Q3_K_L"},  {14, "Q4_K_S"},
+      {15, "Q4_K_M"}, {16, "Q5_K_S"}, {17, "Q5_K_M"},  {18, "Q6_K"},    {19, "IQ2_XXS"}, {20, "IQ2_XS"},
+      {21, "Q2_K_S"}, {22, "IQ3_XS"}, {23, "IQ3_XXS"}, {24, "IQ1_S"},   {25, "IQ4_NL"},  {26, "IQ3_S"},
+      {27, "IQ3_M"},  {28, "IQ2_S"},  {29, "IQ2_M"},   {30, "IQ4_XS"},  {31, "IQ1_M"},   {32, "BF16"},
+      {36, "TQ1_0"},  {37, "TQ2_0"},  {38, "MXFP4"}};
+  auto it = m.find(t);
+  return it == m.end() ? "" : it->second;
+}
+
+// ---------------------------------------------------------------- Kapitsa formats and the choice per tensor
+
+struct Fmt {
+  int bits = 16, gs = 0;  // bits 16: bf16
+  bool dense() const { return bits == 16; }
+  bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs; }
+  bool operator!=(const Fmt& o) const { return !(*this == o); }
+};
+const Fmt kBf16{16, 0}, k4g32{4, 32}, k5g64{5, 64}, k6g64{6, 64}, k8g64{8, 64};
+
+std::string fmt_name(Fmt f) {
+  return f.dense() ? "bf16" : std::to_string(f.bits) + "-bit group " + std::to_string(f.gs);
+}
+
+// the finer of two formats (more bits; a smaller group at equal bits)
+Fmt finer(Fmt a, Fmt b) {
+  if (a.bits != b.bits) return a.bits > b.bits ? a : b;
+  return a.gs <= b.gs ? a : b;
+}
+
+bool refused(uint32_t t) { return !can_dequantize(t); }
+bool low_bit(uint32_t t) { return t == kQ2_K || t == kQ3_K; }
+
+// a linear outside the MoE experts
+Fmt dense_format(uint32_t t) {
+  switch (t) {
+    case kF32: case kF16: case kBF16: return kBf16;
+    case kQ4_0: case kQ4_1: case kQ4_K: return k4g32;  // the GGUF's codes as they are
+    case kQ8_0: case kQ6_K: return k8g64;
+    case kQ5_0: case kQ5_1: case kQ5_K: return k6g64;
+    case kQ2_K: case kQ3_K: return k4g32;
+    default: return k5g64;  // IQ4_NL, IQ4_XS, MXFP4, NVFP4
+  }
+}
+
+// a layer's routed experts, from their least precise tensor: Kapitsa's MoE kernels run 3/5/6/8-bit group 64, 4-bit
+// group 64 and bf16 experts (4-bit group 32 only in the MTP head), so 4-bit types take 5-bit group 64
+int expert_class(uint32_t t) {
+  switch (t) {
+    case kF32: case kF16: case kBF16: return 4;
+    case kQ8_0: case kQ6_K: return 3;
+    case kQ5_0: case kQ5_1: case kQ5_K: return 2;
+    default: return 1;
+  }
+}
+Fmt class_format(int c) { return c == 4 ? kBf16 : c == 3 ? k8g64 : c == 2 ? k6g64 : k5g64; }
+
+// ---------------------------------------------------------------- the model's shape (from the metadata)
+
+struct Hp {
+  std::string arch;
+  bool moe = false, tied = false;
+  int64_t H = 0, layers = 0, nextn = 0, hq = 0, hkv = 0, head_dim = 0, rot = 0, ctx = 0;
+  int64_t conv = 0, dk = 0, hk = 0, hv = 0, dv = 0, interval = 4, ffn = 0;
+  int64_t E = 0, topk = 0, moe_I = 0, shared_I = 0, vocab = 0;
+  double eps = 1e-6, theta = 1e7;
+  std::vector<int64_t> sections;
+  std::vector<bool> recurrent;
+};
+
+// an integer key, or the largest of an integer array (per-layer values)
+int64_t ival(const File& f, const std::string& key, int64_t def = -1) {
+  if (!f.has(key)) {
+    if (def >= 0) return def;
+    throw Error(f.parts()[0] + " has no " + key + " in its metadata; it is not a complete Qwen3.5 GGUF.");
+  }
+  const json& v = f.meta()[key];
+  if (v.is_number_integer()) return v.get<int64_t>();
+  if (v.is_array()) {
+    int64_t m = 0;
+    for (const auto& x : v)
+      if (x.is_number_integer()) m = std::max(m, x.get<int64_t>());
+    return m;
+  }
+  throw Error(f.parts()[0] + ": " + key + " is not a number.");
+}
+
+Hp read_hp(const File& f) {
+  Hp h;
+  h.arch = f.str("general.architecture");
+  const std::string a = h.arch + ".";
+  h.moe = h.arch == "qwen35moe";
+  h.H = ival(f, a + "embedding_length");
+  const int64_t blocks = ival(f, a + "block_count");
+  h.nextn = ival(f, a + "nextn_predict_layers", 0);
+  h.layers = blocks - h.nextn;
+  h.hq = ival(f, a + "attention.head_count");
+  h.hkv = ival(f, a + "attention.head_count_kv");
+  h.head_dim = ival(f, a + "attention.key_length", h.hq ? h.H / h.hq : 0);
+  h.rot = ival(f, a + "rope.dimension_count", h.head_dim / 4);
+  h.ctx = ival(f, a + "context_length", 262144);
+  h.eps = f.real(a + "attention.layer_norm_rms_epsilon", 1e-6);
+  h.theta = f.real(a + "rope.freq_base", 1e7);
+  for (const char* k : {"rope.dimension_sections", "rope.mrope_section", "mrope_sections"})
+    if (f.has(a + k) && f.meta()[a + k].is_array()) {
+      for (const auto& x : f.meta()[a + k])
+        if (x.is_number_integer()) h.sections.push_back(x.get<int64_t>());
+      break;
+    }
+  if (h.sections.empty()) h.sections = {11, 11, 10, 0};
+  h.conv = ival(f, a + "ssm.conv_kernel");
+  h.dk = ival(f, a + "ssm.state_size");
+  h.hk = ival(f, a + "ssm.group_count");
+  h.hv = ival(f, a + "ssm.time_step_rank");
+  const int64_t inner = ival(f, a + "ssm.inner_size");
+  h.dv = h.hv ? inner / h.hv : 0;
+  h.interval = ival(f, a + "full_attention_interval", 4);
+  if (f.has(a + "attention.recurrent_layers") && f.meta()[a + "attention.recurrent_layers"].is_array()) {
+    for (const auto& x : f.meta()[a + "attention.recurrent_layers"]) h.recurrent.push_back(x.is_boolean() ? x.get<bool>() : x.get<int64_t>() != 0);
+    h.recurrent.resize(size_t(std::max<int64_t>(h.layers, 0)), false);
+  } else {
+    for (int64_t i = 0; i < h.layers; ++i) h.recurrent.push_back(h.interval > 0 && (i + 1) % h.interval != 0);
+  }
+  if (h.moe) {
+    h.E = ival(f, a + "expert_count");
+    h.topk = ival(f, a + "expert_used_count");
+    h.moe_I = ival(f, a + "expert_feed_forward_length");
+    h.shared_I = ival(f, a + "expert_shared_feed_forward_length", 0);
+  } else {
+    h.ffn = ival(f, a + "feed_forward_length");
+  }
+  const Tensor* emb = f.find("token_embd.weight");
+  if (!emb || emb->ne.size() != 2) throw Error(f.parts()[0] + " has no token_embd.weight tensor.");
+  h.vocab = int64_t(emb->ne[1]);
+  h.tied = !f.find("output.weight");
+  if (h.H <= 0 || h.layers <= 0 || h.hq <= 0 || h.hkv <= 0 || h.hk <= 0 || h.hv <= 0 || h.hv % h.hk ||
+      int64_t(emb->ne[0]) != h.H)
+    throw Error(f.parts()[0] + ": inconsistent Qwen3.5 metadata (layers, heads or sizes).");
+  return h;
+}
+
+// The checks Kapitsa's model loader makes (src/model/qwen35.cpp), before a long conversion.
+void check_runs(const Hp& h, const std::string& file) {
+  std::string why;
+  if (h.dk != 128 || h.dv != 128) why = "DeltaNet head size " + std::to_string(h.dk) + "/" + std::to_string(h.dv) + " (128 needed)";
+  else if (h.head_dim != 256) why = "attention head size " + std::to_string(h.head_dim) + " (256 needed)";
+  else if (h.hq % h.hkv || h.hq / h.hkv > 8) why = "a grouped-query ratio above 8";
+  else if (h.conv != 4) why = "a convolution of " + std::to_string(h.conv) + " (4 needed)";
+  else if (h.moe && (h.moe_I % 512 || h.shared_I % 512)) why = "expert sizes that are not multiples of 512";
+  else if (h.moe && (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 4608) why = "experts too large for the decode kernels";
+  else if (h.moe && (h.E != 256 || h.topk > 8)) why = std::to_string(h.E) + " experts, " + std::to_string(h.topk) + " per token (256 and at most 8 run)";
+  else if (h.moe && (h.H > 4096 || h.hv * h.dv > 4096 || h.hq * h.head_dim > 4096)) why = "a hidden size above 4096 for a MoE model";
+  else if (h.H % 64) why = "a hidden size that is not a multiple of 64";
+  if (!why.empty()) throw Error(file + " is a Qwen3.5-family model with " + why + ", which Kapitsa does not run.");
+}
+
+// ---------------------------------------------------------------- what to write
+
+// output row -> source row: a block map (rows in blocks of `block` taken every `stride`, from `offset`), then the
+// DeltaNet value-head order (rows from `vfrom` in heads of `hs` rows: grouped output head k * r + v <- tiled source
+// head v * nk + k)
+struct RowMap {
+  uint64_t block = 0, stride = 0, offset = 0;
+  int64_t vfrom = -1;
+  uint64_t hs = 0, nk = 1, r = 1;
+  uint64_t operator()(uint64_t row) const {
+    if (vfrom >= 0 && row >= uint64_t(vfrom)) {
+      const uint64_t l = row - uint64_t(vfrom), h = l / hs, d = l % hs;
+      row = uint64_t(vfrom) + ((h % r) * nk + h / r) * hs + d;
+    }
+    return block ? row / block * stride + offset + row % block : offset + row;
+  }
+};
+
+// One tensor written: a linear (its weight; with scales and biases when quantized) or a float parameter.
+struct Lin {
+  const File* f = nullptr;
+  const Tensor* src = nullptr;
+  std::vector<float> mult;        // NVFP4's .scale tensor: per expert (or one value)
+  uint64_t mult_rows = 0;         // output rows per value of mult
+  std::string name;               // a linear's module name (".weight" etc. appended), a parameter's tensor name
+  bool param = false;
+  std::vector<int64_t> shape;     // output shape (a linear: leading dims and K)
+  uint64_t rows = 0, K = 0;
+  RowMap map;
+  int64_t cperm_hs = 0;           // > 0: columns in value-head order (out_proj), heads of this many columns
+  uint64_t cperm_nk = 1;          // ... of this many key-head groups
+  bool log_neg = false;           // ssm_a -> A_log
+  Fmt fmt;
+  bool mtp = false;               // goes to mtp.safetensors
+  uint64_t srb = 0;               // bytes of a source row (K values)
+  int file = 0;
+  uint64_t off_w = 0, off_s = 0, off_b = 0;
+  uint64_t row_w() const { return fmt.dense() ? K * 2 : K * uint64_t(fmt.bits) / 8; }
+  uint64_t row_s() const { return fmt.dense() ? 0 : K / uint64_t(fmt.gs) * 2; }
+  uint64_t src_bytes() const { return rows * srb; }
+};
+
+// bytes of K values of a tensor read as rows of K (a parameter may be read with another row length than ne[0])
+uint64_t row_bytes_of(const Tensor& t, uint64_t K) {
+  if (K == t.ne[0]) return t.row_bytes();
+  if (t.type == kF32) return K * 4;
+  if (t.type == kF16 || t.type == kBF16) return K * 2;
+  throw Error(t.name + ": a " + type_name(t.type) + " tensor where a float parameter was expected.");
+}
+
+struct Plan {
+  Hp hp;
+  std::vector<Lin> lins;
+  std::vector<std::string> files;   // output safetensors names; the last is mtp.safetensors when has_mtp
+  bool has_mtp = false;
+  std::string mtp_source;
+  std::map<std::string, int> conv_count;  // "Q4_K -> 4-bit group 32" -> tensors
+  std::set<std::string> low, notes;
+};
+
+struct Builder {
+  Plan& P;
+  const File& F;      // the model
+  const File* M;      // where the MTP block is (F, a separate file, or none)
+  std::set<std::string> used;
+  Builder(Plan& p, const File& f, const File* m) : P(p), F(f), M(m) {}
+
+  const Tensor* get(const File& f, const std::string& n, bool required = true) {
+    const Tensor* t = f.find(n);
+    if (!t && required)
+      throw Error(f.parts()[0] + " has no tensor " + n + "; it is not a complete Qwen3.5 GGUF (or a variant Kapitsa "
+                  "does not know).");
+    if (t) {
+      used.insert((&f == &F ? "" : "mtp:") + n);
+      if (refused(t->type))
+        throw Error(base_name(f.parts()[0]) + " stores " + n + " as " + type_name(t->type) + ". Kapitsa converts "
+                    "F32/F16/BF16, Q4_0/Q4_1/Q5_0/Q5_1/Q8_0, Q2_K-Q6_K, IQ4_NL/IQ4_XS, MXFP4 and NVFP4; the IQ1/IQ2/IQ3 "
+                    "formats need llama.cpp's codebooks. Use a Q4_K_M or better file (or Q8_0), or Kapitsa's own "
+                    "model of this size (kapitsa --help).");
+    }
+    return t;
+  }
+  void check_ne(const Tensor* t, std::initializer_list<int64_t> ne) {
+    std::vector<uint64_t> want(ne.begin(), ne.end());
+    if (t->ne != want) {
+      std::string a, b;
+      for (auto x : t->ne) a += (a.empty() ? "" : ", ") + std::to_string(x);
+      for (auto x : want) b += (b.empty() ? "" : ", ") + std::to_string(x);
+      throw Error(t->name + " has dims {" + a + "}, expected {" + b + "} from the metadata.");
+    }
+  }
+  // the NVFP4 scale beside a weight (one value, or one per expert): `experts` values expected, a stacked output's
+  // rows per expert in `rows_per_expert` (0: one value for every row), `pick`: the value of one expert only
+  void attach_scale(const File& f, Lin& L, uint64_t experts, uint64_t rows_per_expert, int64_t pick) {
+    std::string n = L.src->name;
+    if (!ends_with(n, ".weight")) return;
+    n = n.substr(0, n.size() - 7) + ".scale";
+    const Tensor* s = f.find(n);
+    if (!s) return;
+    used.insert((&f == &F ? "" : "mtp:") + n);
+    if (s->type != kF32 || (s->elements() != 1 && s->elements() != experts))
+      throw Error(n + ": a scale tensor Kapitsa does not read.");
+    L.mult.resize(size_t(s->elements()));
+    f.read(*s, 0, L.mult.data(), L.mult.size() * 4);
+    L.mult_rows = 0;
+    if (L.mult.size() > 1) {
+      if (pick >= 0) L.mult = {L.mult[size_t(pick)]};
+      else L.mult_rows = rows_per_expert;
+    }
+  }
+
+  void count(const Lin& L) {
+    std::string k = type_name(L.src->type) + " -> " + fmt_name(L.fmt);
+    if (L.fmt == k4g32 && exact4(L.src->type) && L.mult.empty()) k += " (codes as stored)";
+    else if (L.fmt.dense() && L.src->type == kBF16) k += " (as stored)";
+    ++P.conv_count[(L.mtp ? "MTP head: " : "") + k];
+    if (low_bit(L.src->type)) P.low.insert(type_name(L.src->type));
+  }
+
+  // a float parameter, bf16
+  void param(const File& f, const std::string& src, const std::string& out, std::vector<int64_t> shape,
+             uint64_t rows, uint64_t K, RowMap map = {}, bool log_neg = false, bool mtp = false) {
+    Lin L;
+    L.f = &f;
+    L.src = get(f, src);
+    if (L.src->elements() != rows * K) throw Error(src + ": unexpected size.");
+    L.name = out;
+    L.param = true;
+    L.shape = std::move(shape);
+    L.rows = rows, L.K = K, L.map = map, L.log_neg = log_neg;
+    L.fmt = kBf16;
+    L.mtp = mtp;
+    L.srb = row_bytes_of(*L.src, K);
+    P.lins.push_back(std::move(L));
+  }
+
+  // a linear [N, K] (or rows of a bigger tensor through `map`)
+  // (scale_experts / scale_rows / pick: how the NVFP4 scale of a stacked expert tensor maps to these rows)
+  Lin& linear(const File& f, const Tensor* t, const std::string& out, uint64_t N, uint64_t K, Fmt fmt,
+              RowMap map = {}, int64_t cperm_hs = 0, bool mtp = false, uint64_t scale_experts = 1,
+              uint64_t scale_rows = 0, int64_t pick = -1) {
+    Lin L;
+    L.f = &f;
+    L.src = t;
+    L.name = out;
+    L.shape = {int64_t(N), int64_t(K)};
+    L.rows = N, L.K = K, L.map = map, L.cperm_hs = cperm_hs;
+    L.cperm_nk = uint64_t(P.hp.hk);
+    L.fmt = fmt;
+    if (!fmt.dense() && K % uint64_t(fmt.gs)) L.fmt = kBf16;  // no group fits: keep it exact
+    L.mtp = mtp;
+    if (K != t->ne[0]) throw Error("internal: " + t->name + " read with rows of " + std::to_string(K));
+    L.srb = t->row_bytes();
+    attach_scale(f, L, scale_experts, scale_rows, pick);
+    count(L);
+    P.lins.push_back(std::move(L));
+    return P.lins.back();
+  }
+
+  RowMap vmap(int64_t from, uint64_t hs) const {
+    RowMap m;
+    if (P.hp.hk != P.hp.hv) {
+      m.vfrom = from;
+      m.hs = hs, m.nk = uint64_t(P.hp.hk), m.r = uint64_t(P.hp.hv / P.hp.hk);
+    }
+    return m;
+  }
+
+  // attention block (trunk layer or the MTP layer): q (with its gate) / k / v / o and the q / k norms
+  void attention(const File& f, const std::string& b, const std::string& out, bool mtp) {
+    const Hp& h = P.hp;
+    const uint64_t H = uint64_t(h.H), qd = uint64_t(h.hq * h.head_dim), kd = uint64_t(h.hkv * h.head_dim);
+    auto fmt = [&](const Tensor* t) { return mtp ? k8g64 : dense_format(t->type); };
+    if (const Tensor* q = get(f, b + "attn_q.weight", false)) {
+      check_ne(q, {int64_t(H), int64_t(2 * qd)});
+      linear(f, q, out + "self_attn.q_proj", 2 * qd, H, fmt(q), {}, 0, mtp);
+      const Tensor* k = get(f, b + "attn_k.weight");
+      check_ne(k, {int64_t(H), int64_t(kd)});
+      linear(f, k, out + "self_attn.k_proj", kd, H, fmt(k), {}, 0, mtp);
+      const Tensor* v = get(f, b + "attn_v.weight");
+      check_ne(v, {int64_t(H), int64_t(kd)});
+      linear(f, v, out + "self_attn.v_proj", kd, H, fmt(v), {}, 0, mtp);
+    } else {  // fused q|k|v (convert_hf_to_gguf.py --fuse-qkv)
+      const Tensor* t = get(f, b + "attn_qkv.weight");
+      check_ne(t, {int64_t(H), int64_t(2 * qd + 2 * kd)});
+      RowMap m;
+      linear(f, t, out + "self_attn.q_proj", 2 * qd, H, fmt(t), m, 0, mtp);
+      m.offset = 2 * qd;
+      linear(f, t, out + "self_attn.k_proj", kd, H, fmt(t), m, 0, mtp);
+      m.offset = 2 * qd + kd;
+      linear(f, t, out + "self_attn.v_proj", kd, H, fmt(t), m, 0, mtp);
+    }
+    const Tensor* o = get(f, b + "attn_output.weight");
+    check_ne(o, {int64_t(qd), int64_t(H)});
+    linear(f, o, out + "self_attn.o_proj", H, qd, fmt(o), {}, 0, mtp);
+    param(f, b + "attn_q_norm.weight", out + "self_attn.q_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim), {}, false, mtp);
+    param(f, b + "attn_k_norm.weight", out + "self_attn.k_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim), {}, false, mtp);
+  }
+
+  void deltanet(const std::string& b, const std::string& out) {
+    const Hp& h = P.hp;
+    const uint64_t H = uint64_t(h.H), kd = uint64_t(h.hk * h.dk), vd = uint64_t(h.hv * h.dv), C = 2 * kd + vd;
+    const Tensor* qkv = get(F, b + "attn_qkv.weight");
+    check_ne(qkv, {int64_t(H), int64_t(C)});
+    linear(F, qkv, out + "linear_attn.in_proj_qkv", C, H, dense_format(qkv->type), vmap(int64_t(2 * kd), uint64_t(h.dv)));
+    const Tensor* z = get(F, b + "attn_gate.weight");
+    check_ne(z, {int64_t(H), int64_t(vd)});
+    linear(F, z, out + "linear_attn.in_proj_z", vd, H, dense_format(z->type), vmap(0, uint64_t(h.dv)));
+    const Tensor* beta = get(F, b + "ssm_beta.weight");
+    check_ne(beta, {int64_t(H), h.hv});
+    linear(F, beta, out + "linear_attn.in_proj_b", uint64_t(h.hv), H, dense_format(beta->type), vmap(0, 1));
+    const Tensor* alpha = get(F, b + "ssm_alpha.weight");
+    check_ne(alpha, {int64_t(H), h.hv});
+    linear(F, alpha, out + "linear_attn.in_proj_a", uint64_t(h.hv), H, dense_format(alpha->type), vmap(0, 1));
+    const Tensor* o = get(F, b + "ssm_out.weight");
+    check_ne(o, {int64_t(vd), int64_t(H)});
+    linear(F, o, out + "linear_attn.out_proj", H, vd, dense_format(o->type), {}, h.hk != h.hv ? h.dv : 0);
+    const Tensor* cw = get(F, b + "ssm_conv1d.weight");
+    check_ne(cw, {h.conv, int64_t(C)});
+    param(F, b + "ssm_conv1d.weight", out + "linear_attn.conv1d.weight", {int64_t(C), h.conv, 1}, C, uint64_t(h.conv),
+          vmap(int64_t(2 * kd), uint64_t(h.dv)));
+    param(F, b + "ssm_a", out + "linear_attn.A_log", {h.hv}, uint64_t(h.hv), 1, vmap(0, 1), true);
+    const std::string dt = F.find(b + "ssm_dt.bias") ? b + "ssm_dt.bias" : b + "ssm_dt";  // Ollama's own name
+    param(F, dt, out + "linear_attn.dt_bias", {h.hv}, uint64_t(h.hv), 1, vmap(0, 1));
+    param(F, b + "ssm_norm.weight", out + "linear_attn.norm.weight", {h.dv}, 1, uint64_t(h.dv));
+  }
+
+  void mlp(const File& f, const std::string& b, const std::string& out, bool mtp) {
+    const uint64_t H = uint64_t(P.hp.H), I = uint64_t(P.hp.ffn);
+    const Tensor* g = get(f, b + "ffn_gate.weight");
+    const Tensor* u = get(f, b + "ffn_up.weight");
+    const Tensor* d = get(f, b + "ffn_down.weight");
+    check_ne(g, {int64_t(H), int64_t(I)});
+    check_ne(u, {int64_t(H), int64_t(I)});
+    check_ne(d, {int64_t(I), int64_t(H)});
+    // the decode kernel reads gate and up in one format: the finer of the two
+    const Fmt gu = mtp ? k8g64 : finer(dense_format(g->type), dense_format(u->type));
+    linear(f, g, out + "mlp.gate_proj", I, H, gu, {}, 0, mtp);
+    linear(f, u, out + "mlp.up_proj", I, H, gu, {}, 0, mtp);
+    linear(f, d, out + "mlp.down_proj", H, I, mtp ? k8g64 : dense_format(d->type), {}, 0, mtp);
+  }
+
+  // routed + shared experts, router and shared gate. Trunk: stacked switch_mlp tensors in one format per layer;
+  // MTP head: numbered experts in 4-bit group 32 (what Kapitsa's MTP loader reads) and 8-bit group 64 for the rest.
+  void moe(const File& f, const std::string& b, const std::string& out, bool mtp) {
+    const Hp& h = P.hp;
+    const uint64_t H = uint64_t(h.H), I = uint64_t(h.moe_I), S = uint64_t(h.shared_I), E = uint64_t(h.E);
+    const Tensor* router = get(f, b + "ffn_gate_inp.weight");
+    check_ne(router, {int64_t(H), int64_t(E)});
+    const Tensor* gu = get(f, b + "ffn_gate_up_exps.weight", false);
+    const Tensor* g = gu ? nullptr : get(f, b + "ffn_gate_exps.weight");
+    const Tensor* u = gu ? nullptr : get(f, b + "ffn_up_exps.weight");
+    const Tensor* d = get(f, b + "ffn_down_exps.weight");
+    if (gu) check_ne(gu, {int64_t(H), int64_t(2 * I), int64_t(E)});
+    else check_ne(g, {int64_t(H), int64_t(I), int64_t(E)}), check_ne(u, {int64_t(H), int64_t(I), int64_t(E)});
+    check_ne(d, {int64_t(I), int64_t(H), int64_t(E)});
+    const Tensor* sg = get(f, b + "ffn_gate_shexp.weight");
+    const Tensor* su = get(f, b + "ffn_up_shexp.weight");
+    const Tensor* sd = get(f, b + "ffn_down_shexp.weight");
+    const Tensor* sgate = get(f, b + "ffn_gate_inp_shexp.weight");
+    check_ne(sg, {int64_t(H), int64_t(S)});
+    check_ne(su, {int64_t(H), int64_t(S)});
+    check_ne(sd, {int64_t(S), int64_t(H)});
+    if (sgate->elements() != H) throw Error(sgate->name + ": unexpected size.");
+    const Tensor* gsrc = gu ? gu : g;
+    const Tensor* usrc = gu ? gu : u;
+    RowMap gmap, umap;  // fused gate|up: each expert's I gate rows, then its I up rows
+    if (gu) gmap.block = umap.block = I, gmap.stride = umap.stride = 2 * I, umap.offset = I;
+    if (mtp) {
+      linear(f, router, out + "mlp.gate", E, H, k8g64, {}, 0, true);
+      linear(f, sgate, out + "mlp.shared_expert_gate", 1, H, k8g64, {}, 0, true);
+      linear(f, sg, out + "mlp.shared_expert.gate_proj", S, H, k8g64, {}, 0, true);
+      linear(f, su, out + "mlp.shared_expert.up_proj", S, H, k8g64, {}, 0, true);
+      linear(f, sd, out + "mlp.shared_expert.down_proj", H, S, k8g64, {}, 0, true);
+      for (uint64_t e = 0; e < E; ++e) {
+        const std::string x = out + "mlp.experts." + std::to_string(e) + ".";
+        RowMap m = gmap;
+        if (gu) m.offset = e * 2 * I;
+        else m.offset = e * I;
+        linear(f, gsrc, x + "gate_proj", I, H, k4g32, m, 0, true, E, 0, int64_t(e));
+        if (gu) m.offset = e * 2 * I + I;
+        linear(f, usrc, x + "up_proj", I, H, k4g32, m, 0, true, E, 0, int64_t(e));
+        linear(f, d, x + "down_proj", H, I, k4g32, RowMap{0, 0, e * H}, 0, true, E, 0, int64_t(e));
+      }
+      return;
+    }
+    // trunk: the layer's experts in one format, from their least precise tensor
+    const int cls = std::min({expert_class(gsrc->type), expert_class(usrc->type), expert_class(d->type)});
+    const Fmt ef = class_format(cls);
+    if (ef != k8g64 && ef != kBf16) {
+      const uint32_t weakest = expert_class(gsrc->type) == cls ? gsrc->type : expert_class(usrc->type) == cls ? usrc->type : d->type;
+      P.notes.insert("MoE experts (" + type_name(weakest) + ") become " + fmt_name(ef) + ": Kapitsa's MoE kernels have no "
+                     "group-32 form, and one bit fewer would about double the GGUF's error (this adds about a third)");
+    }
+    auto stacked = [&](const Tensor* t, const std::string& n, uint64_t N, uint64_t K, RowMap m) {
+      Lin& L = linear(f, t, out + "mlp.switch_mlp." + n, E * N, K, ef, m, 0, false, E, N);
+      L.shape = {int64_t(E), int64_t(N), int64_t(K)};
+    };
+    stacked(gsrc, "gate_proj", I, H, gmap);
+    stacked(usrc, "up_proj", I, H, umap);
+    stacked(d, "down_proj", H, I, {});
+    // the shared expert: 8-bit group 64 (a kernel pair with every expert format), bf16 beside bf16 experts
+    const Fmt sf = ef.dense() ? kBf16 : k8g64;
+    linear(f, sg, out + "mlp.shared_expert.gate_proj", S, H, sf);
+    linear(f, su, out + "mlp.shared_expert.up_proj", S, H, sf);
+    linear(f, sd, out + "mlp.shared_expert.down_proj", H, S, sf);
+    linear(f, router, out + "mlp.gate", E, H, dense_format(router->type));
+    linear(f, sgate, out + "mlp.shared_expert_gate", 1, H, dense_format(sgate->type));
+  }
+
+  void build() {
+    const Hp& h = P.hp;
+    const std::string root = "language_model.model.";
+    const Tensor* emb = get(F, "token_embd.weight");
+    linear(F, emb, root + "embed_tokens", uint64_t(h.vocab), uint64_t(h.H), dense_format(emb->type));
+    if (!h.tied) {
+      const Tensor* o = get(F, "output.weight");
+      check_ne(o, {h.H, h.vocab});
+      linear(F, o, "language_model.lm_head", uint64_t(h.vocab), uint64_t(h.H), dense_format(o->type));
+    }
+    param(F, "output_norm.weight", root + "norm.weight", {h.H}, 1, uint64_t(h.H));
+    for (int64_t i = 0; i < h.layers; ++i) {
+      const std::string b = "blk." + std::to_string(i) + ".", out = root + "layers." + std::to_string(i) + ".";
+      param(F, b + "attn_norm.weight", out + "input_layernorm.weight", {h.H}, 1, uint64_t(h.H));
+      param(F, b + "post_attention_norm.weight", out + "post_attention_layernorm.weight", {h.H}, 1, uint64_t(h.H));
+      if (h.recurrent[size_t(i)]) deltanet(b, out);
+      else attention(F, b, out, false);
+      if (h.moe) moe(F, b, out, false);
+      else mlp(F, b, out, false);
+    }
+    if (!M) return;
+    // the MTP block: block `layers` of the file that has it
+    const std::string b = "blk." + std::to_string(h.layers) + ".", out = "mtp.layers.0.";
+    const size_t first = P.lins.size();
+    param(*M, b + "nextn.enorm.weight", "mtp.pre_fc_norm_embedding.weight", {h.H}, 1, uint64_t(h.H), {}, false, true);
+    param(*M, b + "nextn.hnorm.weight", "mtp.pre_fc_norm_hidden.weight", {h.H}, 1, uint64_t(h.H), {}, false, true);
+    if (M->find(b + "nextn.shared_head_norm.weight"))
+      param(*M, b + "nextn.shared_head_norm.weight", "mtp.norm.weight", {h.H}, 1, uint64_t(h.H), {}, false, true);
+    else  // llama.cpp falls back to the trunk's final norm
+      param(F, "output_norm.weight", "mtp.norm.weight", {h.H}, 1, uint64_t(h.H), {}, false, true);
+    const Tensor* fc = get(*M, b + "nextn.eh_proj.weight");
+    check_ne(fc, {2 * h.H, h.H});
+    linear(*M, fc, "mtp.fc", uint64_t(h.H), uint64_t(2 * h.H), k8g64, {}, 0, true);
+    param(*M, b + "attn_norm.weight", out + "input_layernorm.weight", {h.H}, 1, uint64_t(h.H), {}, false, true);
+    param(*M, b + "post_attention_norm.weight", out + "post_attention_layernorm.weight", {h.H}, 1, uint64_t(h.H), {},
+          false, true);
+    attention(*M, b, out, true);
+    if (h.moe) moe(*M, b, out, true);
+    else mlp(*M, b, out, true);
+    if (M->find(b + "nextn.embed_tokens.weight") || M->find(b + "nextn.shared_head_head.weight")) {
+      // a head with its own embedding / output layer: Kapitsa's MTP decoding uses the trunk's
+      P.lins.resize(first);
+      P.notes.insert("MTP head left out: it has its own embedding or output layer, which Kapitsa's MTP decoding does not use");
+      return;
+    }
+    P.has_mtp = true;
+  }
+};
+
+// ---------------------------------------------------------------- tokenizer, config
+
+std::string jstr(const std::string& s) { return json(s).dump(-1, ' ', false, json::error_handler_t::replace); }
+
+// Qwen3.5's pre-tokenizer split (its tokenizer.json; Kapitsa's tokenizer implements the same)
+const char* kQwen35Split =
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|"
+    "\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+
+struct Tok {
+  std::string tokenizer_json, tokenizer_config, template_;
+  int eos = -1, endoftext = -1;
+};
+
+Tok make_tokenizer(const File& f, const Hp& h) {
+  const std::string file = base_name(f.parts()[0]);
+  if (f.str("tokenizer.ggml.model") != "gpt2")
+    throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not Qwen3.5's byte-level BPE.");
+  const std::string pre = f.str("tokenizer.ggml.pre");
+  if (pre != "qwen35")
+    throw Error(file + ": its pre-tokenizer is \"" + pre + "\", not Qwen3.5's (qwen35): not a Qwen3.5-family tokenizer.");
+  const json& toks = f.meta().value("tokenizer.ggml.tokens", json());
+  const json& types = f.meta().value("tokenizer.ggml.token_type", json());
+  const json& merges = f.meta().value("tokenizer.ggml.merges", json());
+  if (!toks.is_array() || !types.is_array() || !merges.is_array() || toks.size() != types.size() || toks.empty() ||
+      int64_t(toks.size()) > h.vocab)
+    throw Error(file + ": the tokenizer's vocabulary is missing or inconsistent.");
+  Tok t;
+  t.template_ = f.str("tokenizer.chat_template");
+  if (t.template_.empty()) throw Error(file + " has no chat template (tokenizer.chat_template).");
+  // vocabulary: normal tokens; added tokens: control (special) and user-defined (not special); unused padding left out
+  std::string vocab, added, decoder;
+  for (size_t i = 0; i < toks.size(); ++i) {
+    const int ty = types[i].is_number_integer() ? types[i].get<int>() : 1;
+    const std::string& s = toks[i].get_ref<const std::string&>();
+    if (ty == 1 || ty == 6) {
+      vocab += (vocab.empty() ? "" : ",") + jstr(s) + ":" + std::to_string(i);
+    } else if (ty == 3 || ty == 4) {
+      const bool special = ty == 3;
+      added += std::string(added.empty() ? "" : ",") + "{\"id\":" + std::to_string(i) + ",\"content\":" + jstr(s) +
+               ",\"single_word\":false,\"lstrip\":false,\"rstrip\":false,\"normalized\":false,\"special\":" +
+               (special ? "true" : "false") + "}";
+      decoder += std::string(decoder.empty() ? "" : ",") + "\"" + std::to_string(i) + "\":{\"content\":" + jstr(s) +
+                 ",\"lstrip\":false,\"normalized\":false,\"rstrip\":false,\"single_word\":false,\"special\":" +
+                 (special ? "true" : "false") + "}";
+      if (s == "<|endoftext|>") t.endoftext = int(i);
+    }
+  }
+  std::string mg;
+  mg.reserve(merges.size() * 12);
+  for (const auto& m : merges) mg += (mg.empty() ? "" : ",") + jstr(m.is_string() ? m.get<std::string>() : "");
+  const std::string bl = "{\"type\":\"ByteLevel\",\"add_prefix_space\":false,\"trim_offsets\":false,\"use_regex\":false}";
+  t.tokenizer_json = "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[" + added +
+                     "],\"normalizer\":{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":["
+                     "{\"type\":\"Split\",\"pattern\":{\"Regex\":" + jstr(kQwen35Split) +
+                     "},\"behavior\":\"Isolated\",\"invert\":false}," + bl + "]},\"post_processor\":" + bl +
+                     ",\"decoder\":" + bl +
+                     ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
+                     "\"end_of_word_suffix\":\"\",\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,"
+                     "\"vocab\":{" + vocab + "},\"merges\":[" + mg + "]}}";
+  auto tok_at = [&](const char* key) -> json {
+    const int64_t id = f.num(key, -1);
+    if (id < 0 || id >= int64_t(toks.size())) return nullptr;
+    return toks[size_t(id)];
+  };
+  t.eos = int(f.num("tokenizer.ggml.eos_token_id", -1));
+  if (t.eos < 0 || t.eos >= int(toks.size())) throw Error(file + " names no end-of-sequence token.");
+  ojson tc;
+  tc["add_bos_token"] = f.flag("tokenizer.ggml.add_bos_token", false);
+  tc["add_prefix_space"] = false;
+  tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
+  tc["clean_up_tokenization_spaces"] = false;
+  tc["eos_token"] = toks[size_t(t.eos)];
+  tc["errors"] = "replace";
+  tc["model_max_length"] = h.ctx;
+  tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
+  tc["split_special_tokens"] = false;
+  tc["tokenizer_class"] = "Qwen2Tokenizer";
+  tc["unk_token"] = nullptr;
+  tc["chat_template"] = t.template_;
+  std::string s = tc.dump(2, ' ', false, json::error_handler_t::replace);
+  // added_tokens_decoder spliced in as text (its keys are ids)
+  s.insert(1, "\n  \"added_tokens_decoder\": {" + decoder + "},");
+  t.tokenizer_config = s + "\n";
+  return t;
+}
+
+ojson make_config(const Plan& P, const Tok& tok, const File& f) {
+  const Hp& h = P.hp;
+  ojson t;
+  t["attention_bias"] = false;
+  t["attn_output_gate"] = true;
+  t["dtype"] = "bfloat16";
+  t["eos_token_id"] = tok.endoftext >= 0 ? tok.endoftext : tok.eos;
+  t["full_attention_interval"] = h.interval;
+  t["head_dim"] = h.head_dim;
+  t["hidden_act"] = "silu";
+  t["hidden_size"] = h.H;
+  if (!h.moe) t["intermediate_size"] = h.ffn;
+  json lt = json::array();
+  for (bool r : h.recurrent) lt.push_back(r ? "linear_attention" : "full_attention");
+  t["layer_types"] = lt;
+  t["linear_conv_kernel_dim"] = h.conv;
+  t["linear_key_head_dim"] = h.dk;
+  t["linear_num_key_heads"] = h.hk;
+  t["linear_num_value_heads"] = h.hv;
+  t["linear_value_head_dim"] = h.dv;
+  t["max_position_embeddings"] = h.ctx;
+  t["model_type"] = h.moe ? "qwen3_5_moe_text" : "qwen3_5_text";
+  if (h.moe) {
+    t["moe_intermediate_size"] = h.moe_I;
+    t["norm_topk_prob"] = true;
+    t["num_experts"] = h.E;
+    t["num_experts_per_tok"] = h.topk;
+    t["shared_expert_intermediate_size"] = h.shared_I;
+  }
+  t["mtp_num_hidden_layers"] = P.has_mtp ? 1 : 0;
+  t["num_attention_heads"] = h.hq;
+  t["num_hidden_layers"] = h.layers;
+  t["num_key_value_heads"] = h.hkv;
+  char eps[32];
+  snprintf(eps, sizeof eps, "%g", float(h.eps));
+  t["rms_norm_eps"] = std::stod(eps);
+  json sec = json::array();
+  for (size_t i = 0; i < std::min<size_t>(3, h.sections.size()); ++i) sec.push_back(h.sections[i]);
+  const double prf = double(h.rot) / double(h.head_dim);
+  t["rope_parameters"] = ojson{{"mrope_interleaved", true}, {"mrope_section", sec}, {"partial_rotary_factor", prf},
+                               {"rope_theta", h.theta}, {"rope_type", "default"}};
+  t["partial_rotary_factor"] = prf;
+  t["tie_word_embeddings"] = h.tied;
+  t["vocab_size"] = h.vocab;
+  ojson c;
+  c["architectures"] = json::array({h.moe ? "Qwen3_5MoeForConditionalGeneration" : "Qwen3_5ForConditionalGeneration"});
+  json eos = json::array({tok.eos});
+  if (tok.endoftext >= 0 && tok.endoftext != tok.eos) eos.push_back(tok.endoftext);
+  c["eos_token_id"] = eos;
+  c["language_model_only"] = true;
+  c["model_type"] = h.moe ? "qwen3_5_moe" : "qwen3_5";
+  c["text_config"] = t;
+  c["tie_word_embeddings"] = h.tied;
+  // quantization: the most common format of the quantized trunk linears, the others per module
+  std::map<std::pair<int, int>, int> n;
+  for (const Lin& L : P.lins)
+    if (!L.param && !L.mtp && !L.fmt.dense()) ++n[{L.fmt.bits, L.fmt.gs}];
+  if (!n.empty()) {
+    auto top = std::max_element(n.begin(), n.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
+    ojson q{{"group_size", top.second}, {"bits", top.first}, {"mode", "affine"}};
+    for (const Lin& L : P.lins)
+      if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
+        q[L.name] = ojson{{"group_size", L.fmt.gs}, {"bits", L.fmt.bits}};
+    c["quantization"] = q;
+    c["quantization_config"] = q;
+  }
+  ojson src{{"file", base_name(f.parts()[0])}};
+  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) src["file_type"] = ft;
+  if (f.has("general.name")) src["name"] = f.str("general.name");
+  c["converted_from_gguf"] = src;
+  return c;
+}
+
+// ---------------------------------------------------------------- conversion
+
+struct OutFile {
+  std::string name;
+  int fd = -1;
+  uint64_t data0 = 0;  // where the tensor data starts (after the header)
+  uint64_t size = 0;
+};
+
+class Progress {
+ public:
+  Progress(uint64_t total, bool show, std::string what) : total_(total), show_(show), what_(std::move(what)) {
+    t0_ = std::chrono::steady_clock::now();
+    tty_ = isatty(2);
+  }
+  void add(uint64_t n) {
+    done_ += n;
+    if (!show_) return;
+    const double s = secs();
+    const int pct = total_ ? int(100.0 * double(done_) / double(total_)) : 100;
+    if (tty_) {
+      if (s - last_ < 0.25 && done_ < total_) return;
+      last_ = s;
+      const double left = done_ ? s * double(total_ - done_) / double(done_) : -1;
+      fprintf(stderr, "\r%s: %3d%% (%s of %s)%s%s   ", what_.c_str(), pct, gb(done_).c_str(), gb(total_).c_str(),
+              done_ < total_ && s > 2 ? ", " : "", done_ < total_ && s > 2 ? (fmt_secs(left) + " left").c_str() : "");
+      fflush(stderr);
+    } else if (pct >= next_) {
+      fprintf(stderr, "%s: %d%% (%s of %s)\n", what_.c_str(), pct, gb(done_).c_str(), gb(total_).c_str());
+      next_ = pct / 10 * 10 + 10;
+    }
+  }
+  void end() {
+    if (show_ && tty_) fprintf(stderr, "\n");
+  }
+  double secs() const {
+    return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0_).count();
+  }
+
+ private:
+  uint64_t total_, done_ = 0;
+  bool show_, tty_ = false;
+  std::string what_;
+  std::chrono::steady_clock::time_point t0_;
+  double last_ = -1;
+  int next_ = 10;
+};
+
+void pwrite_all(int fd, const void* p, size_t n, uint64_t off, const std::string& path) {
+  const uint8_t* d = static_cast<const uint8_t*>(p);
+  while (n) {
+    const ssize_t w = pwrite(fd, d, n, off_t(off));
+    if (w <= 0) {
+      if (errno == ENOSPC) throw Error("The disk is full while writing " + hub::tilde(path) + ".");
+      throw Error("Can't write " + hub::tilde(path) + ": " + strerror(errno) + ".");
+    }
+    d += w, n -= size_t(w), off += uint64_t(w);
+  }
+}
+
+template <class F>
+void parallel_rows(uint64_t n, int threads, F fn) {
+  const int t = int(std::min<uint64_t>(uint64_t(std::max(1, threads)), n));
+  if (t <= 1) {
+    fn(0, n);
+    return;
+  }
+  std::vector<std::thread> th;
+  std::exception_ptr err;
+  std::mutex mu;
+  const uint64_t per = (n + uint64_t(t) - 1) / uint64_t(t);
+  for (int i = 0; i < t; ++i) {
+    const uint64_t a = uint64_t(i) * per, b = std::min(n, a + per);
+    if (a >= b) break;
+    th.emplace_back([&, a, b] {
+      try {
+        fn(a, b);
+      } catch (...) {
+        std::lock_guard<std::mutex> lk(mu);
+        if (!err) err = std::current_exception();
+      }
+    });
+  }
+  for (auto& x : th) x.join();
+  if (err) std::rethrow_exception(err);
+}
+
+// Converts output rows [r0, r1) of L from the source rows held in `src` (starting at source row s0).
+void convert_rows(const Lin& L, const uint8_t* src, uint64_t s0, uint64_t r0, uint64_t r1, uint8_t* w, uint16_t* sc,
+                  uint16_t* bi) {
+  const uint64_t K = L.K, srb = L.srb, nb = L.fmt.dense() ? 0 : K / uint64_t(L.fmt.gs);
+  const uint32_t type = L.src->type;
+  std::vector<float> x(K), y(K);
+  std::vector<uint8_t> codes(K), c2(K);
+  std::vector<float> s32(K / 32 + 1), o32(K / 32 + 1);
+  const bool direct = !L.param && L.fmt == k4g32 && exact4(type) && L.mult.empty();
+  const uint64_t nk = L.cperm_nk;  // value-head columns (out_proj): key-head groups
+  for (uint64_t row = r0; row < r1; ++row) {
+    const uint64_t sr = L.map(row);
+    const uint8_t* s = src + (sr - s0) * srb;
+    uint8_t* wo = w + (row - r0) * L.row_w();
+    if (direct) {
+      decode4(type, s, codes.data(), s32.data(), o32.data(), K);
+      if (L.cperm_hs > 0) {
+        const uint64_t hs = uint64_t(L.cperm_hs), heads = K / hs;
+        const uint64_t r = heads / nk;
+        std::vector<float> s2(s32), o2(o32);
+        c2 = codes;
+        for (uint64_t h = 0; h < heads; ++h) {
+          const uint64_t sh = (h % r) * nk + h / r;
+          memcpy(codes.data() + h * hs, c2.data() + sh * hs, hs);
+          for (uint64_t g = 0; g < hs / 32; ++g) {
+            s32[h * hs / 32 + g] = s2[sh * hs / 32 + g];
+            o32[h * hs / 32 + g] = o2[sh * hs / 32 + g];
+          }
+        }
+      }
+      pack_codes(codes.data(), K, 4, reinterpret_cast<uint32_t*>(wo));
+      for (uint64_t g = 0; g < K / 32; ++g) {
+        sc[(row - r0) * nb + g] = to_bf16(s32[g]);
+        bi[(row - r0) * nb + g] = to_bf16(o32[g]);
+      }
+      continue;
+    }
+    dequantize(type, s, x.data(), K);
+    if (!L.mult.empty()) {
+      const float m = L.mult_rows ? L.mult[row / L.mult_rows] : L.mult[0];
+      for (auto& v : x) v *= m;
+    }
+    if (L.log_neg)
+      for (auto& v : x) v = std::log(-v);
+    if (L.cperm_hs > 0) {
+      const uint64_t hs = uint64_t(L.cperm_hs), heads = K / hs, r = heads / nk;
+      y = x;
+      for (uint64_t h = 0; h < heads; ++h) memcpy(x.data() + h * hs, y.data() + ((h % r) * nk + h / r) * hs, hs * 4);
+    }
+    if (L.fmt.dense()) {
+      uint16_t* o = reinterpret_cast<uint16_t*>(wo);
+      for (uint64_t i = 0; i < K; ++i) o[i] = to_bf16(x[i]);
+      continue;
+    }
+    quantize(x.data(), K, L.fmt.bits, L.fmt.gs, codes.data(), sc + (row - r0) * nb, bi + (row - r0) * nb);
+    pack_codes(codes.data(), K, L.fmt.bits, reinterpret_cast<uint32_t*>(wo));
+  }
+}
+
+void convert(const Lin& L, const std::vector<OutFile>& files, int threads, Progress& prog) {
+  const OutFile& of = files[size_t(L.file)];
+  const uint64_t srb = L.srb;
+  // the whole tensor when its rows are reordered by value head (moderate sizes), else chunks of rows
+  const bool whole = L.map.vfrom >= 0;
+  const uint64_t step = whole ? L.rows : std::max<uint64_t>(1, kChunkBytes / std::max<uint64_t>(srb, 1));
+  std::vector<uint8_t> src, w;
+  std::vector<uint16_t> sc, bi;
+  for (uint64_t r0 = 0; r0 < L.rows; r0 += step) {
+    if (g_stop) throw Error("Stopped; nothing was kept. The same command starts the conversion again.");
+    const uint64_t r1 = std::min(L.rows, r0 + step);
+    uint64_t lo = UINT64_MAX, hi = 0;
+    for (uint64_t r = r0; r < r1; ++r) {
+      const uint64_t s = L.map(r);
+      lo = std::min(lo, s), hi = std::max(hi, s);
+    }
+    if ((hi + 1) * srb > L.src->bytes) throw Error("internal: row map of " + L.name + " out of range");
+    src.resize(size_t((hi - lo + 1) * srb));
+    L.f->read(*L.src, lo * srb, src.data(), src.size());
+    const uint64_t n = r1 - r0, nb = L.fmt.dense() ? 0 : L.K / uint64_t(L.fmt.gs);
+    w.resize(size_t(n * L.row_w()));
+    sc.resize(size_t(n * nb)), bi.resize(size_t(n * nb));
+    parallel_rows(n, (L.K * n >= 65536) ? threads : 1, [&](uint64_t a, uint64_t b) {
+      convert_rows(L, src.data(), lo, r0 + a, r0 + b, w.data() + a * L.row_w(), sc.data() + a * nb, bi.data() + a * nb);
+    });
+    pwrite_all(of.fd, w.data(), w.size(), of.data0 + L.off_w + r0 * L.row_w(), of.name);
+    if (nb) {
+      pwrite_all(of.fd, sc.data(), sc.size() * 2, of.data0 + L.off_s + r0 * nb * 2, of.name);
+      pwrite_all(of.fd, bi.data(), bi.size() * 2, of.data0 + L.off_b + r0 * nb * 2, of.name);
+    }
+    prog.add(n * srb);
+  }
+}
+
+// ---------------------------------------------------------------- sources, names, reuse
+
+struct Source {
+  std::string path;          // the file given (any part)
+  std::string mtp;           // the separate MTP file, "" if none
+  std::string ollama_name;   // "qwen3.5-0.8b" when the file is an Ollama blob with a manifest
+};
+
+// An Ollama blob (models/blobs/sha256-<hex>): the model:tag of a manifest that lists it, and the manifest's draft
+// (MTP) layer when it has one.
+void ollama_lookup(Source& s) {
+  const std::string bn = base_name(s.path), blobs = dir_name(s.path);
+  if (bn.rfind("sha256-", 0) != 0 || base_name(blobs) != "blobs") return;
+  const std::string digest = "sha256:" + bn.substr(7), manifests = dir_name(blobs) + "/manifests";
+  std::vector<std::string> stack{manifests};
+  while (!stack.empty()) {
+    const std::string d = stack.back();
+    stack.pop_back();
+    DIR* dd = opendir(d.c_str());
+    if (!dd) continue;
+    while (dirent* e = readdir(dd)) {
+      const std::string n = e->d_name;
+      if (n == "." || n == "..") continue;
+      const std::string p = d + "/" + n;
+      if (is_dir(p)) {
+        stack.push_back(p);
+        continue;
+      }
+      std::ifstream f(p);
+      json m = json::parse(f, nullptr, false);
+      if (m.is_discarded() || !m.contains("layers") || !m["layers"].is_array()) continue;
+      bool ours = false;
+      std::string draft;
+      for (const auto& l : m["layers"]) {
+        const std::string mt = l.value("mediaType", ""), dg = l.value("digest", "");
+        if (mt == "application/vnd.ollama.image.model" && dg == digest) ours = true;
+        if (mt == "application/vnd.ollama.image.draft" && dg.rfind("sha256:", 0) == 0) draft = blobs + "/sha256-" + dg.substr(7);
+      }
+      if (!ours) continue;
+      s.ollama_name = clean_name(base_name(d) + "-" + n);  // .../library/<model>/<tag>
+      if (s.mtp.empty() && !draft.empty() && is_file(draft)) s.mtp = draft;
+      closedir(dd);
+      return;
+    }
+    closedir(dd);
+  }
+}
+
+std::string default_name(const Source& s, const File& f) {
+  if (!s.ollama_name.empty()) return s.ollama_name;
+  std::string bn = base_name(s.path);
+  static const std::string ext = ".gguf";
+  if (ends_with(lower(bn), ext)) {
+    bn = bn.substr(0, bn.size() - ext.size());
+    // a split file: drop -0000k-of-0000N
+    if (bn.size() > 15 && bn[bn.size() - 15] == '-' && bn.compare(bn.size() - 9, 4, "-of-") == 0) bn = bn.substr(0, bn.size() - 15);
+    return clean_name(bn);
+  }
+  std::string n = f.str("general.basename", f.str("general.name", "model"));
+  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) n += "-" + ft;
+  return clean_name(n);
+}
+
+// the source files, for recognizing an earlier conversion
+json source_id(const File& f, const File* mtp) {
+  json a = json::array();
+  auto add = [&](const File& x) {
+    for (const auto& p : x.parts()) {
+      struct stat st;
+      stat(p.c_str(), &st);
+      a.push_back(json{{"file", base_name(p)}, {"size", uint64_t(st.st_size)}, {"mtime", int64_t(st.st_mtime)}});
+    }
+  };
+  add(f);
+  if (mtp) add(*mtp);
+  return a;
+}
+
+// mtp-*.gguf beside the file (or in an MTP/ folder beside it) of the same model: the one llama.cpp's converter
+// writes with --mtp, as ggml-org, bartowski and unsloth publish it.
+std::string find_mtp_file(const File& f, const Hp& h) {
+  const std::string dir = dir_name(f.parts()[0]);
+  std::vector<std::string> found;
+  for (const std::string& d : {dir, dir + "/MTP", dir + "/mtp"}) {
+    DIR* dd = opendir(d.c_str());
+    if (!dd) continue;
+    while (dirent* e = readdir(dd)) {
+      const std::string n = e->d_name;
+      if (lower(n).rfind("mtp-", 0) != 0 || !ends_with(lower(n), ".gguf")) continue;
+      const std::vector<std::string> parts = split_parts(d + "/" + n);
+      if (parts[0] != d + "/" + n) continue;  // count a split file once
+      try {
+        File m(d + "/" + n);
+        const std::string a = m.str("general.architecture");
+        if (a == h.arch && m.num(a + ".nextn_predict_layers", 0) > 0 && m.num(a + ".embedding_length", 0) == h.H &&
+            m.num(a + ".block_count", 0) - m.num(a + ".nextn_predict_layers", 0) == h.layers)
+          found.push_back(d + "/" + n);
+      } catch (const Error&) {
+      }
+    }
+    closedir(dd);
+  }
+  return found.size() == 1 ? found[0] : "";
+}
+
+void remove_tree(const std::string& dir) {
+  std::error_code ec;
+  std::filesystem::remove_all(dir, ec);
+}
+
+}  // namespace
+
+bool is_gguf_file(const std::string& arg) {
+  std::string p = arg;
+  if (const char* home = getenv("HOME"); home && (p == "~" || p.rfind("~/", 0) == 0)) p = home + p.substr(1);
+  if (!is_file(p)) return false;
+  if (ends_with(lower(p), ".gguf")) return true;
+  std::ifstream f(p, std::ios::binary);
+  char m[4] = {};
+  return f.read(m, 4) && memcmp(m, "GGUF", 4) == 0;
+}
+
+std::string import_model(const ImportOptions& opt) {
+  Source s;
+  s.path = opt.file;
+  s.mtp = opt.mtp;
+  ollama_lookup(s);
+  File f(s.path);
+  const std::string file = base_name(f.parts()[0]);
+  const std::string arch = f.str("general.architecture");
+  if (arch == "qwen3next")
+    throw Error(file + " is Qwen3-Next, the model before Qwen3.5; Kapitsa runs the Qwen3.5 family (Qwen3.5, Qwen3.6, "
+                "Qwen3.8).");
+  if (arch != "qwen35" && arch != "qwen35moe")
+    throw Error(file + " is a \"" + arch + "\" model; Kapitsa runs the Qwen3.5 family (GGUF architectures qwen35 and "
+                "qwen35moe).");
+  for (auto& [k, v] : f.meta().items())
+    if (k.rfind("prism.hadamard.", 0) == 0)
+      throw Error(file + " stores its weights rotated (a Hadamard transform its runtime undoes), which Kapitsa does "
+                  "not read. Choose another quantization of the model.");
+  Plan P;
+  P.hp = read_hp(f);
+  check_runs(P.hp, file);
+  // the MTP head: the file's own block, else a separate file
+  std::unique_ptr<File> mf;
+  const File* M = nullptr;
+  if (P.hp.nextn > 0) {
+    M = &f;
+  } else {
+    if (s.mtp.empty()) s.mtp = find_mtp_file(f, P.hp);
+    if (!s.mtp.empty()) {
+      mf = std::make_unique<File>(s.mtp);
+      const std::string a = mf->str("general.architecture");
+      if (a != arch || mf->num(a + ".embedding_length", 0) != P.hp.H || mf->num(a + ".nextn_predict_layers", 0) < 1 ||
+          mf->num(a + ".block_count", 0) - mf->num(a + ".nextn_predict_layers", 0) != P.hp.layers)
+        throw Error(base_name(s.mtp) + " is not an MTP head of " + file + ".");
+      M = mf.get();
+    }
+  }
+  const std::string name = opt.name.empty() ? default_name(s, f) : clean_name(opt.name);
+  if (name.empty()) throw Error("--name needs letters or digits.");
+  const std::string models = hub::models_dir(), dest = models + "/" + name;
+  const json sid = source_id(f, mf.get());
+  // an earlier conversion of the same files
+  if (is_dir(dest) && !opt.force) {
+    std::ifstream mfs(dest + "/.kapitsa/manifest.json");
+    const json m = json::parse(mfs, nullptr, false);
+    if (!m.is_discarded() && m.contains("gguf") && m["gguf"].value("files", json()) == sid && hub::is_complete(dest)) {
+      if (opt.progress) fprintf(stderr, "Using %s, converted from %s earlier.\n", hub::tilde(dest).c_str(), file.c_str());
+      return dest;
+    }
+    throw Error(hub::tilde(dest) + " exists already and is not a conversion of " + file + ". Name this one with "
+                "--name, or replace that folder with --force.");
+  }
+  Builder B(P, f, M);
+  B.build();
+  if (M && !P.has_mtp) M = nullptr;
+  for (const auto& t : f.tensors())  // tensors not read: the vision tower (none in llama.cpp's text GGUFs) is fine
+    if (!B.used.count(t.name) && !ends_with(t.name, ".input_scale") && t.name.rfind("v.", 0) != 0 &&
+        t.name.rfind("mm.", 0) != 0 && t.name.rfind("mtp.", 0) != 0 && !(P.hp.nextn && t.name.rfind("blk." + std::to_string(P.hp.layers) + ".", 0) == 0))
+      P.notes.insert("not converted: " + t.name + " (a tensor Kapitsa's Qwen3.5 does not use)");
+  Tok tok = make_tokenizer(f, P.hp);
+
+  // output files: trunk shards of at most 5 GB, then mtp.safetensors
+  uint64_t cur = 0, total = 0, src_total = 0;
+  int shards = 0;
+  for (Lin& L : P.lins) {
+    if (L.mtp) continue;
+    const uint64_t b = L.rows * L.row_w() + 2 * L.rows * L.row_s();
+    if (shards == 0 || (cur + b > kShardBytes && cur > 0)) ++shards, cur = 0;
+    L.file = shards - 1;
+    cur += b;
+  }
+  std::vector<std::vector<Lin*>> per(size_t(shards + (P.has_mtp ? 1 : 0)));
+  for (Lin& L : P.lins) {
+    if (L.mtp) L.file = shards;
+    per[size_t(L.file)].push_back(&L);
+    src_total += L.src_bytes();
+  }
+  for (int i = 0; i < shards; ++i) {
+    char b[64];
+    snprintf(b, sizeof b, "model-%05d-of-%05d.safetensors", i + 1, shards);
+    P.files.push_back(shards == 1 ? "model.safetensors" : b);
+  }
+  if (P.has_mtp) P.files.push_back("mtp.safetensors");
+  // headers and offsets
+  std::vector<std::string> headers(P.files.size());
+  std::vector<uint64_t> sizes(P.files.size());
+  json weight_map = json::object();
+  uint64_t trunk_bytes = 0;
+  for (size_t fi = 0; fi < P.files.size(); ++fi) {
+    json h = json::object();
+    uint64_t off = 0;
+    for (Lin* L : per[fi]) {
+      auto put = [&](const std::string& n, const char* dt, std::vector<int64_t> shape, uint64_t bytes) {
+        h[n] = json{{"dtype", dt}, {"shape", shape}, {"data_offsets", {off, off + bytes}}};
+        if (fi < size_t(shards)) weight_map[n] = P.files[fi];
+        const uint64_t at = off;
+        off += bytes;
+        return at;
+      };
+      if (L->param) {
+        L->off_w = put(L->name, "BF16", L->shape, L->rows * L->row_w());
+        continue;
+      }
+      std::vector<int64_t> ws = L->shape, ss = L->shape;
+      if (L->fmt.dense()) {
+        L->off_w = put(L->name + ".weight", "BF16", ws, L->rows * L->row_w());
+        continue;
+      }
+      ws.back() = int64_t(L->K * uint64_t(L->fmt.bits) / 32);
+      ss.back() = int64_t(L->K / uint64_t(L->fmt.gs));
+      L->off_w = put(L->name + ".weight", "U32", ws, L->rows * L->row_w());
+      L->off_s = put(L->name + ".scales", "BF16", ss, L->rows * L->row_s());
+      L->off_b = put(L->name + ".biases", "BF16", ss, L->rows * L->row_s());
+    }
+    json meta{{"format", "mlx"}};
+    if (P.has_mtp && fi + 1 == P.files.size())
+      meta = json{{"format", "mlx"}, {"source", base_name(M->parts()[0])}, {"norms", "mlx (+1)"},
+                  {"base_hidden_variant", "post_norm"}};
+    h["__metadata__"] = meta;
+    std::string hs = h.dump();
+    hs.append((8 - hs.size() % 8) % 8, ' ');
+    headers[fi] = hs;
+    sizes[fi] = 8 + hs.size() + off;
+    total += sizes[fi];
+    if (fi < size_t(shards)) trunk_bytes += off;
+  }
+  total += tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size() + (1u << 20);
+
+  // what will be written, and whether it fits
+  if (opt.progress) {
+    fprintf(stderr, "Converting %s (%s, %s%s) into %s:\n", file.c_str(), arch == "qwen35moe" ? "MoE" : "dense",
+            gb(f.file_bytes()).c_str(), mf ? (" + MTP head from " + base_name(s.mtp)).c_str() : "",
+            hub::tilde(dest).c_str());
+    for (auto& [k, n] : P.conv_count) fprintf(stderr, "  %4d x %s\n", n, k.c_str());
+    for (const auto& n : P.notes) fprintf(stderr, "  note: %s\n", n.c_str());
+    if (!P.low.empty()) {
+      std::string l;
+      for (const auto& t : P.low) l += (l.empty() ? "" : "/") + t;
+      fprintf(stderr, "  warning: %s are 2-3-bit formats; Kapitsa has no kernels for them, so they become 4-bit group "
+                      "32 at their own quality (no better than the file, and larger). A Q4_K_M or better GGUF gives "
+                      "a better model at about the same size.\n", l.c_str());
+    }
+    if (!P.has_mtp)
+      fprintf(stderr, "  no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts\n");
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(models, ec);
+  const uint64_t avail = free_bytes(models);
+  if (avail < total + kKeepFree)
+    throw Error("Not enough disk space: the converted model takes " + gb(total) + " and " + gb(avail) + " is free on "
+                "the disk of " + hub::tilde(models) + ", which must keep 6 GB free. Free some space, or set KAPITSA_HOME "
+                "to a folder on another disk.");
+
+  // write into a hidden folder, renamed when complete
+  StopGuard stop_guard;
+  const std::string tmp = models + "/." + name + ".importing";
+  remove_tree(tmp);
+  std::filesystem::create_directories(tmp + "/.kapitsa", ec);
+  if (ec) throw Error("Can't create " + hub::tilde(tmp) + ": " + ec.message() + ".");
+  try {
+    write_text(tmp + "/config.json", make_config(P, tok, f).dump(2, ' ', false, json::error_handler_t::replace) + "\n");
+    write_text(tmp + "/tokenizer.json", tok.tokenizer_json);
+    write_text(tmp + "/tokenizer_config.json", tok.tokenizer_config);
+    write_text(tmp + "/chat_template.jinja", tok.template_);
+    {
+      ojson g{{"eos_token_id", make_config(P, tok, f)["eos_token_id"]}};
+      for (const char* k : {"temp", "top_k", "top_p", "min_p"})
+        if (f.has(std::string("general.sampling.") + k))
+          g[std::string(k) == "temp" ? "temperature" : k] = f.meta()[std::string("general.sampling.") + k];
+      write_text(tmp + "/generation_config.json", g.dump(2) + "\n");
+    }
+    std::vector<OutFile> outs(P.files.size());
+    for (size_t i = 0; i < P.files.size(); ++i) {
+      OutFile& o = outs[i];
+      o.name = tmp + "/" + P.files[i];
+      o.fd = open(o.name.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
+      if (o.fd < 0) throw Error("Can't create " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+      fcntl(o.fd, F_NOCACHE, 1);
+      if (ftruncate(o.fd, off_t(sizes[i])) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+      const uint64_t hl = headers[i].size();
+      pwrite_all(o.fd, &hl, 8, 0, o.name);
+      pwrite_all(o.fd, headers[i].data(), headers[i].size(), 8, o.name);
+      o.data0 = 8 + hl;
+      o.size = sizes[i];
+    }
+    const int threads = opt.threads > 0 ? opt.threads : std::min(8, perf_cores());
+    Progress prog(src_total, opt.progress, "Converting " + file);
+    for (const Lin& L : P.lins) convert(L, outs, threads, prog);
+    prog.end();
+    for (auto& o : outs) {
+      if (close(o.fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+      o.fd = -1;
+    }
+    if (shards > 0) {
+      json idx{{"metadata", {{"total_size", trunk_bytes}}}, {"weight_map", weight_map}};
+      write_text(tmp + "/model.safetensors.index.json", idx.dump(2) + "\n");
+    }
+    // the manifest, last: what `kapitsa list` shows and what makes the folder complete
+    ojson files = ojson::array();
+    uint64_t bytes = 0;
+    for (const auto& e : std::filesystem::directory_iterator(tmp)) {
+      if (!e.is_regular_file()) continue;
+      files.push_back(ojson{{"path", e.path().filename().string()}, {"size", uint64_t(e.file_size())}});
+      bytes += uint64_t(e.file_size());
+    }
+    ojson conv = ojson::object();
+    for (auto& [k, n] : P.conv_count) conv[k] = n;
+    const std::string ft = ftype_name(f.num("general.file_type", -1));
+    ojson man{{"name", name},
+              {"repo", ""},
+              {"revision", ""},
+              {"commit", ""},
+              {"variant", ft.empty() ? "gguf" : "gguf " + ft},
+              {"quant", "converted from GGUF"},
+              {"gguf", {{"files", sid}, {"conversions", conv}}},
+              {"files", files},
+              {"companions", ojson::array()},
+              {"total_bytes", bytes},
+              {"kapitsa", KAPITSA_VERSION}};
+    write_text(tmp + "/.kapitsa/manifest.json", man.dump(2) + "\n");
+    if (is_dir(dest)) {  // --force
+      if (dest.compare(0, models.size() + 1, models + "/") != 0) throw Error("refusing to replace " + dest);
+      remove_tree(dest);
+    }
+    if (rename(tmp.c_str(), dest.c_str()) != 0) throw Error("Can't create " + hub::tilde(dest) + ": " + strerror(errno) + ".");
+    if (opt.progress)
+      fprintf(stderr, "Converted %s in %s: %s in %s.\n", file.c_str(), fmt_secs(prog.secs()).c_str(), gb(bytes).c_str(),
+              hub::tilde(dest).c_str());
+  } catch (...) {
+    remove_tree(tmp);
+    throw;
+  }
+  return dest;
+}
+
+int run_import(int argc, char** argv) {
+  ImportOptions o;
+  const char* usage =
+      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force]\n\n"
+      "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"
+      "into a model folder in %s, which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf`\n"
+      "converts on first use). A split file is given by any of its parts.\n\n"
+      "  --name NAME    the folder's name (default: from the file name)\n"
+      "  --mtp FILE     the model's MTP head as a separate GGUF (default: the file's own, or an mtp-*.gguf beside it)\n"
+      "  --threads N    CPU threads (default: the performance cores, at most 8)\n"
+      "  --force        convert again over an existing folder of that name\n\n"
+      "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
+      "5-bit (group 64), Q2_K/Q3_K 4-bit group 32, F16/BF16/F32 bf16; MoE experts take 5-bit group 64 from 4-bit types.\n"
+      "IQ1/IQ2/IQ3 files are not supported (they need llama.cpp's codebooks).\n";
+  for (int i = 2; i < argc; ++i) {
+    const std::string a = argv[i];
+    auto next = [&]() -> std::string {
+      if (i + 1 >= argc) {
+        fprintf(stderr, "kapitsa import: %s needs a value\n", a.c_str());
+        exit(2);
+      }
+      return argv[++i];
+    };
+    if (a == "--help" || a == "-h") {
+      printf(usage, hub::tilde(hub::models_dir()).c_str());
+      return 0;
+    } else if (a == "--name") o.name = next();
+    else if (a == "--mtp") o.mtp = next();
+    else if (a == "--threads") o.threads = atoi(next().c_str());
+    else if (a == "--force") o.force = true;
+    else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
+    else {
+      fprintf(stderr, "kapitsa import: unexpected %s\n(kapitsa import --help shows how to use it.)\n", a.c_str());
+      return 2;
+    }
+  }
+  if (o.file.empty()) {
+    fprintf(stderr, "kapitsa import: which file? e.g. kapitsa import ~/Downloads/Qwen3.5-4B-Q4_K_M.gguf\n");
+    return 2;
+  }
+  if (const char* home = getenv("HOME"); home && o.file.rfind("~/", 0) == 0) o.file = home + o.file.substr(1);
+  if (const char* home = getenv("HOME"); home && o.mtp.rfind("~/", 0) == 0) o.mtp = home + o.mtp.substr(1);
+  try {
+    const std::string dir = import_model(o);
+    printf("%s is ready in %s. Start it: kapitsa serve --model %s\n", base_name(o.file).c_str(), hub::tilde(dir).c_str(),
+           base_name(dir).c_str());
+  } catch (const Error& e) {
+    fprintf(stderr, "kapitsa: %s\n", e.what());
+    return 1;
+  } catch (const std::exception& e) {
+    fprintf(stderr, "kapitsa: %s\n", e.what());
+    return 1;
+  }
+  return 0;
+}
+
+}  // namespace ni::gguf

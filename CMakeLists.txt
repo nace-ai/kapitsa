@@ -48,7 +48,8 @@ foreach(t ${NI_TOOLS})
 endforeach()
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
-# embedded. build/nace-infer-server stays as a symlink to it for scripts written before the rename.
+# embedded, and the coding-agent launchers (src/server/launch.cpp). The API translations (src/api/) are in the library.
+# build/nace-infer-server stays as a symlink to it for scripts written before the rename.
 set(KAPITSA_CHAT ${CMAKE_BINARY_DIR}/generated/chat_page.cpp)
 add_custom_command(
   OUTPUT ${KAPITSA_CHAT}
@@ -56,7 +57,7 @@ add_custom_command(
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   DEPENDS ${CMAKE_SOURCE_DIR}/src/server/chat.html ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
   COMMENT "Embedding the chat page")
-add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${KAPITSA_CHAT})
+add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")

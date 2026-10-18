@@ -32,7 +32,9 @@ formula for a public release: it needs a tag, the tarball's sha256 and a tap (se
 | `kapitsa list [--json]` | The models in the store: size on disk, complete or not, MTP head / DFlash2 drafter. |
 | `kapitsa rm M...` | Deletes downloaded models (only folders in the store). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and what fits it (below). |
+| `kapitsa claude\|codex\|opencode [--model M] [--port P] [--ctx N] [--api-key K] [args]` | Starts that coding agent on Kapitsa (Coding agents, below). Other arguments, and all after `--`, go to the agent. |
 | `kapitsa mtp-sidecar SRC OUT [--revision R] [--hidden post_norm\|pre_norm]` | `tools/mtp_sidecar.py` in C++, same bytes (see below). |
+| `kapitsa import FILE.gguf [--name N] [--mtp F] [--threads N] [--force]` | Converts a GGUF of a Qwen3.5-family model once into a store folder (Weight formats, GGUF files). `--model FILE.gguf` (serve and the agent launchers) does it on first use. |
 | `kapitsa --help`, `serve --help`, `pull --help`, `--version` | |
 
 Exit codes: 0, 1 for failures (download, port, model), 2 for usage errors (unknown option or model), 130 after
@@ -57,7 +59,7 @@ kapitsa serve --model 35b                        # or ./build/kapitsa serve --mo
 | `--dflash auto\|none\|<dir>` | DFlash2 block drafter (default `auto`: a drafter in the model's `dflash2/` or `drafter/` folder, else a `*-DFlash2` drafter matching the model next to it, in `<parent>/drafters` or in `~/.cache/nace-infer-models/drafters`; MTP when none is found, or where the drafter's memory would keep one `--ctx` conversation from fitting the memory budget). `none` keeps MTP. `NI_DFLASH` sets the same when the option is absent (`0` = none). |
 | `--prefill-chunk <rows>` | Prefill chunk size (default 2048; 1024 when 2048-row buffers would keep one conversation from its full context). |
 | `--mem-budget <GB>` | GPU memory Kapitsa may hold (default: Metal's recommended working set minus 4%, at least 512 MB; `NI_MEM_BUDGET`). |
-| `--api-key <key>` | Require `Authorization: Bearer <key>` (except `GET /`, `/favicon.ico` and `/health`). |
+| `--api-key <key>` | Require `Authorization: Bearer <key>` or `x-api-key: <key>` (except `GET /`, `/favicon.ico` and `/health`). |
 
 `kapitsa doctor [--model MODEL]... [--ctx 65536] [--slots 2] [--dflash auto|none|DIR] [--json]` prints this Mac (chip,
 GPU cores, RAM, Metal's recommended working set, the memory budget, the Neural Engine) and, for each model, what the
@@ -70,9 +72,93 @@ fetched once into `~/.cache/kapitsa/plans`), then the models under `~/.cache/kap
 (the app's fit check: `starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, `dflash_used`).
 
 Endpoints: `GET /` (the chat page), `POST /v1/chat/completions` (SSE or JSON; `reasoning_content`; Qwen XML tool
-calls returned as OpenAI `tool_calls`; `usage` in the final chunk), `GET /v1/models` (also `context_fit`: the
-tokens one conversation can hold within the memory budget), `GET /health`. Thinking:
-`chat_template_kwargs.enable_thinking=false` or `reasoning_effort: "none"`.
+calls returned as OpenAI `tool_calls`; `usage` in the final chunk), `POST /v1/responses` (OpenAI Responses),
+`POST /v1/messages` and `POST /v1/messages/count_tokens` (Anthropic Messages), `GET /v1/models` (OpenAI's list with
+Anthropic's fields; also `context_fit`: the tokens one conversation can hold within the memory budget), `GET /health`.
+Thinking: `chat_template_kwargs.enable_thinking=false` or `reasoning_effort: "none"`; a `reasoning_effort` (or
+Responses `reasoning.effort`, Anthropic `output_config.effort`) of `low` or `medium` goes to the template, and
+`high`, `xhigh`, `max` leave its default (Qwen3.8's highest level; its template raises on `high`).
+
+The Anthropic and Responses APIs are translations onto the same chat requests (`src/api/anthropic.cpp`,
+`src/api/responses.cpp`; the server only wires the routes):
+
+- **Anthropic Messages.** `system` (text blocks; Claude Code's `x-anthropic-billing-header` block, which changes with
+  every request, is dropped) becomes the first system message; a system message inside `messages` stays where it is
+  and is rendered as a system turn there (the engine does that for any later system message: the Qwen3.5+ templates
+  raise on one). `thinking` blocks become the assistant turn's `reasoning_content`, `tool_use` its tool calls,
+  `tool_result` blocks tool messages before the rest of their turn (`is_error`: "Error: " first; `tool_reference`:
+  the tool's name), `redacted_thinking` is dropped. Images become `image_url` parts (read by models with a vision
+  tower, see Images; other models get a short note), plain-text documents their text, PDFs a short note. Tools need an
+  `input_schema` (server tools are left out, with a log line); `tool_choice` `none` drops them; `tool_addition` /
+  `tool_removal` blocks change the tool list. Thinking is on for `enabled` and `adaptive`, off for `disabled` and
+  when absent, as Anthropic's API does: Claude Code sends `adaptive` with its agent loop and nothing with its short
+  side requests (titles, state classifiers), which then answer without thinking first. `context_management` keeping
+  every turn's thinking (`clear_thinking_20251015`, `keep: "all"`, which Claude Code sends) sets the template's
+  `preserve_thinking`: every assistant turn is rendered with its reasoning, so each request's prompt continues the
+  previous one, the generated reply included, and the engine prefills only the new messages. A reply's thinking
+  block carries its reasoning in its `signature` (`kapitsa.r1.` + base64), so it comes back exact even with
+  `display: "omitted"` (the thinking text is then empty, as requested). Stop reasons: `end_turn`, `max_tokens`,
+  `model_context_window_exceeded` (the context ran out), `stop_sequence` (with the string), `tool_use`. `usage`:
+  `input_tokens` = prompt minus cached, `cache_read_input_tokens` = cached. The stream's `message_start` goes out once
+  the prompt is tokenized and matched against the cache (before the prefill) with those counts. A prompt longer than
+  the context is a 400 `invalid_request_error` "prompt is too long: N tokens > M maximum", which Claude Code answers
+  by compacting.
+- **OpenAI Responses.** `instructions` and the leading system/developer messages become the system message; later
+  ones are system turns in place. `function_call`, `custom_tool_call` and `reasoning` items join the assistant turn
+  they belong to (a reply's calls stay one turn even when a client sends each call followed by its output: output
+  item ids name their response); `*_output` items become tool messages. A reasoning item's text comes from its
+  `encrypted_content` when it is ours (`kapitsa.r1.` + base64: Codex, with `store: false`, sends it back), else its
+  `reasoning_text` content, else its summary. Tools: `function`; `custom` (freeform, e.g. Codex's `apply_patch`) as a
+  function of one string parameter, `input`, whose call goes out as a `custom_tool_call`; `namespace` tools as
+  `<namespace>__<name>` (calls go out with their `namespace`); built-in tools are left out with a log line.
+  `reasoning.effort` `none`/`minimal` turns thinking off. `previous_response_id` continues one of the last 64 stored
+  responses (an unknown id is a 400). Output: reasoning items (`content` `reasoning_text` and `encrypted_content`),
+  messages, function or custom tool calls; a max_output_tokens cut (or the context running out) ends with
+  `response.incomplete`. A prompt longer than the context is a 400 with code `context_length_exceeded`.
+- **Streams.** The engine runs in its own thread and hands events to the connection's thread, so a request that
+  fails before its first event still gets a plain HTTP error, and a stream gets a keepalive (Anthropic `ping`;
+  Responses `response.in_progress` before any output item, an SSE comment after) after 15 s without an event, while
+  the engine waits for another request or prefills a long prompt. After a reply the server prefills the history as
+  for chat completions (`NI_HISTORY_PREFILL`).
+
+`tools/api_test` checks the translation on the CPU (request mapping, the exact event sequences, the launchers'
+settings and, with a model folder, tool loops through the chat template token for token);
+`tests/sdk_check.py build/api_test` has the official `anthropic` and `openai` Python SDKs parse every recorded reply
+(a venv with both is enough; no model).
+
+### Coding agents
+
+`kapitsa claude`, `kapitsa codex` and `kapitsa opencode` (`src/server/launch.cpp`; each client's settings in
+`src/api/clients.cpp`) check that the agent is installed (else say how to install it), then use the Kapitsa
+answering on `127.0.0.1:--port` (its model and context from `/v1/models`; `context_fit` when that is smaller) or
+start one: the model is downloaded first if needed (its progress in the terminal), then `kapitsa serve --model M
+--port P --ctx N` runs from the same binary in a session of its own, logging to `~/.cache/kapitsa/logs/serve-P.log`,
+with `N` the largest context from 128K down in 8K steps for which one conversation fits the memory budget beside
+the model (`conversation_fits`, the engine's own plan; Claude Code's system prompt and tools alone take 20-25K
+tokens, so the 32K default is too small). It waits for `/health`, showing the server's last log line, then runs the
+agent in the terminal's foreground process group (Ctrl+C and Ctrl+Z reach the agent; signals sent to the launcher
+are passed on), stops the server it started when the agent exits, and exits with the agent's code. The server
+also exits by itself if the launcher dies (`KAPITSA_PARENT_PID`, watched with kqueue). What each agent gets:
+
+- **Claude Code**: `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL` and every `ANTHROPIC_DEFAULT_*_MODEL` /
+  `ANTHROPIC_SMALL_FAST_MODEL` set to the model, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
+  set to the context, `CLAUDE_CODE_MAX_OUTPUT_TOKENS` a quarter of a context under 128K,
+  `CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY=0`; `--model M --disallowedTools WebSearch` (Anthropic's servers run its
+  search). The key goes through `--settings '{"apiKeyHelper": ...}'` (layered over the user's settings for this run),
+  which prints `$KAPITSA_API_KEY` (the server's key, or "kapitsa"): Claude Code then sends that key, and only it, as
+  `x-api-key` and as the bearer token. With `ANTHROPIC_AUTH_TOKEN` alone it also sent the user's saved Console key
+  (from the keychain) in `x-api-key`; `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are unset (the first asks
+  whether to use a custom key, the second beside a helper adds a "Both ... set" warning). A user with a saved
+  Console key sees one notice, "apiKeyHelper overriding saved Console key" (a claude.ai login: "... overriding
+  Claude subscription login"); their key and login are untouched.
+- **Codex**: `-c` overrides for a `kapitsa` model provider (`wire_api="responses"`, `env_key="KAPITSA_API_KEY"`),
+  `model`, `model_context_window`, `model_auto_compact_token_limit` (90% of it), `web_search="disabled"` and
+  `show_raw_agent_reasoning=true` (Qwen's reasoning is reasoning text); the user's own `-c` go with them, before
+  any subcommand (a subcommand's list would replace the root's).
+- **opencode**: `OPENCODE_CONFIG_CONTENT` (merged into any the user has) with a `kapitsa` provider
+  (`@ai-sdk/openai-compatible` on `/v1`, reasoning on so `reasoning_content` goes back with each turn, the window,
+  input and output limits, effort variants), the model for `model`, `small_model` and the built-in agents; from
+  opencode 2, `--standalone` (its background service would not see the environment).
 
 Startup: the port is checked before anything loads (a busy port is an error: the socket does not use httplib's
 default `SO_REUSEPORT`, which would let a second server bind it too), the model is downloaded if needed, the engine
@@ -96,8 +182,10 @@ URL (base64; PNG, JPEG, WebP, GIF, HEIC, TIFF, BMP: whatever ImageIO reads) or a
 32 MB cap and a 30 s limit: `NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S`). The engine takes the images from the chat
 messages, so any API that maps its image blocks to these parts works; a part counts as an image exactly when the chat
 template renders it as one (an `image` or `image_url` key, or `"type": "image"`, also with an Anthropic-style
-`source`). Images may sit in user, assistant and tool messages. Video is not supported (a 400 that says so), nor are
-images on models without a vision tower.
+`source`); the Anthropic and Responses APIs map their image blocks and `input_image` items to these parts. Images
+may sit in user, assistant and tool messages. Video is not supported (a 400 that says so). On a model without a vision
+tower an image becomes a short note in the prompt, so agents that attach screenshots keep working. `usage` and
+`/v1/messages/count_tokens` count an image as its rows (a 1280x800 screenshot: 1000 tokens).
 
 The shared part (`src/vision/`: `image.mm`, `encoder.*`, `embed.h`) fetches and decodes images, prepares them
 through the model's encoder, expands each image's placeholder token to its embedding rows, keys those rows for prefix
@@ -311,6 +399,41 @@ A model whose weights alone exceed the memory budget is refused before anything 
 its weights alone (69.3 GB, bf16) exceed ...`), from the same plan of the safetensors headers as the fit check
 (`Qwen35::plan`, formats per module).
 
+### GGUF files
+
+`kapitsa import` (src/gguf/) converts llama.cpp's `qwen35` / `qwen35moe` GGUFs (LM Studio, Ollama blobs with their
+draft layer as the MTP head, Hugging Face GGUF repos; split files by any part) into a normal MLX-format folder, tensor
+by tensor in 64 MB pieces: config.json from the metadata, tokenizer.json / tokenizer_config.json / chat_template.jinja
+from `tokenizer.ggml.*` (control tokens special, user-defined ones not, padding left out), safetensors, and
+mtp.safetensors from the file's MTP block or an `mtp-*.gguf` beside it. llama.cpp's transforms are undone: A_log from
+`ssm_a` = -exp(A_log), DeltaNet value heads from tiled back to grouped order (qkv's V rows, z, a, b, conv1d's V
+channels, A_log, dt_bias, out_proj's columns), conv1d to [C, 4, 1], fused gate_up experts split; RMSNorm weights stay
+1 + w (MLX's convention too). Formats per GGUF type, with the error against the bf16 weights relative to the GGUF
+type's own (1.00 = no added error; measured on Qwen3.5-0.8B / 4B / 3.6-35B-A3B tensors against Qwen's checkpoints):
+
+| GGUF type | Kapitsa format | added error |
+| --- | --- | --- |
+| BF16 / F16 / F32 | bf16 | none (BF16), bf16 rounding (F16 / F32; norms bitwise as from the HF checkpoint) |
+| Q4_0, Q4_1, Q4_K | 4-bit group 32, the GGUF's codes, scale and offset rounded to bf16 | 1.005 |
+| Q8_0 | 8-bit group 64 | 1.67 of Q8_0's (tiny) error |
+| Q6_K | 8-bit group 64 | 1.09 |
+| Q5_0, Q5_1, Q5_K | 6-bit group 64 | 1.31 (8-bit: 1.02) |
+| IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 | IQ4_XS 1.27, NVFP4 1.07 |
+| Q3_K, Q2_K (warning) | 4-bit group 32 | 1.20, 1.03 |
+| MoE experts of 4-bit types | 5-bit group 64 (no group-32 MoE kernels) | 1.31 (4-bit group 64 would be 2.29) |
+
+Re-quantization takes per group the best of the min-max grid, a symmetric grid and least-squares refits (all after
+rounding scale and bias to bf16). A layer's experts share one format (from their least precise tensor), its shared
+expert is 8-bit; a dense layer's gate and up share the finer of their formats. The MTP head is written as Kapitsa's
+sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). IQ1 / IQ2 / IQ3 (they need llama.cpp's
+codebooks), ternary and Hadamard-rotated files are refused, as are Qwen3-Next and other architectures.
+
+Checked on Qwen3.5-0.8B Q4_K_M (unsloth, with MTP), teacher-forced over bench/quality (4092 positions): Kapitsa on
+the converted folder against llama.cpp on the GGUF (CPU) KL 0.0077, top-1 96.7%, perplexity 9.69 against 9.73; the
+conversion alone (both weight sets run by llama.cpp in F16) KL 0.0030, top-1 98.0%, less than llama.cpp's own Q4_K
+kernels move the same weights (KL 0.0052 against their F16 run). The converted tokenizer encodes bench/corpus.txt
+and 300 other texts to the original tokenizer's ids, and the chat template renders as with jinja2.
+
 Testing formats without downloading them: `NI_REQUANT=<bits>[:<spec>]` re-encodes a 4-bit model's linears exactly as
 8, 6, 5-bit or 4-bit group 32 (codes q << (bits - 4), scales / 2^(bits - 4)), and `NI_DEQUANT=<spec>` makes them bf16
 (w = s q + b rounded to bf16), at load (`spec`: `all`, `embed`, `head`, `attn`, `gdn`, `router`, `experts`, `shared`,
@@ -340,12 +463,17 @@ from Hugging Face one layer at a time).
   model's prefill sees), `qwen_vit.*` (the Qwen3.5 processor and ViT); kernels in `vit.metal` (the ViT) and
   `mm.metal` (embedding rows, `attn_prep_m`).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
+  boundaries (a user query's outlives the tool responses after it; a new conversation takes an empty slot, else a
+  one-off's, else the conversation idle longest, and a conversation whose request was still running when it arrived
+  counts as continued: opencode sends its title request beside its first request); `output_parser.h`: streaming parser for
   reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
 - `src/hub/`: the model catalog (`catalog.cpp`: the table of models and variants), `--model` resolution
   (`resolve.cpp`), downloads, reuse, verification, the manifest and the MTP sidecar builder (`fetch.cpp`), the
   NSURLSession transport (`http.mm`).
-- `src/server/`: the command line and the HTTP server (`main.cpp`), the chat page (`chat.html`).
+- `src/server/`: the command line and the HTTP server (`main.cpp`), the coding-agent launchers (`launch.cpp`), the chat
+  page (`chat.html`).
+- `src/api/`: the Anthropic Messages (`anthropic.cpp`) and OpenAI Responses (`responses.cpp`) translations onto the
+  engine's chat requests and their stream writers, and each coding agent's settings (`clients.cpp`).
 - `src/tokenizer/`: byte-level BPE, identical to HF tokenizers.
 - `src/loader/`: aligned parallel safetensors loader (HF offsets are unaligned; weights are repacked into
   256-byte-aligned GPU buffers at load).
@@ -371,8 +499,11 @@ from Hugging Face one layer at a time).
   `bench/shortpf/`: cached-turn / short-prompt TTFT through the server;
   `bench/ckpt/`: TTFT of a user query after scripted agent tool loops (`tool_loop_ttft.py`, `compare.py`),
   how turn boundaries are classified (`kind_probe.py`).
-- `tests/test_server.py`: end-to-end API checks against a running server (the chat page, the API, tool calls,
-  prefix reuse, thinking + tools; `--api-key KEY` adds the key checks), and with `--cli build/kapitsa` offline checks
+- `tools/api_test [model_dir]`: the API translations on the CPU (Server above); `tests/sdk_check.py
+  build/api_test`: the official Python SDKs parse their replies.
+- `tests/test_server.py`: end-to-end API checks against a running server (the chat page, chat completions,
+  Anthropic Messages and Responses tool loops with the cache across them, their errors, tool calls, prefix reuse,
+  thinking + tools; `--api-key KEY` adds the key checks), and with `--cli build/kapitsa` offline checks
   of the command line (names and aliases at the app's pinned revisions, repo ids, folders, refusals, a finished
   download used without network, list, rm, the early port check). `tests/test_sidecar.py build/kapitsa`: the sidecar
   builder against `tools/mtp_sidecar.py`.
