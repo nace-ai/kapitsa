@@ -61,6 +61,17 @@ dialog p{margin:0;color:var(--muted);font-size:13px}
 dialog input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
 dialog .btn{justify-self:end}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+#attach{border:0;background:transparent;color:var(--muted);padding:6px 4px;font-size:20px;line-height:1}
+#attach:hover{color:var(--fg)}
+#form.drop{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+#pending{max-width:780px;margin:0 auto 6px;display:flex;gap:8px;flex-wrap:wrap}
+#pending:empty{display:none}
+.thumb{position:relative}
+.thumb img,.user .imgs img{display:block;max-height:72px;max-width:120px;border-radius:8px;border:1px solid var(--line);object-fit:cover}
+.thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg);font-size:12px;line-height:16px;padding:0}
+.user{flex-direction:column;align-items:flex-end}
+.user .imgs{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:6px}
+.user .imgs img{max-height:160px;max-width:240px}
 </style>
 </head>
 <body>
@@ -73,13 +84,16 @@ dialog .btn{justify-self:end}
 </header>
 <main id="scroll"><div id="log" aria-label="Conversation"></div></main>
 <footer>
+  <div id="pending" aria-label="Images to send"></div>
   <form id="form">
+    <button id="attach" type="button" title="Attach images (or paste / drop them)" aria-label="Attach images">+</button>
+    <input id="file" type="file" accept="image/*" multiple hidden>
     <label class="sr" for="input">Message</label>
     <textarea id="input" rows="1" placeholder="Message Kapitsa" autocomplete="off" autofocus></textarea>
     <button id="send" type="submit" disabled>Send</button>
     <button id="stop" type="button" hidden>Stop</button>
   </form>
-  <p class="hint">Enter sends, Shift+Enter adds a line. Runs on this Mac; nothing leaves it.</p>
+  <p class="hint">Enter sends, Shift+Enter adds a line. Paste or drop images to ask about them. Runs on this Mac; nothing leaves it.</p>
   <p class="sr" id="status" aria-live="polite"></p>
 </footer>
 <dialog id="keydlg">
@@ -97,7 +111,8 @@ const $ = (id) => document.getElementById(id);
 const log = $("log"), scroller = $("scroll"), input = $("input"), send = $("send"), stop = $("stop");
 const store = { get(k, d) { try { const v = localStorage.getItem("kapitsa." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem("kapitsa." + k, JSON.stringify(v)); } catch {} } };
-let messages = store.get("chat", []);   // {role, content, reasoning?, stats?}
+let messages = store.get("chat", []);   // {role, content, images?, reasoning?, stats?}
+let pending = [];                       // data: URLs of the images to send with the next message
 let modelId = "", busy = null;
 $("think").checked = store.get("think", true);
 $("think").onchange = () => store.set("think", $("think").checked);
@@ -220,8 +235,9 @@ function addMessage(m) {
   const el = document.createElement("div");
   el.className = "msg " + (m.role === "user" ? "user" : "bot");
   if (m.role === "user") {
-    el.innerHTML = '<div class="text"></div>';
-    el.querySelector(".text").textContent = m.content;
+    el.innerHTML = (m.images && m.images.length ? '<div class="imgs"></div>' : "") + (m.content ? '<div class="text"></div>' : "");
+    for (const u of m.images || []) { const i = document.createElement("img"); i.src = u; i.alt = "image"; el.querySelector(".imgs").append(i); }
+    if (m.content) el.querySelector(".text").textContent = m.content;
   } else {
     el.innerHTML = '<div class="text"></div><p class="error" hidden></p><div class="stats"></div>';
     renderBot(el, m, false);
@@ -260,10 +276,13 @@ async function loadModel() {
 
 async function ask() {
   const text = input.value.trim();
-  if (!text || busy) return;
+  if ((!text && !pending.length) || busy) return;
   input.value = "";
   grow();
-  messages.push({ role: "user", content: text });
+  const imgs = pending;
+  pending = [];
+  showPending();
+  messages.push(imgs.length ? { role: "user", content: text, images: imgs } : { role: "user", content: text });
   addMessage(messages[messages.length - 1]);
   const m = { role: "assistant", content: "", reasoning: "", stats: {} };
   messages.push(m);
@@ -276,7 +295,12 @@ async function ask() {
   $("status").textContent = "Kapitsa is writing.";
   const body = {
     model: modelId || "default",
-    messages: messages.slice(0, -1).map((x) => ({ role: x.role, content: x.content })),
+    messages: messages.slice(0, -1).map((x) => ({
+      role: x.role,
+      content: x.images && x.images.length
+        ? [...x.images.map((u) => ({ type: "image_url", image_url: { url: u } })), ...(x.content ? [{ type: "text", text: x.content }] : [])]
+        : x.content,
+    })),
     stream: true, stream_options: { include_usage: true },
     chat_template_kwargs: { enable_thinking: $("think").checked },
   };
@@ -332,18 +356,54 @@ async function ask() {
   renderBot(el, m, false);
   if (stick) toBottom();
   $("status").textContent = m.error ? "Error: " + m.error : "Answer complete. " + statsText(m.stats);
-  if (m.error && !m.content) messages.splice(-2, 2); else store.set("chat", messages);
+  if (m.error && !m.content) messages.splice(-2, 2); else save();
   updateSend();
   input.focus();
 }
 
 function grow() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, innerHeight * 0.4) + "px"; }
-function updateSend() { send.disabled = !input.value.trim() || !!busy; }
+function updateSend() { send.disabled = (!input.value.trim() && !pending.length) || !!busy; }
+// the conversation in localStorage; images too while they fit (its quota is a few MB), else without them
+function save() {
+  try { localStorage.setItem("kapitsa.chat", JSON.stringify(messages)); return; } catch {}
+  store.set("chat", messages.map((x) => (x.images ? { ...x, images: undefined, content: (x.content ? x.content + "\n" : "") + "[image]" } : x)));
+}
+// ---- images: attach, paste, drop
+function showPending() {
+  const box = $("pending");
+  box.textContent = "";
+  pending.forEach((u, k) => {
+    const t = document.createElement("div");
+    t.className = "thumb";
+    t.innerHTML = '<img alt="image to send"><button type="button" aria-label="Remove image">x</button>';
+    t.querySelector("img").src = u;
+    t.querySelector("button").onclick = () => { pending.splice(k, 1); showPending(); updateSend(); };
+    box.append(t);
+  });
+  updateSend();
+}
+function addImages(files) {
+  for (const f of files) {
+    if (!f.type.startsWith("image/")) continue;
+    const r = new FileReader();
+    r.onload = () => { pending.push(r.result); showPending(); };
+    r.readAsDataURL(f);
+  }
+}
+$("attach").onclick = () => $("file").click();
+$("file").onchange = () => { addImages($("file").files); $("file").value = ""; input.focus(); };
+input.addEventListener("paste", (e) => {
+  const files = [...(e.clipboardData ? e.clipboardData.files : [])].filter((f) => f.type.startsWith("image/"));
+  if (files.length) { e.preventDefault(); addImages(files); }
+});
+$("form").addEventListener("dragover", (e) => { e.preventDefault(); $("form").classList.add("drop"); });
+$("form").addEventListener("dragleave", () => $("form").classList.remove("drop"));
+$("form").addEventListener("drop", (e) => { e.preventDefault(); $("form").classList.remove("drop"); addImages(e.dataTransfer.files); });
 input.addEventListener("input", () => { grow(); updateSend(); });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
 $("form").addEventListener("submit", (e) => { e.preventDefault(); ask(); });
 stop.onclick = () => busy && busy.abort();
-$("new").onclick = () => { if (busy) busy.abort(); messages = []; store.set("chat", messages); renderAll(); input.focus(); };
+$("new").onclick = () => { if (busy) busy.abort(); messages = []; pending = []; showPending(); store.set("chat", messages); renderAll(); input.focus(); };
 renderAll();
 loadModel();
 </script>

@@ -42,6 +42,8 @@ curl http://127.0.0.1:8000/v1/chat/completions \
   }'
 ```
 
+Images work on Qwen3.6 and Qwen3.8: send OpenAI `image_url` content parts with a `data:` (base64) or `http(s)` URL.
+
 Coding agents and apps that speak the OpenAI API connect to `http://127.0.0.1:8000/v1`; any API key works unless
 the server was started with `--api-key`. Thinking follows the model's default, which is on. `"reasoning_effort": "none"`
 or `"chat_template_kwargs": {"enable_thinking": false}` turns it off. Every response reports its `usage`, including
