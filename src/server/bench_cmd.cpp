@@ -628,7 +628,7 @@ int run(const Options& o) {
                  (o.quick ? dim(dot + "quick: 3 runs per writing test, the 4K prompt only") : std::string()));
       term::line("");
     } else {
-      fprintf(stderr, "kapitsa bench: %s %s on %s (%s, %d-core GPU, %s, macOS %s)%s\n", model_display(mi.title).c_str(),
+      fprintf(stderr, "kapitsa bench: %s %s on %s: %s, %d-core GPU, %s, macOS %s%s\n", model_display(mi.title).c_str(),
               mi.precision.c_str(), mac_name.c_str(), mac.chip.c_str(), mac.gpu_cores, b, mac.macos.c_str(), o.quick ? ", quick" : "");
     }
   }
