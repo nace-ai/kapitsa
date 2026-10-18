@@ -31,8 +31,10 @@ request for request, and the server start, warm-up, quiet wait and contention mo
 `gpu_hogs.py`; it takes the same GPU lock). Its results compare with this harness's and go to the
 [community results](../community/RESULTS.md). `tests/test_bench.py` runs both clients against one scripted server and
 checks that they send the same requests. Two differences: it reads memory with `proc_pid_rusage` (the same
-`phys_footprint_peak` that `footprint` prints) and does not sample `footprint` and `ps` every 2 s while it measures,
-and its client is C++, so its own overhead in a time to first token is smaller (well under a millisecond).
+`phys_footprint_peak` that `footprint` prints) and does not sample `footprint` and `ps` every 2 s while it measures;
+and its client is C++, whose own share of a time to first token is about 1-1.5 ms smaller than `bench.py`'s (measured
+against a server that answers at once): nothing next to a cold prompt's seconds, but 2-3% of a 50-60 ms follow-up, so
+its follow-ups read slightly faster than the harness's for the same server.
 
 ## What a run measures
 
