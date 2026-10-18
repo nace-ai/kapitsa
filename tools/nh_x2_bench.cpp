@@ -789,6 +789,7 @@ int main(int argc, char** argv) {
     if (R == 1 || g_validate) v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_x2_moe_up4", 4, 32, "nh_x2_moe_dn3", 3, 32); });
     v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_x2_moe_up8", 8, 32, "nh_x2_moe_dn4", 4, 32); });
     if (R > 1) v.push_back([](MoeCtx& c) { return bucket_scheme(c, "nh_x2_bucket", "nh_x2_moeb_up", 4, "nh_x2_moeb_dn", 4, 2); });
+    if (R > 1) v.push_back([](MoeCtx& c) { return bucket_scheme(c, "nh_x2_bucket", "nh_x2_moeb_up8", 8, "nh_x2_moeb_dn", 4, 2); });
     for (auto& f : g_extra_schemes) v.push_back(f);
     return v;
   };

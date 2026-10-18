@@ -369,6 +369,36 @@ struct NhX2BucketP {
                         p.I, p.D, (tgp.x * nsg + sg) * 4, lane);
 }
 
+// up over the tiles, 8 rows per simdgroup (NhX2BucketP.up_x = ceil(I / 8)): single-token tiles (most of them) on
+// nh_x2_rows1k (activations in registers for both batches of 4 rows), two-token tiles as two batches of
+// nh_x2_rows_c. 3-4 % faster per routed layer (8 rows) than nh_x2_moeb_up. K = D <= 1024.
+[[kernel]] void nh_x2_moeb_up8(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                               const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
+                               const device uint4* tiles [[buffer(4)]], const device uint* sorted [[buffer(5)]],
+                               constant NhMoeParams& p [[buffer(6)]], uint3 tgp [[threadgroup_position_in_grid]],
+                               uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                               uint lane [[thread_index_in_simdgroup]]) {
+  const uint4 tl = tiles[tgp.y];
+  const device uchar* qe = q + size_t(tl.x) * p.up_q_stride;
+  const device uchar* se = s + size_t(tl.x) * p.up_s_stride;
+  const uint row0 = (tgp.x * nsg + sg) * 8;
+  if (tl.z == 1) {
+    const uint pr = sorted[tl.y];
+    nh_x2_rows1k<4, 2, 2>(qe, se, lat + (pr / p.k) * p.D, h + size_t(pr) * p.h_stride, p.I, p.D, 1.0f, row0, lane);
+    return;
+  }
+  uint xo[2], yo[2];
+  float gs[2];
+  for (int t = 0; t < 2; ++t) {
+    const uint pr = sorted[tl.y + min(uint(t), tl.z - 1)];
+    xo[t] = (pr / p.k) * p.D;
+    yo[t] = pr * p.h_stride;
+    gs[t] = 1.0f;
+  }
+  for (int b = 0; b < 2; ++b)
+    nh_x2_rows_c<4, 2, 2>(qe, se, lat, xo, h, yo, gs, tl.z, p.I, p.D, row0 + uint(4 * b), lane);
+}
+
 // down over the tiles: part[pair] = ew[pair] * W_dn[e] . h[pair]. dispatch_indirect(args, 16) x 32 threads; then
 // nh_moe2_sum
 [[kernel]] void nh_x2_moeb_dn(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
