@@ -144,17 +144,31 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("variant") == dv and
                   j.get("repo") == repo and j.get("revision") == rev and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
-    # Nemotron 3.5 Lightning: NVIDIA's NVFP4 checkpoint with its DSpark drafter in dflash/
-    for a in ["lightning", "nemotron-lightning", "nemotron-3.5-lightning:nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4"]:
-        j = plan(a)
-        got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-        check(f"cli: {a} -> nemotron-3.5-lightning:nvfp4 with its DSpark drafter",
-              j.get("model") == "nemotron-3.5-lightning:nvfp4" and j.get("id") == "nemotron-3.5-lightning" and
-              j.get("repo") == "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4" and
-              j.get("revision") == "bee7596271d1495f6992ae224aefde4410e816b8" and
-              got == [("dspark", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
-                       "6d127b50ecd98562cea85d0087680b7d86091fb0", "dflash")] and
-              j.get("dir") == os.path.join(models, "nemotron-3.5-lightning-nvfp4"), json.dumps(j))
+    # NVIDIA's Nemotron 3.5 checkpoints: one variant each, the LiLiCorr (Bolt, Super-VL) or DSpark (Lightning) drafter in dflash/
+    for name, dv, repo, rev, comp, aliases in [
+            ("nemotron-3.5-bolt", "24gb", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+             "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr", "abd478065678ee83a93821c4b3f512da24e4cecb",
+              "dflash"), ["bolt", "nemotron-bolt"]),
+            ("nemotron-3.5-super-vl", "nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+             "59b8721646c38111a242da18218859fb2b454322",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+              "292bf1efc06ba39567da7351f2ad7a522afa3959", "dflash"),
+             ["super", "super-vl", "nemotron-super", "NEMOTRON-3.5-SUPER-VL:nvfp4",
+              "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"]),
+            ("nemotron-3.5-lightning", "nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+             "bee7596271d1495f6992ae224aefde4410e816b8",
+             ("dspark", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
+              "6d127b50ecd98562cea85d0087680b7d86091fb0", "dflash"),
+             ["lightning", "nemotron-lightning", "nemotron-3.5-lightning:nvfp4",
+              "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4"])]:
+        for a in aliases:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            check(f"cli: {a} -> {name}:{dv} with its {comp[0]} drafter",
+                  j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
+                  j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
+                  j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
