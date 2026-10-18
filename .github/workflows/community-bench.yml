@@ -59,19 +59,28 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
 
       - name: Write RESULTS.md
         run: python3 tools/community_table.py
 
-      - name: Commit it if it changed
+      # main only takes squash-merged pull requests, so the update goes through one
+      - name: Open and merge a pull request if it changed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- bench/community/RESULTS.md; then
             echo "RESULTS.md is up to date"
             exit 0
           fi
+          branch="community/results-${GITHUB_SHA::12}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
           git commit -m "bench/community/RESULTS.md: the community results, rewritten from bench/community/results" -- bench/community/RESULTS.md
-          git push
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Community results: RESULTS.md rewritten" \
+            --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."
+          gh pr merge "$branch" --squash --delete-branch
