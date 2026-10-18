@@ -9,6 +9,10 @@ It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do n
   <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="assets/architecture-light.svg">
 </picture>
 
+The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
+supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
+state for later turns; generation is serialized.
+
 ## From a request to generated tokens
 
 1. **Normalize the API request.** The server exposes OpenAI Chat Completions, OpenAI Responses and Anthropic
@@ -100,4 +104,5 @@ for adapted code and design credits, the [usage guide](usage.md) for options and
 
 The diagram is hand-written SVG in two variants, [architecture-dark.svg](assets/architecture-dark.svg) and
 [architecture-light.svg](assets/architecture-light.svg), with no fonts or scripts, so GitHub shows it as drawn. Edit
-both and preview them at README width (about 830 px) in dark and light mode.
+both and preview them at README width (about 830 px) in dark and light mode. The logo and the README header are in
+[assets/brand](assets/brand/README.md) and [header-dark.svg](assets/header-dark.svg).

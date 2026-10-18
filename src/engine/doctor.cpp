@@ -8,6 +8,7 @@
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
+#include "util/term.h"
 
 #include <nlohmann/json.hpp>
 
@@ -20,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -84,6 +86,142 @@ std::vector<std::string> scan(const std::string& root) {
 
 const char* yesno(bool b) { return b ? "yes" : "no"; }
 
+// ---- the styled view (a terminal): the same plan as the plain lines, in two tables
+
+// One model's plan, for the table
+struct Row {
+  std::string name, where, error, decoding, formats, image;
+  bool planned = false, dense = false, starts = false, all_fit = false;
+  int layers = 0;
+  size_t full = 0, start = 0, weights = 0, kv = 0, drafter = 0, tokens = 0, image_bytes = 0;
+  double dec = 0, pf = 0;
+};
+// One catalog variant: fits (1), too big (0, `need`), not planned (-1); the one --model <name> takes
+struct Variant {
+  std::string model, alias, name, need;
+  int fits = 0;
+  bool chosen = false, starts = false;
+};
+
+std::string gb(double b) {
+  char s[32];
+  snprintf(s, sizeof s, "%.1f GB", b / 1e9);
+  return s;
+}
+
+void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string& budget_note, int ctx, int slots,
+               const std::vector<Row>& rows, const std::vector<Variant>& vars) {
+  using namespace term;
+  const int W = std::min(columns(), 100);
+  std::vector<std::string> o;
+  const std::string dot = std::string("  ") + kDot + "  ";
+  o.push_back("");
+  o.push_back("  " + bold("This Mac"));
+  std::string mac = J["chip"].get<std::string>() + dot + std::to_string(J["gpu_cores"].get<int>()) + "-core GPU";
+  if (J["bandwidth_gbs"].get<double>() > 0) mac += dot + std::to_string(int(J["bandwidth_gbs"].get<double>())) + " GB/s";
+  char ram[32];
+  snprintf(ram, sizeof ram, "%.0f GB RAM", J["ram_bytes"].get<double>() / 1073741824.0);
+  std::string macos = J["macos"].get<std::string>();
+  if (const size_t p = macos.find(" ("); p != std::string::npos) macos.resize(p);
+  mac += dot + ram + dot + "macOS " + macos;
+  o.push_back("    " + clip(mac, W - 4));
+  o.push_back("    " + bold(gb(double(budget))) + " of GPU memory for Kapitsa" +
+              dim(clip("  (" + (budget_note.empty() ? "" : budget_note + "; ") + "Metal recommends " +
+                           gb(J["recommended_working_set_bytes"].get<double>()) + ")",
+                       W - 42)));
+  const std::string ane = J["neural_engine"].get<std::string>();
+  o.push_back("    " + std::string(ane == "available" ? accent(kOk) + " Neural Engine" : dim(std::string(kFail) + " Neural Engine: " + ane)) +
+              dot + (J["apple10"].get<bool>() ? accent(kOk) + " Metal 4 neural accelerators" : dim("no Metal 4 neural accelerators")));
+  o.push_back("");
+
+  // the models: fits, memory at the full context, decoding; then a dim line of details
+  {
+    const std::string title = "  " + bold("Models") + dim("  --ctx " + std::to_string(ctx) + "  --slots " + std::to_string(slots));
+    const std::string legend = accent(kOk) + dim(" fits  ") + warn("◐") + dim(" starts  ") + red(kFail) + dim(" too big");
+    const int gap = std::min(W, 80) - width(title) - width(legend);
+    o.push_back(gap >= 3 ? title + std::string(size_t(gap), ' ') + legend : title);
+    int nw = 0;
+    for (const auto& r : rows) nw = std::max(nw, std::min(30, width(r.name) + (r.planned ? 7 : 0)));
+    for (const auto& r : rows) {
+      std::string name = r.name + (r.planned ? dim(" (plan)") : "");
+      if (!r.error.empty()) {
+        o.push_back("    " + red(kFail) + " " + left(clip(name, 30), nw) + "   " + dim("cannot read: " + r.error));
+        continue;
+      }
+      const std::string mark = r.all_fit ? accent(kOk) : r.starts ? warn("◐") : red(kFail);
+      const std::string mem = r.starts ? right(gb(double(r.full)), 7) + dim(" of " + gb(double(budget)))
+                                       : red("needs " + gb(double(r.start)));
+      std::string l = "    " + mark + " " + left(clip(name, 30), nw) + "   " + left(dim(r.dense ? "dense" : "MoE"), 5) + "   " +
+                      left(mem, 18) + "   " + r.decoding;
+      o.push_back(clip(l, W));
+      const std::string sep = std::string(" ") + kDot + " ";
+      std::string d = r.where.empty() ? "" : r.where + sep;
+      d += "weights " + gb(double(r.weights));
+      char kv[48];
+      snprintf(kv, sizeof kv, "KV %.0f KB/token", r.kv / 1024.0);
+      d += sep + kv;
+      if (r.starts) d += sep + "room for " + count(double(r.tokens)) + " tokens";
+      if (r.image_bytes) d += sep + "images +" + gb(double(r.image_bytes));
+      o.push_back("      " + dim(clip(d, std::max(W, std::min(columns(), 140)) - 8)));
+    }
+    if (rows.empty()) o.push_back("    " + dim("none found (--model DIR)"));
+    o.push_back("");
+  }
+
+  // every catalog variant on this Mac
+  {
+    const std::string title = "  " + bold("Catalog variants");
+    const std::string legend = dim("← what --model <name> takes");
+    const int gap = std::min(W, 80) - width(title) - width(legend);
+    o.push_back(gap >= 3 ? title + std::string(size_t(gap), ' ') + legend : title);
+    // columns: each model's default first, then the other precisions by name, aligned across models
+    std::vector<std::string> models, names;
+    for (const auto& v : vars) {
+      if (std::find(models.begin(), models.end(), v.model) == models.end()) models.push_back(v.model);
+      const hub::CatalogModel* c = hub::find_model(v.model);
+      const bool dflt = c && c->default_variant == v.name;
+      if (!dflt && std::find(names.begin(), names.end(), v.name) == names.end()) names.push_back(v.name);
+    }
+    std::vector<std::vector<std::string>> grid(models.size(), std::vector<std::string>(names.size() + 1));
+    std::vector<int> cw(names.size() + 1, 0);
+    std::vector<std::string> aliases(models.size());
+    int aw = 0;
+    for (const auto& v : vars) {
+      const size_t mi = size_t(std::find(models.begin(), models.end(), v.model) - models.begin());
+      const hub::CatalogModel* c = hub::find_model(v.model);
+      const bool dflt = c && c->default_variant == v.name;
+      const size_t k = dflt ? 0 : size_t(std::find(names.begin(), names.end(), v.name) - names.begin()) + 1;
+      std::string cell = v.name + " " +
+                         (v.fits == 1 ? accent(kOk) : v.fits < 0 ? dim("?") : v.starts ? warn("◐") : red(kFail) + dim(" " + v.need)) +
+                         (v.chosen ? accent(" ←") : "");
+      grid[mi][k] = cell;
+      cw[k] = std::max(cw[k], width(cell));
+      aliases[mi] = v.alias;
+      aw = std::max(aw, width(v.alias));
+    }
+    for (size_t mi = 0; mi < models.size(); ++mi) {
+      std::string l = "    " + left(bold(aliases[mi]), aw) + "   ";
+      const int start = width(l);
+      for (size_t k = 0; k < grid[mi].size(); ++k) {
+        if (cw[k] == 0) continue;
+        if (width(l) + cw[k] > W && width(l) > start) {
+          while (!l.empty() && l.back() == ' ') l.pop_back();
+          o.push_back(l), l = std::string(size_t(start), ' ');
+        }
+        l += left(grid[mi][k], cw[k]) + "   ";
+      }
+      while (!l.empty() && l.back() == ' ') l.pop_back();
+      o.push_back(l);
+    }
+    o.push_back("    " + accent(kOk) + dim(" fits with its drafter   ") + warn("◐") + dim(" starts, without   ") + red(kFail) +
+                dim(" too big   ? offline"));
+  }
+  o.push_back("");
+  std::string out;
+  for (const auto& x : o) out += x + "\n";
+  fputs(out.c_str(), stdout);
+}
+
 }  // namespace
 
 int run_doctor(int argc, char** argv) {
@@ -92,6 +230,8 @@ int run_doctor(int argc, char** argv) {
   std::string dflash;                      // as the server's --dflash ("": NI_DFLASH or auto)
   bool as_json = false;
   double budget_gb = 0;
+  std::vector<Row> tty_rows;  // the styled view (a terminal)
+  std::vector<Variant> tty_vars;
   for (int i = 0; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
@@ -104,12 +244,22 @@ int run_doctor(int argc, char** argv) {
     else if (a == "--dflash") dflash = next();
     else if (a == "--json") as_json = true;
     else {
-      fprintf(stderr,
-              "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
-              "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n");
+      const char* usage =
+          "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
+          "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n";
+      if (!term::fancy()) fputs(usage, stderr);
+      else if (a == "--help" || a == "-h")
+        term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048] "
+                   "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: This Mac's GPU and memory, and which models fit "
+                   "it at the context and slots given (what kapitsa serve would hold).\n");
+      else
+        term::error("unknown option " + a, "kapitsa doctor --help shows how to use it.");
       return 2;
     }
   }
+  // in a terminal: a spinner while the models are planned (a few seconds)
+  std::unique_ptr<term::Spinner> spin;
+  if (!as_json && term::fancy()) spin = std::make_unique<term::Spinner>("Planning the models on this Mac");
   // --model takes what `kapitsa serve --model` takes: a name or alias, org/name, or a folder; a catalog model that is
   // not downloaded is planned from its headers (hub::plan_dir, fetched once)
   for (std::string& m : models) {
@@ -160,7 +310,8 @@ int run_doctor(int argc, char** argv) {
   J["apple10"] = g.apple10();
   J["neural_engine"] = ane_why.empty() ? "available" : ane_why;
   J["bandwidth_gbs"] = bw;
-  if (!as_json) {
+  const bool tty = !as_json && term::fancy();
+  if (!as_json && !tty) {
     printf("Kapitsa doctor\n");
     printf("  Mac:     %s, %d-core GPU (%s), %.0f GB RAM, macOS %s\n", chip.c_str(), cores,
            g.core_count_measured() ? "IORegistry" : "not measured: the tier's smallest", ram_bytes() / 1073741824.0,
@@ -186,7 +337,8 @@ int run_doctor(int argc, char** argv) {
       lp = plan_load(dir, dflash, false, ctx, slots, budget, chunk);
       m = nemotron ? NemotronH::plan(dir, lp.prefill_chunk) : Qwen35::plan(dir, lp.prefill_chunk);
     } catch (const std::exception& e) {
-      if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
+      if (tty) tty_rows.push_back(Row{.name = dir.substr(dir.find_last_of('/') + 1), .error = e.what()});
+      else if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
       continue;
     }
     const int ch = lp.prefill_chunk;
@@ -231,6 +383,23 @@ int run_doctor(int argc, char** argv) {
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
+    if (tty) {
+      Row r;
+      r.name = dir.substr(dir.find_last_of('/') + 1);
+      r.planned = dir.rfind(hub::home_dir() + "/plans/", 0) == 0;
+      if (!r.planned && dir.rfind(hub::models_dir() + "/", 0) != 0) r.where = hub::tilde(dir.substr(0, dir.find_last_of('/')));
+      r.dense = m.dense, r.layers = m.layers, r.formats = m.formats;
+      r.starts = start_need <= budget, r.all_fit = full_need <= budget;
+      r.full = full_need, r.start = start_need, r.weights = m.weights, r.kv = m.kv_per_pos, r.tokens = tokens;
+      r.drafter = lp.dflash_bytes;
+      r.decoding = !lp.dflash.empty() ? std::string(drafter)
+                   : !lp.dflash_left_out.empty() ? std::string(m.mtp ? "MTP" : "plain") + term::dim(" (drafter left out)")
+                   : m.mtp ? "MTP head" : "plain";
+      r.image_bytes = enc ? enc->weight_bytes() : 0;
+      r.dec = dec, r.pf = pf;
+      tty_rows.push_back(r);
+      continue;
+    }
     if (as_json) continue;
     std::string name = dir.substr(dir.find_last_of('/') + 1);
     if (dir.rfind(hub::home_dir() + "/plans/", 0) == 0) name += ", not downloaded: planned from its headers";
@@ -273,7 +442,7 @@ int run_doctor(int argc, char** argv) {
   EngineOptions eo;
   eo.context = ctx, eo.slots = slots, eo.prefill_chunk = chunk, eo.dflash = dflash;
   nlohmann::ordered_json cv = nlohmann::ordered_json::array();
-  if (!as_json) printf("\nCatalog variants on this Mac (--ctx %d, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", ctx, slots);
+  if (!as_json && !tty) printf("\nCatalog variants on this Mac (--ctx %d, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", ctx, slots);
   for (const auto& c : hub::catalog()) {
     bool fits = false;
     const hub::ModelRef pick = pick_variant(c, eo, budget, &fits);
@@ -295,9 +464,21 @@ int run_doctor(int argc, char** argv) {
       line += (line.empty() ? "" : ", ") + v.name + " " + what + (chosen ? " <- --model " + hub::short_name(c) : "");
       cv.push_back({{"model", c.name}, {"variant", v.name}, {"fits", f == 1}, {"planned", f >= 0}, {"chosen", chosen},
                     {"default", v.name == c.default_variant}});
+      if (tty) {
+        Variant tv{.model = c.name, .alias = hub::short_name(c), .name = v.name, .fits = f, .chosen = chosen};
+        if (f == 0) {
+          tv.starts = what.rfind("starts", 0) == 0;
+          if (what.rfind("needs ", 0) == 0) tv.need = what.substr(6);
+        }
+        tty_vars.push_back(tv);
+      }
     }
-    if (!as_json) printf("  %s: %s\n", c.name.c_str(), line.c_str());
+    if (!as_json && !tty) printf("  %s: %s\n", c.name.c_str(), line.c_str());
   }
+  spin.reset();
+  if (tty)
+    print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "",
+              ctx, slots, tty_rows, tty_vars);
   if (as_json) {
     J["context"] = ctx;
     J["slots"] = slots;

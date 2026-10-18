@@ -13,6 +13,7 @@
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "hub/hub.h"
+#include "util/term.h"
 
 #include <nlohmann/json.hpp>
 
@@ -888,6 +889,23 @@ class Progress {
     if (!show_) return;
     const double s = secs();
     const int pct = total_ ? int(100.0 * double(done_) / double(total_)) : 100;
+    if (term::fancy()) {  // a bar on the status line
+      if (s - last_ < 0.1 && done_ < total_) return;
+      last_ = s;
+      const double left = done_ ? s * double(total_ - done_) / double(done_) : -1;
+      char p[16];
+      snprintf(p, sizeof p, "%3d%%", pct);
+      std::string tail = std::string(p) + "  " + gb(done_) + term::dim(" of " + gb(total_));
+      if (s > 0.5) {
+        char r[32];
+        snprintf(r, sizeof r, "%.0f MB/s", double(done_) / 1e6 / s);
+        tail += "  " + term::dim(r);
+      }
+      if (done_ < total_ && s > 2) tail += "  " + term::dim(fmt_secs(left) + " left");
+      const int bw = std::clamp(term::columns() - 6 - term::width(tail) - 3, 8, 40);
+      term::status("    " + term::bar(total_ ? double(done_) / double(total_) : 1, bw) + "  " + tail);
+      return;
+    }
     if (tty_) {
       if (s - last_ < 0.25 && done_ < total_) return;
       last_ = s;
@@ -901,7 +919,8 @@ class Progress {
     }
   }
   void end() {
-    if (show_ && tty_) fprintf(stderr, "\n");
+    if (show_ && term::fancy()) term::status("");
+    else if (show_ && tty_) fprintf(stderr, "\n");
   }
   double secs() const {
     return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0_).count();
@@ -1244,7 +1263,11 @@ std::string import_model(const ImportOptions& opt) {
     std::ifstream mfs(dest + "/.kapitsa/manifest.json");
     const json m = json::parse(mfs, nullptr, false);
     if (!m.is_discarded() && m.contains("gguf") && m["gguf"].value("files", json()) == sid && hub::is_complete(dest)) {
-      if (opt.progress) fprintf(stderr, "Using %s, converted from %s earlier.\n", hub::tilde(dest).c_str(), file.c_str());
+      if (opt.progress && term::fancy())
+        term::line("  " + term::accent(term::kOk) + " Using " + term::bold(hub::tilde(dest)) + term::dim(", converted from " + file + " earlier"),
+                   stderr);
+      else if (opt.progress)
+        fprintf(stderr, "Using %s, converted from %s earlier.\n", hub::tilde(dest).c_str(), file.c_str());
       return dest;
     }
     throw Error(hub::tilde(dest) + " exists already and is not a conversion of " + file + ". Name this one with "
@@ -1328,7 +1351,46 @@ std::string import_model(const ImportOptions& opt) {
   total += tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size() + (1u << 20);
 
   // what will be written, and whether it fits
-  if (opt.progress) {
+  if (opt.progress && term::fancy()) {
+    // in a terminal: the file and where it goes, its formats as a small table, notes dim, warnings yellow
+    const std::string dot = std::string(" ") + term::kDot + " ";
+    term::line("  " + term::accent("⇄") + " Converting " + term::bold(base_name(file)) + "  " +
+                   term::dim(std::string(arch == "qwen35moe" ? "MoE" : "dense") + dot + gb(f.file_bytes()) +
+                             (mf ? dot + "MTP head from " + base_name(s.mtp) : "")),
+               stderr);
+    term::line("    " + term::dim(term::clip("into " + hub::tilde(dest), term::columns() - 5)), stderr);
+    int nw = 0;
+    for (auto& [k, n] : P.conv_count) nw = std::max(nw, int(std::to_string(n).size()));
+    for (auto& [k, n] : P.conv_count) {
+      std::string what = k;
+      if (const size_t a = what.find(" -> "); a != std::string::npos) what = what.substr(0, a) + term::dim(" → ") + what.substr(a + 4);
+      term::line("    " + term::right(std::to_string(n), nw) + term::dim(" × ") + what, stderr);
+    }
+    const int w = std::max(30, std::min(term::columns(), 100) - 6);
+    auto say = [&](const std::string& mark, const std::string& text, bool dim) {
+      const auto ls = term::wrap(text, w);
+      for (size_t i = 0; i < ls.size(); ++i)
+        term::line("    " + (i ? std::string("  ") : mark + " ") + (dim ? term::dim(ls[i]) : ls[i]), stderr);
+    };
+    for (const auto& n : P.notes) say(term::dim(term::kArrow), n, true);
+    if (!P.followed.empty()) {
+      std::string l;
+      for (const auto& [t, n] : P.followed) l += (l.empty() ? "" : ", ") + t + " x" + std::to_string(n);
+      say(term::dim(term::kArrow), "the 1-3-bit tensors (" + l + ") take the file's majority format, " + fmt_name(P.major_fmt) +
+                                       (P.hp.moe ? " (MoE experts: " + fmt_name(expert_format(P.major)) + ")" : ""),
+          true);
+    }
+    if (!P.low.empty()) {
+      std::string l;
+      for (const auto& t : P.low) l += (l.empty() ? "" : "/") + t;
+      say(term::warn(term::kWarn),
+          "This file is mostly " + l + ", 1-3-bit formats Kapitsa has no kernels for: they become 3-bit group 64 (1-2-bit "
+          "types) or 4-bit group 32 (3-bit types), at about the file's quality and larger than the file. A Q4_K_M or better "
+          "GGUF gives a better model at about the size of the conversion.",
+          false);
+    }
+    if (!P.has_mtp) say(term::dim(term::kArrow), "no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts", true);
+  } else if (opt.progress) {
     fprintf(stderr, "Converting %s (%s, %s%s) into %s:\n", file.c_str(), arch == "qwen35moe" ? "MoE" : "dense",
             gb(f.file_bytes()).c_str(), mf ? (" + MTP head from " + base_name(s.mtp)).c_str() : "",
             hub::tilde(dest).c_str());
@@ -1350,6 +1412,17 @@ std::string import_model(const ImportOptions& opt) {
     }
     if (!P.has_mtp)
       fprintf(stderr, "  no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts\n");
+  }
+  if (opt.dry_run && term::fancy()) {
+    const uint64_t avail = free_bytes(models);
+    const std::string text = "Dry run: the conversion would write " + gb(total) + " (" + gb(avail) + " free on that disk" +
+                             (avail < total + kKeepFree ? "; not enough, 6 GB must stay free" : "") + "); nothing was written.";
+    const auto ls = term::wrap(text, std::max(30, std::min(term::columns(), 100) - 6));
+    for (size_t i = 0; i < ls.size(); ++i)
+      term::line("  " + (i ? std::string("  ") : (avail < total + kKeepFree ? term::warn(term::kWarn) : term::dim(term::kArrow)) + " ") +
+                     term::dim(ls[i]),
+                 stderr);
+    return dest;
   }
   if (opt.dry_run) {
     const uint64_t avail = free_bytes(models);
@@ -1437,7 +1510,11 @@ std::string import_model(const ImportOptions& opt) {
       remove_tree(dest);
     }
     if (rename(tmp.c_str(), dest.c_str()) != 0) throw Error("Can't create " + hub::tilde(dest) + ": " + strerror(errno) + ".");
-    if (opt.progress)
+    if (opt.progress && term::fancy())
+      term::line("  " + term::accent(term::kOk) + " Converted " + term::bold(base_name(file)) +
+                     term::dim(" in " + fmt_secs(prog.secs()) + ", " + gb(bytes)),
+                 stderr);
+    else if (opt.progress)
       fprintf(stderr, "Converted %s in %s: %s in %s.\n", file.c_str(), fmt_secs(prog.secs()).c_str(), gb(bytes).c_str(),
               hub::tilde(dest).c_str());
   } catch (...) {
@@ -1467,13 +1544,20 @@ int run_import(int argc, char** argv) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
       if (i + 1 >= argc) {
-        fprintf(stderr, "kapitsa import: %s needs a value\n", a.c_str());
+        if (term::fancy()) term::error(a + " needs a value", "kapitsa import --help shows how to use it.");
+        else fprintf(stderr, "kapitsa import: %s needs a value\n", a.c_str());
         exit(2);
       }
       return argv[++i];
     };
     if (a == "--help" || a == "-h") {
-      printf(usage, hub::tilde(hub::models_dir()).c_str());
+      if (term::fancy()) {
+        char b[4096];
+        snprintf(b, sizeof b, usage, hub::tilde(hub::models_dir()).c_str());
+        term::help(b);
+      } else {
+        printf(usage, hub::tilde(hub::models_dir()).c_str());
+      }
       return 0;
     } else if (a == "--name") o.name = next();
     else if (a == "--mtp") o.mtp = next();
@@ -1482,12 +1566,14 @@ int run_import(int argc, char** argv) {
     else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
     else {
-      fprintf(stderr, "kapitsa import: unexpected %s\n(kapitsa import --help shows how to use it.)\n", a.c_str());
+      if (term::fancy()) term::error("unexpected " + a, "kapitsa import --help shows how to use it.");
+      else fprintf(stderr, "kapitsa import: unexpected %s\n(kapitsa import --help shows how to use it.)\n", a.c_str());
       return 2;
     }
   }
   if (o.file.empty()) {
-    fprintf(stderr, "kapitsa import: which file? e.g. kapitsa import ~/Downloads/Qwen3.5-4B-Q4_K_M.gguf\n");
+    if (term::fancy()) term::error("Which file?", "e.g. kapitsa import ~/Downloads/Qwen3.5-4B-Q4_K_M.gguf");
+    else fprintf(stderr, "kapitsa import: which file? e.g. kapitsa import ~/Downloads/Qwen3.5-4B-Q4_K_M.gguf\n");
     return 2;
   }
   if (const char* home = getenv("HOME"); home && o.file.rfind("~/", 0) == 0) o.file = home + o.file.substr(1);
@@ -1495,13 +1581,21 @@ int run_import(int argc, char** argv) {
   try {
     const std::string dir = import_model(o);
     if (o.dry_run) return 0;
-    printf("%s is ready in %s. Start it: kapitsa serve --model %s\n", base_name(o.file).c_str(), hub::tilde(dir).c_str(),
-           base_name(dir).c_str());
+    if (term::fancy()) {
+      term::line("  " + term::accent(term::kOk) + " " +
+                 term::clip(term::bold(base_name(dir)) + " is ready" + term::dim("  " + hub::tilde(dir)), term::columns() - 5));
+      term::line("  " + term::dim(std::string(term::kArrow) + " kapitsa serve --model " + base_name(dir) + " starts it"));
+    } else {
+      printf("%s is ready in %s. Start it: kapitsa serve --model %s\n", base_name(o.file).c_str(), hub::tilde(dir).c_str(),
+             base_name(dir).c_str());
+    }
   } catch (const Error& e) {
-    fprintf(stderr, "kapitsa: %s\n", e.what());
+    if (term::fancy()) term::status(""), term::error(e.what());
+    else fprintf(stderr, "kapitsa: %s\n", e.what());
     return 1;
   } catch (const std::exception& e) {
-    fprintf(stderr, "kapitsa: %s\n", e.what());
+    if (term::fancy()) term::status(""), term::error(e.what());
+    else fprintf(stderr, "kapitsa: %s\n", e.what());
     return 1;
   }
   return 0;

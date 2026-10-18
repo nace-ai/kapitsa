@@ -22,7 +22,9 @@
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
+#include "server/ui.h"
 #include "util/log.h"
+#include "util/term.h"
 
 #include <httplib/httplib.h>
 
@@ -121,13 +123,22 @@ static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, boo
 // ---------------------------------------------------------------- command line
 
 [[noreturn]] void ni::usage_error(const std::string& msg, const char* help) {
-  fprintf(stderr, "kapitsa: %s\n(%s shows how to use it.)\n", msg.c_str(), help);
+  if (term::fancy()) term::error(msg, std::string(help) + " shows how to use it.");
+  else fprintf(stderr, "kapitsa: %s\n(%s shows how to use it.)\n", msg.c_str(), help);
   exit(2);
 }
 
 int ni::fail(const std::string& msg, int code) {
-  fprintf(stderr, "kapitsa: %s\n", msg.c_str());
+  if (term::fancy()) term::error(msg);
+  else fprintf(stderr, "kapitsa: %s\n", msg.c_str());
   return code;
+}
+
+// A download stopped by Ctrl+C: what to run to continue it
+static int stopped(const hub::Stopped& e) {
+  if (term::fancy()) term::status(""), ui::warning(e.what());
+  else fprintf(stderr, "\n%s\n", e.what());
+  return 130;
 }
 
 int ni::to_int(const std::string& opt, const std::string& v, const char* help) {
@@ -195,6 +206,26 @@ hub::ModelRef ni::for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size
   return pick_variant(*ref.model, opt, budget);
 }
 
+__attribute__((format(printf, 1, 2))) static std::string strf(const char* fmt, ...) {
+  va_list ap, aq;
+  va_start(ap, fmt);
+  va_copy(aq, ap);
+  std::string s(size_t(std::max(0, vsnprintf(nullptr, 0, fmt, aq))), '\0');
+  va_end(aq);
+  vsnprintf(s.data(), s.size() + 1, fmt, ap);
+  va_end(ap);
+  return s;
+}
+
+// A model's name in a note of the terminal UI
+static std::string bold_name(const std::string& s) { return term::bold(s); }
+
+// A command's help: as it is, or styled in a terminal
+static void show_help(const std::string& text) {
+  if (term::fancy()) ui::help(text);
+  else fputs(text.c_str(), stdout);
+}
+
 static std::string models_table() {
   std::string s;
   char line[256];
@@ -222,6 +253,10 @@ static std::string models_table() {
 }
 
 static void print_help() {
+  if (term::fancy()) {
+    ui::quiet();
+    return ui::home(KAPITSA_VERSION);
+  }
   printf("Kapitsa %s: fast local Qwen on Apple silicon.\n\n"
          "  kapitsa serve                 start the best model for this Mac (downloads it the first time)\n"
          "  kapitsa serve --model 27b     start a given model\n\n"
@@ -248,7 +283,7 @@ static void print_help() {
 }
 
 static void print_serve_help() {
-  printf("kapitsa serve [--model MODEL] [options]\n\n"
+  std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
@@ -274,17 +309,21 @@ static void print_serve_help() {
          "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt): OpenAI image_url parts, Anthropic image blocks and\n"
          "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n");
+  if (term::fancy())  // in a terminal the engine's log goes to a file, unless --verbose
+    h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +
+                                            hub::tilde(hub::home_dir()) + "/logs/serve-PORT.log)");
+  show_help(h);
 }
 
 static void print_pull_help() {
-  printf("kapitsa pull MODEL... [--from DIR]...\n\n"
+  show_help(strf("kapitsa pull MODEL... [--from DIR]...\n\n"
          "Downloads a model with the files that speed it up (MTP head, DFlash2 drafter) into\n"
          "%s/<name>-<variant>, verifies every file, and continues an interrupted download.\n\n"
          "  --from DIR   take files that are already on this Mac from DIR (a folder from `hf download --local-dir`,\n"
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
          "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n",
-         hub::tilde(hub::models_dir()).c_str());
+         hub::tilde(hub::models_dir()).c_str()));
 }
 
 // Why the server could not listen on host:port, or "" (a test bind, as the server binds: SO_REUSEADDR only).
@@ -340,12 +379,13 @@ struct StreamJob {
 // after(result) (the reply is out) from the connection's thread.
 static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
-                         std::function<void(const ChatResult&)> after) {
+                         std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter) {
   auto job = std::make_shared<StreamJob>();
-  job->worker = std::thread([&engine, r, w, raw = job.get()] {
+  job->worker = std::thread([&engine, r, w, meter, raw = job.get()] {
     ChatResult out = engine.chat(
         r,
         [&](const ChatDelta& d) {
+          ui::token(meter);
           std::lock_guard<std::mutex> lk(raw->mu);
           std::string s = w->delta(d);
           if (!s.empty()) raw->out.push_back(std::move(s));
@@ -370,13 +410,14 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
   }
   if (!job->started) {
     job->worker.join();
+    ui::done(meter, job->result);
     auto [status, body] = failure(job->result);
     res.status = status;
     res.set_content(api::dump(body), "application/json");
     return;
   }
   res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [job, w, after](size_t, httplib::DataSink& sink) {
+  res.set_chunked_content_provider("text/event-stream", [job, w, after, meter](size_t, httplib::DataSink& sink) {
     for (;;) {
       std::deque<std::string> batch;
       bool done;
@@ -396,6 +437,7 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
     }
     sink.done();
     job->worker.join();
+    ui::done(meter, job->result);
     after(job->result);
     return true;
   });
@@ -425,6 +467,7 @@ static int serve(int argc, char** argv, int first) {
   EngineOptions opt;
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
+  bool verbose = false;
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
@@ -447,10 +490,14 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
+  if (tui) ui::serve_begin(verbose);
+  std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);  // before a long conversion
     try {
@@ -469,15 +516,23 @@ static int serve(int argc, char** argv, int first) {
     if (model.empty()) {
       std::string why;
       if (!best_model(opt, budget, &ref, &why)) return fail(why);
-      fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
-              ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
+      if (tui)
+        notes.push_back(bold_name(ref.name) + " is the best fit for this Mac (" + Gpu::get().name() + ", " +
+                        strf("%.0f GB", ram_gb()) + "). --model picks another.");
+      else
+        fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
+                ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
     } else {
       const hub::ModelRef named = hub::resolve(expand_home(model));
       ref = named;
       if (named.kind == hub::ModelRef::kCatalog && !named.variant_given) {
         bool fits = false;
         ref = pick_variant(*named.model, opt, budget, &fits);
-        if (fits && ref.variant != named.variant)
+        if (fits && ref.variant != named.variant && tui)
+          notes.push_back(bold_name(ref.name) + ", the largest variant of " + model + " that fits this Mac (" +
+                          strf("%.0f GB", ram_gb()) + "; the default, " + named.variant->name + ", does not). --model " +
+                          hub::short_name(*ref.model) + ":<variant> picks another.");
+        else if (fits && ref.variant != named.variant)
           fprintf(stderr, "%s on this Mac (%.0f GB): %s, the largest of its variants that fits (the default, %s, does "
                   "not). --model %s:<variant> picks another.\n", model.c_str(), ram_gb(), ref.name.c_str(),
                   named.variant->name.c_str(), hub::short_name(*ref.model).c_str());
@@ -521,11 +576,15 @@ static int serve(int argc, char** argv, int first) {
   }
   // fail now, not after loading the model, when the port is taken
   if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
+  const std::string log_path = tui ? ui::serve_log_file(port) : "";
+  if (tui) {
+    ui::serve_header(KAPITSA_VERSION);
+    for (const auto& n : notes) ui::note(n);
+  }
   try {
     opt.model_dir = hub::ensure(ref, hub::PullOptions{});
   } catch (const hub::Stopped& e) {
-    fprintf(stderr, "\n%s\n", e.what());
-    return 130;
+    return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
@@ -533,7 +592,9 @@ static int serve(int argc, char** argv, int first) {
   // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
   // daemon evicted it); ni_run and the benchmarks build it synchronously
   setenv("NI_ANE_ASYNC", "1", 0);
+  if (tui) ui::loading_begin(ref.name);
   Engine engine(opt);
+  if (tui) ui::loading_end(ref.name);
 
   const time_t started = std::time(nullptr);
   char started_at[32];
@@ -607,8 +668,14 @@ static int serve(int argc, char** argv, int first) {
     const std::string id = "chatcmpl-" + std::to_string(std::time(nullptr)) + std::to_string(rand() % 100000);
     const long created = long(std::time(nullptr));
     const std::string model = engine.model_id();
+    const auto meter = ui::meter(req, r);
+    r.live = ui::live_of(meter);
     if (!body.value("stream", false)) {
-      ChatResult out = engine.chat(r, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(r, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       if (out.finish_reason == "error") {
         res.status = 400;
@@ -642,6 +709,7 @@ static int serve(int argc, char** argv, int first) {
       if (!send(json{{"role", "assistant"}, {"content", ""}}, nullptr, nullptr)) return false;
       size_t ntool = 0;
       ChatResult out = engine.chat(r, [&](const ChatDelta& d) {
+        ui::token(meter);
         bool ok = true;
         if (!d.reasoning.empty()) ok = ok && send(json{{"reasoning_content", d.reasoning}}, nullptr, nullptr);
         if (!d.content.empty()) ok = ok && send(json{{"content", d.content}}, nullptr, nullptr);
@@ -661,6 +729,7 @@ static int serve(int argc, char** argv, int first) {
       std::string done = "data: [DONE]\n\n";
       sink.write(done.data(), done.size());
       sink.done();
+      ui::done(meter, out);
       // the reply is out: prefill the history as the next turn will render it (NI_HISTORY_PREFILL)
       std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       return true;
@@ -688,8 +757,14 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string id = api::new_id("msg_"), model = engine.model_id();
+    const auto meter = ui::meter(req, q.chat);
+    q.chat.live = ui::live_of(meter);
     if (!q.stream) {
-      ChatResult out = engine.chat(q.chat, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(q.chat, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, body] = api::messages_failure(out);
         res.status = status;
@@ -701,7 +776,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     stream_reply(engine, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
-                 api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); });
+                 api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); }, meter);
   });
   srv.Post("/v1/messages/count_tokens", [&](const httplib::Request& req, httplib::Response& res) {
     try {
@@ -741,8 +816,14 @@ static int serve(int argc, char** argv, int first) {
       for (const auto& it : output) items.push_back(it);
       responses.put(id, std::move(items));
     };
+    const auto meter = ui::meter(req, q->chat);
+    q->chat.live = ui::live_of(meter);
     if (!q->stream) {
-      ChatResult out = engine.chat(q->chat, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(q->chat, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, body] = api::responses_failure(out);
         res.status = status;
@@ -756,10 +837,13 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     auto w = std::make_shared<api::ResponsesStream>(*q, id, model, created);
-    stream_reply(engine, q->chat, w, res, api::responses_failure, [&, q, w, keep](const ChatResult& out) {
-      if (out.finish_reason != "error") keep(w->output());
-      prefill_after(q->chat, out);
-    });
+    stream_reply(
+        engine, q->chat, w, res, api::responses_failure,
+        [&, q, w, keep](const ChatResult& out) {
+          if (out.finish_reason != "error") keep(w->output());
+          prefill_after(q->chat, out);
+        },
+        meter);
   });
 
   // A busy port is an error: httplib's default SO_REUSEPORT would let a second server bind it too.
@@ -774,8 +858,23 @@ static int serve(int argc, char** argv, int first) {
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
-  printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
-         engine.model_id().c_str(), api_key.empty() ? "" : ", API key required");
+  if (tui) {
+    ui::Ready card;
+    card.model = engine.model_id();
+    if (ref.variant) card.quant = ref.variant->quant;
+    card.base = base;
+    card.api_key_note = api_key.empty() ? "" : "required (--api-key)";
+    card.log = log_path;
+    card.budget = budget;
+    card.used = Gpu::get().allocated_bytes();
+    card.context = engine.context_length();
+    card.context_fit = engine.context_fit();
+    card.slots = std::max(1, opt.slots);
+    ui::ready(card);
+  } else {
+    printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
+           engine.model_id().c_str(), api_key.empty() ? "" : ", API key required");
+  }
   fflush(stdout);
   srv.listen_after_bind();
   return 0;
@@ -802,6 +901,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     printf("%s\n", j.dump().c_str());
     return;
   }
+  if (term::fancy()) return ui::plan(r);
   printf("%s\n", r.name.c_str());
   struct stat st {};
   const bool here = !local && !hub::is_current(r) && stat((r.dir + "/config.json").c_str(), &st) == 0;
@@ -858,21 +958,28 @@ static int pull(int argc, char** argv) {
       continue;
     }
     if (ref.kind == hub::ModelRef::kLocal) {
-      printf("%s is a folder on this Mac: nothing to download.\n", ref.dir.c_str());
+      if (term::fancy()) ui::note(hub::tilde(ref.dir) + " is a folder on this Mac: nothing to download.", true);
+      else printf("%s is a folder on this Mac: nothing to download.\n", ref.dir.c_str());
       continue;
     }
     const bool had = hub::is_current(ref);
     try {
       hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
-      fprintf(stderr, "\n%s\n", e.what());
-      return 130;
+      return stopped(e);
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
-    printf("%s %s in %s. Start it: kapitsa serve --model %s\n", ref.name.c_str(),
-           had ? "is already downloaded" : "is ready", hub::tilde(ref.dir).c_str(),
-           ref.model ? hub::short_name(*ref.model, *ref.variant).c_str() : ref.name.c_str());
+    const std::string start = ref.model ? hub::short_name(*ref.model, *ref.variant) : ref.name;
+    if (term::fancy()) {
+      ui::ok(term::clip(term::bold(ref.name) + (had ? " is already downloaded" : " is ready") + term::dim("  " + hub::tilde(ref.dir)),
+                        term::columns() - 5),
+             true);
+      ui::note("kapitsa serve --model " + start + " starts it", true);
+    } else {
+      printf("%s %s in %s. Start it: kapitsa serve --model %s\n", ref.name.c_str(),
+             had ? "is already downloaded" : "is ready", hub::tilde(ref.dir).c_str(), start.c_str());
+    }
   }
   return 0;
 }
@@ -883,10 +990,14 @@ static int list(int argc, char** argv) {
     const std::string a = argv[i];
     if (a == "--json") as_json = true;
     else if (a == "--help" || a == "-h") {
-      printf("kapitsa list [--json]: the models in %s, their size on disk and what they include.\n",
-             hub::tilde(hub::models_dir()).c_str());
+      show_help(strf("kapitsa list [--json]: the models in %s, their size on disk and what they include.\n",
+                     hub::tilde(hub::models_dir()).c_str()));
       return 0;
     } else usage_error("unknown option " + a);
+  }
+  if (!as_json && term::fancy()) {
+    ui::list();
+    return 0;
   }
   const auto v = hub::installed();
   if (as_json) {
@@ -937,7 +1048,7 @@ static int list(int argc, char** argv) {
 
 static int rm(int argc, char** argv) {
   if (argc < 3 || !strcmp(argv[2], "--help") || !strcmp(argv[2], "-h")) {
-    printf("kapitsa rm MODEL...: deletes downloaded models from %s.\n", hub::tilde(hub::models_dir()).c_str());
+    show_help(strf("kapitsa rm MODEL...: deletes downloaded models from %s.\n", hub::tilde(hub::models_dir()).c_str()));
     return argc < 3 ? 2 : 0;
   }
   for (int i = 2; i < argc; ++i) {
@@ -965,7 +1076,8 @@ static int rm(int argc, char** argv) {
     if (ref.kind == hub::ModelRef::kLocal && ref.dir.rfind(hub::models_dir() + "/", 0) != 0)
       return fail(ref.dir + " is a folder of yours, not a downloaded model: kapitsa rm leaves it alone.", 2);
     if (stat(ref.dir.c_str(), &st) != 0) {
-      printf("%s is not downloaded.\n", ref.name.c_str());
+      if (term::fancy()) ui::note(term::bold(ref.name) + " is not downloaded.", true);
+      else printf("%s is not downloaded.\n", ref.name.c_str());
       continue;
     }
     const std::string root = hub::models_dir() + "/";
@@ -977,7 +1089,8 @@ static int rm(int argc, char** argv) {
     std::error_code ec;
     std::filesystem::remove_all(ref.dir, ec);
     if (ec) return fail("Can't delete " + hub::tilde(ref.dir) + ": " + ec.message());
-    printf("Deleted %s (%s).\n", ref.name.c_str(), hub::fmt_bytes(bytes).c_str());
+    if (term::fancy()) ui::ok("Deleted " + term::bold(ref.name) + term::dim("  " + hub::fmt_bytes(bytes) + " freed"), true);
+    else printf("Deleted %s (%s).\n", ref.name.c_str(), hub::fmt_bytes(bytes).c_str());
   }
   return 0;
 }
@@ -1003,8 +1116,7 @@ static int mtp_sidecar(int argc, char** argv) {
   try {
     hub::build_mtp_sidecar(src, rev, out, hidden);
   } catch (const hub::Stopped& e) {
-    fprintf(stderr, "\n%s\n", e.what());
-    return 130;
+    return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
@@ -1013,6 +1125,8 @@ static int mtp_sidecar(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
+  // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
+  if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();
   if (cmd.empty() || cmd == "--help" || cmd == "-h" || cmd == "help") {
     if (argc > 2 && !strcmp(argv[2], "serve")) print_serve_help();
     else if (argc > 2 && !strcmp(argv[2], "pull")) print_pull_help();
