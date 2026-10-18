@@ -4,11 +4,12 @@ Kapitsa is a native C++20 inference engine for Apple silicon. Its HTTP APIs shar
 backends encode work into Metal command buffers and can offload selected prefill operations to Apple's Neural Engine.
 It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do not imply a runtime dependency.
 
-![Kapitsa request flow: APIs feed a shared chat engine, which selects the Qwen or Nemotron backend. Both use Metal; selected prefill work can use the Neural Engine.](assets/architecture.svg)
+![Kapitsa engine: API adapters, conversation state and image encoders feed Qwen or Nemotron; draft-and-verify generation runs on Metal with optional Neural Engine prefill.](assets/architecture.svg)
 
-Solid arrows show the main execution path. Dashed arrows show optional prefill work on the Neural Engine.
-Responses stream back through the shared engine and the API adapter. Model loading and optional image processing
-are described below; they are omitted from the overview to keep the request path readable.
+Solid arrows show request and token flow. Dashed arrows connect supporting resources and execution hardware;
+they do not represent extra sequential stages. The generation loop repeats until completion, streaming through
+the API adapter. Image encoders run only for supported image requests, and Neural Engine work is limited to
+selected prefill operations. Conversation slots retain state for later turns; generation is serialized.
 
 ## From a request to generated tokens
 
@@ -98,11 +99,7 @@ for adapted code and design credits, and [DEVELOPMENT.md](../DEVELOPMENT.md) for
 
 ## Updating the diagram
 
-The SVG is rendered from [architecture.mmd](assets/architecture.mmd), with
-[mermaid-config.json](assets/mermaid-config.json). With Mermaid CLI 11.9.0 and its Chrome dependency installed:
-
-```bash
-npx --yes @mermaid-js/mermaid-cli@11.9.0 \
-  -i docs/assets/architecture.mmd -o docs/assets/architecture.svg \
-  -c docs/assets/mermaid-config.json -b white -w 1400
-```
+[architecture.svg](assets/architecture.svg) is the editable diagram source. It uses native SVG shapes and text,
+with an accessible title and description, so GitHub can display it without JavaScript or embedded HTML.
+Edit the SVG directly and preview it at README width to check labels, arrows and spacing. The logo is a separate
+transparent PNG in [kapitsa-logo.png](assets/kapitsa-logo.png).
