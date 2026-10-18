@@ -1160,6 +1160,10 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     if (!is_dir(d) && !file_size(d, sz)) throw Error("--from " + d + ": no such folder or file.");
   }
   SignalGuard sig;
+  // A folder Kapitsa did not download (no .kapitsa/: put there by hand or by another tool, e.g. a bundle that carries
+  // the same weights): its files are checked against the pinned checksums and kept where they match, so only the files
+  // that differ are fetched.
+  const bool adopt = is_dir(ref.dir) && !is_dir(ref.dir + "/.kapitsa");
   mkdirs(ref.dir);
   FolderLock lock(ref.dir);
   if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
@@ -1267,24 +1271,51 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   uint64_t need = 0, total = 0, have = 0;
   int n_hf = 0, n_from = 0;
   // A manifest that is no longer current (a file went missing, or this Kapitsa pins newer revisions): drop it now
-  // that the new file list is in, check the files that are here against it, and write it again at the end.
+  // that the new file list is in, check the files that are here against it, and write it again at the end. The
+  // files of an adopted folder are checked the same way. The checks run in parallel (8 files at a time).
   const bool recheck = unlink(manifest_path(ref.dir).c_str()) == 0;
-  if (recheck && opt.progress) fprintf(stderr, "Checking the files already in %s...\n", tilde(ref.dir).c_str());
-  for (auto& t : targets) {
+  std::vector<char> matches(targets.size(), 1);
+  if (recheck || adopt) {
+    std::vector<size_t> check;
+    uint64_t check_bytes = 0;
+    for (size_t i = 0; i < targets.size(); ++i) {
+      const Target& t = *targets[i];
+      uint64_t sz;
+      if (file_size(t.final_path, sz) && sz == t.size && (!t.sha256.empty() || !t.blob.empty())) {
+        check.push_back(i);
+        check_bytes += t.size;
+      }
+    }
+    if (opt.progress && !check.empty())
+      fprintf(stderr, "Checking the %zu files already in %s (%s) against the pinned checksums...\n", check.size(),
+              tilde(ref.dir).c_str(), fmt_bytes(check_bytes).c_str());
+    std::atomic<size_t> next{0};
+    std::vector<std::thread> th;
+    for (int w = 0; w < kWorkers; ++w)
+      th.emplace_back([&] {
+        for (size_t k; (k = next.fetch_add(1)) < check.size();) {
+          const Target& t = *targets[check[k]];
+          std::string s256, s1;
+          matches[check[k]] = hash_file(t.final_path, t.sha256.empty() ? nullptr : &s256, t.sha256.empty() ? &s1 : nullptr) &&
+                              (t.sha256.empty() ? s1 == t.blob : s256 == t.sha256);
+        }
+      });
+    for (auto& x : th) x.join();
+  }
+  int n_differ = 0;
+  for (size_t i = 0; i < targets.size(); ++i) {
+    auto& t = targets[i];
     total += t->size;
     uint64_t sz;
     if (file_size(t->final_path, sz) && sz == t->size) {
-      bool ok = true;
-      if (recheck && (!t->sha256.empty() || !t->blob.empty())) {
-        std::string s256, s1;
-        ok = hash_file(t->final_path, t->sha256.empty() ? nullptr : &s256, t->sha256.empty() ? &s1 : nullptr) &&
-             (t->sha256.empty() ? s1 == t->blob : s256 == t->sha256);
-        if (!ok) unlink(t->final_path.c_str());
-      }
-      if (ok) {
+      if (matches[i]) {
         have += t->size;
         continue;
       }
+      if (recheck) unlink(t->final_path.c_str());  // (an adopted folder's own file stays until the pinned one replaces it)
+      ++n_differ;
+    } else if (adopt && file_size(t->final_path, sz)) {
+      ++n_differ;
     }
     if (t->size == 0) {
       write_atomic(t->final_path, "");
@@ -1309,6 +1340,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
                 fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping 1 GB spare) on the disk of " +
                 tilde(models_dir()) + ". Free some space, or set KAPITSA_HOME to a folder on a bigger disk.");
   for (auto& [src, t] : reuse) place(src, t->final_path);
+  if (opt.progress && adopt && n_differ)
+    fprintf(stderr, "%d file%s here differ%s from the pinned ones and will be replaced.\n", n_differ, n_differ == 1 ? "" : "s",
+            n_differ == 1 ? "s" : "");
   if (opt.progress && (n_hf || n_from))
     fprintf(stderr, "Reused %d file%s already on this Mac (%schecksums match; APFS clones take no extra space).\n",
             n_hf + n_from, n_hf + n_from == 1 ? "" : "s",
@@ -1339,7 +1373,9 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   m["completed_at"] = now_iso();
   m["kapitsa"] = KAPITSA_VERSION;
   write_atomic(manifest_path(ref.dir), m.dump(2) + "\n");
-  rmdir((ref.dir + "/.kapitsa/parts").c_str());  // empty now (fails harmlessly otherwise)
+  for (const auto& t : targets)  // the companions' part folders (dflash/ ...), then the parts folder: empty now
+    for (std::string d = dirname_of(t->part_path); d.size() > ref.dir.size() + 15 && rmdir(d.c_str()) == 0;) d = dirname_of(d);
+  rmdir((ref.dir + "/.kapitsa/parts").c_str());  // (fails harmlessly if something is left)
   return ref.dir;
 }
 

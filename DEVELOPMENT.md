@@ -298,7 +298,10 @@ Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
   `~/.cache/huggingface/hub`, at the pinned commit; the blob's name proves its content), files under `--from`
   folders, and for a catalog model the Nace Agent app's copy (`~/.nace/models/<key>` with its companions); in
   folders, any name up to 3 levels deep, matched by size and then by checksum. They are placed as APFS clones (no
-  extra space), or copied across volumes.
+  extra space), or copied across volumes. A catalog model's folder that Kapitsa did not download (no `.kapitsa/`, e.g.
+  a bundle that carries the same files) is adopted: its files are checked against the pinned checksums (8 at a time;
+  Bolt's 25 GB in ~5 s), kept where they match, and only the others fetched (`kapitsa list` says "not checked yet"
+  until then).
 - `HF_TOKEN` (or the token `hf auth login` saved) is sent for gated or private repos; `HF_ENDPOINT` points at a
   mirror. Errors say what to do: offline, not found, gated, rate-limited, out of disk.
 - A repo outside the catalog takes its top-level files except other formats (`.gguf`, `.bin`, `.pth`, images,

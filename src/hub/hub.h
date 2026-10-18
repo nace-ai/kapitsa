@@ -94,8 +94,9 @@ struct PullOptions {
 
 // Makes sure everything the model needs is in ref.dir and returns it. A finished download (its manifest, written
 // last) is reused without any network access. Otherwise: list the repos, take what is already there (finished
-// files, the Hugging Face cache, `from` folders; checksums verified, APFS clones so no extra disk), check the free
-// disk space, download the rest in parallel ranges (resumable: run again after an interruption), build the MTP
+// files, and in a folder Kapitsa did not download only those that match the pinned checksums; the Hugging Face cache;
+// `from` folders; checksums verified, APFS clones so no extra disk), check the free disk space, download the rest in
+// parallel ranges (resumable: run again after an interruption), build the MTP
 // sidecar if the model has one, verify sizes and sha256, and write the manifest. Throws Error.
 std::string ensure(const ModelRef& ref, const PullOptions& opt);
 // Every file the manifest lists is there (a finished download).
