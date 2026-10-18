@@ -1,23 +1,33 @@
 # Homebrew formula for Kapitsa (by Nace AI, https://nace.ai), prepared for a public release and not published yet.
-# At release: tag vX.Y.Z, set `url` to that tag's tarball and `sha256` to its checksum
-# (curl -sL <url> | shasum -a 256), then put this file in a tap (e.g. nace-ai/homebrew-tap as Formula/kapitsa.rb),
-# so that `brew install nace-ai/tap/kapitsa` works. Until then, ./install.sh in a clone is the way to install.
+# It installs the release binary that packaging/release/build.sh makes (the same tarball install.sh downloads), so
+# nothing compiles; `brew install --HEAD` builds main from source instead. At each release the workflow
+# .github/workflows/release.yml sets version, url and sha256 and puts this file in the tap nace-ai/homebrew-tap as
+# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works (RELEASING.md).
 class Kapitsa < Formula
   desc "Fast local Qwen inference for Apple silicon, with an OpenAI-compatible server"
   homepage "https://github.com/nace-ai/kapitsa"
-  url "https://github.com/nace-ai/kapitsa/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000" # replace at release
+  url "https://github.com/nace-ai/kapitsa/releases/download/v0.1.0/kapitsa-0.1.0-darwin-arm64.tar.gz"
+  version "0.1.0" # Homebrew reads "64" from this file name on hosts other than GitHub
+  sha256 "0000000000000000000000000000000000000000000000000000000000000000" # set by the release workflow
   license "Apache-2.0"
-  head "https://github.com/nace-ai/kapitsa.git", branch: "main"
 
-  depends_on "cmake" => :build
+  head do
+    url "https://github.com/nace-ai/kapitsa.git", branch: "main"
+    depends_on "cmake" => :build
+  end
+
   depends_on arch: :arm64
   depends_on macos: :sonoma
 
   def install
-    system "cmake", "-S", ".", "-B", "build", *std_cmake_args
-    system "cmake", "--build", "build", "--target", "kapitsa"
-    bin.install "build/kapitsa"
+    if build.head?
+      ENV.O3 # Homebrew would compile with -Os instead of the build's -O3; the benchmarks ran -O3
+      system "cmake", "-S", ".", "-B", "build", *std_cmake_args
+      system "cmake", "--build", "build", "--target", "kapitsa"
+      bin.install "build/kapitsa"
+    else
+      bin.install "kapitsa"
+    end
     pkgshare.install "LICENSE", "THIRD_PARTY_NOTICES"
   end
 
@@ -30,6 +40,13 @@ class Kapitsa < Formula
       Or start a coding agent on it in one command: kapitsa claude, kapitsa codex, kapitsa opencode.
       Models are stored in ~/.cache/kapitsa/models (KAPITSA_HOME moves them).
     EOS
+  end
+
+  service do
+    run [opt_bin/"kapitsa", "serve"]
+    keep_alive successful_exit: false
+    log_path var/"log/kapitsa.log"
+    error_log_path var/"log/kapitsa.log"
   end
 
   test do
