@@ -19,6 +19,9 @@ run; the docs table also shows bracket A's).
   again (in A while the Mac was busy, then in B).
 - [tuning](tuning/): the short runs that chose oMLX's and MTPLX's settings.
 - [logs](logs/): each run's server log, in full.
+- [bf16](bf16/): the partial bracket on the bf16 weights (its own README).
+- [nchapman-dflash2](nchapman-dflash2/): oMLX with a third-party DFlash2 drafter, bracketed by Kapitsa (its own
+  README).
 
 ## Runs
 

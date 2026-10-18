@@ -476,10 +476,11 @@ decodes each; [tuning](../bench/results/2026-10-18-mlx-serve/README.md#tuning)):
 Qwen3.5-4B, the family's small dense model (32 layers: 24 Gated DeltaNet, 8 full attention), at 4-bit on every engine
 of the [main comparison](#results), through the same harness, requests and checks. Each engine ran in its fastest
 setup for this model: speculative decoding with the model's MTP head wherever the engine has an MTP path (incoai
-publishes no DFlash2 drafter for the 4B; the one third-party DFlash2 drafter, nchapman/Qwen3.5-4B-DFlash2, carries no
-license and was not tried), oMLX's and MTPLX's settings picked in short runs before the session, and llama.cpp's MTP
-at n-max 1, 2, 3 and 6. Configs: the `q35-4b-*` entries in [bench/harness/configs](../bench/harness/configs); result
-files: [bench/results/2026-10-18-4b](../bench/results/2026-10-18-4b/).
+publishes no DFlash2 drafter for the 4B; with the one third-party DFlash2 drafter oMLX was slower than with its MTP
+path, [below](#omlx-with-a-third-party-dflash2-drafter)), oMLX's and MTPLX's settings picked in short runs before the
+session, and llama.cpp's MTP at n-max 1, 2, 3 and 6. Configs: the `q35-4b-*` entries in
+[bench/harness/configs](../bench/harness/configs); result files:
+[bench/results/2026-10-18-4b](../bench/results/2026-10-18-4b/).
 
 Kapitsa was the fastest engine on every metric and used the least memory. It wrote 122 tok/s at T = 0.6, 1.12×
 Ollama's MLX runner with MTP (109.0) and 1.17× MTPLX (104.2, against Kapitsa's 122.0 in the same bracket), read long
@@ -582,6 +583,21 @@ answers each; [tuning](../bench/results/2026-10-18-4b/README.md#tuning)). oMLX: 
 DFlash with z-lab's Qwen3.5-4B drafter (DFlash v1, quantized to 4 bits at load) at most 89.9 / 98.0 (block 5, verify
 `adaptive`; block 9 and verify `dflash` were slower), no speculation 84.9 / 81.8. MTPLX: depth 1 104.5 / 108.6, depth
 2 103.8 / 109.2, and depth 3, its runtime file's default, 87.7 / 102.6.
+
+### oMLX with a third-party DFlash2 drafter
+
+[nchapman/Qwen3.5-4B-DFlash2](https://huggingface.co/nchapman/Qwen3.5-4B-DFlash2) @8d8bb62, a DFlash2 drafter trained
+with vLLM's speculators library against a 4-bit GPTQ Qwen3.5-4B, ran on oMLX later on 2026-10-18 (21:42–21:56), in one
+hold of the GPU lock with Kapitsa first and last. It has no license: it was used locally for this measurement and is
+not in this repository. oMLX reads DFlash2 drafters in incoai's layout; this one's tensors carry the same names, so a
+local view rewrote only its config. The fastest setting in short runs (block 5, verify `adaptive`, the drafter
+quantized to 4 bits at load; blocks 8 and 16 and verify `dflash` were slower) wrote 87.0 (81.0–90.8) tok/s at
+T = 0.6 and 94.6 (91.7–100.3) greedy, read prompts at 875 / 791 tok/s, answered follow-ups in 0.23 / 0.40 s and peaked
+at 7.6 GB: slower than oMLX's MTP path (102.4 / 104.5 in bracket A), which the table above keeps. In the same bracket
+Kapitsa wrote 129.7 and 125.6 tok/s at T = 0.6 (126.8 and 126.7 greedy), read prompts at 1,811 / 1,438 and 1,805 /
+1,455 tok/s and peaked at 4.1 GB. oMLX accepted about 60% of the drafter's drafts and got about 2 tokens out of a pass,
+against the 3.8 its card reports under vLLM, so oMLX may not run this drafter as it was trained. Result files:
+[nchapman-dflash2](../bench/results/2026-10-18-4b/nchapman-dflash2/).
 
 ### Full precision (bf16), a partial bracket
 
