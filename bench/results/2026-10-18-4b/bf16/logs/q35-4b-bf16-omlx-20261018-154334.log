@@ -1,0 +1,185 @@
+2026-10-18 15:43:34,986 - omlx.settings - INFO - Saved settings to <out>/state/omlx/q35-4b-bf16/base/settings.json
+INFO:     Uvicorn running on http://127.0.0.1:8084 (Press CTRL+C to quit)
+2026-10-18 15:43:36,249 - omlx.scheduler - INFO - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-10-18 15:43:36,327 - omlx.server - INFO - Headless mode: serving the API without the web UI
+2026-10-18 15:43:36,334 - omlx.settings - INFO - Saved settings to <out>/state/omlx/q35-4b-bf16/base/settings.json
+2026-10-18 15:43:36,334 - omlx.server - INFO - Generated and saved new auth secret key
+2026-10-18 15:43:36,335 - omlx.server - INFO - CORS origins: ['*']
+2026-10-18 15:43:36,335 - omlx.model_settings - INFO - Loaded settings for 1 models
+2026-10-18 15:43:36,380 - omlx.model_discovery - INFO - Discovered model: qwen3.5-4b-bf16 (type: vlm, engine: vlm, size: 9.11GB, text-only: 8.46GB)
+2026-10-18 15:43:36,381 - omlx.engine_pool - INFO - Discovered 1 models
+2026-10-18 15:43:36,385 - omlx.server - INFO - Server initialized with 1 models
+2026-10-18 15:43:36,385 - omlx.server - INFO - Default model: qwen3.5-4b-bf16
+2026-10-18 15:43:36,385 - omlx.server - INFO - Memory guard tier: aggressive (guard on)
+2026-10-18 15:43:36,385 - omlx.server - INFO - Default max tokens: 32768
+2026-10-18 15:43:36,385 - omlx.server - INFO - HF Downloader initialized
+2026-10-18 15:43:36,388 - omlx.server - INFO - ModelScope SDK not installed, MS downloader disabled
+2026-10-18 15:43:36,391 - omlx.server - INFO - oQ Quantizer initialized
+2026-10-18 15:43:36,434 - omlx.server - INFO - HF Uploader initialized
+INFO:     Started server process [12501]
+INFO:     Waiting for application startup.
+2026-10-18 15:43:36,485 - omlx.settings - INFO - Saved settings to <out>/state/omlx/q35-4b-bf16/base/settings.json
+2026-10-18 15:43:36,486 - omlx.server - INFO - Auto-detected server aliases: ['localhost', '127.0.0.1', 'Mac', 'Mac.local', '192.168.120.90']
+2026-10-18 15:43:36,495 - omlx.process_memory_enforcer - WARNING - Metal cap (37.4GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (46.5GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=46694
+2026-10-18 15:43:36,495 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=36.3GB, interval=1.0s)
+INFO:     Application startup complete.
+2026-10-18 15:43:36,830 - omlx.engine_pool - INFO - Loading model: qwen3.5-4b-bf16
+2026-10-18 15:43:36,838 - omlx.utils.model_loading - INFO - M5 sorted gather_qmm reroute installed (issue #2267)
+2026-10-18 15:43:36,864 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)
+2026-10-18 15:43:36,866 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-10-18 15:43:36,867 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)
+2026-10-18 15:43:36,878 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5.Model.sanitize for MTP
+2026-10-18 15:43:36,900 - omlx.patches.mlx_vlm_mtp.qwen35_moe_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5_moe.Model.sanitize for MTP
+2026-10-18 15:43:36,916 - omlx.patches.mlx_vlm_inkling_compat - INFO - Inkling mlx-vlm compatibility patch applied
+2026-10-18 15:43:36,919 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_runtime - INFO - mlx-vlm Qwen3.5 (dense) runtime MTP patch applied
+2026-10-18 15:43:36,919 - omlx.utils.model_loading - INFO - mlx-vlm runtime MTP patch applied for <out>/state/omlx/q35-4b-bf16/models/qwen3.5-4b-bf16 (config declares mtp heads but checkpoint ships no mtp.* weights; MTPModule attachment skipped to keep strict load_weights happy)
+2026-10-18 15:43:36,925 - omlx.patches.qwen35_gdn_prework - INFO - mlx-vlm Qwen3.5 GDN q/k normalization follows mlx-lm normalize_qk
+2026-10-18 15:43:40,842 - omlx.engine.vlm - INFO - Vision feature cache enabled (SSD: <out>/state/omlx/q35-4b-bf16/base/kv-cache/vision_features)
+2026-10-18 15:43:41,278 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-10-18 15:43:41,282 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+2026-10-18 15:43:41,282 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-10-18 15:43:41,300 - omlx.memory_monitor - INFO - Model info set: 32 layers (8 KVCache), 4 KV heads, 16 Q heads, 256 head_dim. Estimated memory per 64-token block: 2.00 MB
+2026-10-18 15:43:41,300 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-10-18 15:43:41,300 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-10-18 15:43:41,301 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <out>/state/omlx/q35-4b-bf16/base/kv-cache
+2026-10-18 15:43:41,301 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0
+2026-10-18 15:43:41,301 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<out>/state/omlx/q35-4b-bf16/base/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=0, disk_free=9.72 GB, cache_used=0 B, incompatible_files=0
+2026-10-18 15:43:41,301 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+2026-10-18 15:43:41,301 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<out>/state/omlx/q35-4b-bf16/base/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+2026-10-18 15:43:41,301 - omlx.scheduler - INFO - paged SSD cache enabled: <out>/state/omlx/q35-4b-bf16/base/kv-cache, block_size=2048, max_blocks=100000
+2026-10-18 15:43:41,302 - omlx.engine_core - INFO - Engine started
+2026-10-18 15:43:41,303 - omlx.patches.sdpa256_attention - INFO - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, always force bounded for qualifying calls (#2025))
+2026-10-18 15:43:41,440 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 dispatch budget auto-calibrated: 5.29e+09 work/s -> 52920624 (target 10ms/dispatch)
+2026-10-18 15:43:41,440 - omlx.patches.qwen35_fa256_attention - INFO - Qwen3.5/3.6 FA-256 steel attention patch applied (min_kv_len=2048, q_block=32, k_block=8, dispatch_budget=52920624)
+2026-10-18 15:43:41,441 - omlx.patches.qwen35_gdn_verify_fused - INFO - GDN verify replay commit patch applied
+2026-10-18 15:43:41,441 - omlx.patches.qwen35_gdn_prework - INFO - Qwen fused GDN prework patch applied
+2026-10-18 15:43:41,443 - omlx.patches.qwen35_verify_sdpa_split - INFO - Qwen3.5/3.6 verify-width causal vector attention patch applied
+2026-10-18 15:43:41,444 - omlx.patches.qwen35_gdn_chunked - INFO - Qwen3.5/3.6 GDN prefill kernel patch applied (Metal, impl=pipelined, min_t=64)
+2026-10-18 15:43:41,447 - omlx.patches.qwen35_q4_mlp - INFO - Qwen quantized MLP prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 15:43:41,455 - omlx.patches.qwen35_q4_mlp - INFO - Muse Glimmer quantized prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 15:43:41,456 - omlx.patches.qwen35_moe_router - INFO - Qwen MoE fused router top-k patch applied
+2026-10-18 15:43:41,459 - omlx.patches.qwen35_moe_routed_decode - INFO - Qwen MoE fused routed-expert decode patch applied
+2026-10-18 15:43:41,462 - omlx.patches.qwen35_moe_weighted_sum - INFO - Qwen3.5/3.6 MoE weighted-sum patch applied (min_tokens=1024)
+2026-10-18 15:43:41,462 - omlx.patches.qwen35_ragged_decode - INFO - qwen3_5 ragged decode threadgroup fallback patch applied
+2026-10-18 15:43:41,464 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (32 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=gdn-qk-norm-2)
+2026-10-18 15:43:41,509 - omlx.engine.vlm - INFO - VLM tool calling enabled: parser=qwen3_coder
+2026-10-18 15:43:41,512 - omlx.engine.vlm - INFO - VLMBatchedEngine loaded: <out>/state/omlx/q35-4b-bf16/models/qwen3.5-4b-bf16
+2026-10-18 15:43:41,514 - omlx.engine_pool - INFO - Loaded model: qwen3.5-4b-bf16 (actual: 9.03GB, local estimate: 9.11GB, full model: 9.11GB, total: 9.11GB)
+2026-10-18 15:43:41,517 - omlx.engine.vlm - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+2026-10-18 15:43:41,568 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-10-18 15:43:43,775 - omlx.scheduler - INFO - Reserved prefill capacity for 2924 tokens across 8 caches (+0.03GB)
+2026-10-18 15:43:44,781 - omlx.patches.qwen35_gdn_prework - INFO - Qwen B1/T1 fused GDN prework engaged
+2026-10-18 15:43:47,360 - omlx.scheduler - INFO - Using boundary cache snapshot for 300cacba-5163-4a23-893a-80ff5c6fd38c: storing 2917/2988 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-18 15:43:47,360 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=9.2ms/1, prefix_cache_lookup=0.3ms/1, store_cache_main_boundary=2.6ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+2026-10-18 15:43:47,361 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 64 tokens in 5.81s (25.6 tok/s), prompt: 2924, finish_reason=length, max_tokens=64, request_max_tokens=64, stream_model_ttft=3.30s, stream_visible_ttft=3.50s
+2026-10-18 15:43:48,937 - omlx.scheduler - INFO - Using boundary cache snapshot for 5d1f62df-699d-4e0b-8c60-2ca0db95a24d: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:43:48,938 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=18.7ms/2, prefix_cache_lookup=0.4ms/2, store_cache_main_boundary=5.0ms/2, store_cache_main_collect=0.0ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.2ms/1
+2026-10-18 15:43:48,939 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 26 tokens in 1.57s (27.1 tok/s), prompt: 437, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.61s, stream_visible_ttft=1.57s
+2026-10-18 15:44:26,476 - omlx.scheduler - INFO - Using boundary cache snapshot for b8ad2f61-04b0-4a9d-97ab-3cf0918f7055: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:44:26,477 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=28.1ms/3, prefix_cache_lookup=0.4ms/3, store_cache_main_boundary=7.9ms/3, store_cache_main_collect=0.0ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/2
+2026-10-18 15:44:26,478 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 18.85s (27.5 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:44:45,348 - omlx.scheduler - INFO - Using boundary cache snapshot for 24a2e19e-07f9-4a7a-9cf2-86d4faccffe3: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:44:45,349 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=37.4ms/4, prefix_cache_lookup=0.4ms/4, store_cache_main_boundary=10.1ms/4, store_cache_main_collect=0.0ms/4, store_cache_main_dispatch=0.4ms/4, store_cache_worker_sync=0.4ms/3
+2026-10-18 15:44:45,349 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 18.87s (27.5 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:45:04,145 - omlx.scheduler - INFO - Using boundary cache snapshot for 706a3e91-7343-4ced-b36c-b9fa3226f016: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:45:04,145 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=46.8ms/5, prefix_cache_lookup=0.4ms/5, store_cache_main_boundary=12.4ms/5, store_cache_main_collect=0.1ms/5, store_cache_main_dispatch=0.5ms/5, store_cache_worker_sync=0.5ms/4
+2026-10-18 15:45:04,146 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 18.79s (27.6 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:45:22,998 - omlx.scheduler - INFO - Using boundary cache snapshot for e3ab6c84-ac4d-4df2-a352-5c675aa77e21: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:45:22,999 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=56.2ms/6, prefix_cache_lookup=0.5ms/6, store_cache_main_boundary=14.7ms/6, store_cache_main_collect=0.1ms/6, store_cache_main_dispatch=0.6ms/6, store_cache_worker_sync=0.5ms/5
+2026-10-18 15:45:22,999 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 18.85s (27.5 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:45:42,140 - omlx.scheduler - INFO - Using boundary cache snapshot for b972c4fa-a6e4-4bc3-bf00-6a57a64446f7: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:45:42,140 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=65.7ms/7, prefix_cache_lookup=0.5ms/7, store_cache_main_boundary=17.1ms/7, store_cache_main_collect=0.1ms/7, store_cache_main_dispatch=0.6ms/7, store_cache_worker_sync=0.6ms/6
+2026-10-18 15:45:42,141 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.14s (27.1 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:46:02,146 - omlx.scheduler - INFO - Using boundary cache snapshot for 0f8f8ebe-a687-4fc5-922c-20dab0fc9e32: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:46:02,146 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=76.1ms/8, prefix_cache_lookup=0.5ms/8, store_cache_main_boundary=19.9ms/8, store_cache_main_collect=0.1ms/8, store_cache_main_dispatch=0.7ms/8, store_cache_worker_sync=0.7ms/7
+2026-10-18 15:46:02,147 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.93s (26.0 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:46:21,833 - omlx.scheduler - INFO - Using boundary cache snapshot for f46316cc-9d78-4367-bd82-a5760d68ec04: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:46:21,834 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=85.9ms/9, prefix_cache_lookup=0.6ms/9, store_cache_main_boundary=22.1ms/9, store_cache_main_collect=0.1ms/9, store_cache_main_dispatch=0.8ms/9, store_cache_worker_sync=0.8ms/8
+2026-10-18 15:46:21,835 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.69s (26.4 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.26s, stream_visible_ttft=0.26s
+2026-10-18 15:46:41,041 - omlx.scheduler - INFO - Using boundary cache snapshot for 87dbaed5-40f6-459b-8089-02ed220680e9: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:46:41,041 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=96.3ms/10, prefix_cache_lookup=0.6ms/10, store_cache_main_boundary=24.5ms/10, store_cache_main_collect=0.1ms/10, store_cache_main_dispatch=0.9ms/10, store_cache_worker_sync=0.8ms/9
+2026-10-18 15:46:41,042 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.20s (27.0 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:47:00,877 - omlx.scheduler - INFO - Using boundary cache snapshot for fa1da451-e840-4e74-a92c-d3e063f8e874: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:47:00,877 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=105.9ms/11, prefix_cache_lookup=0.7ms/11, store_cache_main_boundary=27.2ms/11, store_cache_main_collect=0.1ms/11, store_cache_main_dispatch=1.0ms/11, store_cache_worker_sync=0.9ms/10
+2026-10-18 15:47:00,878 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.83s (26.1 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:47:20,232 - omlx.scheduler - INFO - Using boundary cache snapshot for a2dcb7d2-5dd4-4dcb-b5ef-5d7be488d99e: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:47:20,232 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=115.6ms/12, prefix_cache_lookup=0.7ms/12, store_cache_main_boundary=29.5ms/12, store_cache_main_collect=0.1ms/12, store_cache_main_dispatch=1.1ms/12, store_cache_worker_sync=1.0ms/11
+2026-10-18 15:47:20,233 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 512 tokens in 19.35s (26.8 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:47:22,462 - omlx.scheduler - INFO - Reserved prefill capacity for 4134 tokens across 8 caches (+0.07GB)
+2026-10-18 15:47:26,429 - omlx.scheduler - INFO - Using boundary cache snapshot for 3b752182-35bd-4e97-bd23-a413d490d46a: storing 4127/4176 tokens (tail terminal, 2 intermediate snapshots)
+2026-10-18 15:47:26,430 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=124.9ms/13, prefix_cache_lookup=1.1ms/13, store_cache_main_boundary=32.2ms/13, store_cache_main_collect=0.1ms/13, store_cache_main_dispatch=1.2ms/13, store_cache_worker_sync=1.0ms/12
+2026-10-18 15:47:26,431 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 42 tokens in 6.12s (26.8 tok/s), prompt: 4134, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=4.55s, stream_visible_ttft=4.55s
+2026-10-18 15:47:27,464 - omlx.scheduler - INFO - Prefix cache restore for 5566798e-e700-4030-9034-ebff12879a7e: source=paged cached=4127 suffix=68 blocks=3 lookup=0.235ms reconstruct=12.221ms promote=True
+2026-10-18 15:47:27,479 - omlx.scheduler - INFO - Reserved prefill capacity for 4195 tokens across 8 caches (+0.01GB)
+2026-10-18 15:47:28,297 - omlx.scheduler - INFO - Using boundary cache snapshot for 5566798e-e700-4030-9034-ebff12879a7e: storing 4188/4211 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:47:28,297 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=134.0ms/14, prefix_cache_lookup=1.3ms/14, prefix_cache_reconstruct=12.2ms/1, store_cache_main_boundary=34.4ms/14, store_cache_main_collect=0.2ms/14, store_cache_main_dispatch=1.3ms/14, store_cache_worker_sync=1.1ms/13
+2026-10-18 15:47:28,298 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 16 tokens in 0.86s (26.5 tok/s), prompt: 4195, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 15:47:29,356 - omlx.scheduler - INFO - Prefix cache restore for 046cb307-3ada-49fa-aaa9-d79a53326871: source=paged cached=4188 suffix=47 blocks=3 lookup=0.289ms reconstruct=13.824ms promote=True
+2026-10-18 15:47:29,372 - omlx.scheduler - INFO - Reserved prefill capacity for 4235 tokens across 8 caches (+0.01GB)
+2026-10-18 15:47:30,079 - omlx.scheduler - INFO - Using boundary cache snapshot for 046cb307-3ada-49fa-aaa9-d79a53326871: storing 4228/4248 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:47:30,080 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=143.3ms/15, prefix_cache_lookup=1.6ms/15, prefix_cache_reconstruct=26.0ms/2, store_cache_main_boundary=36.7ms/15, store_cache_main_collect=0.2ms/15, store_cache_main_dispatch=1.4ms/15, store_cache_worker_sync=1.2ms/14
+2026-10-18 15:47:30,080 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 13 tokens in 0.75s (26.4 tok/s), prompt: 4235, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.26s, stream_visible_ttft=0.26s
+2026-10-18 15:47:31,141 - omlx.scheduler - INFO - Prefix cache restore for 1e004b73-77f9-4303-b781-85e86dd13d5f: source=paged cached=4228 suffix=37 blocks=3 lookup=0.307ms reconstruct=14.840ms promote=True
+2026-10-18 15:47:31,157 - omlx.scheduler - INFO - Reserved prefill capacity for 4265 tokens across 8 caches (+0.00GB)
+2026-10-18 15:47:41,189 - omlx.scheduler - INFO - Using boundary cache snapshot for 1e004b73-77f9-4303-b781-85e86dd13d5f: storing 4258/4521 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:47:41,189 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=153.1ms/16, prefix_cache_lookup=1.9ms/16, prefix_cache_reconstruct=40.9ms/3, store_cache_main_boundary=39.0ms/16, store_cache_main_collect=0.2ms/16, store_cache_main_dispatch=1.4ms/16, store_cache_worker_sync=1.3ms/15
+2026-10-18 15:47:41,190 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 256 tokens in 10.08s (26.0 tok/s), prompt: 4265, finish_reason=length, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.24s, stream_visible_ttft=0.24s
+2026-10-18 15:47:43,504 - omlx.scheduler - INFO - Reserved prefill capacity for 16285 tokens across 8 caches (+0.44GB)
+2026-10-18 15:48:02,970 - omlx.scheduler - INFO - Using boundary cache snapshot for e567270e-51dc-46bf-a538-067f58d875af: storing 16278/16325 tokens (tail terminal, 7 intermediate snapshots)
+2026-10-18 15:48:02,971 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=163.3ms/17, prefix_cache_lookup=2.7ms/17, prefix_cache_reconstruct=40.9ms/3, store_cache_main_boundary=42.2ms/17, store_cache_main_collect=0.2ms/17, store_cache_main_dispatch=1.6ms/17, store_cache_worker_sync=1.4ms/16
+2026-10-18 15:48:02,974 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 40 tokens in 21.68s (24.1 tok/s), prompt: 16285, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=20.02s, stream_visible_ttft=20.02s
+2026-10-18 15:48:04,078 - omlx.scheduler - INFO - Prefix cache restore for fa77f64d-5a01-4777-b3fb-04238d18cfe2: source=paged cached=16278 suffix=66 blocks=8 lookup=0.663ms reconstruct=33.431ms promote=True
+2026-10-18 15:48:04,118 - omlx.scheduler - INFO - Reserved prefill capacity for 16344 tokens across 8 caches (+0.00GB)
+2026-10-18 15:48:05,111 - omlx.scheduler - INFO - Using boundary cache snapshot for fa77f64d-5a01-4777-b3fb-04238d18cfe2: storing 16337/16362 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:05,112 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=173.4ms/18, prefix_cache_lookup=3.4ms/18, prefix_cache_reconstruct=74.3ms/4, store_cache_main_boundary=44.4ms/18, store_cache_main_collect=0.2ms/18, store_cache_main_dispatch=1.6ms/18, store_cache_worker_sync=1.6ms/17
+2026-10-18 15:48:05,113 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 18 tokens in 1.10s (24.1 tok/s), prompt: 16344, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.35s, stream_visible_ttft=0.35s
+2026-10-18 15:48:06,225 - omlx.scheduler - INFO - Prefix cache restore for 394b663a-2b72-4419-ba48-d8a3b50c7c05: source=paged cached=16337 suffix=49 blocks=8 lookup=0.809ms reconstruct=35.043ms promote=True
+2026-10-18 15:48:06,267 - omlx.scheduler - INFO - Reserved prefill capacity for 16386 tokens across 8 caches (+0.01GB)
+2026-10-18 15:48:07,115 - omlx.scheduler - INFO - Using boundary cache snapshot for 394b663a-2b72-4419-ba48-d8a3b50c7c05: storing 16379/16399 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:07,116 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=183.6ms/19, prefix_cache_lookup=4.2ms/19, prefix_cache_reconstruct=109.3ms/5, store_cache_main_boundary=46.9ms/19, store_cache_main_collect=0.2ms/19, store_cache_main_dispatch=1.7ms/19, store_cache_worker_sync=1.6ms/18
+2026-10-18 15:48:07,117 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 13 tokens in 0.96s (23.6 tok/s), prompt: 16386, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.41s, stream_visible_ttft=0.41s
+2026-10-18 15:48:08,215 - omlx.scheduler - INFO - Prefix cache restore for e327c571-bb3c-437e-a149-9e75c9d02476: source=paged cached=16379 suffix=37 blocks=8 lookup=0.787ms reconstruct=34.389ms promote=True
+2026-10-18 15:48:08,251 - omlx.scheduler - INFO - Reserved prefill capacity for 16416 tokens across 8 caches (+0.01GB)
+2026-10-18 15:48:18,402 - omlx.scheduler - INFO - Using boundary cache snapshot for e327c571-bb3c-437e-a149-9e75c9d02476: storing 16409/16656 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-18 15:48:18,403 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=193.6ms/20, prefix_cache_lookup=5.0ms/20, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=49.4ms/20, store_cache_main_collect=0.2ms/20, store_cache_main_dispatch=1.8ms/20, store_cache_worker_sync=1.7ms/19
+2026-10-18 15:48:18,404 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 240 tokens in 10.25s (24.3 tok/s), prompt: 16416, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.38s, stream_visible_ttft=0.38s
+2026-10-18 15:48:20,109 - omlx.scheduler - INFO - Using boundary cache snapshot for 0b2c3196-bf13-4376-aafc-3ae4ed93521e: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:20,109 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=204.1ms/21, prefix_cache_lookup=5.0ms/21, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=52.4ms/21, store_cache_main_collect=0.2ms/21, store_cache_main_dispatch=1.9ms/21, store_cache_worker_sync=1.8ms/20
+2026-10-18 15:48:20,110 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 26 tokens in 1.62s (25.7 tok/s), prompt: 437, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.61s, stream_visible_ttft=1.62s
+2026-10-18 15:48:21,729 - omlx.scheduler - INFO - Using boundary cache snapshot for 6d37dd05-a6bb-4b26-a974-5cfb75258a47: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:21,730 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=213.8ms/22, prefix_cache_lookup=5.1ms/22, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=55.1ms/22, store_cache_main_collect=0.3ms/22, store_cache_main_dispatch=2.0ms/22, store_cache_worker_sync=1.9ms/21
+2026-10-18 15:48:21,730 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 26 tokens in 1.62s (16.1 tok/s), prompt: 437, finish_reason=stop, max_tokens=512, request_max_tokens=512
+2026-10-18 15:48:22,297 - omlx.scheduler - INFO - Reserved prefill capacity for 517 tokens across 8 caches (+0.01GB)
+2026-10-18 15:48:24,391 - omlx.scheduler - INFO - Using boundary cache snapshot for bcb98a9b-0ba1-4570-b853-ebe3f9051965: storing 510/568 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:24,391 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=223.6ms/23, prefix_cache_lookup=5.2ms/23, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=57.6ms/23, store_cache_main_collect=0.3ms/23, store_cache_main_dispatch=2.1ms/23, store_cache_worker_sync=2.0ms/22
+2026-10-18 15:48:24,392 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 51 tokens in 2.66s (25.6 tok/s), prompt: 517, finish_reason=stop, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.67s, stream_visible_ttft=0.67s
+2026-10-18 15:48:27,472 - omlx.scheduler - INFO - Using boundary cache snapshot for 683706ce-eafa-422b-9b63-c82e9f3ff039: storing 430/499 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:27,473 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=233.6ms/24, prefix_cache_lookup=5.3ms/24, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=60.0ms/24, store_cache_main_collect=0.3ms/24, store_cache_main_dispatch=2.2ms/24, store_cache_worker_sync=2.1ms/23
+2026-10-18 15:48:27,474 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 64 tokens in 3.08s (25.9 tok/s), prompt: 435, finish_reason=tool_calls, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.61s, stream_visible_ttft=0.61s
+2026-10-18 15:48:30,549 - omlx.scheduler - INFO - Using boundary cache snapshot for 9d732159-1996-4f00-997e-dbfe352a05f4: storing 430/498 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 15:48:30,549 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=244.6ms/25, prefix_cache_lookup=5.3ms/25, prefix_cache_reconstruct=143.7ms/6, store_cache_main_boundary=62.3ms/25, store_cache_main_collect=0.3ms/25, store_cache_main_dispatch=2.3ms/25, store_cache_worker_sync=2.1ms/24
+2026-10-18 15:48:30,550 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 63 tokens in 3.07s (20.5 tok/s), prompt: 435, finish_reason=stop, max_tokens=4096, request_max_tokens=4096
+2026-10-18 15:48:30,560 - omlx.scheduler - INFO - Prefix cache restore for dab87939-3597-4406-b603-e53281963863: source=paged cached=510 suffix=5 blocks=1 lookup=0.046ms reconstruct=2.733ms promote=True
+2026-10-18 15:48:30,565 - omlx.scheduler - INFO - Reserved prefill capacity for 515 tokens across 8 caches (+0.01GB)
+2026-10-18 15:48:36,621 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=254.5ms/26, prefix_cache_lookup=5.3ms/26, prefix_cache_reconstruct=146.5ms/7, store_cache_main_boundary=62.3ms/26, store_cache_main_collect=0.3ms/25, store_cache_main_dispatch=2.3ms/25, store_cache_worker_sync=2.2ms/25
+2026-10-18 15:48:36,622 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-bf16, 153 tokens in 6.07s (25.7 tok/s), prompt: 515, finish_reason=stop, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.12s, stream_visible_ttft=0.12s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-10-18 15:48:36,884 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped
+2026-10-18 15:48:36,884 - omlx.server - INFO - Process memory enforcer stopped
+2026-10-18 15:48:36,884 - omlx.admin.hf_downloader - INFO - HF Downloader shut down
+2026-10-18 15:48:36,884 - omlx.server - INFO - HF Downloader stopped
+2026-10-18 15:48:36,884 - omlx.engine_pool - INFO - Unloading model: qwen3.5-4b-bf16 (immediate abort)
+2026-10-18 15:48:36,884 - omlx.engine_core - INFO - Engine stopped
+2026-10-18 15:48:36,892 - omlx.scheduler - INFO - Scheduler shutdown initiated...
+2026-10-18 15:48:36,893 - omlx.cache.paged_ssd_cache - INFO - Shutting down PagedSSDCacheManager...
+2026-10-18 15:48:36,894 - omlx.cache.paged_ssd_cache - INFO - Flushed 28 hot cache blocks to SSD
+2026-10-18 15:48:37,239 - omlx.scheduler - INFO - Scheduler shutdown completed
+2026-10-18 15:48:37,240 - omlx.cache.paged_cache - INFO - PagedCacheManager cleared (reset to 256 initial blocks)
+2026-10-18 15:48:37,281 - omlx.scheduler - INFO - Deep reset completed - all caches cleared
+2026-10-18 15:48:37,342 - omlx.engine.vlm - INFO - VLMBatchedEngine stopped
+2026-10-18 15:48:37,921 - omlx.engine_pool - INFO - Unloaded model: qwen3.5-4b-bf16, freed=8.46GB (expected>=7.11GB), active_memory: 1.03KB (settled)
+2026-10-18 15:48:37,966 - omlx.engine_pool - INFO - Engine pool shutdown complete
+2026-10-18 15:48:37,967 - omlx.server - INFO - Engine pool shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [12501]

@@ -519,6 +519,51 @@ DFlash with z-lab's Qwen3.5-4B drafter (DFlash v1, quantized to 4 bits at load) 
 `adaptive`; block 9 and verify `dflash` were slower), no speculation 84.9 / 81.8. MTPLX: depth 1 104.5 / 108.6, depth
 2 103.8 / 109.2, and depth 3, its runtime file's default, 87.7 / 102.6.
 
+### Full precision (bf16), a partial bracket
+
+The same protocol on the model's bf16 weights,
+[mlx-community/Qwen3.5-4B-bf16](https://huggingface.co/mlx-community/Qwen3.5-4B-bf16) @491fdc7 (8.5 GB: 7.8 GB of
+language model and the same 0.6 GB vision tower), the files `kapitsa pull 4b:bf16` downloads, with the same Qwen MTP
+head as the 4-bit model. Four engine setups ran on 2026-10-18 between 15:30 and 15:55, one at a time under the GPU
+lock, each started after other apps had used less than 3% of the GPU for 60 s; the MLX engines read Kapitsa's files
+through APFS clones. **The bracket is incomplete:** the disk then ran short, so there is no closing Kapitsa run, and
+mlx-lm, LM Studio, llama.cpp and Ollama were not run at bf16 (LM Studio needs 10 GiB of free disk for its follow-up
+checkpoints, and llama.cpp and Ollama need Ollama's 9.2 GB BF16 GGUF). Result files:
+[bench/results/2026-10-18-4b/bf16](../bench/results/2026-10-18-4b/bf16/).
+
+**Kapitsa was not the fastest writer at bf16.** oMLX with z-lab's DFlash drafter wrote 59.4 tok/s at T = 0.6 and
+MTPLX at depth 3 wrote 54.2, against Kapitsa's 44.3: 1.34× and 1.23× faster (greedy: 61.5 and 58.8 against 45.1).
+Our best explanation: at bf16 a forward pass reads 7.8 GB of weights, so the rate follows how many tokens a pass
+yields. oMLX's DFlash drafts up to four tokens a pass (2.5 on average) and got 2.8 tokens out of each pass, MTPLX
+drafts three, and Kapitsa's MTP head one, so a Kapitsa pass yields at most two (depth 1 is its default for this model,
+and it has no drafter for the 4B). At 4-bit, where a pass reads about a quarter of the bytes, Kapitsa's depth 1 was
+the fastest setup measured. Kapitsa still read long prompts 1.7–1.9× faster than the next fastest engine here,
+answered follow-ups fastest and used the least memory.
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| oMLX + DFlash (z-lab drafter, block 5) | **59.4** (54.3–63.0) | **61.5** (59.2–69.1) | 859 | 823 | 0.30 | 0.42 | 12.6 | pass |
+| MTPLX (sustained profile, depth 3) | 54.2 (49.7–55.7) | 58.8 (57.4–61.6) | 820 | 751 | 0.11 | 0.15 | 20.3<sup>2</sup> | pass |
+| **Kapitsa** (MTP head) | 44.3 (42.6–47.3) | 45.1 (44.0–45.6) | **1,737** | **1,401** | **0.06** | **0.07** | **9.7** | pass |
+| oMLX (no speculation) | 27.6 (27.0–27.8) | 26.3 (25.9–27.1)<sup>1</sup> | 907 | 812 | 0.27 | 0.41 | 11.8 | pass |
+
+No run of this bracket was flagged for contention. Kapitsa's run (15:30) came first; there is no closing run to check
+it against. One greedy run of Kapitsa, of oMLX + DFlash and of MTPLX looped (distinct-4-gram under 0.5; flagged, not
+invalid).
+
+1. Three of oMLX's five greedy runs without speculation looped, and macOS swapped 12,062 pages (about 190 MB) during
+   that phase; its sampled median, 27.6 tok/s, is the cleaner figure. Reading 7.8 GB a pass at the M4 Pro's 273 GB/s
+   bounds decoding without speculation at about 33 tok/s.
+2. MTPLX's peak includes its session cache, which keeps earlier conversations for follow-up turns.
+
+**Settings.** As at 4-bit, except where short runs before the bracket measured faster (three sampled and three greedy
+answers each; [tuning](../bench/results/2026-10-18-4b/bf16/tuning/)). oMLX: DFlash with z-lab's Qwen3.5-4B drafter
+([z-lab/Qwen3.5-4B-DFlash](https://huggingface.co/z-lab/Qwen3.5-4B-DFlash) @9a1996c, DFlash v1, quantized to 4 bits
+at load), block 5, verify `adaptive`, 59.1 / 63.2 tok/s, against block 9 57.0 / 56.8 and Lightning MTP with the bf16
+head 49.5 / 48.2 (at 4-bit Lightning MTP had been the faster). MTPLX: depth 3, 54.5 / 59.0, against depth 2 52.4 /
+54.9 and depth 1 43.7 / 41.0, with Qwen's bf16 head (Kapitsa's file) and the runtime file of MTPLX's 4B release.
+Kapitsa: its defaults, the bf16 weights with the MTP head (`kapitsa pull 4b:bf16`).
+
 ## Your Mac: `kapitsa bench`
 
 `kapitsa bench` runs this protocol for Kapitsa alone, from the `kapitsa` binary: no Python, no configs, no weights to
