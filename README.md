@@ -124,6 +124,26 @@ A follow-up is the time to the first token of an answer in a conversation that a
 
 </details>
 
+**A real opencode session (19 turns, up to 23K tokens) · Qwen3.6 35B-A3B · 4-bit · MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB**
+
+| Engine | Total time | Writing speed |
+| --- | ---: | ---: |
+| llama.cpp + MTP | — | — |
+| Ollama (MLX runner, MTP) | 73 s | 94 tok/s |
+| LM Studio (MLX engine) | 85 s | 68 tok/s |
+| MTPLX | 139 s | 72 tok/s |
+| oMLX + DFlash2 | 66 s | 107 tok/s |
+| mlx-serve (MTP) | 62 s | 110 tok/s |
+| mlx-serve (DFlash2) | 72 s | 85 tok/s |
+| **Kapitsa** | **49 s** | **141 tok/s** |
+
+opencode fixing a small Python project, recorded on Kapitsa and replayed request by request on every engine: the same
+19 requests, from a 5.5K-token system prompt to a 23K-token conversation, greedy, each answer capped at its recorded
+length. Total time is the time spent answering them; writing speed is tokens per second while the answers stream.
+Kapitsa recorded the session, so the others also re-read about 2 s of recorded answers that differ from their own.
+The same session on Qwen3.8 27B · 4-bit, same Mac: Kapitsa 150 s, next oMLX + DFlash2 278 s. llama.cpp + MTP was not
+run this time. [Details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)
+
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
 | Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |

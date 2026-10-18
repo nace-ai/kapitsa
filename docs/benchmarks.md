@@ -2,11 +2,13 @@
 
 How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt and the small Qwen3.5-4B
 have their own sections: [Bolt](#nemotron-35-bolt-74b-a9b-2026-10-18), [4B](#qwen35-4b-2026-10-18), and so have
-Nemotron 3.5 Super-VL and Lightning on the M5 Max: [Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
-[Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the
-engines people run these models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a
-day later: [its own section](#mlx-serve-2026-10-18)). Each engine ran at its latest release with its own best
-settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
+Nemotron 3.5 Super-VL and Lightning on the M5 Max:
+[Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
+[Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
+models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
+section](#mlx-serve-2026-10-18)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
+best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
 is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
@@ -29,6 +31,10 @@ used the least memory on both models.
 Ratios are computed from the unrounded results. Measured on one MacBook Pro (M4 Pro, 48 GB); on each model the
 next fastest engine on every metric ran in the same session as Kapitsa (35B: the morning of 2026-10-17; 27B: one
 evening session on the final build). The [conditions](#conditions) section lists what differed between sessions.
+
+In [a real opencode session](#a-real-coding-agent-session-2026-10-18) replayed on every engine (19 requests, up to
+23K tokens; 2026-10-18), Kapitsa answered every request in 48.6 s on the 35B, 1.27× faster than the next fastest
+(mlx-serve + MTP, 61.6 s), and in 150.2 s on the 27B, 1.85× faster than the next (oMLX + DFlash2, 278.1 s).
 
 For an additional Kapitsa-only run on a different machine, see the [M5 Max / 128 GB report](benchmarks-m5-max.md).
 Those runs include background GPU contention and are reported separately from the comparison below.
@@ -643,6 +649,137 @@ at load), block 5, verify `adaptive`, 59.1 / 63.2 tok/s, against block 9 57.0 / 
 head 49.5 / 48.2 (at 4-bit Lightning MTP had been the faster). MTPLX: depth 3, 54.5 / 59.0, against depth 2 52.4 /
 54.9 and depth 1 43.7 / 41.0, with Qwen's bf16 head (Kapitsa's file) and the runtime file of MTPLX's 4B release.
 Kapitsa: its defaults, the bf16 weights with the MTP head (`kapitsa pull 4b:bf16`).
+
+## A real coding-agent session (2026-10-18)
+
+The tables above time one thing at a time: a 512-token answer, one long prompt, a short follow-up. A coding agent
+needs all three at once, request after request, so this section replays a real agent session on every engine.
+
+**The session.** [opencode](https://opencode.ai) 2.0.28 (open source) fixing a small Python project
+([bench/harness/agent-task](../bench/harness/agent-task/README.md): a CSV ledger library whose 35 tests fail in 15
+places from five bugs in four files), recorded on Kapitsa serving Qwen3.6-35B-A3B at 4-bit, greedy, with thinking off.
+opencode needed 19 requests to fix all five bugs: it ran the tests, read the four modules, the four test files and the
+sample ledger, made nine edits, ran the tests twice more and summed up. Its system prompt and tool definitions come to
+5,485 tokens; every request sends the whole conversation again, which grows to 22,779 tokens with the files and the
+test output; the answers total 3,577 tokens, 18 of the 19 ending in tool calls.
+
+**The replay.** Every engine gets the same 19 requests in the recorded order, with the recorded messages: the same
+system prompt and tools, the same files and test output, and the recorded answers in the history, never the engine's
+own. Each request is streamed, greedy (temperature 0, top_k 1), with thinking off, and capped at the recorded
+answer's length. The tool definitions are rendered into the system prompt the way Qwen's chat template renders them,
+so every engine reads the same tokens (each request's length is checked against the template's count) and streams
+every token it writes. The agent's own pauses between requests (0.7 s in all) are replayed but not counted. Details:
+[the harness README](../bench/harness/README.md#agent-session).
+
+One bracket per model on 2026-10-18, each under its own hold of the GPU lock with Kapitsa (main at 113bfcd) first and
+last and the six other setups in between, each with the configs and settings of the tables above (32K context, one
+conversation): the 35B between 16:19 and 16:37, where no run was flagged for GPU contention, the 27B below. No run
+failed a check. Result files: [bench/results/2026-10-18-agent-session](../bench/results/2026-10-18-agent-session/).
+
+**Qwen3.6-35B-A3B**
+
+| Engine (setting) | Total time (s) | Prefill (s) | Decode (s) | Writing (tok/s) | First TTFT (s) | Follow-up TTFT, median / p90 (s) | Tokens written | Answers as recorded | Peak memory (GB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Kapitsa** (DFlash2 drafter)<sup>1</sup> | **48.6** | **22.5** | **26.2** | **141.2** | **5.21** | **0.08** / **4.87** | 3,577 | 19 of 19 | **21.1** |
+| mlx-serve + MTP (depth up to 2) | 61.6 | 32.1 | 29.5 | 109.8 | 5.87 | 0.69 / 5.64 | 3,254 | 7 of 19 | 22.3 |
+| oMLX + DFlash2 (block 5, adaptive verify) | 66.4 | 34.3 | 32.1 | 107.2 | 5.41 | 0.82 / 5.67 | 3,431 | 10 of 19 | 23.7 |
+| mlx-serve + DFlash2 (block 4) | 72.2 | 32.3 | 39.9 | 84.6 | 5.91 | 0.70 / 5.71 | 3,380 | 7 of 19 | 22.4 |
+| Ollama, MLX runner + MTP (adaptive depth) | 72.8 | 33.1<sup>2</sup> | 39.7 | 93.8 | 5.97 | 0.71 / 6.06<sup>2</sup> | 3,475 | 6 of 19 | 32.2 |
+| LM Studio (MLX engine) | 85.2 | 34.4 | 50.8 | 68.2 | 6.21 | 0.85 / 5.86 | 3,481 | 9 of 19 | 25.0 |
+| MTPLX (sustained profile, depth 1) | 138.8 | 38.5<sup>2</sup> | 100.4<sup>3</sup> | 71.5 | 6.11 | 0.70 / 6.12<sup>2</sup> | 3,393 | —<sup>2</sup> | 29.3 |
+| llama.cpp + MTP | —<sup>4</sup> | — | — | — | — | — | — | — | — |
+
+Total time is the sum of the 19 requests' times, from sending a request to the end of its stream. Prefill is the sum
+of the times to the first token (reading what the engine did not reuse from its cache, plus that token), decode the
+rest. Writing is all answers' tokens after their first streamed event over the time from the first to the last event
+(to the end of the stream for an answer whose end was never streamed). The first request is a cold 5,485-token
+prompt; the follow-up TTFT covers the other 18. Tokens written are out of the
+3,577 recorded; an answer counts as recorded when its text and tool calls are the recorded ones. Peak memory is the
+server's whole process tree.
+
+1. Kapitsa ran before and after the other engines; the table shows the run after. The run before: 48.7 s, 22.5 / 26.2
+   s, 140.9 tok/s, 5.25 s, 0.08 / 4.86 s, 21.1 GB.
+2. Ollama returns a tool call only once it is complete, even when the request has no tools (its Qwen parser always
+   runs), and MTPLX, asked without tools, replaces a tool call with a notice that it sends at the end. On those turns
+   (Ollama 3, MTPLX 2) the first event brings the whole answer, so their time to first token is left out of the
+   follow-up figures and their prefill time is estimated from the session's writing rate. MTPLX's answers cannot be
+   compared with the recorded ones, since the notice replaces their tool calls.
+3. MTPLX keeps each stream open after the last token while it saves the conversation to its session cache (inline
+   post-commit, the setting that lets its follow-ups hit that cache): 57.8 s of its 100.4 s.
+4. Not run: llama.cpp reads Ollama's Q4_K_M GGUF files (20.2 GB and 15.7 GB), which are no longer on this Mac, and
+   its free disk (6 to 13 GB that day) had no room for them.
+
+**What the recording engine gains.** Kapitsa recorded the session, so its greedy answers are the recorded ones and it
+finds each in its cache on the next request. The other engines run the same weights with other arithmetic, so their
+greedy answers differ wherever two tokens are nearly tied (on 9 to 13 of the 19 turns); the next request then carries
+the recorded answer, and they restore their cache to the end of the previous prompt and read it: 1.7K to 2.4K tokens
+over the session, about 2 s at their prefill rates (MTPLX 3.3K, 3.6 s). On the requests that followed an answer
+matching the recording, where nothing had to be restored, their median time to first token was 0.19 to 0.67 s
+(mlx-serve + DFlash2 0.19, mlx-serve + MTP 0.40, LM Studio 0.41, Ollama 0.53, oMLX 0.67) against Kapitsa's 0.08 to
+0.18 s on the same requests. Kapitsa's lead in total time, 13 s over mlx-serve + MTP, does not come from this.
+
+**Qwen3.8-27B**
+
+The 27B replays the same session, the 35B's answers included. Recorded the same way on the 27B, opencode never got to
+an edit: from its 14th request on it ran the same shell command again and again (greedy decoding can lock a model into
+such a loop) until the recording proxy stopped it at 80 requests. With the 35B's answers in the history, every
+engine's own 27B answers differ from the recorded ones at almost every turn, Kapitsa's included, so on each request
+every engine restored its cache to the end of the previous prompt (within 31 tokens, where an engine reports it) and
+read the recorded answer: the same work for every engine, and no engine has the recording's edge. The prompt lengths
+are the same with the 27B's tokenizer and template. One session on 2026-10-18 between 20:51 and 21:42 under its own
+hold of the GPU lock, Kapitsa first and last.
+
+| Engine (setting) | Total time (s) | Prefill (s) | Decode (s) | Writing (tok/s) | First TTFT (s) | Follow-up TTFT, median / p90 (s) | Tokens written | Peak memory (GB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Kapitsa** (DFlash2 drafter)<sup>1</sup> | **150.2** | **95.2** | **55.0** | **59.7** | **15.05** | **2.74** / **16.10** | 3,180 | **19.9** |
+| oMLX + DFlash2 (block 5, verify dflash) | 278.1 | 202.5 | 75.6 | 42.6 | 42.11 | 3.56 / 37.31 | 3,160 | 28.0 |
+| mlx-serve + MTP (depth up to 4)<sup>2</sup> | 298.7 | 202.0 | 96.6 | 32.9 | 42.98 | 3.46 / 38.24 | 3,191 | 21.6 |
+| Ollama, MLX runner + MTP (adaptive depth)<sup>2, 3</sup> | 302.9 | 198.5 | 104.4 | 32.3 | —<sup>3</sup> | 3.26 / 38.24 | 3,176 | 30.4 |
+| mlx-serve + DFlash2 (draft tree, block 8) | 318.7 | 221.1 | 97.6 | 32.3 | 43.24 | 3.50 / 38.35 | 3,168 | 22.8 |
+| MTPLX (turbo profile, depth 3)<sup>2, 3</sup> | 340.7 | 201.3 | 139.4<sup>4</sup> | 28.4 | —<sup>3</sup> | 3.17 / 38.06 | 3,221 | 30.8 |
+| LM Studio (MLX engine)<sup>5</sup> | 450.0 | 222.5 | 227.5 | 13.9 | 43.00 | 4.91 / 39.91 | 3,191 | 26.9 |
+| llama.cpp + MTP | —<sup>6</sup> | — | — | — | — | — | — | — |
+
+The columns are those of the 35B table; the tokens written are out of the 3,577 of the 35B's answers, which cap each
+27B answer. Answers that match the recorded ones: 0 to 3 of 19 on every engine.
+
+1. Kapitsa ran before and after the other engines; the table shows the run after. The run before: 149.4 s, 93.9 /
+   55.5 s, 59.1 tok/s, 15.21 s, 2.73 / 15.82 s, 19.9 GB (flagged: Slack used the GPU, 4.9% on average). An earlier,
+   unflagged run that day (16:43, in a bracket the Mac's sleep cut short) gave 151.5 s
+   ([confirmations](../bench/results/2026-10-18-agent-session/confirmations/)).
+2. Flagged for GPU contention: Chrome and Slack used more than 5% of the GPU in short bursts (on average 0.9% during
+   mlx-serve + MTP, 2.4% during Ollama, 1.3% during MTPLX). Not re-run: an unflagged run of Ollama's that day gave
+   304.8 s (confirmations), and Kapitsa's flagged and unflagged runs differ by 1 s.
+3. Ollama and MTPLX hold an answer that begins with a tool call (as on the 35B): their first answer did, so it has no
+   time to first token, and the follow-up figures leave out 2 such turns each. Ollama also drops a tool call that the
+   recorded length cuts short without streaming any of it (5 turns): their writing time runs to the end of the
+   stream.
+4. Of which 26.9 s after the last token: MTPLX's inline session commit.
+5. LM Studio keeps the checkpoints it restores from on disk, only while 10 GiB of disk are free; this run had 11.6
+   GiB. In a first attempt that day it had less, kept no checkpoints, and re-read the whole conversation on every
+   request (66 to 104 s per request).
+6. Not run, as on the 35B.
+
+Run index (local time, UTC+5; "Started" is when the session began, after start-up, warm-up and the quiet-GPU wait):
+
+| Result file | Started | Foreign GPU, mean / max (%) | Ambient GPU, mean (%) | Free disk at start (GiB) | Flagged for contention |
+| --- | --- | ---: | ---: | ---: | --- |
+| `q36-35b-kapitsa-20261018-161859.json` | 16:19 | 0.3 / 3.5 | 0.0 | 11.4 | — |
+| `q36-35b-ollama-mlx-q4-20261018-162027.json` | 16:21 | 0.0 / 0.0 | 5.7 | 11.4 | — |
+| `q36-35b-lmstudio-20261018-162321.json` | 16:24 | 0.0 / 0.0 | 3.3 | 11.4 | — |
+| `q36-35b-mtplx-20261018-162554.json` | 16:26 | 0.1 / 1.4 | 1.3 | 10.3 | — |
+| `q36-35b-omlx-best-20261018-162930.json` | 16:30 | 0.0 / 0.0 | 3.7 | 10.0 | — |
+| `q36-35b-mlxserve-mtp-20261018-163132.json` | 16:32 | 0.1 / 1.2 | 0.0 | 9.9 | — |
+| `q36-35b-mlxserve-dflash2-20261018-163326.json` | 16:34 | 0.1 / 1.1 | 0.0 | 9.8 | — |
+| `q36-35b-kapitsa-20261018-163530.json` | 16:36 | 0.3 / 3.0 | 0.0 | 9.7 | — |
+| `q38-27b-kapitsa-20261018-205048.json` | 20:51 | 4.9 / 29.7 | 1.6 | 10.1 | Slack |
+| `q38-27b-ollama-mlx-q4-20261018-205419.json` | 20:56 | 2.4 / 65.2 | 0.3 | 13.1 | Slack, Chrome |
+| `q38-27b-lmstudio-20261018-210117.json` | 21:02 | 0.1 / 7.0 | 9.9 | 11.6 | — |
+| `q38-27b-mtplx-20261018-211005.json` | 21:12 | 1.3 / 30.5 | 7.4 | 11.5 | Chrome |
+| `q38-27b-omlx-best-20261018-211808.json` | 21:20 | 0.1 / 3.0 | 13.2 | 10.2 | — |
+| `q38-27b-mlxserve-mtp-20261018-212503.json` | 21:26 | 0.9 / 37.1 | 8.3 | 10.9 | Chrome, Slack |
+| `q38-27b-mlxserve-dflash2-20261018-213146.json` | 21:33 | 0.4 / 10.7 | 10.5 | 11.9 | — |
+| `q38-27b-kapitsa-20261018-213837.json` | 21:39 | 0.3 / 2.0 | 16.1 | 11.8 | — |
 
 ## Your Mac: `kapitsa bench`
 
