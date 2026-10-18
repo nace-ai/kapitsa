@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""End-to-end checks against a running `kapitsa serve` (stdlib only).
+"""End-to-end checks against a running `kapitsa serve` (stdlib only): the chat page, OpenAI chat completions, Anthropic
+Messages and OpenAI Responses (tool loops, the cache across them, errors).
 usage: test_server.py [base_url] [--api-key KEY] [--model-id ID]   (default http://127.0.0.1:8090)
        test_server.py --cli <path to kapitsa>    offline checks of the command line: model names and aliases,
                                                  `pull --dry-run`, `list`, `rm`, early port errors (no server)"""
@@ -307,6 +308,171 @@ turn([{"role": "user", "content": "Title for: word counting CLI"}], 12)
 r7 = turn(m7 + [{"role": "user", "content": "Great, summarize the plan in one line."}], 40)
 check("one-offs keep the conversation in progress", r7["usage"]["prompt_tokens_details"]["cached_tokens"] >= held // 2,
       json.dumps(r7["usage"]))
+
+# 7b. an agent's first conversation survives the side request it sends beside it (opencode sends its title request with
+#     the first request), even when the other slot holds an older conversation of several turns
+import threading
+c7 = [{"role": "user", "content": "Name one prime number."}]
+a = turn(c7, 20)
+c7 += [{"role": "assistant", "content": a["choices"][0]["message"]["content"]}, {"role": "user", "content": "And another?"}]
+turn(c7, 20)
+b7 = [{"role": "system", "content": "You are a coding agent. Use tools to answer. " + "Be careful and precise. " * 40},
+      {"role": "user", "content": "Read the file /etc/hosts and tell me how many lines it has."}]
+first = {}
+def first_request():
+    first["r"] = post({"messages": b7, "tools": TOOLS, "max_tokens": 1024, "temperature": 0, "top_k": 1,
+                       "chat_template_kwargs": {"enable_thinking": False}})
+th = threading.Thread(target=first_request)
+th.start()
+time.sleep(0.05)
+turn([{"role": "user", "content": "Title for: counting lines in /etc/hosts"}], 12)
+th.join()
+r = first["r"]
+calls7 = r["choices"][0]["message"].get("tool_calls") or []
+if calls7:
+    b7 += [{"role": "assistant", "content": r["choices"][0]["message"]["content"] or "", "tool_calls": calls7[:1]},
+           {"role": "tool", "tool_call_id": calls7[0]["id"], "content": "127.0.0.1 localhost\n::1 localhost\n"}]
+    r2 = post({"messages": b7, "tools": TOOLS, "max_tokens": 256, "temperature": 0, "top_k": 1,
+               "chat_template_kwargs": {"enable_thinking": False}})
+    check("a side request sent beside a first request does not evict it",
+          r2["usage"]["prompt_tokens_details"]["cached_tokens"] >= r["usage"]["prompt_tokens"], json.dumps(r2["usage"]))
+else:
+    check("a side request sent beside a first request does not evict it (it called a tool)", False, json.dumps(r)[:300])
+
+# ---------------------------------------------------------------- Anthropic Messages and OpenAI Responses
+def call(path, body, headers=None, stream=False):
+    """(status, JSON body) of a POST, or (status, [(event, data), ...]) of a stream; HTTP errors are returned"""
+    req = urllib.request.Request(BASE + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", **(auth() if headers is None else headers)})
+    try:
+        r = urllib.request.urlopen(req, timeout=900)
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+    if not stream:
+        return r.status, json.loads(r.read())
+    events, name = [], None
+    for line in r:
+        line = line.decode().rstrip("\n")
+        if line.startswith("event: "):
+            name = line[7:]
+        elif line.startswith("data: "):
+            events.append((name, json.loads(line[6:])))
+    return r.status, events
+
+def blocks_of(events):
+    """the assistant message an Anthropic client assembles from a stream"""
+    blocks, inputs = [], {}
+    for name, d in events:
+        if name == "content_block_start":
+            blocks.append(dict(d["content_block"]))
+        elif name == "content_block_delta":
+            b, x = blocks[d["index"]], d["delta"]
+            if x["type"] == "text_delta": b["text"] += x["text"]
+            elif x["type"] == "thinking_delta": b["thinking"] += x["thinking"]
+            elif x["type"] == "signature_delta": b["signature"] = x["signature"]
+            elif x["type"] == "input_json_delta": inputs[d["index"]] = inputs.get(d["index"], "") + x["partial_json"]
+        elif name == "content_block_stop" and blocks[d["index"]]["type"] == "tool_use":
+            blocks[d["index"]]["input"] = json.loads(inputs.get(d["index"], "{}"))
+    return blocks
+
+A_TOOLS = [{"name": t["function"]["name"], "description": t["function"]["description"],
+            "input_schema": t["function"]["parameters"]} for t in TOOLS]
+CTX = json.loads(get("/v1/models", auth())[2])["data"][0]["context_length"]
+hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+
+# 8. Anthropic: a Claude Code-like tool loop (adaptive thinking shown as a signature only, every turn's thinking kept)
+a_body = {"model": "m", "max_tokens": 4096, "temperature": 0, "top_k": 1,
+          "system": [{"type": "text", "text": "x-anthropic-billing-header: cc_version=1; cch=00000;"},
+                     {"type": "text", "text": "You are a coding agent. Use tools to answer."}],
+          "tools": A_TOOLS, "thinking": {"type": "adaptive", "display": "omitted"},
+          "context_management": {"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]},
+          "messages": [{"role": "user", "content": [{"type": "text", "text": "Read the file /etc/hosts and tell me how many lines it has."}]}]}
+st, m1 = call("/v1/messages", a_body)
+uses = [b for b in m1.get("content", []) if b["type"] == "tool_use"] if st == 200 else []
+check("anthropic: non-streamed tool call (stop_reason tool_use, tool_use read_file /etc/hosts, usage)",
+      st == 200 and m1["type"] == "message" and m1["stop_reason"] == "tool_use" and len(uses) >= 1 and
+      uses[0]["name"] == "read_file" and uses[0]["input"].get("path") == "/etc/hosts" and
+      m1["usage"]["input_tokens"] + m1["usage"]["cache_read_input_tokens"] > 0 and m1["usage"]["output_tokens"] > 0,
+      json.dumps(m1)[:400])
+thinking = [b for b in m1.get("content", []) if b["type"] == "thinking"] if st == 200 else []
+check("anthropic: display omitted: the thinking block has no text and a signature",
+      len(thinking) == 1 and thinking[0]["thinking"] == "" and thinking[0]["signature"], json.dumps(thinking)[:200])
+first = m1["usage"]["input_tokens"] + m1["usage"]["cache_read_input_tokens"] if st == 200 else 0
+st, n = call("/v1/messages/count_tokens", {k: v for k, v in a_body.items() if k not in ("max_tokens", "temperature", "top_k")})
+check("anthropic: count_tokens counts the prompt", st == 200 and n.get("input_tokens") == first, f"{n} vs {first}")
+a_body["messages"] += [{"role": "assistant", "content": m1.get("content", [])},
+                       {"role": "user", "content": [{"type": "tool_result", "tool_use_id": uses[0]["id"] if uses else "x", "content": hosts},
+                                                    {"type": "text", "text": "<system-reminder>Answer briefly.</system-reminder>"}]}]
+st, ev = call("/v1/messages", dict(a_body, stream=True), stream=True)
+names = [e for e, _ in ev] if st == 200 else []
+check("anthropic stream: message_start, ping, blocks, message_delta, message_stop",
+      names[:2] == ["message_start", "ping"] and names[-2:] == ["message_delta", "message_stop"] and
+      "content_block_start" in names, str(names)[:300])
+usage = ev[0][1]["message"]["usage"] if names else {}
+check("anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
+      usage.get("cache_read_input_tokens", 0) >= first and usage.get("cache_creation_input_tokens") == 0, f"{usage} first {first}")
+reply = blocks_of(ev)
+check("anthropic stream: final answer mentions 3", any(b["type"] == "text" and "3" in b["text"] for b in reply) and
+      ev[-2][1]["delta"]["stop_reason"] == "end_turn", json.dumps(reply)[:300])
+a_body["messages"] += [{"role": "assistant", "content": reply}, {"role": "user", "content": "And how many mention localhost?"}]
+st, m3 = call("/v1/messages", dict(a_body, stream=True), stream=True)
+u3 = m3[0][1]["message"]["usage"] if st == 200 and m3 else {}
+check("anthropic: the next question's prompt continues the conversation (every turn's thinking kept)",
+      u3.get("cache_read_input_tokens", 0) > first, f"{u3} first {first}")
+if API_KEY:
+    st, _ = call("/v1/messages", {"model": "m", "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]},
+                 headers={"x-api-key": API_KEY})
+    check("--api-key: x-api-key works too", st == 200, st)
+    st, e = call("/v1/messages", {"model": "m", "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]}, headers={})
+    check("--api-key: without it, 401 in Anthropic's error format", st == 401 and e.get("type") == "error", e)
+long_text = "hello " * int(CTX * 1.1)
+st, e = call("/v1/messages", {"model": "m", "max_tokens": 10, "messages": [{"role": "user", "content": long_text}]})
+check("anthropic: a prompt over the context is 400 \"prompt is too long: N tokens > M maximum\"",
+      st == 400 and e["error"]["type"] == "invalid_request_error" and
+      re.match(r"prompt is too long: \d+ tokens > \d+ maximum", e["error"]["message"]), json.dumps(e)[:300])
+st, e = call("/v1/messages", dict(a_body, stream=True, messages=[{"role": "user", "content": long_text}]), stream=True)
+check("anthropic: streamed too, a plain 400 before any event", st == 400 and "prompt is too long" in json.dumps(e), str(e)[:200])
+
+# 9. Responses: a Codex-like tool loop (reasoning kept through encrypted_content, store false), then previous_response_id
+r_tools = [{"type": "function", "name": t["function"]["name"], "description": t["function"]["description"],
+            "parameters": t["function"]["parameters"], "strict": False} for t in TOOLS]
+r_input = [{"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "Use tools to answer."}]},
+           {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Read the file /etc/hosts and tell me how many lines it has."}]}]
+r_body = {"model": "m", "instructions": "You are a coding agent.", "tools": r_tools, "store": False,
+          "include": ["reasoning.encrypted_content"], "temperature": 0, "top_k": 1, "input": r_input}
+st, ev = call("/v1/responses", dict(r_body, stream=True), stream=True)
+names = [e for e, _ in ev] if st == 200 else []
+done = ev[-1][1]["response"] if names else {}
+calls_ = [o for o in done.get("output", []) if o["type"] == "function_call"]
+check("responses stream: created, in_progress, items, completed; sequence numbers in order",
+      names[:2] == ["response.created", "response.in_progress"] and names[-1] == "response.completed" and
+      [d["sequence_number"] for _, d in ev] == list(range(len(ev))), str(names)[:300])
+check("responses stream: a function_call read_file /etc/hosts",
+      len(calls_) >= 1 and calls_[0]["name"] == "read_file" and json.loads(calls_[0]["arguments"]).get("path") == "/etc/hosts",
+      json.dumps(done.get("output"))[:300])
+first_r = done.get("usage", {}).get("input_tokens", 0)
+r_body["input"] = r_input + done.get("output", []) + [{"type": "function_call_output", "call_id": c["call_id"], "output": hosts} for c in calls_]
+st, r2 = call("/v1/responses", r_body)
+check("responses: the tool loop's next request is answered (mentions 3)",
+      st == 200 and r2["status"] == "completed" and any(o["type"] == "message" and "3" in o["content"][0]["text"] for o in r2["output"]),
+      json.dumps(r2)[:300])
+check("responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
+      st == 200 and r2["usage"]["input_tokens_details"]["cached_tokens"] >= first_r, json.dumps(r2.get("usage")))
+st, p1 = call("/v1/responses", {"model": "m", "input": "Say just the word: apple.", "reasoning": {"effort": "none"}, "max_output_tokens": 20})
+st2, p2 = call("/v1/responses", {"model": "m", "previous_response_id": p1.get("id", ""), "input": "Now just the word: pear.",
+                                 "reasoning": {"effort": "none"}, "max_output_tokens": 20})
+check("responses: previous_response_id continues a stored response",
+      st == 200 and st2 == 200 and p2["previous_response_id"] == p1["id"] and
+      p2["usage"]["input_tokens"] > p1["usage"]["input_tokens"] and p2["usage"]["input_tokens_details"]["cached_tokens"] > 0,
+      json.dumps(p2)[:300])
+st, e = call("/v1/responses", {"model": "m", "previous_response_id": "resp_unknown", "input": "x"})
+check("responses: an unknown previous_response_id is a 400", st == 400 and e["error"]["code"] == "previous_response_not_found", e)
+st, e = call("/v1/responses", {"model": "m", "input": long_text, "stream": True}, stream=True)
+check("responses: a prompt over the context is 400 context_length_exceeded",
+      st == 400 and e["error"]["code"] == "context_length_exceeded", json.dumps(e)[:300])
+st, r = call("/v1/responses", {"model": "m", "input": "Count from 1 to 100.", "reasoning": {"effort": "none"}, "max_output_tokens": 8})
+check("responses: a max_output_tokens cut is status incomplete", st == 200 and r["status"] == "incomplete" and
+      r["incomplete_details"] == {"reason": "max_output_tokens"}, json.dumps(r)[:300])
 
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)
