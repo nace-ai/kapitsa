@@ -368,7 +368,9 @@ from Hugging Face one layer at a time).
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
   the double-buffered decode cycle).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
-  boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
+  boundaries (a user query's outlives the tool responses after it; a new conversation takes an empty slot, else a
+  one-off's, else the conversation idle longest, and a conversation whose request was still running when it arrived
+  counts as continued: opencode sends its title request beside its first request); `output_parser.h`: streaming parser for
   reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
 - `src/hub/`: the model catalog (`catalog.cpp`: the table of models and variants), `--model` resolution
   (`resolve.cpp`), downloads, reuse, verification, the manifest and the MTP sidecar builder (`fetch.cpp`), the

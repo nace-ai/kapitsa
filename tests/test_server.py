@@ -309,6 +309,36 @@ r7 = turn(m7 + [{"role": "user", "content": "Great, summarize the plan in one li
 check("one-offs keep the conversation in progress", r7["usage"]["prompt_tokens_details"]["cached_tokens"] >= held // 2,
       json.dumps(r7["usage"]))
 
+# 7b. an agent's first conversation survives the side request it sends beside it (opencode sends its title request with
+#     the first request), even when the other slot holds an older conversation of several turns
+import threading
+c7 = [{"role": "user", "content": "Name one prime number."}]
+a = turn(c7, 20)
+c7 += [{"role": "assistant", "content": a["choices"][0]["message"]["content"]}, {"role": "user", "content": "And another?"}]
+turn(c7, 20)
+b7 = [{"role": "system", "content": "You are a coding agent. Use tools to answer. " + "Be careful and precise. " * 40},
+      {"role": "user", "content": "Read the file /etc/hosts and tell me how many lines it has."}]
+first = {}
+def first_request():
+    first["r"] = post({"messages": b7, "tools": TOOLS, "max_tokens": 1024, "temperature": 0, "top_k": 1,
+                       "chat_template_kwargs": {"enable_thinking": False}})
+th = threading.Thread(target=first_request)
+th.start()
+time.sleep(0.05)
+turn([{"role": "user", "content": "Title for: counting lines in /etc/hosts"}], 12)
+th.join()
+r = first["r"]
+calls7 = r["choices"][0]["message"].get("tool_calls") or []
+if calls7:
+    b7 += [{"role": "assistant", "content": r["choices"][0]["message"]["content"] or "", "tool_calls": calls7[:1]},
+           {"role": "tool", "tool_call_id": calls7[0]["id"], "content": "127.0.0.1 localhost\n::1 localhost\n"}]
+    r2 = post({"messages": b7, "tools": TOOLS, "max_tokens": 256, "temperature": 0, "top_k": 1,
+               "chat_template_kwargs": {"enable_thinking": False}})
+    check("a side request sent beside a first request does not evict it",
+          r2["usage"]["prompt_tokens_details"]["cached_tokens"] >= r["usage"]["prompt_tokens"], json.dumps(r2["usage"]))
+else:
+    check("a side request sent beside a first request does not evict it (it called a tool)", False, json.dumps(r)[:300])
+
 # ---------------------------------------------------------------- Anthropic Messages and OpenAI Responses
 def call(path, body, headers=None, stream=False):
     """(status, JSON body) of a POST, or (status, [(event, data), ...]) of a stream; HTTP errors are returned"""

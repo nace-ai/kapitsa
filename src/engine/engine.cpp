@@ -292,6 +292,7 @@ void Engine::drop_slot(Slot& slot) {
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
   slot.turns = 0;
+  slot.done_at = 0;
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -400,7 +401,7 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
 
 int Engine::count_tokens(const ChatRequest& r) const { return int(tok_.encode(render(r, true)).size()); }
 
-Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
+Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival) {
   auto lcp = [&](const std::vector<int>& a) {
     size_t n = std::min(a.size(), prompt.size()), i = 0;
     while (i < n && a[i] == prompt[i]) ++i;
@@ -433,8 +434,10 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
     // (a conversation never continued, like an agent's title or commit-message request), and only
     // then a continued conversation; least recently used first within each. So one-offs never evict
     // the conversation in progress, however long an older one-off was, and a new conversation
-    // replaces the conversation idle longest.
-    auto rank = [](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 ? 1 : 2; };
+    // replaces the conversation idle longest. A conversation whose request was still running when this
+    // one arrived counts as continued: an agent sends its title request beside its first request
+    // (opencode does), and that first conversation goes on with the tools' results.
+    auto rank = [&](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at ? 1 : 2; };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (int(prompt.size()) + 64 > s.seq->limit) continue;
@@ -451,7 +454,7 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
                         const std::function<void(const ChatResult&)>& on_prompt) {
-  ++requests_;
+  const uint64_t arrival = ++requests_;
   std::lock_guard<std::mutex> lk(mu_);
   // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (under the engine lock:
   // it runs a startup check through the model's buffers, which the idle history prefill also uses)
@@ -482,7 +485,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (boundary >= int(prompt.size())) boundary = -1;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
-  Slot& slot = pick_slot(prompt);
+  Slot& slot = pick_slot(prompt, arrival);
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
@@ -899,6 +902,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
+  slot.done_at = res.req_seq;
   ChatDelta tail = parser.finish(finish == "stop");
   res.reasoning += tail.reasoning;
   res.content += tail.content;

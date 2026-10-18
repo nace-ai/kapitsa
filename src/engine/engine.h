@@ -175,8 +175,10 @@ class Engine {
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
+    uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
   };
-  Slot& pick_slot(const std::vector<int>& prompt);
+  // `arrival`: the request's number (requests_ when it arrived)
+  Slot& pick_slot(const std::vector<int>& prompt, uint64_t arrival);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
   // slots (least recently used first: their conversations are prefilled again when they come back).
   // Nothing using the slots may be in flight. False if even that leaves too little memory.
