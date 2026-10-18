@@ -101,5 +101,5 @@ for adapted code and design credits, and [DEVELOPMENT.md](../DEVELOPMENT.md) for
 
 [architecture.svg](assets/architecture.svg) is the editable diagram source. It uses native SVG shapes and text,
 with an accessible title and description, so GitHub can display it without JavaScript or embedded HTML.
-Edit the SVG directly and preview it at README width to check labels, arrows and spacing. The logo is a separate
-transparent PNG in [kapitsa-logo.png](assets/kapitsa-logo.png).
+Edit the SVG directly and preview it at README width to check labels, arrows and spacing. The logo and the README
+header are in [assets/brand](assets/brand/README.md) and [header-dark.svg](assets/header-dark.svg).
