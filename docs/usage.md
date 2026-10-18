@@ -42,12 +42,12 @@ Those start the best model for this Mac, with the same output as before.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
-| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
-| `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
+| `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
-| `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
@@ -70,13 +70,13 @@ request's `model` field is not checked.
 
 Each Qwen model comes in several precisions, its variants. Download sizes, companions included:
 
-| Variant | Weights | `35b` | `27b` | `4b` |
+| Variant | Weights | `4b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 22.1 GB | 20.2 GB | 4.6 GB |
-| `5bit` | MLX affine 5-bit, group 64 | 26.4 GB | 23.5 GB | - |
-| `6bit` | MLX affine 6-bit, group 64: the quality choice | 30.7 GB | 26.9 GB | 5.6 GB |
-| `8bit` | MLX affine 8-bit, group 64 | 39.4 GB | 33.6 GB | 6.7 GB |
-| `bf16` | unquantized, where it fits | 71.9 GB | 58.8 GB | 10.6 GB |
+| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 20.2 GB | 22.1 GB |
+| `5bit` | MLX affine 5-bit, group 64 | - | 23.5 GB | 26.4 GB |
+| `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | 26.9 GB | 30.7 GB |
+| `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | 33.6 GB | 39.4 GB |
+| `bf16` | unquantized, where it fits | 10.6 GB | 58.8 GB | 71.9 GB |
 
 Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
 variants fit this Mac. Every variant keeps the model's MTP head and draft model, and pins its repo to a revision, so a

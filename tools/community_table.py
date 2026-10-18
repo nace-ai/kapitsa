@@ -15,7 +15,8 @@ import argparse, glob, json, os, re, statistics, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
 COMMUNITY = os.path.join(REPO, "bench", "community")
-MODEL_ORDER = ["qwen3.6-35b-a3b", "qwen3.8-27b", "qwen3.5-4b", "nemotron-3.5-bolt"]
+MODEL_ORDER = ["qwen3.5-4b", "qwen3.8-27b", "qwen3.6-35b-a3b", "nemotron-3.5-lightning", "nemotron-3.5-bolt",
+               "nemotron-3.5-super-vl"]
 VARIANT_ORDER = ["4bit", "5bit", "6bit", "8bit", "bf16", "24gb"]
 WARN = "⚠"
 

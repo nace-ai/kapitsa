@@ -38,6 +38,7 @@
 #include <sys/sysctl.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -172,7 +173,20 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
   return x;
 }
 
-// The best catalog model for this Mac: the first (the catalog is best first) with a variant whose memory plan, the
+// The order best_model tries the catalog in: the most capable model first (the catalog itself lists the models from
+// small to large, Qwen first, as the README and the picker show them); catalog models not named here come last.
+static std::vector<const hub::CatalogModel*> by_preference() {
+  static const char* const kOrder[] = {"qwen3.6-35b-a3b", "qwen3.8-27b", "qwen3.5-4b", "nemotron-3.5-bolt",
+                                       "nemotron-3.5-super-vl", "nemotron-3.5-lightning"};
+  std::vector<const hub::CatalogModel*> out;
+  for (const char* n : kOrder)
+    if (const hub::CatalogModel* m = hub::find_model(n)) out.push_back(m);
+  for (const auto& m : hub::catalog())
+    if (std::find(out.begin(), out.end(), &m) == out.end()) out.push_back(&m);
+  return out;
+}
+
+// The best catalog model for this Mac: the first in by_preference's order with a variant whose memory plan, the
 // engine's own, leaves room for one conversation of --ctx tokens within the budget and keeps its drafter (each model
 // takes its default variant, else the first of its fallbacks that fits: pick_variant), or failing that whose smallest
 // variant holds the conversation without the drafter (MTP decoding). A model not downloaded yet is
@@ -180,7 +194,8 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
 // cannot be downloaded either and is skipped. False if none can be planned.
 bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
   bool have = false;
-  for (const auto& m : hub::catalog()) {
+  for (const hub::CatalogModel* mp : by_preference()) {
+    const hub::CatalogModel& m = *mp;
     bool fits = false;
     hub::ModelRef r = pick_variant(m, opt, budget, &fits);
     if (fits) {

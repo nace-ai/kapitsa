@@ -33,8 +33,9 @@ next fastest engine on every metric ran in the same session as Kapitsa (35B: the
 evening session on the final build). The [conditions](#conditions) section lists what differed between sessions.
 
 In [a real opencode session](#a-real-coding-agent-session-2026-10-18) replayed on every engine (19 requests, up to
-23K tokens; 2026-10-18), Kapitsa answered every request in 48.6 s on the 35B, 1.27× faster than the next fastest
-(mlx-serve + MTP, 61.6 s), and in 150.2 s on the 27B, 1.85× faster than the next (oMLX + DFlash2, 278.1 s).
+23K tokens; MacBook Pro, M4 Pro, 48 GB, 2026-10-18), Kapitsa answered every request in 48.6 s on Qwen3.6-35B-A3B at
+4-bit, 1.27× faster than the next fastest (mlx-serve + MTP, 61.6 s), and in 150.2 s on Qwen3.8-27B at 4-bit, 1.85×
+faster than the next (oMLX + DFlash2, 278.1 s).
 
 For an additional Kapitsa-only run on a different machine, see the [M5 Max / 128 GB report](benchmarks-m5-max.md).
 Those runs include background GPU contention and are reported separately from the comparison below.

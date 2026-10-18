@@ -47,7 +47,7 @@ struct Variant {
   double download_gb = 0;             // weights + companions
 };
 
-// The models of the catalog (src/hub/catalog.cpp), best first.
+// The models of the catalog (src/hub/catalog.cpp): Qwen from small to large, then Nemotron from small to large.
 struct CatalogModel {
   std::string name;                  // "qwen3.6-35b-a3b"; with the variant, the folder (qwen3.6-35b-a3b-4bit)
   std::vector<std::string> aliases;  // "qwen3.6-35b", "35b"
