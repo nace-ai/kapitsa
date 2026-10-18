@@ -57,22 +57,6 @@ std::string self_path() {
   return realpath(buf, real) ? real : buf;
 }
 
-std::string find_in_path(const std::string& name) {
-  const char* p = getenv("PATH");
-  std::string path = p ? p : "/usr/bin:/bin";
-  size_t a = 0;
-  while (a <= path.size()) {
-    size_t b = path.find(':', a);
-    if (b == std::string::npos) b = path.size();
-    const std::string dir = path.substr(a, b - a);
-    const std::string f = (dir.empty() ? "." : dir) + "/" + name;
-    struct stat st;
-    if (stat(f.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(f.c_str(), X_OK) == 0) return f;
-    a = b + 1;
-  }
-  return "";
-}
-
 // What a GET answers: -1 when nothing listens, else the HTTP status and body
 struct Got {
   int status = -1;
@@ -218,6 +202,22 @@ int major_version(const std::string& path) {
 }
 
 }  // namespace
+
+std::string find_in_path(const std::string& name) {
+  const char* p = getenv("PATH");
+  std::string path = p ? p : "/usr/bin:/bin";
+  size_t a = 0;
+  while (a <= path.size()) {
+    size_t b = path.find(':', a);
+    if (b == std::string::npos) b = path.size();
+    const std::string dir = path.substr(a, b - a);
+    const std::string f = (dir.empty() ? "." : dir) + "/" + name;
+    struct stat st;
+    if (stat(f.c_str(), &st) == 0 && S_ISREG(st.st_mode) && access(f.c_str(), X_OK) == 0) return f;
+    a = b + 1;
+  }
+  return "";
+}
 
 int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string help = "kapitsa " + name + " --help";

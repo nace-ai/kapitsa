@@ -1409,6 +1409,16 @@ void build_mtp_sidecar(const std::string& src, const std::string& revision, cons
           double(p.size - p.head.size()) / 1e6, hidden.c_str());
 }
 
+static std::atomic<bool> g_offline{false};
+static std::atomic<int> g_offline_misses{0};
+
+void set_offline(bool on) {
+  g_offline = on;
+  g_offline_misses = 0;
+}
+
+int offline_misses() { return g_offline_misses; }
+
 std::string plan_dir(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
   if (ref.kind != ModelRef::kCatalog) return "";
@@ -1417,6 +1427,10 @@ std::string plan_dir(const ModelRef& ref) {
   std::string want = m.repo + "@" + m.revision;
   for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
   if (read_text(mark) == want) return dir;
+  if (g_offline) {
+    ++g_offline_misses;
+    return "";
+  }
   unlink(mark.c_str());
   // the repos' file lists, then config.json whole and each safetensors file's header, all in parallel (a few hundred
   // small requests' worth of latency otherwise)

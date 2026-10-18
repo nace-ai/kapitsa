@@ -22,7 +22,9 @@
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
+#include "server/ui.h"
 #include "util/log.h"
+#include "util/term.h"
 
 #include <httplib/httplib.h>
 
@@ -195,6 +197,23 @@ hub::ModelRef ni::for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size
   return pick_variant(*ref.model, opt, budget);
 }
 
+__attribute__((format(printf, 1, 2))) static std::string strf(const char* fmt, ...) {
+  va_list ap, aq;
+  va_start(ap, fmt);
+  va_copy(aq, ap);
+  std::string s(size_t(std::max(0, vsnprintf(nullptr, 0, fmt, aq))), '\0');
+  va_end(aq);
+  vsnprintf(s.data(), s.size() + 1, fmt, ap);
+  va_end(ap);
+  return s;
+}
+
+// A command's help: as it is, or styled in a terminal
+static void show_help(const std::string& text) {
+  if (term::fancy()) ui::help(text);
+  else fputs(text.c_str(), stdout);
+}
+
 static std::string models_table() {
   std::string s;
   char line[256];
@@ -222,6 +241,10 @@ static std::string models_table() {
 }
 
 static void print_help() {
+  if (term::fancy()) {
+    ui::quiet();
+    return ui::home(KAPITSA_VERSION);
+  }
   printf("Kapitsa %s: fast local Qwen on Apple silicon.\n\n"
          "  kapitsa serve                 start the best model for this Mac (downloads it the first time)\n"
          "  kapitsa serve --model 27b     start a given model\n\n"
@@ -248,7 +271,7 @@ static void print_help() {
 }
 
 static void print_serve_help() {
-  printf("kapitsa serve [--model MODEL] [options]\n\n"
+  std::string h = strf("kapitsa serve [--model MODEL] [options]\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
          "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
          "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
@@ -272,17 +295,21 @@ static void print_serve_help() {
          "Images (Qwen3.6, Qwen3.8: models with a vision tower): OpenAI image_url parts, Anthropic image blocks and\n"
          "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
+  if (term::fancy())  // in a terminal the engine's log goes to a file, unless --verbose
+    h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +
+                                            hub::tilde(hub::home_dir()) + "/logs/serve-PORT.log)");
+  show_help(h);
 }
 
 static void print_pull_help() {
-  printf("kapitsa pull MODEL... [--from DIR]...\n\n"
+  show_help(strf("kapitsa pull MODEL... [--from DIR]...\n\n"
          "Downloads a model with the files that speed it up (MTP head, DFlash2 drafter) into\n"
          "%s/<name>-<variant>, verifies every file, and continues an interrupted download.\n\n"
          "  --from DIR   take files that are already on this Mac from DIR (a folder from `hf download --local-dir`,\n"
          "               another app's models): only exact matches of the pinned checksums, as APFS clones\n"
          "  --dry-run    show what MODEL resolves to, without downloading (--json for programs)\n\n"
          "Files already in the Hugging Face cache (~/.cache/huggingface/hub) are reused the same way.\n",
-         hub::tilde(hub::models_dir()).c_str());
+         hub::tilde(hub::models_dir()).c_str()));
 }
 
 // Why the server could not listen on host:port, or "" (a test bind, as the server binds: SO_REUSEADDR only).

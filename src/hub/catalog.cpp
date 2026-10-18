@@ -81,6 +81,7 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"qwen3.6-35b", "35b", "35b-a3b"},
        .title = "Qwen3.6-35B-A3B",
        .about = "MoE, 3B active per token: fast replies and fast reading",
+       .brief = "MoE: fast replies, fast reading",
        // 4-bit: no other precision decodes within 10% of it with DFlash2 (6bit: KL 0.024 from bf16 against 0.114,
        // decode -26%: the quality choice)
        .default_variant = "4bit",
@@ -123,6 +124,7 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"27b"},
        .title = "Qwen3.8-27B",
        .about = "dense: the strongest coder of the three, slower to write",
+       .brief = "dense: the strongest coder, slower",
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
@@ -161,6 +163,7 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"4b"},
        .title = "Qwen3.5-4B",
        .about = "small and quick: for 16-24 GB Macs and simple tasks",
+       .brief = "small and quick, for 16-24 GB Macs",
        // 4-bit: no other precision decodes within 10% of it with MTP (6bit: KL 0.022 from bf16 against 0.113,
        // decode -28%: the quality choice)
        .default_variant = "4bit",
@@ -195,6 +198,7 @@ const std::vector<CatalogModel>& catalog() {
        .aliases = {"nemotron-bolt", "bolt"},
        .title = "Nemotron 3.5 Bolt 74B-A9B",
        .about = "NVIDIA's hybrid Mamba-2 MoE, 9B active, 2-bit experts: an agentic model in 24 GB",
+       .brief = "NVIDIA hybrid MoE: agentic, 24 GB",
        // one variant: NVIDIA's own 24 GB checkpoint (quantization-aware distilled), its safetensors as they are
        .default_variant = "24gb",
        .fallbacks = {},

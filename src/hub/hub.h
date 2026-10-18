@@ -49,6 +49,7 @@ struct CatalogModel {
   std::vector<std::string> aliases;  // "qwen3.6-35b", "35b"
   std::string title;                 // "Qwen3.6-35B-A3B"
   std::string about;                 // one line for --help
+  std::string brief;                 // a few words for the models table of `kapitsa` in a terminal ("": about)
   std::string default_variant;       // the variant `--model <name>` takes where it fits (the API names it <name>)
   // On a Mac the default does not fit (the engine's memory plan of its headers: one --ctx conversation with its
   // drafter), `--model <name>` takes the first of these that fits, else the last: smaller variants, best first.
@@ -109,6 +110,10 @@ bool is_current(const ModelRef& ref);
 // ~/.cache/kapitsa/plans/<name> (a few hundred KB; pinned revisions, so it never changes). "" when that fails
 // (offline) or for a repo outside the catalog.
 std::string plan_dir(const ModelRef& ref);
+// While set, plan_dir() fetches nothing: a plan not already on this Mac is "" (and counted). For answers that must
+// be instant and offline, like the help screen's best model for this Mac: exact when offline_misses() stays 0.
+void set_offline(bool on);
+int offline_misses();
 
 // A model in the store, for `kapitsa list`.
 struct Installed {
