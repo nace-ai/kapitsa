@@ -24,17 +24,22 @@ FetchLimits fetch_limits() {
 
 // ---- image parts ----
 
+static bool typed(const ojson& it, const char* type) {
+  const auto t = it.find("type");
+  return t != it.end() && t->is_string() && t->get_ref<const std::string&>() == type;
+}
+
 // The template's test (`'image' in item or 'image_url' in item or item.type == 'image'`, videos likewise).
 static bool is_image_part(const ojson& it) {
   if (it.is_string()) {
     const std::string& s = it.get_ref<const std::string&>();
     return s.find("image") != std::string::npos;  // `'image' in item` on a string is a substring test
   }
-  return it.is_object() && (it.contains("image") || it.contains("image_url") || it.value("type", "") == "image");
+  return it.is_object() && (it.contains("image") || it.contains("image_url") || typed(it, "image"));
 }
 static bool is_video_part(const ojson& it) {
   if (it.is_string()) return it.get_ref<const std::string&>().find("video") != std::string::npos;
-  return it.is_object() && (it.contains("video") || it.value("type", "") == "video");
+  return it.is_object() && (it.contains("video") || typed(it, "video"));
 }
 
 static Source source_of(const ojson& it) {
@@ -49,10 +54,12 @@ static Source source_of(const ojson& it) {
   else if (it.contains("image")) s.url = url_of(it["image"]);
   if (s.url.empty() && it.contains("source") && it["source"].is_object()) {  // Anthropic-style image block
     const ojson& src = it["source"];
-    const std::string type = src.value("type", "");
-    if (type == "base64" && src.contains("data") && src["data"].is_string())
-      s.url = "data:" + src.value("media_type", std::string("image")) + ";base64," + src["data"].get<std::string>();
-    else if (type == "url") s.url = src.value("url", "");
+    const bool b64 = typed(src, "base64"), url = typed(src, "url");
+    const auto mt = src.find("media_type");
+    if (b64 && src.contains("data") && src["data"].is_string())
+      s.url = "data:" + (mt != src.end() && mt->is_string() ? mt->get<std::string>() : std::string("image")) + ";base64," +
+              src["data"].get<std::string>();
+    else if (url && src.contains("url") && src["url"].is_string()) s.url = src["url"].get<std::string>();
   }
   if (s.url.empty()) throw Error("an image content part has no image: expected {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,...\" or \"https://...\"}}");
   return s;
@@ -352,10 +359,10 @@ Image decode(const std::string& bytes) {
     im.width = int(CGImageGetWidth(img));
     im.height = int(CGImageGetHeight(img));
     // a decompression bomb would take gigabytes before any resize
-    if (im.width < 1 || im.height < 1 || double(im.width) * im.height > 150e6) {
+    if (im.width < 1 || im.height < 1 || double(im.width) * im.height > 100e6) {
       CGImageRelease(img);
       throw Error("the image is " + std::to_string(im.width) + " x " + std::to_string(im.height) +
-                  " pixels: Kapitsa takes images of up to 150 megapixels");
+                  " pixels: Kapitsa takes images of up to 100 megapixels");
     }
     try {
       if (!raw_rgb(img, im.rgb)) drawn_rgb(img, im.rgb);

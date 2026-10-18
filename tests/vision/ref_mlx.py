@@ -53,21 +53,22 @@ for case in cases:
 
     inputs = prepare_inputs(processor, images=list(images), prompts=prompt)
     prompt_ids = np.array(inputs["input_ids"]).reshape(-1).tolist()
-    pixel_values = inputs["pixel_values"]
-    grid = inputs["image_grid_thw"]
+    pixel_values = inputs.get("pixel_values")  # None: a text-only case (the baseline)
+    grid = inputs.get("image_grid_thw")
     full = prompt_ids + answer_ids
     n = len(full)
     skip = len(prompt_ids) - 1
 
-    # the vision tower alone (as get_input_embeddings runs it)
-    pv = pixel_values.astype(model.vision_tower.patch_embed.proj.weight.dtype)
-    feats, _ = model.vision_tower(pv, grid)
-    np.save(os.path.join(out_dir, name + ".vision.npy"), np.array(feats.astype(mx.float32)))
-    np.save(os.path.join(out_dir, name + ".pv.npy"), np.array(pixel_values.astype(mx.float32)))
+    if pixel_values is not None:  # the vision tower alone (as get_input_embeddings runs it)
+        pv = pixel_values.astype(model.vision_tower.patch_embed.proj.weight.dtype)
+        feats, _ = model.vision_tower(pv, grid)
+        np.save(os.path.join(out_dir, name + ".vision.npy"), np.array(feats.astype(mx.float32)))
+        np.save(os.path.join(out_dir, name + ".pv.npy"), np.array(pixel_values.astype(mx.float32)))
 
     # teacher-forced forward of prompt + answer
     t0 = time.time()
-    out = model(mx.array([full]), pixel_values=pixel_values, image_grid_thw=grid)
+    out = (model(mx.array([full]), pixel_values=pixel_values, image_grid_thw=grid) if pixel_values is not None
+           else model(mx.array([full])))
     logits = out.logits if hasattr(out, "logits") else out
     lg = logits[0, skip:n - 1].astype(mx.float32)
     lp = lg - mx.logsumexp(lg, axis=-1, keepdims=True)
@@ -94,7 +95,8 @@ for case in cases:
     with open(os.path.join(out_dir, name + ".ids"), "w") as f:
         f.write(",".join(map(str, full)))
     json.dump({"answer": answer, "prompt_tokens": len(prompt_ids), "answer_tokens": len(answer_ids), "skip": skip,
-               "grids": np.array(grid).tolist(), "load_s": t_load, "generate_s": t_gen, "forward_s": t_fwd,
+               "grids": np.array(grid).tolist() if grid is not None else [], "load_s": t_load, "generate_s": t_gen, "forward_s": t_fwd,
                "images": images, "question": question},
               open(os.path.join(out_dir, name + ".json"), "w"), indent=1)
-    print(json.dumps({"name": name, "answer": answer, "prompt_tokens": len(prompt_ids), "grids": np.array(grid).tolist()}))
+    print(json.dumps({"name": name, "answer": answer, "prompt_tokens": len(prompt_ids),
+                      "grids": np.array(grid).tolist() if grid is not None else []}))

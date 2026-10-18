@@ -52,13 +52,12 @@ struct VitActParams {
   uint out_ld;       // output row stride (elements)
 };
 
-// erf to ~1e-7 (erfc's Chebyshev fit, Numerical Recipes 6.2): Metal has no erf
+// erf to 1.5e-7 (Abramowitz & Stegun 7.1.26): Metal has no erf
 NI_INLINE float vit_erf(float x) {
-  const float z = metal::abs(x), t = 1.0f / (1.0f + 0.5f * z);
-  const float r = t * metal::precise::exp(-z * z - 1.26551223f +
-                    t * (1.00002368f + t * (0.37409196f + t * (0.09678418f + t * (-0.18628806f + t * (0.27886807f +
-                    t * (-1.13520398f + t * (1.48851587f + t * (-0.82215223f + t * 0.17087277f)))))))));
-  return x >= 0.0f ? 1.0f - r : r - 1.0f;
+  const float z = metal::abs(x), t = 1.0f / (1.0f + 0.3275911f * z);
+  const float poly = t * (0.254829592f + t * (-0.284496736f + t * (1.421413741f + t * (-1.453152027f + t * 1.061405429f))));
+  const float r = 1.0f - poly * metal::precise::exp(-z * z);
+  return x >= 0.0f ? r : -r;
 }
 
 NI_INLINE float vit_act(float v, uint act) {
@@ -94,7 +93,7 @@ NI_INLINE float vit_act(float v, uint act) {
 
 // ---- non-causal attention over the patches of one image ----
 // Q, K, V: half [heads][N][D] (head-major); out: half [N][ld], head h at columns h*D... One threadgroup per (block of
-// NSG*8 queries, head); each simdgroup owns 8 query rows over all D dims. Key tiles of 32 keys: K^T and V in
+// NSG*RB*8 queries, head); each simdgroup owns RB blocks of 8 query rows over all D dims. Key tiles of 32 keys: K^T and V in
 // threadgroup memory, S = Q K^T and O += P V on simdgroup matrices, online softmax in the log2 domain.
 struct VitAttnParams {
   uint N;       // patches (keys and queries)
@@ -106,7 +105,7 @@ struct VitAttnParams {
 constant constexpr uint kVitBK = 32;
 constant constexpr float kVitNeg = -1.0e30f;
 
-template <uint D, uint NSG>
+template <uint D, uint NSG, uint RB>
 NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const device half* V, device half* O,
                              constant VitAttnParams& p, uint2 tg, uint tid, uint sg, uint lane,
                              threadgroup half* kt, threadgroup half* vs) {
@@ -114,26 +113,27 @@ NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const d
   constexpr uint KLD = BK + 8;  // K^T: one row per dim, BK keys
   constexpr uint VLD = D + 8;   // V: one row per key, D dims
   const uint h = tg.y;
-  const uint q0 = (p.qb0 + tg.x) * NSG * 8 + sg * 8;
+  const uint q0 = (p.qb0 + tg.x) * NSG * 8 * RB + sg * 8 * RB;  // this simdgroup's RB blocks of 8 queries
   const uint qd = lane / 4;
   const uint frow = (qd & 4) + (lane / 2) % 4, fcol = (qd & 2) * 2 + (lane % 2) * 2;
-  const uint q = q0 + frow;
   const device half* Qh = Q + size_t(h) * p.N * D;
   const device half* Kh = K + size_t(h) * p.N * D;
   const device half* Vh = V + size_t(h) * p.N * D;
 
-  simdgroup_half8x8 qf[ND];
-  {
-    const device half* qr = Qh + size_t(min(q, p.N - 1)) * D + fcol;
+  simdgroup_half8x8 qf[RB][ND];
+  NI_UNROLL for (uint b = 0; b < RB; ++b) {
+    const device half* qr = Qh + size_t(min(q0 + b * 8 + frow, p.N - 1)) * D + fcol;
     NI_UNROLL for (uint d = 0; d < ND; ++d) {
       const half2 v = *(const device half2*)(qr + d * 8);
-      qf[d].thread_elements()[0] = v.x;
-      qf[d].thread_elements()[1] = v.y;
+      qf[b][d].thread_elements()[0] = v.x;
+      qf[b][d].thread_elements()[1] = v.y;
     }
   }
-  simdgroup_float8x8 o[ND];
-  NI_UNROLL for (uint d = 0; d < ND; ++d) o[d] = simdgroup_float8x8(0);
-  float m_row = kVitNeg, l_row = 0.0f;
+  simdgroup_float8x8 o[RB][ND];
+  NI_UNROLL for (uint b = 0; b < RB; ++b)
+    NI_UNROLL for (uint d = 0; d < ND; ++d) o[b][d] = simdgroup_float8x8(0);
+  float m_row[RB], l_row[RB];
+  NI_UNROLL for (uint b = 0; b < RB; ++b) m_row[b] = kVitNeg, l_row[b] = 0.0f;
   const float sl2 = p.scale * M_LOG2E_F;
   const uint ntiles = (p.N + BK - 1) / BK;
   for (uint it = 0; it < ntiles; ++it) {
@@ -159,66 +159,72 @@ NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const d
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // S (8 queries x BK keys) = Q K^T
-    simdgroup_float8x8 s[NC];
-    NI_UNROLL for (uint c = 0; c < NC; ++c) s[c] = simdgroup_float8x8(0);
+    // S (8 queries x BK keys per block) = Q K^T: each K^T fragment serves the RB blocks
+    simdgroup_float8x8 s[RB][NC];
+    NI_UNROLL for (uint b = 0; b < RB; ++b)
+      NI_UNROLL for (uint c = 0; c < NC; ++c) s[b][c] = simdgroup_float8x8(0);
     NI_UNROLL for (uint d = 0; d < ND; ++d) {
       NI_UNROLL for (uint c = 0; c < NC; ++c) {
         simdgroup_half8x8 kf;
         const half2 k2 = *(const threadgroup half2*)(kt + (d * 8 + frow) * KLD + c * 8 + fcol);
         kf.thread_elements()[0] = k2.x;
         kf.thread_elements()[1] = k2.y;
-        simdgroup_multiply_accumulate(s[c], qf[d], kf, s[c]);
+        NI_UNROLL for (uint b = 0; b < RB; ++b) simdgroup_multiply_accumulate(s[b][c], qf[b][d], kf, s[b][c]);
       }
     }
-    // online softmax of this lane's row (its other lanes: lane ^ 1, lane ^ 8)
-    float mx = kVitNeg;
-    NI_UNROLL for (uint c = 0; c < NC; ++c)
-      NI_UNROLL for (uint i = 0; i < 2; ++i) {
-        float v = s[c].thread_elements()[i] * sl2;
-        if (k0 + c * 8 + fcol + i >= p.N) v = kVitNeg;
-        s[c].thread_elements()[i] = v;
-        mx = max(mx, v);
+    // online softmax of this lane's rows (a row's other lanes: lane ^ 1, lane ^ 8)
+    NI_UNROLL for (uint b = 0; b < RB; ++b) {
+      float mx = kVitNeg;
+      NI_UNROLL for (uint c = 0; c < NC; ++c)
+        NI_UNROLL for (uint i = 0; i < 2; ++i) {
+          float v = s[b][c].thread_elements()[i] * sl2;
+          if (k0 + c * 8 + fcol + i >= p.N) v = kVitNeg;
+          s[b][c].thread_elements()[i] = v;
+          mx = max(mx, v);
+        }
+      mx = max(mx, simd_shuffle_xor(mx, 1));
+      mx = max(mx, simd_shuffle_xor(mx, 8));
+      const float m_new = max(m_row[b], mx);
+      const float corr = metal::fast::exp2(m_row[b] - m_new);
+      float ps = 0.0f;
+      NI_UNROLL for (uint c = 0; c < NC; ++c)
+        NI_UNROLL for (uint i = 0; i < 2; ++i) {
+          const float e = metal::fast::exp2(s[b][c].thread_elements()[i] - m_new);
+          s[b][c].thread_elements()[i] = e;
+          ps += e;
+        }
+      ps += simd_shuffle_xor(ps, 1);
+      ps += simd_shuffle_xor(ps, 8);
+      l_row[b] = l_row[b] * corr + ps;
+      m_row[b] = m_new;
+      NI_UNROLL for (uint d = 0; d < ND; ++d) {
+        o[b][d].thread_elements()[0] *= corr;
+        o[b][d].thread_elements()[1] *= corr;
       }
-    mx = max(mx, simd_shuffle_xor(mx, 1));
-    mx = max(mx, simd_shuffle_xor(mx, 8));
-    const float m_new = max(m_row, mx);
-    const float corr = metal::fast::exp2(m_row - m_new);
-    float ps = 0.0f;
-    NI_UNROLL for (uint c = 0; c < NC; ++c)
-      NI_UNROLL for (uint i = 0; i < 2; ++i) {
-        const float e = metal::fast::exp2(s[c].thread_elements()[i] - m_new);
-        s[c].thread_elements()[i] = e;
-        ps += e;
-      }
-    ps += simd_shuffle_xor(ps, 1);
-    ps += simd_shuffle_xor(ps, 8);
-    l_row = l_row * corr + ps;
-    m_row = m_new;
-    NI_UNROLL for (uint d = 0; d < ND; ++d) {
-      o[d].thread_elements()[0] *= corr;
-      o[d].thread_elements()[1] *= corr;
     }
-    // O += P V
+    // O += P V: each V fragment serves the RB blocks
     NI_UNROLL for (uint d = 0; d < ND; ++d) {
       NI_UNROLL for (uint c = 0; c < NC; ++c) {
         simdgroup_half8x8 vf;
         const half2 v2 = *(const threadgroup half2*)(vs + (c * 8 + frow) * VLD + d * 8 + fcol);
         vf.thread_elements()[0] = v2.x;
         vf.thread_elements()[1] = v2.y;
-        simdgroup_multiply_accumulate(o[d], s[c], vf, o[d]);
+        NI_UNROLL for (uint b = 0; b < RB; ++b) simdgroup_multiply_accumulate(o[b][d], s[b][c], vf, o[b][d]);
       }
     }
   }
-  if (q < p.N) {
-    const float inv = 1.0f / l_row;
-    device half* dst = O + size_t(q) * p.ld + h * D + fcol;
-    NI_UNROLL for (uint d = 0; d < ND; ++d)
-      *(device half2*)(dst + d * 8) = half2(o[d].thread_elements()[0] * inv, o[d].thread_elements()[1] * inv);
+  NI_UNROLL for (uint b = 0; b < RB; ++b) {
+    const uint q = q0 + b * 8 + frow;
+    if (q < p.N) {
+      const float inv = 1.0f / l_row[b];
+      device half* dst = O + size_t(q) * p.ld + h * D + fcol;
+      NI_UNROLL for (uint d = 0; d < ND; ++d)
+        *(device half2*)(dst + d * 8) = half2(o[b][d].thread_elements()[0] * inv, o[b][d].thread_elements()[1] * inv);
+    }
   }
 }
 
-#define NI_VIT_ATTN(NAME, D, NSG)                                                                              \
+#define NI_VIT_ATTN(NAME, D, NSG, RB)                                                                          \
   [[kernel, max_total_threads_per_threadgroup(NSG * 32)]] void NAME(                                           \
       const device half* Q [[buffer(0)]], const device half* K [[buffer(1)]], const device half* V [[buffer(2)]], \
       device half* O [[buffer(3)]], constant VitAttnParams& p [[buffer(4)]],                                  \
@@ -226,10 +232,13 @@ NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const d
       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                   \
     threadgroup half kt[D * (kVitBK + 8)];                                                                     \
     threadgroup half vs[kVitBK * (D + 8)];                                                                     \
-    vit_attn_impl<D, NSG>(Q, K, V, O, p, tg, tid, sg, lane, kt, vs);                                           \
+    vit_attn_impl<D, NSG, RB>(Q, K, V, O, p, tg, tid, sg, lane, kt, vs);                                       \
   }
-NI_VIT_ATTN(vit_attn_d72_s4, 72, 4)
-NI_VIT_ATTN(vit_attn_d72_s8, 72, 8)
+// threadgroup = NSG simdgroups x RB blocks of 8 queries each
+NI_VIT_ATTN(vit_attn_d72_s4, 72, 4, 1)
+NI_VIT_ATTN(vit_attn_d72_s8, 72, 8, 1)
+NI_VIT_ATTN(vit_attn_d72_s4r2, 72, 4, 2)
+NI_VIT_ATTN(vit_attn_d72_s8r2, 72, 8, 2)
 
 // ==== the Qwen3.5 ViT ====
 

@@ -273,6 +273,7 @@ int main(int argc, char** argv) {
         vit->encode(p, out);
         printf("  encode %.1f ms\n", now_ms() - t0);
       }
+      if (Encoder::profiling()) Encoder::profile_report(reps);
       return 0;
     }
   } catch (const Error& e) {

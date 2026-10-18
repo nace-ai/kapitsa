@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Time to first token of image prompts through a running `kapitsa serve` (stdlib only).
 
-usage: ttft.py BASE_URL IMAGE.png [IMAGE.png ...]
-For each image: a warm-up request first (the encoder's first load), then per image a cold request (a new image: the
+usage: ttft.py BASE_URL WARMUP.png IMAGE.png [IMAGE.png ...]
+A warm-up request with WARMUP.png first (the encoder's first load), then per image a cold request (a new image: the
 encoder and the whole prompt run) and the same request again (cached: the prompt is reused). Thinking off, 1 token.
 """
 import base64, json, sys, time, urllib.request
@@ -36,7 +36,7 @@ def data_url(path):
 
 
 ask(data_url(sys.argv[2]), "warm-up")
-for path in sys.argv[2:]:
+for path in sys.argv[3:]:
     u = data_url(path)
     cold, us = ask(u, "Describe this screenshot.")
     warm, uw = ask(u, "Describe this screenshot.")

@@ -158,6 +158,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
   const size_t room = budget_ > used ? budget_ - used : 0;
   context_fit_ = int(std::min<size_t>(size_t(opts_.context), room / per));
+  fixed_bytes_ = used;
   logi("GPU: %s, %d cores%s", g.name().c_str(), g.core_count(), g.core_count_measured() ? "" : " (not measured: NI_GPU_CORES or the tier's smallest)");
   logi("memory: %.2f GB allocated (model, buffers, %d slots' state), budget %.1f GB (recommended working set %.1f GB): "
        "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
@@ -439,10 +440,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   try {
     img_src = vision::image_sources(r.messages);
     images = request_images(vision_.get(), opts_.model_id, img_src);
-  } catch (const vision::Error& ex) {
+  } catch (const std::exception& ex) {  // vision::Error: the client's to fix; anything else: say what it was
     ChatResult res;
     res.finish_reason = "error";
-    res.error = ex.what();
+    res.error = dynamic_cast<const vision::Error*>(&ex) ? ex.what() : std::string("images: ") + ex.what();
     return res;
   }
   const double img_prep_ms = now_ms() - t_img;
@@ -535,6 +536,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++img_encoded;
     }
     img_ms += now_ms() - t0;
+    // what one conversation can hold now that the encoder's weights take their share of the budget (/v1/models)
+    const size_t fixed = fixed_bytes_ + (vision_->encoder().loaded() ? vision_->encoder().weight_bytes() : 0);
+    context_fit_ = int(std::min<size_t>(size_t(opts_.context), (budget_ > fixed ? budget_ - fixed : 0) /
+                                                                   model_->kv_bytes_per_pos()));
   };
   if (mmp) {
     int from = 0;

@@ -527,7 +527,27 @@ struct QvitRopeParams {
 
 constexpr int kRowChunk = 4096;     // rows per GEMM pass of the MLP / qkv (scratch memory)
 constexpr double kCmdGflop = 150;   // work per command buffer (~25 ms): long command buffers hold up the display
-constexpr uint32_t kAttnSg = 4;     // simdgroups per attention threadgroup (8 queries each)
+
+// The attention kernel (NI_VIT_ATTN overrides): vit_attn_d72_s{simdgroups}[r{blocks of 8 queries per simdgroup}]
+struct AttnKernel {
+  std::string name;
+  uint32_t sg = 4, rb = 1;
+  uint32_t queries() const { return sg * rb * 8; }
+};
+const AttnKernel& attn_kernel() {
+  static const AttnKernel k = [] {
+    AttnKernel a;
+    a.name = "vit_attn_d72_s4";
+    if (const char* v = getenv("NI_VIT_ATTN"); v && *v) {
+      unsigned sg = 0, rb = 1;
+      if (sscanf(v, "vit_attn_d72_s%ur%u", &sg, &rb) < 1 || (sg != 4 && sg != 8) || (rb != 1 && rb != 2))
+        fatal("NI_VIT_ATTN=%s: expected vit_attn_d72_s{4,8}[r2]", v);
+      a.name = v, a.sg = sg, a.rb = rb;
+    }
+    return a;
+  }();
+  return k;
+}
 
 // GPU work in command buffers of bounded size, committed as they fill; finish() waits for all of them.
 struct CmdSeq {
@@ -677,8 +697,9 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
   }
   const int stop = dbg_stop_ >= 0 ? std::min(dbg_stop_, c_.depth) : c_.depth;
   const Buffer* pending = nullptr;  // the residual bias still to add to x (folded into the next LayerNorm)
-  const double attn_qb_gflop = 4.0 * kAttnSg * 8 * double(N) * HD * NH / 1e9;
-  const uint32_t nqb = (uint32_t(N) + kAttnSg * 8 - 1) / (kAttnSg * 8);
+  const AttnKernel& ak = attn_kernel();
+  const double attn_qb_gflop = 4.0 * ak.queries() * double(N) * HD * NH / 1e9;
+  const uint32_t nqb = (uint32_t(N) + ak.queries() - 1) / ak.queries();
   const uint32_t qb_per = uint32_t(std::max(1.0, std::floor(kCmdGflop / attn_qb_gflop)));
   for (int L = 0; L < stop; ++L) {
     const Block& B = blocks_[size_t(L)];
@@ -704,13 +725,13 @@ void QwenViT::encode(const Prepared& p, const Buffer& out) {
       const uint32_t n = std::min(qb_per, nqb - qb);
       Encoder& e = cs.at(attn_qb_gflop * n);
       const VitAttnParams ap{uint32_t(N), uint32_t(H), qb, 1.0f / std::sqrt(float(HD))};
-      e.use(pipe(kAttnSg == 8 ? "vit_attn_d72_s8" : "vit_attn_d72_s4"));
+      e.use(pipe(ak.name));
       e.buf(0, Qb);
       e.buf(1, Kb);
       e.buf(2, Vb);
       e.buf(3, xn);
       e.val(4, ap);
-      e.dispatch(n, uint32_t(NH), 1, kAttnSg * 32);
+      e.dispatch(n, uint32_t(NH), 1, ak.sg * 32);
     }
     for (int r0 = 0; r0 < N; r0 += RC) {
       const int rc = std::min(RC, N - r0);

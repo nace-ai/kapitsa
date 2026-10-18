@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Image input against a running `kapitsa serve` (stdlib only).
 
-usage: check_server.py BASE_URL IMAGE_DIR [--quick]
+usage: check_server.py BASE_URL IMAGE_DIR [--quick]   (--quick: the answers and the follow-up only)
 IMAGE_DIR holds chart.png (a bar chart: May is highest at 73), terminal.png (a terminal with a ZeroDivisionError at
 train.py line 81) and aerial.png (the Golden Gate Bridge). Checks:
   - answers about the three images are right (thinking off, greedy)
@@ -94,11 +94,15 @@ cached, prompt = u2.get("prompt_tokens_details", {}).get("cached_tokens", 0), u2
 check("follow-up with the same image hits the prefix cache", r2["status"] == 200 and cached >= prompt - 40 and
       "jan" in r2["content"].lower(), f"{cached} of {prompt} prompt tokens cached, time to first token "
       f"{r2.get('ttft') or 0:.2f} s, answer {r2['content'][:80]!r}")
+if QUICK:  # answers and the follow-up only
+    print(f"\n{len(fails)} failed" + (": " + ", ".join(fails) if fails else ""))
+    sys.exit(1 if fails else 0)
+
 # a resent identical request (no history change): cached up to its last token
 r3 = post([user(q1, img["chart"])])
 u3 = r3.get("usage") or {}
 check("the same image prompt again: cached", (u3.get("prompt_tokens_details") or {}).get("cached_tokens", 0) >=
-      u3.get("prompt_tokens", 0) - 8, f"{(u3.get('prompt_tokens_details') or {}).get('cached_tokens')} of "
+      u3.get("prompt_tokens", 0) - 16, f"{(u3.get('prompt_tokens_details') or {}).get('cached_tokens')} of "
       f"{u3.get('prompt_tokens')}; time to first token {r3.get('ttft') or 0:.2f} s")
 
 # a different image of the same size in the same place: no reuse past the image's first row

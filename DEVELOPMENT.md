@@ -88,6 +88,52 @@ the conversation in the browser's localStorage. With `--api-key` it asks for the
 localStorage). Markdown is rendered by a small escaping renderer (code fences, inline code, headings, lists, tables,
 quotes, bold/italic, http(s) links); model output never reaches the page as HTML.
 
+## Images
+
+Models with a vision tower take images: the Qwen3.6-35B-A3B and Qwen3.8-27B packs include theirs (bf16, 0.89 /
+0.92 GB). Send OpenAI `image_url` content parts (`{"type": "image_url", "image_url": {"url": ...}}`) with a `data:`
+URL (base64; PNG, JPEG, WebP, GIF, HEIC, TIFF, BMP: whatever ImageIO reads) or an `http(s)` URL (downloaded with a
+32 MB cap and a 30 s limit: `NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S`). The engine takes the images from the chat
+messages, so any API that maps its image blocks to these parts works; a part counts as an image exactly when the chat
+template renders it as one (an `image` or `image_url` key, or `"type": "image"`, also with an Anthropic-style
+`source`). Images may sit in user, assistant and tool messages. Video is not supported (a 400 that says so), nor are
+images on models without a vision tower.
+
+The shared part (`src/vision/`: `image.mm`, `encoder.*`, `embed.h`) fetches and decodes images, prepares them
+through the model's encoder, expands each image's placeholder token to its embedding rows, keys those rows for prefix
+reuse, loads the encoder on the first image that needs encoding and keeps it within the memory budget. Per model, an
+`ImageEncoder` holds the processor and the tower (`qwen_vit.*` + `src/kernels/vit.metal` for the Qwen3.5 family: a
+new model's encoder is one more class and one line in `open_encoder`), and the model applies its own positions
+(`Qwen35::set_rope_positions`: Qwen's interleaved M-RoPE, `attn_prep_m`; a model whose attention takes no positions
+needs nothing there).
+
+- Processor: decoded as PIL's `convert("RGB")` decodes (no color management, alpha dropped, the EXIF orientation
+  applied), resized by smart_resize (multiples of 32 within the model's 65536 to 16.7M pixels, `--image-max-pixels`
+  lowers the maximum) with Pillow's bicubic resampling reproduced to the bit, normalized, cut into 16x16 patches over
+  2 frames. `tests/vision/check_cpu.py` checks it against Pillow and Hugging Face's processors (bit-exact with the
+  reference arithmetic; decoding exact for PNG, WebP, GIF, BMP, TIFF; JPEG and HEIC go through Apple's decoder,
+  within a few levels of libjpeg).
+- Tower: the bf16 prefill GEMMs (`qrf_f16_*`) with a fp32 residual stream, LayerNorm, GELU, 2D RoPE and a
+  non-causal flash attention over the image's patches (head dim 72) in `vit.metal`; the MLP's 4304 columns padded to
+  4352 with zeros at load. Its work goes to the GPU in command buffers of ~25 ms (long ones hold up the display).
+  Scratch is allocated per image and freed after it.
+- Prefill: the image rows take the encoder's bf16 rows instead of their placeholder's embedding (`Seq::embeds`,
+  also for the MTP head's history pass); attention layers rotate image rows by (t, h, w) and the text after an image
+  by its position less the image's saving (`Seq::rope_pos`, `rope_delta`; decode, verify, MTP and DFlash2 follow it).
+  A text-only conversation runs exactly the kernels it ran before.
+- Prefix reuse and checkpoints compare image rows by keys derived from the image's content (SHA-256 of its decoded
+  pixels and size) and check every image in a reused prefix against the slot's, so an image never reuses another's
+  state; the same image resent (an agent's screenshot every turn) reuses the cache. The embeddings of recent images
+  are kept (`NI_IMAGE_CACHE_MB`, default 256) and `data:` URLs already seen are not decoded again.
+- Memory: the encoder's weights and an image's scratch are allocated within the budget (other slots' KV caches and
+  the Neural Engine split give way first if needed); when the KV cache needs the room the cached embeddings go first
+  and the encoder's weights last (they load again with the next image).
+
+`tools/vit_check` runs the pieces alone (decode, resize, smart_resize, processor output, M-RoPE positions, the
+tower on raw pixels, kernel checks, encode timing); `tests/vision/ref_tower.py` is the float32 reference of the tower
+(Hugging Face's, on the CPU), `tests/vision/ref_mlx.py` writes mlx_vlm's next-token distributions for
+`ni_eval --image`, `tests/vision/check_server.py` checks answers, prefix reuse and errors through a running server.
+
 ## Models and downloads
 
 The store is `~/.cache/kapitsa/models/<name>/` (`KAPITSA_HOME` replaces `~/.cache/kapitsa`): a catalog model under
@@ -282,6 +328,10 @@ from Hugging Face one layer at a time).
 - `src/model/dflash2.*`, `src/kernels/spec_dflash.metal`: the DFlash2 block drafter (load-time 4-bit
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
   the double-buffered decode cycle).
+- `src/vision/`: image input (Images above): `image.mm` (image parts, fetching, ImageIO decoding, digests),
+  `encoder.*` (the encoder interface, lazy loading, caches, placeholder expansion, prefix keys), `embed.h` (what a
+  model's prefill sees), `qwen_vit.*` (the Qwen3.5 processor and ViT); kernels in `vit.metal` (the ViT) and
+  `mm.metal` (embedding rows, `attn_prep_m`).
 - `src/engine/`: chat templates (minja), slots with prefix reuse and recurrent-state checkpoints at turn
   boundaries (a user query's outlives the tool responses after it); `output_parser.h`: streaming parser for
   reasoning / content / tool calls (`tools/parser_test <model dir>` checks it on real token ids, CPU only).
@@ -306,7 +356,8 @@ from Hugging Face one layer at a time).
   pipelines below 1024 threads), `mtp_sidecar.py` (an MTP head for an MLX model that dropped it, from the official
   checkpoint by HTTP range requests: `tools/mtp_sidecar.py Qwen/Qwen3.5-4B <model dir>/mtp.safetensors`).
 - `tools/ni_eval`: teacher-forced quality of a model against a reference (`ni_eval <model> @ids... --ref-model
-  <dir>` exact, `--dump-ref f` / `--ref f` top-K reference files; JSON lines per sequence and in total).
+  <dir>` exact, `--dump-ref f` / `--ref f` top-K reference files; JSON lines per sequence and in total; `--image f`
+  for sequences with images). `tools/vit_check`: the image pieces alone (Images above).
 - `bench/quality/`: held-out token ids (C++, Python, English prose, a coding-agent chat with tool calls; 4 x 1024
   tokens per tokenizer) and the quantization measurement tools (Weight formats above; `README.md` there).
 - `bench/prompts/`: token-id prompts for A/B runs (`make_prompts.py` regenerates them);
@@ -350,6 +401,9 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
 | `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
 | `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |
+| `NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S` | 32, 30 | images: largest encoded image taken (MB), http(s) download limit (s) |
+| `NI_IMAGE_CACHE_MB` | 256 | images: GPU memory kept for the embeddings of recent images (an image sent again is not encoded again) |
+| `NI_VIT_ATTN` | `vit_attn_d72_s4` | the ViT's attention kernel (`vit_attn_d72_s{4,8}[r2]`: simdgroups per threadgroup, 8-query blocks per simdgroup) |
 | `NI_THINK_TOOLCALLS` | on | a tool call the model writes inside its reasoning and ends the turn with is returned as a tool call; `0` = left in the reasoning |
 | `NI_GDN_PAR`, `NI_GDN_STEP` | on, `gdn_step_parr4_l16` | token-parallel DeltaNet prefill (4 value rows per lane); `NI_GDN_PAR=0` = original |
 | `NI_ATTN` | `attn_prefill11r` | prefill attention kernel name (11r: v11 skipping unit rescales, bitwise equal) |
