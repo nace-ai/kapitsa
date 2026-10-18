@@ -189,6 +189,26 @@ path works only greedy in 0.7.1rc1, so `bolt-omlx-lilicorr-greedy` measures it a
 oMLX + drafter launcher (`launchers/omlx_bolt_serve.sh`) follows the bundle's README: load, unload, load again with
 the drafter. `MLX_VLM_PYTHON` names a Python with mlx-vlm.
 
+### Nemotron 3.5 Super-VL (`configs/super-vl.json`) [mlx-vlm git main 73d366e, oMLX 0.7.1rc1, mlx-lm 0.32.2, llama.cpp 0.7.0]
+
+A 96 GB+ model (70 GB of weights); the published runs used a 128 GB M5 Max. Kapitsa and mlx-vlm read NVIDIA's own
+NVFP4 checkpoint, the folder `kapitsa pull super-vl` writes (the LiLiCorr drafter in `dflash/`), linked as
+`$M/nemotron-3.5-super-vl-nvfp4`. mlx-vlm's Super-VL support (PR #2528, with its native MTP drafter) is newer than its
+0.7.8 release, so `MLX_VLM_MAIN_PYTHON` names a venv with git main
+(`uv pip install "mlx-vlm @ git+https://github.com/Blaizzy/mlx-vlm@73d366ecf923"`). oMLX and mlx-lm cannot read
+NVIDIA's checkpoint (model type `nemotron_h_omni`) and run the text-only MLX 4-bit conversion instead; llama.cpp runs
+ggml-org's official Q4_0 GGUF, its MTP head and NVIDIA's LiLiCorr drafter converted by ggml-org:
+
+```bash
+hf download rapid-mlx/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-MLX-4bit --revision 016789035d80736393d9bfcdb63d6911002e424d --local-dir $M/super-vl-mlx-4bit-rapid
+hf download ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf \
+    mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf lilicorr-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf \
+    --revision 3c91ad1be60865386af92e8147dafb32470b097d --local-dir $M/super-vl-gguf   # or set SUPER_VL_GGUF_DIR
+```
+
+The configs' notes give each choice (mlx-vlm's MTP block size and llama.cpp's drafter depths come from smoke tests).
+The 4K / 16K reference prompt lengths (4183 / 16513) were counted with this model's tokenizer and chat template.
+
 ### MTPLX (`configs/mtplx.json`) [2.12.2]
 
 `uv tool install mtplx` (or `pip install mtplx`); set `MTPLX_BIN` unless `mtplx` is on PATH. The settings are the
@@ -260,5 +280,6 @@ the sampling flags change the run (`--help`). Wrap your own server's whole lifet
 | `configs/` | One file per engine, both models |
 | `corpus/` | The frozen prompt corpus and its notice (Apache-2.0 excerpts of Hugging Face Transformers) |
 | `launchers/lmstudio_serve.sh` | LM Studio's daemon as a foreground benchmark server |
+| `launchers/omlx_bolt_serve.sh` | oMLX with Bolt's LiLiCorr drafter (load, unload, reload with the drafter), then the harness port |
 | `tools/ollama_mlx_import.py`, `tools/ollama_mlx_verify.py` | Zero-copy import of MLX weights for Ollama's MLX runner, and its check |
 | `local.env.example` | Paths for this Mac, copied to `local.env` |
