@@ -8,10 +8,13 @@
 //   kapitsa list [--json]
 //   kapitsa rm MODEL...
 //   kapitsa mtp-sidecar SRC OUT [--revision REV] [--hidden post_norm|pre_norm]   (tools/mtp_sidecar.py, same bytes)
+//   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
 #include "engine/doctor.h"
 #include "engine/engine.h"
+#include "gguf/gguf.h"
+#include "gguf/import.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "util/log.h"
@@ -217,12 +220,13 @@ static void print_help() {
          "http://127.0.0.1:8000/v1.\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
-         "  or a model folder.\n\n"
+         "  or a model folder, or a .gguf file (converted once into a model folder).\n\n"
          "Commands:\n"
          "  serve        start the server: chat page at /, OpenAI API at /v1 (kapitsa serve --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
          "  list         downloaded models, their size and what they include\n"
          "  rm MODEL     delete a downloaded model\n"
+         "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
          "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
@@ -231,8 +235,8 @@ static void print_help() {
 static void print_serve_help() {
   printf("kapitsa serve [--model MODEL] [options]\n\n"
          "  --model MODEL          35b, 27b, 4b (full names: kapitsa --help; <model>:<variant> for another\n"
-         "                         precision), org/name[@revision], or a model folder. Default: the best model\n"
-         "                         for this Mac. Downloaded on first use.\n"
+         "                         precision), org/name[@revision], a model folder, or a .gguf file (converted\n"
+         "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
          "  --host HOST            listen address (default 127.0.0.1; 0.0.0.0 serves your network)\n"
          "  --port PORT            default 8000\n"
          "  --api-key KEY          require \"Authorization: Bearer KEY\" (the chat page asks for it once)\n"
@@ -319,6 +323,15 @@ static int serve(int argc, char** argv, int first) {
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
+    try {
+      gguf::ImportOptions io;
+      io.file = expand_home(model);
+      model = gguf::import_model(io);
+    } catch (const gguf::Error& e) {
+      return fail(e.what(), 2);
+    }
+  }
 
   // the model: a name, a repo or a folder; downloaded (or completed) first if needed
   const size_t budget = opt.mem_budget_gb > 0 ? size_t(opt.mem_budget_gb * 1e9) : default_mem_budget();
@@ -690,7 +703,7 @@ static int rm(int argc, char** argv) {
         return fail("Several variants of " + ref.model->name + " are downloaded: " + names + ". Name one.", 2);
       }
     }
-    if (ref.kind == hub::ModelRef::kLocal)
+    if (ref.kind == hub::ModelRef::kLocal && ref.dir.rfind(hub::models_dir() + "/", 0) != 0)
       return fail(ref.dir + " is a folder of yours, not a downloaded model: kapitsa rm leaves it alone.", 2);
     if (stat(ref.dir.c_str(), &st) != 0) {
       printf("%s is not downloaded.\n", ref.name.c_str());
@@ -756,6 +769,7 @@ int main(int argc, char** argv) {
   if (cmd == "list" || cmd == "ls") return list(argc, argv);
   if (cmd == "rm") return rm(argc, argv);
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
+  if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
