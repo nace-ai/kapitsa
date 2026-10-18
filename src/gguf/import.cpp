@@ -18,12 +18,14 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -49,6 +51,25 @@ namespace {
 constexpr uint64_t kShardBytes = 5ull << 30;     // MLX's shard size
 constexpr uint64_t kKeepFree = 6ull << 30;       // free disk an import must leave
 constexpr uint64_t kChunkBytes = 64ull << 20;    // source bytes per conversion step
+
+std::atomic<bool> g_stop{false};  // Ctrl+C during a conversion: stop, remove the unfinished folder
+
+// SIGINT / SIGTERM set g_stop while it lives (the previous handlers come back after)
+struct StopGuard {
+  struct sigaction old_int {}, old_term {};
+  StopGuard() {
+    g_stop = false;
+    struct sigaction sa {};
+    sa.sa_handler = [](int) { g_stop = true; };
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGINT, &sa, &old_int);
+    sigaction(SIGTERM, &sa, &old_term);
+  }
+  ~StopGuard() {
+    sigaction(SIGINT, &old_int, nullptr);
+    sigaction(SIGTERM, &old_term, nullptr);
+  }
+};
 
 // ---------------------------------------------------------------- small helpers
 
@@ -957,6 +978,7 @@ void convert(const Lin& L, const std::vector<OutFile>& files, int threads, Progr
   std::vector<uint8_t> src, w;
   std::vector<uint16_t> sc, bi;
   for (uint64_t r0 = 0; r0 < L.rows; r0 += step) {
+    if (g_stop) throw Error("Stopped; nothing was kept. The same command starts the conversion again.");
     const uint64_t r1 = std::min(L.rows, r0 + step);
     uint64_t lo = UINT64_MAX, hi = 0;
     for (uint64_t r = r0; r < r1; ++r) {
@@ -1257,6 +1279,7 @@ std::string import_model(const ImportOptions& opt) {
                 "to a folder on another disk.");
 
   // write into a hidden folder, renamed when complete
+  StopGuard stop_guard;
   const std::string tmp = models + "/." + name + ".importing";
   remove_tree(tmp);
   std::filesystem::create_directories(tmp + "/.kapitsa", ec);

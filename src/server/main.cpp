@@ -324,6 +324,7 @@ static int serve(int argc, char** argv, int first) {
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
+    if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);  // before a long conversion
     try {
       gguf::ImportOptions io;
       io.file = expand_home(model);
