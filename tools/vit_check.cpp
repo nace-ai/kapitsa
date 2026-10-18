@@ -16,7 +16,8 @@
 //                                                     hidden state of every row after that many blocks
 //   vit_check bench MODEL W H [REPS]                  GPU: encode time of a W x H image (random pixels)
 //   vit_check kernels                                 GPU, tiny synthetic tensors: attn_prep_m vs attn_prep (bitwise
-//                                                     on text rows), vs a CPU M-RoPE on image rows; embed_rows_bf16
+//                                                     on text rows), vs a CPU M-RoPE on image rows; embed_rows_bf16;
+//                                                     vit_ln_f32 vs a CPU LayerNorm
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "util/bf16.h"
@@ -168,6 +169,52 @@ static int kernel_checks() {
     }
   printf("%s embed_rows_bf16: image rows copied exactly, others untouched\n", ok ? "ok  " : "FAIL");
   fails += !ok;
+  // 4. vit_ln_f32 (RADIO's final LayerNorm, in place) on rows [1, 4) of 5 (a pending bias first) vs a CPU LayerNorm
+  // in double; rows outside untouched
+  {
+    const int Dl = 80, R = 5;
+    const float leps = 1e-6f;
+    Buffer xl = g.alloc(size_t(R) * Dl * 4), pb = g.alloc(Dl * 2), lw = g.alloc(Dl * 2), lb = g.alloc(Dl * 2);
+    for (int i = 0; i < R * Dl; ++i) xl.as<float>()[i] = 3.0f + 2.0f * nd(rng);
+    for (int i = 0; i < Dl; ++i) {
+      pb.as<uint16_t>()[i] = f32_to_bf16(0.5f * nd(rng));
+      lw.as<uint16_t>()[i] = f32_to_bf16(1.0f + 0.2f * nd(rng));
+      lb.as<uint16_t>()[i] = f32_to_bf16(0.1f * nd(rng));
+    }
+    const std::vector<float> x0(xl.as<float>(), xl.as<float>() + R * Dl);
+    {
+      auto e = g.begin();
+      vit_ln_inplace(*e, xl.view(size_t(Dl) * 4, size_t(3) * Dl * 4), uint32_t(Dl), &pb, lw, lb, 3, Dl, leps);
+      e->commit_and_wait();
+    }
+    double err = 0;
+    bool untouched = true;
+    for (int r = 0; r < R; ++r) {
+      const float* got = xl.as<float>() + size_t(r) * Dl;
+      const float* in = x0.data() + size_t(r) * Dl;
+      if (r < 1 || r >= 4) {
+        untouched = untouched && !memcmp(got, in, Dl * 4);
+        continue;
+      }
+      double m = 0, v = 0;
+      for (int i = 0; i < Dl; ++i) m += double(in[i]) + bf16_to_f32(pb.as<uint16_t>()[i]);
+      m /= Dl;
+      for (int i = 0; i < Dl; ++i) {
+        const double d = double(in[i]) + bf16_to_f32(pb.as<uint16_t>()[i]) - m;
+        v += d * d;
+      }
+      const double rs = 1.0 / std::sqrt(v / Dl + leps);
+      for (int i = 0; i < Dl; ++i) {
+        const double want = (double(in[i]) + bf16_to_f32(pb.as<uint16_t>()[i]) - m) * rs * bf16_to_f32(lw.as<uint16_t>()[i]) +
+                            bf16_to_f32(lb.as<uint16_t>()[i]);
+        err = std::max(err, std::abs(got[i] - want));
+      }
+    }
+    const bool lok = err < 1e-5 && untouched;
+    printf("%s vit_ln_f32 vs a CPU LayerNorm: max error %.2e, rows outside %s\n", lok ? "ok  " : "FAIL", err,
+           untouched ? "untouched" : "CHANGED");
+    fails += !lok;
+  }
   return fails ? 1 : 0;
 }
 

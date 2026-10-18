@@ -56,8 +56,8 @@ run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16
 
 bf16 is full precision; pick another precision with `--model 35b:6bit`, `--model 27b:bf16` and so on.
 
-Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL NVIDIA's own `nvfp4` one. Qwen3.6, Qwen3.8 and Bolt read
-[images](docs/usage.md#images); the 4B and Super-VL (for now) are text only. Other Qwen3.5-family models load from a Hugging Face repo, a
+Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL NVIDIA's own `nvfp4` one. Every model above reads
+[images](docs/usage.md#images). Other Qwen3.5-family models load from a Hugging Face repo, a
 folder or a GGUF file ([other models](docs/usage.md#other-models)). Model weights keep their own licenses.
 
 ```bash

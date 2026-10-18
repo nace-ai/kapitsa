@@ -1,7 +1,8 @@
-// The Qwen3.5-family image encoder (Qwen3.6-35B-A3B, Qwen3.8-27B, ...): the Qwen2-VL image processor (smart_resize,
-// bicubic resize, normalize, 16x16 patches, a still image repeated over the 2 temporal patches) and the ViT (27 blocks
-// of LayerNorm + attention with 2D RoPE + GELU MLP, learned position embeddings interpolated to the grid, 2x2 patch
-// merger to the language model's width). Weights bf16, run on the prefill GEMMs; the small kernels in vit.metal.
+// The Qwen3.5-family image encoder (Qwen3.5-4B, Qwen3.6-35B-A3B, Qwen3.8-27B, ...): the Qwen2-VL image processor
+// (smart_resize, bicubic resize, normalize, 16x16 patches, a still image repeated over the 2 temporal patches) and the
+// ViT (blocks of LayerNorm + attention with 2D RoPE + GELU MLP, learned position embeddings interpolated to the grid,
+// 2x2 patch merger to the language model's width: 24 blocks of width 1024 and head dimension 64 on the 4B, 27 of 1152
+// and 72 on the 35B and 27B). Weights bf16, run on the prefill GEMMs; the small kernels in vit.metal.
 #pragma once
 #include "loader/safetensors.h"
 #include "vision/encoder.h"
@@ -68,7 +69,7 @@ class QwenViT : public ImageEncoder {
 
   std::string dir_, prefix_;
   QwenViTConfig c_;
-  uint32_t inter_pad_ = 0;  // MLP width padded to a multiple of 64 (4304 -> 4352)
+  uint32_t inter_pad_ = 0;  // MLP width padded to a multiple of 64 (the 35B's and 27B's 4304 -> 4352; the 4B's 4096)
   VitWeights w_;            // the vision tensors: headers while loading, then our own buffers
   bool loaded_ = false;
   VitLin patch_;            // [hidden, T*P*P*C] in (frame, row, column, channel) order

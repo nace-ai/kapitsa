@@ -111,6 +111,12 @@ mkdir $M/qwen3.5-4b-4bit-mtplx && cp -c $M/qwen3.5-4b-4bit-mtp/*.json $M/qwen3.5
 hf download Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed mtp.safetensors mtplx_runtime.json --revision 550153beba237bb1f2f6ccba31ccedfe48ff78ec --local-dir $M/qwen3.5-4b-4bit-mtplx
 # ... and for oMLX's Lightning MTP a view of that folder whose index lists the head (no data copied)
 python3 tools/omlx_mtp_farm.py $M/qwen3.5-4b-4bit-mtplx $M/qwen3.5-4b-4bit-omlx-mtp
+# Qwen3.5-4B at bf16 (q35-4b-bf16-*): the files `kapitsa pull 4b:bf16` puts in ~/.cache/kapitsa/models/qwen3.5-4b-bf16
+# (mlx-community/Qwen3.5-4B-bf16 @491fdc7 plus the same MTP head); MTPLX reads clones of them plus its 4B runtime file,
+# and oMLX's DFlash drafter is z-lab's DFlash v1 drafter for the 4B
+ln -s ~/.cache/kapitsa/models/qwen3.5-4b-bf16 $M/qwen3.5-4b-bf16-mtp
+mkdir $M/qwen3.5-4b-bf16-mtplx && cp -c $M/qwen3.5-4b-bf16-mtp/* $M/qwen3.5-4b-bf16-mtplx/ && cp -c $M/qwen3.5-4b-4bit-mtplx/mtplx_runtime.json $M/qwen3.5-4b-bf16-mtplx/
+hf download z-lab/Qwen3.5-4B-DFlash config.json model.safetensors --revision 9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf --local-dir $M/drafters/Qwen3.5-4B-DFlash
 # GGUF (llama.cpp and Ollama): see "Ollama"
 ```
 

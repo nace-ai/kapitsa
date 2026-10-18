@@ -41,5 +41,16 @@
   "model": "qwen3.5-4b",
   "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors"],
   "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, 8-bit at load). No DFlash2 drafter fits this model, so Kapitsa decodes with the MTP head (its default depth for this size); dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
+ },
+ {
+  "label": "q35-4b-bf16-kapitsa",
+  "extends": "q35-4b-kapitsa",
+  "model_name": "Qwen3.5-4B (bf16)",
+  "model_path": "{models}/qwen3.5-4b-bf16-mtp",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-bf16-mtp", "--model-id", "qwen3.5-4b",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "requires_paths": ["{models}/qwen3.5-4b-bf16-mtp/config.json", "{models}/qwen3.5-4b-bf16-mtp/mtp.safetensors"],
+  "note": "Kapitsa's default settings on the full-precision 4B (`kapitsa pull 4b:bf16`: mlx-community/Qwen3.5-4B-bf16 plus the same MTP head as the 4-bit variant). --slots 1 for parity with llama.cpp -np 1."
  }
 ]
