@@ -119,6 +119,47 @@ NI_INLINE void nh_x2_rows(const device uchar* q, const device uchar* s, const de
   }
 }
 
+// The same for K <= 1024 (the routed up projection: K = latent 1024): a lane's 32 activations are loaded once and
+// serve NB batches of NR rows (rows row0 .. row0 + NR NB - 1), so the activation loads and the per-simdgroup setup are
+// spread over NR NB rows (routed up 13-15 % faster with NR 4, NB 2 than nh_x2_rows<4>). K > 1024 falls back to
+// nh_x2_rows per batch.
+template <int NR, int NB, int EPI>
+NI_INLINE void nh_x2_rows1k(const device uchar* q, const device uchar* s, const device float* x, device float* y,
+                            uint N, uint K, float gs, uint row0, uint lane) {
+  if (K > 1024) {
+    for (int b = 0; b < NB; ++b) nh_x2_rows<NR, EPI>(q, s, x, y, N, K, gs, row0 + uint(b * NR), lane);
+    return;
+  }
+  const uint k0 = lane * 32;
+  const bool on = k0 < K;  // lanes past K read sub-block 0 and add nothing
+  const uint kk = on ? k0 : 0u;
+  float4 xv[8];
+  const device float4* xp = (const device float4*)(x + kk);
+  for (int i = 0; i < 8; ++i) xv[i] = xp[i];
+  for (int b = 0; b < NB; ++b) {
+    float acc[NR];
+    for (int j = 0; j < NR; ++j) {
+      const uint n = min(row0 + uint(b * NR + j), N - 1);
+      const uint2 aux = *(const device uint2*)(q + size_t(n) * (K / 4) + kk / 4);
+      const float v = float(((const device half*)s)[size_t(n) * (K / 256) + kk / 256]) * nh_x2_sub(aux.y) *
+                      nh_x2_dot32(aux, xv);
+      acc[j] = on ? v : 0.0f;
+    }
+    for (int j = 0; j < NR; ++j) {
+      float v = simd_sum(acc[j]) * (gs * kNhX2Scale);
+      const uint n = row0 + uint(b * NR + j);
+      if (lane == 0 && n < N) {
+        if (EPI == 1) v += y[n];
+        if (EPI == 2) {
+          v = max(v, 0.0f);
+          v = v * v;
+        }
+        y[n] = v;
+      }
+    }
+  }
+}
+
 // ---- one-row matvecs, the signature of nh_mv1_iq2_c[_add|_relu2] (NhMvParams): grid ceil(N / NR) x 32 threads ----
 #define NH_X2_MV(NAME, NR, EPI)                                                                                    \
   [[kernel]] void NAME(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],                   \
@@ -146,6 +187,20 @@ NH_X2_MV(nh_x2_mv4_add, 4, 1)
   const uint e = uint(eid[pair]);
   nh_x2_rows<4, 2>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D,
                    h + size_t(pair) * p.h_stride, p.I, p.D, 1.0f, (tgp.x * nsg + sg) * 4, lane);
+}
+
+// up for K <= 1024 (latent 1024), 8 rows per simdgroup: grid (ceil(I / 8), R * k) x 32 threads
+[[kernel]] void nh_x2_moe_up8(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                              const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
+                              const device int* eid [[buffer(4)]], constant NhMoeParams& p [[buffer(5)]],
+                              const device uint* live [[buffer(7)]], uint3 tgp [[threadgroup_position_in_grid]],
+                              uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                              uint lane [[thread_index_in_simdgroup]]) {
+  const uint pair = tgp.y, r = pair / p.k;
+  if (r >= live[0]) return;
+  const uint e = uint(eid[pair]);
+  nh_x2_rows1k<4, 2, 2>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D,
+                        h + size_t(pair) * p.h_stride, p.I, p.D, 1.0f, (tgp.x * nsg + sg) * 8, lane);
 }
 
 #define NH_X2_MOE_DN(NAME, NR)                                                                                     \
@@ -382,33 +437,37 @@ NI_INLINE void nh_x2_vrows(const device half* X, const device uchar* q, const de
   const uint g = fn >> 1;
   float2 acc[NT];
   for (int tt = 0; tt < NT; ++tt) acc[tt] = float2(0.0f);
-  for (uint k1 = 0; k1 < K; k1 += 32 * SB) {
+  for (uint k1 = 0; k1 < K; k1 += 32 * SB) {  // (K % 256 == 0: SB = 2 sub-blocks always fit)
     uint2 auxs[SB];
-    const int nsb = SB == 2 && k1 + 64 > K ? 1 : SB;  // (K % 64 == 32: the last step has one sub-block)
-    if (nsb == 2) {
+    if (SB == 2) {
       const uint4 a0 = *(const device uint4*)(qr + k1 / 4);
       auxs[0] = a0.xy;
       auxs[SB - 1] = a0.zw;
     } else {
       auxs[0] = *(const device uint2*)(qr + k1 / 4);
-      auxs[SB - 1] = auxs[0];
     }
     const float dd = float(sr[k1 / 256]);
     for (int u = 0; u < SB; ++u) {
-      if (u >= nsb) break;
       const uint k0 = k1 + 32 * u;
+      // B for the 4 steps first (independent of the codes): half2(token fn, token fn + 1) at elements P[s][fm & 1]
+      half2 b0[NT], b1[NT], b2[NT], b3[NT];
+      for (int tt = 0; tt < NT; ++tt) {
+        const uint4 x0 = *(const device uint4*)(X + xo[tt][0] + k0), x1 = *(const device uint4*)(X + xo[tt][1] + k0);
+        const half2 a0 = as_type<half2>(odd ? x0.y : x0.x), a1 = as_type<half2>(odd ? x0.w : x0.z);
+        const half2 c0 = as_type<half2>(odd ? x1.y : x1.x), c1 = as_type<half2>(odd ? x1.w : x1.z);
+        b0[tt] = half2(a0.x, c0.x);
+        b1[tt] = half2(a0.y, c0.y);
+        b2[tt] = half2(a1.x, c1.x);
+        b3[tt] = half2(a1.y, c1.y);
+      }
       const uint2 aux = auxs[u];
       const float db = dd * nh_x2_sub(aux.y);
       const uint4 w = nh_x2_dec8(gt[extract_bits(aux.x, 8 * g, 8)], extract_bits(aux.y, 7 * g, 7));
       for (int tt = 0; tt < NT; ++tt) {
-        // B for the 4 steps: half2(token fn, token fn + 1) at elements P[s][fm & 1] of the lane's 8
-        const uint4 x0 = *(const device uint4*)(X + xo[tt][0] + k0), x1 = *(const device uint4*)(X + xo[tt][1] + k0);
-        const half2 a0 = as_type<half2>(odd ? x0.y : x0.x), a1 = as_type<half2>(odd ? x0.w : x0.z);
-        const half2 c0 = as_type<half2>(odd ? x1.y : x1.x), c1 = as_type<half2>(odd ? x1.w : x1.z);
-        float2 c = nh_x2_mma<false>(w.x, half2(a0.x, c0.x), float2(0.0f));
-        c = nh_x2_mma<true>(w.y, half2(a0.y, c0.y), c);
-        c = nh_x2_mma<true>(w.z, half2(a1.x, c1.x), c);
-        c = nh_x2_mma<true>(w.w, half2(a1.y, c1.y), c);
+        float2 c = nh_x2_mma<false>(w.x, b0[tt], float2(0.0f));
+        c = nh_x2_mma<true>(w.y, b1[tt], c);
+        c = nh_x2_mma<true>(w.z, b2[tt], c);
+        c = nh_x2_mma<true>(w.w, b3[tt], c);
         acc[tt] = fma(float2(db), c, acc[tt]);
       }
     }

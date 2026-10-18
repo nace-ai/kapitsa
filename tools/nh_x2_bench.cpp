@@ -522,6 +522,7 @@ void bench_shared(const std::string& label, uint32_t N, uint32_t K, uint32_t M, 
   const uint32_t C = g_hot || g_validate ? 1 : 6;
   Iq2 m = make_iq2(N, K, C);
   Buffer x = g.alloc(size_t(M) * K * 2, "xh"), y = g.alloc(size_t(M) * N * 4, "y"), dummy = g.alloc(64, "dummy");
+  Buffer xp = g.alloc(size_t(K) * 16, "xp");  // kind x2p: X permuted for the B fragments (8 token rows)
   std::normal_distribution<float> nd(0.0f, 1.0f);
   for (size_t i = 0; i < size_t(M) * K; ++i) x.as<__fp16>()[i] = __fp16(nd(rng));
   std::vector<uint32_t> rows;
@@ -541,8 +542,10 @@ void bench_shared(const std::string& label, uint32_t N, uint32_t K, uint32_t M, 
   for (const SVar& v : vars) {
     Pipeline pl = pipe(v.name, false);
     if (!pl.pso) continue;
-    auto mk = [&, pl, v](uint32_t ep) -> Enc {
-      return [&, pl, v, ep](Encoder& e, int call) {
+    Pipeline perm;
+    if (v.kind == "x2p") perm = pipe(v.name.find("nh_x2") == 0 ? "nh_x2_xperm" : "zz_vrows_xperm");
+    auto mk = [&, pl, v, perm](uint32_t ep) -> Enc {
+      return [&, pl, v, ep, perm](Encoder& e, int call) {
         const uint32_t c = uint32_t(call) % C;
         e.use(pl);
         e.buf(0, x);
@@ -550,6 +553,14 @@ void bench_shared(const std::string& label, uint32_t N, uint32_t K, uint32_t M, 
         e.buf(2, m.s, c * m.sexp());
         e.buf(3, y);
         e.buf(8, g_gtab);
+        if (v.kind == "x2p") {  // permute X (zz_vrows_xperm / nh_x2_xperm), then the kernel reads it
+          struct { uint32_t K, x_ld, R; } pp{K, K, M};
+          e.use(perm);
+          e.buf(0, x); e.buf(1, xp); e.bytes(2, &pp, sizeof pp);
+          e.dispatch((K / 8 * 4 + 63) / 64, 1, 1, 64);
+          e.use(pl);
+          e.buf(0, xp);
+        }
         if (v.kind == "gemm") {
           struct { uint32_t M, N, K, x_ld, y_ld; float gs; uint32_t epi, qe, se, k; } gp{M, N, K, K, N, 1.0f, ep, 0, 0, 1};
           e.bytes(4, &gp, sizeof gp);
@@ -582,7 +593,7 @@ void bench_shared(const std::string& label, uint32_t N, uint32_t K, uint32_t M, 
     snprintf(b, sizeof b, "%8.4f ms %6.1f GB/s %5.2f TFLOP/s", t, bytes / t / 1e6, 2.0 * M * N * K / t / 1e9);
     return std::string(b);
   });
-  for (Buffer* b : {&x, &y, &dummy}) g.release(*b);
+  for (Buffer* b : {&x, &y, &dummy, &xp}) g.release(*b);
   m.release();
 }
 
@@ -776,6 +787,7 @@ int main(int argc, char** argv) {
     v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_moe2_up_iq2", 16, 128, "nh_moe2_dn_iq2", 16, 128); });
     v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_x2_moe_up4", 4, 32, "nh_x2_moe_dn4", 4, 32); });
     if (R == 1 || g_validate) v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_x2_moe_up4", 4, 32, "nh_x2_moe_dn3", 3, 32); });
+    v.push_back([](MoeCtx& c) { return pair_scheme(c, "nh_x2_moe_up8", 8, 32, "nh_x2_moe_dn4", 4, 32); });
     if (R > 1) v.push_back([](MoeCtx& c) { return bucket_scheme(c, "nh_x2_bucket", "nh_x2_moeb_up", 4, "nh_x2_moeb_dn", 4, 2); });
     for (auto& f : g_extra_schemes) v.push_back(f);
     return v;
