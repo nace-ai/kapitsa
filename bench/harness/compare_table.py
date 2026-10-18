@@ -22,7 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bench  # noqa: E402
 
-MODEL_ORDER = ["Qwen3.6-35B-A3B", "Qwen3.8-27B", "Qwen3.5-4B"]
+MODEL_ORDER = ["Qwen3.6-35B-A3B", "Qwen3.8-27B", "Qwen3.5-4B", "Qwen3.5-4B (bf16)"]
 OURS = ("kapitsa", "nace-infer")  # nace-infer: Kapitsa's former name, in older results
 
 ENGINES = [  # fallback when a result has no "display" (label regex, engine name)
@@ -41,6 +41,8 @@ ENGINES = [  # fallback when a result has no "display" (label regex, engine name
 
 def model_of(label):
     l = label.lower()
+    if "4b-bf16" in l:
+        return "Qwen3.5-4B (bf16)"
     if "35b" in l:
         return "Qwen3.6-35B-A3B"
     if "27b" in l:
