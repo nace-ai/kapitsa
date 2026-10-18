@@ -256,6 +256,8 @@ class Qwen35 : public Model {
   // MoE models, after an 8-row verify: distinct routed experts of each layer (0 for dense layers)
   const uint32_t* verify8_experts() { return v8ustat_ ? v8ustat_.as<uint32_t>() : nullptr; }
   Buffer hidden_rows() { return x_; }
+  // bytes of one hidden_rows() row as encode_mtp reads it (Qwen3.8-Flash-Next's rows hold its 4 streams)
+  virtual size_t hidden_row_bytes() const { return size_t(cfg_.hidden) * 4; }
   Buffer mtp_post() { return mtp_post_; }
   // GPU copy of src into dst (the smaller of the two sizes, a multiple of 16 bytes), in order with the work in `e`
   // (the engine keeps a sequence's MTP hidden rows aside while another request's passes reuse hidden_rows())

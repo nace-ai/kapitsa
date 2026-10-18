@@ -1459,7 +1459,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     Buffer hsrc = q35_->hidden_rows();
     auto park = [&] {
       if (hsrc.mtl != q35_->hidden_rows().mtl) return;  // parked already
-      const size_t row = size_t(q35_->config().hidden) * 4;
+      const size_t row = q35_->hidden_row_bytes();
       if (!slot.park_h) slot.park_h = g.alloc(size_t(Qwen35::kMaxVerify) * row, "park_hidden");
       auto ep = g.begin();
       q35_->encode_copy(*ep, hsrc.view(size_t(h_row0) * row, size_t(c) * row), slot.park_h.view(0, size_t(c) * row));

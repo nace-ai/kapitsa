@@ -71,6 +71,7 @@ class Qwen4Exp : public Qwen35 {
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
   int default_spec_depth() const override { return 1; }
+  size_t hidden_row_bytes() const override { return size_t(c4_.hc) * size_t(cfg_.hidden) * 4; }
   void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
                   bool h_trunk = true) override;
   void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step,
