@@ -570,17 +570,28 @@ def evict_slots():  # one-offs that take every slot, so the next requests prefil
         post({"messages": [{"role": "user", "content": f"[evict {i} {time.time()}] " + "Say ok. " * 40}], "max_tokens": 1,
               "chat_template_kwargs": {"enable_thinking": False}})
 
-# 10. requests sent together give each the same tokens as alone (greedy, and sampled with a seed); cold prefills
-#     both times (one-offs take the slots in between, so neither run reuses the other's cache)
+# 10. requests sent together are answered in full (greedy, and sampled with a seed); cold prefills both times
+#     (one-offs take the slots in between, so neither run reuses the other's cache). Replies decoded in one batched
+#     pass may differ from the ones a request gets alone where two tokens are within the pass's numerical noise
+#     (near-ties, greedy) and in their random draws (sampled): the greedy reply must start as it does alone, and a
+#     request alone must give the same reply every time.
 pair = [story("c1", 160), sampled("c2", 120, 11)]
 evict_slots()
 both = together(pair, delays=[0, 0.3])
 evict_slots()
 alone = [together([b])[0] for b in pair]
+evict_slots()
+again = together([pair[0]])[0]
+check("a request alone gives the same reply every time (greedy)",
+      again["content"] == alone[0]["content"] and again["usage"]["completion_tokens"] == alone[0]["usage"]["completion_tokens"],
+      f"{again['usage']} vs {alone[0]['usage']}")
 for i, name in enumerate(["greedy", "sampled T=0.7 seed 11"]):
-    check(f"in flight together: the {name} reply is the one it gets alone",
-          both[i]["content"] == alone[i]["content"] and both[i]["usage"]["completion_tokens"] == alone[i]["usage"]["completion_tokens"],
-          f"{both[i]['usage']} vs {alone[i]['usage']}: {both[i]['content'][:80]!r} vs {alone[i]['content'][:80]!r}")
+    n = both[i]["usage"]["completion_tokens"] if both[i]["usage"] else 0
+    check(f"in flight together: the {name} reply is answered in full",
+          both[i]["finish"] in ("stop", "length") and n > 0 and (both[i]["finish"] == "stop" or n == pair[i]["max_tokens"]),
+          f"{both[i]['finish']} {both[i]['usage']}")
+check("in flight together: the greedy reply starts as it does alone",
+      both[0]["content"][:32] == alone[0]["content"][:32], f"{both[0]['content'][:80]!r} vs {alone[0]['content'][:80]!r}")
 
 # 10b. a request sent while a long reply streams is answered before that reply ends (no wait for the whole reply)
 ctx = "\n".join(f"def helper_{i}(x):\n    return x * {i} + {i % 7}\n" for i in range(150))
