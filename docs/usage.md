@@ -44,14 +44,14 @@ Those start the best model for this Mac, with the same output as before.
 | --- | --- | --- | ---: | --- |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
-| `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 3.3 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
+| `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, an MTP head for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for
-Lightning.
+27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
+its DSpark draft model for Lightning.
 
 `--model` takes a name or alias (`35b`), one with a variant (`35b:6bit`), a Hugging Face repo (`org/name[@revision]`,
 see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file
@@ -72,11 +72,11 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 
 | Variant | Weights | `35b` | `27b` | `4b` |
 | --- | --- | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 22.1 GB | 20.2 GB | 3.3 GB |
+| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 22.1 GB | 20.2 GB | 4.6 GB |
 | `5bit` | MLX affine 5-bit, group 64 | 26.4 GB | 23.5 GB | - |
-| `6bit` | MLX affine 6-bit, group 64: the quality choice | 30.7 GB | 26.9 GB | 4.3 GB |
-| `8bit` | MLX affine 8-bit, group 64 | 39.4 GB | 33.6 GB | 5.4 GB |
-| `bf16` | unquantized, where it fits | 71.9 GB | 58.8 GB | 9.3 GB |
+| `6bit` | MLX affine 6-bit, group 64: the quality choice | 30.7 GB | 26.9 GB | 5.6 GB |
+| `8bit` | MLX affine 8-bit, group 64 | 39.4 GB | 33.6 GB | 6.7 GB |
+| `bf16` | unquantized, where it fits | 71.9 GB | 58.8 GB | 10.6 GB |
 
 Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
 variants fit this Mac. Every variant keeps the model's MTP head and draft model, and pins its repo to a revision, so a
@@ -163,7 +163,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
-| `--spec N` | `1` (`2` on the 27B) | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
@@ -319,10 +319,10 @@ the working set at about 2/3 to 78% of the RAM, depending on its version, hence 
 
 | Mac RAM | Budget | `4b` | `27b` | `35b` |
 | --- | --- | --- | --- | --- |
-| 16 GB | 11.0-12.9 GB | yes (198K-249K) | no | no |
-| 24 GB | 16.5-19.3 GB | yes (347K-424K) | only at the larger budget (23K) | no |
-| 32 GB | 22.0-25.7 GB | yes (497K-598K) | yes (62K-80K) | yes (50K-153K) |
-| 48 GB | 33.0-38.6 GB | yes (795K-947K) | yes (184K-265K) | yes (475K-724K) |
+| 16 GB | 11.0-12.9 GB | yes (174K-225K) | no | no |
+| 24 GB | 16.5-19.3 GB | yes (323K-399K) | only at the larger budget (23K) | no |
+| 32 GB | 22.0-25.7 GB | yes (472K-572K) | yes (62K-80K) | yes (50K-153K) |
+| 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (184K-265K) | yes (475K-724K) |
 
 On a 48 GB Mac the 35B also fits in 6-bit with a full conversation and its draft model, in 8-bit only with shorter ones.
 For Bolt and the other variants, run `kapitsa doctor`.

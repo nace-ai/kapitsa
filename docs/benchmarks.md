@@ -493,7 +493,9 @@ Ollama's MLX runner with MTP (109.0) and 1.17× MTPLX (104.2, against Kapitsa's 
 prompts 1.8–2.2× faster than any other engine, and answered follow-ups in 0.05–0.07 s, against 0.09–0.11 s for the
 next fastest (MTPLX). Greedy decoding is the exception to a clear lead: Ollama's MLX runner wrote 123.0 tok/s, 1%
 below Kapitsa's 124.5 in the same bracket, and Kapitsa's greedy medians in bracket B were 120.4 and 125.3, so at
-greedy the two are within run-to-run variation (note 2).
+greedy the two are within run-to-run variation (note 2). Later that day z-lab's DFlash drafter became Kapitsa's default
+for the 4B: 178.7 tok/s at T = 0.6 and 197.7 greedy (bracket C, note 7), 1.6× the next engine here; it holds 0.6 GB
+more than the MTP head did ([Kapitsa with z-lab's DFlash drafter](#kapitsa-with-z-labs-dflash-drafter)).
 
 The runs came in two brackets on 2026-10-18, each opened and closed by Kapitsa, one engine at a time under the GPU
 lock, in High Power mode on AC power. Compare each row with Kapitsa's row of the same bracket.
@@ -510,8 +512,9 @@ lock, in High Power mode on AC power. Compare each row with Kapitsa's row of the
 
 | Engine (setting) | Bracket | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
 | --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
-| **Kapitsa** (MTP head)<sup>1</sup> | A | **122.4** (119.3–123.4) | **124.5** (119.0–127.0) | **1,796** | 1,337 | 0.06 | 0.07 | **4.1** | pass |
-| **Kapitsa** (MTP head)<sup>1</sup> | B | 122.0 (118.7–124.2) | 120.4 (94.0–123.6) | 1,788 | **1,427** | **0.05** | **0.06** | **4.1** | pass |
+| **Kapitsa** (MTP head)<sup>1</sup> | A | 122.4 (119.3–123.4) | 124.5 (119.0–127.0) | 1,796 | 1,337 | 0.06 | 0.07 | **4.1** | pass |
+| **Kapitsa** (MTP head)<sup>1</sup> | B | 122.0 (118.7–124.2) | 120.4 (94.0–123.6) | 1,788 | 1,427 | **0.05** | **0.06** | **4.1** | pass |
+| **Kapitsa** (z-lab's DFlash drafter, its default since)<sup>7</sup> | C | **178.7** (173.2–194.9) | **197.7** (179.2–204.3) | **1,954** | **1,595** | 0.06 | **0.06** | 4.7 | pass |
 | Ollama, MLX runner + MTP (adaptive depth) | A | 109.0 (99.6–115.6) | 123.0 (116.6–124.9)<sup>2</sup> | 758 | 693 | 0.19 | 0.24 | 12.1 | pass |
 | MTPLX (sustained profile, depth 1) | B | 104.2 (99.5–107.0) | 106.3 (105.0–109.0) | 780 | 711 | 0.09<sup>6</sup> | 0.11 | 14.3 | pass |
 | oMLX + MTP (Lightning MTP) | A | 102.4 (99.5–108.6) | 104.5 (102.8–109.4) | 803 | 726 | 0.25 | 0.48 | 7.3 | pass |
@@ -547,6 +550,10 @@ lock, in High Power mode on AC power. Compare each row with Kapitsa's row of the
    and its log shows that tier skipping its writes ("no disk room"); the benchmark's follow-ups came from its
    session cache in memory, as fast as in its A run with 19 GiB free (0.10 / 0.12 s). LM Studio's MLX engine, which
    keeps follow-up checkpoints on disk only while 10 GiB is free, had 18 GiB.
+7. Bracket C, 22:49–23:09, after Kapitsa gained the drafter: Kapitsa's previous build (MTP head) opened and closed it
+   at 120.5 and 120.2 tok/s, as in A and B, so conditions matched
+   ([Kapitsa with z-lab's DFlash drafter](#kapitsa-with-z-labs-dflash-drafter)). One of the five sampled runs looped
+   (distinct-4-gram 0.46); without it the median is 177.2.
 
 Repetition loops (distinct-4-gram under 0.5; flagged, not invalid) came up in one of the five sampled runs of
 Kapitsa in bracket B (median without it 121.0), oMLX without speculation (82.6), llama.cpp (63.4) and llama.cpp at
@@ -617,7 +624,8 @@ mlx-lm, LM Studio, llama.cpp and Ollama were not run at bf16 (LM Studio needs 10
 checkpoints, and llama.cpp and Ollama need Ollama's 9.2 GB BF16 GGUF). Result files:
 [bench/results/2026-10-18-4b/bf16](../bench/results/2026-10-18-4b/bf16/).
 
-**Kapitsa was not the fastest writer at bf16.** oMLX with z-lab's DFlash drafter wrote 59.4 tok/s at T = 0.6 and
+**Kapitsa was not the fastest writer at bf16 in this bracket** (later that day it was, with the same z-lab drafter:
+89.1 tok/s, 1.5× oMLX + DFlash; table, note 3). oMLX with z-lab's DFlash drafter wrote 59.4 tok/s at T = 0.6 and
 MTPLX at depth 3 wrote 54.2, against Kapitsa's 44.3: 1.34× and 1.23× faster (greedy: 61.5 and 58.8 against 45.1).
 Our best explanation: at bf16 a forward pass reads 7.8 GB of weights, so the rate follows how many tokens a pass
 yields. oMLX's DFlash drafts up to four tokens a pass (2.5 on average) and got 2.8 tokens out of each pass, MTPLX
@@ -628,9 +636,10 @@ answered follow-ups fastest and used the least memory.
 
 | Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
-| oMLX + DFlash (z-lab drafter, block 5) | **59.4** (54.3–63.0) | **61.5** (59.2–69.1) | 859 | 823 | 0.30 | 0.42 | 12.6 | pass |
+| **Kapitsa** (z-lab's DFlash drafter, its default since)<sup>3</sup> | **89.1** (80.8–97.6) | **87.6** (85.2–88.4) | **1,893** | **1,556** | **0.06** | **0.07** | 11.0 | pass |
+| oMLX + DFlash (z-lab drafter, block 5) | 59.4 (54.3–63.0) | 61.5 (59.2–69.1) | 859 | 823 | 0.30 | 0.42 | 12.6 | pass |
 | MTPLX (sustained profile, depth 3) | 54.2 (49.7–55.7) | 58.8 (57.4–61.6) | 820 | 751 | 0.11 | 0.15 | 20.3<sup>2</sup> | pass |
-| **Kapitsa** (MTP head) | 44.3 (42.6–47.3) | 45.1 (44.0–45.6) | **1,737** | **1,401** | **0.06** | **0.07** | **9.7** | pass |
+| **Kapitsa** (MTP head) | 44.3 (42.6–47.3) | 45.1 (44.0–45.6) | 1,737 | 1,401 | **0.06** | **0.07** | **9.7** | pass |
 | oMLX (no speculation) | 27.6 (27.0–27.8) | 26.3 (25.9–27.1)<sup>1</sup> | 907 | 812 | 0.27 | 0.41 | 11.8 | pass |
 
 No run of this bracket was flagged for contention. Kapitsa's run (15:30) came first; there is no closing run to check
@@ -641,6 +650,9 @@ invalid).
    that phase; its sampled median, 27.6 tok/s, is the cleaner figure. Reading 7.8 GB a pass at the M4 Pro's 273 GB/s
    bounds decoding without speculation at about 33 tok/s.
 2. MTPLX's peak includes its session cache, which keeps earlier conversations for follow-up turns.
+3. Measured later the same day (22:56), in the hold described under
+   [Kapitsa with z-lab's DFlash drafter](#kapitsa-with-z-labs-dflash-drafter), where the previous build opened and
+   closed at 44.1 and 45.9 tok/s (this bracket's 44.3).
 
 **Settings.** As at 4-bit, except where short runs before the bracket measured faster (three sampled and three greedy
 answers each; [tuning](../bench/results/2026-10-18-4b/bf16/tuning/)). oMLX: DFlash with z-lab's Qwen3.5-4B drafter
@@ -649,6 +661,42 @@ at load), block 5, verify `adaptive`, 59.1 / 63.2 tok/s, against block 9 57.0 / 
 head 49.5 / 48.2 (at 4-bit Lightning MTP had been the faster). MTPLX: depth 3, 54.5 / 59.0, against depth 2 52.4 /
 54.9 and depth 1 43.7 / 41.0, with Qwen's bf16 head (Kapitsa's file) and the runtime file of MTPLX's 4B release.
 Kapitsa: its defaults, the bf16 weights with the MTP head (`kapitsa pull 4b:bf16`).
+
+### Kapitsa with z-lab's DFlash drafter
+
+[z-lab/Qwen3.5-4B-DFlash](https://huggingface.co/z-lab/Qwen3.5-4B-DFlash) @9a1996c (Apache-2.0), the DFlash v1
+drafter oMLX ran above, now runs on Kapitsa's DFlash2 path: six Qwen3 layers over the target's captured features with
+the geometry of the DFlash2 drafters, without their block convolutions and candidate selector. Kapitsa quantizes it to
+4 bits at load and drafts 7 tokens a pass (the drafter was trained with blocks of 16); `kapitsa pull 4b` fetches it as
+a companion of every 4B variant, and without it (`--dflash none`, or a memory budget that leaves it out) the MTP head
+drafts 4 tokens a pass. One hold of the GPU lock on 2026-10-18, 22:49–23:09, same Mac, High Power mode, AC power:
+Kapitsa's previous build (ecf8394, the MTP head at depth 1) first and last as the control, the build with the drafter
+between, its defaults and its MTP head alone; result files in
+[bench/results/2026-10-18-4b/dflash](../bench/results/2026-10-18-4b/dflash/).
+
+| Kapitsa (setting) | Weights | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| previous build, MTP head (opening) | 4-bit | 120.5 (117.6–120.9) | 124.2 (122.0–125.1) | 1,783 | 1,429<sup>1</sup> | 0.05 | 0.05 | 4.1 | pass |
+| **DFlash drafter** (default) | 4-bit | **178.7** (173.2–194.9)<sup>2</sup> | **197.7** (179.2–204.3) | **1,954** | **1,595** | 0.06 | 0.06 | 4.7 | pass |
+| MTP head, depth 4 (`--dflash none`) | 4-bit | 159.0 (152.8–169.0) | 168.6 (163.5–173.1) | 1,800 | 1,461 | 0.06 | 0.06 | 4.0 | pass |
+| previous build, MTP head (closing) | 4-bit | 120.2 (119.4–125.0) | 125.5 (123.3–128.1) | 1,805 | 1,452 | 0.05 | 0.07 | 4.1 | pass |
+| previous build, MTP head (opening) | bf16 | 44.1 (43.3–45.9)<sup>1</sup> | 45.8 (45.5–46.1) | 1,770 | 1,429 | 0.06 | 0.07 | 9.7 | pass |
+| **DFlash drafter** (default) | bf16 | **89.1** (80.8–97.6) | **87.6** (85.2–88.4) | **1,893** | **1,556** | 0.06 | 0.07 | 11.0 | pass |
+| MTP head, depth 4 (`--dflash none`) | bf16 | 71.0 (69.0–74.4) | 74.5 (73.5–79.9) | 1,768 | 1,432 | 0.06 | 0.08 | 9.7 | pass |
+| previous build, MTP head (closing) | bf16 | 45.9 (45.2–46.6) | 45.4 (45.1–46.1) | 1,765 | 1,432 | 0.06 | 0.07 | 9.7 | pass |
+
+The control's openings and closings agree within 4% and match its runs in brackets A and B (122.4 / 122.0) and in the
+bf16 bracket (44.3). With the drafter Kapitsa writes 1.48× its previous rate at 4-bit and 2.0× at bf16, where a pass
+reads 7.8 GB of weights and the drafter turns each pass into about 3 tokens. Prompts read faster too (1.07-1.10×):
+the drafter's prompt pass covers the last 2047 positions, where the MTP head's ran over every prompt position. The
+drafter costs 0.6 GB at 4-bit and 1.3 GB at bf16 (its 4-bit weights, a draft head of 98,304 output-layer rows, 8-bit
+at bf16, and its context rings).
+
+1. Flagged for contention: Slack used the GPU during the opening run's 16K prefill (mean 4.0%, 4-bit) and decode
+   (2.7%, bf16).
+2. One of the five sampled runs looped (distinct-4-gram 0.46); without it the median is 177.2. Loops (flagged, not
+   invalid) also came up in two of the opening bf16 run's five sampled answers and one sampled and one greedy answer
+   of its closing run.
 
 ## A real coding-agent session (2026-10-18)
 

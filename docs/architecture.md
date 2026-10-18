@@ -23,8 +23,9 @@ state for later turns; requests sent at once take turns on the GPU.
    recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
 3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
    and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows.
-4. **Draft and verify.** Qwen uses DFlash2 when available, otherwise its MTP head where supported. Nemotron uses a
-   block drafter: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B),
+   otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+   (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. Plain generation is available with `--spec 0`.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
@@ -44,7 +45,7 @@ and the tokenizer run before a request takes its turn.
 | Backend | `Qwen35` | `NemotronH` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 |
 | Other layers | Attention; dense FFN or MoE | Attention; LatentMoE |
-| Default speculation | DFlash2 on 35B/27B; MTP on 4B | LiLiCorr block drafter (DSpark on Lightning) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning) |
 | Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint |
 | Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type |
 | Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work |

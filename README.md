@@ -48,7 +48,7 @@ run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16
 
 | Model | Download | Speculation |
 | --- | --- | --- |
-| **Qwen3.5-4B** · `4b`<br><sub>dense</sub> | **4-bit · 3.3 GB**<br><sub>also 6-bit 4.3 · 8-bit 5.4 · bf16 9.3 GB</sub> | MTP |
+| **Qwen3.5-4B** · `4b`<br><sub>dense</sub> | **4-bit · 4.6 GB**<br><sub>also 6-bit 5.6 · 8-bit 6.7 · bf16 10.6 GB</sub> | DFlash / MTP |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active</sub> | **4-bit · 22.1 GB**<br><sub>also 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 GB</sub> | DFlash2 / MTP |
 | **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | LiLiCorr |
@@ -91,7 +91,7 @@ the GPU (contention flagged): it may be low.
 | oMLX + DFlash2 | 127 tok/s | 45 tok/s | 102 tok/s |
 | mlx-serve (MTP) | 124 tok/s | 38 tok/s ⚠ | — |
 | mlx-serve (DFlash2) | 104 tok/s | 52 tok/s ⚠ | — |
-| **Kapitsa** | **154 tok/s** | **63 tok/s** | **122 tok/s** |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** | **179 tok/s**<sup>4B</sup> |
 
 | Engine | Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB |
 | --- | ---: |
@@ -104,7 +104,11 @@ Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails
 day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B · 4-bit and 57-61 tok/s ⚠ on
 Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B oMLX
 runs its own MTP path, its fastest setup there; mlx-serve was not run on it
-([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
+([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). <sup>4B</sup> Kapitsa with z-lab's DFlash drafter, its default
+for the 4B since 2026-10-18 evening: measured that evening with the previous build (MTP head) as the control, first
+and last, at 120.5 and 120.2 tok/s, the 122 tok/s of the other engines' bracket
+([details](docs/benchmarks.md#kapitsa-with-z-labs-dflash-drafter)); at bf16 the drafter takes Kapitsa from 44 to
+89 tok/s. Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
 Kapitsa refuses it before downloading). Nemotron 3.5 Lightning fits it (18.2 GB of weights) but has not been measured
 on it yet; its numbers are from the M5 Max below.
 
