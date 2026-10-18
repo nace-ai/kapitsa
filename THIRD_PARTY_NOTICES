@@ -119,8 +119,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ================================================================================
-ggml (https://github.com/ggml-org/ggml, via llama.cpp), MIT License: the IQ2_XXS lattice table
-(iq2xxs_grid, ggml/src/ggml-common.h) in src/kernels/nemotron/nh_common.h, as nh_iq2xxs_grid and its float copy
+ggml (via llama.cpp), MIT License
+https://github.com/ggml-org/ggml
+
+The IQ2_XXS lattice table in src/kernels/nemotron/nh_common.h (nh_iq2xxs_grid) is adapted from ggml's iq2xxs_grid
+(ggml/src/ggml-common.h). The file header notes it.
 
 Copyright (c) 2023-2026 The ggml authors
 
