@@ -566,7 +566,7 @@ void loading_begin(const std::string& what) {
         return std::vector<std::string>{"Loading " + bold(l->what) + "  " + dim(duration(l->secs())),
                                         dim(clip(detail, std::max(20, columns() - kLogoCols - 8)))};
       },
-      1);
+      2);
 }
 
 void loading_end(const std::string& what) {
@@ -619,7 +619,7 @@ void ready(const Ready& r) {
     row("Memory", (bw >= 8 ? bar(double(r.used) / double(r.budget), bw) + "  " : std::string()) + b);
   }
   if (r.context) {
-    std::string c = count(r.context) + " tokens";
+    std::string c = context(r.context) + " tokens";
     if (r.slots > 1) c += " " + dim("×") + " " + std::to_string(r.slots) + " conversations";
     if (r.context_fit > 0 && r.context_fit < r.context) c += dim(" (" + count(r.context_fit) + " fit in memory)");
     row("Context", c);
@@ -699,8 +699,8 @@ void request_header() {  // once, above the first request (g_req_mu)
   const Cols c = cols_now();
   std::string h = "  ";
   if (c.time) h += left("time", 8) + "  ";
-  h += left("client", 10) + "  " + right("prompt", 6) + "  " + right("cached", 5) + "  " + right("first", 6) + "  " +
-       right("out", 5) + "  " + right("tok/s", 6) + "  " + right("step", 4) + "  finish";
+  h += left("client", 9) + "  " + right("prompt", 6) + "  " + right("cache", 5) + "  " + right("first", 6) + "  " +
+       right("out", 5) + "  " + right("tok/s", 5) + "  " + right("step", 4) + "  finish";
   line(section("Requests"));
   line(dim(h));
 }
@@ -873,12 +873,12 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   std::string ttft = "–", tps = "–", cached = "–", step = "–";
   if (first > 0) snprintf(b, sizeof b, "%.2fs", (first - m->t0) / 1000), ttft = b;
   if (r.completion_tokens > 1 && r.decode_ms > 0)
-    snprintf(b, sizeof b, "%.1f", (r.completion_tokens - 1) / (r.decode_ms / 1000)), tps = b;
+    snprintf(b, sizeof b, "%.0f", (r.completion_tokens - 1) / (r.decode_ms / 1000)), tps = b;
   if (r.prompt_tokens > 0) snprintf(b, sizeof b, "%.0f%%", 100.0 * r.cached_tokens / r.prompt_tokens), cached = b;
   const int cyc = m->live->cycles.load(), tok = m->live->tokens.load();
   if (m->live->spec.load() > 0 && cyc > 0 && tok > 1) snprintf(b, sizeof b, "%.1f", double(tok) / cyc), step = b;
   std::string fin = r.finish_reason;
-  if (fin == "tool_calls") fin = accent("tool calls");
+  if (fin == "tool_calls") fin = accent("tools");
   else if (fin == "length") fin = warn(r.context_full ? "context full" : "length");
   else if (fin == "cancelled") fin = warn("cancelled");
   else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
@@ -886,9 +886,9 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   const Cols c = cols_now();
   std::string l = "  ";
   if (c.time) l += dim(at) + "  ";
-  l += left(m->client.empty() ? dim("–") : m->client, 10) + "  " + right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) +
-       "  " + right(cached, 5) + "  " + right(ttft, 6) + "  " + right(count(r.completion_tokens), 5) + "  " + right(tps, 6) +
-       "  " + right(step, 4) + "  " + fin;
+  l += left(clip(m->client.empty() ? dim("–") : m->client, 9), 9) + "  " +
+       right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) + "  " + right(cached, 5) + "  " + right(ttft, 6) + "  " +
+       right(count(r.completion_tokens), 5) + "  " + right(tps, 5) + "  " + right(step, 4) + "  " + fin;
   std::lock_guard<std::mutex> lk(g_req_mu);
   request_header();
   line(clip(l, columns() - 1));

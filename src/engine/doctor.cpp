@@ -162,7 +162,7 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
       d += sep + kv;
       if (r.starts) d += sep + "room for " + count(double(r.tokens)) + " tokens";
       if (r.image_bytes) d += sep + "images +" + gb(double(r.image_bytes));
-      o.push_back("      " + dim(clip(d, W - 8)));
+      o.push_back("      " + dim(clip(d, std::max(W, std::min(columns(), 140)) - 8)));
     }
     if (rows.empty()) o.push_back("    " + dim("none found (--model DIR)"));
     o.push_back("");

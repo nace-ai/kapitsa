@@ -329,7 +329,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
                     ". Stop it, or pass --port to start " + model + " on another port.");
     }
     if (ctx > 0 && ctx != run.context && term::fancy())
-      ui::warning("The server on port " + std::to_string(port) + " is already running with a " + term::count(run.context) +
+      ui::warning("The server on port " + std::to_string(port) + " is already running with a " + term::context(run.context) +
                   "-token context; --ctx " + std::to_string(ctx) + " applies to a server this command starts.");
     else if (ctx > 0 && ctx != run.context)
       fprintf(stderr, "kapitsa: the server on port %d is already running with a %d-token context; --ctx %d applies to a "
@@ -399,7 +399,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     // in a terminal: the logo as a loader while the server starts (a spinner where it can't play)
     const bool tui = term::fancy();
     const std::string label = term::bold(ref.model ? ref.model->name : ref.name) + term::dim("  " + std::string(term::kDot) + "  ") +
-                              term::count(ctx) + " context";
+                              term::context(ctx) + " context";
     auto secs_since = [t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
     std::unique_ptr<ui::Loader> wobble;
     std::unique_ptr<term::Spinner> spinner;
@@ -410,7 +410,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
             return std::vector<std::string>{"Starting " + label + "  " + term::dim(term::duration(secs_since())),
                                             term::dim(term::clip(last_log_line(log), std::max(20, term::columns() - ui::kLogoCols - 8)))};
           },
-          1);
+          2);
     } else if (tui) {
       spinner = std::make_unique<term::Spinner>("Starting " + label);
     }
@@ -497,7 +497,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   if (tui) {
     if (server == 0)
       ui::ok("Kapitsa on " + term::bold("http://127.0.0.1:" + std::to_string(port)) + term::dim("  " + std::string(term::kDot) + "  ") +
-             run.model + term::dim("  " + std::string(term::kDot) + "  ") + term::count(run.context) + " context " +
+             run.model + term::dim("  " + std::string(term::kDot) + "  ") + term::context(run.context) + " context " +
              term::dim("(already running)"));
     else
       ui::note("http://127.0.0.1:" + std::to_string(port) + "  " + term::kDot + "  log " + hub::tilde(log));

@@ -62,6 +62,8 @@ std::vector<std::string> wrap(const std::string& text, int w);
 std::string duration(double seconds);
 // 812, 29.6K, 1.2M
 std::string count(double n);
+// A context size: 32K, 128K (a multiple of 1024 counts in K of 1024, as contexts are named), else as count()
+std::string context(int n);
 
 // Output that coexists with a status line: the status line is cleared, the line written (with a newline) to `f`,
 // and the status line drawn again below it. Thread-safe; every styled line should go through it.
