@@ -217,8 +217,10 @@ curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/jso
 </details>
 
 Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. Requests sent at once (parallel
-subagents, several clients) run side by side, taking turns on the GPU, each with the tokens it would get alone;
-`--slots` sets how many (default: up to 4, as memory allows), each keeping its conversation cached.
+subagents, several clients) run side by side, each on a slot that keeps its conversation cached (`--slots`, default: up
+to 4, as memory allows), and while several decode, one GPU pass serves them all: on the M4 Pro, 2 to 4 replies at once
+write 1.2-1.3x the tokens per second of one on Qwen3.6 35B-A3B at 4-bit
+([requests at once](docs/usage.md#requests-at-once)).
 `brew services start kapitsa` keeps a server running in the background.
 [All server options and API details](docs/usage.md#server-options)
 
@@ -233,6 +235,8 @@ subagents, several clients) run side by side, taking turns on the GPU, each with
   takes part of each layer at the same time.
 * **Writes several tokens per pass.** A draft model proposes a block of tokens (DFlash2 for Qwen, NVIDIA's LiLiCorr for
   Nemotron, the model's MTP head otherwise) and the model checks them all in one GPU pass.
+* **Parallel requests share a pass.** While an agent's subagents (or several clients) decode at once, one GPU pass
+  checks all of their tokens, reading each weight once for all of them.
 * **Follow-ups read only what's new.** Each conversation slot keeps its KV cache and recurrent-state checkpoints at
   turn boundaries, and the last answer is read in while you read it.
 * **Two model families.** Qwen3.5 (Gated DeltaNet and attention, dense or mixture of experts) and Nemotron-H (Mamba-2,

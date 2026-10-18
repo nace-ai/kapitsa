@@ -171,14 +171,32 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
 
+### Requests at once
+
 Requests sent at once (a coding agent's parallel subagents and side requests, several clients) each run on a slot of
-their own and take turns on the GPU between prompt chunks and decode steps: a request sent during a long reply starts
-after a fraction of a second instead of after that reply, and each request gets the tokens it would get alone. The GPU
-is shared, not multiplied: two replies at once write about as many tokens per second in all as one reply alone, each at
-about half the speed. Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full
-`--ctx` conversation, the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With
-every slot busy a request waits for one (the log says so); a streamed chat completion whose client disconnects stops
-waiting.
+their own. Their prompts take turns on the GPU between chunks, so a request sent during a long reply starts after a
+fraction of a second instead of after that reply. While two or more of them decode, one GPU pass serves them all (with
+the draft models of Qwen3.8 27B, Qwen3.6 35B-A3B and Nemotron 3.5 Bolt): each weight is read once for every request,
+so replies at once write more tokens per second in all than one reply alone, each a little slower than alone. Tokens
+per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro with an M4 Pro (48 GB):
+
+| Requests at once | 1 | 2 | 3 | 4 |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 56 (56) | 67 (58) |
+| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 184 (149) | 202 (161) |
+| Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
+
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The 27B's three requests take turns:
+their drafts cost more than the shared pass saves. A request alone gets the tokens it always gets. Requests decoded
+together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
+each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
+4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (not measured batched yet; `NI_BATCH=1` batches them), without
+a draft model (`--dflash none`) and with `NI_BATCH=0`, requests at once take turns on the GPU, each with the tokens it
+gets alone, and write about as many tokens per second in all as one alone.
+
+Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--ctx` conversation,
+the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request
+waits for one (the log says so); a streamed chat completion whose client disconnects stops waiting.
 
 ## APIs
 
@@ -409,6 +427,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
+| `NI_BATCH` | on where measured | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too (not measured yet); `0`: they take turns instead, each with the tokens it gets alone. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
