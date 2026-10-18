@@ -155,14 +155,17 @@ void Qwen4Exp::load(const std::string& dir) {
   if (c4_.ix_dim != 128 || c4_.ix_heads > 8 || c4_.ix_ratio != 4) fatal("qwen4_exp: indexer shape unsupported");
   if (c4_.ple_conv != 4) fatal("qwen4_exp: n-gram conv kernel %d unsupported", c4_.ple_conv);
   if (cfg_.hidden % 128 || cfg_.hidden > 4096) fatal("qwen4_exp: hidden size %d unsupported", cfg_.hidden);
-  // the trunk: every tensor but the vision tower, the n-gram table (mapped below) and the MTP head (its own file)
+  // the trunk and the MTP head (mtp.safetensors, read by load_mtp4): every tensor but the vision tower and the n-gram
+  // table (mapped below); with NI_NO_MTP the head is left out too, as plan() leaves it out
+  const bool no_mtp = getenv("NI_NO_MTP") != nullptr;
   ws_.open_dir(
       dir,
-      [](const std::string& n) {
+      [no_mtp](const std::string& n) {
         return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
-               n.find(".ngram_embedding.") == std::string::npos;
+               n.find(".ngram_embedding.") == std::string::npos && !(no_mtp && n.rfind("mtp.", 0) == 0);
       },
-      [](const std::string& f) { return f != "ple.safetensors"; }, transform_defer());
+      [no_mtp](const std::string& f) { return f != "ple.safetensors" && !(no_mtp && f == "mtp.safetensors"); },
+      transform_defer());
   if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
   else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
   else fatal("%s: unrecognized weight naming (expected the MLX qwen4_exp layout)", dir.c_str());
@@ -265,7 +268,7 @@ void Qwen4Exp::load(const std::string& dir) {
     if (table_.dim() * hash_.heads != cfg_.hidden) fatal("qwen4_exp: n-gram rows of %d values", table_.dim());
   }
   test_transforms();  // NI_REQUANT / NI_DEQUANT (e.g. NI_REQUANT=6:gdn,shared,head: the all-dense-6-bit recipe's speed)
-  if (!getenv("NI_NO_MTP")) load_mtp4(dir);
+  if (!no_mtp) load_mtp4(dir);
   Gpu::get().make_resident(ws_.buffers());
   Gpu::get().make_resident(owned_bufs_);
   alloc_state();
