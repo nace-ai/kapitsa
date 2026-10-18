@@ -123,7 +123,20 @@ optimization.
 
 ## Performance
 
-**MacBook Pro (2024) · M4 Pro · 48 GB.** Writing speed (decode at temperature 0.6), each engine in its fastest setup:
+Kapitsa on two MacBook Pros, writing speed (decode at temperature 0.6):
+
+| Model | MacBook Pro (2024) · M4 Pro · 48 GB | MacBook Pro · M5 Max · 128 GB |
+| --- | ---: | ---: |
+| Qwen3.6 35B-A3B | 154 tok/s | 250 tok/s |
+| Qwen3.8 27B | 63 tok/s | 73 tok/s |
+| Nemotron 3.5 Bolt 74B-A9B | 64 tok/s | not measured yet |
+
+Reading a 4K prompt: 1,169 / 389 / 436 tok/s on the M4 Pro, 2,224 / 430 tok/s on the M5 Max. The M5 Max ran with
+desktop apps open (the harness flagged their GPU use), so its numbers are on the low side
+([M5 Max report](docs/benchmarks-m5-max.md)). Models that need a 96 GB+ Mac are next on the M5 Max.
+
+**Against the other engines** on the MacBook Pro (2024) · M4 Pro · 48 GB, writing speed with each engine in its fastest
+setup:
 
 | Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
 | --- | ---: | ---: |
@@ -167,9 +180,6 @@ and the desktop's own GPU work (10-40% of the GPU while the session ran) was the
 [Run benchmarks locally](bench/harness/README.md) ·
 [Every optimization and its measurements](docs/PERF.md)
 
-An additional [M5 Max / 128 GB measurement](docs/benchmarks-m5-max.md) records 249.8 / 72.9 tok/s sampled decode
-for the 35B / 27B models. Both runs passed the harness's correctness checks and were flagged for background GPU
-contention; the report includes the full results, conditions and reproduction commands.
 
 ## Design
 
