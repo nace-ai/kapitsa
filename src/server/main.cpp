@@ -123,13 +123,22 @@ static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, boo
 // ---------------------------------------------------------------- command line
 
 [[noreturn]] void ni::usage_error(const std::string& msg, const char* help) {
-  fprintf(stderr, "kapitsa: %s\n(%s shows how to use it.)\n", msg.c_str(), help);
+  if (term::fancy()) term::error(msg, std::string(help) + " shows how to use it.");
+  else fprintf(stderr, "kapitsa: %s\n(%s shows how to use it.)\n", msg.c_str(), help);
   exit(2);
 }
 
 int ni::fail(const std::string& msg, int code) {
-  fprintf(stderr, "kapitsa: %s\n", msg.c_str());
+  if (term::fancy()) term::error(msg);
+  else fprintf(stderr, "kapitsa: %s\n", msg.c_str());
   return code;
+}
+
+// A download stopped by Ctrl+C: what to run to continue it
+static int stopped(const hub::Stopped& e) {
+  if (term::fancy()) term::status(""), ui::warning(e.what());
+  else fprintf(stderr, "\n%s\n", e.what());
+  return 130;
 }
 
 int ni::to_int(const std::string& opt, const std::string& v, const char* help) {
@@ -207,6 +216,9 @@ __attribute__((format(printf, 1, 2))) static std::string strf(const char* fmt, .
   va_end(ap);
   return s;
 }
+
+// A model's name in a note of the terminal UI
+static std::string bold_name(const std::string& s) { return term::bold(s); }
 
 // A command's help: as it is, or styled in a terminal
 static void show_help(const std::string& text) {
@@ -365,12 +377,13 @@ struct StreamJob {
 // after(result) (the reply is out) from the connection's thread.
 static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
-                         std::function<void(const ChatResult&)> after) {
+                         std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter) {
   auto job = std::make_shared<StreamJob>();
-  job->worker = std::thread([&engine, r, w, raw = job.get()] {
+  job->worker = std::thread([&engine, r, w, meter, raw = job.get()] {
     ChatResult out = engine.chat(
         r,
         [&](const ChatDelta& d) {
+          ui::token(meter);
           std::lock_guard<std::mutex> lk(raw->mu);
           std::string s = w->delta(d);
           if (!s.empty()) raw->out.push_back(std::move(s));
@@ -395,13 +408,14 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
   }
   if (!job->started) {
     job->worker.join();
+    ui::done(meter, job->result);
     auto [status, body] = failure(job->result);
     res.status = status;
     res.set_content(api::dump(body), "application/json");
     return;
   }
   res.set_header("Cache-Control", "no-cache");
-  res.set_chunked_content_provider("text/event-stream", [job, w, after](size_t, httplib::DataSink& sink) {
+  res.set_chunked_content_provider("text/event-stream", [job, w, after, meter](size_t, httplib::DataSink& sink) {
     for (;;) {
       std::deque<std::string> batch;
       bool done;
@@ -421,6 +435,7 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
     }
     sink.done();
     job->worker.join();
+    ui::done(meter, job->result);
     after(job->result);
     return true;
   });
@@ -450,6 +465,7 @@ static int serve(int argc, char** argv, int first) {
   EngineOptions opt;
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
+  bool verbose = false;
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
@@ -472,10 +488,13 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
+  if (tui) ui::serve_begin(KAPITSA_VERSION, verbose);
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);  // before a long conversion
     try {
@@ -494,15 +513,23 @@ static int serve(int argc, char** argv, int first) {
     if (model.empty()) {
       std::string why;
       if (!best_model(opt, budget, &ref, &why)) return fail(why);
-      fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
-              ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
+      if (tui)
+        ui::note(bold_name(ref.name) + " is the best fit for this Mac (" + Gpu::get().name() + ", " +
+                 strf("%.0f GB", ram_gb()) + "). --model picks another.");
+      else
+        fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
+                ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
     } else {
       const hub::ModelRef named = hub::resolve(expand_home(model));
       ref = named;
       if (named.kind == hub::ModelRef::kCatalog && !named.variant_given) {
         bool fits = false;
         ref = pick_variant(*named.model, opt, budget, &fits);
-        if (fits && ref.variant != named.variant)
+        if (fits && ref.variant != named.variant && tui)
+          ui::note(bold_name(ref.name) + ", the largest variant of " + model + " that fits this Mac (" +
+                   strf("%.0f GB", ram_gb()) + "; the default, " + named.variant->name + ", does not). --model " +
+                   hub::short_name(*ref.model) + ":<variant> picks another.");
+        else if (fits && ref.variant != named.variant)
           fprintf(stderr, "%s on this Mac (%.0f GB): %s, the largest of its variants that fits (the default, %s, does "
                   "not). --model %s:<variant> picks another.\n", model.c_str(), ram_gb(), ref.name.c_str(),
                   named.variant->name.c_str(), hub::short_name(*ref.model).c_str());
@@ -546,11 +573,11 @@ static int serve(int argc, char** argv, int first) {
   }
   // fail now, not after loading the model, when the port is taken
   if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
+  const std::string log_path = tui ? ui::serve_log_file(port) : "";
   try {
     opt.model_dir = hub::ensure(ref, hub::PullOptions{});
   } catch (const hub::Stopped& e) {
-    fprintf(stderr, "\n%s\n", e.what());
-    return 130;
+    return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
@@ -558,7 +585,9 @@ static int serve(int argc, char** argv, int first) {
   // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
   // daemon evicted it); ni_run and the benchmarks build it synchronously
   setenv("NI_ANE_ASYNC", "1", 0);
+  if (tui) ui::loading_begin(ref.name);
   Engine engine(opt);
+  if (tui) ui::loading_end(ref.name);
 
   const time_t started = std::time(nullptr);
   char started_at[32];
@@ -632,8 +661,13 @@ static int serve(int argc, char** argv, int first) {
     const std::string id = "chatcmpl-" + std::to_string(std::time(nullptr)) + std::to_string(rand() % 100000);
     const long created = long(std::time(nullptr));
     const std::string model = engine.model_id();
+    const auto meter = ui::meter(req, r);
     if (!body.value("stream", false)) {
-      ChatResult out = engine.chat(r, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(r, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       if (out.finish_reason == "error") {
         res.status = 400;
@@ -667,6 +701,7 @@ static int serve(int argc, char** argv, int first) {
       if (!send(json{{"role", "assistant"}, {"content", ""}}, nullptr, nullptr)) return false;
       size_t ntool = 0;
       ChatResult out = engine.chat(r, [&](const ChatDelta& d) {
+        ui::token(meter);
         bool ok = true;
         if (!d.reasoning.empty()) ok = ok && send(json{{"reasoning_content", d.reasoning}}, nullptr, nullptr);
         if (!d.content.empty()) ok = ok && send(json{{"content", d.content}}, nullptr, nullptr);
@@ -686,6 +721,7 @@ static int serve(int argc, char** argv, int first) {
       std::string done = "data: [DONE]\n\n";
       sink.write(done.data(), done.size());
       sink.done();
+      ui::done(meter, out);
       // the reply is out: prefill the history as the next turn will render it (NI_HISTORY_PREFILL)
       std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       return true;
@@ -713,8 +749,13 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     const std::string id = api::new_id("msg_"), model = engine.model_id();
+    const auto meter = ui::meter(req, q.chat);
     if (!q.stream) {
-      ChatResult out = engine.chat(q.chat, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(q.chat, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, body] = api::messages_failure(out);
         res.status = status;
@@ -726,7 +767,7 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     stream_reply(engine, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
-                 api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); });
+                 api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); }, meter);
   });
   srv.Post("/v1/messages/count_tokens", [&](const httplib::Request& req, httplib::Response& res) {
     try {
@@ -766,8 +807,13 @@ static int serve(int argc, char** argv, int first) {
       for (const auto& it : output) items.push_back(it);
       responses.put(id, std::move(items));
     };
+    const auto meter = ui::meter(req, q->chat);
     if (!q->stream) {
-      ChatResult out = engine.chat(q->chat, [](const ChatDelta&) { return true; });
+      ChatResult out = engine.chat(q->chat, [&](const ChatDelta&) {
+        ui::token(meter);
+        return true;
+      });
+      ui::done(meter, out);
       if (out.finish_reason == "error") {
         auto [status, body] = api::responses_failure(out);
         res.status = status;
@@ -781,10 +827,13 @@ static int serve(int argc, char** argv, int first) {
       return;
     }
     auto w = std::make_shared<api::ResponsesStream>(*q, id, model, created);
-    stream_reply(engine, q->chat, w, res, api::responses_failure, [&, q, w, keep](const ChatResult& out) {
-      if (out.finish_reason != "error") keep(w->output());
-      prefill_after(q->chat, out);
-    });
+    stream_reply(
+        engine, q->chat, w, res, api::responses_failure,
+        [&, q, w, keep](const ChatResult& out) {
+          if (out.finish_reason != "error") keep(w->output());
+          prefill_after(q->chat, out);
+        },
+        meter);
   });
 
   // A busy port is an error: httplib's default SO_REUSEPORT would let a second server bind it too.
@@ -799,8 +848,23 @@ static int serve(int argc, char** argv, int first) {
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
-  printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
-         engine.model_id().c_str(), api_key.empty() ? "" : ", API key required");
+  if (tui) {
+    ui::Ready card;
+    card.model = engine.model_id();
+    if (ref.variant) card.quant = ref.variant->quant;
+    card.base = base;
+    card.api_key_note = api_key.empty() ? "" : "required (--api-key)";
+    card.log = log_path;
+    card.budget = budget;
+    card.used = Gpu::get().allocated_bytes();
+    card.context = engine.context_length();
+    card.context_fit = engine.context_fit();
+    card.slots = std::max(1, opt.slots);
+    ui::ready(card);
+  } else {
+    printf("Ready: chat at %s, API at %s/v1 (model \"%s\"%s). Ctrl+C stops.\n", base.c_str(), base.c_str(),
+           engine.model_id().c_str(), api_key.empty() ? "" : ", API key required");
+  }
   fflush(stdout);
   srv.listen_after_bind();
   return 0;

@@ -3,6 +3,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <signal.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -275,22 +276,81 @@ std::string repeat(const char* g, int n) {
   return s;
 }
 
-// Output shared by the status line and the lines above it
+// Output shared by the status block (a spinner's line, an animation's rows) and the lines above it
 std::mutex g_mu;
-std::string g_status;
-bool g_drawn = false;
+std::vector<std::string> g_status;
+int g_drawn = 0;  // rows of the status block on screen (the cursor is at the end of its last one)
+bool g_ended = false, g_hidden = false;
 
-void clear_status() {
-  if (g_drawn) fputs("\r\033[K", stderr);
-  g_drawn = false;
-}
-
-void draw_status() {
-  if (g_status.empty() || !caps().live) return;
-  const std::string s = "\r\033[K" + clip(g_status, std::max(10, columns() - 1));
+void put(const std::string& s) {
   fputs(s.c_str(), stderr);
   fflush(stderr);
-  g_drawn = true;
+}
+
+// The cursor is hidden while a status block is drawn, and shown again however the process ends: at exit, and on the
+// signals that would otherwise kill it with the cursor hidden (when nothing else handles them)
+void restore_cursor() {
+  if (g_hidden) {
+    static const char show[] = "\033[?25h";
+    if (write(2, show, sizeof show - 1) < 0) {
+    }
+  }
+}
+
+void on_signal(int sig) {
+  restore_cursor();
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+void hide_cursor() {
+  if (g_hidden) return;
+  static bool once = [] {
+    atexit(restore_cursor);
+    for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT}) {
+      struct sigaction old {};
+      sigaction(sig, nullptr, &old);
+      if (old.sa_handler == SIG_DFL) signal(sig, on_signal);
+    }
+    return true;
+  }();
+  (void)once;
+  g_hidden = true;
+  put("\033[?25l");
+}
+
+void show_cursor() {
+  if (!g_hidden) return;
+  g_hidden = false;
+  put("\033[?25h");
+}
+
+// The escape codes that take the cursor back to the start of the status block and clear it
+std::string erase_status() {
+  if (g_drawn == 0) return "";
+  std::string s = "\r";
+  if (g_drawn > 1) s += "\033[" + std::to_string(g_drawn - 1) + "A";
+  g_drawn = 0;
+  return s + "\033[J";
+}
+
+// The status block, each row cut to the width (a wrapped row would break the redraw)
+std::string status_rows() {
+  if (g_status.empty() || g_ended || !caps().live) return "";
+  const int w = std::max(10, columns() - 1);
+  std::string s;
+  for (size_t i = 0; i < g_status.size(); ++i) s += (i ? "\n" : "") + clip(g_status[i], w) + "\033[K";
+  g_drawn = int(g_status.size());
+  return s;
+}
+
+// One write per change, inside synchronized output (terminals without it ignore the mode): no flicker
+void redraw(const std::string& before = "") {
+  std::string s = erase_status() + before + status_rows();
+  if (s.empty()) return;
+  if (g_drawn > 0) hide_cursor();
+  put("\033[?2026h" + s + "\033[?2026l");
+  if (g_drawn == 0) show_cursor();
 }
 
 }  // namespace
@@ -440,23 +500,40 @@ std::string count(double n) {
 
 void line(const std::string& s, FILE* f) {
   std::lock_guard<std::mutex> lk(g_mu);
-  clear_status();
-  fflush(stderr);
-  fputs(s.c_str(), f);
-  fputc('\n', f);
+  if (f == stderr) {
+    redraw(s + "\n");  // the block off, the line, the block again: one write
+    return;
+  }
+  // stdout: the block off (stderr) first, then the line, then the block again
+  if (g_drawn > 0) put(erase_status());
+  fputs((s + "\n").c_str(), f);
   fflush(f);
-  draw_status();
+  redraw();
 }
 
-void status(const std::string& s) {
+void status(const std::string& s) { status(s.empty() ? std::vector<std::string>{} : std::vector<std::string>{s}); }
+
+void status(const std::vector<std::string>& rows) {
   std::lock_guard<std::mutex> lk(g_mu);
-  g_status = s;
-  if (s.empty()) {
-    clear_status();
-    fflush(stderr);
-  } else {
-    draw_status();
-  }
+  g_status = rows;
+  redraw();
+  if (g_status.empty()) show_cursor();
+}
+
+void keep_status() {
+  std::lock_guard<std::mutex> lk(g_mu);
+  if (g_drawn > 0) put("\n");
+  g_drawn = 0;
+  g_status.clear();
+  show_cursor();
+}
+
+void end_status() {
+  std::lock_guard<std::mutex> lk(g_mu);
+  put(erase_status());
+  g_status.clear();
+  g_ended = true;
+  show_cursor();
 }
 
 struct Spinner::Impl {
@@ -543,9 +620,6 @@ void error(const std::string& msg, const std::string& hint) {
   }
   const int w = std::max(30, std::min(columns(), 100) - 4);
   std::vector<std::string> head = wrap(first, w);
-  std::lock_guard<std::mutex> lk(g_mu);
-  clear_status();
-  fflush(stdout);
   std::string out;
   for (size_t i = 0; i < head.size(); ++i) out += (i ? "    " : "  " + red(bold(kFail)) + " ") + head[i] + "\n";
   size_t a = 0;
@@ -564,9 +638,9 @@ void error(const std::string& msg, const std::string& hint) {
   }
   if (!hint.empty())
     for (const auto& x : wrap(hint, w)) out += "    " + dim(x) + "\n";
-  fputs(out.c_str(), stderr);
-  fflush(stderr);
-  draw_status();
+  fflush(stdout);
+  std::lock_guard<std::mutex> lk(g_mu);
+  redraw(out);
 }
 
 }  // namespace ni::term

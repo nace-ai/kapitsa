@@ -32,17 +32,18 @@ int fail(const std::string& msg, int code);
 
 // ---- kapitsa serve
 
-// From here on, the engine's log goes to ~/.cache/kapitsa/logs/serve-<port>.log (and on screen too, dim, with
-// `verbose`); warnings and errors show on screen either way. Returns the log's path.
-std::string serve_log(int port, bool verbose);
-// The header line of `kapitsa serve`
-void serve_header(const std::string& version);
-// A spinner while the engine loads, showing its latest log line; done() with its load time
+// Before anything else: the header; the engine's log goes to memory, and from serve_log_file() on to
+// ~/.cache/kapitsa/logs/serve-<port>.log (and on screen too, dim, with `verbose` or NI_LOG); warnings and errors show on
+// screen either way
+void serve_begin(const std::string& version, bool verbose);
+// Once the port is known to be free (another server's log is not cut): the log file, with what came before. Its path.
+std::string serve_log_file(int port);
+// A spinner while the engine loads, showing its latest log line; then "✓ Loaded <what> in 6.1s"
 void loading_begin(const std::string& what);
-void loading_end(bool ok);
+void loading_end(const std::string& what);
 struct Ready {
-  std::string model, variant, quant, base, api_key_note, log;
-  size_t budget = 0;
+  std::string model, quant, base, api_key_note, log;
+  size_t budget = 0, used = 0;
   int context = 0, context_fit = 0, slots = 0;
 };
 // The card once the server listens
@@ -51,7 +52,6 @@ void ready(const Ready& r);
 // One API request, for its line in the request log: the client (from the User-Agent), the time from its arrival to
 // its first token, the images it carries. nullptr when the terminal UI is off; the functions take that too.
 struct Meter;
-std::shared_ptr<Meter> meter(const httplib::Request& req, const ojson& messages);
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r);
 void token(const std::shared_ptr<Meter>& m);
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r);

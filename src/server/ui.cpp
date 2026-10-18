@@ -4,6 +4,7 @@
 #include "api/clients.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
+#include "server/pendulum.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <ctime>
 #include <mutex>
@@ -126,14 +128,31 @@ std::string install_command(const std::string& agent) {
 
 // ---------------------------------------------------------------- the home screen
 
+// "Apple M4 Pro · 20-core GPU · 48 GB"
+std::string this_mac() {
+  Gpu& g = Gpu::get();
+  char b[160];
+  snprintf(b, sizeof b, "%s  %s  %d-core GPU  %s  %.0f GB", g.name().c_str(), kDot, g.core_count(), kDot, ram_gb());
+  return b;
+}
+
 void home(const std::string& version) {
   const int W = layout_width();
   std::vector<std::string> o;
-  o.push_back("");
-  o.push_back("  " + badge(" kapitsa ") + "  " + dim(version) + "   fast local Qwen on Apple silicon");
+  // the header: Kapitsa's pendulum beside the wordmark (its intro first, where it may play)
+  const std::vector<std::string> head = {badge(" kapitsa ") + "  " + dim(version), "fast local AI on Apple silicon",
+                                         dim(this_mac())};
+  const hub::CatalogModel* best = best_here();
+  fputs("\n", stdout);
+  fflush(stdout);
+  if (W >= 60) {
+    intro(head, 3);
+  } else {
+    o.push_back("  " + head[0] + "   " + head[1]);
+    o.push_back("  " + head[2]);
+  }
   o.push_back("");
 
-  const hub::CatalogModel* best = best_here();
   o.push_back(section("Get started"));
   two_columns(o, {{"kapitsa serve", "start the best model for this Mac" + (best ? " (" + hub::short_name(*best) + ")" : std::string())},
                   {"kapitsa serve --model 27b", "start another one (downloaded the first time)"},
@@ -359,16 +378,325 @@ void plan(const hub::ModelRef&) {}
 
 // ---------------------------------------------------------------- serve
 
-std::string serve_log(int, bool) { return ""; }
-void serve_header(const std::string&) {}
-void loading_begin(const std::string&) {}
-void loading_end(bool) {}
-void ready(const Ready&) {}
+namespace {
 
-struct Meter {};
-std::shared_ptr<Meter> meter(const httplib::Request&, const ojson&) { return nullptr; }
-std::shared_ptr<Meter> meter(const httplib::Request&, const ChatRequest&) { return nullptr; }
-void token(const std::shared_ptr<Meter>&) {}
-void done(const std::shared_ptr<Meter>&, const ChatResult&) {}
+// The engine's log while `kapitsa serve` runs in a terminal: a file, the lines that matter on screen
+struct ServeLog {
+  std::mutex mu;
+  FILE* f = nullptr;
+  std::string path;
+  std::vector<std::string> pending;  // lines before the file opens (the port is checked first)
+  bool verbose = false;
+  Spinner* spinner = nullptr;
+  std::string ready_line, images_line;
+  std::string detail;  // the latest line
+};
+ServeLog g_log;
+
+// Log lines worth seeing without the log: a drafter left out, images or tools a request carried that the model can't
+// use, the Neural Engine unavailable, a conversation's cache given up for memory
+bool worth_showing(const std::string& m) {
+  if (m.rfind("DFlash2: no drafter found", 0) == 0) return false;
+  std::string l = m;
+  for (auto& ch : l) ch = char(tolower(uint8_t(ch)));
+  for (const char* k : {"left out", "can't", "cannot", "failed", "unavailable", "not used", "insufficient",
+                        "dropping the kv cache", "error", "corrupt", "not supported", "warning"})
+    if (l.find(k) != std::string::npos) return true;
+  return false;
+}
+
+void serve_sink(int level, const char* msg) {
+  const std::string m = msg;
+  const std::string text = std::string("[kapitsa] ") + (level == 0 ? "fatal: " : "") + m;
+  {
+    std::lock_guard<std::mutex> lk(g_log.mu);
+    if (g_log.f) {
+      fputs((text + "\n").c_str(), g_log.f);
+      fflush(g_log.f);
+    } else {
+      g_log.pending.push_back(text);
+    }
+    if (m.rfind("engine ready: ", 0) == 0) g_log.ready_line = m;
+    else if (m.rfind("images: ", 0) == 0) g_log.images_line = m;
+    if (g_log.spinner && level > 0) g_log.spinner->detail(m);
+    if (level > 0) g_log.detail = m;
+  }
+  if (level == 0) {
+    end_status();  // the process exits next: no spinner left behind
+    term::error(m, g_log.path.empty() ? "" : "The log: " + hub::tilde(g_log.path));
+  } else if (g_log.verbose) {
+    line(dim(text), stderr);
+  } else if (worth_showing(m)) {
+    warning(dim(m));
+  }
+}
+
+std::string after(const std::string& s, const std::string& key) {
+  const size_t p = s.find(key);
+  return p == std::string::npos ? "" : s.substr(p + key.size());
+}
+
+// "DFlash2 speculative decoding (verify 7 of 7), images on" -> "DFlash2 drafter"
+std::string decoding(const std::string& ready) {
+  std::string mode = after(ready, " slots, ");
+  if (const size_t p = mode.find(", images on"); p != std::string::npos) mode.resize(p);
+  if (mode.rfind("DFlash2", 0) == 0) return "DFlash2 drafter " + dim("(speculative decoding)");
+  if (mode.rfind("LiLiCorr", 0) == 0) return "LiLiCorr drafter " + dim("(speculative decoding)");
+  if (mode.rfind("MTP", 0) == 0) return "MTP head " + dim("(speculative decoding, " + after(mode, "depth ") + " ahead)");
+  if (mode.rfind("plain", 0) == 0) return "plain " + dim("(no speculative decoding)");
+  return mode;
+}
+
+std::string repeat(const char* g, int n) {
+  std::string s;
+  for (int i = 0; i < n; ++i) s += g;
+  return s;
+}
+
+// A card: a rounded box of `rows` (styled), `inner` columns wide
+void card(std::vector<std::string>& o, const std::vector<std::string>& rows, int inner) {
+  o.push_back("  " + dim("╭" + repeat("─", inner + 4) + "╮"));
+  for (const auto& r : rows) o.push_back("  " + dim("│") + "  " + left(clip(r, inner), inner) + "  " + dim("│"));
+  o.push_back("  " + dim("╰" + repeat("─", inner + 4) + "╯"));
+}
+
+std::atomic<bool> g_serve_ui{false};
+std::mutex g_req_mu;
+bool g_req_header = false;
+
+}  // namespace
+
+void serve_begin(const std::string& version, bool verbose) {
+  g_serve_ui = true;
+  // NI_LOG asks for the log: on screen too
+  g_log.verbose = verbose || getenv("NI_LOG") != nullptr;
+  log_sink() = serve_sink;
+  print({"", "  " + badge(" kapitsa ") + "  " + dim(version + "  " + kDot + "  serve")});
+}
+
+std::string serve_log_file(int port) {
+  const std::string dir = hub::home_dir() + "/logs";
+  mkdir(hub::home_dir().c_str(), 0755);
+  mkdir(dir.c_str(), 0755);
+  const std::string path = dir + "/serve-" + std::to_string(port) + ".log";
+  std::lock_guard<std::mutex> lk(g_log.mu);
+  g_log.f = fopen(path.c_str(), "w");
+  if (!g_log.f) return "";
+  g_log.path = path;
+  const time_t now = time(nullptr);
+  char at[64];
+  strftime(at, sizeof at, "%Y-%m-%d %H:%M:%S", localtime(&now));
+  fprintf(g_log.f, "kapitsa serve on port %d, started %s\n", port, at);
+  for (const auto& l : g_log.pending) fprintf(g_log.f, "%s\n", l.c_str());
+  g_log.pending.clear();
+  fflush(g_log.f);
+  return path;
+}
+
+namespace {
+
+// While the model loads: Kapitsa's pendulum wobbling beside what is happening (where it may play), else a spinner
+struct Loading {
+  std::string what;
+  std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+  std::unique_ptr<Wobble> wobble;
+  double secs() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); }
+};
+std::unique_ptr<Loading> g_loading;
+
+}  // namespace
+
+void loading_begin(const std::string& what) {
+  std::lock_guard<std::mutex> lk(g_log.mu);
+  g_loading = std::make_unique<Loading>();
+  g_loading->what = what;
+  if (!can_animate()) {
+    g_log.spinner = new Spinner("Loading " + bold(what));
+    return;
+  }
+  line("");
+  Loading* l = g_loading.get();
+  l->wobble = std::make_unique<Wobble>(
+      [l] {
+        std::string detail;
+        {
+          std::lock_guard<std::mutex> lk2(g_log.mu);
+          detail = g_log.detail;
+        }
+        // the wobble calms as the load goes on (a typical load: 5-10 s)
+        l->wobble->progress(1 - std::exp(-l->secs() / 4));
+        return std::vector<std::string>{"Loading " + bold(l->what) + "  " + dim(duration(l->secs())),
+                                        dim(clip(detail, std::max(20, columns() - kArtCols - 8)))};
+      },
+      3);
+}
+
+void loading_end(const std::string& what) {
+  Spinner* sp;
+  std::unique_ptr<Loading> l;
+  {
+    std::lock_guard<std::mutex> lk(g_log.mu);
+    sp = g_log.spinner;
+    g_log.spinner = nullptr;
+    l = std::move(g_loading);
+  }
+  if (sp) {
+    sp->done("  " + accent(kOk) + " Loaded " + bold(what) + dim(" in " + duration(sp->seconds())));
+    delete sp;
+  }
+  if (l && l->wobble) l->wobble->done({accent(kOk) + " Loaded " + bold(what) + dim(" in " + duration(l->secs())), ""});
+}
+
+void ready(const Ready& r) {
+  const int W = layout_width();
+  const int inner = std::max(36, std::min(W - 8, 68));
+  std::vector<std::string> rows;
+  auto row = [&](const std::string& k, const std::string& v) { rows.push_back(left(dim(k), 11) + v); };
+  {
+    const std::string status = accent(kOn) + " ready";
+    const std::string name = bold(r.model);
+    const int gap = inner - width(name) - width(status);
+    rows.push_back(gap >= 2 ? name + std::string(size_t(gap), ' ') + status : name);
+  }
+  rows.push_back("");
+  if (!r.quant.empty()) row("Precision", r.quant);
+  std::string ready_line, images_line;
+  {
+    std::lock_guard<std::mutex> lk(g_log.mu);
+    ready_line = g_log.ready_line, images_line = g_log.images_line;
+  }
+  if (!ready_line.empty()) row("Decoding", decoding(ready_line));
+  if (!images_line.empty()) {
+    std::string v = after(images_line, "images: ");
+    std::string gbs;
+    if (const size_t p = v.rfind(", "); p != std::string::npos) gbs = v.substr(p + 2), v.resize(p);
+    if (const size_t p = v.find(" ("); p != std::string::npos) v.resize(p);
+    if (const size_t p = gbs.find(" GB"); p != std::string::npos) gbs.resize(p + 3);
+    row("Images", "on " + dim("(" + v + (gbs.empty() ? "" : ", +" + gbs + " with the first image") + ")"));
+  }
+  if (r.budget) {
+    char b[64];
+    snprintf(b, sizeof b, "%.1f of %.1f GB", r.used / 1e9, r.budget / 1e9);
+    const int bw = std::min(24, inner - 11 - width(b) - 2);
+    row("Memory", (bw >= 8 ? bar(double(r.used) / double(r.budget), bw) + "  " : std::string()) + b);
+  }
+  if (r.context) {
+    std::string c = count(r.context) + " tokens";
+    if (r.slots > 1) c += " " + dim("×") + " " + std::to_string(r.slots) + " conversations";
+    if (r.context_fit > 0 && r.context_fit < r.context) c += dim(" (" + count(r.context_fit) + " fit in memory)");
+    row("Context", c);
+  }
+  rows.push_back("");
+  row("Chat", accent(r.base));
+  row("OpenAI", accent(r.base + "/v1"));
+  row("Anthropic", accent(r.base));
+  if (!r.api_key_note.empty()) row("API key", r.api_key_note);
+  std::vector<std::string> o;
+  o.push_back("");
+  card(o, rows, inner);
+  o.push_back("  " + dim(std::string(kArrow) + " ") + bold("kapitsa claude") + dim(" in another terminal codes with it"));
+  o.push_back("  " + dim(std::string(kArrow) + " " + (r.log.empty() ? "" : "Log " + hub::tilde(r.log) + "  " + kDot + "  ") +
+                         "Ctrl+C stops"));
+  o.push_back("");
+  std::lock_guard<std::mutex> lk(g_req_mu);
+  for (const auto& l : o) line(l);
+}
+
+// ---------------------------------------------------------------- the request log
+
+struct Meter {
+  double t0 = now_ms();
+  std::atomic<double> first{0};
+  std::string client;
+  int images = 0;
+};
+
+namespace {
+
+// The client by its User-Agent, when it is plain which: Claude Code, Codex, opencode, a browser (the chat page), an SDK
+std::string client_of(const std::string& ua) {
+  std::string l = ua;
+  for (auto& ch : l) ch = char(tolower(uint8_t(ch)));
+  auto has = [&](const char* k) { return l.find(k) != std::string::npos; };
+  if (has("claude-cli") || has("claude-code")) return "claude";
+  if (has("codex")) return "codex";
+  if (has("opencode")) return "opencode";
+  if (l.rfind("mozilla/", 0) == 0) return "browser";
+  if (has("anthropic/python")) return "anthropic-py";
+  if (has("anthropic/js")) return "anthropic-js";
+  if (has("openai/python")) return "openai-py";
+  if (has("openai/js")) return "openai-js";
+  if (l.rfind("curl/", 0) == 0) return "curl";
+  if (has("python-urllib") || has("python-requests") || has("aiohttp") || has("httpx")) return "python";
+  if (l.empty()) return "";
+  std::string w = l.substr(0, l.find_first_of("/ ("));
+  return w.size() > 12 ? w.substr(0, 12) : w;
+}
+
+int images_in(const ojson& messages) {
+  int n = 0;
+  if (!messages.is_array()) return 0;
+  for (const auto& m : messages) {
+    if (!m.is_object() || !m.contains("content") || !m["content"].is_array()) continue;
+    for (const auto& p : m["content"])
+      if (p.is_object()) {
+        const std::string t = p.value("type", "");
+        if (t == "image_url" || t == "image" || t == "input_image") ++n;
+      }
+  }
+  return n;
+}
+
+}  // namespace
+
+std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) {
+  if (!g_serve_ui) return nullptr;
+  auto m = std::make_shared<Meter>();
+  m->client = client_of(req.get_header_value("User-Agent"));
+  m->images = images_in(r.messages);
+  return m;
+}
+
+void token(const std::shared_ptr<Meter>& m) {
+  if (m && m->first.load() == 0) m->first = now_ms();
+}
+
+void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
+  if (!m) return;
+  const time_t now = time(nullptr);
+  char at[16];
+  strftime(at, sizeof at, "%H:%M:%S", localtime(&now));
+  const double first = m->first.load();
+  char b[32];
+  std::string ttft = "–", tps = "–", cached = "–";
+  if (first > 0) snprintf(b, sizeof b, "%.2fs", (first - m->t0) / 1000), ttft = b;
+  if (r.completion_tokens > 1 && r.decode_ms > 0)
+    snprintf(b, sizeof b, "%.1f", (r.completion_tokens - 1) / (r.decode_ms / 1000)), tps = b;
+  if (r.prompt_tokens > 0) snprintf(b, sizeof b, "%.0f%%", 100.0 * r.cached_tokens / r.prompt_tokens), cached = b;
+  std::string fin = r.finish_reason;
+  if (fin == "tool_calls") fin = accent("tool calls");
+  else if (fin == "length") fin = warn(r.context_full ? "context full" : "length");
+  else if (fin == "cancelled") fin = warn("cancelled");
+  else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
+  if (m->images > 0) fin += dim("  " + std::to_string(m->images) + (m->images == 1 ? " image" : " images"));
+  const int W = columns();
+  const bool with_time = W >= 72;
+  std::string l = "  ";
+  if (with_time) l += dim(at) + "  ";
+  l += left(m->client.empty() ? dim("–") : m->client, 10) + "  " + right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) +
+       "  " + right(cached, 5) + "  " + right(ttft, 6) + "  " + right(count(r.completion_tokens), 5) + "  " + right(tps, 6) +
+       "  " + fin;
+  std::lock_guard<std::mutex> lk(g_req_mu);
+  if (!g_req_header) {
+    g_req_header = true;
+    std::string h = "  ";
+    if (with_time) h += left("time", 8) + "  ";
+    h += left("client", 10) + "  " + right("prompt", 6) + "  " + right("cached", 5) + "  " + right("first", 6) + "  " +
+         right("out", 5) + "  " + right("tok/s", 6) + "  finish";
+    line(section("Requests"));
+    line(dim(h));
+  }
+  line(clip(l, W - 1));
+}
 
 }  // namespace ni::ui

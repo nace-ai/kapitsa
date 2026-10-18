@@ -66,8 +66,15 @@ std::string count(double n);
 // Output that coexists with a status line: the status line is cleared, the line written (with a newline) to `f`,
 // and the status line drawn again below it. Thread-safe; every styled line should go through it.
 void line(const std::string& s, FILE* f = stdout);
-// Sets the status line drawn under the output on stderr ("" removes it). Drawn only when live().
+// Sets the status line drawn under the output on stderr ("" removes it). Drawn only when live(), with the cursor
+// hidden (shown again when it goes, at exit, and on a signal that ends the process).
 void status(const std::string& s);
+// A status block of several rows (an animation's frame), redrawn in one write
+void status(const std::vector<std::string>& rows);
+// Leaves the status block on screen as it is, as ordinary output, and forgets it
+void keep_status();
+// Removes the status block for good (before the process exits: a fatal error)
+void end_status();
 
 // A spinner on the status line: "⠹ <label>  <seconds>  <detail>" until done()
 class Spinner {
