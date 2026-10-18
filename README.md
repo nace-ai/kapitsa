@@ -11,7 +11,7 @@ back up without reading it again. On a 48 GB MacBook Pro it is the fastest of th
 
 ## Quick start
 
-An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro), the Xcode Command Line Tools and CMake. The 4B
+An Apple silicon Mac with macOS 15 or later (tested on M4 Pro and M5 Max), the Xcode Command Line Tools and CMake. The 4B
 runs on a 16 GB MacBook Air. The 35B-A3B and 27B run on 32 GB Macs with shorter conversations and without the DFlash2
 draft model; 48 GB is recommended. `kapitsa doctor` shows what fits this Mac.
 
@@ -157,6 +157,10 @@ and the desktop's own GPU work (10-40% of the GPU while the session ran) was the
 [Measurement details](docs/benchmarks.md) ·
 [Run benchmarks locally](bench/harness/README.md) ·
 [Every optimization and its measurements](docs/PERF.md)
+
+An additional [M5 Max / 128 GB measurement](docs/benchmarks-m5-max.md) records 249.8 / 72.9 tok/s sampled decode
+for the 35B / 27B models. Both runs passed the harness's correctness checks and were flagged for background GPU
+contention; the report includes the full results, conditions and reproduction commands.
 
 ## Design
 
