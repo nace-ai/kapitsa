@@ -129,6 +129,13 @@ needs nothing there).
   the Neural Engine split give way first if needed); when the KV cache needs the room the cached embeddings go first
   and the encoder's weights last (they load again with the next image).
 
+Accuracy (`tests/vision/`): the processor's output equals mlx_vlm's bit for bit (and Hugging Face's PIL processor
+within 1 ulp; its default torchvision processor resizes differently, by a level on 0.1-0.3% of values); M-RoPE
+positions equal `get_rope_index` over 200 random prompts with 1-4 images; the tower's embeddings are within 0.24%
+(relative L2) of a float32 reference, where mlx_vlm's bf16 tower is 3.7% off; next-token distributions over answers
+about a chart, a terminal screenshot, a photo and two images at once agree with mlx_vlm to a mean KL of 0.002-0.010
+(35B) and 0.0005-0.003 (27B), top-1 96-100%.
+
 `tools/vit_check` runs the pieces alone (decode, resize, smart_resize, processor output, M-RoPE positions, the
 tower on raw pixels, kernel checks, encode timing); `tests/vision/ref_tower.py` is the float32 reference of the tower
 (Hugging Face's, on the CPU), `tests/vision/ref_mlx.py` writes mlx_vlm's next-token distributions for
