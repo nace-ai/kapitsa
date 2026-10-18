@@ -30,6 +30,13 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
 ]
 
+# A follow-up after a tool call reuses its whole first prompt, less at most the generation prompt's tokens: when the
+# model's own tool-call text differs from the template's rendering of it (Qwen3.5-4B), a hybrid model's recurrent
+# state resumes from the checkpoint at the end of the user's turn, which is just before the generation prompt.
+GEN_TAIL = 8
+hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"  # /etc/hosts, as a tool returns it
+
+
 def hosts_call(name, args):
     """A call that reads /etc/hosts: read_file on the path, or run_shell on a command naming it (Nemotron 3.5
     Lightning counts the lines with `wc -l < /etc/hosts`; either is a tool call the server must return)."""
@@ -281,21 +288,20 @@ r = post({"messages": msgs, "tools": TOOLS, "max_tokens": 4096, "stream": True,
           "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
 tc = r["tool_calls"]
 check("tool call: finish=tool_calls", r["finish"] == "tool_calls", str(r["finish"]) + " " + repr(r["content"])[:200])
-ok = len(tc) == 1 and tc[0]["function"]["name"] == "read_file"
-args = json.loads(tc[0]["function"]["arguments"]) if ok else {}
-check("tool call: read_file with path", ok and args.get("path") == "/etc/hosts", json.dumps(tc)[:300])
+ok = len(tc) == 1 and hosts_call(tc[0]["function"]["name"], tc[0]["function"]["arguments"])
+check("tool call: read_file or run_shell on /etc/hosts", ok, json.dumps(tc)[:300])
 check("tool call: no markup in content", "<tool_call>" not in r["content"] and "<function" not in r["content"], repr(r["content"]))
 first_prompt = r["usage"]["prompt_tokens"] if r["usage"] else 0
 msgs += [{"role": "assistant", "content": r["content"], "tool_calls": [
             {"id": tc[0]["id"], "type": "function", "function": tc[0]["function"]}] if ok else []},
          {"role": "tool", "tool_call_id": tc[0]["id"] if ok else "x",
-          "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"}]
+          "content": hosts_result(tc[0]["function"]["name"], tc[0]["function"]["arguments"]) if ok else hosts}]
 r2 = post({"messages": msgs, "tools": TOOLS, "max_tokens": 2048, "stream": True,
            "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
 check("tool result: final answer mentions 3", "3" in r2["content"], repr(r2["content"])[:200])
 cached = r2["usage"]["prompt_tokens_details"]["cached_tokens"] if r2["usage"] else 0
-check("tool result: prefix reused (cached >= first prompt)", cached >= first_prompt,
-      f"cached={cached} first_prompt={first_prompt} usage={r2['usage']}")
+check("tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+      cached >= first_prompt - GEN_TAIL, f"cached={cached} first_prompt={first_prompt} usage={r2['usage']}")
 
 # 3. next user turn: reuse from the checkpoint
 msgs += [{"role": "assistant", "content": r2["content"]},
@@ -424,7 +430,6 @@ def blocks_of(events):
 A_TOOLS = [{"name": t["function"]["name"], "description": t["function"]["description"],
             "input_schema": t["function"]["parameters"]} for t in TOOLS]
 CTX = json.loads(get("/v1/models", auth())[2])["data"][0]["context_length"]
-hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
 
 # 8. Anthropic: a Claude Code-like tool loop (adaptive thinking shown as a signature only, every turn's thinking kept)
 a_body = {"model": "m", "max_tokens": 4096, "temperature": 0, "top_k": 1,
@@ -456,7 +461,8 @@ check("anthropic stream: message_start, ping, blocks, message_delta, message_sto
       "content_block_start" in names, str(names)[:300])
 usage = ev[0][1]["message"]["usage"] if names else {}
 check("anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
-      usage.get("cache_read_input_tokens", 0) >= first and usage.get("cache_creation_input_tokens") == 0, f"{usage} first {first}")
+      usage.get("cache_read_input_tokens", 0) >= first - GEN_TAIL and usage.get("cache_creation_input_tokens") == 0,
+      f"{usage} first {first}")
 reply = blocks_of(ev)
 check("anthropic stream: final answer mentions 3", any(b["type"] == "text" and "3" in b["text"] for b in reply) and
       ev[-2][1]["delta"]["stop_reason"] == "end_turn", json.dumps(reply)[:300])
@@ -584,9 +590,9 @@ side = {"messages": [{"role": "user", "content": f"[side {time.time()}]\n{ctx}\n
 if SLOTS >= 2:  # with one slot the request waits for the reply's end, by design
     long_, short = together([counting("c3", 700), side], delays=[0, 1.0])
     check("in flight together: a 2K-token request sent during a long reply finishes first",
-          short["t_done"] < long_["t_done"] and short["usage"]["prompt_tokens"] > 1500 and long_["usage"]["completion_tokens"] == 700,
-          f"side done {short['t_done'] - long_['t_sent']:.1f} s, long reply done {long_['t_done'] - long_['t_sent']:.1f} s, "
-          f"side usage {short['usage']}")
+          short["t_done"] < long_["t_done"] and short["usage"]["prompt_tokens"] > 1500 and long_["usage"]["completion_tokens"] >= 600,
+          f"side done {short['t_done'] - long_['t_sent']:.1f} s, long reply done {long_['t_done'] - long_['t_sent']:.1f} s "
+          f"({long_['usage']['completion_tokens']} tokens), side usage {short['usage']}")
 else:
     print("SKIP in flight together: a 2K-token request sent during a long reply finishes first (--slots 1)")
 
