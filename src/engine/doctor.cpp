@@ -29,6 +29,13 @@
 namespace ni {
 namespace {
 
+// z-lab's DFlash (v1) drafters run on the DFlash2 path; the label says which one this is
+bool dflash_v1(const std::string& dir) {
+  std::ifstream f(dir + "/config.json");
+  const nlohmann::json c = nlohmann::json::parse(f, nullptr, false);
+  return c.is_object() && c.value("architectures", nlohmann::json::array()) == nlohmann::json::array({"DFlashDraftModel"});
+}
+
 std::string sysctl_str(const char* name) {
   char b[256] = {0};
   size_t n = sizeof b;
@@ -353,7 +360,9 @@ int run_doctor(int argc, char** argv) {
     }
     // Nemotron-H's block drafters: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning)
     const bool dspark = nemotron && NhDrafter::kind(lp.dflash.empty() ? lp.dflash_left_out : lp.dflash) == "dspark";
-    const char* drafter = !nemotron ? "DFlash2 drafter" : dspark ? "DSpark drafter" : "LiLiCorr drafter";
+    const std::string drafter_dir = lp.dflash.empty() ? lp.dflash_left_out : lp.dflash;
+    const char* drafter = nemotron ? (dspark ? "DSpark drafter" : "LiLiCorr drafter")
+                          : !drafter_dir.empty() && dflash_v1(drafter_dir) ? "DFlash drafter" : "DFlash2 drafter";
     const int ch = lp.prefill_chunk;
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
     const Qwen35::AnePlan ap = nemotron ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0} : Qwen35::ane_plan(dir, m);

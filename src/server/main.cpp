@@ -945,7 +945,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
                         r.variant->name == r.model->default_variant ? ", the default" : "");
   if (r.variant)
     for (const auto& c : r.variant->companions)
-      printf("  %-11s %s @ %s%s\n", (c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark" ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
+      printf("  %-11s %s @ %s%s\n", (c.drafter() ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
              c.kind == "mtp-sidecar" ? " (its mtp.* tensors, made into mtp.safetensors)" : "");
   printf("  API name:   %s\n", r.id.c_str());
 }

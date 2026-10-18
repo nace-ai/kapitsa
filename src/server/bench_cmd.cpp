@@ -322,7 +322,7 @@ ModelInfo model_info(const hub::ModelRef& ref) {
 std::string drafter_of(const hub::ModelRef& ref) {
   if (!ref.variant) return "";
   for (const auto& c : ref.variant->companions)
-    if (c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark") return c.repo + "@" + c.revision.substr(0, 7);
+    if (c.drafter()) return c.repo + "@" + c.revision.substr(0, 7);
   return "";
 }
 

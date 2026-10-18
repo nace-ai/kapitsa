@@ -32,6 +32,8 @@ struct Companion {
   std::string subdir;              // where they go in the model's folder ("" = beside the weights)
   std::string sha256;              // "mtp-sidecar": sha256 of the result (a pinned revision always builds the same file)
   uint64_t size = 0;               // "mtp-sidecar": its size in bytes
+  // a draft model (DFlash2, DFlash v1, LiLiCorr, DSpark), not an MTP head's files
+  bool drafter() const { return kind == "dflash2" || kind == "dflash" || kind == "lilicorr" || kind == "dspark"; }
 };
 
 // One way to run a model: its weights at one precision, with the companions that speed them up. `--model
