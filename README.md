@@ -83,6 +83,9 @@ Each variant is pinned to a tested revision. Speculative decoding is lossless: t
 distribution, and greedy output matches decoding without it except at near-ties within rounding noise. Other
 Qwen3.5-family models load from a Hugging Face repo (`--model mlx-community/Qwen3.5-9B-6bit`) or a folder (`--model
 ~/models/my-qwen`) in MLX format, bf16 or MLX's 3- to 8-bit quantizations. The defaults are tuned on the three above.
+A GGUF file of a Qwen3.5-family model (LM Studio, Ollama, llama.cpp, Hugging Face GGUF repos) runs too: `kapitsa serve
+--model ~/Downloads/Qwen3.5-4B-Q4_K_M.gguf` converts it once into a model folder, and `kapitsa import FILE.gguf` converts
+it without starting it.
 
 `kapitsa pull 27b` downloads a model without starting it, `kapitsa list` shows what is downloaded, and
 `kapitsa rm 27b` deletes it. Downloads resume after an interruption and are checked against their checksums. Files
