@@ -1,6 +1,6 @@
 // NVIDIA Nemotron-H hybrid (Mamba-2 + attention + LatentMoE with per-layer expert counts and widths, as in
 // Nemotron 3.5 Bolt 74B-A9B), from NVIDIA's safetensors checkpoint as it is: IQ2_XXS experts, NVFP4 Mamba
-// projections, Q8_0 LM head / attention / latent projections (ggml blocks), BF16 embedding and router. Weights go
+// projections, Q8_0 LM head / attention / latent projections (GGUF blocks), BF16 embedding and router. Weights go
 // into GPU buffers at load with codes and scales apart (src/kernels/nemotron/nh_mv.metal). No vision tower.
 #pragma once
 #include "loader/safetensors.h"
@@ -51,7 +51,7 @@ struct NhMat {
 
 // Repacking (CPU): bytes per repacked row (codes, scales) of K elements in format f; bytes per source row in the
 // checkpoint; source rows into the repacked layout (NVFP4: the codes only, nibbles reordered); fp32 rows quantized
-// to the Q8 layout (ggml's Q8_0 rounding: d = max|x| / 127).
+// to the Q8 layout (Q8_0's rounding: d = max|x| / 127).
 void nh_row_bytes(NhFmt f, int64_t K, size_t& qb, size_t& sb);
 size_t nh_src_row_bytes(NhFmt f, int64_t K);
 void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s);

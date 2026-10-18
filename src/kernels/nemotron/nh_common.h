@@ -1,8 +1,9 @@
 // Shared pieces of the Nemotron-H kernels: the IQ2_XXS lattice, NVFP4 / IQ2_XXS decoding, parameter structs
 // used by several files. (Headers come before the .metal files in the embedded source.)
 
-// IQ2_XXS (2.0625 bpw) lattice: 256 grid points of 8 magnitudes in {8, 25, 43}, one byte each. The table is
-// llama.cpp's iq2xxs_grid (ggml/src/ggml-common.h, MIT License, Copyright (c) 2023-2026 The ggml authors).
+// IQ2_XXS (2.0625 bpw) lattice: 256 grid points of 8 magnitudes in {8, 25, 43}, one byte each. The table is adapted
+// from ggml's iq2xxs_grid (ggml/src/ggml-common.h, MIT License, Copyright (c) 2023-2026 The ggml authors; see
+// THIRD_PARTY_NOTICES).
 constant ulong nh_iq2xxs_grid[256] = {
     0x0808080808080808ul, 0x080808080808082bul, 0x0808080808081919ul, 0x0808080808082b08ul,
     0x0808080808082b2bul, 0x0808080808190819ul, 0x0808080808191908ul, 0x08080808082b0808ul,
@@ -70,11 +71,11 @@ constant ulong nh_iq2xxs_grid[256] = {
     0x2b2b082b08080808ul, 0x2b2b190808192b08ul, 0x2b2b2b0819190808ul, 0x2b2b2b1908081908ul,
 };
 
-// NVFP4 values doubled (ggml's kvalues_fp4: E2M1 x 2); ggml halves the UE4M3 scale to match
+// NVFP4 values doubled (E2M1 x 2); nh_ue4m3 halves the scale to match
 constant float nh_fp4_lut[16] = {0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12};
 
 NI_INLINE float nh_ue4m3(uint b) {
-  // UE4M3 (bias 7) as ggml decodes it, times 0.5: as_type<half>(b << 7) is 2^-8 of the E4M3 value
+  // UE4M3 (bias 7) times 0.5: as_type<half>(b << 7) is 2^-8 of the E4M3 value
   // (normal and subnormal alike); 0x7F (NaN) and 0 are 0
   return (b == 0x7Fu) ? 0.0f : float(as_type<half>(ushort(b << 7))) * 128.0f;
 }

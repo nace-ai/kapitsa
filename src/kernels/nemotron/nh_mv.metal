@@ -7,7 +7,7 @@
 //   IQ2  codes uchar [N][K/256][64], scales half [N][K/256]           IQ2_XXS: per 32 elements 4 grid indices,
 //        4 x 7 sign bits and a 4-bit scale; w = d * (0.5 + s4) / 4 * grid * sign
 //   F32  float [N][K];  BF16  bfloat bits [N][K]
-// The formats follow ggml's definitions (ggml-common.h, ggml-quants.c; MIT): the same values, other kernels.
+// Q8 and IQ2 are the GGUF Q8_0 / IQ2_XXS blocks, FP4 is NVFP4, as NVIDIA's checkpoint stores them (same values).
 // Activations are fp32. y[r, n] = gs * sum_k W[n, k] x[r, k] for R activation rows.
 
 

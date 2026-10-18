@@ -1,5 +1,5 @@
-// LiLiCorr block drafter for Nemotron 3.5 Bolt (GGUF architecture "dflash" with a LiLiCorr head), after
-// llama.cpp's src/models/dflash.cpp and common/speculative.cpp (MIT): a 5-layer DFlash2-style drafter (grouped
+// LiLiCorr block drafter for Nemotron 3.5 Bolt (GGUF architecture "dflash" with a LiLiCorr head): a 5-layer
+// DFlash2-style drafter (grouped
 // dynamic convolutions around attention and FFN, attention sinks, sliding window, context K/V from the target's
 // hidden states) proposes top-8 candidates for 7 slots; the LiLiCorr head scores candidate transitions; a greedy
 // walk over the lattice gives the draft.

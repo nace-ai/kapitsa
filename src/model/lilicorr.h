@@ -42,7 +42,7 @@ class LiliCorr {
   LiliCorr(NemotronH& target, const std::string& dir);
   ~LiliCorr();
   const LiliConfig& config() const { return cfg_; }
-  // the drafter of a Nemotron model folder: its dflash/ (the catalog's companion folder, as oMLX lays it out) or
+  // the drafter of a Nemotron model folder: its dflash/ (the catalog's companion folder) or
   // lilicorr/ subfolder when that holds a LiLiCorr drafter of the model's hidden size; "" if none
   static std::string find(const std::string& model_dir);
   // memory: weights as loaded and buffers; *per_slot: one sequence's ring (a slot holds three: live + 2 snapshots)

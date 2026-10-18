@@ -257,7 +257,7 @@ static NhConfig read_config(const std::string& dir) {
 }
 
 // ---- weight formats ----
-// Tensors as NVIDIA's checkpoint stores them (hf_quant_config.json "MIXED_PRECISION"): Q8_0 and IQ2_XXS as ggml
+// Tensors as NVIDIA's checkpoint stores them (hf_quant_config.json "MIXED_PRECISION"): Q8_0 and IQ2_XXS as GGUF
 // blocks in uint8 tensors [N][K / block][block bytes]; NVFP4 as ModelOpt writes it (uint8 [N][K / 2], low nibble =
 // even element; F8_E4M3 scales [N][K / 16]; F32 weight_scale_2); BF16 for embeddings, router, norms and Mamba vectors.
 void nh_row_bytes(NhFmt f, int64_t K, size_t& qb, size_t& sb) {
@@ -870,7 +870,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.hidden = c.hidden;
   m.layers = c.layers;
   for (const auto& [name, t] : idx.all()) {
-    // as loaded: ggml blocks and NVFP4 keep their size (codes and scales apart), BF16 vectors become fp32
+    // as loaded: GGUF blocks and NVFP4 keep their size (codes and scales apart), BF16 vectors become fp32
     const bool vector = t.shape.size() == 1 || name.find("conv1d") != std::string::npos;
     const bool embedding = name.find("embeddings.") != std::string::npos;
     // the BF16 embedding is mapped from its file (NI_NH_MAP_EMBED): clean file pages, the rows in use
