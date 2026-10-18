@@ -125,7 +125,8 @@ conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and t
 ## Server options
 
 `kapitsa serve` checks the port, downloads the model if needed and loads it, then prints `Ready:` and the chat and API
-addresses. Its log goes to stderr; Ctrl+C stops it.
+addresses. In a terminal the engine's log goes to `~/.cache/kapitsa/logs/serve-PORT.log` (`--verbose` shows it on
+screen too), otherwise to stderr; Ctrl+C stops it.
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -141,6 +142,7 @@ addresses. Its log goes to stderr; Ctrl+C stops it.
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
 | `--image-max-pixels N` | `1200000` (Bolt `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
+| `--verbose` | off | In a terminal, show the engine's log on screen too. |
 
 ## APIs
 
