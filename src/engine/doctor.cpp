@@ -92,7 +92,7 @@ const char* yesno(bool b) { return b ? "yes" : "no"; }
 struct Row {
   std::string name, where, error, decoding, formats, image;
   bool planned = false, dense = false, starts = false, all_fit = false;
-  int layers = 0;
+  int layers = 0, slots = 0;
   size_t full = 0, start = 0, weights = 0, kv = 0, drafter = 0, tokens = 0, image_bytes = 0;
   double dec = 0, pf = 0;
 };
@@ -136,7 +136,8 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
 
   // the models: fits, memory at the full context, decoding; then a dim line of details
   {
-    const std::string title = "  " + bold("Models") + dim("  --ctx " + std::to_string(ctx) + "  --slots " + std::to_string(slots));
+    const std::string title = "  " + bold("Models") + dim("  --ctx " + std::to_string(ctx) + "  --slots " +
+                                                          (slots > 0 ? std::to_string(slots) : std::string("auto")));
     const std::string legend = accent(kOk) + dim(" fits  ") + warn("◐") + dim(" starts  ") + red(kFail) + dim(" too big");
     const int gap = std::min(W, 80) - width(title) - width(legend);
     o.push_back(gap >= 3 ? title + std::string(size_t(gap), ' ') + legend : title);
@@ -156,7 +157,7 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
       o.push_back(clip(l, W));
       const std::string sep = std::string(" ") + kDot + " ";
       std::string d = r.where.empty() ? "" : r.where + sep;
-      d += "weights " + gb(double(r.weights));
+      d += std::to_string(r.slots) + " slots" + sep + "weights " + gb(double(r.weights));
       char kv[48];
       snprintf(kv, sizeof kv, "KV %.0f KB/token", r.kv / 1024.0);
       d += sep + kv;
@@ -226,7 +227,8 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
 
 int run_doctor(int argc, char** argv) {
   std::vector<std::string> models, roots;
-  int ctx = 65536, slots = 2, chunk = 0;  // chunk 0: as the engine picks it (auto_prefill_chunk)
+  int ctx = 65536, slots_opt = 0, chunk = 0;  // slots 0: per model as the engine picks them (auto_slots); chunk 0: as
+                                               // the engine picks it (auto_prefill_chunk)
   std::string dflash;                      // as the server's --dflash ("": NI_DFLASH or auto)
   bool as_json = false;
   double budget_gb = 0;
@@ -238,20 +240,21 @@ int run_doctor(int argc, char** argv) {
     if (a == "--model") models.push_back(next());
     else if (a == "--models-dir") roots.push_back(next());
     else if (a == "--ctx") ctx = std::stoi(next());
-    else if (a == "--slots") slots = std::stoi(next());
+    else if (a == "--slots") slots_opt = std::stoi(next());
     else if (a == "--prefill-chunk") chunk = std::stoi(next());
     else if (a == "--mem-budget") budget_gb = std::stod(next());
     else if (a == "--dflash") dflash = next();
     else if (a == "--json") as_json = true;
     else {
       const char* usage =
-          "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048]\n"
+          "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots N] [--prefill-chunk 2048]\n"
           "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n";
       if (!term::fancy()) fputs(usage, stderr);
       else if (a == "--help" || a == "-h")
-        term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048] "
+        term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots N] [--prefill-chunk 2048] "
                    "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: This Mac's GPU and memory, and which models fit "
-                   "it at the context and slots given (what kapitsa serve would hold).\n");
+                   "it at the context and slots given (what kapitsa serve would hold; without --slots, the slots each "
+                   "model would get).\n");
       else
         term::error("unknown option " + a, "kapitsa doctor --help shows how to use it.");
       return 2;
@@ -276,7 +279,7 @@ int run_doctor(int argc, char** argv) {
       // folders other tools keep models in
       // each model's variant for this Mac: the default where it fits, else a fallback (pick_variant)
       EngineOptions eo;
-      eo.context = ctx, eo.slots = slots, eo.prefill_chunk = chunk, eo.dflash = dflash;
+      eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
       eo.mem_budget_gb = budget_gb;
       const size_t b = budget_gb > 0 ? size_t(budget_gb * 1e9) : default_mem_budget();
       for (const auto& c : hub::catalog())
@@ -321,7 +324,8 @@ int run_doctor(int argc, char** argv) {
     printf("  GPU:     threadgroup memory %zu B, Metal 4 neural accelerators (Apple10): %s%s\n", g.max_threadgroup_memory(),
            yesno(g.apple10()), bw > 0 ? ("; memory bandwidth " + std::to_string(int(bw)) + " GB/s").c_str() : "");
     printf("  Neural Engine: %s\n", ane_why.empty() ? "available" : ("unavailable (" + ane_why + ")").c_str());
-    printf("\nModels (--ctx %d, --slots %d%s):\n", ctx, slots,
+    printf("\nModels (--ctx %d, --slots %s%s):\n", ctx,
+           slots_opt > 0 ? std::to_string(slots_opt).c_str() : "as each model's memory allows",
            chunk ? (", --prefill-chunk " + std::to_string(chunk)).c_str() : "");
     if (models.empty()) printf("  none found (--model DIR)\n");
   }
@@ -333,7 +337,13 @@ int run_doctor(int argc, char** argv) {
     LoadPlan lp;
     const bool nemotron = NemotronH::is_model(dir);
     const char* drafter = nemotron ? "LiLiCorr drafter" : "DFlash2 drafter";
+    int slots = slots_opt;  // as the engine would start it: the ones asked for, else auto_slots
     try {
+      if (slots <= 0) {
+        EngineOptions so;
+        so.context = ctx, so.prefill_chunk = chunk, so.dflash = dflash;
+        slots = auto_slots(dir, so, budget);
+      }
       lp = plan_load(dir, dflash, false, ctx, slots, budget, chunk);
       m = nemotron ? NemotronH::plan(dir, lp.prefill_chunk) : Qwen35::plan(dir, lp.prefill_chunk);
     } catch (const std::exception& e) {
@@ -365,6 +375,7 @@ int run_doctor(int argc, char** argv) {
     o["weights_bytes"] = m.weights;
     o["mtp_bytes"] = m.mtp;
     o["prefill_chunk"] = ch;
+    o["slots"] = slots;
     o["activation_bytes"] = m.activations;
     o["slot_state_bytes"] = m.slot_state;
     o["kv_bytes_per_token"] = m.kv_per_pos;
@@ -388,7 +399,7 @@ int run_doctor(int argc, char** argv) {
       r.name = dir.substr(dir.find_last_of('/') + 1);
       r.planned = dir.rfind(hub::home_dir() + "/plans/", 0) == 0;
       if (!r.planned && dir.rfind(hub::models_dir() + "/", 0) != 0) r.where = hub::tilde(dir.substr(0, dir.find_last_of('/')));
-      r.dense = m.dense, r.layers = m.layers, r.formats = m.formats;
+      r.dense = m.dense, r.layers = m.layers, r.formats = m.formats, r.slots = slots;
       r.starts = start_need <= budget, r.all_fit = full_need <= budget;
       r.full = full_need, r.start = start_need, r.weights = m.weights, r.kv = m.kv_per_pos, r.tokens = tokens;
       r.drafter = lp.dflash_bytes;
@@ -440,7 +451,8 @@ int run_doctor(int argc, char** argv) {
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;
-  eo.context = ctx, eo.slots = slots, eo.prefill_chunk = chunk, eo.dflash = dflash;
+  eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
+  const int slots = fit_slots(slots_opt);  // a variant fits with the slots asked for, else with two (auto's fewest)
   nlohmann::ordered_json cv = nlohmann::ordered_json::array();
   if (!as_json && !tty) printf("\nCatalog variants on this Mac (--ctx %d, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", ctx, slots);
   for (const auto& c : hub::catalog()) {
@@ -478,10 +490,10 @@ int run_doctor(int argc, char** argv) {
   spin.reset();
   if (tty)
     print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "",
-              ctx, slots, tty_rows, tty_vars);
+              ctx, slots_opt, tty_rows, tty_vars);
   if (as_json) {
     J["context"] = ctx;
-    J["slots"] = slots;
+    J["slots"] = slots_opt;  // 0: each model's own (its "slots")
     J["models"] = arr;
     J["catalog_variants"] = cv;
     printf("%s\n", J.dump(2).c_str());

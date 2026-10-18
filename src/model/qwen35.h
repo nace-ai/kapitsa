@@ -255,6 +255,9 @@ class Qwen35 : public Model {
   const uint32_t* verify8_experts() { return v8ustat_ ? v8ustat_.as<uint32_t>() : nullptr; }
   Buffer hidden_rows() { return x_; }
   Buffer mtp_post() { return mtp_post_; }
+  // GPU copy of src into dst (the smaller of the two sizes, a multiple of 16 bytes), in order with the work in `e`
+  // (the engine keeps a sequence's MTP hidden rows aside while another request's passes reuse hidden_rows())
+  void encode_copy(Encoder& e, const Buffer& src, const Buffer& dst) { enc_copy(e, src, dst); }
   float* logits() { return logits_.as<float>(); }
   // Debug: copy of the residual stream after the last step.
   const float* hidden() { return x_.as<float>(); }

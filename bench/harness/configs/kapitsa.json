@@ -40,6 +40,6 @@
           "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
   "model": "qwen3.5-4b",
   "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors"],
-  "note": "Smoke test of the harness on a small model (3.3 GB): Qwen3.5-4B has no DFlash2 drafter, so Kapitsa decodes with its MTP head. Not part of the published comparison."
+  "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, 8-bit at load). No DFlash2 drafter fits this model, so Kapitsa decodes with the MTP head (its default depth for this size); dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
  }
 ]

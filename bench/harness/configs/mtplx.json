@@ -30,5 +30,19 @@
   "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/mtplx_runtime.json", "{models}/qwen3.8-27b-4bit-mtp/mtp.safetensors"],
   "log_grep": ["profile|depth|verify|contract|MTP|mtp", "warn|WARN|error|Error"],
   "note": "The lmstudio-community trunk every engine reads plus the MTP head and mtplx_runtime.json of MTPLX's own 27B release (Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed), with the settings that file recommends: profile turbo, depth 3. MTPLX's release pairs the head with a group-32 trunk; here the trunk is group-64 (the weights every engine reads): MTPLX's runtime-contract check passes and its log shows no warnings. Inline post-commit so follow-up turns hit the session cache."
+ },
+ {
+  "label": "q35-4b-mtplx",
+  "extends": "q36-35b-mtplx",
+  "display": "MTPLX (sustained profile, depth 1)",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtplx",
+  "cmd": ["{env:MTPLX_BIN=mtplx}", "serve", "--model", "{models}/qwen3.5-4b-4bit-mtplx", "--model-id", "qwen3.5-4b",
+          "--host", "127.0.0.1", "--port", "8082", "--no-auth", "--yes", "--context-window", "32768",
+          "--no-stats-footer", "--mtp", "--profile", "sustained", "--depth", "1"],
+  "model": "qwen3.5-4b",
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtplx/mtplx_runtime.json", "{models}/qwen3.5-4b-4bit-mtplx/mtp.safetensors"],
+  "log_grep": ["profile|depth|verify|contract|MTP|mtp", "warn|WARN|error|Error"],
+  "note": "The lmstudio-community trunk every engine reads (APFS clones of Kapitsa's files) plus the MTP head (int4 g64) and mtplx_runtime.json of MTPLX's own 4B release (Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed @550153b), with the profile that file recommends (sustained) and the depth measured best on this Mac: 1 (the file's default, depth 3, was tuned on an M5 Max). Smoke tests before the run (3 + 3 decodes of 512 tokens, sampled / greedy medians): depth 1 104.5 / 108.6 tok/s, depth 2 103.8 / 109.2, depth 3 87.7 / 102.6. Inline post-commit so follow-up turns hit the session cache."
  }
 ]

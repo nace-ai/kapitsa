@@ -60,6 +60,90 @@ static bool ends_with_query(const ojson& messages) {
   return !wrapped;
 }
 
+// ---- the GPU turn ----
+
+void TurnLock::lock() {
+  std::unique_lock<std::mutex> lk(m_);
+  const uint64_t t = next_++;
+  if (t != serving_) {
+    waiting_.fetch_add(1, std::memory_order_relaxed);
+    cv_.wait(lk, [&] { return serving_ == t; });
+    waiting_.fetch_sub(1, std::memory_order_relaxed);
+  }
+  since_.store(now_ms(), std::memory_order_relaxed);
+}
+
+double TurnLock::held_ms() const { return now_ms() - since_.load(std::memory_order_relaxed); }
+
+void TurnLock::unlock() {
+  {
+    std::lock_guard<std::mutex> lk(m_);
+    ++serving_;
+  }
+  cv_.notify_all();
+}
+
+bool TurnLock::try_lock() {
+  std::lock_guard<std::mutex> lk(m_);
+  if (next_ != serving_) return false;  // held, or waited for
+  ++next_;
+  since_.store(now_ms(), std::memory_order_relaxed);
+  return true;
+}
+
+uint64_t TurnLock::events() const {
+  std::lock_guard<std::mutex> lk(m_);
+  return events_;
+}
+
+void TurnLock::notify() {
+  {
+    std::lock_guard<std::mutex> lk(m_);
+    ++events_;
+  }
+  ev_cv_.notify_all();
+}
+
+bool TurnLock::wait_event(uint64_t seen, const std::function<bool()>& stop) {
+  unlock();
+  bool ev = false;
+  {
+    std::unique_lock<std::mutex> lk(m_);
+    auto changed = [&] { return events_ != seen; };
+    if (!stop) {
+      ev_cv_.wait(lk, changed);
+      ev = true;
+    } else {
+      while (!(ev = ev_cv_.wait_for(lk, std::chrono::seconds(1), changed))) {
+        lk.unlock();
+        const bool s = stop();
+        lk.lock();
+        if (s) break;
+      }
+    }
+  }
+  lock();
+  return ev;
+}
+
+bool Engine::contended(bool quantum_too) const {
+  static const bool test = [] {
+    const char* v = getenv("NI_PARK_TEST");
+    return v && atoi(v) > 0;
+  }();
+  static const double quantum = [] {
+    const char* v = getenv("NI_TURN_MS");
+    return v && *v ? std::max(0.0, atof(v)) : 30.0;
+  }();
+  return test || (turn_.waiting() > 0 && (!quantum_too || turn_.held_ms() >= quantum));
+}
+
+void Engine::yield_turn(ChatResult& res) {
+  ++res.yields;
+  turn_.unlock();
+  turn_.lock();
+}
+
 Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
@@ -69,6 +153,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   // Memory: fail before reading any weights when the model, its buffers and the slots' state with a minimal
   // KV cache cannot fit the budget; the KV caches then grow as conversations fill (Qwen35::reserve).
   budget_ = opts_.mem_budget_gb > 0 ? size_t(opts_.mem_budget_gb * 1e9) : default_mem_budget();
+  if (opts_.slots <= 0) {
+    opts_.slots = auto_slots(opts_.model_dir, opts_, budget_);
+    logi("slots: %d (%s; --slots sets how many requests run at once)", opts_.slots,
+         opts_.slots == kAutoSlots ? "the default where memory allows"
+                                   : "as many as this budget holds with one full conversation, the same drafter and prefill chunk");
+  }
   // DFlash2 block drafter (src/model/dflash2.h), default "auto": a drafter matching the model
   // (DFlash2::find: next to it or in ~/.cache/nace-infer-models/drafters) replaces MTP; without one MTP stays.
   // --dflash none / NI_DFLASH=0 keeps MTP, --dflash <dir> names the drafter, --spec 0 turns both off. Found before
@@ -309,6 +399,23 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
   return n;
 }
 
+int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget) {
+  try {
+    const bool spec_off = opt.spec_depth == 0;
+    const LoadPlan two = plan_load(model_dir, opt.dflash, spec_off, opt.context, 2, budget, opt.prefill_chunk);
+    // the most slots up to kAutoSlots that cost nothing two slots have: the same decoding (a drafter two slots keep is
+    // kept), the same prefill chunk, and one full --ctx conversation beside them
+    for (int n = kAutoSlots; n > 2; --n) {
+      const LoadPlan more = plan_load(model_dir, opt.dflash, spec_off, opt.context, n, budget, opt.prefill_chunk);
+      if (more.dflash == two.dflash && more.prefill_chunk == two.prefill_chunk &&
+          conversation_fits(model_dir, opt.context, n, budget > more.dflash_bytes ? budget - more.dflash_bytes : 0))
+        return n;
+    }
+  } catch (const std::exception&) {  // headers that cannot be planned: the engine reports it when it loads them
+  }
+  return 2;
+}
+
 bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget) {
   const MemPlan p = model_plan(model_dir, 1024);
   return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
@@ -318,9 +425,9 @@ int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budg
   try {
     const std::string dir = hub::plan_dir(ref);
     if (dir.empty()) return -1;
-    if (!conversation_fits(dir, opt.context, opt.slots, budget)) return 0;
+    if (!conversation_fits(dir, opt.context, fit_slots(opt.slots), budget)) return 0;
     const LoadPlan lp =
-        plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, opt.slots, budget, opt.prefill_chunk);
+        plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, fit_slots(opt.slots), budget, opt.prefill_chunk);
     return lp.dflash_left_out.empty() ? 1 : 0;
   } catch (const std::exception&) {  // headers that cannot be planned (a damaged download): unknown
     return -1;
@@ -379,17 +486,30 @@ void Engine::drop_slot(Slot& slot) {
   ++slot.gen;  // an idle history prefill for it gives up
 }
 
-bool Engine::reserve_kv(Slot& slot, int need) {
+bool Engine::reserve_kv(Slot& slot, int need, bool started) {
   Seq& s = *slot.seq;
   if (model_->reserve(s, need)) return true;
   if (vision_ && vision_->release(false) && model_->reserve(s, need)) return true;  // earlier requests' image embeddings
-  std::vector<Slot*> others;
-  for (auto& o : slots_)
-    if (&o != &slot && o.seq->cap > 0) others.push_back(&o);
-  std::sort(others.begin(), others.end(), [](const Slot* a, const Slot* b) { return a->last_used < b->last_used; });
-  for (Slot* o : others) {
+  // other slots' caches: idle ones (least recently used first), then those of requests waiting for memory before
+  // their prefill, the newest first (a busy slot's cache is otherwise its request's)
+  std::vector<Slot*> idle, waiting;
+  for (auto& o : slots_) {
+    if (&o == &slot || o.seq->cap == 0) continue;
+    if (!o.busy) idle.push_back(&o);
+    else if (o.mem_wait == Slot::MemWait::before_prefill && (started || o.arrival > slot.arrival)) waiting.push_back(&o);
+  }
+  std::sort(idle.begin(), idle.end(), [](const Slot* a, const Slot* b) { return a->last_used < b->last_used; });
+  std::sort(waiting.begin(), waiting.end(), [](const Slot* a, const Slot* b) { return a->arrival > b->arrival; });
+  for (Slot* o : idle) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for a %d-token context in slot %d",
          int(o - slots_.data()), int(o->tokens.size()), need, int(&slot - slots_.data()));
+    drop_slot(*o);
+    if (model_->reserve(s, need)) return true;
+  }
+  for (Slot* o : waiting) {
+    logi("memory: dropping the KV cache of slot %d (%d tokens cached; its request waits for memory and will read its "
+         "prompt from the start) for a %d-token context in slot %d", int(o - slots_.data()), int(o->tokens.size()), need,
+         int(&slot - slots_.data()));
     drop_slot(*o);
     if (model_->reserve(s, need)) return true;
   }
@@ -406,13 +526,46 @@ bool Engine::reserve_kv(Slot& slot, int need) {
   return false;
 }
 
+bool Engine::reserve_kv_wait(Slot& slot, int need, const std::function<bool()>& cancelled, bool started) {
+  if (reserve_kv(slot, need, started)) return true;
+  // The memory is the other requests' (their KV caches). Wait while one of them runs (it ends, or takes the caches
+  // of requests waiting before their prefill and goes on); before the prefill also while a started request waits
+  // (one of those gives up when nothing runs) or an earlier one does (it comes first and may take this cache). So
+  // something always runs or gives up, and a request before its prefill gives up only when its prompt does not fit
+  // even alone: every other request in flight is a later one waiting, whose cache it took.
+  bool logged = false;
+  for (;;) {
+    int running = 0, started_waiting = 0, earlier_waiting = 0;
+    for (const Slot& o : slots_) {
+      if (&o == &slot || !o.busy) continue;
+      if (o.mem_wait == Slot::MemWait::none) ++running;
+      else if (o.mem_wait == Slot::MemWait::growth) ++started_waiting;
+      else if (o.arrival < slot.arrival) ++earlier_waiting;
+    }
+    if (!(running > 0 || (!started && (started_waiting > 0 || earlier_waiting > 0)))) return false;
+    if (!logged)
+      logi("memory: slot %d waits for a %d-token KV cache%s until other requests in flight end (%d running, %d waiting "
+           "for memory)", int(&slot - slots_.data()), need, started ? " to go on" : " before its prefill", running,
+           active_ - 1 - running);
+    logged = true;
+    if (cancelled && cancelled()) return false;
+    slot.mem_wait = started ? Slot::MemWait::growth : Slot::MemWait::before_prefill;
+    // nothing runs now: the waiting requests decide again (a started one takes this cache or gives up, an earlier
+    // one takes it or finds its prompt too long), else none of them would see an event
+    if (running == 0) turn_.notify();
+    turn_.wait_event(turn_.events(), cancelled);
+    slot.mem_wait = Slot::MemWait::none;
+    if (reserve_kv(slot, need, started)) return true;
+  }
+}
+
 bool Engine::make_room(Slot& keep, size_t bytes) {
   Gpu& g = Gpu::get();
   auto fits = [&] { return g.allocated_bytes() + bytes <= budget_; };
   if (fits()) return true;
-  std::vector<Slot*> others;
+  std::vector<Slot*> others;  // idle slots
   for (auto& o : slots_)
-    if (&o != &keep && o.seq->cap > 0) others.push_back(&o);
+    if (&o != &keep && !o.busy && o.seq->cap > 0) others.push_back(&o);
   std::sort(others.begin(), others.end(), [](const Slot* a, const Slot* b) { return a->last_used < b->last_used; });
   for (Slot* o : others) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for an image", int(o - slots_.data()),
@@ -554,7 +707,7 @@ int Engine::count_tokens(const ChatRequest& r) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
+Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
   auto lcp = [&](const Slot& s) { return common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
   // checkpoint inside the common prefix. A shared prefix without a usable state is worthless
@@ -570,14 +723,18 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
   Slot* best = nullptr;
   int best_lcp = 0;
   for (auto& s : slots_) {
-    if (int(prompt.size()) + 64 > s.seq->limit) continue;
+    if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
     int u = usable(s);
     if (!best || u > best_lcp) {
       best = &s;
       best_lcp = u;
     }
   }
-  if (!best) return slots_[0];
+  if (!best) {  // a prompt within 64 tokens of the context: the first free slot
+    for (auto& s : slots_)
+      if (!s.busy) return &s;
+    return nullptr;
+  }
   if (best_lcp < 64) {
     // Nothing worth reusing: a new conversation. It takes an empty slot, else one holding a one-off
     // (a conversation never continued, like an agent's title or commit-message request), and only
@@ -589,22 +746,23 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     auto rank = [&](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at ? 1 : 2; };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
-      if (int(prompt.size()) + 64 > s.seq->limit) continue;
+      if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
       if (!pick || rank(s) < rank(*pick) || (rank(s) == rank(*pick) && s.last_used < pick->last_used)) pick = &s;
     }
     if (pick) {
       pick->turns = 1;
-      return *pick;
+      return pick;
     }
   }
   ++best->turns;
-  return *best;
+  return best;
 }
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
-                        const std::function<void(const ChatResult&)>& on_prompt) {
+                        const std::function<void(const ChatResult&)>& on_prompt,
+                        const std::function<bool()>& cancelled) {
   const uint64_t arrival = ++requests_;
-  // images: fetched, decoded and resized before the engine lock (a slow download holds up no other request)
+  // images: fetched, decoded and resized before the GPU turn (a slow download holds up no other request)
   std::vector<vision::Source> img_src;
   std::vector<vision::Prepared> images;
   const double t_img = now_ms();
@@ -618,17 +776,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return res;
   }
   const double img_prep_ms = now_ms() - t_img;
-  std::lock_guard<std::mutex> lk(mu_);
-  // the cache of image embeddings goes back to its size once this request is done with them
-  struct EndImages {
-    vision::Vision* v;
-    ~EndImages() {
-      if (v) v->end_request();
-    }
-  } end_images{images.empty() ? nullptr : vision_.get()};
-  // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (under the engine lock:
-  // it runs a startup check through the model's buffers, which the idle history prefill also uses)
-  model_->ane_poll();
+  // the prompt: rendered and tokenized before the GPU turn too (CPU only: a request in flight decodes meanwhile)
   const double t_req = now_ms();
   ChatResult res;
   Gpu& g = Gpu::get();
@@ -671,16 +819,73 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
-  Slot& slot = pick_slot(keys, arrival, mmp);
+  if (n + 1 >= opts_.context) {  // every slot holds opts_.context positions
+    res.finish_reason = "error";
+    res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(opts_.context) + ")";
+    res.prompt_limit = opts_.context - 2;
+    return res;
+  }
+  const double tok_wall = now_ms() - t_req;  // template + tokenizer
+
+  // ---- the GPU turn, then a free slot (first come first served when every slot is busy) ----
+  std::unique_lock<TurnLock> turn(turn_);
+  // the image embeddings this request holds (Vision::embeddings): given back once it is done
+  struct EndImages {
+    vision::Vision* v;
+    std::vector<vision::Digest> used;
+    ~EndImages() {
+      if (v && !used.empty()) v->end_request(used);
+    }
+  } end_images{vision_.get(), {}};
+  // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (with the turn: it runs a startup check
+  // through the model's buffers, and no request in flight keeps anything there between its steps)
+  model_->ane_poll();
+  const double t_slot = now_ms();
+  Slot* picked = nullptr;
+  bool queued = false;
+  for (;;) {
+    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp);
+    if (picked) break;
+    if (!queued) {
+      slot_queue_.push_back(arrival);
+      queued = true;
+      logi("chat: all %d slots are busy: a request waits for one (%zu waiting; --slots sets how many requests run "
+           "at once)", int(slots_.size()), slot_queue_.size());
+    }
+    if (cancelled && cancelled()) {
+      slot_queue_.erase(std::find(slot_queue_.begin(), slot_queue_.end(), arrival));
+      turn_.notify();
+      res.finish_reason = "cancelled";
+      return res;
+    }
+    turn_.wait_event(turn_.events(), cancelled);  // a request ending frees its slot
+  }
+  if (queued) {
+    slot_queue_.erase(std::find(slot_queue_.begin(), slot_queue_.end(), arrival));
+    turn_.notify();  // the next one in line may find another slot free
+    res.queue_ms = now_ms() - t_slot;
+  }
+  Slot& slot = *picked;
+  // the slot is this request's until it returns: no other request picks it, and its KV cache goes to another request
+  // only while this one waits for memory before its prefill (reserve_kv)
+  struct SlotUse {
+    Engine& en;
+    Slot& s;
+    ~SlotUse() {
+      s.busy = false;
+      s.mem_wait = Slot::MemWait::none;
+      --en.active_;
+      en.turn_.notify();
+    }
+  };
+  slot.busy = true;
+  slot.arrival = arrival;
+  ++active_;
+  SlotUse slot_use{*this, slot};
+  const double t_turn = now_ms();
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
-  if (n + 1 >= s.limit) {
-    res.finish_reason = "error";
-    res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(s.limit) + ")";
-    res.prompt_limit = s.limit - 2;
-    return res;
-  }
 
   // ---- prefix reuse ----
   const size_t common = common_rows(slot, keys, mmp);
@@ -701,6 +906,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       bool encoded = false;
       const Buffer emb =
           vision_->embeddings(images[k], img_src[k], [&](size_t b) { return make_room(slot, b); }, &encoded);
+      end_images.used.push_back(images[k].digest);
       runs.push_back(vision::EmbedRun{sp.pos, sp.n, emb, 0, vision_->encoder().out_dim()});
       ++(encoded ? img_encoded : img_reused);
     }
@@ -726,9 +932,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }
 
   // ---- KV cache for the prompt and the first part of the answer (it grows further while decoding) ----
-  // other slots' caches are given up only when the prompt itself does not fit; before them this slot's own, when
+  // other slots' caches are given up only when the prompt itself does not fit: before them this slot's own, when
   // the prompt reuses none of it (no live state to continue, no checkpoint inside the common prefix: the prefill
-  // starts at 0), so the new cache starts empty: nothing to copy, no transient second copy
+  // starts at 0), so the new cache starts empty: nothing to copy, no transient second copy. Requests in flight keep
+  // theirs: this one waits for them to end when only their memory would make room (while it waits, a request that
+  // has started, or an earlier one, may take this slot's cache: the prefill then starts at 0, as below).
   const int kv_min = std::min(s.limit, n + 32), kv_want = std::min(s.limit, n + std::clamp(r.max_tokens, 0, 1024) + 32);
   auto fit_kv = [&] { return model_->reserve(s, kv_want) || model_->reserve(s, kv_min); };
   bool kv_ok = fit_kv();
@@ -738,7 +946,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     drop_slot(slot);
     kv_ok = fit_kv();
   }
-  if (!kv_ok && !reserve_kv(slot, kv_min)) {
+  if (!kv_ok && !reserve_kv_wait(slot, kv_min, cancelled, /*started=*/false)) {
+    if (cancelled && cancelled()) {
+      res.finish_reason = "cancelled";
+      return res;
+    }
     const size_t per = model_->kv_bytes_per_pos(), used = g.allocated_bytes();
     const size_t fit = size_t(s.cap) + (budget_ > used ? budget_ - used : 0) / per;
     res.finish_reason = "error";
@@ -801,7 +1013,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   s.embeds = runs.empty() ? nullptr : &runs;
 
   // ---- prefill ----
-  const double tok_ms = now_ms() - t_req - img_ms;  // template + tokenizer + slot pick (image encoding: logged apart)
+  // template + tokenizer (before the turn) + slot pick (image encoding: logged apart)
+  const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms;
   const AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
@@ -854,8 +1067,30 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // [max(start, n - 2047), n); the drafter projects them into its context ring after the last chunk.
   if (dfl_) dfl_->begin_prefill(n, start);
   if (lili_) lili_->begin_prefill(n, start);
+  // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
+  // shared); from there the prefill runs to its end (at most two chunks).
+  const int capture_from = dfl_ ? std::max(start, n - DFlash2::kCtxKeep)
+                         : lili_ ? std::max(start, n - lili_->config().window)
+                                 : n;
   double t_enc = 0, h_commit = 0;  // the last chunk's commit: ms since t0, host clock
+  // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
+  // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
+  // would all be queued in milliseconds). The GPU still always has the next chunk queued.
+  std::unique_ptr<Encoder> last, last2;
   while (p < n) {
+    if (last2) {
+      last2->wait();
+      last2.reset();
+    }
+    // a chunk is long: the turn goes to a waiting request at once (no NI_TURN_MS)
+    if (p > start && p <= capture_from && contended(false)) {
+      if (last) last->wait();  // the chunks so far (e holds nothing yet)
+      if (dfl_) dfl_->end_prefill();
+      if (lili_) lili_->end_prefill();
+      yield_turn(res);
+      if (dfl_) dfl_->begin_prefill(n, start);
+      if (lili_) lili_->begin_prefill(n, start);
+    }
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
     if (boundary > p && boundary < p + T) {
@@ -931,7 +1166,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       commit_lili(*mtp_e);
     }
     if (mtp_e) mtp_e->commit();  // queued behind the trunk; waited for by the first spec cycle's buffer
-    if (p < n) e = g.begin();
+    if (p < n) {
+      last2 = std::move(last);
+      last = std::move(e);
+      e = g.begin();
+    }
   }
   e->wait();
   s.embeds = nullptr;
@@ -949,8 +1188,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   slot.tokens = keys;
   slot.img_spans = mm.spans;
   slot.img_digests = mm.digests;
+  const int yields_prefill = res.yields;
 
   // ---- decode ----
+  // Between two cycles (steps) the request gives its turn to the requests waiting for one (contended()): it parks
+  // first, so that nothing of its own is in flight and nothing it needs next is left in the model's or drafter's
+  // shared buffers (another request's passes reuse them): DFlash2 and LiLiCorr commit the rows the cycle kept to the
+  // drafter's ring (the next drafting half would have), MTP keeps the hidden rows its next pass reads in the slot.
+  // A request alone never parks: its cycles are exactly those of a single request.
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
   // A tool call written inside the reasoning, with nothing after it but the end of the turn, is returned as a
   // tool call (Qwen3.6 sometimes stops without closing its think block); see OutputParser. NI_THINK_TOOLCALLS=0
@@ -997,6 +1242,15 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (finish.empty() && gen >= r.max_tokens) finish = "length";
     return finish.empty();
   };
+  // KV room for `want` positions between two cycles, with nothing of this request in flight: as reserve_kv, but
+  // when other requests' caches hold the memory, park and wait for them to end (park() makes the request's state its
+  // slot's alone)
+  auto grow_kv = [&](int want, const std::function<void()>& park) {
+    if (reserve_kv(slot, want, true)) return true;
+    if (active_ <= 1) return false;
+    park();
+    return reserve_kv_wait(slot, want, cancelled, true);
+  };
   int fed_until = n;  // exclusive: tokens whose effect is in the live state
   int req_cycles = 0;  // DFlash2 cycles of this request
   const int depth = spec_ ? opts_.spec_depth : 0;
@@ -1015,11 +1269,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     constexpr int B = LiliCorr::kB;
     int P = n, m_prev = 0;
     req_cycles = 0;
+    // parked: the rows the last cycle kept go into the ring now (the verify's captured features are shared)
+    auto park = [&] {
+      if (m_prev > 0) {
+        auto ep = g.begin();
+        lili_->encode_commit(*ep, d, m_prev);
+        ep->commit_and_wait();
+        m_prev = 0;
+      }
+    };
     bool go = handle(s.tokens()[n]);
     while (go) {
       if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
         if (mtp_e) mtp_e->wait();
-        reserve_kv(slot, std::min(s.limit, P + 2 * B + 2));
+        grow_kv(std::min(s.limit, P + 2 * B + 2), park);
       }
       if (P + B + 1 >= s.cap) {
         finish = "length";
@@ -1055,6 +1318,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       m_prev = m;
       P += m;
+      if (go && contended()) {
+        park();
+        yield_turn(res);
+      }
     }
     auto e3 = g.begin();
     if (m_prev > 0) lili_->encode_commit(*e3, d, m_prev);
@@ -1067,27 +1334,39 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // rows this acceptance keeps + drafting pass from the anchor it picks; both read the GPU-side state
     // the acceptance writes), and only then does the host wait and read the accepted count. The GPU never
     // waits for the host between cycles; the host encodes each verify while the drafting half runs.
+    // With other requests waiting for the GPU a cycle commits no drafting half behind its verify: the request parks
+    // (the ring commit of the kept rows alone) and starts the next cycle from the anchor once its turn comes back.
     DFlashSeq& d = *slot.dseq;
     const int K = DFlash2::verify_depth();
     int P = n, m = 0, a_last = 0;
     req_cycles = 0;
     bool go = handle(s.tokens()[n]);
     std::unique_ptr<Encoder> next_draft;  // committed drafting half of the coming cycle
-    // KV cache room for the first cycles (it grows between cycles below): nothing may use the old buffers,
-    // so the deferred prompt work completes first
-    if (go && P + 8 + 8 + DFlash2::kB + 3 > s.cap && s.cap < s.limit) {
-      if (mtp_e) mtp_e->wait();
-      reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3));
-    }
-    if (go && P + 8 + DFlash2::kB + 2 < s.cap) {
-      // host write of the drafter state: nothing in flight reads it (the prefill is done; its deferred
-      // prompt commit, if still running, is host-driven)
-      dfl_->gpu_state_reset(P);
-      next_draft = g.begin();
-      dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P, sp);
-      next_draft->commit();
-    }
+    // The drafting half from the anchor P with nothing in flight (after the prefill, and when the request's turn
+    // comes back after parking), with KV cache room for the first cycles (it grows between cycles below): nothing may
+    // use the old buffers, so the deferred prompt work completes first
+    auto start_cycles = [&] {
+      if (P + 8 + 8 + DFlash2::kB + 3 > s.cap && s.cap < s.limit) {
+        if (mtp_e) mtp_e->wait();
+        grow_kv(std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3), [] {});
+      }
+      if (P + 8 + DFlash2::kB + 2 < s.cap) {
+        // host write of the drafter state: nothing in flight reads it (the prefill is done; its deferred
+        // prompt commit, if still running, is host-driven; a request taking its turn has nothing in flight)
+        dfl_->gpu_state_reset(P);
+        next_draft = g.begin();
+        dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P, sp);
+        next_draft->commit();
+      }
+    };
+    if (go) start_cycles();
+    bool parked = false;     // the request parked after the last cycle (no drafting half committed)
+    bool park_last = false;  // the last cycle committed no drafting half though there was room: it meant to park
     while (go) {
+      if (parked) {
+        parked = false;
+        start_cycles();
+      }
       if (!next_draft) {  // no room for another drafting pass
         finish = "length";
         res.context_full = true;
@@ -1097,13 +1376,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       auto e2 = g.begin();
       dfl_->encode_cycle_verify(*e2, s, P, K, sp);
       e2->commit();
+      bool kv_wait = false;  // no KV room for the next cycle while other requests' caches hold the memory
       if (P + 8 + 8 + DFlash2::kB + 3 > s.cap && s.cap < s.limit) {
         // the KV cache grows here: the verify in flight (and the drafting half before it) complete first, so
         // this cycle's drafting half is not overlapped with it
         e2->wait();
-        reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3));
+        kv_wait = !reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3), true) && active_ > 1;
       }
-      if (P + 8 + 8 + DFlash2::kB + 2 < s.cap) {  // the next anchor is at most P + 8
+      // another request waits for the GPU, or this one for memory (start_cycles waits for it): no drafting half
+      // behind this verify, park after it
+      const bool turn = contended();
+      const bool park = turn || kv_wait;
+      const bool room = P + 8 + 8 + DFlash2::kB + 2 < s.cap;  // the next anchor is at most P + 8
+      park_last = park && room;
+      if (!park && room) {
         next_draft = g.begin();
         dfl_->encode_cycle_draft_gpu(*next_draft, s, d, P + 8, sp);
         next_draft->commit();
@@ -1127,13 +1413,30 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       P += m;
       d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
+      if (go && park) {
+        // park: the rows this cycle kept go into the ring as the drafting half would have put them (from the GPU
+        // state the acceptance wrote, reading the verify's captures before any other request's passes)
+        auto ep = g.begin();
+        dfl_->encode_commit(*ep, d, -1);
+        ep->commit_and_wait();
+        m = 0;
+        park_last = false;
+        if (turn) yield_turn(res);
+        parked = true;
+      }
     }
     // finish: the ring rows of the last cycle (unless the committed drafting half already wrote them),
     // then fold the tape into the recurrent state
     auto e3 = g.begin();
     if (!next_draft && m > 0) {
-      d.ctx = P - m;
-      dfl_->encode_commit(*e3, d, m);
+      if (park_last) {
+        // the drafting half this cycle left out to park would have committed the acceptance's rows: so does this
+        dfl_->encode_commit(*e3, d, -1);
+        if (m < a_last + 1) d.valid_lo = std::max(d.valid_lo, P - m + a_last + 1 - DFlash2::kWin);
+      } else {
+        d.ctx = P - m;
+        dfl_->encode_commit(*e3, d, m);
+      }
     }
     // The committed drafting half wrote all a_last + 1 rows of the last acceptance (positions P - m ..
     // P - m + a_last) to the ring. When the host kept fewer (a stop token or the budget inside the
@@ -1147,19 +1450,32 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
     // with the pending token, accepted rows are committed through the DeltaNet tape.
     int P = n, c = 1, h_row0 = last_chunk_row;
+    // the trunk hidden rows the next MTP pass reads: the model's (the last pass's rows), or the slot's copy of them
+    // while parked (other requests' passes reuse the model's)
+    Buffer hsrc = q35_->hidden_rows();
+    auto park = [&] {
+      if (hsrc.mtl != q35_->hidden_rows().mtl) return;  // parked already
+      const size_t row = size_t(q35_->config().hidden) * 4;
+      if (!slot.park_h) slot.park_h = g.alloc(size_t(Qwen35::kMaxVerify) * row, "park_hidden");
+      auto ep = g.begin();
+      q35_->encode_copy(*ep, hsrc.view(size_t(h_row0) * row, size_t(c) * row), slot.park_h.view(0, size_t(c) * row));
+      ep->commit_and_wait();
+      hsrc = slot.park_h;
+      h_row0 = 0;
+    };
     bool go = handle(s.tokens()[n]);
     while (go) {
       if (P + depth + 2 >= s.cap) {
         // the KV cache grows between cycles; only the prompt's deferred MTP history can still be in flight
         if (mtp_e) mtp_e->wait();
-        if (P + depth + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, P + depth + 3))) {
+        if (P + depth + 2 >= s.limit || !grow_kv(std::min(s.limit, P + depth + 3), park)) {
           finish = "length";
           res.context_full = true;
           break;
         }
       }
       auto e2 = g.begin();
-      q35_->encode_mtp(*e2, s, P - c, c, P - c + 1, q35_->hidden_rows(), h_row0, P + 1);
+      q35_->encode_mtp(*e2, s, P - c, c, P - c + 1, hsrc, h_row0, P + 1);
       for (int k = 2; k <= depth; ++k)
         q35_->encode_mtp(*e2, s, P + k - 2, 1, P + k - 1, q35_->mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
       q35_->encode_verify(*e2, s, P, depth + 1, sp, uint32_t(P));
@@ -1184,11 +1500,16 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
       c = m;
       h_row0 = 0;
+      hsrc = q35_->hidden_rows();
       P += m;
+      if (go && contended()) {
+        park();
+        yield_turn(res);
+      }
     }
     // finish: history rows for the last committed rows, then fold the tape into the state
     auto e3 = g.begin();
-    if (c > 0 && P - c >= 0) q35_->encode_mtp(*e3, s, P - c, c, P - c + 1, q35_->hidden_rows(), h_row0, -1);
+    if (c > 0 && P - c >= 0) q35_->encode_mtp(*e3, s, P - c, c, P - c + 1, hsrc, h_row0, -1);
     q35_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
@@ -1201,19 +1522,27 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       x->commit();
       return x;
     };
+    // parked: the step in flight completes (it writes only the slot's state and its next token)
+    auto park = [&] {
+      if (next) next->wait();
+    };
     if (r.max_tokens > 1) next = encode_at(pos);
     while (true) {
       bool go = handle(s.tokens()[pos]);  // available: produced by the previous command buffer
       if (go && pos + 2 >= s.cap) {
         // the KV cache grows between steps: the step in flight writes it, so it completes first
         if (next) next->wait();
-        if (pos + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, pos + 3))) {
+        if (pos + 2 >= s.limit || !grow_kv(std::min(s.limit, pos + 3), park)) {
           finish = "length";
           res.context_full = true;
           go = false;
         }
       }
       if (!go) break;
+      if (contended()) {
+        park();
+        yield_turn(res);
+      }
       // the step feeding token `pos` is in flight; queue the one after it, then wait
       auto cur = std::move(next);
       next = encode_at(pos + 1);
@@ -1258,15 +1587,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.finish_reason = finish;
   char cyc[64] = "";
   if ((dfl_ || lili_) && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
+  char conc[160] = "";
+  if (res.yields > 0 || res.queue_ms > 0)
+    snprintf(conc, sizeof conc, "; slot %d, waited %.0f ms for it, turns given to other requests: %d in the prefill, %d "
+             "while decoding", res.slot, res.queue_ms, yields_prefill, res.yields - yields_prefill);
   if (mmp)
     logi("chat: %zu image(s), %d tokens: %d encoded in %.0f ms, %d from earlier embeddings, %d in the cached prefix "
          "(+%.0f ms decode/resize before the request)", mm.spans.size(),
          [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
          int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s", n, start, res.prefill_ms, tok_ms,
-       t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
-       finish.c_str(), cyc);
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s", n, start, res.prefill_ms,
+       tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
+       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc);
   return res;
 }
 
@@ -1289,8 +1623,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   // conversation must not wait behind this work
   std::this_thread::sleep_for(std::chrono::milliseconds(idle_ms));
   if (requests_.load() != res.req_seq) return;
-  std::unique_lock<std::mutex> lk(mu_, std::try_to_lock);
-  if (!lk.owns_lock() || requests_.load() != res.req_seq) return;
+  std::unique_lock<TurnLock> lk(turn_, std::try_to_lock);  // nobody holds the GPU turn or waits for it
+  if (!lk.owns_lock() || requests_.load() != res.req_seq || active_ > 0) return;
   Slot& slot = slots_[size_t(res.slot)];
   if (slot.gen != res.slot_gen) return;
   const double t0 = now_ms();

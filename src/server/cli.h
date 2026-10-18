@@ -1,4 +1,5 @@
-// What the command line's files share (main.cpp: serve, pull, list, rm; launch.cpp: the coding agents).
+// What the command line's files share (main.cpp: serve, pull, list, rm; launch.cpp: the coding agents; bench_cmd.cpp:
+// kapitsa bench).
 #pragma once
 #include "engine/engine.h"
 #include "hub/hub.h"
@@ -27,5 +28,9 @@ std::string find_in_path(const std::string& name);
 // kapitsa claude|codex|opencode: starts the coding agent against a Kapitsa server (one already running on the port,
 // or one it starts and stops); argv[first] is the first argument after the agent's name
 int launch_agent(const std::string& name, int argc, char** argv, int first);
+
+// kapitsa bench: benchmarks Kapitsa on this Mac with the harness's protocol, saves the result and submits it when
+// asked (bench_cmd.cpp); argv[first] is the first argument after "bench"
+int run_bench(int argc, char** argv, int first);
 
 }  // namespace ni

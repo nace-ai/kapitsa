@@ -97,5 +97,45 @@
   "model": "qwen3.8-27b-4bit-mtp",
   "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/model.safetensors.index.json"],
   "note": "oMLX's plain autoregressive baseline on the same weights. Its prefix cache did not reuse the follow-up turns on this model (cached TTFT 38.5 / 157.5 s), so the DFlash2 row is oMLX's representative one."
+ },
+ {
+  "label": "q35-4b-omlx-best",
+  "extends": "q36-35b-omlx-best",
+  "display": "oMLX + MTP (Lightning MTP, MTPLX's head)",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-omlx-mtp",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.5-4b-4bit-omlx-mtp", "dst": "{state}/omlx/q35-4b-best/models/qwen3.5-4b-4bit"}},
+   {"write_json": {"path": "{state}/omlx/q35-4b-best/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.5-4b-4bit": {"mtp_enabled": true}}}}},
+   {"clean_dir": "{state}/omlx/q35-4b-best/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q35-4b-best/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8141", "--base-path", "{state}/omlx/q35-4b-best/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q35-4b-best/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "model": "qwen3.5-4b-4bit",
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-omlx-mtp/model.safetensors.index.json",
+                     "{models}/qwen3.5-4b-4bit-omlx-mtp/model-mtp.safetensors"],
+  "note": "oMLX's fastest setting measured on this model: Lightning MTP (its built-in MTP path, adaptive depth, default ceiling 3) with the MTP head of MTPLX's 4B release, which oMLX sees only when the checkpoint index lists it: {models}/qwen3.5-4b-4bit-omlx-mtp is a zero-copy view of qwen3.5-4b-4bit-mtplx made by tools/omlx_mtp_farm.py (the trunk every engine reads, the head linked as model-mtp.safetensors and indexed). Smoke tests before the run (3 + 3 decodes of 512 tokens, sampled / greedy medians): Lightning MTP 101.4 / 103.8 tok/s; DFlash with z-lab's Qwen3.5-4B-DFlash drafter (DFlash v1, 4-bit at load) block 5: 89.9 / 98.0 (verify adaptive) and 89.7 / 91.5 (verify dflash), block 9: 75.3 / 72.6 and 56.1 / 56.5; no speculation 84.9 / 81.8."
+ },
+ {
+  "label": "q35-4b-omlx",
+  "extends": "q36-35b-omlx",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtp",
+  "prepare": [
+   {"symlink": {"src": "{models}/qwen3.5-4b-4bit-mtp", "dst": "{state}/omlx/q35-4b/models/qwen3.5-4b-4bit"}},
+   {"write_json": {"path": "{state}/omlx/q35-4b/base/model_settings.json",
+                   "data": {"version": 1, "models": {"qwen3.5-4b-4bit": {"mtp_enabled": false}}}}},
+   {"clean_dir": "{state}/omlx/q35-4b/base/kv-cache"}
+  ],
+  "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q35-4b/models", "--no-hf-cache",
+          "--headless", "--host", "127.0.0.1", "--port", "8084", "--base-path", "{state}/omlx/q35-4b/base",
+          "--paged-ssd-cache-dir", "{state}/omlx/q35-4b/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
+          "--hot-cache-max-size", "4GB", "--memory-guard", "aggressive"],
+  "model": "qwen3.5-4b-4bit",
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/model.safetensors.index.json"],
+  "note": "oMLX's plain autoregressive baseline on the same weights."
  }
 ]
