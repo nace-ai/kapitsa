@@ -11,9 +11,12 @@
 // line per sequence and a total: KL mean / median / p95 / p99 / max, top-1 agreement with the reference,
 // perplexity of the model (and of the reference). Prefill chunks of R rows (default 512); the logits come from
 // the prefill GEMM over the final-norm rows. Set NI_ANE=0 to keep the Neural Engine split out of the numbers.
+//  --image F      (repeatable) the images of the sequences, in the order of their runs of image placeholder tokens:
+//                 each run takes the image's embeddings and M-RoPE positions, as the server does (src/vision)
 #include "metal/gpu.h"
 #include "model/qwen35.h"
 #include "util/log.h"
+#include "vision/encoder.h"
 
 #include <algorithm>
 #include <cmath>
@@ -121,12 +124,55 @@ void top_of(const float* lp, int V, int K, RefPos& out) {
   for (int i = 0; i < K; ++i) out.top[i] = {idx[i], lp[idx[i]]};
 }
 
+// --image: the images of the sequences, and their encoder
+struct Images {
+  std::vector<std::string> files;
+  std::unique_ptr<vision::ImageEncoder> enc;
+  size_t next = 0;  // images are taken in order across the sequences
+  std::vector<Buffer> bufs;
+};
+
+// The image rows of ids (runs of the placeholder token, one per image, in order): embeddings and positions into s.
+void set_images(Qwen35& m, Seq& s, const std::vector<int>& ids, Images& im, std::vector<vision::EmbedRun>& runs) {
+  if (im.files.empty()) return;
+  std::vector<vision::ImageSpan> spans;
+  const int ph = im.enc->placeholder(), n = int(ids.size());
+  for (int i = 0; i < n;) {
+    if (ids[i] != ph) {
+      ++i;
+      continue;
+    }
+    int j = i;
+    while (j < n && ids[j] == ph) ++j;
+    if (im.next >= im.files.size()) fatal("more image runs than --image files");
+    const std::string& f = im.files[im.next++];
+    std::ifstream in(f, std::ios::binary);
+    const std::string bytes((std::istreambuf_iterator<char>(in)), {});
+    vision::Prepared p = im.enc->prepare(vision::decode(bytes));
+    if (p.tokens != j - i) fatal("%s: %d image tokens in the sequence, the processor makes %d", f.c_str(), j - i, p.tokens);
+    if (!im.enc->loaded()) im.enc->load();
+    Buffer b = Gpu::get().alloc(size_t(p.tokens) * im.enc->out_dim() * 2 + 16, "image_embeddings");
+    const double t0 = now_ms();
+    im.enc->encode(p, b);
+    fprintf(stderr, "image %s: %dx%d -> %d tokens, encoded in %.0f ms\n", f.c_str(), p.width, p.height, p.tokens,
+            now_ms() - t0);
+    im.bufs.push_back(b);
+    runs.push_back(vision::EmbedRun{i, p.tokens, b, 0, im.enc->out_dim()});
+    spans.push_back(vision::ImageSpan{i, p.tokens, p.grid_t, p.grid_h, p.grid_w});
+    i = j;
+  }
+  m.set_rope_positions(s, n, spans);
+  s.embeds = runs.empty() ? nullptr : &runs;
+}
+
 // Runs `m` over the sequence chunk by chunk; calls fn(row pointer, position) for every position < n - 1.
 template <class Fn>
-void run_model(Qwen35& m, const std::vector<int>& ids, int chunk, const Buffer& logits, Fn&& fn) {
+void run_model(Qwen35& m, const std::vector<int>& ids, int chunk, const Buffer& logits, Images& im, Fn&& fn) {
   const int n = int(ids.size()), V = m.config().vocab;
   auto s = m.new_seq(n + 16);
   memcpy(s->tokens(), ids.data(), ids.size() * 4);
+  std::vector<vision::EmbedRun> runs;
+  set_images(m, *s, ids, im, runs);
   SamplingParams sp;
   for (int pos0 = 0; pos0 < n; pos0 += chunk) {
     const int T = std::min(chunk, n - pos0);
@@ -151,6 +197,7 @@ int main(int argc, char** argv) {
   std::string model_dir = argv[1], ref_model, ref_file, dump_file;
   int topk = 256, chunk = 512, skip = 0;
   std::vector<std::string> seqs;
+  Images images;
   for (int i = 2; i < argc; ++i) {
     std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -163,6 +210,7 @@ int main(int argc, char** argv) {
     else if (a == "--topk") topk = std::stoi(next());
     else if (a == "--chunk") chunk = std::stoi(next());
     else if (a == "--skip") skip = std::stoi(next());
+    else if (a == "--image") images.files.push_back(next());
     else seqs.push_back(a);
   }
   if (seqs.empty()) fatal("no sequences");
@@ -203,6 +251,8 @@ int main(int argc, char** argv) {
   std::unique_ptr<Qwen35> ref;
   if (!ref_model.empty()) ref = std::make_unique<Qwen35>(ref_model, chunk);
   Qwen35 m(model_dir, chunk);
+  if (!images.files.empty() && !(images.enc = vision::open_encoder(model_dir))) fatal("%s takes no images", model_dir.c_str());
+  if (ref && !images.files.empty()) fatal("--image with --ref-model is not supported");
   const int V = m.config().vocab;
   if (ref && ref->config().vocab != V) fatal("vocabularies differ");
   Gpu& g = Gpu::get();
@@ -272,7 +322,7 @@ int main(int argc, char** argv) {
         for (auto& s : part) st.add(s);
       }
     } else {
-      run_model(m, seq, chunk, lg, [&](float* row, int p) {
+      run_model(m, seq, chunk, lg, images, [&](float* row, int p) {
         const int am = log_softmax(row, V);
         if (dump) {
           mine[p].lp_next = row[seq[p + 1]];

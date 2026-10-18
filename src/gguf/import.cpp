@@ -1450,7 +1450,7 @@ std::string import_model(const ImportOptions& opt) {
 int run_import(int argc, char** argv) {
   ImportOptions o;
   const char* usage =
-      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force]\n\n"
+      "kapitsa import FILE.gguf [--name NAME] [--mtp MTP.gguf] [--threads N] [--force] [--dry-run]\n\n"
       "Converts a GGUF of a Qwen3.5-family model (from LM Studio, Ollama, llama.cpp or a Hugging Face GGUF repo) once\n"
       "into a model folder in %s, which `kapitsa serve --model NAME` runs (`kapitsa serve --model FILE.gguf`\n"
       "converts on first use). A split file is given by any of its parts.\n\n"

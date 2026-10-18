@@ -1,0 +1,108 @@
+# A tag vX.Y.Z (X.Y.Z = KAPITSA_VERSION in CMakeLists.txt) builds the release binary with packaging/release/build.sh,
+# publishes it on the GitHub release (install.sh downloads it from there) and updates the formula in
+# nace-ai/homebrew-tap. Optional secrets (RELEASING.md): MACOS_CERTIFICATE (base64 .p12 of a Developer ID
+# Application certificate) and MACOS_CERTIFICATE_PASSWORD sign it; NOTARY_KEY (an App Store Connect API .p8 key),
+# NOTARY_KEY_ID and NOTARY_ISSUER_ID also notarize it; TAP_GITHUB_TOKEN pushes the formula to the tap (without it,
+# the job summary shows the formula to commit there).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      SIGN: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      NOTARIZE: ${{ secrets.NOTARY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(printf '%s\n' /Applications/Xcode_*.app | grep -v -i -E 'beta|rc' | sort -V | tail -1) || true
+          if [ -d "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+
+      - name: Signing keychain
+        if: env.SIGN == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          keychain="$RUNNER_TEMP/kapitsa.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" > /dev/null
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk -F '"' '/Developer ID Application/ {print $2; exit}')
+          [ -n "$identity" ] || { echo "MACOS_CERTIFICATE holds no Developer ID Application identity"; exit 1; }
+          echo "KAPITSA_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "KAPITSA_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          if [ "$NOTARIZE" = true ]; then
+            printf '%s\n' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+            xcrun notarytool store-credentials kapitsa-notary --key "$RUNNER_TEMP/notary.p8" \
+              --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --keychain "$keychain"
+            rm "$RUNNER_TEMP/notary.p8"
+            echo "KAPITSA_NOTARY_PROFILE=kapitsa-notary" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        run: |
+          packaging/release/build.sh "${GITHUB_REF_NAME#v}"
+          ./install.sh --from-file "build/release/kapitsa-${GITHUB_REF_NAME#v}-darwin-arm64.tar.gz" --prefix "$RUNNER_TEMP/bin"
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          pre=()
+          case "$v" in *-*) pre=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "Kapitsa $v" --generate-notes "${pre[@]}" \
+            "build/release/kapitsa-$v-darwin-arm64.tar.gz" "build/release/kapitsa-$v-darwin-arm64.tar.gz.sha256"
+
+      - name: Homebrew formula
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          v=${GITHUB_REF_NAME#v}
+          sha=$(cut -d ' ' -f 1 "build/release/kapitsa-$v-darwin-arm64.tar.gz.sha256")
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/kapitsa-$v-darwin-arm64.tar.gz"
+          sed -E -e "s|^  url \"[^\"]*\"|  url \"$url\"|" -e "s|^  version \"[^\"]*\".*|  version \"$v\"|" \
+            -e "s|^  sha256 \"[^\"]*\".*|  sha256 \"$sha\"|" packaging/homebrew/kapitsa.rb > "$RUNNER_TEMP/kapitsa.rb"
+          # install it from a local tap and run its test before it reaches users
+          brew tap-new --no-git kapitsa-release/check
+          cp "$RUNNER_TEMP/kapitsa.rb" "$(brew --repository kapitsa-release/check)/Formula/kapitsa.rb"
+          brew install kapitsa-release/check/kapitsa
+          brew test kapitsa-release/check/kapitsa
+          brew uninstall kapitsa-release/check/kapitsa
+          brew untap kapitsa-release/check
+          if [ -z "$TAP_GITHUB_TOKEN" ]; then
+            { echo "No TAP_GITHUB_TOKEN secret: commit this as Formula/kapitsa.rb in nace-ai/homebrew-tap."
+              echo '```ruby'; cat "$RUNNER_TEMP/kapitsa.rb"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git clone "https://x-access-token:$TAP_GITHUB_TOKEN@github.com/nace-ai/homebrew-tap.git" "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          mkdir -p Formula
+          cp "$RUNNER_TEMP/kapitsa.rb" Formula/kapitsa.rb
+          git add Formula/kapitsa.rb
+          if git diff --cached --quiet; then echo "The tap already has this formula."; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "kapitsa $v"
+          git push origin HEAD

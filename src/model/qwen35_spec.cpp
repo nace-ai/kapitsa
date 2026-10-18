@@ -493,15 +493,16 @@ void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, 
 }
 
 // Attention block for R rows at positions pos..pos+R-1; x += o_proj(attn(norm(x))).
-void Qwen35::enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
-                           const Buffer& x) {
+void Qwen35::enc_attn_rows(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap,
+                           int pos, int R, const Buffer& x) {
   enc_qmvr_multi(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, x, L.in_norm, R, &xrn_);
   kp::AttnPrep ap{uint32_t(R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                   uint32_t(cfg_.rot_dims), uint32_t(pos), uint32_t(cap), cfg_.eps, cfg_.theta};
-  e.use(pipe2("attn_prep"));
+  e.use(pipe2(mrope(s) ? "attn_prep_m" : "attn_prep"));
   e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
   e.buf(5, qo_); e.buf(6, kc); e.buf(7, vc);
   e.val(8, ap);
+  if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   const uint32_t Lmax = uint32_t(pos + R);
   // split-K as in Qwen35::enc_attn: one chunk per GPU core and kv head
@@ -637,6 +638,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (R > kMaxVerify) fatal("encode_mtp: R=%d", R);
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, tok0, R, mtp_e_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, tok0, R, mtp_e_, D);  // image rows (prompt history)
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
   const bool post = h_trunk && mtp_post_norm_hidden_;
   e.use(pipe2(post ? "mtp_concat_norm_post" : "mtp_concat_norm"));
@@ -646,7 +648,7 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   if (post) e.buf(6, final_norm_->buf);
   e.dispatch(R, 1, 1, 256);
   enc_qmvr(e, mtp_fc_, mtp_u_, mtp_x_, R, false);
-  enc_attn_rows(e, mtp_, s.mtp_kc, s.mtp_vc, s.cap, mpos0, R, mtp_x_);
+  enc_attn_rows(e, s, mtp_, s.mtp_kc, s.mtp_vc, s.cap, mpos0, R, mtp_x_);
   if (cfg_.moe) enc_moe_rows(e, mtp_, R, mtp_x_, true);
   else enc_mlp_rows(e, mtp_, R, mtp_x_);
   enc_rows_norm(e, mtp_x_, mtp_norm_, mtp_post_, R, D);
@@ -684,6 +686,7 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
     return;
   }
   enc_embed(e, s.tok, pos0 + 1, R, mtp_e_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0 + 1, R, mtp_e_, D);  // image rows
   kp::RowsNorm np{uint32_t(D), cfg_.eps};
   e.use(pipe2(mtp_post_norm_hidden_ ? "mtp_concat_norm_post" : "mtp_concat_norm"));
   e.buf(0, mtp_e_); e.buf(1, x_, size_t(h_row0) * D * 4); e.buf(2, mtp_pre_e_->buf); e.buf(3, mtp_pre_h_->buf);
@@ -698,10 +701,11 @@ void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0)
   enc_proj(e, {{&mtp_.q, qg_, false}, {&mtp_.k, kr_, false}, {&mtp_.v, vr_, false}}, xh_, R);
   kp::AttnPrep ap{uint32_t(R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
                   uint32_t(cfg_.rot_dims), uint32_t(pos0), uint32_t(s.cap), cfg_.eps, cfg_.theta};
-  e.use(pipe2("attn_prep"));
+  e.use(pipe2(mrope(s) ? "attn_prep_m" : "attn_prep"));
   e.buf(0, qg_); e.buf(1, kr_); e.buf(2, vr_); e.buf(3, mtp_.q_norm->buf); e.buf(4, mtp_.k_norm->buf);
   e.buf(5, qo_); e.buf(6, s.mtp_kc); e.buf(7, s.mtp_vc);
   e.val(8, ap);
+  if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   enc_attn_prefill(e, s.mtp_kc, s.mtp_vc, R, pos0, s.cap);
   enc_rows_half(e, attn_out_, nullptr, hh_, R, cfg_.hq * cfg_.head_dim);
@@ -752,7 +756,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
       e.dispatch(cfg_.lin_hv, 1, 1, 1024);
       enc_qmvr(e, L.out, gout_, x_, R, true, uint32_t(VD), uint32_t(D));
     } else {
-      enc_attn_rows(e, L, s.kc[i], s.vc[i], s.cap, pos, R, x_);
+      enc_attn_rows(e, s, L, s.kc[i], s.vc[i], s.cap, pos, R, x_);
     }
     if (cfg_.moe) enc_moe_rows(e, L, R, x_, false);
     else enc_mlp_rows(e, L, R, x_);

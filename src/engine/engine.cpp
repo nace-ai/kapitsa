@@ -191,17 +191,23 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   const size_t used = g.allocated_bytes(), per = model_->kv_bytes_per_pos();
   const size_t room = budget_ > used ? budget_ - used : 0;
   context_fit_ = int(std::min<size_t>(size_t(opts_.context), room / per));
+  fixed_bytes_ = used;
   logi("GPU: %s, %d cores%s", g.name().c_str(), g.core_count(), g.core_count_measured() ? "" : " (not measured: NI_GPU_CORES or the tier's smallest)");
   logi("memory: %.2f GB allocated (model, buffers, %d slots' state), budget %.1f GB (recommended working set %.1f GB): "
        "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
        used / 1e9, std::max(1, opts_.slots), budget_ / 1e9, g.recommended_working_set() / 1e9, room / 1e9, room / per,
        per / 1024.0, context_fit_, opts_.context);
+  // images: the model's vision tower, loaded on the first image that needs encoding
+  if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
+    logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
+    vision_ = std::make_unique<vision::Vision>(std::move(enc));
+  }
   const std::string mode = lili_ ? std::string("LiLiCorr speculative decoding (7-token blocks)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");
-  logi("engine ready: %s, context %d, %d slots, %s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
-       mode.c_str());
+  logi("engine ready: %s, context %d, %d slots, %s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
+       mode.c_str(), vision_ ? ", images on" : "");
 }
 
 Engine::~Engine() = default;
@@ -354,6 +360,8 @@ void Engine::drop_slot(Slot& slot) {
   model_->drop_kv(*slot.seq);
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
+  slot.img_spans.clear();
+  slot.img_digests.clear();
   slot.turns = 0;
   slot.done_at = 0;
   for (auto& c : slot.ckpts) {
@@ -366,6 +374,7 @@ void Engine::drop_slot(Slot& slot) {
 bool Engine::reserve_kv(Slot& slot, int need) {
   Seq& s = *slot.seq;
   if (model_->reserve(s, need)) return true;
+  if (vision_ && vision_->release(false) && model_->reserve(s, need)) return true;  // earlier requests' image embeddings
   std::vector<Slot*> others;
   for (auto& o : slots_)
     if (&o != &slot && o.seq->cap > 0) others.push_back(&o);
@@ -385,10 +394,45 @@ bool Engine::reserve_kv(Slot& slot, int need) {
     }
     if (model_->reserve(s, need)) return true;
   }
+  if (vision_ && vision_->release(true) && model_->reserve(s, need)) return true;  // the image encoder's weights
   return false;
 }
 
-// Image and video parts become a short note: the engine does not read images yet (the vision branch replaces this).
+bool Engine::make_room(Slot& keep, size_t bytes) {
+  Gpu& g = Gpu::get();
+  auto fits = [&] { return g.allocated_bytes() + bytes <= budget_; };
+  if (fits()) return true;
+  std::vector<Slot*> others;
+  for (auto& o : slots_)
+    if (&o != &keep && o.seq->cap > 0) others.push_back(&o);
+  std::sort(others.begin(), others.end(), [](const Slot* a, const Slot* b) { return a->last_used < b->last_used; });
+  for (Slot* o : others) {
+    logi("memory: dropping the KV cache of slot %d (%d tokens cached) for an image", int(o - slots_.data()),
+         int(o->tokens.size()));
+    drop_slot(*o);
+    if (fits()) return true;
+  }
+  if (model_->ane_release()) {
+    if (ane_ck_) {
+      for (auto* v : {&ane_ck_->conv, &ane_ck_->rec})
+        for (auto& b : *v) Gpu::get().release(b);
+      ane_ck_.reset();
+    }
+    if (fits()) return true;
+  }
+  return false;
+}
+
+size_t Engine::common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm) {
+  if (mm) return vision::common_prefix(slot.tokens, slot.img_spans, slot.img_digests, *mm);
+  const size_t n = std::min(slot.tokens.size(), keys.size());
+  size_t i = 0;
+  while (i < n && slot.tokens[i] == keys[i]) ++i;
+  return i;
+}
+
+// Image and video parts become a short note (a model without an image encoder, or render_chat's callers that do not
+// handle images).
 static ojson without_images(const ojson& messages, int* dropped) {
   ojson out = messages;
   for (auto& m : out) {
@@ -398,7 +442,7 @@ static ojson without_images(const ojson& messages, int* dropped) {
       const std::string t = p.contains("type") && p["type"].is_string() ? p["type"].get<std::string>() : "";
       if (t.find("image") != std::string::npos || t.find("video") != std::string::npos || p.contains("image") ||
           p.contains("image_url") || p.contains("video")) {
-        p = {{"type", "text"}, {"text", "\n[image omitted: this server can't read images yet]\n"}};
+        p = {{"type", "text"}, {"text", "\n[image omitted: this model can't read images]\n"}};
         ++*dropped;
       }
     }
@@ -427,6 +471,7 @@ std::string chat_template_source(const std::string& model_dir) {
 }
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
+  const bool images = vision_ != nullptr;  // image parts render as the model's placeholder, else as a note
   if (nh_) {
     // Nemotron 3.5's template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
     // reasoning efforts, and truncate_history_thinking = false for preserve_thinking (every turn's reasoning kept, as
@@ -440,17 +485,18 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       ChatRequest q = r;
       if (effort) q.template_kwargs["medium_effort"] = true;
       if (keep) q.template_kwargs["truncate_history_thinking"] = false;
-      return render_chat(*tmpl_, q, add_generation_prompt);
+      return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
-  return render_chat(*tmpl_, r, add_generation_prompt);
+  return render_chat(*tmpl_, r, add_generation_prompt, images);
 }
 
-std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt) {
+std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
+                        bool images) {
   minja::chat_template_inputs in;
-  int images = 0;
-  in.messages = without_images(r.messages, &images);
-  if (images && add_generation_prompt) logi("chat: %d image(s) left out: this server can't read images yet", images);
+  int dropped = 0;
+  in.messages = images ? vision::without_image_data(r.messages) : without_images(r.messages, &dropped);
+  if (dropped && add_generation_prompt) logi("chat: %d image(s) left out: this model can't read images", dropped);
   // A system message after the first message (an agent's hook output, a mode change) is a system turn where it
   // stands: the Qwen3.5+ templates raise on it. It goes through the template as a marker tool response (not a user
   // query, so which assistant turns keep their reasoning does not change), and the marker's turn is then replaced.
@@ -478,19 +524,30 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
   return text;
 }
 
-int Engine::count_tokens(const ChatRequest& r) const { return int(tok_.encode(render(r, true)).size()); }
+// The request's images, prepared (fetched, decoded, resized; data: URLs remembered by content), for a model with an
+// image encoder (without one, render() turns image parts into a note). Throws vision::Error (video parts too).
+static std::vector<vision::Prepared> request_images(vision::Vision* vis, std::vector<vision::Source>* src,
+                                                   const ojson& messages) {
+  if (!vis) return {};
+  *src = vision::image_sources(messages);
+  return src->empty() ? std::vector<vision::Prepared>() : vis->prepare(*src);
+}
 
-Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival) {
-  auto lcp = [&](const std::vector<int>& a) {
-    size_t n = std::min(a.size(), prompt.size()), i = 0;
-    while (i < n && a[i] == prompt[i]) ++i;
-    return i;
-  };
+int Engine::count_tokens(const ChatRequest& r) const {
+  std::vector<vision::Source> src;
+  const std::vector<vision::Prepared> images = request_images(vision_.get(), &src, r.messages);
+  const std::vector<int> ids = tok_.encode(render(r, true));
+  if (images.empty()) return int(ids.size());
+  return int(vision::expand(ids, vision_->encoder().placeholder(), images, nullptr).ids.size());  // the images' rows
+}
+
+Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
+  auto lcp = [&](const Slot& s) { return common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
   // checkpoint inside the common prefix. A shared prefix without a usable state is worthless
   // and choosing that slot would only destroy its conversation.
   auto usable = [&](const Slot& s) -> int {
-    size_t l = lcp(s.tokens);
+    size_t l = lcp(s);
     if (l == s.tokens.size() && l < prompt.size()) return int(l);
     int u = 0;
     for (auto& c : s.ckpts)
@@ -534,7 +591,28 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
                         const std::function<void(const ChatResult&)>& on_prompt) {
   const uint64_t arrival = ++requests_;
+  // images: fetched, decoded and resized before the engine lock (a slow download holds up no other request)
+  std::vector<vision::Source> img_src;
+  std::vector<vision::Prepared> images;
+  const double t_img = now_ms();
+  try {
+    images = request_images(vision_.get(), &img_src, r.messages);
+  } catch (const std::exception& ex) {  // vision::Error: the client's to fix; anything else: say what it was
+    ChatResult res;
+    res.finish_reason = "error";
+    res.invalid_request = dynamic_cast<const vision::Error*>(&ex) != nullptr;
+    res.error = res.invalid_request ? ex.what() : std::string("images: ") + ex.what();
+    return res;
+  }
+  const double img_prep_ms = now_ms() - t_img;
   std::lock_guard<std::mutex> lk(mu_);
+  // the cache of image embeddings goes back to its size once this request is done with them
+  struct EndImages {
+    vision::Vision* v;
+    ~EndImages() {
+      if (v) v->end_request();
+    }
+  } end_images{images.empty() ? nullptr : vision_.get()};
   // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (under the engine lock:
   // it runs a startup check through the model's buffers, which the idle history prefill also uses)
   model_->ane_poll();
@@ -562,9 +640,25 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (bt.size() < prompt.size() && std::equal(bt.begin(), bt.end(), prompt.begin())) boundary = int(bt.size());
   }
   if (boundary >= int(prompt.size())) boundary = -1;
+  // images: each placeholder becomes the image's rows; prefix reuse compares keys that tell images apart by content
+  vision::Prompt mm;
+  const vision::Prompt* mmp = nullptr;
+  if (!images.empty()) {
+    try {
+      mm = vision::expand(prompt, vision_->encoder().placeholder(), images, &boundary);
+    } catch (const vision::Error& ex) {
+      res.finish_reason = "error";
+      res.invalid_request = true;
+      res.error = ex.what();
+      return res;
+    }
+    prompt = mm.ids;
+    mmp = &mm;
+  }
+  const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
-  Slot& slot = pick_slot(prompt, arrival);
+  Slot& slot = pick_slot(keys, arrival, mmp);
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
@@ -576,8 +670,47 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }
 
   // ---- prefix reuse ----
-  size_t common = 0;
-  while (common < slot.tokens.size() && common < prompt.size() && slot.tokens[common] == prompt[common]) ++common;
+  const size_t common = common_rows(slot, keys, mmp);
+
+  // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
+  // checkpoint, as below), before any state changes, so a failure leaves the slot as it was ----
+  std::vector<vision::EmbedRun> runs;
+  int img_encoded = 0, img_reused = 0;  // images encoded now, from the embeddings of earlier requests
+  double img_ms = 0;
+  auto image_runs = [&](int from) {
+    const double t0 = now_ms();
+    for (size_t k = 0; k < mm.spans.size(); ++k) {
+      const vision::ImageSpan& sp = mm.spans[k];
+      if (sp.pos + sp.n <= from) continue;
+      bool have = false;
+      for (const vision::EmbedRun& run : runs) have = have || run.pos == sp.pos;
+      if (have) continue;
+      bool encoded = false;
+      const Buffer emb =
+          vision_->embeddings(images[k], img_src[k], [&](size_t b) { return make_room(slot, b); }, &encoded);
+      runs.push_back(vision::EmbedRun{sp.pos, sp.n, emb, 0, vision_->encoder().out_dim()});
+      ++(encoded ? img_encoded : img_reused);
+    }
+    img_ms += now_ms() - t0;
+    // what one conversation can hold now that the encoder's weights take their share of the budget (/v1/models)
+    const size_t fixed = fixed_bytes_ + (vision_->encoder().loaded() ? vision_->encoder().weight_bytes() : 0);
+    context_fit_ = int(std::min<size_t>(size_t(opts_.context), (budget_ > fixed ? budget_ - fixed : 0) /
+                                                                   model_->kv_bytes_per_pos()));
+  };
+  if (mmp) {
+    int from = 0;
+    if (common == slot.tokens.size() && int(common) < n) from = int(common);
+    else
+      for (auto& c : slot.ckpts)
+        if (c.pos > 0 && c.pos <= int(common) && c.pos < n) from = std::max(from, c.pos);
+    try {
+      image_runs(from);
+    } catch (const vision::Error& ex) {
+      res.finish_reason = "error";
+      res.error = ex.what();
+      return res;
+    }
+  }
 
   // ---- KV cache for the prompt and the first part of the answer (it grows further while decoding) ----
   // other slots' caches are given up only when the prompt itself does not fit; before them this slot's own, when
@@ -637,9 +770,22 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.cached_tokens = start;
   if (on_prompt) on_prompt(res);
   std::copy(prompt.begin(), prompt.end(), s.tokens());
+  // images: their positions (M-RoPE; none: the text-only path) and the rows that take their embeddings
+  model_->set_rope_positions(s, n, mm.spans);
+  if (mmp) {
+    try {
+      image_runs(start);  // normally nothing left: the rows were known before
+    } catch (const vision::Error& ex) {
+      drop_slot(slot);  // the state is no longer what slot.tokens says
+      res.finish_reason = "error";
+      res.error = ex.what();
+      return res;
+    }
+  }
+  s.embeds = runs.empty() ? nullptr : &runs;
 
   // ---- prefill ----
-  const double tok_ms = now_ms() - t_req;  // template + tokenizer + slot pick
+  const double tok_ms = now_ms() - t_req - img_ms;  // template + tokenizer + slot pick (image encoding: logged apart)
   const AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
@@ -771,6 +917,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (p < n) e = g.begin();
   }
   e->wait();
+  s.embeds = nullptr;
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
   // Neural Engine split: how busy the ANE was over the prefill. Near 100% it, not the GPU, is the bottleneck (a
@@ -782,7 +929,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const double gpu_last = e->gpu_ms();
   // last chunk: commit -> GPU start, GPU end -> this thread awake (host clock)
   const double lat_start = e->gpu_start_host_ms() - h_commit, lat_wake = h_woke - e->gpu_end_host_ms();
-  slot.tokens = prompt;
+  slot.tokens = keys;
+  slot.img_spans = mm.spans;
+  slot.img_digests = mm.digests;
 
   // ---- decode ----
   const bool think = !text.empty() && text.size() >= 8 && text.compare(text.size() - 8, 8, "<think>\n") == 0;
@@ -1055,6 +1204,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
   slot.done_at = res.req_seq;
+  if (!images.empty()) {  // for prefill_history: the images without their pixels
+    for (vision::Prepared& p : images) std::vector<uint8_t>().swap(p.pixels);
+    res.images = std::make_shared<const std::vector<vision::Prepared>>(std::move(images));
+  }
   ChatDelta tail = parser.finish(finish == "stop");
   res.reasoning += tail.reasoning;
   res.content += tail.content;
@@ -1063,6 +1216,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (parser.promoted() > 0)
     logi("chat: %d tool call(s) written inside the reasoning returned as tool calls", parser.promoted());
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
+  if (mmp) std::copy(keys.begin(), keys.end(), slot.tokens.begin());  // image rows: their keys
   res.completion_tokens = gen;
   if ((dfl_ || lili_) && spec_cycles_ > 0)
     logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? "lilicorr" : "dflash", double(spec_accepted_) / spec_cycles_,
@@ -1074,6 +1228,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.finish_reason = finish;
   char cyc[64] = "";
   if ((dfl_ || lili_) && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  if (mmp)
+    logi("chat: %zu image(s), %d tokens: %d encoded in %.0f ms, %d from earlier embeddings, %d in the cached prefix "
+         "(+%.0f ms decode/resize before the request)", mm.spans.size(),
+         [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
+         int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
        "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s", n, start, res.prefill_ms, tok_ms,
        t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms, gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0,
@@ -1122,8 +1281,11 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   if (returns_reasoning) r2.messages.back()["reasoning_content"] = res.reasoning;
   static const std::string marker = "\x01nace-history-marker\x01";
   r2.messages.push_back({{"role", "user"}, {"content", marker}});
+  std::vector<vision::Prepared> images;  // the request's, as chat() prepared them (no download again)
+  if (res.images) images = *res.images;
   std::string text;
   try {
+    if (vision_ && vision::image_sources(r2.messages).size() != images.size()) return;
     text = render(r2, false);
   } catch (...) {
     return;
@@ -1133,18 +1295,32 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   if (cut == std::string::npos) return;
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);
+  vision::Prompt mm;
+  const vision::Prompt* mmp = nullptr;
+  if (!images.empty()) {
+    try {
+      mm = vision::expand(t2, vision_->encoder().placeholder(), images);
+    } catch (...) {
+      return;
+    }
+    t2 = mm.ids;
+    mmp = &mm;
+  }
+  const std::vector<int>& k2 = mmp ? mm.keys : t2;
   // prefill all but the last token: the follow-up's own prefill then starts with it, so its MTP
   // history pass covers the pair (hidden, next token) of this turn's last row
   const int n = int(t2.size()) - 1;
-  size_t common = 0;
-  while (common < slot.tokens.size() && common < t2.size() && slot.tokens[common] == t2[common]) ++common;
+  const size_t common = common_rows(slot, k2, mmp);
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
     if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
-  if (!best || n + 64 >= s.limit || !model_->reserve(s, n + 64)) return;
+  if (!best || n + 64 >= s.limit) return;
+  for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request
+    if (sp.pos + sp.n > best->pos) return;
+  if (!model_->reserve(s, n + 64)) return;
   Gpu& g = Gpu::get();
   auto e = g.begin();
   model_->restore(*e, s, *best);
@@ -1152,6 +1328,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   std::copy(t2.begin(), t2.end(), s.tokens());
+  model_->set_rope_positions(s, n, mm.spans);
   // DFlash2: the drafter's context ring goes back to the checkpoint with the target state, and the rows
   // prefilled here enter it like prompt rows (captured by every pass, projected after the last chunk)
   if (dfl_) {
@@ -1201,7 +1378,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
     if (p < n) e = g.begin();
   }
   e->wait();
-  slot.tokens.assign(t2.begin(), t2.begin() + n);
+  slot.tokens.assign(k2.begin(), k2.begin() + n);
+  slot.img_spans = mm.spans;
+  slot.img_digests = mm.digests;
   logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
 }
 

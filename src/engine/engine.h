@@ -8,6 +8,7 @@
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
+#include "vision/encoder.h"
 
 #include <nlohmann/json.hpp>
 
@@ -39,6 +40,9 @@ struct EngineOptions {
   // ~/.cache/nace-infer-models/drafters (MTP when none matches), "none" = MTP, or a drafter directory.
   // "" = NI_DFLASH if set (auto | none | 0 | <dir>), else auto. spec_depth 0 turns "auto" off too.
   std::string dflash;
+  // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
+  // model's processor resizes); 0 = the model's own limit.
+  long image_max_pixels = 0;
 };
 
 // GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
@@ -92,8 +96,11 @@ hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt,
 struct ChatRequest;
 // The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
 std::string chat_template_source(const std::string& model_dir);
-// A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it)
-std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt);
+// A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it).
+// `images`: image parts render as images (their data left out; the engine puts the images' rows in place), else image
+// and video parts become a short note.
+std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
+                        bool images = false);
 
 struct ChatRequest {
   ojson messages = ojson::array();
@@ -126,12 +133,15 @@ struct ChatResult {
   std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
   bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
   int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
+  bool invalid_request = false;  // "error" because of the request's content (an image that cannot be read, a video)
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   int reasoning_tokens = 0;   // completion tokens inside the think block
   double prefill_ms = 0, decode_ms = 0;
-  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply
+  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply, the
+  // request's images (what the processor made of them, without pixels)
   int slot = -1;
   uint64_t slot_gen = 0, req_seq = 0;
+  std::shared_ptr<const std::vector<vision::Prepared>> images;
 };
 
 class Engine {
@@ -145,11 +155,13 @@ class Engine {
   // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
   // else Qwen's recommended 0.6 / 0.95 / 20.
   ChatRequest request_defaults() const { return defaults_; }
-  // Renders the prompt for a request (for debugging / token counting). Image and video parts become a short note
-  // (no vision yet), and a system message after the first message becomes a system turn in place (the Qwen3.5+
-  // templates accept one only at the start).
+  // Renders the prompt for a request (for debugging / token counting). With an image encoder, image parts render as
+  // the model's image placeholder (one token per image: chat() expands it to the image's rows); without one, image and
+  // video parts become a short note. A system message after the first message becomes a system turn in place (the
+  // Qwen3.5+ templates accept one only at the start).
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
-  // The prompt's length in tokens, as chat() would prefill it. Does not wait for a running request.
+  // The prompt's length in tokens, as chat() would prefill it (images: their rows; they are fetched and decoded for
+  // their size, and a bad one throws vision::Error). Does not wait for a running request.
   int count_tokens(const ChatRequest& r) const;
   // Runs one request. `on_delta` returns false to cancel. Serialized across threads. `on_prompt`, if given, is
   // called once the prompt is tokenized and matched against the slot's cache, before the prefill, with
@@ -177,7 +189,9 @@ class Engine {
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
     std::unique_ptr<LiliSeq> lseq;    // drafter context (LiLiCorr only)
     std::vector<std::unique_ptr<LiliSeq>> lckpts;   // LiLiCorr: the drafter context as it was at ckpts[i]
-    std::vector<int> tokens;             // tokens whose effect is in the live state
+    std::vector<int> tokens;             // tokens whose effect is in the live state (image rows: their keys)
+    std::vector<vision::ImageSpan> img_spans;  // the images among them
+    std::vector<vision::Digest> img_digests;
     std::vector<TurnCheckpoint> ckpts;   // recurrent-state snapshots
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
@@ -185,8 +199,15 @@ class Engine {
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
   };
-  // `arrival`: the request's number (requests_ when it arrived)
-  Slot& pick_slot(const std::vector<int>& prompt, uint64_t arrival);
+  // `arrival`: the request's number (requests_ when it arrived); mm: the prompt's images (null for text), when
+  // `prompt` holds its prefix-reuse keys
+  Slot& pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr);
+  // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
+  // reusable prefix: the common prefix, cut before any image that is not the same image in both
+  static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
+  // Frees memory until `bytes` more fit the budget: other slots' KV caches (least recently used first), then the
+  // Neural Engine split. False if that is not enough.
+  bool make_room(Slot& keep, size_t bytes);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
   // slots (least recently used first: their conversations are prefilled again when they come back).
   // Nothing using the slots may be in flight. False if even that leaves too little memory.
@@ -203,6 +224,7 @@ class Engine {
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
   std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
+  std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;
@@ -214,6 +236,7 @@ class Engine {
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)
   int context_fit_ = 0;  // see context_fit()
+  size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
 };

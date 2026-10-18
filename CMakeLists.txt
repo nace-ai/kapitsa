@@ -4,8 +4,10 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
 set(KAPITSA_VERSION "0.1.0")
-execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
-                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
+  execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
+                  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -46,7 +48,7 @@ list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
-  "-framework IOKit")
+  "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics")
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
