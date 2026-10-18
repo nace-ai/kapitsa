@@ -53,11 +53,12 @@ run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16
 | **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | LiLiCorr |
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid Mamba-2 MoE, 12B active; 96 GB+ Macs</sub> | **NVIDIA NVFP4 · 76.4 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | LiLiCorr |
+| **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid Mamba-2 MoE, 3B active; text only</sub> | **NVIDIA NVFP4 · 22.9 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | DSpark |
 
 bf16 is full precision; pick another precision with `--model 35b:6bit`, `--model 27b:bf16` and so on.
 
-Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL NVIDIA's own `nvfp4` one. Every model above reads
-[images](docs/usage.md#images). Other Qwen3.5-family models load from a Hugging Face repo, a
+Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL and Lightning NVIDIA's own `nvfp4` ones. Every model above
+except Lightning reads [images](docs/usage.md#images). Other Qwen3.5-family models load from a Hugging Face repo, a
 folder or a GGUF file ([other models](docs/usage.md#other-models)). Model weights keep their own licenses.
 
 ```bash
@@ -104,7 +105,8 @@ day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B 
 Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B oMLX
 runs its own MTP path, its fastest setup there; mlx-serve was not run on it
 ([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
-Kapitsa refuses it before downloading).
+Kapitsa refuses it before downloading). Nemotron 3.5 Lightning fits it (18.2 GB of weights) but has not been measured
+on it yet; its numbers are from the M5 Max below.
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB</summary>
@@ -137,8 +139,19 @@ A follow-up is the time to the first token of an answer in a conversation that a
 | llama.cpp + MTP (Q4_0) | 66 tok/s |
 | **Kapitsa** | **85 tok/s** |
 
+| Engine | Nemotron 3.5 Lightning 30B-A3B · NVIDIA NVFP4 |
+| --- | ---: |
+| mlx-vlm + DSpark | 137 tok/s |
+| mlx-lm (MLX 4-bit) | 139 tok/s |
+| llama.cpp + MTP (Q4_0) | 159 tok/s |
+| oMLX + MTP (MLX 4-bit) | 190 tok/s |
+| **Kapitsa** | **239 tok/s** |
+
 Super-VL is NVIDIA's NVFP4 checkpoint on Kapitsa and mlx-vlm; oMLX and mlx-lm cannot load it and run the text-only MLX
-4-bit conversion, llama.cpp ggml-org's Q4_0 GGUF. Other engines on this Mac for Qwen: coming. Nemotron 3.5 Bolt here:
+4-bit conversion, llama.cpp ggml-org's Q4_0 GGUF. Lightning likewise: NVIDIA's NVFP4 checkpoint with its DSpark drafter
+on Kapitsa and mlx-vlm, MLX 4-bit conversions on oMLX and mlx-lm, ggml-org's Q4_0 GGUF on llama.cpp; Kapitsa writes
+fastest and reads prompts slowest there (1,900 tok/s at 4K against oMLX's 3,600,
+[details](docs/benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)). Other engines on this Mac for Qwen: coming. Nemotron 3.5 Bolt here:
 not measured yet.
 
 <details>
@@ -153,6 +166,8 @@ not measured yet.
 | --- | ---: | --- |
 | Nemotron 3.5 Super-VL, follow-up 4K / 16K | 0.22 / 0.26 s | llama.cpp, 0.19 / 0.20 s |
 | Nemotron 3.5 Super-VL, peak memory | 70.4 GB | oMLX (MLX 4-bit), 74.8 GB |
+| Nemotron 3.5 Lightning, follow-up 4K / 16K | 0.07 / 0.09 s | llama.cpp, 0.07 / 0.08 s |
+| Nemotron 3.5 Lightning, peak memory | 18.6 GB | oMLX (MLX 4-bit), 20.9 GB |
 
 </details>
 

@@ -1,0 +1,1811 @@
+{
+ "schema": 2,
+ "label": "lightning-omlx",
+ "model": "lightning-mlx-4bit",
+ "base_url": "http://127.0.0.1:8275/v1",
+ "when": "2026-10-18 09:13:34",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8275/v1",
+  "model": "lightning-mlx-4bit",
+  "label": "lightning-omlx",
+  "pid": 80759,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4184,16000:16517",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "",
+  "out": "<run-root>/results/lightning-omlx-20261018-091126.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "80e4608cf90ae26f5578399dc0a8fa998beb9141",
+  "dirty": false
+ },
+ "phases": {
+  "decode": [
+   1792340015.008,
+   1792340031.318
+  ],
+  "decode_greedy": [
+   1792340031.404,
+   1792340047.495
+  ],
+  "prefill_4000": [
+   1792340047.584,
+   1792340053.121
+  ],
+  "prefill_16000": [
+   1792340053.206,
+   1792340062.538
+  ],
+  "tools": [
+   1792340062.628,
+   1792340066.753
+  ]
+ },
+ "memory": {
+  "decode": {
+   "pids": [
+    {
+     "pid": 80759,
+     "name": "Python",
+     "phys_footprint": 18426476272,
+     "phys_footprint_peak": 22248225024,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 5980160,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 17572.9,
+   "phys_footprint_peak_mb": 21217.6,
+   "mapped_file_clean_mb": 5.7,
+   "swap_used_mb": 16481.12,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  },
+  "decode_greedy": {
+   "pids": [
+    {
+     "pid": 80759,
+     "name": "Python",
+     "phys_footprint": 18427115248,
+     "phys_footprint_peak": 22248225024,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 5996544,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 17573.5,
+   "phys_footprint_peak_mb": 21217.6,
+   "mapped_file_clean_mb": 5.7,
+   "swap_used_mb": 16481.12,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  },
+  "prefill_4000": {
+   "pids": [
+    {
+     "pid": 80759,
+     "name": "Python",
+     "phys_footprint": 18513819400,
+     "phys_footprint_peak": 22343252656,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 6078464,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 17656.2,
+   "phys_footprint_peak_mb": 21308.2,
+   "mapped_file_clean_mb": 5.8,
+   "swap_used_mb": 16481.12,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  },
+  "prefill_16000": {
+   "pids": [
+    {
+     "pid": 80759,
+     "name": "Python",
+     "phys_footprint": 18781042632,
+     "phys_footprint_peak": 22454631136,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 6176768,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 17911.0,
+   "phys_footprint_peak_mb": 21414.4,
+   "mapped_file_clean_mb": 5.9,
+   "swap_used_mb": 16481.12,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  },
+  "tools": {
+   "pids": [
+    {
+     "pid": 80759,
+     "name": "Python",
+     "phys_footprint": 18543163240,
+     "phys_footprint_peak": 22454631136,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 6176768,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 17684.1,
+   "phys_footprint_peak_mb": 21414.4,
+   "mapped_file_clean_mb": 5.9,
+   "swap_used_mb": 16481.12,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 186.2,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 16481.12,
+  "swapouts": 62463030,
+  "swapins": 52553008,
+  "pageouts": 592849,
+  "memorystatus_level": 79
+ },
+ "decode": [
+  {
+   "greedy": false,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.1456276250537485,
+   "decode_tps": 164.00736520955832,
+   "decode_tps_e2e": 163.78475036440787,
+   "e2e_wall_tps": 156.77270924086443,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 483.2,
+    "window_s": 2.946
+   },
+   "timings": null,
+   "distinct4": 0.9137,
+   "text": "# Complete Python Module with LRU Cache, TTL Expiry, Thread Safety, and Test Suite\n\n## lru_cache_ttl.py\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry, Thread Safety, and Comprehensive Test Suite\n\nThis module provides:\n1. LRUCache class with Time-To-Live (TTL) expiry support\n2. Thread-safe wrapper using RLock\n3. Complete pytest test suite covering all functionality\n4. Edge cases, performance considerations, and real-world usage patterns\n\nFeatures:\n- LRU eviction policy with configurable capacity\n- TTL-based automatic expiry of entries\n- Thread-safe operations with reentrant lock\n- Hit/miss statistics tracking\n- Callable cache invalidation\n- Serialization-safe design\n- Comprehensive test coverage\n\"\"\"\n\nimport threading\nimport time\nimport sys\nimport os\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Optional, Union, Dict, List, Tuple, Set, FrozenSet\n\n\nclass LRUCache:\n    \"\"\"\n    Least Recently Used (LRU) Cache with Time-To-Live (TTL) Expiry.\n\n    This class implements an LRU cache that supports:\n    - Fixed capacity with LRU eviction\n    - Time-based entry expiry\n    - Thread-safe operations\n    - Hit/miss statistics\n    - Optional automatic cleanup\n\n    The cache uses Python's OrderedDict to maintain insertion order\n    and efficiently move items to the end when accessed.\n\n    Attributes:\n        capacity (int): Maximum number of items in the cache\n        ttl (Optional[float]): Time-to-live in seconds for entries\n        _cache (OrderedDict): Internal storage of cache entries\n        _lock (RLock): Thread safety lock\n        _hits (int): Number of cache hits\n        _misses (int): Number of cache misses\n        _evictions (int): Number of items evicted due to capacity\n        _expired (int): Number of items expired due to TTL\n        _creation_time (float): Timestamp of cache creation\n    \"\"\"\n\n    def __init__(self, capacity: int = 128, ttl: Optional[float] = None):\n        \"\"\"\n        Initialize the LRU cache.\n\n        Args:\n            capacity: Maximum number of items to store. Defaults to 128.\n            ttl: Time-to-live in seconds for cache entries.\n",
+   "reasoning": "",
+   "events_t_ms": [
+    145.63,
+    256.24,
+    367.39,
+    474.67,
+    582.3,
+    690.79,
+    798.35,
+    906.51,
+    1018.02,
+    1125.68,
+    1235.22,
+    1345.39,
+    1452.56,
+    1561.77,
+    1669.28,
+    1778.15,
+    1887.87,
+    1998.75,
+    2111.13,
+    2219.85,
+    2330.49,
+    2441.61,
+    2551.53,
+    2661.13,
+    2770.58,
+    2879.46,
+    2987.31,
+    3094.34,
+    3202.26,
+    3265.58
+   ],
+   "events_chars": [
+    1,
+    75,
+    39,
+    60,
+    83,
+    63,
+    78,
+    96,
+    98,
+    72,
+    97,
+    83,
+    60,
+    64,
+    56,
+    77,
+    74,
+    100,
+    94,
+    76,
+    84,
+    66,
+    72,
+    67,
+    68,
+    81,
+    45,
+    98,
+    60,
+    44
+   ]
+  },
+  {
+   "greedy": false,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13552545802667737,
+   "decode_tps": 164.74267047447293,
+   "decode_tps_e2e": 164.06346128630528,
+   "e2e_wall_tps": 157.51871314839207,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 486.4,
+    "window_s": 2.9523
+   },
+   "timings": null,
+   "distinct4": 0.9132,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nThis module implements a complete LRU (Least Recently Used) cache with Time-To-Live (TTL) expiry, thread safety, and comprehensive pytest tests. The implementation includes:\n\n- A core `LRUCache` class with TTL expiry\n- A thread-safe wrapper using `threading.RLock`\n- Full pytest test suite covering all functionality\n- Edge cases, performance considerations, and proper resource management\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides a complete LRU (Least Recently Used) cache implementation\nwith Time-To-Live (TTL) expiry, thread safety, and comprehensive testing.\n\nFeatures:\n- LRU eviction policy based on access recency\n- TTL expiry for cached items\n- Thread-safe operations with reentrant locks\n- Comprehensive pytest test suite\n- Performance optimizations with OrderedDict\n- Proper resource management and error handling\n\nAuthor: Automated Code Generator\nVersion: 1.0.0\n\"\"\"\n\nimport threading\nimport time\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Dict, Optional, Tuple, Union\n\n\nclass LRUCache:\n    \"\"\"\n    A thread-safe LRU (Least Recently Used) cache with TTL (Time-To-Live) expiry.\n\n    This cache implements the classic LRU eviction policy where the least\n    recently accessed items are evicted first when the cache reaches its\n    capacity limit. Additionally, each cached item can have an optional\n    TTL (Time-To-Live) after which it becomes expired and is automatically\n    removed upon access.\n\n    The implementation uses Python's OrderedDict for O(1) operations\n    including insertion, access, and deletion.\n\n    Attributes:\n        capacity (int): Maximum number of items the cache can hold.\n        ttl (Optional[float]): Default Time-To-Live in seconds for all items.\n        _cache (OrderedDict): Internal ordered dictionary storing cache entries.\n        _lock (threading.RLock): Reentrant lock for thread safety.\n        _access_counter (int): Internal counter for access ordering.\n\n    Example:\n        >>> from lru_cache import LRUCache\n        >>> cache = LRUCache(capacity=3, ttl=60)\n        >>> cache.put(\"key1\", \"value1\")\n        >>> value = cache",
+   "reasoning": "",
+   "events_t_ms": [
+    135.53,
+    246.91,
+    355.74,
+    462.88,
+    571.9,
+    680.83,
+    790.87,
+    900.56,
+    1010.78,
+    1119.98,
+    1230.01,
+    1338.83,
+    1446.97,
+    1556.32,
+    1666.49,
+    1774.45,
+    1883.37,
+    1990.39,
+    2098.62,
+    2207.01,
+    2317.67,
+    2427.44,
+    2536.02,
+    2645.66,
+    2758.45,
+    2868.98,
+    2977.88,
+    3089.47,
+    3199.18,
+    3250.17
+   ],
+   "events_chars": [
+    1,
+    76,
+    63,
+    91,
+    68,
+    83,
+    94,
+    72,
+    74,
+    73,
+    72,
+    98,
+    97,
+    60,
+    85,
+    63,
+    60,
+    95,
+    85,
+    61,
+    106,
+    78,
+    94,
+    68,
+    100,
+    69,
+    90,
+    64,
+    43,
+    34
+   ]
+  },
+  {
+   "greedy": false,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13689549989067018,
+   "decode_tps": 166.2397356891565,
+   "decode_tps_e2e": 164.66082068662197,
+   "e2e_wall_tps": 158.00084493474793,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 470.7,
+    "window_s": 2.8317
+   },
+   "timings": null,
+   "distinct4": 0.9564,
+   "text": "# lru_ttl_cache.py\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n\nThis module provides:\n1. An LRU cache implementation with Time-To-Live (TTL) expiry for entries.\n2. A thread-safe wrapper using reentrant locks.\n3. A comprehensive pytest test suite.\n\nThe cache follows the Least Recently Used eviction policy. When the cache\nreaches its capacity, the least recently accessed item is evicted. Each entry\nhas an associated TTL; if the entry is accessed after its TTL has expired,\nit is considered stale and is removed/updated.\n\nFeatures:\n- Configurable cache capacity.\n- Configurable per-entry TTL (default TTL for all entries).\n- Thread-safety via RLock (reentrant lock).\n- Detailed logging of cache operations.\n- Full pytest test coverage.\n\nAuthor: Assistant\nVersion: 1.0.0\n\"\"\"\n\nimport threading\nimport time\nimport heapq\nfrom collections import OrderedDict\nfrom typing import Any, Optional, Callable, Dict, List, Tuple, Set\n\n\nclass _Node:\n    \"\"\"Doubly linked list node for LRU tracking.\"\"\"\n\n    __slots__ = ('key', 'value', 'ttl_expiry', 'prev', 'next')\n\n    def __init__(self, key: Any, value: Any, ttl_expiry: Optional[float]):\n        self.key = key\n        self.value = value\n        self.ttl_expiry = ttl_expiry  # Absolute time when entry expires\n        self.prev: Optional[_Node] = None\n        self.next: Optional[_Node] = None\n\n\nclass LRUCacheWithTTL:\n    \"\"\"\n    An LRU cache with Time-To-Live (TTL) expiry.\n\n    This cache maintains a fixed capacity. When the cache is full and a new\n    entry needs to be added, the least recently used entry is evicted. Each\n    entry can have an explicit TTL; if the current time exceeds the entry's\n    TTL expiry time, the entry is considered stale.\n\n    The implementation uses a hash map for O(1) lookups and a doubly linked\n    list for O(1) LRU tracking (moving to front on access, evicting from tail).\n\n    Attributes:\n        capacity (int): Maximum number of entries in the cache.\n        default_tt",
+   "reasoning": "",
+   "events_t_ms": [
+    136.9,
+    249.31,
+    357.18,
+    465.64,
+    573.11,
+    680.65,
+    787.73,
+    896.53,
+    1004.91,
+    1114.65,
+    1226.6,
+    1335.84,
+    1445.82,
+    1555.72,
+    1666.83,
+    1775.99,
+    1885.19,
+    1993.08,
+    2102.62,
+    2211.38,
+    2319.35,
+    2428.24,
+    2535.64,
+    2642.79,
+    2753.78,
+    2863.79,
+    2971.23,
+    3079.65,
+    3188.89,
+    3240.24
+   ],
+   "events_chars": [
+    1,
+    52,
+    75,
+    56,
+    71,
+    95,
+    81,
+    72,
+    82,
+    80,
+    68,
+    78,
+    74,
+    74,
+    68,
+    50,
+    51,
+    62,
+    64,
+    77,
+    68,
+    51,
+    81,
+    74,
+    72,
+    73,
+    69,
+    58,
+    88,
+    33
+   ]
+  },
+  {
+   "greedy": false,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13562824996188283,
+   "decode_tps": 165.31113732048382,
+   "decode_tps_e2e": 163.50743829369682,
+   "e2e_wall_tps": 157.00193361358052,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 489.2,
+    "window_s": 2.9594
+   },
+   "timings": null,
+   "distinct4": 0.9793,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nHere's a complete Python module implementing an LRU cache with TTL expiry, thread safety, and comprehensive test suite.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry - Complete Module\n\nThis module provides:\n1. LRUCache class with Time-To-Live expiry\n2. Thread-safe wrapper with proper locking\n3. Comprehensive pytest test suite\n4. Cache statistics and monitoring\n\"\"\"\n\nimport threading\nimport time\nimport heapq\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Dict, Optional, Tuple, List\n\n\nclass LRUCache:\n    \"\"\"\n    LRU Cache with Time-To-Live (TTL) Expiry.\n    \n    Features:\n    - Least Recently Used eviction policy\n    - Configurable TTL for each entry\n    - Thread-safe operations\n    - Automatic expiry cleanup\n    - Cache statistics tracking\n    - Size-bounded memory usage\n    \"\"\"\n\n    def __init__(\n        self,\n        max_size: int = 128,\n        default_ttl: Optional[float] = None,\n        use_threading: bool = True,\n    ):\n        \"\"\"\n        Initialize the LRU cache.\n        \n        Args:\n            max_size: Maximum number of entries in the cache\n            default_ttl: Default TTL in seconds for entries without explicit TTL\n            use_threading: Whether to use thread locking (default True)\n        \"\"\"\n        if max_size <= 0:\n            raise ValueError(\"max_size must be a positive integer\")\n        \n        self._max_size = max_size\n        self._default_ttl = default_ttl\n        self._use_threading = use_threading\n        \n        # OrderedDict maintains insertion/access order for LRU\n        self._cache: OrderedDict[str, Tuple[Any, float]] = OrderedDict()\n        \n        # Track access timestamps for LRU ordering\n        self._access_timestamps: Dict[str, float] = {}\n        \n        # TTL tracking - heap for efficient expiry cleanup\n        self._expiry_heap: List[Tuple[float, str]] = []\n        \n        # Lock for thread safety\n        self._lock = threading.RLock() if use_threading else threading.Lock()\n        \n        # Statistics tracking\n        self._stats = {\n            \"hits\": ",
+   "reasoning": "",
+   "events_t_ms": [
+    135.63,
+    250.0,
+    360.42,
+    471.46,
+    577.75,
+    689.33,
+    798.86,
+    907.0,
+    1015.04,
+    1125.2,
+    1233.82,
+    1341.63,
+    1451.2,
+    1558.88,
+    1668.4,
+    1777.08,
+    1885.82,
+    1996.07,
+    2104.24,
+    2214.12,
+    2324.43,
+    2434.68,
+    2544.32,
+    2656.26,
+    2767.15,
+    2878.87,
+    2989.5,
+    3099.2,
+    3209.38,
+    3260.87
+   ],
+   "events_chars": [
+    1,
+    69,
+    95,
+    62,
+    68,
+    70,
+    97,
+    83,
+    63,
+    48,
+    76,
+    81,
+    80,
+    58,
+    65,
+    83,
+    86,
+    84,
+    82,
+    91,
+    60,
+    72,
+    82,
+    79,
+    67,
+    86,
+    53,
+    78,
+    91,
+    25
+   ]
+  },
+  {
+   "greedy": false,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.1377060420345515,
+   "decode_tps": 161.82731263675018,
+   "decode_tps_e2e": 162.11707772454525,
+   "e2e_wall_tps": 155.62343141839438,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 477.3,
+    "window_s": 2.9494
+   },
+   "timings": null,
+   "distinct4": 0.9424,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nThis module implements a complete LRU cache with Time-To-Live expiry, thread safety, and comprehensive test coverage.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with Time-To-Live (TTL) expiry\n2. Thread-safe wrapper using reentrant locks\n3. Comprehensive pytest test suite\n4. Cache statistics and monitoring\n\nFeatures:\n- LRU eviction policy based on access recency\n- TTL-based automatic expiry of entries\n- Thread safety with RLock for concurrent access\n- Size-bounded cache with configurable capacity\n- Hit/miss statistics tracking\n- Safe iteration and introspection\n\"\"\"\n\nimport threading\nimport time\nimport heapq\nfrom collections import OrderedDict\nfrom typing import Any, Optional, Callable, Dict, List, Tuple, Set\n\n\nclass _Node:\n    \"\"\"Internal doubly-linked list node for LRU tracking.\"\"\"\n    \n    __slots__ = ('key', 'value', 'ttl_expiry', 'prev', 'next')\n    \n    def __init__(self, key: Any, value: Any, ttl_expiry: Optional[float]):\n        self.key = key\n        self.value = value\n        self.ttl_expiry = ttl_expiry  # Absolute expiry time (time.time() + ttl)\n        self.prev: Optional[_Node] = None\n        self.next: Optional[_Node] = None\n\n\nclass LRUCacheWithTTL:\n    \"\"\"\n    LRU Cache with Time-To-Live expiry support.\n    \n    This cache implements:\n    - Least Recently Used eviction policy\n    - Optional TTL expiry for each entry\n    - Thread-safe operations via RLock\n    - Size-bounded storage\n    - Hit/miss statistics\n    - Automatic cleanup of expired entries\n    \n    The cache uses a hybrid approach:\n    - OrderedDict for O(1) lookups and LRU ordering\n    - Min-heap for TTL expiry tracking\n    - Reentrant lock for thread safety\n    \"\"\"\n    \n    def __init__(self, capacity: int, default_ttl: Optional[float] = None, \n                 on_evict: Optional[Callable[[Any, Any], None]] = None):\n        \"\"\"\n        Initialize the LRU",
+   "reasoning": "",
+   "events_t_ms": [
+    137.71,
+    250.89,
+    362.39,
+    470.79,
+    579.65,
+    688.24,
+    797.03,
+    906.71,
+    1015.85,
+    1125.09,
+    1236.48,
+    1346.85,
+    1456.47,
+    1566.22,
+    1672.97,
+    1780.38,
+    1889.25,
+    1997.56,
+    2108.05,
+    2218.63,
+    2326.85,
+    2433.82,
+    2546.15,
+    2657.87,
+    2764.7,
+    2876.37,
+    2983.21,
+    3090.68,
+    3200.25,
+    3289.75
+   ],
+   "events_chars": [
+    1,
+    74,
+    80,
+    68,
+    68,
+    69,
+    81,
+    72,
+    87,
+    94,
+    82,
+    75,
+    73,
+    54,
+    48,
+    51,
+    75,
+    60,
+    66,
+    60,
+    75,
+    69,
+    73,
+    82,
+    64,
+    65,
+    60,
+    58,
+    61,
+    61
+   ]
+  }
+ ],
+ "decode_summary": {
+  "runs": 5,
+  "valid_runs": 5,
+  "median_tps": 164.74,
+  "min_tps": 161.83,
+  "max_tps": 166.24,
+  "median_tps_e2e": 163.78,
+  "invalid": [],
+  "flags": []
+ },
+ "decode_greedy": [
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13042183313518763,
+   "decode_tps": 166.768682284571,
+   "decode_tps_e2e": 166.4293333915589,
+   "e2e_wall_tps": 159.94577047865943,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 473.2,
+    "window_s": 2.8374
+   },
+   "timings": null,
+   "distinct4": 0.9,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nThis module implements a complete LRU cache with time-to-live expiry, thread safety, and comprehensive test coverage.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with time-to-live (TTL) expiry\n2. Thread-safe wrapper using reentrant locks\n3. Comprehensive pytest test suite\n4. Performance monitoring and statistics\n\nFeatures:\n- LRU eviction policy with configurable capacity\n- TTL-based expiry for cached entries\n- Thread-safe operations with RLock\n- Hit/miss/eviction statistics\n- Size-aware eviction\n- Context manager support\n- Serialization/deserialization support\n- Weak reference optional cleanup\n\"\"\"\n\nimport threading\nimport time\nimport weakref\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Optional, TypeVar, Generic, Dict, List, Tuple\nimport functools\n\nT = TypeVar('T')\nK = TypeVar('K')\nV = TypeVar('V')\n\n\nclass LRUCacheNode(Generic[K, V]):\n    \"\"\"Doubly-linked list node for LRU cache internals.\"\"\"\n    \n    __slots__ = ('key', 'value', 'ttl', 'expire_time', 'prev', 'next', 'refcount')\n    \n    def __init__(self, key: K, value: V, ttl: Optional[float] = None):\n        self.key = key\n        self.value = value\n        self.ttl = ttl\n        self.expire_time = time.monotonic() + ttl if ttl else float('inf')\n        self.prev: Optional[LRUCacheNode] = None\n        self.next: Optional[LRUCacheNode] = None\n        self.refcount = 1\n    \n    def is_expired(self) -> bool:\n        \"\"\"Check if this node has expired based on TTL.\"\"\"\n        return time.monotonic() > self.expire_time\n    \n    def refresh_ttl(self, ttl: float) -> None:\n        \"\"\"Refresh the TTL for this node.\"\"\"\n        self.ttl = ttl\n        self.expire_time = time.monotonic() + ttl\n\n\nclass LRUDoublyLinkedList(Generic[K, V]):\n    \"\"\"Doubly-linked list",
+   "reasoning": "",
+   "events_t_ms": [
+    130.42,
+    241.21,
+    351.47,
+    458.61,
+    565.55,
+    675.51,
+    787.13,
+    895.03,
+    1005.31,
+    1114.46,
+    1223.42,
+    1335.1,
+    1443.39,
+    1552.88,
+    1660.7,
+    1771.95,
+    1879.79,
+    1988.25,
+    2099.72,
+    2206.57,
+    2313.99,
+    2423.51,
+    2531.23,
+    2643.57,
+    2752.04,
+    2860.57,
+    2967.42,
+    3078.65,
+    3186.56,
+    3200.79
+   ],
+   "events_chars": [
+    1,
+    76,
+    92,
+    58,
+    84,
+    65,
+    95,
+    86,
+    67,
+    72,
+    95,
+    88,
+    61,
+    47,
+    60,
+    59,
+    47,
+    53,
+    64,
+    67,
+    51,
+    67,
+    57,
+    72,
+    71,
+    51,
+    72,
+    55,
+    55,
+    12
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13522995891980827,
+   "decode_tps": 166.03653103944865,
+   "decode_tps_e2e": 166.6631809187535,
+   "e2e_wall_tps": 159.92032094577263,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 486.2,
+    "window_s": 2.9284
+   },
+   "timings": null,
+   "distinct4": 0.9557,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nThis module implements a complete LRU cache with time-to-live expiry, thread safety, and comprehensive testing.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with time-to-live (TTL) expiry\n2. Thread-safe wrapper using reentrant locks\n3. Comprehensive pytest test suite\n4. Cache statistics and monitoring\n\nFeatures:\n- LRU eviction policy with configurable capacity\n- TTL-based expiry for cached items\n- Thread-safe operations with RLock\n- Cache hit/miss/eviction statistics\n- Callable cache decorator\n- Serialization support\n- Performance monitoring\n\"\"\"\n\nimport threading\nimport time\nimport sys\nimport collections\nimport statistics\nfrom typing import (\n    Any, \n    Callable, \n    Dict, \n    Generic, \n    Hashable, \n    List, \n    Optional, \n    Tuple, \n    TypeVar, \n    Union\n)\nfrom dataclasses import dataclass, field\nfrom contextlib import contextmanager\n\n\n# Type variables for generic cache\nK = TypeVar('K', bound=Hashable)  # Key type must be hashable\nV = TypeVar('V')  # Value type\n\n\n@dataclass\nclass CacheItem(Generic[K, V]):\n    \"\"\"\n    Represents a single item in the cache with TTL tracking.\n    \n    Attributes:\n        key: The cache key\n        value: The cached value\n        expiry: Absolute time when item expires (time.time() + ttl)\n        ttl: Time-to-live in seconds\n        access_count: Number of times item has been accessed\n        last_accessed: Timestamp of last access\n    \"\"\"\n    key: K\n    value: V\n    expiry: float = field(init=False)\n    ttl: float\n    access_count: int = 0\n    last_accessed: float = field(default_factory=time.time)\n    \n    def __post_init__(self) -> None:\n        \"\"\"Initialize expiry time based on current time and TTL.\"\"\"\n        self.expiry = time.time() + self.ttl\n    \n    @property\n    def is_expired(self) -> bool:\n        \"\"\"Check if the item has expired based on current time.\"\"\"\n        return time",
+   "reasoning": "",
+   "events_t_ms": [
+    135.23,
+    246.53,
+    354.77,
+    463.39,
+    570.47,
+    677.65,
+    787.16,
+    895.15,
+    1002.21,
+    1110.24,
+    1220.24,
+    1328.41,
+    1439.15,
+    1546.03,
+    1653.88,
+    1760.88,
+    1866.92,
+    1978.88,
+    2090.15,
+    2196.81,
+    2303.72,
+    2412.28,
+    2519.63,
+    2628.86,
+    2737.35,
+    2848.98,
+    2956.26,
+    3065.65,
+    3174.93,
+    3201.29
+   ],
+   "events_chars": [
+    1,
+    76,
+    89,
+    58,
+    86,
+    60,
+    88,
+    84,
+    73,
+    88,
+    92,
+    47,
+    44,
+    48,
+    87,
+    54,
+    57,
+    57,
+    86,
+    81,
+    61,
+    88,
+    65,
+    56,
+    66,
+    62,
+    89,
+    57,
+    82,
+    24
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.13714679097756743,
+   "decode_tps": 164.8114713583305,
+   "decode_tps_e2e": 164.20265828181334,
+   "e2e_wall_tps": 157.5670801824446,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 484.7,
+    "window_s": 2.9407
+   },
+   "timings": null,
+   "distinct4": 0.69,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nThis module implements a complete LRU (Least Recently Used) cache with Time-To-Live (TTL) expiry, thread safety, and comprehensive test coverage.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with Time-To-Live (TTL) expiry\n2. Thread-safe wrapper using reentrant locks\n3. Comprehensive pytest test suite\n4. Performance monitoring and statistics\n\nFeatures:\n- Configurable cache size with LRU eviction\n- TTL-based expiry for cached items\n- Thread-safe operations with RLock\n- Hit/miss/eviction statistics\n- Cache warm-up and statistics reset\n- Serialization/deserialization support\n- Context manager support\n- Detailed logging and monitoring\n\"\"\"\n\nimport threading\nimport time\nimport sys\nimport json\nimport os\nimport tempfile\nimport hashlib\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Dict, List, Optional, Tuple, Union, TypeVar, Generic\nfrom dataclasses import dataclass, field\nfrom enum import Enum\n\n\n# ============================================================================\n# Type Definitions and Enums\n# ============================================================================\n\nT = TypeVar('T')\nK = TypeVar('K')\nV = TypeVar('V')\n\n\nclass CacheStatus(Enum):\n    \"\"\"Status enumeration for cache operations.\"\"\"\n    HIT = \"hit\"\n    MISS = \"miss\"\n    EXPIRED = \"expired\"\n    EVICTED = \"evicted\"\n\n\n@dataclass\nclass CacheStats:\n    \"\"\"Data class to track cache statistics.\"\"\"\n    hits: int = 0\n    misses: int = 0\n    evictions: int = 0\n    expirations: int = 0\n    total_operations: int = 0\n    hit_ratio: float = 0.0\n    avg_access_time: float = 0.0\n    \n    def update(self, access_time: float = 0.0, status: CacheStatus = CacheStatus.HIT) -> None:\n        \"\"\"Update statistics after an access.\"\"\"\n        self.total_operations += 1\n        if status == CacheStatus.HIT:\n            self.hits += 1\n        elif status == CacheStatus.MISS:\n            self.misses += 1\n",
+   "reasoning": "",
+   "events_t_ms": [
+    137.15,
+    246.26,
+    352.71,
+    460.19,
+    568.7,
+    678.31,
+    785.07,
+    892.65,
+    1004.39,
+    1112.83,
+    1222.45,
+    1329.96,
+    1438.38,
+    1547.07,
+    1656.36,
+    1763.46,
+    1871.18,
+    1980.02,
+    2091.37,
+    2203.22,
+    2313.34,
+    2419.9,
+    2530.98,
+    2646.26,
+    2756.62,
+    2866.61,
+    2973.54,
+    3080.04,
+    3186.93,
+    3249.15
+   ],
+   "events_chars": [
+    1,
+    74,
+    63,
+    78,
+    66,
+    72,
+    59,
+    105,
+    61,
+    73,
+    87,
+    88,
+    84,
+    67,
+    66,
+    131,
+    106,
+    56,
+    76,
+    47,
+    64,
+    59,
+    46,
+    47,
+    45,
+    52,
+    83,
+    82,
+    69,
+    34
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.1357805000152439,
+   "decode_tps": 167.60869591514617,
+   "decode_tps_e2e": 165.73555959426068,
+   "e2e_wall_tps": 159.03108241364788,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 460.2,
+    "window_s": 2.7459
+   },
+   "timings": null,
+   "distinct4": 0.8668,
+   "text": "# lru_ttl_cache.py\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with Time-To-Live (TTL) expiry for entries.\n2. Thread-safe wrapper using reentrant locks.\n3. Comprehensive pytest test suite.\n\nAuthor: Assistant\nVersion: 1.0.0\n\"\"\"\n\nimport threading\nimport time\nimport heapq\nfrom collections import OrderedDict\nfrom typing import Any, Callable, Optional, TypeVar, Generic, Dict, List, Tuple\nimport pytest\n\n\nK = TypeVar('K')\nV = TypeVar('V')\n\n\nclass _Node(Generic[K, V]):\n    \"\"\"Doubly linked list node for LRU cache.\"\"\"\n    __slots__ = ('key', 'value', 'prev', 'next')\n\n    def __init__(self, key: K, value: V) -> None:\n        self.key = key\n        self.value = value\n        self.prev: Optional[_Node] = None\n        self.next: Optional[_Node] = None\n\n\nclass _DoublyLinkedList(Generic[K, V]):\n    \"\"\"Doubly linked list maintaining LRU order.\"\"\"\n\n    def __init__(self) -> None:\n        self.head: Optional[_Node] = None  # most recently used\n        self.tail: Optional[_Node] = None  # least recently used\n        self.size = 0\n\n    def move_to_front(self, node: _Node) -> None:\n        \"\"\"Move existing node to the front (most recently used).\"\"\"\n        if self.head is None or node is self.head:\n            return\n        # Remove node from its current position\n        if node.prev:\n            node.prev.next = node.next\n        if node.next:\n            node.next.prev = node.prev\n        if self.tail is node:\n            self.tail = node.prev\n\n        # Insert at front\n        node.prev = None\n        node.next = self.head\n        if self.head:\n            self.head.prev = node\n        self.head = node\n        if self.tail is None:\n            self.tail = node\n        self.size += 1  # type: ignore[unreachable]\n\n    def remove_tail(self) -> Optional[_Node]:\n        \"\"\"Remove and return the least recently used node (tail).\"\"\"\n        if self.tail is None:\n            return None\n        node",
+   "reasoning": "",
+   "events_t_ms": [
+    135.78,
+    246.71,
+    356.8,
+    465.93,
+    576.77,
+    685.79,
+    797.43,
+    908.93,
+    1020.36,
+    1128.57,
+    1240.1,
+    1351.41,
+    1463.38,
+    1574.96,
+    1686.29,
+    1793.59,
+    1901.88,
+    2010.54,
+    2116.92,
+    2223.97,
+    2333.49,
+    2443.11,
+    2552.68,
+    2662.48,
+    2772.21,
+    2883.51,
+    2994.31,
+    3102.7,
+    3209.82,
+    3219.01
+   ],
+   "events_chars": [
+    1,
+    51,
+    72,
+    61,
+    83,
+    58,
+    94,
+    71,
+    51,
+    65,
+    53,
+    59,
+    74,
+    73,
+    73,
+    65,
+    69,
+    68,
+    71,
+    77,
+    100,
+    83,
+    71,
+    80,
+    81,
+    72,
+    57,
+    87,
+    73,
+    5
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 30,
+   "ttft_s": 0.14017787505872548,
+   "decode_tps": 166.60675677947194,
+   "decode_tps_e2e": 166.0544154837128,
+   "e2e_wall_tps": 159.11749252052059,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 30,
+    "rate_method": "chars",
+    "tokens_per_event": 17.067,
+    "window_tokens": 490.5,
+    "window_s": 2.9439
+   },
+   "timings": null,
+   "distinct4": 0.9545,
+   "text": "# LRU Cache with TTL, Thread Safety, and Test Suite\n\nHere's a complete Python module implementing an LRU cache with TTL expiry, thread safety, and comprehensive test suite.\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nLRU Cache with TTL Expiry and Thread Safety\n\nThis module provides:\n1. An LRU cache implementation with Time-To-Live (TTL) expiry\n2. Thread-safe wrapper using reentrant locks\n3. Comprehensive pytest test suite\n4. Performance monitoring and statistics\n\nFeatures:\n- LRU eviction policy with configurable capacity\n- TTL-based automatic expiry of entries\n- Thread-safe operations with RLock\n- Hit/miss/eviction statistics\n- Cache warm-up and statistics reset\n- Serialization/deserialization support\n- Context manager support\n- Detailed logging and monitoring\n\"\"\"\n\nimport threading\nimport time\nimport heapq\nimport json\nimport sys\nfrom collections import OrderedDict\nfrom typing import Any, Optional, Callable, Dict, List, Tuple, Union\n\n\nclass LRUCacheNode:\n    \"\"\"\n    Doubly-linked list node for LRU cache.\n    \n    Each node stores a key-value pair with TTL expiry tracking.\n    Nodes are linked in a doubly-linked list to maintain access order.\n    \"\"\"\n    \n    __slots__ = ('key', 'value', 'expiry', 'prev', 'next')\n    \n    def __init__(self, key: Any, value: Any, expiry: Optional[float] = None):\n        self.key = key\n        self.value = value\n        self.expiry = expiry  # None means no expiry, otherwise absolute timestamp\n        self.prev: Optional[LRUCacheNode] = None\n        self.next: Optional[LRUCacheNode] = None\n    \n    def is_expired(self) -> bool:\n        \"\"\"Check if the entry has expired based on TTL.\"\"\"\n        if self.expiry is None:\n            return False\n        return time.time() > self.expiry\n    \n    def __repr__(self) -> str:\n        return f\"LRUCacheNode(key={self.key!r}, value={self.value!r}, expired={self.is_expired()})\"\n\n\nclass LRUCache:\n    \"\"\"\n    LRU Cache with TTL Expiry.\n    \n    Implements a Least Recently Used cache with optional Time-To-Live expiry\n    for each entry. Uses an Ordered",
+   "reasoning": "",
+   "events_t_ms": [
+    140.18,
+    252.96,
+    361.19,
+    469.76,
+    578.16,
+    687.35,
+    795.91,
+    904.28,
+    1013.7,
+    1123.06,
+    1232.12,
+    1339.8,
+    1450.84,
+    1557.49,
+    1669.16,
+    1776.52,
+    1887.69,
+    1999.25,
+    2108.67,
+    2219.62,
+    2327.18,
+    2438.82,
+    2545.26,
+    2652.13,
+    2762.74,
+    2871.69,
+    2979.12,
+    3087.31,
+    3196.83,
+    3217.48
+   ],
+   "events_chars": [
+    1,
+    69,
+    95,
+    62,
+    81,
+    60,
+    92,
+    82,
+    68,
+    86,
+    97,
+    78,
+    76,
+    66,
+    78,
+    78,
+    47,
+    57,
+    70,
+    78,
+    76,
+    61,
+    74,
+    88,
+    58,
+    58,
+    56,
+    60,
+    77,
+    16
+   ]
+  }
+ ],
+ "decode_greedy_summary": {
+  "runs": 5,
+  "valid_runs": 5,
+  "median_tps": 166.61,
+  "min_tps": 164.81,
+  "max_tps": 167.61,
+  "median_tps_e2e": 166.05,
+  "invalid": [],
+  "flags": []
+ },
+ "prefill": [
+  {
+   "target": 4000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 4182,
+   "expected_prompt_tokens": 4184,
+   "ttft_s": 1.1596977920271456,
+   "prefill_tps": 3606.1118929008962,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The first file in the repository context is `modeling_granite_speech.py`, which defines the core model architecture for Granite Speech, including the encoder, projector, language model, and associated output classes for handling multimodal audio-text inputs and outputs.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [
+     {
+      "ttft_s": 0.15749958297237754,
+      "prompt_tokens": 4257,
+      "cached_tokens": 4176,
+      "finish": "stop",
+      "answer": "get_audio_features"
+     },
+     {
+      "ttft_s": 0.11289474996738136,
+      "prompt_tokens": 4287,
+      "cached_tokens": 4251,
+      "finish": "stop",
+      "answer": "GraniteSpeechCTCEncoder"
+     },
+     {
+      "ttft_s": 0.10737320804037154,
+      "prompt_tokens": 4313,
+      "cached_tokens": 4281,
+      "finish": "stop",
+      "answer": "The file imports `math`, `torch`, `torch.nn.functional`, `nn` from torch, `dataclasses`, and several modules from the transformers library including `initialization`, `cache_utils`, `generation`, `modeling_outputs`, `modeling_utils`, `processing_utils`, `utils`, `utils.generic`, `utils.output_capturing`, `auto`, and specific configuration and model classes related to Granite Speech."
+     }
+    ],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": 0.1129
+   },
+   "turn2_ttft_s": 0.1129,
+   "turn2_cached_tokens": 4176,
+   "turn2_prompt_tokens": 4257,
+   "turn1_finish": "stop"
+  },
+  {
+   "target": 16000,
+   "invalid": [],
+   "flags": [],
+   "prompt_tokens": 16519,
+   "expected_prompt_tokens": 16517,
+   "ttft_s": 4.39746274985373,
+   "prefill_tps": 3756.484350106083,
+   "cold_cached_tokens": 0,
+   "first_event_chars": 3,
+   "timings": null,
+   "finish": "stop",
+   "answer": "The first file in the repository context is about the Granite Speech model, which includes an audio encoder, projector, and language model without a language modeling head.",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [
+     {
+      "ttft_s": 0.17075479100458324,
+      "prompt_tokens": 16573,
+      "cached_tokens": 16513,
+      "finish": "stop",
+      "answer": "get_audio_features"
+     },
+     {
+      "ttft_s": 0.1323095839470625,
+      "prompt_tokens": 16603,
+      "cached_tokens": 16567,
+      "finish": "stop",
+      "answer": "class GraniteSpeechModel"
+     },
+     {
+      "ttft_s": 0.1390770000871271,
+      "prompt_tokens": 16628,
+      "cached_tokens": 16597,
+      "finish": "stop",
+      "answer": "The file imports `torch`, `torch.nn.functional as F`, `from torch import nn`, `from ... import initialization as init`, `from ...cache_utils import Cache`, `from ...generation import GenerationMixin`, `from ...modeling_outputs import BaseModelOutputWithPast, BaseModelOutputWithPooling, ModelOutput`, `from ...modeling_utils import PreTrainedModel`, `from ...processing_utils import Unpack`, `from ...utils import TransformersKwargs, auto_docstring, can_return_tuple, is_peft_available, logging, torch_compilable_check`, `from ...utils.generic import merge_with_config_defaults`, `from ...utils.output_capturing import capture_outputs`, `from ..auto import AutoModel`, and `from .configuration_granite_speech import GraniteSpeechConfig, GraniteSpeechEncoderConfig`."
+     }
+    ],
+    "invalid": [],
+    "flags": [],
+    "median_ttft_s": 0.1391
+   },
+   "turn2_ttft_s": 0.1391,
+   "turn2_cached_tokens": 16513,
+   "turn2_prompt_tokens": 16573,
+   "turn1_finish": "stop"
+  }
+ ],
+ "tools": [
+  {
+   "thinking": false,
+   "stream": {
+    "ok": true,
+    "tool_calls": [
+     {
+      "id": "call_a28ad10e",
+      "name": "read_file",
+      "arguments": "{\"path\": \"src/main.py\"}"
+     }
+    ],
+    "finish": "tool_calls",
+    "ttft_s": 0.1799649999011308,
+    "total_s": 0.34591674990952015,
+    "content_leak": false,
+    "reasoning_chars": 0,
+    "content_head": "\n\n"
+   },
+   "nonstream": {
+    "ok": true,
+    "tool_calls": [
+     {
+      "name": "read_file",
+      "arguments": "{\"path\": \"src/main.py\"}",
+      "id": "call_5cef26a5"
+     }
+    ],
+    "finish": "tool_calls",
+    "total_s": 0.34964799997396767
+   },
+   "round_trip": {
+    "ok": true,
+    "finish": "stop",
+    "content_head": "The entry point in `src/main.py` is the `if __name__ == '__main__':` block at the bottom of the file. Here's what it does:\n\n1. It checks if the script is being run directly (not imported as a module)\n",
+    "more_tool_calls": 0
+   }
+  },
+  {
+   "thinking": true,
+   "stream": {
+    "ok": true,
+    "tool_calls": [
+     {
+      "id": "call_ade16934",
+      "name": "read_file",
+      "arguments": "{\"path\": \"src/main.py\"}"
+     }
+    ],
+    "finish": "tool_calls",
+    "ttft_s": 0.18685829197056592,
+    "total_s": 0.4395623749587685,
+    "content_leak": false,
+    "reasoning_chars": 44,
+    "content_head": "\n\n"
+   },
+   "nonstream": {
+    "ok": true,
+    "tool_calls": [
+     {
+      "name": "read_file",
+      "arguments": "{\"path\": \"src/main.py\"}",
+      "id": "call_fe07b747"
+     }
+    ],
+    "finish": "tool_calls",
+    "total_s": 0.7667952910996974
+   },
+   "round_trip": {
+    "ok": true,
+    "finish": "stop",
+    "content_head": "The entry point in `src/main.py` is the block:\n\n```python\nif __name__ == '__main__':\n    sys.exit(main())\n```\n\nWhen the script is run directly (e.g., `python src/main.py`), Python sets `__name__` to `",
+    "more_tool_calls": 0
+   }
+  }
+ ],
+ "tools_pass": true,
+ "peak_rss_mb": 17684,
+ "peak_footprint_mb": 21322,
+ "invalid": [],
+ "flags": [
+  "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'prefill_16000'] (mean 3.36%, top ['com.apple.WebKit'])"
+ ],
+ "peak_memory_mb": 21414.4,
+ "mapped_file_clean_mb": 5.9,
+ "vm_end": {
+  "swap_used_mb": 16481.12,
+  "swapouts": 62463030,
+  "swapins": 52553165,
+  "pageouts": 592849,
+  "memorystatus_level": 79
+ },
+ "when_end": "2026-10-18 09:14:26",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 3.5,
+    "prompt_tokens": 2930,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.36,
+    "prompt_tokens": 465,
+    "completion_tokens": 26,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "contention": {
+  "overall": {
+   "samples": 25,
+   "mean_foreign_gpu_pct": 3.36,
+   "max_foreign_gpu_pct": 7.45,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 5,
+   "longest_busy_run": 5,
+   "top": [
+    "com.apple.WebKit"
+   ],
+   "flagged": true
+  },
+  "phases": {
+   "decode": {
+    "samples": 9,
+    "mean_foreign_gpu_pct": 2.27,
+    "max_foreign_gpu_pct": 2.5,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   },
+   "decode_greedy": {
+    "samples": 9,
+    "mean_foreign_gpu_pct": 2.54,
+    "max_foreign_gpu_pct": 4.55,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   },
+   "prefill_4000": {
+    "samples": 4,
+    "mean_foreign_gpu_pct": 5.01,
+    "max_foreign_gpu_pct": 7.45,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 2,
+    "longest_busy_run": 2,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   },
+   "prefill_16000": {
+    "samples": 6,
+    "mean_foreign_gpu_pct": 5.46,
+    "max_foreign_gpu_pct": 6.67,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 4,
+    "longest_busy_run": 4,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   },
+   "tools": {
+    "samples": 2,
+    "mean_foreign_gpu_pct": 3.03,
+    "max_foreign_gpu_pct": 3.14,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792340016.952,
+    2.5,
+    "com.apple.WebKit",
+    2.5,
+    0
+   ],
+   [
+    1792340018.998,
+    2.26,
+    "com.apple.WebKit",
+    2.26,
+    0
+   ],
+   [
+    1792340021.041,
+    2.28,
+    "com.apple.WebKit",
+    2.28,
+    0
+   ],
+   [
+    1792340023.081,
+    2.24,
+    "com.apple.WebKit",
+    2.24,
+    0
+   ],
+   [
+    1792340025.122,
+    2.27,
+    "com.apple.WebKit",
+    2.27,
+    0
+   ],
+   [
+    1792340027.164,
+    2.14,
+    "com.apple.WebKit",
+    2.14,
+    0
+   ],
+   [
+    1792340029.211,
+    2.26,
+    "com.apple.WebKit",
+    2.26,
+    0
+   ],
+   [
+    1792340031.255,
+    2.16,
+    "com.apple.WebKit",
+    2.16,
+    0
+   ],
+   [
+    1792340033.3,
+    2.33,
+    "com.apple.WebKit",
+    2.33,
+    0
+   ],
+   [
+    1792340035.344,
+    2.32,
+    "com.apple.WebKit",
+    2.32,
+    0
+   ],
+   [
+    1792340037.39,
+    2.06,
+    "com.apple.WebKit",
+    2.06,
+    0
+   ],
+   [
+    1792340039.436,
+    2.16,
+    "com.apple.WebKit",
+    2.16,
+    0
+   ],
+   [
+    1792340041.477,
+    2.22,
+    "com.apple.WebKit",
+    2.22,
+    0
+   ],
+   [
+    1792340043.522,
+    2.16,
+    "com.apple.WebKit",
+    2.16,
+    0
+   ],
+   [
+    1792340045.567,
+    2.35,
+    "com.apple.WebKit",
+    2.35,
+    0
+   ],
+   [
+    1792340047.613,
+    2.68,
+    "com.apple.WebKit",
+    2.68,
+    0
+   ],
+   [
+    1792340049.66,
+    4.55,
+    "com.apple.WebKit",
+    4.55,
+    0
+   ],
+   [
+    1792340051.701,
+    7.45,
+    "com.apple.WebKit",
+    5.31,
+    0
+   ],
+   [
+    1792340053.75,
+    5.35,
+    "com.apple.WebKit",
+    4.63,
+    0
+   ],
+   [
+    1792340055.793,
+    6.19,
+    "com.apple.WebKit",
+    5.37,
+    0
+   ],
+   [
+    1792340057.838,
+    6.65,
+    "com.apple.WebKit",
+    5.32,
+    0
+   ],
+   [
+    1792340059.882,
+    6.67,
+    "com.apple.WebKit",
+    5.36,
+    0
+   ],
+   [
+    1792340061.92,
+    4.75,
+    "com.apple.WebKit",
+    4.75,
+    0
+   ],
+   [
+    1792340063.967,
+    3.14,
+    "com.apple.WebKit",
+    3.14,
+    0
+   ],
+   [
+    1792340066.011,
+    2.91,
+    "com.apple.WebKit",
+    2.91,
+    0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "lightning-omlx",
+ "display": "oMLX (MLX 4-bit, no speculation)",
+ "engine": "omlx",
+ "version": "omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+ "model_path": "{models}/lightning-mlx-4bit",
+ "note": "oMLX 0.7.1rc1 on mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit @ 55ac8c89 (MLX affine 4-bit g64 from NVIDIA's BF16 weights, converted with mlx-lm 0.31.3; 17.8 GB). oMLX cannot read NVIDIA's NVFP4 checkpoint: its bundled mlx-lm takes it for a plain nemotron_h folder and fails to load it ('Received 11974 parameters not in model: backbone.layers.0.mixer.in_proj.input_scale, ...weight_scale, ...', the ModelOpt NVFP4 / FP8 scales), and its drafter paths do not cover Nemotron-H (DFlash: Qwen / Gemma / GLM / Laguna / MiMo; DSpark: DeepSeek V4), so this is its plain configuration; lightning-omlx-mtp is its MTP one. Cache flags as in omlx.json.",
+ "config": {
+  "label": "lightning-omlx",
+  "display": "oMLX (MLX 4-bit, no speculation)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+  "model_path": "{models}/lightning-mlx-4bit",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/lightning-mlx-4bit",
+     "dst": "{state}/omlx/lightning/models/lightning-mlx-4bit"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/lightning/base/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "lightning-mlx-4bit": {
+        "mtp_enabled": false
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/lightning/base/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{env:OMLX_BIN=omlx}",
+   "serve",
+   "--model-dir",
+   "{state}/omlx/lightning/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8275",
+   "--base-path",
+   "{state}/omlx/lightning/base",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/lightning/base/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_clear_prefixes": [
+   "OMLX_"
+  ],
+  "base_url": "http://127.0.0.1:8275/v1",
+  "model": "lightning-mlx-4bit",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/lightning-mlx-4bit/model.safetensors.index.json"
+  ],
+  "log_grep": [
+   "MTP|mtp|DFlash|drafter",
+   "memory|guard",
+   "[Ll]oaded model|Discovered model",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "oMLX 0.7.1rc1 on mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit @ 55ac8c89 (MLX affine 4-bit g64 from NVIDIA's BF16 weights, converted with mlx-lm 0.31.3; 17.8 GB). oMLX cannot read NVIDIA's NVFP4 checkpoint: its bundled mlx-lm takes it for a plain nemotron_h folder and fails to load it ('Received 11974 parameters not in model: backbone.layers.0.mixer.in_proj.input_scale, ...weight_scale, ...', the ModelOpt NVFP4 / FP8 scales), and its drafter paths do not cover Nemotron-H (DFlash: Qwen / Gemma / GLM / Laguna / MiMo; DSpark: DeepSeek V4), so this is its plain configuration; lightning-omlx-mtp is its MTP one. Cache flags as in omlx.json."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 16489.12,
+    "swapouts": 62463030,
+    "swapins": 52552940,
+    "pageouts": 592849,
+    "memorystatus_level": 92
+   },
+   "gpu_mem": {
+    "in_use": 1915666432,
+    "alloc": 9334652928,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 71740002304,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/venvs/omlx/bin/omlx",
+   "serve",
+   "--model-dir",
+   "<run-root>/state/omlx/lightning/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8275",
+   "--base-path",
+   "<run-root>/state/omlx/lightning/base",
+   "--paged-ssd-cache-dir",
+   "<run-root>/state/omlx/lightning/base/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "cmd_shell": "~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/lightning/models --no-hf-cache --headless --host 127.0.0.1 --port 8275 --base-path <run-root>/state/omlx/lightning/base --paged-ssd-cache-dir <run-root>/state/omlx/lightning/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [
+   "OMLX_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/lightning-mlx-4bit",
+   "safetensors_bytes": 17775425359,
+   "safetensors_files": [
+    "model-00001-of-00004.safetensors",
+    "model-00002-of-00004.safetensors",
+    "model-00003-of-00004.safetensors",
+    "model-00004-of-00004.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "80e4608cf90ae26f5578399dc0a8fa998beb9141",
+   "dirty": false
+  },
+  "config_file": "configs/lightning.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_VLM_MAIN_PYTHON",
+   "MLX_VLM_PYTHON",
+   "OMLX_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "symlink <run-root>/state/omlx/lightning/models/lightning-mlx-4bit -> ~/.cache/kapitsa/benchmark-models/lightning-mlx-4bit",
+   "write <run-root>/state/omlx/lightning/base/model_settings.json: {\"version\": 1, \"models\": {\"lightning-mlx-4bit\": {\"mtp_enabled\": false}}}",
+   "empty <run-root>/state/omlx/lightning/base/kv-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "KAPITSA_BIN": "<repo>/build/kapitsa",
+   "MLX_VLM_MAIN_PYTHON": "~/venvs/mlx-vlm-main/bin/python",
+   "BENCH_OUT": "<run-root>",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 2.0,
+  "server_pid": 80759,
+  "listener_pid": 80759,
+  "gpu_quiet_wait_s": 121.8,
+  "gpu_not_quiet": [
+   "com.apple.WebKit[3316] 6%"
+  ],
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 2912796672,
+   "alloc": 9994256384,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 16481.12,
+   "swapouts": 62463030,
+   "swapins": 52553300,
+   "pageouts": 592849,
+   "memorystatus_level": 92
+  }
+ },
+ "server_log": [
+  "2026-10-18 09:11:28,956 - omlx.model_discovery - INFO - Discovered model: lightning-mlx-4bit (type: llm, engine: batched, size: 17.38GB)",
+  "2026-10-18 09:11:28,965 - omlx.server - INFO - Memory guard tier: aggressive (guard on)",
+  "2026-10-18 09:11:28,991 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=1",
+  "2026-10-18 09:11:28,991 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.6GB, interval=1.0s)",
+  "2026-10-18 09:11:29,228 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)",
+  "2026-10-18 09:11:29,230 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)",
+  "2026-10-18 09:11:29,231 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)",
+  "2026-10-18 09:11:31,418 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)",
+  "2026-10-18 09:11:31,423 - omlx.memory_monitor - INFO - Model info set: 52 layers (6 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 384.00 KB",
+  "2026-10-18 09:11:31,424 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0",
+  "2026-10-18 09:11:31,426 - omlx.engine_pool - INFO - Loaded model: lightning-mlx-4bit (actual: 16.72GB, local estimate: 17.38GB, full model: 17.38GB, total: 17.38GB)",
+  "2026-10-18 09:14:27,005 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped",
+  "2026-10-18 09:14:27,005 - omlx.server - INFO - Process memory enforcer stopped",
+  "2026-10-18 09:14:27,746 - omlx.engine_pool - INFO - Unloaded model: lightning-mlx-4bit, freed=16.56GB (expected>=15.38GB), active_memory: 1.02KB (settled)"
+ ],
+ "server_log_path": "logs/lightning-omlx-20261018-091126.log"
+}

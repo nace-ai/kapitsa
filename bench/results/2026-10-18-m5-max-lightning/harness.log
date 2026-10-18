@@ -1,0 +1,731 @@
+
+===== lightning-kapitsa  [kapitsa] Kapitsa (DSpark drafter)  version 80e4608
+[08:08:43] lightning-kapitsa: GPU lock ~/.cache/nace-gpu.lock is held by: 72929 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:08:48] lightning-kapitsa: GPU lock acquired after 5.8s wait
+[08:08:48] lightning-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --model-id lightning --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash --host 127.0.0.1 --port 8270 --ctx 32768 --slots 1
+[08:08:52] lightning-kapitsa: ready after 4s (pid 73846, listener 73846)
+[08:08:54] lightning-kapitsa:  warm-up prefill~2.9k+decode64: ok (1.85s)
+[08:08:55] lightning-kapitsa:  warm-up tools: ok (0.38s)
+[08:09:56] lightning-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:10:56] lightning-kapitsa: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-kapitsa
+  decode T=0.6: 217.18 tok/s (e2e 216.34; 512 tok, finish=length, d4=0.9576)
+  decode T=0.6: 229.92 tok/s (e2e 223.77; 512 tok, finish=length, d4=0.9299)
+  decode T=0.6: 217.85 tok/s (e2e 223.34; 512 tok, finish=length, d4=0.8596)
+  decode T=0.6: 241.87 tok/s (e2e 236.68; 512 tok, finish=length, d4=0.8436)
+  decode T=0.6: 243.87 tok/s (e2e 237.82; 512 tok, finish=length, d4=0.9362)
+  decode median 229.92 (min 217.18, max 243.87) over 5/5 valid
+  decode T=0: median 241.71 (min 236.22, max 254.77) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 2.18s -> 1917 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4232, 4261, 4294])
+  prefill 16000: 16519 tok (ref 16517), TTFT 8.95s -> 1846 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16548, 16571, 16604])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 18.62 GB, resident mapped files 0.66 GB, swap used 16869.44 MB
+  -> <run-root>/results/lightning-kapitsa-20261018-080842.json
+[08:11:48] lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:11:48] lightning-kapitsa: GPU lock released after 179.5s held
+[08:11:48] lightning-kapitsa: -> <run-root>/results/lightning-kapitsa-20261018-080842.json  flags: 1
+
+===== lightning-kapitsa-plain  [kapitsa] Kapitsa (no drafter)  version 80e4608
+[08:11:48] lightning-kapitsa-plain: GPU lock ~/.cache/nace-gpu.lock is held by: 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 73822 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[08:12:06] lightning-kapitsa-plain: GPU lock acquired after 18.9s wait
+[08:12:07] lightning-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --model-id lightning --dflash none --host 127.0.0.1 --port 8271 --ctx 32768 --slots 1
+[08:12:11] lightning-kapitsa-plain: ready after 4s (pid 84893, listener 84893)
+[08:12:13] lightning-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (1.86s)
+[08:12:13] lightning-kapitsa-plain:  warm-up tools: ok (0.47s)
+[08:13:15] lightning-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:14:15] lightning-kapitsa-plain: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-kapitsa-plain
+  decode T=0.6: 161.56 tok/s (e2e 159.95; 512 tok, finish=length, d4=0.5302)
+  decode T=0.6: 161.25 tok/s (e2e 159.65; 512 tok, finish=length, d4=0.8401)
+  decode T=0.6: 160.32 tok/s (e2e 158.92; 512 tok, finish=length, d4=0.8569)
+  decode T=0.6: 160.59 tok/s (e2e 159.23; 512 tok, finish=length, d4=0.9144)
+  decode T=0.6: 160.08 tok/s (e2e 159.04; 512 tok, finish=length, d4=0.8932)
+  decode median 160.59 (min 160.08, max 161.56) over 5/5 valid
+  decode T=0: median 161.47 (min 161.05, max 161.71) over 5/5 valid
+  prefill 4000: 4180 tok (ref 4184), TTFT 2.13s -> 1958 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4219, 4244, 4284])
+  prefill 16000: 16517 tok (ref 16517), TTFT 9.13s -> 1809 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16545, 16568, 16601])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 17.92 GB, resident mapped files 0.66 GB, swap used 16869.44 MB
+  -> <run-root>/results/lightning-kapitsa-plain-20261018-081148.json
+[08:15:18] lightning-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:15:18] lightning-kapitsa-plain: GPU lock released after 191.5s held
+[08:15:18] lightning-kapitsa-plain: -> <run-root>/results/lightning-kapitsa-plain-20261018-081148.json  flags: 1
+
+===== lightning-mlxvlm  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[08:15:18] lightning-mlxvlm: GPU lock ~/.cache/nace-gpu.lock is held by: 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 84875 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[08:15:38] lightning-mlxvlm: GPU lock acquired after 19.6s wait
+[08:15:38] lightning-mlxvlm: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8272 --prefill-step-size 2048 --max-num-seqs 1
+[08:15:42] lightning-mlxvlm: ready after 4s (pid 96201, listener 96201)
+[08:15:44] lightning-mlxvlm:  warm-up prefill~2.9k+decode64: ok (1.81s)
+[08:15:45] lightning-mlxvlm:  warm-up tools: ok (0.54s)
+[08:16:46] lightning-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:17:46] lightning-mlxvlm: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm
+  decode T=0.6: 109.86 tok/s (e2e 109.88; 512 tok, finish=length, d4=0.9126)
+  decode T=0.6: 109.21 tok/s (e2e 109.25; 512 tok, finish=length, d4=0.8686)
+  decode T=0.6: 108.52 tok/s (e2e 108.54; 512 tok, finish=length, d4=0.8536)
+  decode T=0.6: 109.41 tok/s (e2e 109.47; 512 tok, finish=length, d4=0.9379)
+  decode T=0.6: 109.67 tok/s (e2e 109.70; 512 tok, finish=length, d4=0.8845)
+  decode median 109.41 (min 108.52, max 109.86) over 5/5 valid
+  decode T=0: median 112.34 (min 110.84, max 112.91) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.53s -> 2739 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4182, 4252, 4296])
+  prefill 16000: 16515 tok (ref 16517), TTFT 5.51s -> 2996 tok/s, cold cached=0 | cached TTFT median 0.29s over 3 turns (cached [16514, 16570, 16604])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.67 GB, resident mapped files 0.01 GB, swap used 16869.44 MB
+  -> <run-root>/results/lightning-mlxvlm-20261018-081518.json
+[08:19:05] lightning-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:19:05] lightning-mlxvlm: GPU lock released after 207.5s held
+[08:19:05] lightning-mlxvlm: -> <run-root>/results/lightning-mlxvlm-20261018-081518.json  flags: 1
+
+===== lightning-mlxvlm-dspark  [mlx-lm] mlx-vlm server + DSpark drafter (block 6)  version mlx-vlm 0.7.8, mlx 0.32.4
+[08:19:05] lightning-mlxvlm-dspark: GPU lock ~/.cache/nace-gpu.lock is held by: 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 96172 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[08:19:23] lightning-mlxvlm-dspark: GPU lock acquired after 17.9s wait
+[08:19:23] lightning-mlxvlm-dspark: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6
+[08:19:28] lightning-mlxvlm-dspark: ready after 4s (pid 9048, listener 9048)
+[08:19:30] lightning-mlxvlm-dspark:  warm-up prefill~2.9k+decode64: ok (1.85s)
+[08:19:30] lightning-mlxvlm-dspark:  warm-up tools: ok (0.44s)
+[08:19:34] lightning-mlxvlm-dspark:  warm-up decode512#1: ok (3.76s)
+[08:19:38] lightning-mlxvlm-dspark:  warm-up decode512#2: ok (4.04s)
+[08:19:42] lightning-mlxvlm-dspark:  warm-up decode512#3: ok (4.02s)
+[08:20:44] lightning-mlxvlm-dspark: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:21:43] lightning-mlxvlm-dspark: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm-dspark
+  decode T=0.6: 147.13 tok/s (e2e 146.37; 512 tok, finish=length, d4=0.8799)
+  decode T=0.6: 135.68 tok/s (e2e 133.65; 512 tok, finish=length, d4=0.8536)
+  decode T=0.6: 135.20 tok/s (e2e 134.59; 512 tok, finish=length, d4=0.8467)
+  decode T=0.6: 157.96 tok/s (e2e 156.65; 512 tok, finish=length, d4=0.8747)
+  decode T=0.6: 133.27 tok/s (e2e 131.84; 512 tok, finish=length, d4=0.8689)
+  decode median 135.68 (min 133.27, max 157.96) over 5/5 valid
+  decode T=0: median 148.97 (min 136.12, max 166.58) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.68s -> 2495 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4184, 4254, 4298])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.91s -> 2793 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16516, 16572, 16606])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 28.81 GB, resident mapped files 0.01 GB, swap used 16869.44 MB
+  -> <run-root>/results/lightning-mlxvlm-dspark-20261018-081905.json
+[08:22:50] lightning-mlxvlm-dspark: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:22:50] lightning-mlxvlm-dspark: GPU lock released after 207.5s held
+[08:22:50] lightning-mlxvlm-dspark: -> <run-root>/results/lightning-mlxvlm-dspark-20261018-081905.json  flags: 1
+
+===== lightning-mlxvlm-mtp  [mlx-lm] mlx-vlm server (git main) + native MTP (block 4)  version mlx-vlm git main 73d366e (unreleased; its metadata says 0.7.8), mlx 0.32.4
+[08:22:51] lightning-mlxvlm-mtp: GPU lock ~/.cache/nace-gpu.lock is held by: 9034 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 3000 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:23:56] lightning-mlxvlm-mtp: GPU lock acquired after 65.4s wait
+[08:23:56] lightning-mlxvlm-mtp: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8274 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --draft-kind mtp --draft-block-size 4
+[08:24:01] lightning-mlxvlm-mtp: ready after 4s (pid 24395, listener 24395)
+[08:24:03] lightning-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (1.97s)
+[08:24:03] lightning-mlxvlm-mtp:  warm-up tools: ok (0.52s)
+[08:24:07] lightning-mlxvlm-mtp:  warm-up decode512#1: ok (4.32s)
+[08:24:12] lightning-mlxvlm-mtp:  warm-up decode512#2: ok (4.28s)
+[08:24:16] lightning-mlxvlm-mtp:  warm-up decode512#3: ok (4.32s)
+[08:25:18] lightning-mlxvlm-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:26:18] lightning-mlxvlm-mtp: GPU not quiet after 121s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm-mtp
+  decode T=0.6: 129.86 tok/s (e2e 126.87; 512 tok, finish=length, d4=0.8696)
+  decode T=0.6: 112.49 tok/s (e2e 111.90; 512 tok, finish=length, d4=0.9675)
+  decode T=0.6: 126.72 tok/s (e2e 123.79; 512 tok, finish=length, d4=0.8565)
+  decode T=0.6: 116.15 tok/s (e2e 115.20; 512 tok, finish=length, d4=0.8901)
+  decode T=0.6: 135.71 tok/s (e2e 133.69; 512 tok, finish=length, d4=0.8654)
+  decode median 126.72 (min 112.49, max 135.71) over 5/5 valid
+  decode T=0: median 121.74 (min 115.69, max 136.85) over 5/5 valid
+  prefill 4000: 4186 tok (ref 4184), TTFT 1.55s -> 2709 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4185, 4255, 4299])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.59s -> 2955 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16516, 16570, 16604])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 46.48 GB, resident mapped files 0.01 GB, swap used 16845.44 MB
+  -> <run-root>/results/lightning-mlxvlm-mtp-20261018-082250.json
+[08:27:31] lightning-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:27:31] lightning-mlxvlm-mtp: GPU lock released after 215.5s held
+[08:27:31] lightning-mlxvlm-mtp: -> <run-root>/results/lightning-mlxvlm-mtp-20261018-082250.json  flags: 1
+
+===== lightning-omlx  [omlx] oMLX (MLX 4-bit, no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[08:27:32] lightning-omlx: GPU lock ~/.cache/nace-gpu.lock is held by: 26889 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:27:49] lightning-omlx: GPU lock acquired after 17.4s wait
+[08:27:49] lightning-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/lightning/models --no-hf-cache --headless --host 127.0.0.1 --port 8275 --base-path <run-root>/state/omlx/lightning/base --paged-ssd-cache-dir <run-root>/state/omlx/lightning/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[08:27:51] lightning-omlx: ready after 2s (pid 37223, listener 37223)
+[08:27:54] lightning-omlx:  warm-up prefill~2.9k+decode64: ok (3.48s)
+[08:27:55] lightning-omlx:  warm-up tools: ok (0.38s)
+[08:28:57] lightning-omlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:29:56] lightning-omlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-omlx
+  decode T=0.6: 165.17 tok/s (e2e 163.60; 512 tok, finish=length, d4=0.9715)
+  decode T=0.6: 167.09 tok/s (e2e 166.22; 512 tok, finish=length, d4=0.9606)
+  decode T=0.6: 173.13 tok/s (e2e 167.12; 512 tok, finish=length, d4=0.9785)
+  decode T=0.6: 169.72 tok/s (e2e 165.80; 512 tok, finish=length, d4=0.6831)
+  decode T=0.6: 169.13 tok/s (e2e 166.24; 512 tok, finish=length, d4=0.9116)
+  decode median 169.13 (min 165.17, max 173.13) over 5/5 valid
+  decode T=0: median 170.56 (min 170.21, max 173.29) over 5/5 valid
+  prefill 4000: 4186 tok (ref 4184), TTFT 1.12s -> 3732 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4180, 4249, 4285])
+  prefill 16000: 16517 tok (ref 16517), TTFT 4.27s -> 3868 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16511, 16569, 16597])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 20.91 GB, resident mapped files 0.01 GB, swap used 16845.44 MB
+  -> <run-root>/results/lightning-omlx-20261018-082731.json
+[08:30:53] lightning-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:30:53] lightning-omlx: GPU lock released after 184.5s held
+[08:30:53] lightning-omlx: -> <run-root>/results/lightning-omlx-20261018-082731.json  flags: 1
+
+===== lightning-omlx-mtp  [omlx] oMLX + MTP (Lightning MTP, depth 2, MLX 4-bit with MTP head)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[08:30:54] lightning-omlx-mtp: GPU lock ~/.cache/nace-gpu.lock is held by: 37208 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:31:10] lightning-omlx-mtp: GPU lock acquired after 17.0s wait
+[08:31:10] lightning-omlx-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/lightning-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8276 --base-path <run-root>/state/omlx/lightning-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/lightning-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[08:31:13] lightning-omlx-mtp: ready after 2s (pid 48021, listener 48021)
+[08:31:16] lightning-omlx-mtp:  warm-up prefill~2.9k+decode64: ok (3.55s)
+[08:31:16] lightning-omlx-mtp:  warm-up tools: ok (0.33s)
+[08:31:19] lightning-omlx-mtp:  warm-up decode512#1: ok (2.72s)
+[08:31:22] lightning-omlx-mtp:  warm-up decode512#2: ok (2.87s)
+[08:31:25] lightning-omlx-mtp:  warm-up decode512#3: ok (2.76s)
+[08:32:27] lightning-omlx-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:33:26] lightning-omlx-mtp: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-omlx-mtp
+  decode T=0.6: 203.41 tok/s (e2e 198.78; 512 tok, finish=length, d4=0.906)
+  decode T=0.6: 191.81 tok/s (e2e 189.21; 512 tok, finish=length, d4=0.5503)
+  decode T=0.6: 186.91 tok/s (e2e 189.70; 512 tok, finish=length, d4=0.9381)
+  decode T=0.6: 195.44 tok/s (e2e 194.35; 512 tok, finish=length, d4=0.9395)
+  decode T=0.6: 202.17 tok/s (e2e 201.83; 512 tok, finish=length, d4=0.6951)
+  decode median 195.44 (min 186.91, max 203.41) over 5/5 valid
+  decode T=0: median 204.53 (min 198.38, max 212.19) over 5/5 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 1.15s -> 3648 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4176, 4241, 4277])
+  prefill 16000: 16520 tok (ref 16517), TTFT 4.31s -> 3835 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [16514, 16559, 16594])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.62 GB, resident mapped files 0.01 GB, swap used 16821.44 MB
+  -> <run-root>/results/lightning-omlx-mtp-20261018-083053.json
+[08:34:18] lightning-omlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:34:18] lightning-omlx-mtp: GPU lock released after 187.8s held
+[08:34:18] lightning-omlx-mtp: -> <run-root>/results/lightning-omlx-mtp-20261018-083053.json
+
+===== lightning-mlxlm  [mlx-lm] mlx-lm (MLX 4-bit)  version mlx_lm 0.32.2 mlx 0.32.4
+[08:34:18] lightning-mlxlm: GPU lock ~/.cache/nace-gpu.lock is held by: 48008 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:34:34] lightning-mlxlm: GPU lock acquired after 15.8s wait
+[08:34:34] lightning-mlxlm: starting ~/venvs/mlx-lm/bin/mlx_lm.server --model ~/.cache/kapitsa/benchmark-models/lightning-mlx-4bit --host 127.0.0.1 --port 8277 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[08:34:36] lightning-mlxlm: ready after 2s (pid 58683, listener 58683)
+[08:34:38] lightning-mlxlm:  warm-up prefill~2.9k+decode64: ok (2.0s)
+[08:34:39] lightning-mlxlm:  warm-up tools: ok (0.38s)
+[08:35:40] lightning-mlxlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:36:40] lightning-mlxlm: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mlxlm
+  decode T=0.6: 140.06 tok/s (e2e 138.05; 512 tok, finish=length, d4=0.9368)
+  decode T=0.6: 142.95 tok/s (e2e 142.38; 512 tok, finish=length, d4=0.9475)
+  decode T=0.6: 141.68 tok/s (e2e 141.54; 512 tok, finish=length, d4=0.9475)
+  decode T=0.6: 143.98 tok/s (e2e 141.08; 512 tok, finish=length, d4=0.9631)
+  decode T=0.6: 140.21 tok/s (e2e 139.74; 512 tok, finish=length, d4=0.7002)
+  decode median 141.68 (min 140.06, max 143.98) over 5/5 valid
+  decode T=0: median 146.37 (min 144.62, max 146.99) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.19s -> 3510 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4221, 4275, 4385])
+  prefill 16000: 16518 tok (ref 16517), TTFT 4.74s -> 3485 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [16551, 16576, 16609])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.11 GB, resident mapped files 0.01 GB, swap used 16821.44 MB
+  -> <run-root>/results/lightning-mlxlm-20261018-083418.json
+[08:37:43] lightning-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:37:43] lightning-mlxlm: GPU lock released after 189.4s held
+[08:37:43] lightning-mlxlm: -> <run-root>/results/lightning-mlxlm-20261018-083418.json  flags: 1
+
+===== lightning-llamacpp  [llama.cpp] llama.cpp (Q4_0 GGUF)  version 0.7.0-dev (b11669, 620d2225c)
+[08:37:44] lightning-llamacpp: GPU lock ~/.cache/nace-gpu.lock is held by: 58670 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:38:01] lightning-llamacpp: GPU lock acquired after 17.8s wait
+[08:38:01] lightning-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[08:38:05] lightning-llamacpp: ready after 4s (pid 69636, listener 69636)
+[08:38:07] lightning-llamacpp:  warm-up prefill~2.9k+decode64: ok (1.44s)
+[08:38:07] lightning-llamacpp:  warm-up tools: ok (0.44s)
+[08:39:09] lightning-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:40:09] lightning-llamacpp: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp
+  decode T=0.6: 118.48 tok/s (e2e 118.47; 512 tok, finish=length, d4=0.9702)
+  decode T=0.6: 118.41 tok/s (e2e 118.38; 512 tok, finish=length, d4=0.7112)
+  decode T=0.6: 117.90 tok/s (e2e 117.86; 512 tok, finish=length, d4=0.951)
+  decode T=0.6: 117.85 tok/s (e2e 117.85; 512 tok, finish=length, d4=0.8484)
+  decode T=0.6: 116.85 tok/s (e2e 116.88; 512 tok, finish=length, d4=0.7314)
+  decode median 117.9 (min 116.85, max 118.48) over 5/5 valid
+  decode T=0: median 116.3 (min 113.74, max 117.88) over 5/5 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 1.50s -> 2793 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4227, 4281, 4320])
+  prefill 16000: 16516 tok (ref 16517), TTFT 5.68s -> 2906 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16543, 16566, 16599])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.36 GB, resident mapped files 0.03 GB, swap used 16821.44 MB
+  -> <run-root>/results/lightning-llamacpp-20261018-083743.json
+[08:41:20] lightning-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:41:20] lightning-llamacpp: GPU lock released after 199.2s held
+[08:41:20] lightning-llamacpp: -> <run-root>/results/lightning-llamacpp-20261018-083743.json  flags: 1
+
+===== lightning-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[08:41:21] lightning-llamacpp-mtp1: GPU lock ~/.cache/nace-gpu.lock is held by: 69612 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 73541 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[08:41:37] lightning-llamacpp-mtp1: GPU lock acquired after 16.3s wait
+[08:41:37] lightning-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 1
+[08:41:41] lightning-llamacpp-mtp1: ready after 4s (pid 81409, listener 81409)
+[08:41:42] lightning-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (1.38s)
+[08:41:43] lightning-llamacpp-mtp1:  warm-up tools: ok (0.39s)
+[08:42:44] lightning-llamacpp-mtp1: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:43:44] lightning-llamacpp-mtp1: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp1
+  decode T=0.6: 148.37 tok/s (e2e 147.37; 512 tok, finish=length, d4=0.934)
+  decode T=0.6: 128.56 tok/s (e2e 128.96; 512 tok, finish=length, d4=0.9547)
+  decode T=0.6: 128.51 tok/s (e2e 128.06; 512 tok, finish=length, d4=0.9311)
+  decode T=0.6: 122.26 tok/s (e2e 122.14; 512 tok, finish=length, d4=0.9784)
+  decode T=0.6: 124.13 tok/s (e2e 124.33; 512 tok, finish=length, d4=0.9319)
+  decode median 128.51 (min 122.26, max 148.37) over 5/5 valid
+  decode T=0: median 136.62 (min 120.27, max 139.91) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.39s -> 3012 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4223, 4254, 4289])
+  prefill 16000: 16518 tok (ref 16517), TTFT 5.39s -> 3065 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16555, 16580, 16619])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.07 GB, resident mapped files 0.03 GB, swap used 16813.44 MB
+  -> <run-root>/results/lightning-llamacpp-mtp1-20261018-084120.json
+[08:44:51] lightning-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:44:51] lightning-llamacpp-mtp1: GPU lock released after 194.0s held
+[08:44:51] lightning-llamacpp-mtp1: -> <run-root>/results/lightning-llamacpp-mtp1-20261018-084120.json  flags: 1
+
+===== lightning-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[08:44:51] lightning-llamacpp-mtp2: GPU lock acquired after 0.0s wait
+[08:44:51] lightning-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 2
+[08:44:55] lightning-llamacpp-mtp2: ready after 4s (pid 92959, listener 92959)
+[08:44:56] lightning-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (1.34s)
+[08:44:57] lightning-llamacpp-mtp2:  warm-up tools: ok (0.36s)
+[08:45:58] lightning-llamacpp-mtp2: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:46:58] lightning-llamacpp-mtp2: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp2
+  decode T=0.6: 163.91 tok/s (e2e 163.66; 512 tok, finish=length, d4=0.9529)
+  decode T=0.6: 168.48 tok/s (e2e 169.73; 512 tok, finish=length, d4=0.9835)
+  decode T=0.6: 160.97 tok/s (e2e 162.32; 512 tok, finish=length, d4=0.959)
+  decode T=0.6: 158.30 tok/s (e2e 158.44; 512 tok, finish=length, d4=0.7316)
+  decode T=0.6: 163.37 tok/s (e2e 163.40; 512 tok, finish=length, d4=0.9465)
+  decode median 163.37 (min 158.3, max 168.48) over 5/5 valid
+  decode T=0: median 163.11 (min 153.8, max 165.8) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.44s -> 2904 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4236, 4267, 4301])
+  prefill 16000: 16518 tok (ref 16517), TTFT 5.59s -> 2954 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16554, 16583, 16622])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.11 GB, resident mapped files 0.03 GB, swap used 16805.44 MB
+  -> <run-root>/results/lightning-llamacpp-mtp2-20261018-084451.json
+[08:47:55] lightning-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:47:55] lightning-llamacpp-mtp2: GPU lock released after 184.7s held
+[08:47:55] lightning-llamacpp-mtp2: -> <run-root>/results/lightning-llamacpp-mtp2-20261018-084451.json  flags: 1
+
+===== lightning-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[08:47:55] lightning-llamacpp-mtp3: GPU lock acquired after 0.0s wait
+[08:47:55] lightning-llamacpp-mtp3: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 3
+[08:48:00] lightning-llamacpp-mtp3: ready after 4s (pid 3241, listener 3241)
+[08:48:01] lightning-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (1.3s)
+[08:48:01] lightning-llamacpp-mtp3:  warm-up tools: ok (0.35s)
+[08:49:03] lightning-llamacpp-mtp3: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:50:03] lightning-llamacpp-mtp3: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp3
+  decode T=0.6: 157.49 tok/s (e2e 157.03; 512 tok, finish=length, d4=0.9647)
+  decode T=0.6: 164.77 tok/s (e2e 161.27; 512 tok, finish=length, d4=0.8496)
+  decode T=0.6: 164.51 tok/s (e2e 164.64; 512 tok, finish=length, d4=0.9318)
+  decode T=0.6: 161.78 tok/s (e2e 161.53; 512 tok, finish=length, d4=0.9665)
+  decode T=0.6: 166.53 tok/s (e2e 165.92; 512 tok, finish=length, d4=0.936)
+  decode median 164.51 (min 157.49, max 166.53) over 5/5 valid
+  decode T=0: median 161.15 (min 159.7, max 164.35) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 1.62s -> 2583 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4232, 4263, 4306])
+  prefill 16000: 16517 tok (ref 16517), TTFT 6.05s -> 2731 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16547, 16572, 16603])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.16 GB, resident mapped files 0.03 GB, swap used 16553.19 MB
+  -> <run-root>/results/lightning-llamacpp-mtp3-20261018-084755.json
+[08:51:03] lightning-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 7.1s)
+[08:51:03] lightning-llamacpp-mtp3: GPU lock released after 187.8s held
+[08:51:03] lightning-llamacpp-mtp3: -> <run-root>/results/lightning-llamacpp-mtp3-20261018-084755.json  flags: 2
+
+===== lightning-llamacpp-dspark  [llama.cpp] llama.cpp + DSpark drafter (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[08:51:03] lightning-llamacpp-dspark: GPU lock acquired after 0.0s wait
+[08:51:03] lightning-llamacpp-dspark: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-dspark --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/dspark/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark.gguf --spec-draft-n-max 3
+[08:51:07] lightning-llamacpp-dspark: ready after 4s (pid 13611, listener 13611)
+[08:51:09] lightning-llamacpp-dspark:  warm-up prefill~2.9k+decode64: ok (2.09s)
+[08:51:10] lightning-llamacpp-dspark:  warm-up tools: ok (0.51s)
+[08:52:12] lightning-llamacpp-dspark: gpu busy (62s): com.apple.WebKit[3316] 6%
+[08:53:11] lightning-llamacpp-dspark: GPU not quiet after 121s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-dspark
+  decode T=0.6: 94.82 tok/s (e2e 94.51; 512 tok, finish=length, d4=0.9682)
+  decode T=0.6: 89.89 tok/s (e2e 90.26; 512 tok, finish=length, d4=0.6922)
+  decode T=0.6: 85.32 tok/s (e2e 85.78; 512 tok, finish=length, d4=0.9519)
+  decode T=0.6: 87.31 tok/s (e2e 86.81; 512 tok, finish=length, d4=0.9212)
+  decode T=0.6: 89.79 tok/s (e2e 89.65; 512 tok, finish=length, d4=0.9736)
+  decode median 89.79 (min 85.32, max 94.82) over 5/5 valid
+  decode T=0: median 86.45 (min 80.25, max 93.76) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4739)']
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.57s -> 2671 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4232, 4270, 4313])
+  prefill 16000: 16518 tok (ref 16517), TTFT 6.16s -> 2683 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16550, 16575, 16614])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.31 GB, resident mapped files 0.03 GB, swap used 16505.12 MB
+  -> <run-root>/results/lightning-llamacpp-dspark-20261018-085103.json
+[08:54:40] lightning-llamacpp-dspark: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:54:40] lightning-llamacpp-dspark: GPU lock released after 216.4s held
+[08:54:40] lightning-llamacpp-dspark: -> <run-root>/results/lightning-llamacpp-dspark-20261018-085103.json  flags: 2
+
+===== lightning-kapitsa  [kapitsa] Kapitsa (DSpark drafter)  version 80e4608
+[08:54:40] lightning-kapitsa: GPU lock acquired after 0.0s wait
+[08:54:40] lightning-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --model-id lightning --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash --host 127.0.0.1 --port 8270 --ctx 32768 --slots 1
+[08:54:44] lightning-kapitsa: ready after 4s (pid 25097, listener 25097)
+[08:54:46] lightning-kapitsa:  warm-up prefill~2.9k+decode64: ok (2.07s)
+[08:54:46] lightning-kapitsa:  warm-up tools: ok (0.38s)
+[08:55:48] lightning-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 7%
+[08:56:48] lightning-kapitsa: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-kapitsa
+  decode T=0.6: 231.14 tok/s (e2e 225.30; 512 tok, finish=length, d4=0.9692)
+  decode T=0.6: 238.74 tok/s (e2e 234.75; 512 tok, finish=length, d4=0.9538)
+  decode T=0.6: 233.95 tok/s (e2e 229.81; 512 tok, finish=length, d4=0.9392)
+  decode T=0.6: 243.05 tok/s (e2e 237.41; 512 tok, finish=length, d4=0.9764)
+  decode T=0.6: 243.37 tok/s (e2e 238.51; 512 tok, finish=length, d4=0.9464)
+  decode median 238.74 (min 231.14, max 243.37) over 5/5 valid
+  decode T=0: median 218.14 (min 211.24, max 258.25) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 2.20s -> 1899 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4223, 4252, 4293])
+  prefill 16000: 16516 tok (ref 16517), TTFT 8.87s -> 1861 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16538, 16561, 16602])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 18.62 GB, resident mapped files 0.66 GB, swap used 16505.12 MB
+  -> <run-root>/results/lightning-kapitsa-20261018-085440.json
+[08:57:39] lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[08:57:39] lightning-kapitsa: GPU lock released after 179.6s held
+[08:57:39] lightning-kapitsa: -> <run-root>/results/lightning-kapitsa-20261018-085440.json  flags: 1
+
+===== lightning-kapitsa-plain  [kapitsa] Kapitsa (no drafter)  version 80e4608
+[08:57:39] lightning-kapitsa-plain: GPU lock acquired after 0.0s wait
+[08:57:39] lightning-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --model-id lightning --dflash none --host 127.0.0.1 --port 8271 --ctx 32768 --slots 1
+[08:57:44] lightning-kapitsa-plain: ready after 4s (pid 34736, listener 34736)
+[08:57:45] lightning-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (1.95s)
+[08:57:46] lightning-kapitsa-plain:  warm-up tools: ok (0.48s)
+[08:58:48] lightning-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 7%
+[08:59:48] lightning-kapitsa-plain: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-kapitsa-plain
+  decode T=0.6: 160.33 tok/s (e2e 158.71; 512 tok, finish=length, d4=0.9318)
+  decode T=0.6: 160.07 tok/s (e2e 158.59; 512 tok, finish=length, d4=0.8762)
+  decode T=0.6: 160.13 tok/s (e2e 157.86; 512 tok, finish=length, d4=0.9655)
+  decode T=0.6: 160.26 tok/s (e2e 158.50; 512 tok, finish=length, d4=0.9801)
+  decode T=0.6: 160.07 tok/s (e2e 158.10; 512 tok, finish=length, d4=0.9404)
+  decode median 160.13 (min 160.07, max 160.33) over 5/5 valid
+  decode T=0: median 160.34 (min 160.05, max 160.68) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 2.26s -> 1850 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4208, 4245, 4286])
+  prefill 16000: 16516 tok (ref 16517), TTFT 9.17s -> 1802 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16538, 16563, 16596])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 17.92 GB, resident mapped files 0.67 GB, swap used 16505.12 MB
+  -> <run-root>/results/lightning-kapitsa-plain-20261018-085739.json
+[09:00:50] lightning-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:00:50] lightning-kapitsa-plain: GPU lock released after 191.2s held
+[09:00:50] lightning-kapitsa-plain: -> <run-root>/results/lightning-kapitsa-plain-20261018-085739.json  flags: 1
+
+===== lightning-mlxvlm  [mlx-lm] mlx-vlm server (no speculation)  version mlx-vlm 0.7.8, mlx 0.32.4
+[09:00:50] lightning-mlxvlm: GPU lock acquired after 0.0s wait
+[09:00:51] lightning-mlxvlm: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8272 --prefill-step-size 2048 --max-num-seqs 1
+[09:00:55] lightning-mlxvlm: ready after 4s (pid 44834, listener 44834)
+[09:00:57] lightning-mlxvlm:  warm-up prefill~2.9k+decode64: ok (1.85s)
+[09:00:58] lightning-mlxvlm:  warm-up tools: ok (0.54s)
+[09:02:00] lightning-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 5%
+[09:02:59] lightning-mlxvlm: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm
+  decode T=0.6: 109.01 tok/s (e2e 109.02; 512 tok, finish=length, d4=0.883)
+  decode T=0.6: 108.91 tok/s (e2e 108.90; 512 tok, finish=length, d4=0.8375)
+  decode T=0.6: 108.72 tok/s (e2e 108.72; 512 tok, finish=length, d4=0.9698)
+  decode T=0.6: 108.92 tok/s (e2e 108.92; 512 tok, finish=length, d4=0.8538)
+  decode T=0.6: 108.48 tok/s (e2e 108.54; 512 tok, finish=length, d4=0.8654)
+  decode median 108.91 (min 108.48, max 109.01) over 5/5 valid
+  decode T=0: median 110.99 (min 109.42, max 111.41) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 1.64s -> 2557 tok/s, cold cached=0 | cached TTFT median 0.29s over 3 turns (cached [4183, 4253, 4297])
+  prefill 16000: 16519 tok (ref 16517), TTFT 5.62s -> 2939 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16518, 16572, 16606])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.67 GB, resident mapped files 0.01 GB, swap used 16505.12 MB
+  -> <run-root>/results/lightning-mlxvlm-20261018-090050.json
+[09:04:20] lightning-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:04:20] lightning-mlxvlm: GPU lock released after 209.1s held
+[09:04:20] lightning-mlxvlm: -> <run-root>/results/lightning-mlxvlm-20261018-090050.json
+
+===== lightning-mlxvlm-dspark  [mlx-lm] mlx-vlm server + DSpark drafter (block 6)  version mlx-vlm 0.7.8, mlx 0.32.4
+[09:04:20] lightning-mlxvlm-dspark: GPU lock acquired after 0.0s wait
+[09:04:20] lightning-mlxvlm-dspark: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6
+[09:04:24] lightning-mlxvlm-dspark: ready after 4s (pid 56387, listener 56387)
+[09:04:26] lightning-mlxvlm-dspark:  warm-up prefill~2.9k+decode64: ok (1.84s)
+[09:04:26] lightning-mlxvlm-dspark:  warm-up tools: ok (0.45s)
+[09:04:30] lightning-mlxvlm-dspark:  warm-up decode512#1: ok (3.85s)
+[09:04:34] lightning-mlxvlm-dspark:  warm-up decode512#2: ok (3.97s)
+[09:04:38] lightning-mlxvlm-dspark:  warm-up decode512#3: ok (3.81s)
+[09:05:40] lightning-mlxvlm-dspark: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:06:40] lightning-mlxvlm-dspark: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm-dspark
+  decode T=0.6: 131.34 tok/s (e2e 131.18; 512 tok, finish=length, d4=0.9622)
+  decode T=0.6: 144.45 tok/s (e2e 143.07; 512 tok, finish=length, d4=0.8657)
+  decode T=0.6: 137.67 tok/s (e2e 137.20; 512 tok, finish=length, d4=0.985)
+  decode T=0.6: 134.50 tok/s (e2e 133.49; 512 tok, finish=length, d4=0.8515)
+  decode T=0.6: 137.39 tok/s (e2e 136.24; 512 tok, finish=length, d4=0.9469)
+  decode median 137.39 (min 131.34, max 144.45) over 5/5 valid
+  decode T=0: median 146.33 (min 120.59, max 149.54) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 1.74s -> 2400 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [4183, 4253, 4297])
+  prefill 16000: 16516 tok (ref 16517), TTFT 6.07s -> 2722 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16515, 16563, 16593])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 29.31 GB, resident mapped files 0.01 GB, swap used 16505.12 MB
+  -> <run-root>/results/lightning-mlxvlm-dspark-20261018-090420.json
+[09:07:48] lightning-mlxvlm-dspark: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:07:48] lightning-mlxvlm-dspark: GPU lock released after 208.8s held
+[09:07:48] lightning-mlxvlm-dspark: -> <run-root>/results/lightning-mlxvlm-dspark-20261018-090420.json  flags: 1
+
+===== lightning-mlxvlm-mtp  [mlx-lm] mlx-vlm server (git main) + native MTP (block 4)  version mlx-vlm git main 73d366e (unreleased; its metadata says 0.7.8), mlx 0.32.4
+[09:07:48] lightning-mlxvlm-mtp: GPU lock acquired after 0.0s wait
+[09:07:48] lightning-mlxvlm-mtp: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8274 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --draft-kind mtp --draft-block-size 4
+[09:07:53] lightning-mlxvlm-mtp: ready after 4s (pid 68090, listener 68090)
+[09:07:55] lightning-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (2.01s)
+[09:07:56] lightning-mlxvlm-mtp:  warm-up tools: ok (0.53s)
+[09:08:00] lightning-mlxvlm-mtp:  warm-up decode512#1: ok (4.48s)
+[09:08:04] lightning-mlxvlm-mtp:  warm-up decode512#2: ok (4.4s)
+[09:08:09] lightning-mlxvlm-mtp:  warm-up decode512#3: ok (4.51s)
+[09:09:11] lightning-mlxvlm-mtp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:10:11] lightning-mlxvlm-mtp: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mlxvlm-mtp
+  decode T=0.6: 107.06 tok/s (e2e 106.16; 512 tok, finish=length, d4=0.8771)
+  decode T=0.6: 121.55 tok/s (e2e 120.21; 512 tok, finish=length, d4=0.9371)
+  decode T=0.6: 119.54 tok/s (e2e 118.42; 512 tok, finish=length, d4=0.8618)
+  decode T=0.6: 132.18 tok/s (e2e 128.85; 512 tok, finish=length, d4=0.8357)
+  decode T=0.6: 124.13 tok/s (e2e 122.64; 512 tok, finish=length, d4=0.8487)
+  decode median 121.55 (min 107.06, max 132.18) over 5/5 valid
+  decode T=0: median 122.54 (min 116.06, max 132.57) over 5/5 valid
+  prefill 4000: 4186 tok (ref 4184), TTFT 1.66s -> 2524 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [4185, 4252, 4295])
+  prefill 16000: 16519 tok (ref 16517), TTFT 5.81s -> 2842 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [16518, 16566, 16596])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 46.48 GB, resident mapped files 0.01 GB, swap used 16489.12 MB
+  -> <run-root>/results/lightning-mlxvlm-mtp-20261018-090748.json
+[09:11:26] lightning-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:11:26] lightning-mlxvlm-mtp: GPU lock released after 217.9s held
+[09:11:26] lightning-mlxvlm-mtp: -> <run-root>/results/lightning-mlxvlm-mtp-20261018-090748.json  flags: 1
+
+===== lightning-omlx  [omlx] oMLX (MLX 4-bit, no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[09:11:26] lightning-omlx: GPU lock acquired after 0.0s wait
+[09:11:27] lightning-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/lightning/models --no-hf-cache --headless --host 127.0.0.1 --port 8275 --base-path <run-root>/state/omlx/lightning/base --paged-ssd-cache-dir <run-root>/state/omlx/lightning/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[09:11:29] lightning-omlx: ready after 2s (pid 80759, listener 80759)
+[09:11:32] lightning-omlx:  warm-up prefill~2.9k+decode64: ok (3.5s)
+[09:11:33] lightning-omlx:  warm-up tools: ok (0.36s)
+[09:12:34] lightning-omlx: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:13:34] lightning-omlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-omlx
+  decode T=0.6: 164.01 tok/s (e2e 163.78; 512 tok, finish=length, d4=0.9137)
+  decode T=0.6: 164.74 tok/s (e2e 164.06; 512 tok, finish=length, d4=0.9132)
+  decode T=0.6: 166.24 tok/s (e2e 164.66; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 165.31 tok/s (e2e 163.51; 512 tok, finish=length, d4=0.9793)
+  decode T=0.6: 161.83 tok/s (e2e 162.12; 512 tok, finish=length, d4=0.9424)
+  decode median 164.74 (min 161.83, max 166.24) over 5/5 valid
+  decode T=0: median 166.61 (min 164.81, max 167.61) over 5/5 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 1.16s -> 3606 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [4176, 4251, 4281])
+  prefill 16000: 16519 tok (ref 16517), TTFT 4.40s -> 3756 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16513, 16567, 16597])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 20.91 GB, resident mapped files 0.01 GB, swap used 16481.12 MB
+  -> <run-root>/results/lightning-omlx-20261018-091126.json
+[09:14:32] lightning-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:14:32] lightning-omlx: GPU lock released after 186.2s held
+[09:14:32] lightning-omlx: -> <run-root>/results/lightning-omlx-20261018-091126.json  flags: 1
+
+===== lightning-omlx-mtp  [omlx] oMLX + MTP (Lightning MTP, depth 2, MLX 4-bit with MTP head)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[09:14:32] lightning-omlx-mtp: GPU lock acquired after 0.0s wait
+[09:14:33] lightning-omlx-mtp: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/lightning-mtp/models --no-hf-cache --headless --host 127.0.0.1 --port 8276 --base-path <run-root>/state/omlx/lightning-mtp/base --paged-ssd-cache-dir <run-root>/state/omlx/lightning-mtp/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[09:14:35] lightning-omlx-mtp: ready after 2s (pid 90601, listener 90601)
+[09:14:39] lightning-omlx-mtp:  warm-up prefill~2.9k+decode64: ok (3.72s)
+[09:14:39] lightning-omlx-mtp:  warm-up tools: ok (0.41s)
+[09:14:42] lightning-omlx-mtp:  warm-up decode512#1: ok (2.92s)
+[09:14:45] lightning-omlx-mtp:  warm-up decode512#2: ok (2.83s)
+[09:14:48] lightning-omlx-mtp:  warm-up decode512#3: ok (2.88s)
+[09:15:49] lightning-omlx-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[09:16:49] lightning-omlx-mtp: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-omlx-mtp
+  decode T=0.6: 189.94 tok/s (e2e 190.73; 512 tok, finish=length, d4=0.9343)
+  decode T=0.6: 188.76 tok/s (e2e 183.40; 512 tok, finish=length, d4=0.961)
+  decode T=0.6: 183.54 tok/s (e2e 184.09; 512 tok, finish=length, d4=0.9605)
+  decode T=0.6: 196.17 tok/s (e2e 195.69; 512 tok, finish=length, d4=0.5072)
+  decode T=0.6: 191.57 tok/s (e2e 189.55; 512 tok, finish=length, d4=0.9502)
+  decode median 189.94 (min 183.54, max 196.17) over 5/5 valid
+  decode T=0: median 199.31 (min 188.66, max 202.41) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.19s -> 3521 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4179, 4244, 4274])
+  prefill 16000: 16517 tok (ref 16517), TTFT 4.57s -> 3613 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [16511, 16564, 16594])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.62 GB, resident mapped files 0.01 GB, swap used 16465.12 MB
+  -> <run-root>/results/lightning-omlx-mtp-20261018-091432.json
+[09:17:43] lightning-omlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:17:43] lightning-omlx-mtp: GPU lock released after 190.7s held
+[09:17:43] lightning-omlx-mtp: -> <run-root>/results/lightning-omlx-mtp-20261018-091432.json
+
+===== lightning-mlxlm  [mlx-lm] mlx-lm (MLX 4-bit)  version mlx_lm 0.32.2 mlx 0.32.4
+[09:17:43] lightning-mlxlm: GPU lock acquired after 0.0s wait
+[09:17:43] lightning-mlxlm: starting ~/venvs/mlx-lm/bin/mlx_lm.server --model ~/.cache/kapitsa/benchmark-models/lightning-mlx-4bit --host 127.0.0.1 --port 8277 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[09:17:45] lightning-mlxlm: ready after 2s (pid 1000, listener 1000)
+[09:17:47] lightning-mlxlm:  warm-up prefill~2.9k+decode64: ok (1.32s)
+[09:17:47] lightning-mlxlm:  warm-up tools: ok (0.39s)
+[09:18:49] lightning-mlxlm: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:19:48] lightning-mlxlm: GPU not quiet after 121s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mlxlm
+  decode T=0.6: 135.48 tok/s (e2e 135.33; 512 tok, finish=length, d4=0.9446)
+  decode T=0.6: 138.88 tok/s (e2e 139.55; 512 tok, finish=length, d4=0.9518)
+  decode T=0.6: 139.28 tok/s (e2e 138.62; 512 tok, finish=length, d4=0.6843)
+  decode T=0.6: 140.70 tok/s (e2e 140.11; 512 tok, finish=length, d4=0.9527)
+  decode T=0.6: 140.36 tok/s (e2e 140.36; 512 tok, finish=length, d4=0.9325)
+  decode median 139.28 (min 135.48, max 140.7) over 5/5 valid
+  decode T=0: median 145.58 (min 144.96, max 146.86) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 1.24s -> 3365 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4226, 4257, 4297])
+  prefill 16000: 16519 tok (ref 16517), TTFT 4.83s -> 3422 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [16546, 16571, 16604])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.10 GB, resident mapped files 0.01 GB, swap used 16465.12 MB
+  -> <run-root>/results/lightning-mlxlm-20261018-091743.json
+[09:20:51] lightning-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:20:51] lightning-mlxlm: GPU lock released after 187.5s held
+[09:20:51] lightning-mlxlm: -> <run-root>/results/lightning-mlxlm-20261018-091743.json  flags: 1
+
+===== lightning-llamacpp  [llama.cpp] llama.cpp (Q4_0 GGUF)  version 0.7.0-dev (b11669, 620d2225c)
+[09:20:51] lightning-llamacpp: GPU lock acquired after 0.0s wait
+[09:20:51] lightning-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[09:20:55] lightning-llamacpp: ready after 4s (pid 11077, listener 11077)
+[09:20:56] lightning-llamacpp:  warm-up prefill~2.9k+decode64: ok (1.44s)
+[09:20:57] lightning-llamacpp:  warm-up tools: ok (0.45s)
+[09:21:59] lightning-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:22:58] lightning-llamacpp: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp
+  decode T=0.6: 116.00 tok/s (e2e 116.03; 512 tok, finish=length, d4=0.949)
+  decode T=0.6: 116.97 tok/s (e2e 116.96; 512 tok, finish=length, d4=0.8369)
+  decode T=0.6: 117.01 tok/s (e2e 116.85; 512 tok, finish=length, d4=0.9718)
+  decode T=0.6: 116.78 tok/s (e2e 116.75; 512 tok, finish=length, d4=0.9716)
+  decode T=0.6: 115.45 tok/s (e2e 115.36; 512 tok, finish=length, d4=0.9602)
+  decode median 116.78 (min 115.45, max 117.01) over 5/5 valid
+  decode T=0: median 113.21 (min 112.76, max 114.83) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4612)']
+  prefill 4000: 4184 tok (ref 4184), TTFT 1.57s -> 2662 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4228, 4271, 4310])
+  prefill 16000: 16519 tok (ref 16517), TTFT 5.85s -> 2823 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16550, 16575, 16606])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.36 GB, resident mapped files 0.03 GB, swap used 16465.12 MB
+  -> <run-root>/results/lightning-llamacpp-20261018-092051.json
+[09:24:13] lightning-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:24:13] lightning-llamacpp: GPU lock released after 202.3s held
+[09:24:13] lightning-llamacpp: -> <run-root>/results/lightning-llamacpp-20261018-092051.json  flags: 2
+
+===== lightning-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[09:24:13] lightning-llamacpp-mtp1: GPU lock acquired after 0.0s wait
+[09:24:13] lightning-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 1
+[09:24:17] lightning-llamacpp-mtp1: ready after 4s (pid 21788, listener 21788)
+[09:24:19] lightning-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (1.56s)
+[09:24:19] lightning-llamacpp-mtp1:  warm-up tools: ok (0.43s)
+[09:25:21] lightning-llamacpp-mtp1: gpu busy (62s): com.apple.WebKit[3316] 6%
+[09:26:21] lightning-llamacpp-mtp1: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp1
+  decode T=0.6: 141.59 tok/s (e2e 141.86; 512 tok, finish=length, d4=0.7336)
+  decode T=0.6: 143.77 tok/s (e2e 143.46; 512 tok, finish=length, d4=0.9696)
+  decode T=0.6: 142.41 tok/s (e2e 142.18; 512 tok, finish=length, d4=0.9573)
+  decode T=0.6: 145.57 tok/s (e2e 145.28; 512 tok, finish=length, d4=0.965)
+  decode T=0.6: 144.70 tok/s (e2e 144.86; 512 tok, finish=length, d4=0.8458) INVALID ['content contains </think>']
+  decode median 143.09 (min 141.59, max 145.57) over 4/5 valid
+  decode T=0: median 144.87 (min 134.28, max 146.49) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.49s -> 2806 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4213, 4241, 4282])
+  prefill 16000: 16518 tok (ref 16517), TTFT 5.86s -> 2821 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16547, 16582, 16625])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.08 GB, resident mapped files 0.03 GB, swap used 16457.12 MB
+  INVALID: ['decode: content contains </think>']
+  -> <run-root>/results/lightning-llamacpp-mtp1-20261018-092413.json
+[09:27:24] lightning-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:27:24] lightning-llamacpp-mtp1: GPU lock released after 191.2s held
+[09:27:24] lightning-llamacpp-mtp1: -> <run-root>/results/lightning-llamacpp-mtp1-20261018-092413.json  INVALID: ['decode: content contains </think>']  flags: 1
+
+===== lightning-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[09:27:24] lightning-llamacpp-mtp2: GPU lock acquired after 0.0s wait
+[09:27:24] lightning-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 2
+[09:27:28] lightning-llamacpp-mtp2: ready after 4s (pid 31956, listener 31956)
+[09:27:30] lightning-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (1.4s)
+[09:27:30] lightning-llamacpp-mtp2:  warm-up tools: ok (0.36s)
+[09:28:32] lightning-llamacpp-mtp2: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:29:32] lightning-llamacpp-mtp2: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp2
+  decode T=0.6: 154.10 tok/s (e2e 155.55; 512 tok, finish=length, d4=0.4495) flags ['repetition loop (distinct-4-gram 0.4495)']
+  decode T=0.6: 156.31 tok/s (e2e 156.43; 512 tok, finish=length, d4=0.9529)
+  decode T=0.6: 148.18 tok/s (e2e 149.78; 512 tok, finish=length, d4=0.7362)
+  decode T=0.6: 161.96 tok/s (e2e 161.26; 512 tok, finish=length, d4=0.4755) flags ['repetition loop (distinct-4-gram 0.4755)']
+  decode T=0.6: 166.96 tok/s (e2e 166.52; 512 tok, finish=length, d4=0.981)
+  decode median 156.31 (min 148.18, max 166.96) over 5/5 valid
+  decode T=0: median 163.01 (min 151.79, max 168.42) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.47s -> 2838 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4240, 4262, 4295])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.81s -> 2841 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16551, 16573, 16606])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.13 GB, resident mapped files 0.03 GB, swap used 16441.12 MB
+  -> <run-root>/results/lightning-llamacpp-mtp2-20261018-092724.json
+[09:30:30] lightning-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:30:30] lightning-llamacpp-mtp2: GPU lock released after 185.9s held
+[09:30:30] lightning-llamacpp-mtp2: -> <run-root>/results/lightning-llamacpp-mtp2-20261018-092724.json  flags: 3
+
+===== lightning-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[09:30:30] lightning-llamacpp-mtp3: GPU lock acquired after 0.0s wait
+[09:30:30] lightning-llamacpp-mtp3: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 3
+[09:30:34] lightning-llamacpp-mtp3: ready after 4s (pid 41964, listener 41964)
+[09:30:36] lightning-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (1.36s)
+[09:30:36] lightning-llamacpp-mtp3:  warm-up tools: ok (0.35s)
+[09:31:38] lightning-llamacpp-mtp3: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:32:38] lightning-llamacpp-mtp3: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp3
+  decode T=0.6: 147.10 tok/s (e2e 148.17; 512 tok, finish=length, d4=0.9576)
+  decode T=0.6: 176.05 tok/s (e2e 174.28; 512 tok, finish=length, d4=0.9436)
+  decode T=0.6: 154.65 tok/s (e2e 155.54; 512 tok, finish=length, d4=0.99)
+  decode T=0.6: 167.15 tok/s (e2e 166.61; 512 tok, finish=length, d4=0.9841)
+  decode T=0.6: 159.09 tok/s (e2e 159.24; 512 tok, finish=length, d4=0.8635)
+  decode median 159.09 (min 147.1, max 176.05) over 5/5 valid
+  decode T=0: median 161.96 (min 150.55, max 170.03) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.48s -> 2835 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4219, 4244, 4284])
+  prefill 16000: 16516 tok (ref 16517), TTFT 5.87s -> 2812 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16564, 16589, 16623])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.17 GB, resident mapped files 0.03 GB, swap used 16433.12 MB
+  -> <run-root>/results/lightning-llamacpp-mtp3-20261018-093030.json
+[09:33:36] lightning-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:33:36] lightning-llamacpp-mtp3: GPU lock released after 186.0s held
+[09:33:36] lightning-llamacpp-mtp3: -> <run-root>/results/lightning-llamacpp-mtp3-20261018-093030.json  flags: 1
+
+===== lightning-llamacpp-dspark  [llama.cpp] llama.cpp + DSpark drafter (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[09:33:36] lightning-llamacpp-dspark: GPU lock acquired after 0.0s wait
+[09:33:36] lightning-llamacpp-dspark: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-dspark --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/dspark/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark.gguf --spec-draft-n-max 3
+[09:33:40] lightning-llamacpp-dspark: ready after 4s (pid 51669, listener 51669)
+[09:33:42] lightning-llamacpp-dspark:  warm-up prefill~2.9k+decode64: ok (2.07s)
+[09:33:43] lightning-llamacpp-dspark:  warm-up tools: ok (0.48s)
+[09:34:45] lightning-llamacpp-dspark: gpu busy (62s): com.apple.WebKit[3316] 6%
+[09:35:45] lightning-llamacpp-dspark: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-dspark
+  decode T=0.6: 86.46 tok/s (e2e 86.46; 512 tok, finish=length, d4=0.5332)
+  decode T=0.6: 85.00 tok/s (e2e 85.50; 512 tok, finish=length, d4=0.9797)
+  decode T=0.6: 85.12 tok/s (e2e 84.71; 512 tok, finish=length, d4=0.9877)
+  decode T=0.6: 85.83 tok/s (e2e 86.29; 512 tok, finish=length, d4=0.9221)
+  decode T=0.6: 84.87 tok/s (e2e 84.77; 512 tok, finish=length, d4=0.8624)
+  decode median 85.12 (min 84.87, max 86.46) over 5/5 valid
+  decode T=0: median 88.37 (min 80.02, max 92.32) over 5/5 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 1.63s -> 2572 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4218, 4255, 4298])
+  prefill 16000: 16515 tok (ref 16517), TTFT 6.23s -> 2650 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16591, 16629, 16668])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.31 GB, resident mapped files 0.03 GB, swap used 16425.12 MB
+  -> <run-root>/results/lightning-llamacpp-dspark-20261018-093336.json
+[09:37:17] lightning-llamacpp-dspark: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:37:17] lightning-llamacpp-dspark: GPU lock released after 220.4s held
+[09:37:17] lightning-llamacpp-dspark: -> <run-root>/results/lightning-llamacpp-dspark-20261018-093336.json  flags: 1
+
+===== lightning-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[09:38:03] lightning-llamacpp-mtp1: GPU lock acquired after 0.0s wait
+[09:38:04] lightning-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/lightning-gguf/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --host 127.0.0.1 --port 8278 -a lightning -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/lightning-gguf/mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --spec-draft-n-max 1
+[09:38:08] lightning-llamacpp-mtp1: ready after 4s (pid 65782, listener 65782)
+[09:38:09] lightning-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (1.52s)
+[09:38:10] lightning-llamacpp-mtp1:  warm-up tools: ok (0.42s)
+[09:39:11] lightning-llamacpp-mtp1: gpu busy (62s): com.apple.WebKit[3316] 7%
+[09:40:11] lightning-llamacpp-mtp1: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-llamacpp-mtp1
+  decode T=0.6: 148.48 tok/s (e2e 147.98; 512 tok, finish=length, d4=0.9362)
+  decode T=0.6: 141.53 tok/s (e2e 140.95; 512 tok, finish=length, d4=0.8889)
+  decode T=0.6: 142.36 tok/s (e2e 142.70; 512 tok, finish=length, d4=0.9362)
+  decode T=0.6: 140.51 tok/s (e2e 140.84; 512 tok, finish=length, d4=0.5783)
+  decode T=0.6: 144.27 tok/s (e2e 143.79; 512 tok, finish=length, d4=0.9246)
+  decode median 142.36 (min 140.51, max 148.48) over 5/5 valid
+  decode T=0: median 142.31 (min 140.73, max 146.31) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 1.48s -> 2831 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4244, 4266, 4308])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.82s -> 2840 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [16568, 16599, 16641])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.07 GB, resident mapped files 0.03 GB, swap used 16425.12 MB
+  -> <run-root>/results/lightning-llamacpp-mtp1-20261018-093803.json
+[09:41:14] lightning-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[09:41:14] lightning-llamacpp-mtp1: GPU lock released after 190.5s held
+[09:41:14] lightning-llamacpp-mtp1: -> <run-root>/results/lightning-llamacpp-mtp1-20261018-093803.json  flags: 1
