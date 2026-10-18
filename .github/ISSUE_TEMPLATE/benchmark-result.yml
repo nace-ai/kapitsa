@@ -1,0 +1,28 @@
+name: Benchmark result
+description: Add a `kapitsa bench` result to the community results. `kapitsa bench --submit` fills this in when gh is not set up.
+title: "Benchmark: "
+labels: ["benchmark"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for measuring Kapitsa on your Mac. `kapitsa bench --submit` fills in the result below; it is the JSON
+        file `kapitsa bench` saved (in `~/.cache/kapitsa/bench/`). It holds your Mac's model, chip, memory and macOS
+        version, and the run's numbers and conditions: no serial number, host name, user name or path.
+        A maintainer checks it with `tools/community_check.py` and adds it to
+        [the community results](https://github.com/nace-ai/kapitsa/blob/main/bench/community/RESULTS.md).
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: The JSON that `kapitsa bench` saved, unchanged.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything about the run, if you like (other apps open, cooling, a custom build).
+    validations:
+      required: false

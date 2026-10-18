@@ -1,0 +1,86 @@
+# Community benchmark results (bench/community): checks the `kapitsa bench` results a pull request adds, labels it, and
+# keeps bench/community/RESULTS.md up to date once results reach main.
+#
+# The check runs on pull_request_target so that it can label pull requests from forks. That event runs with this
+# repository's token, so it never runs the pull request's code: it checks out the base branch, whose
+# tools/community_check.py reads the pull request's result files as data through the API (contents at the head commit)
+# and never executes anything from them. Untrusted text (file names, titles) is never put into a run: line.
+name: Community benchmark results
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths: ["bench/community/results/**"]
+  push:
+    branches: [main]
+    paths: ["bench/community/results/**", "tools/community_table.py"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      # pull_request_target checks out the base branch as it is now (its newest checker), never the pull request
+      - name: Check out the base branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # a Python of its own: the runner's system Python refuses pip installs (PEP 668)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install jsonschema
+        run: python -m pip install --disable-pip-version-check jsonschema==4.23.0
+
+      - name: Check the results and label the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python tools/community_check.py --github
+
+  table:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Write RESULTS.md
+        run: python3 tools/community_table.py
+
+      # main only takes squash-merged pull requests, so the update goes through one
+      - name: Open and merge a pull request if it changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- bench/community/RESULTS.md; then
+            echo "RESULTS.md is up to date"
+            exit 0
+          fi
+          branch="community/results-${GITHUB_SHA::12}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -m "bench/community/RESULTS.md: the community results, rewritten from bench/community/results" -- bench/community/RESULTS.md
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "Community results: RESULTS.md rewritten" \
+            --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."
+          gh pr merge "$branch" --squash --delete-branch

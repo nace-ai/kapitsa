@@ -392,7 +392,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
-    if (ctx == 0) ctx = agent_context(ref.dir, opt.slots, budget);
+    if (ctx == 0) ctx = agent_context(ref.dir, fit_slots(opt.slots), budget);  // the context first; serve then picks the slots
     if (const std::string p = port_problem("127.0.0.1", port); !p.empty()) return fail(p);
     mkdir(hub::home_dir().c_str(), 0755);
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);

@@ -15,6 +15,8 @@
 #include <functional>
 #include <memory>
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -32,7 +34,9 @@ struct EngineOptions {
   std::string model_dir;
   std::string model_id;        // id reported by /v1/models (default: directory name)
   int context = 32768;         // capacity of each slot (tokens)
-  int slots = 2;               // conversations kept warm at once (each has its own KV/state)
+  // requests that run at once, each on a slot with its own KV cache and state that keeps its conversation warm
+  // (more wait for a free one); 0 = auto_slots()
+  int slots = 0;
   int prefill_chunk = 0;       // rows per prefill pass; 0 = 2048, or 1024 when that leaves too little memory
   int spec_depth = -1;         // MTP draft tokens per cycle (0 = no speculative decoding, -1 = model default)
   double mem_budget_gb = 0;    // GPU memory Kapitsa may hold (GB); 0 = default_mem_budget()
@@ -45,6 +49,16 @@ struct EngineOptions {
   // 1.4 million), 0 = the model's own limit (Qwen3.6 / 3.8: 16.7 million, Bolt: 13312 patches of 16x16).
   long image_max_pixels = vision::kModelDefaultPixels;
 };
+
+// Slots when none are asked for (EngineOptions::slots 0): kAutoSlots, so that an agent's conversation and its parallel
+// subagents or side requests each run on a warm slot of their own, or as many (down to 2, the old default) as the
+// model's memory plan, the engine's own, holds without costing anything two slots have: one full --ctx conversation
+// beside them, the same decoding (drafter) and the same prefill chunk. From the safetensors headers alone (the engine,
+// `kapitsa serve` and `kapitsa doctor` share it).
+constexpr int kAutoSlots = 4;
+int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget);
+// The slots a fit check counts before the model is known: the ones asked for, else 2 (auto never takes fewer).
+inline int fit_slots(int slots) { return slots > 0 ? slots : 2; }
 
 // GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
 // (recommendedMaxWorkingSetSize, which macOS sizes from the RAM) minus a margin (4%, at least 512 MB) for
@@ -158,6 +172,37 @@ struct ChatResult {
   int slot = -1;
   uint64_t slot_gen = 0, req_seq = 0;
   std::shared_ptr<const std::vector<vision::Prepared>> images;
+  // concurrency: time this request waited for a free slot, and the GPU turns it gave to other requests
+  double queue_ms = 0;
+  int yields = 0;
+};
+
+// The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
+// up its turn between two steps of its own (prefill chunks, decode cycles) goes behind every request waiting, so the
+// requests in flight take turns step by step. Events (a slot or memory freed, a request ended) wake requests that wait
+// for one without holding the turn.
+class TurnLock {
+ public:
+  void lock();
+  void unlock();
+  bool try_lock();  // the turn now when nobody holds it or waits for it (idle-time work: history prefill)
+  // requests waiting for the turn (read by its holder between steps)
+  int waiting() const { return waiting_.load(std::memory_order_relaxed); }
+  // how long the holder has held the turn (ms; read by the holder)
+  double held_ms() const;
+  // events: the count (read while holding the turn); notify() adds one (while holding it)
+  uint64_t events() const;
+  void notify();
+  // Gives up the turn until events() != seen, or until `stop` (polled every second without the turn) says so, then
+  // waits for it again (behind the requests already waiting). True if an event happened.
+  bool wait_event(uint64_t seen, const std::function<bool()>& stop = nullptr);
+
+ private:
+  mutable std::mutex m_;
+  std::condition_variable cv_, ev_cv_;
+  uint64_t next_ = 0, serving_ = 0, events_ = 0;
+  std::atomic<int> waiting_{0};
+  std::atomic<double> since_{0};  // when the holder took the turn (host ms)
 };
 
 class Engine {
@@ -166,6 +211,7 @@ class Engine {
   ~Engine();
   const std::string& model_id() const { return opts_.model_id; }
   int context_length() const { return opts_.context; }
+  int slots() const { return int(slots_.size()); }  // requests that run at once
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
   // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
@@ -179,11 +225,15 @@ class Engine {
   // The prompt's length in tokens, as chat() would prefill it (images: their rows; they are fetched and decoded for
   // their size, and a bad one throws vision::Error). Does not wait for a running request.
   int count_tokens(const ChatRequest& r) const;
-  // Runs one request. `on_delta` returns false to cancel. Serialized across threads. `on_prompt`, if given, is
-  // called once the prompt is tokenized and matched against the slot's cache, before the prefill, with
-  // prompt_tokens and cached_tokens set (not when the request fails before that).
+  // Runs one request. `on_delta` returns false to cancel. Requests in flight at once each take a slot of their own and
+  // take turns on the GPU between prefill chunks and decode cycles (one request alone runs as if it were the only
+  // one); with every slot busy a request waits for one, first come first served. `on_prompt`, if given, is called once
+  // the prompt is tokenized and matched against the slot's cache, before the prefill, with prompt_tokens and
+  // cached_tokens set (not when the request fails before that). `cancelled`, if given, is polled while the request
+  // waits for a slot or for memory (a client gone before its first token).
   ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
-                  const std::function<void(const ChatResult&)>& on_prompt = nullptr);
+                  const std::function<void(const ChatResult&)>& on_prompt = nullptr,
+                  const std::function<bool()>& cancelled = nullptr);
   // History prefill (NI_HISTORY_PREFILL): after a reply, prefills the conversation as the next request
   // will render it (the template drops this turn's think block, so the generated tokens in the live
   // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its
@@ -214,20 +264,43 @@ class Engine {
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
+    bool busy = false;                // a request runs on it (its state and KV cache are that request's)
+    uint64_t arrival = 0;             // that request's number (requests_ when it arrived)
+    // that request waits for memory other requests' KV caches hold: before its prefill (nothing of it on the GPU
+    // yet: a request that has started may take its cache, as may an earlier one; it then reads its prompt from the
+    // start), or for its KV cache to grow while decoding (its cache stays)
+    enum class MemWait : uint8_t { none, before_prefill, growth } mem_wait = MemWait::none;
+    Buffer park_h;                    // MTP decoding: the hidden rows the next cycle reads, while other requests run
   };
-  // `arrival`: the request's number (requests_ when it arrived); mm: the prompt's images (null for text), when
-  // `prompt` holds its prefix-reuse keys
-  Slot& pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr);
+  // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
+  // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
+  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr);
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
-  // Frees memory until `bytes` more fit the budget: other slots' KV caches (least recently used first), then the
+  // Frees memory until `bytes` more fit the budget: idle slots' KV caches (least recently used first), then the
   // Neural Engine split. False if that is not enough.
   bool make_room(Slot& keep, size_t bytes);
-  // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
-  // slots (least recently used first: their conversations are prefilled again when they come back).
-  // Nothing using the slots may be in flight. False if even that leaves too little memory.
-  bool reserve_kv(Slot& slot, int need);
+  // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of idle
+  // slots (least recently used first: their conversations are prefilled again when they come back), then those of
+  // requests waiting for memory before their prefill (the newest first): every such request's when `started` (this
+  // slot's request is decoding: an answer in progress comes first, as when requests ran one at a time and the
+  // others waited without a slot), later ones' otherwise. Nothing using those slots may be in flight. False if even
+  // that leaves too little memory.
+  bool reserve_kv(Slot& slot, int need, bool started);
+  // reserve_kv, and while that fails, waits (without the turn) for memory that other requests in flight hold: a
+  // request that has started (`started`; the caller has parked its work: nothing of its own in flight, nothing it
+  // still needs in the model's shared buffers) while another one runs; one before its prefill also while a started or
+  // an earlier request waits for memory. False when it cannot fit (for one before its prefill: not even alone, as the
+  // others are later requests whose caches it took), or cancelled.
+  bool reserve_kv_wait(Slot& slot, int need, const std::function<bool()>& cancelled, bool started);
+  // Time to give the GPU turn away: another request waits for it and (`quantum`) this one has held it for NI_TURN_MS
+  // (default 30: two of the 35B's ~19 ms decode cycles, one of the 27B's or Bolt's; each turn given away costs ~0.6 ms
+  // of an idle GPU). NI_PARK_TEST=1: at every step, even alone (the parked path's exactness check).
+  bool contended(bool quantum = true) const;
+  // Gives the GPU turn to the requests waiting for it and waits for it again. The caller has drained its own GPU work
+  // and keeps nothing it needs in the model's shared buffers (its state is in its slot).
+  void yield_turn(ChatResult& res);
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
@@ -248,7 +321,9 @@ class Engine {
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;
-  std::mutex mu_;
+  TurnLock turn_;            // the GPU turn: engine state and the model are used by its holder only
+  int active_ = 0;           // requests holding a slot (under the turn)
+  std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;

@@ -181,7 +181,8 @@ class ContentionMonitor(threading.Thread):
                 rows = diff_rows(a, b, tb - ta, proc_tree(self.roots()))
                 tot = sum(r[0] for r in rows)
                 top = rows[0] if rows else (0.0, (0, "-"))
-                amb = sum((b[k] - a.get(k, 0)) / ((tb - ta) * 1e9) * 100 for k in b if is_ambient(k[1]))
+                # a process that closes one of its GPU clients loses that client's time: clamp, or the sample goes negative
+                amb = sum(max(0, b[k] - a.get(k, 0)) / ((tb - ta) * 1e9) * 100 for k in b if is_ambient(k[1]))
                 self.samples.append([round(tb, 3), round(tot, 2), top[1][1], round(top[0], 2), round(amb, 2)])
                 a, ta = b, tb
             except Exception:

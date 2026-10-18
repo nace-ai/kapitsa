@@ -1,0 +1,78 @@
+[
+ {
+  "label": "q36-35b-mlxserve-mtp",
+  "display": "mlx-serve + MTP (depth up to 2)",
+  "engine": "mlx-serve",
+  "version": "26.10.2",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q36-35b-mtp"},
+   {"write_json": {"path": "{state}/mlx-serve/q36-35b-mtp/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768", "--no-drafter", "--mtp-max-depth", "2"],
+  "env": {"HOME": "{state}/mlx-serve/q36-35b-mtp"},
+  "env_clear_prefixes": ["MLX_SERVE_"],
+  "base_url": "http://127.0.0.1:8173/v1",
+  "model": "Qwen3.6-35B-A3B-MLX-Serve-4bit",
+  "ready_timeout": 600,
+  "adaptive_warm": true,
+  "requires_paths": ["{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit/config.json",
+                     "{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit/mtp/weights.safetensors"],
+  "version_cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--version"],
+  "log_grep": ["\\[spec-stats\\] mode=", "\\[mtp\\]|\\[dflash\\]|\\[row-exact\\]|drafter ready|MTP head ready|round-cost|=enabled \\(streaming",
+               "warn|WARN|error|Error"],
+  "note": "mlx-serve 26.10.2 (the release binary) on the vendor's own 35B pack, ddalcu/Qwen3.6-35B-A3B-MLX-Serve-4bit @6122e2b: its trunk shards are the mlx-community 4-bit ones every engine here reads (sha256-identical, so tools/mlx_serve_pack.py clones them), plus its MTP sidecar mtp/weights.safetensors (mlx-community's 4-bit MoE head) and its config.json. MTP with exact verification (the default; the opt-in lossy --mtp-typical/--mtp-tokenv3 verifiers change the output distribution). --mtp-max-depth 2: fastest in smoke tests before the run (median of 5 sampled decodes: max depth 2 127.5 tok/s, the adaptive default (cap 6 on this Mac) 124.8, max 3 117.5, max 1 114.7); the adaptive planner drafts about 1.9 tokens a round here anyway. PLD stays on (default), but mlx-serve runs one speculative mode per request (DFlash, else MTP, else PLD), so it never runs beside MTP (--no-pld measured 120.8, the same within noise). --no-drafter. A fresh HOME per run (in {state}): no saved model-settings.json applies and the round-cost table mlx-serve learns starts empty (the warm-up's three full decodes train it). --ctx-size 32768 like the others; one sequence (--max-concurrent 1, its default)."
+ },
+ {
+  "label": "q38-27b-mlxserve-mtp",
+  "extends": "q36-35b-mlxserve-mtp",
+  "display": "mlx-serve + MTP (depth up to 4)",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q38-27b-mtp"},
+   {"write_json": {"path": "{state}/mlx-serve/q38-27b-mtp/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768", "--no-drafter", "--mtp-max-depth", "4"],
+  "env": {"HOME": "{state}/mlx-serve/q38-27b-mtp"},
+  "model": "qwen3.8-27b-4bit-mlx-serve",
+  "requires_paths": ["{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve/config.json",
+                     "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve/mtp/weights.safetensors"],
+  "note": "The 27B trunk every engine reads (lmstudio-community/Qwen3.8-27B-MLX-4bit @6067b15) with the MTP head of the vendor's pack ddalcu/Qwen3.8-27B-MLX-Serve-4bit @901aa73 (its 29 language_model.mtp.* tensors, byte for byte, as mtp/weights.safetensors; mlx-serve folds +1 into its delta-encoded norms at load, as it does for the pack itself), built by tools/mlx_serve_pack.py. The vendor's own trunk is its own conversion of the same model (bf16 embedding; in the tensors sampled about 0.2% of the 4-bit codes differ) and did not fit this Mac's free disk next to the shared one. --no-drafter (the folder also holds the drafter/ for the DFlash2 config). MTP with exact verification. --mtp-max-depth 4: fastest in smoke tests before the run (median of 5 sampled decodes: max depth 4 37.8 tok/s, max 3 37.7, the adaptive default (cap 6 on this Mac) 36.3). PLD, HOME and context as on the 35B."
+ },
+ {
+  "label": "q38-27b-mlxserve-dflash2",
+  "extends": "q38-27b-mlxserve-mtp",
+  "display": "mlx-serve + DFlash2 (draft tree, block 8)",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q38-27b-dflash2"},
+   {"write_json": {"path": "{state}/mlx-serve/q38-27b-dflash2/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768",
+          "--drafter", "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve/drafter", "--no-mtp"],
+  "env": {"HOME": "{state}/mlx-serve/q38-27b-dflash2"},
+  "requires_paths": ["{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve/config.json",
+                     "{models}/mlx-serve/qwen3.8-27b-4bit-mlx-serve/drafter/model.safetensors"],
+  "note": "The same folder with the vendor's drafter/ (z-lab's mirror of incoai/Qwen3.8-27B-DFlash2, sha256-identical to the drafter Kapitsa reads), named with --drafter so a missing drafter fails the run; mlx-serve quantizes it to 8 bits at load (its default on M1-M4). On this dense target it drafts with DFlash2's path selector and verifies a tree of up to 7 drafted tokens a round (block 8, its 'draft tree' cap; up to 15 on M5's tensor units). --no-mtp: with the MTP head loaded, a request admitted while the previous one is still finishing on the server (the benchmark's back-to-back requests) is handed to MTP, which decodes this model at about 27 tok/s beside a bound drafter; in smoke tests with the head loaded 2 of 5 answers went that way (median 50.1 tok/s, 26.6-55.0), without it 51.5 (47.4-54.0). Block 8 and the tree are the defaults and were fastest: block 6 measured 45.4 tok/s, and with the selector off (MLX_SERVE_DFLASH_SELECTOR=0, linear block-8 drafts) 48.0. PLD, HOME and context as on the 35B."
+ },
+ {
+  "label": "q36-35b-mlxserve-dflash2",
+  "extends": "q36-35b-mlxserve-mtp",
+  "display": "mlx-serve + DFlash2 (block 4)",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q36-35b-dflash2"},
+   {"write_json": {"path": "{state}/mlx-serve/q36-35b-dflash2/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768",
+          "--drafter", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2", "--no-mtp", "--draft-block-size", "4"],
+  "env": {"HOME": "{state}/mlx-serve/q36-35b-dflash2"},
+  "requires_paths": ["{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit/config.json",
+                     "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
+  "note": "The same pack plus --drafter incoai/Qwen3.6-35B-A3B-DFlash2 (the drafter Kapitsa and oMLX use; mlx-serve quantizes it to 8 bits at load, its default on M1-M4). The vendor ships no drafter for this model and documents DFlash for dense targets, but its loader binds DFlash drafters to MoE trunks too (the qwen3_5 MoE forward fills the drafter's layer taps). On a MoE target it verifies a fixed block (no draft tree: trees need the dense row-exact verify) and switches DFlash off for the rest of an answer once it accepts fewer than 1.8 drafts per round (its break-even bar for MoE verifies); at T = 0.6 this drafter averaged about 1.8 at block 5, so most answers finish as plain decoding. --no-mtp: with the MTP head loaded, a request admitted while the previous one is still finishing (the benchmark's back-to-back requests) is handed to MTP instead. --draft-block-size 4: fastest in smoke tests (median of 5 sampled decodes: block 4 103.9 tok/s, the default block 5 (this Mac's cap) 102.4, block 8 88.2; block 5 with the MTP head loaded 98.7). PLD, HOME and context as for MTP."
+ }
+]
