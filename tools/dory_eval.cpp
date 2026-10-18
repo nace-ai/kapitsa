@@ -141,6 +141,7 @@ int main(int argc, char** argv) {
     if (greedy > 0) {
       double pf_ms = 0;
       prefill(&pf_ms);
+      if (Encoder::profiling()) Encoder::profile_report(1);  // NI_PROFILE=1: the prefill's kernels, then decode's
       std::vector<int> toks{s->tokens()[n]};
       const double t1 = now_ms();
       for (int i = 0; i + 1 < greedy; ++i) {
@@ -152,6 +153,7 @@ int main(int argc, char** argv) {
         toks.push_back(s->tokens()[n + i + 1]);
       }
       const double dec_ms = now_ms() - t1;
+      if (Encoder::profiling() && toks.size() > 1) Encoder::profile_report(int(toks.size()) - 1);
       nlohmann::json o{{"name", name}, {"gen", toks}, {"prefill_ms", pf_ms}, {"decode_ms", dec_ms},
                        {"loops", m.loops_of(*s)}, {"kv", loop_kv_name(m.kv_mode())}};
       std::ofstream(out + "/" + name + ".greedy.json") << o.dump();

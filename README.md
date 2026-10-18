@@ -56,14 +56,16 @@ run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16
 | **Qwen3.5-4B** · `4b`<br><sub>dense</sub> | **4-bit · 4.6 GB**<br><sub>also 6-bit 5.6 · 8-bit 6.7 · bf16 10.6 GB</sub> | DFlash / MTP |
 | **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active</sub> | **4-bit · 22.1 GB**<br><sub>also 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 GB</sub> | DFlash2 / MTP |
+| **Nemotron-Labs Dory1.0 4B** · `dory`<br><sub>looped dense, 1-4 loops per token; text only</sub> | **NVIDIA NVFP4 · 3.2 GB**<br><sub>also bf16 8.0 GB</sub> | — |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid Mamba-2 MoE, 3B active; text only</sub> | **NVIDIA NVFP4 · 22.9 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | DSpark |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | LiLiCorr |
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid Mamba-2 MoE, 12B active; 96 GB+ Macs</sub> | **NVIDIA NVFP4 · 76.4 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | LiLiCorr |
 
 bf16 is full precision; pick another precision with `--model 35b:6bit`, `--model 27b:bf16` and so on.
 
-Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL and Lightning NVIDIA's own `nvfp4` ones. Every model above
-except Lightning reads [images](docs/usage.md#images). Other Qwen3.5-family models load from a Hugging Face repo, a
+Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL and Lightning NVIDIA's own `nvfp4` ones, Dory NVIDIA's `nvfp4` and `bf16` ones;
+Dory runs its shared block 1-4 times per token (`--loops`, 2 by default: [thinking depth](docs/usage.md#dory-thinking-depth)). Every model above
+except Lightning and Dory reads [images](docs/usage.md#images). Other Qwen3.5-family models load from a Hugging Face repo, a
 folder or a GGUF file ([other models](docs/usage.md#other-models)). Model weights keep their own licenses.
 
 ```bash

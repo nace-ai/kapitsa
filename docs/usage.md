@@ -242,6 +242,36 @@ Effort levels: `none` and `minimal` turn thinking off; `low` and `medium` go to 
 them; `high`, `xhigh` and `max` keep the template's default, Qwen3.8's highest level. The other models think the same at
 every level. In Messages, `"thinking": {..., "display": "omitted"}` returns thinking blocks without their text.
 
+### Dory: thinking depth
+
+NVIDIA's Nemotron-Labs Dory1.0 4B is a looped model: 16 input layers, a shared block of 40 layers, 16 output layers,
+and the shared block runs 1 to 4 times per token. Each loop is thinking in latent space: more compute per token, the
+same weights, no extra tokens. It is separate from the visible reasoning (the `<think>` block), which stays as the
+chat template and the request say (thinking on by default in Chat Completions and Responses).
+
+| Loops | What NVIDIA reports | Speed |
+| --- | --- | --- |
+| 1 | the cheapest per token; SWE-bench Verified 50.3 | the fastest |
+| 2 (default) | most of the gain; SWE-bench Verified 59.5 | |
+| 4 | best on agentic tasks; SWE-bench Verified 61.8 | the slowest |
+
+- **Server default:** `kapitsa serve --model dory --loops 4` (or `kapitsa claude --model dory --loops 4`); without it, 2
+  loops.
+- **Per request:** `"loops": N` in the request body (OpenAI clients: `extra_body={"loops": 4}`) sets it for that request.
+  Without it, the agents' own effort controls choose: OpenAI's `reasoning_effort` and Responses' `reasoning.effort`
+  (`minimal` and `low` 1 loop, `medium` 2, `high` and `xhigh` 4), Anthropic's `thinking` (disabled 1 loop, a
+  `budget_tokens` under 4096 1, under 16384 2, above 4; adaptive the server's default) and `output_config.effort`.
+  Every reply reports the loops it ran in `usage.kapitsa.loops`, and the server log names them.
+- **Cache:** a conversation's cached prompt is only valid for the loop count that computed it; a request with another
+  count reads its prompt again (on another slot when one is free, so the conversation in progress keeps its cache).
+- **KV cache (`--loop-kv`):** `last-loop` (the default, NVIDIA's `recurrent_kv_cache_mode: last_loop`) keeps one cache per
+  layer, each loop writing over the previous one's, so a conversation's KV cache is the size of a one-loop model's at
+  any loop count: 36 KB per token plus 114 MB of sliding-window rings. `per-loop` keeps a cache per loop, as the model
+  was trained (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both.
+- **Replies that think to the end:** as NVIDIA's `force_nonempty_content` (on by default here), a reply whose answer is
+  empty returns its reasoning as its content too; `"chat_template_kwargs": {"force_nonempty_content": false}` turns it
+  off.
+
 ### API keys and network access
 
 The server listens on `127.0.0.1` and needs no key: any key a client sends is accepted. With `--api-key KEY`, every
