@@ -6,7 +6,7 @@
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "server/cli.h"
-#include "server/pendulum.h"
+#include "server/beam.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -396,21 +396,21 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     const auto t0 = std::chrono::steady_clock::now();
     int shown = -1;
     bool ready = false;
-    // in a terminal: Kapitsa's pendulum wobbling while the server starts (a spinner where it can't play)
+    // in a terminal: the logo as a loader while the server starts (a spinner where it can't play)
     const bool tui = term::fancy();
     const std::string label = term::bold(ref.model ? ref.model->name : ref.name) + term::dim("  " + std::string(term::kDot) + "  ") +
                               term::count(ctx) + " context";
     auto secs_since = [t0] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
-    std::unique_ptr<ui::Wobble> wobble;
+    std::unique_ptr<ui::Loader> wobble;
     std::unique_ptr<term::Spinner> spinner;
     if (tui && ui::can_animate()) {
       term::line("");
-      wobble = std::make_unique<ui::Wobble>(
+      wobble = std::make_unique<ui::Loader>(
           [&] {
             return std::vector<std::string>{"Starting " + label + "  " + term::dim(term::duration(secs_since())),
-                                            term::dim(term::clip(last_log_line(log), std::max(20, term::columns() - ui::kArtCols - 8)))};
+                                            term::dim(term::clip(last_log_line(log), std::max(20, term::columns() - ui::kLogoCols - 8)))};
           },
-          3);
+          1);
     } else if (tui) {
       spinner = std::make_unique<term::Spinner>("Starting " + label);
     }

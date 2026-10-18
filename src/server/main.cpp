@@ -494,7 +494,8 @@ static int serve(int argc, char** argv, int first) {
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
-  if (tui) ui::serve_begin(KAPITSA_VERSION, verbose);
+  if (tui) ui::serve_begin(verbose);
+  std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
   if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);  // before a long conversion
     try {
@@ -514,8 +515,8 @@ static int serve(int argc, char** argv, int first) {
       std::string why;
       if (!best_model(opt, budget, &ref, &why)) return fail(why);
       if (tui)
-        ui::note(bold_name(ref.name) + " is the best fit for this Mac (" + Gpu::get().name() + ", " +
-                 strf("%.0f GB", ram_gb()) + "). --model picks another.");
+        notes.push_back(bold_name(ref.name) + " is the best fit for this Mac (" + Gpu::get().name() + ", " +
+                        strf("%.0f GB", ram_gb()) + "). --model picks another.");
       else
         fprintf(stderr, "No --model given: %s is the best fit for this Mac (%s, %.0f GB). --model picks another.\n",
                 ref.name.c_str(), Gpu::get().name().c_str(), ram_gb());
@@ -526,9 +527,9 @@ static int serve(int argc, char** argv, int first) {
         bool fits = false;
         ref = pick_variant(*named.model, opt, budget, &fits);
         if (fits && ref.variant != named.variant && tui)
-          ui::note(bold_name(ref.name) + ", the largest variant of " + model + " that fits this Mac (" +
-                   strf("%.0f GB", ram_gb()) + "; the default, " + named.variant->name + ", does not). --model " +
-                   hub::short_name(*ref.model) + ":<variant> picks another.");
+          notes.push_back(bold_name(ref.name) + ", the largest variant of " + model + " that fits this Mac (" +
+                          strf("%.0f GB", ram_gb()) + "; the default, " + named.variant->name + ", does not). --model " +
+                          hub::short_name(*ref.model) + ":<variant> picks another.");
         else if (fits && ref.variant != named.variant)
           fprintf(stderr, "%s on this Mac (%.0f GB): %s, the largest of its variants that fits (the default, %s, does "
                   "not). --model %s:<variant> picks another.\n", model.c_str(), ram_gb(), ref.name.c_str(),
@@ -574,6 +575,10 @@ static int serve(int argc, char** argv, int first) {
   // fail now, not after loading the model, when the port is taken
   if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
   const std::string log_path = tui ? ui::serve_log_file(port) : "";
+  if (tui) {
+    ui::serve_header(KAPITSA_VERSION);
+    for (const auto& n : notes) ui::note(n);
+  }
   try {
     opt.model_dir = hub::ensure(ref, hub::PullOptions{});
   } catch (const hub::Stopped& e) {
@@ -662,6 +667,7 @@ static int serve(int argc, char** argv, int first) {
     const long created = long(std::time(nullptr));
     const std::string model = engine.model_id();
     const auto meter = ui::meter(req, r);
+    r.live = ui::live_of(meter);
     if (!body.value("stream", false)) {
       ChatResult out = engine.chat(r, [&](const ChatDelta&) {
         ui::token(meter);
@@ -750,6 +756,7 @@ static int serve(int argc, char** argv, int first) {
     }
     const std::string id = api::new_id("msg_"), model = engine.model_id();
     const auto meter = ui::meter(req, q.chat);
+    q.chat.live = ui::live_of(meter);
     if (!q.stream) {
       ChatResult out = engine.chat(q.chat, [&](const ChatDelta&) {
         ui::token(meter);
@@ -808,6 +815,7 @@ static int serve(int argc, char** argv, int first) {
       responses.put(id, std::move(items));
     };
     const auto meter = ui::meter(req, q->chat);
+    q->chat.live = ui::live_of(meter);
     if (!q->stream) {
       ChatResult out = engine.chat(q->chat, [&](const ChatDelta&) {
         ui::token(meter);

@@ -32,10 +32,12 @@ int fail(const std::string& msg, int code);
 
 // ---- kapitsa serve
 
-// Before anything else: the header; the engine's log goes to memory, and from serve_log_file() on to
+// Before anything else: the engine's log goes to memory, and from serve_log_file() on to
 // ~/.cache/kapitsa/logs/serve-<port>.log (and on screen too, dim, with `verbose` or NI_LOG); warnings and errors show on
 // screen either way
-void serve_begin(const std::string& version, bool verbose);
+void serve_begin(bool verbose);
+// The header, once the server will start (a mistyped command shows its error alone)
+void serve_header(const std::string& version);
 // Once the port is known to be free (another server's log is not cut): the log file, with what came before. Its path.
 std::string serve_log_file(int port);
 // A spinner while the engine loads, showing its latest log line; then "✓ Loaded <what> in 6.1s"
@@ -53,6 +55,8 @@ void ready(const Ready& r);
 // its first token, the images it carries. nullptr when the terminal UI is off; the functions take that too.
 struct Meter;
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r);
+// What the engine updates while it writes the request (ChatRequest::live), for the dashboard; null without a meter
+std::shared_ptr<LiveDecode> live_of(const std::shared_ptr<Meter>& m);
 void token(const std::shared_ptr<Meter>& m);
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r);
 

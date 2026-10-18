@@ -102,6 +102,18 @@ std::string chat_template_source(const std::string& model_dir);
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images = false);
 
+// One request's progress while it runs, for a live display (`kapitsa serve`'s dashboard in a terminal): the caller
+// passes it in ChatRequest::live and reads it from any thread; the engine writes it with relaxed atomic stores between
+// decode cycles, never on the GPU's path.
+struct LiveDecode {
+  std::atomic<int> phase{0};               // 0 waiting for the engine, 1 reading the prompt, 2 writing, 3 done
+  std::atomic<int> prompt{0}, cached{0};   // prompt tokens, of which reused from the cache
+  std::atomic<int> tokens{0};              // tokens written
+  std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
+  std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
+  std::atomic<int> spec{0};                // 0 plain decoding, 1 MTP, 2 DFlash2, 3 LiLiCorr
+};
+
 struct ChatRequest {
   ojson messages = ojson::array();
   ojson tools = ojson::array();
@@ -112,6 +124,7 @@ struct ChatRequest {
   int top_k = 20;
   uint32_t seed = 0;
   std::vector<std::string> stop;
+  std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
 };
 
 struct ToolCall {

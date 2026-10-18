@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -124,8 +125,10 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
   if (const size_t p = macos.find(" ("); p != std::string::npos) macos.resize(p);
   mac += dot + ram + dot + "macOS " + macos;
   o.push_back("    " + clip(mac, W - 4));
-  o.push_back("    " + bold(gb(double(budget))) + " of GPU memory for Kapitsa " +
-              dim("(Metal recommends " + gb(J["recommended_working_set_bytes"].get<double>()) + "; " + budget_note + ")"));
+  o.push_back("    " + bold(gb(double(budget))) + " of GPU memory for Kapitsa" +
+              dim(clip("  (" + (budget_note.empty() ? "" : budget_note + "; ") + "Metal recommends " +
+                           gb(J["recommended_working_set_bytes"].get<double>()) + ")",
+                       W - 42)));
   const std::string ane = J["neural_engine"].get<std::string>();
   o.push_back("    " + std::string(ane == "available" ? accent(kOk) + " Neural Engine" : dim(std::string(kFail) + " Neural Engine: " + ane)) +
               dot + (J["apple10"].get<bool>() ? accent(kOk) + " Metal 4 neural accelerators" : dim("no Metal 4 neural accelerators")));
@@ -171,30 +174,44 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
     const std::string legend = dim("← what --model <name> takes");
     const int gap = std::min(W, 80) - width(title) - width(legend);
     o.push_back(gap >= 3 ? title + std::string(size_t(gap), ' ') + legend : title);
-    std::string cur;
-    std::string l;
-    int start = 0;
+    // columns: each model's default first, then the other precisions by name, aligned across models
+    std::vector<std::string> models, names;
+    for (const auto& v : vars) {
+      if (std::find(models.begin(), models.end(), v.model) == models.end()) models.push_back(v.model);
+      const hub::CatalogModel* c = hub::find_model(v.model);
+      const bool dflt = c && c->default_variant == v.name;
+      if (!dflt && std::find(names.begin(), names.end(), v.name) == names.end()) names.push_back(v.name);
+    }
+    std::vector<std::vector<std::string>> grid(models.size(), std::vector<std::string>(names.size() + 1));
+    std::vector<int> cw(names.size() + 1, 0);
+    std::vector<std::string> aliases(models.size());
     int aw = 0;
-    for (const auto& v : vars) aw = std::max(aw, width(v.alias));
-    for (size_t i = 0; i <= vars.size(); ++i) {
-      if (i == vars.size() || vars[i].model != cur) {
-        if (!l.empty()) o.push_back(l);
-        if (i == vars.size()) break;
-        cur = vars[i].model;
-        l = "    " + left(bold(vars[i].alias), aw) + "   ";
-        start = width(l);
-      }
-      const Variant& v = vars[i];
+    for (const auto& v : vars) {
+      const size_t mi = size_t(std::find(models.begin(), models.end(), v.model) - models.begin());
+      const hub::CatalogModel* c = hub::find_model(v.model);
+      const bool dflt = c && c->default_variant == v.name;
+      const size_t k = dflt ? 0 : size_t(std::find(names.begin(), names.end(), v.name) - names.begin()) + 1;
       std::string cell = v.name + " " +
                          (v.fits == 1 ? accent(kOk) : v.fits < 0 ? dim("?") : v.starts ? warn("◐") : red(kFail) + dim(" " + v.need)) +
                          (v.chosen ? accent(" ←") : "");
-      if (width(l) + width(cell) > W && width(l) > start) {
-        while (!l.empty() && l.back() == ' ') l.pop_back();
-        o.push_back(l), l = std::string(size_t(start), ' ');
+      grid[mi][k] = cell;
+      cw[k] = std::max(cw[k], width(cell));
+      aliases[mi] = v.alias;
+      aw = std::max(aw, width(v.alias));
+    }
+    for (size_t mi = 0; mi < models.size(); ++mi) {
+      std::string l = "    " + left(bold(aliases[mi]), aw) + "   ";
+      const int start = width(l);
+      for (size_t k = 0; k < grid[mi].size(); ++k) {
+        if (cw[k] == 0) continue;
+        if (width(l) + cw[k] > W && width(l) > start) {
+          while (!l.empty() && l.back() == ' ') l.pop_back();
+          o.push_back(l), l = std::string(size_t(start), ' ');
+        }
+        l += left(grid[mi][k], cw[k]) + "   ";
       }
-      l += cell + "    ";
-      if (i + 1 == vars.size() || vars[i + 1].model != cur)
-        while (!l.empty() && l.back() == ' ') l.pop_back();
+      while (!l.empty() && l.back() == ' ') l.pop_back();
+      o.push_back(l);
     }
     o.push_back("    " + accent(kOk) + dim(" fits with its drafter   ") + warn("◐") + dim(" starts, without   ") + red(kFail) +
                 dim(" too big   ? offline"));
@@ -240,6 +257,9 @@ int run_doctor(int argc, char** argv) {
       return 2;
     }
   }
+  // in a terminal: a spinner while the models are planned (a few seconds)
+  std::unique_ptr<term::Spinner> spin;
+  if (!as_json && term::fancy()) spin = std::make_unique<term::Spinner>("Planning the models on this Mac");
   // --model takes what `kapitsa serve --model` takes: a name or alias, org/name, or a folder; a catalog model that is
   // not downloaded is planned from its headers (hub::plan_dir, fetched once)
   for (std::string& m : models) {
@@ -455,8 +475,9 @@ int run_doctor(int argc, char** argv) {
     }
     if (!as_json && !tty) printf("  %s: %s\n", c.name.c_str(), line.c_str());
   }
+  spin.reset();
   if (tty)
-    print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "4% / 512 MB below it",
+    print_tty(J, budget, budget_gb > 0 ? "--mem-budget" : getenv("NI_MEM_BUDGET") ? "NI_MEM_BUDGET" : "",
               ctx, slots, tty_rows, tty_vars);
   if (as_json) {
     J["context"] = ctx;

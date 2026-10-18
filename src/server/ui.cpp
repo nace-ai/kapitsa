@@ -4,7 +4,7 @@
 #include "api/clients.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
-#include "server/pendulum.h"
+#include "server/beam.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -12,8 +12,11 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <cmath>
 #include <ctime>
 #include <mutex>
@@ -107,14 +110,15 @@ std::string this_mac() {
 void home(const std::string& version) {
   const int W = layout_width();
   std::vector<std::string> o;
-  // the header: Kapitsa's pendulum beside the wordmark (its intro first, where it may play)
+  // the header: the logo (a beam diffracted by a standing wave of light) beside the wordmark, its intro first where it
+  // may play
   const std::vector<std::string> head = {badge(" kapitsa ") + "  " + dim(version), "fast local AI on Apple silicon",
                                          dim(this_mac())};
   const hub::CatalogModel* best = best_here();
   fputs("\n", stdout);
   fflush(stdout);
   if (W >= 60) {
-    intro(head, 3);
+    intro(head, 1);
   } else {
     o.push_back("  " + head[0] + "   " + head[1]);
     o.push_back("  " + head[2]);
@@ -238,8 +242,21 @@ void quiet() {
 
 
 void ok(const std::string& s, bool out) { line("  " + accent(kOk) + " " + s, out ? stdout : stderr); }
-void note(const std::string& s, bool out) { line("  " + dim(std::string(kArrow) + " " + s), out ? stdout : stderr); }
-void warning(const std::string& s) { line("  " + warn(kWarn) + " " + s, stderr); }
+void note(const std::string& s, bool out) {
+  // a long note wraps under itself (styled text is cut, not wrapped)
+  const int w = std::max(30, std::min(columns(), 100) - 5);
+  FILE* f = out ? stdout : stderr;
+  if (width(s) <= w || s.find('\033') != std::string::npos) return line("  " + dim(std::string(kArrow) + " " + clip(s, w)), f);
+  const auto ls = wrap(s, w);
+  for (size_t i = 0; i < ls.size(); ++i) line((i ? "    " : "  " + dim(std::string(kArrow)) + " ") + dim(ls[i]), f);
+}
+void warning(const std::string& s) {
+  // a long warning wraps under itself (styled text is cut, not wrapped)
+  const int w = std::max(30, std::min(columns(), 100) - 5);
+  if (width(s) <= w || s.find('\033') != std::string::npos) return line("  " + warn(kWarn) + " " + clip(s, w), stderr);
+  const auto ls = wrap(s, w);
+  for (size_t i = 0; i < ls.size(); ++i) line((i ? "    " : "  " + warn(kWarn) + " ") + ls[i], stderr);
+}
 
 int fail(const std::string& msg, int code) {
   term::error(msg);
@@ -445,7 +462,9 @@ void serve_sink(int level, const char* msg) {
   } else if (g_log.verbose) {
     line(dim(text), stderr);
   } else if (worth_showing(m)) {
-    warning(dim(m));
+    const int w = std::max(30, std::min(columns(), 100) - 5);
+    const auto ls = wrap(m, w);
+    for (size_t i = 0; i < ls.size(); ++i) line((i ? "    " : "  " + warn(kWarn) + " ") + dim(ls[i]), stderr);
   }
 }
 
@@ -484,11 +503,14 @@ bool g_req_header = false;
 
 }  // namespace
 
-void serve_begin(const std::string& version, bool verbose) {
+void serve_begin(bool verbose) {
   g_serve_ui = true;
   // NI_LOG asks for the log: on screen too
   g_log.verbose = verbose || getenv("NI_LOG") != nullptr;
   log_sink() = serve_sink;
+}
+
+void serve_header(const std::string& version) {
   print({"", "  " + badge(" kapitsa ") + "  " + dim(version + "  " + kDot + "  serve")});
 }
 
@@ -513,11 +535,11 @@ std::string serve_log_file(int port) {
 
 namespace {
 
-// While the model loads: Kapitsa's pendulum wobbling beside what is happening (where it may play), else a spinner
+// While the model loads: the logo as a loader beside what is happening (where it may play), else a spinner
 struct Loading {
   std::string what;
   std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
-  std::unique_ptr<Wobble> wobble;
+  std::unique_ptr<Loader> wobble;
   double secs() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); }
 };
 std::unique_ptr<Loading> g_loading;
@@ -534,7 +556,7 @@ void loading_begin(const std::string& what) {
   }
   line("");
   Loading* l = g_loading.get();
-  l->wobble = std::make_unique<Wobble>(
+  l->wobble = std::make_unique<Loader>(
       [l] {
         std::string detail;
         {
@@ -542,9 +564,9 @@ void loading_begin(const std::string& what) {
           detail = g_log.detail;
         }
         return std::vector<std::string>{"Loading " + bold(l->what) + "  " + dim(duration(l->secs())),
-                                        dim(clip(detail, std::max(20, columns() - kArtCols - 8)))};
+                                        dim(clip(detail, std::max(20, columns() - kLogoCols - 8)))};
       },
-      3);
+      1);
 }
 
 void loading_end(const std::string& what) {
@@ -618,13 +640,15 @@ void ready(const Ready& r) {
   for (const auto& l : o) line(l);
 }
 
-// ---------------------------------------------------------------- the request log
+// ---------------------------------------------------------------- the request log and the dashboard
 
 struct Meter {
   double t0 = now_ms();
   std::atomic<double> first{0};
   std::string client;
   int images = 0;
+  std::shared_ptr<LiveDecode> live = std::make_shared<LiveDecode>();
+  std::deque<std::array<double, 3>> samples;  // the dashboard thread's: (ms, tokens, cycles), the last 1.5 s
 };
 
 namespace {
@@ -663,6 +687,160 @@ int images_in(const ojson& messages) {
   return n;
 }
 
+// The request lines' columns
+struct Cols {
+  bool time;
+};
+Cols cols_now() { return Cols{columns() >= 76}; }
+
+void request_header() {  // once, above the first request (g_req_mu)
+  if (g_req_header) return;
+  g_req_header = true;
+  const Cols c = cols_now();
+  std::string h = "  ";
+  if (c.time) h += left("time", 8) + "  ";
+  h += left("client", 10) + "  " + right("prompt", 6) + "  " + right("cached", 5) + "  " + right("first", 6) + "  " +
+       right("out", 5) + "  " + right("tok/s", 6) + "  " + right("step", 4) + "  finish";
+  line(section("Requests"));
+  line(dim(h));
+}
+
+// ---- the dashboard: while requests are written, a strip under the request lines. The newest request as a beam
+// (Kapitza-Dirac: one step of the drafter and the verify comes out as the tokens it accepted), the others a line each;
+// where no animation may play, one line of text.
+
+struct Dash {
+  std::mutex mu;
+  std::condition_variable cv;
+  // the requests being served; weak: one that ends without done() (its client gone) leaves with its last owner
+  std::vector<std::weak_ptr<Meter>> active;
+  bool running = false;
+};
+Dash& dash() {
+  static Dash* d = new Dash;  // never destroyed: its thread may outlive main's statics
+  return *d;
+}
+
+// tokens per second and per step over the last 1.5 s (since the first token while there is less)
+std::pair<double, double> rates(Meter& m, double now) {
+  const double tok = m.live->tokens.load(std::memory_order_relaxed), cyc = m.live->cycles.load(std::memory_order_relaxed);
+  m.samples.push_back({now, tok, cyc});
+  while (m.samples.size() > 2 && now - m.samples.front()[0] > 1500) m.samples.pop_front();
+  const auto& a = m.samples.front();
+  double dt = now - a[0], dtok = tok - a[1], dcyc = cyc - a[2];
+  const double first = m.first.load();
+  if (dt < 300 && first > 0) dt = now - first, dtok = tok - 1, dcyc = cyc;  // the start: since the first token
+  return {dt > 50 && dtok > 0 ? dtok * 1000 / dt : 0, dcyc > 0 ? dtok / dcyc : 0};
+}
+
+std::string state(Meter& m, double now, bool beam) {
+  const int phase = m.live->phase.load(std::memory_order_relaxed);
+  if (phase == 0) return dim("waiting for the engine");
+  if (phase == 1) return "reading the prompt" + dim("  " + duration((now - m.t0) / 1000));
+  const auto [tps, step] = rates(m, now);
+  char b[64];
+  std::string s = "writing ";
+  snprintf(b, sizeof b, "%.0f tok/s", tps);
+  s += beam ? accent(b) : std::string(b);
+  if (m.live->spec.load(std::memory_order_relaxed) > 0 && step > 0) {
+    snprintf(b, sizeof b, "%.1f tokens/step", step);
+    s += dim("  " + std::string(kDot) + "  ") + b;
+  }
+  return s;
+}
+
+std::string prompt_info(const Meter& m) {
+  const int p = m.live->prompt.load(std::memory_order_relaxed), c = m.live->cached.load(std::memory_order_relaxed);
+  if (p <= 0) return "";
+  char b[32];
+  snprintf(b, sizeof b, ", %.0f%% cached", 100.0 * c / p);
+  return count(p) + " prompt" + dim(b);
+}
+
+std::vector<std::string> strip(const std::vector<std::shared_ptr<Meter>>& act, double t, bool art) {
+  const double now = now_ms();
+  // the newest request being read or written gets the beam
+  std::shared_ptr<Meter> top = act.back();
+  for (auto it = act.rbegin(); it != act.rend(); ++it)
+    if ((*it)->live->phase.load(std::memory_order_relaxed) >= 1) {
+      top = *it;
+      break;
+    }
+  Meter& m = *top;
+  const std::string who = bold(m.client.empty() ? "request" : m.client);
+  std::vector<std::string> rows;
+  if (art) {
+    const int phase = m.live->phase.load(std::memory_order_relaxed);
+    Beam b;
+    b.t = t;
+    b.flow = b.shimmer = true;
+    const bool spec = m.live->spec.load(std::memory_order_relaxed) > 0;
+    b.k = phase == 2 ? (spec ? std::clamp(m.live->last.load(std::memory_order_relaxed), 1, 8) : 1) : 0;
+    b.band = 0.3;
+    b.reach = phase == 2 ? 1 : phase == 1 ? 0.34 : 0.12;
+    const int toks = m.live->tokens.load(std::memory_order_relaxed);
+    std::vector<std::string> text = {who + dim("  " + std::string(kDot) + "  ") + prompt_info(m), state(m, now, true),
+                                     dim(std::to_string(toks) + " tokens  " + kDot + "  " + duration((now - m.t0) / 1000))};
+    rows = beside(diffraction(24, 3, b), 24, text, 0);
+  } else {
+    rows.push_back("  " + accent(kOn) + " " + who + dim("  " + std::string(kDot) + "  ") + state(m, now, false));
+  }
+  int more = 0;
+  for (const auto& o : act) {
+    if (o == top) continue;
+    if (++more > 3) break;
+    rows.push_back("    " + dim("↳ ") + bold(o->client.empty() ? "request" : o->client) + dim("  " + std::string(kDot) + "  ") +
+                   state(*o, now, false));
+  }
+  return rows;
+}
+
+void dash_loop() {
+  Dash& d = dash();
+  const bool art = can_animate();
+  const auto t0 = std::chrono::steady_clock::now();
+  bool shown = false;
+  for (;;) {
+    std::vector<std::shared_ptr<Meter>> act;
+    {
+      std::unique_lock<std::mutex> lk(d.mu);
+      d.active.erase(std::remove_if(d.active.begin(), d.active.end(), [](const auto& w) { return w.expired(); }),
+                     d.active.end());
+      if (d.active.empty()) {
+        if (shown) status(""), shown = false;
+        d.cv.wait(lk, [&] { return !d.active.empty(); });
+      }
+      for (const auto& w : d.active)
+        if (auto m = w.lock()) act.push_back(m);
+    }
+    if (act.empty()) continue;
+    const double t = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    status(strip(act, t, art));
+    shown = true;
+    std::unique_lock<std::mutex> lk(d.mu);  // a frame every 50 ms (4 a second for the text line), or at once on a change
+    d.cv.wait_for(lk, std::chrono::milliseconds(art ? 50 : 250));
+  }
+}
+
+void dash_add(const std::shared_ptr<Meter>& m) {
+  Dash& d = dash();
+  std::lock_guard<std::mutex> lk(d.mu);
+  d.active.push_back(m);
+  if (!d.running && live()) {
+    d.running = true;
+    std::thread(dash_loop).detach();
+  }
+  d.cv.notify_all();
+}
+
+void dash_remove(const std::shared_ptr<Meter>& m) {
+  Dash& d = dash();
+  std::lock_guard<std::mutex> lk(d.mu);
+  d.active.erase(std::remove_if(d.active.begin(), d.active.end(), [&](const auto& w) { return w.expired() || w.lock() == m; }),
+                 d.active.end());
+  d.cv.notify_all();
+}
+
 }  // namespace
 
 std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) {
@@ -670,8 +848,15 @@ std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r) 
   auto m = std::make_shared<Meter>();
   m->client = client_of(req.get_header_value("User-Agent"));
   m->images = images_in(r.messages);
+  {
+    std::lock_guard<std::mutex> lk(g_req_mu);
+    request_header();
+  }
+  dash_add(m);
   return m;
 }
+
+std::shared_ptr<LiveDecode> live_of(const std::shared_ptr<Meter>& m) { return m ? m->live : nullptr; }
 
 void token(const std::shared_ptr<Meter>& m) {
   if (m && m->first.load() == 0) m->first = now_ms();
@@ -679,40 +864,34 @@ void token(const std::shared_ptr<Meter>& m) {
 
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   if (!m) return;
+  dash_remove(m);
   const time_t now = time(nullptr);
   char at[16];
   strftime(at, sizeof at, "%H:%M:%S", localtime(&now));
   const double first = m->first.load();
   char b[32];
-  std::string ttft = "–", tps = "–", cached = "–";
+  std::string ttft = "–", tps = "–", cached = "–", step = "–";
   if (first > 0) snprintf(b, sizeof b, "%.2fs", (first - m->t0) / 1000), ttft = b;
   if (r.completion_tokens > 1 && r.decode_ms > 0)
     snprintf(b, sizeof b, "%.1f", (r.completion_tokens - 1) / (r.decode_ms / 1000)), tps = b;
   if (r.prompt_tokens > 0) snprintf(b, sizeof b, "%.0f%%", 100.0 * r.cached_tokens / r.prompt_tokens), cached = b;
+  const int cyc = m->live->cycles.load(), tok = m->live->tokens.load();
+  if (m->live->spec.load() > 0 && cyc > 0 && tok > 1) snprintf(b, sizeof b, "%.1f", double(tok) / cyc), step = b;
   std::string fin = r.finish_reason;
   if (fin == "tool_calls") fin = accent("tool calls");
   else if (fin == "length") fin = warn(r.context_full ? "context full" : "length");
   else if (fin == "cancelled") fin = warn("cancelled");
   else if (fin == "error") fin = red("error") + (r.error.empty() ? "" : dim(" " + r.error));
   if (m->images > 0) fin += dim("  " + std::to_string(m->images) + (m->images == 1 ? " image" : " images"));
-  const int W = columns();
-  const bool with_time = W >= 72;
+  const Cols c = cols_now();
   std::string l = "  ";
-  if (with_time) l += dim(at) + "  ";
+  if (c.time) l += dim(at) + "  ";
   l += left(m->client.empty() ? dim("–") : m->client, 10) + "  " + right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) +
        "  " + right(cached, 5) + "  " + right(ttft, 6) + "  " + right(count(r.completion_tokens), 5) + "  " + right(tps, 6) +
-       "  " + fin;
+       "  " + right(step, 4) + "  " + fin;
   std::lock_guard<std::mutex> lk(g_req_mu);
-  if (!g_req_header) {
-    g_req_header = true;
-    std::string h = "  ";
-    if (with_time) h += left("time", 8) + "  ";
-    h += left("client", 10) + "  " + right("prompt", 6) + "  " + right("cached", 5) + "  " + right("first", 6) + "  " +
-         right("out", 5) + "  " + right("tok/s", 6) + "  finish";
-    line(section("Requests"));
-    line(dim(h));
-  }
-  line(clip(l, W - 1));
+  request_header();
+  line(clip(l, columns() - 1));
 }
 
 }  // namespace ni::ui

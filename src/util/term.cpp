@@ -307,7 +307,7 @@ void hide_cursor() {
   if (g_hidden) return;
   static bool once = [] {
     atexit(restore_cursor);
-    for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT}) {
+    for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE}) {
       struct sigaction old {};
       sigaction(sig, nullptr, &old);
       if (old.sa_handler == SIG_DFL) signal(sig, on_signal);
