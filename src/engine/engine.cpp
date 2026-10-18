@@ -427,13 +427,19 @@ std::string chat_template_source(const std::string& model_dir) {
 }
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
-  // Nemotron 3.5's template shortens its reasoning on medium_effort: the low and medium reasoning efforts map to it
-  if (nh_ && r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs.contains("medium_effort") &&
-      r.template_kwargs["reasoning_effort"].is_string()) {
-    const std::string e = r.template_kwargs["reasoning_effort"];
-    if (e == "low" || e == "medium") {
+  if (nh_) {
+    // Nemotron 3.5's template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
+    // reasoning efforts, and truncate_history_thinking = false for preserve_thinking (every turn's reasoning kept, as
+    // the Anthropic API's keep-all asks: the next request's prompt then continues what was generated)
+    const auto& k = r.template_kwargs;
+    const bool effort = k.contains("reasoning_effort") && k["reasoning_effort"].is_string() &&
+                        (k["reasoning_effort"] == "low" || k["reasoning_effort"] == "medium") && !k.contains("medium_effort");
+    const bool keep = k.contains("preserve_thinking") && k["preserve_thinking"] == true &&
+                      !k.contains("truncate_history_thinking");
+    if (effort || keep) {
       ChatRequest q = r;
-      q.template_kwargs["medium_effort"] = true;
+      if (effort) q.template_kwargs["medium_effort"] = true;
+      if (keep) q.template_kwargs["truncate_history_thinking"] = false;
       return render_chat(*tmpl_, q, add_generation_prompt);
     }
   }
