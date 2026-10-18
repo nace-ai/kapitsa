@@ -68,6 +68,8 @@ target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
+# a library the Python converters build and load themselves (ctypes), not a command
+list(FILTER NI_TOOLS EXCLUDE REGEX ".*/tools/mlx_quant\\.cpp$")
 foreach(t ${NI_TOOLS})
   get_filename_component(name ${t} NAME_WE)
   add_executable(${name} ${t})
