@@ -6,8 +6,8 @@
 
 namespace ni::gguf {
 
-// Whether dequantize() reads a type: F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, Q2_K .. Q6_K, IQ4_NL, IQ4_XS,
-// MXFP4 and NVFP4.
+// Whether dequantize() reads a type: F32, F16, BF16, Q4_0, Q4_1, Q5_0, Q5_1, Q8_0, Q2_K .. Q6_K, IQ1_S, IQ1_M,
+// IQ2_XXS, IQ2_XS, IQ2_S, IQ3_XXS, IQ3_S, IQ4_NL, IQ4_XS, MXFP4 and NVFP4.
 bool can_dequantize(uint32_t type);
 // n values (a whole number of the type's blocks) into floats, as llama.cpp computes them.
 void dequantize(uint32_t type, const uint8_t* src, float* dst, size_t n);

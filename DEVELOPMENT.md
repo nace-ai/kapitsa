@@ -364,14 +364,20 @@ type's own (1.00 = no added error; measured on Qwen3.5-0.8B / 4B / 3.6-35B-A3B t
 | Q6_K | 8-bit group 64 | 1.09 |
 | Q5_0, Q5_1, Q5_K | 6-bit group 64 | 1.31 (8-bit: 1.02) |
 | IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 | IQ4_XS 1.27, NVFP4 1.07 |
-| Q3_K, Q2_K (warning) | 4-bit group 32 | 1.20, 1.03 |
-| MoE experts of 4-bit types | 5-bit group 64 (no group-32 MoE kernels) | 1.31 (4-bit group 64 would be 2.29) |
+| IQ3_XXS, IQ3_S, Q3_K | 4-bit group 32 (3-bit group 64 would add 83-144%) | 1.09, 1.21, 1.20 |
+| IQ2_XXS, IQ2_XS, IQ2_S, IQ1_S, IQ1_M, Q2_K | 3-bit group 64 (4-bit group 32: 1.004-1.05, 1.4-1.7x the bytes) | 1.15, 1.21, 1.31, 1.04, 1.07, 1.27 |
+| 1-3-bit types in a mostly 4-bit-or-better file (unsloth's UD mixes) | the file's majority format | IQ3_S / Q3_K to 5-bit group 64: 1.05 / 1.06 (Qwen3.8-27B UD-Q4_K_M) |
+| MoE experts | 5-bit group 64 from 4-bit types (no group-32 MoE kernels), 4-bit group 64 from 3-bit, 3-bit group 64 from 1-2-bit | 1.31 for Q4_K (4-bit group 64 would be 2.29) |
 
 Re-quantization takes per group the best of the min-max grid, a symmetric grid and least-squares refits (all after
 rounding scale and bias to bf16). A layer's experts share one format (from their least precise tensor), its shared
 expert is 8-bit; a dense layer's gate and up share the finer of their formats. The MTP head is written as Kapitsa's
-sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). IQ1 / IQ2 / IQ3 (they need llama.cpp's
-codebooks), ternary and Hadamard-rotated files are refused, as are Qwen3-Next and other architectures.
+sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). The IQ1 / IQ2 / IQ3 codebooks are ggml's
+(src/gguf/iq_grids.h, THIRD_PARTY_NOTICES); the 1-3-bit errors were measured on pure-type quantizations of
+Qwen3.5-0.8B (llama.cpp's own, with an importance matrix) against its bf16 weights. Ternary (TQ1_0 / TQ2_0) and
+Hadamard-rotated files are refused, as are Qwen3-Next and other architectures. `kapitsa import FILE --dry-run` prints
+the formats per type, the size and the folder without writing (on a header-only sparse copy of the Qwen3.8-27B
+UD-Q4_K_M: 16.46 GB in, 20.29 GB out; its 4 IQ3_S and 7 Q3_K tensors take 5-bit group 64, its majority).
 
 Checked on Qwen3.5-0.8B Q4_K_M (unsloth, with MTP), teacher-forced over bench/quality (4092 positions): Kapitsa on
 the converted folder against llama.cpp on the GGUF (CPU) KL 0.0077, top-1 96.7%, perplexity 9.69 against 9.73; the

@@ -166,7 +166,7 @@ struct Fmt {
   bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs; }
   bool operator!=(const Fmt& o) const { return !(*this == o); }
 };
-const Fmt kBf16{16, 0}, k4g32{4, 32}, k5g64{5, 64}, k6g64{6, 64}, k8g64{8, 64};
+const Fmt kBf16{16, 0}, k3g64{3, 64}, k4g32{4, 32}, k4g64{4, 64}, k5g64{5, 64}, k6g64{6, 64}, k8g64{8, 64};
 
 std::string fmt_name(Fmt f) {
   return f.dense() ? "bf16" : std::to_string(f.bits) + "-bit group " + std::to_string(f.gs);
@@ -179,31 +179,52 @@ Fmt finer(Fmt a, Fmt b) {
 }
 
 bool refused(uint32_t t) { return !can_dequantize(t); }
-bool low_bit(uint32_t t) { return t == kQ2_K || t == kQ3_K; }
 
-// a linear outside the MoE experts
-Fmt dense_format(uint32_t t) {
+// Precision classes of the GGUF types: 1-2-bit (IQ1_*, IQ2_*, Q2_K), 3-bit (IQ3_*, Q3_K), 4-bit (Q4_x, IQ4_x, MXFP4,
+// NVFP4), 5-bit (Q5_x), 6-8-bit (Q6_K, Q8_0), float.
+enum Cls { kC2, kC3, kC4, kC5, kC8, kCF };
+Cls type_class(uint32_t t) {
+  switch (t) {
+    case kF32: case kF16: case kBF16: return kCF;
+    case kQ8_0: case kQ6_K: return kC8;
+    case kQ5_0: case kQ5_1: case kQ5_K: return kC5;
+    case kQ3_K: case kIQ3_XXS: case kIQ3_S: return kC3;
+    case kQ2_K: case kIQ2_XXS: case kIQ2_XS: case kIQ2_S: case kIQ1_S: case kIQ1_M: return kC2;
+    default: return kC4;
+  }
+}
+
+// A linear outside the MoE experts, by its own type: Q4_x keep their codes (4-bit group 32); 1-3-bit types take the
+// smallest format that adds little to their error (measured: 3-bit types +9-21% at 4-bit group 32, 3-bit group 64
+// would add 83-144%; 1-2-bit types +4-31% at 3-bit group 64).
+Fmt own_format(uint32_t t) {
   switch (t) {
     case kF32: case kF16: case kBF16: return kBf16;
-    case kQ4_0: case kQ4_1: case kQ4_K: return k4g32;  // the GGUF's codes as they are
+    case kQ4_0: case kQ4_1: case kQ4_K: return k4g32;
     case kQ8_0: case kQ6_K: return k8g64;
     case kQ5_0: case kQ5_1: case kQ5_K: return k6g64;
-    case kQ2_K: case kQ3_K: return k4g32;
-    default: return k5g64;  // IQ4_NL, IQ4_XS, MXFP4, NVFP4
+    default:
+      switch (type_class(t)) {
+        case kC3: return k4g32;
+        case kC2: return k3g64;
+        default: return k5g64;  // IQ4_NL, IQ4_XS, MXFP4, NVFP4
+      }
   }
 }
 
-// a layer's routed experts, from their least precise tensor: Kapitsa's MoE kernels run 3/5/6/8-bit group 64, 4-bit
-// group 64 and bf16 experts (4-bit group 32 only in the MTP head), so 4-bit types take 5-bit group 64
-int expert_class(uint32_t t) {
-  switch (t) {
-    case kF32: case kF16: case kBF16: return 4;
-    case kQ8_0: case kQ6_K: return 3;
-    case kQ5_0: case kQ5_1: case kQ5_K: return 2;
-    default: return 1;
+// A layer's routed experts, by the class of their least precise tensor. Kapitsa's MoE kernels run 3/4/5/6/8-bit group
+// 64 and bf16 experts (4-bit group 32 only in the MTP head): 4-bit types take 5-bit group 64 (4-bit group 64 would
+// double their error), 3-bit types 4-bit group 64, 1-2-bit types 3-bit group 64.
+Fmt expert_format(Cls c) {
+  switch (c) {
+    case kC2: return k3g64;
+    case kC3: return k4g64;
+    case kC4: return k5g64;
+    case kC5: return k6g64;
+    case kC8: return k8g64;
+    default: return kBf16;
   }
 }
-Fmt class_format(int c) { return c == 4 ? kBf16 : c == 3 ? k8g64 : c == 2 ? k6g64 : k5g64; }
 
 // ---------------------------------------------------------------- the model's shape (from the metadata)
 
@@ -356,6 +377,12 @@ uint64_t row_bytes_of(const Tensor& t, uint64_t K) {
 
 struct Plan {
   Hp hp;
+  // A mostly 4-bit-or-better file (unsloth's UD mixes) with some 1-3-bit tensors: those take the file's majority
+  // format, so a layer keeps one format (and no tensor drops below the rest of the model).
+  bool follow = false;
+  Cls major = kCF;      // the class holding most of the trunk's linear weights
+  Fmt major_fmt;        // the most common format of the trunk's 4-bit-or-better dense linears
+  std::map<std::string, int> followed;  // type -> tensors that took major_fmt
   std::vector<Lin> lins;
   std::vector<std::string> files;   // output safetensors names; the last is mtp.safetensors when has_mtp
   bool has_mtp = false;
@@ -379,10 +406,10 @@ struct Builder {
     if (t) {
       used.insert((&f == &F ? "" : "mtp:") + n);
       if (refused(t->type))
-        throw Error(base_name(f.parts()[0]) + " stores " + n + " as " + type_name(t->type) + ". Kapitsa converts "
-                    "F32/F16/BF16, Q4_0/Q4_1/Q5_0/Q5_1/Q8_0, Q2_K-Q6_K, IQ4_NL/IQ4_XS, MXFP4 and NVFP4; the IQ1/IQ2/IQ3 "
-                    "formats need llama.cpp's codebooks. Use a Q4_K_M or better file (or Q8_0), or Kapitsa's own "
-                    "model of this size (kapitsa --help).");
+        throw Error(base_name(f.parts()[0]) + " stores " + n + " as " + type_name(t->type) + ", which Kapitsa does not "
+                    "convert: it reads F32/F16/BF16, Q4_0/Q4_1/Q5_0/Q5_1/Q8_0, Q2_K-Q6_K, IQ1_S/IQ1_M, IQ2_XXS/IQ2_XS/"
+                    "IQ2_S, IQ3_XXS/IQ3_S, IQ4_NL/IQ4_XS, MXFP4 and NVFP4 (not the ternary TQ1_0/TQ2_0). Use another "
+                    "quantization of the model, or Kapitsa's own model of this size (kapitsa --help).");
     }
     return t;
   }
@@ -420,7 +447,7 @@ struct Builder {
     if (L.fmt == k4g32 && exact4(L.src->type) && L.mult.empty()) k += " (codes as stored)";
     else if (L.fmt.dense() && L.src->type == kBF16) k += " (as stored)";
     ++P.conv_count[(L.mtp ? "MTP head: " : "") + k];
-    if (low_bit(L.src->type)) P.low.insert(type_name(L.src->type));
+    if (type_class(L.src->type) <= kC3 && !P.follow) P.low.insert(type_name(L.src->type));
   }
 
   // a float parameter, bf16
@@ -461,6 +488,23 @@ struct Builder {
     count(L);
     P.lins.push_back(std::move(L));
     return P.lins.back();
+  }
+
+  // the format of a linear outside the experts (a 1-3-bit one takes the file's majority format in a mixed file)
+  Fmt dense_format(uint32_t t) {
+    if (P.follow && type_class(t) <= kC3) {
+      ++P.followed[type_name(t)];
+      return P.major_fmt;
+    }
+    return own_format(t);
+  }
+  Cls expert_class(uint32_t t) {
+    const Cls c = type_class(t);
+    if (P.follow && c <= kC3) {
+      ++P.followed[type_name(t)];
+      return P.major;
+    }
+    return c;
   }
 
   RowMap vmap(int64_t from, uint64_t hs) const {
@@ -591,10 +635,11 @@ struct Builder {
       return;
     }
     // trunk: the layer's experts in one format, from their least precise tensor
-    const int cls = std::min({expert_class(gsrc->type), expert_class(usrc->type), expert_class(d->type)});
-    const Fmt ef = class_format(cls);
-    if (ef != k8g64 && ef != kBf16) {
-      const uint32_t weakest = expert_class(gsrc->type) == cls ? gsrc->type : expert_class(usrc->type) == cls ? usrc->type : d->type;
+    const Cls cg = expert_class(gsrc->type), cu = gu ? cg : expert_class(usrc->type), cd = expert_class(d->type);
+    const Cls cls = std::min({cg, cu, cd});
+    const Fmt ef = expert_format(cls);
+    if (cls == kC4) {
+      const uint32_t weakest = cg == cls ? gsrc->type : cu == cls ? usrc->type : d->type;
       P.notes.insert("MoE experts (" + type_name(weakest) + ") become " + fmt_name(ef) + ": Kapitsa's MoE kernels have no "
                      "group-32 form, and one bit fewer would about double the GGUF's error (this adds about a third)");
     }
@@ -1108,6 +1153,34 @@ std::string find_mtp_file(const File& f, const Hp& h) {
   return found.size() == 1 ? found[0] : "";
 }
 
+// The class holding most of the trunk's linear weights and the most common format of its 4-bit-or-better dense
+// linears: in a file that is mostly 4-bit or better, its 1-3-bit tensors take that format (Plan::follow).
+void find_majority(Plan& P, const File& f) {
+  std::map<int, double> by_class;
+  std::map<std::pair<int, int>, double> by_fmt;
+  bool low = false;
+  for (const auto& t : f.tensors()) {
+    if (t.name.rfind("blk.", 0) != 0 || t.ne.size() < 2 || !ends_with(t.name, ".weight") ||
+        t.name.find("ssm_conv1d") != std::string::npos || atoi(t.name.c_str() + 4) >= P.hp.layers)
+      continue;
+    const Cls c = type_class(t.type);
+    by_class[c] += double(t.elements());
+    if (c <= kC3) low = true;
+    else if (t.name.find("_exps") == std::string::npos) {
+      const Fmt o = own_format(t.type);
+      by_fmt[{o.bits, o.gs}] += double(t.elements());
+    }
+  }
+  if (by_class.empty()) return;
+  P.major = Cls(std::max_element(by_class.begin(), by_class.end(), [](auto& a, auto& b) { return a.second < b.second; })->first);
+  P.major_fmt = k4g32;
+  if (!by_fmt.empty()) {
+    const auto m = std::max_element(by_fmt.begin(), by_fmt.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
+    P.major_fmt = Fmt{m.first, m.second};
+  }
+  P.follow = low && P.major >= kC4;
+}
+
 void remove_tree(const std::string& dir) {
   std::error_code ec;
   std::filesystem::remove_all(dir, ec);
@@ -1177,6 +1250,7 @@ std::string import_model(const ImportOptions& opt) {
     throw Error(hub::tilde(dest) + " exists already and is not a conversion of " + file + ". Name this one with "
                 "--name, or replace that folder with --force.");
   }
+  find_majority(P, f);
   Builder B(P, f, M);
   B.build();
   if (M && !P.has_mtp) M = nullptr;
@@ -1260,15 +1334,28 @@ std::string import_model(const ImportOptions& opt) {
             hub::tilde(dest).c_str());
     for (auto& [k, n] : P.conv_count) fprintf(stderr, "  %4d x %s\n", n, k.c_str());
     for (const auto& n : P.notes) fprintf(stderr, "  note: %s\n", n.c_str());
+    if (!P.followed.empty()) {
+      std::string l;
+      for (const auto& [t, n] : P.followed) l += (l.empty() ? "" : ", ") + t + " x" + std::to_string(n);
+      fprintf(stderr, "  note: the 1-3-bit tensors (%s) take the file's majority format, %s%s\n", l.c_str(),
+              fmt_name(P.major_fmt).c_str(), P.hp.moe ? (" (MoE experts: " + fmt_name(expert_format(P.major)) + ")").c_str() : "");
+    }
     if (!P.low.empty()) {
       std::string l;
       for (const auto& t : P.low) l += (l.empty() ? "" : "/") + t;
-      fprintf(stderr, "  warning: %s are 2-3-bit formats; Kapitsa has no kernels for them, so they become 4-bit group "
-                      "32 at their own quality (no better than the file, and larger). A Q4_K_M or better GGUF gives "
-                      "a better model at about the same size.\n", l.c_str());
+      fprintf(stderr, "  warning: this file is mostly %s, 1-3-bit formats Kapitsa has no kernels for: they become 3-bit "
+                      "group 64 (1-2-bit types) or 4-bit group 32 (3-bit types), at about the file's quality and larger "
+                      "than the file. A Q4_K_M or better GGUF gives a better model at about the size of the conversion.\n",
+              l.c_str());
     }
     if (!P.has_mtp)
       fprintf(stderr, "  no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts\n");
+  }
+  if (opt.dry_run) {
+    const uint64_t avail = free_bytes(models);
+    fprintf(stderr, "Dry run: the conversion would write %s into %s (%s free on that disk%s).\n", gb(total).c_str(),
+            hub::tilde(dest).c_str(), gb(avail).c_str(), avail < total + kKeepFree ? "; not enough, 6 GB must stay free" : "");
+    return dest;
   }
   std::error_code ec;
   std::filesystem::create_directories(models, ec);
@@ -1370,10 +1457,12 @@ int run_import(int argc, char** argv) {
       "  --name NAME    the folder's name (default: from the file name)\n"
       "  --mtp FILE     the model's MTP head as a separate GGUF (default: the file's own, or an mtp-*.gguf beside it)\n"
       "  --threads N    CPU threads (default: the performance cores, at most 8)\n"
-      "  --force        convert again over an existing folder of that name\n\n"
+      "  --force        convert again over an existing folder of that name\n"
+      "  --dry-run      show the formats, size and folder of the conversion, and write nothing\n\n"
       "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
-      "5-bit (group 64), Q2_K/Q3_K 4-bit group 32, F16/BF16/F32 bf16; MoE experts take 5-bit group 64 from 4-bit types.\n"
-      "IQ1/IQ2/IQ3 files are not supported (they need llama.cpp's codebooks).\n";
+      "5-bit (group 64), IQ3_x/Q3_K 4-bit group 32, IQ1/IQ2/Q2_K 3-bit group 64, F16/BF16/F32 bf16; in a mostly\n"
+      "4-bit-or-better file its 1-3-bit tensors take the file's majority format. MoE experts take 5-bit group 64 from\n"
+      "4-bit types.\n";
   for (int i = 2; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -1390,6 +1479,7 @@ int run_import(int argc, char** argv) {
     else if (a == "--mtp") o.mtp = next();
     else if (a == "--threads") o.threads = atoi(next().c_str());
     else if (a == "--force") o.force = true;
+    else if (a == "--dry-run") o.dry_run = true;
     else if (!a.empty() && a[0] != '-' && o.file.empty()) o.file = a;
     else {
       fprintf(stderr, "kapitsa import: unexpected %s\n(kapitsa import --help shows how to use it.)\n", a.c_str());
@@ -1404,6 +1494,7 @@ int run_import(int argc, char** argv) {
   if (const char* home = getenv("HOME"); home && o.mtp.rfind("~/", 0) == 0) o.mtp = home + o.mtp.substr(1);
   try {
     const std::string dir = import_model(o);
+    if (o.dry_run) return 0;
     printf("%s is ready in %s. Start it: kapitsa serve --model %s\n", base_name(o.file).c_str(), hub::tilde(dir).c_str(),
            base_name(dir).c_str());
   } catch (const Error& e) {
