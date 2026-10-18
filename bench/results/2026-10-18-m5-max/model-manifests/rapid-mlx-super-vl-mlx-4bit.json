@@ -1,0 +1,111 @@
+{
+  "repo": "rapid-mlx/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-MLX-4bit",
+  "revision": "016789035d80736393d9bfcdb63d6911002e424d",
+  "role": "oMLX and mlx-lm: text-only MLX affine 4-bit",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "size": 1570
+    },
+    {
+      "path": "README.md",
+      "size": 1682
+    },
+    {
+      "path": "chat_template.jinja",
+      "size": 12927
+    },
+    {
+      "path": "config.json",
+      "size": 3553
+    },
+    {
+      "path": "generation_config.json",
+      "size": 210
+    },
+    {
+      "path": "model-00001-of-00014.safetensors",
+      "size": 4810861978,
+      "sha256": "3836ab21083d1b554342490a82f4839728716c49eca42ad09eba9190d2a169f7"
+    },
+    {
+      "path": "model-00002-of-00014.safetensors",
+      "size": 5098971310,
+      "sha256": "53681663c1af4c483eead528a999d07bf6a544921ca499866d512deec479df63"
+    },
+    {
+      "path": "model-00003-of-00014.safetensors",
+      "size": 5098971361,
+      "sha256": "181f945678f5445a0ddb00597b3583a7ecc587facd55d6450d9abf7473f1b55f"
+    },
+    {
+      "path": "model-00004-of-00014.safetensors",
+      "size": 5098971365,
+      "sha256": "96838c07bf522c3f9b3244b065825b137c35da0c7b86445d44ddccd83089300d"
+    },
+    {
+      "path": "model-00005-of-00014.safetensors",
+      "size": 5078907701,
+      "sha256": "38572d084da21e5409e40585e61fb8c33481dabc4f4d953a9e2ebc9421eadf1e"
+    },
+    {
+      "path": "model-00006-of-00014.safetensors",
+      "size": 5098971381,
+      "sha256": "871787fa493f2c5c70bf5d6fc26c39b32617e3fdd79fd328ff946ed9c2c5501b"
+    },
+    {
+      "path": "model-00007-of-00014.safetensors",
+      "size": 5078907675,
+      "sha256": "c5a9985dc66c5ca56b3de905ac074a1f94a89814150400595cf825775bac1394"
+    },
+    {
+      "path": "model-00008-of-00014.safetensors",
+      "size": 5098971389,
+      "sha256": "6f43097160ccc002583c3ce1291e23fd8ebce399c534d4a0dfcb1a09028210a5"
+    },
+    {
+      "path": "model-00009-of-00014.safetensors",
+      "size": 5098971335,
+      "sha256": "67ff11531d8aa17b614b46b65bba33307c8829f5d49818cf65b8de1b24131b6b"
+    },
+    {
+      "path": "model-00010-of-00014.safetensors",
+      "size": 5078907659,
+      "sha256": "15fea55d4e28e2128ac5e67c2bfbe437c6a762e3e5754d81ef06be2b172efbd6"
+    },
+    {
+      "path": "model-00011-of-00014.safetensors",
+      "size": 5098971349,
+      "sha256": "fd660645b0a932eac83d426562ec89ebddd7ff835c18e4204a9bde4440e7e6f0"
+    },
+    {
+      "path": "model-00012-of-00014.safetensors",
+      "size": 5098971361,
+      "sha256": "011eae950eb92566de15461746accd90089965eba7c25a3b3912cc8995b46fbc"
+    },
+    {
+      "path": "model-00013-of-00014.safetensors",
+      "size": 5078907697,
+      "sha256": "16e1b110bfda3dbda211f505356f5afcb29753b02a9a1cb3ee95527195f850bd"
+    },
+    {
+      "path": "model-00014-of-00014.safetensors",
+      "size": 3605190770,
+      "sha256": "95cc1b815ada89c10389d8a70384979a433a4c81ecd48affd29817476826ac6d"
+    },
+    {
+      "path": "model.safetensors.index.json",
+      "size": 118177
+    },
+    {
+      "path": "tokenizer.json",
+      "size": 17077366,
+      "sha256": "d0432ad8b1c2984a2e2dca82e1933e3fd5628df6e95c51fba4c3ee9950dce299"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size": 449
+    }
+  ],
+  "total_bytes": 69540670265
+}
