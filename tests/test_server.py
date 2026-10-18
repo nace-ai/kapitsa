@@ -194,6 +194,12 @@ def cli_checks(kapitsa):
     s.close()
     rc, _, err = run("serve", "--model", "nonsense")
     check("cli: serve with an unknown model", rc == 2 and "Unknown model" in err, err)
+    # Qwen3.8-Flash-Next: a catalog entry whose repo is not published yet (its folder, when present, is used as it is)
+    p = plan("flash-next")
+    check("cli: flash-next resolves to the catalog entry", p.get("model") == "qwen3.8-flash-next:4bit"
+          and p.get("revision", "").startswith("TODO"), str(p))
+    rc, _, err = run("serve", "--model", "flash", "--port", str(busy))
+    check("cli: flash-next before its upload: a clear error", rc == 1 and "not published yet" in err, err)
     rc, _, err = run("serve", "--port", str(busy))
     check("cli: serve with no model, offline and nothing downloaded: a clear error", rc == 1 and "Can't reach" in err, err)
     rc, out, _ = run("--help")

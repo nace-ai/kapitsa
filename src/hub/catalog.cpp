@@ -206,6 +206,25 @@ const std::vector<CatalogModel>& catalog() {
             .companions = {lilicorr_bolt()},
             .download_gb = 25.08},
        }},
+      // Kept last until its repo is published (`kapitsa serve` without --model would otherwise pick it on a 128 GB
+      // Mac): TODO pin the repo's revision after the upload, set download_gb from its listing, then move it up.
+      {.name = "qwen3.8-flash-next",
+       .aliases = {"flash-next", "flash"},
+       .title = "Qwen3.8-Flash-Next 180B-A7B",
+       .about = "Qwen's 180B MoE, 7B active: hyper-connections, sparse attention, a 32 GB n-gram table read from the SSD",
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           // our conversion of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (bf16): MTP head in mtp.safetensors, the n-gram
+           // table in ple.safetensors (mapped, outside GPU memory), the vision tower bf16
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit group 64 experts, 8-bit router / indexer / n-gram projections, 4-bit group 32 "
+                     "n-gram table",
+            .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit",
+            .revision = "TODO-pin-after-upload",
+            .companions = {},
+            .download_gb = 106.0},
+       }},
   };
   return c;
 }
