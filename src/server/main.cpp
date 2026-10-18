@@ -2,7 +2,8 @@
 // chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
 //                 [--ctx 32768] [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
-//                 [--api-key K] [--mem-budget GB]    no --model: the best catalog model for this Mac's memory
+//                 [--api-key K] [--mem-budget GB] [--image-max-pixels N]
+//                 no --model: the best catalog model for this Mac's memory
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
 //   kapitsa list [--json]
@@ -244,8 +245,12 @@ static void print_serve_help() {
          "  --spec N               MTP draft depth without a drafter (default per model; 0 = no speculation)\n"
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
-         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n\n"
+         "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
+         "  --image-max-pixels N   images: resize larger ones to about N pixels (fewer tokens, faster; default:\n"
+         "                         the model's own limit, 16.7 million for Qwen3.6 / 3.8)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions, GET /v1/models, GET /health.\n"
+         "Images: OpenAI image_url content parts with a data: (base64) or http(s) URL, on models with a vision\n"
+         "tower (Qwen3.6, Qwen3.8). Video is not supported.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
 }
 
@@ -315,6 +320,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--prefill-chunk") opt.prefill_chunk = to_int(a, next(), help);
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
+    else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }

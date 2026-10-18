@@ -5,6 +5,7 @@
 #include "model/dflash2.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
+#include "vision/encoder.h"
 
 #include <nlohmann/json.hpp>
 
@@ -36,6 +37,9 @@ struct EngineOptions {
   // ~/.cache/nace-infer-models/drafters (MTP when none matches), "none" = MTP, or a drafter directory.
   // "" = NI_DFLASH if set (auto | none | 0 | <dir>), else auto. spec_depth 0 turns "auto" off too.
   std::string dflash;
+  // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
+  // model's processor resizes); 0 = the model's own limit.
+  long image_max_pixels = 0;
 };
 
 // GPU memory Kapitsa holds at most by default: Metal's recommended working set for this GPU
@@ -116,9 +120,11 @@ struct ChatResult {
   std::string error;
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
   double prefill_ms = 0, decode_ms = 0;
-  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply
+  // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply, the
+  // request's images (what the processor made of them, without pixels)
   int slot = -1;
   uint64_t slot_gen = 0, req_seq = 0;
+  std::shared_ptr<const std::vector<vision::Prepared>> images;
 };
 
 class Engine {
@@ -152,14 +158,22 @@ class Engine {
   struct Slot {
     std::unique_ptr<Seq> seq;
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
-    std::vector<int> tokens;             // tokens whose effect is in the live state
+    std::vector<int> tokens;             // tokens whose effect is in the live state (image rows: their keys)
+    std::vector<vision::ImageSpan> img_spans;  // the images among them
+    std::vector<vision::Digest> img_digests;
     std::vector<TurnCheckpoint> ckpts;   // recurrent-state snapshots
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
   };
-  Slot& pick_slot(const std::vector<int>& prompt);
+  Slot& pick_slot(const std::vector<int>& prompt, const vision::Prompt* mm = nullptr);
+  // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
+  // reusable prefix: the common prefix, cut before any image that is not the same image in both
+  static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
+  // Frees memory until `bytes` more fit the budget: other slots' KV caches (least recently used first), then the
+  // Neural Engine split. False if that is not enough.
+  bool make_room(Slot& keep, size_t bytes);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
   // slots (least recently used first: their conversations are prefilled again when they come back).
   // Nothing using the slots may be in flight. False if even that leaves too little memory.
@@ -172,6 +186,7 @@ class Engine {
   std::unique_ptr<Qwen35> model_;
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
+  std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;

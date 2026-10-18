@@ -5,6 +5,7 @@
 #include <thread>
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
+#include "vision/embed.h"
 
 #include <deque>
 #include <memory>
@@ -56,6 +57,7 @@ struct Qwen35Config {
   // full attention
   int hq = 0, hkv = 0, head_dim = 0, rot_dims = 0;
   float theta = 1e7f, eps = 1e-6f;
+  int mrope[3] = {11, 11, 10};  // M-RoPE (images): rotary frequencies per (t, h, w) axis, interleaved
   // MLP
   bool moe = false;
   int experts = 0, top_k = 0, moe_I = 0, shared_I = 0, dense_I = 0;
@@ -96,6 +98,13 @@ struct Seq {
   int n_pend = 0;
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
   int* tokens() { return tok.as<int>(); }
+  // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
+  // a prompt's prefill; null: text only). Positions: rows [0, rope_n) rotate by the (t, h, w) M-RoPE positions in
+  // rope_pos (int32 x 3 per row), later rows by row + rope_delta (Qwen35::set_rope_positions); rope_n == 0 and
+  // rope_delta == 0: position = row, the text-only path.
+  const std::vector<vision::EmbedRun>* embeds = nullptr;
+  Buffer rope_pos;
+  int rope_n = 0, rope_delta = 0;
 };
 
 // Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
@@ -235,6 +244,14 @@ class Qwen35 {
     size_t bytes = 0;
   };
   static AnePlan ane_plan(const std::string& model_dir, const MemPlan& m);
+  // Images: the M-RoPE positions of a prompt of n rows whose images sit at `spans` (Qwen's get_rope_index: text rows
+  // count up one per row, an image's rows take (t, h, w) = start + (frame, row, column) of its token grid, and the text
+  // after it continues at start + max(grid_h, grid_w)), into s for every pass that follows (prefill, decode, verify,
+  // MTP). No spans: positions = rows again. Call between requests (nothing in flight may read s).
+  void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans);
+  // The positions themselves: (t, h, w) of rows [0, end of the last image) into `table`; returns the delta of the
+  // rows after it (position = row + delta)
+  static int rope_positions(const std::vector<vision::ImageSpan>& spans, std::vector<int32_t>& table);
   // Clears recurrent state (KV entries are overwritten by position, so they need no reset).
   void reset(Seq& s);
   Checkpoint new_checkpoint();
@@ -445,8 +462,11 @@ class Qwen35 {
   // fused (norm +) projections of R rows sharing the input; falls back to separate kernels
   void enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm, int R,
                       const Buffer* xn_out = nullptr, std::vector<bool> add = {});
-  void enc_attn_rows(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
-                     const Buffer& x);
+  void enc_attn_rows(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos,
+                     int R, const Buffer& x);
+  // attn_prep_m's arguments beyond attn_prep's (a sequence with images: M-RoPE positions, buffers 9 and 10)
+  static bool mrope(const Seq& s) { return s.rope_n > 0 || s.rope_delta != 0; }
+  void enc_mrope_args(Encoder& e, const Seq& s);
   void enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer);
   // ---- 8-row verify path (qwen35_v8.cpp) ----
   void v8_alloc();
@@ -454,7 +474,7 @@ class Qwen35 {
   // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table
   void enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
               const Buffer* xn_out = nullptr);
-  void enc_attn8(Encoder& e, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
+  void enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
   void enc_mlp8(Encoder& e, const Layer& L, int R);
   void enc_moe8(Encoder& e, const Layer& L, int R, int li);
 
