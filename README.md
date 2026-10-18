@@ -104,11 +104,10 @@ Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails
 day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B · 4-bit and 57-61 tok/s ⚠ on
 Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B oMLX
 runs its own MTP path, its fastest setup there; mlx-serve was not run on it
-([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). <sup>4B</sup> Kapitsa with z-lab's DFlash drafter, its default
-for the 4B since 2026-10-18 evening: measured that evening with the previous build (MTP head) as the control, first
-and last, at 120.5 and 120.2 tok/s, the 122 tok/s of the other engines' bracket
-([details](docs/benchmarks.md#kapitsa-with-z-labs-dflash-drafter)); at bf16 the drafter takes Kapitsa from 44 to
-89 tok/s. Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
+([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). <sup>4B</sup> With z-lab's DFlash drafter, the 4B's
+default since 2026-10-18, measured that evening with the previous build run first and last as a control: it wrote
+120 tok/s, in line with its 122 in the bracket above ([details](docs/benchmarks.md#kapitsa-with-z-labs-dflash-drafter)).
+At bf16 the drafter takes Kapitsa from 44 to 89 tok/s. Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
 Kapitsa refuses it before downloading). Nemotron 3.5 Lightning fits it (18.2 GB of weights) but has not been measured
 on it yet; its numbers are from the M5 Max below.
 
