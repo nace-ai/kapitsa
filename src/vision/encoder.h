@@ -3,7 +3,7 @@
 // mind, the caches (prepared images by source, embeddings by content), and the prompt side (a placeholder token per
 // image expanded to the image's rows, with prefix-reuse keys that tell images apart by content).
 // Per model: the processor and the tower behind ImageEncoder (QwenViT, qwen_vit.h, for the Qwen3.5 family; RadioViT,
-// radio_vit.h, for Nemotron 3.5 Bolt; a new model's encoder is one more class and one more line in open_encoder; the
+// radio_vit.h, for Nemotron 3.5 Bolt and Super-VL; a new model's encoder is one more class and one more line in open_encoder; the
 // GPU building blocks they share are in vit_common.h), and the model's own handling of image rows:
 // its prefill puts the embeddings in (vision::enc_embed_runs for Seq::embeds) and Model::set_rope_positions gives
 // them positions (Qwen35: M-RoPE; the default does nothing, for attention without positions as in Nemotron-H).

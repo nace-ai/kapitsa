@@ -1,4 +1,4 @@
-// Nemotron 3.5 Bolt's image encoder (see radio_vit.h).
+// Nemotron 3.5 Bolt's and Super-VL's image encoder (see radio_vit.h).
 #include "vision/radio_vit.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -15,6 +15,7 @@ using json = nlohmann::json;
 namespace {
 constexpr const char* kTower = "vision_model.radio_model.model.";  // the tower's tensors (timm names)
 constexpr const char* kProj = "mlp1.";                              // the projector's: 0 RMSNorm, 1 and 3 linears
+constexpr const char* kFinalLn = "vision_projector.vision_final_layernorm.";  // Super-VL's LayerNorm before mlp1
 
 // rows [0, n) in parallel
 template <class F>
@@ -47,6 +48,14 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
   r.image_token = root.value("img_context_token_id", r.image_token);
   const json t = root.contains("llm_config") ? root["llm_config"] : root.value("text_config", json::object());
   r.out_hidden = t.value("hidden_size", r.out_hidden);
+  // NVIDIA's NemotronH Omni projector: vision_final_layernorm if the config has it (Bolt: false), else whether the
+  // language model has MTP layers (Super-VL's config predates the field: its tower was trained with the LayerNorm
+  // Megatron puts at the end of every block built from a config with MTP)
+  if (root.contains("vision_final_layernorm") && root["vision_final_layernorm"].is_boolean())
+    r.final_ln = root["vision_final_layernorm"].get<bool>();
+  else
+    r.final_ln = t.contains("num_nextn_predict_layers") && t["num_nextn_predict_layers"].is_number_integer() &&
+                 t["num_nextn_predict_layers"].get<int>() > 0;
   auto why_not = [&]() -> std::string {
     if (v.value("use_swiglu_ffn", false)) return "a SwiGLU MLP";
     if (v.value("hidden_act", std::string("gelu")) != "gelu") return "an activation other than GELU";
@@ -54,7 +63,6 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
     if (r.hidden % r.heads || r.hidden / r.heads != 80 || r.hidden % 64 || r.inter % 64) return "an unexpected shape";
     if (std::fabs(root.value("downsample_ratio", 0.5) - 0.5) > 1e-9) return "a downsample ratio other than 0.5";
     if (root.value("ps_version", std::string("v2")) != "v2") return "pixel shuffle v1";
-    if (root.value("vision_final_layernorm", false)) return "a final LayerNorm on the tower";
     if (root.value("image_tag_type", std::string("internvl")) != "internvl") return "another image tag type";
     return "";
   };
@@ -66,13 +74,11 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
   for (const std::string& n : vit_tensor_names(dir)) {
     tower = tower || n == std::string(kTower) + "patch_generator.embedder.weight";
     proj = proj || n == std::string(kProj) + "1.weight";
-    // Super-VL: NVIDIA's code layer-normalizes the tower's output before the projector whenever the language model
-    // has MTP layers, without a config flag; the weights are the only sign of it
-    final_ln = final_ln || n == "vision_projector.vision_final_layernorm.weight";
+    final_ln = final_ln || n == std::string(kFinalLn) + "weight";
   }
   if (!tower || !proj) return false;  // a text-only conversion of the model
-  if (final_ln) {
-    logi("vision: %s has a RADIO tower with a final LayerNorm on the tower, which Kapitsa does not run: images are off",
+  if (r.final_ln && !final_ln) {
+    logi("vision: %s: the config asks for a LayerNorm on the RADIO tower's output that its files lack: images are off",
          dir.c_str());
     return false;
   }
@@ -107,7 +113,8 @@ int RadioViT::patch_budget() const {
 
 std::string RadioViT::describe() const {
   return name() + " (" + std::to_string(c_.depth) + " blocks, width " + std::to_string(c_.hidden) + ", " +
-         std::to_string(c_.patch) + "-pixel patches; images of " + std::to_string(c_.min_patches) + " to " +
+         std::to_string(c_.patch) + "-pixel patches" + (c_.final_ln ? ", a final LayerNorm" : "") + "; images of " +
+         std::to_string(c_.min_patches) + " to " +
          std::to_string(patch_budget()) + " patches)";
 }
 
@@ -263,7 +270,7 @@ size_t RadioViT::weight_bytes() const {
   const size_t tower = block * c_.depth + (H * P3 + H) + size_t(c_.side) * c_.side * H + size_t(c_.prefix) * H;
   const size_t proj = H4 + (size_t(c_.proj_hidden) * H4 + c_.proj_hidden) +
                       (size_t(c_.out_hidden) * c_.proj_hidden + c_.out_hidden);
-  return 2 * (tower + proj);
+  return 2 * (tower + proj + (c_.final_ln ? 2 * H : 0));
 }
 
 void RadioViT::load() {
@@ -297,6 +304,16 @@ void RadioViT::load() {
   m2_ = pw_.lin("3", 0, 0, false);
   if (m1_.K != uint32_t(4 * c_.hidden) || m1_.N != uint32_t(c_.proj_hidden) || m2_.N != uint32_t(c_.out_hidden))
     fatal("vision: RADIO projector of an unexpected shape");
+  if (c_.final_ln) {
+    fw_.open(dir_, kFinalLn);
+    for (const char* n : {"weight", "bias"})
+      if (const Tensor* t = fw_.find(n); !t || t->numel() != c_.hidden)
+        fatal("vision: RADIO final LayerNorm %s missing or of an unexpected size", n);
+    fnw_ = fw_.vec("weight");
+    fnb_ = fw_.vec("bias");
+    fw_.close();
+    fw_.make_resident();
+  }
   tw_.close();
   pw_.close();
   tw_.make_resident();
@@ -307,6 +324,7 @@ void RadioViT::load() {
 void RadioViT::unload() {
   tw_.release();
   pw_.release();
+  fw_.release();
   blocks_.clear();
   loaded_ = false;
 }
@@ -433,6 +451,12 @@ void RadioViT::encode(const Prepared& p, const Buffer& out) {
     cs.finish();
     for (Buffer& b : scratch) g.release(b);
     return;
+  }
+  // Super-VL: the patches layer-normalized in place (the last block's pending bias added first, so zeros after it)
+  if (c_.final_ln) {
+    vit_ln_inplace(cs.at(0.01 * N * H / 1e6), x.view(size_t(c_.prefix) * H * 4, size_t(N) * H * 4), uint32_t(H),
+                   pending, fnw_, fnb_, N, H, c_.ln_eps);
+    pending = &patch_.b;  // the patch embedder's bias: zeros
   }
   // the projector: 2x2 patches as one row (+ the last block's pending bias), RMSNorm, linear, ReLU^2, linear -> bf16
   for (int m0 = 0; m0 < M; m0 += MC) {

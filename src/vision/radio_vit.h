@@ -1,9 +1,11 @@
-// Nemotron 3.5 Bolt's image encoder (NVIDIA's NemotronH Omni): the processor, C-RADIO ViT-H/16 and the projector.
+// Nemotron 3.5 Bolt's and Super-VL's image encoder (NVIDIA's NemotronH Omni): the processor, C-RADIO ViT-H/16 and the
+// projector.
 // Processor: one tile per image whose 16-pixel patch grid holds between 1024 and 13312 patches (aspect kept, each side
 // even), resized as torch's antialiased bicubic interpolate in float32, normalized with CLIP's mean and std. Tower: 32
 // blocks of LayerNorm + attention (16 heads of 80) + GELU MLP over 10 cls / register tokens and the patches, whose
-// position embeddings come from a 128 x 128 table resized to the grid's longer side and cropped (CPE). Then the patches
-// in 2x2 groups (pixel shuffle) through mlp1 (RMSNorm, linear, ReLU squared, linear) to the language model's width.
+// position embeddings come from a 128 x 128 table resized to the grid's longer side and cropped (CPE). Super-VL then
+// layer-normalizes the patches (vision_projector.vision_final_layernorm; Bolt does not). Then the patches in 2x2 groups
+// (pixel shuffle) through mlp1 (RMSNorm, linear, ReLU squared, linear) to the language model's width.
 // Weights bf16 on the prefill GEMMs; the small kernels in vit.metal (radio_*).
 #pragma once
 #include "vision/encoder.h"
@@ -29,6 +31,10 @@ struct RadioViTConfig {
   int image_token = 18;     // <image>
   std::string image_start = "<img>", image_end = "</img>";
   float ln_eps = 1e-6f, rms_eps = 1e-5f;
+  // a LayerNorm on the tower's output before the pixel shuffle (vision_projector.vision_final_layernorm): NVIDIA's code
+  // has one when config.json's vision_final_layernorm says so, or, without that field, when the language model has MTP
+  // layers (Super-VL; Bolt's config says false)
+  bool final_ln = false;
   // processor
   int min_patches = 1024, max_patches = 13312;
   long max_pixels = 0;      // a cap on the pixels (patches * 256) an image keeps; 0: none
@@ -83,10 +89,12 @@ class RadioViT : public ImageEncoder {
   std::string dir_;
   RadioViTConfig c_;
   VitWeights tw_, pw_;  // the tower's tensors (vision_model.radio_model.model.*), the projector's (mlp1.*)
+  VitWeights fw_;       // the final LayerNorm's (vision_projector.vision_final_layernorm.*), with final_ln
   bool loaded_ = false;
   VitLin patch_;        // [hidden, 3 * patch * patch], (channel, row, column) order; no bias
   Buffer pos_, cls_;    // bf16 [side * side, hidden], [prefix, hidden]
   std::vector<Block> blocks_;
+  Buffer fnw_, fnb_;    // the final LayerNorm's weight and bias [hidden], with final_ln
   Buffer mnorm_;        // mlp1's RMSNorm weight [4 * hidden]
   VitLin m1_, m2_;      // no biases (zeros)
   int dbg_stop_ = -1;
