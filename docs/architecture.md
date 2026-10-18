@@ -95,6 +95,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |
 | Catalog, downloads and weights | [`src/hub/`](../src/hub/), [`src/loader/`](../src/loader/) |
+| `kapitsa bench`: the harness's protocol, this Mac's conditions, the result and its submission | [`src/bench/`](../src/bench/), [`bench_cmd.cpp`](../src/server/bench_cmd.cpp) |
 
 The Neural Engine bridge uses Apple's private framework interfaces. See [third-party notices](../THIRD_PARTY_NOTICES)
 for adapted code and design credits, the [usage guide](usage.md) for options and switches, and

@@ -58,6 +58,8 @@ kill %1
   Metal kernels and runtime.
 - `src/ane/`: the Neural Engine bridge; `src/vision/`: image decoding, processors and vision towers.
 - `src/hub/`: the model catalog, `--model` resolution and downloads; `src/gguf/`: `kapitsa import`.
+- `src/bench/`: `kapitsa bench`: the benchmark harness's protocol, the Mac and its conditions, the result file and its
+  submission; `bench/community/`: the community results and their checks.
 - `src/loader/`: the safetensors loader; `src/tokenizer/`: byte-level BPE, identical to Hugging Face's tokenizers.
 - `tools/`: check, measurement and benchmark programs, each built as `build/<name>`; `bench/`: benchmark prompts,
   quality data and the cross-engine harness; `tests/`: the checks above.
