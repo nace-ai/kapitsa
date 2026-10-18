@@ -78,6 +78,7 @@ jobs:
         if: ${{ !contains(github.ref_name, '-') }}
         env:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          HOMEBREW_NO_AUTO_UPDATE: "1"
         run: |
           v=${GITHUB_REF_NAME#v}
           sha=$(cut -d ' ' -f 1 "build/release/kapitsa-$v-darwin-arm64.tar.gz.sha256")
@@ -89,7 +90,7 @@ jobs:
           cp "$RUNNER_TEMP/kapitsa.rb" "$(brew --repository kapitsa-release/check)/Formula/kapitsa.rb"
           brew install kapitsa-release/check/kapitsa
           brew test kapitsa-release/check/kapitsa
-          brew uninstall kapitsa
+          brew uninstall kapitsa-release/check/kapitsa
           brew untap kapitsa-release/check
           if [ -z "$TAP_GITHUB_TOKEN" ]; then
             { echo "No TAP_GITHUB_TOKEN secret: commit this as Formula/kapitsa.rb in nace-ai/homebrew-tap."
@@ -101,6 +102,7 @@ jobs:
           mkdir -p Formula
           cp "$RUNNER_TEMP/kapitsa.rb" Formula/kapitsa.rb
           git add Formula/kapitsa.rb
+          if git diff --cached --quiet; then echo "The tap already has this formula."; exit 0; fi
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "kapitsa $v"
-          git push
+          git push origin HEAD
