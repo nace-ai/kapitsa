@@ -15,7 +15,8 @@ std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixe
     if (max_pixels > 0) qc.max_pixels = std::max(max_pixels, qc.min_pixels);
     return std::make_unique<QwenViT>(dir, qc);
   }
-  // other models' encoders go here (each behind ImageEncoder)
+  // other models' encoders go here, each behind ImageEncoder (Nemotron 3.5 Bolt's RADIO ViT-H/16 with its pixel
+  // shuffle and mlp1 projector: its vision_model.* tensors), with the model's prefill calling enc_embed_runs
   return nullptr;
 }
 

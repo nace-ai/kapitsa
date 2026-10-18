@@ -191,9 +191,11 @@ The shared part (`src/vision/`: `image.mm`, `encoder.*`, `embed.h`) fetches and 
 through the model's encoder, expands each image's placeholder token to its embedding rows, keys those rows for prefix
 reuse, loads the encoder on the first image that needs encoding and keeps it within the memory budget. Per model, an
 `ImageEncoder` holds the processor and the tower (`qwen_vit.*` + `src/kernels/vit.metal` for the Qwen3.5 family: a
-new model's encoder is one more class and one line in `open_encoder`), and the model applies its own positions
-(`Qwen35::set_rope_positions`: Qwen's interleaved M-RoPE, `attn_prep_m`; a model whose attention takes no positions
-needs nothing there).
+new model's encoder is one more class and one line in `open_encoder`), and the model takes the image rows: its
+prefill puts the embeddings in (`vision::enc_embed_runs` for `Seq::embeds`) and `Model::set_rope_positions` gives
+them positions (Qwen35: interleaved M-RoPE in `attn_prep_m`; the default does nothing, for attention without
+positions such as Nemotron-H's). Nemotron 3.5 Bolt's RADIO encoder is the next one; until it lands, an image sent to
+Bolt becomes the short note.
 
 - Processor: decoded as PIL's `convert("RGB")` decodes (no color management, alpha dropped, the EXIF orientation
   applied), resized by smart_resize (multiples of 32 within the model's 65536 to 16.7M pixels, `--image-max-pixels`
