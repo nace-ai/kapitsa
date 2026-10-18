@@ -122,8 +122,8 @@ class Qwen4Exp : public Qwen35 {
   void enc_attn4(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4Layer& F, int pos, const Buffer& u);
   void enc_moe4(Encoder& e, const Layer& L, const Buffer& u);
   void enc_attn4_prefill(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4Layer& F, int pos0, int T);
-  void enc_qsa(Encoder& e, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R, int pos0, const Buffer& ik,
-               const Buffer& bk);
+  void enc_qsa(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R, int pos0,
+               const Buffer& ik, const Buffer& bk);
   // Sparse attention: a row at position pos selects blocks once it sees more than budget + ratio - 1 tokens
   bool qsa_sparse(int pos) const { return (pos + 1) / c4_.ix_ratio > c4_.ix_budget / c4_.ix_ratio; }
   // block scores and key lists (idx_ / cnt_ rows 0..R-1) of R rows at positions pos0.. whose index queries are iq_ rows
@@ -169,6 +169,7 @@ class Qwen4Exp : public Qwen35 {
   Buffer ple_dec_[4];         // decode / verify staging (fp32 [kMaxVerify, hidden]), a ring
   Buffer mtpX_;               // the MTP head's 4-stream state [T, hc*hidden] (mtp_post_: its rows after the layer)
   Buffer qscore_, qidx_, qcnt_;  // sparse attention: block scores [rows, blocks], key lists [rows, i_ld], counts
+  Buffer xr2_, hinv_;         // one-row gated residual (hc_down / hc_up): the injected row, its streams' inverse RMS
   uint32_t qidx_ld_ = 0;
   int ple_pf_flip_ = 0, ple_dec_next_ = 0;
   void* ple_ev_ = nullptr;    // MTLSharedEvent: tickets of gathers done by completion handlers

@@ -63,7 +63,7 @@ void Qwen4Exp::enc_attn4_rows(Encoder& e, const Seq& s, const Layer& L, const Qw
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, uint32_t(R), 1, cfg_.head_dim);
-  enc_qsa(e, F, iqk_, F.iqk.N, R, pos, ik, bk);
+  enc_qsa(e, s, F, iqk_, F.iqk.N, R, pos, ik, bk);
   if (qsa_sparse(pos + R - 1)) {  // rows that see > budget + ratio - 1 tokens: their selected blocks (the others: all)
     enc_qsa_select(e, bk, R, pos, 0);
     enc_attn_sparse(e, kc, vc, s.cap, R, true, 0);
@@ -252,7 +252,7 @@ void Qwen4Exp::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, uint32_t(R), 1, cfg_.head_dim);
-  enc_qsa(e, mtp4_, iqk_, mtp4_.iqk.N, R, pos0, s.mtp_ixk, s.mtp_ixb);
+  enc_qsa(e, s, mtp4_, iqk_, mtp4_.iqk.N, R, pos0, s.mtp_ixk, s.mtp_ixb);
 }
 
 }  // namespace ni

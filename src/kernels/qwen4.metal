@@ -212,7 +212,7 @@ struct PleParams {
 
 // ---- Sparse-attention indexer: index queries, raw index keys, block keys ----
 // iqk rows = [iq head 0..NH-1 (HD each) | ik (HD)]. Index queries: RMSNorm * wq, partial NeoX RoPE (rot dims) at the
-// row's position; the raw index key goes to the cache ik [pos, HD] (half). Block j (tokens 4j..4j+3) gets its key
+// row's position (M-RoPE for image rows); the raw index key goes to the cache ik [pos, HD] (half). Block j (tokens 4j..4j+3) gets its key
 // once complete: RMSNorm(mean(ik[4j..4j+3])) * wk, RoPE at position 4j -> bk [j, HD] (fp32).
 struct QsaParams {
   uint R;       // rows
@@ -226,11 +226,21 @@ struct QsaParams {
   float theta;
 };
 
-NI_INLINE float qsa_rope(threadgroup float* row, float x, uint tid, uint rot, uint pos, float theta) {
+// RoPE of cache row `pos`: at its M-RoPE position for image rows (rows < mr.mn take (t, h, w) by the interleaved
+// sections, as attn_prep_m), else at pos + mr.delta (text: mn = delta = 0)
+NI_INLINE float qsa_rope(threadgroup float* row, float x, uint tid, uint rot, uint pos, float theta,
+                         const device int* mpos, constant MropeParams& mr) {
   const uint hr = rot / 2;
   if (tid >= rot) return x;
   const uint i = tid % hr;
-  const float ang = float(pos) * metal::precise::pow(theta, -2.0f * float(i) / float(rot));
+  int rp;
+  if (pos < mr.mn) {
+    const uint a = (i % 3 == 1 && i < mr.sec1) ? 1u : (i % 3 == 2 && i < mr.sec2) ? 2u : 0u;
+    rp = mpos[pos * 3 + a];
+  } else {
+    rp = int(pos) + mr.delta;
+  }
+  const float ang = float(rp) * metal::precise::pow(theta, -2.0f * float(i) / float(rot));
   const float cs = metal::precise::cos(ang), sn = metal::precise::sin(ang);
   return tid < hr ? row[tid] * cs - row[tid + hr] * sn : row[tid] * cs + row[tid - hr] * sn;
 }
@@ -238,7 +248,8 @@ NI_INLINE float qsa_rope(threadgroup float* row, float x, uint tid, uint rot, ui
 // grid: (NH + 1, R) x HD threads
 [[kernel]] void qsa_prep(const device float* iqk [[buffer(0)]], const device float* wq [[buffer(1)]],
                          device float* iq [[buffer(2)]], device half* ik [[buffer(3)]],
-                         constant QsaParams& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                         constant QsaParams& p [[buffer(4)]], const device int* mpos [[buffer(5)]],
+                         constant MropeParams& mr [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
                          uint tid [[thread_index_in_threadgroup]]) {
   threadgroup float scratch[32];
   threadgroup float row[256];
@@ -251,12 +262,13 @@ NI_INLINE float qsa_rope(threadgroup float* row, float x, uint tid, uint rot, ui
   const float ss = tg_sum(x * x, scratch, tid, p.HD);
   row[tid] = x * metal::precise::rsqrt(ss / float(p.HD) + p.eps) * wq[tid];
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  iq[(r * p.NH + h) * p.HD + tid] = qsa_rope(row, row[tid], tid, p.rot, pos, p.theta);
+  iq[(r * p.NH + h) * p.HD + tid] = qsa_rope(row, row[tid], tid, p.rot, pos, p.theta, mpos, mr);
 }
 
 // grid: R x HD threads (rows that complete a block write its key)
 [[kernel]] void qsa_block(const device half* ik [[buffer(0)]], const device float* wk [[buffer(1)]],
                           device float* bk [[buffer(2)]], constant QsaParams& p [[buffer(3)]],
+                          const device int* mpos [[buffer(4)]], constant MropeParams& mr [[buffer(5)]],
                           uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]]) {
   threadgroup float scratch[32];
   threadgroup float row[256];
@@ -269,7 +281,7 @@ NI_INLINE float qsa_rope(threadgroup float* row, float x, uint tid, uint rot, ui
   const float ss = tg_sum(m * m, scratch, tid, p.HD);
   row[tid] = m * metal::precise::rsqrt(ss / float(p.HD) + p.eps) * wk[tid];
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  bk[j * p.HD + tid] = qsa_rope(row, row[tid], tid, p.rot, t0, p.theta);
+  bk[j * p.HD + tid] = qsa_rope(row, row[tid], tid, p.rot, t0, p.theta, mpos, mr);
 }
 
 // ---- Sparse-attention selection (queries that see more than budget + ratio - 1 tokens) ----
@@ -578,3 +590,152 @@ NI_MTP4_PRE(mtp4_pre_h, half)
   const float v = pe[r * p.D + c];
   for (uint s = 0; s < p.S; ++s) X[(r * p.S + s) * p.D + c] = v + ph[(r * p.S + s) * p.D + c];
 }
+
+// ---- The gated residual of one row in two dispatches (decode): hc_down, then hc_up ----
+// hc_down: X' = X + inj_prev * y (has_y), the per-stream inverse RMS of X', h = silu(W_down Xn / S) with Xn = X' * inv *
+// w (computed on the fly; no Xn buffer), and (the last threadgroup) X' into X2, inv, inj = 2 sigmoid(W_inj Xn / S).
+// Threadgroup t < rank / 8: rows 8t..8t+7, its 8 simdgroups each a slice of the K = S*D inputs, summed in threadgroup
+// memory. W_down: MLX affine BITS-bit, group 64. grid: rank / 8 + 1 threadgroups x 256 threads.
+struct HcRowParams {
+  uint D, S;
+  uint rank;
+  uint has_y, has_inj;
+  float eps;
+};
+template <int BITS>
+NI_INLINE void hc_down_impl(const device float* X, const device float* y, const device float* inj_prev,
+                            const device float* w, const device uint32_t* W, const device bfloat* Ws,
+                            const device bfloat* Wb, const device bfloat* winj, device float* X2, device float* h,
+                            device float* inv_out, device float* inj, constant HcRowParams& p, uint tg, uint tid,
+                            uint sg, uint lane, threadgroup float* scratch, threadgroup float* part) {
+  const uint SD = p.S * p.D;
+  float ss[4] = {0, 0, 0, 0};
+  for (uint i = tid; i < SD; i += 256) {
+    const uint s = i / p.D;
+    const float v = X[i] + (p.has_y ? inj_prev[s] * y[i - s * p.D] : 0.0f);
+    ss[s] += v * v;
+  }
+  float inv[4];
+  for (uint s = 0; s < p.S; ++s) inv[s] = metal::precise::rsqrt(tg_sum(ss[s], scratch, tid, 256) / float(p.D) + p.eps);
+  if (tg == p.rank / 8) {  // the residual, the norms, the injection weights
+    float dot[4] = {0, 0, 0, 0};
+    for (uint i = tid; i < SD; i += 256) {
+      const uint s = i / p.D;
+      const float v = X[i] + (p.has_y ? inj_prev[s] * y[i - s * p.D] : 0.0f);
+      X2[i] = v;
+      if (p.has_inj) {
+        const float xn = v * inv[s] * w[i];
+        for (uint q = 0; q < p.S; ++q) dot[q] += float(winj[q * SD + i]) * xn;
+      }
+    }
+    for (uint q = 0; q < p.S; ++q) {
+      const float d = p.has_inj ? tg_sum(dot[q], scratch, tid, 256) : 0.0f;
+      if (tid == 0) {
+        inv_out[q] = inv[q];
+        if (p.has_inj) inj[q] = 2.0f * sigmoid(d / float(p.S));
+      }
+    }
+    return;
+  }
+  constexpr uint PER = 32 / BITS, WPL = 8 / PER;  // 8 values per lane step: WPL words of a row
+  const uint slice = SD / 8, k_begin = sg * slice, wpr = SD / PER, gpr = SD / 64;
+  float acc[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  for (uint k0 = k_begin + lane * 8; k0 < k_begin + slice; k0 += 256) {
+    const uint s = k0 / p.D, c0 = k0 - s * p.D;
+    const float a = p.has_y ? inj_prev[s] : 0.0f, is = inv[s];
+    const float4 x0 = *(const device float4*)(X + k0), x1 = *(const device float4*)(X + k0 + 4);
+    const float4 y0 = *(const device float4*)(y + c0), y1 = *(const device float4*)(y + c0 + 4);
+    const float4 w0 = *(const device float4*)(w + k0), w1 = *(const device float4*)(w + k0 + 4);
+    const float4 n0 = (x0 + a * y0) * is * w0, n1 = (x1 + a * y1) * is * w1;
+    const float xv[8] = {n0.x, n0.y, n0.z, n0.w, n1.x, n1.y, n1.z, n1.w};
+    const float xs = n0.x + n0.y + n0.z + n0.w + n1.x + n1.y + n1.z + n1.w;
+    const uint g = k0 / 64;
+    for (uint r = 0; r < 8; ++r) {
+      const uint row = tg * 8 + r;
+      float d = 0.0f;
+      for (uint wi = 0; wi < WPL; ++wi) {
+        const uint word = W[row * wpr + k0 / PER + wi];
+        for (uint j = 0; j < PER; ++j) d += float((word >> (BITS * j)) & ((1u << BITS) - 1u)) * xv[wi * PER + j];
+      }
+      acc[r] += float(Ws[row * gpr + g]) * d + float(Wb[row * gpr + g]) * xs;
+    }
+  }
+  for (uint r = 0; r < 8; ++r) {
+    const float v = simd_sum(acc[r]);
+    if (lane == 0) part[sg * 8 + r] = v;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < 8) {
+    float t = 0.0f;
+    for (uint q = 0; q < 8; ++q) t += part[q * 8 + tid];
+    h[tg * 8 + tid] = silu(t / float(p.S));
+  }
+}
+#define NI_HC_DOWN(NAME, BITS)                                                                                 \
+  [[kernel]] void NAME(const device float* X [[buffer(0)]], const device float* y [[buffer(1)]],               \
+                       const device float* inj_prev [[buffer(2)]], const device float* w [[buffer(3)]],        \
+                       const device uint32_t* W [[buffer(4)]], const device bfloat* Ws [[buffer(5)]],          \
+                       const device bfloat* Wb [[buffer(6)]], const device bfloat* winj [[buffer(7)]],         \
+                       device float* X2 [[buffer(8)]], device float* h [[buffer(9)]], device float* inv [[buffer(10)]], \
+                       device float* inj [[buffer(11)]], constant HcRowParams& p [[buffer(12)]],               \
+                       uint tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],     \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float scratch[32];                                                                             \
+    threadgroup float part[64];                                                                                \
+    hc_down_impl<BITS>(X, y, inj_prev, w, W, Ws, Wb, winj, X2, h, inv, inj, p, tg, tid, sg, lane, scratch, part); \
+  }
+NI_HC_DOWN(hc_down_b4, 4)
+NI_HC_DOWN(hc_down_b8, 8)
+
+// hc_up: m = W_up h for the 4 rows (s*D + c) of channel c, u[c] = mean_s sigmoid(m_s) * X'[s, c] * inv[s] * w[s, c];
+// X' (X2) goes back into X, and y is zeroed (has_y: hc_down has read it). A simdgroup per channel, 8 lanes per row
+// (each rank / 8 inputs). W_up: MLX affine BITS-bit, group 64. grid: D / 8 threadgroups x 256 threads.
+template <int BITS>
+NI_INLINE void hc_up_impl(const device float* h, const device float* X2, const device float* inv, const device float* w,
+                          const device uint32_t* W, const device bfloat* Ws, const device bfloat* Wb, device float* u,
+                          device float* X, device float* y, constant HcRowParams& p, uint tg, uint tid, uint sg,
+                          uint lane, threadgroup float* hs) {
+  for (uint i = tid; i < p.rank; i += 256) hs[i] = h[i];
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint c = tg * 8 + sg, s = lane / 8, sub = lane % 8;
+  if (c >= p.D) return;
+  constexpr uint PER = 32 / BITS;
+  const uint row = s * p.D + c, per = p.rank / 8, k0 = sub * per, wpr = p.rank / PER, gpr = p.rank / 64;
+  float m = 0.0f;
+  if (s < p.S)
+    for (uint k = k0; k < k0 + per; k += PER) {
+      const uint word = W[row * wpr + k / PER];
+      for (uint j = 0; j < PER; ++j) {
+        const uint kk = k + j, g = kk / 64;
+        m += (float(Ws[row * gpr + g]) * float((word >> (BITS * j)) & ((1u << BITS) - 1u)) + float(Wb[row * gpr + g])) * hs[kk];
+      }
+    }
+  // the 8 lanes of a row, then the S rows of the channel
+  m += simd_shuffle_xor(m, 1);
+  m += simd_shuffle_xor(m, 2);
+  m += simd_shuffle_xor(m, 4);
+  float v = 0.0f;
+  if (sub == 0 && s < p.S) {
+    const float x = X2[row];
+    v = sigmoid(m) * x * inv[s] * w[row];
+    X[row] = x;
+  }
+  v = simd_sum(v);
+  if (lane == 0) {
+    u[c] = v / float(p.S);
+    if (p.has_y) y[c] = 0.0f;
+  }
+}
+#define NI_HC_UP(NAME, BITS)                                                                                   \
+  [[kernel]] void NAME(const device float* h [[buffer(0)]], const device float* X2 [[buffer(1)]],              \
+                       const device float* inv [[buffer(2)]], const device float* w [[buffer(3)]],             \
+                       const device uint32_t* W [[buffer(4)]], const device bfloat* Ws [[buffer(5)]],          \
+                       const device bfloat* Wb [[buffer(6)]], device float* u [[buffer(7)]], device float* X [[buffer(8)]], \
+                       device float* y [[buffer(9)]], constant HcRowParams& p [[buffer(10)]],                  \
+                       uint tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],     \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
+    threadgroup float hs[512];                                                                                 \
+    hc_up_impl<BITS>(h, X2, inv, w, W, Ws, Wb, u, X, y, p, tg, tid, sg, lane, hs);                             \
+  }
+NI_HC_UP(hc_up_b4, 4)
+NI_HC_UP(hc_up_b8, 8)

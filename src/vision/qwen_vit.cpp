@@ -73,7 +73,7 @@ bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
   const json root = read_json_or_empty(dir + "/config.json");
   if (!root.contains("vision_config") || !root["vision_config"].is_object()) return false;
   const std::string mt = root.value("model_type", std::string());
-  if (mt.rfind("qwen3_5", 0) != 0) return false;
+  if (mt.rfind("qwen3_5", 0) != 0 && mt != "qwen4_exp") return false;  // (Qwen3.8-Flash-Next: the same tower)
   const json& v = root["vision_config"];
   QwenViTConfig q;
   q.depth = v.value("depth", q.depth);

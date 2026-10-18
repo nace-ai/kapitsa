@@ -369,7 +369,8 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
          + Tz * D * 4 + 2 * Tz * c4.hc * 4 + V * SD * 4 + Tz * SD * 2 + Tz * R * 4 + Tz * R * 2 + Tz * SD * 4 +
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
-         + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4;  // sparse attention's key lists
+         + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
+         + SD * 4 + 64;  // the one-row gated residual's row
 }
 
 void Qwen4Exp::alloc4() {
@@ -393,6 +394,8 @@ void Qwen4Exp::alloc4() {
   ple_v_ = g.alloc(T * D * 4, "ple_value");
   for (Buffer& b : ple_pf_) b = g.alloc(T * D * 2, "ple_rows");
   for (Buffer& b : ple_dec_) b = g.alloc(V * D * 4, "ple_rows_decode");
+  xr2_ = g.alloc(SD * 4, "hc_row");
+  hinv_ = g.alloc(64, "hc_inv");
   qidx_ld_ = uint32_t((c4_.ix_budget + c4_.ix_ratio + 3) / 4 * 4);  // budget + ratio - 1 entries, rounded
   qidx_ = g.alloc(T * qidx_ld_ * 4, "qsa_idx");
   qcnt_ = g.alloc(T * 4 + 16, "qsa_cnt");
@@ -555,6 +558,28 @@ void Qwen4Exp::enc_inject(Encoder& e, int R, const Buffer& X, const Buffer& inj)
 void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X, size_t x_row0, bool inject,
                            const Buffer& inj_prev, const Buffer& inj_out, const Buffer& u, uint32_t u_ld) {
   const uint32_t D = uint32_t(cfg_.hidden), S = uint32_t(c4_.hc), SD = S * D;
+  // one row in two dispatches, hc_down + hc_up (NI_HC_ROW=1; off: 4-layer synthetic decode 640 vs 790 tok/s)
+  static const bool fused = env_on("NI_HC_ROW");
+  const uint32_t rank = uint32_t(c4_.hc_rank);
+  if (fused && R == 1 && (g.down.q4() || g.down.q8()) && (g.up.q4() || g.up.q8()) && rank % 64 == 0 && SD % 2048 == 0) {
+    const struct {
+      uint32_t D, S, rank, has_y, has_inj;
+      float eps;
+    } p{D, S, rank, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
+    e.use(pipe(g.down.bits == 8 ? "hc_down_b8" : "hc_down_b4"));
+    e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
+    e.buf(4, g.down.w->buf); e.buf(5, g.down.s->buf); e.buf(6, g.down.b->buf); e.buf(7, g.inj ? g.inj.w->buf : g.norm->buf);
+    e.buf(8, xr2_); e.buf(9, hch_); e.buf(10, hinv_); e.buf(11, inj_out);
+    e.val(12, p);
+    e.dispatch(rank / 8 + 1, 1, 1, 256);
+    e.use(pipe(g.up.bits == 8 ? "hc_up_b8" : "hc_up_b4"));
+    e.buf(0, hch_); e.buf(1, xr2_); e.buf(2, hinv_); e.buf(3, g.norm->buf);
+    e.buf(4, g.up.w->buf); e.buf(5, g.up.s->buf); e.buf(6, g.up.b->buf); e.buf(7, u); e.buf(8, X, x_row0 * SD * 4);
+    e.buf(9, yb_);
+    e.val(10, p);
+    e.dispatch(D / 8, 1, 1, 256);
+    return;
+  }
   const HcParams p{uint32_t(R), D, S, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
   e.use(pipe("hc_pre"));
   e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
@@ -619,17 +644,26 @@ void Qwen4Exp::enc_gdn4(Encoder& e, Seq& s, int li, const Layer& L, const Buffer
   enc_qmv(e, L.out, gout_, yb_, nullptr, nullptr);
 }
 
-void Qwen4Exp::enc_qsa(Encoder& e, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R, int pos0, const Buffer& ik,
-                       const Buffer& bk) {
+void Qwen4Exp::enc_qsa(Encoder& e, const Seq& s, const Qwen4Layer& F, const Buffer& iqk, uint32_t ld, int R, int pos0,
+                       const Buffer& ik, const Buffer& bk) {
   const QsaParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(cfg_.rot_dims), uint32_t(pos0),
                     uint32_t(c4_.ix_ratio), ld, cfg_.eps, cfg_.theta};
+  // images: the rows' M-RoPE positions (as attn_prep_m's); text: mn = delta = 0
+  const struct {
+    uint32_t mn;
+    int32_t delta;
+    uint32_t sec1, sec2;
+  } m{uint32_t(s.rope_n), s.rope_delta, uint32_t(3 * cfg_.mrope[1]), uint32_t(3 * cfg_.mrope[2])};
+  const Buffer& mpos = s.rope_pos ? s.rope_pos : iq_;
   e.use(pipe("qsa_prep"));
   e.buf(0, iqk); e.buf(1, F.iqn->buf); e.buf(2, iq_); e.buf(3, ik);
   e.val(4, p);
+  e.buf(5, mpos); e.val(6, m);
   e.dispatch(p.NH + 1, uint32_t(R), 1, p.HD);
   e.use(pipe("qsa_block"));
   e.buf(0, ik); e.buf(1, F.ikn->buf); e.buf(2, bk);
   e.val(3, p);
+  e.buf(4, mpos); e.val(5, m);
   e.dispatch(uint32_t(R), 1, 1, p.HD);
 }
 
@@ -708,7 +742,7 @@ void Qwen4Exp::enc_attn4(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, 1, 1, cfg_.head_dim);
-  enc_qsa(e, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
+  enc_qsa(e, s, F, iqk_, F.iqk.N, 1, pos, s.ixk[size_t(li)], s.ixb[size_t(li)]);
   if (qsa_sparse(pos)) {  // the selected blocks only
     enc_qsa_select(e, s.ixb[size_t(li)], 1, pos, 0);
     enc_attn_sparse(e, s.kc[size_t(li)], s.vc[size_t(li)], s.cap, 1, true, 0);
@@ -824,7 +858,7 @@ void Qwen4Exp::enc_attn4_prefill(Encoder& e, Seq& s, int li, const Layer& L, con
   e.val(8, ap);
   if (mrope(s)) enc_mrope_args(e, s);
   e.dispatch(cfg_.hq + 2 * cfg_.hkv, uint32_t(T), 1, cfg_.head_dim);
-  enc_qsa(e, F, iqk_, F.iqk.N, T, pos0, s.ixk[size_t(li)], s.ixb[size_t(li)]);
+  enc_qsa(e, s, F, iqk_, F.iqk.N, T, pos0, s.ixk[size_t(li)], s.ixb[size_t(li)]);
   if (qsa_sparse(pos0 + T - 1)) {
     // rows in passes whose score scratch stays within ~64 MB (every row of a 2048-row chunk up to a 32k context)
     const int nbmax = (pos0 + T) / c4_.ix_ratio;
