@@ -1700,12 +1700,17 @@ NI_INLINE void attn11_store_v(threadgroup half* vt, thread const uint4* r, uint 
 // GQ (attn_prefill11g, NI_SHORTPF): rows are (query, head) pairs of one KV head's G query heads,
 // row r = query r / G, head kvh*G + r % G; grid = (ceil(T*G / 32), Hkv[, nsplit]). For few queries
 // the 32-row blocks then hold G queries' worth of rows instead of padding T up to 32.
-template <uint BK, bool XS, bool SPLIT = false, bool GQ = false, bool RSKIP = false>
+// MASK (attn_prefill11m, Qwen3.8-Flash-Next's sparse attention; BK = 32, not GQ): query t attends only to the keys
+// whose bit is set in its mask row (mask[t * mwords + key / 32]), causally; key tiles no query of the block selected
+// are skipped (tflag: 2 uints of threadgroup memory).
+template <uint BK, bool XS, bool SPLIT = false, bool GQ = false, bool RSKIP = false, bool MASK = false>
 NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc, const device half* vc,
                                    const device float* qg, device float* out, constant AttnPrefParams& p,
                                    uint2 tg, uint tid, uint sg, uint lane, threadgroup half* kv,
                                    threadgroup float2* xs, uint split = 0, uint nsplit = 1,
-                                   device float* part_o = nullptr, device float2* part_ml = nullptr) {
+                                   device float* part_o = nullptr, device float2* part_ml = nullptr,
+                                   const device uint* mask = nullptr, uint mwords = 0,
+                                   threadgroup uint* tflag = nullptr) {
   constexpr uint NC = BK / 8;                     // key fragments per tile
   constexpr uint KLD = attn11_kld<BK>();
   const uint G = p.Hq / p.Hkv;
@@ -1713,7 +1718,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   const uint qd = lane / 4;
   const uint frow = (qd & 4) + (lane / 2) % 4;    // this lane's fragment row and first column
   const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
-  uint h, kvh, t, qpos_rg, kend;
+  uint h, kvh, t, qpos_rg, kend, tq0 = 0;
   if (GQ) {
     kvh = tg.y;
     const uint nrb = (p.T * G + kBQ11 - 1) / kBQ11;
@@ -1728,6 +1733,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
     kvh = h / G;
     const uint nqb = (p.T + kBQ11 - 1) / kBQ11;
     const uint t0 = (nqb - 1 - tg.x) * kBQ11;     // heaviest (latest) blocks first: short last wave
+    tq0 = t0;
     t = t0 + rg * 8 + frow;                       // this lane's query
     qpos_rg = p.pos0 + t0 + rg * 8;               // first query position of the row group
     kend = p.pos0 + min(t0 + kBQ11, p.T);         // keys needed by the block
@@ -1764,6 +1770,17 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
 
   for (uint it = it_begin; it < it_end; ++it) {
     const uint k0 = it * BK;
+    uint mword = 0;  // MASK: this lane's query's selection bits in the tile
+    if (MASK) {
+      if (sg == 0) {  // the block's 32 queries: any selected key in the tile?
+        const uint tq = tq0 + lane;
+        const uint any = simd_or(tq < p.T ? mask[tq * mwords + k0 / 32] : 0u);
+        if (lane == 0) tflag[it & 1] = any;
+      }
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      if (tflag[it & 1] == 0) continue;  // (uniform over the threadgroup)
+      mword = mask[min(t, p.T - 1) * mwords + k0 / 32];
+    }
     uint4 r[BK / 8];
     attn11_fetch_k<BK>(r, kb, k0, kend, tid);
     threadgroup_barrier(mem_flags::mem_threadgroup);   // previous P.V is done with the buffer
@@ -1805,6 +1822,7 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
       NI_UNROLL for (uint i = 0; i < 2; ++i) {
         float v = s[c].thread_elements()[i] * M_LOG2E_F;
         if (diag && k0 + c * 8 + fcol + i > qpos) v = kNeg11;
+        if (MASK && !((mword >> (c * 8 + fcol + i)) & 1u)) v = kNeg11;
         s[c].thread_elements()[i] = v;
         mx = max(mx, v);
       }
@@ -1920,6 +1938,21 @@ NI_INLINE void attn_prefill11_impl(const device float* q, const device half* kc,
   }
   const float g = qg[(t * p.Hq + h) * 2 * kHD + kHD + d];
   out[(t * p.Hq + h) * kHD + d] = o / l * sigmoid(g);
+}
+
+// attn_prefill11m: attn_prefill11r over the keys each query's mask row selects (sparse attention; grid as 11r)
+[[kernel, max_total_threads_per_threadgroup(256)]] void attn_prefill11m(
+    const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]],
+    const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant AttnPrefParams& p [[buffer(5)]],
+    const device uint* mask [[buffer(6)]], constant uint& mwords [[buffer(7)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  threadgroup float2 xs[1];
+  threadgroup uint tflag[2];
+  attn_prefill11_impl<32, false, false, false, true, true>(q, kc, vc, qg, out, p, tg, tid, sg, lane,
+                                                           (threadgroup half*)kvm, xs, 0, 1, nullptr, nullptr, mask,
+                                                           mwords, tflag);
 }
 
 // attn_prefill11r (NI_ATTN=attn_prefill11r): v11 with the O rescale skipped when corr == 1 for all rows

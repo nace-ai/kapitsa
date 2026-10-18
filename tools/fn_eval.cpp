@@ -11,10 +11,14 @@
 //     --xs F2: the residual (4 streams) of every position after the embedding and after each layer (one prefill per
 //              layer count; float32 [L + 1, n, 4 * hidden])
 //   F: float32 logits [n, vocab] (row p = the distribution after token p)
+//   --dump-ref F  instead: ni_eval's NIEVREF2 reference file (top-K log-probs per position, --topk, default 64)
+//   --ref F       compares with such a file: KL over its top-K (+ the lumped rest), top-1 agreement, perplexity
 #include "metal/gpu.h"
 #include "model/qwen4_exp.h"
 #include "util/log.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -24,6 +28,19 @@
 #include <vector>
 
 using namespace ni;
+
+// log-softmax of one row in place; returns the argmax
+static int log_softmax(float* x, int V) {
+  float m = x[0];
+  int am = 0;
+  for (int i = 1; i < V; ++i)
+    if (x[i] > m) m = x[i], am = i;
+  double s = 0.0;
+  for (int i = 0; i < V; ++i) s += std::exp(double(x[i] - m));
+  const float lse = m + float(std::log(s));
+  for (int i = 0; i < V; ++i) x[i] -= lse;
+  return am;
+}
 
 static std::vector<int> read_ids(const std::string& arg0) {
   std::string arg = arg0;
@@ -47,8 +64,8 @@ int main(int argc, char** argv) {
   }
   const std::string dir = argv[1];
   const std::vector<int> ids = read_ids(argv[2]);
-  std::string out, xs_out, mode = "prefill";
-  int chunk = 512, rows = 3, hist = 0;
+  std::string out, xs_out, mode = "prefill", dump_ref, ref;
+  int chunk = 512, rows = 3, hist = 0, topk = 64;
   for (int i = 3; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
@@ -61,6 +78,9 @@ int main(int argc, char** argv) {
     else if (a == "--rows") rows = std::stoi(next());
     else if (a == "--xs") xs_out = next();
     else if (a == "--hist") hist = std::stoi(next());
+    else if (a == "--dump-ref") dump_ref = next();
+    else if (a == "--ref") ref = next();
+    else if (a == "--topk") topk = std::stoi(next());
     else fatal("unknown option %s", a.c_str());
   }
   const int n = int(ids.size());
@@ -82,7 +102,7 @@ int main(int argc, char** argv) {
     m.set_debug_layers(-1);
     fprintf(stderr, "wrote %s\n", xs_out.c_str());
   }
-  if (out.empty()) return 0;
+  if (out.empty() && dump_ref.empty() && ref.empty()) return 0;
   std::vector<float> logits(size_t(n) * V);
   auto s = m.new_seq(n + 16);
   memcpy(s->tokens(), ids.data(), ids.size() * 4);
@@ -133,7 +153,78 @@ int main(int argc, char** argv) {
     fatal("unknown mode %s", mode.c_str());
   }
   fprintf(stderr, "%s: %d positions in %.0f ms\n", mode.c_str(), n, now_ms() - t0);
-  std::ofstream f(out, std::ios::binary);
-  f.write(reinterpret_cast<const char*>(logits.data()), std::streamsize(logits.size() * 4));
+  if (!out.empty()) {
+    std::ofstream f(out, std::ios::binary);
+    f.write(reinterpret_cast<const char*>(logits.data()), std::streamsize(logits.size() * 4));
+  }
+  // positions [p_lo, n - 1) score (mtp: rows from --hist; its row p predicts token p + 2)
+  const int p_lo = mode == "mtp" ? hist : 0, shift = mode == "mtp" ? 2 : 1;
+  if (!dump_ref.empty()) {
+    std::ofstream f(dump_ref, std::ios::binary);
+    const uint32_t one = 1, Vu = uint32_t(V), Ku = uint32_t(topk), nn = uint32_t(n);
+    f.write("NIEVREF2", 8);
+    f.write((const char*)&one, 4); f.write((const char*)&Vu, 4); f.write((const char*)&Ku, 4);
+    f.write((const char*)&nn, 4);
+    f.write((const char*)ids.data(), std::streamsize(ids.size() * 4));
+    std::vector<uint32_t> idx(static_cast<size_t>(V));
+    for (int p = 0; p + 1 < n; ++p) {
+      float* row = logits.data() + size_t(p) * V;
+      log_softmax(row, V);
+      const float lp = p + shift < n ? row[ids[size_t(p + shift)]] : 0.0f;
+      for (int i = 0; i < V; ++i) idx[size_t(i)] = uint32_t(i);
+      std::partial_sort(idx.begin(), idx.begin() + topk, idx.end(), [&](uint32_t a, uint32_t b) { return row[a] > row[b]; });
+      f.write((const char*)&lp, 4);
+      for (int i = 0; i < topk; ++i) {
+        f.write((const char*)&idx[size_t(i)], 4);
+        f.write((const char*)&row[idx[size_t(i)]], 4);
+      }
+    }
+    fprintf(stderr, "wrote %s\n", dump_ref.c_str());
+  }
+  if (!ref.empty()) {
+    std::ifstream f(ref, std::ios::binary);
+    char magic[8];
+    uint32_t nseq = 0, Vr = 0, K = 0, nr = 0;
+    f.read(magic, 8); f.read((char*)&nseq, 4); f.read((char*)&Vr, 4); f.read((char*)&K, 4); f.read((char*)&nr, 4);
+    if (!f || memcmp(magic, "NIEVREF2", 8) || nseq < 1 || int(nr) != n) fatal("%s: not a reference for this sequence", ref.c_str());
+    std::vector<int> rid(nr);
+    f.read((char*)rid.data(), nr * 4);
+    if (rid != ids) fatal("%s: other token ids", ref.c_str());
+    std::vector<double> kls;
+    double nll = 0, nll_ref = 0;
+    long agree = 0, cnt = 0;
+    std::vector<std::pair<uint32_t, float>> top(K);
+    for (int p = 0; p + 1 < n; ++p) {
+      float lp_ref = 0;
+      f.read((char*)&lp_ref, 4);
+      for (auto& t : top) f.read((char*)&t.first, 4), f.read((char*)&t.second, 4);
+      if (p < p_lo || p + shift >= n) continue;
+      float* row = logits.data() + size_t(p) * V;
+      const int am = log_softmax(row, V);
+      double pk = 0, qk = 0, kl = 0;
+      for (auto& [id, lpr] : top) {
+        const double pr = std::exp(double(lpr));
+        pk += pr;
+        qk += std::exp(double(row[id]));
+        kl += pr * (double(lpr) - double(row[id]));
+      }
+      const double rp = std::max(1.0 - pk, 1e-12), rq = std::max(1.0 - qk, 1e-12);
+      kls.push_back(std::max(0.0, kl + rp * (std::log(rp) - std::log(rq))));
+      agree += uint32_t(am) == top[0].first;
+      nll -= row[ids[size_t(p + shift)]];
+      nll_ref -= lp_ref;
+      ++cnt;
+    }
+    double mean = 0;
+    for (double k : kls) mean += k;
+    mean /= std::max<size_t>(kls.size(), 1);
+    std::vector<double> srt = kls;
+    std::sort(srt.begin(), srt.end());
+    auto pct = [&](double q) { return srt.empty() ? 0.0 : srt[std::min(srt.size() - 1, size_t(q * double(srt.size() - 1) + 0.5))]; };
+    printf("{\"mode\": \"%s\", \"positions\": %ld, \"kl_mean\": %.6g, \"kl_median\": %.6g, \"kl_p99\": %.6g, \"kl_max\": %.6g, "
+           "\"top1_agree\": %.5f, \"ppl\": %.5f, \"ppl_ref\": %.5f}\n",
+           mode.c_str(), cnt, mean, pct(0.5), pct(0.99), pct(1.0), cnt ? double(agree) / double(cnt) : 0.0,
+           cnt ? std::exp(nll / double(cnt)) : 0.0, cnt ? std::exp(nll_ref / double(cnt)) : 0.0);
+  }
   return 0;
 }

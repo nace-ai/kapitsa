@@ -370,7 +370,7 @@ static size_t qwen4_act_bytes(const Qwen35Config& c, const Qwen4ExpConfig& c4, i
          Tz * IQ * 4 + Tz * c4.ix_heads * c4.ix_dim * 4 + Tz * SD * 4 + Tz * D * 4 + 2 * Tz * D * 2 + 4 * V * D * 4 +
          (mtp ? Tz * SD * 4 + V * SD * 4 - V * D * 4 : 0)  // the MTP head's state; mtp_post_ widened
          + Tz * size_t(c4.ix_budget + c4.ix_ratio + 3) / 4 * 4 * 4 + Tz * 4  // sparse attention's key lists
-         + SD * 4 + 64;  // the one-row gated residual's row
+         + SD * 4 + 64 + (SD / 1024 + 1) * V * R * 4;  // the one-row gated residual's row, hc_down_sk's partials
 }
 
 void Qwen4Exp::alloc4() {
@@ -394,6 +394,7 @@ void Qwen4Exp::alloc4() {
   ple_v_ = g.alloc(T * D * 4, "ple_value");
   for (Buffer& b : ple_pf_) b = g.alloc(T * D * 2, "ple_rows");
   for (Buffer& b : ple_dec_) b = g.alloc(V * D * 4, "ple_rows_decode");
+  hpart_ = g.alloc((SD / 1024 + 1) * V * R * 4, "hc_part");
   xr2_ = g.alloc(SD * 4, "hc_row");
   hinv_ = g.alloc(64, "hc_inv");
   qidx_ld_ = uint32_t((c4_.ix_budget + c4_.ix_ratio + 3) / 4 * 4);  // budget + ratio - 1 entries, rounded
@@ -586,6 +587,25 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
   e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, xn4_); e.buf(6, inj_out);
   e.val(7, p);
   e.dispatch(uint32_t(R), 1, 1, 1024);
+  // the low-rank mix on two parallel GEMVs (hc_down_sk: split over the inputs; hc_up_mix: up projection, sigmoid and
+  // the streams' mean per channel); NI_HC_SK=0: the qmv GEMVs below and hc_mix
+  static const bool sk = !(getenv("NI_HC_SK") && !strcmp(getenv("NI_HC_SK"), "0"));
+  const bool sk_fmt = g.down.gs == 64 && (g.down.bits == 4 || g.down.bits == 6 || g.down.bits == 8);
+  if (sk && g.down.same_format(g.up) && sk_fmt && SD % 1024 == 0 && rank % 64 == 0 && D % 16 == 0) {
+    const struct {
+      uint32_t R, D, S, rank, kc, u_ld;
+    } mp{uint32_t(R), D, S, rank, SD / 1024, u_ld};
+    const std::string b = "_b" + std::to_string(g.down.bits);
+    e.use(pipe("hc_down_sk" + b));
+    e.buf(0, xn4_); e.buf(1, g.down.w->buf); e.buf(2, g.down.s->buf); e.buf(3, g.down.b->buf); e.buf(4, hpart_);
+    e.val(5, mp);
+    e.dispatch(rank / 8, SD / 1024, uint32_t(R), 256);
+    e.use(pipe("hc_up_mix" + b));
+    e.buf(0, hpart_); e.buf(1, xn4_); e.buf(2, g.up.w->buf); e.buf(3, g.up.s->buf); e.buf(4, g.up.b->buf); e.buf(5, u);
+    e.val(6, mp);
+    e.dispatch(D / 16, uint32_t(R), 1, 256);
+    return;
+  }
   if (R == 1) enc_qmv(e, g.down, xn4_, hch_, nullptr, nullptr);
   else enc_qmvr(e, g.down, xn4_, hch_, R, false);
   const uint32_t n = uint32_t(R) * uint32_t(c4_.hc_rank);
@@ -697,6 +717,29 @@ void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
+void Qwen4Exp::enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords) {
+  const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);
+  const size_t need = size_t(R) * nb * 4, mneed = size_t(row0 + R) * mwords * 4;
+  if (qscore_.size < need) {  // between passes only (see enc_qsa_select)
+    Gpu::get().release(qscore_);
+    qscore_ = Gpu::get().alloc(std::max(need, size_t(4) << 20), "qsa_scores");
+  }
+  if (qmask_.size < mneed) {
+    Gpu::get().release(qmask_);
+    qmask_ = Gpu::get().alloc(std::max(size_t(tmax_) * mwords * 4, mneed), "qsa_mask");
+  }
+  const QsaSelParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0), uint32_t(c4_.ix_ratio),
+                       uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, mwords};
+  e.use(pipe("qsa_score"));
+  e.buf(0, iq_, size_t(row0) * c4_.ix_heads * c4_.ix_dim * 4); e.buf(1, bk); e.buf(2, qscore_);
+  e.val(3, p);
+  e.dispatch((nb + 255) / 256, uint32_t(R), 1, 256);
+  e.use(pipe("qsa_select_mask"));
+  e.buf(0, qscore_); e.buf(1, qmask_, size_t(row0) * mwords * 4); e.buf(2, qcnt_);
+  e.val(3, p);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
 void Qwen4Exp::enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, int cap, int R, bool partials, int q_row0) {
   const uint32_t G = uint32_t(cfg_.hq / cfg_.hkv), maxn = qidx_ld_;
   const float scale = 1.0f / std::sqrt(float(cfg_.head_dim));
@@ -780,7 +823,9 @@ void Qwen4Exp::enc_moe4(Encoder& e, const Layer& L, const Buffer& u) {
   const uint32_t E = uint32_t(cfg_.experts);
   kp::Moe mp{uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(cfg_.top_k), cfg_.eps};
   kp::Topk tp{E, uint32_t(cfg_.top_k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe(E == 256 && cfg_.top_k <= 8 ? "moe_topk256" : "moe_topk"));
+  // 512 experts: moe_topk512 (selects on the logits; NI_TOPK512=0: moe_topk)
+  static const bool t512 = !(getenv("NI_TOPK512") && !strcmp(getenv("NI_TOPK512"), "0"));
+  e.use(pipe(t512 && E == 512 && cfg_.top_k <= 16 ? "moe_topk512" : E == 256 && cfg_.top_k <= 8 ? "moe_topk256" : "moe_topk"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, eidx_); e.buf(3, ewts_);
   e.val(4, tp);
   e.dispatch(1, 1, 1, 32);
@@ -863,10 +908,28 @@ void Qwen4Exp::enc_attn4_prefill(Encoder& e, Seq& s, int li, const Layer& L, con
     // rows in passes whose score scratch stays within ~64 MB (every row of a 2048-row chunk up to a 32k context)
     const int nbmax = (pos0 + T) / c4_.ix_ratio;
     const int per = std::max(1, std::min(T, int((size_t(64) << 20) / (size_t(nbmax) * 4))));
-    for (int r0 = 0; r0 < T; r0 += per) {
-      const int n = std::min(per, T - r0);
-      enc_qsa_select(e, s.ixb[size_t(li)], n, pos0 + r0, r0);
-      enc_attn_sparse(e, s.kc[size_t(li)], s.vc[size_t(li)], s.cap, n, false, r0);
+    // Up to 8192 keys: bit rows and the prefill flash attention skipping unselected keys and tiles (attn_prefill11m:
+    // its cost grows with the union of a 32-query block's selections, at worst the context); past that, per-row key
+    // lists and a gather kernel without MMA (attn_sparse_rows: ~budget keys per row whatever the context). Synthetic
+    // 4-layer pack, a 2048-row chunk: 11.7 vs 24.8 ms at 4k keys, 35 vs 24 ms at 16k. NI_QSA_PF=mask / list forces one.
+    static const char* pf = getenv("NI_QSA_PF");
+    const bool lists = pf && *pf ? !strcmp(pf, "list") : pos0 + T > 8192;
+    if (lists) {
+      for (int r0 = 0; r0 < T; r0 += per) {
+        const int n = std::min(per, T - r0);
+        enc_qsa_select(e, s.ixb[size_t(li)], n, pos0 + r0, r0);
+        enc_attn_sparse(e, s.kc[size_t(li)], s.vc[size_t(li)], s.cap, n, false, r0);
+      }
+    } else {
+      const uint32_t mwords = uint32_t(pos0 + T + 31) / 32;
+      for (int r0 = 0; r0 < T; r0 += per) enc_qsa_mask(e, s.ixb[size_t(li)], std::min(per, T - r0), pos0 + r0, r0, mwords);
+      kp::AttnPref fp{uint32_t(T), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos0), uint32_t(s.cap),
+                      1.0f / std::sqrt(float(cfg_.head_dim))};
+      e.use(pipe("attn_prefill11m"));
+      e.buf(0, qo_); e.buf(1, s.kc[size_t(li)]); e.buf(2, s.vc[size_t(li)]); e.buf(3, qg_); e.buf(4, attn_out_);
+      e.val(5, fp);
+      e.buf(6, qmask_); e.val(7, mwords);
+      e.dispatch(uint32_t(T + 31) / 32, uint32_t(cfg_.hq), 1, 256);
     }
   } else {
     enc_attn_prefill(e, s.kc[size_t(li)], s.vc[size_t(li)], T, pos0, s.cap);

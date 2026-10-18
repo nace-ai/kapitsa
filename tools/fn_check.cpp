@@ -241,6 +241,56 @@ void test_hc_row(int bits) {
   report((n + ": y zeroed").c_str(), cmp(D, [&](size_t i) { return y.f()[i]; }, [](size_t) { return 0.0; }, 1.0), 0);
 }
 
+// the R-row low-rank mix after hc_pre (hc_down_sk + hc_up_mix) against fp64
+void test_hc_mix_sk(int bits) {
+  const uint32_t D = 512, S = 4, SD = S * D, RK = 128, G = 64, R = 3, KC = SD / 1024;
+  Buf xn(R * SD), part(KC * R * RK), u(R * D);
+  Buf Wd(size_t(RK) * SD * bits / 32), Sd(RK * SD / G, 2), Bd(RK * SD / G, 2);
+  Buf Wu(size_t(SD) * RK * bits / 32), Su(SD * RK / G, 2), Bu(SD * RK / G, 2);
+  xn.fill(-2, 2);
+  for (size_t i = 0; i < Wd.n; ++i) Wd.b.as<uint32_t>()[i] = uint32_t(rng());
+  for (size_t i = 0; i < Wu.n; ++i) Wu.b.as<uint32_t>()[i] = uint32_t(rng());
+  const float sc = bits == 4 ? 0.004f : 0.0003f;
+  Sd.fill_bf16(sc / 2, sc), Bd.fill_bf16(-sc * (1 << bits) / 2, 0), Su.fill_bf16(sc, 2 * sc), Bu.fill_bf16(-sc * (1 << bits), 0);
+  struct { uint32_t R, D, S, rank, kc, u_ld; } p{R, D, S, RK, KC, D};
+  const std::string sfx = "_b" + std::to_string(bits);
+  run(("hc_down_sk" + sfx).c_str(), [&](Encoder& e) {
+    e.buf(0, xn.b); e.buf(1, Wd.b); e.buf(2, Sd.b); e.buf(3, Bd.b); e.buf(4, part.b); e.val(5, p);
+  }, RK / 8, KC, R, 256);
+  run(("hc_up_mix" + sfx).c_str(), [&](Encoder& e) {
+    e.buf(0, part.b); e.buf(1, xn.b); e.buf(2, Wu.b); e.buf(3, Su.b); e.buf(4, Bu.b); e.buf(5, u.b); e.val(6, p);
+  }, D / 16, R, 1, 256);
+  auto deq = [&](const Buf& W, const Buf& Sc, const Buf& Bi, uint32_t n, uint32_t k, uint32_t K) {
+    // value k of row n: bits [k * bits, k * bits + bits) of the row's little-endian bit stream
+    const uint64_t bit = (uint64_t(n) * K + k) * uint64_t(bits);
+    const uint32_t* w = W.b.as<uint32_t>();
+    uint64_t v = w[bit / 32];
+    if (bit % 32 + bits > 32) v |= uint64_t(w[bit / 32 + 1]) << 32;
+    const uint32_t q = uint32_t(v >> (bit % 32)) & ((1u << bits) - 1);
+    return double(bf(Sc, n * (K / G) + k / G)) * q + bf(Bi, n * (K / G) + k / G);
+  };
+  double err = 0;
+  for (uint32_t r = 0; r < R; ++r) {
+    std::vector<double> hh(RK);
+    for (uint32_t n = 0; n < RK; ++n) {
+      double a = 0;
+      for (uint32_t k = 0; k < SD; ++k) a += deq(Wd, Sd, Bd, n, k, SD) * xn.f()[r * SD + k];
+      hh[n] = silu(a / S);
+    }
+    for (uint32_t c = 0; c < D; ++c) {
+      double a = 0;
+      for (uint32_t s2 = 0; s2 < S; ++s2) {
+        double m = 0;
+        for (uint32_t k = 0; k < RK; ++k) m += deq(Wu, Su, Bu, s2 * D + c, k, RK) * hh[k];
+        a += sigm(m) * xn.f()[r * SD + s2 * D + c];
+      }
+      const double ref = a / S;
+      err = std::max(err, std::fabs(ref - u.f()[r * D + c]) / std::max(std::fabs(ref), 1e-2));
+    }
+  }
+  report(("hc_down_sk + hc_up_mix" + sfx + ": u").c_str(), err, 1e-4);
+}
+
 // CPU reference of the PLE block over rows [0, R) at positions pos0.. with gvn history `hist` (positions < pos0)
 void ple_ref(uint32_t R, uint32_t D, uint32_t S, uint32_t pos0, const float* key, const float* val, std::vector<double>& X,
              const float* wk, const float* wq, const float* wc, const Buf& cw, std::vector<std::vector<double>>& hist) {
@@ -498,12 +548,118 @@ void test_qmvht() {
   }
 }
 
+// the 512-expert router top-k against a CPU softmax + top-k (both renormalizations)
+void test_topk512() {
+  const uint32_t R = 3, E = 512, K = 10;
+  for (uint32_t norm = 0; norm < 2; ++norm) {
+    Buf lg(R * E), sh(R), idx(R * K), wts(R * (K + 1));
+    lg.fill(-4, 4), sh.fill(-2, 2);
+    struct { uint32_t E, k, norm; } p{E, K, norm};
+    run("moe_topk512", [&](Encoder& e) { e.buf(0, lg.b); e.buf(1, sh.b); e.buf(2, idx.b); e.buf(3, wts.b); e.val(4, p); }, R, 1, 1, 32);
+    int bad = 0;
+    double err = 0;
+    for (uint32_t r = 0; r < R; ++r) {
+      std::vector<std::pair<float, uint32_t>> v;
+      double mx = -1e30, tot = 0;
+      for (uint32_t i = 0; i < E; ++i) v.push_back({lg.f()[r * E + i], i}), mx = std::max(mx, double(lg.f()[r * E + i]));
+      for (auto& x : v) tot += std::exp(x.first - mx);
+      std::stable_sort(v.begin(), v.end(), [](auto& a, auto& b) { return a.first > b.first; });
+      double sel = 0;
+      for (uint32_t q = 0; q < K; ++q) sel += std::exp(v[q].first - mx);
+      for (uint32_t q = 0; q < K; ++q) {
+        bad += idx.b.as<uint32_t>()[r * K + q] != v[q].second;
+        const double w = std::exp(v[q].first - mx) / (norm ? sel : tot);
+        err = std::max(err, std::fabs(w - wts.f()[r * (K + 1) + q]) / w);
+      }
+      err = std::max(err, std::fabs(sigm(sh.f()[r]) - wts.f()[r * (K + 1) + K]));
+    }
+    report(norm ? "moe_topk512 (renormalized): ids" : "moe_topk512: ids", bad, 0);
+    report(norm ? "moe_topk512 (renormalized): weights" : "moe_topk512: weights", err, 1e-5);
+  }
+}
+
+// the weight-format kernels (wfmt.metal) on Qwen3.8-Flash-Next's 6-bit shapes against fp64: the decode GEMV
+// (qmvg_f6g64_r2) and the prefill GEMM (qrf_f6g64_*, half inputs)
+void test_wfmt6() {
+  struct Shape { uint32_t N, K; };
+  const int bits = 6;
+  for (Shape sh : {Shape{320, 10240}, Shape{10240, 320}, Shape{12288, 2560}, Shape{2560, 6144}}) {
+    const uint32_t N = sh.N, K = sh.K, G = K / 64;
+    Buf W(size_t(N) * K * bits / 32), Sc(size_t(N) * G, 2), Bi(size_t(N) * G, 2);
+    for (size_t i = 0; i < W.n; ++i) W.b.as<uint32_t>()[i] = uint32_t(rng());
+    Sc.fill_bf16(0.0005f, 0.002f), Bi.fill_bf16(-0.06f, 0.0f);
+    auto deq = [&](uint32_t n, uint32_t k) {
+      const uint64_t bit = (uint64_t(n) * K + k) * uint64_t(bits);
+      const uint32_t* w = W.b.as<uint32_t>();
+      uint64_t v = w[bit / 32];
+      if (bit % 32 + bits > 32) v |= uint64_t(w[bit / 32 + 1]) << 32;
+      return double(bf(Sc, n * G + k / 64)) * double(uint32_t(v >> (bit % 32)) & 63u) + bf(Bi, n * G + k / 64);
+    };
+    // decode GEMV, one row
+    {
+      Buf x(K), y(N);
+      x.fill(-1, 1);
+      struct { uint32_t N, K, xs, ys; float eps; } p{N, K, K, N, 1e-6f};
+      run("qmvg_f6g64_r2", [&](Encoder& e) {
+        e.buf(0, W.b); e.buf(1, Sc.b); e.buf(2, Bi.b); e.buf(3, x.b); e.buf(4, y.b); e.val(5, p); e.buf(6, y.b); e.buf(7, y.b);
+      }, (N + 15) / 16, 1, 1, 256);
+      double err = 0;
+      for (uint32_t n = 0; n < N; n += (N > 2048 ? 7 : 1)) {
+        double a = 0;
+        for (uint32_t k = 0; k < K; ++k) a += deq(n, k) * x.f()[k];
+        err = std::max(err, std::fabs(a - y.f()[n]) / std::max(std::fabs(a), 0.05));
+      }
+      char name[64];
+      snprintf(name, sizeof name, "qmvg_f6g64_r2 %ux%u", N, K);
+      report(name, err, 1e-4);
+    }
+    // prefill GEMM, M rows of half inputs (FN_ONEHOT: row m = the unit vector of input 7m + 3)
+    for (uint32_t M : {5u, 37u, 160u}) {
+      Buf xh(size_t(M) * K, 2), y(size_t(M) * N);
+      for (size_t i = 0; i < xh.n; ++i) xh.b.as<_Float16>()[i] = _Float16(getenv("FN_ONEHOT") ? 0.0f : urand(-1, 1));
+      if (getenv("FN_ONEHOT"))
+        for (uint32_t m = 0; m < M; ++m) xh.b.as<_Float16>()[size_t(m) * K + (7 * m + 3) % K] = _Float16(1.0f);
+      std::string n = "qrf_f6g64";
+      uint32_t bm = 32, bn = 128, th = 128;
+      if (M <= 8) n += "_m8_n64", bm = 8, bn = 64, th = 64;
+      else if (M < 64 || N <= 64) n += "_m16_n64", bm = 16, bn = 64;
+      else n += "_m32_n128";
+      struct { uint32_t M, N, K, x_ld, y_ld, add, gs, ws, ss; } p{M, N, K, K, N, 0, 64, 0, 0};
+      run(n.c_str(), [&](Encoder& e) {
+        e.buf(0, xh.b); e.buf(1, W.b); e.buf(2, Sc.b); e.buf(3, Bi.b); e.buf(4, y.b); e.val(5, p);
+      }, (N + bn - 1) / bn, (M + bm - 1) / bm, 1, th);
+      double err = 0;
+      for (uint32_t m = 0; m < M; m += (M > 40 ? 13 : 1))
+        for (uint32_t nn = 0; nn < N; nn += (N > 2048 ? 11 : 1)) {
+          double a = 0;
+          for (uint32_t k = 0; k < K; ++k) a += deq(nn, k) * double(float(xh.b.as<_Float16>()[size_t(m) * K + k]));
+          err = std::max(err, std::fabs(a - y.f()[size_t(m) * N + nn]) / std::max(std::fabs(a), 0.05));
+        }
+      char name[64];
+      snprintf(name, sizeof name, "%s %ux%u M=%u", n.c_str(), N, K, M);
+      report(name, err, 2e-3);
+      if (getenv("FN_ONEHOT") && M == 5)
+        for (uint32_t m = 0; m < 2; ++m)
+          for (uint32_t nn = 0; nn < 3; ++nn)
+            printf("   m %u n %u: got %.6f want %.6f\n", m, nn, y.f()[size_t(m) * N + nn], deq(nn, (7 * m + 3) % K));
+    }
+  }
+}
+
 int kernels() {
+  if (getenv("FN_WFMT")) {
+    test_wfmt6();
+    return g_fail ? 1 : 0;
+  }
+  test_topk512();
   // (24 KB of threadgroup memory: past what shader validation, which doubles it, accepts)
   if (!getenv("MTL_SHADER_VALIDATION")) test_qmvht();
   test_hc();
   test_hc_row(4);
   test_hc_row(8);
+  test_hc_mix_sk(4);
+  test_hc_mix_sk(6);
+  test_hc_mix_sk(8);
   test_ple();
   test_qsa();
   test_qsa_sparse();

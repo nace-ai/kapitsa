@@ -129,6 +129,8 @@ class Qwen4Exp : public Qwen35 {
   // block scores and key lists (idx_ / cnt_ rows 0..R-1) of R rows at positions pos0.. whose index queries are iq_ rows
   // iq_row0..; the score scratch grows on demand (between passes)
   void enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int iq_row0);
+  // the same as bit rows (mask rows row0.. of qmask_, mwords words each) for the masked prefill attention
+  void enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords);
   // attention of R rows over their key lists (q rows qo_ from q_row0; output attn_out_ rows from q_row0)
   void enc_attn_sparse(Encoder& e, const Buffer& kc, const Buffer& vc, int cap, int R, bool partials, int q_row0);
   // the n-gram embedding block at layer c4_.ple_layer: rows staged in `rows` (fp32 for R rows, half for prefill)
@@ -169,7 +171,9 @@ class Qwen4Exp : public Qwen35 {
   Buffer ple_dec_[4];         // decode / verify staging (fp32 [kMaxVerify, hidden]), a ring
   Buffer mtpX_;               // the MTP head's 4-stream state [T, hc*hidden] (mtp_post_: its rows after the layer)
   Buffer qscore_, qidx_, qcnt_;  // sparse attention: block scores [rows, blocks], key lists [rows, i_ld], counts
+  Buffer qmask_;                 // sparse prefill: key bit rows [T, ceil(keys / 32)]
   Buffer xr2_, hinv_;         // one-row gated residual (hc_down / hc_up): the injected row, its streams' inverse RMS
+  Buffer hpart_;              // row gated residual: hc_down_sk's partial sums [S*D / 1024, kMaxVerify, rank]
   uint32_t qidx_ld_ = 0;
   int ple_pf_flip_ = 0, ple_dec_next_ = 0;
   void* ple_ev_ = nullptr;    // MTLSharedEvent: tickets of gathers done by completion handlers

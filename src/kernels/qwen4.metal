@@ -53,7 +53,7 @@ NI_INLINE void hc_pre_impl(device float* X, device float* y, const device float*
   const float4 inv = metal::precise::rsqrt(tg_sum4(ss, scratch, tid, ntg) / float(D) + p.eps);
   float4 dot = 0.0f;
   for (uint c = tid; c < D; c += ntg) {
-    const float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]) * inv * float4(w[c], w[D + c], w[2 * D + c], w[3 * D + c]);
+    float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]) * inv * float4(w[c], w[D + c], w[2 * D + c], w[3 * D + c]);
     xn[r * SD + c] = XN(v.x);
     xn[r * SD + D + c] = XN(v.y);
     xn[r * SD + 2 * D + c] = XN(v.z);
@@ -339,20 +339,25 @@ struct QsaSelParams {
 // the topb-th largest score (scores are >= 0, so their bits order like the values), then thread t keeps blocks of its
 // contiguous range [t * per, (t + 1) * per) above the threshold and the lowest-index ones equal to it, and writes them
 // at offsets from a scan of the per-thread counts.
-[[kernel]] void qsa_select(const device float* score [[buffer(0)]], device uint* idx [[buffer(1)]],
-                           device uint* cnt [[buffer(2)]], constant QsaSelParams& p [[buffer(3)]],
-                           uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                           uint ntg [[threads_per_threadgroup]]) {
-  threadgroup atomic_uint hist[256];
-  threadgroup uint scan[1024];
-  threadgroup uint sel_digit, sel_rank;
+// MASK (qsa_select_mask): the selection as a bit row instead (idx [R, i_ld] words; bit k of word k / 32 = key k;
+// i_ld = ceil(keys / 32)), every bit set for dense rows (the causal limit applies in the attention kernel).
+template <bool MASK>
+NI_INLINE void qsa_select_impl(const device float* score, device uint* idx, device uint* cnt, constant QsaSelParams& p,
+                               uint r, uint tid, uint ntg, threadgroup atomic_uint* hist, threadgroup uint* scan,
+                               threadgroup uint* sel) {
   const uint pos = p.pos0 + r, n = pos + 1, nb = n / p.ratio;
   device uint* out = idx + r * p.i_ld;
   if (nb <= p.topb) {
-    for (uint i = tid; i < n; i += ntg) out[i] = i;
-    if (tid == 0) cnt[r] = n;
+    if (MASK) {
+      for (uint i = tid; i < p.i_ld; i += ntg) out[i] = 0xffffffffu;
+    } else {
+      for (uint i = tid; i < n; i += ntg) out[i] = i;
+      if (tid == 0) cnt[r] = n;
+    }
     return;
   }
+  if (MASK)
+    for (uint i = tid; i < p.i_ld; i += ntg) out[i] = 0u;
   const device uint* key = (const device uint*)(score + r * p.s_ld);
   // radix select: prefix = the threshold's bits found so far, rank = how many of the topb are still to place
   uint prefix = 0, pmask = 0, rank = p.topb;
@@ -369,17 +374,17 @@ struct QsaSelParams {
       for (;; --d) {
         const uint c = atomic_load_explicit(&hist[d], memory_order_relaxed);
         if (acc + c >= rank || d == 0) {
-          sel_rank = rank - acc;
+          sel[1] = rank - acc;
           break;
         }
         acc += c;
       }
-      sel_digit = d;
+      sel[0] = d;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    prefix |= sel_digit << shift;
+    prefix |= sel[0] << shift;
     pmask |= 255u << shift;
-    rank = sel_rank;
+    rank = sel[1];
   }
   // prefix = the threshold key; rank = how many blocks equal to it are kept (the lowest indices)
   const uint per = (nb + ntg - 1) / ntg, j0 = min(tid * per, nb), j1 = min(j0 + per, nb);
@@ -410,18 +415,41 @@ struct QsaSelParams {
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
   uint o = (scan[tid] - keep) * p.ratio, e_left = eq_keep;
+  if (MASK) threadgroup_barrier(mem_flags::mem_device);  // the row's words are zero before any bit is set
   for (uint j = j0; j < j1; ++j) {
     const uint k = key[j];
     const bool take = k > prefix || (k == prefix && e_left > 0);
     if (k == prefix && take) --e_left;
     if (!take) continue;
-    for (uint t = 0; t < p.ratio; ++t) out[o + t] = j * p.ratio + t;
+    if (MASK) {  // ratio = 4 bits of one word (blocks start at multiples of 4)
+      atomic_fetch_or_explicit((device atomic_uint*)(out + j * p.ratio / 32), ((1u << p.ratio) - 1u) << (j * p.ratio % 32),
+                               memory_order_relaxed);
+    } else {
+      for (uint t = 0; t < p.ratio; ++t) out[o + t] = j * p.ratio + t;
+    }
     o += p.ratio;
   }
   const uint tail0 = nb * p.ratio, base = p.topb * p.ratio;
+  if (MASK) {
+    if (tid == 0)
+      for (uint k = tail0; k < n; ++k) atomic_fetch_or_explicit((device atomic_uint*)(out + k / 32), 1u << (k % 32), memory_order_relaxed);
+    return;
+  }
   for (uint i = tid; tail0 + i < n; i += ntg) out[base + i] = tail0 + i;
   if (tid == 0) cnt[r] = base + (n - tail0);
 }
+#define NI_QSA_SELECT(NAME, MASK)                                                                              \
+  [[kernel]] void NAME(const device float* score [[buffer(0)]], device uint* idx [[buffer(1)]],                \
+                       device uint* cnt [[buffer(2)]], constant QsaSelParams& p [[buffer(3)]],                 \
+                       uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],      \
+                       uint ntg [[threads_per_threadgroup]]) {                                                 \
+    threadgroup atomic_uint hist[256];                                                                         \
+    threadgroup uint scan[1024];                                                                               \
+    threadgroup uint sel[2];                                                                                   \
+    qsa_select_impl<MASK>(score, idx, cnt, p, r, tid, ntg, hist, scan, sel);                                   \
+  }
+NI_QSA_SELECT(qsa_select, false)
+NI_QSA_SELECT(qsa_select_mask, true)
 
 // Attention of R rows over their own key lists (idx / cnt from qsa_select): split-K partials as attn_rows_partial
 // (combined by attn_rows_reduce with the gate), chunk c of row r covering list entries [c * chunk, (c + 1) * chunk).
@@ -757,3 +785,161 @@ NI_INLINE void hc_up_impl(const device float* h, const device float* X2, const d
   }
 NI_HC_UP(hc_up_b4, 4)
 NI_HC_UP(hc_up_b8, 8)
+
+// ---- The gated residual's low-rank mix of R rows on parallel GEMVs (after hc_pre has written Xn) ----
+// MLX affine BITS-bit codes (4, 6 or 8; group 64) in runs of 16 values: 16 * BITS bits, so a run starting at a
+// multiple of 16 values starts on a word and stays in one 64-group.
+template <int BITS>
+NI_INLINE void unpack16(const device uint32_t* w, thread float* q) {
+  constexpr uint NW = 16 * BITS / 32, MASK = (1u << BITS) - 1u;
+  uint words[NW];
+  for (uint i = 0; i < NW; ++i) words[i] = w[i];
+  for (uint j = 0; j < 16; ++j) {
+    const uint bit = j * BITS, wi = bit / 32, sh = bit % 32;
+    uint v = words[wi] >> sh;
+    if (sh + BITS > 32) v |= words[wi + 1] << (32 - sh);
+    q[j] = float(v & MASK);
+  }
+}
+
+// hc_down_sk: part[c, r, n] = W_down[n, chunk c] . Xn[r, chunk c] (chunks of 1024 inputs; summed by hc_up_mix).
+// A simdgroup per (row n, chunk), lanes 32 inputs each (half a 64-group). grid: (N / 8, KC, R) x 256 threads.
+struct HcMixParams {
+  uint R, D, S;
+  uint rank;      // N of W_down, K of W_up
+  uint kc;        // chunks of 1024 inputs (S * D / 1024)
+  uint u_ld;      // floats between u rows
+};
+template <int BITS>
+NI_INLINE void hc_down_sk_impl(const device float* xn, const device uint32_t* W, const device bfloat* Ws,
+                               const device bfloat* Wb, device float* part, constant HcMixParams& p, uint3 tg, uint sg,
+                               uint lane) {
+  const uint SD = p.S * p.D, n = tg.x * 8 + sg, c = tg.y, r = tg.z;
+  const uint k0 = c * 1024 + lane * 32;
+  const device float4* x4 = (const device float4*)(xn + r * SD + k0);
+  float xv[32];
+  float xs = 0.0f;
+  for (uint i = 0; i < 8; ++i) {
+    const float4 v = x4[i];
+    xv[4 * i] = v.x, xv[4 * i + 1] = v.y, xv[4 * i + 2] = v.z, xv[4 * i + 3] = v.w;
+    xs += v.x + v.y + v.z + v.w;
+  }
+  const device uint32_t* w = W + size_t(n) * (SD * BITS / 32) + k0 * BITS / 32;
+  float q[16], d = 0.0f;
+  const uint g = n * (SD / 64) + k0 / 64;
+  for (uint h = 0; h < 2; ++h) {
+    unpack16<BITS>(w + h * (16 * BITS / 32), q);
+    for (uint j = 0; j < 16; ++j) d += q[j] * xv[h * 16 + j];
+  }
+  const float acc = simd_sum(float(Ws[g]) * d + float(Wb[g]) * xs);
+  if (lane == 0) part[(c * p.R + r) * p.rank + n] = acc;
+}
+#define NI_HC_DOWN_SK(NAME, BITS)                                                                              \
+  [[kernel]] void NAME(const device float* xn [[buffer(0)]], const device uint32_t* W [[buffer(1)]],           \
+                       const device bfloat* Ws [[buffer(2)]], const device bfloat* Wb [[buffer(3)]],           \
+                       device float* part [[buffer(4)]], constant HcMixParams& p [[buffer(5)]],                \
+                       uint3 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint lane [[thread_index_in_simdgroup]]) {                                              \
+    hc_down_sk_impl<BITS>(xn, W, Ws, Wb, part, p, tg, sg, lane);                                               \
+  }
+NI_HC_DOWN_SK(hc_down_sk_b4, 4)
+NI_HC_DOWN_SK(hc_down_sk_b6, 6)
+NI_HC_DOWN_SK(hc_down_sk_b8, 8)
+
+// hc_up_mix: h = silu(sum_c part[c] / S) (staged per threadgroup), m = W_up h for the S rows (s*D + ch) of a
+// channel, u[ch] = mean_s sigmoid(m_s) * Xn[s*D + ch]. A simdgroup per 2 channels: 8 rows of 4 lanes, each lane a
+// quarter of the rank inputs in runs of 16. grid: (D / 16, R) x 256 threads; rank % 64 == 0.
+template <int BITS>
+NI_INLINE void hc_up_mix_impl(const device float* part, const device float* xn, const device uint32_t* W,
+                              const device bfloat* Ws, const device bfloat* Wb, device float* u, constant HcMixParams& p,
+                              uint2 tg, uint tid, uint sg, uint lane, threadgroup float* hs, threadgroup float* hsum) {
+  const uint r = tg.y, SD = p.S * p.D, K = p.rank;
+  for (uint i = tid; i < K; i += 256) {
+    float t = 0.0f;
+    for (uint c = 0; c < p.kc; ++c) t += part[(c * p.R + r) * K + i];
+    hs[i] = silu(t / float(p.S));
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < K / 16; i += 256) {
+    float t = 0.0f;
+    for (uint j = 0; j < 16; ++j) t += hs[i * 16 + j];
+    hsum[i] = t;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint rl = lane / 4, qq = lane % 4;           // row of the simdgroup (channel rl / 4, stream rl % 4), quarter
+  const uint ch = (tg.x * 8 + sg) * 2 + rl / 4, s = rl % 4;
+  const uint row = s * p.D + ch, per = K / 4;        // inputs per lane (a multiple of 16)
+  const device uint32_t* w = W + size_t(row) * (K * BITS / 32);
+  float q[16], m = 0.0f;
+  for (uint k = qq * per; k < (qq + 1) * per; k += 16) {
+    unpack16<BITS>(w + k * BITS / 32, q);
+    float d = 0.0f;
+    const uint g = row * (K / 64) + k / 64;
+    for (uint j = 0; j < 16; ++j) d += q[j] * hs[k + j];
+    m += float(Ws[g]) * d + float(Wb[g]) * hsum[k / 16];
+  }
+  m += simd_shuffle_xor(m, 1);
+  m += simd_shuffle_xor(m, 2);
+  float v = qq == 0 ? sigmoid(m) * xn[r * SD + row] : 0.0f;
+  v += simd_shuffle_xor(v, 4);
+  v += simd_shuffle_xor(v, 8);
+  if ((lane & 15) == 0) u[r * p.u_ld + ch] = v / float(p.S);
+}
+#define NI_HC_UP_MIX(NAME, BITS)                                                                               \
+  [[kernel]] void NAME(const device float* part [[buffer(0)]], const device float* xn [[buffer(1)]],           \
+                       const device uint32_t* W [[buffer(2)]], const device bfloat* Ws [[buffer(3)]],          \
+                       const device bfloat* Wb [[buffer(4)]], device float* u [[buffer(5)]],                   \
+                       constant HcMixParams& p [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],       \
+                       uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
+                       uint lane [[thread_index_in_simdgroup]]) {                                              \
+    threadgroup float hs[1024];                                                                                \
+    threadgroup float hsum[64];                                                                                \
+    hc_up_mix_impl<BITS>(part, xn, W, Ws, Wb, u, p, tg, tid, sg, lane, hs, hsum);                              \
+  }
+NI_HC_UP_MIX(hc_up_mix_b4, 4)
+NI_HC_UP_MIX(hc_up_mix_b6, 6)
+NI_HC_UP_MIX(hc_up_mix_b8, 8)
+
+// ---- Router top-k for 512 experts (Qwen3.8-Flash-Next), one row per simdgroup ----
+// The k largest logits are the k largest probabilities: selected on the logits (16 per lane, no exponentials), then
+// weighted by softmax over the selected (norm: the top-k renormalization; else over all 512). wts[k] = sigmoid of the
+// shared-expert gate. Rows: idx [R, k], wts [R, k + 1]. grid: R x 32 threads.
+[[kernel]] void moe_topk512(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
+                            device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
+                            constant TopkParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                            uint lane [[thread_index_in_simdgroup]]) {
+  const device float4* l4 = (const device float4*)(logits + r * 512 + lane * 16);
+  const float4 a = l4[0], b = l4[1], c = l4[2], d = l4[3];
+  float v[16] = {a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w, c.x, c.y, c.z, c.w, d.x, d.y, d.z, d.w};
+  float mx = v[0];
+  for (uint i = 1; i < 16; ++i) mx = max(mx, v[i]);
+  mx = simd_max(mx);
+  float total = 0.0f;  // the full softmax denominator (no renormalization only)
+  if (!p.norm) {
+    for (uint i = 0; i < 16; ++i) total += metal::precise::exp(v[i] - mx);
+    total = simd_sum(total);
+  }
+  uint taken = 0;
+  float sel = 0.0f, my_w = 0.0f;
+  uint my_i = 0;
+  for (uint q = 0; q < p.k; ++q) {
+    float best = -INFINITY;
+    uint bi = 0xffffffffu;
+    for (uint i = 0; i < 16; ++i)
+      if (!(taken & (1u << i)) && v[i] > best) {
+        best = v[i];
+        bi = lane * 16 + i;
+      }
+    const float g = simd_max(best);
+    const uint win = simd_min(best == g ? bi : 0xffffffffu);
+    if (win / 16 == lane) taken |= 1u << (win % 16);
+    const float e = metal::precise::exp(g - mx);
+    sel += e;
+    if (lane == q) my_w = e, my_i = win;
+  }
+  if (lane < p.k) {
+    idx[r * p.k + lane] = my_i;
+    wts[r * (p.k + 1) + lane] = my_w / (p.norm ? sel : total);
+  }
+  if (lane == p.k) wts[r * (p.k + 1) + p.k] = sigmoid(shared[r]);
+}
