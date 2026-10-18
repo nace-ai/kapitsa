@@ -225,14 +225,20 @@ class Qwen35 : public Model {
 
   // ---- speculative decoding with the model's MTP head ----
   bool has_mtp() const { return mtp_loaded_; }
-  // Measured best MTP draft depth (M4 Pro): MoE 35B-A3B 1, dense 27B 2, dense 4B 1. A small dense
-  // model's 3-row verify costs ~1.4x a decode step (the 27B's ~1.1x: bandwidth bound) while its head's
-  // second draft is accepted only 59% of the time, so depth 1 wins below a hidden size of 4096.
-  int default_spec_depth() const { return cfg_.moe || cfg_.hidden < 4096 ? 1 : 2; }
-  // Rows per verify (pending token + up to 7 drafts). R <= 4 runs the MTP-era small-batch kernels
-  // (unchanged); R >= 5 (or NI_V8=1 for any R >= 2) the 8-row MMA path (qwen35_v8.cpp).
+  // bits of the MTP head's bf16 linears as loaded (and planned): 4 on dense models (NI_MTP_BITS=8: 8), 8 on MoE ones
+  static int mtp_head_bits(bool moe);
+  // Measured best MTP draft depth (M4 Pro): MoE 35B-A3B 1 (its verify reads the union of the rows' experts), dense
+  // models 4. Dense verifies of 3-8 rows run the 8-row MMA path (~1.1-1.25x a decode step) and a draft pass costs
+  // ~0.5 ms (4B) to ~4 ms (27B); depth 4 is best at 4-bit and at bf16 alike (the bf16 step costs 3.3x, but the drafts'
+  // acceptance falls off by depth 5). Greedy, code / prose, 2-3 alternations: 4B 4-bit depth 1 127.8 / 126.8, 2
+  // 149.0 / 142.1, 3 153.7 / 147.8, 4 157.6 / 147.5, 5 155.6 / 142.4 tok/s (512 tokens); 4B bf16 depth 1 45.8 / 43.0, 2
+  // 60.7 / 53.7, 3 65.9 / 56.2, 4 69.4 / 58.1, 5 69.7 / 57.6, 6 70.0 / 57.2 (256); 27B 4-bit depth 2 32.7 / 31.0, 4
+  // 39.3 / 34.9, 6 40.0 / 35.1 (128 tokens; depth 2 on the small-batch kernels: 29.1).
+  int default_spec_depth() const { return cfg_.moe ? 1 : 4; }
+  // Rows per verify (pending token + up to 7 drafts). R <= 2 (and R <= 4 on MoE models) runs the small-batch
+  // kernels; more rows (NI_V8=1: from 2; NI_V8=0: from 5) the 8-row MMA path (qwen35_v8.cpp).
   static constexpr int kMaxVerify = 8;
-  static constexpr int kMaxMtpRows = 4;  // MTP history rows per encode_mtp on the default path
+  static constexpr int kMaxMtpRows = 8;  // MTP rows per encode_mtp (history rows of a cycle: depth + 1); depth <= 7
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
   // row R-1; with draft_out >= 0 the draft for the next token goes to tokens[draft_out].
@@ -336,6 +342,13 @@ class Qwen35 : public Model {
   };
   void enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm,
                      const Buffer* xn_out = nullptr);
+  // NI_QMVF (default on): R <= 2 token rows of up to 4 matrices sharing x (4- or 8-bit group 64, one width) in one
+  // qmvf.metal dispatch, an RMSNorm of x folded in (xn_out: also the normalized rows, [R, K]), add[i]: y += ...;
+  // gu: segments 0 / 1 are gate / up and segs[0].y gets silu(gate) * up. x_ld / y_ld: 0 = K / each matrix's N.
+  // False (nothing encoded) when off or not applicable.
+  bool enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
+                const Buffer* xn_out = nullptr, const std::vector<bool>& add = {}, uint32_t x_ld = 0,
+                uint32_t y_ld = 0, bool gu = false);
   void enc_gdn(Encoder& e, Seq& s, int li, const Layer& L);
   void enc_attn(Encoder& e, Seq& s, int li, const Layer& L, int pos);
   void enc_moe(Encoder& e, const Layer& L);
@@ -401,7 +414,9 @@ class Qwen35 : public Model {
   QLinear own_qlin(const class WeightStore& w, const std::string& name);
   // speculative decoding helpers (qwen35_spec.cpp)
   void load_mtp(const std::string& dir);
-  QLinear quantize8(const Tensor& w);
+  QLinear quantize8(const Tensor& w, int bits = 8);
+  // rows [r0, r0 + n) of a linear in any format -> an owned 4-bit group-64 copy (CPU, MLX rounding)
+  QLinear quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n);
   const Tensor* own_copy(const Tensor& t);
   // A float parameter the kernels read as bf16 (norms, conv, A_log, dt_bias): t itself when it is
   // bf16, else an owned bf16 copy (++lossy when a value is not a bf16 number)
@@ -411,6 +426,7 @@ class Qwen35 : public Model {
   // block-drafter capture of rows [0, T) of x (default x_) at positions pos0.. after layer `layer` (no-op
   // unless armed); x must hold the layer's final output for those rows (mixer and FFN added)
   void enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x = nullptr);
+  int v8_rows_min(bool mtp = false) const;
   void enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add,
                 uint32_t x_ld = 0, uint32_t y_ld = 0);
   // fused (norm +) projections of R rows sharing the input; falls back to separate kernels
@@ -449,6 +465,14 @@ class Qwen35 : public Model {
   QLinear mtp_fc_;
   const Tensor *mtp_norm_ = nullptr, *mtp_pre_e_ = nullptr, *mtp_pre_h_ = nullptr;
   QLinear draft_head_[2];   // lm_head rows [0, 32768) and the added/special tokens
+  // draft_head_ (and the gathered DraftVocab rows) are a 4-bit group-64 copy of the output layer's rows: an output
+  // layer in another format (bf16, 6- or 8-bit variants) drafts from it (NI_DRAFT_Q4=0: from its own rows)
+  bool draft_q4_ = false;
+  // NI_DRAFT_CTX (default on): the reduced draft head also scores every other id this conversation's tokens hold
+  // (prompt and output; a coding conversation's identifiers), from output-layer rows gathered per Seq
+  struct DraftVocab;
+  DraftVocab* draft_vocab_update(Seq& s, int upto);
+  void draft_vocab_rewind(Seq& s, int pos0);
   uint32_t draft_split_ = 0, draft_special0_ = 0;
   bool full_draft_ = false;  // draft over the whole vocabulary (see load_mtp; NI_FULL_DRAFT=0/1 overrides)
   const CaptureHook* cap_ = nullptr;

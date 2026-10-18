@@ -575,6 +575,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.use(pipe8("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);
   e.val(3, sr);
+  e.buf(4, cand_i_);  // (no remap table)
   e.dispatch(R, 1, 1, 1024);
 }
 

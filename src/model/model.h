@@ -27,6 +27,7 @@ struct Seq {
   int pend_pos = 0;                // position of the first pending row (Nemotron-H)
   int pend_half = 0;               // which half of pend_qkv holds the pending rows (Nemotron-H: 2 x 8 rows)
   Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
+  std::shared_ptr<void> draft_vocab;  // Qwen35: the MTP draft head's rows for this conversation's tokens
   int* tokens() { return tok.as<int>(); }
   // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
   // a prompt's prefill; null: text only). Positions (Model::set_rope_positions): rows [0, rope_n) rotate by the
@@ -55,7 +56,7 @@ struct SamplingParams {
 // doctor`. Bytes.
 struct MemPlan {
   size_t weights = 0;      // trunk (vision tower and MTP excluded), as loaded
-  size_t mtp = 0;          // MTP head as loaded (bf16 linears become 8-bit), 0 without mtp.safetensors
+  size_t mtp = 0;          // MTP head as loaded (bf16 linears become 4-bit), 0 without mtp.safetensors
   size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
   size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
   size_t kv_per_pos = 0;   // per slot and position

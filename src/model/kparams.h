@@ -137,6 +137,7 @@ struct SampleRows {
   uint32_t n, K;
   float temp, top_p;
   uint32_t seed, step, out_index, remap_from, remap_base;
+  uint32_t table_from;  // 0, or: indices >= table_from map through the table at buffer 4 (gathered draft rows)
 };
 
 struct QmvrMulti {
@@ -154,6 +155,14 @@ struct QmvrcMulti {
   uint32_t N[4];
   uint32_t tg_begin[5];
   uint32_t bits[4];
+};
+
+// qmvf.metal: small-batch matvecs with a folded RMSNorm, up to 4 matrices (or a SwiGLU gate / up pair) per dispatch
+struct Qmvf {
+  uint32_t K, R, x_ld, nseg;
+  float eps;
+  uint32_t N[4], y_ld[4], add[4], tg_begin[5];
+  uint32_t write_xn;
 };
 
 // ---- DFlash2 drafter (src/kernels/spec_dflash.metal) ----

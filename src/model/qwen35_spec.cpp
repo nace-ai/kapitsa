@@ -2,6 +2,7 @@
 // verifies the pending token plus drafts in one small-batch forward, and Gated DeltaNet layers roll
 // back through a tape (rows are only folded into the recurrent state once accepted).
 #include "loader/safetensors.h"
+#include "model/dflash2.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "util/bf16.h"
@@ -16,6 +17,11 @@
 #include <nlohmann/json.hpp>
 
 namespace ni {
+
+static int env_int(const char* n, int def) {
+  const char* v = getenv(n);
+  return v && *v ? atoi(v) : def;
+}
 
 static Pipeline pipe2(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
@@ -55,17 +61,21 @@ const Tensor* Qwen35::bf16_param(const Tensor* t, int& lossy) {
   return &owned_.back();
 }
 
-// bf16 [N, K] -> MLX affine 8-bit, group 64 (near lossless; halves the bytes the head reads).
-QLinear Qwen35::quantize8(const Tensor& w) {
+// bf16 [N, K] -> MLX affine 8-bit (near lossless; halves the bytes the head reads) or 4-bit (NI_MTP_BITS=4: a
+// quarter), group 64, min/max per group.
+QLinear Qwen35::quantize8(const Tensor& w, int bits) {
   if (w.dtype != DType::BF16 || w.shape.size() != 2) fatal("quantize8: expected a 2-D bf16 tensor");
+  if (bits != 8 && bits != 4) fatal("quantize8: %d bits", bits);
   const uint32_t N = uint32_t(w.shape[0]), K = uint32_t(w.shape[1]);
   if (K % 64) fatal("quantize8: K=%u not a multiple of 64", K);
   Gpu& g = Gpu::get();
-  Buffer wq = g.alloc(size_t(N) * K, "mtp_q8", false);
+  const uint32_t qmax = (1u << bits) - 1;
+  Buffer wq = g.alloc(size_t(N) * K * bits / 8, bits == 8 ? "mtp_q8" : "mtp_q4", false);
   Buffer sc = g.alloc(size_t(N) * K / 64 * 2, "mtp_q8s", false);
   Buffer bi = g.alloc(size_t(N) * K / 64 * 2, "mtp_q8b", false);
   const uint16_t* src = w.buf.as<uint16_t>();
-  uint8_t* q = wq.as<uint8_t>();  // 4 values per uint32, value j at bits 8j == byte j (little endian)
+  uint8_t* q = wq.as<uint8_t>();  // value k of a row at bits [bits*k, bits*k + bits) of the little-endian stream
+  if (bits == 4) memset(q, 0, wq.size);
   uint16_t* s = sc.as<uint16_t>();
   uint16_t* b = bi.as<uint16_t>();
   for (uint32_t n = 0; n < N; ++n)
@@ -76,7 +86,7 @@ QLinear Qwen35::quantize8(const Tensor& w) {
         lo = std::min(lo, v);
         hi = std::max(hi, v);
       }
-      float scale = (hi - lo) / 255.0f;
+      float scale = (hi - lo) / float(qmax);
       if (scale == 0.0f) scale = 1e-8f;
       uint16_t sb = f32_to_bf16(scale), bb = f32_to_bf16(lo);
       float sr = bf16_to_f32(sb), br = bf16_to_f32(bb);
@@ -85,13 +95,16 @@ QLinear Qwen35::quantize8(const Tensor& w) {
       for (uint32_t k = 0; k < 64; ++k) {
         float v = bf16_to_f32(src[size_t(n) * K + g0 + k]);
         long qv = std::lround((v - br) / sr);
-        q[size_t(n) * K + g0 + k] = uint8_t(std::clamp(qv, 0L, 255L));
+        const uint8_t c = uint8_t(std::clamp(qv, 0L, long(qmax)));
+        const size_t i = size_t(n) * K + g0 + k;
+        if (bits == 8) q[i] = c;
+        else q[i / 2] |= uint8_t(c << (4 * (i % 2)));
       }
     }
   owned_bufs_.push_back(wq);
   owned_bufs_.push_back(sc);
   owned_bufs_.push_back(bi);
-  Tensor tw{wq, DType::U32, {int64_t(N), int64_t(K / 4)}};
+  Tensor tw{wq, DType::U32, {int64_t(N), int64_t(K * bits / 32)}};
   Tensor ts{sc, DType::BF16, {int64_t(N), int64_t(K / 64)}};
   Tensor tb{bi, DType::BF16, {int64_t(N), int64_t(K / 64)}};
   owned_.push_back(tw);
@@ -103,7 +116,35 @@ QLinear Qwen35::quantize8(const Tensor& w) {
   L.b = &owned_.back();
   L.N = N;
   L.K = K;
-  L.bits = 8;
+  L.bits = bits;
+  L.gs = 64;
+  return L;
+}
+
+QLinear Qwen35::quantize_rows4(const QLinear& src, uint32_t r0, uint32_t n) {
+  const uint32_t K = src.K, gpr = K / 64;
+  if (K % 64 || n == 0) fatal("quantize_rows4: [%u, %u]", n, K);
+  std::vector<uint16_t> tmp(size_t(n) * K);
+  std::vector<const uint16_t*> rowp(n);
+  for (uint32_t i = 0; i < n; ++i) {
+    dfl_row_bf16(src, r0 + i, tmp.data() + size_t(i) * K);
+    rowp[i] = tmp.data() + size_t(i) * K;
+  }
+  Gpu& g = Gpu::get();
+  Buffer w = g.alloc(size_t(n) * K / 2, "draft_q4_w", false), sc = g.alloc(size_t(n) * gpr * 2, "draft_q4_s", false),
+         bi = g.alloc(size_t(n) * gpr * 2, "draft_q4_b", false);
+  dfl_quantize_cpu(rowp, K, 4, false, w.as<uint32_t>(), sc.as<uint16_t>(), bi.as<uint16_t>());
+  QLinear L;
+  for (const Buffer& b : {w, sc, bi}) owned_bufs_.push_back(b);
+  owned_.push_back(Tensor{w, DType::U32, {int64_t(n), int64_t(K / 8)}});
+  L.w = &owned_.back();
+  owned_.push_back(Tensor{sc, DType::BF16, {int64_t(n), int64_t(gpr)}});
+  L.s = &owned_.back();
+  owned_.push_back(Tensor{bi, DType::BF16, {int64_t(n), int64_t(gpr)}});
+  L.b = &owned_.back();
+  L.N = n;
+  L.K = K;
+  L.bits = 4;
   L.gs = 64;
   return L;
 }
@@ -218,8 +259,10 @@ void Qwen35::load_mtp(const std::string& dir) {
     if (const char* v = getenv("NI_MTP_HIDDEN"); v && *v) variant = std::string(v) + "_norm";  // pre | post
     mtp_post_norm_hidden_ = variant == "post_norm";
   }
-  auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 8-bit here
-    QLinear L = w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"));
+  // bf16 linears of the head (Hugging Face checkpoints, tools/mtp_sidecar.py) are quantized here (mtp_head_bits).
+  const int mtp_bits = mtp_head_bits(cfg_.moe);
+  auto lin = [&](const std::string& n) {  // quantized in the file, or bf16 -> 4-bit here
+    QLinear L = w.has(n + ".scales") ? own_qlin(w, n) : quantize8(get(n + ".weight"), mtp_bits);
     L.mtp = true;
     return L;
   };
@@ -265,7 +308,7 @@ void Qwen35::load_mtp(const std::string& dir) {
   // Draft head: the 32768 lowest token ids (byte-level BPE ids are roughly in merge order, i.e.
   // by frequency) plus every added/special token, so the drafter can still propose <tool_call>,
   // </think> or <|im_end|>. 286 MB per draft step becomes ~37 MB.
-  draft_split_ = std::min<uint32_t>(32768, uint32_t(cfg_.vocab));
+  draft_split_ = std::min<uint32_t>(uint32_t(std::max(1024, env_int("NI_DRAFT_IDS", 32768))), uint32_t(cfg_.vocab));
   // Dense 27B: the full-vocabulary draft raises acceptance (depth 2: 0.73 -> 0.83) for ~1% of the
   // cycle; the 35B-A3B's cycle is short enough that the 286 MB lm_head pass outweighs the gain. So does
   // the 4B's: its lm_head is 15% of the bytes a decode step reads (27B: 5%), and the reduced draft head
@@ -303,12 +346,143 @@ void Qwen35::load_mtp(const std::string& dir) {
   };
   draft_head_[0] = rows_view(lm_head_, 0, draft_split_);
   draft_head_[1] = rows_view(lm_head_, draft_special0_, uint32_t(cfg_.vocab) - draft_special0_);
+  // An output layer in another format than 4-bit group 64 (bf16, 6- or 8-bit variants) drafts from a 4-bit copy of
+  // those rows (NI_DRAFT_Q4=0: from its own): drafting only, the verify reads the output layer itself. bf16 4B: the
+  // reduced head reads 45 instead of 168 MB per draft pass; depth 3, code / prose, 256 tokens: 64.0 -> 65.5 / 52.0 ->
+  // 56.2 tok/s.
+  draft_q4_ = !full_draft_ && !lm_head_.q4() && env_int("NI_DRAFT_Q4", 1) != 0;
+  if (draft_q4_) {
+    draft_head_[0] = quantize_rows4(lm_head_, 0, draft_split_);
+    draft_head_[1] = quantize_rows4(lm_head_, draft_special0_, uint32_t(cfg_.vocab) - draft_special0_);
+  }
   mtp_loaded_ = true;
-  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s, drafts over %s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
-       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm", full_draft_ ? "the full vocabulary" : "ids < 32768 + specials");
+  logi("MTP head loaded in %.0f ms (%s, trunk hidden %s, drafts over %s%s)", now_ms() - t0, cfg_.moe ? "MoE" : "dense",
+       mtp_post_norm_hidden_ ? "post-norm" : "pre-norm",
+       full_draft_ ? "the full vocabulary" : ("ids < " + std::to_string(draft_split_) + " + specials").c_str(),
+       draft_q4_ ? ", a 4-bit copy of the output layer's rows" : "");
+}
+
+// Bits of the MTP head's bf16 linears as loaded. Dense models: 4 (NI_MTP_BITS=8: 8 bits, the earlier default). The
+// drafts may differ, the verified output does not. 4B, 512-token greedy runs, depth 3: code 148.3 -> 152.5 tok/s,
+// prose 142.1 -> 147.0 (2.37 -> 2.31 / 2.26 -> 2.22 tokens per cycle for a 0.26 ms cheaper draft pass); depth 1
+// 124.8 -> 128.3 / 124.8 -> 127.0; bf16 trunk, depth 4, 256 tokens: 68.1 -> 69.4 / 55.8 -> 57.4. MoE models: 8, as
+// before (the MoE row kernels pair group-32 experts, as in MTPLX's 35B sidecar, with an 8-bit shared expert only).
+int Qwen35::mtp_head_bits(bool moe) {
+  static const int env = env_int("NI_MTP_BITS", 4) == 8 ? 8 : 4;
+  return moe ? 8 : env;
+}
+
+// ---- the draft head's per-conversation rows ----
+
+struct Qwen35::DraftVocab {
+  std::vector<uint8_t> in;    // per vocabulary id: already gathered
+  std::vector<uint32_t> ids;  // gathered ids in order of appearance (row i of the buffers)
+  int scanned = 0;            // tokens [0, scanned) of the Seq have been looked at
+  uint32_t cap = 0;
+  Buffer w, sc, bi, table;    // gathered output-layer rows (the output layer's format) and their ids
+  Tensor tw, ts, tb;
+  QLinear L;                  // the gathered rows as a linear of N = ids.size() rows
+};
+
+// NI_DRAFT_CTX (read once; default 1) and NI_DRAFT_CTX_ROWS (row capacity per conversation, default 8192: 11.8 MB
+// for the 4B's 4-bit output layer)
+static bool draft_ctx_on() {
+  static const bool v = env_int("NI_DRAFT_CTX", 1) != 0;
+  return v;
+}
+
+// Scans the Seq's tokens [scanned, upto) (all final: written by the host or by command buffers that completed) and
+// gathers the output-layer rows of ids outside the static draft rows. Rows already gathered are never rewritten while
+// the set grows, so a command buffer still reading the first N rows is unaffected by appending row N. A prefill from
+// position 0 (a new conversation in this slot) starts the set over; one from p > 0 rescans from p.
+Qwen35::DraftVocab* Qwen35::draft_vocab_update(Seq& s, int upto) {
+  if (!draft_ctx_on() || full_draft_ || !mtp_loaded_) return nullptr;
+  if (!s.draft_vocab) {
+    auto v = std::make_shared<DraftVocab>();
+    const uint32_t outside = draft_special0_ - std::min(draft_split_, draft_special0_);
+    v->cap = std::min<uint32_t>(uint32_t(std::clamp(env_int("NI_DRAFT_CTX_ROWS", 8192), 64, 65536)), outside);
+    if (v->cap == 0) return nullptr;
+    Gpu& g = Gpu::get();
+    const QLinear& H = draft_head_[0];  // the draft head's format (the output layer's, or its 4-bit copy)
+    v->w = g.alloc(size_t(v->cap) * H.row_bytes(), "draft_ctx_w", false);
+    if (!H.dense()) {
+      v->sc = g.alloc(size_t(v->cap) * H.group_row_bytes(), "draft_ctx_s", false);
+      v->bi = g.alloc(size_t(v->cap) * H.group_row_bytes(), "draft_ctx_b", false);
+    }
+    v->table = g.alloc(size_t(v->cap) * 4, "draft_ctx_ids", false);
+    v->in.assign(size_t(cfg_.vocab), 0);
+    v->tw = Tensor{v->w, H.w->dtype, {int64_t(v->cap), int64_t(H.dense() ? H.K : H.row_bytes() / 4)}};
+    v->L = H;
+    v->L.w = &v->tw;
+    if (H.dense()) {
+      v->L.s = v->L.b = v->L.w;
+    } else {
+      v->ts = Tensor{v->sc, H.s->dtype, {int64_t(v->cap), int64_t(H.K / H.gs)}};
+      v->tb = Tensor{v->bi, H.b->dtype, {int64_t(v->cap), int64_t(H.K / H.gs)}};
+      v->L.s = &v->ts;
+      v->L.b = &v->tb;
+    }
+    v->L.N = 0;
+    s.draft_vocab = v;
+  }
+  DraftVocab& v = *static_cast<DraftVocab*>(s.draft_vocab.get());
+  if (upto < v.scanned) v.scanned = 0;  // rewound below what was scanned: look again
+  const QLinear& H = lm_head_;
+  const size_t wrow = H.row_bytes(), srow = H.group_row_bytes();
+  const int* t = s.tokens();
+  std::vector<uint16_t> row(draft_q4_ ? H.K : 0);
+  for (int i = v.scanned; i < upto; ++i) {
+    const int id = t[i];
+    if (id < int(draft_split_) || id >= int(draft_special0_) || v.in[size_t(id)]) continue;
+    if (v.ids.size() >= v.cap) break;
+    const size_t r = v.ids.size();
+    if (draft_q4_) {  // the draft head's 4-bit copy of this row
+      dfl_row_bf16(H, uint32_t(id), row.data());
+      const uint32_t gpr = H.K / 64;
+      dfl_quantize_cpu({row.data()}, H.K, 4, false, v.w.as<uint32_t>() + r * (H.K / 8), v.sc.as<uint16_t>() + r * gpr,
+                       v.bi.as<uint16_t>() + r * gpr);
+    } else {
+      memcpy(v.w.as<uint8_t>() + r * wrow, H.w->buf.as<uint8_t>() + size_t(id) * wrow, wrow);
+      if (!H.dense()) {
+        memcpy(v.sc.as<uint8_t>() + r * srow, H.s->buf.as<uint8_t>() + size_t(id) * srow, srow);
+        memcpy(v.bi.as<uint8_t>() + r * srow, H.b->buf.as<uint8_t>() + size_t(id) * srow, srow);
+      }
+    }
+    v.table.as<uint32_t>()[r] = uint32_t(id);
+    v.in[size_t(id)] = 1;
+    v.ids.push_back(uint32_t(id));
+  }
+  v.scanned = std::max(v.scanned, upto);
+  v.L.N = uint32_t(v.ids.size());
+  return &v;
+}
+
+// A prefill at pos0 may replace the tokens from pos0 on: the next scan starts there (pos0 == 0: a new conversation in
+// this slot, the gathered set starts over). Nothing of this Seq that reads the rows is in flight during a prefill.
+void Qwen35::draft_vocab_rewind(Seq& s, int pos0) {
+  if (!s.draft_vocab) return;
+  DraftVocab& v = *static_cast<DraftVocab*>(s.draft_vocab.get());
+  if (pos0 <= 0) {
+    for (uint32_t id : v.ids) v.in[id] = 0;
+    v.ids.clear();
+    v.L.N = 0;
+    v.scanned = 0;
+  } else {
+    v.scanned = std::min(v.scanned, pos0);
+  }
 }
 
 // ---- small-batch encoders ----
+
+// Rows from which verifies and the MTP passes' matvecs (enc_qmvr, enc_qmvr_multi, enc_mlp_rows) take the 8-row MMA
+// GEMMs: 3 on dense models, 5 on MoE models. NI_V8=1: 2, NI_V8=0: 5. mtp: for an MTP pass (NI_MTP_V8=0 keeps those on
+// the small-batch kernels below 5 rows and one-row passes on qmvr, as before).
+int Qwen35::v8_rows_min(bool mtp) const {
+  static const int v8_env = getenv("NI_V8") && *getenv("NI_V8") ? atoi(getenv("NI_V8")) : -1;
+  static const bool mtp_v8 = env_int("NI_MTP_V8", 1) != 0;
+  if (mtp && !mtp_v8) return 5;
+  return v8_env == 1 ? 2 : v8_env == 0 || cfg_.moe ? 5 : 3;
+}
 
 void Qwen35::enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const Buffer& y, int R, int D) {
   e.use(pipe2("rows_norm_f32"));
@@ -323,8 +497,15 @@ void Qwen35::enc_rows_norm(Encoder& e, const Buffer& x, const Tensor* w, const B
 void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, int R, bool add, uint32_t x_ld,
                       uint32_t y_ld) {
   if (R < 1 || R > kMaxVerify) fatal("qmvr: R=%d", R);
-  // 5-8 rows (deep MTP drafts), and formats without qmvr kernels (bf16, 3/5/6-bit, group 32): the 8-row MMA GEMM
-  if (R > 4 || !(L.q4() || L.q8())) {
+  // one row (a chained MTP draft pass): the decode matvecs (qmv2 / qmv3, in-place add)
+  static const bool mtp_v8 = env_int("NI_MTP_V8", 1) != 0;
+  if (mtp_v8 && R == 1 && (L.q4() || L.q8()) && (!x_ld || x_ld == L.K) && (!y_ld || y_ld == L.N)) {
+    enc_qmv(e, L, x, y, add ? &y : nullptr, nullptr);
+    return;
+  }
+  // 5-8 rows (deep MTP drafts; 3-4 on dense models: MTP passes over a cycle's history rows), and formats without
+  // qmvr kernels (bf16, 3/5/6-bit, group 32): the 8-row MMA GEMM
+  if (R >= v8_rows_min(true) || !(L.q4() || L.q8())) {
     v8_alloc();
     enc_x8(e, x, R, int(L.K), nullptr, false, int(x_ld ? x_ld : L.K));
     enc_qmm8(e, {{&L, y, y_ld ? y_ld : L.N, add}}, R, v8t_, v8s_);
@@ -412,7 +593,17 @@ void Qwen35::enc_qmvr(Encoder& e, const QLinear& L, const Buffer& x, const Buffe
 
 void Qwen35::enc_qmvr_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm, int R,
                             const Buffer* xn_out, std::vector<bool> add) {
+  if (enc_qmvf(e, segs, x, R, norm, xn_out, add)) return;
   const uint32_t K = segs[0].L->K;
+  if (R >= v8_rows_min(true) && R <= kMaxVerify && segs.size() <= 4 && K % 64 == 0) {
+    // one X8 table (RMSNorm folded, the normalized rows to xn_out) for every matrix, one GEMM dispatch
+    v8_alloc();
+    enc_x8(e, x, R, int(K), norm, false, 0, xn_out);
+    std::vector<Seg8> s8;
+    for (size_t i = 0; i < segs.size(); ++i) s8.push_back({segs[i].L, segs[i].y, 0, i < add.size() && add[i]});
+    enc_qmm8(e, s8, R, v8t_, v8s_);
+    return;
+  }
   bool special = true;  // the fused multi-row kernels read 4/8-bit group-64 weights
   for (auto& sg : segs) special = special && (sg.L->q4() || sg.L->q8());
   static const bool rowcache = env_on("NI_RC");
@@ -622,6 +813,18 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
 // Dense SwiGLU MLP for R rows: x += down(silu(gate(n)) * up(n)), n = norm(x).
 void Qwen35::enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x) {
   const int D = cfg_.hidden;
+  if (enc_qmvf(e, {{&L.mg, mh_}, {&L.mu, mh_}}, x, R, L.post_norm, nullptr, {}, 0, 0, true)) {
+    enc_qmvr(e, L.md, mh_, x, R, true);
+    return;
+  }
+  if (R >= v8_rows_min(true) && R <= kMaxVerify && L.mg.N % 256 == 0 && L.mg.N <= uint32_t(std::max(cfg_.dense_I, 0)) &&
+      L.mg.same_format(L.mu)) {
+    v8_alloc();
+    enc_x8(e, x, R, D, L.post_norm);
+    enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_);
+    enc_qmm8(e, {{&L.md, x, uint32_t(D), true}}, R, v8h_, v8hs_);
+    return;
+  }
   enc_rows_norm(e, x, L.post_norm, xrn_, R, D);
   enc_qmvr(e, L.mg, xrn_, hg_, R, false);
   enc_qmvr(e, L.mu, xrn_, hu_, R, false);
@@ -658,32 +861,41 @@ void Qwen35::encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Bu
   // greedy draft over the reduced vocabulary from the last row
   const Buffer last = mtp_post_.view(size_t(R - 1) * D * 4, size_t(D) * 4);
   const bool full_vocab = full_draft_;
-  uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N;
+  uint32_t n0 = draft_head_[0].N, n1 = draft_head_[1].N, n2 = 0;
+  DraftVocab* dv = nullptr;
   if (full_vocab) {
     enc_qmv(e, lm_head_, last, dlog_, nullptr, nullptr);
     n0 = lm_head_.N;
     n1 = 0;
   } else {
-    enc_qmv(e, draft_head_[0], last, dlog_, nullptr, nullptr);
-    enc_qmv(e, draft_head_[1], last, dlog_.view(size_t(n0) * 4, size_t(n1) * 4), nullptr, nullptr);
+    // the conversation's own ids beyond the static rows: gathered on the first pass of a cycle (its tokens are
+    // final); the chained passes of deeper drafts reuse that set
+    dv = h_trunk ? draft_vocab_update(s, tok0 + R) : static_cast<DraftVocab*>(s.draft_vocab.get());
+    n2 = dv ? dv->L.N : 0;
+    std::vector<Seg> segs = {{&draft_head_[0], dlog_}, {&draft_head_[1], dlog_.view(size_t(n0) * 4, size_t(n1) * 4)}};
+    if (n2) segs.push_back({&dv->L, dlog_.view(size_t(n0 + n1) * 4, size_t(n2) * 4)});
+    if (!enc_qmvf(e, segs, last, 1, nullptr))
+      for (const Seg& sg : segs) enc_qmv(e, *sg.L, last, sg.y, nullptr, nullptr);
   }
-  const uint32_t V = n0 + n1, chunk = 2048, ntg = (V + chunk - 1) / chunk;
+  const uint32_t V = n0 + n1 + n2, chunk = 2048, ntg = (V + chunk - 1) / chunk;
   kp::TopkStage ts{V, 1, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, dlog_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   e.dispatch(ntg, 1, 1, 256);
-  kp::SampleRows sr{ntg, 1, 0.0f, 1.0f, 0, 0, uint32_t(draft_out), full_vocab ? 0u : n0, draft_special0_};
+  kp::SampleRows sr{ntg, 1, 0.0f, 1.0f, 0, 0, uint32_t(draft_out), full_vocab ? 0u : n0, draft_special0_,
+                    n2 ? n0 + n1 : 0u};
   e.use(pipe2("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, s.tok);
   e.val(3, sr);
+  e.buf(4, n2 ? dv->table : cand_i_);
   e.dispatch(1, 1, 1, 1024);
 }
 
 void Qwen35::encode_mtp_prefill(Encoder& e, Seq& s, int pos0, int R, int h_row0) {
   if (!mtp_loaded_ || R <= 0) return;
   const int D = cfg_.hidden;
-  if (R <= kMaxMtpRows) {
+  if (R <= 4) {  // a few history rows: the small-batch kernels; more: the prefill GEMMs below
     encode_mtp(e, s, pos0, R, pos0 + 1, x_, h_row0, -1);
     return;
   }
@@ -726,10 +938,11 @@ uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
 
 void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
   if (R < 1 || R > kMaxVerify) fatal("encode_verify: R=%d", R);
-  // NI_V8=1: the 8-row path for any R >= 2 (A/B); by default only R >= 5 takes it, so MTP verifies
-  // (R <= 4) run exactly the kernels they always did.
-  static const bool v8_all = env_on("NI_V8");
-  if (R > 4 || v8 || (v8_all && R > 1)) {
+  // The 8-row MMA path: R >= 5; dense models also R = 3-4 (it reads the weights once for up to 8 rows at ~1.1-1.25x a
+  // decode step, where the FMA kernels cost 1.2-1.9x from 3 rows on: 4B MTP depth 2 117.7 -> 138.3 tok/s). MoE
+  // models keep the small-batch kernels below 5 rows (their verify unions the rows' experts). NI_V8=1: any R >= 2;
+  // NI_V8=0: R >= 5 only (the earlier rule).
+  if (R >= v8_rows_min() || v8) {
     encode_verify8(e, s, pos, R, sp, step);
     return;
   }
@@ -765,8 +978,10 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     if (cap_) enc_capture(e, i, pos, R);
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
-  enc_rows_norm(e, x_, final_norm_, xrn_, R, D);
-  enc_qmvr(e, lm_head_, xrn_, logits_, R, false);
+  if (!enc_qmvf(e, {{&lm_head_, logits_}}, x_, R, final_norm_)) {
+    enc_rows_norm(e, x_, final_norm_, xrn_, R, D);
+    enc_qmvr(e, lm_head_, xrn_, logits_, R, false);
+  }
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   kp::TopkStage ts{V, K, chunk};
@@ -778,6 +993,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
   e.use(pipe2("sample_stage2_rows"));
   e.buf(0, cand_v_); e.buf(1, cand_i_); e.buf(2, samp_);
   e.val(3, sr);
+  e.buf(4, cand_i_);  // (no remap table)
   e.dispatch(R, 1, 1, 1024);
 }
 

@@ -551,9 +551,11 @@ struct SampleRowsParams {
   uint out_index;
   uint remap_from;  // 0 = no remap
   uint remap_base;
+  uint table_from;  // 0 = none; indices >= table_from are table[i - table_from] (a draft head's gathered rows)
 };
 [[kernel]] void sample_stage2_rows(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
                                    device int* tokens [[buffer(2)]], constant SampleRowsParams& p [[buffer(3)]],
+                                   const device uint* table [[buffer(4)]],
                                    uint r [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
                                    uint ntg [[threads_per_threadgroup]]) {
   threadgroup float sv[32];
@@ -613,7 +615,8 @@ struct SampleRowsParams {
         if (u < acc) { chosen = topi[q]; break; }
       }
     }
-    if (p.remap_from && chosen >= p.remap_from) chosen = p.remap_base + (chosen - p.remap_from);
+    if (p.table_from && chosen >= p.table_from) chosen = table[chosen - p.table_from];
+    else if (p.remap_from && chosen >= p.remap_from) chosen = p.remap_base + (chosen - p.remap_from);
     tokens[p.out_index + r] = int(chosen);
   }
 }

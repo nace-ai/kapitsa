@@ -776,7 +776,8 @@ struct TensorMeta {
   size_t bytes = 0;
 };
 static size_t st_bytes(const std::string& path, bool mtp, double expert_share = -1, size_t* decode = nullptr,
-                       size_t* lm_head = nullptr, std::map<std::string, TensorMeta>* metas = nullptr) {
+                       size_t* lm_head = nullptr, std::map<std::string, TensorMeta>* metas = nullptr,
+                       int mtp_bits = 4) {
   std::ifstream f(path, std::ios::binary);
   uint64_t n = 0;
   if (!f.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) return 0;
@@ -798,7 +799,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
     if (mtp && v["dtype"] == "BF16" && v["shape"].size() == 2 && name.size() > 7 &&
         name.compare(name.size() - 7, 7, ".weight") == 0 && name.find("norm") == std::string::npos) {
       const size_t N = v["shape"][0], K = v["shape"][1];
-      b = N * K + 2 * (N * K / 64) * 2;  // quantize8: codes + bf16 scales and biases per 64
+      b = N * K * size_t(mtp_bits) / 8 + 2 * (N * K / 64) * 2;  // quantized at load: codes + bf16 scales and biases
     }
     total += (b + 255) / 256 * 256;
     if (metas) {  // keyed by the name's tail: embed_tokens.weight, lm_head.scales, mlp.gate_proj.weight (layer 0) ...
@@ -836,7 +837,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
   for (const std::string& f : files) {
     m.weights += st_bytes(dir + "/" + f, false, share, &m.decode_bytes, &lm_head, &metas);
     if (f == "mtp.safetensors" && !getenv("NI_NO_MTP")) {
-      m.mtp = st_bytes(dir + "/" + f, true);
+      m.mtp = st_bytes(dir + "/" + f, true, -1, nullptr, nullptr, nullptr, mtp_head_bits(c.moe));
       has_mtp = m.mtp > 0;
     }
   }
@@ -1473,6 +1474,9 @@ static constexpr uint32_t kRows = 4, kSg = 2; // qmv: rows per simdgroup, simdgr
 
 void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer& y, const Buffer* resid,
                      const Tensor* norm) {
+  // a folded norm on qmvf (the LM head after the final norm); plain single matrices keep qmv2 / qmv3 (bench_qmvf:
+  // as fast or faster without a norm to fold)
+  if (norm && !resid && enc_qmvf(e, {{&L, y}}, x, 1, norm)) return;
   // Tuned on M4 Pro: huge matrices (lm_head) like 4 rows x 4 simdgroups, the rest 2 rows x 8.
   const bool huge = L.N >= 65536;
   uint32_t rows = huge ? 4 : 2, nsg = huge ? 4 : 8;
@@ -1510,6 +1514,7 @@ void Qwen35::enc_qmv(Encoder& e, const QLinear& L, const Buffer& x, const Buffer
 
 void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, const Tensor* norm,
                            const Buffer* xn_out) {
+  if (enc_qmvf(e, segs, x, 1, norm, xn_out)) return;
   // segments in other formats than 4/8-bit group 64: one generic dispatch per format (the first writes xn_out)
   bool special = true;
   for (auto& sg : segs) special = special && (sg.L->q4() || sg.L->q8());
@@ -1591,6 +1596,65 @@ void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, c
   e.buf(18, norm ? norm->buf : x);
   e.buf(19, xn_out ? *xn_out : x);
   e.dispatch(tg, 1, 1, 32 * nsg);
+}
+
+// NI_QMVF (read once; default 1): the decode and 2-row (MTP verify / draft) matvecs that share an input or fold an
+// RMSNorm run qmvf.metal (4- and 8-bit group-64 weights); 0 restores the previous kernels (qmv2_multi / qmv3_multi,
+// mlp_gate_up, rows_norm + one qmvrc1 / qmvr_multi per matrix, rows_norm + swiglu_f32).
+static bool qmvf_on() {
+  static const bool v = env_int("NI_QMVF", 1) != 0;
+  return v;
+}
+
+bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
+                      const Buffer* xn_out, const std::vector<bool>& add, uint32_t x_ld, uint32_t y_ld, bool gu) {
+  if (!qmvf_on() || R < 1 || R > 2 || segs.empty() || segs.size() > 4 || (gu && segs.size() != 2)) return false;
+  const int bits = segs[0].L->bits;
+  const uint32_t K = segs[0].L->K;
+  if (bits != 4 && bits != 8) return false;
+  for (const Seg& s : segs)
+    if (!(s.L->q4() || s.L->q8()) || s.L->bits != bits || s.L->K != K) return false;
+  if (K % 64 || (xn_out && !norm)) return false;
+  // one threadgroup per token row and 8 weight rows (2 simdgroups x 4 rows: the qmvrc1 layout, its token rows
+  // adjacent in the grid so they share each weight block through the cache)
+  constexpr int nt = 1, rows = 4, nsg = 2;
+  char name[96];
+  snprintf(name, sizeof name, "qmvf%s_b%d_t%d_r%d%s", gu ? "_gu" : "", bits, nt, rows, norm ? "_norm" : "");
+  static std::unordered_map<std::string, Pipeline> cache;
+  auto it = cache.find(name);
+  if (it == cache.end()) it = cache.emplace(name, Gpu::get().pipeline(name)).first;
+  e.use(it->second);
+  kp::Qmvf p{};
+  p.K = K;
+  p.R = uint32_t(R);
+  p.x_ld = x_ld ? x_ld : K;
+  p.nseg = uint32_t(segs.size());
+  p.eps = cfg_.eps;
+  p.write_xn = xn_out ? 1u : 0u;
+  const uint32_t per_tg = uint32_t(rows * nsg);
+  uint32_t tg = 0;
+  for (size_t i = 0; i < 4; ++i) {
+    const Seg& s = segs[std::min(i, segs.size() - 1)];
+    if (i < segs.size()) {
+      p.N[i] = s.L->N;
+      p.y_ld[i] = y_ld ? y_ld : s.L->N;
+      p.add[i] = i < add.size() && add[i] ? 1u : 0u;
+      p.tg_begin[i] = tg;
+      if (!gu || i == 0) tg += (s.L->N + per_tg - 1) / per_tg;
+    }
+    e.buf(int(i * 4 + 0), s.L->w->buf);
+    e.buf(int(i * 4 + 1), s.L->s->buf);
+    e.buf(int(i * 4 + 2), s.L->b->buf);
+    e.buf(int(i * 4 + 3), s.y);
+  }
+  if (gu) tg = p.tg_begin[1];
+  p.tg_begin[segs.size()] = tg;
+  e.buf(16, x);
+  e.val(17, p);
+  e.buf(18, norm ? norm->buf : x);
+  e.buf(19, xn_out ? *xn_out : x);
+  e.dispatch(uint32_t((R + nt - 1) / nt), tg, 1, 32 * uint32_t(nsg));
+  return true;
 }
 
 void Qwen35::enc_gdn(Encoder& e, Seq& s, int li, const Layer& L) {
@@ -1691,6 +1755,10 @@ void Qwen35::enc_moe(Encoder& e, const Layer& L) {
 }
 
 void Qwen35::enc_mlp(Encoder& e, const Layer& L) {
+  if (enc_qmvf(e, {{&L.mg, mh_}, {&L.mu, mh_}}, x_, 1, L.post_norm, nullptr, {}, 0, 0, true)) {
+    enc_qmv(e, L.md, mh_, x_, &x_, nullptr);
+    return;
+  }
   static Pipeline gu = Gpu::get().pipeline("mlp_gate_up");
   constexpr uint32_t rows = 2, nsg = 8;
   kp::Qmv p{L.mg.N, L.mg.K, L.mg.K, L.mg.N, cfg_.eps};
@@ -2477,6 +2545,7 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
   if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
   if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  draft_vocab_rewind(s, pos0);  // tokens from pos0 on may be new
   const int D = cfg_.hidden;
   enc_embed(e, s.tok, pos0, T, x_);
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, x_, D);  // image rows

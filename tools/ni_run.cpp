@@ -627,6 +627,7 @@ int main(int argc, char** argv) {
     if (Encoder::profiling()) Encoder::profile_report(1);  // drop prefill records
     std::vector<int> acc_hist(D + 1, 0);
     bool stop2 = false;
+    double gpu_sum = 0;
     while (int(out.size()) < n_gen && !stop2) {
       double tc0 = now_ms();
       grow(P + D + 3);  // nothing in flight: every cycle is waited for
@@ -636,6 +637,7 @@ int main(int argc, char** argv) {
         m.encode_mtp(*e, s, P + k - 2, 1, P + k - 1, m.mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
       m.encode_verify(*e, s, P, D + 1, sp, uint32_t(P));
       e->commit_and_wait();
+      gpu_sum += e->gpu_ms();
       const int* y = m.samples();
       int* tk = s.tokens();
       int a = 0;
@@ -664,9 +666,10 @@ int main(int argc, char** argv) {
     printf("ids:");
     for (int t : out) printf(" %d", t);
     printf("\n");
-    fprintf(stderr, "prompt %d tok in %.0f ms (%.1f tok/s); spec decode D=%d: %zu tok in %.0f ms (%.1f tok/s), %d cycles, %.2f tok/cycle, accepted/drafted %.2f, hist",
+    fprintf(stderr, "prompt %d tok in %.0f ms (%.1f tok/s); spec decode D=%d: %zu tok in %.0f ms (%.1f tok/s), %d cycles, %.2f tok/cycle, accepted/drafted %.2f, %.3f ms GPU/cycle, %.3f ms wall/cycle, hist",
             n, t_prompt, n / (t_prompt / 1000), D, out.size() - 1, td, (out.size() - 1) / (td / 1000), cycles,
-            double(out.size() - 1) / cycles, double(accepted) / (cycles * D));
+            double(out.size() - 1) / cycles, double(accepted) / (cycles * D), gpu_sum / std::max(cycles, 1),
+            td / std::max(cycles, 1));
     for (int a = 0; a <= D; ++a) fprintf(stderr, " %d", acc_hist[a]);
     fprintf(stderr, "\n");
     return 0;
