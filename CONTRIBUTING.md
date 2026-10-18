@@ -62,7 +62,8 @@ kill %1
   submission; `bench/community/`: the community results and their checks.
 - `src/loader/`: the safetensors loader; `src/tokenizer/`: byte-level BPE, identical to Hugging Face's tokenizers.
 - `tools/`: check, measurement and benchmark programs, each built as `build/<name>`; `bench/`: benchmark prompts,
-  quality data and the cross-engine harness; `tests/`: the checks above.
+  quality data and the cross-engine harness (`bench/batch/`: requests at once, their latency, throughput and exactness,
+  and a stress test); `tests/`: the checks above.
 
 [docs/architecture.md](docs/architecture.md) walks through a request and maps the sources;
 [docs/usage.md](docs/usage.md) documents the commands, options and switches.

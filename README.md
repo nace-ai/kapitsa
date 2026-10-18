@@ -175,8 +175,10 @@ curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/jso
 
 </details>
 
-Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached; it
-does not enable parallel generation. `brew services start kapitsa` keeps a server running in the background.
+Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. Requests sent at once (parallel
+subagents, several clients) run side by side, taking turns on the GPU, each with the tokens it would get alone;
+`--slots` sets how many (default: up to 4, as memory allows), each keeping its conversation cached.
+`brew services start kapitsa` keeps a server running in the background.
 [All server options and API details](docs/usage.md#server-options)
 
 ## Architecture

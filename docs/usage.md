@@ -155,7 +155,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
 | `--model-id ID` | the model's name | The model's name in the API. |
 | `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
-| `--slots N` | `2` | Conversations whose caches are kept for follow-ups. |
+| `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
 | `--spec N` | `1` (`2` on the 27B) | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
@@ -163,6 +163,15 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--image-max-pixels N` | `1200000` (Bolt `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
+
+Requests sent at once (a coding agent's parallel subagents and side requests, several clients) each run on a slot of
+their own and take turns on the GPU between prompt chunks and decode steps: a request sent during a long reply starts
+after a fraction of a second instead of after that reply, and each request gets the tokens it would get alone. The GPU
+is shared, not multiplied: two replies at once write about as many tokens per second in all as one reply alone, each at
+about half the speed. Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full
+`--ctx` conversation, the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With
+every slot busy a request waits for one (the log says so); a streamed chat completion whose client disconnects stops
+waiting.
 
 ## APIs
 
@@ -174,7 +183,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `POST /v1/responses` | OpenAI Responses: reasoning items, function and custom tools, `usage.input_tokens_details.cached_tokens`. `previous_response_id` continues one of the last 64 stored responses (unknown ids are a 400). Built-in tools such as web search are left out. |
 | `POST /v1/messages` | Anthropic Messages: thinking blocks, `tool_use` and `tool_result`; `usage.input_tokens` counts the uncached prompt, `cache_read_input_tokens` the cached part. Server tools are left out. |
 | `POST /v1/messages/count_tokens` | Anthropic's token count of a request. |
-| `GET /v1/models` | The model being served (OpenAI's list with Anthropic's fields); `context_fit` is the tokens one conversation can hold within the memory budget. |
+| `GET /v1/models` | The model being served (OpenAI's list with Anthropic's fields); `context_fit` is the tokens one conversation can hold within the memory budget, `slots` the requests that run at once. |
 | `GET /health` | `{"status":"ok"}` |
 | `GET /` | The chat page: one file that talks only to this server and keeps its conversations in the browser. |
 
@@ -284,15 +293,18 @@ grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B
   leaves the draft model out or uses 1024-token chunks.
 - A prompt that needs more room takes it from cached image embeddings, then from idle slots, least recently used first
   (their conversations are read again when they return), then from the Neural Engine split (prefill then runs on the
-  GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. A reply
-  that cannot grow its cache ends with finish reason `length`.
+  GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. With
+  other requests in flight, a request that fits only once one of them ends waits for it, and only a prompt that does
+  not fit even alone gets the error; a reply in progress may take the cache of a request still waiting (that request
+  then reads its prompt again). A reply that cannot grow its cache ends with finish reason `length`.
 
 `kapitsa doctor` shows this Mac (chip, GPU cores, RAM, macOS, the working set, Kapitsa's budget, the Neural Engine) and,
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
-or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which
-one `--model NAME` takes. It assumes `--ctx 65536 --slots 2` (`--ctx`, `--slots`, `--prefill-chunk`, `--dflash` and
-`--mem-budget` change that); `--model M`, repeatable, checks other models, downloaded or not; `--json` prints the same
-for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, ...).
+or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which one
+`--model NAME` takes. It assumes `--ctx 65536` and, per model, the slots the server would start with (the catalog check:
+2; `--ctx`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change that); `--model M`, repeatable, checks
+other models, downloaded or not; `--json` prints the same for programs (`starts`, `fits_full_context`,
+`kv_tokens_in_budget`, `decoding`, ...).
 
 What fits, for the 4-bit variants at `--ctx 65536 --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:
@@ -374,6 +386,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
+| `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |

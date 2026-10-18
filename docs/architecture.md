@@ -11,7 +11,7 @@ It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do n
 
 The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
 supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
-state for later turns; generation is serialized.
+state for later turns; requests sent at once take turns on the GPU.
 
 ## From a request to generated tokens
 
@@ -29,8 +29,13 @@ state for later turns; generation is serialized.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
 
-The engine serializes generation through a mutex. `--slots` keeps multiple conversations warm; it does **not** enable
-concurrent model execution or continuous batching. Image fetching and CPU preparation happen before the engine lock.
+Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
+between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn
+away a request parks: nothing of its own left in flight and nothing it needs next left in the model's or the drafter's
+shared buffers, so its cycles, and its tokens, are the ones it runs alone. This is not batching: a forward pass serves
+one request, so requests together decode about as fast as one alone, and `--slots` (up to 4 by default, as memory
+allows) sets how many run at once; with every slot busy a request waits for one. Image fetching, the chat template
+and the tokenizer run before a request takes its turn.
 
 ## Two model backends
 
