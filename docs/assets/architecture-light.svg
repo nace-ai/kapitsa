@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="1210" viewBox="0 0 1120 1210" role="img" aria-labelledby="title desc">
+<title id="title">Inside Kapitsa: from request to streamed tokens</title>
+<desc id="desc">API adapters prepare prompts and reuse conversation checkpoints. Optional Qwen and Bolt image encoders supply cached embeddings. Pinned model weights feed Qwen or Nemotron backends. A repeating draft, target verification and commit cycle generates streamed responses. Metal runs model work; the Neural Engine optionally accelerates selected prefill operations.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/></marker></defs>
+<rect width="1120" height="1210" rx="24" fill="#fff"/>
+<g font-family="Arial, Helvetica, sans-serif">
+<text x="32" y="47" font-size="15" font-weight="700" fill="#6366f1">KAPITSA</text>
+<text x="32" y="84" font-size="32" font-weight="700" fill="#17203b">Inside the inference engine</text>
+<text x="32" y="113" font-size="18" font-weight="400" fill="#475569">Native C++ + Metal on Apple silicon</text>
+<rect x="875" y="34" width="213" height="38" rx="12" fill="#ecfdf5" stroke="none"/>
+<text x="895" y="59" font-size="14" font-weight="700" fill="#047857">BY NACE.AI</text>
+<rect x="32" y="145" width="1056" height="355" rx="18" fill="#f8fafc" stroke="#e2e8f0"/>
+<rect x="52" y="163" width="30" height="28" rx="7" fill="#6366f1" stroke="none"/>
+<text x="58" y="183" font-size="14" font-weight="700" fill="#fff">01</text>
+<text x="94" y="184" font-size="18" font-weight="700" fill="#17203b">REQUEST → PROMPT → REUSED STATE</text>
+<rect x="54" y="210" width="490" height="93" rx="12" fill="#fff" stroke="#dbe2ec"/>
+<text x="74" y="240" font-size="19" font-weight="700" fill="#17203b">One shared API surface</text>
+<text x="74" y="267" font-size="17" font-weight="400" fill="#475569">OpenAI Chat / Responses · Anthropic Messages</text>
+<rect x="54" y="337" width="490" height="93" rx="12" fill="#17203b" stroke="#17203b"/>
+<text x="74" y="367" font-size="19" font-weight="700" fill="#fff">Prepare the prompt</text>
+<text x="74" y="394" font-size="17" font-weight="400" fill="#d3dcf3">Jinja chat template → tokenizer → conversation slot</text>
+<path d="M 299 303 V 337" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="572" y="210" width="494" height="100" rx="12" fill="#fffbeb" stroke="#fde68a"/>
+<text x="592" y="240" font-size="19" font-weight="700" fill="#78350f">Conversation memory</text>
+<text x="592" y="267" font-size="17" font-weight="400" fill="#92400e">Attention KV + recurrent-state checkpoints</text>
+<text x="592" y="291" font-size="17" font-weight="400" fill="#92400e">Restore a matching prefix; retain state for follow-ups</text>
+<rect x="572" y="337" width="494" height="93" rx="12" fill="#fdf2f8" stroke="#fbcfe8"/>
+<text x="592" y="367" font-size="19" font-weight="700" fill="#831843">Optional image input</text>
+<text x="592" y="394" font-size="17" font-weight="400" fill="#9d174d">QwenViT / Bolt C-RADIO → cached embeddings</text>
+<path d="M 572 260 H 558 V 382 H 544" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<text x="580" y="474" font-size="15" font-weight="400" fill="#475569">Slots retain state for follow-ups.</text>
+<text x="580" y="494" font-size="15" font-weight="400" fill="#475569">Generation runs one request at a time.</text>
+<rect x="32" y="537" width="1056" height="282" rx="18" fill="#f8fafc" stroke="#e2e8f0"/>
+<rect x="52" y="555" width="30" height="28" rx="7" fill="#6366f1" stroke="none"/>
+<text x="58" y="575" font-size="14" font-weight="700" fill="#fff">02</text>
+<text x="94" y="576" font-size="18" font-weight="700" fill="#17203b">PREFILL THE UNCACHED SUFFIX · SELECTED BACKEND</text>
+<path d="M 299 430 V 537" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 819 430 V 450 H 299" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<rect x="54" y="602" width="490" height="115" rx="12" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="74" y="632" font-size="19" font-weight="700" fill="#312e81">Qwen3.5 family · Qwen35</text>
+<text x="74" y="659" font-size="17" font-weight="400" fill="#4338ca">Gated DeltaNet + attention</text>
+<text x="74" y="683" font-size="17" font-weight="400" fill="#4338ca">Dense feed-forward layers / mixture of experts</text>
+<rect x="572" y="602" width="494" height="115" rx="12" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="592" y="632" font-size="19" font-weight="700" fill="#312e81">Nemotron 3.5 Bolt · NemotronH</text>
+<text x="592" y="659" font-size="17" font-weight="400" fill="#4338ca">Mamba-2 + attention</text>
+<text x="592" y="683" font-size="17" font-weight="400" fill="#4338ca">LatentMoE</text>
+<rect x="54" y="739" width="1012" height="57" rx="12" fill="#fffbeb" stroke="#fde68a"/>
+<text x="74" y="774" font-size="13" font-weight="700" fill="#92400e">MODEL STORE</text>
+<text x="213" y="774" font-size="17" font-weight="400" fill="#78350f">Pinned revisions · checksum validation · safetensors load / repack</text>
+<path d="M 299 739 V 717" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<path d="M 819 739 V 717" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<rect x="32" y="856" width="652" height="284" rx="18" fill="#f8fafc" stroke="#e2e8f0"/>
+<rect x="52" y="874" width="30" height="28" rx="7" fill="#6366f1" stroke="none"/>
+<text x="58" y="894" font-size="14" font-weight="700" fill="#fff">03</text>
+<text x="94" y="895" font-size="18" font-weight="700" fill="#17203b">TOKEN GENERATION LOOP</text>
+<path d="M 358 819 V 856" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="54" y="922" width="186" height="92" rx="12" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="74" y="952" font-size="19" font-weight="700" fill="#312e81">Draft</text>
+<text x="74" y="979" font-size="17" font-weight="400" fill="#4338ca">DFlash2 / MTP</text>
+<text x="74" y="1003" font-size="17" font-weight="400" fill="#4338ca">or LiLiCorr</text>
+<rect x="265" y="922" width="185" height="92" rx="12" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="285" y="952" font-size="19" font-weight="700" fill="#312e81">Verify</text>
+<text x="285" y="979" font-size="17" font-weight="400" fill="#4338ca">Target checks</text>
+<text x="285" y="1003" font-size="17" font-weight="400" fill="#4338ca">proposals</text>
+<rect x="475" y="922" width="187" height="92" rx="12" fill="#eef2ff" stroke="#c7d2fe"/>
+<text x="495" y="952" font-size="19" font-weight="700" fill="#312e81">Commit</text>
+<text x="495" y="979" font-size="17" font-weight="400" fill="#4338ca">Accept tokens</text>
+<text x="495" y="1003" font-size="17" font-weight="400" fill="#4338ca">advance state</text>
+<path d="M 240 964 H 265" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 450 964 H 475" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 568 1014 V 1042 H 147 V 1014" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="275" y="1028" width="165" height="28" rx="12" fill="#f8fafc" stroke="none"/>
+<text x="291" y="1048" font-size="16" font-weight="400" fill="#475569">repeat until done</text>
+<text x="56" y="1084" font-size="16" font-weight="400" fill="#475569">Stream text, reasoning and tool calls through the API adapter.</text>
+<text x="56" y="1113" font-size="15" font-weight="400" fill="#64748b">Plain generation is available with --spec 0.</text>
+<rect x="708" y="856" width="380" height="284" rx="18" fill="#f0fdf9" stroke="#e2e8f0"/>
+<rect x="728" y="874" width="30" height="28" rx="7" fill="#6366f1" stroke="none"/>
+<text x="734" y="894" font-size="14" font-weight="700" fill="#fff">↗</text>
+<text x="770" y="895" font-size="18" font-weight="700" fill="#17203b">APPLE SILICON EXECUTION</text>
+<path d="M 898 819 V 856" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<text x="730" y="932" font-size="20" font-weight="700" fill="#064e3b">Metal GPU</text>
+<text x="730" y="959" font-size="16" font-weight="400" fill="#047857">Quantized matmuls · fused kernels</text>
+<text x="730" y="984" font-size="16" font-weight="400" fill="#047857">Attention · recurrent scans · experts</text>
+<path d="M 730 1004 H 1066" stroke="#a7f3d0"/>
+<text x="730" y="1033" font-size="20" font-weight="700" fill="#064e3b">Neural Engine · optional</text>
+<text x="730" y="1060" font-size="16" font-weight="400" fill="#047857">Selected prefill projections / FFN</text>
+<text x="730" y="1085" font-size="16" font-weight="400" fill="#047857">Shared-event sync · GPU fallback</text>
+<text x="730" y="1114" font-size="14" font-weight="400" fill="#047857">Hardware serves the model backends.</text>
+<path d="M 34 1175 H 65" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)"/>
+<text x="78" y="1181" font-size="14" font-weight="400" fill="#475569">Request / token flow</text>
+<path d="M 264 1175 H 295" fill="none" stroke="#64748b" stroke-width="1.8" marker-end="url(#arrow)" stroke-dasharray="5 5"/>
+<text x="308" y="1181" font-size="14" font-weight="400" fill="#475569">Supporting state / execution</text>
+<text x="815" y="1181" font-size="14" font-weight="400" fill="#64748b">Architecture · nace-ai/kapitsa</text>
+</g></svg>
