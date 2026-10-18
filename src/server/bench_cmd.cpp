@@ -14,6 +14,7 @@
 #include "server/cli.h"
 #include "server/picker.h"
 #include "server/ui.h"
+#include "update/update.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -41,7 +42,7 @@
 #include <thread>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.1.32"
+#define KAPITSA_VERSION "0.1.34"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -322,7 +323,7 @@ ModelInfo model_info(const hub::ModelRef& ref) {
 std::string drafter_of(const hub::ModelRef& ref) {
   if (!ref.variant) return "";
   for (const auto& c : ref.variant->companions)
-    if (c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark") return c.repo + "@" + c.revision.substr(0, 7);
+    if (c.drafter()) return c.repo + "@" + c.revision.substr(0, 7);
   return "";
 }
 
@@ -667,7 +668,8 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  s.ref_prompt_tokens = reference_prompt_tokens(NemotronH::is_model(ref.dir) ? "nemotron-h" : "qwen3.5");
+  s.ref_prompt_tokens =
+      reference_prompt_tokens(NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h" : "qwen3.5");
 
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
   // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)
@@ -721,6 +723,7 @@ int run(const Options& o) {
     }
     senv.push_back("KAPITSA_PARENT_PID=" + std::to_string(getpid()));  // it exits with this process, however it ends
     senv.push_back("KAPITSA_NO_PROMPT=1");
+    senv.push_back("KAPITSA_NO_AUTO_UPDATE=1");  // no update check running beside the measurements
     std::vector<char*> sa, se;
     for (auto& x : sargv) sa.push_back(x.data());
     sa.push_back(nullptr);
@@ -1085,6 +1088,10 @@ int run_bench(int argc, char** argv, int first) {
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;
+  // the binary stays the same for the whole run (its servers start from it): no update replaces it meanwhile
+  if (!update::hold_for_benchmark())
+    return fail("kapitsa was updated as this benchmark started, so its servers would run another version. Run kapitsa "
+                "bench again.");
   return run(o);
 }
 

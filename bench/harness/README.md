@@ -16,6 +16,7 @@ cp local.env.example local.env          # where your weights and engines are; se
 python3 compare_engines.py configs/*.json --list
 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json --dry-run   # resolve everything, start nothing
 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json --only 'q36-35b-*'
+python3 compare_engines.py configs/kapitsa.json --skip decode,greedy,prefill,tools   # only the agent session
 python3 compare_table.py                # tables of the newest clean run per config, from runs/results
 ```
 
@@ -48,6 +49,7 @@ its follow-ups read slightly faster than the harness's for the same server.
 | Prefill, 4K and 16K | A cold prompt of 4,133 / 16,286 tokens (source code from the frozen corpus) with a random nonce right after `<\|im_start\|>system`, so no engine can reuse a cached prefix. Rate = prompt tokens / time to first token. |
 | Cached TTFT, 4K and 16K | After that prompt, three follow-up user turns on the growing conversation (append-only, 1 s apart, as an agent loop), median time to first token. Engines that cache prefixes answer from the cache. |
 | Tool calls | Streaming and non-streaming requests with two tools, with thinking off and on, plus a tool-result round trip. "pass" = every check passed. |
+| Agent session | A real coding-agent session, replayed request by request: opencode fixing a small Python project, recorded on Kapitsa ([Agent session](#agent-session)). Per request the time to first token, the writing rate and the time; per session the total time, prefill and decode time, the mean writing rate and the follow-up TTFT (median, p90). |
 | Peak memory | `phys_footprint_peak` of the server's whole process tree, in bytes, after every phase. Memory-mapped weights (llama.cpp's default mmap, Ollama's GGUF runner) are not part of `phys_footprint`; they are recorded separately as resident mapped files. |
 
 ## What makes a run count
@@ -86,6 +88,94 @@ Each engine has different hidden defaults. The harness sends everything explicit
 
 `compare_table.py` takes, per config, the newest run with no INVALID reason and no contention flag (else the newest
 valid one, marked), and marks invalid cells with `!`.
+
+## Agent session
+
+The other phases time one thing at a time. A coding agent does them all at once: a long system prompt with tool
+definitions, then turn after turn in which the conversation grows by file contents and test output and the model
+answers briefly, mostly with a tool call. Every turn sends the whole conversation again, so what decides an agent's
+speed is how much of it the engine reuses from its cache, how fast it reads the rest and how fast it writes. The
+agent phase (`agent_replay.py`, bench.py's last phase) replays a recorded session of a real agent.
+
+**The session.** [agent-traces/opencode-ledger.json](agent-traces/opencode-ledger.json) is
+[opencode](https://opencode.ai) 2.0.28 fixing [agent-task](agent-task/README.md), a small Python library whose test
+suite fails from five bugs in four files. It was recorded on Kapitsa serving Qwen3.6-35B-A3B at 4-bit, greedy, with
+thinking off: opencode ran with the provider configuration `kapitsa opencode` writes (effort `none`), in an empty home
+folder (no user configuration, skills or instruction files), against `tools/agent_record.py proxy`, which logs every
+`/v1/chat/completions` request opencode sends and the length of every answer. opencode fixed all five bugs in 19
+requests (all 35 tests pass, the tests unchanged): the prompt grows from 5,485 to 22,779 tokens, mostly by the files
+it read and the test output, and the answers total 3,577 tokens (18 tool-call turns and a closing summary). The proxy
+showed the model the paths the trace keeps (`/work/task` for the project, `/work/tmp`, `/home/user`; `--rewrite`) and
+translated the tool calls back for opencode, so the recording and every replay ask for the same answers: replayed
+on Kapitsa, all 19 answers come back token for token. `agent_record.py build` refuses to write a trace that still
+names the user, the Mac or the home folder.
+
+[agent-traces/index.json](agent-traces/index.json) maps a config's model to the session it replays; a model without
+an entry gets no agent phase. Qwen3.8-27B replays the 35B's session too: recorded the same way on the 27B, opencode
+repeated one shell command from its 14th request on until the proxy stopped it at 80, the task unsolved (greedy
+decoding can lock a model into a loop). With another model's answers in the history, every engine's own answer differs
+from the recorded one at almost every turn, so on the next request each engine restores its cache to the end of the
+previous prompt and reads the recorded answer; that holds for every engine alike, the one that recorded nothing
+included. On the recording model the recording engine has an edge: its answers are the recorded ones, while another
+engine's greedy answers differ wherever rounding decides a close call (9 to 13 of 19 turns on the 35B), and it reads the
+recorded answer instead of finding its own in its cache (`same_answer` per turn shows where).
+
+**The replay.** The requests go out in the recorded order with the recorded messages, never the engine's own
+answers, so every engine reads exactly the same conversation: the same system prompt and tools, the same files and
+test output. Each is streamed, greedy (temperature 0, top_k 1, the rest neutral), with thinking off by both switches,
+and with `max_tokens` equal to the recorded answer's length: an engine that writes the same answer stops where the
+recording stopped, one that writes another (different weights or arithmetic) stops at its own end or at that length,
+and its token count is recorded. Between requests the replay waits as long as the agent did while it ran its tools
+(at most 5 s each), so engines that use the pause (Kapitsa reads its last answer into the cache) get the time they
+would get in real use. One `X-Session-Id` for the whole session.
+
+The tool definitions go into the system message exactly as the Qwen chat template renders them (`--agent-tool-mode
+rendered`, the default), and the requests carry no `tools` field: the prompt is token for token the one the template
+builds from the request with tools, it is identical on every engine, and the engine streams every token it writes
+(engines hold a parsed tool call back until its closing tag, so with `tools` the first token of a tool-call answer
+would arrive with the whole call on some engines and not on others). `--agent-tool-mode api` sends the requests as
+recorded, tools included. Ollama parses tool calls from Qwen's output even without `tools`; on such turns the
+first event is the whole call, and the replay treats them as below.
+
+**Measured.** Per request: the time to the first token (TTFT: reading whatever the engine could not reuse from its
+cache, plus the first token), the writing rate (the tokens after the first streamed event over the time to the last
+event) and the total time. Per session: the total time (the sum of the requests; with the agent's pauses it is the
+wall time), the prefill time (the sum of the TTFTs) and the decode time (the rest), the mean writing rate (all answers'
+window tokens over all their window time), the first request's TTFT (a cold prompt of about 5.5K tokens) and the median
+and p90 TTFT of the follow-ups (the requests that continue the previous one). A turn whose first event is a held tool
+call has no TTFT of its own: it is left out of the TTFT statistics and its prefill time is estimated as its time minus
+its tokens at the session's writing rate (`prefill_estimated_turns` in the result). The same goes for a turn whose
+first event carries most of the answer (MTPLX, asked without tools, replaces a tool call it will not run with a
+notice it sends at the end). An answer whose end was never streamed (fewer characters than tokens, ending on a small
+event: Ollama drops a tool call that `max_tokens` cut short) has its writing window run to the end of the stream. Each answer is also compared with the recorded one (its text and tool calls, raw or
+parsed; `same_answers`), and the time a stream stays open after its last token is summed (`after_last_token_s`).
+
+**Checks.** Thinking text in an answer, a failed request, or a prompt shorter than 90% of the reference length (the
+engine cut the conversation) make the session INVALID; a prompt more than 2% off the reference is flagged. The
+reference lengths are stored in the trace, counted with Qwen3.6's tokenizer and chat template
+(`tools/agent_trace_tokens.py`, which also checks that the rendered and the API forms of every request are the same
+text). The quiet-GPU wait and the contention monitor apply as to every phase (the phase is `agent` in the result). A
+session still running after 40 minutes (`--agent-timeout`) stops and is INVALID. The longest request plus its answer
+is 23,101 tokens: every config's 32K context holds it. compare_engines.py flags runs of LM Studio and MTPLX that
+start with less than 10 GiB of free disk, below which they keep no prompt cache on disk (`provenance.system_start.disk_free_bytes`).
+
+**Running it.** `python3 compare_engines.py <configs> --skip decode,greedy,prefill,tools` runs only the agent
+session; `--skip agent` leaves it out of a full run; `--agent-trace FILE` replays another trace. By hand, against a
+running server: `python3 agent_replay.py --base-url ... --model ...` (`--max-turns 3` for a quick check).
+
+**Recording another session.** Serve the model (under the GPU lock), put the proxy in front of it, run the agent
+against the proxy in a copy of the project, then build the trace and its reference lengths:
+
+```bash
+kapitsa serve --model 35b --port 8291 --ctx 65536 &
+W=$(mktemp -d) && cp -R agent-task/project $W/task
+python3 tools/agent_record.py proxy --listen 127.0.0.1:8299 --upstream http://127.0.0.1:8291 --log rec.jsonl \
+    --greedy --no-think --rewrite "$W/task=/work/task" --anonymize &
+# opencode in $W/task with an empty HOME and the provider `kapitsa opencode` writes, its baseURL http://127.0.0.1:8299/v1
+(cd $W/task && opencode run --standalone --auto -m 'kapitsa/qwen3.6-35b-a3b#none' --title ledger) < agent-task/prompt.txt
+python3 tools/agent_record.py build rec.jsonl --workdir $W/task --out agent-traces/my-trace.json
+python3 tools/agent_trace_tokens.py agent-traces/my-trace.json --model-dir ~/models/qwen3.6-35b-a3b-4bit --write
+```
 
 ## Weights
 
@@ -343,8 +433,8 @@ engine locations in `local.env.example`.
 
 Under `runs/` (or `--out-dir`): `results/<label>-<time>.json` (every request's timings and text, the summaries,
 flags, contention samples, memory per phase and the provenance), `logs/<label>-<time>.log` (the server's own log)
-and `state/` (engine state the harness owns). `compare_table.py [results dirs]` writes `compare_table.md` and
-`compare_table.csv`.
+and `state/` (engine state the harness owns). `compare_table.py [results dirs]` writes `compare_table.md` (with an
+agent-session table per model), `compare_table.csv` and `compare_table_agent.csv`.
 
 ## Benchmarking a server by hand
 
@@ -359,6 +449,12 @@ the sampling flags change the run (`--help`). Wrap your own server's whole lifet
 `bench.py` so: `lockf -k ~/.cache/nace-gpu.lock sh -c 'start server; NACE_GPU_LOCK_HELD=1 python3 bench.py ...'`.
 `python3 gpu_hogs.py` lists what is using the GPU right now.
 
+`agent_replay.py` replays the agent session alone against a running server (it takes the GPU lock the same way):
+
+```bash
+python3 agent_replay.py --base-url http://127.0.0.1:8000/v1 --model qwen3.6-35b-a3b --label my-run
+```
+
 ## Files
 
 | File | What it does |
@@ -366,6 +462,11 @@ the sampling flags change the run (`--help`). Wrap your own server's whole lifet
 | `bench.py` | The benchmark client: one server, all measurements, one result JSON |
 | `compare_engines.py` | Runs configs one at a time: lock, start, warm up, quiet wait, `bench.py`, stop, provenance |
 | `compare_table.py` | Markdown and CSV tables from result files |
+| `agent_replay.py` | The agent-session replay (bench.py's `agent` phase, or by hand) |
+| `agent-task/` | The coding task the agent solved: the project it got, the prompt, the bugs |
+| `agent-traces/` | Recorded agent sessions (`opencode-ledger.json`) |
+| `tools/agent_record.py` | The recording proxy and the trace builder (paths and names sanitized) |
+| `tools/agent_trace_tokens.py` | Reference prompt lengths of a trace with a model's tokenizer and chat template (needs transformers) |
 | `gpu_hogs.py` | GPU load per process (ioreg), the GPU lock, the quiet wait and the contention monitor |
 | `configs/` | One file per engine, both models |
 | `corpus/` | The frozen prompt corpus and its notice (Apache-2.0 excerpts of Hugging Face Transformers) |

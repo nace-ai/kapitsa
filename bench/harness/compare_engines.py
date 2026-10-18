@@ -15,8 +15,11 @@ e.g. to put a time limit on a run), the harness does not take it again; run one 
 the lock is released between engines.
 
 usage: compare_engines.py <configs.json> [more.json ...] [--only label,glob*] [--list] [--dry-run] [--check-flags]
-                          [--sizes 4000,16000] [--bench-args "..."] [--reverse] [--quiet-timeout 300]
-                          [--out-dir DIR] [--env-file FILE]
+                          [--sizes 4000,16000] [--skip phases] [--agent-trace FILE] [--bench-args "..."] [--reverse]
+                          [--quiet-timeout 300] [--out-dir DIR] [--env-file FILE]
+
+bench.py's phases: decode, greedy, prefill, tools and the agent session (a recorded opencode session replayed against
+the same server, agent_replay.py); --skip leaves phases out (--skip decode,greedy,prefill,tools: the agent session only).
 
 Config files (configs/*.json) are lists of objects; several files are merged in order:
   label         unique id (log/result file names)          display   engine name shown in tables
@@ -32,6 +35,7 @@ Config files (configs/*.json) are lists of objects; several files are merged in 
   requires_paths / requires_ollama_tag   skip with a message when missing
   prepare       [{"symlink": {"src", "dst"}}, {"write_json": {"path", "data"}}, {"clean_dir": path inside {state}},
                  {"link_files": {"src", "dst", "exclude": [globs]}}  (per-file symlinks, nothing copied)]
+  cleanup       the same steps after the server stopped (e.g. clean_dir of an on-disk KV cache the engine filled)
   stop          extra stop command (e.g. `mtplx stop --port N`); the process tree is killed anyway
   pid_file      file holding the pid of a server that detaches from the launcher (LM Studio's llmster
                 daemon): that pid's process tree is the measured server (memory, quiet wait, teardown)
@@ -41,6 +45,8 @@ Config files (configs/*.json) are lists of objects; several files are merged in 
   adaptive_warm 3 full decodes in the warm-up       flag_check "llama-server": adapt flags to --help
   ready_timeout seconds to wait for /v1/models (default 900)
   sampling_overrides, no_think_style, bench_args    passed to bench.py
+  agent_trace, agent_tool_mode   the agent session to replay (a file in agent-traces/); default: the model's entry
+                in agent-traces/index.json, none for a model without one
   version_cmd   command whose output is recorded   log_grep  regexes copied from the server log
   gguf_expect   expected blob digest prefix        note      free text, copied to the result
 
@@ -681,13 +687,26 @@ def system_state():
          "powermode": (re.search(r"powermode\s+(\d+)", run(["pmset", "-g"])) or [None, None])[1],
          "vm": bench.vm_snapshot(), "gpu_mem": gpu_mem(),
          # free disk: LM Studio's MLX engine and MTPLX keep follow-up checkpoints on disk only above 10 GiB free
-         "disk_free_bytes": shutil.disk_usage(os.path.expanduser("~")).free}
+         "disk_free_bytes": disk_free()}
     try:
         with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=1) as r:
             d["ollama_app_loaded"] = [m.get("name") for m in json.load(r).get("models", [])]
     except Exception:
         d["ollama_app_loaded"] = "not running"
     return d
+
+
+def disk_free(path=None):
+    """Free bytes on the volume of the home folder (LM Studio's and MTPLX's on-disk prompt caches write nothing when
+    under 10 GiB are free)."""
+    try:
+        return shutil.disk_usage(path or os.path.expanduser("~")).free
+    except Exception:
+        return None
+
+
+DISK_CACHE_FLOOR = 10 * 2**30
+DISK_CACHE_ENGINES = ("lmstudio", "mtplx")
 
 
 def gpu_mem():
@@ -918,9 +937,34 @@ def plan(c, args, stamp):
         bargs += ["--no-think-style", c["no_think_style"]]
     if c.get("sampling_overrides"):
         bargs += ["--sampling-overrides", json.dumps(c["sampling_overrides"])]
+    if args.skip:
+        bargs += ["--skip", args.skip]
+    trace, mode = agent_session_of(c, args)
+    bargs += ["--agent-trace", trace or "none"]
+    if trace and mode:
+        bargs += ["--agent-tool-mode", mode]
     bargs += shlex.split(args.bench_args or "") + [str(x) for x in c.get("bench_args", [])]
     p["bench_args"] = bargs
     return p, ctx
+
+
+AGENT_INDEX = os.path.join(HERE, "agent-traces", "index.json")
+
+
+def agent_session_of(c, args):
+    """(trace path or None, tool mode or None) of a config's agent phase: --agent-trace (for every config), else the
+    config's own "agent_trace", else the entry for its model in agent-traces/index.json (no entry: no agent phase)."""
+    if args.agent_trace:
+        return (None, None) if args.agent_trace.lower() == "none" else (os.path.abspath(args.agent_trace), None)
+    if c.get("agent_trace"):
+        return os.path.join(HERE, "agent-traces", c["agent_trace"]), c.get("agent_tool_mode")
+    try:
+        e = json.load(open(AGENT_INDEX)).get(c.get("model_name") or "")
+    except Exception:
+        e = None
+    if not e or not e.get("trace"):
+        return None, None
+    return os.path.join(HERE, "agent-traces", e["trace"]), e.get("tool_mode")
 
 
 class NoLock:
@@ -1091,6 +1135,12 @@ def run_config(c, args, stamp):
                 teardown = stop_server(c, proc, kill_roots, port, ctx, base_mem, p.get("env"))
                 log(f"{label}: stopped ({teardown.get('killed_with')}, survivors {teardown.get('survivors')}, "
                     f"memory released after {teardown.get('memory_release_s')}s)")
+            if c.get("cleanup"):
+                try:
+                    teardown["cleanup"] = do_prepare(c["cleanup"], ctx, False)
+                except (ResolveError, OSError) as e:
+                    teardown["cleanup"] = [f"<failed: {e}>"]
+            teardown["disk_free_bytes"] = disk_free()
         finally:
             held = lock.release()
     # merge config + provenance into the result
@@ -1102,6 +1152,11 @@ def run_config(c, args, stamp):
                                     harness_held_s=round(held, 1),
                                     harness_lock=f"held {lock.why}" if isinstance(lock, NoLock) else "flock by the harness"),
                    "teardown": teardown})
+    free0 = ((prov.get("system_start") or {}).get("disk_free_bytes"))
+    if engine_kind(c) in DISK_CACHE_ENGINES and free0 is not None and free0 < DISK_CACHE_FLOOR:
+        result.setdefault("flags", []).append(
+            f"disk: {free0 / 2**30:.1f} GiB free at start, under the 10 GiB below which {engine_kind(c)} keeps no "
+            "prompt cache on disk")
     if c.get("version") not in (None, "auto"):
         det = detect_version(c, p["cmd"], ctx)
         result["version_detected"] = det
@@ -1155,6 +1210,13 @@ def dry_run(c, args, stamp):
           + (", 3 x full decode (adaptive speculation)" if c.get("adaptive_warm") else ""))
     print(f"  quiet    : every other process < {args.quiet_max:.0f}% GPU and the idle server tree < {args.quiet_max:.0f}% for 15 s, "
           f"timeout {args.quiet_timeout:.0f}s; ambient: {', '.join(sorted(gpu_hogs.AMBIENT))}")
+    ba = bench.parse_args(p["bench_args"])
+    skipped = set(filter(None, ba.skip.split(",")))
+    phases = [x for x in ("decode", "greedy", "prefill", "tools") if x not in skipped]
+    if ba.agent_trace and "agent" not in skipped:
+        phases.append(f"agent ({os.path.relpath(ba.agent_trace, HERE)}" + ("" if os.path.exists(ba.agent_trace) else ", MISSING")
+                      + f", tool mode {ba.agent_tool_mode})")
+    print(f"  phases   : {', '.join(phases) or '(none)'}")
     print(f"  bench    : NACE_GPU_LOCK_HELD=1 python3 bench.py {shlex.join(p['bench_args'])} --pid <server pid>")
     if c.get("stop"):
         try:
@@ -1164,13 +1226,33 @@ def dry_run(c, args, stamp):
     print(f"  result   : {os.path.relpath(p['out'], OUT)} (in {OUT})")
 
 
+_STOPPING = []
+
+
+def _exit_on_signal(signum, frame):
+    """SIGINT, SIGTERM and SIGHUP end the run, and the running config's finally block still stops its server (a
+    detached daemon such as LM Studio's would otherwise keep its model loaded) and releases the GPU lock. Signals
+    that arrive while that teardown runs are ignored, so a second Ctrl+C or a job runner's follow-up SIGTERM cannot
+    cut it short."""
+    if _STOPPING:
+        return
+    _STOPPING.append(signum)
+    raise SystemExit(128 + signum)
+
+
 def main():
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _exit_on_signal)
     ap = argparse.ArgumentParser(description="Run bench.py over engine configs, one at a time, under the GPU lock.")
     ap.add_argument("configs", nargs="+", help="config files (configs/*.json); merged in order")
     ap.add_argument("--only", default="", help="comma list of labels or globs, e.g. q36-*,q38-27b-kapitsa")
     ap.add_argument("--list", action="store_true", help="list the configs and exit")
     ap.add_argument("--sizes", default="4000,16000")
     ap.add_argument("--bench-args", default="", help="extra bench.py args for every config (shell-quoted string)")
+    ap.add_argument("--skip", default="", help="bench.py phases to leave out: decode,greedy,prefill,tools,agent "
+                    "(e.g. --skip decode,greedy,prefill,tools runs only the agent session)")
+    ap.add_argument("--agent-trace", default="", help="agent session to replay for every config (default: the "
+                    "model's entry in agent-traces/index.json; none = no agent phase)")
     ap.add_argument("--dry-run", action="store_true", help="print the resolved plan per config; start nothing")
     ap.add_argument("--check-flags", action="store_true", help="with --dry-run: run `llama-server --help` and check flags")
     ap.add_argument("--reverse", action="store_true", help="run configs in reverse order (interleave across sessions)")

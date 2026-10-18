@@ -23,15 +23,17 @@ struct Stopped : Error {
 // Files fetched with a model to make it faster. The repos and revisions match the Nace Agent app's model catalog, so
 // the app and the CLI download the same bytes.
 struct Companion {
-  std::string kind;                // "mtp": an MTP head's files; "dflash2": a DFlash2 drafter; "lilicorr": a LiLiCorr
-                                   // drafter (Nemotron 3.5 Bolt, Super-VL); "dspark": a DSpark drafter (Nemotron 3.5
-                                   // Lightning); "mtp-sidecar": mtp.safetensors built from an official checkpoint's
-                                   // mtp.* tensors
+  std::string kind;                // "mtp": an MTP head's files; "dflash2": a DFlash2 drafter ("dflash": a DFlash v1
+                                   // drafter, in the same dflash2/ folder); "lilicorr": a LiLiCorr drafter (Nemotron
+                                   // 3.5 Bolt, Super-VL); "dspark": a DSpark drafter (Nemotron 3.5 Lightning);
+                                   // "mtp-sidecar": mtp.safetensors built from an official checkpoint's mtp.* tensors
   std::string repo, revision;
   std::vector<std::string> files;  // the files taken from the repo ("mtp-sidecar": none)
   std::string subdir;              // where they go in the model's folder ("" = beside the weights)
   std::string sha256;              // "mtp-sidecar": sha256 of the result (a pinned revision always builds the same file)
   uint64_t size = 0;               // "mtp-sidecar": its size in bytes
+  // a draft model (DFlash2, DFlash v1, LiLiCorr, DSpark), not an MTP head's files
+  bool drafter() const { return kind == "dflash2" || kind == "dflash" || kind == "lilicorr" || kind == "dspark"; }
 };
 
 // One way to run a model: its weights at one precision, with the companions that speed them up. `--model
@@ -45,7 +47,7 @@ struct Variant {
   double download_gb = 0;             // weights + companions
 };
 
-// The models of the catalog (src/hub/catalog.cpp), best first.
+// The models of the catalog (src/hub/catalog.cpp): Qwen from small to large, then Nemotron from small to large.
 struct CatalogModel {
   std::string name;                  // "qwen3.6-35b-a3b"; with the variant, the folder (qwen3.6-35b-a3b-4bit)
   std::vector<std::string> aliases;  // "qwen3.6-35b", "35b"

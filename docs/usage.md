@@ -15,11 +15,12 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
+| `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
 download (the parts are kept) or when the model question is cancelled; the coding-agent commands exit with the agent's
-code.
+code; `kapitsa update --check` exits 100 when a newer release is out.
 
 ### Which model
 
@@ -42,17 +43,18 @@ Those start the best model for this Mac, with the same output as before.
 
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
-| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
-| `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 3.3 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
+| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
+| `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron-Labs Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
+| `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
-| `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
-| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, an MTP head for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for
-Lightning; Flash-Next's repo holds its MTP head.
+27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
+its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory has none: it decodes without one.
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
 ([nace-ai/Qwen3.8-Flash-Next-MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit), its precision per
@@ -77,13 +79,13 @@ request's `model` field is not checked.
 
 Each Qwen model comes in several precisions, its variants. Download sizes, companions included:
 
-| Variant | Weights | `35b` | `27b` | `4b` |
+| Variant | Weights | `4b` | `27b` | `35b` |
 | --- | --- | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 22.1 GB | 20.2 GB | 3.3 GB |
-| `5bit` | MLX affine 5-bit, group 64 | 26.4 GB | 23.5 GB | - |
-| `6bit` | MLX affine 6-bit, group 64: the quality choice | 30.7 GB | 26.9 GB | 4.3 GB |
-| `8bit` | MLX affine 8-bit, group 64 | 39.4 GB | 33.6 GB | 5.4 GB |
-| `bf16` | unquantized, where it fits | 71.9 GB | 58.8 GB | 9.3 GB |
+| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 20.2 GB | 22.1 GB |
+| `5bit` | MLX affine 5-bit, group 64 | - | 23.5 GB | 26.4 GB |
+| `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | 26.9 GB | 30.7 GB |
+| `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | 33.6 GB | 39.4 GB |
+| `bf16` | unquantized, where it fits | 10.6 GB | 58.8 GB | 71.9 GB |
 
 Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
 variants fit this Mac. Every variant keeps the model's MTP head and draft model, and pins its repo to a revision, so a
@@ -91,7 +93,11 @@ download is always the same bytes. After a Kapitsa update that pins newer revisi
 files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's own
 mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
 Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
-projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding).
+projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding). Dory has two,
+NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format most of its pre-training ran in,
+with BF16 embedding and head; 3.2 GB) and `bf16` (8.0 GB). Along two replies (320 positions), the NVFP4 checkpoint's
+next-token distributions are a KL of 0.020 from the BF16 checkpoint's on average (NVIDIA's code, 2 loops), with the same
+top token at 94% of positions.
 
 ### Other models
 
@@ -171,21 +177,41 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
-| `--spec N` | `1` (`2` on the 27B) | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
+| `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
+| `--loop-kv MODE` | `last-loop` | Dory: the shared block's KV cache, `last-loop` (one per layer) or `per-loop` (one per loop, more memory). |
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
 
+### Requests at once
+
 Requests sent at once (a coding agent's parallel subagents and side requests, several clients) each run on a slot of
-their own and take turns on the GPU between prompt chunks and decode steps: a request sent during a long reply starts
-after a fraction of a second instead of after that reply, and each request gets the tokens it would get alone. The GPU
-is shared, not multiplied: two replies at once write about as many tokens per second in all as one reply alone, each at
-about half the speed. Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full
-`--ctx` conversation, the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With
-every slot busy a request waits for one (the log says so); a streamed chat completion whose client disconnects stops
-waiting.
+their own. Their prompts take turns on the GPU between chunks, so a request sent during a long reply starts after a
+fraction of a second instead of after that reply. While two or more of them decode, one GPU pass serves them all (with
+the draft models of Qwen3.8 27B, Qwen3.6 35B-A3B and Nemotron 3.5 Bolt): each weight is read once for every request,
+so replies at once write more tokens per second in all than one reply alone, each a little slower than alone. Tokens
+per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro with an M4 Pro (48 GB):
+
+| Requests at once | 1 | 2 | 3 | 4 |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 56 (56) | 67 (58) |
+| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 184 (149) | 202 (161) |
+| Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
+
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The 27B's three requests take turns:
+their drafts cost more than the shared pass saves. A request alone gets the tokens it always gets. Requests decoded
+together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
+each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
+4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (not measured batched yet; `NI_BATCH=1` batches them), without
+a draft model (`--dflash none`) and with `NI_BATCH=0`, requests at once take turns on the GPU, each with the tokens it
+gets alone, and write about as many tokens per second in all as one alone.
+
+Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--ctx` conversation,
+the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request
+waits for one (the log says so); a streamed chat completion whose client disconnects stops waiting.
 
 ## APIs
 
@@ -225,6 +251,41 @@ and thinks only when the request asks for it.
 Effort levels: `none` and `minimal` turn thinking off; `low` and `medium` go to the chat template, where Qwen3.8 uses
 them; `high`, `xhigh` and `max` keep the template's default, Qwen3.8's highest level. The other models think the same at
 every level. In Messages, `"thinking": {..., "display": "omitted"}` returns thinking blocks without their text.
+
+### Dory: thinking depth
+
+NVIDIA's Nemotron-Labs Dory1.0 4B is a looped model: 16 input layers, a shared block of 40 layers, 16 output layers,
+and the shared block runs 1 to 4 times per token. Each loop is thinking in latent space: more compute per token, the
+same weights, no extra tokens. It is separate from the visible reasoning (the `<think>` block), which stays as the
+chat template and the request say (thinking on by default in Chat Completions and Responses).
+
+| Loops | What NVIDIA reports | Speed |
+| --- | --- | --- |
+| 1 | the cheapest per token; SWE-bench Verified 50.3 | the fastest |
+| 2 (default) | most of the gain; SWE-bench Verified 59.5 | |
+| 4 | best on agentic tasks; SWE-bench Verified 61.8 | the slowest |
+
+- **Server default:** `kapitsa serve --model dory --loops 4` (or `kapitsa claude --model dory --loops 4`); without it, 2
+  loops.
+- **Per request:** `"loops": N` in the request body (OpenAI clients: `extra_body={"loops": 4}`) sets it for that request.
+  Without it, the agents' own effort controls choose: OpenAI's `reasoning_effort` and Responses' `reasoning.effort`
+  (`minimal` and `low` 1 loop, `medium` 2, `high` and `xhigh` 4; `none` only turns the visible thinking off and keeps
+  the default), Anthropic's `thinking` (disabled 1 loop, a
+  `budget_tokens` under 4096 1, under 16384 2, above 4; adaptive the server's default) and `output_config.effort`.
+  Every reply reports the loops it ran in `usage.kapitsa.loops`, and the server log names them.
+- **Cache:** a conversation's cached prompt is only valid for the loop count that computed it; a request with another
+  count reads its prompt again (on another slot when one is free, so the conversation in progress keeps its cache).
+- **KV cache (`--loop-kv`):** `last-loop` (the default, NVIDIA's `recurrent_kv_cache_mode: last_loop`) keeps one cache per
+  layer, each loop writing over the previous one's, so a conversation's KV cache is the size of a one-loop model's at
+  any loop count: 36 KB per token plus 114 MB of sliding-window rings. `per-loop` keeps a cache per loop, as NVIDIA's vLLM
+  and llama.cpp commands run it (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both. The two differ
+  little: on the BF16 weights at 2 loops, along four replies (504 positions), per-loop's next-token distributions are a
+  KL of 0.0009 from last-loop's on average, with the same top token at 99.2% of positions (about a twentieth of the
+  NVFP4 checkpoint's difference from BF16); greedy replies first differ after 10, 88 and 130 tokens, and not within 160
+  on the fourth.
+- **Replies that think to the end:** as NVIDIA's `force_nonempty_content` (on by default here), a reply whose answer is
+  empty returns its reasoning as its content too; `"chat_template_kwargs": {"force_nonempty_content": false}` turns it
+  off.
 
 ### API keys and network access
 
@@ -273,12 +334,12 @@ tools and MCP servers work as usual:
 
 ## Images
 
-Every catalog model except `nemotron-3.5-lightning` (a text-only model) reads images, in every precision:
-`qwen3.5-4b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and `nemotron-3.5-super-vl`.
-Their vision towers come with the download and load with the first image: about 0.67 GB of GPU memory for the 4B's,
-0.9 GB for the 35B's, the 27B's and Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and for Super-VL's. On a
-model without one, such as Lightning or a text-only conversion, each image becomes a short note in the prompt, so
-agents that attach screenshots keep working.
+Every catalog model except `nemotron-3.5-lightning` and `nemotron-labs-dory1.0-4b` (text-only models) reads images, in
+every precision: `qwen3.5-4b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and
+`nemotron-3.5-super-vl`. Their vision towers come with the download and load with the first image: about 0.67 GB of GPU
+memory for the 4B's, 0.9 GB for the 35B's, the 27B's and Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and
+for Super-VL's. On a model without one, such as Lightning, Dory or a text-only conversion, each image becomes a short
+note in the prompt, so agents that attach screenshots keep working.
 
 | API | Image part |
 | --- | --- |
@@ -331,10 +392,10 @@ the working set at about 2/3 to 78% of the RAM, depending on its version, hence 
 
 | Mac RAM | Budget | `4b` | `27b` | `35b` |
 | --- | --- | --- | --- | --- |
-| 16 GB | 11.0-12.9 GB | yes (198K-249K) | no | no |
-| 24 GB | 16.5-19.3 GB | yes (347K-424K) | only at the larger budget (23K) | no |
-| 32 GB | 22.0-25.7 GB | yes (497K-598K) | yes (62K-80K) | yes (50K-153K) |
-| 48 GB | 33.0-38.6 GB | yes (795K-947K) | yes (184K-265K) | yes (475K-724K) |
+| 16 GB | 11.0-12.9 GB | yes (174K-225K) | no | no |
+| 24 GB | 16.5-19.3 GB | yes (323K-399K) | only at the larger budget (23K) | no |
+| 32 GB | 22.0-25.7 GB | yes (472K-572K) | yes (62K-80K) | yes (50K-153K) |
+| 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (184K-265K) | yes (475K-724K) |
 
 On a 48 GB Mac the 35B also fits in 6-bit with a full conversation and its draft model, in 8-bit only with shorter ones.
 Flash-Next needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budget, and on 96 GB (about 72 GB) its fixed
@@ -406,7 +467,10 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`. |
+| `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
+| `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
+| `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
 | `BENCH_GPU_LOCK` | `~/.cache/nace-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
 | `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
@@ -419,6 +483,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
+| `NI_BATCH` | on where measured | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too (not measured yet); `0`: they take turns instead, each with the tokens it gets alone. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
@@ -432,16 +497,60 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 The other `NI_*` switches exist for development and A/B tests.
 
-## Updating and uninstalling
+## Updating
 
-Homebrew and the curl installer work from the first release on. To update:
+`kapitsa update` updates Kapitsa to its latest release, the way it was installed:
 
-```bash
-brew upgrade kapitsa                                                                  # Homebrew
-curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash   # the installer, run again
-git pull && ./install.sh                                                              # a source build, in its clone
-```
+| Installed with | `kapitsa update` | Automatically |
+| --- | --- | --- |
+| `install.sh`, or a copied release binary | Downloads the release and puts it in place (below). | Installed within a day; the next run in a terminal says so. |
+| Homebrew (`/opt/homebrew/Cellar/kapitsa`) | Runs `brew upgrade nace-ai/tap/kapitsa` in a terminal (`--fetch-HEAD` for a `--HEAD` install); elsewhere it prints that command. | A run in a terminal says when a release is out. |
+| A build from source (a `CMakeCache.txt` beside the binary or above it) | Says how: `git -C SRC pull && cmake --build BUILD`. | A run in a terminal says when a release is out. |
+| `./install.sh` in a clone (a binary built from source, copied) | Replaces it with the release build. | A run in a terminal says when a release is out. |
+| An app such as Nace Agent (a binary inside `*.app/Contents/`) | Nothing: the app keeps its own Kapitsa. | Nothing. |
 
-To uninstall: `brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the
-binary `install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to
-that folder. Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`) removes the models and logs.
+An update of an install.sh install downloads the release's tarball and `.sha256` from GitHub into a new folder beside the
+binary and checks the tarball against the checksum. It checks the new binary's code signature (valid, signed as
+Kapitsa releases are, and by the same Developer ID team as the running binary when that one has one) and that its
+`--version` is the release's. Then it renames it over the old binary in one step, after checking that no `kapitsa bench`
+is running from it (a benchmark's servers must all run one binary) and that the file there is still the kapitsa that
+runs. The old binary is kept as `kapitsa.previous` beside the license files (`../share/kapitsa` from the binary's
+folder, where `install.sh` puts them, updated too). A release that fails a check changes nothing. A server that is
+running keeps the version it started with until it restarts. When the binary's folder is not yours to write (say
+`/usr/local/bin`), `kapitsa update` prints the command that works: `sudo /usr/local/bin/kapitsa update`.
+
+- `kapitsa update --check` only says whether a newer release is out: exit 0 when this one is up to date, 100 when a
+  newer one is out, 1 when it can't tell. A build newer than the latest release (or a dev build of it) is up to date.
+- `kapitsa update --rollback` puts `kapitsa.previous` back, and keeps the binary it replaces in its place (a second
+  `--rollback` returns to it). Automatic updates then skip the release rolled back from, until a newer one is out.
+- `kapitsa update --version X.Y.Z` installs that release, an older one too (nothing else ever installs an older one).
+- `kapitsa update --auto off` (and `on`) turns automatic updates off for this `KAPITSA_HOME`.
+
+Automatic updates: once a day, a `kapitsa` command (not `--help`, `--version`, `kapitsa update` or `kapitsa bench`)
+starts a check in the background: a separate process in its own session, at background priority, with a time limit of
+5 minutes (`KAPITSA_UPDATE_TIMEOUT_S`). The command itself does not wait for it and prints nothing more. For a
+Homebrew install, a build from source, a binary built from source, or one in a folder you can't write, the check only
+runs from a command in a terminal and only records a release that is out. The next run in a terminal prints one line: `Updated Kapitsa to
+0.1.33 (from 0.1.32); restart running servers to use it`, or `Kapitsa 0.1.33 is available: brew upgrade
+nace-ai/tap/kapitsa`, or why a release was not installed. A check that can't reach GitHub stays silent and runs again
+the next day. `KAPITSA_NO_AUTO_UPDATE=1`, `kapitsa update --auto off` and `CI` (set, and not `0` or `false`) turn
+automatic updates off; they are also off for root.
+
+What each binary's last check found is in `~/.cache/kapitsa/update.json` (`KAPITSA_HOME`): when it ran, the latest
+release, the result, and a release to skip after a rollback.
+
+Privacy: a check asks only `github.com/nace-ai/kapitsa/releases/latest` where the latest release is (a HEAD request,
+with no GitHub API and so no rate limit). An update downloads two files from the release, through GitHub's file host
+(`*.githubusercontent.com`); no other redirect is followed. Requests carry a fixed User-Agent (`kapitsa`) and
+language, no cookies and nothing about this Mac. There is no telemetry.
+
+Automatic updates start with the release after 0.1.32. Kapitsa 0.1.32 and older update once by hand: run the installer
+again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash`), or
+`brew upgrade nace-ai/tap/kapitsa`, or `git pull && ./install.sh` in a clone.
+
+## Uninstalling
+
+`brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binary
+`install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
+folder (the license files, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
+removes the models, logs and update state.

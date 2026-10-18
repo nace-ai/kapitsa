@@ -4,6 +4,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <fstream>
 
 namespace ni {
@@ -57,5 +58,25 @@ std::unique_ptr<NhDrafter> NhDrafter::open(NemotronH& target, const std::string&
 void NhDrafter::reset(LiliSeq& d) { d.ctx = d.hi = 0; }
 
 void NhDrafter::rewind(LiliSeq& d, int pos) { d.ctx = pos; }
+
+void NhDrafter::stage_init(LiliSeq& d) {
+  if (d.stage) return;
+  const NhCapture& v = verify_hook();
+  d.stage = Gpu::get().alloc(size_t(kB) * v.ld * 4, "nh_draft_stage");
+  d.staged = 0;
+  d.stage_hook.feat = d.stage;
+  d.stage_hook.ld = v.ld;
+  d.stage_hook.slot = v.slot;
+  d.stage_hook.pos_base = 0;
+  d.stage_hook.rows = kB;
+}
+
+void NhDrafter::encode_commit_staged(Encoder& e, LiliSeq& d) {
+  if (d.staged <= 0) return;
+  enc_commit_rows(e, d, d.stage, d.staged, d.ctx);
+  d.ctx += d.staged;
+  d.hi = std::max(d.hi, d.ctx);
+  d.staged = 0;
+}
 
 }  // namespace ni

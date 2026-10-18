@@ -1,0 +1,5 @@
+{
+ "_comment": "The agent session compare_engines.py replays for each model (config model_name), and the tool mode; a model without an entry gets no agent phase. Qwen3.8-27B replays the 35B's session: recorded greedily on the 27B (the same task, prompt and setup), opencode repeated one shell command from its 14th request on until the recording proxy stopped it at 80 requests, the task unsolved. With the 35B's answers in the history, every engine's own 27B answer differs from the next request's at almost every turn, so each engine restores its cache to the end of the previous prompt and reads the recorded answer (the same for every engine, the one that recorded nothing included).",
+ "Qwen3.6-35B-A3B": {"trace": "opencode-ledger.json", "tool_mode": "rendered"},
+ "Qwen3.8-27B": {"trace": "opencode-ledger.json", "tool_mode": "rendered"}
+}

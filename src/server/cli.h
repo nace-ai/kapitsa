@@ -1,5 +1,5 @@
 // What the command line's files share (main.cpp: serve, pull, list, rm; launch.cpp: the coding agents; bench_cmd.cpp:
-// kapitsa bench).
+// kapitsa bench; update_cmd.cpp: kapitsa update and the automatic update).
 #pragma once
 #include "engine/engine.h"
 #include "hub/hub.h"
@@ -7,6 +7,10 @@
 #include <string>
 
 namespace ni {
+
+// This build's version (CMakeLists.txt's KAPITSA_VERSION), as `kapitsa --version` prints it: the one copy the update
+// code compares (main.cpp)
+extern const char* const kVersion;
 
 // Prints "kapitsa: <msg>" and where the usage is, and exits with 2
 [[noreturn]] void usage_error(const std::string& msg, const char* help = "kapitsa --help");
@@ -32,5 +36,12 @@ int launch_agent(const std::string& name, int argc, char** argv, int first);
 // kapitsa bench: benchmarks Kapitsa on this Mac with the harness's protocol, saves the result and submits it when
 // asked (bench_cmd.cpp); argv[first] is the first argument after "bench"
 int run_bench(int argc, char** argv, int first);
+
+// kapitsa update: updates this kapitsa to the latest release (update_cmd.cpp); argv[first] is the first argument after
+// "update"
+int run_update(int argc, char** argv, int first);
+// Before a command runs: the line about the last automatic update (in a terminal), and once a day the next check,
+// started in the background (update_cmd.cpp). Leaves help, the version, kapitsa update and kapitsa bench alone.
+void auto_update(int argc, char** argv);
 
 }  // namespace ni

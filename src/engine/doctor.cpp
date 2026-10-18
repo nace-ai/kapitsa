@@ -6,6 +6,7 @@
 #include "engine/engine.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
+#include "model/dory.h"
 #include "model/nemotron_h.h"
 #include "model/nh_drafter.h"
 #include "model/qwen35.h"
@@ -28,6 +29,13 @@
 
 namespace ni {
 namespace {
+
+// z-lab's DFlash (v1) drafters run on the DFlash2 path; the label says which one this is
+bool dflash_v1(const std::string& dir) {
+  std::ifstream f(dir + "/config.json");
+  const nlohmann::json c = nlohmann::json::parse(f, nullptr, false);
+  return c.is_object() && c.value("architectures", nlohmann::json::array()) == nlohmann::json::array({"DFlashDraftModel"});
+}
 
 std::string sysctl_str(const char* name) {
   char b[256] = {0};
@@ -92,6 +100,7 @@ const char* yesno(bool b) { return b ? "yes" : "no"; }
 // One model's plan, for the table
 struct Row {
   std::string name, where, error, decoding, formats, image;
+  std::string note;  // a model's own line (Dory: its loops and the KV of each mode)
   bool planned = false, dense = false, starts = false, all_fit = false;
   int layers = 0, slots = 0;
   size_t full = 0, start = 0, weights = 0, kv = 0, drafter = 0, tokens = 0, image_bytes = 0;
@@ -165,6 +174,7 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
       if (r.starts) d += sep + "room for " + count(double(r.tokens)) + " tokens";
       if (r.image_bytes) d += sep + "images +" + gb(double(r.image_bytes));
       o.push_back("      " + dim(clip(d, std::max(W, std::min(columns(), 140)) - 8)));
+      if (!r.note.empty()) o.push_back("      " + dim(clip(r.note, std::max(W, std::min(columns(), 140)) - 8)));
     }
     if (rows.empty()) o.push_back("    " + dim("none found (--model DIR)"));
     o.push_back("");
@@ -337,6 +347,7 @@ int run_doctor(int argc, char** argv) {
     MemPlan m;
     LoadPlan lp;
     const bool nemotron = NemotronH::is_model(dir);
+    const bool dory = Dory::is_model(dir);
     int slots = slots_opt;  // as the engine would start it: the ones asked for, else auto_slots
     try {
       if (slots <= 0) {
@@ -353,10 +364,35 @@ int run_doctor(int argc, char** argv) {
     }
     // Nemotron-H's block drafters: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning)
     const bool dspark = nemotron && NhDrafter::kind(lp.dflash.empty() ? lp.dflash_left_out : lp.dflash) == "dspark";
-    const char* drafter = !nemotron ? "DFlash2 drafter" : dspark ? "DSpark drafter" : "LiLiCorr drafter";
+    const std::string drafter_dir = lp.dflash.empty() ? lp.dflash_left_out : lp.dflash;
+    const char* drafter = nemotron ? (dspark ? "DSpark drafter" : "LiLiCorr drafter")
+                          : !drafter_dir.empty() && dflash_v1(drafter_dir) ? "DFlash drafter" : "DFlash2 drafter";
     const int ch = lp.prefill_chunk;
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
-    const Qwen35::AnePlan ap = nemotron ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0} : Qwen35::ane_plan(dir, m);
+    const Qwen35::AnePlan ap = nemotron || dory ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0}
+                                                : Qwen35::ane_plan(dir, m);
+    // Dory: the loops it runs and the KV per token of each mode (the full-attention layers'; the sliding-window
+    // layers keep rings of window + 8 positions per conversation)
+    std::string dory_note;
+    nlohmann::ordered_json dory_j;
+    if (dory) {
+      const DoryConfig dc = Dory::read_config(dir);
+      const int loops = Dory::serving_loops() > 0 ? Dory::serving_loops() : dc.loops;
+      char b[400];
+      snprintf(b, sizeof b, "loops: %d (requests take 1-%d) %s KV: %s; per token: last-loop %.0f KB, per-loop %.0f KB "
+               "(%d loops) / %.0f KB (4); sliding-window rings %.0f MB per conversation",
+               loops, Dory::kMaxLoops, term::kDot, loop_kv_name(Dory::serving_kv()),
+               Dory::kv_per_pos(dc, LoopKv::last_loop, loops) / 1024.0,
+               Dory::kv_per_pos(dc, LoopKv::per_loop, loops) / 1024.0, loops,
+               Dory::kv_per_pos(dc, LoopKv::per_loop, 4) / 1024.0, Dory::ring_bytes(dc, Dory::serving_kv(), loops) / 1e6);
+      dory_note = b;
+      dory_j = {{"loops", loops},
+                {"loop_kv", loop_kv_name(Dory::serving_kv())},
+                {"kv_bytes_per_token", {{"last_loop", Dory::kv_per_pos(dc, LoopKv::last_loop, loops)},
+                                        {"per_loop", Dory::kv_per_pos(dc, LoopKv::per_loop, loops)},
+                                        {"per_loop_4", Dory::kv_per_pos(dc, LoopKv::per_loop, 4)}}},
+                {"ring_bytes_per_conversation", Dory::ring_bytes(dc, Dory::serving_kv(), loops)}};
+    }
     const uint32_t units = ap.units, total = ap.total;
     const size_t ane_bytes = ap.bytes;
     const std::string src = ap.source;
@@ -394,6 +430,7 @@ int run_doctor(int argc, char** argv) {
     o["decoding"] = !lp.dflash.empty() ? (dspark ? "dspark" : nemotron ? "lilicorr" : "dflash2") : m.mtp ? "mtp" : "plain";
     const auto enc = vision::open_encoder(dir);  // images: the encoder's weights load with the first image
     o["image_encoder_bytes"] = enc ? enc->weight_bytes() : 0;
+    if (dory) o["dory"] = dory_j;
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
@@ -411,6 +448,7 @@ int run_doctor(int argc, char** argv) {
                    : m.mtp ? "MTP head" : "plain";
       r.image_bytes = enc ? enc->weight_bytes() : 0;
       r.dec = dec, r.pf = pf;
+      r.note = dory_note;
       tty_rows.push_back(r);
       continue;
     }
@@ -443,14 +481,16 @@ int run_doctor(int argc, char** argv) {
     if (enc)
       printf("    images: %s, +%.2f GB when the first image arrives (not counted above)\n", enc->name().c_str(),
              enc->weight_bytes() / 1e9);
-    if (m.dense)
+    if (dory) printf("    %s\n", dory_note.c_str());
+    if (m.dense && !dory)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()
                    : ("off: " + src).c_str());
     if (dec > 0)
       printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; %s add their "
              "measured factors (docs/benchmarks.md)\n",
-             dec, m.decode_bytes / 1e9, pf, nemotron ? "the block drafter and the Neural Engine split" : "MTP / Neural Engine");
+             dec, m.decode_bytes / 1e9, pf,
+             nemotron ? "the block drafter and the Neural Engine split" : dory ? "loops other than the default" : "MTP / Neural Engine");
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;

@@ -31,6 +31,11 @@ struct LiliSeq {
   Buffer anchor;          // fp32 [kAnchors][H]: projected context features; slot = position % kAnchors
   int ctx = 0;            // committed context positions [0, ctx)
   int hi = 0;             // one past the highest position written since the reset: the ring holds [hi - window, hi)
+  // Batched decode (NhDrafter::stage_init): the target captures of rows not yet committed, positions ctx ..
+  // ctx + staged - 1, fp32 [8][n_slots * H]; the hook a batched verify writes them with (by row)
+  Buffer stage;
+  int staged = 0;
+  NhCapture stage_hook;
 };
 
 class LiliCorr : public NhDrafter {
@@ -91,8 +96,9 @@ class LiliCorr : public NhDrafter {
   Buffer upload(const std::vector<float>& v, const char* label);
   Buffer vec(const std::string& name);                  // host() in a GPU buffer
   void alloc_buffers();
+  const NhCapture& verify_hook() const override { return hook_v_; }
   // fc + norm of feature rows [0, R) of `feat` at positions pos0.. into the ring and the anchor slots
-  void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0);
+  void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) override;
   void enc_bias(Encoder& e, const Buffer& x, const Buffer& b, int rows, int D, int act);
   // y = W x for M fp32 rows: one row on the matvec, more on the GEMM (x converted to half; scaled: per-row scale
   // for inputs that may leave half's range)

@@ -101,10 +101,16 @@ int main(int argc, char** argv) {
       names.push_back(argv[i]);
     }
   }
+  int failed = 0;
   for (const std::string& name : names) {
     const char* nm = name.c_str();
-    ni::Pipeline p = g.pipeline(name);
-    printf("%-36s ok (max threads %u)", nm, p.max_threads);
+    ni::Pipeline p = g.pipeline(name, /*required=*/false);
+    if (!p.pso) {  // e.g. an experimental kernel past the threadgroup memory limit: report it, go on
+      printf("%-36s FAILED\n", nm);
+      ++failed;
+      continue;
+    }
+    printf("%-36s ok (max threads %u, threadgroup memory %u B)", nm, p.max_threads, p.tg_mem);
     if (adir) {
       std::string path = std::string(adir) + "/" + name + ".bin";
       std::ifstream f;
@@ -120,6 +126,6 @@ int main(int argc, char** argv) {
     }
     printf("\n");
   }
-  printf("kernels compiled\n");
-  return 0;
+  printf("kernels compiled%s\n", failed ? " (some pipelines failed)" : "");
+  return failed ? 1 : 0;
 }

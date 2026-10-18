@@ -13,6 +13,8 @@
 //   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
 //   kapitsa bench [--model M] [--quick] [--json] [--submit [--dry-run]] [--out FILE]; kapitsa bench submit [FILE]
 //                 (bench_cmd.cpp: the harness's protocol on this Mac, its result, the community results)
+//   kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on|off]   (update_cmd.cpp; and once a day, in the
+//                 background, the automatic update)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
 #include "api/anthropic.h"
@@ -38,6 +40,7 @@
 #include <sys/sysctl.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
@@ -47,7 +50,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.1.32"
+#define KAPITSA_VERSION "0.1.34"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -56,6 +59,8 @@
 namespace ni {
 extern const char* const kChatPage;  // src/server/chat.html, embedded at build time
 }
+
+const char* const ni::kVersion = KAPITSA_VERSION;
 
 using namespace ni;
 using json = nlohmann::ordered_json;
@@ -102,15 +107,19 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     // it raises on "high")
     const std::string e = b["reasoning_effort"];
     if (e == "none" || e == "minimal" || !r.template_kwargs.contains("reasoning_effort")) api::apply_effort(e, r.template_kwargs);
+    r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
+  r.loops = api::request_loops_field(b);
   return r;
 }
 
 static json usage_json(const ChatResult& res) {
-  return json{{"prompt_tokens", res.prompt_tokens},
-              {"completion_tokens", res.completion_tokens},
-              {"total_tokens", res.prompt_tokens + res.completion_tokens},
-              {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
+  json u{{"prompt_tokens", res.prompt_tokens},
+         {"completion_tokens", res.completion_tokens},
+         {"total_tokens", res.prompt_tokens + res.completion_tokens},
+         {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
+  if (res.loops > 0) u["kapitsa"] = api::kapitsa_usage(res);  // looped models: the loop count the request ran
+  return u;
 }
 
 static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, bool with_index) {
@@ -172,7 +181,20 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
   return x;
 }
 
-// The best catalog model for this Mac: the first (the catalog is best first) with a variant whose memory plan, the
+// The order best_model tries the catalog in: the most capable model first (the catalog itself lists the models from
+// small to large, Qwen first, as the README and the picker show them); catalog models not named here come last.
+static std::vector<const hub::CatalogModel*> by_preference() {
+  static const char* const kOrder[] = {"qwen3.6-35b-a3b", "qwen3.8-27b", "qwen3.5-4b", "nemotron-3.5-bolt",
+                                       "nemotron-3.5-super-vl", "nemotron-3.5-lightning"};
+  std::vector<const hub::CatalogModel*> out;
+  for (const char* n : kOrder)
+    if (const hub::CatalogModel* m = hub::find_model(n)) out.push_back(m);
+  for (const auto& m : hub::catalog())
+    if (std::find(out.begin(), out.end(), &m) == out.end()) out.push_back(&m);
+  return out;
+}
+
+// The best catalog model for this Mac: the first in by_preference's order with a variant whose memory plan, the
 // engine's own, leaves room for one conversation of --ctx tokens within the budget and keeps its drafter (each model
 // takes its default variant, else the first of its fallbacks that fits: pick_variant), or failing that whose smallest
 // variant holds the conversation without the drafter (MTP decoding). A model not downloaded yet is
@@ -180,7 +202,8 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
 // cannot be downloaded either and is skipped. False if none can be planned.
 bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
   bool have = false;
-  for (const auto& m : hub::catalog()) {
+  for (const hub::CatalogModel* mp : by_preference()) {
+    const hub::CatalogModel& m = *mp;
     bool fits = false;
     hub::ModelRef r = pick_variant(m, opt, budget, &fits);
     if (fits) {
@@ -282,7 +305,8 @@ static void print_help() {
          "  rm MODEL     delete a downloaded model\n"
          "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
          "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n"
-         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n\n"
+         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n"
+         "  update       update Kapitsa to its latest release; it also updates itself (kapitsa update --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
 }
@@ -306,6 +330,11 @@ static void print_serve_help() {
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
+         "  --loops N              Dory: the shared block's loops per token, 1-4 (default 2, NVIDIA's recommendation;\n"
+         "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
+         "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
+         "  --loop-kv MODE         Dory: last-loop (default: one cache per layer, the size of a 1-loop model's) or\n"
+         "                         per-loop (a cache per loop, as NVIDIA's vLLM commands run it; more memory)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
@@ -500,12 +529,25 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--loops") {
+      opt.loops = to_int(a, next(), help);
+      if (opt.loops < 1 || opt.loops > Dory::kMaxLoops) usage_error("--loops: 1 to 4", help);
+    } else if (a == "--loop-kv") {
+      LoopKv kv;
+      opt.loop_kv = next();
+      if (!parse_loop_kv(opt.loop_kv, &kv)) usage_error("--loop-kv: last-loop or per-loop", help);
+    }
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  {  // looped models: the memory plans before the model loads count what it will run
+    LoopKv kv = LoopKv::last_loop;
+    if (!opt.loop_kv.empty()) parse_loop_kv(opt.loop_kv, &kv);
+    Dory::set_serving(opt.loops, kv);
+  }
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start
@@ -945,7 +987,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
                         r.variant->name == r.model->default_variant ? ", the default" : "");
   if (r.variant)
     for (const auto& c : r.variant->companions)
-      printf("  %-11s %s @ %s%s\n", (c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark" ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
+      printf("  %-11s %s @ %s%s\n", (c.drafter() ? "drafter:" : "MTP head:"), c.repo.c_str(), c.revision.c_str(),
              c.kind == "mtp-sidecar" ? " (its mtp.* tensors, made into mtp.safetensors)" : "");
   printf("  API name:   %s\n", r.id.c_str());
 }
@@ -1156,14 +1198,21 @@ int main(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
   // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
   if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();
+  // the last automatic update's line, and once a day the next check, in the background (update_cmd.cpp)
+  auto_update(argc, argv);
   if (cmd.empty() || cmd == "--help" || cmd == "-h" || cmd == "help") {
     if (argc > 2 && !strcmp(argv[2], "serve")) print_serve_help();
     else if (argc > 2 && !strcmp(argv[2], "pull")) print_pull_help();
+    else if (argc > 2 && !strcmp(argv[2], "update")) {
+      char h[] = "--help";
+      char* a[] = {argv[0], argv[2], h, nullptr};
+      return run_update(3, a, 2);
+    }
     else print_help();
     return 0;
   }
   if (cmd == "--version" || cmd == "-v" || cmd == "version") {
-    printf("kapitsa %s%s%s%s\n", KAPITSA_VERSION, *KAPITSA_GIT ? " (" : "", KAPITSA_GIT, *KAPITSA_GIT ? ")" : "");
+    printf("kapitsa %s%s%s%s\n", kVersion, *KAPITSA_GIT ? " (" : "", KAPITSA_GIT, *KAPITSA_GIT ? ")" : "");
     return 0;
   }
   if (cmd == "serve") return serve(argc, argv, 2);
@@ -1175,6 +1224,7 @@ int main(int argc, char** argv) {
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
   if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
   if (cmd == "bench") return run_bench(argc, argv, 2);
+  if (cmd == "update") return run_update(argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

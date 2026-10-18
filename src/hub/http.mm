@@ -10,7 +10,10 @@ namespace {
 // One request in flight on a client (requests on one client are sequential).
 struct Request {
   const std::function<bool(const uint8_t*, size_t)>* sink = nullptr;
+  const std::function<bool(const std::string&)>* allow = nullptr;  // which redirects to follow (null: all)
   std::string body;
+  std::string url;      // the URL that answered
+  std::string refused;  // a redirect not followed
   long status = 0;
   bool cancelled = false;
   std::string host;   // the request's host: Authorization is not sent on to another host after a redirect
@@ -33,6 +36,7 @@ struct Request {
     didReceiveResponse:(NSURLResponse*)response
      completionHandler:(void (^)(NSURLSessionResponseDisposition))handler {
   if ([response isKindOfClass:[NSHTTPURLResponse class]]) _req->status = long([(NSHTTPURLResponse*)response statusCode]);
+  if (const char* u = response.URL.absoluteString.UTF8String) _req->url = u;
   handler(NSURLSessionResponseAllow);
 }
 
@@ -73,6 +77,12 @@ struct Request {
     willPerformHTTPRedirection:(NSHTTPURLResponse*)response
                     newRequest:(NSURLRequest*)request
              completionHandler:(void (^)(NSURLRequest*))handler {
+  const char* to = request.URL.absoluteString.UTF8String;
+  if (_req->allow && !(to && (*_req->allow)(to))) {
+    _req->refused = to ? to : "?";
+    handler(nil);  // not followed: the 3xx answer is the result
+    return;
+  }
   NSMutableURLRequest* m = [request mutableCopy];
   const char* host = request.URL.host.UTF8String;
   if (!host || _req->host != host) [m setValue:nil forHTTPHeaderField:@"Authorization"];
@@ -92,6 +102,7 @@ namespace ni::hub {
 struct HttpClient::Impl {
   NSURLSession* session = nil;
   NIHttpDelegate* delegate = nil;
+  std::function<bool(const std::string&)> allow;  // which redirects to follow (empty: all)
 };
 
 HttpClient::HttpClient(double idle_timeout_s) : impl_(std::make_unique<Impl>()) {
@@ -120,7 +131,8 @@ HttpClient::~HttpClient() {
 }
 
 static HttpResult run(NSURLSession* session, NIHttpDelegate* delegate, const std::string& url, const Headers& headers,
-                      uint64_t a, uint64_t b, const std::function<bool(const uint8_t*, size_t)>* sink) {
+                      uint64_t a, uint64_t b, const std::function<bool(const uint8_t*, size_t)>* sink,
+                      const std::function<bool(const std::string&)>* allow, bool head = false) {
   HttpResult out;
   @autoreleasepool {
     NSURL* u = [NSURL URLWithString:@(url.c_str())];
@@ -130,9 +142,11 @@ static HttpResult run(NSURLSession* session, NIHttpDelegate* delegate, const std
     }
     Request r;
     r.sink = sink;
+    r.allow = allow;
     r.host = u.host.UTF8String ? u.host.UTF8String : "";
     r.done = dispatch_semaphore_create(0);
     NSMutableURLRequest* req = [NSMutableURLRequest requestWithURL:u];
+    if (head) req.HTTPMethod = @"HEAD";
     for (const auto& [k, v] : headers) [req setValue:@(v.c_str()) forHTTPHeaderField:@(k.c_str())];
     if (b > a) {
       r.range = "bytes=" + std::to_string(a) + "-" + std::to_string(b - 1);
@@ -149,6 +163,8 @@ static HttpResult run(NSURLSession* session, NIHttpDelegate* delegate, const std
     out.body = std::move(r.body);
     out.cancelled = r.cancelled;
     out.range_ignored = r.range_ignored;
+    out.url = std::move(r.url);
+    out.refused = std::move(r.refused);
     if (r.error && !r.cancelled && !r.range_ignored) {
       out.error_code = int(r.error.code);
       out.error = r.error.localizedDescription.UTF8String ? r.error.localizedDescription.UTF8String : "network error";
@@ -172,12 +188,18 @@ static HttpResult run(NSURLSession* session, NIHttpDelegate* delegate, const std
 }
 
 HttpResult HttpClient::get(const std::string& url, const Headers& headers, uint64_t a, uint64_t b) {
-  return run(impl_->session, impl_->delegate, url, headers, a, b, nullptr);
+  return run(impl_->session, impl_->delegate, url, headers, a, b, nullptr, impl_->allow ? &impl_->allow : nullptr);
 }
 
 HttpResult HttpClient::stream(const std::string& url, const Headers& headers, uint64_t a, uint64_t b,
                               const std::function<bool(const uint8_t*, size_t)>& sink) {
-  return run(impl_->session, impl_->delegate, url, headers, a, b, &sink);
+  return run(impl_->session, impl_->delegate, url, headers, a, b, &sink, impl_->allow ? &impl_->allow : nullptr);
 }
+
+HttpResult HttpClient::head(const std::string& url, const Headers& headers) {
+  return run(impl_->session, impl_->delegate, url, headers, 0, 0, nullptr, impl_->allow ? &impl_->allow : nullptr, true);
+}
+
+void HttpClient::allow_redirects(std::function<bool(const std::string& url)> allow) { impl_->allow = std::move(allow); }
 
 }  // namespace ni::hub

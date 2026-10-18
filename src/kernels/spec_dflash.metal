@@ -143,6 +143,36 @@ struct DflNormParams {
   }
 }
 
+// DFlash (v1) drafters, plain residual sublayers: h[r] += u[r]; n = RMSNorm(h[r]; w) -> fp32 n and the X8 table
+// (dfl_conv_fin_norm without the block conv). grid: 8 threadgroups x 256.
+[[kernel]] void dfl_res_norm(device float* h [[buffer(0)]], const device float* u [[buffer(1)]],
+                             const device bfloat* w [[buffer(2)]], device float* n [[buffer(3)]],
+                             device half* xh [[buffer(4)]], device float* xs [[buffer(5)]],
+                             constant DflNormParams& p [[buffer(6)]], uint r [[threadgroup_position_in_grid]],
+                             uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                             uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[32];
+  const uint H = p.H;
+  device float* hr = h + r * H;
+  float ss = 0.0f;
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane;
+    const float2 v = *(device float2*)(hr + c) + *(const device float2*)(u + r * H + c);
+    *(device float2*)(hr + c) = v;
+    ss += v.x * v.x + v.y * v.y;
+  }
+  ss = tg_sum(ss, red, tid, ntg);
+  const float inv = metal::precise::rsqrt(ss / float(H) + p.eps);
+  for (uint g = sg; g < H / 64; g += nsg) {
+    const uint c = g * 64 + 2 * lane;
+    const float2 v = *(device float2*)(hr + c);
+    const float2 o = float2(v.x * inv * float(w[c]), v.y * inv * float(w[c + 1]));
+    *(device float2*)(n + r * H + c) = o;
+    dfl_put2(xh, xs, r, H, g, lane, o.x, o.y);
+  }
+}
+
 // Two-tap grouped dynamic convolution (SPEC §4.1). D [8][4G] = n . P^T, columns
 // [stage][tap][group]; base bf16 [stage][tap][H]; tap 0 = current row, tap 1 = previous row (zero
 // for row 0); the coefficients come from the current row.

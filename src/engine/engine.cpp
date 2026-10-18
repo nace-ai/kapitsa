@@ -11,6 +11,8 @@
 #include <chrono>
 #include <cstring>
 #include <deque>
+#include <map>
+#include <mutex>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -189,22 +191,34 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
             "--mem-budget can help.",
             opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
-  if (Qwen4Exp::is_model(opts_.model_dir)) {
-    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk);  // Qwen3.8-Flash-Next
-    q35_ = m.get();
-    model_ = std::move(m);
-  } else if (NemotronH::is_model(opts_.model_dir)) {
-    auto m = std::make_unique<NemotronH>(opts_.model_dir, opts_.prefill_chunk);
-    nh_ = m.get();
-    model_ = std::move(m);
-    // the publisher's sampling settings (generation_config.json; Nemotron 3.5: temperature 1.0, top-p 0.95, no
-    // top-k: the sampler's 32)
+  // the publisher's sampling settings (generation_config.json; Nemotron 3.5 and Dory: temperature 1.0, top-p 0.95, no
+  // top-k: the sampler's 32)
+  auto publisher_sampling = [&] {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     if (!gc.is_discarded() && gc.is_object()) {
       if (gc.contains("temperature") && gc["temperature"].is_number()) defaults_.temperature = gc["temperature"];
       if (gc.contains("top_p") && gc["top_p"].is_number()) defaults_.top_p = gc["top_p"];
       defaults_.top_k = gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0;
     }
+  };
+  if (Qwen4Exp::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk);  // Qwen3.8-Flash-Next
+    q35_ = m.get();
+    model_ = std::move(m);
+  } else if (Dory::is_model(opts_.model_dir)) {
+    LoopKv kv = LoopKv::last_loop;
+    if (!opts_.loop_kv.empty() && !parse_loop_kv(opts_.loop_kv, &kv))
+      fatal("--loop-kv: last-loop or per-loop, not \"%s\"", opts_.loop_kv.c_str());
+    if (opts_.loops < 0 || opts_.loops > Dory::kMaxLoops) fatal("--loops: 1 to %d", Dory::kMaxLoops);
+    auto m = std::make_unique<Dory>(opts_.model_dir, opts_.prefill_chunk, opts_.loops, kv);
+    dory_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
+  } else if (NemotronH::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<NemotronH>(opts_.model_dir, opts_.prefill_chunk);
+    nh_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -304,12 +318,21 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       vision_ = std::make_unique<vision::Vision>(std::move(enc));
     }
   }
+  // batched decode where it was measured: DFlash2 drafters (Qwen3.6 35B-A3B, Qwen3.8 27B) and LiLiCorr on Bolt's 24 GB
+  // checkpoint; the 4B's DFlash (v1) drafter, Super-VL's LiLiCorr and Lightning's DSpark take turns until measured
+  // (NI_BATCH=1 batches them too)
+  batch_measured_ = (dfl_ && !dfl_->config().v1) ||
+                    (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");
-  logi("engine ready: %s, context %d, %d slots, %s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
-       mode.c_str(), vision_ ? ", images on" : "");
+  const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
+                                         std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
+                                         " KV"
+                                   : std::string();
+  logi("engine ready: %s, context %d, %d slots, %s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
+       mode.c_str(), looped.c_str(), vision_ ? ", images on" : "");
 }
 
 Engine::~Engine() = default;
@@ -321,10 +344,12 @@ size_t default_mem_budget() {
 }
 
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
+  if (Dory::is_model(model_dir)) return Dory::plan(model_dir, prefill_chunk);
   if (Qwen4Exp::is_model(model_dir)) return Qwen4Exp::plan(model_dir, prefill_chunk);
   return NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk) : Qwen35::plan(model_dir, prefill_chunk);
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
+  if (Dory::is_model(model_dir)) return 0;
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
@@ -345,7 +370,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
-  if (NemotronH::is_model(model_dir)) {
+  if (Dory::is_model(model_dir)) {
+    lp.dflash_off = true;  // plain decoding (no drafter for Dory)
+  } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
       lp.dflash = lp.dflash_auto ? NhDrafter::find(model_dir) : want;
@@ -563,6 +590,377 @@ bool Engine::reserve_kv_wait(Slot& slot, int need, const std::function<bool()>& 
   }
 }
 
+// ---- batched decode ----
+
+int Engine::batch_rows(int n) const {
+  // NI_BATCH: 0 = requests take turns, 1 = batched with every drafter; unset: batched where it was measured
+  static const int mode = [] {
+    const char* v = getenv("NI_BATCH");
+    return v && *v ? atoi(v) : -1;
+  }();
+  if (mode == 0 || n < 2 || n > 8 || (!dfl_ && !lili_) || (mode < 0 && !batch_measured_)) return 0;
+  // NI_BATCH_ROWS="n:rows,...": rows per member for n members (0: take turns)
+  static const std::vector<int> env = [] {
+    std::vector<int> t(9, -1);
+    const char* v = getenv("NI_BATCH_ROWS");
+    for (const char* p = v; p && *p;) {
+      char* end = nullptr;
+      const long k = strtol(p, &end, 10);
+      if (end == p || *end != ':') break;
+      const long r = strtol(end + 1, &end, 10);
+      if (k >= 2 && k <= 8 && r >= 0 && r <= 8) t[size_t(k)] = int(r);
+      p = *end == ',' ? end + 1 : end;
+    }
+    return t;
+  }();
+  int rows = env[size_t(n)];
+  if (rows < 0) {
+    // As measured on the M4 Pro (MacBook Pro, 48 GB), 512-token greedy replies to code prompts, tok/s in all against
+    // the requests taking turns (bench/batch/concurrency.py streams):
+    // - Qwen3.6 35B-A3B 4-bit (DFlash2, MoE): 2 at once 4 rows each (the anchor + 3 drafts) 197 against 155 (2 rows
+    //   each 153, plain 130); 3 at once 2 rows each 184 against 149 (plain 166); 4 at once 2 rows each 202 against 158
+    //   (plain 199)
+    // - Qwen3.8 27B 4-bit (DFlash2, dense): 2 at once 4 rows each 61-65 against 57-59 (2 rows each 41, plain 28); 3 at
+    //   once 2 rows each 52-54 against 56: the requests take turns; 4 at once 2 rows each 63-65 against 55-56 (plain 51)
+    // - Nemotron 3.5 Bolt, NVIDIA 24 GB (LiLiCorr): 2 at once 4 rows each 76.6 against 62.6 (2 rows each 55.5, plain
+    //   47.2); 3 at once 2 rows each 64.4 against 62.8 (plain 62.5); 4 at once plain 74.6 against 61.7 (2 rows each 70.0)
+    // More members (--slots above 4, not measured): plain rows.
+    static constexpr int moe[5] = {0, 0, 4, 2, 2}, dense[5] = {0, 0, 4, 0, 2}, lili[5] = {0, 0, 4, 2, 1};
+    const int* t = dfl_ ? (q35_->config().moe ? moe : dense) : lili;
+    rows = n <= 4 ? t[n] : 1;
+  }
+  if (rows > 0 && n * rows > 8) rows = 8 / n;
+  return rows;
+}
+
+bool Engine::batch_wanted() const {
+  if (!dfl_ && !lili_) return false;
+  int n = 0;  // requests decoding (not waiting for memory)
+  for (const Slot& o : slots_) n += o.busy && o.decoding && o.mem_wait == Slot::MemWait::none;
+  // join the running batch: it is to take every decoding request (its runner waits for them when fewer rows do not
+  // pay, as 2 of 3 requests might not)
+  if (batch_runner_) return batch_rows(std::min(std::max(n, int(batch_.size()) + 1), 8)) > 0;
+  if (now_ms() < batch_backoff_) return false;
+  return n >= 2 && batch_rows(std::min(n, 8)) > 0;
+}
+
+void Engine::batch_leave(BatchJob& j, BatchJob::State st) {
+  batch_.erase(std::remove(batch_.begin(), batch_.end(), &j), batch_.end());
+  // its staged rows into its drafter's ring: the ring holds every row before j.P again, as its own loop expects
+  const bool staged = dfl_ ? j.slot->dseq->staged > 0 : lili_ && j.slot->lseq->staged > 0;
+  if (staged) {
+    auto e = Gpu::get().begin();
+    if (dfl_) dfl_->encode_commit_staged(*e, *j.slot->dseq);
+    else lili_->encode_commit_staged(*e, *j.slot->lseq);
+    e->commit_and_wait();
+  }
+  if (st == BatchJob::State::done) j.slot->decoding = false;  // (no batch waits for it any more)
+  {
+    std::lock_guard<std::mutex> lk(bmu_);
+    j.state = st;
+  }
+  bcv_.notify_all();
+}
+
+bool Engine::join_batch(BatchJob& job) {
+  batch_.push_back(&job);
+  turn_.notify();  // a runner waiting for its members
+  if (!batch_runner_) {
+    batch_runner_ = true;
+    job.runner = true;
+  }
+  for (;;) {
+    if (job.runner && job.state == BatchJob::State::active) run_batch(job);
+    if (job.state != BatchJob::State::active) break;
+    // a member: its cycles run in the runner's passes; it waits, without the turn, until it is done, returned or runs
+    // the batch itself
+    turn_.unlock();
+    {
+      std::unique_lock<std::mutex> lk(bmu_);
+      bcv_.wait(lk, [&] { return job.state != BatchJob::State::active || job.runner; });
+    }
+    turn_.lock();
+  }
+  return job.state == BatchJob::State::done;
+}
+
+void Engine::run_batch(BatchJob& me) {
+  double t_wait = -1;  // waiting for the members to come since
+  while (me.state == BatchJob::State::active) {
+    const int n = int(batch_.size());
+    const int rows = n >= 2 ? batch_rows(n) : 0;
+    if (rows == 0) {
+      // the other decoding requests join at their next cycle boundary: wait for them (without the turn), up to a second
+      int dec = 0;
+      for (const Slot& o : slots_) dec += o.busy && o.decoding && o.mem_wait == Slot::MemWait::none;
+      if (dec > n && batch_rows(std::min(dec, 8)) > 0 && (t_wait < 0 || now_ms() - t_wait < 1000)) {
+        if (t_wait < 0) t_wait = now_ms();
+        const double t0 = t_wait;
+        turn_.wait_event(turn_.events(), [t0] { return now_ms() - t0 >= 1000; });
+        continue;
+      }
+      if (t_wait >= 0 && now_ms() - t_wait >= 1000) batch_backoff_ = now_ms() + 2000;  // they did not come
+      for (BatchJob* j : std::vector<BatchJob*>(batch_)) batch_leave(*j, BatchJob::State::returned);
+      break;
+    }
+    t_wait = -1;
+    // KV room for the cycle, as each member's own loop grows it; a member that cannot have it goes back to its loop
+    // (which waits for the memory, or ends at the context's limit)
+    for (BatchJob* j : std::vector<BatchJob*>(batch_)) {
+      Seq& s = *j->slot->seq;
+      const int need = std::min(s.limit, j->P + 8 + 8 + 8 + 3);
+      if (j->P + 8 + 8 + 2 >= s.limit || (need > s.cap && !reserve_kv(*j->slot, need, true)))
+        batch_leave(*j, BatchJob::State::returned);
+    }
+    if (me.state != BatchJob::State::active) break;
+    const int m = int(batch_.size());
+    if (m < 2 || batch_rows(m) == 0) continue;
+    // plain rows run pipelined (NI_BATCH_PIPE=0: one pass at a time; also with NI_TRACE_TOKENS, which reads the
+    // logits of each pass after it)
+    static const bool pipe = [] {
+      const char* v = getenv("NI_BATCH_PIPE");
+      return !(v && v[0] == '0') && !(getenv("NI_TRACE_TOKENS") && *getenv("NI_TRACE_TOKENS"));
+    }();
+    if (batch_rows(m) == 1 && pipe) batch_plain_run();
+    else batch_cycle(batch_rows(m));
+    for (BatchJob* j : std::vector<BatchJob*>(batch_))
+      if (j->stopped) batch_leave(*j, BatchJob::State::done);
+    if (me.state != BatchJob::State::active) break;
+    if (contended()) {  // between cycles: other requests' turns (prefill chunks, a member's end, a request joining)
+      turn_.unlock();
+      turn_.lock();
+    }
+  }
+  // this member left: another one runs the batch, or the last one goes back to its own loop
+  if (batch_.size() < 2) batch_stats();
+  batch_runner_ = false;
+  if (batch_.size() >= 2) {
+    BatchJob* next = batch_.front();
+    {
+      std::lock_guard<std::mutex> lk(bmu_);
+      next->runner = true;
+    }
+    batch_runner_ = true;
+    bcv_.notify_all();
+  } else if (batch_.size() == 1) {
+    batch_leave(*batch_.front(), BatchJob::State::returned);
+  }
+}
+
+void Engine::batch_cycle(int rows) {
+  Gpu& g = Gpu::get();
+  const double t_cycle = now_ms();
+  const int k = rows - 1;  // drafted tokens per member
+  const std::vector<BatchJob*> jobs = batch_;
+  // Two command buffers, as a single request's cycle: the first (each member's staged rows into its drafter's ring
+  // before its draft or when its stage is full, then its draft) starts on the GPU while the host encodes the second,
+  // one pass over every row
+  const SamplingParams greedy;
+  auto e1 = g.begin();
+  bool e1_work = false;
+  // grouped: the members' per-sequence dispatches of a stage run side by side (encode_verify_multi groups them)
+  auto e2 = g.begin_grouped();
+  // DFlash2, sampled requests (T > 0): the walk samples their drafts and the exact speculative acceptance (as a single
+  // request's cycle) keeps them; greedy requests keep a draft while it equals the verify's argmax
+  const bool exact = [] {
+    const char* v = getenv("NI_BATCH_EXACT");
+    return !(v && v[0] == '0');
+  }();
+  if (dfl_) {
+    std::vector<Qwen35::VerifyGroup> groups;
+    for (BatchJob* j : jobs) {
+      Slot& sl = *j->slot;
+      DFlashSeq& d = *sl.dseq;
+      dfl_->stage_init(d);
+      if (d.staged > 0 && (k > 0 || d.staged == DFlash2::kB)) dfl_->encode_commit_staged(*e1, d), e1_work = true;
+      if (k > 0) {
+        const bool sampled = exact && j->sp.temperature > 0;
+        dfl_->encode_draft(*e1, *sl.seq, d, j->P, sampled ? j->sp : greedy);
+        if (sampled) dfl_->encode_save_walk(*e1, d);
+        e1_work = true;
+      }
+      groups.push_back(Qwen35::VerifyGroup{sl.seq.get(), j->P, rows, j->sp, &d.stage_hook, k > 0 ? 0 : d.staged});
+    }
+    if (e1_work) e1->commit();
+    q35_->encode_verify_multi(*e2, groups);
+    if (k > 0 && exact) {  // the sampled members' acceptance (stage-1 candidates per row: as the pass made them)
+      uint32_t Kmax = 1;
+      for (const auto& gr : groups)
+        if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
+      const uint32_t n = (uint32_t(model_->vocab()) + 2047) / 2048 * Kmax;
+      int r0 = 0;
+      for (BatchJob* j : jobs) {
+        if (j->sp.temperature > 0)
+          dfl_->encode_accept_rows(*e2, *j->slot->seq, *j->slot->dseq, j->P, k, j->sp, r0, n);
+        r0 += rows;
+      }
+    }
+  } else {
+    std::vector<NemotronH::VerifyGroup> groups;
+    for (BatchJob* j : jobs) {
+      Slot& sl = *j->slot;
+      LiliSeq& l = *sl.lseq;
+      lili_->stage_init(l);
+      if (l.staged > 0 && (k > 0 || l.staged == NhDrafter::kB)) lili_->encode_commit_staged(*e1, l), e1_work = true;
+      if (k > 0) lili_->encode_draft(*e1, *sl.seq, l, j->P), e1_work = true;
+      groups.push_back(NemotronH::VerifyGroup{sl.seq.get(), j->P, rows, j->sp, &l.stage_hook, k > 0 ? 0 : l.staged});
+    }
+    if (e1_work) e1->commit();
+    nh_->encode_verify_multi(*e2, groups);
+  }
+  e2->commit_and_wait();
+  bstat_gpu_ += e2->gpu_ms() + (e1_work ? e1->gpu_ms() : 0.0);
+  const int* samp = dfl_ ? q35_->samples() : nh_->samples();
+  int r0 = 0;
+  for (BatchJob* j : jobs) {
+    Seq& s = *j->slot->seq;
+    int* tk = s.tokens();
+    int a = 0;  // drafts kept: while each equals the sample of the row before it
+    if (dfl_ && k > 0 && exact && j->sp.temperature > 0) {
+      a = j->slot->dseq->accepted();  // (the acceptance wrote the token after them)
+    } else {
+      while (a < k && samp[r0 + a] == tk[j->P + 1 + a]) ++a;
+      tk[j->P + 1 + a] = samp[r0 + a];  // the sample after them
+    }
+    int m = 0;  // rows fed: the anchor and the kept drafts, up to where the request stops
+    bool go = true;
+    while (m < a + 1) {
+      ++m;
+      if (!(*j->handle)(tk[j->P + m])) {
+        go = false;
+        break;
+      }
+    }
+    if (dfl_) {
+      q35_->commit_rows(s, m);
+      DFlashSeq& d = *j->slot->dseq;
+      d.staged = k > 0 ? m : d.staged + 1;  // their captures: positions P .. P + m - 1
+    } else {
+      nh_->commit_rows(s, m);
+      LiliSeq& l = *j->slot->lseq;
+      l.staged = k > 0 ? m : l.staged + 1;
+    }
+    j->P += m;
+    ++j->cycles;
+    j->tokens += m;
+    if (k > 0) {
+      ++spec_cycles_;
+      spec_accepted_ += m;
+    }
+    (*j->cycle_done)(m);
+    if (j->trace) {
+      const float* lg = dfl_ ? q35_->logits() : nh_->logits();
+      (*j->trace)(lg + size_t(r0) * size_t(model_->vocab()), m, tk + j->P - m + 1);
+    }
+    if (!go) j->stopped = true;
+    r0 += rows;
+  }
+  ++bstat_cycles_;
+  bstat_rows_ += long(rows) * long(jobs.size());
+  bstat_wall_ += now_ms() - t_cycle;
+  if (bstat_cycles_ >= 200) batch_stats();
+}
+
+// Each row is its member's anchor, kept whatever its sample (commit_rows(s, 1) as each pass is encoded); the pass after
+// a member's last token was planned before the host read that token: its row is dropped (commit_rows(s, 0)), as the
+// staging of its capture. Returns after 8 passes (a drafter's stage holds 8 rows), a member's stop, or when another
+// request waits for the GPU; nothing is in flight then.
+void Engine::batch_plain_run() {
+  Gpu& g = Gpu::get();
+  const double t_run = now_ms();
+  const std::vector<BatchJob*> jobs = batch_;
+  const size_t n = jobs.size();
+  {  // the stages take up to 8 rows: earlier rows into the rings first
+    auto e1 = g.begin();
+    bool any = false;
+    for (BatchJob* j : jobs) {
+      if (dfl_) {
+        DFlashSeq& d = *j->slot->dseq;
+        dfl_->stage_init(d);
+        if (d.staged > 0) dfl_->encode_commit_staged(*e1, d), any = true;
+      } else {
+        LiliSeq& l = *j->slot->lseq;
+        lili_->stage_init(l);
+        if (l.staged > 0) lili_->encode_commit_staged(*e1, l), any = true;
+      }
+    }
+    if (any) e1->commit();
+  }
+  std::vector<int> base(n), stop_at(n, -1);
+  for (size_t i = 0; i < n; ++i) base[i] = jobs[i]->P;
+  auto encode = [&](int c) {  // pass c: row base + c of every member, its capture to stage row c
+    auto e = g.begin_grouped();
+    if (dfl_) {
+      std::vector<Qwen35::VerifyGroup> gr;
+      for (size_t i = 0; i < n; ++i) {
+        Slot& sl = *jobs[i]->slot;
+        Qwen35::VerifyGroup v{sl.seq.get(), base[i] + c, 1, jobs[i]->sp, &sl.dseq->stage_hook, c};
+        v.tok_out = true;
+        gr.push_back(v);
+      }
+      q35_->encode_verify_multi(*e, gr);
+      for (BatchJob* j : jobs) q35_->commit_rows(*j->slot->seq, 1);
+    } else {
+      std::vector<NemotronH::VerifyGroup> gr;
+      for (size_t i = 0; i < n; ++i) {
+        Slot& sl = *jobs[i]->slot;
+        NemotronH::VerifyGroup v{sl.seq.get(), base[i] + c, 1, jobs[i]->sp, &sl.lseq->stage_hook, c};
+        v.tok_out = true;
+        gr.push_back(v);
+      }
+      nh_->encode_verify_multi(*e, gr);
+      for (BatchJob* j : jobs) nh_->commit_rows(*j->slot->seq, 1);
+    }
+    e->commit();
+    return e;
+  };
+  std::unique_ptr<Encoder> cur = encode(0);
+  int encoded = 1, c = 0;
+  bool stop = false;
+  for (;;) {
+    std::unique_ptr<Encoder> next;
+    if (!stop && encoded < 8 && !contended()) next = encode(encoded++);
+    cur->wait();
+    bstat_gpu_ += cur->gpu_ms();
+    for (size_t i = 0; i < n; ++i) {  // pass c's samples: each member's token after row base + c
+      if (stop_at[i] >= 0) continue;
+      BatchJob* j = jobs[i];
+      const int P = base[i] + c;
+      j->P = P + 1;
+      ++j->cycles;
+      ++j->tokens;
+      if (dfl_) j->slot->dseq->staged = c + 1;
+      else j->slot->lseq->staged = c + 1;
+      (*j->cycle_done)(1);
+      if (!(*j->handle)(j->slot->seq->tokens()[P + 1])) {
+        j->stopped = true;
+        stop_at[i] = c;
+        stop = true;
+      }
+    }
+    ++c;
+    ++bstat_cycles_;
+    bstat_rows_ += long(n);
+    cur = std::move(next);
+    if (!cur) break;
+  }
+  for (size_t i = 0; i < n; ++i)  // a stopped member's row in the pass after its stop: not wanted
+    if (stop_at[i] >= 0 && stop_at[i] < encoded - 1) {
+      if (dfl_) q35_->commit_rows(*jobs[i]->slot->seq, 0);
+      else nh_->commit_rows(*jobs[i]->slot->seq, 0);
+    }
+  bstat_wall_ += now_ms() - t_run;
+  if (bstat_cycles_ >= 200) batch_stats();
+}
+
+void Engine::batch_stats() {  // (debug log) how the batch's time splits
+  if (bstat_cycles_ <= 0) return;
+  logd("batch: %ld cycles, %.1f rows each, %.2f ms per cycle (GPU %.2f)", bstat_cycles_,
+       double(bstat_rows_) / double(bstat_cycles_), bstat_wall_ / double(bstat_cycles_), bstat_gpu_ / double(bstat_cycles_));
+  bstat_cycles_ = bstat_rows_ = 0;
+  bstat_wall_ = bstat_gpu_ = 0;
+}
+
 bool Engine::make_room(Slot& keep, size_t bytes) {
   Gpu& g = Gpu::get();
   auto fits = [&] { return g.allocated_bytes() + bytes <= budget_; };
@@ -637,8 +1035,8 @@ std::string chat_template_source(const std::string& model_dir) {
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
   const bool images = vision_ != nullptr;  // image parts render as the model's placeholder, else as a note
-  if (nh_) {
-    // Nemotron 3.5's template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
+  if (nh_ || dory_) {
+    // Nemotron 3.5's (and Dory's) template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
     // reasoning efforts, and truncate_history_thinking = false for preserve_thinking (every turn's reasoning kept, as
     // the Anthropic API's keep-all asks: the next request's prompt then continues what was generated)
     const auto& k = r.template_kwargs;
@@ -656,11 +1054,54 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
   return render_chat(*tmpl_, r, add_generation_prompt, images);
 }
 
+// Whether a chat template reads message content as a string only (Dory's: a content array would render as its repr):
+// a user message of one text part, rendered, must show the text and nothing of the part's markup. Cached per template.
+static bool string_content_template(const minja::chat_template& tmpl) {
+  static std::mutex mu;
+  static std::map<const void*, bool> known;
+  std::lock_guard<std::mutex> lk(mu);
+  if (auto it = known.find(&tmpl); it != known.end()) return it->second;
+  static const std::string needle = "\x01kapitsa-typed-content\x01";
+  bool str_only = false;
+  try {
+    minja::chat_template_inputs in;
+    in.messages = ojson::array({{{"role", "user"}, {"content", ojson::array({{{"type", "text"}, {"text", needle}}})}}});
+    in.add_generation_prompt = false;
+    minja::chat_template_options opt;
+    opt.apply_polyfills = false;
+    const std::string out = tmpl.apply(in, opt);
+    str_only = out.find(needle) == std::string::npos || out.find("'type'") != std::string::npos ||
+               out.find("\"type\"") != std::string::npos;
+  } catch (...) {
+  }
+  known[&tmpl] = str_only;
+  return str_only;
+}
+
+// A content array as one string: its text parts joined by newlines (vLLM's "string" content format)
+static ojson flatten_content(const ojson& messages) {
+  ojson out = messages;
+  for (auto& m : out) {
+    if (!m.is_object() || !m.contains("content") || !m["content"].is_array()) continue;
+    std::string s;
+    bool first = true;
+    for (const auto& p : m["content"])
+      if (p.is_object() && p.contains("text") && p["text"].is_string()) {
+        if (!first) s += "\n";
+        s += p["text"].get<std::string>();
+        first = false;
+      }
+    m["content"] = s;
+  }
+  return out;
+}
+
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images) {
   minja::chat_template_inputs in;
   int dropped = 0;
   in.messages = images ? vision::without_image_data(r.messages) : without_images(r.messages, &dropped);
+  if (!images && string_content_template(tmpl)) in.messages = flatten_content(in.messages);
   if (dropped && add_generation_prompt) logi("chat: %d image(s) left out: this model can't read images", dropped);
   // A system message after the first message (an agent's hook output, a mode change) is a system turn where it
   // stands: the Qwen3.5+ templates raise on it. It goes through the template as a marker tool response (not a user
@@ -711,8 +1152,9 @@ int Engine::count_tokens(const ChatRequest& r) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
-  auto lcp = [&](const Slot& s) { return common_rows(s, prompt, mm); };
+Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops) {
+  // (a looped model's cached state is only valid for the loop count that computed it)
+  auto lcp = [&](const Slot& s) { return dory_ && s.loops != loops ? size_t(0) : common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
   // checkpoint inside the common prefix. A shared prefix without a usable state is worthless
   // and choosing that slot would only destroy its conversation.
@@ -823,6 +1265,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
+  const int loops = request_loops(r);  // looped models (0 otherwise)
+  res.loops = loops;
   if (n + 1 >= opts_.context) {  // every slot holds opts_.context positions
     res.finish_reason = "error";
     res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(opts_.context) + ")";
@@ -848,7 +1292,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   Slot* picked = nullptr;
   bool queued = false;
   for (;;) {
-    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp);
+    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp, loops);
     if (picked) break;
     if (!queued) {
       slot_queue_.push_back(arrival);
@@ -892,7 +1336,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   ++slot.gen;
 
   // ---- prefix reuse ----
-  const size_t common = common_rows(slot, keys, mmp);
+  // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
+  const size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
+  if (dory_ && slot.loops != loops && !slot.tokens.empty())
+    logi("chat: %d loops on slot %d, whose cache holds %d-loop KV: the prompt is read from the start", loops,
+         int(&slot - slots_.data()), slot.loops);
+  if (dory_) slot.loops = s.loops = loops;
 
   // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
   // checkpoint, as below), before any state changes, so a failure leaves the slot as it was ----
@@ -1210,7 +1659,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }();
   // (Nemotron-H: the whitespace before </think> stays in the reasoning, as its template renders returned turns)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, nh_ != nullptr);
+                      think_tools, nh_ != nullptr || dory_ != nullptr);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -1264,8 +1713,50 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     live->last.store(m, std::memory_order_relaxed);
     live->cycles.fetch_add(1, std::memory_order_relaxed);
   };
+  // NI_TRACE_TOKENS=<file> (tests: batched against single-stream outputs): each speculative cycle's tokens and the
+  // margin between the two largest logits of the row that chose each, one JSON line per request at its end
+  static const char* trace_path = getenv("NI_TRACE_TOKENS") && *getenv("NI_TRACE_TOKENS") ? getenv("NI_TRACE_TOKENS")
+                                                                                         : nullptr;
+  std::vector<int> tr_tok;
+  std::vector<float> tr_margin;
+  const std::function<void(const float*, int, const int*)> trace_fn = [&](const float* rows, int m, const int* toks) {
+    const int V = model_->vocab();
+    for (int j = 0; j < m; ++j) {
+      const float* l = rows + size_t(j) * size_t(V);
+      float a = -INFINITY, b = -INFINITY;
+      for (int v = 0; v < V; ++v)
+        if (l[v] > a) b = a, a = l[v];
+        else if (l[v] > b) b = l[v];
+      tr_tok.push_back(toks[j]);
+      tr_margin.push_back(a - b);
+    }
+  };
   if (live) live->spec.store(lili_ ? 3 : dfl_ ? 2 : depth > 0 ? 1 : 0, std::memory_order_relaxed),
       live->phase.store(2, std::memory_order_relaxed);
+  // batched decode: this request decodes (other requests' batch_wanted() counts it) until its loop ends
+  struct Decoding {
+    Slot& s;
+    explicit Decoding(Slot& sl) : s(sl) { s.decoding = true; }
+    ~Decoding() { s.decoding = false; }
+  } decoding{slot};
+  const std::function<bool(int)> handle_fn = handle;
+  const std::function<void(int)> cycle_fn = cycle_done;
+  // joins the batch at a cycle boundary (parked) and returns there once the request stopped (true) or is back in its
+  // own loop at P (false)
+  auto batch = [&](int& P) {
+    BatchJob job;
+    job.slot = &slot;
+    job.sp = sp;
+    job.P = P;
+    job.handle = &handle_fn;
+    job.cycle_done = &cycle_fn;
+    job.trace = trace_path ? &trace_fn : nullptr;
+    const bool done = join_batch(job);
+    P = job.P;
+    req_cycles += job.cycles;
+    res.batched += job.cycles;
+    return done;
+  };
   if (lili_) {
     // LiLiCorr: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass (7
     // proposals after the anchor tokens[P]), then the target's verify of the 8 rows (capturing the drafter's
@@ -1320,12 +1811,15 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++req_cycles;
       spec_accepted_ += m;
       cycle_done(m);
+      if (trace_path) trace_fn(nh_->logits(), m, tk + P + 1);
       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       m_prev = m;
       P += m;
-      if (go && contended()) {
+      const bool join = go && batch_wanted();
+      if (go && (join || contended())) {
         park();
-        yield_turn(res);
+        if (!join) yield_turn(res);
+        else if (batch(P)) go = false;
       }
     }
     auto e3 = g.begin();
@@ -1388,10 +1882,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         e2->wait();
         kv_wait = !reserve_kv(slot, std::min(s.limit, P + 8 + 8 + DFlash2::kB + 3), true) && active_ > 1;
       }
-      // another request waits for the GPU, or this one for memory (start_cycles waits for it): no drafting half
-      // behind this verify, park after it
+      // another request waits for the GPU, this one for memory (start_cycles waits for it), or it joins the batch: no
+      // drafting half behind this verify, park after it
       const bool turn = contended();
-      const bool park = turn || kv_wait;
+      const bool join = !kv_wait && batch_wanted();  // (a request waiting for memory would leave the batch at once)
+      const bool park = turn || kv_wait || join;
       const bool room = P + 8 + 8 + DFlash2::kB + 2 < s.cap;  // the next anchor is at most P + 8
       park_last = park && room;
       if (!park && room) {
@@ -1415,6 +1910,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++req_cycles;
       spec_accepted_ += m;
       cycle_done(m);
+      if (trace_path) trace_fn(q35_->logits(), m, tk + P + 1);
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       P += m;
       d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
@@ -1426,7 +1922,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         ep->commit_and_wait();
         m = 0;
         park_last = false;
-        if (turn) yield_turn(res);
+        if (join) {
+          if (batch(P)) go = false;
+          d.ctx = P;  // (the batch committed every row before P to the ring)
+        } else if (turn) {
+          yield_turn(res);
+        }
         parked = true;
       }
     }
@@ -1563,6 +2064,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       fed_until = pos + 1;
     }
   }
+  slot.decoding = false;  // (a batch forming no longer waits for this request)
   if (live) live->phase.store(3, std::memory_order_relaxed);
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
@@ -1577,6 +2079,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.content += tail.content;
   for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);
   if (!tail.reasoning.empty() || !tail.content.empty() || !tail.tool_calls.empty()) on_delta(tail);
+  // Dory (NVIDIA's nemotron_v3 reasoning parser): with force_nonempty_content, on by default here (the card asks
+  // coding agents to set it), a reply that put everything in its reasoning and left the content empty returns that
+  // text as its content too (a last delta), so agents that read the content alone get the answer
+  if (dory_ && res.tool_calls.empty() && content_text(ojson(res.content)).empty() && !res.reasoning.empty()) {
+    const auto f = r.template_kwargs.find("force_nonempty_content");
+    const bool force = f == r.template_kwargs.end() || !f->is_boolean() || f->get<bool>();
+    if (force) {
+      ChatDelta d;
+      d.content = res.reasoning;
+      res.content = res.reasoning;
+      res.reasoning.clear();
+      on_delta(d);
+    }
+  }
   if (parser.promoted() > 0)
     logi("chat: %d tool call(s) written inside the reasoning returned as tool calls", parser.promoted());
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
@@ -1588,25 +2104,60 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   else if (depth > 0 && spec_cycles_ > 0)
     logd("spec: %.2f accepted/drafted over %ld cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
   res.decode_ms = now_ms() - t1;
+  if (trace_path) {  // one line: the prompt (FNV-1a of its ids), the first token, then each cycle's tokens and margins
+    uint64_t h = 1469598103934665603ull;
+    for (int t : prompt) h = (h ^ uint64_t(uint32_t(t))) * 1099511628211ull;
+    nlohmann::json j{{"prompt_hash", std::to_string(h)}, {"prompt_tokens", n}, {"temperature", r.temperature},
+                     {"first", s.tokens()[n]}, {"tokens", tr_tok}, {"margins", tr_margin}, {"batched", res.batched}};
+    static std::mutex mu;
+    std::lock_guard<std::mutex> lk(mu);
+    if (FILE* f = fopen(trace_path, "a")) {
+      fprintf(f, "%s\n", j.dump().c_str());
+      fclose(f);
+    }
+  }
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
   char cyc[64] = "";
   if ((dfl_ || lili_) && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
-  char conc[160] = "";
-  if (res.yields > 0 || res.queue_ms > 0)
+  char conc[256] = "";
+  if (res.yields > 0 || res.queue_ms > 0 || res.batched > 0)
     snprintf(conc, sizeof conc, "; slot %d, waited %.0f ms for it, turns given to other requests: %d in the prefill, %d "
-             "while decoding", res.slot, res.queue_ms, yields_prefill, res.yields - yields_prefill);
+             "while decoding; %d cycles batched with other requests", res.slot, res.queue_ms, yields_prefill,
+             res.yields - yields_prefill, res.batched);
   if (mmp)
     logi("chat: %zu image(s), %d tokens: %d encoded in %.0f ms, %d from earlier embeddings, %d in the cached prefix "
          "(+%.0f ms decode/resize before the request)", mm.spans.size(),
          [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
          int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
+  char lp[32] = "";
+  if (loops > 0) snprintf(lp, sizeof lp, ", %d loop%s", loops, loops > 1 ? "s" : "");
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s", n, start, res.prefill_ms,
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
-       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc);
+       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc, lp);
   return res;
+}
+
+int Engine::request_loops(const ChatRequest& r) const {
+  if (!dory_) return 0;
+  int l = 0;
+  if (r.loops > 0) {
+    l = r.loops;
+  } else if (!r.effort.empty()) {
+    // OpenAI's reasoning effort: minimal / low 1 loop, medium 2, high / xhigh 4 ("none" only turns the visible
+    // thinking off, as benchmarks and agents send it with any model: the server's default loops)
+    const std::string& e = r.effort;
+    if (e == "minimal" || e == "low") l = 1;
+    else if (e == "medium") l = 2;
+    else if (e == "high" || e == "xhigh" || e == "max") l = 4;
+  } else if (r.thinking_budget >= 0) {
+    // Anthropic's thinking: disabled 1 loop, a budget by its size (under 4096 tokens 1, under 16384 2, else 4)
+    l = r.thinking_budget < 4096 ? 1 : r.thinking_budget < 16384 ? 2 : 4;
+  }
+  if (l <= 0) l = dory_->default_loops();
+  return std::clamp(l, 1, Dory::kMaxLoops);
 }
 
 void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {

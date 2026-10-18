@@ -18,6 +18,7 @@ struct Seq {
   // max_seq). It grows on demand up to `limit` (Model::reserve); encoding past it is a fatal "context full".
   int cap = 0;
   int limit = 0;                   // the conversation's context: max positions
+  int loops = 0;                   // looped models (Dory): the recurrent block's loop count (0: the model's default)
   Buffer tok;                      // int32 [limit + 8]
   std::vector<Buffer> conv, rec;   // per layer (recurrent layers only: GDN / Mamba-2)
   std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]
@@ -33,6 +34,7 @@ struct Seq {
   std::vector<Buffer> ixk, ixb;
   Buffer mtp_ixk, mtp_ixb;
   Buffer pconv;
+  std::shared_ptr<void> draft_vocab;  // Qwen35: the MTP draft head's rows for this conversation's tokens
   int* tokens() { return tok.as<int>(); }
   // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
   // a prompt's prefill; null: text only). Positions (Model::set_rope_positions): rows [0, rope_n) rotate by the
@@ -62,7 +64,7 @@ struct SamplingParams {
 // doctor`. Bytes.
 struct MemPlan {
   size_t weights = 0;      // trunk (vision tower and MTP excluded), as loaded
-  size_t mtp = 0;          // MTP head as loaded (bf16 linears become 8-bit), 0 without mtp.safetensors
+  size_t mtp = 0;          // MTP head as loaded (bf16 linears become 4-bit), 0 without mtp.safetensors
   size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
   size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
   size_t kv_per_pos = 0;   // per slot and position

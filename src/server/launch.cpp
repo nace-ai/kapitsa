@@ -37,7 +37,8 @@ using json = nlohmann::ordered_json;
 namespace {
 
 const char* kHelp =
-    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--ctx N] [--api-key K] [agent arguments] [-- agent arguments]\n\n"
+    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--ctx N] [--loops N] [--api-key K] [agent arguments]\n"
+    "                                 [-- agent arguments]\n\n"
     "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
     "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with the\n"
     "largest context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
@@ -45,6 +46,8 @@ const char* kHelp =
     "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
     "  --ctx N       its context (default: the largest up to 131072 that fits)\n"
+    "  --loops N     Dory: loops per token, 1-4, when the agent asks for none (default 2; 4 is slower and more\n"
+    "                accurate on agentic tasks)\n"
     "  --api-key K   the server's API key, if it was started with one\n\n"
     "Every other argument goes to the agent, e.g.\n"
     "  kapitsa claude -p \"what does this repo do?\"\n"
@@ -285,7 +288,7 @@ std::string find_in_path(const std::string& name) {
 int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string help = "kapitsa " + name + " --help";
   std::string model, key;
-  int port = 8000, ctx = 0;
+  int port = 8000, ctx = 0, loops = 0;
   bool yes = false;
   std::vector<std::string> args;
   for (int i = first; i < argc; ++i) {
@@ -319,6 +322,10 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     else if (is("--model")) model = value("--model");
     else if (is("--port")) port = to_int("--port", value("--port"), help.c_str());
     else if (is("--ctx")) ctx = to_int("--ctx", value("--ctx"), help.c_str());
+    else if (is("--loops")) {
+      loops = to_int("--loops", value("--loops"), help.c_str());
+      if (loops < 1 || loops > 4) usage_error("--loops: 1 to 4", help.c_str());
+    }
     else if (is("--api-key")) key = value("--api-key");
     else args.push_back(a);
   }
@@ -364,6 +371,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     else if (ctx > 0 && ctx != run.context)
       fprintf(stderr, "kapitsa: the server on port %d is already running with a %d-token context; --ctx %d applies to a "
               "server this command starts.\n", port, run.context, ctx);
+    if (loops > 0)
+      fprintf(stderr, "kapitsa: the server on port %d is already running; --loops %d applies to a server this command "
+              "starts.\n", port, loops);
   } else {
     // start one: the model (downloaded first, with its progress here), a context sized for agents, then `serve`
     EngineOptions opt;
@@ -399,6 +409,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     std::vector<std::string> sargv = {self_path(), "serve", "--model", serve_model, "--port", std::to_string(port),
                                       "--ctx", std::to_string(ctx)};
     if (!key.empty()) sargv.insert(sargv.end(), {"--api-key", key});
+    if (loops > 0) sargv.insert(sargv.end(), {"--loops", std::to_string(loops)});
     std::vector<std::string> senv;
     for (char** e = environ; *e; ++e)
       if (strncmp(*e, "KAPITSA_PARENT_PID=", 19) != 0) senv.push_back(*e);

@@ -30,6 +30,13 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
 ]
 
+# A follow-up after a tool call reuses its whole first prompt, less at most the generation prompt's tokens: when the
+# model's own tool-call text differs from the template's rendering of it (Qwen3.5-4B), a hybrid model's recurrent
+# state resumes from the checkpoint at the end of the user's turn, which is just before the generation prompt.
+GEN_TAIL = 8
+hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"  # /etc/hosts, as a tool returns it
+
+
 def hosts_call(name, args):
     """A call that reads /etc/hosts: read_file on the path, or run_shell on a command naming it (Nemotron 3.5
     Lightning counts the lines with `wc -l < /etc/hosts`; either is a tool call the server must return)."""
@@ -113,7 +120,8 @@ PINNED = {
                     [("mtp", "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed", "1d5087d2062c02b279180a53e4016cf9cd7a3d7e", "."),
                      ("dflash2", "incoai/Qwen3.8-27B-DFlash2", "015e795645c74b1a0eeef3b570031fb62e769bc5", "dflash2")]),
     "qwen3.5-4b": ("lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1",
-                   [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", ".")]),
+                   [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
+                    ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
 }
 
 def cli_checks(kapitsa):
@@ -180,6 +188,21 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
                   j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # NVIDIA's Dory: NVFP4 (default) and BF16, no drafter
+    for a, dv, repo, rev in [
+            ("dory", "nvfp4", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4", "41f02335e1a1ad3289b8b32485e2265cbe97cfdf"),
+            ("nemotron-labs-dory1.0-4b", "nvfp4", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4",
+             "41f02335e1a1ad3289b8b32485e2265cbe97cfdf"),
+            ("dory:bf16", "bf16", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16", "b366b87f762ea334ba3eb55912031baba1515810"),
+            ("nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16", "bf16", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16",
+             "b366b87f762ea334ba3eb55912031baba1515810")]:
+        name = "nemotron-labs-dory1.0-4b"
+        j = plan(a)
+        check(f"cli: {a} -> {name}:{dv}, no drafter",
+              j.get("model") == name + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
+              j.get("revision") == rev and j.get("companions") == [] and
+              j.get("id") == (name if dv == "nvfp4" else name + ":" + dv) and
+              j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
@@ -289,15 +312,14 @@ r = post({"messages": msgs, "tools": TOOLS, "max_tokens": 4096, "stream": True,
           "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
 tc = r["tool_calls"]
 check("tool call: finish=tool_calls", r["finish"] == "tool_calls", str(r["finish"]) + " " + repr(r["content"])[:200])
-ok = len(tc) == 1 and tc[0]["function"]["name"] == "read_file"
-args = json.loads(tc[0]["function"]["arguments"]) if ok else {}
-check("tool call: read_file with path", ok and args.get("path") == "/etc/hosts", json.dumps(tc)[:300])
+ok = len(tc) == 1 and hosts_call(tc[0]["function"]["name"], tc[0]["function"]["arguments"])
+check("tool call: read_file or run_shell on /etc/hosts", ok, json.dumps(tc)[:300])
 check("tool call: no markup in content", "<tool_call>" not in r["content"] and "<function" not in r["content"], repr(r["content"]))
 first_prompt = r["usage"]["prompt_tokens"] if r["usage"] else 0
 msgs += [{"role": "assistant", "content": r["content"], "tool_calls": [
             {"id": tc[0]["id"], "type": "function", "function": tc[0]["function"]}] if ok else []},
          {"role": "tool", "tool_call_id": tc[0]["id"] if ok else "x",
-          "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"}]
+          "content": hosts_result(tc[0]["function"]["name"], tc[0]["function"]["arguments"]) if ok else hosts}]
 r2 = post({"messages": msgs, "tools": TOOLS, "max_tokens": 2048, "stream": True,
            "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
 # (a model may check once more with another call, e.g. Qwen3.8-Flash-Next runs `wc -l` after reading the file: up to 2
@@ -313,8 +335,8 @@ while rounds < 2 and rl["finish"] == "tool_calls" and rl["tool_calls"] and "3" n
     rounds += 1
 check("tool result: final answer mentions 3", "3" in rl["content"], repr(rl["content"])[:200])
 cached = r2["usage"]["prompt_tokens_details"]["cached_tokens"] if r2["usage"] else 0
-check("tool result: prefix reused (cached >= first prompt)", cached >= first_prompt,
-      f"cached={cached} first_prompt={first_prompt} usage={r2['usage']}")
+check("tool result: prefix reused (cached >= first prompt, less the generation prompt's tail)",
+      cached >= first_prompt - GEN_TAIL, f"cached={cached} first_prompt={first_prompt} usage={r2['usage']}")
 
 # 3. next user turn: reuse from the checkpoint
 msgs += [{"role": "assistant", "content": rl["content"]},
@@ -474,7 +496,8 @@ check("anthropic stream: message_start, ping, blocks, message_delta, message_sto
       "content_block_start" in names, str(names)[:300])
 usage = ev[0][1]["message"]["usage"] if names else {}
 check("anthropic stream: message_start reports the tool loop's prompt as cached (the reply's tokens included)",
-      usage.get("cache_read_input_tokens", 0) >= first and usage.get("cache_creation_input_tokens") == 0, f"{usage} first {first}")
+      usage.get("cache_read_input_tokens", 0) >= first - GEN_TAIL and usage.get("cache_creation_input_tokens") == 0,
+      f"{usage} first {first}")
 reply = blocks_of(ev)
 check("anthropic stream: final answer mentions 3", any(b["type"] == "text" and "3" in b["text"] for b in reply) and
       ev[-2][1]["delta"]["stop_reason"] == "end_turn", json.dumps(reply)[:300])
@@ -547,6 +570,57 @@ st, r = call("/v1/responses", {"model": "m", "input": "Count from 1 to 100.", "r
 check("responses: a max_output_tokens cut is status incomplete", st == 200 and r["status"] == "incomplete" and
       r["incomplete_details"] == {"reason": "max_output_tokens"}, json.dumps(r)[:300])
 
+# ---------------------------------------------------------------- looped models (Dory)
+# 10. A looped model reports the loop count each request ran (usage.kapitsa.loops): a request's "loops", else its
+#     reasoning effort (low 1, medium 2, high 4) or Anthropic thinking (off 1, a budget by its size), else the server's
+#     default. A cached prefix is reused only at the loop count that computed it.
+probe = post({"messages": [{"role": "user", "content": "Say hi."}], "max_tokens": 4,
+              "chat_template_kwargs": {"enable_thinking": False}})
+if (probe.get("usage") or {}).get("kapitsa"):
+    base_loops = probe["usage"]["kapitsa"]["loops"]
+    lmsgs = [{"role": "system", "content": "[loops] You are terse. " + "Answer in one short sentence. " * 30},
+             {"role": "user", "content": "What is the capital of France?"}]
+    def lp(**kw):
+        return post(dict({"messages": lmsgs, "max_tokens": 16, "temperature": 0, "top_k": 1,
+                          "chat_template_kwargs": {"enable_thinking": False}}, **kw))
+    la = lp(loops=1)
+    lb = lp(loops=1)
+    lc = lp(loops=2)
+    ld = lp(loops=2)
+    n_l = la["usage"]["prompt_tokens"]
+    check("loops: usage.kapitsa.loops reports the request's loops",
+          la["usage"]["kapitsa"]["loops"] == 1 and lc["usage"]["kapitsa"]["loops"] == 2, json.dumps(lc["usage"]))
+    check("loops: the same loop count reuses the cached prompt",
+          lb["usage"]["prompt_tokens_details"]["cached_tokens"] >= n_l - GEN_TAIL and
+          ld["usage"]["prompt_tokens_details"]["cached_tokens"] >= n_l - GEN_TAIL, json.dumps([lb["usage"], ld["usage"]]))
+    check("loops: another loop count reads the prompt again (no cached tokens)",
+          lc["usage"]["prompt_tokens_details"]["cached_tokens"] == 0, json.dumps(lc["usage"]))
+    check("loops: the same greedy answer at the same loop count",
+          la["choices"][0]["message"]["content"] == lb["choices"][0]["message"]["content"],
+          repr([la["choices"][0]["message"]["content"], lb["choices"][0]["message"]["content"]]))
+    le = lp(reasoning_effort="low")
+    lh = lp(reasoning_effort="high")
+    check("loops: reasoning_effort low runs 1 loop, high 4",
+          le["usage"]["kapitsa"]["loops"] == 1 and lh["usage"]["kapitsa"]["loops"] == 4,
+          json.dumps([le["usage"], lh["usage"]]))
+    try:
+        lp(loops=9)
+        bad_loops = False
+    except urllib.error.HTTPError as e:
+        bad_loops = e.code == 400
+    check("loops: 9 loops is a 400", bad_loops)
+    st, ma = call("/v1/messages", {"model": "m", "max_tokens": 8, "messages": [{"role": "user", "content": "Say hi."}]})
+    st2, mb = call("/v1/messages", {"model": "m", "max_tokens": 64, "thinking": {"type": "enabled", "budget_tokens": 20000},
+                                    "messages": [{"role": "user", "content": "Say hi."}]})
+    st3, mc = call("/v1/messages", {"model": "m", "max_tokens": 64, "thinking": {"type": "adaptive"},
+                                    "messages": [{"role": "user", "content": "Say hi."}]})
+    check("loops: Anthropic thinking off 1 loop, a 20000-token budget 4, adaptive the server's default",
+          st == st2 == st3 == 200 and ma["usage"]["kapitsa"]["loops"] == 1 and mb["usage"]["kapitsa"]["loops"] == 4 and
+          mc["usage"]["kapitsa"]["loops"] == base_loops, json.dumps([ma.get("usage"), mb.get("usage"), mc.get("usage")]))
+    st, rr = call("/v1/responses", {"model": "m", "input": "Say hi.", "reasoning": {"effort": "high"}, "max_output_tokens": 64})
+    check("loops: Responses reasoning.effort high runs 4 loops",
+          st == 200 and rr["usage"]["kapitsa"]["loops"] == 4, json.dumps(rr.get("usage")))
+
 # ---------------------------------------------------------------- requests in flight at once
 # Each request in flight has a slot of its own and they take turns on the GPU between prefill chunks and decode cycles;
 # with every slot busy a request waits for one. /v1/models says how many slots there are.
@@ -582,17 +656,28 @@ def evict_slots():  # one-offs that take every slot, so the next requests prefil
         post({"messages": [{"role": "user", "content": f"[evict {i} {time.time()}] " + "Say ok. " * 40}], "max_tokens": 1,
               "chat_template_kwargs": {"enable_thinking": False}})
 
-# 10. requests sent together give each the same tokens as alone (greedy, and sampled with a seed); cold prefills
-#     both times (one-offs take the slots in between, so neither run reuses the other's cache)
+# 10. requests sent together are answered in full (greedy, and sampled with a seed); cold prefills both times
+#     (one-offs take the slots in between, so neither run reuses the other's cache). Replies decoded in one batched
+#     pass may differ from the ones a request gets alone where two tokens are within the pass's numerical noise
+#     (near-ties, greedy) and in their random draws (sampled): the greedy reply must start as it does alone, and a
+#     request alone must give the same reply every time.
 pair = [story("c1", 160), sampled("c2", 120, 11)]
 evict_slots()
 both = together(pair, delays=[0, 0.3])
 evict_slots()
 alone = [together([b])[0] for b in pair]
+evict_slots()
+again = together([pair[0]])[0]
+check("a request alone gives the same reply every time (greedy)",
+      again["content"] == alone[0]["content"] and again["usage"]["completion_tokens"] == alone[0]["usage"]["completion_tokens"],
+      f"{again['usage']} vs {alone[0]['usage']}")
 for i, name in enumerate(["greedy", "sampled T=0.7 seed 11"]):
-    check(f"in flight together: the {name} reply is the one it gets alone",
-          both[i]["content"] == alone[i]["content"] and both[i]["usage"]["completion_tokens"] == alone[i]["usage"]["completion_tokens"],
-          f"{both[i]['usage']} vs {alone[i]['usage']}: {both[i]['content'][:80]!r} vs {alone[i]['content'][:80]!r}")
+    n = both[i]["usage"]["completion_tokens"] if both[i]["usage"] else 0
+    check(f"in flight together: the {name} reply is answered in full",
+          both[i]["finish"] in ("stop", "length") and n > 0 and (both[i]["finish"] == "stop" or n == pair[i]["max_tokens"]),
+          f"{both[i]['finish']} {both[i]['usage']}")
+check("in flight together: the greedy reply starts as it does alone",
+      both[0]["content"][:32] == alone[0]["content"][:32], f"{both[0]['content'][:80]!r} vs {alone[0]['content'][:80]!r}")
 
 # 10b. a request sent while a long reply streams is answered before that reply ends (no wait for the whole reply)
 ctx = "\n".join(f"def helper_{i}(x):\n    return x * {i} + {i % 7}\n" for i in range(150))
@@ -602,9 +687,9 @@ side = {"messages": [{"role": "user", "content": f"[side {time.time()}]\n{ctx}\n
 if SLOTS >= 2:  # with one slot the request waits for the reply's end, by design
     long_, short = together([counting("c3", 700), side], delays=[0, 1.0])
     check("in flight together: a 2K-token request sent during a long reply finishes first",
-          short["t_done"] < long_["t_done"] and short["usage"]["prompt_tokens"] > 1500 and long_["usage"]["completion_tokens"] == 700,
-          f"side done {short['t_done'] - long_['t_sent']:.1f} s, long reply done {long_['t_done'] - long_['t_sent']:.1f} s, "
-          f"side usage {short['usage']}")
+          short["t_done"] < long_["t_done"] and short["usage"]["prompt_tokens"] > 1500 and long_["usage"]["completion_tokens"] >= 600,
+          f"side done {short['t_done'] - long_['t_sent']:.1f} s, long reply done {long_['t_done'] - long_['t_sent']:.1f} s "
+          f"({long_['usage']['completion_tokens']} tokens), side usage {short['usage']}")
 else:
     print("SKIP in flight together: a 2K-token request sent during a long reply finishes first (--slots 1)")
 

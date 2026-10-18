@@ -11,7 +11,8 @@ It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do n
 
 The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
 supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
-state for later turns; requests sent at once take turns on the GPU.
+state for later turns; requests sent at once take turns on the GPU for their prompts and share batched passes while
+they decode.
 
 ## From a request to generated tokens
 
@@ -23,8 +24,9 @@ state for later turns; requests sent at once take turns on the GPU.
    recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
 3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
    and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows.
-4. **Draft and verify.** Qwen uses DFlash2 when available, otherwise its MTP head where supported. Nemotron uses a
-   block drafter: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B),
+   otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
+   (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. Plain generation is available with `--spec 0`.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
@@ -32,10 +34,25 @@ state for later turns; requests sent at once take turns on the GPU.
 Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
 between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn
 away a request parks: nothing of its own left in flight and nothing it needs next left in the model's or the drafter's
-shared buffers, so its cycles, and its tokens, are the ones it runs alone. This is not batching: a forward pass serves
-one request, so requests together decode about as fast as one alone, and `--slots` (up to 4 by default, as memory
-allows) sets how many run at once; with every slot busy a request waits for one. Image fetching, the chat template
-and the tokenizer run before a request takes its turn.
+shared buffers, so a request that only takes turns runs the cycles, and gets the tokens, it would alone. `--slots` (up
+to 4 by default, as memory allows) sets how many run at once; with every slot busy a request waits for one. Image
+fetching, the chat template and the tokenizer run before a request takes its turn.
+
+When two or more requests decode at once with a block drafter (DFlash2 on the Qwen 27B and 35B-A3B, LiLiCorr on Bolt),
+their decode cycles are batched. At a cycle boundary a parked request joins the batch, and one member's thread holds the
+turn and runs every member's cycles (`Engine::run_batch`): each member's draft when it verifies drafts, then one target
+pass over all the members' rows (`encode_verify_multi`, up to 8 rows). The norms, projections, MLP or experts and the LM
+head run once over every row, so each weight is read once for all the members; each member's recurrent scan, convolution
+window and attention over its own KV cache run side by side in the same command buffer. Every member keeps its own
+drafter ring, acceptance (the longest greedy match, or the exact speculative sampling of a sampled DFlash2 request),
+parser and stream. How many rows a member gets depends on the model and on how many requests decode, as measured
+(`Engine::batch_rows`): with DFlash2, two requests verify 3 drafts each and three or four 1 draft each (the 27B's three
+take turns: their drafts cost more than the shared pass saves); with LiLiCorr, two verify 3 drafts each, three 1 draft
+each and four plain rows. The Qwen3.5 4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL take turns until measured
+(`NI_BATCH=1` batches them too). A member that finishes leaves the batch, and the last one goes back to its own loop.
+One request alone runs the single-stream path unchanged. Requests decoded together can get other tokens than alone where
+two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
+`NI_BATCH=0` makes them take turns instead.
 
 ## Two model backends
 
@@ -44,7 +61,7 @@ and the tokenizer run before a request takes its turn.
 | Backend | `Qwen35` | `NemotronH` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 |
 | Other layers | Attention; dense FFN or MoE | Attention; LatentMoE |
-| Default speculation | DFlash2 on 35B/27B; MTP on 4B | LiLiCorr block drafter (DSpark on Lightning) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning) |
 | Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint |
 | Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type |
 | Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work |
@@ -64,6 +81,8 @@ new architecture requires more than implementing `Model` if it needs a new draft
   backends have separate kernel sets for their shapes and stored weight formats.
 * **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
   are accepted. Throughput depends on the model, prompt, sampling settings and acceptance rate.
+* **Requests at once share passes.** While several requests decode, one target pass verifies all of their rows and
+  reads each weight once for all of them.
 * **Prefix reuse.** KV caches and recurrent-state checkpoints avoid rereading an entire conversation for each turn.
   Image embeddings have their own content-aware cache, so a changed image cannot reuse another image's prompt state.
 * **GPU and Neural Engine overlap.** Eligible prefill operations split across both processors. GPU work and Neural
@@ -97,7 +116,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | --- | --- |
 | CLI, HTTP routes and chat page | [`src/server/`](../src/server/) |
 | OpenAI Responses and Anthropic adapters | [`src/api/`](../src/api/) |
-| Request lifecycle, slots and generation | [`src/engine/engine.cpp`](../src/engine/engine.cpp) |
+| Request lifecycle, slots, turns, batched decoding and generation | [`src/engine/engine.cpp`](../src/engine/engine.cpp) |
 | Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h) |
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal) |
@@ -107,6 +126,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |
 | Catalog, downloads and weights | [`src/hub/`](../src/hub/), [`src/loader/`](../src/loader/) |
 | `kapitsa bench`: the harness's protocol, this Mac's conditions, the result and its submission | [`src/bench/`](../src/bench/), [`bench_cmd.cpp`](../src/server/bench_cmd.cpp) |
+| `kapitsa update` and the automatic update | [`src/update/`](../src/update/), [`update_cmd.cpp`](../src/server/update_cmd.cpp) |
 
 The Neural Engine bridge uses Apple's private framework interfaces. See [third-party notices](../THIRD_PARTY_NOTICES)
 for adapted code and design credits, the [usage guide](usage.md) for options and switches, and

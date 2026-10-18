@@ -4,6 +4,7 @@
 #pragma once
 #include "hub/hub.h"
 #include "model/dflash2.h"
+#include "model/dory.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -50,10 +51,14 @@ struct EngineOptions {
   // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.5-4B, Qwen3.6, Qwen3.8: 16.7 million, Bolt and
   // Super-VL: 13312 patches of 16x16).
   long image_max_pixels = vision::kModelDefaultPixels;
+  // Looped models (Dory): the recurrent block's loop count when a request names none (0: the model's default, 2 for
+  // Dory 1.0; requests choose 1-4 with "loops" or a reasoning effort), and the recurrent layers' KV ("": last-loop)
+  int loops = 0;
+  std::string loop_kv;
 };
 
-// The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next
-// or Nemotron-H.
+// The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next,
+// Nemotron-H or Dory.
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk);
 
 // Slots when none are asked for (EngineOptions::slots 0): kAutoSlots, so that an agent's conversation and its parallel
@@ -148,6 +153,13 @@ struct ChatRequest {
   uint32_t seed = 0;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
+  // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning
+  // effort (OpenAI's reasoning_effort / reasoning.effort: minimal and low 1, medium 2, high and xhigh 4; none, which
+  // only turns thinking off, the default) or Anthropic's thinking (disabled 1, a budget by its size); "" / -1: the
+  // server's default
+  int loops = 0;
+  std::string effort;
+  int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
 };
 
 struct ToolCall {
@@ -181,6 +193,8 @@ struct ChatResult {
   // concurrency: time this request waited for a free slot, and the GPU turns it gave to other requests
   double queue_ms = 0;
   int yields = 0;
+  int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
+  int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
 };
 
 // The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
@@ -270,17 +284,19 @@ class Engine {
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
+    int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
     uint64_t arrival = 0;             // that request's number (requests_ when it arrived)
     // that request waits for memory other requests' KV caches hold: before its prefill (nothing of it on the GPU
     // yet: a request that has started may take its cache, as may an earlier one; it then reads its prompt from the
     // start), or for its KV cache to grow while decoding (its cache stays)
     enum class MemWait : uint8_t { none, before_prefill, growth } mem_wait = MemWait::none;
+    bool decoding = false;            // that request is in its decode loop
     Buffer park_h;                    // MTP decoding: the hidden rows the next cycle reads, while other requests run
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
   // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
-  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr);
+  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0);
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
@@ -310,12 +326,52 @@ class Engine {
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
+
+  // ---- batched decode: the decode cycles of several requests in one forward pass ----
+  // A decoding request (DFlash2 or LiLiCorr) joins the batch at a cycle boundary, parked, when another request decodes
+  // and batch_rows() says a pass over their rows pays; one member's thread (the runner, holding the GPU turn) runs the
+  // batch's cycles for all of them: each member's staged ring rows committed, its drafting pass (rows > 1), then one
+  // verify pass of every member's rows (Qwen35 / NemotronH::encode_verify_multi), the acceptance (greedy and LiLiCorr
+  // members keep a draft row while it equals the target's sample at the row before it; sampled DFlash2 members use the
+  // single-stream cycle's exact speculative acceptance) and each member's tokens through its own handle(). A
+  // member that stops leaves (its thread runs its request's end); when one member is left it goes back to its own loop
+  // (returned). With a single request decoding none of this runs: its path is the single-stream one.
+  struct BatchJob {
+    Slot* slot = nullptr;
+    SamplingParams sp;
+    int P = 0;  // anchor: tokens[P] is the next row to feed (the rows before it are in the state or pending)
+    const std::function<bool(int)>* handle = nullptr;    // the request's handle(): false once it stops
+    const std::function<void(int)>* cycle_done = nullptr;
+    // NI_TRACE_TOKENS: the logit rows of the tokens a cycle wrote (rows, count, the tokens); null when off
+    const std::function<void(const float*, int, const int*)>* trace = nullptr;
+    enum class State : uint8_t { active, done, returned } state = State::active;
+    bool runner = false;
+    bool stopped = false;  // its handle() said stop in the last cycle (it leaves as done)
+    int cycles = 0, tokens = 0;
+  };
+  // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
+  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched).
+  // NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides the table.
+  int batch_rows(int n) const;
+  // at a decode cycle boundary: join the batch (one is running, or another request decodes and batching pays)
+  bool batch_wanted() const;
+  // the caller holds the turn and has parked (nothing in flight, its drafter's ring holds the rows before job.P); returns
+  // with the turn once the job is done (true: the request stopped) or returned (false: back to its own loop at job.P)
+  bool join_batch(BatchJob& job);
+  void run_batch(BatchJob& me);
+  void batch_cycle(int rows);
+  // plain rows, pipelined: up to 8 passes, each encoded and committed before the host reads the one before it
+  void batch_plain_run();
+  void batch_stats();
+  // j leaves the batch: its staged rows into its drafter's ring, its state, its thread woken
+  void batch_leave(BatchJob& j, BatchJob::State st);
   void wait_split(Encoder& e);
 
   EngineOptions opts_;
   std::unique_ptr<Model> model_;
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
+  Dory* dory_ = nullptr;     // model_ when it is a Dory model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
@@ -329,6 +385,16 @@ class Engine {
   std::vector<Slot> slots_;
   TurnLock turn_;            // the GPU turn: engine state and the model are used by its holder only
   int active_ = 0;           // requests holding a slot (under the turn)
+  int decoding_ = 0;         // of those, requests in their decode loop (under the turn)
+  std::vector<BatchJob*> batch_;  // the batch's members (under the turn)
+  bool batch_runner_ = false;     // a member's thread runs the batch
+  bool batch_measured_ = false;   // batched decode measured with this model's drafter (batch_rows' default)
+  double batch_backoff_ = 0;      // now_ms() before which no batch forms (the last one's members did not all come)
+  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles
+  long bstat_cycles_ = 0, bstat_rows_ = 0;
+  double bstat_wall_ = 0, bstat_gpu_ = 0;
+  std::mutex bmu_;                // a waiting member's job state / runner flag
+  std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
@@ -340,6 +406,11 @@ class Engine {
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
+
+ public:
+  // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the
+  // server's default); 0 for other models
+  int request_loops(const ChatRequest& r) const;
 };
 
 } // namespace ni

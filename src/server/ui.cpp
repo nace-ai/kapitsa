@@ -262,7 +262,8 @@ void home(const std::string& version) {
                   {"rm", "delete a downloaded model"},
                   {"import", "convert a GGUF (LM Studio, Ollama, llama.cpp) into a model"},
                   {"doctor", "this Mac's GPU and memory, and which models fit"},
-                  {"bench", "benchmark this Mac and add it to the community results"}},
+                  {"bench", "benchmark this Mac and add it to the community results"},
+                  {"update", "update Kapitsa to its latest release (it also updates itself)"}},
               4, W);
   paragraph(o, "kapitsa <command> --help shows its options.", 4, W, dim);
   o.push_back("");
@@ -438,7 +439,7 @@ void plan(const hub::ModelRef& r) {
                                                         (r.variant->name == r.model->default_variant ? "  " + std::string(kDot) + "  the default" : ""))});
   if (r.variant)
     for (const auto& c : r.variant->companions)
-      rows.push_back({c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark" ? "drafter" : "MTP head",
+      rows.push_back({c.drafter() ? "drafter" : "MTP head",
                       c.repo + dim(" @ " + short_rev(c.revision) + (c.kind == "mtp-sidecar" ? ", its mtp.* tensors" : ""))});
   rows.push_back({"API name", r.id});
   for (const auto& [k, v] : rows) o.push_back("    " + left(dim(k), 11) + clip(v, W - 15));

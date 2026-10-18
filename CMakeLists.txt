@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
-set(KAPITSA_VERSION "0.1.32")
+set(KAPITSA_VERSION "0.1.34")
 if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
   execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
                   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
@@ -41,6 +41,16 @@ add_custom_command(
   DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
   COMMENT "Embedding the Nemotron-H Metal kernels")
 
+# Dory kernels: a third embedded source, compiled only when a Dory model loads.
+file(GLOB NI_DORY_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/dory/*.metal)
+set(NI_DORY_EMBED ${CMAKE_BINARY_DIR}/generated/dory_kernels_embed.cpp)
+add_custom_command(
+  OUTPUT ${NI_DORY_EMBED}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_DORY_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
+          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_dory.cmake
+  DEPENDS ${NI_DORY_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_dory.cmake
+  COMMENT "Embedding the Dory Metal kernels")
+
 # kapitsa bench (src/bench/): the harness's frozen prompt corpus and Apple's names for the Mac models, embedded
 set(NI_BENCH_CORPUS ${CMAKE_BINARY_DIR}/generated/bench_corpus.cpp)
 add_custom_command(
@@ -61,10 +71,10 @@ file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
-  "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics")
+  "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security")
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
@@ -79,7 +89,8 @@ foreach(t ${NI_TOOLS})
 endforeach()
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
-# embedded, and the coding-agent launchers (src/server/launch.cpp). The API translations (src/api/) are in the library.
+# embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API
+# translations (src/api/) and the updater (src/update/) are in the library.
 # build/nace-infer-server stays as a symlink to it for scripts written before the rename.
 set(KAPITSA_CHAT ${CMAKE_BINARY_DIR}/generated/chat_page.cpp)
 add_custom_command(
@@ -90,7 +101,7 @@ add_custom_command(
   COMMENT "Embedding the chat page")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${KAPITSA_CHAT})
+  ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")

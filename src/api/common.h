@@ -39,6 +39,12 @@ bool unpack_reasoning(const std::string& blob, std::string* text);
 // (returns false).
 bool apply_effort(const std::string& effort, ojson& kwargs);
 
+// A request's own loop count for looped models (Dory): "loops" in the body (the OpenAI clients' extra_body), 1-4,
+// else 0. Throws ApiError (400) for another value.
+int request_loops_field(const ojson& body);
+// The usage field that reports it ({"loops": n}; null when the model is not looped)
+ojson kapitsa_usage(const ChatResult& res);
+
 // Appends a text piece, with a newline between pieces that have none at the junction
 void join_text(std::string& acc, const std::string& piece);
 

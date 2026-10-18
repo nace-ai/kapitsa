@@ -1,0 +1,170 @@
+// NVIDIA Nemotron-Labs Dory (DoryForCausalLM, model_type "dory"): a looped (latent-recurrent) normalized GPT. 72
+// physical layers, each an attention or an MLP sublayer: 16 input layers, a 40-layer recurrent block run `loops` times
+// (the input re-injected each time), 16 output layers. Sliding-window (1024) and full attention 3:1, GQA 16 / 4 heads
+// of 256, SwiGLU MLP, nGPT normalizations (justnorm: L2) and slerp-like residuals, an output gate on attention, and a
+// per-vocabulary logit scale. NVIDIA's safetensors as they are: BF16, or NVFP4 (ModelOpt W4A16) linears with BF16
+// embedding and LM head; the matrix kernels are Nemotron-H's (nemotron_h.h's formats and repacking).
+//
+// The math is NVIDIA's (vLLM PR #60149, vllm/model_executor/models/dory.py). Loops: 1-4 (the card recommends 2, its
+// config's n_recurrent_loops), per conversation (Seq::loops). KV of the recurrent block's attention layers:
+//  - last-loop (default; the card's recurrent_kv_cache_mode "last_loop"): one cache per layer, every loop writing
+//    the step's keys over the previous loop's, so a step's tokens attend to their own loop's keys and earlier
+//    tokens to their final loop's; the cache costs what a one-loop model's does at any loop count. A step's result
+//    depends on how the tokens are grouped into steps (as in vLLM and llama.cpp): a prompt chunk's tokens see each
+//    other's same-loop keys, decoded tokens one at a time see final-loop keys.
+//  - per-loop: a cache per loop (what NVIDIA's vLLM and llama.cpp commands run; steps do not matter), loops x the
+//    recurrent layers' KV.
+// Sliding-window layers keep a ring of window + 8 positions; full-attention layers a cache that grows with the
+// conversation. A ring cannot go back further than its 8 spare positions, so checkpoints (Model::save / restore,
+// the engine's turn boundaries) hold copies of the rings.
+#pragma once
+#include "loader/safetensors.h"
+#include "model/model.h"
+#include "model/nemotron_h.h"
+
+#include <memory>
+#include <string>
+#include <vector>
+
+namespace ni {
+
+enum class LoopKv : uint8_t { last_loop = 0, per_loop = 1 };
+const char* loop_kv_name(LoopKv m);              // "last-loop" / "per-loop"
+bool parse_loop_kv(const std::string& s, LoopKv* out);  // last-loop | last_loop | per-loop | per_loop
+
+struct DoryConfig {
+  int hidden = 0, vocab = 0, layers = 0, hq = 0, hkv = 0, hd = 0, ffn = 0;
+  int n_in = 0, n_rec = 0, n_out = 0;
+  int loops = 2;             // config.json's n_recurrent_loops (the card's recommended default)
+  int window = 0;
+  double theta_swa = 1e4, theta_full = 1e7;
+  double init_std = 0.02, alpha_init = 0.05, gate_init = 0;  // gate_init: the output gate's logit scale init
+  std::vector<char> kind;    // per physical layer: 'S' sliding-window attention, 'F' full attention, 'M' MLP
+  std::vector<int> eos;
+  int bos = -1;
+  bool recurrent(int l) const { return l >= n_in && l < n_in + n_rec; }
+  bool attention(int l) const { return kind[size_t(l)] != 'M'; }
+};
+
+struct DoryLayer {
+  char kind = 'M';
+  bool rec = false;   // in the recurrent block
+  NhMat q, k, v, g, o;
+  NhMat gate, up, down;
+  Buffer alpha;       // fp32 [hidden]: |alpha x ngpt_alpha_init / initializer_range|
+  Buffer sqk2;        // fp32 [hq x hd]: (sqk x sqrt(hd) / initializer_range)^2
+  Buffer sg2;         // fp32 [hq x hd]: (s_gate x sqrt(gate_init) / initializer_range)^2
+  Buffer sug, suu;    // fp32 [ffn]: suv_gate, suv_up x sqrt(hidden)
+  int cache = -1;     // attention: the index of its (first) cache in Seq::kc / vc
+};
+
+class Dory : public Model {
+ public:
+  static constexpr int kMaxLoops = 4;
+  static constexpr int kMaxRows = 8;   // rows of a decode / verify pass
+  static constexpr int kRingSpare = 8;  // a sliding-window ring's positions beyond the window
+
+  // path: the checkpoint folder; loops: the default loop count (0 = the config's); kv: the recurrent KV mode
+  Dory(const std::string& path, int prefill_chunk = 2048, int loops = 0, LoopKv kv = LoopKv::last_loop);
+  ~Dory() override;
+  static bool is_model(const std::string& dir);  // config.json's model_type is "dory"
+  static DoryConfig read_config(const std::string& dir);
+  // The memory plan (headers only): kv_per_pos for `loops` (0: the config's) in mode kv
+  static MemPlan plan(const std::string& path, int prefill_chunk, LoopKv kv, int loops);
+  static MemPlan plan(const std::string& path, int prefill_chunk = 2048) {
+    return plan(path, prefill_chunk, serving_kv(), serving_loops());
+  }
+  // What the server will run (--loops, --loop-kv), for the memory plans made before the model loads (plan_load,
+  // auto_slots, doctor): plan() without them takes these
+  static void set_serving(int loops, LoopKv kv);
+  static int serving_loops();     // 0: the config's
+  static LoopKv serving_kv();
+  // KV cache bytes per position (full-attention layers) and per conversation (sliding-window rings), for doctor
+  static size_t kv_per_pos(const DoryConfig& c, LoopKv kv, int loops);
+  static size_t ring_bytes(const DoryConfig& c, LoopKv kv, int loops);
+
+  const DoryConfig& config() const { return cfg_; }
+  int vocab() const override { return cfg_.vocab; }
+  const std::vector<int>& eos_ids() const override { return cfg_.eos; }
+  int default_loops() const { return loops_; }
+  LoopKv kv_mode() const { return kv_; }
+  // the loop count a conversation runs: its own, else the default
+  int loops_of(const Seq& s) const { return s.loops > 0 ? s.loops : loops_; }
+  std::string formats_summary() const;
+
+  // ---- Model ----
+  void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
+  std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
+  bool reserve(Seq& s, int need) override;
+  void drop_kv(Seq& s) override;
+  size_t kv_bytes_per_pos() const override;
+  void reset(Seq& s) override;
+  Checkpoint new_checkpoint() override;
+  void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
+  void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
+  void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                      Checkpoint* snap = nullptr, int snap_row = 0) override;
+  int prefill_chunk() const override { return tmax_; }
+  bool can_snapshot() const override { return false; }
+
+  // ---- tools ----
+  // logits of rows [0, T) of the last pass (fp32 [T][vocab]): a decode step's row 0, a prefill's last row
+  float* logits() { return logits_.as<float>(); }
+  // teacher-forced scoring: tokens [pos0, pos0 + T) as one step, every row's next-token logits into out [T][vocab]
+  void encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out);
+
+ private:
+  void load(int prefill_chunk);
+  void alloc_buffers();
+  void alloc_prefill();
+  bool ensure_loop_caches(Seq& s, int loops);  // per-loop mode: the caches of loops [0, loops)
+  int cache_index(const DoryLayer& L, int loop) const;
+  int cache_rows(const Seq& s, int cache) const;  // a ring's rows, or the linear cap
+  bool is_ring(int cache) const { return ring_[size_t(cache)]; }
+
+  // passes
+  void enc_rows(Encoder& e, Seq& s, int pos0, int R);           // R <= kMaxRows rows; final hidden rows in x_
+  void enc_prefill_rows(Encoder& e, Seq& s, int pos0, int T);   // GEMM pass; final hidden rows in px_
+  void enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int R, int mode);
+  void enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int T, int mode, bool last_loop);
+  void enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size_t ld);
+  void enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
+                  uint32_t step);
+  // matrix products: rows of fp32 x (<= 8) / GEMM of half rows
+  void enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int R, int epi);
+  void enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi);
+  void enc_slerp(Encoder& e, const Buffer& h, const Buffer& y, const Buffer& alpha, const Buffer& inp,
+                 const Buffer* xh, int R, int mode);
+  void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out);
+
+  std::string path_;
+  std::unique_ptr<SafetensorsIndex> st_;
+  DoryConfig cfg_;
+  int loops_ = 2;
+  LoopKv kv_ = LoopKv::last_loop;
+  std::vector<DoryLayer> layers_;
+  NhMat embed_, head_;
+  Buffer logit_scale_;           // fp32 [vocab]: logit_scale / initializer_range
+  Buffer inv_swa_, inv_full_;    // fp32 [hd / 2]: rope inverse frequencies
+  std::vector<bool> ring_;       // per cache: a sliding-window ring
+  std::vector<int> cache_loop_;  // per cache: its loop (per-loop mode's recurrent caches), else 0
+  int ring_rows_ = 0;
+  int n_caches_ = 0;
+  int tmax_ = 2048;
+  size_t mem_budget_ = 0;
+  std::vector<Buffer> owned_;    // weight buffers
+  void* embed_map_ = nullptr;
+  size_t embed_map_len_ = 0;
+  Buffer dummy_;                 // bound where a shared kernel declares a buffer Dory's formats never read
+
+  // decode / verify activations (kMaxRows rows)
+  Buffer x_, inp_, y_, q_, k_, v_, g_, ao_, mg_, mu_, mh_, part_o_, part_ml_;
+  Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  int attn_max_chunks_ = 64;
+  // prefill activations (tmax_ rows; on first use)
+  bool pf_alloc_ = false;
+  Buffer px_, pxh_, pinp_, py_, pq_, pk_, pv_, pg_, pck_, pcv_, pao_, paoh_, pmg_, pmu_, pmh_;
+};
+
+}  // namespace ni

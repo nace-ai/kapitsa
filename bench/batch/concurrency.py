@@ -17,6 +17,9 @@
   concurrency.py memtake --base URL --log SERVER_LOG [--after-s 6]
       A reply in progress needs KV cache that a request waiting for memory holds: the reply takes it and runs to
       max_tokens; the waiting request is answered after it (on a server with a small --mem-budget).
+  concurrency.py greedy  --base URL [--mode alone|together] [--n 8] [--tokens 300]
+      Greedy requests of different kinds, one at a time or all at once (with NI_TRACE_TOKENS set on the server,
+      match.py compares the batched outputs with the single-stream ones).
   concurrency.py single  --base URL [--reps 5] [--tokens 512] [--sizes 4000,16000] [--prefill-reps 2]
       One request at a time with the same prompts in every run (a single-stream build A/B): greedy decode tok/s and
       the time to first token of cold prompts.
@@ -381,6 +384,38 @@ def cmd_memtake(a):
     sys.exit(0 if ok else 1)
 
 
+def greedy_plan(n, tokens):
+    """n greedy requests of different kinds (code, prose, a long context, counting), fixed nonces"""
+    kinds = [
+        lambda i: code_messages(f"G{i} c0d3"),
+        lambda i: [{"role": "user", "content": f"[G{i}] Explain how a B-tree keeps itself balanced, in detail."}],
+        lambda i: context_messages(1500, f"G{i} ctx", "Describe what the code above does, file by file.",
+                                   offset=10000 + 3000 * i),
+        lambda i: [{"role": "user", "content": f"[G{i}] Write a short story about a lighthouse keeper and a storm."}],
+        lambda i: [{"role": "user", "content": f"[G{i}] List the planets of the solar system with one fact each."}],
+        lambda i: [{"role": "system", "content": f"[G{i}] You are a terse assistant."},
+                   {"role": "user", "content": "Write a Python function that merges overlapping intervals, with tests."}],
+    ]
+    return [(f"g{i}", body(kinds[i % len(kinds)](i), tokens)) for i in range(n)]
+
+
+def cmd_greedy(a):
+    """greedy requests one at a time or all at once (with NI_TRACE_TOKENS on the server: match.py compares them)"""
+    warm(a.base)
+    evict(a.base)
+    plan = greedy_plan(a.n, a.tokens)
+    t0 = time.perf_counter()
+    if a.mode == "alone":
+        outs = [stream(a.base, b, t0) for _, b in plan]
+    else:
+        outs = run_threads([lambda b=b: stream(a.base, b, t0) for _, b in plan])
+    span = max(o["done"] for o in outs) - min(o["sent"] for o in outs)
+    tot = sum(ntok(o) for o in outs)
+    print(json.dumps({"mode": a.mode, "n": a.n, "tokens": [ntok(o) for o in outs], "span_s": round(span, 2),
+                      "total_tps": round(tot / span, 2) if span > 0 else 0,
+                      "errors": [o["error"] for o in outs if o["error"]]}))
+
+
 def cmd_turns(a):
     """two-turn conversations: turn 2 continues turn 1 on its slot (prefix reuse, the checkpoint and the drafter ring a
     finished turn 1 left), so a wrong state after turn 1 shows in turn 2. Conversations one after another, or at once."""
@@ -476,6 +511,11 @@ def main():
     mt.add_argument("--base", required=True)
     mt.add_argument("--log", required=True, help="the server's log (its KV room)")
     mt.add_argument("--after-s", type=float, default=6.0)
+    gr = sub.add_parser("greedy")
+    gr.add_argument("--base", required=True)
+    gr.add_argument("--mode", default="alone", choices=["alone", "together"])
+    gr.add_argument("--n", type=int, default=8)
+    gr.add_argument("--tokens", type=int, default=300)
     sg = sub.add_parser("single")
     sg.add_argument("--base", required=True)
     sg.add_argument("--reps", type=int, default=5)
@@ -488,7 +528,7 @@ def main():
     c.add_argument("b")
     a = p.parse_args()
     {"ttft": cmd_ttft, "streams": cmd_streams, "exact": cmd_exact, "turns": cmd_turns, "memory": cmd_memory,
-     "single": cmd_single, "memtake": cmd_memtake, "compare": cmd_compare}[a.cmd](a)
+     "single": cmd_single, "memtake": cmd_memtake, "greedy": cmd_greedy, "compare": cmd_compare}[a.cmd](a)
 
 
 if __name__ == "__main__":

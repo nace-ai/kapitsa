@@ -20,6 +20,12 @@ struct DFlash2Config {
   int nq = 32, nkv = 8, hd = 128, block = 8, window = 2048, conv_gs = 16, rank = 256, topk = 16;
   float eps = 1e-6f, theta = 1e7f;
   std::vector<int> target_layers;  // target layer ids whose outputs feed fc, in slot order
+  // DFlash (v1) drafter (DFlashDraftModel, e.g. z-lab/Qwen3.5-4B-DFlash): the same context path and block layout
+  // without the block convolutions and the candidate selector; it runs with the 8-row block and the 2048-position
+  // context ring here (trained with 16-row blocks and a 4096-position window: the block size is a runtime choice,
+  // the shorter window only matters past 2047 tokens of context)
+  bool v1 = false;
+  int trained_block = 0, trained_window = 0;
 };
 
 // Per-sequence drafter state: the context K/V ring of every draft layer.
@@ -27,6 +33,15 @@ struct DFlashSeq {
   Buffer ring_k, ring_v;  // bf16 [NL][8 kv heads][2048 slots][128]; slot = position mod 2048
   int ctx = 0;            // committed context positions 0 .. ctx-1 (the ring holds the last 2048)
   int valid_lo = 0;       // lowest position whose ring entry is valid (> 0 after a rewind past the window)
+  // Batched decode (DFlash2::stage_init): the target captures of rows not yet in the ring, positions ctx ..
+  // ctx + staged - 1, bf16 [8][n_slots * H]; the hook a batched verify writes them with (by row)
+  Buffer stage;
+  int staged = 0;
+  CaptureHook stage_hook;
+  // sampled requests in a batch: the walk of its last draft (candidate ids [7][16], q [7][16], choices [8]) and its
+  // acceptance's result {a, token}, kept per sequence (bytes 0, 448, 896, 928; 944: a drafter state it may write)
+  Buffer walk;
+  int accepted() const { return walk.as<int>()[232]; }
 };
 
 // 8-row affine-quantized GEMM (dfl_qmm8): Y_i[8, N_i] = oscale_i * X[8, K] . W_i^T for up to 4
@@ -49,6 +64,8 @@ void dfl_enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffe
 // zero), even=true MLX's CPU backend (round half to even).
 void dfl_quantize_cpu(const std::vector<const uint16_t*>& rows, uint32_t K, int bits, bool even, uint32_t* W,
                       uint16_t* S, uint16_t* B);
+// One row of a linear in any format (bf16, or affine bits / group gs) as bf16 values (CPU).
+void dfl_row_bf16(const QLinear& H, uint32_t row, uint16_t* out);
 
 // Draft attention split plan for anchor position P: context [lo, P) cut into nsplit chunks of
 // `chunk` positions (multiple of 32), at least min_chunk each (0: NI_DFLASH_ATTN_CHUNK, default 256),
@@ -115,6 +132,15 @@ class DFlash2 {
   void arm_verify(int P);
   void disarm();
   void encode_commit(Encoder& e, DFlashSeq& d, int m);
+  // Batched decode: d's staging buffer and its capture hook (once; allocated on first use), and the commit of its
+  // staged rows into the ring (d.ctx += d.staged, d.staged = 0)
+  void stage_init(DFlashSeq& d);
+  void encode_commit_staged(Encoder& e, DFlashSeq& d);
+  // Batched decode at T > 0: d keeps the walk of its draft (encode_save_walk right after its encode_draft); after the
+  // batched pass, the exact acceptance of its rows [r0, r0 + K + 1) (stage-1 candidates n per row), as encode_accept
+  // does for a single verify: tokens[P + 1 + a] = the next token, d.accepted() = a once the command buffer completed
+  void encode_save_walk(Encoder& e, DFlashSeq& d);
+  void encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K, const SamplingParams& sp, int r0, uint32_t n);
   Buffer capt() const { return capt_; }  // bf16 [8][n_slots * H]
 
   // ---- drafting pass (SPEC §4, §5, §7) ----
@@ -214,6 +240,8 @@ class DFlash2 {
   }
   void enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M);  // prefill GEMM
   void enc_commit_kv(Encoder& e, DFlashSeq& d, const Buffer& kv, int rows, int pos0);
+  // encode_commit's projections of m rows of `src` (bf16 [8][n_slots * H]; the verify captures capt_ by default)
+  void enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src);
   void encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const SamplingParams& sp, bool gpu);
   void dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes);
 

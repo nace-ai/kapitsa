@@ -1,0 +1,29 @@
+date,description,amount,category,tags
+# Household account, December 2025 to March 2026
+2025-12-01,"Rent, December",-1450.00,housing,monthly fixed
+2025-12-01,Salary,4200.00,income,monthly
+2025-12-03,Groceries,-96.30,food,
+2025-12-11,"Gifts, family",-240.00,gifts,
+2025-12-19,Electricity,-71.15,utilities,monthly
+2025-12-24,Groceries,-132.85,food,
+
+2026-01-01,"Rent, January",-1450.00,housing,monthly fixed
+2026-01-01,Salary,4200.00,income,monthly
+2026-01-06,Coffee beans,-14.20,Food,
+2026-01-15,Gym,-35.00,health,monthly fixed
+2026-01-20,Electricity,-80.40,utilities,monthly
+2026-01-27,Groceries,-104.65,food,
+
+2026-02-01,"Rent, February",-1450.00,housing,monthly fixed
+2026-02-01,Salary,4200.00,income,monthly
+2026-02-02,Car insurance,(312.00),insurance,yearly
+2026-02-14,"Dinner at ""Luigi's""",-86.40,food,
+2026-02-15,Gym,-35.00,health,monthly fixed
+2026-02-19,Electricity,-77.90,utilities,monthly
+
+2026-03-01,"Rent, March",-1450.00,housing,monthly fixed
+2026-03-01,Salary,4200.00,income,monthly
+2026-03-09,Bike repair,-58.00,transport,
+2026-03-15,Gym,-35.00,health,monthly fixed
+2026-03-21,Electricity,-69.25,utilities,monthly
+2026-03-28,Tax refund,312.18,income,

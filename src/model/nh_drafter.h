@@ -56,6 +56,18 @@ class NhDrafter {
   // ---- drafting: block [tokens[P], mask x 7] at positions P..P+7 (d.ctx == P) -> tokens[P+1 .. P+7], and the
   // coming verify's depth in the target's live rows ----
   virtual void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) = 0;
+
+  // ---- batched decode: one verify pass over several sequences' rows writes each one's captures into its own stage
+  // (LiliSeq::stage, by row) instead of the shared verify capture. stage_init: d's stage and its hook (once);
+  // encode_commit_staged: its staged rows into the ring (d.ctx += d.staged, d.staged = 0) ----
+  void stage_init(LiliSeq& d);
+  void encode_commit_staged(Encoder& e, LiliSeq& d);
+
+ protected:
+  // the verify capture hook (its row width and layer slots), and the commit of feature rows [0, R) of `feat` at
+  // positions pos0.. into d's ring
+  virtual const NhCapture& verify_hook() const = 0;
+  virtual void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) = 0;
 };
 
 }  // namespace ni
