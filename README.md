@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/kapitsa-logo.png" width="160" alt="Kapitsa logo, an indigo and mint geometric K">
+</p>
+
 # Kapitsa
 
 **Local Qwen and Nemotron inference for Apple silicon, by [Nace.AI](https://nace.ai).**
@@ -103,7 +107,7 @@ processing, cached latency, correctness checks and raw results. For other engine
 
 ## Architecture
 
-![Kapitsa architecture: a shared chat engine selects Qwen or Nemotron model backends, with Metal GPU execution and optional Neural Engine prefill.](docs/assets/architecture.svg)
+![Kapitsa architecture: request preparation and cached conversations feed Qwen or Nemotron backends, with image encoders, a draft-and-verify loop, Metal execution and optional Neural Engine prefill.](docs/assets/architecture.svg)
 
 * **Specialized kernels** execute each model's attention, recurrent layers and matrix operations directly in Metal.
 * **Speculative decoding** drafts multiple tokens, then verifies them with the target model.
