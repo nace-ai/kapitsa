@@ -2142,9 +2142,10 @@ int Engine::request_loops(const ChatRequest& r) const {
   if (r.loops > 0) {
     l = r.loops;
   } else if (!r.effort.empty()) {
-    // OpenAI's reasoning effort: minimal / low 1 loop, medium 2, high / xhigh 4 (none: thinking off, 1 loop)
+    // OpenAI's reasoning effort: minimal / low 1 loop, medium 2, high / xhigh 4 ("none" only turns the visible
+    // thinking off, as benchmarks and agents send it with any model: the server's default loops)
     const std::string& e = r.effort;
-    if (e == "none" || e == "minimal" || e == "low") l = 1;
+    if (e == "minimal" || e == "low") l = 1;
     else if (e == "medium") l = 2;
     else if (e == "high" || e == "xhigh" || e == "max") l = 4;
   } else if (r.thinking_budget >= 0) {

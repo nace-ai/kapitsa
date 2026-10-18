@@ -259,7 +259,8 @@ chat template and the request say (thinking on by default in Chat Completions an
   loops.
 - **Per request:** `"loops": N` in the request body (OpenAI clients: `extra_body={"loops": 4}`) sets it for that request.
   Without it, the agents' own effort controls choose: OpenAI's `reasoning_effort` and Responses' `reasoning.effort`
-  (`minimal` and `low` 1 loop, `medium` 2, `high` and `xhigh` 4), Anthropic's `thinking` (disabled 1 loop, a
+  (`minimal` and `low` 1 loop, `medium` 2, `high` and `xhigh` 4; `none` only turns the visible thinking off and keeps
+  the default), Anthropic's `thinking` (disabled 1 loop, a
   `budget_tokens` under 4096 1, under 16384 2, above 4; adaptive the server's default) and `output_config.effort`.
   Every reply reports the loops it ran in `usage.kapitsa.loops`, and the server log names them.
 - **Cache:** a conversation's cached prompt is only valid for the loop count that computed it; a request with another

@@ -149,8 +149,9 @@ struct ChatRequest {
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
   // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning
-  // effort (OpenAI's reasoning_effort / reasoning.effort: minimal and low 1, medium 2, high and xhigh 4) or Anthropic's
-  // thinking (disabled 1, a budget by its size); "" / -1: the server's default
+  // effort (OpenAI's reasoning_effort / reasoning.effort: minimal and low 1, medium 2, high and xhigh 4; none, which
+  // only turns thinking off, the default) or Anthropic's thinking (disabled 1, a budget by its size); "" / -1: the
+  // server's default
   int loops = 0;
   std::string effort;
   int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
