@@ -190,3 +190,19 @@ struct NhMoeDecP {
   // shared down rows (NVFP4) into sd
   nh_x4_mv_impl<0, 0>(dq, ds, sh, sd, p.H, p.S, gs_dn, ((tg - p.tg_u) * nsg + sg) * 4, lane, tlh);
 }
+
+// x[n] += W_up[n, :] . lo + sd[n] (lo: the summed partials, nh_x4_moe_dn_sum). grid: ceil(H / rows) threadgroups
+[[kernel]] void nh_moe_d2(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                          const device float* lo [[buffer(2)]], const device float* sd [[buffer(3)]],
+                          device float* x [[buffer(4)]], constant NhMoeDecP& p [[buffer(5)]],
+                          uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                          uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  const uint row0 = (tgp.x * nsg + sg) * 4;
+  float acc[4][1] = {{0}, {0}, {0}, {0}};
+  if (row0 < p.H) nh_mv_dot<0, 4, 1>(q, s, lo, p.L, p.L, 1, row0, p.H, lane, nullptr, acc);
+  for (int j = 0; j < 4; ++j) {
+    const float v = simd_sum(acc[j][0]);
+    const uint n = row0 + j;
+    if (lane == 0 && n < p.H) x[n] += v + sd[n];
+  }
+}

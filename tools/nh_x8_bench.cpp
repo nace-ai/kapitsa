@@ -572,7 +572,7 @@ int main(int argc, char** argv) {
   }
 
   // ---------------- the one-token MoE layer (NVFP4) ----------------
-  // the fused layer (nh_moe_a4, nh_moe_b4, nh_x4_moe_dn, nh_moe_d1) against the separate kernels
+  // the fused layer (nh_moe_a4, nh_moe_b4, nh_x4_moe_dn_sum, nh_moe_d2) against the separate kernels
   if (want("zdec")) {
     const uint32_t H = small ? 512 : 4096, E = small ? 96 : 512, k = 22, L = small ? 256 : 1024,
                    S = small ? 384 : 5376, I = small ? 256 : 2688, R = 8;
@@ -632,6 +632,8 @@ int main(int argc, char** argv) {
            EID = g.alloc(k * 4, "eid"), EW = g.alloc(k * 4, "ew"), CTR = g.alloc(16, "ctr"), HH = g.alloc(size_t(k) * I * 4, "h"),
            PART = g.alloc(size_t(k) * L * 4, "part"), SD = g.alloc(H * 4, "sd"), LO = g.alloc(L * 4, "lo");
     memset(CTR.ptr(), 0, 16);
+    Buffer LOF = g.alloc(L * 4, "lof"), CNT = g.alloc(4096, "cnt");
+    memset(CNT.ptr(), 0, 4096);
     struct MoeDecP_ { uint32_t H, E, k, norm; float scale; uint32_t L, S, I, uqs, uss, tg_r, tg_l, tg_u; } dp{
         H, E, k, 1, 5.0f, L, S, I, uint32_t(uq), uint32_t(us), (E + 31) / 32, (L + 31) / 32, k * ((I + 31) / 32)};
     struct MoeP_ { uint32_t I, D, k, uqs, uss, dqs, dss, hs; } mp{I, L, k, uint32_t(uq), uint32_t(us), uint32_t(dq), uint32_t(ds), I};
@@ -668,7 +670,7 @@ int main(int argc, char** argv) {
       e.buf(10, GU);
       e.val(11, sdn.gs);
       e.dispatch(dp.tg_u + (H + 31) / 32, 1, 1, 256);
-      e.use(NemotronH::pipeline("nh_x4_moe_dn"));
+      e.use(NemotronH::pipeline("nh_x4_moe_dn_sum"));
       e.buf(0, DQ);
       e.buf(1, DS);
       e.buf(2, HH);
@@ -678,15 +680,17 @@ int main(int argc, char** argv) {
       e.bytes(6, &mp, sizeof mp);
       e.buf(8, live);
       e.buf(9, GD);
+      e.buf(10, LOF);
+      e.buf(11, CNT);
       e.dispatch((L + 31) / 32, k, 1, 256);
-      e.use(NemotronH::pipeline("nh_moe_d1"));
+      e.use(NemotronH::pipeline("nh_moe_d2"));
       e.buf(0, LQU);
       e.buf(1, LSU);
-      e.buf(2, PART);
+      e.buf(2, LOF);
       e.buf(3, SD);
       e.buf(4, X1);
       e.bytes(5, &dp, sizeof dp);
-      e.dispatch((H + 31) / 32, 1, 1, 256);
+      e.dispatch((H + 15) / 16, 1, 1, 128);
     };
     auto mv = [&](Encoder& e, const char* name, const Buffer& q, const Buffer& sc, const Buffer& x, const Buffer& y,
                   uint32_t N, uint32_t K, float gs, uint32_t rows_tg, uint32_t thr) {

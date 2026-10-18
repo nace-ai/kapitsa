@@ -963,6 +963,8 @@ void NemotronH::alloc_buffers() {
   acc_ = g.alloc(64, "nh_accepted");
   route_ctr_ = g.alloc(16, "nh_route_counter");
   memset(route_ctr_.ptr(), 0, 16);
+  moecnt_ = g.alloc(size_t(kMaxRows) * ((size_t(std::max(1, cfg_.latent)) + 31) / 32) * 4 + 16, "nh_moe_counters");
+  memset(moecnt_.ptr(), 0, moecnt_.size);
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
@@ -1544,7 +1546,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch(tg_u + (H + 31) / 32, 1, 1, 256);
     const MoeP mp{I, Lt, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
                   uint32_t(L.down_e.s_exp()), I};
-    e.use(pipe("nh_x4_moe_dn"));
+    e.use(pipe("nh_x4_moe_dn_sum"));
     e.buf(0, L.down_e.q);
     e.buf(1, L.down_e.s);
     e.buf(2, h_);
@@ -1554,15 +1556,17 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.val(6, mp);
     e.buf(8, live_all_);
     e.buf(9, L.down_e.gse);
+    e.buf(10, lo_);
+    e.buf(11, moecnt_);
     e.dispatch((Lt + 31) / 32, k, 1, 256);
-    e.use(pipe("nh_moe_d1"));
+    e.use(pipe("nh_moe_d2"));
     e.buf(0, L.lat_up.q);
     e.buf(1, L.lat_up.s);
-    e.buf(2, part_);
+    e.buf(2, lo_);
     e.buf(3, sd_);
     e.buf(4, x_);
     e.val(5, dp);
-    e.dispatch((H + 31) / 32, 1, 1, 256);
+    e.dispatch((H + 15) / 16, 1, 1, 128);
     return;
   }
   const bool gm = gemm_rows_ && R >= 2;
@@ -1617,7 +1621,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.buf(9, L.up_e.gse);
       e.dispatch((uint32_t(L.I) + 31) / 32, npairs, 1, 256);
       if (grouped) e.group_begin();
-      e.use(pipe("nh_x4_moe_dn"));
+      e.use(pipe("nh_x4_moe_dn_sum"));  // (the rows' sums into lo_: no nh_moe2_sum2 below)
       e.buf(0, L.down_e.q);
       e.buf(1, L.down_e.s);
       e.buf(2, h_);
@@ -1627,6 +1631,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.val(6, mp);
       e.buf(8, live());
       e.buf(9, L.down_e.gse);
+      e.buf(10, lo_);
+      e.buf(11, moecnt_);
       e.dispatch((uint32_t(cfg_.latent) + 31) / 32, npairs, 1, 256);
     } else if (x2 && R >= 2) {
       // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
@@ -1694,13 +1700,14 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       else enc_mv(e, L.down_s, sh_, x_, R, 1);
       e.group_end();
     }
-    e.use(pipe(fp4 ? "nh_moe2_sum2" : "nh_moe2_sum"));
-    e.buf(0, part_);
-    e.buf(1, lo_);
-    e.val(2, mp);
-    e.buf(3, live());
-    if (fp4) e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
-    else e.dispatch(nrows, 1, 1, 256);
+    if (!fp4) {
+      e.use(pipe("nh_moe2_sum"));
+      e.buf(0, part_);
+      e.buf(1, lo_);
+      e.val(2, mp);
+      e.buf(3, live());
+      e.dispatch(nrows, 1, 1, 256);
+    }
   }
   // shared expert on the full hidden state; both branches add into the residual stream
   if (grouped) {  // (the shared expert ran above)

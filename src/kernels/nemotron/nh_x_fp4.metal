@@ -474,6 +474,46 @@ NH_X4_MM(nh_x4_mm32_l0, 4, 0)
 // simdgroup (spills), 16-bit staging stores, k-groups inside a threadgroup instead of split K (out_proj 0.406 vs
 // 0.332 ms at 32 rows). A token-pair-interleaved X (B pairs without packing) would gain 1.5-2%.
 
+// The same down projection, and the row's sum over its k pairs by the last of the k threadgroups of each 32-row block
+// to finish (an arrival counter per (row, block) in cnt [[11]]: zero before the first call, every call leaves it zero):
+// lo[row] = sum_j part[row * k + j] in pair order, the same additions as nh_moe2_sum2, without its dispatch (22 x 1024
+// partials of a one-token layer read again by every simdgroup of nh_moe_d1: 28 us). 8 simdgroups (32 rows) per
+// threadgroup; grid (ceil(D / 32), pairs).
+[[kernel]] void nh_x4_moe_dn_sum(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                                 const device float* h [[buffer(2)]], device float* part [[buffer(3)]],
+                                 const device int* eid [[buffer(4)]], const device float* ew [[buffer(5)]],
+                                 constant NhMoeParams& p [[buffer(6)]], const device uint* live [[buffer(8)]],
+                                 const device float* gse [[buffer(9)]], device float* lo [[buffer(10)]],
+                                 device atomic_uint* cnt [[buffer(11)]], uint3 tgp [[threadgroup_position_in_grid]],
+                                 uint3 ntg [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                 uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                 uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup half2 tlh[256];
+  threadgroup uint arrival[1];
+  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
+  const uint pair = tgp.y, r = pair / p.k;
+  if (r >= live[0]) return;
+  const uint e = uint(eid[pair]);
+  nh_x4_mv_impl<0, 0>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride, h + size_t(pair) * p.h_stride,
+                      part + size_t(pair) * p.D, p.D, p.I, ew[pair] * gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
+  device atomic_uint* c = cnt + r * ntg.x + tgp.x;
+  threadgroup_barrier(mem_flags::mem_device);
+  if (tid == 0) {
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+    arrival[0] = atomic_fetch_add_explicit(c, 1u, memory_order_relaxed);
+    atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup | mem_flags::mem_device);
+  if (arrival[0] != p.k - 1) return;
+  const uint rows = nsg * 4, d = tgp.x * rows + tid;
+  if (tid < rows && d < p.D) {
+    float v = 0.0f;
+    for (uint j = 0; j < p.k; ++j) v += part[(size_t(r) * p.k + j) * p.D + d];
+    lo[r * p.D + d] = v;
+  }
+  if (tid == 0) atomic_store_explicit(c, 0u, memory_order_relaxed);
+}
+
 // ---- NVFP4 routed experts for prefill: the pairs grouped by expert (nh_moe_bucket tiles of <= 8 TB rows), each tile
 // on nh_x4_mm's design (weights decoded once per threadgroup into the A operands, the tile's token rows staged in
 // threadgroup memory per 128-element step, no split K): 4 simdgroups x 16 output rows per threadgroup.
