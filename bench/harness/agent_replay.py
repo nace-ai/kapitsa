@@ -32,7 +32,7 @@ The GPU lock is taken for the replay unless the caller holds it (NACE_GPU_LOCK_H
 runs the same replay as its "agent" phase (with the server's memory and, under compare_engines.py, the contention
 monitor and the quiet-GPU wait).
 """
-import argparse, copy, hashlib, json, math, os, random, statistics, sys, time
+import argparse, copy, hashlib, json, math, os, random, re, statistics, sys, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -122,6 +122,27 @@ def recorded_gaps(t):
     return out
 
 
+TOOL_CALL_RX = re.compile(r"<tool_call>\s*<function=([^>\n]+)>(.*?)</function>\s*</tool_call>", re.S)
+PARAM_RX = re.compile(r"<parameter=([^>\n]+)>\n?(.*?)\n?</parameter>", re.S)
+
+
+def answer_form(content, tool_calls):
+    """An answer as (text, [(tool, {argument: value text})]), whether its tool calls came as Qwen's raw
+    <tool_call> text (rendered mode) or parsed by the server, so answers can be compared across engines."""
+    content = content or ""
+    calls = [(m.group(1).strip(), {k.strip(): v for k, v in PARAM_RX.findall(m.group(2))})
+             for m in TOOL_CALL_RX.finditer(content)]
+    text = TOOL_CALL_RX.sub("", content).strip()
+    for tc in tool_calls or []:
+        try:
+            args = json.loads(tc.get("arguments") or "{}")
+        except ValueError:
+            args = {"_raw": tc.get("arguments")}
+        calls.append((tc.get("name"), {k: v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+                                       for k, v in (args.items() if isinstance(args, dict) else [])}))
+    return text, calls
+
+
 def ref_prompt_tokens(rq, mode):
     r = rq.get("ref_prompt_tokens") or {}
     return r.get(mode) if isinstance(r, dict) else None
@@ -192,6 +213,7 @@ def summarize(turns, wall_s, gaps_s):
          "prompt_tokens_main_sum": sum(x.get("prompt_tokens") or 0 for x in main),
          "stopped_early": sum(1 for x in ok if (x.get("completion_tokens") or 0) < x["max_tokens"] - 1),
          "held_tool_calls": len(held),
+         "same_answers": sum(1 for x in ok if x.get("same_answer")),
          "cached_tokens_reported": sum(x.get("cached_tokens") or 0 for x in ok) if any(
              x.get("cached_tokens") is not None for x in ok) else None}
     return s
@@ -259,6 +281,8 @@ def replay(a, t, mode="rendered", gaps="recorded", max_turns=None, log=print, ti
                      "timings": r["timings"], "content": r["content"], "reasoning": r["reasoning"],
                      "tool_calls": r["tool_calls"], "events_t_ms": [round(x * 1000, 1) for x in r["ev_t"]],
                      "events_chars": r["ev_c"], "events_kind": ",".join(r["ev_k"])})
+        turn["same_answer"] = answer_form(r["content"], r["tool_calls"]) == answer_form(rec.get("content"),
+                                                                                       rec.get("tool_calls"))
         for why in bench.thinking_leak(r):
             res["invalid"].append(f"turn {turn['i']}: {why}")
         if not ct:
@@ -295,7 +319,7 @@ def line(s):
             f"{s['decode_s']:.1f}s), wall {s['wall_s']:.1f}s, {s['completion_tokens']}/{s['max_tokens']} tok out, "
             f"writing {bench.f2(s['write_tps'])} tok/s, first TTFT {bench.f2(s['first_ttft_s'])}s, follow-up TTFT median "
             f"{bench.f2(s['followup_ttft_median_s'])}s p90 {bench.f2(s['followup_ttft_p90_s'])}s, "
-            f"peak context {s['context_tokens_max']}")
+            f"peak context {s['context_tokens_max']}, {s['same_answers']}/{s['turns_ok']} answers as recorded")
 
 
 def main():

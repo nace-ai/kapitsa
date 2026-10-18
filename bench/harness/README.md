@@ -110,6 +110,12 @@ translated the tool calls back for opencode, so the recording and every replay a
 on Kapitsa, all 19 answers come back token for token. `agent_record.py build` refuses to write a trace that still
 names the user, the Mac or the home folder.
 
+Each model replays a session recorded on it: [agent-traces/index.json](agent-traces/index.json) maps a config's
+model to its trace (`opencode-ledger.json` for Qwen3.6-35B-A3B, `opencode-ledger-27b.json` for Qwen3.8-27B, recorded
+the same way on the 27B). Another model's recorded answers would differ from the engine's own at every
+turn, so the next request would make the engine roll its cache back to the previous prompt every time, which no real
+session does; a model without an entry gets no agent phase.
+
 **The replay.** The requests go out in the recorded order with the recorded messages, never the engine's own
 answers, so every engine reads exactly the same conversation: the same system prompt and tools, the same files and
 test output. Each is streamed, greedy (temperature 0, top_k 1, the rest neutral), with thinking off by both switches,
@@ -131,10 +137,13 @@ first event is the whole call, and the replay treats them as below.
 cache, plus the first token), the writing rate (the tokens after the first streamed event over the time to the last
 event) and the total time. Per session: the total time (the sum of the requests; with the agent's pauses it is the
 wall time), the prefill time (the sum of the TTFTs) and the decode time (the rest), the mean writing rate (all answers'
-window tokens over all their window time), the first request's TTFT (a cold prompt of about 5.6K tokens) and the median
+window tokens over all their window time), the first request's TTFT (a cold prompt of about 5.5K tokens) and the median
 and p90 TTFT of the follow-ups (the requests that continue the previous one). A turn whose first event is a held tool
 call has no TTFT of its own: it is left out of the TTFT statistics and its prefill time is estimated as its time minus
-its tokens at the session's writing rate (`prefill_estimated_turns` in the result).
+its tokens at the session's writing rate (`prefill_estimated_turns` in the result). Each answer is also compared with
+the recorded one (its text and tool calls, raw or parsed; `same_answers`): after an answer that differs, the next
+request makes the engine roll its cache back to the end of the previous prompt, which the recording engine never
+needed.
 
 **Checks.** Thinking text in an answer, a failed request, or a prompt shorter than 90% of the reference length (the
 engine cut the conversation) make the session INVALID; a prompt more than 2% off the reference is flagged. The

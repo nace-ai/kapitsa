@@ -1,0 +1,5 @@
+{
+ "_comment": "The agent session compare_engines.py replays for each model (config model_name), and the tool mode. A trace's recorded answers come from the model it was recorded on: replaying them on another model makes every engine roll its cache back at every turn, which no real session of that model does. Models without an entry get no agent phase.",
+ "Qwen3.6-35B-A3B": {"trace": "opencode-ledger.json", "tool_mode": "rendered"},
+ "Qwen3.8-27B": {"trace": "opencode-ledger-27b.json", "tool_mode": "rendered"}
+}

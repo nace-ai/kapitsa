@@ -45,6 +45,8 @@ Config files (configs/*.json) are lists of objects; several files are merged in 
   adaptive_warm 3 full decodes in the warm-up       flag_check "llama-server": adapt flags to --help
   ready_timeout seconds to wait for /v1/models (default 900)
   sampling_overrides, no_think_style, bench_args    passed to bench.py
+  agent_trace, agent_tool_mode   the agent session to replay (a file in agent-traces/); default: the model's entry
+                in agent-traces/index.json, none for a model without one
   version_cmd   command whose output is recorded   log_grep  regexes copied from the server log
   gguf_expect   expected blob digest prefix        note      free text, copied to the result
 
@@ -937,11 +939,32 @@ def plan(c, args, stamp):
         bargs += ["--sampling-overrides", json.dumps(c["sampling_overrides"])]
     if args.skip:
         bargs += ["--skip", args.skip]
-    if args.agent_trace:
-        bargs += ["--agent-trace", args.agent_trace]
+    trace, mode = agent_session_of(c, args)
+    bargs += ["--agent-trace", trace or "none"]
+    if trace and mode:
+        bargs += ["--agent-tool-mode", mode]
     bargs += shlex.split(args.bench_args or "") + [str(x) for x in c.get("bench_args", [])]
     p["bench_args"] = bargs
     return p, ctx
+
+
+AGENT_INDEX = os.path.join(HERE, "agent-traces", "index.json")
+
+
+def agent_session_of(c, args):
+    """(trace path or None, tool mode or None) of a config's agent phase: --agent-trace (for every config), else the
+    config's own "agent_trace", else the entry for its model in agent-traces/index.json (no entry: no agent phase)."""
+    if args.agent_trace:
+        return (None, None) if args.agent_trace.lower() == "none" else (os.path.abspath(args.agent_trace), None)
+    if c.get("agent_trace"):
+        return os.path.join(HERE, "agent-traces", c["agent_trace"]), c.get("agent_tool_mode")
+    try:
+        e = json.load(open(AGENT_INDEX)).get(c.get("model_name") or "")
+    except Exception:
+        e = None
+    if not e or not e.get("trace"):
+        return None, None
+    return os.path.join(HERE, "agent-traces", e["trace"]), e.get("tool_mode")
 
 
 class NoLock:
@@ -1212,8 +1235,8 @@ def main():
     ap.add_argument("--bench-args", default="", help="extra bench.py args for every config (shell-quoted string)")
     ap.add_argument("--skip", default="", help="bench.py phases to leave out: decode,greedy,prefill,tools,agent "
                     "(e.g. --skip decode,greedy,prefill,tools runs only the agent session)")
-    ap.add_argument("--agent-trace", default="", help="agent session to replay (default: bench.py's, "
-                    "agent-traces/opencode-ledger.json; none = no agent phase)")
+    ap.add_argument("--agent-trace", default="", help="agent session to replay for every config (default: the "
+                    "model's entry in agent-traces/index.json; none = no agent phase)")
     ap.add_argument("--dry-run", action="store_true", help="print the resolved plan per config; start nothing")
     ap.add_argument("--check-flags", action="store_true", help="with --dry-run: run `llama-server --help` and check flags")
     ap.add_argument("--reverse", action="store_true", help="run configs in reverse order (interleave across sessions)")
