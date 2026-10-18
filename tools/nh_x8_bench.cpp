@@ -564,5 +564,210 @@ int main(int argc, char** argv) {
       for (Buffer* b : {&eidb, &ewb, &latf, &lath, &hb, &pb, &ob, &live}) g.release(*b);
     }
   }
+
+  // ---------------- the one-token MoE layer (NVFP4) ----------------
+  // the fused layer (nh_moe_a4, nh_moe_b4, nh_x4_moe_dn, nh_moe_d1) against the separate kernels
+  if (want("zdec")) {
+    const uint32_t H = small ? 512 : 4096, E = small ? 96 : 512, k = 22, L = small ? 256 : 1024,
+                   S = small ? 384 : 5376, I = small ? 256 : 2688, R = 8;
+    struct RouteP_ { uint32_t E, k, norm; float scale; uint32_t ls, rows; };
+    std::vector<float> bias(E);
+    for (auto& v : bias) v = nrand() * 0.01f;
+    Buffer bb = g.alloc(E * 4, "bias"), live = g.alloc(16, "live");
+    memcpy(bb.ptr(), bias.data(), E * 4);
+    live.as<uint32_t>()[0] = 0xffffffffu;
+    // the one-token layer, on synthetic weights of the real formats
+    std::vector<uint16_t> rw(size_t(E) * H);
+    for (auto& v : rw) {
+      const float f = nrand() * 0.02f;
+      uint32_t u;
+      memcpy(&u, &f, 4);
+      v = uint16_t(u >> 16);
+    }
+    std::vector<uint8_t> lq(size_t(L) * H), lqu(size_t(H) * L);
+    std::vector<__fp16> ls(size_t(L) * H / 32), lsu(size_t(H) * L / 32);
+    for (auto& v : lq) v = uint8_t(rnd());
+    for (auto& v : lqu) v = uint8_t(rnd());
+    for (auto& v : ls) v = __fp16(0.0005f + float(rnd() % 100) * 1e-5f);
+    for (auto& v : lsu) v = __fp16(0.0005f + float(rnd() % 100) * 1e-5f);
+    Mat su = make(NhFmt::FP4, S, H, 0.0011f), sdn = make(NhFmt::FP4, H, S, 0.0009f);
+    std::vector<Mat> up(E), dn(E);
+    std::vector<float> gu(E), gd(E);
+    for (uint32_t e = 0; e < E; ++e) {
+      gu[e] = 0.0008f * (1.0f + 0.1f * float(e % 5));
+      gd[e] = 0.0006f * (1.0f + 0.1f * float(e % 3));
+      up[e] = make(NhFmt::FP4, I, L, gu[e]);
+      dn[e] = make(NhFmt::FP4, L, I, gd[e]);
+    }
+    auto upload = [&](const void* p, size_t n, const char* lab) {
+      Buffer b = g.alloc(std::max<size_t>(n, 16), lab, false);
+      memcpy(b.ptr(), p, n);
+      return b;
+    };
+    Buffer RW = upload(rw.data(), rw.size() * 2, "rw"), LQ = upload(lq.data(), lq.size(), "lq"),
+           LS = upload(ls.data(), ls.size() * 2, "ls"), LQU = upload(lqu.data(), lqu.size(), "lqu"),
+           LSU = upload(lsu.data(), lsu.size() * 2, "lsu"), SUQ = upload(su.q.data(), su.q.size(), "suq"),
+           SUS = upload(su.s.data(), su.s.size(), "sus"), SDQ = upload(sdn.q.data(), sdn.q.size(), "sdq"),
+           SDS = upload(sdn.s.data(), sdn.s.size(), "sds");
+    const size_t uq = up[0].q.size(), us = up[0].s.size(), dq = dn[0].q.size(), ds = dn[0].s.size();
+    Buffer UQ = g.alloc(uq * E, "uq", false), US = g.alloc(us * E, "us", false), DQ = g.alloc(dq * E, "dq", false),
+           DS = g.alloc(ds * E, "ds", false), GU = upload(gu.data(), E * 4, "gu"), GD = upload(gd.data(), E * 4, "gd");
+    for (uint32_t e = 0; e < E; ++e) {
+      memcpy(UQ.as<uint8_t>() + e * uq, up[e].q.data(), uq);
+      memcpy(US.as<uint8_t>() + e * us, up[e].s.data(), us);
+      memcpy(DQ.as<uint8_t>() + e * dq, dn[e].q.data(), dq);
+      memcpy(DS.as<uint8_t>() + e * ds, dn[e].s.data(), ds);
+    }
+    std::vector<float> xn(H), x0(H);
+    for (auto& v : xn) v = nrand();
+    for (auto& v : x0) v = nrand();
+    Buffer XN = upload(xn.data(), H * 4, "xn"), X1 = upload(x0.data(), H * 4, "x1"), X2 = upload(x0.data(), H * 4, "x2");
+    Buffer LOG = g.alloc(E * 4, "logits"), LAT = g.alloc(L * 4, "lat"), SH = g.alloc(S * 4, "sh"),
+           EID = g.alloc(k * 4, "eid"), EW = g.alloc(k * 4, "ew"), CTR = g.alloc(16, "ctr"), HH = g.alloc(size_t(k) * I * 4, "h"),
+           PART = g.alloc(size_t(k) * L * 4, "part"), SD = g.alloc(H * 4, "sd"), LO = g.alloc(L * 4, "lo");
+    memset(CTR.ptr(), 0, 16);
+    struct MoeDecP_ { uint32_t H, E, k, norm; float scale; uint32_t L, S, I, uqs, uss, tg_r, tg_l, tg_u; } dp{
+        H, E, k, 1, 5.0f, L, S, I, uint32_t(uq), uint32_t(us), (E + 15) / 16, (L + 15) / 16, k * ((I + 15) / 16)};
+    struct MoeP_ { uint32_t I, D, k, uqs, uss, dqs, dss, hs; } mp{I, L, k, uint32_t(uq), uint32_t(us), uint32_t(dq), uint32_t(ds), I};
+    struct MvP_ { uint32_t N, K, xs, ys; float gs; uint32_t R; };
+    auto fused = [&](Encoder& e) {
+      e.use(NemotronH::pipeline("nh_moe_a4"));
+      e.buf(0, XN);
+      e.buf(1, RW);
+      e.buf(2, LQ);
+      e.buf(3, LS);
+      e.buf(4, SUQ);
+      e.buf(5, SUS);
+      e.buf(6, LOG);
+      e.buf(7, LAT);
+      e.buf(8, SH);
+      e.buf(9, bb);
+      e.buf(10, EID);
+      e.buf(11, EW);
+      e.buf(12, CTR);
+      e.bytes(13, &dp, sizeof dp);
+      e.val(14, su.gs);
+      e.dispatch(dp.tg_r + dp.tg_l + (S + 15) / 16, 1, 1, 128);
+      e.use(NemotronH::pipeline("nh_moe_b4"));
+      e.buf(0, UQ);
+      e.buf(1, US);
+      e.buf(2, LAT);
+      e.buf(3, HH);
+      e.buf(4, EID);
+      e.buf(5, SDQ);
+      e.buf(6, SDS);
+      e.buf(7, SH);
+      e.buf(8, SD);
+      e.bytes(9, &dp, sizeof dp);
+      e.buf(10, GU);
+      e.val(11, sdn.gs);
+      e.dispatch(dp.tg_u + (H + 15) / 16, 1, 1, 128);
+      e.use(NemotronH::pipeline("nh_x4_moe_dn"));
+      e.buf(0, DQ);
+      e.buf(1, DS);
+      e.buf(2, HH);
+      e.buf(3, PART);
+      e.buf(4, EID);
+      e.buf(5, EW);
+      e.bytes(6, &mp, sizeof mp);
+      e.buf(8, live);
+      e.buf(9, GD);
+      e.dispatch((L + 7) / 8, k, 1, 64);
+      e.use(NemotronH::pipeline("nh_moe_d1"));
+      e.buf(0, LQU);
+      e.buf(1, LSU);
+      e.buf(2, PART);
+      e.buf(3, SD);
+      e.buf(4, X1);
+      e.bytes(5, &dp, sizeof dp);
+      e.dispatch((H + 15) / 16, 1, 1, 128);
+    };
+    auto mv = [&](Encoder& e, const char* name, const Buffer& q, const Buffer& sc, const Buffer& x, const Buffer& y,
+                  uint32_t N, uint32_t K, float gs, uint32_t rows_tg, uint32_t thr) {
+      const MvP_ p{N, K, K, N, gs, 1};
+      e.use(NemotronH::pipeline(name));
+      e.buf(0, q);
+      e.buf(1, sc);
+      e.buf(2, x);
+      e.buf(3, y);
+      e.bytes(4, &p, sizeof p);
+      e.dispatch((N + rows_tg - 1) / rows_tg, 1, 1, thr);
+    };
+    auto separate = [&](Encoder& e) {
+      mv(e, "nh_mv_bf16_r1", RW, RW, XN, LOG, E, H, 1.0f, 16, 128);
+      RouteP_ r1{E, k, 1, 5.0f, E, 1};
+      e.use(NemotronH::pipeline("nh_moe_route1"));
+      e.buf(0, LOG);
+      e.buf(1, bb);
+      e.buf(2, EID);
+      e.buf(3, EW);
+      e.bytes(4, &r1, sizeof r1);
+      e.buf(5, live);
+      e.dispatch(1, 1, 1, 256);
+      mv(e, "nh_mv_q8_r1", LQ, LS, XN, LAT, L, H, 1.0f, 16, 128);
+      mv(e, "nh_x4_mv_l0_relu2", SUQ, SUS, XN, SH, S, H, su.gs, 8, 64);
+      e.use(NemotronH::pipeline("nh_x4_moe_up"));
+      e.buf(0, UQ);
+      e.buf(1, US);
+      e.buf(2, LAT);
+      e.buf(3, HH);
+      e.buf(4, EID);
+      e.bytes(5, &mp, sizeof mp);
+      e.buf(7, live);
+      e.buf(9, GU);
+      e.dispatch((I + 7) / 8, k, 1, 64);
+      e.use(NemotronH::pipeline("nh_x4_moe_dn"));
+      e.buf(0, DQ);
+      e.buf(1, DS);
+      e.buf(2, HH);
+      e.buf(3, PART);
+      e.buf(4, EID);
+      e.buf(5, EW);
+      e.bytes(6, &mp, sizeof mp);
+      e.buf(8, live);
+      e.buf(9, GD);
+      e.dispatch((L + 7) / 8, k, 1, 64);
+      e.use(NemotronH::pipeline("nh_moe2_sum2"));
+      e.buf(0, PART);
+      e.buf(1, LO);
+      e.bytes(2, &mp, sizeof mp);
+      e.buf(3, live);
+      e.dispatch((L + 63) / 64, 1, 1, 64);
+      mv(e, "nh_mv_q8_r1_add", LQU, LSU, LO, X2, H, L, 1.0f, 16, 128);
+      mv(e, "nh_x4_mv_l0_add", SDQ, SDS, SH, X2, H, S, sdn.gs, 8, 64);
+    };
+    {
+      auto e = g.begin();
+      fused(*e);
+      e->commit_and_wait();
+    }
+    std::vector<int> e_f(EID.as<int>(), EID.as<int>() + k);
+    {
+      auto e = g.begin();
+      separate(*e);
+      e->commit_and_wait();
+    }
+    const bool same_e = !memcmp(e_f.data(), EID.ptr(), k * 4);
+    double me = 0, mr = 0;
+    for (uint32_t n = 0; n < H; ++n) {
+      const double d1 = double(X1.as<float>()[n]) - x0[n], d2 = double(X2.as<float>()[n]) - x0[n];
+      me = std::max(me, std::fabs(d1 - d2));
+      mr = std::max(mr, std::fabs(d2));
+    }
+    Timer tf, tsep;
+    for (int rd = 0; rd < reps + 2; ++rd) {
+      for (int which = 0; which < 2; ++which) {
+        auto e = g.begin();
+        for (int c = 0; c < 10; ++c) {
+          if (which) separate(*e);
+          else fused(*e);
+        }
+        e->commit_and_wait();
+        if (rd >= 2) (which ? tsep : tf).t.push_back(e->gpu_ms() / 10);
+      }
+    }
+    printf("one-token MoE layer (H %u, E %u top-%u, I %u, latent %u, shared %u): fused %.4f ms, separate %.4f ms; "
+           "experts %s, rel. diff %.1e\n", H, E, k, I, L, S, tf.med(), tsep.med(), same_e ? "same" : "DIFFER", me / mr);
+  }
   return 0;
 }

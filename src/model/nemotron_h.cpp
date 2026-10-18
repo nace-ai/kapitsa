@@ -1502,6 +1502,68 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch((H + 15) / 16, 1, 1, 128);
     return;
   }
+  if (R == 1 && fuse_dec_ && L.router.fmt == NhFmt::BF16 && L.lat_down.fmt == NhFmt::Q8 && L.lat_up.fmt == NhFmt::Q8 &&
+      L.up_s.fmt == NhFmt::FP4 && L.down_s.fmt == NhFmt::FP4 && L.up_e.fmt == NhFmt::FP4 && L.E <= 512 &&
+      L.k_used <= 32 && cfg_.hidden % 32 == 0 && cfg_.shared_I % 32 == 0 && cfg_.latent % 32 == 0) {
+    // one token, NVFP4 experts and shared expert: 4 dispatches (nh_zdec.metal)
+    const uint32_t H = uint32_t(cfg_.hidden), Lt = uint32_t(cfg_.latent), S = uint32_t(cfg_.shared_I), I = uint32_t(L.I);
+    const uint32_t tg_r = (uint32_t(L.E) + 15) / 16, tg_l = (Lt + 15) / 16, tg_u = k * ((I + 15) / 16);
+    const MoeDecP dp{H, uint32_t(L.E), k, cfg_.w_norm ? 1u : 0u, cfg_.w_scale, Lt, S, I, uint32_t(L.up_e.q_exp()),
+                     uint32_t(L.up_e.s_exp()), tg_r, tg_l, tg_u};
+    e.use(pipe("nh_moe_a4"));
+    e.buf(0, xn_);
+    e.buf(1, L.router.q);
+    e.buf(2, L.lat_down.q);
+    e.buf(3, L.lat_down.s);
+    e.buf(4, L.up_s.q);
+    e.buf(5, L.up_s.s);
+    e.buf(6, rl_);
+    e.buf(7, lat_);
+    e.buf(8, sh_);
+    e.buf(9, L.exp_bias);
+    e.buf(10, eid_);
+    e.buf(11, ew_);
+    e.buf(12, route_ctr_);
+    e.val(13, dp);
+    e.val(14, L.up_s.gs);
+    e.dispatch(tg_r + tg_l + (S + 15) / 16, 1, 1, 128);
+    e.use(pipe("nh_moe_b4"));
+    e.buf(0, L.up_e.q);
+    e.buf(1, L.up_e.s);
+    e.buf(2, lat_);
+    e.buf(3, h_);
+    e.buf(4, eid_);
+    e.buf(5, L.down_s.q);
+    e.buf(6, L.down_s.s);
+    e.buf(7, sh_);
+    e.buf(8, sd_);
+    e.val(9, dp);
+    e.buf(10, L.up_e.gse);
+    e.val(11, L.down_s.gs);
+    e.dispatch(tg_u + (H + 15) / 16, 1, 1, 128);
+    const MoeP mp{I, Lt, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
+                  uint32_t(L.down_e.s_exp()), I};
+    e.use(pipe("nh_x4_moe_dn"));
+    e.buf(0, L.down_e.q);
+    e.buf(1, L.down_e.s);
+    e.buf(2, h_);
+    e.buf(3, part_);
+    e.buf(4, eid_);
+    e.buf(5, ew_);
+    e.val(6, mp);
+    e.buf(8, live_all_);
+    e.buf(9, L.down_e.gse);
+    e.dispatch((Lt + 7) / 8, k, 1, 64);
+    e.use(pipe("nh_moe_d1"));
+    e.buf(0, L.lat_up.q);
+    e.buf(1, L.lat_up.s);
+    e.buf(2, part_);
+    e.buf(3, sd_);
+    e.buf(4, x_);
+    e.val(5, dp);
+    e.dispatch((H + 15) / 16, 1, 1, 128);
+    return;
+  }
   const bool gm = gemm_rows_ && R >= 2;
   // With a grouped encoder (NI_NH_GROUP): router, latent down and shared up run together, then routed down and shared
   // down; a serial encoder runs them one after another in the same order.
@@ -1631,12 +1693,13 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       else enc_mv(e, L.down_s, sh_, x_, R, 1);
       e.group_end();
     }
-    e.use(pipe("nh_moe2_sum"));
+    e.use(pipe(fp4 ? "nh_moe2_sum2" : "nh_moe2_sum"));
     e.buf(0, part_);
     e.buf(1, lo_);
     e.val(2, mp);
     e.buf(3, live());
-    e.dispatch(nrows, 1, 1, 256);
+    if (fp4) e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
+    else e.dispatch(nrows, 1, 1, 256);
   }
   // shared expert on the full hidden state; both branches add into the residual stream
   if (grouped) {  // (the shared expert ran above)

@@ -185,6 +185,19 @@ NI_INLINE void nh_mv1_iq2v(const device uchar* q, const device uchar* s, const d
   }
 }
 
+// The same sums spread over threadgroups (many experts per row: one threadgroup per row read 22 x 1024 partials alone
+// in ~25 us). grid: (ceil(D / 64), R) x 64 threads; the same order of additions.
+[[kernel]] void nh_moe2_sum2(const device float* part [[buffer(0)]], device float* o [[buffer(1)]],
+                             constant NhMoeParams& p [[buffer(2)]], const device uint* live [[buffer(3)]],
+                             uint2 tg [[threadgroup_position_in_grid]], uint2 tid [[thread_position_in_threadgroup]],
+                             uint2 ntg [[threads_per_threadgroup]]) {
+  const uint r = tg.y, d = tg.x * ntg.x + tid.x;
+  if (r >= live[0] || d >= p.D) return;
+  float v = 0.0f;
+  for (uint j = 0; j < p.k; ++j) v += part[(size_t(r) * p.k + j) * p.D + d];
+  o[r * p.D + d] = v;
+}
+
 // The IQ2_XXS grid points as 8 halves each (4 KB): the A operands of the 8-row MMA kernels and the prefill GEMMs'
 // weight tiles read it from the constant address space. grid: 1 x 256 threads.
 [[kernel]] void nh_iq2_fill_tables2(device uchar* tab [[buffer(0)]], uint i [[thread_position_in_grid]]) {
