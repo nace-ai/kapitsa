@@ -26,13 +26,23 @@ static std::string read_file(const std::string& p) {
   return ss.str();
 }
 
+// A message's role, or "" (a field of another type included)
+static std::string role_of(const ojson& m) {
+  if (!m.is_object()) return "";
+  auto it = m.find("role");
+  return it != m.end() && it->is_string() ? it->get<std::string>() : "";
+}
+
 // Whether the conversation ends with a user query, by the Qwen3.5+ template's own test: a user message
 // whose trimmed text is not wrapped in <tool_response> ... </tool_response>. Tool results (role "tool",
-// rendered inside a user turn, or such a wrapped user message) are not queries.
+// rendered inside a user turn, or such a wrapped user message) are not queries. System messages after it
+// (an agent's context, rendered as system turns in place) do not change that.
 static bool ends_with_query(const ojson& messages) {
   if (!messages.is_array() || messages.empty()) return false;
-  const ojson& m = messages.back();
-  if (!m.is_object() || m.value("role", "") != "user") return false;
+  size_t last = messages.size() - 1;
+  while (last > 0 && role_of(messages[last]) == "system") --last;
+  const ojson& m = messages[last];
+  if (role_of(m) != "user") return false;
   std::string text;
   if (m.contains("content") && m["content"].is_string()) {
     text = m["content"].get<std::string>();
@@ -92,11 +102,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   model_ = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
   model_->set_mem_budget(budget_);
   tok_.load(opts_.model_dir + "/tokenizer.json");
-  std::string src = read_file(opts_.model_dir + "/chat_template.jinja");
-  if (src.empty()) {
-    auto cfg = nlohmann::json::parse(read_file(opts_.model_dir + "/tokenizer_config.json"));
-    if (cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
-  }
+  const std::string src = chat_template_source(opts_.model_dir);
   if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
   tmpl_ = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
   think_open_ = tok_.find("<think>");
@@ -286,6 +292,7 @@ void Engine::drop_slot(Slot& slot) {
   model_->reset(*slot.seq);  // nothing in flight uses it: other slots are idle, this one's request has not started
   slot.tokens.clear();
   slot.turns = 0;
+  slot.done_at = 0;
   for (auto& c : slot.ckpts) {
     c.pos = -1;
     c.query = false;
@@ -318,17 +325,83 @@ bool Engine::reserve_kv(Slot& slot, int need) {
   return false;
 }
 
+// Image and video parts become a short note: the engine does not read images yet (the vision branch replaces this).
+static ojson without_images(const ojson& messages, int* dropped) {
+  ojson out = messages;
+  for (auto& m : out) {
+    if (!m.is_object() || !m.contains("content") || !m["content"].is_array()) continue;
+    for (auto& p : m["content"]) {
+      if (!p.is_object() || (p.contains("text") && p["text"].is_string())) continue;
+      const std::string t = p.contains("type") && p["type"].is_string() ? p["type"].get<std::string>() : "";
+      if (t.find("image") != std::string::npos || t.find("video") != std::string::npos || p.contains("image") ||
+          p.contains("image_url") || p.contains("video")) {
+        p = {{"type", "text"}, {"text", "\n[image omitted: this server can't read images yet]\n"}};
+        ++*dropped;
+      }
+    }
+  }
+  return out;
+}
+
+// The text of a message's content (a string, or the text of its parts), trimmed as the templates trim it.
+static std::string content_text(const ojson& c) {
+  std::string s;
+  if (c.is_string()) s = c.get<std::string>();
+  else if (c.is_array())
+    for (auto& p : c)
+      if (p.is_object() && p.contains("text") && p["text"].is_string()) s += p["text"].get<std::string>();
+  const size_t a = s.find_first_not_of(" \n\r\t"), b = s.find_last_not_of(" \n\r\t");
+  return a == std::string::npos ? "" : s.substr(a, b + 1 - a);
+}
+
+std::string chat_template_source(const std::string& model_dir) {
+  std::string src = read_file(model_dir + "/chat_template.jinja");
+  if (src.empty()) {
+    auto cfg = nlohmann::json::parse(read_file(model_dir + "/tokenizer_config.json"), nullptr, false);
+    if (cfg.is_object() && cfg.contains("chat_template") && cfg["chat_template"].is_string()) src = cfg["chat_template"];
+  }
+  return src;
+}
+
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
+  return render_chat(*tmpl_, r, add_generation_prompt);
+}
+
+std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt) {
   minja::chat_template_inputs in;
-  in.messages = r.messages;
+  int images = 0;
+  in.messages = without_images(r.messages, &images);
+  if (images && add_generation_prompt) logi("chat: %d image(s) left out: this server can't read images yet", images);
+  // A system message after the first message (an agent's hook output, a mode change) is a system turn where it
+  // stands: the Qwen3.5+ templates raise on it. It goes through the template as a marker tool response (not a user
+  // query, so which assistant turns keep their reasoning does not change), and the marker's turn is then replaced.
+  std::vector<std::string> later;
+  static const std::string mark = "\x02kapitsa-system-turn-";
+  for (size_t i = 1; i < in.messages.size(); ++i) {
+    ojson& m = in.messages[i];
+    if (role_of(m) != "system") continue;
+    later.push_back(content_text(m.contains("content") ? m["content"] : ojson()));
+    m = {{"role", "user"}, {"content", "<tool_response>" + mark + std::to_string(later.size() - 1) + "\x02</tool_response>"}};
+  }
   in.tools = r.tools.empty() ? ojson() : r.tools;
   in.add_generation_prompt = add_generation_prompt;
   in.extra_context = r.template_kwargs;
   minja::chat_template_options opt;
-  return tmpl_->apply(in, opt);
+  std::string text = tmpl.apply(in, opt);
+  for (size_t k = 0; k < later.size(); ++k) {
+    const std::string inner = "<tool_response>" + mark + std::to_string(k) + "\x02</tool_response>";
+    const std::string turn = "<|im_start|>user\n" + inner + "<|im_end|>\n";
+    if (size_t at = text.find(turn); at != std::string::npos)
+      text.replace(at, turn.size(), "<|im_start|>system\n" + later[k] + "<|im_end|>\n");
+    else if (size_t at2 = text.find(inner); at2 != std::string::npos)  // another template's markup: its text in place
+      text.replace(at2, inner.size(), later[k]);
+  }
+  return text;
 }
 
-Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
+int Engine::count_tokens(const ChatRequest& r) const { return int(tok_.encode(render(r, true)).size()); }
+
+Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival) {
   auto lcp = [&](const std::vector<int>& a) {
     size_t n = std::min(a.size(), prompt.size()), i = 0;
     while (i < n && a[i] == prompt[i]) ++i;
@@ -361,8 +434,10 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
     // (a conversation never continued, like an agent's title or commit-message request), and only
     // then a continued conversation; least recently used first within each. So one-offs never evict
     // the conversation in progress, however long an older one-off was, and a new conversation
-    // replaces the conversation idle longest.
-    auto rank = [](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 ? 1 : 2; };
+    // replaces the conversation idle longest. A conversation whose request was still running when this
+    // one arrived counts as continued: an agent sends its title request beside its first request
+    // (opencode does), and that first conversation goes on with the tools' results.
+    auto rank = [&](const Slot& s) { return s.tokens.empty() ? 0 : s.turns <= 1 && arrival > s.done_at ? 1 : 2; };
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (int(prompt.size()) + 64 > s.seq->limit) continue;
@@ -377,8 +452,9 @@ Engine::Slot& Engine::pick_slot(const std::vector<int>& prompt) {
   return *best;
 }
 
-ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta) {
-  ++requests_;
+ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
+                        const std::function<void(const ChatResult&)>& on_prompt) {
+  const uint64_t arrival = ++requests_;
   std::lock_guard<std::mutex> lk(mu_);
   // NI_ANE_ASYNC: switch the prefill FFN split on once its program is compiled (under the engine lock:
   // it runs a startup check through the model's buffers, which the idle history prefill also uses)
@@ -409,13 +485,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (boundary >= int(prompt.size())) boundary = -1;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
-  Slot& slot = pick_slot(prompt);
+  Slot& slot = pick_slot(prompt, arrival);
   Seq& s = *slot.seq;
   slot.last_used = ++clock_;
   ++slot.gen;
   if (n + 1 >= s.limit) {
     res.finish_reason = "error";
     res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(s.limit) + ")";
+    res.prompt_limit = s.limit - 2;
     return res;
   }
 
@@ -442,6 +519,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     res.finish_reason = "error";
     res.error = "insufficient memory: a " + std::to_string(n) + "-token prompt needs more KV cache than this Mac's "
                 "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
+    res.prompt_limit = std::max(0, int(fit) - 32);
     return res;
   }
   int start = 0;
@@ -473,6 +551,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
   res.cached_tokens = start;
+  if (on_prompt) on_prompt(res);
   std::copy(prompt.begin(), prompt.end(), s.tokens());
 
   // ---- prefill ----
@@ -629,6 +708,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       finish = "stop";
       return false;
     }
+    if (parser.in_think()) ++res.reasoning_tokens;
     ChatDelta d = parser.push(t);
     if (!d.content.empty()) {
       content_so_far += d.content;
@@ -638,6 +718,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
           size_t over = content_so_far.size() - at;
           d.content.resize(d.content.size() > over ? d.content.size() - over : 0);
           finish = "stop";
+          res.stop_sequence = st;
           break;
         }
       }
@@ -682,6 +763,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     while (go) {
       if (!next_draft) {  // no room for another drafting pass
         finish = "length";
+        res.context_full = true;
         break;
       }
       next_draft.reset();
@@ -744,6 +826,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         if (mtp_e) mtp_e->wait();
         if (P + depth + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, P + depth + 3))) {
           finish = "length";
+          res.context_full = true;
           break;
         }
       }
@@ -797,6 +880,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         if (next) next->wait();
         if (pos + 2 >= s.limit || !reserve_kv(slot, std::min(s.limit, pos + 3))) {
           finish = "length";
+          res.context_full = true;
           go = false;
         }
       }
@@ -818,6 +902,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.slot = int(&slot - slots_.data());
   res.slot_gen = slot.gen;
   res.req_seq = requests_.load();
+  slot.done_at = res.req_seq;
   ChatDelta tail = parser.finish(finish == "stop");
   res.reasoning += tail.reasoning;
   res.content += tail.content;
@@ -872,6 +957,16 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   // way and keep the text up to the placeholder turn's start
   ChatRequest r2 = r;
   r2.messages.push_back({{"role", "assistant"}, {"content", res.content}});
+  // with its reasoning when the client sends reasoning back (it asks to keep every turn's thinking, or an earlier
+  // assistant turn came back with it): templates that render past reasoning (Qwen3.8; preserve_thinking) then render
+  // this turn as the live state holds it, and there is nothing to prefill
+  const auto pt = r.template_kwargs.find("preserve_thinking");
+  bool returns_reasoning = pt != r.template_kwargs.end() && pt->is_boolean() && pt->get<bool>();
+  for (const auto& m : r.messages)
+    returns_reasoning = returns_reasoning || (role_of(m) == "assistant" && m.contains("reasoning_content") &&
+                                              m["reasoning_content"].is_string() &&
+                                              !m["reasoning_content"].get<std::string>().empty());
+  if (returns_reasoning) r2.messages.back()["reasoning_content"] = res.reasoning;
   static const std::string marker = "\x01nace-history-marker\x01";
   r2.messages.push_back({{"role", "user"}, {"content", marker}});
   std::string text;

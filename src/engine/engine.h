@@ -86,6 +86,12 @@ int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budg
 // nothing planned, a downloaded one or the default. *fits: whether the returned variant fits.
 hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits = nullptr);
 
+struct ChatRequest;
+// The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
+std::string chat_template_source(const std::string& model_dir);
+// A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it)
+std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt);
+
 struct ChatRequest {
   ojson messages = ojson::array();
   ojson tools = ojson::array();
@@ -114,7 +120,11 @@ struct ChatResult {
   std::vector<ToolCall> tool_calls;
   std::string finish_reason;  // stop | length | tool_calls | cancelled | error
   std::string error;
+  std::string stop_sequence;  // "stop" at one of the request's stop strings: that string
+  bool context_full = false;  // "length" because the context window (or the memory for it) ran out, not max_tokens
+  int prompt_limit = 0;       // "error" because the prompt does not fit: the most prompt tokens that would
   int prompt_tokens = 0, cached_tokens = 0, completion_tokens = 0;
+  int reasoning_tokens = 0;   // completion tokens inside the think block
   double prefill_ms = 0, decode_ms = 0;
   // engine bookkeeping for prefill_history: the slot, its use count and the request count at the reply
   int slot = -1;
@@ -129,10 +139,17 @@ class Engine {
   int context_length() const { return opts_.context; }
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
-  // Renders the prompt for a request (for debugging / token counting).
+  // Renders the prompt for a request (for debugging / token counting). Image and video parts become a short note
+  // (no vision yet), and a system message after the first message becomes a system turn in place (the Qwen3.5+
+  // templates accept one only at the start).
   std::string render(const ChatRequest& r, bool add_generation_prompt = true) const;
-  // Runs one request. `on_delta` returns false to cancel. Serialized across threads.
-  ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta);
+  // The prompt's length in tokens, as chat() would prefill it. Does not wait for a running request.
+  int count_tokens(const ChatRequest& r) const;
+  // Runs one request. `on_delta` returns false to cancel. Serialized across threads. `on_prompt`, if given, is
+  // called once the prompt is tokenized and matched against the slot's cache, before the prefill, with
+  // prompt_tokens and cached_tokens set (not when the request fails before that).
+  ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
+                  const std::function<void(const ChatResult&)>& on_prompt = nullptr);
   // History prefill (NI_HISTORY_PREFILL): after a reply, prefills the conversation as the next request
   // will render it (the template drops this turn's think block, so the generated tokens in the live
   // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its
@@ -158,8 +175,10 @@ class Engine {
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
+    uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
   };
-  Slot& pick_slot(const std::vector<int>& prompt);
+  // `arrival`: the request's number (requests_ when it arrived)
+  Slot& pick_slot(const std::vector<int>& prompt, uint64_t arrival);
   // Grows slot's KV cache to `need` positions; when the memory budget is short, frees the caches of other
   // slots (least recently used first: their conversations are prefilled again when they come back).
   // Nothing using the slots may be in flight. False if even that leaves too little memory.

@@ -25,13 +25,16 @@ class Kapitsa < Formula
     <<~EOS
       Start the best model for this Mac (the first run downloads it):
         kapitsa serve
-      Then open http://127.0.0.1:8000 to chat, or use the API at http://127.0.0.1:8000/v1.
+      Then open http://127.0.0.1:8000 to chat, or use the API at http://127.0.0.1:8000/v1
+      (OpenAI chat completions and Responses, Anthropic Messages).
+      Or start a coding agent on it in one command: kapitsa claude, kapitsa codex, kapitsa opencode.
       Models are stored in ~/.cache/kapitsa/models (KAPITSA_HOME moves them).
     EOS
   end
 
   test do
     assert_match "kapitsa", shell_output("#{bin}/kapitsa --version")
+    assert_match "kapitsa opencode", shell_output("#{bin}/kapitsa --help")
     # model names resolve offline
     ENV["KAPITSA_HOME"] = testpath.to_s
     assert_match "qwen3.5-4b", shell_output("#{bin}/kapitsa pull --dry-run --json 4b")

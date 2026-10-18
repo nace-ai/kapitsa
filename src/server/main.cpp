@@ -1,8 +1,9 @@
-// kapitsa: Kapitsa's command line, and its OpenAI-compatible server (chat completions, streaming, tools) with a
-// chat page at /.
+// kapitsa: Kapitsa's command line, and its server: OpenAI chat completions and Responses, Anthropic Messages
+// (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
 //                 [--ctx 32768] [--slots 2] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
 //                 [--api-key K] [--mem-budget GB]    no --model: the best catalog model for this Mac's memory
+//   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
 //   kapitsa pull MODEL... [--from DIR]... [--dry-run [--json]]
 //   kapitsa list [--json]
@@ -11,23 +12,29 @@
 //   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
+#include "api/anthropic.h"
+#include "api/responses.h"
 #include "engine/doctor.h"
 #include "engine/engine.h"
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "hub/hub.h"
 #include "metal/gpu.h"
+#include "server/cli.h"
 #include "util/log.h"
 
 #include <httplib/httplib.h>
 
 #include <netdb.h>
+#include <sys/event.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <unistd.h>
 
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <filesystem>
 #include <thread>
 #include <csignal>
@@ -85,9 +92,10 @@ static ChatRequest parse_request(const json& b) {
   if (b.contains("chat_template_kwargs") && b["chat_template_kwargs"].is_object())
     r.template_kwargs = b["chat_template_kwargs"];
   if (b.contains("reasoning_effort") && b["reasoning_effort"].is_string()) {
-    std::string e = b["reasoning_effort"];
-    if (e == "none") r.template_kwargs["enable_thinking"] = false;
-    else if (!r.template_kwargs.contains("reasoning_effort")) r.template_kwargs["reasoning_effort"] = e;
+    // none/minimal: thinking off; low/medium: the template's level; high/xhigh/max: its default (Qwen3.8's highest;
+    // it raises on "high")
+    const std::string e = b["reasoning_effort"];
+    if (e == "none" || e == "minimal" || !r.template_kwargs.contains("reasoning_effort")) api::apply_effort(e, r.template_kwargs);
   }
   return r;
 }
@@ -111,17 +119,17 @@ static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, boo
 
 // ---------------------------------------------------------------- command line
 
-[[noreturn]] static void usage_error(const std::string& msg, const char* help = "kapitsa --help") {
+[[noreturn]] void ni::usage_error(const std::string& msg, const char* help) {
   fprintf(stderr, "kapitsa: %s\n(%s shows how to use it.)\n", msg.c_str(), help);
   exit(2);
 }
 
-static int fail(const std::string& msg, int code = 1) {
+int ni::fail(const std::string& msg, int code) {
   fprintf(stderr, "kapitsa: %s\n", msg.c_str());
   return code;
 }
 
-static int to_int(const std::string& opt, const std::string& v, const char* help) {
+int ni::to_int(const std::string& opt, const std::string& v, const char* help) {
   char* end = nullptr;
   errno = 0;
   const long x = strtol(v.c_str(), &end, 10);
@@ -129,13 +137,13 @@ static int to_int(const std::string& opt, const std::string& v, const char* help
   return int(x);
 }
 
-static std::string expand_home(const std::string& p) {
+std::string ni::expand_home(const std::string& p) {
   const char* h = getenv("HOME");
   if (h && (p == "~" || p.rfind("~/", 0) == 0)) return h + p.substr(1);
   return p;
 }
 
-static double ram_gb() {
+double ni::ram_gb() {
   uint64_t m = 0;
   size_t n = sizeof m;
   sysctlbyname("hw.memsize", &m, &n, nullptr, 0);
@@ -155,7 +163,7 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
 // variant holds the conversation without the drafter (MTP decoding). A model not downloaded yet is
 // planned from its headers (hub::plan_dir: a few hundred KB, fetched once); one that cannot be planned (offline)
 // cannot be downloaded either and is skipped. False if none can be planned.
-static bool best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
+bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
   bool have = false;
   for (const auto& m : hub::catalog()) {
     bool fits = false;
@@ -181,7 +189,7 @@ static bool best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* o
 }
 
 // --model <name> without a variant: the one for this Mac (pick_variant); anything else as resolved.
-static hub::ModelRef for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size_t budget) {
+hub::ModelRef ni::for_this_mac(hub::ModelRef ref, const EngineOptions& opt, size_t budget) {
   if (ref.kind != hub::ModelRef::kCatalog || ref.variant_given) return ref;
   return pick_variant(*ref.model, opt, budget);
 }
@@ -216,13 +224,19 @@ static void print_help() {
   printf("Kapitsa %s: fast local Qwen on Apple silicon.\n\n"
          "  kapitsa serve                 start the best model for this Mac (downloads it the first time)\n"
          "  kapitsa serve --model 27b     start a given model\n\n"
-         "Then open http://127.0.0.1:8000 to chat, or point any OpenAI-compatible app at\n"
-         "http://127.0.0.1:8000/v1.\n\n"
+         "Then open http://127.0.0.1:8000 to chat, or point any OpenAI- or Anthropic-compatible app at\n"
+         "http://127.0.0.1:8000/v1. Or start a coding agent on it in one command:\n\n"
+         "  kapitsa claude                Claude Code\n"
+         "  kapitsa codex                 Codex\n"
+         "  kapitsa opencode              opencode\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
          "  or a model folder, or a .gguf file (converted once into a model folder).\n\n"
          "Commands:\n"
-         "  serve        start the server: chat page at /, OpenAI API at /v1 (kapitsa serve --help)\n"
+         "  serve        start the server: chat page at /, OpenAI and Anthropic APIs at /v1 (kapitsa serve --help)\n"
+         "  claude, codex, opencode [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
+         "               start that coding agent on Kapitsa: on the server already running on the port, else on one\n"
+         "               started for it (with a context sized for agents; kapitsa claude --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
          "  list         downloaded models, their size and what they include\n"
          "  rm MODEL     delete a downloaded model\n"
@@ -239,7 +253,8 @@ static void print_serve_help() {
          "                         once: kapitsa import). Default: the best model for this Mac. Downloaded on first use.\n"
          "  --host HOST            listen address (default 127.0.0.1; 0.0.0.0 serves your network)\n"
          "  --port PORT            default 8000\n"
-         "  --api-key KEY          require \"Authorization: Bearer KEY\" (the chat page asks for it once)\n"
+         "  --api-key KEY          require \"Authorization: Bearer KEY\" or \"x-api-key: KEY\" (the chat page asks for\n"
+         "                         it once)\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --ctx TOKENS           context per conversation (default 32768)\n"
          "  --slots N              conversations kept ready for instant follow-ups (default 2)\n"
@@ -249,7 +264,8 @@ static void print_serve_help() {
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n\n"
-         "Endpoints: GET / (chat page), POST /v1/chat/completions, GET /v1/models, GET /health.\n"
+         "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
+         "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
          "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
 }
 
@@ -265,7 +281,7 @@ static void print_pull_help() {
 }
 
 // Why the server could not listen on host:port, or "" (a test bind, as the server binds: SO_REUSEADDR only).
-static std::string port_problem(const std::string& host, int port) {
+std::string ni::port_problem(const std::string& host, int port) {
   addrinfo hints{}, *res = nullptr;
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
@@ -294,7 +310,111 @@ static std::string port_problem(const std::string& host, int port) {
   return why;
 }
 
+// One streamed reply of the Anthropic or Responses API. The engine runs in a thread of its own and hands the writer's
+// events to the connection's thread through a queue. So the reply is still a plain HTTP error when the request fails
+// before its first event (a prompt the context cannot hold: Claude Code and Codex recover from those errors), the
+// first event goes out as soon as the prompt is counted, and the connection gets keepalive events while the engine
+// waits for another request or prefills a long prompt (clients drop a stream that is idle for minutes).
+struct StreamJob {
+  std::mutex mu;  // the queue, the flags and every call into the writer
+  std::condition_variable cv;
+  std::deque<std::string> out;
+  bool started = false, done = false;
+  std::atomic<bool> cancelled{false};
+  ChatResult result;
+  std::thread worker;
+  ~StreamJob() {
+    cancelled = true;
+    if (worker.joinable()) worker.join();
+  }
+};
+
+// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before any; then calls
+// after(result) (the reply is out) from the connection's thread.
+static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
+                         std::function<std::pair<int, json>(const ChatResult&)> failure,
+                         std::function<void(const ChatResult&)> after) {
+  auto job = std::make_shared<StreamJob>();
+  job->worker = std::thread([&engine, r, w, raw = job.get()] {
+    ChatResult out = engine.chat(
+        r,
+        [&](const ChatDelta& d) {
+          std::lock_guard<std::mutex> lk(raw->mu);
+          std::string s = w->delta(d);
+          if (!s.empty()) raw->out.push_back(std::move(s));
+          raw->cv.notify_all();
+          return !raw->cancelled.load();
+        },
+        [&](const ChatResult& prompt) {
+          std::lock_guard<std::mutex> lk(raw->mu);
+          raw->out.push_back(w->begin(prompt));
+          raw->started = true;
+          raw->cv.notify_all();
+        });
+    std::lock_guard<std::mutex> lk(raw->mu);
+    if (raw->started && out.finish_reason != "cancelled") raw->out.push_back(w->end(out));
+    raw->result = std::move(out);
+    raw->done = true;
+    raw->cv.notify_all();
+  });
+  {
+    std::unique_lock<std::mutex> lk(job->mu);
+    job->cv.wait(lk, [&] { return job->started || job->done; });
+  }
+  if (!job->started) {
+    job->worker.join();
+    auto [status, body] = failure(job->result);
+    res.status = status;
+    res.set_content(api::dump(body), "application/json");
+    return;
+  }
+  res.set_header("Cache-Control", "no-cache");
+  res.set_chunked_content_provider("text/event-stream", [job, w, after](size_t, httplib::DataSink& sink) {
+    for (;;) {
+      std::deque<std::string> batch;
+      bool done;
+      {
+        std::unique_lock<std::mutex> lk(job->mu);
+        if (!job->cv.wait_for(lk, std::chrono::seconds(15), [&] { return !job->out.empty() || job->done; }))
+          job->out.push_back(w->keepalive());  // 15 s without an event
+        batch.swap(job->out);
+        done = job->done;
+      }
+      for (const auto& e : batch)
+        if (!sink.write(e.data(), e.size())) {
+          job->cancelled = true;  // the client is gone: the engine stops at its next token
+          return false;
+        }
+      if (done) break;
+    }
+    sink.done();
+    job->worker.join();
+    after(job->result);
+    return true;
+  });
+}
+
+// Started by `kapitsa claude|codex|opencode` (KAPITSA_PARENT_PID): exits when the launcher does, however it ends (kill -9
+// included), instead of holding the model's memory with nobody left to stop it.
+static void exit_with_parent() {
+  const char* v = getenv("KAPITSA_PARENT_PID");
+  const pid_t parent = v && *v ? pid_t(atoi(v)) : 0;
+  if (parent <= 1) return;
+  std::thread([parent] {
+    const int kq = kqueue();
+    struct kevent ev;
+    EV_SET(&ev, parent, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, nullptr);
+    if (kq < 0 || kevent(kq, &ev, 1, nullptr, 0, nullptr) < 0) {
+      if (errno == ESRCH) _exit(0);  // already gone
+      return;
+    }
+    kevent(kq, nullptr, 0, &ev, 1, nullptr);
+    _exit(0);
+  }).detach();
+}
+
 static int serve(int argc, char** argv, int first) {
+  exit_with_parent();
   EngineOptions opt;
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
@@ -407,6 +527,10 @@ static int serve(int argc, char** argv, int first) {
   setenv("NI_ANE_ASYNC", "1", 0);
   Engine engine(opt);
 
+  const time_t started = std::time(nullptr);
+  char started_at[32];
+  strftime(started_at, sizeof started_at, "%Y-%m-%dT%H:%M:%SZ", gmtime(&started));
+  api::ResponseStore responses;  // recent responses, for previous_response_id
   httplib::Server srv;
   srv.set_payload_max_length(64u << 20);
   // Stream events go out as written: with Nagle's algorithm a small SSE chunk waits for the ACK of
@@ -416,9 +540,15 @@ static int serve(int argc, char** argv, int first) {
     // the chat page needs no key (it asks for one and sends it with its API calls), nor does /health
     if (api_key.empty() || req.path == "/health" || (req.method == "GET" && (req.path == "/" || req.path == "/favicon.ico")))
       return httplib::Server::HandlerResponse::Unhandled;
-    if (req.get_header_value("Authorization") == "Bearer " + api_key) return httplib::Server::HandlerResponse::Unhandled;
+    // OpenAI clients send "Authorization: Bearer KEY", Anthropic ones "x-api-key: KEY" (Claude Code may send both,
+    // with an Anthropic key of its own in x-api-key)
+    if (req.get_header_value("Authorization") == "Bearer " + api_key || req.get_header_value("x-api-key") == api_key)
+      return httplib::Server::HandlerResponse::Unhandled;
     res.status = 401;
-    res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
+    if (req.path.rfind("/v1/messages", 0) == 0)
+      res.set_content(api::dump(api::messages_error("authentication_error", "invalid api key")), "application/json");
+    else
+      res.set_content(R"({"error":{"message":"invalid api key","type":"auth_error"}})", "application/json");
     return httplib::Server::HandlerResponse::Handled;
   });
   srv.Get("/health", [](const httplib::Request&, httplib::Response& res) {
@@ -436,13 +566,21 @@ static int serve(int argc, char** argv, int first) {
   });
   srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
   srv.Get("/v1/models", [&](const httplib::Request&, httplib::Response& res) {
+    // OpenAI's list and Anthropic's (type, display_name, created_at, has_more, first_id, last_id) in one
     json j{{"object", "list"},
            {"data", json::array({json{{"id", engine.model_id()},
                                       {"object", "model"},
+                                      {"type", "model"},
+                                      {"display_name", engine.model_id()},
+                                      {"created", long(started)},
+                                      {"created_at", started_at},
                                       {"owned_by", "nace"},
                                       {"context_length", engine.context_length()},
                                       // tokens one conversation can hold within this Mac's memory budget
-                                      {"context_fit", engine.context_fit()}}})}};
+                                      {"context_fit", engine.context_fit()}}})},
+           {"has_more", false},
+           {"first_id", engine.model_id()},
+           {"last_id", engine.model_id()}};
     res.set_content(j.dump(), "application/json");
   });
   srv.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {
@@ -517,6 +655,101 @@ static int serve(int argc, char** argv, int first) {
       // the reply is out: prefill the history as the next turn will render it (NI_HISTORY_PREFILL)
       std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
       return true;
+    });
+  });
+
+  // After a reply: prefill the conversation as its next request will render it (NI_HISTORY_PREFILL), in its own thread
+  auto prefill_after = [&engine](const ChatRequest& r, const ChatResult& out) {
+    std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
+  };
+
+  // Anthropic Messages (src/api/anthropic.cpp)
+  srv.Post("/v1/messages", [&](const httplib::Request& req, httplib::Response& res) {
+    api::MessagesRequest q;
+    try {
+      q = api::messages_request(json::parse(req.body));
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(api::dump(api::messages_error(e.type, e.what())), "application/json");
+      return;
+    } catch (const std::exception& e) {
+      res.status = 400;
+      res.set_content(api::dump(api::messages_error("invalid_request_error", std::string("bad request: ") + e.what())),
+                      "application/json");
+      return;
+    }
+    const std::string id = api::new_id("msg_"), model = engine.model_id();
+    if (!q.stream) {
+      ChatResult out = engine.chat(q.chat, [](const ChatDelta&) { return true; });
+      if (out.finish_reason == "error") {
+        auto [status, body] = api::messages_failure(out);
+        res.status = status;
+        res.set_content(api::dump(body), "application/json");
+        return;
+      }
+      res.set_content(api::dump(api::messages_response(id, model, out, q.show_thinking)), "application/json");
+      prefill_after(q.chat, out);
+      return;
+    }
+    stream_reply(engine, q.chat, std::make_shared<api::MessagesStream>(id, model, q.show_thinking), res,
+                 api::messages_failure, [&, r = q.chat](const ChatResult& out) { prefill_after(r, out); });
+  });
+  srv.Post("/v1/messages/count_tokens", [&](const httplib::Request& req, httplib::Response& res) {
+    try {
+      const ChatRequest r = api::messages_prompt(json::parse(req.body));
+      res.set_content(json{{"input_tokens", engine.count_tokens(r)}}.dump(), "application/json");
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(api::dump(api::messages_error(e.type, e.what())), "application/json");
+    } catch (const std::exception& e) {
+      res.status = 400;
+      res.set_content(api::dump(api::messages_error("invalid_request_error", std::string("bad request: ") + e.what())),
+                      "application/json");
+    }
+  });
+
+  // OpenAI Responses (src/api/responses.cpp)
+  srv.Post("/v1/responses", [&](const httplib::Request& req, httplib::Response& res) {
+    auto q = std::make_shared<api::ResponsesRequest>();
+    try {
+      *q = api::responses_request(json::parse(req.body), responses);
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(api::dump(api::responses_error(e.what(), e.type, e.code, e.param)), "application/json");
+      return;
+    } catch (const std::exception& e) {
+      res.status = 400;
+      res.set_content(api::dump(api::responses_error(std::string("bad request: ") + e.what(), "invalid_request_error")),
+                      "application/json");
+      return;
+    }
+    const std::string id = api::new_id("resp_"), model = engine.model_id();
+    const long created = long(std::time(nullptr));
+    // the conversation through this response, for a later previous_response_id
+    auto keep = [&responses, q, id](const ojson& output) {
+      if (!q->store) return;
+      ojson items = q->items;
+      for (const auto& it : output) items.push_back(it);
+      responses.put(id, std::move(items));
+    };
+    if (!q->stream) {
+      ChatResult out = engine.chat(q->chat, [](const ChatDelta&) { return true; });
+      if (out.finish_reason == "error") {
+        auto [status, body] = api::responses_failure(out);
+        res.status = status;
+        res.set_content(api::dump(body), "application/json");
+        return;
+      }
+      ojson output;
+      res.set_content(api::dump(api::responses_response(*q, id, model, created, out, &output)), "application/json");
+      keep(output);
+      prefill_after(q->chat, out);
+      return;
+    }
+    auto w = std::make_shared<api::ResponsesStream>(*q, id, model, created);
+    stream_reply(engine, q->chat, w, res, api::responses_failure, [&, q, w, keep](const ChatResult& out) {
+      if (out.finish_reason != "error") keep(w->output());
+      prefill_after(q->chat, out);
     });
   });
 
@@ -772,6 +1005,7 @@ int main(int argc, char** argv) {
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
   if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
+  if (cmd == "claude" || cmd == "codex" || cmd == "opencode") return launch_agent(cmd, argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

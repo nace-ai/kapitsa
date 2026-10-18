@@ -29,6 +29,19 @@ starts reuse the download, offline too. Without `--model`, Kapitsa picks the bes
 Once it prints `Ready`, open <http://127.0.0.1:8000> to chat, or point a coding agent or any OpenAI-compatible app
 at `http://127.0.0.1:8000/v1`. Press Ctrl+C to stop.
 
+## Use it with Claude Code, Codex, opencode
+
+```bash
+kapitsa claude      # Claude Code
+kapitsa codex       # Codex
+kapitsa opencode    # opencode
+```
+
+Each command starts the agent on Kapitsa. It uses the server already running on port 8000, or starts one for the
+session with the largest context up to 128K tokens that the Mac's memory holds, and stops it when the agent exits.
+Arguments go to the agent, for example `kapitsa claude -p "what does this repo do?"` or `kapitsa codex exec "fix the
+failing test"`. `--model 27b` picks the model and `--port` another server. The agent itself must be installed.
+
 ## Use the API
 
 OpenAI Chat Completions, with streaming, reasoning (`reasoning_content`) and tool calls:
@@ -46,6 +59,9 @@ Coding agents and apps that speak the OpenAI API connect to `http://127.0.0.1:80
 the server was started with `--api-key`. Thinking follows the model's default, which is on. `"reasoning_effort": "none"`
 or `"chat_template_kwargs": {"enable_thinking": false}` turns it off. Every response reports its `usage`, including
 the cached prompt tokens of a follow-up.
+
+The same server speaks the OpenAI Responses API (`POST /v1/responses`) and the Anthropic Messages API
+(`POST /v1/messages`, at base URL `http://127.0.0.1:8000`), with streaming, reasoning and tool calls.
 [API details](DEVELOPMENT.md#server)
 
 ## Models
@@ -88,7 +104,7 @@ Add these to `kapitsa serve`:
 | `--dflash none` | Decode with the model's MTP head instead of its DFlash2 draft model. |
 | `--spec 0` | Turn speculative decoding off. |
 | `--mem-budget 20` | Cap the GPU memory Kapitsa holds, in GB. Default: what macOS recommends for this Mac's GPU, a little less. |
-| `--api-key KEY` | Require a bearer token. The chat page asks for it once. |
+| `--api-key KEY` | Require an API key (a bearer token or `x-api-key`). The chat page asks for it once. |
 | `--host 0.0.0.0` | Serve your network. Default: this Mac only (`127.0.0.1:8000`; `--port` changes the port). |
 
 Models are stored in `~/.cache/kapitsa/models`, and `KAPITSA_HOME` moves them. `HF_TOKEN` is used for downloads
