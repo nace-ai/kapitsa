@@ -116,6 +116,7 @@ ojson make_result(const RunInputs& in) {
       }
     }
 
+  if (in.external_server) invalid.push_back("server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown");
   // conditions per timed phase: other apps on the GPU (compare_engines.py's contention summary), swap, thermal state
   std::vector<std::string> busy, hot;
   double t_first = INFINITY, t_last = -INFINITY;

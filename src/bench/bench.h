@@ -311,6 +311,7 @@ struct RunInputs {
   double quiet_wait_s = 0;
   bool quiet = true;
   std::vector<Busy> quiet_busy;
+  bool external_server = false;  // tests: a server kapitsa bench did not start (its result is invalid)
 };
 // The result file's content (bench/community/schema.json)
 ojson make_result(const RunInputs& in);

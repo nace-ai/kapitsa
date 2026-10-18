@@ -637,9 +637,14 @@ int run(const Options& o) {
   for (int p : other_kapitsas())
     warn_line("Another Kapitsa is running (pid " + std::to_string(p) + "): its model's memory and any requests it serves skew the numbers.");
 
+  // tests (tests/test_bench.py): KAPITSA_BENCH_SERVER=<port> measures a server already listening on 127.0.0.1:<port>
+  // instead of starting one (no download, lock or quiet wait); its result is invalid, as nothing about that server is known
+  const char* ext_env = getenv("KAPITSA_BENCH_SERVER");
+  const int external = ext_env ? atoi(ext_env) : 0;
+
   // ---- the download, before the GPU lock (it needs no GPU)
   try {
-    if (ref.kind != hub::ModelRef::kLocal) ref.dir = hub::ensure(ref, hub::PullOptions{});
+    if (ref.kind != hub::ModelRef::kLocal && !external) ref.dir = hub::ensure(ref, hub::PullOptions{});
   } catch (const hub::Stopped& e) {
     if (g_tui) term::status(""), ui::warning(e.what());
     else fprintf(stderr, "\n%s\n", e.what());
@@ -656,7 +661,7 @@ int run(const Options& o) {
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
   // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)
   GpuLock lock;
-  if (!env_on("NACE_GPU_LOCK_HELD")) {
+  if (!env_on("NACE_GPU_LOCK_HELD") && !external) {
     std::unique_ptr<Ticker> t;
     const bool ok = lock.acquire([&](const std::string& who) {
       say("Waiting for the GPU lock " + GpuLock::path() + (who.empty() ? "" : ", held by " + who));
@@ -672,60 +677,62 @@ int run(const Options& o) {
 
   // ---- the server: compare_engines.py's start (its own session, NI_* cleared, one slot, 32K context)
   Server srv;
-  srv.port = free_port();
+  srv.port = external ? external : free_port();
   if (srv.port <= 0) return fail("Can't find a free port for the server.");
-  mkdir(hub::home_dir().c_str(), 0755);
-  mkdir((hub::home_dir() + "/logs").c_str(), 0755);
-  srv.log = hub::home_dir() + "/logs/bench-" + std::to_string(srv.port) + ".log";
-  srv.gpu_mem_before = gpu_memory_in_use();
-  std::vector<std::string> sargv = {self_path(), "serve", "--model", ref.dir, "--model-id", s.model, "--host", "127.0.0.1",
-                                    "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1"};
-  std::vector<std::string> senv, cleared;
-  for (char** e = environ; *e; ++e) {
-    const std::string kv = *e;
-    if (kv.rfind("NI_", 0) == 0) {
-      cleared.push_back(kv.substr(0, kv.find('=')));
-      continue;
-    }
-    if (kv.rfind("KAPITSA_PARENT_PID=", 0) == 0 || kv.rfind("KAPITSA_NO_PROMPT=", 0) == 0) continue;
-    senv.push_back(kv);
-  }
-  if (!cleared.empty()) {
-    std::string names;
-    for (const auto& c : cleared) names += (names.empty() ? "" : ", ") + c;
-    if (g_tui) ui::note("Left out of the server, as the harness does: " + names);
-    else say("Left out of the server, as the harness does: " + names);
-  }
-  senv.push_back("KAPITSA_PARENT_PID=" + std::to_string(getpid()));  // it exits with this process, however it ends
-  senv.push_back("KAPITSA_NO_PROMPT=1");
-  std::vector<char*> sa, se;
-  for (auto& x : sargv) sa.push_back(x.data());
-  sa.push_back(nullptr);
-  for (auto& x : senv) se.push_back(x.data());
-  se.push_back(nullptr);
-  const int lfd = open(srv.log.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  if (lfd < 0) return fail("Can't write the server's log " + hub::tilde(srv.log) + ": " + strerror(errno));
   struct sigaction act {}, old_int, old_term, old_hup;
   act.sa_handler = on_stop;
   sigemptyset(&act.sa_mask);
   sigaction(SIGINT, &act, &old_int);
   sigaction(SIGTERM, &act, &old_term);
   sigaction(SIGHUP, &act, &old_hup);
-  const pid_t child = fork();
-  if (child < 0) return fail(std::string("Can't start the server: ") + strerror(errno));
-  if (child == 0) {
-    setsid();
-    const int null = open("/dev/null", O_RDONLY);
-    dup2(null, 0);
-    dup2(lfd, 1);
-    dup2(lfd, 2);
-    execve(sa[0], sa.data(), se.data());
-    _exit(127);
+  if (!external) {  // start one
+    mkdir(hub::home_dir().c_str(), 0755);
+    mkdir((hub::home_dir() + "/logs").c_str(), 0755);
+    srv.log = hub::home_dir() + "/logs/bench-" + std::to_string(srv.port) + ".log";
+    srv.gpu_mem_before = gpu_memory_in_use();
+    std::vector<std::string> sargv = {self_path(), "serve", "--model", ref.dir, "--model-id", s.model, "--host", "127.0.0.1",
+                                      "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1"};
+    std::vector<std::string> senv, cleared;
+    for (char** e = environ; *e; ++e) {
+      const std::string kv = *e;
+      if (kv.rfind("NI_", 0) == 0) {
+        cleared.push_back(kv.substr(0, kv.find('=')));
+        continue;
+      }
+      if (kv.rfind("KAPITSA_PARENT_PID=", 0) == 0 || kv.rfind("KAPITSA_NO_PROMPT=", 0) == 0) continue;
+      senv.push_back(kv);
+    }
+    if (!cleared.empty()) {
+      std::string names;
+      for (const auto& c : cleared) names += (names.empty() ? "" : ", ") + c;
+      if (g_tui) ui::note("Left out of the server, as the harness does: " + names);
+      else say("Left out of the server, as the harness does: " + names);
+    }
+    senv.push_back("KAPITSA_PARENT_PID=" + std::to_string(getpid()));  // it exits with this process, however it ends
+    senv.push_back("KAPITSA_NO_PROMPT=1");
+    std::vector<char*> sa, se;
+    for (auto& x : sargv) sa.push_back(x.data());
+    sa.push_back(nullptr);
+    for (auto& x : senv) se.push_back(x.data());
+    se.push_back(nullptr);
+    const int lfd = open(srv.log.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (lfd < 0) return fail("Can't write the server's log " + hub::tilde(srv.log) + ": " + strerror(errno));
+    const pid_t child = fork();
+    if (child < 0) return fail(std::string("Can't start the server: ") + strerror(errno));
+    if (child == 0) {
+      setsid();
+      const int null = open("/dev/null", O_RDONLY);
+      dup2(null, 0);
+      dup2(lfd, 1);
+      dup2(lfd, 2);
+      execve(sa[0], sa.data(), se.data());
+      _exit(127);
+    }
+    close(lfd);
+    srv.pid = child;
+    g_server = child;
   }
-  close(lfd);
-  srv.pid = child;
-  g_server = child;
-  auto own = [&] { return process_tree({int(srv.pid)}); };
+  auto own = [&] { return srv.pid > 0 ? process_tree({int(srv.pid)}) : std::set<int>{}; };
   auto cleanup = [&] {
     stop_server(srv);
     lock.release();
@@ -740,6 +747,7 @@ int run(const Options& o) {
   in.version = KAPITSA_VERSION;
   in.commit = KAPITSA_GIT;
   in.time_utc = utc_now();
+  in.external_server = external != 0;
   in.power_start = power();
   in.vm_start = vm();
   in.thermal_start = thermal_state();
@@ -751,7 +759,11 @@ int run(const Options& o) {
   std::string out_path;
   try {
     // wait for it, showing what it does
-    {
+    if (external) {
+      mi.decoding = "unknown";
+      mi.decoding_detail = "a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)";
+      say("Measuring the server on 127.0.0.1:" + std::to_string(external) + " (KAPITSA_BENCH_SERVER)");
+    } else {
       const auto t0 = std::chrono::steady_clock::now();
       auto secs = [&] { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); };
       const std::string what = bold(model_display(mi.title)) + dim("  " + std::string(term::kDot) + "  ") + mi.precision;
@@ -826,7 +838,7 @@ int run(const Options& o) {
       say("Warm-up done in " + term::duration(t.secs()));
     }
     const std::set<int> terminal = ancestors();  // the terminal that shows this run: ambient, like the harness's driving app
-    {
+    if (!external) {
       Ticker t("Waiting for a quiet GPU");
       std::vector<Busy> busy;
       double waited = 0;

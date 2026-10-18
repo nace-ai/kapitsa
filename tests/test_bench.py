@@ -14,6 +14,8 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
    stand-in gh that records what it is asked: nothing without a yes typed at a terminal, then the pull request's calls.
 6. `kapitsa bench` fails before loading anything when the model can't be had (a home without models, no network).
 7. The GPU lock, on a test file: it waits for lockf's holder and names it, and lockf waits for it.
+8. The whole command against the scripted server (KAPITSA_BENCH_SERVER, a test hook: no model, no lock): plain,
+   --json and on a terminal; the result saved, valid against the schema, refused for submission.
 """
 import glob, http.server, json, os, pty, random, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
 import urllib.parse
@@ -281,9 +283,9 @@ for mode in ("full", "quick"):
     results[mode] = r.stdout
     with open(os.path.join(tmp, f"{mode}.json"), "w") as fh:
         fh.write(r.stdout)
+schema = json.load(open(os.path.join(REPO, "bench", "community", "schema.json")))
 try:
     import jsonschema
-    schema = json.load(open(os.path.join(REPO, "bench", "community", "schema.json")))
     jsonschema.Draft202012Validator.check_schema(schema)
     for mode, text in results.items():
         errs = list(jsonschema.Draft202012Validator(schema).iter_errors(json.loads(text)))
@@ -394,11 +396,11 @@ check(r.returncode == 1 and "terminal" in r.stderr, "without a terminal nothing 
 check(not [c for c in calls() if c["args"][:2] != ["api", "--hostname"]], "and gh was asked for nothing else")
 
 
-def with_terminal(args, answers, timeout=60):
+def with_terminal(args, answers, timeout=60, environ=None):
     """Runs args on a pseudo-terminal, typing each answer when a [y/N] question appears; returns (code, output)."""
     pid, fd = pty.fork()
     if pid == 0:
-        os.execve(args[0], args, env)
+        os.execve(args[0], args, environ or env)
     out, left = b"", list(answers)
     t0 = time.time()
     while time.time() - t0 < timeout:
@@ -466,6 +468,52 @@ r3 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
 check(json.loads(first).get("ok") and r2.returncode != 0 and r3.returncode == 0,
       "while it holds the lock lockf can't take it; released after", f"{first} {r2.returncode} {r3.returncode}")
 subprocess.run(["chflags", "nouchg", lockfile])
+
+# ---------------------------------------------------------------- 8. the whole command, against the scripted server
+# KAPITSA_BENCH_SERVER: kapitsa bench measures the scripted server instead of starting one (no download, lock or quiet
+# wait); everything else is the real command: the protocol, the monitor, the result, the screens. Its result is invalid.
+xhome = tempfile.mkdtemp(prefix="kapitsa-bench-e2e-")
+xenv = dict(env, KAPITSA_BENCH_SERVER=str(port), KAPITSA_HOME=xhome, HOME=os.path.join(xhome, "user"))
+os.makedirs(xenv["HOME"])
+Script.log, Script.prompt = [], {}
+r = run([KAPITSA, "bench", "--model", "4b", "--quick"], env=xenv, timeout=300)
+saved = glob.glob(os.path.join(xhome, "bench", "kapitsa-bench-*-qwen3.5-4b-4bit-quick.json"))
+check(r.returncode == 1 and len(saved) == 1, "plain: a quick run against the scripted server completes and is saved", (r.stdout + r.stderr)[-500:])
+check(len(Script.log) == 18, "the quick protocol's 18 requests (warm-up 2, writing 3 + 3, the 4K prompt and 3 follow-ups, tools 6)",
+      str(len(Script.log)))
+res = json.load(open(saved[0])) if saved else {}
+check(res.get("invalid") == ["server: a server kapitsa bench did not start (KAPITSA_BENCH_SERVER), so its settings are unknown"],
+      "its result is invalid (an external server), so it can't be submitted", str(res.get("invalid")))
+check(res.get("mode") == "quick" and res.get("model", {}).get("name") == "qwen3.5-4b" and res["model"]["variant"] == "4bit" and
+      res["model"]["precision"] == "4-bit", "the model and the mode", str(res.get("model")))
+check(res["protocol"]["sizes"] == [4000] and res["protocol"]["decode_runs"] == 3 and len(res["results"]["decode"]["runs_tps"]) == 3,
+      "the quick protocol: 3 + 3 runs, the 4K prompt")
+check(res["results"]["prefill"][0]["prompt_tokens"] == 4133 and len(res["results"]["prefill"][0]["followup_s"]) == 3 and
+      res["results"]["tool_calls"] == "pass", "the prompt, the follow-ups and the tool check as the server answered")
+hw = run(["sysctl", "-n", "hw.model"]).stdout.strip()
+check(res["mac"]["identifier"] == hw and res["mac"]["memory_gb"] > 0 and res["mac"]["chip"].startswith("Apple"), "this Mac")
+try:
+    import jsonschema
+    errs = list(jsonschema.Draft202012Validator(schema).iter_errors(res))
+    check(not errs, "the run's result validates against schema.json", "; ".join(e.message for e in errs[:3]))
+except ImportError:
+    pass
+check("| Writing, T = 0.6 |" in r.stdout and "decode T=0.6: median" in r.stderr and "Saved " in r.stderr,
+      "plain: the summary table on stdout, the progress on stderr")
+r = run([KAPITSA, "bench", "--model", "4b", "--quick", "--submit", "--dry-run"], env=xenv, timeout=300)
+check(r.returncode == 1 and "invalid measurements" in r.stderr, "--submit refuses an invalid result", r.stderr[-300:])
+r = run([KAPITSA, "bench", "--model", "4b", "--quick", "--json"], env=xenv, timeout=300)
+try:
+    js = json.loads(r.stdout)
+except Exception:
+    js = {}
+check(js.get("kind") == "kapitsa-bench" and "decode T=0.6" in r.stderr, "--json: the result on stdout, the progress on stderr")
+code, text = with_terminal([KAPITSA, "bench", "--model", "4b", "--quick"], [], timeout=300,
+                           environ=dict(xenv, TERM="xterm-256color", COLUMNS="100"))
+plain = __import__("re").sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
+check(code == 1 and "Writing, T = 0.6" in plain and "Reading 4K" in plain and "Follow-up at 4K" in plain and "Tool calls" in plain
+      and "╭" in plain and "Saved" in plain, "a terminal: the phases and the summary card", plain[-600:])
+shutil.rmtree(xhome, ignore_errors=True)
 
 shutil.rmtree(tmp, ignore_errors=True)
 shutil.rmtree(gh_dir, ignore_errors=True)
