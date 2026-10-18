@@ -50,6 +50,7 @@ class LiliCorr : public NhDrafter {
   static size_t plan_bytes(const std::string& dir, size_t* per_slot);
 
   const char* name() const override { return "LiLiCorr"; }
+  int window() const override { return cfg_.window; }
   std::unique_ptr<LiliSeq> new_seq() override;
   static void reset(LiliSeq& d) { d.ctx = d.hi = 0; }
   // prefix reuse: context back to pos (ring entries of positions >= pos are dead; the draft reads

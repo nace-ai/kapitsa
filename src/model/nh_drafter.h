@@ -32,6 +32,8 @@ class NhDrafter {
   static std::unique_ptr<NhDrafter> open(NemotronH& target, const std::string& dir);
   // for logs: "LiLiCorr", "DSpark"
   virtual const char* name() const = 0;
+  // the context window: the last rows a draft attends to (the prompt rows a prefill must capture)
+  virtual int window() const = 0;
 
   virtual std::unique_ptr<LiliSeq> new_seq() = 0;
   static void reset(LiliSeq& d);

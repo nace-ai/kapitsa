@@ -62,7 +62,7 @@ const hub::CatalogModel* best_here() {
     if (!fits) {
       try {
         const std::string d = hub::plan_dir(ref);
-        fits = !d.empty() && conversation_fits(d, opt.context, opt.slots, budget);
+        fits = !d.empty() && conversation_fits(d, opt.context, fit_slots(opt.slots), budget);
       } catch (const std::exception&) {
       }
     }
@@ -261,7 +261,8 @@ void home(const std::string& version) {
                   {"list", "downloaded models, and every precision"},
                   {"rm", "delete a downloaded model"},
                   {"import", "convert a GGUF (LM Studio, Ollama, llama.cpp) into a model"},
-                  {"doctor", "this Mac's GPU and memory, and which models fit"}},
+                  {"doctor", "this Mac's GPU and memory, and which models fit"},
+                  {"bench", "benchmark this Mac and add it to the community results"}},
               4, W);
   paragraph(o, "kapitsa <command> --help shows its options.", 4, W, dim);
   o.push_back("");

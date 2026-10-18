@@ -91,12 +91,14 @@ class Vision {
   std::vector<Prepared> prepare(const std::vector<Source>& sources);
   // p's embeddings (bf16 rows), from the cache or encoded now (its source decoded again if p came from the cache).
   // `make_room(bytes)` must return true when `bytes` more may be allocated within the memory budget (it may free other
-  // memory). Embeddings handed out stay valid until end_request(). *encoded: whether they were encoded now (else
-  // they came from the cache). Throws Error.
+  // memory). Embeddings handed out stay valid until the request gives them back (end_request with the digests it got:
+  // requests in flight at once each keep theirs). *encoded: whether they were encoded now (else they came from the
+  // cache). Throws Error.
   Buffer embeddings(Prepared& p, const Source& src, const std::function<bool(size_t)>& make_room,
                     bool* encoded = nullptr);
-  // The request's prefill is done: the cache goes back to its size.
-  void end_request();
+  // A request is done with the embeddings it got (`used`: their digests, one per embeddings() call): the cache goes
+  // back to its size.
+  void end_request(const std::vector<Digest>& used);
   // Frees the cached embeddings of earlier requests, and with `weights` the encoder's weights too (the KV cache needs
   // the room; the next image loads them again). False if nothing was freed.
   bool release(bool weights);
@@ -105,13 +107,12 @@ class Vision {
   struct Entry {
     Digest digest;
     Buffer buf;
-    uint64_t used = 0;  // request that last used it
+    int pins = 0;  // requests holding it (embeddings() handed it out, end_request() not yet called)
   };
-  void evict(size_t cap, bool keep_current);
+  void evict(size_t cap);  // the least recently used entries no request holds, until the cache is at most `cap`
   std::unique_ptr<ImageEncoder> enc_;
   std::list<Entry> cache_;  // embeddings, most recently used first
   size_t cache_bytes_ = 0, cache_cap_ = 0;
-  uint64_t request_ = 1;
   struct Meta {
     Digest key;
     Prepared p;  // without pixels

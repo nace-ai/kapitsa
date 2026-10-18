@@ -1,0 +1,57 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k32_w14_m32_n128 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] read 2.37 GB of weights in 1001 ms (2.4 GB/s)
+[kapitsa] converted 24 parameter tensors to bf16 at load (0 values not exactly representable)
+[kapitsa] read 0.24 GB of weights in 60 ms (4.0 GB/s)
+[kapitsa] MTP head loaded in 125 ms (dense, trunk hidden post-norm, drafts over ids < 32768 + specials)
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] compiled kernels in 2341 ms
+[kapitsa] prewarmed 90 prefill pipelines in 2354 ms
+[kapitsa] loaded <models>/qwen3.5-4b-4bit-mtp: 32 layers, dense, 2.4 GB mapped in 3569 ms; weights 4-bit group 64 100%
+[kapitsa] NI_ANE: compiling the Neural Engine program in the background; prefill uses the GPU alone until it is ready
+[kapitsa] NI_ANE: Neural Engine program ready in the background (program was cached, 0.1 s)
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (237 ms)
+[kapitsa] DFlash2: no drafter found for <models>/qwen3.5-4b-4bit-mtp (looked next to the model and in ~/.cache/nace-infer-models/drafters)
+[kapitsa] GPU: Apple M4 Pro, 20 cores
+[kapitsa] memory: 3.27 GB allocated (model, buffers, 1 slots' state), budget 38.6 GB (recommended working set 40.2 GB): KV room 35.33 GB = 958274 tokens (36 KB per token), one conversation up to 32768 of 32768 tokens
+[kapitsa] vision: <models>/qwen3.5-4b-4bit-mtp has a vision tower of a shape Kapitsa does not run (hidden 1024, 16 heads, out 2560): images are off
+[kapitsa] engine ready: qwen3.5-4b, context 32768, 1 slots, MTP speculative decoding depth 1
+[kapitsa] listening on http://127.0.0.1:8091
+Ready: chat at http://127.0.0.1:8091, API at http://127.0.0.1:8091/v1 (model "qwen3.5-4b"). Ctrl+C stops.
+[kapitsa] NI_ANE: Neural Engine FFN split (wavefront): 18/18 units (9216 channels; GPU 0) from the default for this chip, chunks >= 512 rows; row scales 3 ms, program cached 1 ms + load 33 ms (13 functions, MIL 89 KB); 187.6 MB Metal; ready in 0.1 s
+[kapitsa] NI_ANE: startup check 2.11% of the ANE's part from the GPU alone (2 functions, 235 ms)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] prefill: Neural Engine busy 112% of 2266 ms over 2 split chunks (128 evaluations)
+[kapitsa] chat: prompt 2926 (cached 0) in 2266 ms (+1.1 ms template/tokenize; last chunk: encoded by 2248.7 ms, GPU start +1.4 ms, GPU 15.9 ms, wake +0.1 ms), 64 tokens in 603 ms (104.4 tok/s), length
+[kapitsa] chat: prompt 430 (cached 0) in 490 ms (+0.6 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.1 ms, GPU 489.3 ms, wake +0.2 ms), 27 tokens in 206 ms (126.3 tok/s), tool_calls
+[kapitsa] chat: prompt 85 (cached 0) in 174 ms (+0.6 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +47.5 ms, GPU 123.5 ms, wake +2.9 ms), 512 tokens in 5348 ms (95.5 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 116 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +2.1 ms, GPU 112.7 ms, wake +0.3 ms), 512 tokens in 5141 ms (99.4 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 114 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.4 ms, GPU 112.1 ms, wake +0.1 ms), 512 tokens in 4469 ms (114.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 113 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.5 ms, GPU 111.7 ms, wake +0.1 ms), 512 tokens in 4393 ms (116.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 114 ms (+0.6 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +1.9 ms, GPU 111.4 ms, wake +0.1 ms), 512 tokens in 4447 ms (114.9 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 114 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.4 ms, GPU 112.1 ms, wake +0.1 ms), 512 tokens in 4338 ms (117.8 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 113 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.4 ms, GPU 111.5 ms, wake +0.1 ms), 512 tokens in 4593 ms (111.3 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 118 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.5 ms, GPU 116.4 ms, wake +0.1 ms), 512 tokens in 4628 ms (110.4 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 117 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +1.6 ms, GPU 115.1 ms, wake +0.1 ms), 512 tokens in 4625 ms (110.5 tok/s), length
+[kapitsa] chat: prompt 85 (cached 0) in 119 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +2.9 ms, GPU 116.2 ms, wake +0.1 ms), 512 tokens in 4674 ms (109.3 tok/s), length
+[kapitsa] prefill: Neural Engine busy 98% of 2995 ms over 2 split chunks (128 evaluations)
+[kapitsa] chat: prompt 4133 (cached 0) in 2995 ms (+6.1 ms template/tokenize; last chunk: encoded by 2933.1 ms, GPU start +1.3 ms, GPU 60.7 ms, wake +0.1 ms), 50 tokens in 493 ms (99.4 tok/s), stop
+[kapitsa] history: prefilled 53 tokens of the rendered reply (from 4126) in 94 ms
+[kapitsa] chat: prompt 4201 (cached 4179) in 53 ms (+1.2 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +2.2 ms, GPU 49.9 ms, wake +0.1 ms), 13 tokens in 104 ms (115.3 tok/s), stop
+[kapitsa] history: prefilled 16 tokens of the rendered reply (from 4194) in 30 ms
+[kapitsa] chat: prompt 4237 (cached 4210) in 65 ms (+1.0 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +1.2 ms, GPU 63.4 ms, wake +0.1 ms), 14 tokens in 122 ms (107.0 tok/s), stop
+[kapitsa] history: prefilled 17 tokens of the rendered reply (from 4230) in 39 ms
+[kapitsa] chat: prompt 4267 (cached 4247) in 51 ms (+0.9 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +0.9 ms, GPU 50.1 ms, wake +0.1 ms), 256 tokens in 2410 ms (105.8 tok/s), length
+[kapitsa] prefill: Neural Engine busy 81% of 14319 ms over 8 split chunks (512 evaluations)
+[kapitsa] chat: prompt 16286 (cached 0) in 14319 ms (+15.7 ms template/tokenize; last chunk: encoded by 14293.9 ms, GPU start +4.4 ms, GPU 20.5 ms, wake +0.2 ms), 50 tokens in 583 ms (84.0 tok/s), stop
+[kapitsa] history: prefilled 53 tokens of the rendered reply (from 16279) in 112 ms
+[kapitsa] chat: prompt 16354 (cached 16332) in 62 ms (+4.0 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +1.6 ms, GPU 59.4 ms, wake +0.1 ms), 23 tokens in 251 ms (87.6 tok/s), stop
+[kapitsa] history: prefilled 26 tokens of the rendered reply (from 16347) in 63 ms
+[kapitsa] chat: prompt 16400 (cached 16373) in 59 ms (+2.9 ms template/tokenize; last chunk: encoded by 0.3 ms, GPU start +0.8 ms, GPU 57.3 ms, wake +0.1 ms), 22 tokens in 242 ms (86.8 tok/s), stop
+[kapitsa] history: prefilled 25 tokens of the rendered reply (from 16393) in 60 ms
+[kapitsa] chat: prompt 16438 (cached 16418) in 46 ms (+4.3 ms template/tokenize; last chunk: encoded by 0.4 ms, GPU start +1.3 ms, GPU 44.0 ms, wake +0.1 ms), 256 tokens in 2496 ms (102.1 tok/s), length
+[kapitsa] chat: prompt 430 (cached 0) in 492 ms (+0.5 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +1.5 ms, GPU 490.1 ms, wake +0.1 ms), 27 tokens in 211 ms (123.4 tok/s), tool_calls
+[kapitsa] chat: prompt 430 (cached 423) in 17 ms (+0.3 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.1 ms, GPU 16.5 ms, wake +0.2 ms), 27 tokens in 196 ms (132.8 tok/s), tool_calls
+[kapitsa] chat: prompt 510 (cached 456) in 79 ms (+0.4 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.5 ms, GPU 78.6 ms, wake +0.1 ms), 88 tokens in 759 ms (114.6 tok/s), stop
+[kapitsa] chat: prompt 428 (cached 423) in 16 ms (+0.2 ms template/tokenize; last chunk: encoded by 0.7 ms, GPU start +0.1 ms, GPU 15.6 ms, wake +0.1 ms), 58 tokens in 442 ms (129.1 tok/s), tool_calls
+[kapitsa] chat: prompt 428 (cached 423) in 16 ms (+0.3 ms template/tokenize; last chunk: encoded by 0.2 ms, GPU start +0.1 ms, GPU 16.0 ms, wake +0.1 ms), 62 tokens in 460 ms (132.6 tok/s), tool_calls
+[kapitsa] chat: prompt 508 (cached 423) in 113 ms (+0.3 ms template/tokenize; last chunk: encoded by 0.1 ms, GPU start +0.5 ms, GPU 112.7 ms, wake +0.1 ms), 156 tokens in 1264 ms (122.6 tok/s), stop

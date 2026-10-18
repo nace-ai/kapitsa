@@ -25,6 +25,7 @@ class DSpark : public NhDrafter {
   static bool is_dspark(const std::string& dir, int hidden);
   static size_t plan_bytes(const std::string& dir, size_t* per_slot);
   const char* name() const override { return "DSpark"; }
+  int window() const override { return window_; }
 
   std::unique_ptr<LiliSeq> new_seq() override;
   void encode_copy(Encoder& e, const LiliSeq& src, LiliSeq& dst) override;

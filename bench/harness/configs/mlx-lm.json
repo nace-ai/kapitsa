@@ -25,5 +25,16 @@
           "--max-tokens", "16384", "--prefill-step-size", "2048"],
   "requires_paths": ["{models}/qwen3.8-27b-4bit-mtp/config.json"],
   "note": "Same weights directory as Kapitsa (the mtp.safetensors side-car is ignored); no speculative decoding. Same server settings as the 35B."
+ },
+ {
+  "label": "q35-4b-mlxlm",
+  "extends": "q36-35b-mlxlm",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtp",
+  "cmd": ["{env:MLX_LM_SERVER=mlx_lm.server}", "--model", "{models}/qwen3.5-4b-4bit-mtp",
+          "--host", "127.0.0.1", "--port", "8081", "--prompt-cache-size", "4", "--prompt-cache-bytes", "8589934592",
+          "--max-tokens", "16384", "--prefill-step-size", "2048"],
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json"],
+  "note": "Same weights directory as Kapitsa (the mtp.safetensors side-car is ignored); no speculative decoding (no MTP path, and its draft-model path needs trimmable caches, which the GatedDeltaNet layers' are not). Same server settings as the larger models."
  }
 ]

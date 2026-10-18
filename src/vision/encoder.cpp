@@ -70,10 +70,10 @@ std::vector<Prepared> Vision::prepare(const std::vector<Source>& sources) {
   return out;
 }
 
-void Vision::evict(size_t cap, bool keep_current) {
+void Vision::evict(size_t cap) {
   for (auto it = cache_.end(); cache_bytes_ > cap && it != cache_.begin();) {
     --it;
-    if (keep_current && it->used == request_) continue;
+    if (it->pins > 0) continue;  // a request in flight still reads it
     cache_bytes_ -= it->buf.size;
     Gpu::get().release(it->buf);
     it = cache_.erase(it);
@@ -85,7 +85,7 @@ Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bo
   if (encoded) *encoded = false;
   for (auto it = cache_.begin(); it != cache_.end(); ++it)
     if (it->digest == p.digest) {
-      it->used = request_;
+      ++it->pins;
       cache_.splice(cache_.begin(), cache_, it);
       return cache_.front().buf;
     }
@@ -97,7 +97,7 @@ Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bo
   const size_t out_bytes = size_t(p.tokens) * size_t(enc_->out_dim()) * 2;
   const size_t need = out_bytes + enc_->work_bytes(p) + (enc_->loaded() ? 0 : enc_->weight_bytes());
   if (!make_room(need)) {
-    evict(0, true);  // embeddings of earlier requests first
+    evict(0);  // embeddings of earlier requests first
     if (!make_room(need))
       throw Error("insufficient memory for the image: encoding it takes " + std::to_string(need / 1048576) +
                   " MB of GPU memory (the encoder's weights and scratch) beyond the KV cache Kapitsa holds within its "
@@ -114,20 +114,25 @@ Buffer Vision::embeddings(Prepared& p, const Source& src, const std::function<bo
   enc_->encode(p, out);
   logi("vision: %dx%d image -> %d tokens (grid %dx%d) encoded in %.0f ms", p.width, p.height, p.tokens, p.grid_h,
        p.grid_w, now_ms() - t0);
-  cache_.push_front(Entry{p.digest, out, request_});
+  cache_.push_front(Entry{p.digest, out, 1});
   cache_bytes_ += out.size;
   if (encoded) *encoded = true;
   return out;
 }
 
-void Vision::end_request() {
-  evict(cache_cap_, false);
-  ++request_;
+void Vision::end_request(const std::vector<Digest>& used) {
+  for (const Digest& d : used)
+    for (Entry& e : cache_)
+      if (e.digest == d && e.pins > 0) {
+        --e.pins;
+        break;
+      }
+  evict(cache_cap_);
 }
 
 bool Vision::release(bool weights) {
   const size_t before = cache_bytes_;
-  evict(0, true);
+  evict(0);
   weights = weights && enc_->loaded();
   if (weights) enc_->unload();
   if (weights || cache_bytes_ < before)

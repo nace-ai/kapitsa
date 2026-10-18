@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nace-ai/kapitsa/blob/main/bench/community/schema.json",
+  "title": "kapitsa bench result",
+  "description": "One run of `kapitsa bench` on one Mac: the protocol of bench/harness (bench.py), measured as a client of the local server. Version 1. tools/community_check.py checks a result against this schema and for plausibility; tools/community_table.py makes RESULTS.md from them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "kind", "mode", "time_utc", "kapitsa", "mac", "model", "protocol", "results", "conditions", "flags", "invalid"],
+  "properties": {
+    "schema": {"const": 1, "description": "The version of this schema."},
+    "kind": {"const": "kapitsa-bench"},
+    "mode": {"enum": ["full", "quick"], "description": "full: 5 runs per writing test, 4K and 16K prompts. quick: 3 runs per writing test, the 4K prompt only."},
+    "time_utc": {"type": "string", "pattern": "^20[0-9]{2}-[01][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-6][0-9]Z$", "description": "When the run started, in UTC."},
+    "kapitsa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "commit"],
+      "properties": {
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$", "maxLength": 32},
+        "commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7,40}$", "description": "The build's git commit, when it was built from a checkout."}
+      }
+    },
+    "mac": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier", "name", "year", "chip", "cpu_cores", "gpu_cores", "memory_gb", "macos", "macos_build"],
+      "properties": {
+        "identifier": {"type": "string", "pattern": "^[A-Za-z]+[0-9]+,[0-9]+$", "maxLength": 32, "description": "sysctl hw.model, e.g. Mac16,7."},
+        "name": {"type": ["string", "null"], "maxLength": 80, "description": "Apple's name for the model, from mac-models.json; null when it does not list the identifier."},
+        "year": {"type": ["integer", "null"], "minimum": 2020, "maximum": 2100},
+        "chip": {"type": "string", "pattern": "^Apple [A-Z][0-9]+( [A-Za-z0-9]+)*$", "maxLength": 40, "description": "sysctl machdep.cpu.brand_string, e.g. Apple M4 Pro."},
+        "cpu_cores": {"type": "integer", "minimum": 1, "maximum": 512},
+        "gpu_cores": {"type": ["integer", "null"], "minimum": 1, "maximum": 1024, "description": "The GPU's cores (IOKit gpu-core-count)."},
+        "memory_gb": {"type": "integer", "minimum": 4, "maximum": 4096},
+        "macos": {"type": "string", "pattern": "^[0-9]+(\\.[0-9]+){0,2}$", "maxLength": 16},
+        "macos_build": {"type": "string", "pattern": "^[0-9A-Za-z]+$", "maxLength": 16}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "variant", "precision", "catalog", "revision", "decoding", "decoding_detail", "drafter"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 120, "description": "The catalog's name (qwen3.6-35b-a3b), or a folder's."},
+        "title": {"type": "string", "maxLength": 120},
+        "variant": {"type": ["string", "null"], "pattern": "^[a-z0-9]+$", "maxLength": 16, "description": "The catalog variant (4bit, bf16, 24gb); null for a model outside the catalog."},
+        "precision": {"type": "string", "maxLength": 60},
+        "catalog": {"type": "boolean", "description": "A catalog model at its pinned weights (only these are added to the table)."},
+        "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7}$", "description": "The weights' pinned revision, short."},
+        "decoding": {"enum": ["DFlash2", "LiLiCorr", "MTP", "plain", "unknown"]},
+        "decoding_detail": {"type": "string", "maxLength": 120, "description": "The server's own words for it, from its log's engine ready line."},
+        "drafter": {"type": ["string", "null"], "maxLength": 120, "description": "The drafter's repo@revision when one was used."}
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["corpus_sha256", "decode_tokens", "decode_runs", "greedy_runs", "sizes"],
+      "properties": {
+        "corpus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The prompt corpus (bench/harness/corpus); the frozen one is 1a9bb103..."},
+        "decode_tokens": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "decode_runs": {"type": "integer", "minimum": 1, "maximum": 50},
+        "greedy_runs": {"type": "integer", "minimum": 0, "maximum": 50},
+        "sizes": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1000, "maximum": 32000}}
+      }
+    },
+    "results": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decode", "decode_greedy", "prefill", "tool_calls", "peak_memory_gb"],
+      "properties": {
+        "decode": {"$ref": "#/$defs/decode", "description": "Writing at temperature 0.6: the median and each valid run's rate over the middle of a 512-token answer, tok/s."},
+        "decode_greedy": {"anyOf": [{"$ref": "#/$defs/decode"}, {"type": "null"}], "description": "The same, greedy."},
+        "prefill": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["size", "prompt_tokens", "ttft_s", "tps", "followup_s", "followup_median_s"],
+            "properties": {
+              "size": {"type": "integer", "minimum": 1000, "maximum": 32000},
+              "prompt_tokens": {"type": ["integer", "null"], "minimum": 1},
+              "ttft_s": {"type": ["number", "null"], "exclusiveMinimum": 0, "description": "Time to the first token of the cold prompt."},
+              "tps": {"type": ["number", "null"], "exclusiveMinimum": 0, "description": "Reading speed: prompt tokens / ttft_s, tok/s."},
+              "followup_s": {"type": "array", "maxItems": 10, "items": {"type": "number", "exclusiveMinimum": 0}, "description": "Time to the first token of each follow-up turn."},
+              "followup_median_s": {"type": ["number", "null"], "exclusiveMinimum": 0}
+            }
+          }
+        },
+        "tool_calls": {"enum": ["pass", "fail"]},
+        "tool_calls_failed": {"type": "array", "maxItems": 6, "items": {"type": "string", "maxLength": 40}},
+        "peak_memory_gb": {"type": ["number", "null"], "exclusiveMinimum": 0, "description": "The server's phys_footprint_peak, GB of 2^30 bytes."},
+        "mapped_gb": {"type": "number", "minimum": 0, "description": "Resident memory-mapped weights outside the footprint, when 0.05 GB or more."}
+      }
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["power_source", "power_mode", "low_power_mode", "thermal_state", "swapouts", "gpu_quiet_wait_s", "gpu_other_mean_pct", "gpu_other_max_pct", "gpu_ambient_mean_pct", "gpu_users", "contention"],
+      "properties": {
+        "power_source": {"enum": ["ac", "battery", "ups", null]},
+        "power_mode": {"enum": ["automatic", "low", "high", null], "description": "macOS's energy mode (pmset powermode)."},
+        "low_power_mode": {"type": "boolean"},
+        "thermal_state": {"enum": ["nominal", "fair", "serious", "critical", null], "description": "The worst seen during the run."},
+        "swapouts": {"type": "integer", "minimum": 0, "description": "Pages swapped out during the timed phases."},
+        "gpu_quiet_wait_s": {"type": "number", "minimum": 0},
+        "gpu_other_mean_pct": {"type": "number", "minimum": 0, "maximum": 10000, "description": "Other processes' share of GPU time during the timed phases."},
+        "gpu_other_max_pct": {"type": "number", "minimum": 0, "maximum": 10000},
+        "gpu_ambient_mean_pct": {"type": "number", "minimum": 0, "maximum": 10000, "description": "Ambient load (macOS's photo and media analysis, the terminal): recorded, never flagged."},
+        "gpu_users": {"type": "array", "maxItems": 3, "items": {"type": "string", "maxLength": 80}, "description": "Other apps that used at least 0.5% of the GPU on average."},
+        "contention": {"type": "array", "maxItems": 8, "items": {"type": "string", "pattern": "^(decode|decode_greedy|prefill_[0-9]+|tools)$"}, "description": "The phases other apps disturbed (sustained load over 5%): their numbers are marked."}
+      }
+    },
+    "flags": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 400}, "description": "What could skew the numbers, in the harness's words."},
+    "invalid": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 400}, "description": "Measurements that failed the harness's checks; a result with any is not added."}
+  },
+  "$defs": {
+    "decode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["median_tps", "runs_tps"],
+      "properties": {
+        "median_tps": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "runs_tps": {"type": "array", "maxItems": 50, "items": {"type": "number", "exclusiveMinimum": 0}}
+      }
+    }
+  }
+}
