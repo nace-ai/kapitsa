@@ -111,8 +111,8 @@ needs nothing there).
   applied), resized by smart_resize (multiples of 32 within the model's 65536 to 16.7M pixels, `--image-max-pixels`
   lowers the maximum) with Pillow's bicubic resampling reproduced to the bit, normalized, cut into 16x16 patches over
   2 frames. `tests/vision/check_cpu.py` checks it against Pillow and Hugging Face's processors (bit-exact with the
-  reference arithmetic; decoding exact for PNG, WebP, GIF, BMP, TIFF; JPEG and HEIC go through Apple's decoder,
-  within a few levels of libjpeg).
+  reference arithmetic; decoding exact for PNG, WebP, GIF, BMP, TIFF; JPEG goes through Apple's decoder, 0.6 levels
+  from libjpeg on average, up to ~20 on edges).
 - Tower: the bf16 prefill GEMMs (`qrf_f16_*`) with a fp32 residual stream, LayerNorm, GELU, 2D RoPE and a
   non-causal flash attention over the image's patches (head dim 72) in `vit.metal`; the MLP's 4304 columns padded to
   4352 with zeros at load. Its work goes to the GPU in command buffers of ~25 ms (long ones hold up the display).

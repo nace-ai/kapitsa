@@ -165,8 +165,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
        used / 1e9, std::max(1, opts_.slots), budget_ / 1e9, g.recommended_working_set() / 1e9, room / 1e9, room / per,
        per / 1024.0, context_fit_, opts_.context);
   // images: the model's vision tower, loaded on the first image that needs encoding
-  if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels))
+  if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
+    logi("images: %s, %.2f GB loaded on the first image", enc->describe().c_str(), enc->weight_bytes() / 1e9);
     vision_ = std::make_unique<vision::Vision>(std::move(enc));
+  }
   const std::string mode = dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");

@@ -38,6 +38,7 @@ class QwenViT : public ImageEncoder {
   static bool supports(const std::string& dir, QwenViTConfig* c);  // a Qwen3.5-family vision tower in dir's files
 
   std::string name() const override { return "Qwen3.5 ViT"; }
+  std::string describe() const override;
   int placeholder() const override { return c_.image_token; }
   int out_dim() const override { return c_.out_hidden; }
   Prepared prepare(const Image& im) const override;

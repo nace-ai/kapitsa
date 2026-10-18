@@ -33,6 +33,7 @@ class ImageEncoder {
  public:
   virtual ~ImageEncoder() = default;
   virtual std::string name() const = 0;
+  virtual std::string describe() const { return name(); }  // for logs: its shape and the image sizes it takes
   virtual int placeholder() const = 0;    // the token the chat template writes for one image
   virtual int out_dim() const = 0;        // embedding width (the language model's hidden size)
   virtual Prepared prepare(const Image& im) const = 0;      // CPU only, thread-safe

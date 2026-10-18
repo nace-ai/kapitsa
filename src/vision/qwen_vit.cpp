@@ -133,8 +133,12 @@ bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
 QwenViT::QwenViT(const std::string& dir, const QwenViTConfig& c) : dir_(dir), c_(c) {
   prefix_ = vision_prefix(dir);
   inter_pad_ = uint32_t((c_.inter + 63) / 64 * 64);
-  logi("vision: %s (%d blocks, width %d, %d-pixel patches), images of %ld to %ld pixels; loaded on the first image",
-       name().c_str(), c_.depth, c_.hidden, c_.patch, c_.min_pixels, c_.max_pixels);
+}
+
+std::string QwenViT::describe() const {
+  return name() + " (" + std::to_string(c_.depth) + " blocks, width " + std::to_string(c_.hidden) + ", " +
+         std::to_string(c_.patch) + "-pixel patches; images of " + std::to_string(c_.min_pixels) + " to " +
+         std::to_string(c_.max_pixels) + " pixels)";
 }
 
 QwenViT::~QwenViT() { unload(); }

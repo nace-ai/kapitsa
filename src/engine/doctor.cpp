@@ -1,6 +1,7 @@
 // `kapitsa doctor`: this Mac (GPU, cores, memory budget, Neural Engine) and, per model, whether and how it
 // runs here: memory at the requested context and slots, the Neural Engine split, rough speeds.
 #include "engine/doctor.h"
+#include "vision/encoder.h"
 #include "ane/ffn_split.h"
 #include "engine/engine.h"
 #include "hub/hub.h"
@@ -222,6 +223,8 @@ int run_doctor(int argc, char** argv) {
     o["dflash_used"] = !lp.dflash.empty();
     o["dflash_bytes"] = lp.dflash_found_bytes;
     o["decoding"] = !lp.dflash.empty() ? "dflash2" : m.mtp ? "mtp" : "plain";
+    const auto enc = vision::open_encoder(dir);  // images: the encoder's weights load with the first image
+    o["image_encoder_bytes"] = enc ? enc->weight_bytes() : 0;
     o["decode_tps_estimate"] = std::round(dec);
     o["prefill_tps_estimate_gpu"] = std::round(pf);
     arr.push_back(o);
@@ -251,6 +254,9 @@ int run_doctor(int argc, char** argv) {
              m.mtp ? "MTP" : "plain", lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, ctx);
     else
       printf("    decoding: %s%s\n", m.mtp ? "MTP" : "plain", lp.dflash_off ? "" : " (no DFlash2 drafter found)");
+    if (enc)
+      printf("    images: %s, +%.2f GB when the first image arrives (not counted above)\n", enc->name().c_str(),
+             enc->weight_bytes() / 1e9);
     if (m.dense)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()
