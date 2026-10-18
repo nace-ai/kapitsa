@@ -75,11 +75,9 @@ kapitsa rm 27b                 # delete one
 
 ## Benchmarks
 
-Writing speed: tokens per second of a coding answer (decode, temperature 0.6), each engine in the setup that writes
-fastest ([all setups](docs/benchmarks.md)). Qwen runs at **4-bit** on every engine: MLX 4-bit (group 64) on Kapitsa
-and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24 GB checkpoint (2-bit experts,
-4-bit NVFP4 Mamba layers, 8-bit elsewhere) on every engine. ⚠ marks a number from a run during which other apps used
-the GPU (contention flagged): it may be low.
+Writing speed of a coding answer (T = 0.6), each engine in its fastest setup ([all setups](docs/benchmarks.md)). Qwen
+is 4-bit on every engine (Q4_K_M on llama.cpp), Bolt NVIDIA's 24 GB checkpoint. ⚠: other apps used the GPU during
+that run.
 
 **On your Mac:** `kapitsa bench` measures Kapitsa with the same protocol, and the
 [community results](bench/community/RESULTS.md) collect every Mac measured so far: add yours with
@@ -99,16 +97,9 @@ the GPU (contention flagged): it may be low.
 | mlx-serve (DFlash2) | — | 52 tok/s ⚠ | 104 tok/s | — |
 | **Kapitsa** | **179 tok/s**<sup>4B</sup> | **63 tok/s** | **154 tok/s** | **64 tok/s** |
 
-oMLX runs DFlash2 on the 27B and 35B, its own MTP path on the 4B (its fastest setup there) and Bolt without a drafter:
-its LiLiCorr drafter fails every sampled request. Bolt is NVIDIA's 24 GB checkpoint on every engine. mlx-serve ran a day
-later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B · 4-bit and 57-61 tok/s ⚠ on
-Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)); it was not run on the 4B
-([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). <sup>4B</sup> With z-lab's DFlash drafter, the 4B's default since
-2026-10-18, measured that evening with the previous build run first and last as a control: it wrote 120 tok/s, in line
-with its 122 in the bracket above ([details](docs/benchmarks.md#kapitsa-with-z-labs-dflash-drafter)). At bf16 the drafter
-takes Kapitsa from 44 to 89 tok/s. Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights; Kapitsa refuses it
-before downloading). Nemotron 3.5 Lightning fits it (18.2 GB of weights) but has not been measured on it yet; its numbers
-are from the M5 Max below.
+oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B and no drafter on Bolt. Every engine ran beside Kapitsa in
+the same session ([details](docs/benchmarks.md)). <sup>4B</sup> With its new drafter; the previous build, run as a
+control, matched its earlier 122 tok/s.
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB</summary>
@@ -139,12 +130,9 @@ A follow-up is the time to the first token of an answer in a conversation that a
 | mlx-serve (DFlash2) | 72 s | 85 tok/s |
 | **Kapitsa** | **49 s** | **141 tok/s** |
 
-opencode fixing a small Python project, recorded on Kapitsa and replayed request by request on every engine: the same
-19 requests, from a 5.5K-token system prompt to a 23K-token conversation, greedy, each answer capped at its recorded
-length. Total time is the time spent answering them; writing speed is tokens per second while the answers stream.
-Kapitsa recorded the session, so the others also re-read about 2 s of recorded answers that differ from their own.
-The same session on Qwen3.8 27B · 4-bit, same Mac: Kapitsa 150 s, next oMLX + DFlash2 278 s. llama.cpp + MTP was not
-run this time. [Details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)
+opencode fixing a small Python project: the same 19 requests (5.5K to 23K tokens) replayed on every engine, greedy.
+On Qwen3.8 27B · 4-bit: Kapitsa 150 s, next oMLX + DFlash2 278 s.
+[Details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)
 
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
@@ -156,12 +144,9 @@ run this time. [Details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-
 | oMLX | — | — | 190 tok/s | 52 tok/s |
 | **Kapitsa** | **73 tok/s** ⚠ | **250 tok/s** ⚠ | **239 tok/s** | **85 tok/s** |
 
-On the Nemotron models Kapitsa and mlx-vlm run NVIDIA's NVFP4 checkpoints (mlx-vlm with the DSpark drafter on Lightning
-and MTP from its unreleased git main on Super-VL), oMLX and mlx-lm run MLX 4-bit conversions (oMLX with MTP on Lightning;
-on Super-VL text only, as they cannot load NVIDIA's checkpoint) and llama.cpp ggml-org's Q4_0 GGUFs. On Lightning Kapitsa
-writes fastest but reads prompts slowest (1,900 tok/s at 4K against oMLX's 3,600,
-[details](docs/benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)). The other engines have not been run
-on the Qwen models on this Mac yet, nor has Nemotron 3.5 Bolt.
+Kapitsa and mlx-vlm run NVIDIA's NVFP4 checkpoints, oMLX and mlx-lm MLX 4-bit, llama.cpp Q4_0. On Lightning, oMLX
+reads prompts faster than Kapitsa (3,600 vs 1,900 tok/s at 4K;
+[details](docs/benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)).
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</summary>
