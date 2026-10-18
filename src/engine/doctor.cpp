@@ -250,7 +250,7 @@ int run_doctor(int argc, char** argv) {
       if (!term::fancy()) fputs(usage, stderr);
       else if (a == "--help" || a == "-h")
         term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots 2] [--prefill-chunk 2048] "
-                   "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: this Mac's GPU and memory, and which models fit "
+                   "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: This Mac's GPU and memory, and which models fit "
                    "it at the context and slots given (what kapitsa serve would hold).\n");
       else
         term::error("unknown option " + a, "kapitsa doctor --help shows how to use it.");

@@ -653,7 +653,14 @@ void error(const std::string& msg, const std::string& hint) {
     const bool cmd = l.rfind("  ", 0) == 0;  // an indented line: a command to run, kept as is
     if (cmd) {
       while (!l.empty() && l[0] == ' ') l.erase(l.begin());
-      out += "      " + bold(l) + "\n";
+      std::string alt;  // "cmd      (or: other cmd)": the other one on a line of its own
+      if (const size_t p = l.find("  ("); p != std::string::npos && l.back() == ')') {
+        alt = l.substr(p + 3, l.size() - p - 4);
+        l.resize(p);
+        while (!l.empty() && l.back() == ' ') l.pop_back();
+      }
+      out += "      " + bold(clip(l, w - 2)) + "\n";
+      if (!alt.empty()) out += "      " + dim(clip(alt, w - 2)) + "\n";
       continue;
     }
     for (const auto& x : wrap(l, w)) out += "    " + dim(x) + "\n";
