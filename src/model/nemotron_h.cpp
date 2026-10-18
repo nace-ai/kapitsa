@@ -1373,10 +1373,12 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     const bool x2 = x2_ && L.E <= 1024 && L.I % 256 == 0 && cfg_.latent % 256 == 0;
     if (x2 && R >= 2) {
       // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
-      // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms
+      // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms; up with 8 rows per
+      // simdgroup when the latent fits in registers (K <= 1024: 3-5 % per layer)
+      const bool up8 = cfg_.latent <= 1024;
       const struct {
         uint32_t P, E, BM, k, up_x, dn_x;
-      } bp{npairs, uint32_t(L.E), 2, k, (uint32_t(L.I) + 3) / 4, (uint32_t(cfg_.latent) + 3) / 4};
+      } bp{npairs, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4), (uint32_t(cfg_.latent) + 3) / 4};
       e.use(pipe("nh_x2_bucket"));
       e.buf(0, eid_);
       e.buf(1, x2sorted_);
@@ -1386,7 +1388,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.bytes(5, &bp, sizeof bp);
       e.buf(6, live());
       e.dispatch(1, 1, 1, 1024);
-      e.use(pipe("nh_x2_moeb_up"));
+      e.use(pipe(up8 ? "nh_x2_moeb_up8" : "nh_x2_moeb_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
       e.buf(2, lat_);
