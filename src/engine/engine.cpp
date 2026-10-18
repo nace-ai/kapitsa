@@ -942,8 +942,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
+  // (Nemotron-H: the whitespace before </think> stays in the reasoning, as its template renders returned turns)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools);
+                      think_tools, nh_ != nullptr);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;

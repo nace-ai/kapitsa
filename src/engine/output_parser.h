@@ -26,11 +26,14 @@ class OutputParser {
   // Qwen3.6 sometimes writes its call and stops without ever closing the think block. If the reasoning
   // goes on instead (a call drafted while thinking), the held tokens are replayed as reasoning, exactly
   // as without think_tools.
+  // think_ws: the whitespace the model writes before </think> stays in the reasoning (Nemotron 3.5's template
+  // renders a returned turn as "<think>\n" + reasoning + "</think>", so a reasoning that ended with the model's own
+  // "\n" renders as generated and the next request reuses the cache through the reply; Qwen's templates add theirs)
   OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
-               bool parse_tools, const ojson& tools, bool think_tools = false)
+               bool parse_tools, const ojson& tools, bool think_tools = false, bool think_ws = false)
       : dec_(t), hdec_(t), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools), think_tools_(think_tools && parse_tools),
-        tools_(tools) {}
+        think_ws_(think_ws), tools_(tools) {}
 
   // Returns the delta produced by this token.
   ChatDelta push(int id) {
@@ -80,7 +83,8 @@ class OutputParser {
     }
     if (id == think_close_) {
       flush_text(d);
-      held_.clear();  // drop whitespace before </think>
+      if (think_ws_ && in_think_) d.reasoning += held_;
+      held_.clear();  // drop whitespace before </think> (think_ws: kept above)
       in_think_ = false;
       skip_leading_ws_ = true;
       return;
@@ -264,7 +268,7 @@ class OutputParser {
   StreamDecoder hdec_;  // text of held tokens (think_tools)
   int think_open_, think_close_, tc_open_, tc_close_;
   bool in_think_;
-  bool parse_tools_, think_tools_;
+  bool parse_tools_, think_tools_, think_ws_;
   const ojson& tools_;
   bool in_tool_ = false, skip_leading_ws_ = false;
   std::string tool_buf_, held_;
