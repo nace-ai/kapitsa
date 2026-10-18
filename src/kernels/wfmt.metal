@@ -474,7 +474,7 @@ NI_INLINE void moeg_down_rows_impl(const device uint32_t* dw, const device bfloa
   }
 }
 
-#define NI_MOEG_DOWN_ROWS(NAME, FE, GE, FD, GD)                                                               \
+#define NI_MOEG_DOWN_ROWS(NAME, FE, GE, FD, GD, HS)                                                             \
   [[kernel]] void NAME(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],       \
                        const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],      \
                        const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],        \
@@ -484,7 +484,7 @@ NI_INLINE void moeg_down_rows_impl(const device uint32_t* dw, const device bfloa
                        uint tid [[thread_index_in_threadgroup]], uint2 ntg2 [[threads_per_threadgroup]],      \
                        uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],   \
                        uint lane [[thread_index_in_simdgroup]]) {                                             \
-    threadgroup float hs[9 * 512];                                                                           \
+    threadgroup float hs[HS];                                                                                \
     moeg_down_rows_impl<FE, GE, FD, GD>(dw, dsc, dbi, sdw, sds, sdb, h, idx, wts, x, p, tgp, tid, ntg2.x, sg, nsg, \
                                         lane, hs);                                                           \
   }
@@ -1511,23 +1511,26 @@ NI_MOE8G(f3g64_f8g64, 3, 64, 8, 64)
 
 // MoE rows: routed experts x shared expert formats seen in MLX packs
 NI_MOEG_GU_ROWS(moeg_gu_rows_f16_f16, 16, 64, 16, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f16_f16, 16, 64, 16, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f16_f16, 16, 64, 16, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f8g64_f8g64, 8, 64, 8, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64, 8, 64, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f8g64_f8g64, 8, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f4g64_f8g64, 4, 64, 8, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64, 4, 64, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64, 4, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f6g64_f6g64, 6, 64, 6, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f6g64_f6g64, 6, 64, 6, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f6g64_f6g64, 6, 64, 6, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f6g64_f8g64, 6, 64, 8, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f6g64_f8g64, 6, 64, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f6g64_f8g64, 6, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f5g64_f5g64, 5, 64, 5, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f5g64, 5, 64, 5, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f5g64, 5, 64, 5, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f5g64_f8g64, 5, 64, 8, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f8g64, 5, 64, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f5g64_f8g64, 5, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f3g64_f8g64, 3, 64, 8, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64, 3, 64, 8, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64, 3, 64, 8, 64, 9 * 512)
 NI_MOEG_GU_ROWS(moeg_gu_rows_f4g64_f4g64, 4, 64, 4, 64)
-NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f4g64, 4, 64, 4, 64, 9 * 512)
+// wide experts ((k + 1) * max(I, SI) <= 7168 staged floats: Qwen3.8-Flash-Next's 11 x 640)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f4g64_f8g64_w, 4, 64, 8, 64, 7168)
+NI_MOEG_DOWN_ROWS(moeg_down_rows_f3g64_f8g64_w, 3, 64, 8, 64, 7168)
 
 // Neural Engine split (ane_ffn.metal): weight staging from each format, and the GPU's share of the down projection
 #define NI_WF_ANE(SFX, F, GS) NI_ANE_WF(SFX, F, GS) NI_QRF_LD(qrf_##SFX##_m32_n128_ld, F, GS, 32, 128, 1, 4, false)

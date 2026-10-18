@@ -327,7 +327,7 @@ NI_INLINE void moe_down_rows_impl(const device uint32_t* dw, const device bfloat
       if (row0 + q < p.D) x[r * p.D + row0 + q] += tot[q];
 }
 
-#define NI_MOE_DOWN_ROWS(NAME, GS, SBITS)                                                                  \
+#define NI_MOE_DOWN_ROWS(NAME, GS, SBITS, HS)                                                                \
   [[kernel]] void NAME(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],      \
                        const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],     \
                        const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],       \
@@ -337,11 +337,13 @@ NI_INLINE void moe_down_rows_impl(const device uint32_t* dw, const device bfloat
                        uint tid [[thread_index_in_threadgroup]], uint2 ntg2 [[threads_per_threadgroup]],     \
                        uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],  \
                        uint lane [[thread_index_in_simdgroup]]) {                                            \
-    threadgroup float hs[9 * 512];                                                                          \
+    threadgroup float hs[HS];                                                                               \
     moe_down_rows_impl<GS, SBITS>(dw, dsc, dbi, sdw, sds, sdb, h, idx, wts, x, p, tgp, tid, ntg2.x, sg, nsg, lane, hs); \
   }
-NI_MOE_DOWN_ROWS(moe_down_rows_g64, 64, 4)
-NI_MOE_DOWN_ROWS(moe_down_rows_g32_s8, 32, 8)
+// (k + 1) * max(I, SI) <= 4608 staged floats; the _w forms (wide experts: Qwen3.8-Flash-Next) <= 7168
+NI_MOE_DOWN_ROWS(moe_down_rows_g64, 64, 4, 9 * 512)
+NI_MOE_DOWN_ROWS(moe_down_rows_g32_s8, 32, 8, 9 * 512)
+NI_MOE_DOWN_ROWS(moe_down_rows_g64_w, 64, 4, 7168)
 
 // Router top-k for R rows with E = 256 (one simdgroup per row).
 [[kernel]] void moe_topk256_rows(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
@@ -454,15 +456,13 @@ struct GdnVerifyParams {
 
 // grid: Hv threadgroups x 1024 threads (as gdn_step).
 // pend_k: [Rmax, Hv, 128], pend_g: [Rmax, Hv], pend_d: [Rmax, Hv, 128]
-[[kernel]] void gdn_step_verify(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
-                                const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
-                                const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
-                                const device float* z [[buffer(6)]], const device bfloat* norm_w [[buffer(7)]],
-                                device float* out [[buffer(8)]], device float* pend_k [[buffer(9)]],
-                                device float* pend_g [[buffer(10)]], device float* pend_d [[buffer(11)]],
-                                constant GdnVerifyParams& p [[buffer(12)]], uint h [[threadgroup_position_in_grid]],
-                                uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float scratch[32];
+template <bool SIG>
+NI_INLINE void gdn_step_verify_impl(const device float* q, const device float* k, const device float* v,
+                                    const device float* g, const device float* beta, device float* state,
+                                    const device float* z, const device bfloat* norm_w, device float* out,
+                                    device float* pend_k, device float* pend_g, device float* pend_d,
+                                    constant GdnVerifyParams& p, uint h, uint sg, uint lane,
+                                    threadgroup float* scratch) {
   constexpr uint D = 128;
   const uint hk = h / (p.Hv / p.Hk);
   device float* S = state + h * D * D;
@@ -506,10 +506,26 @@ struct GdnVerifyParams {
       float ov = lane == 0 ? o[0] : lane == 1 ? o[1] : lane == 2 ? o[2] : o[3];
       float nv = lane == 0 ? nw[0] : lane == 1 ? nw[1] : lane == 2 ? nw[2] : nw[3];
       uint idx = (t * p.Hv + h) * D + dv;
-      out[idx] = ov * inv * nv * silu(z[idx]);
+      out[idx] = ov * inv * nv * gdn_gate<SIG>(z[idx]);
     }
   }
 }
+
+#define NI_GDN_STEP_VERIFY(NAME, SIG)                                                                         \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],             \
+                       const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],             \
+                       const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],            \
+                       const device float* z [[buffer(6)]], const device bfloat* norm_w [[buffer(7)]],       \
+                       device float* out [[buffer(8)]], device float* pend_k [[buffer(9)]],                  \
+                       device float* pend_g [[buffer(10)]], device float* pend_d [[buffer(11)]],             \
+                       constant GdnVerifyParams& p [[buffer(12)]], uint h [[threadgroup_position_in_grid]],  \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) { \
+    threadgroup float scratch[32];                                                                           \
+    gdn_step_verify_impl<SIG>(q, k, v, g, beta, state, z, norm_w, out, pend_k, pend_g, pend_d, p, h, sg, lane, \
+                              scratch);                                                                      \
+  }
+NI_GDN_STEP_VERIFY(gdn_step_verify, false)
+NI_GDN_STEP_VERIFY(gdn_step_verify_sg, true)
 
 // ---- per-row sampling ----
 // topk_stage1 with a row dimension: grid (ceil(V/chunk), R).

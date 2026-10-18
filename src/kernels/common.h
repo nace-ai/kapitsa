@@ -9,6 +9,9 @@ using namespace metal;
 
 NI_INLINE float silu(float x) { return x / (1.0f + metal::fast::exp(-x)); }
 NI_INLINE float sigmoid(float x) { return 1.0f / (1.0f + metal::fast::exp(-x)); }
+// The gated RMSNorm's output gate of Gated DeltaNet layers: silu(z) (Qwen3.5/3.6/3.8), sigmoid(z) (Qwen3.8-Flash-Next's
+// output_gate_type "sigmoid": the _sg kernels)
+template <bool SIG> NI_INLINE float gdn_gate(float z) { return SIG ? sigmoid(z) : silu(z); }
 NI_INLINE float softplus(float x) { return x > 20.0f ? x : metal::precise::log(1.0f + metal::precise::exp(x)); }
 
 // Sum across a threadgroup of up to 1024 threads (32 simdgroups). `scratch` holds >= 32 floats.

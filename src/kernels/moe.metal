@@ -495,17 +495,14 @@ NI_GU3(moe_gate_up3_r2, 2)
 NI_GU3(moe_gate_up3_r4, 4)
 
 // grid: row tiles over D. x[row] += sum_slot wts[slot] * (down_slot[row] . h[slot]); h staged once.
-[[kernel]] void moe_down2(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],
-                          const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],
-                          const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],
-                          const device float* h [[buffer(6)]], const device uint* idx [[buffer(7)]],
-                          const device float* wts [[buffer(8)]], device float* x [[buffer(9)]],
-                          constant MoeParams& p [[buffer(10)]], uint tgp [[threadgroup_position_in_grid]],
-                          uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
-                          uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                          uint lane [[thread_index_in_simdgroup]]) {
+// moe_down2 stages (k + 1) * max(I, SI) <= 4608 floats, moe_down2_w (wide experts: Qwen3.8-Flash-Next's 11 x 640)
+// <= 7168 (checked on the host); the same arithmetic.
+NI_INLINE void moe_down2_impl(const device uint32_t* dw, const device bfloat* dsc, const device bfloat* dbi,
+                              const device uint32_t* sdw, const device bfloat* sds, const device bfloat* sdb,
+                              const device float* h, const device uint* idx, const device float* wts, device float* x,
+                              constant MoeParams& p, uint tgp, uint tid, uint ntg, uint sg, uint nsg, uint lane,
+                              threadgroup float* hs) {
   constexpr int ROWS = 2;
-  threadgroup float hs[9 * 512];  // (k + 1) * max(I, SI) <= 4608 (checked on the host)
   const uint hstride = max(p.I, p.SI);
   for (uint i = tid; i < (p.k + 1) * hstride / 4; i += ntg) ((threadgroup float4*)hs)[i] = ((const device float4*)h)[i];
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -528,6 +525,22 @@ NI_GU3(moe_gate_up3_r4, 4)
     for (int r = 0; r < ROWS; ++r)
       if (row0 + r < p.D) x[row0 + r] += tot[r];
 }
+
+#define NI_MOE_DOWN2(NAME, HS)                                                                                 \
+  [[kernel]] void NAME(const device uint32_t* dw [[buffer(0)]], const device bfloat* dsc [[buffer(1)]],       \
+                       const device bfloat* dbi [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],      \
+                       const device bfloat* sds [[buffer(4)]], const device bfloat* sdb [[buffer(5)]],        \
+                       const device float* h [[buffer(6)]], const device uint* idx [[buffer(7)]],             \
+                       const device float* wts [[buffer(8)]], device float* x [[buffer(9)]],                  \
+                       constant MoeParams& p [[buffer(10)]], uint tgp [[threadgroup_position_in_grid]],       \
+                       uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]],        \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],   \
+                       uint lane [[thread_index_in_simdgroup]]) {                                             \
+    threadgroup float hs[HS];                                                                                 \
+    moe_down2_impl(dw, dsc, dbi, sdw, sds, sdb, h, idx, wts, x, p, tgp, tid, ntg, sg, nsg, lane, hs);         \
+  }
+NI_MOE_DOWN2(moe_down2, 9 * 512)
+NI_MOE_DOWN2(moe_down2_w, 7168)
 
 // Faster single-simdgroup top-k for E = 256, k <= 8: compile-time sizes, fast exp, one pass of
 // simd reductions per round.

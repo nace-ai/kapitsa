@@ -525,12 +525,13 @@ void Qwen35::enc_attn_rows(Encoder& e, const Seq& s, const Layer& L, const Buffe
 }
 
 // MoE block for R rows: x += moe(norm(x)).
-void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer) {
+void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer, const Buffer* in) {
   const int D = cfg_.hidden, k = cfg_.top_k;
-  enc_qmvr_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, x, L.post_norm, R, &xrn_);
-  if (cfg_.experts != 256 || k > 8) fatal("MoE rows: E must be 256 and k <= 8");
+  if (in && in->mtl != xrn_.mtl) fatal("enc_moe_rows: the input rows must be xrn_");
+  enc_qmvr_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, in ? *in : x, in ? nullptr : L.post_norm, R, &xrn_);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe2("moe_topk256_rows"));
+  // E = 256, k <= 8 (Qwen3.5/3.6): the unrolled form; any other E <= 512, k <= 16: one simdgroup per row
+  e.use(pipe2(cfg_.experts == 256 && k <= 8 ? "moe_topk256_rows" : "moe_topk_rows"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(R, 1, 1, 32);
@@ -593,7 +594,7 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
     e.dispatch((D + rows * nsg - 1) / (rows * nsg), 1, 1, 32 * nsg);
     return;
   }
-  const std::string gu_k = moe_rows_kernel(true, L.eg, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd);
+  const std::string gu_k = moe_rows_kernel(true, L.eg, L.sg), dn_k = moe_rows_kernel(false, L.ed, L.sd, moe_wide());
   if (gu_k.empty() || dn_k.empty())
     fatal("MoE rows: no kernels for %s experts with a %s shared expert%s", format_name(L.eg.bits, L.eg.gs).c_str(),
           format_name(L.sg.bits, L.sg.gs).c_str(), mtp_layer ? " (MTP head)" : "");

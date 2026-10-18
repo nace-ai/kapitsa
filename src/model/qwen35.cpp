@@ -330,7 +330,7 @@ void Qwen35::prewarm_pipelines() {
       }
       if (L.eg && !moe_rows_kernel(true, L.eg, L.sg).empty() && !(L.eg.q4() && L.sg.q4())) {
         names.insert(moe_rows_kernel(true, L.eg, L.sg));
-        names.insert(moe_rows_kernel(false, L.ed, L.sd));
+        names.insert(moe_rows_kernel(false, L.ed, L.sd, moe_wide()));
         names.insert("moe8g_gu_" + L.eg.fmt() + "_" + L.sg.fmt());  // when instantiated (else not created)
       }
     }
@@ -628,15 +628,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
         check(*q);
   }
   // Checks the kernels' assumptions.
-  if (cfg_.lin_dk != 128 || cfg_.lin_dv != 128) fatal("GDN head dims must be 128");
-  if (cfg_.head_dim != 256) fatal("attention head_dim must be 256");
-  if (cfg_.hq / cfg_.hkv > 8) fatal("GQA ratio > 8 unsupported");
-  if (cfg_.conv_k != 4) fatal("conv kernel must be 4");
-  if (cfg_.moe && (cfg_.moe_I % 512 || cfg_.shared_I % 512)) fatal("expert sizes must be multiples of 512");
-  if (cfg_.moe && (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) > 4608) fatal("MoE decode: (k+1)*I > 4608");
-  if (cfg_.moe && (cfg_.experts % 32 || cfg_.experts > 512 || cfg_.top_k > 16)) fatal("MoE: unsupported expert count");
-  if (cfg_.moe && (cfg_.hidden > 4096 || cfg_.lin_hv * cfg_.lin_dv > 4096 || cfg_.hq * cfg_.head_dim > 4096))
-    fatal("MoE decode kernels stage at most 4096 inputs");
+  check_shapes();
   test_transforms();
   check_formats();
 
@@ -651,6 +643,24 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   // calibration or a default share for this chip (27B 4k prefill ~2.8x); NI_ANE=0 keeps the GPU alone.
   if (!cfg_.moe && !(getenv("NI_ANE") && !strcmp(getenv("NI_ANE"), "0"))) init_ane();
 }
+
+Qwen35::Qwen35(const std::string& dir, int prefill_chunk, NoLoad) : dir_(dir), tmax_(prefill_chunk) {}
+
+// The kernels' assumptions on the architecture.
+void Qwen35::check_shapes() const {
+  if (cfg_.lin_dk != 128 || cfg_.lin_dv != 128) fatal("GDN head dims must be 128");
+  if (cfg_.head_dim != 256) fatal("attention head_dim must be 256");
+  if (cfg_.hq / cfg_.hkv > 16) fatal("GQA ratio > 16 unsupported");
+  if (cfg_.conv_k != 4) fatal("conv kernel must be 4");
+  if (cfg_.moe && (cfg_.moe_I % 64 || cfg_.shared_I % 64)) fatal("expert sizes must be multiples of 64");
+  // the decode / row MoE kernels stage every slot's h: (k + 1) * I floats, 7168 at most (the _w forms past 4608)
+  if (cfg_.moe && (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) > 7168) fatal("MoE decode: (k+1)*I > 7168");
+  if (cfg_.moe && (cfg_.experts % 32 || cfg_.experts > 512 || cfg_.top_k > 16)) fatal("MoE: unsupported expert count");
+  if (cfg_.moe && cfg_.hidden > 4096) fatal("MoE decode kernels stage at most 4096 inputs");
+}
+
+// Staged h floats of the decode / row MoE kernels past the 4608 of the original forms: their wide (_w) instantiations
+bool Qwen35::moe_wide() const { return cfg_.moe && (cfg_.top_k + 1) * std::max(cfg_.moe_I, cfg_.shared_I) > 4608; }
 
 Qwen35::~Qwen35() {
   // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
@@ -1139,7 +1149,13 @@ void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
 // ---- weight formats ----
 // Per-row MoE kernels (decode, verify, MTP rows) for routed experts e and shared expert s: the specialized
 // 4-bit ones, else the generic instantiation of wfmt.metal for the pair, or "" if there is none.
-std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s) {
+std::string moe_rows_kernel(bool gate_up, const QLinear& e, const QLinear& s, bool wide) {
+  // wide: the down kernel's staged h exceeds 4608 floats (moe_wide): the _w forms, which exist for these pairs
+  if (wide && !gate_up) {
+    if (e.q4() && s.q4()) return "moe_down_rows_g64_w";
+    const std::string pair = e.fmt() + "_" + s.fmt();
+    return pair == "f4g64_f8g64" || pair == "f3g64_f8g64" ? "moeg_down_rows_" + pair + "_w" : "";
+  }
   if (e.q4() && s.q4()) return gate_up ? "moe_gate_up_rows_g64" : "moe_down_rows_g64";
   if (e.bits == 4 && e.gs == 32 && s.q8()) return gate_up ? "moe_gate_up_rows_g32_s8" : "moe_down_rows_g32_s8";
   static const std::set<std::string> have = {"f16_f16",     "f8g64_f8g64", "f4g64_f8g64", "f6g64_f6g64", "f6g64_f8g64",
@@ -1425,7 +1441,7 @@ void Qwen35::check_formats() const {
       fatal("%s: experts' gate/up/down (or the shared expert's gate/up) differ in format", what);
     if (!moe_prefill_format(L.eg))
       fatal("%s: %s routed experts are not supported", what, format_name(L.eg.bits, L.eg.gs).c_str());
-    if (moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd).empty())
+    if (moe_rows_kernel(true, L.eg, L.sg).empty() || moe_rows_kernel(false, L.ed, L.sd, moe_wide()).empty())
       fatal("%s: no MoE kernels for %s experts with a %s shared expert", what, format_name(L.eg.bits, L.eg.gs).c_str(),
             format_name(L.sg.bits, L.sg.gs).c_str());
   };
@@ -1658,7 +1674,7 @@ void Qwen35::enc_moe(Encoder& e, const Layer& L) {
   // NI_GU: 2 = fused top-k (v2), 3 = separate top-k dispatch + v3 rows 2, 4 = v3 rows 4
   static int variant = getenv("NI_GU") ? atoi(getenv("NI_GU")) : 3;
   static Pipeline gu = Gpu::get().pipeline(variant == 2 ? "moe_gate_up2" : variant == 3 ? "moe_gate_up3_r2" : "moe_gate_up3_r4");
-  static Pipeline dn = Gpu::get().pipeline("moe_down2");
+  const Pipeline dn = pipe(moe_wide() ? "moe_down2_w" : "moe_down2");
   static Pipeline topk = Gpu::get().pipeline(cfg_.experts == 256 && cfg_.top_k <= 8 ? "moe_topk256" : "moe_topk");
   constexpr uint32_t nsg = 8;
   const uint32_t gu_rows = variant == 4 ? 4 : 2, rows = 2;
@@ -2006,7 +2022,7 @@ static bool moe_fma() {
   return on;
 }
 
-bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
+bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
   // generic expert formats (wfmt.metal qmmsf_moe_*: bf16, 8/6/5/3-bit group 64): 8-row MMA tiles, no FMA rows
@@ -2030,7 +2046,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   };
   const bool fold = fold_on && moe_fused() && same(L.sg, G) && same(L.su, U) && same(L.sd, Dn);
   const int S = fold ? T : 0;
-  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   enc_topk_rows(e, tp.E, tp.k, tp.norm != 0, T);
@@ -2170,12 +2186,12 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
   e.dispatch((L.N + 63) / 64, max_tiles, 1, 128);
 }
 
-void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
-  if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf)) return;
-  if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf)) return;
+void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
+  if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf, xh_ready)) return;
+  if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf, xh_ready)) return;
   if (L.eg.bits != 4) fatal("MoE prefill: no kernels for %s experts", format_name(L.eg.bits, L.eg.gs).c_str());
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k;
-  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   enc_topk_rows(e, tp.E, tp.k, tp.norm != 0, T);
@@ -2218,7 +2234,7 @@ void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xb
 // quantization match the routed experts') or on the dense path (mode 2). Per row the arithmetic
 // matches the original path (same dequantized halfs, same MMA order over K). Returns false when
 // the layer does not fit the kernels' assumptions (the caller then runs the original path).
-bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& xbuf) {
+bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
   const int D = cfg_.hidden, k = cfg_.top_k, P = T * k, E = cfg_.experts;
   const QLinear &G = L.eg, &U = L.eu, &Dn = L.ed;
   // NI_MOE_QMR: qrm_gu (64 + 64 weight rows) / qrm_dn (128 rows) on 32- or 16-row tiles (4-bit g64)
@@ -2245,7 +2261,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
                     L.su.same_format(G) && L.sd.same_format(Dn) && L.sg.gs == G.gs && L.su.gs == G.gs &&
                     L.sd.gs == Dn.gs;
   const int S = fold ? T : 0;
-  enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
+  if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   enc_topk_rows(e, tp.E, tp.k, tp.norm != 0, T);
@@ -2367,7 +2383,7 @@ void Qwen35::enc_gdn_prefill_par(Encoder& e, Seq& s, int li, const Layer& L, int
     e.val(9, srow);
   }
   e.dispatch(Hv * (128 / rows_tg), 1, 1, 32 * sgs);
-  e.use(pipe("gdn_gnorm"));
+  e.use(pipe(gdn_sigmoid_ ? "gdn_gnorm_sg" : "gdn_gnorm"));
   e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, hh_);
   e.val(4, sp);
   e.dispatch((uint32_t(T) * Hv + 7) / 8, 1, 1, 256);

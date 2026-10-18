@@ -98,14 +98,11 @@ struct GdnStepParams {
   float eps;
 };
 
-[[kernel]] void gdn_step(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
-                         const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],
-                         const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],
-                         const device float* z [[buffer(6)]], const device bfloat* norm_w [[buffer(7)]],
-                         device float* out [[buffer(8)]], constant GdnStepParams& p [[buffer(9)]],
-                         uint h [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
-                         uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float scratch[32];
+template <bool SIG>
+NI_INLINE void gdn_step_impl(const device float* q, const device float* k, const device float* v, const device float* g,
+                             const device float* beta, device float* state, const device float* z,
+                             const device bfloat* norm_w, device float* out, constant GdnStepParams& p, uint h, uint sg,
+                             uint lane, threadgroup float* scratch) {
   constexpr uint D = 128;
   const uint hk = h / (p.Hv / p.Hk);
   device float* S = state + h * D * D;
@@ -138,11 +135,25 @@ struct GdnStepParams {
       float ov = lane == 0 ? o[0] : lane == 1 ? o[1] : lane == 2 ? o[2] : o[3];
       float nv = lane == 0 ? nw[0] : lane == 1 ? nw[1] : lane == 2 ? nw[2] : nw[3];
       uint idx = (t * p.Hv + h) * D + dv;
-      out[idx] = ov * inv * nv * silu(z[idx]);
+      out[idx] = ov * inv * nv * gdn_gate<SIG>(z[idx]);
     }
   }
   for (int r = 0; r < 4; ++r) *(device float4*)(S + (sg * 4 + r) * D + lane * 4) = st[r];
 }
+
+#define NI_GDN_STEP(NAME, SIG)                                                                                \
+  [[kernel]] void NAME(const device float* q [[buffer(0)]], const device float* k [[buffer(1)]],             \
+                       const device float* v [[buffer(2)]], const device float* g [[buffer(3)]],             \
+                       const device float* beta [[buffer(4)]], device float* state [[buffer(5)]],            \
+                       const device float* z [[buffer(6)]], const device bfloat* norm_w [[buffer(7)]],       \
+                       device float* out [[buffer(8)]], constant GdnStepParams& p [[buffer(9)]],             \
+                       uint h [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],  \
+                       uint lane [[thread_index_in_simdgroup]]) {                                            \
+    threadgroup float scratch[32];                                                                           \
+    gdn_step_impl<SIG>(q, k, v, g, beta, state, z, norm_w, out, p, h, sg, lane, scratch);                    \
+  }
+NI_GDN_STEP(gdn_step, false)
+NI_GDN_STEP(gdn_step_sg, true)
 
 // ---- Gated DeltaNet prefill path (NI_GDN_PAR=1): gdn_prep_par -> gdn_step_par_l* -> gdn_gnorm ----
 // Same math as gdn_prep + gdn_step + rows_to_half, laid out for many tokens. Every sum follows the
@@ -470,11 +481,9 @@ NI_GDN_STEP_PARR_SNAP(gdn_step_parr4_snap_l32, 32, 4)
 //   y[t, h*128 + dv] = half(rmsnorm(o[t, h, :])[dv] * w[dv] * silu(z[t, h, dv]))
 // One simdgroup per (token, head); lane l holds rows 4l..4l+3 and sums them like gdn_step's
 // simdgroup l. grid: ceil(T*Hv / 8) threadgroups x 256 threads.
-[[kernel]] void gdn_gnorm(const device float* o [[buffer(0)]], const device float* z [[buffer(1)]],
-                          const device bfloat* norm_w [[buffer(2)]], device half* y [[buffer(3)]],
-                          constant GdnStepParams& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
-                          uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                          uint lane [[thread_index_in_simdgroup]]) {
+template <bool SIG>
+NI_INLINE void gdn_gnorm_impl(const device float* o, const device float* z, const device bfloat* norm_w, device half* y,
+                              constant GdnStepParams& p, uint tg, uint sg, uint nsg, uint lane) {
   constexpr uint D = 128;
   const uint row = tg * nsg + sg;  // t * Hv + h
   if (row >= p.T * p.Hv) return;
@@ -488,10 +497,21 @@ NI_GDN_STEP_PARR_SNAP(gdn_step_parr4_snap_l32, 32, 4)
   half4 y4;
   for (int r = 0; r < 4; ++r) {
     float nv = float(norm_w[lane * 4 + r]);
-    y4[r] = half(ov[r] * inv * nv * silu(zz[r]));
+    y4[r] = half(ov[r] * inv * nv * gdn_gate<SIG>(zz[r]));
   }
   *(device half4*)(y + idx) = y4;
 }
+
+#define NI_GDN_GNORM(NAME, SIG)                                                                               \
+  [[kernel]] void NAME(const device float* o [[buffer(0)]], const device float* z [[buffer(1)]],             \
+                       const device bfloat* norm_w [[buffer(2)]], device half* y [[buffer(3)]],              \
+                       constant GdnStepParams& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],    \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],  \
+                       uint lane [[thread_index_in_simdgroup]]) {                                            \
+    gdn_gnorm_impl<SIG>(o, z, norm_w, y, p, tg, sg, nsg, lane);                                              \
+  }
+NI_GDN_GNORM(gdn_gnorm, false)
+NI_GDN_GNORM(gdn_gnorm_sg, true)
 
 // ---- Prefill helpers ----
 // Y[t, :] = half(rmsnorm(X[t, :]) * w) when w is given (norm=1), else half(X[t, :]).
