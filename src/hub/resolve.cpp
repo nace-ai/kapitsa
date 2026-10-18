@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
+#include <strings.h>
 
 namespace ni::hub {
 
@@ -163,6 +164,9 @@ ModelRef resolve(const std::string& arg0) {
                          arg == "." || arg == "..";
   if (path_like) {
     const std::string p = expand(arg);
+    if (!is_dir(p) && p.size() > 5 && strcasecmp(p.c_str() + p.size() - 5, ".gguf") == 0 && access(p.c_str(), R_OK) == 0)
+      throw Error(arg + " is a GGUF file: `kapitsa import " + arg + "` converts it into a model folder (kapitsa serve "
+                  "--model " + arg + " converts it on first use).");
     if (!is_dir(p)) throw Error("No folder at " + arg + ". --model takes a model folder, a name (" + choices() +
                                 ") or a Hugging Face repo (org/name).");
     return local(p);
@@ -201,6 +205,8 @@ ModelRef resolve(const std::string& arg0) {
     r.dir = models_dir() + "/" + folder;
     return r;
   }
+  // a folder of the models dir by its name (kapitsa import's conversions)
+  if (arg.find('/') == std::string::npos && arg[0] != '.' && is_dir(models_dir() + "/" + arg)) return local(models_dir() + "/" + arg);
   if (is_dir(arg)) return local(arg);
   throw Error("Unknown model \"" + arg + "\". Choose " + choices() +
               ", a Hugging Face repo of a Qwen3.5-family MLX model (org/name), or a model folder.");

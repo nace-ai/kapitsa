@@ -3,6 +3,8 @@
 // agents), waits for it, runs the agent pointed at it (src/api/clients.cpp: its environment and options), and stops
 // the server it started when the agent exits, with the agent's exit code.
 #include "api/clients.h"
+#include "gguf/gguf.h"
+#include "gguf/import.h"
 #include "server/cli.h"
 #include "util/log.h"
 
@@ -252,6 +254,15 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   // the agent first: no server is started for one that is not installed
   const std::string path = find_in_path(name);
   if (path.empty()) return fail(api::agent_install_hint(name));
+  if (!model.empty() && gguf::is_gguf_file(expand_home(model))) {  // a GGUF: its conversion, made on first use
+    try {
+      gguf::ImportOptions io;
+      io.file = expand_home(model);
+      model = gguf::import_model(io);
+    } catch (const gguf::Error& e) {
+      return fail(e.what(), 2);
+    }
+  }
 
   Running run;
   std::string why;
