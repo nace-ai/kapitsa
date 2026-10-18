@@ -891,6 +891,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     printf("%s\n", j.dump().c_str());
     return;
   }
+  if (term::fancy()) return ui::plan(r);
   printf("%s\n", r.name.c_str());
   struct stat st {};
   const bool here = !local && !hub::is_current(r) && stat((r.dir + "/config.json").c_str(), &st) == 0;
@@ -947,21 +948,28 @@ static int pull(int argc, char** argv) {
       continue;
     }
     if (ref.kind == hub::ModelRef::kLocal) {
-      printf("%s is a folder on this Mac: nothing to download.\n", ref.dir.c_str());
+      if (term::fancy()) ui::note(hub::tilde(ref.dir) + " is a folder on this Mac: nothing to download.", true);
+      else printf("%s is a folder on this Mac: nothing to download.\n", ref.dir.c_str());
       continue;
     }
     const bool had = hub::is_current(ref);
     try {
       hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
-      fprintf(stderr, "\n%s\n", e.what());
-      return 130;
+      return stopped(e);
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
-    printf("%s %s in %s. Start it: kapitsa serve --model %s\n", ref.name.c_str(),
-           had ? "is already downloaded" : "is ready", hub::tilde(ref.dir).c_str(),
-           ref.model ? hub::short_name(*ref.model, *ref.variant).c_str() : ref.name.c_str());
+    const std::string start = ref.model ? hub::short_name(*ref.model, *ref.variant) : ref.name;
+    if (term::fancy()) {
+      ui::ok(term::clip(term::bold(ref.name) + (had ? " is already downloaded" : " is ready") + term::dim("  " + hub::tilde(ref.dir)),
+                        term::columns() - 5),
+             true);
+      ui::note("kapitsa serve --model " + start + " starts it", true);
+    } else {
+      printf("%s %s in %s. Start it: kapitsa serve --model %s\n", ref.name.c_str(),
+             had ? "is already downloaded" : "is ready", hub::tilde(ref.dir).c_str(), start.c_str());
+    }
   }
   return 0;
 }
@@ -972,10 +980,14 @@ static int list(int argc, char** argv) {
     const std::string a = argv[i];
     if (a == "--json") as_json = true;
     else if (a == "--help" || a == "-h") {
-      printf("kapitsa list [--json]: the models in %s, their size on disk and what they include.\n",
-             hub::tilde(hub::models_dir()).c_str());
+      show_help(strf("kapitsa list [--json]: the models in %s, their size on disk and what they include.\n",
+                     hub::tilde(hub::models_dir()).c_str()));
       return 0;
     } else usage_error("unknown option " + a);
+  }
+  if (!as_json && term::fancy()) {
+    ui::list();
+    return 0;
   }
   const auto v = hub::installed();
   if (as_json) {
@@ -1026,7 +1038,7 @@ static int list(int argc, char** argv) {
 
 static int rm(int argc, char** argv) {
   if (argc < 3 || !strcmp(argv[2], "--help") || !strcmp(argv[2], "-h")) {
-    printf("kapitsa rm MODEL...: deletes downloaded models from %s.\n", hub::tilde(hub::models_dir()).c_str());
+    show_help(strf("kapitsa rm MODEL...: deletes downloaded models from %s.\n", hub::tilde(hub::models_dir()).c_str()));
     return argc < 3 ? 2 : 0;
   }
   for (int i = 2; i < argc; ++i) {
@@ -1054,7 +1066,8 @@ static int rm(int argc, char** argv) {
     if (ref.kind == hub::ModelRef::kLocal && ref.dir.rfind(hub::models_dir() + "/", 0) != 0)
       return fail(ref.dir + " is a folder of yours, not a downloaded model: kapitsa rm leaves it alone.", 2);
     if (stat(ref.dir.c_str(), &st) != 0) {
-      printf("%s is not downloaded.\n", ref.name.c_str());
+      if (term::fancy()) ui::note(term::bold(ref.name) + " is not downloaded.", true);
+      else printf("%s is not downloaded.\n", ref.name.c_str());
       continue;
     }
     const std::string root = hub::models_dir() + "/";
@@ -1066,7 +1079,8 @@ static int rm(int argc, char** argv) {
     std::error_code ec;
     std::filesystem::remove_all(ref.dir, ec);
     if (ec) return fail("Can't delete " + hub::tilde(ref.dir) + ": " + ec.message());
-    printf("Deleted %s (%s).\n", ref.name.c_str(), hub::fmt_bytes(bytes).c_str());
+    if (term::fancy()) ui::ok("Deleted " + term::bold(ref.name) + term::dim("  " + hub::fmt_bytes(bytes) + " freed"), true);
+    else printf("Deleted %s (%s).\n", ref.name.c_str(), hub::fmt_bytes(bytes).c_str());
   }
   return 0;
 }
@@ -1092,8 +1106,7 @@ static int mtp_sidecar(int argc, char** argv) {
   try {
     hub::build_mtp_sidecar(src, rev, out, hidden);
   } catch (const hub::Stopped& e) {
-    fprintf(stderr, "\n%s\n", e.what());
-    return 130;
+    return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
   }
@@ -1102,6 +1115,8 @@ static int mtp_sidecar(int argc, char** argv) {
 
 int main(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
+  // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
+  if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();
   if (cmd.empty() || cmd == "--help" || cmd == "-h" || cmd == "help") {
     if (argc > 2 && !strcmp(argv[2], "serve")) print_serve_help();
     else if (argc > 2 && !strcmp(argv[2], "pull")) print_pull_help();

@@ -95,6 +95,17 @@ class Spinner {
 // A progress bar of `w` columns: done part in the accent, the rest dim
 std::string bar(double fraction, int w);
 
+// Text layout for the screens: rows of "key  description" (keys in a column styled by `key`, descriptions wrapped
+// beside them, or under them when the column leaves too little room), and paragraphs wrapped at an indent
+using Style = std::string (*)(const std::string&);
+std::string plain(const std::string& s);
+void two_columns(std::vector<std::string>& out, const std::vector<std::pair<std::string, std::string>>& rows, int indent,
+                 int w, Style key = bold, Style desc = plain, int min_key = 0);
+void paragraph(std::vector<std::string>& out, const std::string& text, int indent, int w, Style style = plain);
+// A command's --help from its plain text: usage, options and their descriptions, examples, wrapped to the terminal
+// (stdout)
+void help(const std::string& plain_text);
+
 // "kapitsa: <msg>" for a terminal: a red ✗ with the problem, then what to do on its own dim line(s). The message's
 // first sentence is the problem, the rest the fix; `hint` (if any) is a last dim line. On stderr.
 void error(const std::string& msg, const std::string& hint = "");

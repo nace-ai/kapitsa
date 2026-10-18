@@ -276,7 +276,7 @@ Wobble::Wobble(std::function<std::vector<std::string>()> text, int at) : impl_(n
     for (int f = 0; !impl_->stop; ++f) {
       if (f > 0) s.advance(1.0 / kFps / kScale);
       // calm again: a nudge, smaller as the load goes on
-      const double p = impl_->progress;
+      const double p = std::max(impl_->progress.load(), 1 - std::exp(-double(f) / kFps / 5));
       if (std::fabs(s.th) < 0.03 && std::fabs(s.om) < 0.15 && p < 0.95) s.om += side * 0.6 * (1 - p), side = -side;
       status(beside(frame(s, trail), impl_->text(), impl_->at));
       trail.push_back(bob(s));

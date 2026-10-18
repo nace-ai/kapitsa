@@ -29,8 +29,9 @@ std::vector<std::string> still_art();
 // frame alone. Prints to stdout.
 void intro(const std::vector<std::string>& text, int at);
 
-// The pendulum wobbling while something loads, beside text() (called every frame, from the animation's thread);
-// progress() in [0, 1] calms it. done() stands it upright and leaves it on screen beside `final`.
+// The pendulum wobbling while something loads, beside text() (called every frame, from the animation's thread). It
+// calms as time goes on (a load takes 5-10 s), or as progress() in [0, 1] says. done() stands it upright and leaves it
+// on screen beside `final`.
 class Wobble {
  public:
   Wobble(std::function<std::vector<std::string>()> text, int at);

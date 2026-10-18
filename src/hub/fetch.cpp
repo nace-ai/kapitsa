@@ -8,6 +8,7 @@
 //   <dir>/.kapitsa/manifest.json           written last: the model is complete
 #include "hub/hub.h"
 #include "hub/http.h"
+#include "util/term.h"
 
 #include <CommonCrypto/CommonDigest.h>
 #include <nlohmann/json.hpp>
@@ -552,6 +553,7 @@ struct Progress {
   double secs() const { return std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(); }
   void print(bool final) {
     if (!show) return;
+    if (term::fancy()) return draw(final);
     const double now = secs();
     const uint64_t d = std::min(done.load(), total);
     samples.emplace_back(now, d);
@@ -571,6 +573,25 @@ struct Progress {
       last_line = now;
     }
     fflush(stderr);
+  }
+  // In a terminal: a bar with the share done, the bytes, the speed and the time left, on the status line
+  void draw(bool final) {
+    if (final) return term::status("");
+    const double now = secs();
+    const uint64_t d = std::min(done.load(), total);
+    samples.emplace_back(now, d);
+    while (samples.size() > 2 && now - samples.front().first > 8) samples.pop_front();
+    const double dt = now - samples.front().first;
+    const double rate = dt > 0.5 ? double(d - samples.front().second) / dt : 0;
+    const double frac = total ? double(d) / double(total) : 1;
+    char pct[16], sp[32];
+    snprintf(pct, sizeof pct, "%3d%%", int(100 * frac));
+    snprintf(sp, sizeof sp, "%.1f MB/s", rate / 1e6);
+    std::string tail = std::string(pct) + "  " + fmt_bytes(d) + term::dim(" of " + fmt_bytes(total));
+    const int w = term::columns();
+    if (w >= 70) tail += "  " + term::dim(sp) + "  " + term::dim(rate > 0 ? fmt_duration(double(total - d) / rate) + " left" : "");
+    const int bw = std::clamp(w - 6 - term::width(tail) - 3, 8, 40);
+    term::status("    " + term::bar(frac, bw) + "  " + tail);
   }
 };
 
@@ -1168,7 +1189,11 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   FolderLock lock(ref.dir);
   if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
   HttpClient api(30);
-  if (opt.progress) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
+  // in a terminal: a spinner while the file lists come and files already here are checked
+  std::unique_ptr<term::Spinner> spin;
+  if (opt.progress && term::fancy())
+    spin = std::make_unique<term::Spinner>("Fetching the file list of " + term::bold(ref.name) + term::dim(" from " + endpoint_host()));
+  else if (opt.progress) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
 
   const Listing main = list_repo(api, ref.repo, ref.revision);
   if (ref.kind == ModelRef::kRepo) check_supported(api, main);
@@ -1260,10 +1285,14 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     const std::string app = user_home() + "/.nace/models/" + ref.model->name + "-" + ref.variant->name;
     if (is_dir(app)) {
       from.scan(app, 3);
-      if (opt.progress) fprintf(stderr, "Checking Nace Agent's copy in %s...\n", tilde(app).c_str());
+      if (spin) spin->label("Checking Nace Agent's copy in " + tilde(app));
+      else if (opt.progress) fprintf(stderr, "Checking Nace Agent's copy in %s...\n", tilde(app).c_str());
     }
   }
-  if (opt.progress && !opt.from.empty()) fprintf(stderr, "Checking the files in %s against the pinned checksums...\n",
+  if (spin && !opt.from.empty())
+    spin->label("Checking the files in " + (opt.from.size() == 1 ? tilde(opt.from[0]) : std::string("the --from folders")) +
+                " against the pinned checksums");
+  else if (opt.progress && !opt.from.empty()) fprintf(stderr, "Checking the files in %s against the pinned checksums...\n",
                                                   opt.from.size() == 1 ? tilde(opt.from[0]).c_str() : "the --from folders");
   const dev_t dest_dev = device_of(ref.dir);
   std::vector<Target*> todo;
@@ -1286,7 +1315,10 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         check_bytes += t.size;
       }
     }
-    if (opt.progress && !check.empty())
+    if (spin && !check.empty())
+      spin->label("Checking the " + std::to_string(check.size()) + " files already in " + tilde(ref.dir) + term::dim(" (" + fmt_bytes(check_bytes) + ")") +
+                  " against the pinned checksums");
+    else if (opt.progress && !check.empty())
       fprintf(stderr, "Checking the %zu files already in %s (%s) against the pinned checksums...\n", check.size(),
               tilde(ref.dir).c_str(), fmt_bytes(check_bytes).c_str());
     std::atomic<size_t> next{0};
@@ -1340,10 +1372,22 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
                 fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping 1 GB spare) on the disk of " +
                 tilde(models_dir()) + ". Free some space, or set KAPITSA_HOME to a folder on a bigger disk.");
   for (auto& [src, t] : reuse) place(src, t->final_path);
-  if (opt.progress && adopt && n_differ)
+  const bool tui = opt.progress && term::fancy();
+  if (spin) spin->done();
+  if (tui && adopt && n_differ)
+    term::line("  " + term::warn(term::kWarn) + " " + std::to_string(n_differ) + (n_differ == 1 ? " file here differs" : " files here differ") +
+                   " from the pinned ones and will be replaced", stderr);
+  else if (opt.progress && adopt && n_differ)
     fprintf(stderr, "%d file%s here differ%s from the pinned ones and will be replaced.\n", n_differ, n_differ == 1 ? "" : "s",
             n_differ == 1 ? "s" : "");
-  if (opt.progress && (n_hf || n_from))
+  if (tui && (n_hf || n_from))
+    term::line("  " + term::accent(term::kOk) + " Reused " + std::to_string(n_hf + n_from) + (n_hf + n_from == 1 ? " file" : " files") +
+                   " already on this Mac" +
+                   term::dim(std::string(n_hf ? (n_from ? " (the Hugging Face cache and other folders" : " (the Hugging Face cache")
+                                              : " (other folders") +
+                             "; APFS clones take no extra space)"),
+               stderr);
+  else if (opt.progress && (n_hf || n_from))
     fprintf(stderr, "Reused %d file%s already on this Mac (%schecksums match; APFS clones take no extra space).\n",
             n_hf + n_from, n_hf + n_from == 1 ? "" : "s",
             n_hf ? (n_from ? "from the Hugging Face cache and other folders; " : "from the Hugging Face cache; ") : "");
@@ -1351,14 +1395,25 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     Progress prog;  // its total is set by download(): what is fetched now
     prog.show = opt.progress;
     prog.tty = isatty(2);
-    if (opt.progress) {
-      std::string what = "weights " + fmt_bytes(weights_bytes);
+    std::string what = "weights " + fmt_bytes(weights_bytes);
+    if (tui) {
+      for (const auto& e : extras) what += std::string(" ") + term::kDot + " " + e;
+      term::line("  " + term::accent("↓") + " Downloading " + term::bold(ref.name) + "  " + term::dim(what), stderr);
+      term::line("    " + term::dim(term::clip("into " + tilde(ref.dir) + (have ? " (" + fmt_bytes(have) + " already here)" : ""),
+                                         term::columns() - 5)),
+                 stderr);
+    } else if (opt.progress) {
       for (const auto& e : extras) what += ", " + e;
       fprintf(stderr, "Downloading %s (%s) into %s%s\n", ref.name.c_str(), what.c_str(), tilde(ref.dir).c_str(),
               have ? (", " + fmt_bytes(have) + " already here").c_str() : "");
     }
     download(todo, prog);
-    if (opt.progress)
+    if (tui)
+      term::line("  " + term::accent(term::kOk) + " Downloaded " + fmt_bytes(prog.total) +
+                     term::dim(" in " + fmt_duration(prog.secs()) + " (" +
+                               std::to_string(int(double(prog.total) / 1e6 / std::max(0.001, prog.secs()))) + " MB/s)"),
+                 stderr);
+    else if (opt.progress)
       fprintf(stderr, "Downloaded %s in %s (%.0f MB/s).\n", fmt_bytes(prog.total).c_str(), fmt_duration(prog.secs()).c_str(),
               double(prog.total) / 1e6 / std::max(0.001, prog.secs()));
   }
@@ -1391,7 +1446,12 @@ std::string ensure(const ModelRef& ref, const PullOptions& opt) {
   } catch (const Error& e) {
     // a finished download of older pinned revisions still runs: better than nothing while offline
     if (is_complete(ref.dir)) {
-      fprintf(stderr, "Using the copy of %s already here (it could not be updated: %s)\n", ref.name.c_str(), e.what());
+      if (term::fancy())
+        term::line("  " + term::warn(term::kWarn) + " Using the copy of " + term::bold(ref.name) + " already here " +
+                       term::dim(std::string("(it could not be updated: ") + e.what() + ")"),
+                   stderr);
+      else
+        fprintf(stderr, "Using the copy of %s already here (it could not be updated: %s)\n", ref.name.c_str(), e.what());
       return ref.dir;
     }
     if (!existed) remove_if_empty(ref.dir);

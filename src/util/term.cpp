@@ -643,4 +643,162 @@ void error(const std::string& msg, const std::string& hint) {
   redraw(out);
 }
 
+
+// Rows of "key  description": the keys in a column (styled by `key`), the descriptions wrapped beside them (styled per
+// line by `desc`), or under them when the column leaves too little room.
+std::string plain(const std::string& s) { return s; }
+
+void two_columns(std::vector<std::string>& out, const std::vector<std::pair<std::string, std::string>>& rows, int indent,
+                 int w, Style key, Style desc, int min_key) {
+  int kw = min_key;
+  for (const auto& [k, d] : rows) kw = std::max(kw, width(k));
+  const int dw = w - indent - kw - 3;
+  const std::string pad(size_t(indent), ' ');
+  for (const auto& [k, d] : rows) {
+    if (d.empty()) {
+      out.push_back(pad + key(k));
+      continue;
+    }
+    if (dw < 20) {  // too narrow: the description under its key
+      out.push_back(pad + key(k));
+      for (const auto& l : wrap(d, w - indent - 2)) out.push_back(pad + "  " + desc(l));
+      continue;
+    }
+    const auto lines = wrap(d, dw);
+    for (size_t i = 0; i < lines.size(); ++i)
+      out.push_back(pad + (i ? std::string(size_t(kw), ' ') : left(key(k), kw)) + "   " + desc(lines[i]));
+  }
+}
+
+// A paragraph wrapped to the width at an indent, each line styled
+void paragraph(std::vector<std::string>& out, const std::string& text, int indent, int w, Style style) {
+  for (const auto& l : wrap(text, w - indent)) out.push_back(std::string(size_t(indent), ' ') + style(l));
+}
+
+
+
+void help(const std::string& text) {
+  const int W = std::min(columns(), 100);
+  std::vector<std::string> lines;
+  for (size_t a = 0; a <= text.size();) {
+    size_t b = text.find('\n', a);
+    if (b == std::string::npos) b = text.size();
+    lines.push_back(text.substr(a, b - a));
+    a = b + 1;
+  }
+  while (!lines.empty() && lines.back().empty()) lines.pop_back();
+  std::vector<std::string> o;
+  o.push_back("");
+  // the usage: "kapitsa <command> ..." up to its first ": " or the end of its paragraph
+  size_t i = 0;
+  {
+    std::string usage;
+    for (; i < lines.size() && !lines[i].empty() && lines[i][0] != ' '; ++i) usage += (usage.empty() ? "" : " ") + lines[i];
+    std::string rest;
+    if (const size_t c = usage.find(": "); c != std::string::npos) rest = usage.substr(c + 2), usage.resize(c);
+    // the command words in bold, its options as they are
+    size_t cmd_end = 0;
+    for (size_t k = 0; k < usage.size();) {
+      size_t e = usage.find(' ', k);
+      if (e == std::string::npos) e = usage.size();
+      const std::string word = usage.substr(k, e - k);
+      if (word.empty() || word[0] == '[' || word[0] == '-' || isupper(uint8_t(word[0]))) break;
+      cmd_end = e;
+      k = e + 1;
+    }
+    const auto wrapped = wrap(usage, W - 4);
+    for (size_t k = 0; k < wrapped.size(); ++k) {
+      std::string l = wrapped[k];
+      if (k == 0 && cmd_end > 0 && cmd_end <= l.size()) l = bold(l.substr(0, cmd_end)) + l.substr(cmd_end);
+      o.push_back((k ? "    " : "  ") + l);
+    }
+    if (!rest.empty()) {
+      o.push_back("");
+      paragraph(o, rest, 2, W);
+    }
+  }
+  // then: option rows ("  --flag ARG   what it does", continued by deeper indented lines), examples (other indented
+  // lines) and paragraphs. The descriptions start at one column (a flag as wide as it is followed by one space only):
+  // the most common column after two spaces.
+  size_t desc_col = 0;
+  {
+    std::vector<size_t> cols;
+    for (size_t k = i; k < lines.size(); ++k) {
+      const std::string& l = lines[k];
+      size_t ind = 0;
+      while (ind < l.size() && l[ind] == ' ') ++ind;
+      if (ind < 2 || ind >= 6 || ind >= l.size() || l[ind] != '-') continue;
+      if (const size_t g = l.find("  ", ind); g != std::string::npos) {
+        size_t d = g;
+        while (d < l.size() && l[d] == ' ') ++d;
+        cols.push_back(d);
+      }
+    }
+    size_t best = 0;
+    for (size_t c : cols)
+      if (std::count(cols.begin(), cols.end(), c) > std::count(cols.begin(), cols.end(), best)) best = c;
+    desc_col = best;
+  }
+  std::vector<std::pair<std::string, std::string>> opts;
+  auto flush_opts = [&] {
+    if (opts.empty()) return;
+    two_columns(o, opts, 4, W);
+    opts.clear();
+  };
+  std::string para;
+  auto flush_para = [&] {
+    if (para.empty()) return;
+    paragraph(o, para, 2, W);
+    para.clear();
+  };
+  for (; i < lines.size(); ++i) {
+    const std::string& l = lines[i];
+    if (l.empty()) {
+      flush_opts();
+      flush_para();
+      o.push_back("");
+      continue;
+    }
+    size_t ind = 0;
+    while (ind < l.size() && l[ind] == ' ') ++ind;
+    if (ind >= 6 && !opts.empty()) {  // an option's description, continued
+      opts.back().second += " " + l.substr(ind);
+      continue;
+    }
+    if (ind >= 2 && ind < 6 && l[ind] == '-' && l.size() > ind + 1 && l[ind + 1] != ' ') {
+      flush_para();
+      size_t gap = l.find("  ", ind);
+      if (desc_col > ind && desc_col < l.size() && l[desc_col - 1] == ' ' && l[desc_col] != ' ' && (gap == std::string::npos || gap > desc_col)) {
+        std::string k = l.substr(ind, desc_col - ind);
+        while (!k.empty() && k.back() == ' ') k.pop_back();
+        opts.push_back({k, l.substr(desc_col)});
+      } else if (gap == std::string::npos) {
+        opts.push_back({l.substr(ind), ""});
+      } else {
+        size_t d = gap;
+        while (d < l.size() && l[d] == ' ') ++d;
+        opts.push_back({l.substr(ind, gap - ind), l.substr(d)});
+      }
+      continue;
+    }
+    if (ind >= 2) {  // an example: kept as is, the command in bold
+      flush_opts();
+      flush_para();
+      o.push_back("    " + bold(l.substr(ind)));
+      continue;
+    }
+    flush_opts();
+    // a sentence that ends a line and a capital that starts the next: a new paragraph
+    if (!para.empty() && para.back() == '.' && isupper(uint8_t(l[0]))) flush_para();
+    para += (para.empty() ? "" : " ") + l;
+  }
+  flush_opts();
+  flush_para();
+  o.push_back("");
+  std::string out;
+  for (const auto& l : o) out += l + "\n";
+  fputs(out.c_str(), stdout);
+  fflush(stdout);
+}
+
 }  // namespace ni::term
