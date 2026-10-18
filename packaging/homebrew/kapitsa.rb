@@ -38,6 +38,7 @@ class Kapitsa < Formula
       Then open http://127.0.0.1:8000 to chat, or use the API at http://127.0.0.1:8000/v1
       (OpenAI chat completions and Responses, Anthropic Messages).
       Or start a coding agent on it in one command: kapitsa claude, kapitsa codex, kapitsa opencode, kapitsa pi.
+      Measure it on this Mac and add yours to the community results: kapitsa bench --submit
       Models are stored in ~/.cache/kapitsa/models (KAPITSA_HOME moves them).
     EOS
   end

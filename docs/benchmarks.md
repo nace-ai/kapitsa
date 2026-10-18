@@ -463,6 +463,15 @@ DFlash with z-lab's Qwen3.5-4B drafter (DFlash v1, quantized to 4 bits at load) 
 `adaptive`; block 9 and verify `dflash` were slower), no speculation 84.9 / 81.8. MTPLX: depth 1 104.5 / 108.6, depth
 2 103.8 / 109.2, and depth 3, its runtime file's default, 87.7 / 102.6.
 
+## Your Mac: `kapitsa bench`
+
+`kapitsa bench` runs this protocol for Kapitsa alone, from the `kapitsa` binary: no Python, no configs, no weights to
+place by hand (the catalog's models, downloaded with their drafters). It sends the same requests as `bench.py`, starts
+the server as `compare_engines.py` does, and flags runs alike, so its numbers compare with the tables above; it
+records the Mac and its conditions, and with `--submit` adds the result to the
+[community results](../bench/community/RESULTS.md), checked as [bench/community](../bench/community/README.md) says.
+The [usage guide](usage.md#benchmarking-this-mac) has its options.
+
 ## Run benchmarks locally
 
 Everything above can be rerun with the harness in [bench/harness](../bench/harness/README.md) (Python 3, standard

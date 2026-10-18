@@ -26,12 +26,15 @@ first use instead.
 
 ## Tests
 
-These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/vit_check`) come with the full build.
+These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/vit_check`, `build/bench_test`) come with
+the full build.
 
 | Command | What it checks | Needs |
 | --- | --- | --- |
 | `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
 | `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
+| `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
+| `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
 | `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
 | `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids | a Qwen model folder |

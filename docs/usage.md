@@ -14,6 +14,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa rm M...` | Deletes downloaded models. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
+| `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
@@ -306,6 +307,51 @@ the working set at about 2/3 to 78% of the RAM, depending on its version, hence 
 On a 48 GB Mac the 35B also fits in 6-bit with a full conversation and its draft model, in 8-bit only with shorter ones.
 For Bolt and the other variants, run `kapitsa doctor`.
 
+## Benchmarking this Mac
+
+`kapitsa bench` measures Kapitsa on this Mac the way the [published benchmarks](benchmarks.md) measured it, so its
+numbers compare with them and with the [community results](../bench/community/RESULTS.md) from other Macs.
+
+```bash
+kapitsa bench                     # in a terminal it asks which model; elsewhere the best model for this Mac
+kapitsa bench --model 35b:6bit    # a given model and precision
+kapitsa bench --quick             # a shorter run: 3 runs per writing test, the 4K prompt only
+kapitsa bench --submit            # then add the result to the community results (it asks first)
+```
+
+It runs the protocol of [bench/harness](../bench/harness/README.md) (`bench.py`), request for request, as a client
+of the local API: it starts the model's server (`kapitsa serve` with one conversation slot and a 32K context, `NI_*`
+variables left out; downloading the model first if needed), warms it up, waits until other apps leave the GPU alone
+for 15 seconds (5 minutes at most, 2 for `--quick`), then measures:
+
+| Measurement | How |
+| --- | --- |
+| Writing | A 512-token coding answer, at temperature 0.6 and greedy, 5 runs each (3 with `--quick`), median; the rate over the middle of the stream |
+| Reading | A cold prompt of about 4K and 16K tokens (the 4K one with `--quick`): prompt tokens per second to the first token |
+| Follow-up | Three new messages in that conversation, 1 s apart: the median time to the first token |
+| Peak memory | The server's `phys_footprint_peak`, what macOS's `footprint` shows |
+| Tool calls | Streamed and whole replies with two tools, thinking off and on, and a round trip |
+
+While it measures, it samples every process's GPU time, the thermal state and the power source every 2 seconds, and
+flags what could skew a number: other apps using more than 5% of the GPU for three samples in a row or on average
+(the measurement is marked), the battery, Low Power Mode, a serious thermal state, swapping. macOS's photo and media
+analysis and the terminal showing the run count as ambient load: recorded, never flagged.
+
+The result, about 2 KB of JSON ([bench/community/schema.json](../bench/community/schema.json)), goes to
+`~/.cache/kapitsa/bench/` (`--out FILE` puts it elsewhere; `--json` also prints it). It records the Mac (its model
+identifier with Apple's name and year, chip, CPU and GPU cores, memory, macOS version and build), Kapitsa's version, the
+model, its precision and how it decoded, the numbers and the conditions; no serial number, host name, user name or
+path. A run takes 3 to 15 minutes and holds the GPU lock that the benchmark harness uses (`~/.cache/nace-gpu.lock`), so
+it never runs beside a harness run.
+
+`--submit`, or yes to the question at the end of a run in a terminal, adds the result to the community results. It
+shows the exact JSON first and sends it only after a yes typed at the terminal: with [gh](https://cli.github.com)
+logged in, as a pull request from your fork (it uses your gh login and nothing else); without gh, by opening the
+"Benchmark result" issue form in the browser with the JSON filled in, for you to submit. `kapitsa bench submit [FILE]`
+sends a saved result (the newest by default), and `--submit --dry-run` prints the gh commands or the issue's address
+without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
+[bench/community](../bench/community/README.md).
+
 ## Running in the background
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
@@ -316,8 +362,11 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, the last model chosen in `state.json`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
+| `BENCH_GPU_LOCK` | `~/.cache/nace-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
+| `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
+| `KAPITSA_BENCH_REPO` | `nace-ai/kapitsa` | `kapitsa bench --submit`: the repository results go to. |
 | `HF_TOKEN` | the token `hf auth login` saved | Hugging Face token for gated or private repos. |
 | `HF_ENDPOINT` | `https://huggingface.co` | A Hugging Face mirror. |
 | `HF_HOME`, `HF_HUB_CACHE` | `~/.cache/huggingface`, `$HF_HOME/hub` | The Hugging Face cache, whose files downloads reuse. |
