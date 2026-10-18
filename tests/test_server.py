@@ -42,6 +42,11 @@ def hosts_call(name, args):
         (name == "run_shell" and "/etc/hosts" in str(args.get("command", "")))
 
 
+def hosts_result(name):
+    """What the call on /etc/hosts returns: the file for read_file, the line count for `wc -l` through run_shell."""
+    return "3\n" if name == "run_shell" else hosts
+
+
 def auth():
     return {"Authorization": "Bearer " + API_KEY} if API_KEY else {}
 
@@ -438,7 +443,7 @@ first = m1["usage"]["input_tokens"] + m1["usage"]["cache_read_input_tokens"] if 
 st, n = call("/v1/messages/count_tokens", {k: v for k, v in a_body.items() if k not in ("max_tokens", "temperature", "top_k")})
 check("anthropic: count_tokens counts the prompt", st == 200 and n.get("input_tokens") == first, f"{n} vs {first}")
 a_body["messages"] += [{"role": "assistant", "content": m1.get("content", [])},
-                       {"role": "user", "content": [{"type": "tool_result", "tool_use_id": uses[0]["id"] if uses else "x", "content": hosts},
+                       {"role": "user", "content": [{"type": "tool_result", "tool_use_id": uses[0]["id"] if uses else "x", "content": hosts_result(uses[0]["name"] if uses else "")},
                                                     {"type": "text", "text": "<system-reminder>Answer briefly.</system-reminder>"}]}]
 st, ev = call("/v1/messages", dict(a_body, stream=True), stream=True)
 names = [e for e, _ in ev] if st == 200 else []
@@ -488,7 +493,7 @@ check("responses stream: a function_call on /etc/hosts",
       len(calls_) >= 1 and hosts_call(calls_[0]["name"], calls_[0]["arguments"]),
       json.dumps(done.get("output"))[:300])
 first_r = done.get("usage", {}).get("input_tokens", 0)
-r_body["input"] = r_input + done.get("output", []) + [{"type": "function_call_output", "call_id": c["call_id"], "output": hosts} for c in calls_]
+r_body["input"] = r_input + done.get("output", []) + [{"type": "function_call_output", "call_id": c["call_id"], "output": hosts_result(c["name"])} for c in calls_]
 st, r2 = call("/v1/responses", r_body)
 check("responses: the tool loop's next request is answered (mentions 3)",
       st == 200 and r2["status"] == "completed" and any(o["type"] == "message" and "3" in o["content"][0]["text"] for o in r2["output"]),
