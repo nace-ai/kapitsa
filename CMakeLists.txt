@@ -4,8 +4,10 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "")
 project(nace_infer LANGUAGES C CXX OBJCXX)
 
 set(KAPITSA_VERSION "0.1.0")
-execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
-                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+if(NOT DEFINED KAPITSA_GIT)  # packaging/release/build.sh passes the commit it exported
+  execute_process(COMMAND git -C ${CMAKE_SOURCE_DIR} rev-parse --short HEAD OUTPUT_VARIABLE KAPITSA_GIT
+                  OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
