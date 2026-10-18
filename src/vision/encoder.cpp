@@ -2,6 +2,7 @@
 #include "vision/encoder.h"
 #include "util/log.h"
 #include "vision/qwen_vit.h"
+#include "vision/radio_vit.h"
 
 #include <algorithm>
 #include <cstring>
@@ -12,11 +13,17 @@ namespace ni::vision {
 std::unique_ptr<ImageEncoder> open_encoder(const std::string& dir, long max_pixels) {
   QwenViTConfig qc;
   if (QwenViT::supports(dir, &qc)) {
-    if (max_pixels > 0) qc.max_pixels = std::max(max_pixels, qc.min_pixels);
+    if (max_pixels == kModelDefaultPixels) max_pixels = kDefaultImageMaxPixels;
+    if (max_pixels > 0) qc.max_pixels = std::clamp(max_pixels, qc.min_pixels, qc.max_pixels);
     return std::make_unique<QwenViT>(dir, qc);
   }
-  // other models' encoders go here, each behind ImageEncoder (Nemotron 3.5 Bolt's RADIO ViT-H/16 with its pixel
-  // shuffle and mlp1 projector: its vision_model.* tensors), with the model's prefill calling enc_embed_runs
+  RadioViTConfig rc;
+  if (RadioViT::supports(dir, &rc)) {
+    // patches = pixels / 256, within the processor's 1024 to 13312
+    rc.max_pixels = max_pixels == kModelDefaultPixels ? kRadioDefaultMaxPixels : std::max(0L, max_pixels);
+    return std::make_unique<RadioViT>(dir, rc);
+  }
+  // other models' encoders go here, each behind ImageEncoder, with the model's prefill calling enc_embed_runs
   return nullptr;
 }
 
@@ -147,12 +154,14 @@ static int image_key(const Digest& d, int j) {
   return int(0x80000000u | uint32_t(h >> 33));
 }
 
-Prompt expand(const std::vector<int>& ids, int placeholder, const std::vector<Prepared>& images, int* index) {
+Prompt expand(const std::vector<int>& ids, int placeholder, const std::vector<Prepared>& images, int* index,
+              const std::vector<int>& pre, const std::vector<int>& post) {
   Prompt pr;
   size_t k = 0;
   int shift = 0;
+  const int wrap = int(pre.size() + post.size());
   size_t total = ids.size();
-  for (const Prepared& p : images) total += size_t(std::max(0, p.tokens - 1));
+  for (const Prepared& p : images) total += size_t(std::max(0, p.tokens - 1 + wrap));
   pr.ids.reserve(total);
   pr.keys.reserve(total);
   for (size_t i = 0; i < ids.size(); ++i) {
@@ -164,13 +173,15 @@ Prompt expand(const std::vector<int>& ids, int placeholder, const std::vector<Pr
     if (k >= images.size())
       throw Error("the prompt has more image placeholders than images (an <|image_pad|> written in the text?)");
     const Prepared& p = images[k++];
+    for (int t : pre) pr.ids.push_back(t), pr.keys.push_back(t);
     pr.spans.push_back(ImageSpan{int(pr.ids.size()), p.tokens, p.grid_t, p.grid_h, p.grid_w});
     pr.digests.push_back(p.digest);
     for (int j = 0; j < p.tokens; ++j) {
       pr.ids.push_back(placeholder);
       pr.keys.push_back(image_key(p.digest, j));
     }
-    if (index && int(i) < *index) shift += p.tokens - 1;
+    for (int t : post) pr.ids.push_back(t), pr.keys.push_back(t);
+    if (index && int(i) < *index) shift += p.tokens - 1 + wrap;
   }
   if (k != images.size())
     throw Error("the chat template rendered " + std::to_string(k) + " of the request's " + std::to_string(images.size()) +

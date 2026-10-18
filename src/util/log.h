@@ -3,6 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #include <unistd.h>
 
 namespace ni {
@@ -23,15 +24,45 @@ inline int& log_level() {
   return lvl;
 }
 
+// Where logi, logd and fatal lines go. None (the default): stderr, as "[kapitsa] <message>" lines (what the Nace Agent
+// app, the bench harness and `kapitsa claude`'s server log read). `kapitsa serve` in a terminal sets one
+// (src/server/ui.cpp): a log file, with warnings and errors on screen. `level`: 0 fatal, 1 logi, 2 logd; `msg` has
+// no "[kapitsa] " prefix and no newline. Called from any thread.
+using LogSink = void (*)(int level, const char* msg);
+inline LogSink& log_sink() {
+  static LogSink s = nullptr;
+  return s;
+}
+
+inline void log_to_sink(LogSink s, int level, const char* fmt, va_list ap) {
+  char buf[1024];
+  va_list aq;
+  va_copy(aq, ap);
+  const int n = vsnprintf(buf, sizeof buf, fmt, aq);
+  va_end(aq);
+  if (n < int(sizeof buf)) {
+    s(level, buf);
+    return;
+  }
+  std::string big(size_t(n) + 1, '\0');
+  vsnprintf(big.data(), big.size(), fmt, ap);
+  big.resize(size_t(n));
+  s(level, big.c_str());
+}
+
 // Exits with status 1 (NI_ABORT=1: abort() instead, for a backtrace in a debugger or crash report). Most fatal
 // errors are the user's to fix (a missing file, not enough memory), and abort()'s "Abort trap" and crash report
 // would only bury the message.
 [[noreturn]] __attribute__((format(printf, 1, 2))) inline void fatal(const char* fmt, ...) {
   va_list ap;
   va_start(ap, fmt);
-  fprintf(stderr, "[kapitsa] fatal: ");
-  vfprintf(stderr, fmt, ap);
-  fprintf(stderr, "\n");
+  if (LogSink s = log_sink()) {
+    log_to_sink(s, 0, fmt, ap);
+  } else {
+    fprintf(stderr, "[kapitsa] fatal: ");
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+  }
   va_end(ap);
   if (env_on("NI_ABORT")) abort();
   fflush(stdout);
@@ -42,6 +73,11 @@ __attribute__((format(printf, 1, 2))) inline void logi(const char* fmt, ...) {
   if (log_level() < 1) return;
   va_list ap;
   va_start(ap, fmt);
+  if (LogSink s = log_sink()) {
+    log_to_sink(s, 1, fmt, ap);
+    va_end(ap);
+    return;
+  }
   fprintf(stderr, "[kapitsa] ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
@@ -52,6 +88,11 @@ __attribute__((format(printf, 1, 2))) inline void logd(const char* fmt, ...) {
   if (log_level() < 2) return;
   va_list ap;
   va_start(ap, fmt);
+  if (LogSink s = log_sink()) {
+    log_to_sink(s, 2, fmt, ap);
+    va_end(ap);
+    return;
+  }
   fprintf(stderr, "[kapitsa] ");
   vfprintf(stderr, fmt, ap);
   fprintf(stderr, "\n");
