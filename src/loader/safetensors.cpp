@@ -19,7 +19,7 @@ size_t dtype_size(DType d) {
   switch (d) {
     case DType::F32: case DType::U32: case DType::I32: return 4;
     case DType::F16: case DType::BF16: return 2;
-    case DType::U8: case DType::I8: return 1;
+    case DType::U8: case DType::I8: case DType::F8E4M3: return 1;
     case DType::I64: return 8;
     default: return 0;
   }
@@ -34,6 +34,7 @@ static DType parse_dtype(const std::string& s) {
   if (s == "U8") return DType::U8;
   if (s == "I8") return DType::I8;
   if (s == "I64") return DType::I64;
+  if (s == "F8_E4M3") return DType::F8E4M3;
   return DType::Unknown;
 }
 
@@ -188,6 +189,67 @@ const Tensor& WeightStore::get(const std::string& name) const {
   auto* t = find(name);
   if (!t) fatal("missing tensor %s", name.c_str());
   return *t;
+}
+
+SafetensorsIndex::SafetensorsIndex(const std::string& dir, const std::function<bool(const std::string&)>& skip)
+    : dir_(dir) {
+  DIR* d = opendir(dir.c_str());
+  if (!d) fatal("cannot open model dir %s", dir.c_str());
+  while (dirent* e = readdir(d)) {
+    std::string n = e->d_name;
+    if (n.size() > 12 && n.substr(n.size() - 12) == ".safetensors") paths_.push_back(dir + "/" + n);
+  }
+  closedir(d);
+  std::sort(paths_.begin(), paths_.end());
+  if (paths_.empty()) fatal("no .safetensors in %s", dir.c_str());
+  for (size_t fi = 0; fi < paths_.size(); ++fi) {
+    const std::string& path = paths_[fi];
+    const int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) fatal("open %s failed", path.c_str());
+    fcntl(fd, F_NOCACHE, 1);
+    fds_.push_back(fd);
+    uint64_t hlen = 0;
+    if (pread(fd, &hlen, 8, 0) != 8 || hlen > (uint64_t(1) << 30)) fatal("read %s failed", path.c_str());
+    std::string hdr(hlen, '\0');
+    if (pread(fd, hdr.data(), hlen, 8) != ssize_t(hlen)) fatal("read %s header failed", path.c_str());
+    const auto j = nlohmann::json::parse(hdr);
+    for (auto& [name, v] : j.items()) {
+      if (name == "__metadata__" || (skip && skip(name))) continue;
+      Entry t;
+      t.file = int(fi);
+      t.dtype = parse_dtype(v["dtype"].get<std::string>());
+      for (auto& x : v["shape"]) t.shape.push_back(x.get<int64_t>());
+      const size_t b = v["data_offsets"][0].get<size_t>(), e = v["data_offsets"][1].get<size_t>();
+      t.off = 8 + hlen + b;
+      t.len = e - b;
+      t_[name] = std::move(t);
+    }
+  }
+}
+
+SafetensorsIndex::~SafetensorsIndex() {
+  for (int fd : fds_) close(fd);
+}
+
+const SafetensorsIndex::Entry* SafetensorsIndex::find(const std::string& name) const {
+  auto it = t_.find(name);
+  return it == t_.end() ? nullptr : &it->second;
+}
+
+const SafetensorsIndex::Entry& SafetensorsIndex::get(const std::string& name) const {
+  const Entry* t = find(name);
+  if (!t) fatal("%s: tensor %s missing", dir_.c_str(), name.c_str());
+  return *t;
+}
+
+void SafetensorsIndex::read(const Entry& t, size_t off, void* dst, size_t n) const {
+  if (off + n > t.len) fatal("%s: read past a tensor's end", dir_.c_str());
+  size_t done = 0;
+  while (done < n) {
+    const ssize_t r = pread(fds_[size_t(t.file)], static_cast<uint8_t*>(dst) + done, n - done, off_t(t.off + off + done));
+    if (r <= 0) fatal("reading %s failed", paths_[size_t(t.file)].c_str());
+    done += size_t(r);
+  }
 }
 
 WeightStore::~WeightStore() {

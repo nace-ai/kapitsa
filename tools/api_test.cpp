@@ -620,14 +620,14 @@ void clients() {
 
 // ---------------------------------------------------------------- round trips through a chat template
 
-struct Model {
+struct TmplModel {
   std::string dir;
   Tokenizer tok;
   std::unique_ptr<minja::chat_template> tmpl;
 };
 
 // The deltas the engine streams for a generated `text` (what the model writes after the generation prompt)
-std::vector<ChatDelta> generate(const Model& m, const std::string& text, bool in_think, const ojson& tools,
+std::vector<ChatDelta> generate(const TmplModel& m, const std::string& text, bool in_think, const ojson& tools,
                                 std::vector<int>* ids) {
   OutputParser p(m.tok, m.tok.find("<think>"), m.tok.find("</think>"), m.tok.find("<tool_call>"), m.tok.find("</tool_call>"),
                  in_think, !tools.empty(), tools, true);
@@ -677,7 +677,7 @@ ojson anthropic_reply(const std::vector<Event>& ev) {
 }
 
 // Whether `next`'s prompt continues `prev`'s prompt and the generated ids (+ the end of the turn) token for token
-bool continues(const Model& m, const std::string& prev, const std::vector<int>& gen, const std::string& next, std::string* why) {
+bool continues(const TmplModel& m, const std::string& prev, const std::vector<int>& gen, const std::string& next, std::string* why) {
   std::vector<int> want = m.tok.encode(prev);
   want.insert(want.end(), gen.begin(), gen.end());
   want.push_back(m.tok.find("<|im_end|>"));
@@ -692,7 +692,7 @@ bool continues(const Model& m, const std::string& prev, const std::vector<int>& 
   return false;
 }
 
-void anthropic_round_trip(const Model& m, const std::string& tag) {
+void anthropic_round_trip(const TmplModel& m, const std::string& tag) {
   // a Claude Code tool loop: the hook output as a mid-conversation system message, thinking with display omitted,
   // keep:all thinking, then the tool result with a reminder, then a final answer and a new question
   ojson body = J(R"({"model": "m", "max_tokens": 32000, "stream": true,
@@ -742,7 +742,7 @@ void anthropic_round_trip(const Model& m, const std::string& tag) {
         tag + "anthropic: the hook's system message is a system turn in place; no billing header in the prompt");
 }
 
-void responses_round_trip(const Model& m, const std::string& tag, bool drop_content) {
+void responses_round_trip(const TmplModel& m, const std::string& tag, bool drop_content) {
   ResponseStore store;
   ojson input = J(R"([{"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "Use tools."}]},
                       {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "<environment_context>cwd</environment_context>"}]},
@@ -802,7 +802,7 @@ void responses_round_trip(const Model& m, const std::string& tag, bool drop_cont
   }
 }
 
-void template_checks(const Model& m, const std::string& tag) {
+void template_checks(const TmplModel& m, const std::string& tag) {
   // a later system message is a system turn in place; images become a note; the template no longer raises
   ChatRequest r;
   r.messages = J(R"([{"role": "system", "content": "S"}, {"role": "user", "content": "Q"},
@@ -921,7 +921,7 @@ int main(int argc, char** argv) {
   }
   if (dirs.empty()) printf("SKIP round trips through a chat template: no model folder (api_test <model_dir>)\n");
   for (const auto& dir : dirs) {
-    Model m;
+    TmplModel m;
     m.dir = dir;
     m.tok.load(dir + "/tokenizer.json");
     m.tmpl = std::make_unique<minja::chat_template>(chat_template_source(dir), "", "<|im_end|>");

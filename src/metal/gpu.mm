@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
+#include <unistd.h>
 #include "metal/gpu.h"
 #include <IOKit/IOKitLib.h>
 #include <mach/mach_time.h>
@@ -25,6 +26,8 @@ struct Gpu::Impl {
   // the base library lacks, so 4-bit models never pay its compile (~2 s uncached).
   id<MTLLibrary> wf = nil;
   std::mutex wf_mu;
+  // compile_extra's libraries, in the order compiled
+  std::vector<std::pair<std::string, id<MTLLibrary>>> extra;
 };
 
 static inline id<MTLDevice> dev(void* p) { return (__bridge id<MTLDevice>)p; }
@@ -38,11 +41,10 @@ Gpu::Gpu() : impl_(new Impl) {
   id<MTLDevice> d = MTLCreateSystemDefaultDevice();
   if (!d) fatal("no Metal device");
   device_ = (__bridge_retained void*)d;
-  // NI_ANE=1 (the GPU + Neural Engine FFN split) ends a command buffer at every event signal: a
-  // 2048-row chunk of the 27B is 65 command buffers, with up to two chunks queued, so the queue
-  // must allow more than the default path's 64 in flight (fewer would deadlock on the waits).
-  const bool split = env_on("NI_ANE") || env_on("NI_ANE_QUEUE");
-  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:split ? 512 : 64];
+  // The GPU + Neural Engine prefill splits end a command buffer at every event signal: a 2048-row chunk of the 27B
+  // is 65 command buffers and one of Nemotron-H 121, with up to two chunks queued, so the queue must allow more than
+  // Metal's default 64 in flight (fewer would deadlock on the waits). Nemotron-H splits by default, so always 512.
+  id<MTLCommandQueue> q = [d newCommandQueueWithMaxCommandBufferCount:512];
   queue_ = (__bridge_retained void*)q;
 }
 
@@ -124,6 +126,8 @@ Buffer Gpu::alloc(size_t bytes, const char* label, bool tracked) {
                                                                  : MTLResourceHazardTrackingModeUntracked)];
     if (!b) fatal("Metal alloc of %zu bytes failed", bytes);
     if (label) b.label = [NSString stringWithUTF8String:label];
+    static const bool alog = getenv("NI_ALLOC_LOG") && atoi(getenv("NI_ALLOC_LOG"));
+    if (alog && bytes >= (size_t(4) << 20)) logi("alloc %8.1f MB %s", bytes / 1e6, label ? label : "?");
     std::lock_guard<std::mutex> lk(impl_->mu);
     [impl_->retained addObject:b];
     return Buffer{(__bridge void*)b, (uint8_t*)b.contents, 0, bytes};
@@ -171,9 +175,14 @@ void Gpu::release(Buffer& b) {
   b = Buffer{};
 }
 
-static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms) {
+static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms,
+                                      bool metal32 = false) {
   MTLCompileOptions* o = [MTLCompileOptions new];
+  // extra libraries (Nemotron-H) use Metal 3.2 for device-scope fences (atomic_thread_fence with thread_scope_device)
   o.languageVersion = MTLLanguageVersion3_1;
+  if (metal32) {
+    if (@available(macOS 15.0, *)) o.languageVersion = MTLLanguageVersion3_2;
+  }
   // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
   // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
   // kernels only agree to the last bit or so; with safe math they must agree exactly.
@@ -214,11 +223,30 @@ void Gpu::compile_formats() {
   }
 }
 
-// The function `fn` from the base library, else from the weight-format library (compiled on first need).
+void Gpu::compile_extra(const std::string& key, const char* source) {
+  compile();
+  std::lock_guard<std::mutex> lk(impl_->wf_mu);
+  for (auto& [k, lib] : impl_->extra)
+    if (k == key) return;
+  @autoreleasepool {
+    double ms = 0;
+    id<MTLLibrary> lib = compile_library(dev(device_), std::string(source), false, &ms, true);
+    impl_->extra.push_back({key, lib});
+    logi("compiled the %s kernels in %.0f ms", key.c_str(), ms);
+  }
+}
+
+// The function `fn` from the base library, else from an extra library, else from the weight-format library
+// (compiled on first need).
 static id<MTLFunction> find_function(Gpu& g, void* base, Gpu::Impl* impl, const std::string& fn) {
   NSString* n = [NSString stringWithUTF8String:fn.c_str()];
   id<MTLFunction> f = [(__bridge id<MTLLibrary>)base newFunctionWithName:n];
   if (f) return f;
+  {
+    std::lock_guard<std::mutex> lk(impl->wf_mu);
+    for (auto& [k, lib] : impl->extra)
+      if ((f = [lib newFunctionWithName:n])) return f;
+  }
   g.compile_formats();
   return [impl->wf newFunctionWithName:n];
 }
@@ -278,6 +306,11 @@ std::vector<std::string> Gpu::function_names(bool formats) {
     compile_formats();
     for (NSString* n in [impl_->wf functionNames]) v.push_back([n UTF8String]);
   }
+  {
+    std::lock_guard<std::mutex> lk(impl_->wf_mu);
+    for (auto& [k, lib] : impl_->extra)
+      for (NSString* n in [lib functionNames]) v.push_back([n UTF8String]);
+  }
   std::sort(v.begin(), v.end());
   v.erase(std::unique(v.begin(), v.end()), v.end());
   return v;
@@ -292,6 +325,12 @@ std::unique_ptr<Encoder> Gpu::begin(bool concurrent) {
   e->cb_ = (__bridge_retained void*)cb;
   e->enc_ = (__bridge_retained void*)enc;
   e->concurrent_ = concurrent;
+  return e;
+}
+
+std::unique_ptr<Encoder> Gpu::begin_grouped() {
+  auto e = begin(true);
+  e->auto_barrier_ = true;
   return e;
 }
 
@@ -390,11 +429,20 @@ static bool dup_kernel(const char* name) {
   return false;
 }
 
+// grouped encoders: a barrier before each dispatch but the second and later of a group
+void Encoder::pre_dispatch() {
+  if (!auto_barrier_) return;
+  if (dispatched_ && (!in_group_ || group_first_)) barrier();
+  group_first_ = false;
+  dispatched_ = true;
+}
+
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
   // A GPU whose compiler gives a kernel fewer threads per threadgroup than it is dispatched with (register
   // pressure differs between GPU families) would fail the command buffer: name the kernel instead.
   if (cur_max_threads_ && tx * ty * tz > cur_max_threads_)
     fatal("kernel %s: %u threads per threadgroup, this GPU allows %u", cur_name_, tx * ty * tz, cur_max_threads_);
+  pre_dispatch();
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
     [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
@@ -415,6 +463,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
   }
 }
 void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty, uint32_t tz) {
+  pre_dispatch();
   [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
                              indirectBufferOffset:args.offset + off
                             threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
@@ -452,6 +501,42 @@ void Encoder::wait() {
   }
   if (cb.status == MTLCommandBufferStatusError)
     fatal("GPU error: %s", [[cb.error description] UTF8String]);
+  static const bool cbt = getenv("NI_CB_TRACE") && atoi(getenv("NI_CB_TRACE"));
+  if (cbt && prev_.size() > 4) {
+    // debug: GPU time of each command buffer of this encoder, the idle gaps between them
+    std::vector<std::pair<double, double>> t;
+    for (void* p : prev_) {
+      id<MTLCommandBuffer> b = (__bridge id<MTLCommandBuffer>)p;
+      t.push_back({b.GPUStartTime * 1e3, b.GPUEndTime * 1e3});
+    }
+    t.push_back({cb.GPUStartTime * 1e3, cb.GPUEndTime * 1e3});
+    double busy = 0, gaps = 0, last_end = t[0].first;
+    std::vector<std::pair<double, size_t>> big;
+    for (size_t i = 0; i < t.size(); ++i) {
+      const double st = std::max(t[i].first, last_end);
+      if (t[i].first > last_end) {
+        gaps += t[i].first - last_end;
+        big.push_back({t[i].first - last_end, i});
+      }
+      if (t[i].second > st) busy += t[i].second - st;
+      last_end = std::max(last_end, t[i].second);
+    }
+    std::sort(big.rbegin(), big.rend());
+    std::string g;
+    for (size_t i = 0; i < std::min<size_t>(6, big.size()); ++i)
+      g += " " + std::to_string(int(big[i].first * 10) / 10.0).substr(0, 5) + "@" + std::to_string(big[i].second);
+    logi("cb trace: %zu command buffers, span %.1f ms, GPU busy %.1f ms, idle gaps %.1f ms (largest:%s)", t.size(),
+         last_end - t[0].first, busy, gaps, g.c_str());
+  }
+}
+bool Encoder::wait_for(double timeout_ms) {
+  id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
+  const double t0 = host_ms();
+  while (cb.status < MTLCommandBufferStatusCompleted) {
+    if (host_ms() - t0 > timeout_ms) return false;
+    usleep(500);
+  }
+  return true;
 }
 double Encoder::gpu_start_host_ms() const {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
@@ -490,6 +575,19 @@ void Encoder::signal_event(void* event, uint64_t value) {
     if (ended.status == MTLCommandBufferStatusError && ev.signaledValue < value) ev.signaledValue = value;
   }];
   [cb commit];
+  prev_.push_back(cb_);
+  id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
+  cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];
+  open_encoder();
+}
+void Encoder::split() {
+  if (profiling()) return;  // (every dispatch has its own command buffer then)
+  if (enc_) {
+    [E(enc_) endEncoding];
+    CFRelease(enc_);
+    enc_ = nullptr;
+  }
+  [(__bridge id<MTLCommandBuffer>)cb_ commit];
   prev_.push_back(cb_);
   id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
   cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];

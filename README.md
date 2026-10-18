@@ -11,8 +11,8 @@ back up without reading it again. On a 48 GB MacBook Pro it is the fastest of th
 
 ## Quick start
 
-An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro). The 4B runs on a 16 GB MacBook Air. The 35B-A3B
-and 27B run on 32 GB Macs with shorter conversations and without the DFlash2 draft model; 48 GB is recommended.
+An Apple silicon Mac with macOS 15 or later (tested on M4 Pro and M5 Max). The 4B runs on a 16 GB MacBook Air. The
+35B-A3B and 27B run on 32 GB Macs with shorter conversations and without the DFlash2 draft model; 48 GB is recommended.
 `kapitsa doctor` shows what fits this Mac.
 
 ```bash
@@ -77,6 +77,7 @@ The same server speaks the OpenAI Responses API (`POST /v1/responses`) and the A
 | Qwen3.6-35B-A3B (mixture of experts, 3B active) | `qwen3.6-35b` or `35b` | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | 22.1 GB | DFlash2 draft model, MTP head |
 | Qwen3.8-27B (dense) | `qwen3.8-27b` or `27b` | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` | 20.2 GB | DFlash2 draft model, MTP head |
 | Qwen3.5-4B (dense) | `qwen3.5-4b` or `4b` | `4bit` (default), `6bit`, `8bit`, `bf16` | 3.3 GB | MTP head |
+| Nemotron 3.5 Bolt 74B-A9B (hybrid Mamba-2 mixture of experts, 9B active) | `nemotron-3.5-bolt` or `bolt` | `24gb` (NVIDIA's own 24 GB checkpoint) | 25.1 GB | NVIDIA's LiLiCorr draft model |
 
 A variant is the precision of the weights: `--model 35b` takes the default, `--model 35b:6bit` another. The default
 is the fastest; for the best quality take `6bit`: its answers stay closer to the full-precision model (about 96% of
@@ -142,14 +143,30 @@ engine:
 | Cached time to first token · 4K / 16K | 0.06 / 0.09 s (1.6× / 1.7×) | 0.28 / 0.27 s (1.2× / 1.5×) |
 | Peak memory | 21.1 GB (lowest) | 19.4 GB (lowest) |
 
+**Nemotron 3.5 Bolt 74B-A9B**, NVIDIA's own 24 GB checkpoint, against the engines that load it on a Mac (one
+session, back to back; Kapitsa with NVIDIA's LiLiCorr drafter and the GPU and Neural Engine reading prompts together):
+
+| Metric | Kapitsa | Next best |
+| --- | ---: | --- |
+| Decode · coding prompt, temperature 0.6 | 64 tok/s (1.9×) | oMLX, 34 (its drafter fails when sampling) |
+| Decode · greedy | 67 tok/s (1.3×) | oMLX + LiLiCorr, 53 |
+| Prefill · 4K / 16K prompt | 436 / 385 tok/s (1.5× / 1.3×) | mlx-vlm 300, oMLX 300 |
+| Cached time to first token · 4K / 16K | 0.28 / 0.32 s (2.6× / 2.3×) | oMLX, 0.72 / 0.72 s |
+| Peak memory | 22.7 GB (lowest) | oMLX, 30.3 GB |
+
 How it was measured: MacBook Pro (2024), M4 Pro with a 20-core GPU, 48 GB, macOS 27.0.1. The same prompts for every
 engine, each at its latest release and its own best settings, the same 4-bit weights wherever the engine accepts them
 (GGUF engines on Q4_K_M), thinking off, 32K context, one slot, median of 5 runs, nothing else on the GPU. Ratios are
 against the next-fastest engine measured, which ran in the same session as Kapitsa. Every engine passes the same
-tool-call checks.
+tool-call checks. For Bolt every engine read NVIDIA's checkpoint (the MLX engines through the MLX bundle's model file),
+and the desktop's own GPU work (10-40% of the GPU while the session ran) was there for every engine alike.
 [Measurement details](docs/benchmarks.md) ·
 [Run benchmarks locally](bench/harness/README.md) ·
 [Every optimization and its measurements](docs/PERF.md)
+
+An additional [M5 Max / 128 GB measurement](docs/benchmarks-m5-max.md) records 249.8 / 72.9 tok/s sampled decode
+for the 35B / 27B models. Both runs passed the harness's correctness checks and were flagged for background GPU
+contention; the report includes the full results, conditions and reproduction commands.
 
 ## Design
 

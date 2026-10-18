@@ -69,12 +69,20 @@ class Program {
                std::function<void(bool)> done) const;
 
   bool was_cached = false;  // the daemon held a compilation (no compile)
+  bool adopted = false;     // taken over from a parked program of this process (no compile, no load)
   double compile_ms = 0, load_ms = 0;
   std::string dir;
+
+  // Keeps a loaded program for the next Program of the same MIL and weights in this process, which then takes it over
+  // instead of compiling and loading again (a background compile hands its result to the real build this way: the
+  // daemon does not always keep the compilation it just made). unpark_all() unloads what was not taken.
+  static void park(std::unique_ptr<Program> p);
+  static void unpark_all();
 
  private:
   struct Impl;
   std::shared_ptr<Impl> impl_;
+  std::string key_;
 };
 
 // GPU <-> ANE handoff (two events). The GPU signals `ready`
@@ -91,11 +99,15 @@ class Handoff {
   ~Handoff();
   void* ready_event() const;  // id<MTLSharedEvent>: GPU -> ANE
   void* done_event() const;   // id<MTLSharedEvent>: ANE -> GPU
+  // NI_ANE_TRACE: an event the GPU raises to a job's done value right after its wait for that job (nullptr when
+  // tracing is off); finish() then logs when the GPU went on, relative to when the ANE signalled
+  void* trace_event() const;
   uint64_t next_ready();
   uint64_t next_done();
   using Report = std::function<void(bool)>;
   using Start = std::function<void(void* ready_event, uint64_t wait, void* done_event, uint64_t signal, Report report)>;
-  void queue(uint64_t ready, uint64_t done, const Start& start);
+  // tag: the kind of job, for NI_ANE_TRACE's per-kind summary in finish()
+  void queue(uint64_t ready, uint64_t done, const Start& start, int tag = 0);
   // Waits (at most one bound) for the jobs queued since the last finish(). False if any failed
   // or did not report. ane_ms: sum over jobs of (report - event reached ready).
   bool finish(double* ane_ms = nullptr);

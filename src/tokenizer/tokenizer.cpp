@@ -6,11 +6,13 @@
 #include <CoreFoundation/CoreFoundation.h>
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 
 namespace ni {
 
 #include "tokenizer/unicode_tables.inc"
+#include "tokenizer/unicode_tables_cased.inc"
 
 namespace {
 
@@ -125,6 +127,79 @@ void pretokenize(const std::string& s, std::vector<std::string>& out) {
   }
 }
 
+inline bool is_Lut(uint32_t c) { return c < 0x80 ? (c - 'A' < 26) : in_table(kUpperTitle, c); }   // Lu, Lt
+inline bool is_Ll(uint32_t c) { return c < 0x80 ? (c - 'a' < 26) : in_table(kLowerCase, c); }      // Ll
+inline bool is_Lmo(uint32_t c) { return c >= 0x80 && in_table(kModOther, c); }                    // Lm, Lo
+
+// Tekken pre-tokenizer (Mistral's tokenizer.json, Nemotron; transformers applies the same pattern with
+// fix_mistral_regex):
+// [^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]*[\p{Ll}\p{Lm}\p{Lo}\p{M}]+
+// |[^\r\n\p{L}\p{N}]?[\p{Lu}\p{Lt}\p{Lm}\p{Lo}\p{M}]+[\p{Ll}\p{Lm}\p{Lo}\p{M}]*
+// |\p{N}| ?[^\s\p{L}\p{N}]+[\r\n/]*|\s*[\r\n]+|\s+(?!\S)|\s+
+// Each alternative is matched as the regex engine does (first alternative that matches, greedy with
+// backtracking): A* B+ backtracks A* until a B follows.
+void pretokenize_tekken(const std::string& s, std::vector<std::string>& out) {
+  std::vector<CP> cps = to_cps(s);
+  const size_t n = cps.size();
+  auto at = [&](size_t i) { return cps[i].c; };
+  auto P = [&](size_t i) { return i < n && !is_nl(at(i)) && !is_L(at(i)) && !is_N(at(i)); };
+  auto A = [&](size_t i) { return i < n && (is_Lut(at(i)) || is_Lmo(at(i)) || is_M(at(i))); };
+  auto B = [&](size_t i) { return i < n && (is_Ll(at(i)) || is_Lmo(at(i)) || is_M(at(i))); };
+  auto Q = [&](size_t i) { return i < n && !is_space(at(i)) && !is_L(at(i)) && !is_N(at(i)); };
+  size_t i = 0;
+  while (i < n) {
+    size_t j = i;
+    // 1. P? A* B+
+    for (int pre = P(i) ? 1 : 0; pre >= 0 && j == i; --pre) {
+      const size_t j0 = i + size_t(pre);
+      size_t a_end = j0;
+      while (A(a_end)) ++a_end;
+      for (size_t k = a_end + 1; k-- > j0;) {
+        if (!B(k)) continue;
+        size_t e = k;
+        while (B(e)) ++e;
+        j = e;
+        break;
+      }
+    }
+    // 2. P? A+ B*
+    for (int pre = P(i) ? 1 : 0; pre >= 0 && j == i; --pre) {
+      const size_t j0 = i + size_t(pre);
+      size_t a_end = j0;
+      while (A(a_end)) ++a_end;
+      if (a_end == j0) continue;
+      while (B(a_end)) ++a_end;
+      j = a_end;
+    }
+    // 3. \p{N}
+    if (j == i && is_N(at(i))) j = i + 1;
+    // 4.  ?[^\s\p{L}\p{N}]+[\r\n/]*
+    if (j == i) {
+      size_t k = at(i) == ' ' && Q(i + 1) ? i + 1 : i;
+      if (Q(k)) {
+        while (Q(k)) ++k;
+        while (k < n && (is_nl(at(k)) || at(k) == '/')) ++k;
+        j = k;
+      }
+    }
+    // 5-7. whitespace, as in the Qwen split
+    if (j == i && is_space(at(i))) {
+      size_t k = i;
+      while (k < n && is_space(at(k))) ++k;
+      size_t last_nl = n;
+      for (size_t q = i; q < k; ++q)
+        if (is_nl(at(q))) last_nl = q;
+      if (last_nl != n) j = last_nl + 1;
+      else if (k < n && k - i > 1) j = k - 1;
+      else j = k;
+    }
+    if (j == i) j = i + 1;
+    const uint32_t b0 = cps[i].off, b1 = j < n ? cps[j].off : uint32_t(s.size());
+    out.emplace_back(s.substr(b0, b1 - b0));
+    i = j;
+  }
+}
+
 std::string nfc(const std::string& s) {
   bool ascii = std::all_of(s.begin(), s.end(), [](char c) { return (unsigned char)c < 0x80; });
   if (ascii) return s;
@@ -166,6 +241,21 @@ void Tokenizer::load(const std::string& path) {
   nlohmann::json j = nlohmann::json::parse(f);
   auto& model = j["model"];
   if (model["type"] != "BPE") fatal("only BPE tokenizers are supported");
+  // Tekken (Mistral, Nemotron 3.5): its Split regex, no normalizer, whole words looked up first (ignore_merges).
+  // Anything else gets Qwen's split with NFC.
+  static const char* kTekken =
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
+      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
+      "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+  const auto& pt = j["pre_tokenizer"];
+  if (pt.is_object() && pt.value("type", "") == "Sequence" && pt["pretokenizers"].is_array())
+    for (auto& p : pt["pretokenizers"])
+      if (p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].contains("Regex") &&
+          p["pattern"]["Regex"] == kTekken) {
+        tekken_ = true;
+        nfc_ = !j["normalizer"].is_null();
+        ignore_merges_ = model.value("ignore_merges", false);
+      }
   uint32_t b2u[256];
   byte_unicode(b2u);
   std::unordered_map<uint32_t, uint8_t> u2b;
@@ -230,6 +320,24 @@ void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
       return;
     }
   }
+  if (ignore_merges_) {
+    std::string u;
+    for (unsigned char b : word) {
+      static const auto b2u = [] {
+        std::array<uint32_t, 256> t{};
+        uint32_t raw[256];
+        byte_unicode(raw);
+        for (int i = 0; i < 256; ++i) t[i] = raw[i];
+        return t;
+      }();
+      put_utf8(u, b2u[b]);
+    }
+    auto it = vocab_.find(u);
+    if (it != vocab_.end()) {
+      out.push_back(it->second);
+      return;
+    }
+  }
   std::vector<int> sym;
   sym.reserve(word.size());
   for (unsigned char b : word) sym.push_back(byte_id_[b]);
@@ -269,7 +377,8 @@ void Tokenizer::bpe(const std::string& word, std::vector<int>& out) const {
 void Tokenizer::encode_plain(const std::string& text, std::vector<int>& out) const {
   if (text.empty()) return;
   std::vector<std::string> words;
-  pretokenize(nfc(text), words);
+  if (tekken_) pretokenize_tekken(nfc_ ? nfc(text) : text, words);
+  else pretokenize(nfc_ ? nfc(text) : text, words);
   for (auto& w : words) bpe(w, out);
 }
 

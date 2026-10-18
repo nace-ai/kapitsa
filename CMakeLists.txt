@@ -31,11 +31,21 @@ add_custom_command(
   DEPENDS ${NI_KERNELS} ${CMAKE_SOURCE_DIR}/cmake/embed_kernels.cmake
   COMMENT "Embedding Metal kernels")
 
+# Nemotron-H kernels: a second embedded source, compiled only when such a model loads.
+file(GLOB NI_NH_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/*.metal ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/*.h)
+set(NI_NH_EMBED ${CMAKE_BINARY_DIR}/generated/nh_kernels_embed.cpp)
+add_custom_command(
+  OUTPUT ${NI_NH_EMBED}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_NH_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
+          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
+  DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
+  COMMENT "Embedding the Nemotron-H Metal kernels")
+
 file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
   "-framework IOKit")
