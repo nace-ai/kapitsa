@@ -8,7 +8,9 @@ train.py line 81) and aerial.png (the Golden Gate Bridge). Checks:
   - a follow-up turn resending the same image reuses the cached prompt (cached_tokens covers the image)
   - a different image of the same size in the same place does not (cached_tokens stops before it)
   - an http:// image URL works (served from IMAGE_DIR by a local server)
-  - errors: video parts, broken base64, unsupported URL schemes and a text model's refusal are 400s with a message
+  - the Anthropic Messages API (an image block; count_tokens counts the image's rows) and the Responses API
+    (input_image) read the same image
+  - errors: video parts, broken base64, bytes that are no image and unsupported URL schemes are 400s with a message
   - time to first token for each image, cold and cached
 """
 import base64, http.server, json, os, sys, threading, time, urllib.error, urllib.request
@@ -143,6 +145,39 @@ check("http:// image URL", r5["status"] == 200 and "active users" in r5.get("con
 r6 = post([user("What is this?", f"http://127.0.0.1:{srv.server_address[1]}/missing.png")], max_tokens=10)
 check("http:// URL that is not there: 400", r6["status"] == 400 and "404" in r6.get("error", ""), r6.get("error", "")[:100])
 srv.shutdown()
+
+# the other APIs: an Anthropic image block (count_tokens counts its rows) and a Responses input_image
+def post_api(path, body):
+    req = urllib.request.Request(BASE + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", "anthropic-version": "2023-06-01"})
+    try:
+        return 200, json.loads(urllib.request.urlopen(req, timeout=900).read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
+b64 = base64.b64encode(open(os.path.join(DIR, "chart.png"), "rb").read()).decode()
+amsg = [{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
+                                     {"type": "text", "text": q1}]}]
+st_c, ct = post_api("/v1/messages/count_tokens", {"model": "x", "messages": amsg})
+st_a, am = post_api("/v1/messages", {"model": "x", "max_tokens": 60, "temperature": 0, "messages": amsg})
+a_text = "".join(b.get("text", "") for b in am.get("content", []) if b.get("type") == "text")
+au = am.get("usage", {})
+a_prompt = au.get("input_tokens", 0) + au.get("cache_read_input_tokens", 0)
+check("anthropic: an image block is read", st_a == 200 and "may" in a_text.lower() and "73" in a_text,
+      f"{st_a} {a_text[:100]!r} usage {au}")
+check("anthropic count_tokens counts the image's rows", st_c == 200 and ct.get("input_tokens") == a_prompt > 500,
+      f"count_tokens {ct.get('input_tokens')}, the request's prompt {a_prompt}")
+st_r, rr = post_api("/v1/responses", {"model": "x", "max_output_tokens": 60, "temperature": 0, "reasoning": {"effort": "none"},
+                                      "input": [{"role": "user", "content": [
+                                          {"type": "input_image", "image_url": "data:image/png;base64," + b64},
+                                          {"type": "input_text", "text": q1}]}]})
+r_text = "".join(c.get("text", "") for o in rr.get("output", []) if o.get("type") == "message" for c in o.get("content", []))
+check("responses: an input_image is read", st_r == 200 and "may" in r_text.lower() and "73" in r_text,
+      f"{st_r} {r_text[:100]!r} usage {rr.get('usage')}")
+st_b, bad = post_api("/v1/messages", {"model": "x", "max_tokens": 5, "messages": [{"role": "user", "content": [
+    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.b64encode(b"no image").decode()}},
+    {"type": "text", "text": "hi"}]}]})
+check("anthropic: an image that cannot be decoded is a 400 invalid_request_error",
+      st_b == 400 and bad.get("error", {}).get("type") == "invalid_request_error", f"{st_b} {bad}")
 
 # errors
 r = post([{"role": "user", "content": [{"type": "video", "video": "x.mp4"}, {"type": "text", "text": "hi"}]}], max_tokens=5)
