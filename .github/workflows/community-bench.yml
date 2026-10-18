@@ -1,0 +1,72 @@
+# Community benchmark results (bench/community): checks the `kapitsa bench` results a pull request adds, labels it, and
+# keeps bench/community/RESULTS.md up to date once results reach main.
+#
+# The check runs on pull_request_target so that it can label pull requests from forks. That event runs with this
+# repository's token, so it never runs the pull request's code: it checks out the base branch, whose
+# tools/community_check.py reads the pull request's result files as data through the API (contents at the head commit)
+# and never executes anything from them. Untrusted text (file names, titles) is never put into a run: line.
+name: Community benchmark results
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    paths: ["bench/community/results/**"]
+  push:
+    branches: [main]
+    paths: ["bench/community/results/**", "tools/community_table.py"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Check out the base branch (its checker, never the pull request's code)
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install jsonschema
+        run: python3 -m pip install --user --disable-pip-version-check jsonschema==4.23.0
+
+      - name: Check the results and label the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 tools/community_check.py --github
+
+  table:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Write RESULTS.md
+        run: python3 tools/community_table.py
+
+      - name: Commit it if it changed
+        run: |
+          if git diff --quiet -- bench/community/RESULTS.md; then
+            echo "RESULTS.md is up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "bench/community/RESULTS.md: the community results, rewritten from bench/community/results" -- bench/community/RESULTS.md
+          git push
