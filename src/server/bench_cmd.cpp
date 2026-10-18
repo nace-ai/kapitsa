@@ -235,11 +235,17 @@ void card(const std::vector<std::string>& rows, int inner, FILE* f) {
   for (const auto& l : o) term::line(l, f);
 }
 
-// A yes typed at the terminal (the default is no)
+// A yes typed at the terminal (the default is no). A long question is wrapped to the terminal's width, its last line
+// asked.
 bool ask_yes(const std::string& question) {
   const int fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
   if (fd < 0) return false;
-  const std::string q = question + " [y/N] ";
+  size_t ind = 0;
+  while (ind < question.size() && question[ind] == ' ') ++ind;
+  const std::string pad(ind, ' ');
+  const auto lines = term::wrap(question.substr(ind), std::max(30, std::min(term::columns(), 100) - int(ind) - 7));
+  for (size_t i = 0; i + 1 < lines.size(); ++i) term::line(pad + lines[i], stderr);
+  const std::string q = pad + lines.back() + " [y/N] ";
   if (write(fd, q.data(), q.size()) < 0) {
     close(fd);
     return false;
@@ -252,6 +258,11 @@ bool ask_yes(const std::string& question) {
   while (!ans.empty() && isspace(uint8_t(ans.back()))) ans.pop_back();
   while (!ans.empty() && isspace(uint8_t(ans.front()))) ans.erase(ans.begin());
   return ans == "y" || ans == "yes";
+}
+
+// A line of text for the confirmation, wrapped to the terminal's width
+void say_wrapped(const std::string& text) {
+  for (const auto& l : term::wrap(text, std::max(30, std::min(term::columns(), 100) - 3))) term::line("  " + l, stderr);
 }
 
 bool can_confirm() {
@@ -372,7 +383,7 @@ int submit(const ojson& result, const std::string& content, bool dry, bool asked
         !ask_yes("  Add it to the community results? This opens a pull request on " + repo + " as @" + gh.login + "."))
       return 0;
     term::line("", stderr);
-    term::line("  This is what will be sent, as " + plan.path + ":", stderr);
+    say_wrapped("This is what will be sent, as " + plan.path + ":");
     term::line("", stderr);
     fputs(content.c_str(), stderr);
     term::line("", stderr);
@@ -409,7 +420,7 @@ int submit(const ojson& result, const std::string& content, bool dry, bool asked
   if (!asked_already && !ask_yes("  Add it to the community results? This opens a prefilled issue on " + repo + " in the browser."))
     return 0;
   term::line("", stderr);
-  term::line("  This is what will be sent, in the issue's form:", stderr);
+  say_wrapped("This is what will be sent, in the issue's form:");
   term::line("", stderr);
   fputs((compact + "\n").c_str(), stderr);
   term::line("", stderr);
@@ -815,10 +826,11 @@ int run(const Options& o) {
       mi.decoding = detail.rfind("DFlash2", 0) == 0 ? "DFlash2" : detail.rfind("LiLiCorr", 0) == 0 ? "LiLiCorr"
                     : detail.rfind("MTP", 0) == 0 ? "MTP" : detail.rfind("plain", 0) == 0 ? "plain" : "unknown";
       if (mi.decoding == "DFlash2" || mi.decoding == "LiLiCorr") mi.drafter = drafter_of(ref);
-      const std::string done = accent(term::kOk) + " Loaded " + what + dim(" in " + term::duration(secs())) +
-                               dim("  " + std::string(term::kDot) + "  ") + detail;
-      if (wobble) wobble->done({done, ""});
-      if (ticker) ticker->done(), term::line("  " + done, stderr);
+      const std::string done = accent(term::kOk) + " Loaded " + what + dim(" in " + term::duration(secs()));
+      // beside the logo, each line within the terminal's width: a wrapped line would misplace the logo's last frame
+      const int room = std::max(20, term::columns() - ui::kLogoCols - 6);
+      if (wobble) wobble->done({term::clip(done, room), dim(term::clip("  " + detail, room))});
+      if (ticker) ticker->done(), term::line(term::clip("  " + done + dim("  " + std::string(term::kDot) + "  " + detail), term::columns() - 1), stderr);
       say("Ready after " + term::duration(secs()) + ": " + detail);
     }
     s.port = srv.port;
