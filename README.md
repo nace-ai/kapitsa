@@ -99,8 +99,9 @@ it without starting it.
 
 `kapitsa pull 27b` downloads a model without starting it, `kapitsa list` shows what is downloaded, and
 `kapitsa rm 27b` deletes it. Downloads resume after an interruption and are checked against their checksums. Files
-already on the Mac are reused instead of downloaded again: the Hugging Face cache, Nace Agent's models, or a folder you
-name with `--from`.
+already on the Mac are reused instead of downloaded again: the Hugging Face cache, Nace Agent's models, a folder you
+name with `--from`, or the model's own folder when its files came from elsewhere (checked against the pinned
+checksums first).
 [Model storage](DEVELOPMENT.md#models-and-downloads)
 
 ## Settings
