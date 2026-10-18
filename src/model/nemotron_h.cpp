@@ -1578,6 +1578,63 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch((H + 15) / 16, 1, 1, 128);
     return;
   }
+  if (R == 1 && fuse_dec_ && !L.lat_up && L.router.fmt == NhFmt::F32 && L.up_s.fmt == NhFmt::FP4 &&
+      L.down_s.fmt == NhFmt::FP4 && L.up_e.fmt == NhFmt::FP4 && L.E <= 512 && L.k_used <= 32 && cfg_.hidden % 32 == 0 &&
+      cfg_.shared_I % 32 == 0) {
+    // one token, no latent projections (Lightning): 4 dispatches (nh_zh_moe.metal)
+    const uint32_t H = uint32_t(cfg_.hidden), S = uint32_t(cfg_.shared_I), I = uint32_t(L.I);
+    const uint32_t tg_r = (uint32_t(L.E) + 15) / 16, tg_u = k * ((I + 15) / 16);
+    const MoeDecP dp{H, uint32_t(L.E), k, cfg_.w_norm ? 1u : 0u, cfg_.w_scale, H, S, I, uint32_t(L.up_e.q_exp()),
+                     uint32_t(L.up_e.s_exp()), tg_r, 0, tg_u};
+    e.use(pipe("nh_moe_ah"));
+    e.buf(0, xn_);
+    e.buf(1, L.router.q);
+    e.buf(4, L.up_s.q);
+    e.buf(5, L.up_s.s);
+    e.buf(6, rl_);
+    e.buf(8, sh_);
+    e.buf(9, L.exp_bias);
+    e.buf(10, eid_);
+    e.buf(11, ew_);
+    e.buf(12, route_ctr_);
+    e.val(13, dp);
+    e.val(14, L.up_s.gs);
+    e.dispatch(tg_r + (S + 15) / 16, 1, 1, 128);
+    e.use(pipe("nh_moe_b4"));
+    e.buf(0, L.up_e.q);
+    e.buf(1, L.up_e.s);
+    e.buf(2, xn_);
+    e.buf(3, h_);
+    e.buf(4, eid_);
+    e.buf(5, L.down_s.q);
+    e.buf(6, L.down_s.s);
+    e.buf(7, sh_);
+    e.buf(8, sd_);
+    e.val(9, dp);
+    e.buf(10, L.up_e.gse);
+    e.val(11, L.down_s.gs);
+    e.dispatch(tg_u + (H + 15) / 16, 1, 1, 128);
+    const MoeP mp{I, H, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
+                  uint32_t(L.down_e.s_exp()), I};
+    e.use(pipe("nh_x4_moe_dn"));
+    e.buf(0, L.down_e.q);
+    e.buf(1, L.down_e.s);
+    e.buf(2, h_);
+    e.buf(3, part_);
+    e.buf(4, eid_);
+    e.buf(5, ew_);
+    e.val(6, mp);
+    e.buf(8, live_all_);
+    e.buf(9, L.down_e.gse);
+    e.dispatch((H + 7) / 8, k, 1, 64);
+    e.use(pipe("nh_moe_dh"));
+    e.buf(0, part_);
+    e.buf(1, sd_);
+    e.buf(2, x_);
+    e.val(3, dp);
+    e.dispatch((H + 255) / 256, 1, 1, 256);
+    return;
+  }
   const bool gm = gemm_rows_ && R >= 2;
   // without latent projections (Lightning) the experts read the normed hidden state, their sum goes into x_
   const bool lat = bool(L.lat_up);

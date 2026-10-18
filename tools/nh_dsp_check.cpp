@@ -1,7 +1,8 @@
 // Nemotron 3.5 Lightning's new kernels against CPU references at small odd sizes: the DSpark drafter's causal block
 // attention (nh_dsp_attn, a ring that wraps), its mask rows (nh_dsp_mask_rows) and Markov walk over candidates
 // (nh_dsp_walk, NVFP4 W2), the MoE sums of layers without latent projections (nh_moe2_sum2_add,
-// nh_moe_combine_add), and the 8-row BF16 product (nh_xb_v8: Lightning's attention in verify). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
+// nh_moe_combine_add, the fused one-token layer's nh_moe_ah / nh_moe_dh), and the 8-row BF16 product (nh_xb_v8:
+// Lightning's attention in verify). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
 //   nh_dsp_check
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
@@ -337,6 +338,108 @@ void check_xb_v8() {
     }
 }
 
+void check_moe_ah() {
+  // E experts (2 router threadgroups), top-k, H inputs, S shared-expert rows (NVFP4 in the loader's layout)
+  const uint32_t E = 20, k = 3, H = 96, S = 37;
+  std::vector<float> xn(H), rw(size_t(E) * H), bias(E);
+  for (auto& v : xn) v = nrand();
+  for (auto& v : rw) v = nrand() * 0.3f;
+  for (auto& v : bias) v = nrand() * 0.1f;
+  std::vector<uint8_t> src(size_t(S) * H / 2), q(src.size()), sc(size_t(S) * H / 16);
+  for (auto& b : src) b = uint8_t(rnd());
+  for (auto& b : sc) b = uint8_t(0x28 + rnd() % 0x10);
+  nh_repack_rows(NhFmt::FP4, H, src.data(), S, q.data(), nullptr);
+  const float gs = 0.8f, scale = 2.5f;
+  Gpu& g = Gpu::get();
+  Buffer bx = up(xn, "xn"), brw = up(rw, "rw"), bq = up(q, "uq"), bs = up(sc, "us"), bb = up(bias, "bias");
+  Buffer lg = g.alloc(E * 4, "logits"), sh = g.alloc(S * 4, "sh"), eid = g.alloc(k * 4, "eid"), ew = g.alloc(k * 4, "ew");
+  Buffer ctr = g.alloc(16, "ctr");
+  memset(ctr.ptr(), 0, 16);
+  struct {
+    uint32_t H, E, k, norm;
+    float scale;
+    uint32_t L, S, I, uqs, uss, tg_r, tg_l, tg_u;
+  } p{H, E, k, 1, scale, H, S, 1, 0, 0, (E + 15) / 16, 0, 0};
+  auto e = g.begin();
+  e->use(NemotronH::pipeline("nh_moe_ah"));
+  e->buf(0, bx);
+  e->buf(1, brw);
+  e->buf(4, bq);
+  e->buf(5, bs);
+  e->buf(6, lg);
+  e->buf(8, sh);
+  e->buf(9, bb);
+  e->buf(10, eid);
+  e->buf(11, ew);
+  e->buf(12, ctr);
+  e->bytes(13, &p, sizeof p);
+  e->bytes(14, &gs, 4);
+  e->dispatch(p.tg_r + (S + 15) / 16, 1, 1, 128);
+  e->commit_and_wait();
+  // reference: logits, sigmoid + bias selection, normalized weights x scale; shared up relu^2
+  std::vector<double> prob(E), sel(E);
+  double lerr = 0, lmx = 0;
+  for (uint32_t i = 0; i < E; ++i) {
+    double l = 0;
+    for (uint32_t j = 0; j < H; ++j) l += double(rw[size_t(i) * H + j]) * xn[j];
+    lerr = std::max(lerr, std::fabs(l - lg.as<float>()[i]));
+    lmx = std::max(lmx, std::fabs(l));
+    prob[i] = 1.0 / (1.0 + std::exp(-l));
+    sel[i] = prob[i] + bias[i];
+  }
+  std::vector<int> ids;
+  double sum = 1e-20;
+  for (uint32_t j = 0; j < k; ++j) {
+    int b = -1;
+    for (uint32_t i = 0; i < E; ++i)
+      if (std::find(ids.begin(), ids.end(), int(i)) == ids.end() && (b < 0 || sel[i] > sel[size_t(b)])) b = int(i);
+    ids.push_back(b);
+    sum += prob[size_t(b)];
+  }
+  int bad = 0;
+  double werr = 0;
+  for (uint32_t j = 0; j < k; ++j) {
+    bad += eid.as<int>()[j] != ids[j];
+    werr = std::max(werr, std::fabs(prob[size_t(ids[j])] / sum * scale - ew.as<float>()[j]));
+  }
+  double serr = 0, smx = 0;
+  for (uint32_t n = 0; n < S; ++n) {
+    double d = 0;
+    for (uint32_t j = 0; j < H; ++j) {
+      const uint8_t b = src[size_t(n) * H / 2 + j / 2];
+      d += kE2M1[(j & 1) ? b >> 4 : b & 15] * e4m3(sc[size_t(n) * H / 16 + j / 16]) * xn[j];
+    }
+    d = std::max(d * gs, 0.0);
+    serr = std::max(serr, std::fabs(d * d - sh.as<float>()[n]));
+    smx = std::max(smx, d * d);
+  }
+  report("nh_moe_ah logits", lerr / lmx, 1e-5);
+  report("nh_moe_ah experts", double(bad), 0);
+  report("nh_moe_ah weights", werr, 1e-5);
+  report("nh_moe_ah shared up", serr / smx, 1e-5);
+  // nh_moe_dh: x += sum of k partials + sd
+  std::vector<float> part(size_t(k) * H), sd(H), x(H);
+  for (auto& v : part) v = nrand();
+  for (auto& v : sd) v = nrand();
+  for (auto& v : x) v = nrand();
+  Buffer bp = up(part, "part"), bsd = up(sd, "sd"), bxx = up(x, "x");
+  e = g.begin();
+  e->use(NemotronH::pipeline("nh_moe_dh"));
+  e->buf(0, bp);
+  e->buf(1, bsd);
+  e->buf(2, bxx);
+  e->bytes(3, &p, sizeof p);
+  e->dispatch((H + 255) / 256, 1, 1, 256);
+  e->commit_and_wait();
+  double derr = 0;
+  for (uint32_t n = 0; n < H; ++n) {
+    double ref = double(x[n]) + sd[n];
+    for (uint32_t j = 0; j < k; ++j) ref += part[size_t(j) * H + n];
+    derr = std::max(derr, std::fabs(ref - bxx.as<float>()[n]));
+  }
+  report("nh_moe_dh", derr, 1e-5);
+}
+
 }  // namespace
 
 int main() {
@@ -347,6 +450,7 @@ int main() {
   check_walk();
   check_sums();
   check_xb_v8();
+  check_moe_ah();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }

@@ -175,7 +175,7 @@ int main(int argc, char** argv) {
       if (auto* lc = dynamic_cast<LiliCorr*>(lili.get())) lc->debug_feature_stats();
     t0 = now_ms();
     int produced = 1, cycles = 0;
-    double spec_gpu_ms = 0;
+    double spec_gpu_ms = 0, draft_gpu_ms = 0;
     if (!lili) {
       // as the engine: the next step is encoded and queued while the current one runs
       std::unique_ptr<Encoder> next;
@@ -206,6 +206,7 @@ int main(int argc, char** argv) {
         m.set_dynamic_rows(false);
         e2->commit_and_wait();
         gpu_ms += e1->gpu_ms() + e2->gpu_ms();
+        draft_gpu_ms += e1->gpu_ms();
         const int a = m.accepted();
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
@@ -227,8 +228,9 @@ int main(int argc, char** argv) {
     printf("prefill %d tokens in %.0f ms (%.1f tok/s); decode %d tokens in %.0f ms (%.2f tok/s)", n, t_pf,
            n / (t_pf / 1000), produced - 1, t_dec, produced > 1 ? (produced - 1) / (t_dec / 1000) : 0.0);
     if (cycles)
-      printf("; %d cycles, %.2f tokens per cycle, %.1f ms per cycle (GPU %.1f)", cycles, double(produced - 1) / cycles,
-             t_dec / cycles, spec_gpu_ms / cycles);
+      printf("; %d cycles, %.2f tokens per cycle, %.1f ms per cycle (GPU %.1f: drafting %.2f, verify %.2f)", cycles,
+             double(produced - 1) / cycles, t_dec / cycles, spec_gpu_ms / cycles, draft_gpu_ms / cycles,
+             (spec_gpu_ms - draft_gpu_ms) / cycles);
     const AneStats& as = m.ane_stats();
     if (as.chunks) printf("; ANE %d chunks, busy %.0f ms", as.chunks, as.ane_ms);
     task_vm_info_data_t vi;
