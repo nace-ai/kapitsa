@@ -562,19 +562,21 @@ void clients() {
       if (a == k) return b == v;
     return false;
   };
-  check(has(c, "ANTHROPIC_BASE_URL", "http://127.0.0.1:8000") && has(c, "ANTHROPIC_AUTH_TOKEN", "kapitsa") &&
+  check(has(c, "ANTHROPIC_BASE_URL", "http://127.0.0.1:8000") && has(c, "KAPITSA_API_KEY", "kapitsa") &&
             has(c, "ANTHROPIC_MODEL", "qwen3.6-35b-a3b") && has(c, "ANTHROPIC_DEFAULT_HAIKU_MODEL", "qwen3.6-35b-a3b") &&
             has(c, "ANTHROPIC_SMALL_FAST_MODEL", "qwen3.6-35b-a3b") && has(c, "CLAUDE_CODE_MAX_CONTEXT_TOKENS", "131072") &&
             has(c, "CLAUDE_CODE_AUTO_COMPACT_WINDOW", "131072") && has(c, "CLAUDE_CODE_USE_BEDROCK", "0") &&
             has(c, "CLAUDE_CODE_USE_VERTEX", "0") && has(c, "CLAUDE_CODE_USE_FOUNDRY", "0") &&
-            c.unset == std::vector<std::string>{"ANTHROPIC_API_KEY"},
+            c.unset == std::vector<std::string>{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"},
         "claude: environment");
-  check(c.argv == std::vector<std::string>{"/bin/claude", "--model", "qwen3.6-35b-a3b", "--disallowedTools", "WebSearch", "-p", "hi",
+  check(c.argv == std::vector<std::string>{"/bin/claude", "--settings", R"({"apiKeyHelper":"printf '%s' \"$KAPITSA_API_KEY\""})",
+                                           "--model", "qwen3.6-35b-a3b", "--disallowedTools", "WebSearch", "-p", "hi",
                                            "--allowedTools", "Read"},
-        "claude: arguments", "");
+        "claude: arguments (the server's key through an apiKeyHelper)", "");
+  check(ojson::parse(c.argv[2])["apiKeyHelper"] == "printf '%s' \"$KAPITSA_API_KEY\"", "claude: the --settings value is JSON");
   AgentServer small{"http://127.0.0.1:8000", "m", 49152, "k"};
   AgentLaunch c2 = agent_launch("claude", "/bin/claude", small, {}, {}, -1);
-  check(has(c2, "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "12288") && has(c2, "ANTHROPIC_AUTH_TOKEN", "k"),
+  check(has(c2, "CLAUDE_CODE_MAX_OUTPUT_TOKENS", "12288") && has(c2, "KAPITSA_API_KEY", "k"),
         "claude: a smaller window caps its replies at a quarter of it; the server's key");
 
   AgentLaunch x = agent_launch("codex", "/bin/codex", s, {"exec", "-c", "model_verbosity=\"low\"", "--skip-git-repo-check", "fix it"}, {}, -1);

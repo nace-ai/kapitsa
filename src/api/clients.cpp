@@ -40,7 +40,7 @@ AgentLaunch claude(const std::string& path, const AgentServer& s, const std::vec
   AgentLaunch l;
   const std::string n = std::to_string(s.context);
   l.set = {{"ANTHROPIC_BASE_URL", s.base_url},
-           {"ANTHROPIC_AUTH_TOKEN", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"KAPITSA_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
            {"ANTHROPIC_MODEL", s.model},
            {"ANTHROPIC_DEFAULT_OPUS_MODEL", s.model},
            {"ANTHROPIC_DEFAULT_SONNET_MODEL", s.model},
@@ -57,8 +57,13 @@ AgentLaunch claude(const std::string& path, const AgentServer& s, const std::vec
   // its replies ask for 32,000 tokens; a smaller window keeps room for the conversation
   if (s.context < 128000 && !env.count("CLAUDE_CODE_MAX_OUTPUT_TOKENS"))
     l.set.push_back({"CLAUDE_CODE_MAX_OUTPUT_TOKENS", std::to_string(std::max(4096, s.context / 4))});
-  l.unset = {"ANTHROPIC_API_KEY"};
-  l.argv = {path, "--model", s.model, "--disallowedTools", "WebSearch"};
+  // The server's key through an apiKeyHelper (settings layered over the user's own, for this run only): Claude Code
+  // then sends it, and only it, as x-api-key and as the bearer token. Otherwise it also sends the user's saved Console
+  // key or claude.ai login to the local server. ANTHROPIC_AUTH_TOKEN beside a helper would add a "Both ... set" warning;
+  // ANTHROPIC_API_KEY would ask whether to use a custom key.
+  l.unset = {"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"};
+  l.argv = {path, "--settings", R"({"apiKeyHelper":"printf '%s' \"$KAPITSA_API_KEY\""})", "--model", s.model,
+            "--disallowedTools", "WebSearch"};
   l.argv.insert(l.argv.end(), args.begin(), args.end());
   l.notes = {"WebSearch is off: Claude Code runs it on Anthropic's servers. Other tools and MCP servers work as usual."};
   return l;

@@ -139,11 +139,17 @@ agent in the terminal's foreground process group (Ctrl+C and Ctrl+Z reach the ag
 are passed on), stops the server it started when the agent exits, and exits with the agent's code. The server
 also exits by itself if the launcher dies (`KAPITSA_PARENT_PID`, watched with kqueue). What each agent gets:
 
-- **Claude Code**: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` (the key, or any), `ANTHROPIC_MODEL` and every
-  `ANTHROPIC_DEFAULT_*_MODEL` / `ANTHROPIC_SMALL_FAST_MODEL` set to the model, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and
-  `CLAUDE_CODE_AUTO_COMPACT_WINDOW` set to the context, `CLAUDE_CODE_MAX_OUTPUT_TOKENS` a quarter of a context under
-  128K, `CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY=0`, `ANTHROPIC_API_KEY` unset; `--model M --disallowedTools
-  WebSearch` (Anthropic's servers run its search).
+- **Claude Code**: `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL` and every `ANTHROPIC_DEFAULT_*_MODEL` /
+  `ANTHROPIC_SMALL_FAST_MODEL` set to the model, `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
+  set to the context, `CLAUDE_CODE_MAX_OUTPUT_TOKENS` a quarter of a context under 128K,
+  `CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY=0`; `--model M --disallowedTools WebSearch` (Anthropic's servers run its
+  search). The key goes through `--settings '{"apiKeyHelper": ...}'` (layered over the user's settings for this run),
+  which prints `$KAPITSA_API_KEY` (the server's key, or "kapitsa"): Claude Code then sends that key, and only it, as
+  `x-api-key` and as the bearer token. With `ANTHROPIC_AUTH_TOKEN` alone it also sent the user's saved Console key
+  (from the keychain) in `x-api-key`; `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are unset (the first asks
+  whether to use a custom key, the second beside a helper adds a "Both ... set" warning). A user with a saved
+  Console key sees one notice, "apiKeyHelper overriding saved Console key" (a claude.ai login: "... overriding
+  Claude subscription login"); their key and login are untouched.
 - **Codex**: `-c` overrides for a `kapitsa` model provider (`wire_api="responses"`, `env_key="KAPITSA_API_KEY"`),
   `model`, `model_context_window`, `model_auto_compact_token_limit` (90% of it), `web_search="disabled"` and
   `show_raw_agent_reasoning=true` (Qwen's reasoning is reasoning text); the user's own `-c` go with them, before
