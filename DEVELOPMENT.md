@@ -14,14 +14,18 @@ Needs CMake 3.24+ and the Xcode Command Line Tools only. Metal kernels are embed
 runtime by the OS (`newLibraryWithSource`), so no offline `metal` compiler or Xcode is required. Pipelines are
 created at load (`NI_PREWARM=0` skips that and creates them on first use).
 
-`install.sh` checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line Tools (opens
-their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa` target in
-Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
-overrides), with a note when that folder is not on the PATH. It installs `LICENSE` and `THIRD_PARTY_NOTICES`
+`install.sh` in a clone checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line
+Tools (opens their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa`
+target in Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
+overrides), with a note when that folder is not on the PATH. Piped from curl (not in a clone), it installs the
+latest release's prebuilt binary instead, checked against the release's sha256 (`--version X.Y.Z`, `--from-file
+TARBALL`, `--from-source`: `install.sh --help`). It installs `LICENSE` and `THIRD_PARTY_NOTICES`
 to `../share/kapitsa` relative to that binary folder, and prints the location. Run it again to
 update. To uninstall, delete the binary, that notices folder and `~/.cache/kapitsa`.
-`packaging/homebrew/kapitsa.rb` installs the same documents in Homebrew's package share directory. It is a
-formula for a public release: it needs a tag, the tarball's sha256 and a tap (see the file); nothing is published.
+`packaging/release/build.sh` builds the release tarball (the binary, stripped and signed, with those two documents)
+from the committed tree; `install.sh` and the Homebrew formula `packaging/homebrew/kapitsa.rb` install that tarball
+(`brew install --HEAD` builds from source), and the formula's service runs `kapitsa serve` under `brew services`.
+[RELEASING.md](RELEASING.md) has the release steps; nothing is published yet.
 
 ## Commands
 

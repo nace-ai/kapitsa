@@ -11,17 +11,23 @@ back up without reading it again. On a 48 GB MacBook Pro it is the fastest of th
 
 ## Quick start
 
-An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro), the Xcode Command Line Tools and CMake. The 4B
-runs on a 16 GB MacBook Air. The 35B-A3B and 27B run on 32 GB Macs with shorter conversations and without the DFlash2
-draft model; 48 GB is recommended. `kapitsa doctor` shows what fits this Mac.
+An Apple silicon Mac with macOS 15 or later (tested on an M4 Pro). The 4B runs on a 16 GB MacBook Air. The 35B-A3B
+and 27B run on 32 GB Macs with shorter conversations and without the DFlash2 draft model; 48 GB is recommended.
+`kapitsa doctor` shows what fits this Mac.
 
 ```bash
-git clone https://github.com/nace-ai/kapitsa && cd kapitsa && ./install.sh
+brew install nace-ai/tap/kapitsa
 kapitsa serve --model qwen3.6-35b
 ```
 
-`./install.sh` builds Kapitsa in a minute or two and puts `kapitsa` in `/opt/homebrew/bin` or `~/.local/bin`. It
-offers to install CMake with Homebrew, and tells you if the folder needs adding to your PATH.
+`brew services start kapitsa` runs `kapitsa serve` in the background instead, now and at every login (log:
+`/opt/homebrew/var/log/kapitsa.log`).
+
+No Homebrew? `curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash` installs the same
+prebuilt binary.
+
+From source, with the Xcode Command Line Tools and CMake:
+`git clone https://github.com/nace-ai/kapitsa && cd kapitsa && ./install.sh`.
 
 The first run of `kapitsa serve` downloads the model and its DFlash2 draft model (22 GB) and prints `Ready`. Later
 starts reuse the download, offline too. Without `--model`, Kapitsa picks the best model that fits this Mac.
