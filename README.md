@@ -12,8 +12,6 @@
 brew install nace-ai/tap/kapitsa
 ```
 
-Homebrew and the prebuilt binary work from the first release on. Until then, build from source.
-
 <details>
 <summary>Without Homebrew, or from source</summary>
 
@@ -54,11 +52,12 @@ run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active</sub> | **4-bit · 22.1 GB**<br><sub>also 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 GB</sub> | DFlash2 / MTP |
 | **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | LiLiCorr |
+| **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid Mamba-2 MoE, 12B active; 96 GB+ Macs</sub> | **NVIDIA NVFP4 · 76.4 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | LiLiCorr |
 
 bf16 is full precision; pick another precision with `--model 35b:6bit`, `--model 27b:bf16` and so on.
 
-Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint. Qwen3.6, Qwen3.8 and Bolt read
-[images](docs/usage.md#images); the 4B is text only. Other Qwen3.5-family models load from a Hugging Face repo, a
+Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint, Super-VL NVIDIA's own `nvfp4` one. Qwen3.6, Qwen3.8 and Bolt read
+[images](docs/usage.md#images); the 4B and Super-VL (for now) are text only. Other Qwen3.5-family models load from a Hugging Face repo, a
 folder or a GGUF file ([other models](docs/usage.md#other-models)). Model weights keep their own licenses.
 
 ```bash
@@ -73,70 +72,95 @@ kapitsa rm 27b                 # delete one
 Writing speed: tokens per second of a coding answer (decode, temperature 0.6), each engine in the setup that writes
 fastest ([all setups](docs/benchmarks.md)). Qwen runs at **4-bit** on every engine: MLX 4-bit (group 64) on Kapitsa
 and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24 GB checkpoint (2-bit experts,
-4-bit NVFP4 Mamba layers, 8-bit elsewhere) on every engine.
+4-bit NVFP4 Mamba layers, 8-bit elsewhere) on every engine. ⚠ marks a number from a run during which other apps used
+the GPU (contention flagged): it may be low.
 
-### MacBook Pro (2024) · M4 Pro · 48 GB
+**On your Mac:** `kapitsa bench` measures Kapitsa with the same protocol, and the
+[community results](bench/community/RESULTS.md) collect every Mac measured so far: add yours with
+`kapitsa bench --submit`.
 
-| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
-| --- | ---: | ---: |
-| llama.cpp + MTP | 69 tok/s | 18 tok/s |
-| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
-| LM Studio (MLX engine) | 86 tok/s | 15 tok/s |
-| MTPLX | 80 tok/s | 36 tok/s |
-| oMLX + DFlash2 | 127 tok/s | 45 tok/s |
-| **Kapitsa** | **154 tok/s** | **63 tok/s** |
+### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
+
+| Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit | Qwen3.5 4B · 4-bit |
+| --- | ---: | ---: | ---: |
+| llama.cpp + MTP | 69 tok/s | 18 tok/s | 70 tok/s |
+| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s | 109 tok/s |
+| LM Studio (MLX engine) | 86 tok/s | 15 tok/s | 81 tok/s |
+| MTPLX | 80 tok/s | 36 tok/s | 104 tok/s |
+| oMLX + DFlash2 | 127 tok/s | 45 tok/s | 102 tok/s |
+| mlx-serve (MTP) | 124 tok/s | 38 tok/s ⚠ | — |
+| mlx-serve (DFlash2) | 104 tok/s | 52 tok/s ⚠ | — |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** | **122 tok/s** |
 
 | Engine | Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB |
 | --- | ---: |
 | mlx-vlm | 32 tok/s |
-| oMLX | 34 tok/s |
+| oMLX | 34 tok/s ⚠ |
 | oMLX + LiLiCorr | fails when sampling |
 | **Kapitsa** | **64 tok/s** |
 
-Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. Qwen3.5 4B:
-being measured.
-<!-- Qwen3.5 4B slot: a column "Qwen3.5 4B" in the Qwen table above, "N tok/s" per engine. -->
+Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. mlx-serve ran a
+day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B · 4-bit and 57-61 tok/s ⚠ on
+Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B oMLX
+runs its own MTP path, its fastest setup there; mlx-serve was not run on it
+([details](docs/benchmarks.md#qwen35-4b-2026-10-18)). Nemotron 3.5 Super-VL does not fit this Mac (70 GB of weights;
+Kapitsa refuses it before downloading).
 
 <details>
-<summary>Follow-ups and memory, MacBook Pro (2024) · M4 Pro · 48 GB</summary>
+<summary>Follow-ups and memory, MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB</summary>
 
 A follow-up is the time to the first token of an answer in a conversation that already holds a 4K or 16K prompt.
 
-| MacBook Pro (2024) · M4 Pro · 48 GB | Kapitsa | Next best on this Mac |
+| MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB | Kapitsa | Next best on this Mac |
 | --- | ---: | --- |
-| Qwen3.6 35B-A3B, follow-up 4K / 16K | 0.06 / 0.09 s | MTPLX, 0.10 / 0.15 s |
-| Qwen3.6 35B-A3B, peak memory | 21.1 GB | oMLX + DFlash2, 23.4 GB |
-| Qwen3.8 27B, follow-up 4K / 16K | 0.28 / 0.27 s | MTPLX, 0.33 / 0.39 s |
-| Qwen3.8 27B, peak memory | 19.4 GB | oMLX without speculation, 20.5 GB |
-| Nemotron 3.5 Bolt, follow-up 4K / 16K | 0.28 / 0.32 s | oMLX, 0.72 / 0.72 s |
-| Nemotron 3.5 Bolt, peak memory | 22.7 GB | oMLX, 30.3 GB |
+| Qwen3.6 35B-A3B · 4-bit, follow-up 4K / 16K | 0.06 / 0.09 s | MTPLX, 0.10 / 0.15 s |
+| Qwen3.6 35B-A3B · 4-bit, peak memory | 21.1 GB | mlx-serve + MTP, 22.5 GB |
+| Qwen3.8 27B · 4-bit, follow-up 4K / 16K | 0.28 / 0.27 s | MTPLX, 0.33 / 0.39 s |
+| Qwen3.8 27B · 4-bit, peak memory | 19.4 GB | mlx-serve + MTP, 20.1 GB ⚠ |
+| Nemotron 3.5 Bolt · NVIDIA 24 GB, follow-up 4K / 16K | 0.28 / 0.32 s | oMLX, 0.72 / 0.72 s ⚠ |
+| Nemotron 3.5 Bolt · NVIDIA 24 GB, peak memory | 22.7 GB | oMLX, 30.3 GB ⚠ |
 
 </details>
 
-### MacBook Pro · M5 Max · 128 GB
+### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
 | Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
 | --- | ---: | ---: |
-| **Kapitsa** | **250 tok/s** | **73 tok/s** |
+| **Kapitsa** | **250 tok/s** ⚠ | **73 tok/s** ⚠ |
 | Other engines | — | — |
 
-Other engines on this Mac: coming. Nemotron 3.5 Bolt here: not measured yet.
+| Engine | Nemotron 3.5 Super-VL 120B-A12B · NVIDIA NVFP4 |
+| --- | ---: |
+| mlx-vlm + MTP (unreleased git main) | 46 tok/s |
+| mlx-lm (MLX 4-bit) | 46 tok/s |
+| oMLX (MLX 4-bit) | 52 tok/s |
+| llama.cpp + MTP (Q4_0) | 66 tok/s |
+| **Kapitsa** | **85 tok/s** |
+
+Super-VL is NVIDIA's NVFP4 checkpoint on Kapitsa and mlx-vlm; oMLX and mlx-lm cannot load it and run the text-only MLX
+4-bit conversion, llama.cpp ggml-org's Q4_0 GGUF. Other engines on this Mac for Qwen: coming. Nemotron 3.5 Bolt here:
+not measured yet.
 
 <details>
-<summary>Follow-ups and memory, MacBook Pro · M5 Max · 128 GB</summary>
+<summary>Follow-ups and memory, MacBook Pro (16-inch, 2026) · M5 Max · 128 GB</summary>
 
-| MacBook Pro · M5 Max · 128 GB | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| MacBook Pro (16-inch, 2026) · M5 Max · 128 GB | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
 | --- | ---: | ---: |
-| Follow-up 4K / 16K | 34.9 / 40.2 ms | 121.6 / 135.3 ms |
-| Peak memory | 21.0 GB | 19.4 GB |
+| Follow-up 4K / 16K | 34.9 / 40.2 ms ⚠ | 121.6 / 135.3 ms ⚠ |
+| Peak memory | 21.0 GB ⚠ | 19.4 GB ⚠ |
+
+| MacBook Pro · M5 Max · 128 GB | Kapitsa | Best other engine on this Mac |
+| --- | ---: | --- |
+| Nemotron 3.5 Super-VL, follow-up 4K / 16K | 0.22 / 0.26 s | llama.cpp, 0.19 / 0.20 s |
+| Nemotron 3.5 Super-VL, peak memory | 70.4 GB | oMLX (MLX 4-bit), 74.8 GB |
 
 </details>
 
 Same prompts on every engine, thinking off, median of 5 runs, each engine at its latest release. Desktop apps used the
-GPU during the Bolt runs (alike for every engine) and the M5 Max runs (flagged for it). These measure speed, not model
-quality.
+GPU during the Bolt runs, alike for every engine, and during the M5 Max runs, which are flagged (⚠). These measure
+speed, not model quality.
 [How it was measured](docs/benchmarks.md) · [M5 Max report](docs/benchmarks-m5-max.md) ·
-[Run the benchmarks yourself](bench/harness/README.md)
+[Run the benchmarks yourself](bench/harness/README.md) · [Community results](bench/community/RESULTS.md)
 
 ## Connect your apps
 
@@ -168,8 +192,10 @@ curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/jso
 
 </details>
 
-Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached; it
-does not enable parallel generation. `brew services start kapitsa` keeps a server running in the background.
+Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. Requests sent at once (parallel
+subagents, several clients) run side by side, taking turns on the GPU, each with the tokens it would get alone;
+`--slots` sets how many (default: up to 4, as memory allows), each keeping its conversation cached.
+`brew services start kapitsa` keeps a server running in the background.
 [All server options and API details](docs/usage.md#server-options)
 
 ## Architecture

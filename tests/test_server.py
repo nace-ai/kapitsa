@@ -132,6 +132,25 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("variant") == dv and
                   j.get("repo") == repo and j.get("revision") == rev and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # NVIDIA's Nemotron 3.5 checkpoints: one variant each, the LiLiCorr drafter in dflash/
+    for name, dv, repo, rev, comp, aliases in [
+            ("nemotron-3.5-bolt", "24gb", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+             "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr", "abd478065678ee83a93821c4b3f512da24e4cecb",
+              "dflash"), ["bolt", "nemotron-bolt"]),
+            ("nemotron-3.5-super-vl", "nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+             "59b8721646c38111a242da18218859fb2b454322",
+             ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+              "292bf1efc06ba39567da7351f2ad7a522afa3959", "dflash"),
+             ["super", "super-vl", "nemotron-super", "NEMOTRON-3.5-SUPER-VL:nvfp4",
+              "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"])]:
+        for a in aliases:
+            j = plan(a)
+            got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
+            check(f"cli: {a} -> {name}:{dv} with its LiLiCorr drafter",
+                  j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
+                  j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
+                  j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
@@ -479,6 +498,97 @@ check("responses: a prompt over the context is 400 context_length_exceeded",
 st, r = call("/v1/responses", {"model": "m", "input": "Count from 1 to 100.", "reasoning": {"effort": "none"}, "max_output_tokens": 8})
 check("responses: a max_output_tokens cut is status incomplete", st == 200 and r["status"] == "incomplete" and
       r["incomplete_details"] == {"reason": "max_output_tokens"}, json.dumps(r)[:300])
+
+# ---------------------------------------------------------------- requests in flight at once
+# Each request in flight has a slot of its own and they take turns on the GPU between prefill chunks and decode cycles;
+# with every slot busy a request waits for one. /v1/models says how many slots there are.
+SLOTS = json.loads(get("/v1/models", auth())[2])["data"][0].get("slots", 2)
+check("/v1/models reports the requests that run at once (slots)", isinstance(SLOTS, int) and SLOTS >= 1, str(SLOTS))
+def story(tag, n):
+    return {"messages": [{"role": "system", "content": f"[{tag}] You are a storyteller."},
+                         {"role": "user", "content": "Tell a long story about a lighthouse keeper and a storm."}],
+            "max_tokens": n, "temperature": 0, "top_k": 1, "stream": True,
+            "chat_template_kwargs": {"enable_thinking": False}}
+def counting(tag, n):  # a reply that runs to max_tokens
+    return {"messages": [{"role": "user", "content": f"[{tag}] Count from 1 to 2000, one number per line, nothing else."}],
+            "max_tokens": n, "temperature": 0, "top_k": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False}}
+def sampled(tag, n, seed):
+    return {"messages": [{"role": "user", "content": f"[{tag}] Write a short poem about rain on a tin roof."}],
+            "max_tokens": n, "temperature": 0.7, "top_p": 0.95, "top_k": 20, "seed": seed, "stream": True,
+            "chat_template_kwargs": {"enable_thinking": False}}
+def together(bodies, delays=None):
+    out = [None] * len(bodies)
+    def go(i):
+        if delays:
+            time.sleep(delays[i])
+        t0 = time.time()
+        out[i] = post(bodies[i], stream=True)
+        out[i]["t_done"] = time.time()
+        out[i]["t_sent"] = t0
+    th = [threading.Thread(target=go, args=(i,)) for i in range(len(bodies))]
+    for t in th: t.start()
+    for t in th: t.join()
+    return out
+def evict_slots():  # one-offs that take every slot, so the next requests prefill cold
+    for i in range(SLOTS):
+        post({"messages": [{"role": "user", "content": f"[evict {i} {time.time()}] " + "Say ok. " * 40}], "max_tokens": 1,
+              "chat_template_kwargs": {"enable_thinking": False}})
+
+# 10. requests sent together give each the same tokens as alone (greedy, and sampled with a seed); cold prefills
+#     both times (one-offs take the slots in between, so neither run reuses the other's cache)
+pair = [story("c1", 160), sampled("c2", 120, 11)]
+evict_slots()
+both = together(pair, delays=[0, 0.3])
+evict_slots()
+alone = [together([b])[0] for b in pair]
+for i, name in enumerate(["greedy", "sampled T=0.7 seed 11"]):
+    check(f"in flight together: the {name} reply is the one it gets alone",
+          both[i]["content"] == alone[i]["content"] and both[i]["usage"]["completion_tokens"] == alone[i]["usage"]["completion_tokens"],
+          f"{both[i]['usage']} vs {alone[i]['usage']}: {both[i]['content'][:80]!r} vs {alone[i]['content'][:80]!r}")
+
+# 10b. a request sent while a long reply streams is answered before that reply ends (no wait for the whole reply)
+ctx = "\n".join(f"def helper_{i}(x):\n    return x * {i} + {i % 7}\n" for i in range(150))
+side = {"messages": [{"role": "user", "content": f"[side {time.time()}]\n{ctx}\nHow many functions are defined above? "
+                      "Answer with a number."}], "max_tokens": 16, "temperature": 0, "top_k": 1, "stream": True,
+        "chat_template_kwargs": {"enable_thinking": False}}
+if SLOTS >= 2:  # with one slot the request waits for the reply's end, by design
+    long_, short = together([counting("c3", 700), side], delays=[0, 1.0])
+    check("in flight together: a 2K-token request sent during a long reply finishes first",
+          short["t_done"] < long_["t_done"] and short["usage"]["prompt_tokens"] > 1500 and long_["usage"]["completion_tokens"] == 700,
+          f"side done {short['t_done'] - long_['t_sent']:.1f} s, long reply done {long_['t_done'] - long_['t_sent']:.1f} s, "
+          f"side usage {short['usage']}")
+else:
+    print("SKIP in flight together: a 2K-token request sent during a long reply finishes first (--slots 1)")
+
+# 10c. more requests than slots: they wait for one, first come first served, and all are answered
+many = together([counting(f"q{i}", 40) for i in range(SLOTS + 2)], delays=[0.05 * i for i in range(SLOTS + 2)])
+check("more requests than slots: every one is answered in full",
+      all(m["finish"] == "length" and m["usage"]["completion_tokens"] == 40 for m in many),
+      str([(m["finish"], (m["usage"] or {}).get("completion_tokens")) for m in many]))
+
+# 10d. a client gone mid-stream: its request stops (the next request does not wait for its reply to end), and the
+#      request beside it is answered in full
+def abandon(body, after_chunks):
+    req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", **auth()})
+    r = urllib.request.urlopen(req, timeout=600)
+    got = 0
+    for line in r:
+        if line.startswith(b"data: "):
+            got += 1
+            if got >= after_chunks:
+                break
+    r.close()
+gone = threading.Thread(target=abandon, args=(counting("c4", 3000), 20))
+gone.start()
+time.sleep(0.2)
+beside = together([counting("c5", 100)])[0]
+gone.join()
+t0 = time.time()
+after = post(counting("c6", 8), stream=True)
+check("a client gone mid-stream: the request beside it is answered, the next one starts at once",
+      beside["usage"]["completion_tokens"] == 100 and after["usage"]["completion_tokens"] == 8 and time.time() - t0 < 10,
+      f"beside {beside['usage']}, next request {time.time() - t0:.1f} s")
 
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

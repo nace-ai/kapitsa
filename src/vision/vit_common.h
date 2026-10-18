@@ -67,6 +67,9 @@ struct VitCmds {
 // added to x first (and written back: a linear's bias folded into the next norm)
 void vit_ln(Encoder& e, const Buffer& x, uint32_t x_ld, const Buffer* pending, const Buffer& w, const Buffer& b,
             const Buffer& out, uint32_t out_ld, int rows, int D, float eps);
+// The same LayerNorm in place, the rows staying fp32 (vit_ln_f32)
+void vit_ln_inplace(Encoder& e, const Buffer& x, uint32_t x_ld, const Buffer* pending, const Buffer& w, const Buffer& b,
+                    int rows, int D, float eps);
 // rows of fp32 y (ld apart) + bias -> activation (0 none, 1 GELU tanh, 2 GELU erf, 3 ReLU squared) -> dst:
 // vit_bias_act_h (half; columns [n, ld) written 0), vit_bias_act_b (bf16), vit_bias_f32 (fp32; act != 0 adds the bias)
 void vit_act(Encoder& e, const char* kernel, const Buffer& y, uint32_t ld, const Buffer& bias, const Buffer& dst,

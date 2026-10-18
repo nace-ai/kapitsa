@@ -1,7 +1,9 @@
-// NVIDIA Nemotron-H hybrid (Mamba-2 + attention + LatentMoE with per-layer expert counts and widths, as in
-// Nemotron 3.5 Bolt 74B-A9B), from NVIDIA's safetensors checkpoint as it is: IQ2_XXS experts, NVFP4 Mamba
-// projections, Q8_0 LM head / attention / latent projections (GGUF blocks), BF16 embedding and router. Weights go
-// into GPU buffers at load with codes and scales apart (src/kernels/nemotron/nh_mv.metal). No vision tower.
+// NVIDIA Nemotron-H hybrid (Mamba-2 + attention + LatentMoE with per-layer expert counts and widths), from NVIDIA's
+// safetensors checkpoints as they are: Nemotron 3.5 Bolt 74B-A9B (IQ2_XXS experts, NVFP4 Mamba projections, Q8_0 LM
+// head / attention / latent projections as GGUF blocks) and Nemotron 3.5 Super-VL 120B-A12B (NVFP4 experts and shared
+// expert, FP8 E4M3 Mamba projections / attention / LM head with one scale per tensor, BF16 latent projections), BF16
+// embedding and router. Weights go into GPU buffers at load with codes and scales apart
+// (src/kernels/nemotron/nh_mv.metal). No vision tower.
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
@@ -35,14 +37,16 @@ struct NhConfig {
   int bos = -1;
 };
 
-enum class NhFmt : uint8_t { F32, Q8, FP4, IQ2, BF16 };
+enum class NhFmt : uint8_t { F32, Q8, FP4, IQ2, BF16, FP8 };
 
 // A weight matrix [N outputs][K inputs], or E stacked expert matrices, in a repacked GPU layout.
 struct NhMat {
   NhFmt fmt = NhFmt::F32;
   uint32_t N = 0, K = 0, E = 1;
-  Buffer q, s;            // codes / values; scales (none for F32 / BF16: s = q)
-  float gs = 1.0f;        // per-tensor scale (NVFP4's weight_scale_2)
+  Buffer q, s;            // codes / values; scales (none for F32 / BF16 / FP8: s = q)
+  float gs = 1.0f;        // per-tensor scale (NVFP4's weight_scale_2; FP8: weight_scale x 256, the kernels' FP8
+                          // operands being the E4M3 values x 2^-8)
+  Buffer gse;             // NVFP4 expert stacks: each expert's weight_scale_2 (float [E]; gs is then 1)
   size_t q_row = 0, s_row = 0;  // bytes per row
   size_t q_exp() const { return q_row * N; }
   size_t s_exp() const { return s_row * N; }
@@ -56,7 +60,8 @@ void nh_row_bytes(NhFmt f, int64_t K, size_t& qb, size_t& sb);
 size_t nh_src_row_bytes(NhFmt f, int64_t K);
 void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s);
 void nh_quant_q8(const float* x, int64_t K, uint8_t* q, uint8_t* s);
-// The format and shape of a checkpoint matrix (scale: its NVFP4 weight_scale entry, else null); false if unknown.
+// The format and shape of a checkpoint matrix (scale: its weight_scale entry, NVFP4's block scales or FP8's tensor
+// scale, else null); false if unknown.
 bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry* scale, NhFmt& f, uint32_t& N,
                  uint32_t& K);
 
@@ -222,12 +227,14 @@ class NemotronH : public Model {
   bool gemm_rows_ = true;         // NI_NH_ROWS_GEMM: passes of 2+ rows (verify) run their dense matmuls as GEMMs
   bool v8_ = true;                // NI_NH_V8: GEMMs of <= 8 rows on the 8-row MMA kernels (nh_v8.metal)
   bool x4_ = true;  // NVFP4 x4 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X4=0: the older ones
-  Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 kernels (serial calls share them)
+  bool x8_ = true;  // FP8 x8 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X8=0: the generic ones
+  Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
   bool x2_ = true;  // IQ2_XXS x2 kernels (subnormal-half weights); NI_NH_X2=0: the older ones (fused decode excepted)
   Buffer x2sorted_, x2tiles_, x2args_, x2rank_;  // verify routed experts grouped by expert (nh_x2_bucket)
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows
   bool fuse_dec_ = true;          // NI_NH_FUSE: a token's MoE layer in 4 dispatches (nh_zdec.metal)
   Buffer route_ctr_, sd_;         // fused MoE: the router threadgroups' arrival counter, the shared expert's output
+  Buffer moecnt_;                 // NVFP4 experts: arrival counters per (row, 32-row block) of nh_x4_moe_dn_sum
   int attn_max_chunks_ = 64;
   const NhCapture* cap_ = nullptr;
   // prefill activations (tmax_ rows; allocated on first use)

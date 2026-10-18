@@ -97,9 +97,13 @@ class LiliCorr {
 
   NemotronH& tg_;
   std::string path_;
-  int head_rows_ = 0;  // draft head: the target LM head's first rows
+  int head_rows_ = 0;  // draft head: the first rows of the drafter's own LM head (own_head_) or the target's
+  bool has_own_head_ = false;
+  NhMat own_head_;
   // dynamic verify depth: per-row cost / fixed cost of a cycle (NI_LILI_DYN; 0 = every draft). 0.04 measured best on the
-  // harness's code prompt, 512 tokens: greedy 53.5 tok/s against 50.7 (0) and 52.3 (0.08); T = 0.6 52.2 against 47.3
+  // harness's code prompt, 512 tokens: greedy 53.5 tok/s against 50.7 (0) and 52.3 (0.08); T = 0.6 52.2 against 47.3.
+  // Super-VL (a row adds up to 22 experts per layer), 512 tokens, two rounds: 0.04 best or within 1% everywhere (C++
+  // greedy 89.0 / 92.8 against 84.1 / 89.1 at 0.08 and 82.5 / 85.9 at 0.15)
   float dyn_ratio_ = 0.04f;
   uint32_t dyn_mode_ = 0;   // its acceptance estimate (NI_LILI_DYN_P): 0 drafter marginal, 1 LiLiCorr walk, 2 both
   Buffer picks_;            // the walk's chosen candidate per slot

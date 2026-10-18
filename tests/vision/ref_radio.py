@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Reference of Nemotron 3.5 Bolt's image encoder: the model bundle's own code (NVIDIA's modeling_radio.py RadioModel
-and the vision projector of modeling_nemotron_h_omni.py, with its image processor) on the CPU, only the vision tensors
-loaded (~3.3 GB in float32). Run it while no model runs.
+"""Reference of Nemotron 3.5 Bolt's and Super-VL's image encoder: the model bundle's own code (NVIDIA's modeling_radio.py
+RadioModel and the vision projector of modeling_nemotron_h_omni.py, with Super-VL's final LayerNorm, and its image
+processor) on the CPU, only the vision tensors loaded (~3.3 GB in float32). Run it while no model runs.
 
 usage: ref_radio.py MODEL_DIR IN.rgb W H OUT_DIR [--bf16]
 Writes to OUT_DIR, float32: h1.f32 / h32.f32 (every row's hidden state after block 1 / the last block: cls and register
@@ -50,13 +50,14 @@ model.make_preprocessor_external()
 idx = json.load(open(os.path.join(model_dir, "model.safetensors.index.json")))["weight_map"]
 pre = "vision_model.radio_model.model."
 sd = {}
-for f in sorted({v for k, v in idx.items() if k.startswith(pre) or k.startswith("mlp1.")}):
+fln = "vision_projector.vision_final_layernorm."  # Super-VL's LayerNorm on the tower's output
+for f in sorted({v for k, v in idx.items() if k.startswith(pre) or k.startswith("mlp1.") or k.startswith(fln)}):
     with safe_open(os.path.join(model_dir, f), "pt") as st:
         for k in st.keys():
-            if not (k.startswith(pre) or k.startswith("mlp1.")):
+            if not (k.startswith(pre) or k.startswith("mlp1.") or k.startswith(fln)):
                 continue
             t = st.get_tensor(k).to(torch.float32)
-            if k.startswith("mlp1."):
+            if k.startswith("mlp1.") or k.startswith(fln):
                 sd[k] = t
                 continue
             n = k[len(pre):]
@@ -70,7 +71,7 @@ for f in sorted({v for k, v in idx.items() if k.startswith(pre) or k.startswith(
                     sd[n.replace("attn.qkv", "attention.attention." + part)] = chunk.clone()
                 continue
             sd[n] = t
-tower_sd = {k: v for k, v in sd.items() if not k.startswith("mlp1.")}
+tower_sd = {k: v for k, v in sd.items() if not (k.startswith("mlp1.") or k.startswith(fln))}
 missing, unexpected = model.load_state_dict(tower_sd, strict=False)
 missing = [m for m in missing if "layer_scale" not in m and m != "summary_idxs"]  # LayerScale 1.0; idxs from config
 if missing or unexpected:
@@ -80,13 +81,18 @@ model = model.to(dtype).eval()
 pcfg = types.SimpleNamespace(downsample_ratio=cfg["downsample_ratio"], video_temporal_patch_size=vc.get("video_temporal_patch_size"),
                              ps_version=cfg.get("ps_version", "v2"), vit_hidden_size=cfg["vit_hidden_size"],
                              projector_hidden_size=cfg["projector_hidden_size"],
-                             llm_config=types.SimpleNamespace(hidden_size=cfg["llm_config"]["hidden_size"]),
-                             vision_final_layernorm=cfg.get("vision_final_layernorm", False),
+                             llm_config=types.SimpleNamespace(
+                                 hidden_size=cfg["llm_config"]["hidden_size"],
+                                 num_nextn_predict_layers=cfg["llm_config"].get("num_nextn_predict_layers", 0)),
+                             vision_final_layernorm=cfg.get("vision_final_layernorm"),  # None: from the MTP layers
                              vision_config=types.SimpleNamespace(layer_norm_eps=vc["layer_norm_eps"]))
 proj = omni.NemotronH_Omni_Reasoning_V3VisionProjector(pcfg)
 proj.mlp1.norm.weight.copy_(sd["mlp1.0.weight"])
 proj.mlp1.linear1.weight.copy_(sd["mlp1.1.weight"])
 proj.mlp1.linear2.weight.copy_(sd["mlp1.3.weight"])
+if proj.vision_final_layernorm is not None:
+    proj.vision_final_layernorm.weight.copy_(sd[fln + "weight"])
+    proj.vision_final_layernorm.bias.copy_(sd[fln + "bias"])
 proj = proj.to(dtype).eval()
 
 # the image through NVIDIA's processor (a size it keeps: no resize), then the tower and the projector
@@ -103,7 +109,9 @@ hs[1][0].to(torch.float32).numpy().tofile(os.path.join(out_dir, "h1.f32"))
 hs[-1][0].to(torch.float32).numpy().tofile(os.path.join(out_dir, "h32.f32"))
 emb = proj._project(out.features, H // 16, W // 16)
 emb[0].to(torch.float32).numpy().tofile(os.path.join(out_dir, "emb.f32"))
+feat = out.features if proj.vision_final_layernorm is None else proj.vision_final_layernorm(out.features)
 lin1 = proj.mlp1.linear1(proj.mlp1.norm(
-    proj.pixel_shuffle(out.features.reshape(1, H // 16, W // 16, -1), scale_factor=0.5).reshape(1, -1, 4 * vc["hidden_size"])))
-print(f"{len(hs) - 1} blocks, {hs[-1].shape[1]} rows; embeddings {tuple(emb.shape)}, dtype {dtype}; projector's inner "
+    proj.pixel_shuffle(feat.reshape(1, H // 16, W // 16, -1), scale_factor=0.5).reshape(1, -1, 4 * vc["hidden_size"])))
+print(f"{len(hs) - 1} blocks, {hs[-1].shape[1]} rows; final LayerNorm {proj.vision_final_layernorm is not None}; "
+      f"embeddings {tuple(emb.shape)}, dtype {dtype}; projector's inner "
       f"max |x| {float(lin1.abs().max()):.1f} (ReLU^2 then {float(lin1.clamp(min=0).square().max()):.1f})")

@@ -1,0 +1,23 @@
+{
+  "repo": "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF",
+  "revision": "3c91ad1be60865386af92e8147dafb32470b097d",
+  "role": "llama.cpp: Q4_0 trunk + MTP head (Q4_0)",
+  "files": [
+    {
+      "path": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf",
+      "size": 71803752384,
+      "sha256": "1d51968bb20cd34760fb75a1e4a03b6dea247bcb4bf5d6e27b0964a558d7f922"
+    },
+    {
+      "path": "lilicorr-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf",
+      "size": 1353710336,
+      "sha256": "39b28765205188d9828c3ec015e63403bece33d718761a3fa748863eec4c8726"
+    },
+    {
+      "path": "mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf",
+      "size": 2270017248,
+      "sha256": "e0e2da5e6537bd060d79141b39b6348548e0485dba0248fff30aec4346ee1531"
+    }
+  ],
+  "total_bytes": 75427479968
+}

@@ -4,6 +4,8 @@
 // MoE mode: the rows of a tile are one expert's (token, expert) pairs (tile list from nh_moe_bucket):
 //   MODE 1 (up):   X row = sorted[i] / k (the token), Y row i (sorted order), W = expert e
 //   MODE 2 (down): X row i, Y row = sorted[i] (the pair), W = expert e
+//   NVFP4 expert stacks (nh_gemm_fp4_moe_*) scale expert e's products by its tensor scale gse[e] (buffer 9) in the
+//   epilogue, before relu^2: the half intermediate of the up projection stays in range.
 // Epilogues: 0 store fp32, 1 add into fp32, 2 relu^2 then store half, 3 store half.
 
 struct NhGemmP {
@@ -36,6 +38,25 @@ NI_INLINE void nh_dq16(const device uchar* q, const device uchar* s, uint K, uin
       dst[j] = half(nh_fp4_lut[b & 15u] * sc);
       dst[j + 8] = half(nh_fp4_lut[b >> 4] * sc);
     }
+  } else if (FMT == 4) {  // BF16 -> half (exact for |w| in [6.1e-5, 65504])
+    const device uint4* wp = (const device uint4*)(q + size_t(n) * K * 2 + k * 2);
+    for (int h = 0; h < 2; ++h) {
+      const uint4 v = wp[h];
+      for (int i = 0; i < 4; ++i) {
+        dst[h * 8 + 2 * i] = half(as_type<float>(v[i] << 16));
+        dst[h * 8 + 2 * i + 1] = half(as_type<float>(v[i] & 0xFFFF0000u));
+      }
+    }
+  } else if (FMT == 5) {  // FP8: one reordered 16-element group, E4M3 x 2^-8 as half bits (gs includes 2^8)
+    const uint4 v = *(const device uint4*)(q + size_t(n) * K + k);
+    for (int m = 0; m < 4; ++m) {
+      const half2 a = as_type<half2>(((v[m] & 0x00800080u) << 8) | ((v[m] & 0x007F007Fu) << 7));
+      const half2 b = as_type<half2>((v[m] & 0x80008000u) | ((v[m] >> 1) & 0x3F803F80u));
+      dst[2 * m] = a.x;
+      dst[2 * m + 8] = a.y;
+      dst[2 * m + 1] = b.x;
+      dst[2 * m + 9] = b.y;
+    }
   } else {  // IQ2: half of a 32-element sub-block (grid points l0, l0 + 1)
     const uint k32 = k & ~31u, l0 = (k & 16u) ? 2u : 0u;
     const uint2 aux = *(const device uint2*)(q + size_t(n) * (K / 4) + k32 / 4);
@@ -57,11 +78,12 @@ template <int FMT, int MODE, int BM>
 NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const device uchar* Ws, device void* Y,
                             constant NhGemmP& p, const device uint4* tiles, const device uint* ntiles,
                             const device uint* sorted, uint2 tg, uint tid, uint sg, uint lane, threadgroup half* xs,
-                            threadgroup half* ws, constant uchar* tab) {
+                            threadgroup half* ws, constant uchar* tab, const device float* gse = nullptr) {
   constexpr int FM = BM / 16;  // row fragments per simdgroup (2 x 2 simdgroups: BM / 2 rows x 32 columns each)
   uint m0 = tg.y * BM, M = p.M, n0 = tg.x * kGBN;
   const device uchar* q = Wq;
   const device uchar* s = Ws;
+  float gs = p.gs;
   if (MODE != 0) {
     if (tg.y >= ntiles[0]) return;
     const uint4 t = tiles[tg.y];
@@ -69,6 +91,7 @@ NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const 
     s += size_t(t.x) * p.s_estride;
     m0 = t.y;
     M = t.y + t.z;  // rows [t.y, t.y + t.z) of the sorted pair list
+    if (FMT == 1) gs *= gse[t.x];
   }
   const uint sm = sg / 2, sn = sg % 2;
   simdgroup_float8x8 acc[FM][4];
@@ -122,7 +145,7 @@ NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const 
       for (int e = 0; e < 2; ++e) {
         const uint n = n0 + sn * 32 + j * 8 + cc + e;
         if (n >= p.N) continue;
-        float v = acc[i][j].thread_elements()[e] * p.gs;
+        float v = acc[i][j].thread_elements()[e] * gs;
         const size_t o = size_t(yrow) * p.y_ld + n;
         if (p.epi == 0) ((device float*)Y)[o] = v;
         else if (p.epi == 1) ((device float*)Y)[o] += v;
@@ -161,6 +184,32 @@ NH_GEMM(nh_gemm_iq2_moe_up_m16, 2, 1, 16)
 NH_GEMM(nh_gemm_iq2_moe_dn_m64, 2, 2, 64)
 NH_GEMM(nh_gemm_iq2_moe_dn_m32, 2, 2, 32)
 NH_GEMM(nh_gemm_iq2_moe_dn_m16, 2, 2, 16)
+NH_GEMM(nh_gemm_fp8_m64, 5, 0, 64)
+NH_GEMM(nh_gemm_fp8_m32, 5, 0, 32)
+NH_GEMM(nh_gemm_fp8_m16, 5, 0, 16)
+NH_GEMM(nh_gemm_bf16w_m64, 4, 0, 64)
+NH_GEMM(nh_gemm_bf16w_m32, 4, 0, 32)
+NH_GEMM(nh_gemm_bf16w_m16, 4, 0, 16)
+
+// NVFP4 expert stacks: the experts' tensor scales gse (buffer 9)
+#define NH_GEMM_GS(NAME, FMT, MODE, BM)                                                                          \
+  [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
+      const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]], \
+      device void* Y [[buffer(3)]], constant NhGemmP& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],   \
+      const device uint* ntiles [[buffer(6)]], const device uint* sorted [[buffer(7)]],                          \
+      constant uchar* tab [[buffer(8)]], const device float* gse [[buffer(9)]],                                  \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                       \
+      uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                     \
+    threadgroup half xs[BM * kGLD];                                                                              \
+    threadgroup half ws[kGBN * kGLD];                                                                            \
+    nh_gemm_impl<FMT, MODE, BM>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, tg, tid, sg, lane, xs, ws, tab, gse);    \
+  }
+NH_GEMM_GS(nh_gemm_fp4_moe_up_m64, 1, 1, 64)
+NH_GEMM_GS(nh_gemm_fp4_moe_up_m32, 1, 1, 32)
+NH_GEMM_GS(nh_gemm_fp4_moe_up_m16, 1, 1, 16)
+NH_GEMM_GS(nh_gemm_fp4_moe_dn_m64, 1, 2, 64)
+NH_GEMM_GS(nh_gemm_fp4_moe_dn_m32, 1, 2, 32)
+NH_GEMM_GS(nh_gemm_fp4_moe_dn_m16, 1, 2, 16)
 
 // ---- F32 GEMM (the router: Y[M, N] = X[M, K] W[N, K]^T, X fp32, W fp32 or bf16, fp32 products) ----
 // grid: (ceil(N / 32), ceil(M / 32)) x 128 threads; 4 simdgroups of 16 x 16 (2 x 2 fragments)

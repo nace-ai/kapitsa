@@ -1,0 +1,670 @@
+
+===== super-omlx  [omlx] oMLX (community MLX 4-bit, text only, no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[02:02:41] super-omlx: GPU lock ~/.cache/nace-gpu.lock is held by: 81562 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 1800 ~/nace_ml/worktrees/kapi; 93044 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[02:02:56] super-omlx: GPU lock acquired after 14.8s wait
+[02:02:56] super-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/super-vl/models --no-hf-cache --headless --host 127.0.0.1 --port 8264 --base-path <run-root>/state/omlx/super-vl/base --paged-ssd-cache-dir <run-root>/state/omlx/super-vl/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[02:02:58] super-omlx: ready after 2s (pid 93922, listener 93922)
+[02:03:10] super-omlx:  warm-up prefill~2.9k+decode64: ok (12.14s)
+[02:03:11] super-omlx:  warm-up tools: ok (1.29s)
+[02:04:13] super-omlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[02:05:15] super-omlx: gpu busy (124s): com.apple.WebKit[3316] 6%
+[02:06:16] super-omlx: gpu busy (185s): com.apple.WebKit[3316] 6%
+[02:07:18] super-omlx: gpu busy (247s): com.apple.WebKit[3316] 6%
+[02:08:12] super-omlx: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-omlx
+  decode T=0.6: 51.61 tok/s (e2e 51.37; 512 tok, finish=length, d4=0.9821)
+  decode T=0.6: 50.31 tok/s (e2e 50.83; 512 tok, finish=length, d4=0.5365)
+  decode T=0.6: 51.83 tok/s (e2e 51.05; 512 tok, finish=length, d4=0.9608)
+  decode T=0.6: 51.49 tok/s (e2e 50.72; 512 tok, finish=length, d4=0.568)
+  decode T=0.6: 50.21 tok/s (e2e 49.58; 512 tok, finish=length, d4=0.548)
+  decode median 51.49 (min 50.21, max 51.83) over 5/5 valid
+  decode T=0: median 50.24 (min 49.49, max 50.43) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 4.27s -> 979 tok/s, cold cached=0 | cached TTFT median 0.34s over 3 turns (cached [4177, 4230, 4279])
+  prefill 16000: 16516 tok (ref 16513), TTFT 16.24s -> 1017 tok/s, cold cached=0 | cached TTFT median 0.38s over 3 turns (cached [16510, 16573, 16622])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 74.77 GB, resident mapped files 0.01 GB, swap used 18764.94 MB
+  -> <run-root>/results/super-omlx-20261018-020241.json
+[02:10:58] super-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[02:10:58] super-omlx: GPU lock released after 482.8s held
+[02:10:58] super-omlx: -> <run-root>/results/super-omlx-20261018-020241.json  flags: 1
+
+===== super-mlxlm  [mlx-lm] mlx-lm (community MLX 4-bit, text only)  version mlx_lm 0.32.2 mlx 0.32.4
+[02:11:00] super-mlxlm: GPU lock ~/.cache/nace-gpu.lock is held by: 93044 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 93523 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 1800 ~/nace_ml/worktrees/kapi; waiting...
+[02:12:01] super-mlxlm: GPU lock acquired after 62.2s wait
+[02:12:01] super-mlxlm: starting ~/venvs/mlx-lm/bin/mlx_lm.server --model ~/.cache/kapitsa/benchmark-models/super-vl-mlx-4bit-rapid --host 127.0.0.1 --port 8265 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[02:12:03] super-mlxlm: ready after 2s (pid 25003, listener 25003)
+[02:12:13] super-mlxlm:  warm-up prefill~2.9k+decode64: ok (10.49s)
+[02:12:15] super-mlxlm:  warm-up tools: ok (1.37s)
+[02:13:16] super-mlxlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[02:14:18] super-mlxlm: gpu busy (123s): com.apple.WebKit[3316] 6%
+[02:15:20] super-mlxlm: gpu busy (185s): com.apple.WebKit[3316] 6%
+[02:16:22] super-mlxlm: gpu busy (247s): com.apple.WebKit[3316] 6%
+[02:17:15] super-mlxlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxlm
+  decode T=0.6: 45.10 tok/s (e2e 44.92; 512 tok, finish=length, d4=0.9749)
+  decode T=0.6: 46.05 tok/s (e2e 45.71; 512 tok, finish=length, d4=0.7096)
+  decode T=0.6: 45.80 tok/s (e2e 45.87; 512 tok, finish=length, d4=0.6878)
+  decode T=0.6: 45.44 tok/s (e2e 45.50; 512 tok, finish=length, d4=0.556)
+  decode T=0.6: 46.18 tok/s (e2e 45.28; 512 tok, finish=length, d4=0.502)
+  decode median 45.8 (min 45.1, max 46.18) over 5/5 valid
+  decode T=0: median 45.64 (min 45.08, max 46.14) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 4.68s -> 895 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [4216, 4260, 4300])
+  prefill 16000: 16515 tok (ref 16513), TTFT 17.03s -> 970 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [16559, 16612, 16652])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 75.59 GB, resident mapped files 0.01 GB, swap used 18033.5 MB
+  -> <run-root>/results/super-mlxlm-20261018-021058.json
+[02:20:15] super-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[02:20:15] super-mlxlm: GPU lock released after 494.0s held
+[02:20:15] super-mlxlm: -> <run-root>/results/super-mlxlm-20261018-021058.json  flags: 1
+
+===== super-omlx  [omlx] oMLX (community MLX 4-bit, text only, no speculation)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[02:20:40] super-omlx: GPU lock ~/.cache/nace-gpu.lock is held by: 23730 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 2400 ~/nace_ml/worktrees/kapi; 52958 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[02:22:05] super-omlx: GPU lock acquired after 84.2s wait
+[02:22:05] super-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/state/omlx/super-vl/models --no-hf-cache --headless --host 127.0.0.1 --port 8264 --base-path <run-root>/state/omlx/super-vl/base --paged-ssd-cache-dir <run-root>/state/omlx/super-vl/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[02:22:07] super-omlx: ready after 2s (pid 57245, listener 57245)
+[02:22:20] super-omlx:  warm-up prefill~2.9k+decode64: ok (12.17s)
+[02:22:21] super-omlx:  warm-up tools: ok (1.2s)
+[02:23:22] super-omlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[02:24:24] super-omlx: gpu busy (123s): com.apple.WebKit[3316] 6%
+[02:25:26] super-omlx: gpu busy (185s): com.apple.WebKit[3316] 6%
+[02:26:28] super-omlx: gpu busy (247s): com.apple.WebKit[3316] 6%
+[02:27:21] super-omlx: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-omlx
+  decode T=0.6: 52.13 tok/s (e2e 51.47; 512 tok, finish=length, d4=0.4771) flags ['repetition loop (distinct-4-gram 0.4771)']
+  decode T=0.6: 52.07 tok/s (e2e 51.45; 512 tok, finish=length, d4=0.5244)
+  decode T=0.6: 51.82 tok/s (e2e 51.44; 512 tok, finish=length, d4=0.9702)
+  decode T=0.6: 51.56 tok/s (e2e 50.78; 512 tok, finish=length, d4=0.5559)
+  decode T=0.6: 49.69 tok/s (e2e 49.99; 512 tok, finish=length, d4=0.9111)
+  decode median 51.82 (min 49.69, max 52.13) over 5/5 valid
+  decode T=0: median 50.43 (min 50.11, max 50.97) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 4.23s -> 989 tok/s, cold cached=0 | cached TTFT median 0.33s over 3 turns (cached [4178, 4244, 4287])
+  prefill 16000: 16512 tok (ref 16513), TTFT 15.74s -> 1049 tok/s, cold cached=0 | cached TTFT median 0.43s over 3 turns (cached [16506, 16569, 16608])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 74.77 GB, resident mapped files 0.01 GB, swap used 18001.5 MB
+  -> <run-root>/results/super-omlx-20261018-022040.json
+[02:30:09] super-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[02:30:09] super-omlx: GPU lock released after 484.3s held
+[02:30:09] super-omlx: -> <run-root>/results/super-omlx-20261018-022040.json  flags: 1
+
+===== super-mlxlm  [mlx-lm] mlx-lm (community MLX 4-bit, text only)  version mlx_lm 0.32.2 mlx 0.32.4
+[02:30:09] super-mlxlm: GPU lock ~/.cache/nace-gpu.lock is held by: 52958 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 56737 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 2400 ~/nace_ml/worktrees/kapi; waiting...
+[02:35:03] super-mlxlm: GPU lock acquired after 294.1s wait
+[02:35:03] super-mlxlm: starting ~/venvs/mlx-lm/bin/mlx_lm.server --model ~/.cache/kapitsa/benchmark-models/super-vl-mlx-4bit-rapid --host 127.0.0.1 --port 8265 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[02:35:05] super-mlxlm: ready after 2s (pid 97844, listener 97844)
+[02:35:15] super-mlxlm:  warm-up prefill~2.9k+decode64: ok (9.88s)
+[02:35:16] super-mlxlm:  warm-up tools: ok (1.24s)
+[02:36:18] super-mlxlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[02:37:20] super-mlxlm: gpu busy (124s): com.apple.WebKit[3316] 7%
+[02:38:22] super-mlxlm: gpu busy (185s): com.apple.WebKit[3316] 6%
+[02:39:23] super-mlxlm: gpu busy (247s): com.apple.WebKit[3316] 6%
+[02:40:17] super-mlxlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxlm
+  decode T=0.6: 44.74 tok/s (e2e 44.81; 512 tok, finish=length, d4=0.9455)
+  decode T=0.6: 45.54 tok/s (e2e 45.66; 512 tok, finish=length, d4=0.9625)
+  decode T=0.6: 45.80 tok/s (e2e 45.72; 512 tok, finish=length, d4=0.9448)
+  decode T=0.6: 45.59 tok/s (e2e 45.43; 512 tok, finish=length, d4=0.9601)
+  decode T=0.6: 45.30 tok/s (e2e 45.01; 512 tok, finish=length, d4=0.9626)
+  decode median 45.54 (min 44.74, max 45.8) over 5/5 valid
+  decode T=0: median 45.36 (min 44.74, max 45.62) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 4.73s -> 885 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [4213, 4257, 4299])
+  prefill 16000: 16516 tok (ref 16513), TTFT 17.10s -> 966 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [16557, 16584, 16619])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 75.59 GB, resident mapped files 0.01 GB, swap used 17604.44 MB
+  -> <run-root>/results/super-mlxlm-20261018-023009.json
+[02:43:15] super-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[02:43:15] super-mlxlm: GPU lock released after 491.7s held
+[02:43:15] super-mlxlm: -> <run-root>/results/super-mlxlm-20261018-023009.json  flags: 2
+
+===== super-kapitsa  [kapitsa] Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill)  version 04a82a4
+[03:16:30] super-kapitsa: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 31028 lockf -k ~/.cache/nace-gpu.lock <tmp>/scratchpad/ligh; waiting...
+[03:16:33] super-kapitsa: GPU lock acquired after 3.5s wait
+[03:16:33] super-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --model-id super-vl --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4/dflash --host 127.0.0.1 --port 8260 --ctx 32768 --slots 1
+[03:16:44] super-kapitsa: ready after 10s (pid 31215, listener 31215)
+[03:16:50] super-kapitsa:  warm-up prefill~2.9k+decode64: ok (6.14s)
+[03:16:51] super-kapitsa:  warm-up tools: ok (1.71s)
+[03:17:53] super-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[03:18:55] super-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 6%
+[03:19:57] super-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 6%
+[03:20:59] super-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 6%
+[03:21:52] super-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-kapitsa
+  decode T=0.6: 75.11 tok/s (e2e 74.67; 512 tok, finish=length, d4=0.5682)
+  decode T=0.6: 81.60 tok/s (e2e 80.76; 512 tok, finish=length, d4=0.6969)
+  decode T=0.6: 80.12 tok/s (e2e 79.85; 512 tok, finish=length, d4=0.4398) flags ['repetition loop (distinct-4-gram 0.4398)']
+  decode T=0.6: 78.74 tok/s (e2e 80.44; 512 tok, finish=length, d4=0.4307) flags ['repetition loop (distinct-4-gram 0.4307)']
+  decode T=0.6: 78.71 tok/s (e2e 78.75; 512 tok, finish=length, d4=0.9385)
+  decode median 78.74 (min 75.11, max 81.6) over 5/5 valid
+  decode T=0: median 80.33 (min 73.79, max 87.34) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 6.65s -> 629 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [4222, 4256, 4296])
+  prefill 16000: 16512 tok (ref 16513), TTFT 32.44s -> 509 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [16551, 16585, 16627])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.38 GB, resident mapped files 1.01 GB, swap used 18166.81 MB
+  -> <run-root>/results/super-kapitsa-20261018-031630.json
+[03:24:10] super-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[03:24:10] super-kapitsa: GPU lock released after 456.6s held
+[03:24:10] super-kapitsa: -> <run-root>/results/super-kapitsa-20261018-031630.json  flags: 3
+
+===== super-kapitsa-plain  [kapitsa] Kapitsa (no drafter)  version 04a82a4
+[03:24:10] super-kapitsa-plain: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 31190 lockf -k ~/.cache/nace-gpu.lock <tmp>/scratchpad/ligh; waiting...
+[03:24:21] super-kapitsa-plain: GPU lock acquired after 11.0s wait
+[03:24:21] super-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --model-id super-vl --dflash none --host 127.0.0.1 --port 8261 --ctx 32768 --slots 1
+[03:24:31] super-kapitsa-plain: ready after 10s (pid 55883, listener 55883)
+[03:24:38] super-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (6.38s)
+[03:24:40] super-kapitsa-plain:  warm-up tools: ok (1.92s)
+[03:25:41] super-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 6%
+[03:26:43] super-kapitsa-plain: gpu busy (124s): com.apple.WebKit[3316] 6%
+[03:27:45] super-kapitsa-plain: gpu busy (185s): com.apple.WebKit[3316] 6%
+[03:28:47] super-kapitsa-plain: gpu busy (247s): com.apple.WebKit[3316] 6%
+[03:29:40] super-kapitsa-plain: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-kapitsa-plain
+  decode T=0.6: 47.22 tok/s (e2e 46.87; 512 tok, finish=length, d4=0.7038)
+  decode T=0.6: 45.89 tok/s (e2e 46.76; 512 tok, finish=length, d4=0.3377) flags ['repetition loop (distinct-4-gram 0.3377)']
+  decode T=0.6: 47.05 tok/s (e2e 46.85; 512 tok, finish=length, d4=0.895)
+  decode T=0.6: 46.15 tok/s (e2e 46.32; 512 tok, finish=length, d4=0.9498)
+  decode T=0.6: 45.16 tok/s (e2e 45.25; 512 tok, finish=length, d4=0.9253)
+  decode median 46.15 (min 45.16, max 47.22) over 5/5 valid
+  decode T=0: median 46.86 (min 45.26, max 47.23) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 6.86s -> 610 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [4226, 4270, 4312])
+  prefill 16000: 16514 tok (ref 16513), TTFT 33.31s -> 496 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [16554, 16597, 16648])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 67.67 GB, resident mapped files 1.01 GB, swap used 18118.81 MB
+  -> <run-root>/results/super-kapitsa-plain-20261018-032410.json
+[03:32:57] super-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[03:32:57] super-kapitsa-plain: GPU lock released after 516.4s held
+[03:32:57] super-kapitsa-plain: -> <run-root>/results/super-kapitsa-plain-20261018-032410.json  flags: 2
+
+===== super-mlxvlm  [mlx-lm] mlx-vlm server (git main, no speculation)  version unknown
+[03:32:58] super-mlxvlm: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 55858 lockf -k ~/.cache/nace-gpu.lock <tmp>/scratchpad/ligh; waiting...
+[03:33:02] super-mlxvlm: GPU lock acquired after 4.5s wait
+[03:33:02] super-mlxvlm: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --host 127.0.0.1 --port 8262 --prefill-step-size 2048 --max-num-seqs 1
+[03:33:17] super-mlxvlm: ready after 15s (pid 83651, listener 83651)
+[03:33:30] super-mlxvlm:  warm-up prefill~2.9k+decode64: ok (13.28s)
+[03:33:32] super-mlxvlm:  warm-up tools: ok (1.77s)
+[03:34:33] super-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[03:35:35] super-mlxvlm: gpu busy (124s): com.apple.WebKit[3316] 6%
+[03:36:37] super-mlxvlm: gpu busy (185s): com.apple.WebKit[3316] 6%
+[03:37:39] super-mlxvlm: gpu busy (247s): com.apple.WebKit[3316] 6%
+[03:38:32] super-mlxvlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxvlm
+  decode T=0.6: 30.85 tok/s (e2e 30.85; 512 tok, finish=length, d4=0.4298) flags ['repetition loop (distinct-4-gram 0.4298)']
+  decode T=0.6: 30.84 tok/s (e2e 30.85; 512 tok, finish=length, d4=0.4265) flags ['repetition loop (distinct-4-gram 0.4265)']
+  decode T=0.6: 30.70 tok/s (e2e 30.70; 512 tok, finish=length, d4=0.6402)
+  decode T=0.6: 30.32 tok/s (e2e 30.32; 512 tok, finish=length, d4=0.6278)
+  decode T=0.6: 30.53 tok/s (e2e 30.51; 512 tok, finish=length, d4=0.4164) flags ['repetition loop (distinct-4-gram 0.4164)']
+  decode median 30.7 (min 30.32, max 30.85) over 5/5 valid
+  decode T=0: median 30.76 (min 30.59, max 30.9) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.453)']
+  prefill 4000: 4186 tok (ref 4183), TTFT 6.00s -> 698 tok/s, cold cached=0 | cached TTFT median 0.55s over 3 turns (cached [4185, 4249, 4288])
+  prefill 16000: 16513 tok (ref 16513), TTFT 20.66s -> 799 tok/s, cold cached=0 | cached TTFT median 0.61s over 3 turns (cached [16512, 16575, 16618])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 99.26 GB, resident mapped files 0.01 GB, swap used 18038.81 MB
+  -> <run-root>/results/super-mlxvlm-20261018-033257.json
+[03:42:50] super-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[03:42:50] super-mlxvlm: GPU lock released after 588.4s held
+[03:42:50] super-mlxvlm: -> <run-root>/results/super-mlxvlm-20261018-033257.json  flags: 5
+
+===== super-mlxvlm-mtp  [mlx-lm] mlx-vlm server (git main, native MTP, block 4)  version unknown
+[03:42:50] super-mlxvlm-mtp: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 83607 lockf -k ~/.cache/nace-gpu.lock <tmp>/scratchpad/ligh; waiting...
+[03:43:02] super-mlxvlm-mtp: GPU lock acquired after 11.4s wait
+[03:43:02] super-mlxvlm-mtp: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --host 127.0.0.1 --port 8263 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --draft-kind mtp --draft-block-size 4
+[03:43:18] super-mlxvlm-mtp: ready after 17s (pid 16637, listener 16637)
+[03:43:32] super-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (13.61s)
+[03:43:34] super-mlxvlm-mtp:  warm-up tools: ok (1.56s)
+[03:43:45] super-mlxvlm-mtp:  warm-up decode512#1: ok (11.91s)
+[03:43:58] super-mlxvlm-mtp:  warm-up decode512#2: ok (12.11s)
+[03:44:10] super-mlxvlm-mtp:  warm-up decode512#3: ok (12.5s)
+[03:45:12] super-mlxvlm-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[03:46:14] super-mlxvlm-mtp: gpu busy (124s): com.apple.WebKit[3316] 6%
+[03:47:15] super-mlxvlm-mtp: gpu busy (185s): com.apple.WebKit[3316] 6%
+[03:48:17] super-mlxvlm-mtp: gpu busy (247s): com.apple.WebKit[3316] 6%
+[03:49:11] super-mlxvlm-mtp: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxvlm-mtp
+  decode T=0.6: 44.60 tok/s (e2e 44.33; 512 tok, finish=length, d4=0.3237) flags ['repetition loop (distinct-4-gram 0.3237)']
+  decode T=0.6: 46.47 tok/s (e2e 46.12; 512 tok, finish=length, d4=0.512)
+  decode T=0.6: 45.27 tok/s (e2e 44.66; 512 tok, finish=length, d4=0.3768) flags ['repetition loop (distinct-4-gram 0.3768)']
+  decode T=0.6: 44.85 tok/s (e2e 44.52; 512 tok, finish=length, d4=0.4251) flags ['repetition loop (distinct-4-gram 0.4251)']
+  decode T=0.6: 44.28 tok/s (e2e 43.99; 512 tok, finish=length, d4=0.4299) flags ['repetition loop (distinct-4-gram 0.4299)']
+  decode median 44.85 (min 44.28, max 46.47) over 5/5 valid
+  decode T=0: median 48.48 (min 44.4, max 50.1) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.56s -> 752 tok/s, cold cached=0 | cached TTFT median 0.51s over 3 turns (cached [4183, 4247, 4286])
+  prefill 16000: None tok (ref 16513), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 108.05 GB, resident mapped files 0.01 GB, swap used 17998.81 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/super-mlxvlm-mtp-20261018-034250.json
+[03:52:00] super-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[03:52:00] super-mlxvlm-mtp: GPU lock released after 538.5s held
+[03:52:00] super-mlxvlm-mtp: -> <run-root>/results/super-mlxvlm-mtp-20261018-034250.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 5
+
+===== super-llamacpp  [llama.cpp] llama.cpp (Q4_0 GGUF)  version 0.7.0-dev (b11669, 620d2225c)
+[03:52:00] super-llamacpp: GPU lock ~/.cache/nace-gpu.lock is held by: 18058 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 build/fn_check kernels; 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[03:52:22] super-llamacpp: GPU lock acquired after 22.0s wait
+[03:52:22] super-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[03:52:34] super-llamacpp: ready after 12s (pid 46738, listener 46738)
+[03:52:40] super-llamacpp:  warm-up prefill~2.9k+decode64: ok (5.34s)
+[03:52:41] super-llamacpp:  warm-up tools: ok (1.59s)
+[03:53:43] super-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[03:54:45] super-llamacpp: gpu busy (123s): com.apple.WebKit[3316] 6%
+[03:55:47] super-llamacpp: gpu busy (185s): com.apple.WebKit[3316] 6%
+[03:56:48] super-llamacpp: gpu busy (247s): com.apple.WebKit[3316] 6%
+[03:57:42] super-llamacpp: GPU not quiet after 300s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp
+  decode T=0.6: 37.00 tok/s (e2e 36.99; 512 tok, finish=length, d4=0.6972)
+  decode T=0.6: 36.85 tok/s (e2e 36.85; 512 tok, finish=length, d4=0.9124)
+  decode T=0.6: 35.94 tok/s (e2e 35.93; 512 tok, finish=length, d4=0.931)
+  decode T=0.6: 35.33 tok/s (e2e 35.31; 512 tok, finish=length, d4=0.9008)
+  decode T=0.6: 35.14 tok/s (e2e 35.11; 512 tok, finish=length, d4=0.9476)
+  decode median 35.94 (min 35.14, max 37.0) over 5/5 valid
+  decode T=0: median 35.32 (min 35.09, max 36.07) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 5.57s -> 752 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [4221, 4265, 4307])
+  prefill 16000: 16514 tok (ref 16513), TTFT 20.65s -> 800 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [16558, 16596, 16638])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 78.46 GB, resident mapped files 0.03 GB, swap used 17950.81 MB
+  -> <run-root>/results/super-llamacpp-20261018-035200.json
+[04:01:21] super-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:01:21] super-llamacpp: GPU lock released after 539.1s held
+[04:01:21] super-llamacpp: -> <run-root>/results/super-llamacpp-20261018-035200.json  flags: 1
+
+===== super-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[04:01:22] super-llamacpp-mtp1: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 45719 (lockf); waiting...
+[04:01:43] super-llamacpp-mtp1: GPU lock acquired after 21.7s wait
+[04:01:43] super-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 1
+[04:01:55] super-llamacpp-mtp1: ready after 12s (pid 76690, listener 76690)
+[04:02:00] super-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (5.02s)
+[04:02:02] super-llamacpp-mtp1:  warm-up tools: ok (1.42s)
+[04:03:04] super-llamacpp-mtp1: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:04:05] super-llamacpp-mtp1: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:05:07] super-llamacpp-mtp1: gpu busy (185s): com.apple.WebKit[3316] 6%
+[04:06:09] super-llamacpp-mtp1: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:07:02] super-llamacpp-mtp1: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp1
+  decode T=0.6: 51.80 tok/s (e2e 51.81; 512 tok, finish=length, d4=0.9423)
+  decode T=0.6: 49.29 tok/s (e2e 49.38; 512 tok, finish=length, d4=0.5648)
+  decode T=0.6: 50.32 tok/s (e2e 50.33; 512 tok, finish=length, d4=0.6181)
+  decode T=0.6: 49.60 tok/s (e2e 49.59; 512 tok, finish=length, d4=0.6003)
+  decode T=0.6: 49.40 tok/s (e2e 49.35; 512 tok, finish=length, d4=0.7098)
+  decode median 49.6 (min 49.29, max 51.8) over 5/5 valid
+  decode T=0: median 49.13 (min 49.09, max 49.97) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.16s -> 810 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4226, 4260, 4300])
+  prefill 16000: 16514 tok (ref 16513), TTFT 19.31s -> 855 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [16565, 16595, 16630])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.57 GB, resident mapped files 0.03 GB, swap used 17926.81 MB
+  -> <run-root>/results/super-llamacpp-mtp1-20261018-040121.json
+[04:09:50] super-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:09:50] super-llamacpp-mtp1: GPU lock released after 487.4s held
+[04:09:50] super-llamacpp-mtp1: -> <run-root>/results/super-llamacpp-mtp1-20261018-040121.json  flags: 1
+
+===== super-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[04:09:51] super-llamacpp-mtp2: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 77182 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 300 build/fn_check kernels; waiting...
+[04:10:15] super-llamacpp-mtp2: GPU lock acquired after 24.8s wait
+[04:10:15] super-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 2
+[04:10:28] super-llamacpp-mtp2: ready after 12s (pid 4525, listener 4525)
+[04:10:32] super-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (4.77s)
+[04:10:34] super-llamacpp-mtp2:  warm-up tools: ok (1.3s)
+[04:11:35] super-llamacpp-mtp2: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:12:37] super-llamacpp-mtp2: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:13:39] super-llamacpp-mtp2: gpu busy (185s): com.apple.WebKit[3316] 6%
+[04:14:41] super-llamacpp-mtp2: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:15:34] super-llamacpp-mtp2: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp2
+  decode T=0.6: 63.38 tok/s (e2e 63.34; 512 tok, finish=length, d4=0.9242)
+  decode T=0.6: 60.21 tok/s (e2e 60.56; 512 tok, finish=length, d4=0.5499)
+  decode T=0.6: 56.41 tok/s (e2e 56.50; 512 tok, finish=length, d4=0.5628)
+  decode T=0.6: 57.73 tok/s (e2e 57.57; 512 tok, finish=length, d4=0.4873) flags ['repetition loop (distinct-4-gram 0.4873)']
+  decode T=0.6: 59.31 tok/s (e2e 59.40; 512 tok, finish=length, d4=0.9587)
+  decode median 59.31 (min 56.41, max 63.38) over 5/5 valid
+  decode T=0: median 58.57 (min 57.79, max 59.66) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.04s -> 830 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4221, 4252, 4288])
+  prefill 16000: 16515 tok (ref 16513), TTFT 18.69s -> 884 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [16562, 16610, 16660])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.73 GB, resident mapped files 0.03 GB, swap used 17918.81 MB
+  -> <run-root>/results/super-llamacpp-mtp2-20261018-040950.json
+[04:18:01] super-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:18:01] super-llamacpp-mtp2: GPU lock released after 465.8s held
+[04:18:01] super-llamacpp-mtp2: -> <run-root>/results/super-llamacpp-mtp2-20261018-040950.json  flags: 2
+
+===== super-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[04:18:01] super-llamacpp-mtp3: GPU lock ~/.cache/nace-gpu.lock is held by: 3360 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 600 build/fn_check kernels; 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[04:18:27] super-llamacpp-mtp3: GPU lock acquired after 25.9s wait
+[04:18:27] super-llamacpp-mtp3: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 3
+[04:18:39] super-llamacpp-mtp3: ready after 12s (pid 31215, listener 31215)
+[04:18:44] super-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (4.71s)
+[04:18:45] super-llamacpp-mtp3:  warm-up tools: ok (1.26s)
+[04:19:47] super-llamacpp-mtp3: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:20:49] super-llamacpp-mtp3: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:21:51] super-llamacpp-mtp3: gpu busy (185s): com.apple.WebKit[3316] 7%
+[04:22:52] super-llamacpp-mtp3: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:23:46] super-llamacpp-mtp3: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp3
+  decode T=0.6: 70.76 tok/s (e2e 70.50; 512 tok, finish=length, d4=0.9681)
+  decode T=0.6: 69.20 tok/s (e2e 68.52; 512 tok, finish=length, d4=0.9512)
+  decode T=0.6: 65.33 tok/s (e2e 64.78; 512 tok, finish=length, d4=0.9663)
+  decode T=0.6: 65.63 tok/s (e2e 65.46; 512 tok, finish=length, d4=0.4736) flags ['repetition loop (distinct-4-gram 0.4736)']
+  decode T=0.6: 57.63 tok/s (e2e 57.77; 512 tok, finish=length, d4=0.5598)
+  decode median 65.63 (min 57.63, max 70.76) over 5/5 valid
+  decode T=0: median 64.4 (min 62.33, max 66.36) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 5.04s -> 830 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4229, 4263, 4306])
+  prefill 16000: 16513 tok (ref 16513), TTFT 19.19s -> 861 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [16557, 16585, 16617])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.89 GB, resident mapped files 0.03 GB, swap used 17918.81 MB
+  -> <run-root>/results/super-llamacpp-mtp3-20261018-041801.json
+[04:26:05] super-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:26:05] super-llamacpp-mtp3: GPU lock released after 457.6s held
+[04:26:05] super-llamacpp-mtp3: -> <run-root>/results/super-llamacpp-mtp3-20261018-041801.json  flags: 2
+
+===== super-llamacpp-lilicorr  [llama.cpp] llama.cpp + LiLiCorr drafter (n-max 7)  version 0.7.0-dev (b11669, 620d2225c)
+[04:26:05] super-llamacpp-lilicorr: GPU lock ~/.cache/nace-gpu.lock is held by: 31025 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 31185 lockf -k ~/.cache/nace-gpu.lock <tmp>/scratchpad/ligh; waiting...
+[04:26:16] super-llamacpp-lilicorr: GPU lock acquired after 11.8s wait
+[04:26:17] super-llamacpp-lilicorr: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-dflash --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/lilicorr-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf --spec-draft-n-max 7
+[04:26:29] super-llamacpp-lilicorr: ready after 12s (pid 56285, listener 56285)
+[04:26:35] super-llamacpp-lilicorr:  warm-up prefill~2.9k+decode64: ok (6.52s)
+[04:26:37] super-llamacpp-lilicorr:  warm-up tools: ok (1.54s)
+[04:27:38] super-llamacpp-lilicorr: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:28:40] super-llamacpp-lilicorr: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:29:42] super-llamacpp-lilicorr: gpu busy (185s): com.apple.WebKit[3316] 6%
+[04:30:44] super-llamacpp-lilicorr: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:31:37] super-llamacpp-lilicorr: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-lilicorr
+  decode T=0.6: 30.19 tok/s (e2e 30.09; 512 tok, finish=length, d4=0.9626)
+  decode T=0.6: 30.11 tok/s (e2e 30.20; 512 tok, finish=length, d4=0.6471)
+  decode T=0.6: 28.61 tok/s (e2e 28.68; 512 tok, finish=length, d4=0.9105)
+  decode T=0.6: 27.39 tok/s (e2e 27.21; 512 tok, finish=length, d4=0.7285)
+  decode T=0.6: 24.30 tok/s (e2e 24.13; 512 tok, finish=length, d4=0.3176) flags ['repetition loop (distinct-4-gram 0.3176)']
+  decode median 28.61 (min 24.3, max 30.19) over 5/5 valid
+  decode T=0: median 29.64 (min 27.48, max 31.21) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 6.17s -> 678 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4229, 4276, 4325])
+  prefill 16000: 16514 tok (ref 16513), TTFT 22.43s -> 736 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16555, 16586, 16619])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 86.20 GB, resident mapped files 0.03 GB, swap used 18194.06 MB
+  -> <run-root>/results/super-llamacpp-lilicorr-20261018-042605.json
+[04:35:58] super-llamacpp-lilicorr: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:35:58] super-llamacpp-lilicorr: GPU lock released after 581.8s held
+[04:35:58] super-llamacpp-lilicorr: -> <run-root>/results/super-llamacpp-lilicorr-20261018-042605.json  flags: 2
+exit 0
+
+===== super-kapitsa  [kapitsa] Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill)  version 04a82a4
+[04:36:32] super-kapitsa: GPU lock ~/.cache/nace-gpu.lock is held by: 78212 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[04:36:47] super-kapitsa: GPU lock acquired after 15.2s wait
+[04:36:47] super-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --model-id super-vl --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4/dflash --host 127.0.0.1 --port 8260 --ctx 32768 --slots 1
+[04:36:59] super-kapitsa: ready after 12s (pid 89839, listener 89839)
+[04:37:05] super-kapitsa:  warm-up prefill~2.9k+decode64: ok (5.93s)
+[04:37:06] super-kapitsa:  warm-up tools: ok (1.41s)
+[04:38:08] super-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:39:10] super-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:40:12] super-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 5%
+[04:41:14] super-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:42:07] super-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-kapitsa
+  decode T=0.6: 78.09 tok/s (e2e 79.33; 512 tok, finish=length, d4=0.8263)
+  decode T=0.6: 84.54 tok/s (e2e 82.74; 512 tok, finish=length, d4=0.4814) flags ['repetition loop (distinct-4-gram 0.4814)']
+  decode T=0.6: 85.99 tok/s (e2e 85.21; 512 tok, finish=length, d4=0.9647)
+  decode T=0.6: 93.17 tok/s (e2e 90.94; 512 tok, finish=length, d4=0.8717)
+  decode T=0.6: 81.47 tok/s (e2e 81.36; 512 tok, finish=length, d4=0.9641)
+  decode median 84.54 (min 78.09, max 93.17) over 5/5 valid
+  decode T=0: median 86.98 (min 76.27, max 89.96) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4753)']
+  prefill 4000: 4186 tok (ref 4183), TTFT 6.67s -> 627 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4232, 4266, 4306])
+  prefill 16000: 16515 tok (ref 16513), TTFT 32.42s -> 509 tok/s, cold cached=0 | cached TTFT median 0.26s over 3 turns (cached [16565, 16612, 16663])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.38 GB, resident mapped files 1.00 GB, swap used 18154.06 MB
+  -> <run-root>/results/super-kapitsa-20261018-043631.json
+[04:44:23] super-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:44:23] super-kapitsa: GPU lock released after 456.3s held
+[04:44:23] super-kapitsa: -> <run-root>/results/super-kapitsa-20261018-043631.json  flags: 3
+
+===== super-kapitsa-plain  [kapitsa] Kapitsa (no drafter)  version 04a82a4
+[04:44:24] super-kapitsa-plain: GPU lock ~/.cache/nace-gpu.lock is held by: 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; 89271 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; waiting...
+[04:44:40] super-kapitsa-plain: GPU lock acquired after 16.4s wait
+[04:44:40] super-kapitsa-plain: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --model-id super-vl --dflash none --host 127.0.0.1 --port 8261 --ctx 32768 --slots 1
+[04:44:50] super-kapitsa-plain: ready after 10s (pid 16647, listener 16647)
+[04:44:56] super-kapitsa-plain:  warm-up prefill~2.9k+decode64: ok (5.86s)
+[04:44:57] super-kapitsa-plain:  warm-up tools: ok (1.83s)
+[04:45:59] super-kapitsa-plain: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:47:01] super-kapitsa-plain: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:48:03] super-kapitsa-plain: gpu busy (185s): com.apple.WebKit[3316] 6%
+[04:49:05] super-kapitsa-plain: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:49:58] super-kapitsa-plain: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-kapitsa-plain
+  decode T=0.6: 47.39 tok/s (e2e 46.92; 512 tok, finish=length, d4=0.4657) flags ['repetition loop (distinct-4-gram 0.4657)']
+  decode T=0.6: 46.93 tok/s (e2e 46.90; 512 tok, finish=length, d4=0.9253)
+  decode T=0.6: 46.28 tok/s (e2e 46.80; 512 tok, finish=length, d4=0.4751) flags ['repetition loop (distinct-4-gram 0.4751)']
+  decode T=0.6: 46.42 tok/s (e2e 46.43; 512 tok, finish=length, d4=0.9579)
+  decode T=0.6: 44.98 tok/s (e2e 45.13; 512 tok, finish=length, d4=0.9694)
+  decode median 46.42 (min 44.98, max 47.39) over 5/5 valid
+  decode T=0: median 46.47 (min 45.26, max 47.31) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 6.79s -> 617 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [4224, 4258, 4300])
+  prefill 16000: 16514 tok (ref 16513), TTFT 32.95s -> 501 tok/s, cold cached=0 | cached TTFT median 0.25s over 3 turns (cached [16542, 16576, 16616])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 67.67 GB, resident mapped files 1.00 GB, swap used 18058.06 MB
+  -> <run-root>/results/super-kapitsa-plain-20261018-044423.json
+[04:53:09] super-kapitsa-plain: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[04:53:09] super-kapitsa-plain: GPU lock released after 509.6s held
+[04:53:09] super-kapitsa-plain: -> <run-root>/results/super-kapitsa-plain-20261018-044423.json  flags: 3
+
+===== super-mlxvlm  [mlx-lm] mlx-vlm server (git main, no speculation)  version unknown
+[04:53:12] super-mlxvlm: GPU lock ~/.cache/nace-gpu.lock is held by: 16613 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[04:53:28] super-mlxvlm: GPU lock acquired after 19.2s wait
+[04:53:29] super-mlxvlm: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --host 127.0.0.1 --port 8262 --prefill-step-size 2048 --max-num-seqs 1
+[04:53:43] super-mlxvlm: ready after 15s (pid 44414, listener 44414)
+[04:53:55] super-mlxvlm:  warm-up prefill~2.9k+decode64: ok (12.01s)
+[04:53:57] super-mlxvlm:  warm-up tools: ok (1.72s)
+[04:54:59] super-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[04:56:00] super-mlxvlm: gpu busy (124s): com.apple.WebKit[3316] 6%
+[04:57:02] super-mlxvlm: gpu busy (185s): com.apple.WebKit[3316] 6%
+[04:58:04] super-mlxvlm: gpu busy (247s): com.apple.WebKit[3316] 6%
+[04:58:57] super-mlxvlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxvlm
+  decode T=0.6: 30.81 tok/s (e2e 30.82; 512 tok, finish=length, d4=0.4389) flags ['repetition loop (distinct-4-gram 0.4389)']
+  decode T=0.6: 30.81 tok/s (e2e 30.82; 512 tok, finish=length, d4=0.4334) flags ['repetition loop (distinct-4-gram 0.4334)']
+  decode T=0.6: 30.73 tok/s (e2e 30.74; 512 tok, finish=length, d4=0.5044)
+  decode T=0.6: 30.28 tok/s (e2e 30.28; 512 tok, finish=length, d4=0.4222) flags ['repetition loop (distinct-4-gram 0.4222)']
+  decode T=0.6: 30.60 tok/s (e2e 30.59; 512 tok, finish=length, d4=0.5093)
+  decode median 30.73 (min 30.28, max 30.81) over 5/5 valid
+  decode T=0: median 30.94 (min 30.71, max 31.04) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4554)']
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.89s -> 710 tok/s, cold cached=0 | cached TTFT median 0.53s over 3 turns (cached [4183, 4247, 4286])
+  prefill 16000: 16516 tok (ref 16513), TTFT 20.33s -> 812 tok/s, cold cached=0 | cached TTFT median 0.61s over 3 turns (cached [16515, 16578, 16621])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 99.28 GB, resident mapped files 0.01 GB, swap used 18018.06 MB
+  -> <run-root>/results/super-mlxvlm-20261018-045309.json
+[05:03:15] super-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:03:15] super-mlxvlm: GPU lock released after 586.2s held
+[05:03:15] super-mlxvlm: -> <run-root>/results/super-mlxvlm-20261018-045309.json  flags: 5
+
+===== super-mlxvlm-mtp  [mlx-lm] mlx-vlm server (git main, native MTP, block 4)  version unknown
+[05:03:18] super-mlxvlm-mtp: GPU lock ~/.cache/nace-gpu.lock is held by: 44385 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:03:33] super-mlxvlm-mtp: GPU lock acquired after 18.4s wait
+[05:03:33] super-mlxvlm-mtp: starting ~/venvs/mlx-vlm-main/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --host 127.0.0.1 --port 8263 --prefill-step-size 2048 --max-num-seqs 1 --draft-model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --draft-kind mtp --draft-block-size 4
+[05:03:48] super-mlxvlm-mtp: ready after 15s (pid 76845, listener 76845)
+[05:04:00] super-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (12.09s)
+[05:04:01] super-mlxvlm-mtp:  warm-up tools: ok (1.53s)
+[05:04:13] super-mlxvlm-mtp:  warm-up decode512#1: ok (12.01s)
+[05:04:25] super-mlxvlm-mtp:  warm-up decode512#2: ok (11.92s)
+[05:04:37] super-mlxvlm-mtp:  warm-up decode512#3: ok (11.72s)
+[05:05:39] super-mlxvlm-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:06:41] super-mlxvlm-mtp: gpu busy (124s): com.apple.WebKit[3316] 6%
+[05:07:42] super-mlxvlm-mtp: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:08:44] super-mlxvlm-mtp: gpu busy (247s): com.apple.WebKit[3316] 7%
+[05:09:38] super-mlxvlm-mtp: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mlxvlm-mtp
+  decode T=0.6: 46.28 tok/s (e2e 45.95; 512 tok, finish=length, d4=0.6113)
+  decode T=0.6: 48.45 tok/s (e2e 47.97; 512 tok, finish=length, d4=0.6114)
+  decode T=0.6: 48.13 tok/s (e2e 47.60; 512 tok, finish=length, d4=0.6334)
+  decode T=0.6: 44.15 tok/s (e2e 43.91; 512 tok, finish=length, d4=0.3752) flags ['repetition loop (distinct-4-gram 0.3752)']
+  decode T=0.6: 43.90 tok/s (e2e 43.64; 512 tok, finish=length, d4=0.6275)
+  decode median 46.28 (min 43.9, max 48.45) over 5/5 valid
+  decode T=0: median 49.11 (min 48.87, max 49.58) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.388)']
+  prefill 4000: 4180 tok (ref 4183), TTFT 5.53s -> 756 tok/s, cold cached=0 | cached TTFT median 0.52s over 3 turns (cached [4179, 4243, 4282])
+  prefill 16000: None tok (ref 16513), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 108.05 GB, resident mapped files 0.01 GB, swap used 17986.06 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/results/super-mlxvlm-mtp-20261018-050315.json
+[05:12:24] super-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:12:24] super-mlxvlm-mtp: GPU lock released after 531.1s held
+[05:12:24] super-mlxvlm-mtp: -> <run-root>/results/super-mlxvlm-mtp-20261018-050315.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 3
+
+===== super-llamacpp  [llama.cpp] llama.cpp (Q4_0 GGUF)  version 0.7.0-dev (b11669, 620d2225c)
+[05:12:28] super-llamacpp: GPU lock ~/.cache/nace-gpu.lock is held by: 76805 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:12:41] super-llamacpp: GPU lock acquired after 17.3s wait
+[05:12:41] super-llamacpp: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[05:12:54] super-llamacpp: ready after 12s (pid 6913, listener 6913)
+[05:12:59] super-llamacpp:  warm-up prefill~2.9k+decode64: ok (5.29s)
+[05:13:00] super-llamacpp:  warm-up tools: ok (1.55s)
+[05:14:02] super-llamacpp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:15:04] super-llamacpp: gpu busy (124s): com.apple.WebKit[3316] 6%
+[05:16:06] super-llamacpp: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:17:07] super-llamacpp: gpu busy (247s): com.apple.WebKit[3316] 6%
+[05:18:01] super-llamacpp: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp
+  decode T=0.6: 37.06 tok/s (e2e 37.05; 512 tok, finish=length, d4=0.9402)
+  decode T=0.6: 36.73 tok/s (e2e 36.71; 512 tok, finish=length, d4=0.542)
+  decode T=0.6: 35.89 tok/s (e2e 35.86; 512 tok, finish=length, d4=0.9771)
+  decode T=0.6: 35.48 tok/s (e2e 35.46; 512 tok, finish=length, d4=0.9306)
+  decode T=0.6: 35.02 tok/s (e2e 35.02; 512 tok, finish=length, d4=0.9039)
+  decode median 35.89 (min 35.02, max 37.06) over 5/5 valid
+  decode T=0: median 35.44 (min 35.14, max 35.61) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.48s -> 764 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [4230, 4261, 4296])
+  prefill 16000: 16516 tok (ref 16513), TTFT 20.11s -> 821 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [16556, 16590, 16630])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 78.46 GB, resident mapped files 0.03 GB, swap used 17946.0 MB
+  -> <run-root>/results/super-llamacpp-20261018-051224.json
+[05:21:40] super-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:21:40] super-llamacpp: GPU lock released after 539.0s held
+[05:21:40] super-llamacpp: -> <run-root>/results/super-llamacpp-20261018-051224.json  flags: 1
+
+===== super-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11669, 620d2225c)
+[05:21:44] super-llamacpp-mtp1: GPU lock ~/.cache/nace-gpu.lock is held by: 6893 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 900 ~/nace_ml/worktrees/kapits; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:21:59] super-llamacpp-mtp1: GPU lock acquired after 18.9s wait
+[05:21:59] super-llamacpp-mtp1: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 1
+[05:22:11] super-llamacpp-mtp1: ready after 12s (pid 36421, listener 36421)
+[05:22:16] super-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (4.92s)
+[05:22:18] super-llamacpp-mtp1:  warm-up tools: ok (1.35s)
+[05:23:19] super-llamacpp-mtp1: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:24:21] super-llamacpp-mtp1: gpu busy (124s): com.apple.WebKit[3316] 6%
+[05:25:23] super-llamacpp-mtp1: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:26:25] super-llamacpp-mtp1: gpu busy (247s): com.apple.WebKit[3316] 6%
+[05:27:18] super-llamacpp-mtp1: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp1
+  decode T=0.6: 49.60 tok/s (e2e 49.66; 512 tok, finish=length, d4=0.6151)
+  decode T=0.6: 52.02 tok/s (e2e 52.02; 512 tok, finish=length, d4=0.973)
+  decode T=0.6: 49.13 tok/s (e2e 49.18; 512 tok, finish=length, d4=0.5121)
+  decode T=0.6: 48.62 tok/s (e2e 48.66; 512 tok, finish=length, d4=0.6819)
+  decode T=0.6: 49.72 tok/s (e2e 49.67; 512 tok, finish=length, d4=0.9452)
+  decode median 49.6 (min 48.62, max 52.02) over 5/5 valid
+  decode T=0: median 49.39 (min 48.91, max 49.65) over 5/5 valid
+  prefill 4000: 4186 tok (ref 4183), TTFT 5.12s -> 818 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [4211, 4242, 4277])
+  prefill 16000: 16514 tok (ref 16513), TTFT 18.89s -> 874 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [16554, 16597, 16646])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.56 GB, resident mapped files 0.03 GB, swap used 17922.0 MB
+  -> <run-root>/results/super-llamacpp-mtp1-20261018-052140.json
+[05:30:04] super-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:30:04] super-llamacpp-mtp1: GPU lock released after 485.1s held
+[05:30:04] super-llamacpp-mtp1: -> <run-root>/results/super-llamacpp-mtp1-20261018-052140.json  flags: 1
+
+===== super-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[05:30:05] super-llamacpp-mtp2: GPU lock ~/.cache/nace-gpu.lock is held by: 38886 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 600 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:30:23] super-llamacpp-mtp2: GPU lock acquired after 18.3s wait
+[05:30:23] super-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 2
+[05:30:35] super-llamacpp-mtp2: ready after 12s (pid 63453, listener 63453)
+[05:30:40] super-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (4.77s)
+[05:30:41] super-llamacpp-mtp2:  warm-up tools: ok (1.29s)
+[05:31:43] super-llamacpp-mtp2: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:32:44] super-llamacpp-mtp2: gpu busy (124s): com.apple.WebKit[3316] 6%
+[05:33:46] super-llamacpp-mtp2: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:34:48] super-llamacpp-mtp2: gpu busy (247s): com.apple.WebKit[3316] 6%
+[05:35:42] super-llamacpp-mtp2: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp2
+  decode T=0.6: 58.80 tok/s (e2e 59.23; 512 tok, finish=length, d4=0.5591)
+  decode T=0.6: 61.77 tok/s (e2e 61.45; 512 tok, finish=length, d4=0.9428)
+  decode T=0.6: 59.73 tok/s (e2e 59.66; 512 tok, finish=length, d4=0.4082) flags ['repetition loop (distinct-4-gram 0.4082)']
+  decode T=0.6: 58.53 tok/s (e2e 58.87; 512 tok, finish=length, d4=0.936)
+  decode T=0.6: 56.50 tok/s (e2e 56.61; 512 tok, finish=length, d4=0.3646) flags ['repetition loop (distinct-4-gram 0.3646)']
+  decode median 58.8 (min 56.5, max 61.77) over 5/5 valid
+  decode T=0: median 59.38 (min 58.72, max 60.05) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 5.04s -> 830 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4220, 4253, 4294])
+  prefill 16000: 16515 tok (ref 16513), TTFT 18.82s -> 877 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [16560, 16607, 16657])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.72 GB, resident mapped files 0.03 GB, swap used 17833.88 MB
+  -> <run-root>/results/super-llamacpp-mtp2-20261018-053004.json
+[05:38:06] super-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:38:06] super-llamacpp-mtp2: GPU lock released after 463.3s held
+[05:38:06] super-llamacpp-mtp2: -> <run-root>/results/super-llamacpp-mtp2-20261018-053004.json  flags: 3
+
+===== super-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11669, 620d2225c)
+[05:38:09] super-llamacpp-mtp3: GPU lock ~/.cache/nace-gpu.lock is held by: 63439 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 600 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:38:24] super-llamacpp-mtp3: GPU lock acquired after 18.4s wait
+[05:38:24] super-llamacpp-mtp3: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/mtp-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --spec-draft-n-max 3
+[05:38:37] super-llamacpp-mtp3: ready after 12s (pid 88803, listener 88803)
+[05:38:41] super-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (4.67s)
+[05:38:42] super-llamacpp-mtp3:  warm-up tools: ok (1.24s)
+[05:39:44] super-llamacpp-mtp3: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:40:46] super-llamacpp-mtp3: gpu busy (123s): com.apple.WebKit[3316] 6%
+[05:41:48] super-llamacpp-mtp3: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:42:50] super-llamacpp-mtp3: gpu busy (247s): com.apple.WebKit[3316] 6%
+[05:43:43] super-llamacpp-mtp3: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-mtp3
+  decode T=0.6: 69.74 tok/s (e2e 69.49; 512 tok, finish=length, d4=0.9171)
+  decode T=0.6: 67.46 tok/s (e2e 67.30; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 63.05 tok/s (e2e 63.03; 512 tok, finish=length, d4=0.9495)
+  decode T=0.6: 65.53 tok/s (e2e 65.09; 512 tok, finish=length, d4=0.9637)
+  decode T=0.6: 63.10 tok/s (e2e 63.06; 512 tok, finish=length, d4=0.9131)
+  decode median 65.53 (min 63.05, max 69.74) over 5/5 valid
+  decode T=0: median 66.08 (min 64.71, max 67.5) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 5.03s -> 833 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4233, 4267, 4307])
+  prefill 16000: 16513 tok (ref 16513), TTFT 18.73s -> 882 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [16552, 16585, 16625])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 81.89 GB, resident mapped files 0.03 GB, swap used 17809.88 MB
+  -> <run-root>/results/super-llamacpp-mtp3-20261018-053806.json
+[05:45:59] super-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:45:59] super-llamacpp-mtp3: GPU lock released after 455.2s held
+[05:45:59] super-llamacpp-mtp3: -> <run-root>/results/super-llamacpp-mtp3-20261018-053806.json  flags: 1
+
+===== super-llamacpp-lilicorr  [llama.cpp] llama.cpp + LiLiCorr drafter (n-max 7)  version 0.7.0-dev (b11669, 620d2225c)
+[05:46:03] super-llamacpp-lilicorr: GPU lock ~/.cache/nace-gpu.lock is held by: 88789 lockf -k ~/.cache/nace-gpu.lock perl -e $t = shift @ARGV; alarm $t; exec @ARGV or die "exec: $!" 600 ~/nace_ml/worktrees/kapit; 89081 /opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -u compare_engines.py configs; waiting...
+[05:46:18] super-llamacpp-lilicorr: GPU lock acquired after 18.2s wait
+[05:46:18] super-llamacpp-lilicorr: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.cache/kapitsa/benchmark-models/super-vl-gguf/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf --host 127.0.0.1 --port 8266 -a super-vl -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-dflash --spec-draft-model ~/.cache/kapitsa/benchmark-models/super-vl-gguf/lilicorr-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf --spec-draft-n-max 7
+[05:46:30] super-llamacpp-lilicorr: ready after 12s (pid 14637, listener 14637)
+[05:46:36] super-llamacpp-lilicorr:  warm-up prefill~2.9k+decode64: ok (6.09s)
+[05:46:37] super-llamacpp-lilicorr:  warm-up tools: ok (1.48s)
+[05:47:39] super-llamacpp-lilicorr: gpu busy (62s): com.apple.WebKit[3316] 6%
+[05:48:41] super-llamacpp-lilicorr: gpu busy (123s): com.apple.WebKit[3316] 6%
+[05:49:43] super-llamacpp-lilicorr: gpu busy (185s): com.apple.WebKit[3316] 6%
+[05:50:44] super-llamacpp-lilicorr: gpu busy (247s): com.apple.WebKit[3316] 6%
+[05:51:38] super-llamacpp-lilicorr: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-llamacpp-lilicorr
+  decode T=0.6: 26.04 tok/s (e2e 26.12; 512 tok, finish=length, d4=0.6312)
+  decode T=0.6: 31.10 tok/s (e2e 31.15; 512 tok, finish=length, d4=0.9384)
+  decode T=0.6: 23.38 tok/s (e2e 23.27; 512 tok, finish=length, d4=0.6828)
+  decode T=0.6: 28.28 tok/s (e2e 28.06; 512 tok, finish=length, d4=0.7043)
+  decode T=0.6: 24.63 tok/s (e2e 24.62; 512 tok, finish=length, d4=0.6225)
+  decode median 26.04 (min 23.38, max 31.1) over 5/5 valid
+  decode T=0: median 30.99 (min 29.86, max 31.37) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 6.14s -> 681 tok/s, cold cached=0 | cached TTFT median 0.24s over 3 turns (cached [4226, 4260, 4300])
+  prefill 16000: 16515 tok (ref 16513), TTFT 22.13s -> 746 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [16557, 16591, 16631])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 86.19 GB, resident mapped files 0.03 GB, swap used 17793.88 MB
+  -> <run-root>/results/super-llamacpp-lilicorr-20261018-054559.json
+[05:55:59] super-llamacpp-lilicorr: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[05:55:59] super-llamacpp-lilicorr: GPU lock released after 581.4s held
+[05:55:59] super-llamacpp-lilicorr: -> <run-root>/results/super-llamacpp-lilicorr-20261018-054559.json  flags: 1
+exit 0

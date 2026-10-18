@@ -11,7 +11,7 @@ It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do n
 
 The generation loop repeats until completion, streaming through the API adapter. Image encoders run only for
 supported image requests, and Neural Engine work is limited to selected prefill operations. Conversation slots retain
-state for later turns; generation is serialized.
+state for later turns; requests sent at once take turns on the GPU.
 
 ## From a request to generated tokens
 
@@ -29,8 +29,13 @@ state for later turns; generation is serialized.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
 
-The engine serializes generation through a mutex. `--slots` keeps multiple conversations warm; it does **not** enable
-concurrent model execution or continuous batching. Image fetching and CPU preparation happen before the engine lock.
+Requests sent at once each run on a slot of their own and take turns on the GPU (a first-come-first-served turn lock):
+between prefill chunks, and between decode cycles once a request has held the GPU for 30 ms. Before it gives its turn
+away a request parks: nothing of its own left in flight and nothing it needs next left in the model's or the drafter's
+shared buffers, so its cycles, and its tokens, are the ones it runs alone. This is not batching: a forward pass serves
+one request, so requests together decode about as fast as one alone, and `--slots` (up to 4 by default, as memory
+allows) sets how many run at once; with every slot busy a request waits for one. Image fetching, the chat template
+and the tokenizer run before a request takes its turn.
 
 ## Two model backends
 
@@ -76,9 +81,10 @@ loader supplies weights to the backends; Bolt repacks codes and scales into its 
 Qwen GGUF files are converted once into a reusable model folder.
 
 Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints or `RadioViT` for Nemotron
-3.5 Bolt's C-RADIO ViT-H/16 tower and projector. The tower loads on the first image request; CPU image preparation
-and cached GPU embeddings feed the model's prefill. Qwen uses M-RoPE positions; Bolt wraps image rows in its image
-tokens and uses attention without positional embeddings. The current 4B tower shape is unsupported. The text
+3.5 Bolt's and Super-VL's C-RADIO ViT-H/16 tower and projector (Super-VL layer-normalizes the tower's output first).
+The tower loads on the first image request; CPU image preparation and cached GPU embeddings feed the model's prefill.
+Qwen uses M-RoPE positions; Bolt and Super-VL wrap image rows in their image tokens and use attention without
+positional embeddings. The current 4B tower shape is unsupported. The text
 benchmarks do not measure images.
 
 Memory planning happens before weights load. Per-slot KV caches grow within a budget derived from Metal's recommended
@@ -100,6 +106,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |
 | Catalog, downloads and weights | [`src/hub/`](../src/hub/), [`src/loader/`](../src/loader/) |
+| `kapitsa bench`: the harness's protocol, this Mac's conditions, the result and its submission | [`src/bench/`](../src/bench/), [`bench_cmd.cpp`](../src/server/bench_cmd.cpp) |
 
 The Neural Engine bridge uses Apple's private framework interfaces. See [third-party notices](../THIRD_PARTY_NOTICES)
 for adapted code and design credits, the [usage guide](usage.md) for options and switches, and

@@ -14,6 +14,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa rm M...` | Deletes downloaded models. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
+| `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
@@ -45,10 +46,12 @@ Those start the best model for this Mac, with the same output as before.
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 3.3 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
+| `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs. Not published yet | 106 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
-27B, an MTP head for the 4B, NVIDIA's LiLiCorr draft model for Bolt; Flash-Next's repo holds its MTP head.
+27B, an MTP head for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL; Flash-Next's repo holds its MTP
+head.
 
 Flash-Next's conversion is not uploaded yet: `--model flash-next` checks that it fits this Mac, then says where to put
 a converted pack (`~/.cache/kapitsa/models/qwen3.8-flash-next-4bit/`, used as it is from then on); `--model <folder>`
@@ -86,6 +89,8 @@ variants fit this Mac. Every variant keeps the model's MTP head and draft model,
 download is always the same bytes. After a Kapitsa update that pins newer revisions, the next start fetches only the
 files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's own
 mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
+Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
+projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding).
 
 ### Other models
 
@@ -100,7 +105,8 @@ A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, 
 (`qwen4_exp`) folder also needs its `ple.safetensors` table.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
-them), mixture-of-experts checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
+them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
+checkpoints in the Hugging Face layout, and weights larger than this Mac's memory budget.
 
 ### GGUF files
 
@@ -162,14 +168,23 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
 | `--model-id ID` | the model's name | The model's name in the API. |
 | `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
-| `--slots N` | `2` | Conversations whose caches are kept for follow-ups. |
+| `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
 | `--spec N` | `1` (`2` on the 27B) | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
-| `--image-max-pixels N` | `1200000` (Bolt `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
+| `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
+
+Requests sent at once (a coding agent's parallel subagents and side requests, several clients) each run on a slot of
+their own and take turns on the GPU between prompt chunks and decode steps: a request sent during a long reply starts
+after a fraction of a second instead of after that reply, and each request gets the tokens it would get alone. The GPU
+is shared, not multiplied: two replies at once write about as many tokens per second in all as one reply alone, each at
+about half the speed. Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full
+`--ctx` conversation, the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With
+every slot busy a request waits for one (the log says so); a streamed chat completion whose client disconnects stops
+waiting.
 
 ## APIs
 
@@ -181,7 +196,7 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `POST /v1/responses` | OpenAI Responses: reasoning items, function and custom tools, `usage.input_tokens_details.cached_tokens`. `previous_response_id` continues one of the last 64 stored responses (unknown ids are a 400). Built-in tools such as web search are left out. |
 | `POST /v1/messages` | Anthropic Messages: thinking blocks, `tool_use` and `tool_result`; `usage.input_tokens` counts the uncached prompt, `cache_read_input_tokens` the cached part. Server tools are left out. |
 | `POST /v1/messages/count_tokens` | Anthropic's token count of a request. |
-| `GET /v1/models` | The model being served (OpenAI's list with Anthropic's fields); `context_fit` is the tokens one conversation can hold within the memory budget. |
+| `GET /v1/models` | The model being served (OpenAI's list with Anthropic's fields); `context_fit` is the tokens one conversation can hold within the memory budget, `slots` the requests that run at once. |
 | `GET /health` | `{"status":"ok"}` |
 | `GET /` | The chat page: one file that talks only to this server and keeps its conversations in the browser. |
 
@@ -257,9 +272,10 @@ tools and MCP servers work as usual:
 
 ## Images
 
-`qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next` and `nemotron-3.5-bolt` read images. Their vision towers come with the download and
-load with the first image: about 0.9 GB of GPU memory for the Qwen models, 1.7 GB for Bolt. On a model without one,
-such as the 4B, each image becomes a short note in the prompt, so agents that attach screenshots keep working.
+`qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and `nemotron-3.5-super-vl` read images.
+Their vision towers come with the download and load with the first image: about 0.9 GB of GPU memory for the Qwen
+models, 1.7 GB for Bolt and for Super-VL. On a model without one, such as the 4B, each image becomes a short note in
+the prompt, so agents that attach screenshots keep working.
 
 | API | Image part |
 | --- | --- |
@@ -270,7 +286,7 @@ such as the 4B, each image becomes a short note in the prompt, so agents that at
 - Sources: `data:` URLs (base64) and `http(s)` URLs, in user, assistant and tool messages; up to 32 MB per image and
   30 s per download (`NI_IMAGE_MAX_MB`, `NI_IMAGE_TIMEOUT_S`). Formats: what macOS's ImageIO decodes (PNG, JPEG, WebP,
   GIF, HEIC, TIFF, BMP). Video is not supported (a 400 error).
-- Size: images over 1.2 million pixels (Bolt: 1.4 million) are scaled down to about that; a 2880x1800 screenshot becomes
+- Size: images over 1.2 million pixels (Bolt and Super-VL: 1.4 million) are scaled down to about that; a 2880x1800 screenshot becomes
   1376x864. `--image-max-pixels N` sets the cap, `0` lifts it to the model's own limit.
 - Tokens: an image costs prompt tokens by its size (a 1280x800 screenshot: 1000 tokens), in `usage` and `count_tokens`.
 - Cache: the same image sent again (an agent's screenshot every turn) reuses the cached prompt, and the embeddings of
@@ -282,9 +298,10 @@ Kapitsa holds at most a budget of GPU memory: Metal's recommended working set, w
 (at least 512 MB) for the Neural Engine service and other GPU users; `--mem-budget GB` (or `NI_MEM_BUDGET`) sets it.
 Fixed at start are the weights, the MTP head, the prefill buffers (they scale with `--prefill-chunk`), each slot's
 recurrent state and, where used, the Neural Engine split's buffers and the draft model. Each conversation's KV cache
-grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B, 8 KB on Bolt, 31 KB on Flash-Next.
-Flash-Next's n-gram table (32 GB) is not in the budget: it is mapped from its file, and each token reads 16 rows of it
-on the CPU, so macOS keeps the parts in use in the page cache and can drop them under pressure. When memory is short:
+grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B, 8 KB on Bolt and on Super-VL, 31 KB
+on Flash-Next. Flash-Next's n-gram table (32 GB) is not in the budget: it is mapped from its file, and each token reads
+16 rows of it on the CPU, so macOS keeps the parts in use in the page cache and can drop them under pressure. When
+memory is short:
 
 - At start, the fixed part and an 8K-token KV cache must fit, else the server exits with `insufficient memory: ...`,
   what each part needs and what would help (fewer `--slots`, `--prefill-chunk 1024`, no draft model, a smaller model,
@@ -293,15 +310,18 @@ on the CPU, so macOS keeps the parts in use in the page cache and can drop them 
   leaves the draft model out or uses 1024-token chunks.
 - A prompt that needs more room takes it from cached image embeddings, then from idle slots, least recently used first
   (their conversations are read again when they return), then from the Neural Engine split (prefill then runs on the
-  GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. A reply
-  that cannot grow its cache ends with finish reason `length`.
+  GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. With
+  other requests in flight, a request that fits only once one of them ends waits for it, and only a prompt that does
+  not fit even alone gets the error; a reply in progress may take the cache of a request still waiting (that request
+  then reads its prompt again). A reply that cannot grow its cache ends with finish reason `length`.
 
 `kapitsa doctor` shows this Mac (chip, GPU cores, RAM, macOS, the working set, Kapitsa's budget, the Neural Engine) and,
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
-or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which
-one `--model NAME` takes. It assumes `--ctx 65536 --slots 2` (`--ctx`, `--slots`, `--prefill-chunk`, `--dflash` and
-`--mem-budget` change that); `--model M`, repeatable, checks other models, downloaded or not; `--json` prints the same
-for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `decoding`, ...).
+or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which one
+`--model NAME` takes. It assumes `--ctx 65536` and, per model, the slots the server would start with (the catalog check:
+2; `--ctx`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change that); `--model M`, repeatable, checks
+other models, downloaded or not; `--json` prints the same for programs (`starts`, `fits_full_context`,
+`kv_tokens_in_budget`, `decoding`, ...).
 
 What fits, for the 4-bit variants at `--ctx 65536 --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:
@@ -318,6 +338,56 @@ Flash-Next needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budg
 part with an 8K cache (74.7 GB) does not fit, so it is refused before the download. For Bolt and the other variants,
 run `kapitsa doctor`.
 
+Super-VL's weights alone are 70.1 GB, so it needs a 96 GB+ Mac: on 128 GB (a 110.8 GB budget) it runs with its draft
+model (3.5 GB at two slots) and room for millions of tokens of KV cache; on 96 GB it starts without the draft model
+(about 29K tokens of KV cache in all at a 72 GB budget) or with it from an 80 GB budget; on 48 and 64 GB Macs it is
+refused before the download (`... does not fit this Mac: its weights alone (70.1 GB, ...) exceed ...`).
+
+## Benchmarking this Mac
+
+`kapitsa bench` measures Kapitsa on this Mac the way the [published benchmarks](benchmarks.md) measured it, so its
+numbers compare with them and with the [community results](../bench/community/RESULTS.md) from other Macs.
+
+```bash
+kapitsa bench                     # in a terminal it asks which model; elsewhere the best model for this Mac
+kapitsa bench --model 35b:6bit    # a given model and precision
+kapitsa bench --quick             # a shorter run: 3 runs per writing test, the 4K prompt only
+kapitsa bench --submit            # then add the result to the community results (it asks first)
+```
+
+It runs the protocol of [bench/harness](../bench/harness/README.md) (`bench.py`), request for request, as a client
+of the local API: it starts the model's server (`kapitsa serve` with one conversation slot and a 32K context, `NI_*`
+variables left out; downloading the model first if needed), warms it up, waits until other apps leave the GPU alone
+for 15 seconds (5 minutes at most, 2 for `--quick`), then measures:
+
+| Measurement | How |
+| --- | --- |
+| Writing | A 512-token coding answer, at temperature 0.6 and greedy, 5 runs each (3 with `--quick`), median; the rate over the middle of the stream |
+| Reading | A cold prompt of about 4K and 16K tokens (the 4K one with `--quick`): prompt tokens per second to the first token |
+| Follow-up | Three new messages in that conversation, 1 s apart: the median time to the first token |
+| Peak memory | The server's `phys_footprint_peak`, what macOS's `footprint` shows (lower in a quick run, which holds no 16K conversation) |
+| Tool calls | Streamed and whole replies with two tools, thinking off and on, and a round trip |
+
+While it measures, it samples every process's GPU time, the thermal state and the power source every 2 seconds, and
+flags what could skew a number: other apps using more than 5% of the GPU for three samples in a row or on average
+(the measurement is marked), the battery, Low Power Mode, a serious thermal state, swapping. macOS's photo and media
+analysis and the terminal showing the run count as ambient load: recorded, never flagged.
+
+The result, about 2 KB of JSON ([bench/community/schema.json](../bench/community/schema.json)), goes to
+`~/.cache/kapitsa/bench/` (`--out FILE` puts it elsewhere; `--json` also prints it). It records the Mac (its model
+identifier with Apple's name and year, chip, CPU and GPU cores, memory, macOS version and build), Kapitsa's version, the
+model, its precision and how it decoded, the numbers and the conditions; no serial number, host name, user name or
+path. A run takes 3 to 15 minutes and holds the GPU lock that the benchmark harness uses (`~/.cache/nace-gpu.lock`), so
+it never runs beside a harness run.
+
+`--submit`, or yes to the question at the end of a run in a terminal, adds the result to the community results. It
+shows the exact JSON first and sends it only after a yes typed at the terminal: with [gh](https://cli.github.com)
+logged in, as a pull request from your fork (it uses your gh login and nothing else); without gh, by opening the
+"Benchmark result" issue form in the browser with the JSON filled in, for you to submit. `kapitsa bench submit [FILE]`
+sends a saved result (the newest by default), and `--submit --dry-run` prints the gh commands or the issue's address
+without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
+[bench/community](../bench/community/README.md).
+
 ## Running in the background
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
@@ -328,8 +398,11 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, the last model chosen in `state.json`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
+| `BENCH_GPU_LOCK` | `~/.cache/nace-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
+| `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
+| `KAPITSA_BENCH_REPO` | `nace-ai/kapitsa` | `kapitsa bench --submit`: the repository results go to. |
 | `HF_TOKEN` | the token `hf auth login` saved | Hugging Face token for gated or private repos. |
 | `HF_ENDPOINT` | `https://huggingface.co` | A Hugging Face mirror. |
 | `HF_HOME`, `HF_HUB_CACHE` | `~/.cache/huggingface`, `$HF_HOME/hub` | The Hugging Face cache, whose files downloads reuse. |
@@ -337,10 +410,13 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
+| `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
 | `NI_IMAGE_CACHE_MB` | `256` | GPU memory kept for the embeddings of recent images. |
+| `NI_NH_BF16` | off | Nemotron Super-VL: `1` keeps its BF16 latent projections in BF16 instead of 8-bit (exact; about 4% slower decoding). |
+| `NI_LILI_DYN` | `0.04` | Nemotron's LiLiCorr draft model: how many of its 7 drafts are verified is chosen per cycle, weighing their expected acceptance against each extra row's cost (this value, relative to a cycle's fixed cost); `0` verifies all 7. |
 | `NI_PREWARM` | on | `0` creates the GPU pipelines on first use instead of at load. |
 
 The other `NI_*` switches exist for development and A/B tests.

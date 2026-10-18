@@ -32,5 +32,18 @@
                      "~/.lmstudio/hub/models/qwen/qwen3.8-27b/model.yaml",
                      "~/.lmstudio/models/lmstudio-community/Qwen3.8-27B-MLX-4bit/config.json"],
   "note": "As the 35B: staff pick qwen/qwen3.8-27b, whose Mac variant lmstudio-community/Qwen3.8-27B-MLX-4bit is exactly the trunk the other MLX engines read (without the MTP head), MLX engine, 32K, one slot. Not measured: LM Studio's llama.cpp runtime on its Q4_K_M GGUF with MTP drafting, which could decode faster than its MLX engine on this model (standalone llama.cpp + MTP: 18.3 vs 15.3 tok/s) at a slower prefill."
+ },
+ {
+  "label": "q35-4b-lmstudio",
+  "extends": "q36-35b-lmstudio",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.5-4B-MLX-4bit",
+  "cmd": ["{harness}/launchers/lmstudio_serve.sh", "serve", "8197", "qwen/qwen3.5-4b", "q35-4b-lmstudio",
+          "--context-length", "32768", "--parallel", "1"],
+  "model": "q35-4b-lmstudio",
+  "requires_paths": ["{env:LMS_BIN=~/.lmstudio/bin/lms}",
+                     "~/.lmstudio/hub/models/qwen/qwen3.5-4b/model.yaml",
+                     "~/.lmstudio/models/lmstudio-community/Qwen3.5-4B-MLX-4bit/config.json"],
+  "note": "As the larger models: staff pick qwen/qwen3.5-4b, whose Mac variant lmstudio-community/Qwen3.5-4B-MLX-4bit (@c43ee1d, its current revision) is exactly the trunk the other MLX engines read, MLX engine, 32K, one slot, no speculative decoding (vision checkpoint on the batched mlx-vlm path). Its prompt cache keeps the checkpoints that serve follow-up turns on disk only while at least 10 GiB of the disk is free (mlx-engine's disk_budget.py; provenance.system_start.disk_free_bytes records it)."
  }
 ]

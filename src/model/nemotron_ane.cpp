@@ -79,6 +79,25 @@ NhAne::NhAne(NemotronH& m, const NhAneConfig& c) : m_(m), cfg_(c) {
     if (mc.kind[size_t(i)] == 'M') mamba_.push_back(i);
     if (mc.kind[size_t(i)] == 'E') moe_.push_back(i);
   }
+  // the staging kernels read NVFP4 or FP8 Mamba projections and an IQ2_XXS or NVFP4 shared expert, one format each
+  // for every layer (Bolt: NVFP4 / IQ2_XXS; Super-VL: FP8 / NVFP4)
+  auto fmt_of = [](NhFmt f) -> const char* {
+    return f == NhFmt::FP4 ? "fp4" : f == NhFmt::FP8 ? "fp8" : f == NhFmt::IQ2 ? "iq2" : "";
+  };
+  for (int i : mamba_) {
+    const NhLayer& l = m.layers()[size_t(i)];
+    const std::string fi = fmt_of(l.in.fmt), fo = fmt_of(l.out.fmt);
+    if (mfmt_.empty()) mfmt_ = fi;
+    if ((fi != "fp4" && fi != "fp8") || fi != fo || fi != mfmt_)
+      throw std::runtime_error("the Mamba projections are neither NVFP4 nor FP8");
+  }
+  for (int i : moe_) {
+    const NhLayer& l = m.layers()[size_t(i)];
+    const std::string fu = fmt_of(l.up_s.fmt), fd = fmt_of(l.down_s.fmt);
+    if (sfmt_.empty()) sfmt_ = fu;
+    if (cfg_.ffn && ((fu != "iq2" && fu != "fp4") || fu != fd || fu != sfmt_))
+      throw std::runtime_error("the shared expert is neither IQ2_XXS nor NVFP4");
+  }
   fn_rows_ = cfg_.fn_rows.empty() ? std::vector<uint32_t>{512, 1024, 1536, 2048} : cfg_.fn_rows;
   std::sort(fn_rows_.begin(), fn_rows_.end());
   fn_rows_.erase(std::remove_if(fn_rows_.begin(), fn_rows_.end(),
@@ -451,7 +470,7 @@ void NhAne::row_scales() {
     const NhLayer& l = L[size_t(mamba_[j])];
     if (in_) {
       const WP p{ain0(), 0, H_, H_, 0, 0, l.in.gs};
-      e->use(pipe("nh_ane_rs_fp4_b128"));
+      e->use(pipe("nh_ane_rs_" + mfmt_ + "_b128"));
       e->buf(0, l.in.q);
       e->buf(1, l.in.s);
       e->buf(2, in_->rs, j * ain_ * 2);
@@ -461,7 +480,7 @@ void NhAne::row_scales() {
     }
     if (out_) {
       const WP p{gout_, 0, DI_, DI_, 0, 0, l.out.gs};
-      e->use(pipe("nh_ane_rs_fp4_b128"));
+      e->use(pipe("nh_ane_rs_" + mfmt_ + "_b128"));
       e->buf(0, l.out.q);
       e->buf(1, l.out.s);
       e->buf(2, out_->rs, j * aout_ * 2);
@@ -472,16 +491,16 @@ void NhAne::row_scales() {
   }
   for (size_t j = 0; ffn_ && j < ne; ++j) {
     const NhLayer& l = L[size_t(moe_[j])];
-    const WP pu{0, 0, H_, H_, 0, 0, 1.0f};
-    e->use(pipe("nh_ane_rs_iq2_b128"));
+    const WP pu{0, 0, H_, H_, 0, 0, l.up_s.gs};
+    e->use(pipe("nh_ane_rs_" + sfmt_ + "_b128"));
     e->buf(0, l.up_s.q);
     e->buf(1, l.up_s.s);
     e->buf(2, ffn_->rs, j * I_ * 2);
     e->buf(3, signs_);
     e->val(4, pu);
     e->dispatch(I_ / 8, 1, 1, 256);
-    const WP pd{0, 0, I_, I_, 0, 0, 1.0f};
-    e->use(pipe("nh_ane_rs_iq2_b256"));
+    const WP pd{0, 0, I_, I_, 0, 0, l.down_s.gs};
+    e->use(pipe("nh_ane_rs_" + sfmt_ + "_b256"));
     e->buf(0, l.down_s.q);
     e->buf(1, l.down_s.s);
     e->buf(2, ffn_->rsd, j * H_ * 2);
@@ -533,7 +552,7 @@ void NhAne::stage(Encoder& e, int which, int li) {
     const uint32_t g0 = which == 0 ? ain0() : gout_;
     const std::vector<int>& lv = mamba_;
     const size_t j = size_t(std::find(lv.begin(), lv.end(), li) - lv.begin());
-    e.use(pipe("nh_ane_stage_fp4_b128"));
+    e.use(pipe("nh_ane_stage_" + mfmt_ + "_b128"));
     for (size_t k = 0; k < op.w.size(); ++k) {
       const WP p{g0, uint32_t(k * kSeg), kSeg, W.K, op.w[k].stride, op.s.stride / 2, W.gs};
       e.buf(0, W.q);
@@ -549,9 +568,9 @@ void NhAne::stage(Encoder& e, int which, int li) {
   }
   Op& op = *ffn_;
   const size_t j = size_t(std::find(moe_.begin(), moe_.end(), li) - moe_.begin());
-  e.use(pipe("nh_ane_stage_iq2_b128"));
+  e.use(pipe("nh_ane_stage_" + sfmt_ + "_b128"));
   for (size_t k = 0; k < op.w.size(); ++k) {
-    const WP p{0, uint32_t(k * kSeg), kSeg, H_, op.w[k].stride, op.s.stride / 2, 1.0f};
+    const WP p{0, uint32_t(k * kSeg), kSeg, H_, op.w[k].stride, op.s.stride / 2, l.up_s.gs};
     e.buf(0, l.up_s.q);
     e.buf(1, l.up_s.s);
     e.buf(2, op.rs, j * I_ * 2);
@@ -561,10 +580,10 @@ void NhAne::stage(Encoder& e, int which, int li) {
     e.val(6, p);
     e.dispatch(I_ / 8, kSeg / 128, 1, 256);
   }
-  e.use(pipe("nh_ane_stage_iq2_b256"));
+  e.use(pipe("nh_ane_stage_" + sfmt_ + "_b256"));
   uint32_t col = 0;
   for (size_t i = 0; i < op.wd.size(); ++i) {
-    const WP p{0, col, dseg_[i], I_, op.wd[i].stride, op.sd.stride / 2, 1.0f};
+    const WP p{0, col, dseg_[i], I_, op.wd[i].stride, op.sd.stride / 2, l.down_s.gs};
     e.buf(0, l.down_s.q);
     e.buf(1, l.down_s.s);
     e.buf(2, op.rsd, j * H_ * 2);

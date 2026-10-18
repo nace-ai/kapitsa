@@ -13,8 +13,8 @@
 //   repo but .gitattributes is fetched. Its companions are fetched with it: an MTP head ("mtp": files taken from a
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
 //   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first). Both run with a trunk of
-//   any precision (the drafter reads the trunk's embedding and output layer in any format). Nemotron 3.5 Bolt's
-//   companion is NVIDIA's LiLiCorr drafter ("lilicorr", in dflash/ as oMLX lays it out).
+//   any precision (the drafter reads the trunk's embedding and output layer in any format). Nemotron 3.5 Bolt's and
+//   Super-VL's companion is NVIDIA's LiLiCorr drafter for each ("lilicorr", in dflash/ as oMLX lays it out).
 // - download_gb is shown before a download (weights and companions). Memory needs no entry: the engine plans it
 //   from the variant's headers.
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
@@ -70,6 +70,15 @@ Companion lilicorr_bolt() {
           .repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr",
           .revision = "abd478065678ee83a93821c4b3f512da24e4cecb",
           .files = {"config.json", "model.safetensors", "LICENSE"},
+          .subdir = "dflash"};
+}
+
+Companion lilicorr_super() {
+  // NVIDIA's LiLiCorr block drafter for Super-VL (NVFP4 / BF16, with its own NVFP4 copy of the LM head), in dflash/
+  return {.kind = "lilicorr",
+          .repo = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
+          .revision = "292bf1efc06ba39567da7351f2ad7a522afa3959",
+          .files = {"config.json", "model.safetensors"},
           .subdir = "dflash"};
 }
 
@@ -210,6 +219,21 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
             .companions = {lilicorr_bolt()},
             .download_gb = 25.08},
+       }},
+      {.name = "nemotron-3.5-super-vl",
+       .aliases = {"nemotron-super", "super-vl", "super"},
+       .title = "Nemotron 3.5 Super-VL 120B-A12B",
+       .about = "NVIDIA's hybrid Mamba-2 MoE, 12B active, NVFP4 experts (96 GB+ Macs, 128 GB for full context)",
+       // one variant: NVIDIA's NVFP4 checkpoint, its safetensors as they are
+       .default_variant = "nvfp4",
+       .fallbacks = {},
+       .variants = {
+           {.name = "nvfp4",
+            .quant = "NVFP4 experts and shared expert, FP8 Mamba / attention / head, BF16 latent / embedding",
+            .repo = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+            .revision = "59b8721646c38111a242da18218859fb2b454322",
+            .companions = {lilicorr_super()},
+            .download_gb = 76.38},
        }},
       // Kept last until its repo is published (`kapitsa serve` without --model would otherwise pick it on a 128 GB
       // Mac): TODO pin the repo's revision after the upload, set download_gb from its listing, then move it up.

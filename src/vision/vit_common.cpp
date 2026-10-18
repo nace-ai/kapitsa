@@ -240,6 +240,18 @@ void vit_ln(Encoder& e, const Buffer& x, uint32_t x_ld, const Buffer* pending, c
   e.dispatch((uint32_t(rows) + 7) / 8, 1, 1, 256);
 }
 
+void vit_ln_inplace(Encoder& e, const Buffer& x, uint32_t x_ld, const Buffer* pending, const Buffer& w, const Buffer& b,
+                    int rows, int D, float eps) {
+  const VitLnParams lp{uint32_t(rows), uint32_t(D), x_ld, 0, eps, pending ? 1u : 0u};
+  e.use(vit_pipe("vit_ln_f32"));
+  e.buf(0, x);
+  e.buf(1, pending ? *pending : w);
+  e.buf(2, w);
+  e.buf(3, b);
+  e.val(5, lp);
+  e.dispatch((uint32_t(rows) + 7) / 8, 1, 1, 256);
+}
+
 void vit_act(Encoder& e, const char* kernel, const Buffer& y, uint32_t ld, const Buffer& bias, const Buffer& dst,
              uint32_t out_ld, int rows, int n, uint32_t act) {
   const VitActParams ap{uint32_t(rows), uint32_t(n), ld, act, out_ld};
