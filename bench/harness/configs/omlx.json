@@ -15,6 +15,7 @@
                      "dflash_block_size": 5, "dflash_verify_mode": "adaptive"}}}}},
    {"clean_dir": "{state}/omlx/q36-35b-best/base/kv-cache"}
   ],
+  "cleanup": [{"clean_dir": "{state}/omlx/q36-35b-best/base/kv-cache"}],
   "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q36-35b-best/models", "--no-hf-cache",
           "--headless", "--host", "127.0.0.1", "--port", "8141", "--base-path", "{state}/omlx/q36-35b-best/base",
           "--paged-ssd-cache-dir", "{state}/omlx/q36-35b-best/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
@@ -44,6 +45,7 @@
                    "data": {"version": 1, "models": {"qwen3.6-35b-a3b-4bit": {"mtp_enabled": false}}}}},
    {"clean_dir": "{state}/omlx/q36-35b/base/kv-cache"}
   ],
+  "cleanup": [{"clean_dir": "{state}/omlx/q36-35b/base/kv-cache"}],
   "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q36-35b/models", "--no-hf-cache",
           "--headless", "--host", "127.0.0.1", "--port", "8084", "--base-path", "{state}/omlx/q36-35b/base",
           "--paged-ssd-cache-dir", "{state}/omlx/q36-35b/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
@@ -70,6 +72,7 @@
                      "dflash_block_size": 5, "dflash_verify_mode": "dflash"}}}}},
    {"clean_dir": "{state}/omlx/q38-27b-best/base/kv-cache"}
   ],
+  "cleanup": [{"clean_dir": "{state}/omlx/q38-27b-best/base/kv-cache"}],
   "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q38-27b-best/models", "--no-hf-cache",
           "--headless", "--host", "127.0.0.1", "--port", "8141", "--base-path", "{state}/omlx/q38-27b-best/base",
           "--paged-ssd-cache-dir", "{state}/omlx/q38-27b-best/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",
@@ -90,6 +93,7 @@
                    "data": {"version": 1, "models": {"qwen3.8-27b-4bit-mtp": {"mtp_enabled": false}}}}},
    {"clean_dir": "{state}/omlx/q38-27b/base/kv-cache"}
   ],
+  "cleanup": [{"clean_dir": "{state}/omlx/q38-27b/base/kv-cache"}],
   "cmd": ["{env:OMLX_BIN=omlx}", "serve", "--model-dir", "{state}/omlx/q38-27b/models", "--no-hf-cache",
           "--headless", "--host", "127.0.0.1", "--port", "8084", "--base-path", "{state}/omlx/q38-27b/base",
           "--paged-ssd-cache-dir", "{state}/omlx/q38-27b/base/kv-cache", "--paged-ssd-cache-max-size", "4GB",

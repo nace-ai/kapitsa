@@ -7,6 +7,9 @@ Measures, through the server's /v1/chat/completions streaming API (what coding a
   * prefill tok/s + TTFT   (cold ~4k and ~16k token prompts; cache-busting nonce after the system tag)
   * cached TTFT            (agent pattern: 3 append-only follow-up turns on the same prefix, median)
   * tool calling           (streaming + non-streaming, tools array, tool-result round trip)
+  * agent session          (agent_replay.py: a recorded opencode session, agent-traces/*.json, replayed request
+                            by request, greedy, max_tokens = each recorded answer's length; per-turn TTFT,
+                            writing rate and time, session totals)
   * memory                 (footprint phys_footprint / peak / resident mapped files of the server
                             process tree at the end of every phase, plus swap)
 
@@ -289,14 +292,15 @@ def post(base, body, stream, timeout=1800, session=None):
 def stream_chat(base, body, session=None, timeout=1800):
     """Streams one chat completion. Returns ttft/gen_time/total (s), usage, timings (llama.cpp and
     Ollama send one), content, reasoning, tool_calls, n_chunks (content-bearing events), finish, and
-    the per-event arrival times (ev_t, s since request) and character counts (ev_c)."""
+    the per-event arrival times (ev_t, s since request), character counts (ev_c) and kinds (ev_k: "c" content,
+    "r" reasoning, "t" tool call; an event can carry several)."""
     body = dict(body)
     body["stream"] = True
     body.setdefault("stream_options", {"include_usage": True})
     t0 = time.perf_counter()
     r = post(base, body, True, session=session, timeout=timeout)
     first = last = usage = timings = finish = None
-    content, reasoning, tcs, ev_t, ev_c = [], [], {}, [], []
+    content, reasoning, tcs, ev_t, ev_c, ev_k = [], [], {}, [], [], []
     n = 0
     for raw in r:
         line = raw.decode("utf-8", "ignore").strip()
@@ -317,14 +321,15 @@ def stream_chat(base, body, session=None, timeout=1800):
             d = ch.get("delta") or {}
             if ch.get("finish_reason"):
                 finish = ch["finish_reason"]
-            got, nch = False, 0
+            got, nch, kind = False, 0, ""
             if d.get("content"):
-                content.append(d["content"]); nch += len(d["content"]); got = True
+                content.append(d["content"]); nch += len(d["content"]); got = True; kind += "c"
             rc = d.get("reasoning_content") or d.get("reasoning")
             if rc:
-                reasoning.append(rc); nch += len(rc); got = True
+                reasoning.append(rc); nch += len(rc); got = True; kind += "r"
             for tc in d.get("tool_calls") or []:
                 got = True
+                kind += "" if "t" in kind else "t"
                 i = tc.get("index", 0)
                 e = tcs.setdefault(i, {"id": None, "name": "", "arguments": ""})
                 if tc.get("id"):
@@ -343,11 +348,12 @@ def stream_chat(base, body, session=None, timeout=1800):
                 last = now
                 ev_t.append(now - t0)
                 ev_c.append(nch)
+                ev_k.append(kind)
     t_end = time.perf_counter()
     return {"ttft": (first - t0) if first else None, "gen_time": (last - first) if first and last else None,
             "total": t_end - t0, "usage": usage, "timings": timings, "content": "".join(content),
             "reasoning": "".join(reasoning), "tool_calls": [tcs[k] for k in sorted(tcs)], "n_chunks": n,
-            "finish": finish, "ev_t": ev_t, "ev_c": ev_c}
+            "finish": finish, "ev_t": ev_t, "ev_c": ev_c, "ev_k": ev_k}
 
 # ---------------------------------------------------------------- request parameters
 def _overrides(a):
@@ -739,13 +745,24 @@ def parse_args(argv=None):
                     help="light: one tiny request; full: the compare_engines warm-up; none: caller warmed up")
     ap.add_argument("--adaptive-warm", action="store_true", help="with --warmup full: 3 extra full decodes")
     ap.add_argument("--no-gpu-lock", action="store_true", help=f"do not take the GPU lock {gpu_hogs.LOCK_PATH} (NACE_GPU_LOCK_HELD=1 also skips it)")
-    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools")
+    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent")
+    ap.add_argument("--agent-trace", default=None,
+                    help="agent session to replay (default agent-traces/opencode-ledger.json; 'none' = no agent phase)")
+    ap.add_argument("--agent-tool-mode", default="rendered", choices=["rendered", "api"],
+                    help="rendered: tools in the system prompt as the Qwen chat template renders them; api: as recorded")
+    ap.add_argument("--agent-gaps", default="recorded", help="pause before each agent turn: recorded (<= 5 s), none, or seconds")
+    ap.add_argument("--agent-max-turns", type=int, default=None, help="replay only the first N requests of the trace")
+    ap.add_argument("--agent-timeout", type=float, default=2400, help="start no agent turn after this many seconds")
     ap.add_argument("--out", default=None, help="result JSON (default: $BENCH_OUT or bench/harness/runs, results/<label>-<time>.json)")
     a = ap.parse_args(argv)
     if a.greedy_runs is None:
         a.greedy_runs = a.decode_runs
     if a.corpus:
         set_corpus(a.corpus)
+    if a.agent_trace is None:
+        a.agent_trace = os.path.join(HERE, "agent-traces", "opencode-ledger.json")
+    elif a.agent_trace.lower() == "none":
+        a.agent_trace = ""
     return a
 
 
@@ -826,6 +843,21 @@ def main():
             res["tools_pass"] = tools_pass(res["tools"])
             for t in res["tools"]:
                 print(f"  tools(think={t['thinking']}): stream ok={t['stream'].get('ok')} {[(x['name'], x['arguments']) for x in t['stream'].get('tool_calls', [])]} leak={t['stream'].get('content_leak')} | nonstream ok={t['nonstream'].get('ok')} | roundtrip={t.get('round_trip', {}).get('ok')}", flush=True)
+        if "agent" not in skip and a.agent_trace:
+            import agent_replay
+            if not os.path.exists(a.agent_trace):
+                print(f"  agent session: no trace at {a.agent_trace}; skipped", flush=True)
+            else:
+                trace = agent_replay.load_trace(a.agent_trace)
+                print(f"  agent session: {trace.get('name')} ({len(trace['requests'])} requests, tool mode "
+                      f"{a.agent_tool_mode}, gaps {a.agent_gaps})", flush=True)
+                res["agent"] = phase("agent", lambda: agent_replay.replay(
+                    a, trace, a.agent_tool_mode, a.agent_gaps, a.agent_max_turns,
+                    log=lambda m: print(m, flush=True), timeout_s=a.agent_timeout))
+                ag = res["agent"]
+                print("  agent session: " + agent_replay.line(ag["summary"])
+                      + (f" INVALID {ag['invalid']}" if ag["invalid"] else "")
+                      + (f" flags {ag['flags']}" if ag["flags"] else ""), flush=True)
     finally:
         if mem:
             mem.stop_ev.set(); mem.join(timeout=5)
@@ -843,6 +875,9 @@ def main():
         fl += [f"prefill_{p['target']}: {x}" for x in p.get("flags", [])]
         inv += [f"cached_{p['target']}: {x}" for x in p.get("cached", {}).get("invalid", [])]
         fl += [f"cached_{p['target']}: {x}" for x in p.get("cached", {}).get("flags", [])]
+    if res.get("agent"):
+        inv += [f"agent: {x}" for x in res["agent"].get("invalid", [])]
+        fl += [f"agent: {x}" for x in res["agent"].get("flags", [])]
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")

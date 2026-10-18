@@ -13,6 +13,13 @@ harness's own:
 Best value per column is bold; Kapitsa rows are marked. Results of the old harness (schema 1: max-of-2 decode,
 no min_p/presence parity, no thinking guard) are left out unless --include-legacy.
 
+A second table per model covers the agent session (bench.py's "agent" phase, agent_replay.py), from each config's
+latest run that has one (clean: no INVALID reason in the phase and no contention flag in it):
+  engine time    the sum of the replayed requests' times (the gaps for the agent's tools are left out)
+  prefill        the sum of the requests' times to first token; decode = the rest
+  writing tok/s  all answers' tokens after their first streamed event over the time from first to last event
+  TTFT           first request (cold), and the median / p90 of the follow-up requests
+
 usage: compare_table.py [results dir ...] [--out FILE_WITHOUT_EXT] [--include-legacy]
        writes <out>.md and <out>.csv, prints the markdown (default: the first results dir/compare_table)
 """
@@ -138,8 +145,13 @@ def extract(d, path):
     }
 
 
+def has_main_phases(d):
+    return bool(d.get("decode") or d.get("decode_greedy") or d.get("prefill") or d.get("tools")) or d.get("schema", 1) < 2
+
+
 def load(res_dirs, include_legacy):
-    best = {}
+    """(best run per (model, config) for the main table, best run per (model, config) with an agent session)"""
+    best, best_agent = {}, {}
     for res_dir in res_dirs:
         for f in sorted(glob.glob(os.path.join(res_dir, "*.json"))):
             try:
@@ -153,11 +165,79 @@ def load(res_dirs, include_legacy):
             r = extract(d, f)
             if not r["model"]:
                 continue
-            r["rank"] = (not r["invalid"] and not r["contended"], not r["invalid"], r["when"])
             k = (r["model"], r["key"])
-            if k not in best or r["rank"] >= best[k]["rank"]:
-                best[k] = r
-    return best
+            if has_main_phases(d):
+                r["rank"] = (not r["invalid"] and not r["contended"], not r["invalid"], r["when"])
+                if k not in best or r["rank"] >= best[k]["rank"]:
+                    best[k] = r
+            ag = extract_agent(d, f, r)
+            if ag:
+                if k not in best_agent or ag["rank"] >= best_agent[k]["rank"]:
+                    best_agent[k] = ag
+    return best, best_agent
+
+
+def extract_agent(d, path, base):
+    """The agent-session row of a result, or None."""
+    a = d.get("agent")
+    if not isinstance(a, dict) or not a.get("summary"):
+        return None
+    s = a["summary"]
+    ph = ((d.get("contention") or {}).get("phases") or {}).get("agent") or {}
+    contended = bool(ph.get("flagged"))
+    invalid = list(a.get("invalid") or [])
+    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours")}
+    tr = a.get("trace") or {}
+    r.update({"engine_s": s.get("engine_s"), "prefill_s": s.get("prefill_s"), "decode_s": s.get("decode_s"),
+              "wall_s": s.get("wall_s"), "write_tps": s.get("write_tps"), "first_ttft": s.get("first_ttft_s"),
+              "fu_med": s.get("followup_ttft_median_s"), "fu_p90": s.get("followup_ttft_p90_s"),
+              "tokens_out": s.get("completion_tokens"), "tokens_cap": s.get("max_tokens"),
+              "turns": s.get("turns"), "turns_ok": s.get("turns_ok"), "context_max": s.get("context_tokens_max"),
+              "trace": tr.get("name"), "trace_sha": (tr.get("sha256") or "")[:12], "tool_mode": a.get("tool_mode"),
+              "invalid": invalid, "flags": list(a.get("flags") or []) + [f for f in d.get("flags", []) if f.startswith("disk:")],
+              "contended": contended, "foreign_max": ph.get("max_foreign_gpu_pct"),
+              "mem_mb": (d.get("memory") or {}).get("agent", {}).get("phys_footprint_peak_mb")})
+    r["rank"] = (not invalid and not contended, not invalid, r["when"])
+    return r
+
+
+AGENT_COLS = [  # key, header, fmt, better
+    ("engine_s", "engine time s", "%.1f", "min"),
+    ("prefill_s", "prefill s", "%.1f", "min"),
+    ("decode_s", "decode s", "%.1f", "min"),
+    ("write_tps", "writing tok/s", "%.1f", "max"),
+    ("first_ttft", "first TTFT s", "%.2f", "min"),
+    ("fu_med", "follow-up TTFT median s", "%.2f", "min"),
+    ("fu_p90", "follow-up TTFT p90 s", "%.2f", "min"),
+]
+
+
+def agent_table(model, rows):
+    rows = sorted(rows, key=lambda r: r["engine_s"] if r["engine_s"] is not None else 1e18)
+    best = {}
+    for key, _, _, how in AGENT_COLS:
+        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]]
+        best[key] = (max(vals) if how == "max" else min(vals)) if vals else None
+    traces = sorted({f"{r['trace']} ({r['trace_sha']}, tool mode {r['tool_mode']})" for r in rows})
+    hw = collections.Counter(r["hardware"] for r in rows if r.get("hardware")).most_common(1)
+    lines = [f"\n### {model}: agent session" + (f" ({hw[0][0]})" if hw else "") + "\n",
+             "Trace: " + "; ".join(traces) + "\n",
+             "| engine | " + " | ".join(h for _, h, _, _ in AGENT_COLS) + " | tokens out | turns | flags |",
+             "|---|" + "---|" * (len(AGENT_COLS) + 3)]
+    for r in rows:
+        name = r["display"] + (" (ours)" if r["ours"] and "ours" not in r["display"] else "")
+        cells = []
+        for k, _, f, _ in AGENT_COLS:
+            v = r.get(k)
+            c = "-" if v is None else f % v
+            if v is not None and v == best[k]:
+                c = f"**{c}**"
+            cells.append(c)
+        out = f"{r['tokens_out']}/{r['tokens_cap']}" if r.get("tokens_cap") else "-"
+        lines.append(f"| {name} | " + " | ".join(cells) + f" | {out} | {r['turns_ok']}/{r['turns']} | {short_flags(r)} |")
+    lines.append("")
+    lines.append("Runs: " + "; ".join(f"{r['display']} = `{r['file']}`" for r in rows))
+    return "\n".join(lines)
 
 
 COLS = [  # key, header, fmt, better ("max"/"min")
@@ -236,6 +316,12 @@ CSV_COLS = ["model", "display", "key", "label", "engine", "version", "when", "de
             "mem_mb", "mapped_mb", "tools", "invalid", "flags", "contended", "foreign_max", "ours", "schema", "file"]
 
 
+AGENT_CSV_COLS = ["model", "display", "key", "engine", "version", "when", "engine_s", "prefill_s", "decode_s", "wall_s",
+                  "write_tps", "first_ttft", "fu_med", "fu_p90", "tokens_out", "tokens_cap", "turns", "turns_ok",
+                  "context_max", "mem_mb", "trace", "trace_sha", "tool_mode", "invalid", "flags", "contended",
+                  "foreign_max", "ours", "file"]
+
+
 def csv_val(v):
     if isinstance(v, list):
         return "; ".join(v)
@@ -251,14 +337,20 @@ def main():
     ap.add_argument("--include-legacy", action="store_true", help="also use schema-1 results (old harness)")
     a = ap.parse_args()
     dirs = a.results or [os.path.join(bench.out_dir(), "results")]
-    best = load(dirs, a.include_legacy)
+    best, best_agent = load(dirs, a.include_legacy)
     out = a.out or os.path.join(dirs[0], "compare_table")
-    models = sorted({m for m, _ in best}, key=lambda m: (MODEL_ORDER.index(m) if m in MODEL_ORDER else len(MODEL_ORDER), m))
-    md, csv_rows = [], []
+    models = sorted({m for m, _ in list(best) + list(best_agent)},
+                    key=lambda m: (MODEL_ORDER.index(m) if m in MODEL_ORDER else len(MODEL_ORDER), m))
+    md, csv_rows, agent_rows = [], [], []
     for m in models:
         rows = [r for (mm, _), r in best.items() if mm == m]
-        md.append(table(m, rows))
-        csv_rows += sorted(rows, key=lambda r: -(r["decode"] or 0))
+        if rows:
+            md.append(table(m, rows))
+            csv_rows += sorted(rows, key=lambda r: -(r["decode"] or 0))
+        arows = [r for (mm, _), r in best_agent.items() if mm == m]
+        if arows:
+            md.append(agent_table(m, arows))
+            agent_rows += arows
     text = "\n".join(md) if md else "(no results)"
     print(text)
     with open(out + ".md", "w") as fh:
@@ -268,7 +360,13 @@ def main():
         w.writerow(CSV_COLS)
         for r in csv_rows:
             w.writerow([csv_val(r.get(c)) for c in CSV_COLS])
-    print(f"\n-> {out}.md, {out}.csv")
+    if agent_rows:
+        with open(out + "_agent.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(AGENT_CSV_COLS)
+            for r in agent_rows:
+                w.writerow([csv_val(r.get(c)) for c in AGENT_CSV_COLS])
+    print(f"\n-> {out}.md, {out}.csv" + (f", {out}_agent.csv" if agent_rows else ""))
 
 
 if __name__ == "__main__":
