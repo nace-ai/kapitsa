@@ -118,7 +118,9 @@ void Qwen35::v8_alloc() {
   const int tiles = cfg_.moe ? kMaxVerify * cfg_.top_k + 1 : 1;
   const int Ih = cfg_.moe ? std::max(cfg_.moe_I, cfg_.shared_I) : std::max(cfg_.dense_I, 64);
   v8h_ = g.alloc(size_t(tiles) * Ih * 8 * 2, "x8_h_tables");
-  v8cnt_ = g.alloc(size_t(std::max(cfg_.lin_hv, 1)) * 4 + 16, "gdn8_counters");
+  // per-head arrival counters of gdn_step_verify8s, one set per sequence of a batched pass (encode_verify_multi runs
+  // their steps side by side)
+  v8cnt_ = g.alloc((size_t(std::max(cfg_.lin_hv, 1)) * 4 + 16) * 8, "gdn8_counters");
   memset(v8cnt_.ptr(), 0, v8cnt_.size);
   if (!cfg_.moe) {
     v8g_ = g.alloc(size_t(8) * cfg_.dense_I * 4, "x8_gate_rows");
@@ -577,6 +579,227 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.val(3, sr);
   e.buf(4, cand_i_);  // (no remap table)
   e.dispatch(R, 1, 1, 1024);
+}
+
+// ---- batched decode: one 8-row verify over the rows of several sequences ----
+// Every row-independent part (norms into the X8 tables, projections, MLP / MoE, LM head, the top-k stage) runs once
+// over all the rows; the parts that read or write a sequence's own state run per group on views of the shared row
+// buffers: the GDN conv window, recurrence and tape (gdn_prep_verify, gdn_step_verify8s), the attention's KV cache
+// write and its attention over the cache (attn_prep, attn8m_partial, attn_rows_reduce), the sampler's second stage
+// (its parameters and RNG positions). Each group folds its sequence's pending rows first, as encode_verify8 does.
+void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups) {
+  int R = 0;
+  for (const VerifyGroup& gr : groups) {
+    if (!gr.s || gr.R < 1) fatal("encode_verify_multi: an empty group");
+    if (gr.pos + gr.R + 1 >= gr.s->cap) fatal("context full (%d)", gr.s->cap);
+    R += gr.R;
+  }
+  if (groups.empty() || R > 8) fatal("encode_verify_multi: %d rows", R);
+  if (v8_rlim_) fatal("encode_verify_multi: a verify row limit is set");
+  v8_alloc();
+  const int D = cfg_.hidden, HD = cfg_.hq * cfg_.head_dim, VD = cfg_.lin_hv * cfg_.lin_dv;
+  const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
+  const size_t qk = size_t(cfg_.lin_hk) * cfg_.lin_dk, hv = size_t(cfg_.lin_hv), kvw = size_t(cfg_.hkv) * cfg_.head_dim;
+  std::vector<size_t> r0(groups.size());
+  for (size_t g = 0, r = 0; g < groups.size(); ++g) {
+    r0[g] = r;
+    r += size_t(groups[g].R);
+  }
+  // rows [r0, r0 + R) of a row-major buffer of `w` floats per row
+  auto rows = [&](const Buffer& b, size_t g, size_t w) {
+    return b.view(r0[g] * w * 4, size_t(groups[g].R) * w * 4);
+  };
+  // (with a grouped encoder the per-sequence dispatches of one stage run side by side: they read and write
+  // disjoint rows of the shared buffers, their own sequence's state, their own counters and attention partials)
+  const size_t cnt_stride = (size_t(std::max(cfg_.lin_hv, 1)) * 4 + 16);
+  e.group_begin();
+  for (size_t g = 0; g < groups.size(); ++g)
+    enc_embed(e, groups[g].s->tok, groups[g].pos, groups[g].R, rows(x_, g, size_t(D)));
+  e.group_end();
+  static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;
+  const int split_thr = v8_knobs().gdnsplit;
+  const bool split = gdn8 && cfg_.lin_dv == 128 && cfg_.lin_dk == 128 && split_thr >= 32 && split_thr <= 1024 &&
+                     split_thr % 32 == 0 && 128 % (split_thr / 8) == 0;
+  static const int attn_mma = env_int("NI_V8_ATTN", 1);
+  static const int tg_target = env_int("NI_V8_ATTN_TGS", 160);
+  const int G = cfg_.hq / cfg_.hkv;
+  const bool mma = attn_mma && G <= 16 && cfg_.head_dim == 256;
+  for (int i = 0; i < cfg_.layers; ++i) {
+    const Layer& L = layers_[i];
+    if (L.linear) {
+      enc_x8(e, x_, R, D, L.in_norm);
+      enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_);
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        Seq& s = *groups[g].s;
+        const kp::GdnVerify gv{uint32_t(groups[g].R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv),
+                               C, cfg_.eps};
+        e.use(pipe8("gdn_prep_verify"));
+        e.buf(0, rows(qkv_, g, C)); e.buf(1, rows(ab_, g, hv)); e.buf(2, rows(bb_, g, hv)); e.buf(3, s.conv[i]);
+        e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
+        e.buf(7, rows(gq_, g, qk)); e.buf(8, rows(gk_, g, qk)); e.buf(9, rows(gv_, g, size_t(VD)));
+        e.buf(10, rows(gg_, g, hv)); e.buf(11, rows(gbeta_, g, hv));
+        e.buf(12, s.pend_qkv[i]);
+        e.val(13, gv);
+        e.dispatch(C / 128, 1, 1, 128);
+      }
+      e.group_end();
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        Seq& s = *groups[g].s;
+        const kp::GdnVerify gv{uint32_t(groups[g].R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv),
+                               C, cfg_.eps};
+        if (split) {
+          e.use(pipe8("gdn_step_verify8s"));
+          e.buf(0, rows(gq_, g, qk)); e.buf(1, rows(gk_, g, qk)); e.buf(2, rows(gv_, g, size_t(VD)));
+          e.buf(3, rows(gg_, g, hv)); e.buf(4, rows(gbeta_, g, hv));
+          e.buf(5, s.rec[i]); e.buf(6, rows(gout_, g, size_t(VD)));
+          e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);
+          e.val(12, gv);
+          e.buf(13, v8cnt_.view(g * cnt_stride, cnt_stride));
+          e.dispatch(cfg_.lin_hv, 128 / (split_thr / 8), 1, uint32_t(split_thr));
+        } else {
+          e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
+          e.buf(0, rows(gq_, g, qk)); e.buf(1, rows(gk_, g, qk)); e.buf(2, rows(gv_, g, size_t(VD)));
+          e.buf(3, rows(gg_, g, hv)); e.buf(4, rows(gbeta_, g, hv));
+          e.buf(5, s.rec[i]); e.buf(6, rows(zb_, g, size_t(VD))); e.buf(7, L.gnorm->buf);
+          e.buf(8, rows(gout_, g, size_t(VD)));
+          e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);
+          e.val(12, gv);
+          e.dispatch(cfg_.lin_hv, 1, 1, 1024);
+        }
+      }
+      e.group_end();
+      if (split) {  // the gated norm of all rows into the out_proj's table
+        const kp::GdnVerify ga{uint32_t(R), 0u, uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
+        e.use(pipe8("gdn_gnorm_x8"));
+        e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, v8t_); e.buf(4, v8s_);
+        e.val(5, ga);
+        e.dispatch(cfg_.lin_hv, 1, 1, 256);
+      } else {
+        enc_x8(e, gout_, R, VD, nullptr);
+      }
+      enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+    } else {
+      enc_x8(e, x_, R, D, L.in_norm);
+      enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_);
+      // each sequence's history chunks as enc_attn8 cuts them, its partials in a region of their own (the
+      // sequences' chunks x rows share the buffer's 1024)
+      std::vector<kp::AttnRows> rp(groups.size());
+      std::vector<size_t> pbase(groups.size());
+      const uint32_t share = std::max<uint32_t>(1, 1024 / uint32_t(groups.size()));
+      for (size_t g = 0, base = 0; g < groups.size(); ++g) {
+        const int pos = groups[g].pos, Rg = groups[g].R;
+        const uint32_t Lmax = uint32_t(pos + Rg), gran = mma ? 32 : 16;
+        const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
+        uint32_t chunk = std::max<uint32_t>(64, (Lmax + want - 1) / want);
+        chunk = (chunk + gran - 1) / gran * gran;
+        while ((Lmax + chunk - 1) / chunk * uint32_t(Rg) > share) chunk += gran;
+        const uint32_t nch = (Lmax + chunk - 1) / chunk;
+        rp[g] = kp::AttnRows{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos), chunk, uint32_t(groups[g].s->cap),
+                             1.0f / std::sqrt(float(cfg_.head_dim)), nch};
+        pbase[g] = base;
+        base += size_t(Rg) * size_t(cfg_.hq) * nch;  // partial rows (r * Hq + h) * nchunks + c
+      }
+      auto part = [&](const Buffer& b, size_t g, size_t w) {
+        const size_t n = size_t(groups[g].R) * size_t(cfg_.hq) * rp[g].nchunks;
+        return b.view(pbase[g] * w * 4, n * w * 4);
+      };
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        const Seq& s = *groups[g].s;
+        const kp::AttnPrep ap{uint32_t(groups[g].R), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim),
+                              uint32_t(cfg_.rot_dims), uint32_t(groups[g].pos), uint32_t(s.cap), cfg_.eps, cfg_.theta};
+        e.use(pipe8(mrope(s) ? "attn_prep_m" : "attn_prep"));
+        e.buf(0, rows(qg_, g, 2 * size_t(HD))); e.buf(1, rows(kr_, g, kvw)); e.buf(2, rows(vr_, g, kvw));
+        e.buf(3, L.q_norm->buf); e.buf(4, L.k_norm->buf);
+        e.buf(5, rows(qo_, g, size_t(HD))); e.buf(6, s.kc[i]); e.buf(7, s.vc[i]);
+        e.val(8, ap);
+        if (mrope(s)) enc_mrope_args(e, s);
+        e.dispatch(cfg_.hq + 2 * cfg_.hkv, groups[g].R, 1, cfg_.head_dim);
+      }
+      e.group_end();
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        const Seq& s = *groups[g].s;
+        const int Rg = groups[g].R;
+        const uint32_t Ru = uint32_t(Rg);
+        if (mma) {
+          e.use(pipe8("attn8m_partial"));
+          e.buf(0, rows(qo_, g, size_t(HD))); e.buf(1, s.kc[i]); e.buf(2, s.vc[i]);
+          e.buf(3, part(part_o_, g, size_t(cfg_.head_dim))); e.buf(4, part(part_ml_, g, 2));
+          e.val(5, rp[g]);
+          e.val(6, Ru);
+          e.dispatch(rp[g].nchunks, cfg_.hkv, 1, 64 * G);
+        } else {
+          static const int rb_env = env_int("NI_V8_ATTN_RB", 0);
+          const int RB = std::max(1, std::min(rb_env ? rb_env : 32 / G, Rg));
+          e.use(pipe8("attn8_partial"));
+          e.buf(0, rows(qo_, g, size_t(HD))); e.buf(1, s.kc[i]); e.buf(2, s.vc[i]);
+          e.buf(3, part(part_o_, g, size_t(cfg_.head_dim))); e.buf(4, part(part_ml_, g, 2));
+          e.val(5, rp[g]);
+          e.val(6, Ru);
+          e.dispatch(rp[g].nchunks, cfg_.hkv, (Rg + RB - 1) / RB, 32 * G * RB);
+        }
+      }
+      e.group_end();
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        e.use(pipe8("attn_rows_reduce"));
+        e.buf(0, part(part_o_, g, size_t(cfg_.head_dim))); e.buf(1, part(part_ml_, g, 2));
+        e.buf(2, rows(qg_, g, 2 * size_t(HD))); e.buf(3, rows(attn_out_, g, size_t(HD)));
+        e.val(4, rp[g]);
+        e.dispatch(cfg_.hq, groups[g].R, 1, cfg_.head_dim);
+      }
+      e.group_end();
+      enc_x8(e, attn_out_, R, HD, nullptr);
+      enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+    }
+    if (cfg_.moe) enc_moe8(e, L, R, i);
+    else enc_mlp8(e, L, R);
+    e.group_begin();
+    for (size_t g = 0; g < groups.size(); ++g) {  // the drafters' captures, by row
+      const CaptureHook* cap = groups[g].cap;
+      if (!cap || i >= int(cap->slot.size()) || cap->slot[size_t(i)] < 0) continue;
+      const kp::DflCapture cp{uint32_t(D), cap->ld, uint32_t(cap->slot[size_t(i)]) * uint32_t(D),
+                              uint32_t(groups[g].cap_row0)};
+      e.use(pipe8("dfl_capture"));
+      e.buf(0, rows(x_, g, size_t(D)));
+      e.buf(1, cap->dst);
+      e.val(2, cp);
+      e.dispatch((uint32_t(D) / 4 + 255) / 256, uint32_t(groups[g].R), 1, 256);
+    }
+    e.group_end();
+  }
+  for (const VerifyGroup& gr : groups) gr.s->n_pend = 0;  // folded by this pass; commit_rows() sets the new count
+  enc_x8(e, x_, R, D, final_norm_);
+  enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_);
+  // sampling: the top-k stage once over every row (the largest candidate count any group needs), the second stage
+  // per group with its parameters
+  uint32_t Kmax = 1;
+  for (const VerifyGroup& gr : groups)
+    if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
+  const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
+  const kp::TopkStage ts{V, Kmax, chunk};
+  e.use(pipe8("topk_stage1_rows"));
+  e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
+  e.val(3, ts);
+  e.dispatch(ntg, R, 1, 256);
+  e.group_begin();
+  for (size_t g = 0; g < groups.size(); ++g) {
+    const SamplingParams& sp = groups[g].sp;
+    const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+    const bool own = groups[g].tok_out;
+    const kp::SampleRows sr{ntg * Kmax, K, sp.temperature, sp.top_p, sp.seed, uint32_t(groups[g].pos),
+                            own ? uint32_t(groups[g].pos + 1) : uint32_t(r0[g]), 0, 0};
+    e.use(pipe8("sample_stage2_rows"));
+    e.buf(0, rows(cand_v_, g, size_t(ntg) * Kmax)); e.buf(1, rows(cand_i_, g, size_t(ntg) * Kmax));
+    e.buf(2, own ? groups[g].s->tok : samp_);
+    e.val(3, sr);
+    e.buf(4, cand_i_);  // (no remap table)
+    e.dispatch(uint32_t(groups[g].R), 1, 1, 1024);
+  }
+  e.group_end();
 }
 
 } // namespace ni

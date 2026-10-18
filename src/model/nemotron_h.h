@@ -125,6 +125,8 @@ class NemotronH : public Model {
   bool ane_finish_chunk() override;
   void ane_abort(const std::string& why) override;
   bool grouped_passes() const override { return group_; }
+  // the routed experts are IQ2_XXS (Nemotron 3.5 Bolt's 24 GB checkpoint)
+  bool iq2_experts() const;
   bool ane_release() override;
   void ane_poll() override;
   const AneStats& ane_stats() const override { return ane_stats_; }
@@ -136,6 +138,23 @@ class NemotronH : public Model {
   // the sequence's pending rows; logits() rows 0..R-1 hold their next-token logits. commit_rows() then says how
   // many of the rows were accepted, and the next pass (or encode_flush) folds them into the state.
   void encode_verify(Encoder& e, Seq& s, int pos, int R);
+  // Batched decode: one pass over the rows of several sequences (sum of R <= kMaxRows). Group g verifies
+  // tokens[pos .. pos + R) of its sequence as encode_verify does (its pending rows are committed first, its rows
+  // become pending); the norms, projections, MoE and LM head run once over all the rows, the Mamba scans and the
+  // attention with its KV cache per group. Then one token per row is sampled with its group's parameters (RNG step:
+  // the row's position) into samples() rows [r0, r0 + R) (r0: the rows of the groups before it). With `cap`, the
+  // drafter's target layer inputs of the group's rows go to cap->feat rows [cap_row0, cap_row0 + R).
+  struct VerifyGroup {
+    Seq* s = nullptr;
+    int pos = 0, R = 1;
+    SamplingParams sp;
+    const NhCapture* cap = nullptr;
+    int cap_row0 = 0;
+    // the samples go into the sequence's own tokens (row j's to tokens[pos + 1 + j]) instead of samples(), where the
+    // next pass can read them before the host has (pipelined plain rows)
+    bool tok_out = false;
+  };
+  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   void encode_flush(Encoder& e, Seq& s);
   // Logits of rows [0, T) of the last pass (fp32 [T][vocab], T <= kMaxRows) / of the last prefill chunk.
@@ -183,8 +202,9 @@ class NemotronH : public Model {
                   uint32_t step);
   void enc_capture(Encoder& e, int layer, const Buffer& x, int pos0, int R);
   // np pending rows zp (a verify block's accepted rows, at pos0 - np) are committed first when given
+  // parts: 1 the scan, 2 the conv ring updates after it (a batched pass runs every sequence's scans, then their rings)
   void enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int pos0, bool write, const Buffer& y,
-               const Buffer* zp = nullptr, int np = 0);
+               const Buffer* zp = nullptr, int np = 0, int parts = 3);
   void enc_attn(Encoder& e, Seq& s, int li, int pos0, int R);
   void enc_moe(Encoder& e, const NhLayer& L, int R);
   // prefill of T rows (> kMaxRows) with GEMMs; the final hidden rows (pre-norm) stay in px_

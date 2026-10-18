@@ -987,7 +987,63 @@ void DFlash2::arm_verify(int P) {
 
 void DFlash2::disarm() { tg_.set_capture(nullptr); }
 
-void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
+void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) { enc_commit_from(e, d, m, capt_); }
+
+void DFlash2::stage_init(DFlashSeq& d) {
+  if (d.stage) return;
+  d.walk = Gpu::get().alloc(960, "dfl_walk");
+  d.stage = Gpu::get().alloc(size_t(kB) * hook_vf_.ld * 2, "dfl_stage");
+  d.staged = 0;
+  d.stage_hook.dst = d.stage;
+  d.stage_hook.ld = hook_vf_.ld;
+  d.stage_hook.slot = hook_vf_.slot;
+  d.stage_hook.pos_base = 0;
+  d.stage_hook.rows = kB;
+}
+
+void DFlash2::encode_save_walk(Encoder& e, DFlashSeq& d) {
+  auto copy = [&](const Buffer& src, const Buffer& dst) {
+    const uint32_t n = uint32_t(std::min(src.size, dst.size) / 16);
+    e.use(dpipe("copy_u32"));
+    e.buf(0, src);
+    e.buf(1, dst);
+    e.val(2, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  };
+  copy(cand_i_, d.walk.view(0, 448));
+  copy(qprob_, d.walk.view(448, 448));
+  copy(walk_k_, d.walk.view(896, 32));
+}
+
+void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K, const SamplingParams& sp, int r0,
+                                 uint32_t n) {
+  if (K < 1 || K > kB - 1 || sp.temperature <= 0) fatal("DFlash2 accept_rows: K=%d T=%g", K, sp.temperature);
+  const size_t R = size_t(K) + 1;
+  kp::DflDist dp{n, uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)), sp.temperature, sp.top_p};
+  e.use(dpipe("dfl_dist_rows"));
+  e.buf(0, tg_.verify_cand_vals().view(size_t(r0) * n * 4, R * n * 4));
+  e.buf(1, tg_.verify_cand_ids().view(size_t(r0) * n * 4, R * n * 4));
+  e.buf(2, dist_id_); e.buf(3, dist_p_); e.buf(4, dist_keep_);
+  e.val(5, dp);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+  kp::DflAccept ap{uint32_t(P), uint32_t(K), sp.temperature, sp.seed, 0u};
+  e.use(dpipe("dfl_accept"));
+  e.buf(0, s.tok); e.buf(1, tg_.verify_samples().view(size_t(r0) * 4, R * 4)); e.buf(2, dist_id_); e.buf(3, dist_p_);
+  e.buf(4, d.walk.view(0, 448)); e.buf(5, d.walk.view(448, 448)); e.buf(6, d.walk.view(896, 32));
+  e.buf(7, d.walk.view(928, 16));
+  e.val(8, ap);
+  e.buf(9, kdyn_);
+  e.buf(10, d.walk.view(944, 16));
+  e.dispatch(1, 1, 1, 32);
+}
+
+void DFlash2::encode_commit_staged(Encoder& e, DFlashSeq& d) {
+  if (d.staged <= 0) return;
+  enc_commit_from(e, d, d.staged, d.stage);
+  d.staged = 0;
+}
+
+void DFlash2::enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src) {
   // m < 0: GPU-driven (rows and positions from the drafter state; d.ctx is advanced by the caller)
   const bool gpu = m < 0;
   if (!gpu && (m < 1 || m > kB)) fatal("DFlash2 commit: m=%d", m);
@@ -999,7 +1055,7 @@ void DFlash2::encode_commit(Encoder& e, DFlashSeq& d, int m) {
   {
     kp::DflX8 p{nH, gpu ? 0xffffffffu : uint32_t(m), nH, 1.0f / 16.0f};
     e.use(dpipe("dfl_x8_from_bf16"));
-    e.buf(0, capt_); e.buf(1, xh_); e.buf(2, xs_);
+    e.buf(0, src); e.buf(1, xh_); e.buf(2, xs_);
     e.val(3, p);
     e.buf(4, gst_);
     e.dispatch(8, 1, 1, 256);

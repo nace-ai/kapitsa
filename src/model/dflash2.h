@@ -33,6 +33,15 @@ struct DFlashSeq {
   Buffer ring_k, ring_v;  // bf16 [NL][8 kv heads][2048 slots][128]; slot = position mod 2048
   int ctx = 0;            // committed context positions 0 .. ctx-1 (the ring holds the last 2048)
   int valid_lo = 0;       // lowest position whose ring entry is valid (> 0 after a rewind past the window)
+  // Batched decode (DFlash2::stage_init): the target captures of rows not yet in the ring, positions ctx ..
+  // ctx + staged - 1, bf16 [8][n_slots * H]; the hook a batched verify writes them with (by row)
+  Buffer stage;
+  int staged = 0;
+  CaptureHook stage_hook;
+  // sampled requests in a batch: the walk of its last draft (candidate ids [7][16], q [7][16], choices [8]) and its
+  // acceptance's result {a, token}, kept per sequence (bytes 0, 448, 896, 928; 944: a drafter state it may write)
+  Buffer walk;
+  int accepted() const { return walk.as<int>()[232]; }
 };
 
 // 8-row affine-quantized GEMM (dfl_qmm8): Y_i[8, N_i] = oscale_i * X[8, K] . W_i^T for up to 4
@@ -123,6 +132,15 @@ class DFlash2 {
   void arm_verify(int P);
   void disarm();
   void encode_commit(Encoder& e, DFlashSeq& d, int m);
+  // Batched decode: d's staging buffer and its capture hook (once; allocated on first use), and the commit of its
+  // staged rows into the ring (d.ctx += d.staged, d.staged = 0)
+  void stage_init(DFlashSeq& d);
+  void encode_commit_staged(Encoder& e, DFlashSeq& d);
+  // Batched decode at T > 0: d keeps the walk of its draft (encode_save_walk right after its encode_draft); after the
+  // batched pass, the exact acceptance of its rows [r0, r0 + K + 1) (stage-1 candidates n per row), as encode_accept
+  // does for a single verify: tokens[P + 1 + a] = the next token, d.accepted() = a once the command buffer completed
+  void encode_save_walk(Encoder& e, DFlashSeq& d);
+  void encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K, const SamplingParams& sp, int r0, uint32_t n);
   Buffer capt() const { return capt_; }  // bf16 [8][n_slots * H]
 
   // ---- drafting pass (SPEC §4, §5, §7) ----
@@ -222,6 +240,8 @@ class DFlash2 {
   }
   void enc_qmm_rows(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M);  // prefill GEMM
   void enc_commit_kv(Encoder& e, DFlashSeq& d, const Buffer& kv, int rows, int pos0);
+  // encode_commit's projections of m rows of `src` (bf16 [8][n_slots * H]; the verify captures capt_ by default)
+  void enc_commit_from(Encoder& e, DFlashSeq& d, int m, const Buffer& src);
   void encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const SamplingParams& sp, bool gpu);
   void dbg(Encoder& e, const std::string& name, const Buffer& src, size_t bytes);
 

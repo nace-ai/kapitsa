@@ -528,6 +528,12 @@ void NemotronH::ane_build() {
 
 bool NemotronH::ane_splits(int T) const { return ane_ && T > kMaxRows && ane_->splits(T); }
 
+bool NemotronH::iq2_experts() const {
+  for (const NhLayer& L : layers_)
+    if (L.kind == 'E' && L.up_e.fmt == NhFmt::IQ2) return true;
+  return false;
+}
+
 bool NemotronH::ane_finish_chunk() {
   if (!ane_chunk_) return true;
   ane_chunk_ = false;
@@ -1372,13 +1378,14 @@ void NemotronH::enc_capture(Encoder& e, int layer, const Buffer& x, int pos0, in
 }
 
 void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int pos0, bool write, const Buffer& y,
-                        const Buffer* zp, int np) {
+                        const Buffer* zp, int np, int parts) {
   const NhLayer& L = layers_[size_t(li)];
   const SsmP p{uint32_t(T), uint32_t(pos0), write ? 1u : 0u, uint32_t(cfg_.in_proj()), uint32_t(cfg_.n_head),
                uint32_t(cfg_.head_dim), uint32_t(cfg_.d_state), uint32_t(cfg_.n_group)};
   // short passes (decode, verify, flush): one simdgroup per state row (NI_NH_SSM1=0: the head-per-threadgroup kernel)
   static const bool ssm1 = !getenv("NI_NH_SSM1") || atoi(getenv("NI_NH_SSM1")) != 0;
   const bool short_pass = (ssm1 || np > 0) && T <= kMaxRows && cfg_.head_dim % 8 == 0 && cfg_.d_state == 128;
+  if (parts & 1) {
   e.use(pipe(short_pass ? "nh_ssm1" : "nh_ssm"));
   e.buf(0, zx);
   e.buf(1, s.conv[size_t(li)]);
@@ -1396,6 +1403,8 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   e.val(12, npu);
   if (short_pass) e.dispatch(uint32_t(cfg_.n_head * cfg_.head_dim / 8), 1, 1, 256);
   else e.dispatch(uint32_t(cfg_.n_head), 1, 1, 256);
+  }
+  if (!(parts & 2)) return;
   if (np > 0) {  // the committed pending rows' raw xBC into the ring (after every head has read it)
     const uint32_t CH = uint32_t(cfg_.conv_ch());
     const RingP rp{uint32_t(np), uint32_t(pos0 - np), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner), CH};
@@ -1656,8 +1665,10 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   const bool lat = bool(L.lat_up);
   const Buffer& lin = lat ? lat_ : xn_;
   // With a grouped encoder (NI_NH_GROUP): router, latent down and shared up run together, then routed down and shared
-  // down; a serial encoder runs them one after another in the same order.
-  const bool grouped = e.grouped();
+  // down; a serial encoder runs them one after another in the same order. (The batched decode's grouped passes keep the
+  // serial order unless NI_NH_GROUP is on, as a single request's passes do: the shared expert's sum then comes after
+  // the routed experts', so a batched pass's rows round as their single passes do.)
+  const bool grouped = e.grouped() && group_;
   // router: logits (BF16 weights, fp32 products), sigmoid + selection bias, top-k
   if (grouped) e.group_begin();
   enc_mv(e, L.router, xn_, rl_, R, 0, uint32_t(cfg_.hidden), uint32_t(cfg_.max_E));
@@ -1957,6 +1968,189 @@ void NemotronH::encode_verify(Encoder& e, Seq& s, int pos, int R) {
   else if (s.n_pend > 0 && s.pend_pos + s.n_pend != pos) fatal("NemotronH: verify at %d after pending rows at %d", pos, s.pend_pos);
   enc_rows(e, s, pos, R, false);
   enc_head(e, R, logits_, size_t(cfg_.vocab));
+}
+
+// Batched decode (see the header): enc_rows' layer loop over the rows of several sequences. The Mamba in_proj, the
+// attention projections, the MoE and the LM head run once over all the rows; each group's in_proj rows go into its
+// sequence's pending buffer (the half its pending rows do not use) before its scan, which commits those pending rows
+// first (merged flush); its KV cache write and attention run on views of the shared row buffers.
+void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups) {
+  int R = 0;
+  for (const VerifyGroup& gr : groups) {
+    if (!gr.s || gr.R < 1) fatal("NemotronH: an empty verify group");
+    Seq& s = *gr.s;
+    if (gr.pos + gr.R >= s.cap) fatal("context full (%d)", s.cap);
+    if (!merge_flush_) encode_flush(e, s);
+    else if (s.n_pend > 0 && s.pend_pos + s.n_pend != gr.pos)
+      fatal("NemotronH: verify at %d after pending rows at %d", gr.pos, s.pend_pos);
+    R += gr.R;
+  }
+  if (groups.empty() || R > kMaxRows) fatal("NemotronH: %d rows in one pass", R);
+  const bool dyn = dyn_rows_;
+  dyn_rows_ = false;  // every row of every group is live
+  const size_t H = size_t(cfg_.hidden), IP = size_t(cfg_.in_proj()), DI = size_t(cfg_.d_inner);
+  const size_t QW = size_t(std::max(1, cfg_.hq * cfg_.hd)), KW = size_t(std::max(1, cfg_.hkv * cfg_.hd));
+  if ((IP * 4) % 16) fatal("NemotronH: in_proj width %zu", IP);
+  std::vector<size_t> r0(groups.size());
+  for (size_t g = 0, r = 0; g < groups.size(); ++g) {
+    r0[g] = r;
+    r += size_t(groups[g].R);
+  }
+  auto rows = [&](const Buffer& b, size_t g, size_t w) {
+    return b.view(r0[g] * w * 4, size_t(groups[g].R) * w * 4);
+  };
+  // (with a grouped encoder each stage's per-sequence dispatches run side by side: disjoint rows of the shared
+  // buffers, their own sequence's state and pending rows, their own attention partials)
+  e.group_begin();
+  for (size_t g = 0; g < groups.size(); ++g)
+    enc_embed(e, groups[g].s->tok, groups[g].pos, groups[g].R, rows(x_, g, H));
+  e.group_end();
+  const bool gm = gemm_rows_ && R >= 2;
+  const size_t half = size_t(kMaxRows) * IP * 4;
+  // the drafters' captures of layer i's input (i = layers: the trunk's output), by row, into each group's own hook
+  auto capture = [&](int i) {
+    e.group_begin();
+    for (size_t g = 0; g < groups.size(); ++g) {
+      const NhCapture* cap = groups[g].cap;
+      if (!cap || i >= int(cap->slot.size()) || cap->slot[size_t(i)] < 0) continue;
+      struct {
+        uint32_t D, ld, slot, dst_row0, src_row0;
+      } p{uint32_t(H), cap->ld, uint32_t(cap->slot[size_t(i)]), uint32_t(groups[g].cap_row0), uint32_t(r0[g])};
+      e.use(pipe("nh_capture"));
+      e.buf(0, x_);
+      e.buf(1, cap->feat);
+      e.bytes(2, &p, sizeof p);
+      e.dispatch(uint32_t(groups[g].R), uint32_t((H + 255) / 256), 1, 256);
+    }
+    e.group_end();
+  };
+  for (int i = 0; i < cfg_.layers; ++i) {
+    const NhLayer& L = layers_[size_t(i)];
+    capture(i);
+    enc_norm(e, x_, L.norm, xn_, R, cfg_.hidden);
+    if (gm) enc_rows_half(e, xn_, xnh_, R, cfg_.hidden);
+    if (L.kind == 'M') {
+      if (gm) enc_gemm(e, L.in, xnh_, zx_, R, 0);
+      else enc_mv(e, L.in, xn_, zx_, R, 0);
+      for (int part = 0; part < 3; ++part) {  // every sequence's copy into its pending rows, then scans, then rings
+        e.group_begin();
+        for (size_t g = 0; g < groups.size(); ++g) {
+          Seq& s = *groups[g].s;
+          const Buffer pb = s.pend_qkv[size_t(i)];
+          const Buffer zx = pb.view(size_t(1 - s.pend_half) * half, half);
+          if (part == 0) {
+            enc_copy(e, rows(zx_, g, IP), zx.view(0, size_t(groups[g].R) * IP * 4));
+          } else if (s.n_pend > 0 && merge_flush_) {
+            const Buffer zp = pb.view(size_t(s.pend_half) * half, half);
+            enc_ssm(e, s, i, zx, groups[g].R, groups[g].pos, false, rows(y_, g, DI), &zp, s.n_pend, part);
+          } else {
+            enc_ssm(e, s, i, zx, groups[g].R, groups[g].pos, false, rows(y_, g, DI), nullptr, 0, part);
+          }
+        }
+        e.group_end();
+      }
+      const GnormP gp{uint32_t(cfg_.d_inner), uint32_t(cfg_.d_inner / cfg_.n_group), cfg_.eps};
+      e.use(pipe(gm ? "nh_gnorm_half" : "nh_gnorm"));
+      e.buf(0, y_);
+      e.buf(1, L.gnorm);
+      e.buf(2, gm ? xnh_ : yn_);
+      e.val(3, gp);
+      e.dispatch(uint32_t(R * cfg_.n_group), 1, 1, 256);
+      if (gm) enc_gemm(e, L.out, xnh_, x_, R, 1);
+      else enc_mv(e, L.out, yn_, x_, R, 1);
+    } else if (L.kind == 'A') {
+      e.group_begin();
+      if (gm) {
+        enc_gemm(e, L.q, xnh_, q_, R, 0);
+        enc_gemm(e, L.k, xnh_, k_, R, 0);
+        enc_gemm(e, L.v, xnh_, v_, R, 0);
+      } else {
+        enc_mv(e, L.q, xn_, q_, R, 0);
+        enc_mv(e, L.k, xn_, k_, R, 0);
+        enc_mv(e, L.v, xn_, v_, R, 0);
+      }
+      e.group_end();
+      std::vector<AttnP> ap(groups.size());
+      std::vector<size_t> pbase(groups.size());
+      for (size_t g = 0, base = 0; g < groups.size(); ++g) {
+        const int pos0 = groups[g].pos, Rg = groups[g].R;
+        const int L_max = pos0 + Rg;
+        uint32_t chunk = 256;
+        while ((uint32_t(L_max) + chunk - 1) / chunk > uint32_t(attn_max_chunks_)) chunk *= 2;
+        const uint32_t nchunks = (uint32_t(L_max) + chunk - 1) / chunk;
+        ap[g] = AttnP{uint32_t(Rg), uint32_t(pos0), uint32_t(groups[g].s->cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
+                      chunk, nchunks, 1.0f / std::sqrt(float(cfg_.hd))};
+        pbase[g] = base;  // its partials: rows (r * Hq + h) * nchunks + c of a region of its own
+        base += size_t(Rg) * size_t(cfg_.hq) * nchunks;
+      }
+      auto part = [&](const Buffer& b, size_t g, size_t w) {
+        return b.view(pbase[g] * w * 4, size_t(groups[g].R) * size_t(cfg_.hq) * ap[g].nchunks * w * 4);
+      };
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        Seq& s = *groups[g].s;
+        const KvP kp{uint32_t(groups[g].R), uint32_t(groups[g].pos), uint32_t(s.cap), uint32_t(cfg_.hkv),
+                     uint32_t(cfg_.hd)};
+        e.use(pipe("nh_kv_write"));
+        e.buf(0, rows(k_, g, KW));
+        e.buf(1, rows(v_, g, KW));
+        e.buf(2, s.kc[size_t(i)]);
+        e.buf(3, s.vc[size_t(i)]);
+        e.val(4, kp);
+        e.dispatch(uint32_t(groups[g].R), uint32_t(2 * cfg_.hkv), 1, uint32_t(cfg_.hd));
+      }
+      e.group_end();
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        Seq& s = *groups[g].s;
+        e.use(pipe("nh_attn_partial"));
+        e.buf(0, rows(q_, g, QW));
+        e.buf(1, s.kc[size_t(i)]);
+        e.buf(2, s.vc[size_t(i)]);
+        e.buf(3, part(part_o_, g, size_t(cfg_.hd)));
+        e.buf(4, part(part_ml_, g, 2));
+        e.val(5, ap[g]);
+        e.dispatch(ap[g].nchunks, uint32_t(cfg_.hkv), uint32_t(groups[g].R), uint32_t(32 * (cfg_.hq / cfg_.hkv)));
+      }
+      e.group_end();
+      e.group_begin();
+      for (size_t g = 0; g < groups.size(); ++g) {
+        e.use(pipe("nh_attn_reduce"));
+        e.buf(0, part(part_o_, g, size_t(cfg_.hd)));
+        e.buf(1, part(part_ml_, g, 2));
+        e.buf(2, rows(ao_, g, QW));
+        e.val(3, ap[g]);
+        e.dispatch(uint32_t(cfg_.hq), uint32_t(groups[g].R), 1, uint32_t(cfg_.hd));
+      }
+      e.group_end();
+      if (gm) {
+        enc_rows_half(e, ao_, aoh_, R, cfg_.hq * cfg_.hd);
+        enc_gemm(e, L.o, aoh_, x_, R, 1);
+      } else {
+        enc_mv(e, L.o, ao_, x_, R, 1);
+      }
+    } else {
+      enc_moe(e, L, R);
+    }
+  }
+  capture(cfg_.layers);  // (a drafter reading the trunk's output: DSpark)
+  for (const VerifyGroup& gr : groups) {
+    gr.s->n_pend = gr.R;  // until commit_rows() says how many were accepted
+    gr.s->pend_pos = gr.pos;
+    gr.s->pend_half = 1 - gr.s->pend_half;
+  }
+  enc_head(e, R, logits_, size_t(cfg_.vocab));
+  const size_t V = size_t(cfg_.vocab);
+  for (size_t g = 0; g < groups.size(); ++g)
+    for (int j = 0; j < groups[g].R; ++j) {
+      const size_t r = r0[g] + size_t(j);
+      if (groups[g].tok_out)
+        enc_sample(e, logits_.view(r * V * 4, V * 4), groups[g].s->tok, groups[g].pos + 1 + j, groups[g].sp,
+                   uint32_t(groups[g].pos + j));
+      else
+        enc_sample(e, logits_.view(r * V * 4, V * 4), samp_, int(r), groups[g].sp, uint32_t(groups[g].pos + j));
+    }
+  dyn_rows_ = dyn;
 }
 
 void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {

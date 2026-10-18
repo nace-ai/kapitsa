@@ -250,6 +250,24 @@ class Qwen35 : public Model {
   // their pre-norm hidden states. commit_rows() then picks how many of them were accepted.
   // v8: take the 8-row path for any R >= 1 (a block drafter verifying fewer than 4 proposals).
   void encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8 = false);
+  // Batched decode: one 8-row verify pass over the rows of several sequences. Group g verifies tokens[pos .. pos + R)
+  // of its sequence (folding its pending rows first, as encode_verify does); the projections, the MLP / MoE and the
+  // LM head run once over all the rows (sum of R <= 8), the per-sequence parts (GDN conv, recurrence and tape;
+  // attention with its KV cache) per group. Group g's rows are rows [r0, r0 + R) of samples() (r0 = the rows of the
+  // groups before it), each sampled with its group's parameters (RNG step: the row's position). With `cap`, the
+  // drafter's target layer outputs of the group's rows go to cap->dst rows [cap_row0, cap_row0 + R) (cap->ld,
+  // cap->slot; its positions are not used). Afterwards commit_rows() per sequence, as after encode_verify.
+  struct VerifyGroup {
+    Seq* s = nullptr;
+    int pos = 0, R = 1;
+    SamplingParams sp;
+    const CaptureHook* cap = nullptr;
+    int cap_row0 = 0;
+    // the samples go into the sequence's own tokens (row j's to tokens[pos + 1 + j]) instead of samples(), where the
+    // next pass can read them before the host has (pipelined plain rows)
+    bool tok_out = false;
+  };
+  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   void encode_flush(Encoder& e, Seq& s);

@@ -176,6 +176,7 @@ struct ChatResult {
   // concurrency: time this request waited for a free slot, and the GPU turns it gave to other requests
   double queue_ms = 0;
   int yields = 0;
+  int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
 };
 
 // The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
@@ -271,6 +272,7 @@ class Engine {
     // yet: a request that has started may take its cache, as may an earlier one; it then reads its prompt from the
     // start), or for its KV cache to grow while decoding (its cache stays)
     enum class MemWait : uint8_t { none, before_prefill, growth } mem_wait = MemWait::none;
+    bool decoding = false;            // that request is in its decode loop
     Buffer park_h;                    // MTP decoding: the hidden rows the next cycle reads, while other requests run
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
@@ -305,6 +307,45 @@ class Engine {
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
+
+  // ---- batched decode: the decode cycles of several requests in one forward pass ----
+  // A decoding request (DFlash2 or LiLiCorr) joins the batch at a cycle boundary, parked, when another request decodes
+  // and batch_rows() says a pass over their rows pays; one member's thread (the runner, holding the GPU turn) runs the
+  // batch's cycles for all of them: each member's staged ring rows committed, its drafting pass (rows > 1), then one
+  // verify pass of every member's rows (Qwen35 / NemotronH::encode_verify_multi), the acceptance (greedy and LiLiCorr
+  // members keep a draft row while it equals the target's sample at the row before it; sampled DFlash2 members use the
+  // single-stream cycle's exact speculative acceptance) and each member's tokens through its own handle(). A
+  // member that stops leaves (its thread runs its request's end); when one member is left it goes back to its own loop
+  // (returned). With a single request decoding none of this runs: its path is the single-stream one.
+  struct BatchJob {
+    Slot* slot = nullptr;
+    SamplingParams sp;
+    int P = 0;  // anchor: tokens[P] is the next row to feed (the rows before it are in the state or pending)
+    const std::function<bool(int)>* handle = nullptr;    // the request's handle(): false once it stops
+    const std::function<void(int)>* cycle_done = nullptr;
+    // NI_TRACE_TOKENS: the logit rows of the tokens a cycle wrote (rows, count, the tokens); null when off
+    const std::function<void(const float*, int, const int*)>* trace = nullptr;
+    enum class State : uint8_t { active, done, returned } state = State::active;
+    bool runner = false;
+    bool stopped = false;  // its handle() said stop in the last cycle (it leaves as done)
+    int cycles = 0, tokens = 0;
+  };
+  // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
+  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched).
+  // NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides the table.
+  int batch_rows(int n) const;
+  // at a decode cycle boundary: join the batch (one is running, or another request decodes and batching pays)
+  bool batch_wanted() const;
+  // the caller holds the turn and has parked (nothing in flight, its drafter's ring holds the rows before job.P); returns
+  // with the turn once the job is done (true: the request stopped) or returned (false: back to its own loop at job.P)
+  bool join_batch(BatchJob& job);
+  void run_batch(BatchJob& me);
+  void batch_cycle(int rows);
+  // plain rows, pipelined: up to 8 passes, each encoded and committed before the host reads the one before it
+  void batch_plain_run();
+  void batch_stats();
+  // j leaves the batch: its staged rows into its drafter's ring, its state, its thread woken
+  void batch_leave(BatchJob& j, BatchJob::State st);
   void wait_split(Encoder& e);
 
   EngineOptions opts_;
@@ -324,6 +365,16 @@ class Engine {
   std::vector<Slot> slots_;
   TurnLock turn_;            // the GPU turn: engine state and the model are used by its holder only
   int active_ = 0;           // requests holding a slot (under the turn)
+  int decoding_ = 0;         // of those, requests in their decode loop (under the turn)
+  std::vector<BatchJob*> batch_;  // the batch's members (under the turn)
+  bool batch_runner_ = false;     // a member's thread runs the batch
+  bool batch_measured_ = false;   // batched decode measured with this model's drafter (batch_rows' default)
+  double batch_backoff_ = 0;      // now_ms() before which no batch forms (the last one's members did not all come)
+  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles
+  long bstat_cycles_ = 0, bstat_rows_ = 0;
+  double bstat_wall_ = 0, bstat_gpu_ = 0;
+  std::mutex bmu_;                // a waiting member's job state / runner flag
+  std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)

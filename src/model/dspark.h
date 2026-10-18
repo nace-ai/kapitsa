@@ -48,7 +48,8 @@ class DSpark : public NhDrafter {
   Buffer vec(const std::string& name);
   void load();
   void alloc_buffers();
-  void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0);
+  const NhCapture& verify_hook() const override { return hook_v_; }
+  void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) override;
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
 
   NemotronH& tg_;
