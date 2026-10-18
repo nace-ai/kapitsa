@@ -14,6 +14,7 @@
 #include "server/cli.h"
 #include "server/picker.h"
 #include "server/ui.h"
+#include "update/update.h"
 #include "util/log.h"
 #include "util/term.h"
 
@@ -721,6 +722,7 @@ int run(const Options& o) {
     }
     senv.push_back("KAPITSA_PARENT_PID=" + std::to_string(getpid()));  // it exits with this process, however it ends
     senv.push_back("KAPITSA_NO_PROMPT=1");
+    senv.push_back("KAPITSA_NO_AUTO_UPDATE=1");  // no update check running beside the measurements
     std::vector<char*> sa, se;
     for (auto& x : sargv) sa.push_back(x.data());
     sa.push_back(nullptr);
@@ -1085,6 +1087,10 @@ int run_bench(int argc, char** argv, int first) {
   if (o.dry && !o.submit) usage_error("--dry-run goes with --submit", help);
   g_tui = term::fancy() && !o.json;
   g_plain = !g_tui;
+  // the binary stays the same for the whole run (its servers start from it): no update replaces it meanwhile
+  if (!update::hold_for_benchmark())
+    return fail("kapitsa was updated as this benchmark started, so its servers would run another version. Run kapitsa "
+                "bench again.");
   return run(o);
 }
 

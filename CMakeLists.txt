@@ -64,7 +64,7 @@ list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
-  "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics")
+  "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security")
 target_compile_definitions(naceinfer PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}")
 
 file(GLOB NI_TOOLS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/tools/*.cpp ${CMAKE_SOURCE_DIR}/tools/*.mm)
@@ -77,7 +77,8 @@ foreach(t ${NI_TOOLS})
 endforeach()
 
 # Kapitsa's server and CLI: `kapitsa serve --model <name|dir> ...`, with the chat page (src/server/chat.html)
-# embedded, and the coding-agent launchers (src/server/launch.cpp). The API translations (src/api/) are in the library.
+# embedded, the coding-agent launchers (src/server/launch.cpp) and `kapitsa update` (src/server/update_cmd.cpp). The API
+# translations (src/api/) and the updater (src/update/) are in the library.
 # build/nace-infer-server stays as a symlink to it for scripts written before the rename.
 set(KAPITSA_CHAT ${CMAKE_BINARY_DIR}/generated/chat_page.cpp)
 add_custom_command(
@@ -88,7 +89,7 @@ add_custom_command(
   COMMENT "Embedding the chat page")
 add_executable(kapitsa ${CMAKE_SOURCE_DIR}/src/server/main.cpp ${CMAKE_SOURCE_DIR}/src/server/launch.cpp
   ${CMAKE_SOURCE_DIR}/src/server/ui.cpp ${CMAKE_SOURCE_DIR}/src/server/beam.cpp ${CMAKE_SOURCE_DIR}/src/server/picker.cpp
-  ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${KAPITSA_CHAT})
+  ${CMAKE_SOURCE_DIR}/src/server/bench_cmd.cpp ${CMAKE_SOURCE_DIR}/src/server/update_cmd.cpp ${KAPITSA_CHAT})
 target_include_directories(kapitsa PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kapitsa PRIVATE naceinfer "-framework CoreFoundation")
 target_compile_definitions(kapitsa PRIVATE KAPITSA_VERSION="${KAPITSA_VERSION}" KAPITSA_GIT="${KAPITSA_GIT}")

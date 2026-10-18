@@ -13,6 +13,8 @@
 //   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
 //   kapitsa bench [--model M] [--quick] [--json] [--submit [--dry-run]] [--out FILE]; kapitsa bench submit [FILE]
 //                 (bench_cmd.cpp: the harness's protocol on this Mac, its result, the community results)
+//   kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on|off]   (update_cmd.cpp; and once a day, in the
+//                 background, the automatic update)
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
 #include "api/anthropic.h"
@@ -57,6 +59,8 @@
 namespace ni {
 extern const char* const kChatPage;  // src/server/chat.html, embedded at build time
 }
+
+const char* const ni::kVersion = KAPITSA_VERSION;
 
 using namespace ni;
 using json = nlohmann::ordered_json;
@@ -297,7 +301,8 @@ static void print_help() {
          "  rm MODEL     delete a downloaded model\n"
          "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
          "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n"
-         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n\n"
+         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n"
+         "  update       update Kapitsa to its latest release; it also updates itself (kapitsa update --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
 }
@@ -1171,14 +1176,21 @@ int main(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "";
   // in a terminal the engine's log lines stay out of the screens (`kapitsa serve` keeps them in its log file)
   if (term::fancy() && cmd != "serve" && (cmd.empty() || cmd[0] != '-' || cmd == "--help" || cmd == "-h")) ui::quiet();
+  // the last automatic update's line, and once a day the next check, in the background (update_cmd.cpp)
+  auto_update(argc, argv);
   if (cmd.empty() || cmd == "--help" || cmd == "-h" || cmd == "help") {
     if (argc > 2 && !strcmp(argv[2], "serve")) print_serve_help();
     else if (argc > 2 && !strcmp(argv[2], "pull")) print_pull_help();
+    else if (argc > 2 && !strcmp(argv[2], "update")) {
+      char h[] = "--help";
+      char* a[] = {argv[0], argv[2], h, nullptr};
+      return run_update(3, a, 2);
+    }
     else print_help();
     return 0;
   }
   if (cmd == "--version" || cmd == "-v" || cmd == "version") {
-    printf("kapitsa %s%s%s%s\n", KAPITSA_VERSION, *KAPITSA_GIT ? " (" : "", KAPITSA_GIT, *KAPITSA_GIT ? ")" : "");
+    printf("kapitsa %s%s%s%s\n", kVersion, *KAPITSA_GIT ? " (" : "", KAPITSA_GIT, *KAPITSA_GIT ? ")" : "");
     return 0;
   }
   if (cmd == "serve") return serve(argc, argv, 2);
@@ -1190,6 +1202,7 @@ int main(int argc, char** argv) {
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
   if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
   if (cmd == "bench") return run_bench(argc, argv, 2);
+  if (cmd == "update") return run_update(argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }
