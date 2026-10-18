@@ -89,10 +89,10 @@ that run.
 
 | Engine | Qwen3.5 4B · 4-bit | Qwen3.8 27B · 4-bit | Qwen3.6 35B-A3B · 4-bit | Nemotron 3.5 Bolt · NVIDIA 24 GB |
 | --- | ---: | ---: | ---: | ---: |
-| llama.cpp + MTP | 70 tok/s | 18 tok/s | 69 tok/s | — |
-| Ollama (MLX runner, MTP) | 109 tok/s | 32 tok/s | 89 tok/s | — |
+| llama.cpp + MTP | 70 tok/s | 18 tok/s | 69 tok/s | —<br><sub>no Metal support</sub> |
+| Ollama (MLX runner, MTP) | 109 tok/s | 32 tok/s | 89 tok/s | —<br><sub>no support</sub> |
 | LM Studio (MLX engine) | 81 tok/s | 15 tok/s | 86 tok/s | — |
-| MTPLX | 104 tok/s | 36 tok/s | 80 tok/s | — |
+| MTPLX | 104 tok/s | 36 tok/s | 80 tok/s | —<br><sub>no support</sub> |
 | mlx-vlm | — | — | — | 32 tok/s |
 | oMLX | 102 tok/s | 45 tok/s | 127 tok/s | 34 tok/s ⚠ |
 | mlx-serve (MTP) | — | 38 tok/s ⚠ | 124 tok/s | — |
