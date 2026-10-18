@@ -1,53 +1,70 @@
-# Kapitsa
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
+  <img alt="Kapitsa: the fastest inference engine for Qwen and Nemotron on Apple silicon. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
+</picture>
 
-**Local Qwen and Nemotron inference for Apple silicon, by [Nace.AI](https://nace.ai).**
+[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Connect your apps](#connect-your-apps) · [Benchmarks](#benchmarks) · [Architecture](#architecture)
 
-Run chat apps and coding agents on your Mac through OpenAI-compatible and Anthropic-compatible APIs.
-Kapitsa is a native C++ and Metal engine with speculative decoding, conversation caching, optional Neural Engine
-acceleration, and image input on supported Qwen and Nemotron models.
+## Install
 
-[Quick start](#quick-start) · [Models](#models) · [Performance](#performance) · [Architecture](#architecture) · [Documentation](#documentation)
+```bash
+brew install nace-ai/tap/kapitsa
+```
+
+Homebrew and the prebuilt binary work from the first release on. Until then, build from source.
+
+<details>
+<summary>Without Homebrew, or from source</summary>
+
+The same prebuilt binary, checked against the release's checksum:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash
+```
+
+From source, with an Apple silicon Mac on macOS 15 or later, the Xcode Command Line Tools and CMake 3.24+:
+
+```bash
+git clone https://github.com/nace-ai/kapitsa.git && cd kapitsa && ./install.sh
+```
+
+</details>
 
 ## Quick start
 
-Use an Apple silicon Mac with macOS 15 or later, the Xcode Command Line Tools, and CMake 3.24+.
-Build and install from source:
-
 ```bash
-git clone https://github.com/nace-ai/kapitsa.git
-cd kapitsa
-./install.sh
 kapitsa serve --model 4b
 ```
 
-Open **http://127.0.0.1:8000** to chat. The first start downloads the model and its companion files (3.3 GB for 4B);
-later starts reuse them, including offline. The 4B model fits a 16 GB Mac. Run `kapitsa doctor` to check larger models
-and context sizes on your machine.
+Open **http://127.0.0.1:8000** to chat. The first start downloads the model and its companion files (3.3 GB for the
+4B); later starts reuse them, offline too. `kapitsa serve` alone starts the best model for your Mac, and
+`kapitsa doctor` shows which models and context sizes fit it.
 
-Prebuilt and Homebrew installation are prepared but not yet released. See [release status and packaging](RELEASING.md).
+<!-- Demo slot: record docs/assets/demo.gif from main once the terminal UI (opt/tui) lands, then uncomment.
+<p align="center"><img src="docs/assets/demo.gif" alt="kapitsa claude: Claude Code on a local model" width="830"></p>
+-->
 
 ## Models
 
-| Model | CLI name | Architecture | Default download | Speculation |
+| Model | CLI name | Architecture | Download | Speculation |
 | --- | --- | --- | ---: | --- |
 | Qwen3.5-4B | `4b` | Dense, 4B | 3.3 GB | MTP |
 | Qwen3.6-35B-A3B | `35b` | MoE, 3B active | 22.1 GB | DFlash2 / MTP |
 | Qwen3.8-27B | `27b` | Dense, 27B | 20.2 GB | DFlash2 / MTP |
 | Nemotron 3.5 Bolt 74B-A9B | `bolt` | Hybrid Mamba-2 MoE, 9B active | 25.1 GB | LiLiCorr |
 
-Downloads include the model's companion files. Qwen defaults to 4-bit weights; Bolt uses NVIDIA's mixed-precision
-`24gb` checkpoint. Select another Qwen precision with, for example, `--model 35b:6bit`.
-[Variants, checkpoints and model storage](DEVELOPMENT.md#models-and-downloads).
+Downloads include the model's companion files. Qwen defaults to 4-bit weights; `--model 35b:6bit` picks another
+[precision](docs/usage.md#precisions). Bolt is NVIDIA's own `24gb` checkpoint. Qwen3.6, Qwen3.8 and Bolt read
+[images](docs/usage.md#images); the 4B is text only. Other Qwen3.5-family models load from a Hugging Face repo, a
+folder or a GGUF file ([other models](docs/usage.md#other-models)). Model weights keep their own licenses.
 
 ```bash
 kapitsa serve --model bolt     # start another model (stop the current server first)
 kapitsa pull 27b               # download without starting a server
-kapitsa list                  # show downloaded models
+kapitsa list                   # show downloaded models
+kapitsa rm 27b                 # delete one
 ```
-
-Qwen3.6, Qwen3.8 and Nemotron 3.5 Bolt support [image input](DEVELOPMENT.md#images); 4B currently runs text only.
-Compatible Qwen checkpoints can also load from a Hugging Face repo, a local folder, or a supported GGUF file.
-Model weights retain their own licenses.
 
 ## Connect your apps
 
@@ -59,63 +76,134 @@ kapitsa codex
 kapitsa opencode
 ```
 
-Each launcher reuses a server on port 8000 or starts one for the session. Add `--model bolt` or `--model 35b` to choose
-a model. [Agent setup and options](DEVELOPMENT.md#coding-agents).
+Each launcher reuses a server on port 8000 or starts one for the session, and stops it when the agent exits. To choose
+the model, add `--model bolt` or `--model 35b`. [Agent setup and options](docs/usage.md#coding-agents)
 
 For API clients, use `http://127.0.0.1:8000/v1` for OpenAI Chat Completions and Responses, or
-`http://127.0.0.1:8000` for Anthropic Messages. Streaming, reasoning and tool calls are supported.
-Any API key works locally unless you start the server with `--api-key`.
+`http://127.0.0.1:8000` for Anthropic Messages. Streaming, reasoning and tool calls are supported. Any API key works
+locally unless you start the server with `--api-key`.
 
 <details>
 <summary>Example API request</summary>
 
 ```bash
-curl http://127.0.0.1:8000/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "qwen3.5-4b",
-    "messages": [{"role": "user", "content": "Explain speculative decoding."}],
-    "reasoning_effort": "none"
-  }'
+curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3.5-4b",
+  "messages": [{"role": "user", "content": "Explain speculative decoding."}]
+}'
 ```
 
 </details>
 
-Use `--ctx` to set context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached;
-it does not enable parallel generation. [All server options and API details](DEVELOPMENT.md#server).
+Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached; it
+does not enable parallel generation. `brew services start kapitsa` keeps a server running in the background.
+[All server options and API details](docs/usage.md#server-options)
 
-## Performance
+## Benchmarks
 
-**M5 Max · 40-core GPU · 128 GB · macOS 26.4 · AC power.** Median generation speed from five 512-token coding
-answers at each temperature. Source revision and full conditions are recorded in the
-[M5 Max report](docs/benchmarks-m5-max.md).
+Reads: prompt tokens per second (prefill) for a 4K- and a 16K-token prompt. Writes: tokens per second of a coding
+answer (decode, temperature 0.6). Each engine runs in the setup that writes fastest ([all setups](docs/benchmarks.md)).
 
-| Model | Sampled (T=0.6) | Greedy (T=0) | Peak memory |
+### MacBook Pro (2024) · M4 Pro · 48 GB
+
+| Qwen3.6 35B-A3B, tok/s | Reads 4K | Reads 16K | Writes |
 | --- | ---: | ---: | ---: |
-| Qwen3.6-35B-A3B | 249.8 tok/s | 297.4 tok/s | 21.0 GiB |
-| Qwen3.8-27B | 72.9 tok/s | 83.7 tok/s | 19.4 GiB |
+| llama.cpp + MTP | 663 | 545 | 69 |
+| Ollama (MLX runner, MTP) | 892 | 776 | 89 |
+| LM Studio (MLX engine) | 957 | 846 | 86 |
+| MTPLX | 918 | 804 | 80 |
+| oMLX + DFlash2 | 1,035 | 901 | 127 |
+| **Kapitsa** | **1,169** | **986** | **154** |
+| *Kapitsa vs next-fastest* | *1.1×* | *1.1×* | *1.2×* |
 
-Both published runs passed the harness checks and were flagged for **background GPU contention**.
+| Qwen3.8 27B, tok/s | Reads 4K | Reads 16K | Writes |
+| --- | ---: | ---: | ---: |
+| llama.cpp + MTP | 84 | 77 | 18 |
+| Ollama (MLX runner, MTP) | 124 | 119 | 32 |
+| LM Studio (MLX engine) | 127 | 122 | 15 |
+| MTPLX | 126 | 121 | 36 |
+| oMLX + DFlash2 | 136 | 128 | 45 |
+| **Kapitsa** | **389** | **335** | **63** |
+| *Kapitsa vs next-fastest* | *2.9×* | *2.6×* | *1.4×* |
 
-These are text-generation throughput measurements, not model-quality scores. The linked report includes prompt
-processing, cached latency, correctness checks and raw results. For other engines on the M4 Pro, see the
-[comparison report](docs/benchmarks.md). [Run the benchmarks yourself](bench/harness/README.md).
+| Nemotron 3.5 Bolt 74B-A9B, tok/s | Reads 4K | Reads 16K | Writes |
+| --- | ---: | ---: | ---: |
+| mlx-vlm | 300 | 296 | 32 |
+| oMLX | 296 | 300 | 34 |
+| oMLX + LiLiCorr | 288 | 297 | fails |
+| **Kapitsa** | **436** | **385** | **64** |
+| *Kapitsa vs next-fastest* | *1.5×* | *1.3×* | *1.9×* |
+
+Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. Qwen3.5 4B:
+being measured.
+<!-- Qwen3.5 4B slot: | Qwen3.5 4B, tok/s | Reads 4K | Reads 16K | Writes |, rows as above. -->
+
+<details>
+<summary>Follow-ups and memory, MacBook Pro (2024) · M4 Pro · 48 GB</summary>
+
+A follow-up is the time to the first token of an answer in a conversation that already holds a 4K or 16K prompt.
+
+| MacBook Pro (2024) · M4 Pro · 48 GB | Kapitsa | Next best on this Mac |
+| --- | ---: | --- |
+| Qwen3.6 35B-A3B, follow-up 4K / 16K | 0.06 / 0.09 s | MTPLX, 0.10 / 0.15 s |
+| Qwen3.6 35B-A3B, peak memory | 21.1 GB | oMLX + DFlash2, 23.4 GB |
+| Qwen3.8 27B, follow-up 4K / 16K | 0.28 / 0.27 s | MTPLX, 0.33 / 0.39 s |
+| Qwen3.8 27B, peak memory | 19.4 GB | oMLX without speculation, 20.5 GB |
+| Nemotron 3.5 Bolt, follow-up 4K / 16K | 0.28 / 0.32 s | oMLX, 0.72 / 0.72 s |
+| Nemotron 3.5 Bolt, peak memory | 22.7 GB | oMLX, 30.3 GB |
+
+</details>
+
+### MacBook Pro · M5 Max · 128 GB
+
+| Kapitsa, tok/s | Reads 4K | Reads 16K | Writes |
+| --- | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 2,224 | 2,011 | 250 |
+| Qwen3.8 27B | 430 | 400 | 73 |
+| Other engines | — | — | — |
+
+Other engines on this Mac: coming. Nemotron 3.5 Bolt here: not measured yet.
+
+<details>
+<summary>Follow-ups and memory, MacBook Pro · M5 Max · 128 GB</summary>
+
+| MacBook Pro · M5 Max · 128 GB | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| --- | ---: | ---: |
+| Follow-up 4K / 16K | 34.9 / 40.2 ms | 121.6 / 135.3 ms |
+| Peak memory | 21.0 GB | 19.4 GB |
+
+</details>
+
+Same prompts on every engine, thinking off, median of 5 runs, each engine at its latest release. Desktop apps used the
+GPU during the Bolt runs (alike for every engine) and the M5 Max runs (flagged for it). These measure speed, not model
+quality.
+[How it was measured](docs/benchmarks.md) · [M5 Max report](docs/benchmarks-m5-max.md) ·
+[Run the benchmarks yourself](bench/harness/README.md)
 
 ## Architecture
 
-![Kapitsa architecture: a shared chat engine selects Qwen or Nemotron model backends, with Metal GPU execution and optional Neural Engine prefill.](docs/assets/architecture.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+  <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="docs/assets/architecture-light.svg">
+</picture>
 
-* **Specialized kernels** execute each model's attention, recurrent layers and matrix operations directly in Metal.
-* **Speculative decoding** drafts multiple tokens, then verifies them with the target model.
-* **Conversation caching** reuses attention KV caches and recurrent-state checkpoints for follow-up turns.
+* **Reads on two chips.** Prompts are read in chunks on the GPU; for dense models and Nemotron, the Neural Engine
+  takes part of each layer at the same time.
+* **Writes several tokens per pass.** A draft model proposes a block of tokens (DFlash2 for Qwen, NVIDIA's LiLiCorr for
+  Nemotron, the model's MTP head otherwise) and the model checks them all in one GPU pass.
+* **Follow-ups read only what's new.** Each conversation slot keeps its KV cache and recurrent-state checkpoints at
+  turn boundaries, and the last answer is read in while you read it.
+* **Two model families.** Qwen3.5 (Gated DeltaNet and attention, dense or mixture of experts) and Nemotron-H (Mamba-2,
+  attention and LatentMoE), with image encoders for both.
+* **Hand-written Metal kernels** for each weight format, compiled at runtime, with no MLX or llama.cpp underneath.
 
-[Architecture walkthrough and source map](docs/architecture.md) · [Optimization measurements](docs/PERF.md)
+[Architecture walkthrough and source map](docs/architecture.md)
 
 ## Documentation
 
-* [Development guide](DEVELOPMENT.md): builds, APIs, images, model formats, memory and tuning.
-* [Benchmark methodology](bench/harness/README.md): reproducible measurements and validity checks.
-* [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releases](RELEASING.md)
+* [Usage guide](docs/usage.md): models and downloads, server options, APIs, coding agents, images and memory.
+* [Benchmarks](docs/benchmarks.md): every engine, setting and run behind the tables above.
+* [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Press kit](docs/assets/brand/README.md)
 
-Kapitsa is licensed under [Apache 2.0](LICENSE), copyright 2026 Nace AI.
+Kapitsa is licensed under [Apache 2.0](LICENSE), copyright 2026 [Nace AI](https://nace.ai).
 [Third-party notices and acknowledgments](THIRD_PARTY_NOTICES) cover included and adapted code.
