@@ -88,7 +88,7 @@ prefill,tools`). Each file records its full config.
 2. Flagged for contention.
 
 Chosen: Lightning MTP for oMLX, the fastest at both temperatures; for MTPLX depth 1, the fastest sampled and within 1%
-of depth 2 at greedy. Qwen3.5-4B has no DFlash2 drafter; z-lab's drafter is DFlash v1.
+of depth 2 at greedy. z-lab's drafter is DFlash v1; incoai publishes no DFlash2 drafter for the 4B.
 
 ## Files
 

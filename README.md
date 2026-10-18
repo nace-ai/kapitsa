@@ -100,8 +100,8 @@ the GPU (contention flagged): it may be low.
 
 Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. mlx-serve ran a
 day later on a busier Mac, where Kapitsa wrote 139-167 tok/s on Qwen3.6 35B-A3B · 4-bit and 57-61 tok/s ⚠ on
-Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B, which
-has no DFlash2 drafter, oMLX runs its own MTP path; mlx-serve was not run on it
+Qwen3.8 27B · 4-bit in the same session ([details](docs/benchmarks.md#mlx-serve-2026-10-18)). On Qwen3.5 4B oMLX
+runs its own MTP path, its fastest setup there; mlx-serve was not run on it
 ([details](docs/benchmarks.md#qwen35-4b-2026-10-18)).
 
 <details>

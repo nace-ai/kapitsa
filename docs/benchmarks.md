@@ -353,13 +353,13 @@ decodes each; [tuning](../bench/results/2026-10-18-mlx-serve/README.md#tuning)):
 
 ## Qwen3.5-4B (2026-10-18)
 
-Qwen3.5-4B, the family's small dense model (32 layers: 24 Gated DeltaNet, 8 full attention), at 4-bit on every
-engine of the [main comparison](#results), through the same harness, requests and checks. Each engine ran in its
-fastest setup for this model: speculative decoding with the model's MTP head wherever the engine has an MTP path
-(there is no DFlash2 drafter for the 4B), oMLX's and MTPLX's settings picked in short runs before the session, and
-llama.cpp's MTP at n-max 1, 2, 3 and 6. Configs: the `q35-4b-*` entries in
-[bench/harness/configs](../bench/harness/configs); result files:
-[bench/results/2026-10-18-4b](../bench/results/2026-10-18-4b/).
+Qwen3.5-4B, the family's small dense model (32 layers: 24 Gated DeltaNet, 8 full attention), at 4-bit on every engine
+of the [main comparison](#results), through the same harness, requests and checks. Each engine ran in its fastest
+setup for this model: speculative decoding with the model's MTP head wherever the engine has an MTP path (incoai
+publishes no DFlash2 drafter for the 4B; the one third-party DFlash2 drafter, nchapman/Qwen3.5-4B-DFlash2, carries no
+license and was not tried), oMLX's and MTPLX's settings picked in short runs before the session, and llama.cpp's MTP
+at n-max 1, 2, 3 and 6. Configs: the `q35-4b-*` entries in [bench/harness/configs](../bench/harness/configs); result
+files: [bench/results/2026-10-18-4b](../bench/results/2026-10-18-4b/).
 
 Kapitsa was the fastest engine on every metric and used the least memory. It wrote 122 tok/s at T = 0.6, 1.12×
 Ollama's MLX runner with MTP (109.0) and 1.17× MTPLX (104.2, against Kapitsa's 122.0 in the same bracket), read long
