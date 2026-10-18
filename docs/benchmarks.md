@@ -1,7 +1,8 @@
 # Benchmarks
 
 How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt has
-[its own section](#nemotron-35-bolt-74b-a9b-2026-10-18)), compared with the engines people run these models with on a
+[its own section](#nemotron-35-bolt-74b-a9b-2026-10-18), and so has Nemotron 3.5 Super-VL on the
+[M5 Max](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18)), compared with the engines people run these models with on a
 Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX. Each engine ran at its latest release
 with its own best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the
 same checks. The harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file
@@ -269,6 +270,61 @@ desktop's own GPU work (the app the session ran in: 10-40% of the GPU) was there
 
 Kapitsa's earlier run in the same session (before the weight packing that lowered its memory; `confirmations/`) gave
 64.7 / 65.6 tok/s decode, 455 / 396 tok/s prefill, 0.25 / 0.33 s follow-ups and 24.9 GB.
+
+## Nemotron 3.5 Super-VL 120B-A12B (M5 Max, 128 GB, 2026-10-18)
+
+NVIDIA's NVFP4 checkpoint (`nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4`: NVFP4 experts, FP8 Mamba
+projections, attention and LM head, BF16 latent projections; 70 GB of weights) needs a 96 GB+ Mac, so this comparison
+ran on a MacBook Pro with an M5 Max (40-core GPU, 128 GB, macOS 26.4), with every engine that runs the model on a Mac:
+
+- Kapitsa and mlx-vlm read NVIDIA's checkpoint itself. mlx-vlm's Super-VL support (and its native MTP drafter) is
+  newer than its latest release (0.7.8 refuses the model), so it ran at git main 73d366e, an unreleased build.
+- oMLX 0.7.1rc1 and mlx-lm 0.32.2 cannot read it (`Model type nemotron_h_omni not supported`). They ran the
+  only text-only MLX conversion, `rapid-mlx/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-MLX-4bit` (affine 4-bit from
+  NVIDIA's BF16 weights, 69.5 GB). Those weights carry no MTP head, and oMLX's drafter path covers no Nemotron-H
+  model, so neither has speculative decoding here.
+- llama.cpp 0.7.0 (b11669, the latest release) ran ggml-org's official Q4_0 GGUF (71.8 GB; its NVFP4 GGUF has no
+  Metal kernels), with the model's MTP head (ggml-org's `mtp-...-Q4_0.gguf`) at each depth, and with NVIDIA's
+  LiLiCorr drafter as ggml-org converted it.
+
+One session on 2026-10-18, every configuration run twice, with
+[configs/super-vl.json](../bench/harness/configs/super-vl.json); the table has each configuration's second run. Result
+files, weights and revisions: [bench/results/2026-10-18-m5-max](../bench/results/2026-10-18-m5-max/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (LiLiCorr drafter, GPU + Neural Engine prefill) | **84.5** (78.1–93.2) | **87.0** (76.3–90.0) | 627 | 509 | 0.22 | 0.26 | **70.4** + 1.0 mapped<sup>1</sup> | pass |
+| Kapitsa (no drafter) | 46.4 (45.0–47.4) | 46.5 (45.3–47.3) | 617 | 501 | 0.20 | 0.25 | 67.7 + 1.0 mapped | pass |
+| llama.cpp + MTP (n-max 3) | 65.5 (63.0–69.7) | 66.1 (64.7–67.5) | 833 | 882 | 0.22 | 0.20 | 81.9 | pass |
+| llama.cpp + MTP (n-max 2) | 58.8 (56.5–61.8) | 59.4 (58.7–60.0) | 830 | 877 | 0.22 | 0.20 | 81.7 | pass |
+| llama.cpp + MTP (n-max 1) | 49.6 (48.6–52.0) | 49.4 (48.9–49.6) | 818 | 874 | 0.23 | 0.21 | 81.6 | pass |
+| llama.cpp (no speculation) | 35.9 (35.0–37.1) | 35.4 (35.1–35.6) | 764 | 821 | **0.19** | 0.20 | 78.5 | pass |
+| llama.cpp + LiLiCorr drafter (n-max 7) | 26.0 (23.4–31.1) | 31.0 (29.9–31.4) | 681 | 746 | 0.24 | 0.32 | 86.2 | pass |
+| oMLX, MLX 4-bit (no speculation) | 51.8 (49.7–52.1) | 50.4 (50.1–51.0) | **989** | **1,049** | 0.33 | 0.43 | 74.8 | pass |
+| mlx-lm, MLX 4-bit | 45.5 (44.7–45.8) | 45.4 (44.7–45.6) | 885 | 966 | 0.20 | 0.25 | 75.6 | pass |
+| mlx-vlm + MTP (block 4) | 46.3 (43.9–48.5) | 49.1 (48.9–49.6) | 756 | fails<sup>2</sup> | 0.52 | fails<sup>2</sup> | 108.0 | pass |
+| mlx-vlm (no speculation) | 30.7 (30.3–30.8) | 30.9 (30.7–31.0) | 710 | 812 | 0.53 | 0.61 | 99.3 | pass |
+
+1. Kapitsa maps the BF16 embedding from its file (1.0 GB of clean file pages outside the process footprint), as on
+   Bolt. The others' memory includes their whole weights: mlx-vlm turns the FP8 layers into BF16 at load.
+2. mlx-vlm with its MTP drafter runs out of GPU memory on the 16K prompt (`[METAL] Command buffer execution failed:
+   Insufficient Memory`, peak 108 GB), in both runs and also with its prefix cache off.
+
+Kapitsa writes fastest, sampled and greedy (1.3× llama.cpp + MTP, the next fastest), and uses the least memory. It
+reads prompts slowest: every other engine prefills at 680-1,050 tok/s against Kapitsa's 500-630 (oMLX and mlx-lm on
+their 4-bit weights fastest), and its follow-ups (0.22 / 0.26 s) are close to llama.cpp's (0.19 / 0.20 s) and mlx-lm's
+rather than ahead.
+Speculative settings came from smoke tests: mlx-vlm's MTP block 4 beat 2, 3 (its PR's setting), 5 and 6; llama.cpp's
+LiLiCorr drafter is slower than no drafter at all (its NVFP4 GGUF has no Metal kernels), at n-max 7 as at the default 3.
+
+Conditions: desktop apps stayed open. One `com.apple.WebKit` process used 3-5% of the GPU throughout and rose past the
+harness's 5% threshold in every engine's prefill phases, so every row but oMLX's is flagged CONTENTION. Kapitsa's
+rows show much more of it during its own prefill (31% mean in the 16K phase, which runs on the GPU and the Neural
+Engine together; its decode phases saw 4-5% like the others'), in both of its runs; its prefill rates are close to the
+ones measured outside the server (672-684 / 514-516 tok/s at 4K / 16K). At T = 0.6 this model repeats itself in some
+512-token answers on every engine (flagged, kept). The first run of each configuration is in
+[confirmations](../bench/results/2026-10-18-m5-max/confirmations/): Kapitsa 78.7 / 80.3 tok/s decode there, the others
+within 3% of the rows above except llama.cpp + LiLiCorr (28.6 tok/s sampled).
 
 ## Run benchmarks locally
 
