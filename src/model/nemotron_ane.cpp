@@ -79,6 +79,17 @@ NhAne::NhAne(NemotronH& m, const NhAneConfig& c) : m_(m), cfg_(c) {
     if (mc.kind[size_t(i)] == 'M') mamba_.push_back(i);
     if (mc.kind[size_t(i)] == 'E') moe_.push_back(i);
   }
+  // the staging kernels read NVFP4 Mamba projections and an IQ2_XXS shared expert (Bolt's formats)
+  for (int i : mamba_) {
+    const NhLayer& l = m.layers()[size_t(i)];
+    if ((ain_ && l.in.fmt != NhFmt::FP4) || (aout_ && l.out.fmt != NhFmt::FP4))
+      throw std::runtime_error("the Mamba projections are not NVFP4");
+  }
+  for (int i : moe_) {
+    const NhLayer& l = m.layers()[size_t(i)];
+    if (cfg_.ffn && (l.up_s.fmt != NhFmt::IQ2 || l.down_s.fmt != NhFmt::IQ2))
+      throw std::runtime_error("the shared expert is not IQ2_XXS");
+  }
   fn_rows_ = cfg_.fn_rows.empty() ? std::vector<uint32_t>{512, 1024, 1536, 2048} : cfg_.fn_rows;
   std::sort(fn_rows_.begin(), fn_rows_.end());
   fn_rows_.erase(std::remove_if(fn_rows_.begin(), fn_rows_.end(),

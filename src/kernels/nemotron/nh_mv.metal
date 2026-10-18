@@ -7,7 +7,9 @@
 //   IQ2  codes uchar [N][K/256][64], scales half [N][K/256]           IQ2_XXS: per 32 elements 4 grid indices,
 //        4 x 7 sign bits and a 4-bit scale; w = d * (0.5 + s4) / 4 * grid * sign
 //   F32  float [N][K];  BF16  bfloat bits [N][K]
-// Q8 and IQ2 are the GGUF Q8_0 / IQ2_XXS blocks, FP4 is NVFP4, as NVIDIA's checkpoint stores them (same values).
+//   FP8  E4M3 bytes [N][K], each 16-element group reordered (byte 4 m + 0..3 = elements 2 m, 2 m + 1, 2 m + 8,
+//        2 m + 9; nh_x_fp8.metal), read as half x 2^-8; w = e4m3(q) * tensor scale (the host's gs includes 2^8)
+// Q8 and IQ2 are the GGUF Q8_0 / IQ2_XXS blocks, FP4 is NVFP4, FP8 FP8 E4M3, as NVIDIA's checkpoints store them.
 // Activations are fp32. y[r, n] = gs * sum_k W[n, k] x[r, k] for R activation rows.
 
 
@@ -21,11 +23,11 @@ struct NhMvParams {
 // One simdgroup computes NR consecutive output rows for RMAX activation rows. Lanes split K in SPAN-element
 // steps (lane l covers k0 = l * SPAN + i * 32 * SPAN); each step is consumed in 8-element chunks: the 8 inputs
 // of every activation row are loaded once and used for the NR weight rows.
-// FMT: 0 Q8 (SPAN 32), 1 FP4 (SPAN 32), 2 IQ2 (SPAN 32), 3 F32 (SPAN 8), 4 BF16 (SPAN 8).
+// FMT: 0 Q8 (SPAN 32), 1 FP4 (SPAN 32), 2 IQ2 (SPAN 32), 3 F32 (SPAN 8), 4 BF16 (SPAN 8), 5 FP8 (SPAN 16).
 template <int FMT, int NR, int RMAX>
 NI_INLINE void nh_mv_dot(const device uchar* q, const device uchar* s, const device float* x, uint K, uint xs, uint R,
                          uint row0, uint N, uint lane, threadgroup const ulong* tgrid, thread float (&acc)[NR][RMAX]) {
-  constexpr uint SPAN = FMT >= 3 ? 8 : 32;
+  constexpr uint SPAN = FMT == 5 ? 16 : FMT >= 3 ? 8 : 32;
   uint rows[NR];
   for (int j = 0; j < NR; ++j) rows[j] = min(row0 + j, N - 1);
   for (uint k0 = lane * SPAN; k0 < K; k0 += 32 * SPAN) {
@@ -81,6 +83,15 @@ NI_INLINE void nh_mv_dot(const device uchar* q, const device uchar* s, const dev
         } else if (FMT == 2) {
           nh_iq2_decode8((c2[j].x >> (8 * c)) & 0xFFu, (c2[j].y >> (7 * c)) & 127u, 1.0f, tgrid, w);
           scale = sc[j][0];
+        } else if (FMT == 5) {
+          // chunk c (elements 8c .. 8c + 7 of the group): bytes 2c, 2c + 1 of each word m are elements 8c + 2m, + 1
+          const uint4 v = *(const device uint4*)(q + size_t(rows[j]) * K + k0);
+          for (int m = 0; m < 4; ++m) {
+            const half2 a = as_type<half2>(((v[m] & 0x00800080u) << 8) | ((v[m] & 0x007F007Fu) << 7));
+            const half2 b = as_type<half2>((v[m] & 0x80008000u) | ((v[m] >> 1) & 0x3F803F80u));
+            w[2 * m] = float(c ? a.y : a.x);
+            w[2 * m + 1] = float(c ? b.y : b.x);
+          }
         } else if (FMT == 3) {
           const device float4* wp = (const device float4*)((const device float*)q + size_t(rows[j]) * K + k0);
           const float4 a = wp[0], b = wp[1];
@@ -156,6 +167,7 @@ NH_MV_FMT(fp4, 1)
 NH_MV_FMT(iq2, 2)
 NH_MV_FMT(f32, 3)
 NH_MV_FMT(bf16, 4)
+NH_MV_FMT(fp8, 5)
 
 // ---- Routed experts (IQ2) for R activation rows, each with its own k experts: the parameters of nh_moe2_* ----
 struct NhMoeParams {

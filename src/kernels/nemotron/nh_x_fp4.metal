@@ -153,6 +153,10 @@ NI_INLINE void nh_x4_mv_impl(const device uchar* q, const device uchar* s, const
     const uint n = row0 + uint(j);
     if (lane == 0 && n < N) {
       if (EPI == 1) v += y[n];
+      if (EPI == 2) {
+        v = max(v, 0.0f);
+        v = v * v;
+      }
       y[n] = v;
     }
   }
@@ -172,6 +176,44 @@ NH_X4_MV(nh_x4_mv, 2, 0)
 NH_X4_MV(nh_x4_mv_add, 2, 1)
 NH_X4_MV(nh_x4_mv_l0, 0, 0)
 NH_X4_MV(nh_x4_mv_l0_add, 0, 1)
+NH_X4_MV(nh_x4_mv_l0_relu2, 0, 2)
+
+// ---- NVFP4 routed experts per (row, expert) pair (decode, verify): the signatures of nh_moe2_up_iq2 /
+// nh_moe2_dn_iq2 plus the experts' tensor scales gse [[9]] (scaled before relu^2, so the intermediate never holds the
+// unscaled products). up: h[pair] = relu(gse[e] W_up[e] . lat[row])^2, grid (ceil(I / 8), pairs) x 64 threads;
+// down: part[pair] = ew[pair] gse[e] W_dn[e] . h[pair], grid (ceil(D / 8), pairs) x 64 threads; then nh_moe2_sum.
+// Pairs of rows >= live[0] return. ----
+[[kernel]] void nh_x4_moe_up(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                             const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
+                             const device int* eid [[buffer(4)]], constant NhMoeParams& p [[buffer(5)]],
+                             const device uint* live [[buffer(7)]], const device float* gse [[buffer(9)]],
+                             uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                             uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                             uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup half2 tlh[256];
+  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
+  const uint pair = tgp.y, r = pair / p.k;
+  if (r >= live[0]) return;
+  const uint e = uint(eid[pair]);
+  nh_x4_mv_impl<0, 2>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D,
+                      h + size_t(pair) * p.h_stride, p.I, p.D, gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
+}
+
+[[kernel]] void nh_x4_moe_dn(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
+                             const device float* h [[buffer(2)]], device float* part [[buffer(3)]],
+                             const device int* eid [[buffer(4)]], const device float* ew [[buffer(5)]],
+                             constant NhMoeParams& p [[buffer(6)]], const device uint* live [[buffer(8)]],
+                             const device float* gse [[buffer(9)]], uint3 tgp [[threadgroup_position_in_grid]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                             uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
+  threadgroup half2 tlh[256];
+  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
+  const uint pair = tgp.y;
+  if (pair / p.k >= live[0]) return;
+  const uint e = uint(eid[pair]);
+  nh_x4_mv_impl<0, 0>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride, h + size_t(pair) * p.h_stride,
+                      part + size_t(pair) * p.D, p.D, p.I, ew[pair] * gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
+}
 
 // ---- 8 rows (verify): Y^T[n, t] = W[n, :] . X^T[:, t] on 8x8x8 MMAs, W decoded into registers as A, the token rows
 // as B read straight from X ----
