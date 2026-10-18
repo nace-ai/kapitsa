@@ -107,7 +107,8 @@ def render(results, results_dir, out_path):
              "Writing: tokens per second of a 512-token coding answer, median of the runs (5, or 3 in a quick run), at "
              "temperature 0.6 and greedy. Reading: a cold prompt of about 4K and 16K tokens, prompt tokens per second "
              "to its first token. Follow-up: the time to the first token of a new message in that conversation. "
-             f"Memory: the server's peak, GB of 2^30 bytes. {WARN}: other apps used the GPU during that measurement "
+             "Memory: the server's peak, GB of 2^30 bytes (a quick run reads no 16K prompt, so its peak is lower: about 0.4 GB "
+             f"on the 4B). {WARN}: other apps used the GPU during that measurement "
              "(contention flagged), so it may be low. Different Macs, macOS versions and Kapitsa versions give "
              "different numbers; these are what each run measured.", ""]
     if not results:
