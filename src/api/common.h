@@ -34,7 +34,7 @@ std::string pack_reasoning(const std::string& text);
 bool unpack_reasoning(const std::string& blob, std::string* text);
 
 // A reasoning effort into the chat template's kwargs: "none" and "minimal" turn thinking off, "low" and "medium" pass
-// as reasoning_effort (and medium_effort, Nemotron 3.5's switch for shorter reasoning), and "high", "xhigh" and "max" leave the template's default, its highest level (Qwen3.8 takes
+// as reasoning_effort, and "high", "xhigh" and "max" leave the template's default, its highest level (Qwen3.8 takes
 // low, medium and xhigh, the default, and raises on anything else; Qwen3.6 has no levels). Other values are left out
 // (returns false).
 bool apply_effort(const std::string& effort, ojson& kwargs);

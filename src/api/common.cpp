@@ -75,10 +75,7 @@ bool unpack_reasoning(const std::string& blob, std::string* text) {
 
 bool apply_effort(const std::string& effort, ojson& kwargs) {
   if (effort == "none" || effort == "minimal") kwargs["enable_thinking"] = false;
-  else if (effort == "low" || effort == "medium") {
-    kwargs["reasoning_effort"] = effort;
-    kwargs["medium_effort"] = true;  // Nemotron 3.5's template: its shorter reasoning (other templates ignore it)
-  }
+  else if (effort == "low" || effort == "medium") kwargs["reasoning_effort"] = effort;
   else return effort == "high" || effort == "xhigh" || effort == "max";  // the template's default
   return true;
 }

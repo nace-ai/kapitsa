@@ -427,6 +427,16 @@ std::string chat_template_source(const std::string& model_dir) {
 }
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
+  // Nemotron 3.5's template shortens its reasoning on medium_effort: the low and medium reasoning efforts map to it
+  if (nh_ && r.template_kwargs.contains("reasoning_effort") && !r.template_kwargs.contains("medium_effort") &&
+      r.template_kwargs["reasoning_effort"].is_string()) {
+    const std::string e = r.template_kwargs["reasoning_effort"];
+    if (e == "low" || e == "medium") {
+      ChatRequest q = r;
+      q.template_kwargs["medium_effort"] = true;
+      return render_chat(*tmpl_, q, add_generation_prompt);
+    }
+  }
   return render_chat(*tmpl_, r, add_generation_prompt);
 }
 
