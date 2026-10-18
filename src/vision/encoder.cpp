@@ -50,9 +50,9 @@ std::vector<Prepared> Vision::prepare(const std::vector<Source>& sources) {
     }
     Prepared p = enc_->prepare(decode(fetch(s, lim)));
     if (inline_data) {
+      std::vector<uint8_t> px = std::move(p.pixels);  // remembered without its pixels (no copy of them)
       Meta m{key, p};
-      m.p.pixels.clear();
-      m.p.pixels.shrink_to_fit();
+      p.pixels = std::move(px);
       std::lock_guard<std::mutex> lk(meta_mu_);
       meta_.push_front(std::move(m));
       if (meta_.size() > 256) meta_.pop_back();
