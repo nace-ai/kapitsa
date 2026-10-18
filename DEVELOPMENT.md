@@ -222,7 +222,17 @@ within 1 ulp; its default torchvision processor resizes differently, by a level 
 positions equal `get_rope_index` over 200 random prompts with 1-4 images; the tower's embeddings are within 0.24%
 (relative L2) of a float32 reference, where mlx_vlm's bf16 tower is 3.7% off; next-token distributions over answers
 about a chart, a terminal screenshot, a photo and two images at once agree with mlx_vlm to a mean KL of 0.002-0.010
-(35B) and 0.0005-0.003 (27B), top-1 96-100%.
+(35B) and 0.0005-0.003 (27B), top-1 96-100% (text-only prompts: 0.0015-0.0045 and 0.0002-0.0003; part of the image
+cases' divergence is mlx_vlm's own tower error).
+
+Speed (M4 Pro, 35B): a 1280x800 screenshot (1000 tokens) encodes in 0.84 s, and its first answer token comes 1.7 s
+after the request (2.3 s for the first image after the server starts: the encoder's 0.9 GB load in ~0.4 s); sent
+again it is cached: 0.02 s. 1920x1080 (2040 tokens): 2.4 s to encode, 4.2 s to the first token; 2880x1800 (5040
+tokens): 10.9 s and 15.5 s. The tower's attention spans all of an image's patches, so its cost grows with their
+square: its GEMMs run at ~7 TFLOP/s and its attention at ~6.7 (59% and 37% of a 1280x800 encode), and
+`--image-max-pixels` trades detail for time. Text-only requests are unchanged: the same outputs bit for bit
+(teacher-forced log-probs on both models, greedy decodes, a multi-turn server conversation) at the same prefill and
+decode speed.
 
 `tools/vit_check` runs the pieces alone (decode, resize, smart_resize, processor output, M-RoPE positions, the
 tower on raw pixels, kernel checks, encode timing); `tests/vision/ref_tower.py` is the float32 reference of the tower
