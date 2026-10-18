@@ -4,6 +4,19 @@
 // The residual stream is S = 4 streams of D = 2560 ([s0 | s1 | s2 | s3], fp32). Norm weights are the checkpoint's
 // zero-centred w applied as 1 + w; the model passes them as fp32 (1 + w) vectors.
 
+// Sum of a float4 across a threadgroup of up to 1024 threads in one exchange (scratch: >= 32 float4)
+NI_INLINE float4 tg_sum4(float4 v, threadgroup float4* scratch, uint tid, uint ntg) {
+  const uint lane = tid & 31, sg = tid >> 5, nsg = (ntg + 31) >> 5;
+  v = float4(simd_sum(v.x), simd_sum(v.y), simd_sum(v.z), simd_sum(v.w));
+  if (lane == 0) scratch[sg] = v;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  float4 r = lane < nsg ? scratch[lane] : float4(0.0f);
+  r = float4(simd_sum(r.x), simd_sum(r.y), simd_sum(r.z), simd_sum(r.w));
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  return r;
+}
+NI_INLINE float4 sigmoid4(float4 x) { return 1.0f / (1.0f + metal::fast::exp(-x)); }
+
 struct HcParams {
   uint R;        // rows
   uint D;        // stream width
@@ -17,41 +30,46 @@ struct HcParams {
 //   X += inj_prev[s] * y (has_y; y then zeroed for the next block's accumulation)
 //   Xn = per-stream RMSNorm(X) * w       inj = 2 sigmoid(W_inj Xn / S) (has_inj)
 // Xn: fp32 (decode / verify rows, the GEMV input) or half (prefill rows, the GEMM input).
+// (S = 4 streams: their sums of squares and the four injection dots each go through one tg_sum4)
 template <typename XN>
 NI_INLINE void hc_pre_impl(device float* X, device float* y, const device float* inj_prev, const device float* w,
                            const device bfloat* winj, device XN* xn, device float* inj, constant HcParams& p, uint r,
-                           uint tid, uint ntg, threadgroup float* scratch) {
-  const uint SD = p.S * p.D;
+                           uint tid, uint ntg, threadgroup float4* scratch) {
+  const uint SD = p.S * p.D, D = p.D;
   device float* x = X + r * SD;
-  device float* yr = y + r * p.D;
-  float ss[4] = {0, 0, 0, 0};
-  for (uint i = tid; i < SD; i += ntg) {
-    const uint s = i / p.D;
-    float v = x[i];
+  device float* yr = y + r * D;
+  const float4 a = p.has_y ? float4(inj_prev[r * 4], inj_prev[r * 4 + 1], inj_prev[r * 4 + 2], inj_prev[r * 4 + 3])
+                           : float4(0.0f);
+  float4 ss = 0.0f;
+  for (uint c = tid; c < D; c += ntg) {  // channel c of every stream
+    float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]);
     if (p.has_y) {
-      v += inj_prev[r * p.S + s] * yr[i - s * p.D];
-      x[i] = v;
+      v += a * yr[c];
+      x[c] = v.x, x[D + c] = v.y, x[2 * D + c] = v.z, x[3 * D + c] = v.w;
+      yr[c] = 0.0f;  // (only this thread reads channel c of y)
     }
-    ss[s] += v * v;
+    ss += v * v;
   }
-  float inv[4];
-  for (uint s = 0; s < p.S; ++s) inv[s] = metal::precise::rsqrt(tg_sum(ss[s], scratch, tid, ntg) / float(p.D) + p.eps);
-  if (p.has_y) {  // every thread's reads of y are done (tg_sum's barriers)
-    for (uint i = tid; i < p.D; i += ntg) yr[i] = 0.0f;
-  }
-  float dot[4] = {0, 0, 0, 0};
-  for (uint i = tid; i < SD; i += ntg) {
-    const uint s = i / p.D;
-    const float v = x[i] * inv[s] * w[i];
-    xn[r * SD + i] = XN(v);
-    if (p.has_inj)
-      for (uint q = 0; q < p.S; ++q) dot[q] += float(winj[q * SD + i]) * v;
-  }
-  if (p.has_inj)
-    for (uint q = 0; q < p.S; ++q) {
-      const float d = tg_sum(dot[q], scratch, tid, ntg);
-      if (tid == 0) inj[r * p.S + q] = 2.0f * sigmoid(d / float(p.S));
+  const float4 inv = metal::precise::rsqrt(tg_sum4(ss, scratch, tid, ntg) / float(D) + p.eps);
+  float4 dot = 0.0f;
+  for (uint c = tid; c < D; c += ntg) {
+    const float4 v = float4(x[c], x[D + c], x[2 * D + c], x[3 * D + c]) * inv * float4(w[c], w[D + c], w[2 * D + c], w[3 * D + c]);
+    xn[r * SD + c] = XN(v.x);
+    xn[r * SD + D + c] = XN(v.y);
+    xn[r * SD + 2 * D + c] = XN(v.z);
+    xn[r * SD + 3 * D + c] = XN(v.w);
+    if (p.has_inj) {
+      const uint i0 = c, i1 = D + c, i2 = 2 * D + c, i3 = 3 * D + c;
+      dot += v.x * float4(winj[i0], winj[SD + i0], winj[2 * SD + i0], winj[3 * SD + i0]);
+      dot += v.y * float4(winj[i1], winj[SD + i1], winj[2 * SD + i1], winj[3 * SD + i1]);
+      dot += v.z * float4(winj[i2], winj[SD + i2], winj[2 * SD + i2], winj[3 * SD + i2]);
+      dot += v.w * float4(winj[i3], winj[SD + i3], winj[2 * SD + i3], winj[3 * SD + i3]);
     }
+  }
+  if (p.has_inj) {
+    const float4 d = tg_sum4(dot, scratch, tid, ntg);
+    if (tid == 0) *(device float4*)(inj + r * 4) = 2.0f * sigmoid4(d / float(p.S));
+  }
 }
 
 #define NI_HC_PRE(NAME, XN)                                                                                    \
@@ -61,7 +79,7 @@ NI_INLINE void hc_pre_impl(device float* X, device float* y, const device float*
                        device float* inj [[buffer(6)]], constant HcParams& p [[buffer(7)]],                    \
                        uint r [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],      \
                        uint ntg [[threads_per_threadgroup]]) {                                                 \
-    threadgroup float scratch[32];                                                                             \
+    threadgroup float4 scratch[32];                                                                            \
     hc_pre_impl<XN>(X, y, inj_prev, w, winj, xn, inj, p, r, tid, ntg, scratch);                                \
   }
 NI_HC_PRE(hc_pre, float)

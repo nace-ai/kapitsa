@@ -147,7 +147,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.spec_depth < 0) opts_.spec_depth = q35_ ? q35_->default_spec_depth() : 0;
   spec_ = q35_ && opts_.spec_depth > 0 && q35_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
-  if (q35_ && !lp.dflash_off && lp.dflash_left_out.empty()) {
+  if (q35_ && q35_->block_drafter_ok() && !lp.dflash_off && lp.dflash_left_out.empty()) {
     const std::string& dir = lp.dflash;
     if (dir.empty()) {
       logi("DFlash2: no drafter found for %s (looked next to the model and in ~/.cache/nace-infer-models/drafters)",
