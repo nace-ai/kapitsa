@@ -1,0 +1,33 @@
+%% Render with @mermaid-js/mermaid-cli 11.9.0; see docs/architecture.md.
+flowchart TB
+    accTitle: Kapitsa inference engine architecture
+    accDescr: OpenAI and Anthropic APIs feed a shared chat engine. Qwen and Nemotron backends execute on the Metal GPU, with optional prefill work on the Apple Neural Engine.
+    api("Apps & coding agents<br/>OpenAI Chat / Responses · Anthropic Messages")
+    engine("Shared chat engine<br/>Templates · tokenization · cached conversations · streaming")
+    api --> engine
+
+    subgraph backends["Model backends"]
+        direction LR
+        qwen["Qwen3.5 family<br/>Gated DeltaNet + attention<br/>Dense / MoE · MTP or DFlash2"]
+        bolt["Nemotron 3.5 Bolt<br/>Mamba-2 + attention + LatentMoE<br/>LiLiCorr drafting"]
+    end
+    engine --> qwen
+    engine --> bolt
+
+    gpu["Apple GPU · Metal<br/>Prefill · generation · draft verification"]
+    ane["Apple Neural Engine<br/>Optional prefill work<br/>GPU fallback on failure"]
+    qwen --> gpu
+    bolt --> gpu
+    qwen -. "dense FFN" .-> ane
+    bolt -. "Mamba projections + shared expert" .-> ane
+
+    classDef surface fill:#f1f5f9,stroke:#94a3b8,color:#0f172a,stroke-width:1px;
+    classDef core fill:#0f172a,stroke:#0f172a,color:#ffffff,stroke-width:2px;
+    classDef model fill:#eef2ff,stroke:#818cf8,color:#312e81,stroke-width:1.5px;
+    classDef hardware fill:#ecfdf5,stroke:#34d399,color:#064e3b,stroke-width:1.5px;
+    class api surface;
+    class engine core;
+    class qwen,bolt model;
+    class gpu,ane hardware;
+    style backends fill:#ffffff,stroke:#cbd5e1,stroke-dasharray:4 4,color:#475569
+    linkStyle default stroke:#64748b,stroke-width:1.5px;
