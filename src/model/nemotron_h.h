@@ -221,6 +221,10 @@ class NemotronH : public Model {
   const Buffer& live() const { return dyn_rows_ ? live_ : live_all_; }
   bool gemm_rows_ = true;         // NI_NH_ROWS_GEMM: passes of 2+ rows (verify) run their dense matmuls as GEMMs
   bool v8_ = true;                // NI_NH_V8: GEMMs of <= 8 rows on the 8-row MMA kernels (nh_v8.metal)
+  bool x4_ = true;  // NVFP4 x4 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X4=0: the older ones
+  Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 kernels (serial calls share them)
+  bool x2_ = true;  // IQ2_XXS x2 kernels (subnormal-half weights); NI_NH_X2=0: the older ones (fused decode excepted)
+  Buffer x2sorted_, x2tiles_, x2args_, x2rank_;  // verify routed experts grouped by expert (nh_x2_bucket)
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows
   bool fuse_dec_ = true;          // NI_NH_FUSE: a token's MoE layer in 4 dispatches (nh_zdec.metal)
   Buffer route_ctr_, sd_;         // fused MoE: the router threadgroups' arrival counter, the shared expert's output

@@ -1,6 +1,6 @@
-// Nemotron-H (GGUF) kernels: weight formats and the matrix x vector(s) products of decode and verify.
+// Nemotron-H kernels: weight formats and the generic matrix x vector(s) products (decode fallbacks, the router).
 //
-// Weights are repacked at load from llama.cpp's block layouts into separate code and scale arrays:
+// Weights are repacked at load from the checkpoint's blocks into separate code and scale arrays:
 //   Q8   codes char  [N][K], scales half [N][K/32]                    w = s * q
 //   FP4  codes uchar [N][K/2], scales uchar (UE4M3) [N][K/16]        w = e2m1(q) * ue4m3(s) * tensor scale
 //        (NVFP4; in a 16-element sub-block, byte i holds element i in its low and element i + 8 in its high nibble)
@@ -157,9 +157,7 @@ NH_MV_FMT(iq2, 2)
 NH_MV_FMT(f32, 3)
 NH_MV_FMT(bf16, 4)
 
-// ---- Routed experts (IQ2) for R activation rows: each row has its own k experts ----
-// up:   h[r, j, :] = relu(up_{e(r,j)} . lat[r])^2           grid: (ceil(I / rows per tg), R * k)
-// down: o[r, :]    = sum_j w(r,j) * down_{e(r,j)} . h[r, j]  grid: (ceil(D / rows per tg), R)
+// ---- Routed experts (IQ2) for R activation rows, each with its own k experts: the parameters of nh_moe2_* ----
 struct NhMoeParams {
   uint I;            // expert width
   uint D;            // latent size
@@ -168,52 +166,3 @@ struct NhMoeParams {
   uint dn_q_stride, dn_s_stride;
   uint h_stride;     // floats between (row, slot) hidden vectors (>= I)
 };
-
-[[kernel]] void nh_moe_up_iq2(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
-                              const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
-                              const device int* eid [[buffer(4)]], constant NhMoeParams& p [[buffer(5)]],
-                              uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
-                              uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                              uint tid [[thread_index_in_threadgroup]], uint3 ntg3 [[threads_per_threadgroup]]) {
-  threadgroup ulong tgrid[256];
-  nh_iq2_grid_to_tg(tgrid, tid, ntg3.x);
-  const uint pair = tgp.y, r = pair / p.k;
-  const uint e = uint(eid[pair]);
-  const uint row0 = (tgp.x * nsg + sg) * 4;
-  float acc[4][1] = {{0}, {0}, {0}, {0}};
-  if (row0 < p.I)
-    nh_mv_dot<2, 4, 1>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D, p.D, p.D, 1,
-                       row0, p.I, lane, tgrid, acc);
-  for (int j = 0; j < 4; ++j) {
-    float v = max(simd_sum(acc[j][0]), 0.0f);
-    if (lane == 0 && row0 + j < p.I) h[size_t(pair) * p.h_stride + row0 + j] = v * v;
-  }
-}
-
-[[kernel]] void nh_moe_down_iq2(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
-                                const device float* h [[buffer(2)]], device float* o [[buffer(3)]],
-                                const device int* eid [[buffer(4)]], const device float* ew [[buffer(5)]],
-                                constant NhMoeParams& p [[buffer(6)]], uint3 tgp [[threadgroup_position_in_grid]],
-                                uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                                uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]],
-                                uint3 ntg3 [[threads_per_threadgroup]]) {
-  threadgroup ulong tgrid[256];
-  nh_iq2_grid_to_tg(tgrid, tid, ntg3.x);
-  const uint r = tgp.y;
-  const uint row0 = (tgp.x * nsg + sg) * 4;
-  float tot[4] = {0, 0, 0, 0};
-  for (uint j = 0; j < p.k; ++j) {
-    const uint pair = r * p.k + j;
-    const uint e = uint(eid[pair]);
-    float acc[4][1] = {{0}, {0}, {0}, {0}};
-    if (row0 < p.D)
-      nh_mv_dot<2, 4, 1>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride, h + size_t(pair) * p.h_stride,
-                         p.I, p.I, 1, row0, p.D, lane, tgrid, acc);
-    const float w = ew[pair];
-    for (int i = 0; i < 4; ++i) tot[i] += w * acc[i][0];
-  }
-  for (int i = 0; i < 4; ++i) {
-    const float v = simd_sum(tot[i]);
-    if (lane == 0 && row0 + i < p.D) o[r * p.D + row0 + i] = v;
-  }
-}

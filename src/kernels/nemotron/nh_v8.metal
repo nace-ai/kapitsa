@@ -13,7 +13,7 @@
 //   FP4:      k(s, j) = 16 (j >> 2) + 4 ((j >> 1) & 1) + s + 8 (j & 1)   (the two nibbles of 4 bytes per lane: the
 //             repacked order holds elements i and i + 8 in byte i of a 16-block; a threadgroup LUT maps a byte to both)
 // B is gathered on the fly from half rows of X (2 loads per step: tokens fn, fn + 1 at k(s, fm)).
-// Idea and lane layout from verify8.metal (Splash's integer-codes-as-MMA-operands, our code).
+// The lane layout and the integer codes as MMA operands follow src/kernels/verify8.metal.
 //
 // 8x8 fragment lane layout: lane holds row fm, columns fn, fn + 1 with q = lane >> 2,
 // fm = (q & 4) | ((lane >> 1) & 3), fn = ((q & 2) << 1) | ((lane & 1) << 1).

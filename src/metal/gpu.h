@@ -127,6 +127,9 @@ class Encoder {
   // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
   void signal_event(void* event, uint64_t value);
   void wait_event(void* event, uint64_t value);
+  // Commits the work so far and continues in a new command buffer (same queue, so in order): long passes are split
+  // into short command buffers, which keeps the GPU responsive to the desktop's own work.
+  void split();
   void commit_and_wait() { commit(); wait(); }
   double gpu_ms() const;     // GPU time of the finished command buffer
   // GPU start / end of the finished command buffer on the host clock (mach time, ms), and that
@@ -146,7 +149,7 @@ class Encoder {
   void open_encoder();
   void* cb_ = nullptr;
   void* enc_ = nullptr;
-  std::vector<void*> prev_;   // command buffers committed by signal_event (retained)
+  std::vector<void*> prev_;   // command buffers committed by signal_event / split (retained)
   const char* cur_name_ = "";
   uint32_t cur_max_threads_ = 0;  // the pipeline's maxTotalThreadsPerThreadgroup (dispatch checks it)
   bool concurrent_ = false;

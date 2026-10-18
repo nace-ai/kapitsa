@@ -1,5 +1,5 @@
 // ---- GPU side of Nemotron-H's GPU + Neural Engine prefill split (src/model/nemotron_ane.cpp) ----
-// The scheme of src/kernels/ane_ffn.metal (Splash's design: W8A8 after a block Hadamard rotation v -> D H v / sqrt(n),
+// The scheme of src/kernels/ane_ffn.metal (W8A8 after a block Hadamard rotation v -> D H v / sqrt(n),
 // per-row weight and per-token input int8 scales, int8 codes read by the ANE as code / 128), for the checkpoint's
 // formats: the Mamba in / out projections (NVFP4) and the shared expert (IQ2_XXS). Weight rows rotate in blocks of
 // 128 along their inputs (in_proj, out_proj, shared up) or of 256 along the shared expert's intermediate (its down

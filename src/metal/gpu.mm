@@ -499,6 +499,33 @@ void Encoder::wait() {
   }
   if (cb.status == MTLCommandBufferStatusError)
     fatal("GPU error: %s", [[cb.error description] UTF8String]);
+  static const bool cbt = getenv("NI_CB_TRACE") && atoi(getenv("NI_CB_TRACE"));
+  if (cbt && prev_.size() > 4) {
+    // debug: GPU time of each command buffer of this encoder, the idle gaps between them
+    std::vector<std::pair<double, double>> t;
+    for (void* p : prev_) {
+      id<MTLCommandBuffer> b = (__bridge id<MTLCommandBuffer>)p;
+      t.push_back({b.GPUStartTime * 1e3, b.GPUEndTime * 1e3});
+    }
+    t.push_back({cb.GPUStartTime * 1e3, cb.GPUEndTime * 1e3});
+    double busy = 0, gaps = 0, last_end = t[0].first;
+    std::vector<std::pair<double, size_t>> big;
+    for (size_t i = 0; i < t.size(); ++i) {
+      const double st = std::max(t[i].first, last_end);
+      if (t[i].first > last_end) {
+        gaps += t[i].first - last_end;
+        big.push_back({t[i].first - last_end, i});
+      }
+      if (t[i].second > st) busy += t[i].second - st;
+      last_end = std::max(last_end, t[i].second);
+    }
+    std::sort(big.rbegin(), big.rend());
+    std::string g;
+    for (size_t i = 0; i < std::min<size_t>(6, big.size()); ++i)
+      g += " " + std::to_string(int(big[i].first * 10) / 10.0).substr(0, 5) + "@" + std::to_string(big[i].second);
+    logi("cb trace: %zu command buffers, span %.1f ms, GPU busy %.1f ms, idle gaps %.1f ms (largest:%s)", t.size(),
+         last_end - t[0].first, busy, gaps, g.c_str());
+  }
 }
 bool Encoder::wait_for(double timeout_ms) {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
@@ -546,6 +573,19 @@ void Encoder::signal_event(void* event, uint64_t value) {
     if (ended.status == MTLCommandBufferStatusError && ev.signaledValue < value) ev.signaledValue = value;
   }];
   [cb commit];
+  prev_.push_back(cb_);
+  id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
+  cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];
+  open_encoder();
+}
+void Encoder::split() {
+  if (profiling()) return;  // (every dispatch has its own command buffer then)
+  if (enc_) {
+    [E(enc_) endEncoding];
+    CFRelease(enc_);
+    enc_ = nullptr;
+  }
+  [(__bridge id<MTLCommandBuffer>)cb_ commit];
   prev_.push_back(cb_);
   id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
   cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];

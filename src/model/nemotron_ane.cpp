@@ -207,11 +207,12 @@ void NhAne::build() {
   program(mil, blob);
   const double t2 = now_ms();
   prog_ = std::make_unique<ane::Program>(mil, blob, "kapitsa-nh-ane");
-  note_ += std::string(note_.empty() ? "" : ", ") + "program " + (prog_->was_cached ? "cached" : "compiled") + " in " +
+  note_ += std::string(note_.empty() ? "" : ", ") + "program " +
+           (prog_->adopted ? "from the background compile" : prog_->was_cached ? "cached" : "compiled") + " in " +
            std::to_string(int(now_ms() - t2)) + " ms (" + std::to_string(3 * fn_rows_.size()) + " functions, MIL " +
            std::to_string(mil.size() / 1024) + " KB)";
   if (!real) {
-    prog_.reset();
+    ane::Program::park(std::move(prog_));  // the real build takes it over (the daemon may not keep the compilation)
     return;
   }
   // bindings, by input name
@@ -616,16 +617,22 @@ void NhAne::launch(Encoder& e, int which, int T) {
   const uint64_t ready = h_->next_ready(), done = h_->next_done();
   std::shared_ptr<ane::Program::Binding> b = op.bind[size_t(fn_)];
   ane::Program* prog = prog_.get();
-  h_->queue(ready, done, [prog, b](void* rev, uint64_t w, void* dev, uint64_t s, ane::Handoff::Report rep) {
-    prog->enqueue(*b, rev, w, dev, s, std::move(rep));
-  });
+  h_->queue(
+      ready, done,
+      [prog, b](void* rev, uint64_t w, void* dev, uint64_t s, ane::Handoff::Report rep) {
+        prog->enqueue(*b, rev, w, dev, s, std::move(rep));
+      },
+      which);
   ++jobs_;
   pending_ = done;
   e.signal_event(h_->ready_event(), ready);
 }
 
 void NhAne::wait_join(Encoder& e) {
-  if (pending_) e.wait_event(h_->done_event(), pending_);
+  if (pending_) {
+    e.wait_event(h_->done_event(), pending_);
+    if (void* t = h_->trace_event()) e.signal_event(t, pending_);  // NI_ANE_TRACE: when the GPU went on
+  }
   pending_ = 0;
 }
 

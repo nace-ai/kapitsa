@@ -262,6 +262,28 @@ struct Program::Binding {
   NSNumber* proc = nil;
 };
 
+namespace {
+std::mutex g_park_mu;
+std::unordered_map<std::string, std::unique_ptr<Program>> g_parked;  // by tag/key
+}  // namespace
+
+void Program::park(std::unique_ptr<Program> p) {
+  if (!p || !p->impl_ || !p->impl_->loaded) return;
+  std::unique_ptr<Program> old;
+  std::lock_guard lk(g_park_mu);
+  auto& slot = g_parked[p->key_];
+  old = std::move(slot);  // (unloaded outside the lock below, when `old` goes)
+  slot = std::move(p);
+}
+
+void Program::unpark_all() {
+  std::unordered_map<std::string, std::unique_ptr<Program>> all;
+  {
+    std::lock_guard lk(g_park_mu);
+    all.swap(g_parked);
+  }
+}
+
 Program::Program(const std::string& mil, const std::vector<uint8_t>& blob, const std::string& tag, double limit_s)
     : impl_(std::make_shared<Impl>()) {
   impl_->api = api();
@@ -269,6 +291,24 @@ Program::Program(const std::string& mil, const std::vector<uint8_t>& blob, const
   const uint64_t key = fnv1a(blob.data(), blob.size(), fnv1a(mil.data(), mil.size()));
   char hex[17];
   snprintf(hex, sizeof hex, "%016llx", (unsigned long long)key);
+  key_ = tag + "/" + hex;
+  {
+    std::unique_ptr<Program> parked;
+    {
+      std::lock_guard lk(g_park_mu);
+      auto it = g_parked.find(key_);
+      if (it != g_parked.end()) {
+        parked = std::move(it->second);
+        g_parked.erase(it);
+      }
+    }
+    if (parked && parked->impl_ && parked->impl_->loaded) {
+      impl_ = std::move(parked->impl_);  // the parked object, now empty, unloads nothing when it goes
+      dir = parked->dir;
+      was_cached = adopted = true;
+      return;
+    }
+  }
   char base[1024] = {0};
   if (!confstr(_CS_DARWIN_USER_CACHE_DIR, base, sizeof base)) throw std::runtime_error("no DARWIN_USER_CACHE_DIR");
   std::filesystem::path d = std::filesystem::path(base) / tag / hex;
@@ -482,13 +522,19 @@ enum class Phase : uint8_t { Queued, Started, Succeeded, Failed };
 struct Job {
   Phase phase = Phase::Queued;
   double started = 0, ran = 0;
+  double done_seen = 0, ready_seen = 0, joined_seen = 0;  // NI_ANE_TRACE
+  int tag = 0;
 };
+bool trace_on() {
+  static const bool on = getenv("NI_ANE_TRACE") && atoi(getenv("NI_ANE_TRACE"));
+  return on;
+}
 }  // namespace
 
 struct Handoff::State {
   std::mutex mu;
   std::condition_variable changed;
-  id<MTLSharedEvent> ready = nil, done = nil;
+  id<MTLSharedEvent> ready = nil, done = nil, joined = nil;
   MTLSharedEventListener* listener = nil;
   double bound_s = 2.0;
   uint64_t ready_value = 0, done_value = 0;  // highest values handed out
@@ -517,7 +563,10 @@ Handoff::Handoff(double bound_s) : st_(std::make_shared<State>()) {
   st_->done_value = st_->done.signaledValue;
   st_->listener = [[MTLSharedEventListener alloc]
       initWithDispatchQueue:dispatch_queue_create("nace.ane.handoff", DISPATCH_QUEUE_SERIAL)];
+  if (trace_on()) st_->joined = (__bridge_transfer id<MTLSharedEvent>)Gpu::get().new_shared_event();
 }
+
+void* Handoff::trace_event() const { return st_->joined ? (__bridge void*)st_->joined : nullptr; }
 
 Handoff::~Handoff() {
   std::unique_lock lk(st_->mu);
@@ -542,7 +591,7 @@ uint64_t Handoff::next_done() {
   return st_->done_value;
 }
 
-void Handoff::queue(uint64_t ready, uint64_t done, const Start& start) {
+void Handoff::queue(uint64_t ready, uint64_t done, const Start& start, int tag) {
   auto st = st_;
   uint64_t jid = 0;
   {
@@ -553,6 +602,7 @@ void Handoff::queue(uint64_t ready, uint64_t done, const Start& start) {
       return;
     }
     st->jobs[jid] = Job{};
+    st->jobs[jid].tag = tag;
     ++st->outstanding;
   }
   auto report = [st, jid](bool ok) {
@@ -575,12 +625,29 @@ void Handoff::queue(uint64_t ready, uint64_t done, const Start& start) {
   try {
     start((__bridge void*)st->ready, ready, (__bridge void*)st->done, done, report);
     const double bound = st->bound_s;
+    if (trace_on() && st->joined)
+      [st->joined notifyListener:st->listener
+                         atValue:done
+                           block:^(id<MTLSharedEvent>, uint64_t) {
+                             std::lock_guard lk(st->mu);
+                             auto it = st->jobs.find(jid);
+                             if (it != st->jobs.end()) it->second.joined_seen = now_ms();
+                           }];
+    if (trace_on())
+      [st->done notifyListener:st->listener
+                       atValue:done
+                         block:^(id<MTLSharedEvent>, uint64_t) {
+                           std::lock_guard lk(st->mu);
+                           auto it = st->jobs.find(jid);
+                           if (it != st->jobs.end()) it->second.done_seen = now_ms();
+                         }];
     [st->ready notifyListener:st->listener
                       atValue:ready
                         block:^(id<MTLSharedEvent>, uint64_t) {
                           {
                             std::lock_guard lk(st->mu);
                             auto it = st->jobs.find(jid);
+                            if (it != st->jobs.end()) it->second.ready_seen = now_ms();
                             if (it == st->jobs.end() || it->second.phase != Phase::Queued) return;
                             it->second.phase = Phase::Started;
                             it->second.started = now_ms();
@@ -628,6 +695,44 @@ bool Handoff::finish(double* ane_ms) {
   for (auto& [jid, j] : s.jobs) {
     if (j.phase != Phase::Succeeded) ok = false;
     ms += j.ran;
+  }
+  if (trace_on() && !s.jobs.empty()) {
+    // per kind of job: ready seen -> done seen (the ANE's latency as the host sees it); done seen -> the GPU past its
+    // wait ("joined"; small when the GPU waited, larger when its own work was still running); the GPU's pace (ready
+    // seen to the next job's ready seen)
+    std::vector<std::pair<uint64_t, const Job*>> v;
+    for (auto& [jid, j] : s.jobs) v.push_back({jid, &j});
+    std::sort(v.begin(), v.end(), [](auto& a, auto& b) { return a.first < b.first; });
+    auto med = [](std::vector<double> x) {
+      if (x.empty()) return 0.0;
+      std::sort(x.begin(), x.end());
+      return x[x.size() / 2];
+    };
+    auto sum = [](const std::vector<double>& x) {
+      double t = 0;
+      for (double y : x) t += y;
+      return t;
+    };
+    std::string out;
+    for (int tag = 0; tag < 4; ++tag) {
+      std::vector<double> lat, joined, pace, ahead;
+      for (size_t i = 0; i < v.size(); ++i) {
+        const Job& j = *v[i].second;
+        if (j.tag != tag || !j.ready_seen) continue;
+        if (j.done_seen) lat.push_back(j.done_seen - j.ready_seen);
+        if (j.done_seen && j.joined_seen) joined.push_back(j.joined_seen - j.done_seen);
+        if (i + 1 < v.size() && v[i + 1].second->ready_seen) pace.push_back(v[i + 1].second->ready_seen - j.ready_seen);
+        if (j.joined_seen) ahead.push_back(j.joined_seen - j.ready_seen);
+      }
+      if (lat.empty()) continue;
+      char buf[320];
+      snprintf(buf, sizeof buf,
+               " | kind %d: %zu jobs, ready->done med %.1f (sum %.0f), done->GPU on med %.1f (sum %.0f), ready->GPU on "
+               "med %.1f, pace med %.1f (sum %.0f)",
+               tag, lat.size(), med(lat), sum(lat), med(joined), sum(joined), med(ahead), med(pace), sum(pace));
+      out += buf;
+    }
+    logi("ANE trace (ms):%s", out.c_str());
   }
   s.jobs.clear();
   if (ane_ms) *ane_ms = ms;

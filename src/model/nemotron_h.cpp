@@ -390,7 +390,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_rows", "nh_gnorm", "nh_conv_ring", "nh_accept", "nh_capture", "nh_gemm_",
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
-                                   "copy_u32", "kv_regrow"};
+                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_"};
   std::vector<std::string> v;
   for (const std::string& n : g.function_names())
     for (const char* pre : prefixes)
@@ -478,10 +478,12 @@ void NemotronH::ane_build() {
   try {
     ane_ = std::make_unique<NhAne>(*this, ane_cfg_);
   } catch (const std::exception& e) {
+    ane::Program::unpark_all();
     logi("NI_ANE: Neural Engine split unavailable (%s); the GPU runs the prefill alone", e.what());
     ane_.reset();
     return;
   }
+  ane::Program::unpark_all();  // (a background compile parks its program for this build)
   if (mem_budget_ && Gpu::get().allocated_bytes() > mem_budget_) {
     logi("NI_ANE: the Neural Engine split's %.0f MB would exceed the memory budget (%.1f GB); GPU only",
          ane_->metal_bytes() / 1e6, mem_budget_ / 1e9);
@@ -835,6 +837,20 @@ void NemotronH::alloc_buffers() {
   live_all_ = g.alloc(16, "nh_live_all");
   live_.as<uint32_t>()[0] = 0xffffffffu;
   live_all_.as<uint32_t>()[0] = 0xffffffffu;
+  // NVFP4 9-32-row kernels split K in 4 (K <= 8192) or 8 parts: partials of the largest FP4 matrix (in_proj) at 32
+  // rows, and one arrival counter per 64-row tile (zero now; every call leaves them zero)
+  if (const char* v = getenv("NI_NH_X4")) x4_ = atoi(v) != 0;
+  x4part_ = g.alloc(size_t(4) * ((size_t(cfg_.in_proj()) + 63) / 64) * 2048 * 4, "nh_x4_partials");
+  x4cnt_ = g.alloc(4096, "nh_x4_counters");
+  memset(x4cnt_.ptr(), 0, 4096);
+  if (const char* v = getenv("NI_NH_X2")) x2_ = atoi(v) != 0;
+  {
+    const size_t P = size_t(kMaxRows) * size_t(std::max(1, cfg_.max_k));  // (row, expert) pairs of a verify block
+    x2sorted_ = g.alloc(P * 4, "nh_x2_sorted");
+    x2tiles_ = g.alloc(P * 16, "nh_x2_tiles");
+    x2args_ = g.alloc(64, "nh_x2_dispatch_args");
+    x2rank_ = g.alloc(P * 4, "nh_x2_rank");
+  }
   // the IQ2_XXS grid as halves (nh_iq2_fill_tables2), read by the 8-row and GEMM kernels from the constant space
   iq2tab_ = g.alloc(4096, "nh_iq2_grid_half");
   {
@@ -892,6 +908,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.activations += R * (2 * H * 4 + std::max(H, DI) * 2 + size_t(c.in_proj()) * 4 + DI * 6 + QD * 6 + KD * 8 +
                         size_t(c.max_E) * 4 + size_t(c.latent) * 4 + size_t(c.shared_I) * 2) +
                    P * (16 + size_t(c.max_I) * 2 + size_t(c.latent) * 4) + (P / 16 + size_t(c.max_E) + 2) * 16;
+  m.activations += size_t(4) * ((size_t(c.in_proj()) + 63) / 64) * 2048 * 4 + 4096;  // x4 split-K partials, counters
   m.head_row_bytes = size_t(c.hidden) + size_t(c.hidden / 32) * 2;
   m.dense = false;
   m.ffn_ane = false;
@@ -1050,6 +1067,32 @@ void NemotronH::enc_norm(Encoder& e, const Buffer& x, const Buffer& w, const Buf
 void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int R, int epi, uint32_t xs,
                        uint32_t ys) {
   if (W.E != 1) fatal("enc_mv on an expert stack");
+  // one FP4 row: the x4 kernel (8 rows per 64-thread threadgroup; in_proj 248, out_proj 228 GB/s on fresh weights)
+  if (R == 1 && W.fmt == NhFmt::FP4 && x4_ && epi <= 1 && W.K % 32 == 0 && (xs == 0 || xs == W.K) &&
+      (ys == 0 || ys == W.N)) {
+    const MvP p{W.N, W.K, W.K, W.N, W.gs, 1};
+    e.use(pipe(epi ? "nh_x4_mv_l0_add" : "nh_x4_mv_l0"));
+    e.buf(0, W.q);
+    e.buf(1, W.s);
+    e.buf(2, x);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 7) / 8, 1, 1, 64);
+    return;
+  }
+  // one IQ2 row: the x2 kernels (one simdgroup per 4 rows, 3 for the add; shared up 182, down 169 GB/s vs 104 / 95)
+  if (R == 1 && W.fmt == NhFmt::IQ2 && x2_ && W.K % 256 == 0 && (xs == 0 || xs == W.K) && (ys == 0 || ys == W.N)) {
+    const MvP p{W.N, W.K, W.K, W.N, W.gs, 1};
+    const uint32_t nr = epi == 1 ? 3 : 4;
+    e.use(pipe(epi == 2 ? "nh_x2_mv4_relu2" : epi == 1 ? "nh_x2_mv3_add" : "nh_x2_mv4"));
+    e.buf(0, W.q);
+    e.buf(1, W.s);
+    e.buf(2, x);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + nr - 1) / nr, 1, 1, 32);
+    return;
+  }
   // one row: FP4 with K <= 4096 (Mamba in_proj) and IQ2 on the nh_mv1 kernels (the FP4 byte-pair table, the IQ2 grid
   // from the constant table); the rest on the generic kernels (FP4 out_proj, K 8192: nh_mv_fp4_r1 242 against 189 GB/s)
   if (R == 1 && ((W.fmt == NhFmt::FP4 && W.K <= 4096 && epi <= 1) || (W.fmt == NhFmt::IQ2 && epi <= 2)) &&
@@ -1269,7 +1312,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch(tg_u + (H + 15) / 16, 1, 1, 128);
     const MoeP mp{I, Lt, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
                   uint32_t(L.down_e.s_exp()), I};
-    e.use(pipe("nh_moe2_dn_iq2"));
+    e.use(pipe(x2_ ? "nh_x2_moe_dn3" : "nh_moe2_dn_iq2"));
     e.buf(0, L.down_e.q);
     e.buf(1, L.down_e.s);
     e.buf(2, h_);
@@ -1278,7 +1321,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.buf(5, ew_);
     e.val(6, mp);
     e.buf(8, live_all_);
-    e.dispatch((Lt + 15) / 16, k, 1, 128);
+    if (x2_) e.dispatch((Lt + 2) / 3, k, 1, 32);
+    else e.dispatch((Lt + 15) / 16, k, 1, 128);
     e.use(pipe("nh_moe_d1"));
     e.buf(0, L.lat_up.q);
     e.buf(1, L.lat_up.s);
@@ -1326,26 +1370,66 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   // the down projection per (pair, 16 rows) into weighted partials, summed per row (nh_moe2_*)
   const uint32_t npairs = uint32_t(R) * k, nrows = uint32_t(R);
   {
-    e.use(pipe("nh_moe2_up_iq2"));
-    e.buf(0, L.up_e.q);
-    e.buf(1, L.up_e.s);
-    e.buf(2, lat_);
-    e.buf(3, h_);
-    e.buf(4, eid_);
-    e.val(5, mp);
-    e.buf(7, live());
-    e.dispatch((uint32_t(L.I) + 15) / 16, npairs, 1, 128);
-    if (grouped) e.group_begin();
-    e.use(pipe("nh_moe2_dn_iq2"));
-    e.buf(0, L.down_e.q);
-    e.buf(1, L.down_e.s);
-    e.buf(2, h_);
-    e.buf(3, part_);
-    e.buf(4, eid_);
-    e.buf(5, ew_);
-    e.val(6, mp);
-    e.buf(8, live());
-    e.dispatch((uint32_t(cfg_.latent) + 15) / 16, npairs, 1, 128);
+    const bool x2 = x2_ && L.E <= 1024 && L.I % 256 == 0 && cfg_.latent % 256 == 0;
+    if (x2 && R >= 2) {
+      // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
+      // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms
+      const struct {
+        uint32_t P, E, BM, k, up_x, dn_x;
+      } bp{npairs, uint32_t(L.E), 2, k, (uint32_t(L.I) + 3) / 4, (uint32_t(cfg_.latent) + 3) / 4};
+      e.use(pipe("nh_x2_bucket"));
+      e.buf(0, eid_);
+      e.buf(1, x2sorted_);
+      e.buf(2, x2tiles_);
+      e.buf(3, x2args_);
+      e.buf(4, x2rank_);
+      e.bytes(5, &bp, sizeof bp);
+      e.buf(6, live());
+      e.dispatch(1, 1, 1, 1024);
+      e.use(pipe("nh_x2_moeb_up"));
+      e.buf(0, L.up_e.q);
+      e.buf(1, L.up_e.s);
+      e.buf(2, lat_);
+      e.buf(3, h_);
+      e.buf(4, x2tiles_);
+      e.buf(5, x2sorted_);
+      e.val(6, mp);
+      e.dispatch_indirect(x2args_, 0, 32, 1, 1);
+      if (grouped) e.group_begin();
+      e.use(pipe("nh_x2_moeb_dn"));
+      e.buf(0, L.down_e.q);
+      e.buf(1, L.down_e.s);
+      e.buf(2, h_);
+      e.buf(3, part_);
+      e.buf(4, x2tiles_);
+      e.buf(5, x2sorted_);
+      e.buf(6, ew_);
+      e.val(7, mp);
+      e.dispatch_indirect(x2args_, 16, 32, 1, 1);
+    } else {
+      e.use(pipe(x2 ? "nh_x2_moe_up4" : "nh_moe2_up_iq2"));
+      e.buf(0, L.up_e.q);
+      e.buf(1, L.up_e.s);
+      e.buf(2, lat_);
+      e.buf(3, h_);
+      e.buf(4, eid_);
+      e.val(5, mp);
+      e.buf(7, live());
+      if (x2) e.dispatch((uint32_t(L.I) + 3) / 4, npairs, 1, 32);
+      else e.dispatch((uint32_t(L.I) + 15) / 16, npairs, 1, 128);
+      if (grouped) e.group_begin();
+      e.use(pipe(x2 ? "nh_x2_moe_dn3" : "nh_moe2_dn_iq2"));
+      e.buf(0, L.down_e.q);
+      e.buf(1, L.down_e.s);
+      e.buf(2, h_);
+      e.buf(3, part_);
+      e.buf(4, eid_);
+      e.buf(5, ew_);
+      e.val(6, mp);
+      e.buf(8, live());
+      if (x2) e.dispatch((uint32_t(cfg_.latent) + 2) / 3, npairs, 1, 32);
+      else e.dispatch((uint32_t(cfg_.latent) + 15) / 16, npairs, 1, 128);
+    }
     if (grouped) {
       if (gm) enc_gemm(e, L.down_s, shh_, x_, R, 1);
       else enc_mv(e, L.down_s, sh_, x_, R, 1);
@@ -1584,6 +1668,42 @@ void NemotronH::alloc_prefill(int T) {
 void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi, uint32_t y_ld,
                          uint32_t x_ld) {
   if (W.fmt == NhFmt::F32 || W.fmt == NhFmt::BF16 || W.E != 1) fatal("enc_gemm: unsupported matrix");
+  // NVFP4 up to 32 rows: the x4 kernels; up to 8 rows 8 simdgroups split K (in_proj 0.207 vs 0.260 ms, out_proj
+  // 0.097 vs 0.141), 9-32 rows SK parts of K summed in a fixed order by the last part to arrive (in_proj 32 rows
+  // 0.72 vs 0.91 ms, out_proj 0.34 vs 0.56)
+  if (W.fmt == NhFmt::FP4 && x4_ && M <= 32 && W.K % 128 == 0 && (x_ld ? x_ld : W.K) % 8 == 0 && (M > 8 || v8_)) {
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
+    if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
+      e.use(pipe(tb == 1 ? "nh_x4_v8_l0" : tb == 2 ? "nh_x4_mm16_l0" : tb == 3 ? "nh_x4_mm24_l0" : "nh_x4_mm32_l0"));
+      e.buf(0, xh);
+      e.buf(1, W.q);
+      e.buf(2, W.s);
+      e.buf(3, y);
+      e.val(4, p);
+      if (tb == 1) {
+        e.dispatch((W.N + 15) / 16, 1, 1, 256);
+      } else {
+        e.buf(5, x4part_);
+        e.buf(6, x4cnt_);
+        e.dispatch(sk, tiles, 1, 128);
+      }
+      return;
+    }
+  }
+  // IQ2 up to 32 rows (the shared expert in verify): the x2 kernels, one simdgroup per 8 rows on 8x8 MMAs with the
+  // weights as fp16 subnormals (8 rows: up 0.083 vs 0.107 ms, down 0.090 vs 0.111; 32 rows 0.25 vs 0.35)
+  if (W.fmt == NhFmt::IQ2 && x2_ && M <= 32 && W.K % 256 == 0 && (M > 8 || v8_)) {
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe(M <= 8 ? "nh_x2_v8" : M <= 16 ? "nh_x2_v16" : "nh_x2_v32"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.s);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 7) / 8, 1, 1, 32);
+    return;
+  }
   // up to 8 rows (verify, the drafter's block): the 8-row MMA kernels (weights decoded into registers)
   if (M <= 8 && v8_) {
     // split-K: 4 simdgroups share 8 NB rows and split K (measured 6-35% over a block of rows per simdgroup); 32 rows
@@ -1690,8 +1810,7 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       enc_gemm(e, L.o, poh_, px_, T, 1);
     } else {
       const uint32_t k = uint32_t(L.k_used), P = uint32_t(T) * k;
-      const bool ffn_ane = split && ane_->ffn();  // the shared expert on the ANE while the GPU routes
-      if (ffn_ane) ane_->ffn_launch(e, i, pxh_, T);
+      const bool ffn_ane = split && ane_->ffn();  // the shared expert on the ANE while the GPU runs the experts
       // router (bf16 or fp32 weights, fp32 products), routing
       const GemmF32P rp{uint32_t(T), uint32_t(L.E), H, H, uint32_t(cfg_.max_E)};
       e.use(pipe(L.router.fmt == NhFmt::BF16 ? "nh_gemm_bf16" : "nh_gemm_f32"));
@@ -1725,6 +1844,10 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       e.val(5, bp);
       e.buf(6, live_all_);
       e.dispatch(1, 1, 1, 1024);
+      // launched here, after the routing, not before the router: under a busy desktop (the UI's GPU work), a launch
+      // before the router GEMM left the GPU idle 0.8-2.3 s per 2048-row chunk (other processes' frames ran in the
+      // gaps; 100-190 ms each, measured with command-buffer timestamps), here 0.03-0.2 s (4k prefill 10.0 -> 8.4 s)
+      if (ffn_ane) ane_->ffn_launch(e, i, pxh_, T);
       const uint32_t max_tiles = P / bm + uint32_t(L.E) + 1;
       {
         const GemmP gp{P, uint32_t(L.I), uint32_t(cfg_.latent), uint32_t(cfg_.latent), uint32_t(L.I), 1.0f, 2,
@@ -1773,6 +1896,9 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         enc_gemm(e, L.down_s, psh_, px_, T, 1);
       }
     }
+    // a command buffer per layer of a long chunk (~80 ms at 2048 rows instead of seconds), so the desktop's own GPU
+    // work is not held back behind one long buffer (a split chunk already ends one at every Neural Engine handoff)
+    if (!split && T >= 256 && i + 1 < cfg_.layers) e.split();
   }
 }
 

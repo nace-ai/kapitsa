@@ -4,7 +4,7 @@
 //   B: routed up (IQ2, relu^2) of the k selected experts | shared down (IQ2) into sd.
 //   C: routed down (nh_moe2_dn_iq2: weighted partials per selected expert).
 //   D: latent up (Q8) of lo = sum of C's partials, + sd, added into the residual.
-// Same per-row arithmetic as the separate kernels (nh_mv_dot / nh_mv1_iq2v / nh_moe_route1).
+// Same per-row arithmetic as the separate kernels (nh_mv_dot / nh_x2_rows / nh_moe_route1).
 
 struct NhMoeDecP {
   uint H;            // hidden (A's input, D's output)
@@ -57,7 +57,7 @@ struct NhMoeDecP {
     return;
   }
   // shared up rows (IQ2, relu^2)
-  nh_mv1_iq2v<4, 2>(uq, us, xn, sh, p.S, p.H, 1.0f, ((tg - p.tg_r - p.tg_l) * nsg + sg) * 4, lane);
+  nh_x2_rows<4, 2>(uq, us, xn, sh, p.S, p.H, 1.0f, ((tg - p.tg_r - p.tg_l) * nsg + sg) * 4, lane);
 }
 
 // grid: tg_u = k * ceil(I / 16) + ceil(H / 16) threadgroups x 128 threads
@@ -71,12 +71,12 @@ struct NhMoeDecP {
   const uint tg = tgp.x;
   if (tg < p.tg_u) {  // routed up: pair j = tg / tiles per expert
     const uint per = (p.I + 15) / 16, j = tg / per, e = uint(eid[j]);
-    nh_mv1_iq2v<4, 2>(eq + size_t(e) * p.up_q_stride, es + size_t(e) * p.up_s_stride, lat, h + size_t(j) * p.I, p.I,
+    nh_x2_rows<4, 2>(eq + size_t(e) * p.up_q_stride, es + size_t(e) * p.up_s_stride, lat, h + size_t(j) * p.I, p.I,
                       p.L, 1.0f, ((tg % per) * nsg + sg) * 4, lane);
     return;
   }
   // shared down rows (IQ2) into sd
-  nh_mv1_iq2v<4, 0>(dq, ds, sh, sd, p.H, p.S, 1.0f, ((tg - p.tg_u) * nsg + sg) * 4, lane);
+  nh_x2_rows<4, 0>(dq, ds, sh, sd, p.H, p.S, 1.0f, ((tg - p.tg_u) * nsg + sg) * 4, lane);
 }
 
 // x[n] += W_up[n, :] . (sum_j part[j, :]) + sd[n]. grid: ceil(H / 16) threadgroups x 128 threads

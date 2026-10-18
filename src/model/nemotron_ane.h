@@ -8,7 +8,7 @@
 // NVFP4 / IQ2_XXS rows (nothing stored twice: the per-row scales are computed once and cached on disk). GPU and ANE
 // are ordered through two shared events (ane::Handoff) with a watchdog; a failed job retires the split and the
 // engine reruns the chunk on the GPU (Model::ane_finish_chunk).
-// The scheme is src/ane/ffn_split's (Splash's design: incoai/splash, Apache-2.0); the ops and code here are ours.
+// The scheme is src/ane/ffn_split's (the Qwen dense FFN split), applied to Nemotron-H's projections.
 #pragma once
 #include "ane/ane.h"
 #include "metal/gpu.h"
