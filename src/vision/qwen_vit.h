@@ -5,6 +5,7 @@
 #pragma once
 #include "loader/safetensors.h"
 #include "vision/encoder.h"
+#include "vision/vit_common.h"
 
 #include <array>
 #include <memory>
@@ -52,36 +53,29 @@ class QwenViT : public ImageEncoder {
   const QwenViTConfig& config() const { return c_; }
   // The processor's output as the reference processors return it (pixel_values: [patches, C x T x P x P] in
   // (channel, frame, row, column) order, float32): for checks against them.
-  std::vector<float> pixel_values(const Prepared& p) const;
+  std::vector<float> pixel_values(const Prepared& p) const override;
   // Tests: the hidden state after `layers` blocks (fp32 [patches, hidden]; layers = depth: before the merger) instead
   // of the embeddings, when set before encode() (then out must hold patches x hidden floats).
-  void set_debug_stop(int layers) { dbg_stop_ = layers; }
+  void set_debug_stop(int layers) override { dbg_stop_ = layers; }
+  int debug_rows(const Prepared& p) const override { return (p.height / c_.patch) * (p.width / c_.patch); }
+  int debug_width() const override { return c_.hidden; }
 
  private:
-  struct Lin {
-    Buffer w;      // bf16 [N, K] (K padded to a multiple of 64 with zero columns)
-    Buffer b;      // bf16 [N] (padded rows: zero)
-    uint32_t N = 0, K = 0;
-  };
   struct Block {
     Buffer n1w, n1b, n2w, n2b;
-    Lin qkv, proj, fc1, fc2;
+    VitLin qkv, proj, fc1, fc2;
   };
-  Lin load_lin(const std::string& name, uint32_t pad_n, uint32_t pad_k);
-  Buffer load_vec(const std::string& name);
-  void gemm(Encoder& e, const Lin& L, const Buffer& x, uint32_t x_ld, const Buffer& y, uint32_t y_ld, int M, bool add);
 
   std::string dir_, prefix_;
   QwenViTConfig c_;
   uint32_t inter_pad_ = 0;  // MLP width padded to a multiple of 64 (4304 -> 4352)
-  std::unique_ptr<WeightStore> ws_;  // the vision tensors' headers (read on load into our own buffers)
+  VitWeights w_;            // the vision tensors: headers while loading, then our own buffers
   bool loaded_ = false;
-  Lin patch_;               // [hidden, T*P*P*C] in (frame, row, column, channel) order
+  VitLin patch_;            // [hidden, T*P*P*C] in (frame, row, column, channel) order
   Buffer pos_;              // bf16 [pos_embeds, hidden]
   std::vector<Block> blocks_;
   Buffer mnw_, mnb_;        // merger norm
-  Lin m1_, m2_;
-  std::vector<Buffer> owned_;
+  VitLin m1_, m2_;
   int dbg_stop_ = -1;
 };
 

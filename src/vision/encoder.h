@@ -2,8 +2,9 @@
 // Shared by every model (here): the encoder interface, loading it on the first image with the memory budget in
 // mind, the caches (prepared images by source, embeddings by content), and the prompt side (a placeholder token per
 // image expanded to the image's rows, with prefix-reuse keys that tell images apart by content).
-// Per model: the processor and the tower behind ImageEncoder (QwenViT, qwen_vit.h, for the Qwen3.5 family; a new
-// model's encoder is one more class and one more line in open_encoder), and the model's own handling of image rows:
+// Per model: the processor and the tower behind ImageEncoder (QwenViT, qwen_vit.h, for the Qwen3.5 family; RadioViT,
+// radio_vit.h, for Nemotron 3.5 Bolt; a new model's encoder is one more class and one more line in open_encoder; the
+// GPU building blocks they share are in vit_common.h), and the model's own handling of image rows:
 // its prefill puts the embeddings in (vision::enc_embed_runs for Seq::embeds) and Model::set_rope_positions gives
 // them positions (Qwen35: M-RoPE; the default does nothing, for attention without positions as in Nemotron-H).
 #pragma once
@@ -26,8 +27,9 @@ struct Prepared {
   int grid_t = 1, grid_h = 0, grid_w = 0;  // its token grid (positions use it): tokens = grid_t * grid_h * grid_w
   Digest digest{};                         // the picture and the shape the processor gave it: equal digests, equal rows
   int width = 0, height = 0;               // the encoder's input size (after resizing)
-  std::vector<uint8_t> pixels;             // the encoder's input (QwenViT: resized RGB rows); empty when only the
-                                           // metadata came from the cache (Vision::embeddings prepares it again)
+  std::vector<uint8_t> pixels;             // the encoder's input (QwenViT: resized RGB rows, RadioViT: half patch
+                                           // rows); empty when only the metadata came from the cache
+                                           // (Vision::embeddings prepares it again)
 };
 
 class ImageEncoder {
@@ -36,6 +38,9 @@ class ImageEncoder {
   virtual std::string name() const = 0;
   virtual std::string describe() const { return name(); }  // for logs: its shape and the image sizes it takes
   virtual int placeholder() const = 0;    // the token the chat template writes for one image
+  // Special tokens around an image's rows that its processor adds to the prompt ("" for none; Nemotron: <img>, </img>)
+  virtual std::string image_start() const { return ""; }
+  virtual std::string image_end() const { return ""; }
   virtual int out_dim() const = 0;        // embedding width (the language model's hidden size)
   virtual Prepared prepare(const Image& im) const = 0;      // CPU only, thread-safe
   virtual size_t weight_bytes() const = 0;                  // GPU memory of the loaded weights
@@ -45,6 +50,21 @@ class ImageEncoder {
   virtual void unload() = 0;
   // p's embeddings into `out` (p.tokens rows of out_dim() bf16): its own short command buffers, waited for.
   virtual void encode(const Prepared& p, const Buffer& out) = 0;
+
+  // ---- for checks against reference implementations (tools/vit_check) ----
+  // The processor's output as the reference processor returns it (float32, the reference's layout); empty if none.
+  virtual std::vector<float> pixel_values(const Prepared& p) const {
+    (void)p;
+    return {};
+  }
+  // When set before encode(): the tower's hidden state after `layers` blocks (fp32 [debug_rows, debug_width]) into
+  // `out` instead of the embeddings.
+  virtual void set_debug_stop(int layers) { (void)layers; }
+  virtual int debug_rows(const Prepared& p) const {
+    (void)p;
+    return 0;
+  }
+  virtual int debug_width() const { return 0; }
 };
 
 // The servers' default cap on the pixels an image keeps: about what Anthropic's API lets Claude see (a 2880x1800
@@ -107,9 +127,11 @@ struct Prompt {
   std::vector<ImageSpan> spans;
   std::vector<Digest> digests;  // per span
 };
-// Expands each placeholder token of `ids` (in order) to its image's rows. `index` (e.g. a turn boundary) moves with
-// the expansion. Throws Error when the placeholders and the images do not pair up.
-Prompt expand(const std::vector<int>& ids, int placeholder, const std::vector<Prepared>& images, int* index = nullptr);
+// Expands each placeholder token of `ids` (in order) to its image's rows, between the tokens `pre` and `post` (the
+// processor's own marks around an image: ImageEncoder::image_start / image_end). `index` (e.g. a turn boundary) moves
+// with the expansion. Throws Error when the placeholders and the images do not pair up.
+Prompt expand(const std::vector<int>& ids, int placeholder, const std::vector<Prepared>& images, int* index = nullptr,
+              const std::vector<int>& pre = {}, const std::vector<int>& post = {});
 // Rows two prompts share as a reusable prefix: equal keys, and every image in the prefix the same image (digest and
 // span) in both: a different image never reuses another image's state, however its rows' keys compare.
 size_t common_prefix(const std::vector<int>& a_keys, const std::vector<ImageSpan>& a_spans,

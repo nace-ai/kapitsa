@@ -225,6 +225,10 @@ class Engine {
   std::unique_ptr<DFlash2> dfl_;
   std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
   std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
+  std::vector<int> img_pre_, img_post_;     // the tokens its processor puts around an image's rows (Nemotron: <img>)
+  // `ids` with each image placeholder expanded to its image's rows (vision::expand with the encoder's marks)
+  vision::Prompt expand_images(const std::vector<int>& ids, const std::vector<vision::Prepared>& images,
+                               int* index = nullptr) const;
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
   std::vector<Slot> slots_;
