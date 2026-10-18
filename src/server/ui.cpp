@@ -783,7 +783,8 @@ std::vector<std::string> strip(const std::vector<std::shared_ptr<Meter>>& act, d
     const double rd = p > 0 ? double(m.live->read.load(std::memory_order_relaxed)) / p : 0;
     b.reach = phase == 2 ? 1 : phase == 1 ? 0.06 + 0.28 * rd : 0.06;
     const int toks = m.live->tokens.load(std::memory_order_relaxed);
-    std::vector<std::string> text = {who + dim("  " + std::string(kDot) + "  ") + prompt_info(m), state(m, now, true),
+    const std::string pi = prompt_info(m);
+    std::vector<std::string> text = {who + (pi.empty() ? "" : dim("  " + std::string(kDot) + "  ") + pi), state(m, now, true),
                                      dim(std::to_string(toks) + " tokens  " + kDot + "  " + duration((now - m.t0) / 1000))};
     rows = beside(diffraction(24, 3, b), 24, text, 0);
   } else {
