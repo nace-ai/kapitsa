@@ -84,6 +84,37 @@ std::string downloaded(const hub::CatalogModel& m) {
   return "-";
 }
 
+// A model's precisions for the line under its row: "4-bit 22.1 GB ✓ · 5-bit 26.4 · ... · bf16 71.9", the default in
+// the normal color and the others dim, ✓ where downloaded; without the sizes when they do not fit in `room`
+std::string precisions_of(const hub::CatalogModel& m, int room) {
+  auto make = [&](bool sizes) {
+    std::string s;
+    for (const auto& v : m.variants) {
+      std::string item = v.label;
+      if (item.empty()) {
+        item = v.name;
+        if (item.size() > 3 && item.compare(item.size() - 3, 3, "bit") == 0) item.insert(item.size() - 3, "-");
+        if (sizes) {
+          char b[32];
+          snprintf(b, sizeof b, s.empty() ? " %.1f GB" : " %.1f", v.download_gb);
+          item += b;
+        }
+      }
+      bool have = false;
+      try {
+        have = hub::is_current(hub::resolve(m.name + ":" + v.name));
+      } catch (const hub::Error&) {
+      }
+      s += (s.empty() ? "" : dim(std::string(" ") + kDot + " ")) + (v.name == m.default_variant ? item : dim(item)) +
+           (have ? " " + accent(kOk) : "");
+    }
+    return s;
+  };
+  std::string s = make(true);
+  if (width(s) > room) s = make(false);
+  return clip(s, room);
+}
+
 // The command that installs a coding agent: the first command of its install hint
 std::string install_command(const std::string& agent) {
   const std::string h = api::agent_install_hint(agent);
@@ -169,13 +200,16 @@ void home(const std::string& version) {
   const bool show_purpose = pw >= 16;
   std::vector<std::string> table;
   int tw = 0;
-  for (const auto& r : rows) {
+  const int under = indent + aw + 3;  // the precisions line starts under the name
+  for (size_t i = 0; i < rows.size(); ++i) {
+    const Row& r = rows[i];
     std::string l = std::string(size_t(indent), ' ') + left(bold(r.alias), aw) + "   " + left(r.name, nw) + "   " +
                     right(dim(r.size), sw);
     if (mw) l += "  " + left(r.marks, mw);
     if (show_purpose) l += "   " + clip(r.purpose, pw);
     tw = std::max(tw, width(l));
     table.push_back(l);
+    table.push_back(std::string(size_t(under), ' ') + precisions_of(hub::catalog()[i], W - under - 1));
   }
   std::string legend;
   if (any_mark) legend += accent(kOk) + dim(" downloaded");
@@ -184,7 +218,10 @@ void home(const std::string& version) {
   const int edge = std::max(tw, width(title) + 3 + width(legend));  // the legend ends where the table does
   o.push_back(legend.empty() || edge > W ? title : title + std::string(size_t(edge - width(title) - width(legend)), ' ') + legend);
   for (auto& l : table) o.push_back(l);
-  paragraph(o, "4-bit by default; other precisions in kapitsa list, e.g. --model 35b:8bit", 4, W, dim);
+  {
+    const std::string pick = dim("pick one: ") + "kapitsa serve --model 35b:6bit" + dim(std::string("  ") + kDot + "  bf16 = full precision");
+    o.push_back("    " + (width(pick) <= W - 5 ? pick : dim("pick one: ") + "--model 35b:6bit"));
+  }
   paragraph(o, "or any Qwen3.5-family MLX repo (org/name), a model folder, or a .gguf file", 4, W, dim);
   o.push_back("");
 

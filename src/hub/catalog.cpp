@@ -205,6 +205,7 @@ const std::vector<CatalogModel>& catalog() {
        .variants = {
            {.name = "24gb",
             .quant = "IQ2_XXS experts, NVFP4 Mamba, Q8_0 attention / latent / head, BF16 embedding",
+            .label = "NVIDIA 24 GB (2-bit experts, NVFP4, 8-bit)",
             .repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
             .revision = "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
             .companions = {lilicorr_bolt()},

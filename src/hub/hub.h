@@ -38,6 +38,7 @@ struct Companion {
 struct Variant {
   std::string name;                   // "4bit", "8bit", "6bit", "bf16" (lower case): what follows the ':'
   std::string quant;                  // what the weights are: "MLX affine 4-bit, group 64"
+  std::string label;                  // how the home screen names it ("": from the name, 4bit -> 4-bit)
   std::string repo, revision;         // the weights (every file but .gitattributes)
   std::vector<Companion> companions;
   double download_gb = 0;             // weights + companions
