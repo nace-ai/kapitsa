@@ -93,7 +93,7 @@ NI_INLINE float vit_act(float v, uint act) {
 
 // ---- non-causal attention over the patches of one image ----
 // Q, K, V: half [heads][N][D] (head-major); out: half [N][ld], head h at columns h*D... One threadgroup per (block of
-// NSG*RB*8 queries, head); each simdgroup owns RB blocks of 8 query rows over all D dims. Key tiles of BK keys: K^T and V in
+// NSG*RB*8 queries, head); each simdgroup owns RB blocks of 8 query rows over all D dims. Key tiles of 32 keys: K^T and V in
 // threadgroup memory, S = Q K^T and O += P V on simdgroup matrices, online softmax in the log2 domain.
 struct VitAttnParams {
   uint N;       // patches (keys and queries)
@@ -102,13 +102,14 @@ struct VitAttnParams {
   float scale;  // softmax scale (1/sqrt(D))
 };
 
+constant constexpr uint kVitBK = 32;
 constant constexpr float kVitNeg = -1.0e30f;
 
-template <uint D, uint NSG, uint RB, uint BK>
+template <uint D, uint NSG, uint RB>
 NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const device half* V, device half* O,
                              constant VitAttnParams& p, uint2 tg, uint tid, uint sg, uint lane,
                              threadgroup half* kt, threadgroup half* vs) {
-  constexpr uint ND = D / 8, NC = BK / 8, NT = NSG * 32;
+  constexpr uint BK = kVitBK, ND = D / 8, NC = BK / 8, NT = NSG * 32;
   constexpr uint KLD = BK + 8;  // K^T: one row per dim, BK keys
   constexpr uint VLD = D + 8;   // V: one row per key, D dims
   const uint h = tg.y;
@@ -223,23 +224,21 @@ NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const d
   }
 }
 
-#define NI_VIT_ATTN(NAME, D, NSG, RB, BK)                                                                      \
+#define NI_VIT_ATTN(NAME, D, NSG, RB)                                                                          \
   [[kernel, max_total_threads_per_threadgroup(NSG * 32)]] void NAME(                                           \
       const device half* Q [[buffer(0)]], const device half* K [[buffer(1)]], const device half* V [[buffer(2)]], \
       device half* O [[buffer(3)]], constant VitAttnParams& p [[buffer(4)]],                                  \
       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                     \
       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                   \
-    threadgroup half kt[D * (BK + 8)];                                                                         \
-    threadgroup half vs[BK * (D + 8)];                                                                         \
-    vit_attn_impl<D, NSG, RB, BK>(Q, K, V, O, p, tg, tid, sg, lane, kt, vs);                                   \
+    threadgroup half kt[D * (kVitBK + 8)];                                                                     \
+    threadgroup half vs[kVitBK * (D + 8)];                                                                     \
+    vit_attn_impl<D, NSG, RB>(Q, K, V, O, p, tg, tid, sg, lane, kt, vs);                                       \
   }
-// threadgroup = NSG simdgroups x RB blocks of 8 queries each; key tiles of 32 (or 64: _k64)
-NI_VIT_ATTN(vit_attn_d72_s4, 72, 4, 1, 32)
-NI_VIT_ATTN(vit_attn_d72_s8, 72, 8, 1, 32)
-NI_VIT_ATTN(vit_attn_d72_s4r2, 72, 4, 2, 32)
-NI_VIT_ATTN(vit_attn_d72_s8r2, 72, 8, 2, 32)
-NI_VIT_ATTN(vit_attn_d72_s4k64, 72, 4, 1, 64)
-NI_VIT_ATTN(vit_attn_d72_s8k64, 72, 8, 1, 64)
+// threadgroup = NSG simdgroups x RB blocks of 8 queries each
+NI_VIT_ATTN(vit_attn_d72_s4, 72, 4, 1)
+NI_VIT_ATTN(vit_attn_d72_s8, 72, 8, 1)
+NI_VIT_ATTN(vit_attn_d72_s4r2, 72, 4, 2)
+NI_VIT_ATTN(vit_attn_d72_s8r2, 72, 8, 2)
 
 // ==== the Qwen3.5 ViT ====
 

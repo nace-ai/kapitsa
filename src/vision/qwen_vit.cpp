@@ -545,8 +545,7 @@ const AttnKernel& attn_kernel() {
     if (const char* v = getenv("NI_VIT_ATTN"); v && *v) {
       unsigned sg = 0, rb = 1;
       if (sscanf(v, "vit_attn_d72_s%ur%u", &sg, &rb) < 1 || (sg != 4 && sg != 8) || (rb != 1 && rb != 2))
-        fatal("NI_VIT_ATTN=%s: expected vit_attn_d72_s{4,8}[r2|k64]", v);
-      if (strstr(v, "k64")) rb = 1;
+        fatal("NI_VIT_ATTN=%s: expected vit_attn_d72_s{4,8}[r2]", v);
       a.name = v, a.sg = sg, a.rb = rb;
     }
     return a;
