@@ -14,14 +14,18 @@ Needs CMake 3.24+ and the Xcode Command Line Tools only. Metal kernels are embed
 runtime by the OS (`newLibraryWithSource`), so no offline `metal` compiler or Xcode is required. Pipelines are
 created at load (`NI_PREWARM=0` skips that and creates them on first use).
 
-`install.sh` checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line Tools (opens
-their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa` target in
-Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
-overrides), with a note when that folder is not on the PATH. It installs `LICENSE` and `THIRD_PARTY_NOTICES`
+`install.sh` in a clone checks for Apple silicon (and a terminal not under Rosetta), macOS 14+, the Command Line
+Tools (opens their installer) and CMake (offers `brew install cmake`; `--yes` doesn't ask), builds the `kapitsa`
+target in Release, and installs it to `/opt/homebrew/bin` when that is writable, else `~/.local/bin` (`--prefix DIR`
+overrides), with a note when that folder is not on the PATH. Piped from curl (not in a clone), it installs the
+latest release's prebuilt binary instead, checked against the release's sha256 (`--version X.Y.Z`, `--from-file
+TARBALL`, `--from-source`: `install.sh --help`). It installs `LICENSE` and `THIRD_PARTY_NOTICES`
 to `../share/kapitsa` relative to that binary folder, and prints the location. Run it again to
 update. To uninstall, delete the binary, that notices folder and `~/.cache/kapitsa`.
-`packaging/homebrew/kapitsa.rb` installs the same documents in Homebrew's package share directory. It is a
-formula for a public release: it needs a tag, the tarball's sha256 and a tap (see the file); nothing is published.
+`packaging/release/build.sh` builds the release tarball (the binary, stripped and signed, with those two documents)
+from the committed tree; `install.sh` and the Homebrew formula `packaging/homebrew/kapitsa.rb` install that tarball
+(`brew install --HEAD` builds from source), and the formula's service runs `kapitsa serve` under `brew services`.
+[RELEASING.md](RELEASING.md) has the release steps; nothing is published yet.
 
 ## Commands
 
@@ -34,7 +38,7 @@ formula for a public release: it needs a tag, the tarball's sha256 and a tap (se
 | `kapitsa doctor [--model M]... [--json]` | This Mac and what fits it (below). |
 | `kapitsa claude\|codex\|opencode [--model M] [--port P] [--ctx N] [--api-key K] [args]` | Starts that coding agent on Kapitsa (Coding agents, below). Other arguments, and all after `--`, go to the agent. |
 | `kapitsa mtp-sidecar SRC OUT [--revision R] [--hidden post_norm\|pre_norm]` | `tools/mtp_sidecar.py` in C++, same bytes (see below). |
-| `kapitsa import FILE.gguf [--name N] [--mtp F] [--threads N] [--force]` | Converts a GGUF of a Qwen3.5-family model once into a store folder (Weight formats, GGUF files). `--model FILE.gguf` (serve and the agent launchers) does it on first use. |
+| `kapitsa import FILE.gguf [--name N] [--mtp F] [--threads N] [--force] [--dry-run]` | Converts a GGUF of a Qwen3.5-family model once into a store folder (Weight formats, GGUF files). `--model FILE.gguf` (serve and the agent launchers) does it on first use. |
 | `kapitsa --help`, `serve --help`, `pull --help`, `--version` | |
 
 Exit codes: 0, 1 for failures (download, port, model), 2 for usage errors (unknown option or model), 130 after
@@ -297,7 +301,10 @@ Downloads (`src/hub/fetch.cpp`, transport `src/hub/http.mm`):
   `~/.cache/huggingface/hub`, at the pinned commit; the blob's name proves its content), files under `--from`
   folders, and for a catalog model the Nace Agent app's copy (`~/.nace/models/<key>` with its companions); in
   folders, any name up to 3 levels deep, matched by size and then by checksum. They are placed as APFS clones (no
-  extra space), or copied across volumes.
+  extra space), or copied across volumes. A catalog model's folder that Kapitsa did not download (no `.kapitsa/`, e.g.
+  a bundle that carries the same files) is adopted: its files are checked against the pinned checksums (8 at a time;
+  Bolt's 25 GB in ~5 s), kept where they match, and only the others fetched (`kapitsa list` says "not checked yet"
+  until then).
 - `HF_TOKEN` (or the token `hf auth login` saved) is sent for gated or private repos; `HF_ENDPOINT` points at a
   mirror. Errors say what to do: offline, not found, gated, rate-limited, out of disk.
 - A repo outside the catalog takes its top-level files except other formats (`.gguf`, `.bin`, `.pth`, images,
@@ -434,14 +441,20 @@ type's own (1.00 = no added error; measured on Qwen3.5-0.8B / 4B / 3.6-35B-A3B t
 | Q6_K | 8-bit group 64 | 1.09 |
 | Q5_0, Q5_1, Q5_K | 6-bit group 64 | 1.31 (8-bit: 1.02) |
 | IQ4_NL, IQ4_XS, MXFP4, NVFP4 | 5-bit group 64 | IQ4_XS 1.27, NVFP4 1.07 |
-| Q3_K, Q2_K (warning) | 4-bit group 32 | 1.20, 1.03 |
-| MoE experts of 4-bit types | 5-bit group 64 (no group-32 MoE kernels) | 1.31 (4-bit group 64 would be 2.29) |
+| IQ3_XXS, IQ3_S, Q3_K | 4-bit group 32 (3-bit group 64 would add 83-144%) | 1.09, 1.21, 1.20 |
+| IQ2_XXS, IQ2_XS, IQ2_S, IQ1_S, IQ1_M, Q2_K | 3-bit group 64 (4-bit group 32: 1.004-1.05, 1.4-1.7x the bytes) | 1.15, 1.21, 1.31, 1.04, 1.07, 1.27 |
+| 1-3-bit types in a mostly 4-bit-or-better file (unsloth's UD mixes) | the file's majority format | IQ3_S / Q3_K to 5-bit group 64: 1.05 / 1.06 (Qwen3.8-27B UD-Q4_K_M) |
+| MoE experts | 5-bit group 64 from 4-bit types (no group-32 MoE kernels), 4-bit group 64 from 3-bit, 3-bit group 64 from 1-2-bit | 1.31 for Q4_K (4-bit group 64 would be 2.29) |
 
 Re-quantization takes per group the best of the min-max grid, a symmetric grid and least-squares refits (all after
 rounding scale and bias to bf16). A layer's experts share one format (from their least precise tensor), its shared
 expert is 8-bit; a dense layer's gate and up share the finer of their formats. The MTP head is written as Kapitsa's
-sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). IQ1 / IQ2 / IQ3 (they need llama.cpp's
-codebooks), ternary and Hadamard-rotated files are refused, as are Qwen3-Next and other architectures.
+sidecar reads it (8-bit group-64 linears, numbered 4-bit group-32 experts). The IQ1 / IQ2 / IQ3 codebooks are ggml's
+(src/gguf/iq_grids.h, THIRD_PARTY_NOTICES); the 1-3-bit errors were measured on pure-type quantizations of
+Qwen3.5-0.8B (llama.cpp's own, with an importance matrix) against its bf16 weights. Ternary (TQ1_0 / TQ2_0) and
+Hadamard-rotated files are refused, as are Qwen3-Next and other architectures. `kapitsa import FILE --dry-run` prints
+the formats per type, the size and the folder without writing (on a header-only sparse copy of the Qwen3.8-27B
+UD-Q4_K_M: 16.46 GB in, 20.29 GB out; its 4 IQ3_S and 7 Q3_K tensors take 5-bit group 64, its majority).
 
 Checked on Qwen3.5-0.8B Q4_K_M (unsloth, with MTP), teacher-forced over bench/quality (4092 positions): Kapitsa on
 the converted folder against llama.cpp on the GGUF (CPU) KL 0.0077, top-1 96.7%, perplexity 9.69 against 9.73; the

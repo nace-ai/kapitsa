@@ -802,8 +802,14 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     return;
   }
   printf("%s\n", r.name.c_str());
+  struct stat st {};
+  const bool here = !local && !hub::is_current(r) && stat((r.dir + "/config.json").c_str(), &st) == 0;
   printf("  folder:     %s%s\n", hub::tilde(r.dir).c_str(),
-         local ? " (yours, used as is)" : hub::is_current(r) ? " (downloaded)" : " (not downloaded yet)");
+         local                ? " (yours, used as is)"
+         : hub::is_current(r) ? " (downloaded)"
+         : here ? " (files here, not checked yet: `kapitsa pull` checks them against the pinned checksums and fetches "
+                  "only what differs)"
+                : " (not downloaded yet)");
   if (!local) printf("  weights:    %s @ %s\n", r.repo.c_str(), r.revision.empty() ? "main" : r.revision.c_str());
   if (r.variant) printf("  variant:    %s (%s)%s\n", r.variant->name.c_str(), r.variant->quant.c_str(),
                         r.variant->name == r.model->default_variant ? ", the default" : "");
@@ -897,7 +903,17 @@ static int list(int argc, char** argv) {
     for (const auto& m : v) {
       std::string what = "weights";
       for (const auto& e : m.extras) what += " + " + e;
-      if (!m.complete) what = "incomplete: `kapitsa pull " + m.name + "` continues it";
+      if (!m.complete) {
+        // a catalog model's folder that Kapitsa did not download (no .kapitsa/): `pull` checks and adopts its files
+        std::string cat;
+        struct stat st {};
+        if (stat((m.dir + "/.kapitsa").c_str(), &st) != 0)
+          for (const auto& c : hub::catalog())
+            for (const auto& var : c.variants)
+              if (m.name == c.name + "-" + var.name) cat = hub::short_name(c, var);
+        what = !cat.empty() ? "not checked yet: `kapitsa pull " + cat + "` checks it against the pinned checksums"
+                            : "incomplete: `kapitsa pull " + m.name + "` continues it";
+      }
       printf("  %-18s %9s  %s\n", m.name.c_str(), hub::fmt_bytes(m.bytes).c_str(), what.c_str());
     }
   }
