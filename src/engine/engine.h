@@ -223,7 +223,7 @@ class Engine {
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
-  std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
+  std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;

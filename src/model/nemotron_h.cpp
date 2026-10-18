@@ -419,7 +419,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_rows", "nh_gnorm", "nh_conv_ring", "nh_accept", "nh_capture", "nh_gemm_",
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
-                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_"};
+                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_"};
   std::vector<std::string> v;
   for (const std::string& n : g.function_names())
     for (const char* pre : prefixes)
@@ -1781,6 +1781,7 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       enc_moe(e, L, R);
     }
   }
+  if (cap_) enc_capture(e, cfg_.layers, x_, pos0, R);  // (a drafter reading the trunk's output: slot `layers`)
   if (!commit) {
     s.n_pend = R;  // until commit_rows() says how many were accepted
     s.pend_pos = pos0;
@@ -2004,6 +2005,19 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
     e.dispatch((W.N + 7) / 8, 1, 1, 32);
     return;
   }
+  // BF16 up to 8 rows (Lightning's attention in verify): nh_xb_v8, the x8 design with the weights converted to half
+  // as nh_gemm_bf16w converts them (a verify's 24 projections 0.70 against 2.47 ms on nh_gemm_bf16w_m16)
+  if (W.fmt == NhFmt::BF16 && v8_ && M <= 8 && W.K % 128 == 0 && (x_ld ? x_ld : W.K) % 8 == 0) {
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe("nh_xb_v8"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.q);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 15) / 16, 1, 1, 256);
+    return;
+  }
   // up to 8 rows (verify, the drafter's block): the 8-row MMA kernels (weights decoded into registers)
   if (M <= 8 && v8_ && W.fmt != NhFmt::FP8 && W.fmt != NhFmt::BF16) {
     // split-K: 4 simdgroups share 8 NB rows and split K (measured 6-35% over a block of rows per simdgroup); 32 rows
@@ -2210,6 +2224,7 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
     // work is not held back behind one long buffer (a split chunk already ends one at every Neural Engine handoff)
     if (!split && T >= 256 && i + 1 < cfg_.layers) e.split();
   }
+  if (cap_) enc_capture(e, cfg_.layers, px_, pos0, T);
 }
 
 }  // namespace ni

@@ -79,8 +79,9 @@ struct NhLayer {
   int E = 0, k_used = 0, I = 0;
 };
 
-// Capture of target layer inputs for a block drafter: before layer l (slot[l] >= 0), the hidden rows at positions
-// p in [pos_base, pos_base + rows) are copied (fp32) to feat row p - pos_base, columns [slot * H, (slot + 1) * H).
+// Capture of target layer inputs for a block drafter: before layer l (slot[l] >= 0; l = layers: the trunk's output,
+// before the final norm), the hidden rows at positions p in [pos_base, pos_base + rows) are copied (fp32) to feat row
+// p - pos_base, columns [slot * H, (slot + 1) * H).
 struct NhCapture {
   Buffer feat;
   uint32_t ld = 0;          // floats per feat row (n_slots * H)
