@@ -783,7 +783,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.cached_tokens = start;
   LiveDecode* const live = r.live.get();  // progress for a display: relaxed stores, between cycles only
   if (live) live->prompt.store(n, std::memory_order_relaxed), live->cached.store(start, std::memory_order_relaxed),
-      live->phase.store(1, std::memory_order_relaxed);
+      live->read.store(start, std::memory_order_relaxed), live->phase.store(1, std::memory_order_relaxed);
   if (on_prompt) on_prompt(res);
   std::copy(prompt.begin(), prompt.end(), s.tokens());
   // images: their positions (M-RoPE; none: the text-only path) and the rows that take their embeddings
@@ -916,6 +916,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     };
     if (lili_commit) lili_->end_prefill();
     if (lili_commit && !mtp_defer) commit_lili(*e);
+    if (live) e->on_completed([lv = r.live, done = p] { lv->read.store(done, std::memory_order_relaxed); });
     e->commit();
     if (p == n) {
       t_enc = now_ms() - t0;  // until the last chunk's commit

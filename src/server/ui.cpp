@@ -100,7 +100,7 @@ std::string install_command(const std::string& agent) {
 // ---------------------------------------------------------------- the home screen
 
 // "Apple M4 Pro · 20-core GPU · 48 GB"
-std::string this_mac() {
+static std::string this_mac() {
   Gpu& g = Gpu::get();
   char b[160];
   snprintf(b, sizeof b, "%s  %s  %d-core GPU  %s  %.0f GB", g.name().c_str(), kDot, g.core_count(), kDot, ram_gb());
@@ -258,10 +258,6 @@ void warning(const std::string& s) {
   for (size_t i = 0; i < ls.size(); ++i) line((i ? "    " : "  " + warn(kWarn) + " ") + ls[i], stderr);
 }
 
-int fail(const std::string& msg, int code) {
-  term::error(msg);
-  return code;
-}
 
 // ---------------------------------------------------------------- list, plan
 
@@ -736,7 +732,12 @@ std::pair<double, double> rates(Meter& m, double now) {
 std::string state(Meter& m, double now, bool beam) {
   const int phase = m.live->phase.load(std::memory_order_relaxed);
   if (phase == 0) return dim("waiting for the engine");
-  if (phase == 1) return "reading the prompt" + dim("  " + duration((now - m.t0) / 1000));
+  if (phase == 1) {
+    const int rd = m.live->read.load(std::memory_order_relaxed), p = m.live->prompt.load(std::memory_order_relaxed);
+    std::string s = "reading the prompt";
+    if (p > 4096 && rd < p) s = "reading " + count(rd) + dim(" of ") + count(p);  // a long prompt: how far it is
+    return s + dim("  " + duration((now - m.t0) / 1000));
+  }
   const auto [tps, step] = rates(m, now);
   char b[64];
   std::string s = "writing ";
@@ -777,7 +778,10 @@ std::vector<std::string> strip(const std::vector<std::shared_ptr<Meter>>& act, d
     const bool spec = m.live->spec.load(std::memory_order_relaxed) > 0;
     b.k = phase == 2 ? (spec ? std::clamp(m.live->last.load(std::memory_order_relaxed), 1, 8) : 1) : 0;
     b.band = 0.3;
-    b.reach = phase == 2 ? 1 : phase == 1 ? 0.34 : 0.12;
+    // reading: the beam comes in as the prompt is read; writing: it crosses the wave and fans out
+    const double p = m.live->prompt.load(std::memory_order_relaxed);
+    const double rd = p > 0 ? double(m.live->read.load(std::memory_order_relaxed)) / p : 0;
+    b.reach = phase == 2 ? 1 : phase == 1 ? 0.06 + 0.28 * rd : 0.06;
     const int toks = m.live->tokens.load(std::memory_order_relaxed);
     std::vector<std::string> text = {who + dim("  " + std::string(kDot) + "  ") + prompt_info(m), state(m, now, true),
                                      dim(std::to_string(toks) + " tokens  " + kDot + "  " + duration((now - m.t0) / 1000))};

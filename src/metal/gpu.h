@@ -2,6 +2,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -117,6 +118,9 @@ class Encoder {
   void group_end() { in_group_ = false; }
   bool grouped() const { return auto_barrier_; }
   void commit();             // non-blocking
+  // `f` runs (on a Metal thread) once the GPU has finished this command buffer; set before commit(). For progress
+  // displays: no wait, nothing on the GPU's path.
+  void on_completed(std::function<void()> f);
   void wait();               // waits for this command buffer (and the ones signal_event committed)
   // Waits at most timeout_ms for this command buffer to finish (polling); false if it is still running.
   bool wait_for(double timeout_ms);

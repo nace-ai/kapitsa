@@ -27,8 +27,6 @@ void quiet();
 void ok(const std::string& s, bool out = false);
 void note(const std::string& s, bool out = false);
 void warning(const std::string& s);
-// "kapitsa: <msg>" errors: a red ✗ with the problem and the fix on its own dim line
-int fail(const std::string& msg, int code);
 
 // ---- kapitsa serve
 

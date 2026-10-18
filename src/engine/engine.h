@@ -109,6 +109,8 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
 struct LiveDecode {
   std::atomic<int> phase{0};               // 0 waiting for the engine, 1 reading the prompt, 2 writing, 3 done
   std::atomic<int> prompt{0}, cached{0};   // prompt tokens, of which reused from the cache
+  std::atomic<int> read{0};                // prompt tokens read so far: the cached ones, then each prefill chunk the
+                                           // GPU has finished
   std::atomic<int> tokens{0};              // tokens written
   std::atomic<int> cycles{0};              // decode cycles: a speculative cycle's verify, or a plain step
   std::atomic<int> last{0};                // tokens the last cycle wrote (its accepted drafts + 1)
