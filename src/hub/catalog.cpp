@@ -260,8 +260,7 @@ const std::vector<CatalogModel>& catalog() {
             .companions = {dspark_lightning()},
             .download_gb = 22.93},
        }},
-      // Kept last until its repo is published (`kapitsa serve` without --model would otherwise pick it on a 128 GB
-      // Mac): TODO pin the repo's revision after the upload, set download_gb from its listing, then move it up.
+      // a 128 GB Mac's model: it never comes first for `kapitsa serve` without --model, since the 35B fits there too
       {.name = "qwen3.8-flash-next",
        .aliases = {"flash-next", "flash"},
        .title = "Qwen3.8-Flash-Next 180B-A7B",
@@ -269,15 +268,15 @@ const std::vector<CatalogModel>& catalog() {
        .default_variant = "4bit",
        .fallbacks = {},
        .variants = {
-           // our conversion of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (bf16): MTP head in mtp.safetensors, the n-gram
-           // table in ple.safetensors (mapped, outside GPU memory), the vision tower bf16
+           // Nace AI's quantization of Qwen/Qwen3.8-Flash-Next @ de4b8e4d (bf16; tools/convert_qwen4_exp.py): the MTP
+           // head in mtp.safetensors, the n-gram table in ple.safetensors (mapped, outside GPU memory), vision bf16
            {.name = "4bit",
-            .quant = "MLX affine 4-bit group 64 experts, 8-bit router / indexer / n-gram projections, 4-bit group 32 "
-                     "n-gram table",
+            .quant = "MLX affine 4-bit experts / DeltaNet / head, 6-bit attention / hyper-connections, 8-bit router / "
+                     "indexer / embedding, 4-bit n-gram table",
             .repo = "nace-ai/Qwen3.8-Flash-Next-MLX-4bit",
-            .revision = "TODO-pin-after-upload",
+            .revision = "5d423f9f563c1f1b7ca7945b268e65c0b92b0eae",
             .companions = {},
-            .download_gb = 106.0},
+            .download_gb = 105.86},
        }},
   };
   return c;

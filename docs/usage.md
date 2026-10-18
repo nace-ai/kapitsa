@@ -48,17 +48,17 @@ Those start the best model for this Mac, with the same output as before.
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 | `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
-| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs. Not published yet | 106 GB | `4bit` |
+| `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL, its DSpark draft model for
 Lightning; Flash-Next's repo holds its MTP head.
 
-Flash-Next's conversion is not uploaded yet: `--model flash-next` checks that it fits this Mac, then says where to put
-a converted pack (`~/.cache/kapitsa/models/qwen3.8-flash-next-4bit/`, used as it is from then on); `--model <folder>`
-runs one from anywhere. Its `4bit` recipe keeps the hyper-connections and attention at 6 bits and the router, indexer
-and n-gram gates at 8 (71.4 GB of weights, 4.1 GB read per token); its 32 GB n-gram table (`ple.safetensors`) stays on
-disk and is read through the page cache.
+Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
+([nace-ai/Qwen3.8-Flash-Next-MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit), its precision per
+tensor chosen by KL against bf16; Qwen publishes no 4-bit). Its recipe keeps the hyper-connections and attention at 6
+bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB read per token); its 32 GB n-gram table
+(`ple.safetensors`) stays on disk and is read through the page cache.
 
 `--model` takes a name or alias (`35b`), one with a variant (`35b:6bit`), a Hugging Face repo (`org/name[@revision]`,
 see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file

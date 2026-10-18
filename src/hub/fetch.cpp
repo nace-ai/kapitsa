@@ -1131,10 +1131,6 @@ bool is_complete(const std::string& dir) {
 
 bool is_current(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal) return true;
-  if (ref.kind == ModelRef::kCatalog && ref.variant->unpublished()) {  // a local conversion in the catalog's folder
-    uint64_t sz;
-    return file_size(ref.dir + "/config.json", sz);
-  }
   if (!is_complete(ref.dir)) return false;
   if (ref.kind != ModelRef::kCatalog) return true;
   // a catalog model: the files of the revisions this Kapitsa pins (a newer Kapitsa may pin newer ones)
@@ -1442,9 +1438,6 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
 
 std::string ensure(const ModelRef& ref, const PullOptions& opt) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
-  if (ref.kind == ModelRef::kCatalog && ref.variant->unpublished())
-    throw Error(ref.name + " is not published yet (" + ref.repo + " is a placeholder): put a converted pack in " +
-                tilde(ref.dir) + ", or pass --model with its folder.");
   const bool existed = is_dir(ref.dir);
   try {
     return ensure_impl(ref, opt);
@@ -1530,7 +1523,6 @@ std::string plan_dir(const ModelRef& ref) {
   std::string want = m.repo + "@" + m.revision;
   for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
   if (read_text(mark) == want) return dir;
-  if (m.unpublished()) return "";  // no headers to fetch yet (a plan put in the plans folder by hand is used, above)
   if (g_offline) {
     ++g_offline_misses;
     return "";

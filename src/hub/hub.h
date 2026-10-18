@@ -43,9 +43,6 @@ struct Variant {
   std::string repo, revision;         // the weights (every file but .gitattributes)
   std::vector<Companion> companions;
   double download_gb = 0;             // weights + companions
-  // A placeholder revision ("TODO..."): the repo is not published yet. Its folder (<models_dir>/<name>-<variant>) is
-  // used as it is when present (a local conversion), and nothing is downloaded.
-  bool unpublished() const { return revision.rfind("TODO", 0) == 0; }
 };
 
 // The models of the catalog (src/hub/catalog.cpp), best first.
