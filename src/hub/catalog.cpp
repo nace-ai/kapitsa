@@ -6,7 +6,7 @@
 // - `--model <name>` takes the model's default variant where the engine's memory plan of its headers leaves room for
 //   one --ctx conversation with its drafter, else the first of its fallbacks that does (smaller variants, best
 //   first). The default is the highest-quality variant whose decode with speculative decoding stays within ~10% of
-//   the 4-bit variant's on a 48 GB M4 Pro (docs/PERF.md, "Weight formats and default precisions": quality against
+//   the 4-bit variant's on a 48 GB M4 Pro (measured: quality against
 //   the bf16 model, decode and prefill speed); today that is 4-bit for every model, as each step up in precision
 //   reads 22% (5-bit) to 89% (8-bit) more bytes per token.
 // - A variant pins its weights to a revision (a commit), so a download is always the same bytes; every file of the

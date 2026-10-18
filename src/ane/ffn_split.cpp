@@ -703,7 +703,7 @@ size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, 
 }
 
 uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave) {
-  // Measured on the M4 Pro (20-core GPU, 16-core ANE; docs/PERF.md, 27B): the wavefront hides the ANE's
+  // Measured on the M4 Pro (20-core GPU, 16-core ANE, 27B): the wavefront hides the ANE's
   // FFN of one row half under the GPU's mixer of the other, and the GPU stays the bottleneck up to the
   // whole FFN (34 of 34 units: 7.20 s per 2048-row chunk vs 7.40 at 33, 8.40 at 31); the plain split
   // balances at 27 of 34. Per layer and chunk, the ANE takes ~1.94 ms per unit (fixed for the chip family)

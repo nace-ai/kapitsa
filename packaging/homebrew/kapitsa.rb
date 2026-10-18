@@ -2,7 +2,7 @@
 # It installs the release binary that packaging/release/build.sh makes (the same tarball install.sh downloads), so
 # nothing compiles; `brew install --HEAD` builds main from source instead. At each release the workflow
 # .github/workflows/release.yml sets version, url and sha256 and puts this file in the tap nace-ai/homebrew-tap as
-# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works (RELEASING.md).
+# Formula/kapitsa.rb, so that `brew install nace-ai/tap/kapitsa` works.
 class Kapitsa < Formula
   desc "Fast local Qwen inference for Apple silicon, with an OpenAI-compatible server"
   homepage "https://github.com/nace-ai/kapitsa"

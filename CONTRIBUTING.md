@@ -2,17 +2,72 @@
 
 Thanks for helping make Kapitsa faster. A few rules keep it fast and correct.
 
-## Build and test
+## Build from source
+
+You need a Mac with Apple silicon and macOS 14 or later (Kapitsa is tested on macOS 15 and later), the Xcode Command
+Line Tools (`xcode-select --install`) and CMake 3.24 or later.
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
-python3 tests/test_server.py --cli build/kapitsa           # the command line, offline
-python3 tests/test_sidecar.py build/kapitsa                 # the MTP sidecar builder against tools/mtp_sidecar.py
-build/kapitsa serve --model 4b --port 8090 &                # then, against a running server:
-python3 tests/test_server.py http://127.0.0.1:8090
+git clone https://github.com/nace-ai/kapitsa.git && cd kapitsa
+./install.sh                                                               # check, build, put kapitsa on the PATH
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j   # or: everything, tools included
 ```
 
-[DEVELOPMENT.md](DEVELOPMENT.md) explains the layout, the switches and the tools.
+In a clone, `./install.sh` checks for Apple silicon (and a terminal not running under Rosetta), macOS 14 or later, the
+Command Line Tools (it opens their installer) and CMake (it offers `brew install cmake`; `--yes` doesn't ask). It builds
+the `kapitsa` target in Release and installs it to `/opt/homebrew/bin` when that is writable, else to `~/.local/bin`
+(`--prefix DIR` picks another folder), with `LICENSE` and `THIRD_PARTY_NOTICES` in `../share/kapitsa` relative to that
+folder. Run it again to update; `./install.sh --help` lists its options. By hand, `cmake --build build --target kapitsa`
+builds only the `kapitsa` command, into `build/kapitsa`.
+
+The Metal kernels are embedded in the binary as source and compiled by macOS at runtime, so neither Xcode nor the
+offline `metal` compiler is needed. The GPU pipelines are created when a model loads; `NI_PREWARM=0` creates them on
+first use instead.
+
+## Tests
+
+These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/vit_check`) come with the full build.
+
+| Command | What it checks | Needs |
+| --- | --- | --- |
+| `python3 tests/test_server.py --cli build/kapitsa` | The command line, offline: model names and aliases, `pull --dry-run`, `list`, `rm`, refusals, early port errors | nothing |
+| `python3 tests/test_sidecar.py build/kapitsa` | `kapitsa mtp-sidecar` writes the same bytes as `tools/mtp_sidecar.py` | nothing |
+| `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
+| `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
+| `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids | a Qwen model folder |
+| `python3 tests/vision/check_cpu.py build/vit_check MODEL_DIR [--quick]` | The Qwen image processor against Pillow (and Hugging Face's processors when torch and transformers are installed) | a Qwen3.6 or Qwen3.8 folder; Pillow and numpy |
+| `python3 tests/vision/check_radio_cpu.py MODEL_DIR build/vit_check IMAGE.png...` | Nemotron 3.5 Bolt's image processor against NVIDIA's own | the Bolt folder; torch |
+
+End to end, against a running server (this one runs the 4B on the GPU and downloads it, 3.3 GB, the first time):
+
+```bash
+build/kapitsa serve --model 4b --port 8090 &
+python3 tests/test_server.py http://127.0.0.1:8090   # --api-key KEY for a server started with one
+kill %1
+```
+
+## Layout
+
+- `src/server/`: the command line, the HTTP server, the coding-agent launchers and the chat page.
+- `src/api/`: the Anthropic Messages and OpenAI Responses translations, and each coding agent's settings.
+- `src/engine/`: chat templates, conversation slots and prefix reuse, the output parser, `kapitsa doctor`.
+- `src/model/`: the Qwen3.5-family and Nemotron-H backends and their drafters; `src/kernels/` and `src/metal/`: the
+  Metal kernels and runtime.
+- `src/ane/`: the Neural Engine bridge; `src/vision/`: image decoding, processors and vision towers.
+- `src/hub/`: the model catalog, `--model` resolution and downloads; `src/gguf/`: `kapitsa import`.
+- `src/loader/`: the safetensors loader; `src/tokenizer/`: byte-level BPE, identical to Hugging Face's tokenizers.
+- `tools/`: check, measurement and benchmark programs, each built as `build/<name>`; `bench/`: benchmark prompts,
+  quality data and the cross-engine harness; `tests/`: the checks above.
+
+[docs/architecture.md](docs/architecture.md) walks through a request and maps the sources;
+[docs/usage.md](docs/usage.md) documents the commands, options and switches.
+
+## Code style
+
+- Keep new code in the style of the code around it: C++20, in the existing formatting. Comments explain why.
+- No new dependencies without a strong reason: Kapitsa builds with the Xcode Command Line Tools and CMake alone.
+- Run new or changed Metal kernels at small sizes first, with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`: a kernel
+  that reads or writes out of bounds can fault the GPU and take the desktop down with it.
 
 ## Speed changes
 
@@ -20,13 +75,17 @@ python3 tests/test_server.py http://127.0.0.1:8090
   ...). Report every run, not the best one, with the Mac, the macOS version and the commit.
 - A default changes only after an interleaved A/B and a check that the output stays the same: greedy tokens and
   logits against the old path, with differences allowed only at near-ties.
-- Put the numbers in [docs/PERF.md](docs/PERF.md) with the change that produced them.
+- Put the numbers in the pull request, with the change that produced them.
+
+## Benchmarks
+
+The [benchmark harness](bench/harness/README.md) runs Kapitsa and other engines through the same client-side benchmark,
+one engine at a time; [docs/benchmarks.md](docs/benchmarks.md) has the published results.
 
 ## Pull requests
 
 - One change per pull request, with its measurements when it touches speed or memory.
-- Keep new code in the style of the code around it. No new dependencies without a strong reason: Kapitsa builds with
-  the Xcode Command Line Tools and CMake alone.
+- New code follows the [code style](#code-style) above.
 - By contributing you agree that your contribution is licensed under the Apache License 2.0 (see [LICENSE](LICENSE)).
 
 Report security issues privately: see [SECURITY.md](SECURITY.md).

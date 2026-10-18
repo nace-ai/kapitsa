@@ -3,7 +3,7 @@
 //   nh_bench [case-substring ...]   (default: every case)
 // Cases: one-row matvecs per format ("mv"), routed experts for 1 and 8 token rows ("moe"), the 8-row MMA products of
 // the verify pass ("v8": NB row blocks of 8 per threadgroup), the prefill GEMMs ("gemm").
-// Variants measured slower and removed are listed in docs/PERF.md (Nemotron 3.5 Bolt).
+// Variants that measured slower were removed.
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"

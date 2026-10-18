@@ -1,6 +1,7 @@
 # Quantization quality and speed
 
-The measurements behind docs/PERF.md "Weight formats and default precisions".
+Tools to measure how far a quantized model's next-token distributions are from the bf16 model, and how fast each
+precision runs: the measurements behind the default precisions (4-bit by default, 6-bit as the quality choice).
 
 - `ids_qwen35/`, `ids_qwen38/`: the held-out token sequences (4 x 1024 tokens: C++, Python, English technical prose, a
   coding-agent chat with tool calls rendered with the model's chat template; `ids_qwen35` for Qwen3.5 / 3.6,

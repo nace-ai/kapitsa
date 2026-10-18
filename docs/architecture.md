@@ -4,11 +4,10 @@ Kapitsa is a native C++20 inference engine for Apple silicon. Its HTTP APIs shar
 backends encode work into Metal command buffers and can offload selected prefill operations to Apple's Neural Engine.
 It does not use the MLX or llama.cpp runtime. Compatible checkpoint formats do not imply a runtime dependency.
 
-![Kapitsa request flow: APIs feed a shared chat engine, which selects the Qwen or Nemotron backend. Both use Metal; selected prefill work can use the Neural Engine.](assets/architecture.svg)
-
-Solid arrows show the main execution path. Dashed arrows show optional prefill work on the Neural Engine.
-Responses stream back through the shared engine and the API adapter. Model loading and optional image processing
-are described below; they are omitted from the overview to keep the request path readable.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+  <img alt="Kapitsa's architecture: the APIs, the engine with its conversation slots, prefill on the GPU and the Neural Engine, draft-and-verify decoding, the Qwen and Nemotron backends and their Metal kernels." src="assets/architecture-light.svg">
+</picture>
 
 ## From a request to generated tokens
 
@@ -60,7 +59,7 @@ new architecture requires more than implementing `Model` if it needs a new draft
   failed chunk on the GPU.
 
 These are implementation mechanisms, not guarantees of a fixed speedup. Measured results and their conditions live
-in the [benchmark reports](benchmarks.md), [M5 Max report](benchmarks-m5-max.md) and [optimization log](PERF.md).
+in the [benchmark reports](benchmarks.md) and the [M5 Max report](benchmarks-m5-max.md).
 
 ## Loading, images and memory
 
@@ -94,15 +93,11 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Catalog, downloads and weights | [`src/hub/`](../src/hub/), [`src/loader/`](../src/loader/) |
 
 The Neural Engine bridge uses Apple's private framework interfaces. See [third-party notices](../THIRD_PARTY_NOTICES)
-for adapted code and design credits, and [DEVELOPMENT.md](../DEVELOPMENT.md) for switches and implementation details.
+for adapted code and design credits, the [usage guide](usage.md) for options and switches, and
+[CONTRIBUTING.md](../CONTRIBUTING.md) for building and testing.
 
 ## Updating the diagram
 
-The SVG is rendered from [architecture.mmd](assets/architecture.mmd), with
-[mermaid-config.json](assets/mermaid-config.json). With Mermaid CLI 11.9.0 and its Chrome dependency installed:
-
-```bash
-npx --yes @mermaid-js/mermaid-cli@11.9.0 \
-  -i docs/assets/architecture.mmd -o docs/assets/architecture.svg \
-  -c docs/assets/mermaid-config.json -b white -w 1400
-```
+The diagram is hand-written SVG in two variants, [architecture-dark.svg](assets/architecture-dark.svg) and
+[architecture-light.svg](assets/architecture-light.svg), with no fonts or scripts, so GitHub shows it as drawn. Edit
+both and preview them at README width (about 830 px) in dark and light mode.

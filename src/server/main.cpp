@@ -273,7 +273,7 @@ static void print_serve_help() {
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
          "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt): OpenAI image_url parts, Anthropic image blocks and\n"
          "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
-         "Tuning switches (NI_* variables): DEVELOPMENT.md.\n");
+         "Tuning switches (NI_* variables): docs/usage.md.\n");
 }
 
 static void print_pull_help() {

@@ -535,7 +535,7 @@ void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bo
   e.val(4, tp);
   e.dispatch(R, 1, 1, 32);
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
-  // opt-in: measured slower than per-row expert reads on M4 Pro (see docs/PERF.md)
+  // opt-in: measured slower than per-row expert reads on M4 Pro
   static const bool no_dedupe = !env_on("NI_DEDUPE");
   static const bool rc_moe = env_on("NI_RC");
   const bool all4 = L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4();

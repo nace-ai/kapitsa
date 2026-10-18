@@ -1,5 +1,5 @@
 // Teacher-forced next-token distributions over token sequences: the quality metric of a quantization
-// (docs/PERF.md "Weight formats and quantization").
+// (bench/quality/README.md).
 //   ni_eval <model> [--ref-model <model>] [--ref <file>] [--dump-ref <file>] [--topk K] [--chunk R] [--skip S]
 //           @ids1 [@ids2 ...]
 //  --ref-model M  both models run in this process; per position the exact KL(ref || model) over the vocabulary
