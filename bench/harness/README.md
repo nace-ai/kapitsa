@@ -146,7 +146,8 @@ and p90 TTFT of the follow-ups (the requests that continue the previous one). A 
 call has no TTFT of its own: it is left out of the TTFT statistics and its prefill time is estimated as its time minus
 its tokens at the session's writing rate (`prefill_estimated_turns` in the result). The same goes for a turn whose
 first event carries most of the answer (MTPLX, asked without tools, replaces a tool call it will not run with a
-notice it sends at the end). Each answer is also compared with the recorded one (its text and tool calls, raw or
+notice it sends at the end). An answer whose end was never streamed (fewer characters than tokens, ending on a small
+event: Ollama drops a tool call that `max_tokens` cut short) has its writing window run to the end of the stream. Each answer is also compared with the recorded one (its text and tool calls, raw or
 parsed; `same_answers`), and the time a stream stays open after its last token is summed (`after_last_token_s`).
 
 **Checks.** Thinking text in an answer, a failed request, or a prompt shorter than 90% of the reference length (the

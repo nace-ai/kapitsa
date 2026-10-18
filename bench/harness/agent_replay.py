@@ -155,17 +155,24 @@ def pct(v, q):
     return v[max(0, min(len(v) - 1, math.ceil(q / 100 * len(v)) - 1))]
 
 
-def window(r, ct):
-    """(tokens, seconds) written between the first and the last streamed event of one answer: the first event's
-    tokens are not counted (their time is in the TTFT). One token per event when the event count matches the reported
-    tokens (with or without the end token), else tokens are spread over events by characters (bench.decode_rates)."""
-    t = r["ev_t"]
-    if len(t) < 2 or not ct:
-        return 0.0, 0.0
-    if len(t) in (ct, ct - 1):
-        return float(len(t) - 1), t[-1] - t[0]
-    _, _, info = bench.decode_rates(r, ct, head=1, tail=0)
-    return float(info.get("window_tokens") or 0.0), float(info.get("window_s") or 0.0)
+def window(ev_t, ev_c, ct, total):
+    """(tokens, seconds, tail_unstreamed) written between the first and the last streamed event of one answer: the
+    first event's tokens are not counted (their time is in the TTFT). One token per event when the event count
+    matches the reported tokens (with or without the end token), else tokens are spread over events by characters
+    (bench.decode_rates). A stream that carries fewer characters than its answer has tokens and ends on a small event
+    never streamed the end of its answer (Ollama drops a tool call that max_tokens cut short): its window runs to the
+    end of the stream, where the last tokens were written."""
+    if len(ev_t) < 2 or not ct:
+        if len(ev_t) == 1 and ct and ct >= 8 and sum(ev_c) < ct and ev_c[0] < 0.1 * max(1, sum(ev_c)) + 4:
+            return float(ct - 1), max(0.0, total - ev_t[0]), True
+        return 0.0, 0.0, False
+    chars = sum(ev_c)
+    if ct >= 8 and chars < ct and ev_c[-1] < 0.1 * chars:
+        return float(ct - 1), max(0.0, total - ev_t[0]), True
+    if len(ev_t) in (ct, ct - 1):
+        return float(len(ev_t) - 1), ev_t[-1] - ev_t[0], False
+    _, _, info = bench.decode_rates({"ev_t": ev_t, "ev_c": ev_c}, ct, head=1, tail=0)
+    return float(info.get("window_tokens") or 0.0), float(info.get("window_s") or 0.0), False
 
 
 HELD_SHARE = 0.5  # a first event with at least this share of an answer's characters held the answer back
@@ -225,7 +232,8 @@ def summarize(turns, wall_s, gaps_s):
          "stopped_early": sum(1 for x in ok if (x.get("completion_tokens") or 0) < x["max_tokens"] - 1),
          "held_tool_calls": len(held),
          "after_last_token_s": round(sum(x["total_s"] - (x.get("events_t_ms") or [0])[-1] / 1000 for x in ok
-                                         if x.get("events_t_ms")), 3),
+                                         if x.get("events_t_ms") and not x.get("tail_unstreamed")), 3),
+         "tail_unstreamed_turns": sum(1 for x in ok if x.get("tail_unstreamed")),
          "same_answers": sum(1 for x in ok if x.get("same_answer")),
          "cached_tokens_reported": sum(x.get("cached_tokens") or 0 for x in ok) if any(
              x.get("cached_tokens") is not None for x in ok) else None}
@@ -281,7 +289,7 @@ def replay(a, t, mode="rendered", gaps="recorded", max_turns=None, log=print, ti
         failed_in_a_row = 0
         u = r["usage"] or {}
         ct, pt = u.get("completion_tokens"), u.get("prompt_tokens")
-        wtok, wsec = window(r, ct)
+        wtok, wsec, tail = window(r["ev_t"], r["ev_c"], ct, r["total"])
         k0 = r["ev_k"][0] if r.get("ev_k") else ""
         first_kind = None if not r["ev_t"] else ("text" if "c" in k0 else "reasoning" if "r" in k0 else "tool_call")
         turn.update({"prompt_tokens": pt, "cached_tokens": bench.cached_of(u, r["timings"]), "completion_tokens": ct,
@@ -289,7 +297,7 @@ def replay(a, t, mode="rendered", gaps="recorded", max_turns=None, log=print, ti
                      "total_s": round(r["total"], 4),
                      "decode_s": round(r["total"] - r["ttft"], 4) if r["ttft"] is not None else None,
                      "events": r["n_chunks"], "first_event": first_kind, "tool_call_events": len(r["tool_calls"]),
-                     "window_tokens": round(wtok, 1), "window_s": round(wsec, 4),
+                     "window_tokens": round(wtok, 1), "window_s": round(wsec, 4), "tail_unstreamed": tail,
                      "write_tps": round(wtok / wsec, 2) if wsec > 0 else None,
                      "timings": r["timings"], "content": r["content"], "reasoning": r["reasoning"],
                      "tool_calls": r["tool_calls"], "events_t_ms": [round(x * 1000, 1) for x in r["ev_t"]],
@@ -336,6 +344,13 @@ def resummarize(res):
     """Recomputes a stored phase result's summary and session flags from its per-turn records (e.g. after a change
     to the summary rules); invalid reasons and per-turn flags are kept."""
     keep = [f for f in res.get("flags", []) if f.startswith("turn ")]
+    for x in res["turns"]:
+        if x.get("error") or not x.get("events_t_ms"):
+            continue
+        wtok, wsec, tail = window([t / 1000 for t in x["events_t_ms"]], x.get("events_chars") or [],
+                                  x.get("completion_tokens"), x["total_s"])
+        x.update({"window_tokens": round(wtok, 1), "window_s": round(wsec, 4), "tail_unstreamed": tail,
+                  "write_tps": round(wtok / wsec, 2) if wsec > 0 else None})
     s = summarize(res["turns"], res["summary"]["wall_s"], res["summary"]["gaps_s"])
     res["summary"] = s
     res["flags"] = keep + session_flags(s, res.get("tool_mode", "rendered"))
