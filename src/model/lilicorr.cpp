@@ -110,9 +110,15 @@ size_t loaded_bytes(const SafetensorsIndex& idx) {
 std::string LiliCorr::find(const std::string& model_dir) {
   int hidden = 0;
   {
+    // the language model's config: llm_config (Nemotron Omni releases), text_config, or the whole file
     const nlohmann::json j = read_json(model_dir + "/config.json");
-    const nlohmann::json& t = j.contains("llm_config") ? j["llm_config"] : j;
-    if (t.is_object()) hidden = t.value("hidden_size", 0);
+    const nlohmann::json* t = &j;
+    for (const char* k : {"llm_config", "text_config"})
+      if (j.is_object() && j.contains(k) && j[k].is_object()) {
+        t = &j[k];
+        break;
+      }
+    if (t->is_object()) hidden = t->value("hidden_size", 0);
   }
   for (const char* sub : {"/dflash", "/lilicorr"})
     if (is_lilicorr(model_dir + sub, hidden)) return model_dir + sub;
@@ -130,8 +136,9 @@ size_t LiliCorr::plan_bytes(const std::string& dir, size_t* per_slot) {
   const size_t ring = size_t(NL) * 2 * size_t(hkv) * size_t(W) * size_t(hd) * 2 + size_t(kAnchors) * size_t(H) * 4;
   if (per_slot) *per_slot = ring;
   const int64_t nl = d.contains("target_layer_ids") ? int64_t(d["target_layer_ids"].size()) : 6;
-  // prompt capture (window rows of every target layer) and its half copy, pass and commit buffers
-  const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + (size_t(96) << 20);
+  // prompt capture (window rows of every target layer) and its half copy, commit buffers (window rows), pass buffers
+  const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + size_t(W) * (size_t(H) * 6 + size_t(hkv) * size_t(hd) * 8) +
+                      (size_t(96) << 20);
   return w + bufs;
 }
 
@@ -249,12 +256,16 @@ LiliCorr::LiliCorr(NemotronH& target, const std::string& dir) : tg_(target), pat
   else head_rows_ = std::min(tg_.vocab(), kHeadRows);
   const double t0 = now_ms();
   st_ = std::make_unique<SafetensorsIndex>(path_);
+  has_own_head_ = j.value("has_own_lm_head", false) && st_->find("lm_head.weight");
+  if (has_own_head_ && j.value("draft_vocab_size", tg_.vocab()) != tg_.vocab())
+    fatal("%s: a draft vocabulary other than the target's is not supported", dir.c_str());
   load();
   st_.reset();
   alloc_buffers();
-  logi("LiLiCorr drafter: %d layers, window %d, %.2f GB (NVFP4 as stored, BF16 matrices as Q8), draft head %d of %d "
-       "rows, loaded in %.1f s",
-       c.NL, c.window, weight_bytes_ / 1e9, head_rows_, tg_.vocab(), (now_ms() - t0) / 1000);
+  logi("LiLiCorr drafter: %d layers, window %d, %d KV heads, %.2f GB (NVFP4 as stored, BF16 matrices as Q8), draft head "
+       "%d of %d rows (%s), loaded in %.1f s",
+       c.NL, c.window, c.hkv, weight_bytes_ / 1e9, head_rows_, tg_.vocab(), own_head_ ? "its own" : "the target's",
+       (now_ms() - t0) / 1000);
 }
 
 LiliCorr::~LiliCorr() {
@@ -274,7 +285,9 @@ void LiliCorr::load() {
     L.ffn_norm = vec(b + "post_attention_layernorm.weight");
     L.qn = vec(b + "self_attn.q_norm.weight");
     L.kn = vec(b + "self_attn.k_norm.weight");
-    L.sinks = vec(b + "self_attn.attention_sink_bias");
+    // attention sinks (Bolt's drafter; Super-VL's has none: a logit of -1e30 adds nothing to the softmax)
+    if (st_->find(b + "self_attn.attention_sink_bias")) L.sinks = vec(b + "self_attn.attention_sink_bias");
+    else L.sinks = upload(std::vector<float>(size_t(cfg_.hq), -1e30f), "lili_no_sinks");
     L.ac_base = vec(b + "attention_conv.base_kernel");
     L.fc_base = vec(b + "mlp_conv.base_kernel");
     L.ac_proj = mat(b + "attention_conv.kernel_projection.weight");
@@ -287,6 +300,8 @@ void LiliCorr::load() {
     L.up = mat(b + "mlp.up_proj.weight");
     L.down = mat(b + "mlp.down_proj.weight");
   }
+  // its own draft head (Super-VL's: an NVFP4 copy of the target's LM head), else the target's
+  if (has_own_head_) own_head_ = mat("lm_head.weight");
   const std::string h = "lilicorr.";
   tok_proj_ = mat(h + "token_proj.weight");
   tok_b_ = vec(h + "token_proj.bias");
@@ -660,15 +675,15 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
       e.val(3, n);
       e.dispatch((n + 255) / 256, 1, 1, 256);
     }
-    lin(e, L.down, gt_, t2_, R, 0);
+    lin(e, L.down, gt_, t2_, R, 0, true);  // (Super-VL's drafter: silu(gate) * up reaches 2.6e5, past half)
     dconv(t2_, L.fc_base, 1, t1_);
     add(x_, t1_, x_, B * H);
   }
   tg_.enc_norm(e, x_, out_norm_, hfin_, R, int(H), cfg_.eps);
   // slot logits (rows 1..7) with the target's LM head, their top-K candidates
-  // the draft head: the target's LM head rows [0, head_rows_) (ids in the tokenizer's order: special tokens first,
-  // then the BPE vocabulary in merge order, most frequent first), a view without a copy
-  NhMat head = tg_.lm_head();
+  // the draft head: the drafter's own or the target's LM head, rows [0, head_rows_) (ids in the tokenizer's order:
+  // special tokens first, then the BPE vocabulary in merge order, most frequent first), a view without a copy
+  NhMat head = own_head_ ? own_head_ : tg_.lm_head();
   head.N = uint32_t(head_rows_);
   const uint32_t V = head.N;
   lin(e, head, hfin_.view(size_t(H) * 4, size_t(S) * H * 4), logits_, int(S), 0);

@@ -267,7 +267,7 @@ int run_doctor(int argc, char** argv) {
     if (dec > 0)
       printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; %s add their "
              "measured factors (DEVELOPMENT.md)\n",
-             dec, m.decode_bytes / 1e9, pf, nemotron ? "the LiLiCorr drafter and the IQ2_XXS kernels" : "MTP / Neural Engine");
+             dec, m.decode_bytes / 1e9, pf, nemotron ? "the LiLiCorr drafter and the Neural Engine split" : "MTP / Neural Engine");
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;
