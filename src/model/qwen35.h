@@ -5,6 +5,7 @@
 #include <thread>
 #include "loader/safetensors.h"
 #include "metal/gpu.h"
+#include "model/model.h"
 #include "vision/embed.h"
 
 #include <deque>
@@ -84,35 +85,6 @@ struct Layer {
   QLinear mg, mu, md;
 };
 
-// One conversation's state: token buffer, recurrent (GDN) states, attention KV cache.
-struct Seq {
-  // Positions the attention caches hold now, which is also their row stride (every kernel takes it as
-  // max_seq). It grows on demand up to `limit` (Qwen35::reserve); encoding past it is a fatal "context full".
-  int cap = 0;
-  int limit = 0;                   // the conversation's context: max positions
-  Buffer tok;                      // int32 [limit + 8]
-  std::vector<Buffer> conv, rec;   // per layer (linear layers only)
-  std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]
-  // speculative decoding: rows accepted by the last verify, not yet folded into conv/rec
-  std::vector<Buffer> pend_qkv, pend_k, pend_g, pend_d;  // per linear layer
-  int n_pend = 0;
-  Buffer mtp_kc, mtp_vc;           // MTP head's attention cache (positions = trunk positions)
-  int* tokens() { return tok.as<int>(); }
-  // Images (src/vision): prompt rows these runs cover take image embeddings in the prefill (the engine sets it around
-  // a prompt's prefill; null: text only). Positions: rows [0, rope_n) rotate by the (t, h, w) M-RoPE positions in
-  // rope_pos (int32 x 3 per row), later rows by row + rope_delta (Qwen35::set_rope_positions); rope_n == 0 and
-  // rope_delta == 0: position = row, the text-only path.
-  const std::vector<vision::EmbedRun>* embeds = nullptr;
-  Buffer rope_pos;
-  int rope_n = 0, rope_delta = 0;
-};
-
-// Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
-// before `pos` stay valid as long as the token prefix matches).
-struct Checkpoint {
-  int pos = -1;
-  std::vector<Buffer> conv, rec;
-};
 
 // Target hidden capture for a block drafter (DFlash2):
 // after target layer l (mixer + FFN residual add), every row whose position p lies in
@@ -125,12 +97,6 @@ struct CaptureHook {
   std::vector<int> slot;   // per target layer: capture slot, or -1
 };
 
-struct SamplingParams {
-  float temperature = 0.0f;
-  float top_p = 1.0f;
-  int top_k = 20;
-  uint32_t seed = 0;
-};
 
 // Timings of one split layer (ANE split benchmark / calibration), ms per layer.
 struct AneLayerTimes {
@@ -163,19 +129,21 @@ V8Knobs& v8_knobs();
 // "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad); unknown keys are fatal
 V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
-class Qwen35 {
+class Qwen35 : public Model {
  public:
   explicit Qwen35(const std::string& model_dir, int prefill_chunk = 2048);
-  ~Qwen35();
+  ~Qwen35() override;
   const Qwen35Config& config() const { return cfg_; }
+  int vocab() const override { return cfg_.vocab; }
+  const std::vector<int>& eos_ids() const override { return cfg_.eos; }
 
   // ---- GPU + Neural Engine split of the dense prefill FFN (opt-in NI_ANE=1; qwen35_ane.cpp) ----
   // Whether a prefill chunk of T rows would run the split (callers checkpoint the recurrent state
   // before such a chunk so it can be rerun on the GPU alone if the split fails).
-  bool ane_splits(int T) const;
+  bool ane_splits(int T) const override;
   // After the command of a chunk encoded with the split has completed: false if the split failed
   // (it is then off for the rest of the process) and the chunk must be rerun. True otherwise.
-  bool ane_finish_chunk();
+  bool ane_finish_chunk() override;
   ane::FfnSplit* ane_split() { return ane_.get(); }
   // Startup check: layers [0, n) on random input rows, GPU alone vs split. Returns
   // RMS(split - gpu) / RMS(gpu - gpu_part) (worst over the functions checked).
@@ -189,51 +157,34 @@ class Qwen35 {
   // Times one prefill chunk of T rows (random tokens, fresh state; split per the current setup or
   // the GPU alone), median of `reps` after a warm-up; ms.
   double ane_bench_chunk(int T, int reps, bool split);
-  struct AneStats {
-    int chunks = 0, evals = 0, reruns = 0;  // evals: ANE evaluations of chunks that held
-    double ane_ms = 0;
-  };
-  const AneStats& ane_stats() const { return ane_stats_; }
+  using AneStats = ni::AneStats;
+  const AneStats& ane_stats() const override { return ane_stats_; }
   // NI_ANE_ASYNC (the server): finish the Neural Engine split once its background compile is done.
   // Call between requests (it runs the startup check through the model's buffers).
-  void ane_poll();
+  void ane_poll() override;
   // Frees the split's memory for good (prefill on the GPU alone from then on): a conversation's KV cache
   // needs the room. False if there was no split.
-  bool ane_release();
+  bool ane_release() override;
 
   // ---- memory ----
   // A sequence of up to `limit` positions. Its attention caches hold `initial` positions (default: all)
   // and grow with reserve(); 0 allocates them on first use.
-  std::unique_ptr<Seq> new_seq(int limit, int initial = -1);
+  std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
   // Makes s's attention caches hold `need` positions (<= s.limit): new buffers, a GPU copy of the old
   // positions, the old buffers released, in batches so the overlap stays small. Grows by at least a
   // quarter (in 1024-position steps) when the memory budget allows, else exactly. Synchronous: no
   // command buffer that uses s may be in flight. False (nothing changed) if the budget does not allow it.
-  bool reserve(Seq& s, int need);
+  bool reserve(Seq& s, int need) override;
   // Frees s's attention caches (cap 0; positions must be prefilled again). Nothing using s in flight.
-  void drop_kv(Seq& s);
+  void drop_kv(Seq& s) override;
   // Bytes of attention cache per position of a sequence (every attention layer and the MTP head, K + V)
-  size_t kv_bytes_per_pos() const;
+  size_t kv_bytes_per_pos() const override;
   // Upper limit for Metal allocations (bytes) that reserve() and the Neural Engine split respect; 0 = none
-  void set_mem_budget(size_t bytes) { mem_budget_ = bytes; }
+  void set_mem_budget(size_t bytes) override { mem_budget_ = bytes; }
   size_t mem_budget() const { return mem_budget_; }
   // What a model needs, from config.json and the safetensors headers only (no weights read): for fit
   // checks before loading and `kapitsa doctor`. Bytes.
-  struct MemPlan {
-    size_t weights = 0;      // trunk (vision tower and MTP excluded), as loaded
-    size_t mtp = 0;          // MTP head as loaded (bf16 linears become 8-bit), 0 without mtp.safetensors
-    size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
-    size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape
-    size_t kv_per_pos = 0;   // per slot and position
-    size_t decode_bytes = 0; // weights one plain decode step reads (MoE: the routed share of the experts)
-    size_t head_row_bytes = 0;  // one vocabulary row of the draft head (the output layer's, or its 8-bit copy)
-    size_t decode_params = 0;   // weights one plain decode step multiplies (MoE: the routed experts only)
-    int hidden = 0, layers = 0, ffn = 0;  // ffn: the dense FFN's intermediate size (0 for MoE)
-    bool dense = false;
-    bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
-    std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
-    size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }
-  };
+  using MemPlan = ni::MemPlan;
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
   static Qwen35Config read_config(const std::string& model_dir);  // config.json only
   // The Neural Engine split this Mac would build for the model (dense FFN): its share in units of 512 channels
@@ -248,29 +199,29 @@ class Qwen35 {
   // count up one per row, an image's rows take (t, h, w) = start + (frame, row, column) of its token grid, and the text
   // after it continues at start + max(grid_h, grid_w)), into s for every pass that follows (prefill, decode, verify,
   // MTP). No spans: positions = rows again. Call between requests (nothing in flight may read s).
-  void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans);
+  void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) override;
   // The positions themselves: (t, h, w) of rows [0, end of the last image) into `table`; returns the delta of the
   // rows after it (position = row + delta)
   static int rope_positions(const std::vector<vision::ImageSpan>& spans, std::vector<int32_t>& table);
   // Clears recurrent state (KV entries are overwritten by position, so they need no reset).
-  void reset(Seq& s);
-  Checkpoint new_checkpoint();
+  void reset(Seq& s) override;
+  Checkpoint new_checkpoint() override;
   // GPU copies, ordered with the surrounding work in `e`.
-  void save(Encoder& e, const Seq& s, Checkpoint& c, int pos);
-  void restore(Encoder& e, Seq& s, const Checkpoint& c);
+  void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
+  void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
 
   // Encodes one decode step for the token at tokens[pos]. With `sample`, computes logits and
   // writes the sampled id to tokens[pos+1]; without, only advances the state (prompt tokens).
-  void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true);
+  void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;
   // Encodes T prompt tokens tokens[pos0 .. pos0+T) as one batch (T <= prefill_chunk).
   // With `sample`, also samples tokens[pos0+T] from the last position.
   // With `snap` (requires can_snapshot(), 0 < snap_row < T): also saves the recurrent state as it
   // stands after the first snap_row tokens into `snap` (pos = pos0 + snap_row), inside the pass.
   void encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
-                      Checkpoint* snap = nullptr, int snap_row = 0);
-  int prefill_chunk() const { return tmax_; }
+                      Checkpoint* snap = nullptr, int snap_row = 0) override;
+  int prefill_chunk() const override { return tmax_; }
   // NI_SHORTPF: checkpoints can be captured inside a prefill pass (encode_prefill's `snap`).
-  bool can_snapshot() const;
+  bool can_snapshot() const override;
 
   // ---- speculative decoding with the model's MTP head ----
   bool has_mtp() const { return mtp_loaded_; }

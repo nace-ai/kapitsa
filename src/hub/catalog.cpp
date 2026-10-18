@@ -13,7 +13,8 @@
 //   repo but .gitattributes is fetched. Its companions are fetched with it: an MTP head ("mtp": files taken from a
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
 //   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first). Both run with a trunk of
-//   any precision (the drafter reads the trunk's embedding and output layer in any format).
+//   any precision (the drafter reads the trunk's embedding and output layer in any format). Nemotron 3.5 Bolt's
+//   companion is NVIDIA's LiLiCorr drafter ("lilicorr", in dflash/ as oMLX lays it out).
 // - download_gb is shown before a download (weights and companions). Memory needs no entry: the engine plans it
 //   from the variant's headers.
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
@@ -61,6 +62,15 @@ Companion mtp4() {
           .revision = "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
           .sha256 = "4f491dd27975520ec9c9bfa970ca215cc7f12a0328761d3656ab7b9f388e472a",
           .size = 241200816};
+}
+
+Companion lilicorr_bolt() {
+  // NVIDIA's LiLiCorr block drafter for Bolt (1.11B, NVFP4 / BF16), in dflash/ where --dflash auto finds it
+  return {.kind = "lilicorr",
+          .repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr",
+          .revision = "abd478065678ee83a93821c4b3f512da24e4cecb",
+          .files = {"config.json", "model.safetensors", "LICENSE"},
+          .subdir = "dflash"};
 }
 
 }  // namespace
@@ -180,6 +190,21 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "491fdc7c087ba7fb48adcb1253f8e76d011db783",
             .companions = {mtp4()},
             .download_gb = 9.35},
+       }},
+      {.name = "nemotron-3.5-bolt",
+       .aliases = {"nemotron-bolt", "bolt"},
+       .title = "Nemotron 3.5 Bolt 74B-A9B",
+       .about = "NVIDIA's hybrid Mamba-2 MoE, 9B active, 2-bit experts: an agentic model in 24 GB",
+       // one variant: NVIDIA's own 24 GB checkpoint (quantization-aware distilled), its safetensors as they are
+       .default_variant = "24gb",
+       .fallbacks = {},
+       .variants = {
+           {.name = "24gb",
+            .quant = "IQ2_XXS experts, NVFP4 Mamba, Q8_0 attention / latent / head, BF16 embedding",
+            .repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
+            .revision = "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
+            .companions = {lilicorr_bolt()},
+            .download_gb = 25.08},
        }},
   };
   return c;

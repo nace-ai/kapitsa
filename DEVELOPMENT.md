@@ -465,6 +465,20 @@ from Hugging Face one layer at a time).
 - `src/model/qwen35*.cpp`: the model (decode, chunked prefill with in-pass checkpoints, the GPU + Neural
   Engine FFN split (`qwen35_ane.cpp`), MTP speculative decoding: draft chain, multi-row verify, tape commit;
   the 8-row verify of DFlash2 in `qwen35_v8.cpp` + `verify8.metal`).
+- `src/model/nemotron_h.*`, `src/kernels/nemotron/`: Nemotron 3.5 Bolt (Nemotron-H: Mamba-2, attention and LatentMoE
+  layers) from NVIDIA's safetensors as stored (NVFP4, IQ2_XXS, Q8_0, BF16; repacked while read, the BF16 embedding
+  mapped from its file): NVFP4 matvecs and up-to-32-row products (`nh_x_fp4.metal`), IQ2_XXS matvecs, routed
+  experts (verify pairs grouped by expert) and the shared expert's up-to-32-row products (`nh_x_iq2.metal`), the
+  4-dispatch MoE layer of one token (`nh_zdec.metal`), Q8 8-row MMA verify products (`nh_v8.metal`), prefill GEMMs
+  and expert bucketing (`nh_gemm.metal`), the Mamba scan with the verify's pending rows merged in (`nh_ops.metal`),
+  flash attention without positions (`nh_attn.metal`);
+  `src/model/nemotron_ane.*` + `nh_ane.metal`: the GPU + Neural Engine prefill split (Mamba in/out projections and
+  the shared expert, W8A8 after block Hadamard rotations); `src/model/lilicorr.*` + `nh_lili.metal`: NVIDIA's LiLiCorr
+  block drafter (5 DFlash2-style layers, the joint candidate head, the greedy walk and the dynamic verify depth on
+  the GPU). Tools: `nh_eval` (KL / top-1 / perplexity against a reference file, raw generation with or without the
+  drafter), `nh_bench`, `nh_x4_bench`, `nh_x2_bench` (kernels on synthetic weights of the real shapes, against fp64;
+  the x benches rotate weight copies so calls read DRAM, and take `--limit` seconds and shader validation at small
+  sizes), `nh_compile`, `nh_tok`.
 - `src/model/dflash2.*`, `src/kernels/spec_dflash.metal`: the DFlash2 block drafter (load-time 4-bit
   quantization, the target-hidden capture hook, the per-slot context ring, the drafting pass, on-GPU acceptance,
   the double-buffered decode cycle).
@@ -545,7 +559,14 @@ Defaults are the measured winners on an M4 Pro; each switch exists to A/B or to 
 | `NI_DFLASH_CB` | 3 | `ni_run` DFlash2 loop: 3 double-buffered, 2 two command buffers per cycle, 1 one |
 | `NI_V8_CM`, `NI_V8_PAIR`, `NI_V8_KPLAN`, `NI_V8_GUSPLIT`, `NI_V8_GDNSPLIT`, `NI_V8_PREPU` | measured winners | 8-row verify kernel knobs (`V8Knobs`, `qwen35.h`); `ni_run` with `NI_AB=key=value,...` runs those settings in odd cycles and reports both halves' GPU time |
 | `NI_V8` | off | `1`: every multi-row verify (R >= 2) on the 8-row path (A/B; R <= 4 keeps the MTP-era kernels otherwise) |
-| `NI_ANE`, `NI_ANE_UNITS` | dense models, where the chip has a share | GPU + Neural Engine split of the dense prefill FFN (two-half wavefront); `0` = GPU only; `NI_ANE_UNITS` = the Neural Engine's share in 512-channel units. The drafter capture follows every schedule |
+| `NI_ANE`, `NI_ANE_UNITS` | dense models, where the chip has a share; Nemotron-H | GPU + Neural Engine split of the dense prefill FFN (two-half wavefront); `0` = GPU only; `NI_ANE_UNITS` = the Neural Engine's share in 512-channel units. The drafter capture follows every schedule |
+| `NI_ANE_IN`, `NI_ANE_OUT`, `NI_ANE_FFN`, `NI_ANE_FFN_A16`, `NI_ANE_IN_FIRST`, `NI_ANE_MIN_ROWS`, `NI_ANE_FNS` | 0.7, 0.7, 1, 1, 1, 512, 512,1024,1536,2048 | Nemotron-H's split: the Neural Engine's share of in_proj / out_proj rows, the shared expert on it, its intermediate in fp16, in_proj's first rows (z, x) rather than its last (x, B, C, dt), the smallest chunk that splits, the program's row counts |
+| `NI_LILI_DYN`, `NI_LILI_DYN_P`, `NI_LILI_HEAD` | 0.04, 0, 131072 | LiLiCorr: dynamic verify depth (per-row cost over a cycle's fixed cost; `0` = verify all 7 drafts), its acceptance estimate (`1` the walk's scores, `2` both), the draft head's rows |
+| `NI_NH_FUSE`, `NI_NH_GROUP`, `NI_NH_MERGE_FLUSH`, `NI_NH_MAP_EMBED` | 1, 0, 1, 1 | Nemotron-H: one token's MoE layer in 4 dispatches; grouped encoders (independent dispatches overlap); the verify's scan commits the previous cycle's accepted rows; the BF16 embedding mapped from its file |
+| `NI_NH_V8`, `NI_NH_ROWS_GEMM`, `NI_NH_SSM1` | 1, 1, 1 | Nemotron-H: 8-row MMA verify products, multi-row passes on GEMMs, the per-state-row scan of short passes (`0`: the older kernels, for A/B) |
+| `NI_NH_X4`, `NI_NH_X2` | 1, 1 | Nemotron-H: the NVFP4 x4 kernels (one row, up to 8 and up to 32 rows) and the IQ2_XXS x2 kernels (one row, verify experts grouped by expert, the shared expert up to 32 rows); `0`: the older kernels, for A/B (the one-token MoE layer keeps x2) |
+| `NI_ALLOC_LOG` | off | logs every Metal allocation of 4 MB or more with its label (where a model's memory goes) |
+| `NI_CB_TRACE`, `NI_ANE_TRACE` | off | diagnostics: GPU time and idle gaps over an encoder's command buffers (logged when it is waited for); per kind of Neural Engine job, its latency, when the GPU went on after it and the GPU's pace (logged per split chunk) |
 | `NI_SHORTPF_FOLD` | off | short prefills: the shared expert as expert E in the routed expert dispatches |
 | `NI_HISTORY_PREFILL` | on | server: after a reply ending with "stop", once idle for `NI_HISTORY_IDLE_MS` (250), prefill the answer as the next turn renders it |
 | `NI_QUERY_CKPT` | on | a user query's turn-boundary checkpoint outlives tool-response ones (tool loops); `0` = oldest first |

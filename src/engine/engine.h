@@ -1,8 +1,11 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
-// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models.
+// and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors) and
+// Nemotron-H models (NVIDIA's safetensors).
 #pragma once
 #include "hub/hub.h"
 #include "model/dflash2.h"
+#include "model/lilicorr.h"
+#include "model/nemotron_h.h"
 #include "model/qwen35.h"
 #include "tokenizer/tokenizer.h"
 #include "vision/encoder.h"
@@ -149,6 +152,9 @@ class Engine {
   int context_length() const { return opts_.context; }
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
+  // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
+  // else Qwen's recommended 0.6 / 0.95 / 20.
+  ChatRequest request_defaults() const { return defaults_; }
   // Renders the prompt for a request (for debugging / token counting). With an image encoder, image parts render as
   // the model's image placeholder (one token per image: chat() expands it to the image's rows); without one, image and
   // video parts become a short note. A system message after the first message becomes a system turn in place (the
@@ -181,6 +187,8 @@ class Engine {
   struct Slot {
     std::unique_ptr<Seq> seq;
     std::unique_ptr<DFlashSeq> dseq;  // drafter context ring (DFlash2 only)
+    std::unique_ptr<LiliSeq> lseq;    // drafter context (LiLiCorr only)
+    std::vector<std::unique_ptr<LiliSeq>> lckpts;   // LiLiCorr: the drafter context as it was at ckpts[i]
     std::vector<int> tokens;             // tokens whose effect is in the live state (image rows: their keys)
     std::vector<vision::ImageSpan> img_spans;  // the images among them
     std::vector<vision::Digest> img_digests;
@@ -207,11 +215,15 @@ class Engine {
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
+  void wait_split(Encoder& e);
 
   EngineOptions opts_;
-  std::unique_ptr<Qwen35> model_;
+  std::unique_ptr<Model> model_;
+  Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split)
+  NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
+  std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
   std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
   Tokenizer tok_;
   std::unique_ptr<minja::chat_template> tmpl_;
@@ -226,6 +238,7 @@ class Engine {
   int context_fit_ = 0;  // see context_fit()
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
+  ChatRequest defaults_;
 };
 
 } // namespace ni

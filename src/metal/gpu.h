@@ -61,17 +61,25 @@ class Gpu {
   // Compiles the weight-format kernels (src/kernels/wfmt.metal instantiations: bf16, 3/5/6-bit, ...) as a
   // second library; pipeline() does it on the first kernel the base library lacks.
   void compile_formats();
+  // Compiles another embedded kernel source as a library of its own, once per key (the Nemotron-H kernels:
+  // a model family's kernels, compiled only when such a model loads). pipeline() looks in these libraries
+  // after the base library and before the weight-format one.
+  void compile_extra(const std::string& key, const char* source);
   // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
   // ni_compile reads code size, stack (spills) and GPR count from it.
   bool archive(const std::string& fn, const std::string& path);
   // required=false returns an empty Pipeline (pso null) instead of exiting when creation fails
   Pipeline pipeline(const std::string& fn, bool required = true);
-  std::vector<std::string> function_names(bool formats = false);  // kernels in the library (+ the format kernels)
+  // kernels in the library and the extra libraries (+ the format kernels)
+  std::vector<std::string> function_names(bool formats = false);
 
   // Command buffer that holds one compute encoder. Commit is non-blocking.
   // concurrent=true lets independent dispatches overlap; call Encoder::barrier() between
   // dependent ones.
   std::unique_ptr<Encoder> begin(bool concurrent = false);
+  // A concurrent encoder that keeps serial order on its own: a barrier before every dispatch, except inside a
+  // group (Encoder::group_begin / group_end), whose dispatches may run together.
+  std::unique_ptr<Encoder> begin_grouped();
   // Keeps every resource resident (avoids per-dispatch residency checks).
   void make_resident(const std::vector<Buffer>& bufs);
 
@@ -103,8 +111,15 @@ class Encoder {
   void dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty = 1, uint32_t tz = 1);
   // Memory barrier between dependent dispatches in a concurrent encoder.
   void barrier();
+  // With begin_grouped(): the dispatches between group_begin() and group_end() are independent of each other (none
+  // reads what another writes) and may overlap on the GPU. No effect on other encoders.
+  void group_begin() { in_group_ = true; group_first_ = true; }
+  void group_end() { in_group_ = false; }
+  bool grouped() const { return auto_barrier_; }
   void commit();             // non-blocking
   void wait();               // waits for this command buffer (and the ones signal_event committed)
+  // Waits at most timeout_ms for this command buffer to finish (polling); false if it is still running.
+  bool wait_for(double timeout_ms);
   // Shared-event steps (ANE split): signal_event ends the current command buffer with a signal of
   // `value` and commits it (so the signal is never held back behind later dispatches), then
   // continues in a new command buffer; if the signalling buffer fails, the CPU sets the event to
@@ -112,6 +127,9 @@ class Encoder {
   // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
   void signal_event(void* event, uint64_t value);
   void wait_event(void* event, uint64_t value);
+  // Commits the work so far and continues in a new command buffer (same queue, so in order): long passes are split
+  // into short command buffers, which keeps the GPU responsive to the desktop's own work.
+  void split();
   void commit_and_wait() { commit(); wait(); }
   double gpu_ms() const;     // GPU time of the finished command buffer
   // GPU start / end of the finished command buffer on the host clock (mach time, ms), and that
@@ -131,10 +149,12 @@ class Encoder {
   void open_encoder();
   void* cb_ = nullptr;
   void* enc_ = nullptr;
-  std::vector<void*> prev_;   // command buffers committed by signal_event (retained)
+  std::vector<void*> prev_;   // command buffers committed by signal_event / split (retained)
   const char* cur_name_ = "";
   uint32_t cur_max_threads_ = 0;  // the pipeline's maxTotalThreadsPerThreadgroup (dispatch checks it)
   bool concurrent_ = false;
+  bool auto_barrier_ = false, in_group_ = false, group_first_ = false, dispatched_ = false;
+  void pre_dispatch();
 };
 
 } // namespace ni

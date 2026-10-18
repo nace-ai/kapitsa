@@ -1,7 +1,8 @@
 # Benchmarks
 
-How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro, compared with the engines people run these
-models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX. Each engine ran at its latest release
+How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt has
+[its own section](#nemotron-35-bolt-74b-a9b-2026-10-18)), compared with the engines people run these models with on a
+Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX. Each engine ran at its latest release
 with its own best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the
 same checks. The harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file
 behind these tables is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
@@ -25,6 +26,9 @@ used the least memory on both models.
 Ratios are computed from the unrounded results. Measured on one MacBook Pro (M4 Pro, 48 GB); on each model the
 next fastest engine on every metric ran in the same session as Kapitsa (35B: the morning of 2026-10-17; 27B: one
 evening session on the final build). The [conditions](#conditions) section lists what differed between sessions.
+
+For an additional Kapitsa-only run on a different machine, see the [M5 Max / 128 GB report](benchmarks-m5-max.md).
+Those runs include background GPU contention and are reported separately from the comparison below.
 
 ## Results
 
@@ -233,6 +237,38 @@ local paths are replaced by placeholders (`~`, `<bench-root>` for the folder the
 this repository, `<kapitsa-checkout>`, `<build-dir>`); nothing else was changed. `engine: "nace-infer"` and
 `nace_infer_git` are Kapitsa under its earlier name, and `{root}` in the recorded configs is that earlier folder; the
 configs in [bench/harness/configs](../bench/harness/configs) are the same settings in this repository's layout.
+
+## Nemotron 3.5 Bolt 74B-A9B (2026-10-18)
+
+NVIDIA's own 24 GB checkpoint (`nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`: NVFP4 Mamba projections, IQ2_XXS experts,
+Q8_0 attention, latent projections and LM head) on the engines that load it on a Mac. oMLX and mlx-vlm read it
+through the model file of NVIDIA's Bolt bundle for MLX (`txgsync/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr-MLX`,
+which carries NVIDIA's files byte-identical); Kapitsa reads the safetensors directly. All runs in one session on
+2026-10-18 between 06:37 and 07:50, back to back, with [configs/bolt.json](../bench/harness/configs/bolt.json); the
+desktop's own GPU work (the app the session ran in: 10-40% of the GPU) was there for every engine alike. Result files:
+[bench/results/2026-10-18](../bench/results/2026-10-18/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (LiLiCorr drafter, GPU + Neural Engine prefill) | **63.9** (62.5–66.1)<sup>1</sup> | **67.4** (64.6–69.6) | **436** | **385** | **0.28** | **0.32** | **22.7** + 1.0 mapped<sup>2</sup> | pass |
+| oMLX + LiLiCorr drafter | fails<sup>3</sup> | 52.8 (50.3–53.9)<sup>3</sup> | 288 | 297 | 0.75 | 0.84 | 31.5 | pass |
+| oMLX (no speculation) | 33.9 (33.5–34.1) | 34.1 (33.6–34.2) | 296 | 300 | 0.72 | 0.72 | 30.3 | pass |
+| mlx-vlm (no speculation) | 31.8 (31.1–32.6) | 32.9 (32.4–33.1) | 300 | 296 | 14.52<sup>4</sup> | 57.86<sup>4</sup> | 32.3 | pass |
+
+1. One of the five sampled runs looped (distinct-4-gram 0.43; flagged): 63.6 tok/s, not the fastest. Without it the
+   median is 64.2.
+2. Kapitsa maps the BF16 embedding from its file: those pages (1.0 GB resident) are clean file pages outside the
+   process footprint. Steady footprint after each phase: Kapitsa 22.4–22.7 GB, oMLX 23.9–24.3, oMLX + LiLiCorr
+   25.2–25.6, mlx-vlm 23.2–23.5.
+3. oMLX 0.7.1rc1 with the drafter fails every request at T > 0 (its sampled DFlash selection), so its sampled decode
+   and its prefill phases have no valid result (`bolt-omlx-lilicorr-20261018-063713.json`); the `-greedy` run sends
+   temperature 0 in every phase, so it has two greedy series, with medians 52.8 and 45.9: the table shows the higher,
+   and its prefill and follow-up numbers.
+4. mlx-vlm's server reused no prompt cache for the follow-up turns (0 cached tokens): every follow-up re-read the
+   whole conversation.
+
+Kapitsa's earlier run in the same session (before the weight packing that lowered its memory; `confirmations/`) gave
+64.7 / 65.6 tok/s decode, 455 / 396 tok/s prefill, 0.25 / 0.33 s follow-ups and 24.9 GB.
 
 ## Run benchmarks locally
 

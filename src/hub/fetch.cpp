@@ -1239,7 +1239,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         cbytes += f->size;
       }
       mcomp.push_back(ojson{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"commit", L.commit}, {"files", cf}});
-      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : "MTP head ") + fmt_bytes(cbytes));
+      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : c.kind == "lilicorr" ? "LiLiCorr drafter " : "MTP head ") +
+                       fmt_bytes(cbytes));
     }
   }
 
@@ -1560,6 +1561,7 @@ std::vector<Installed> installed() {
     uint64_t sz;
     if (file_size(m.dir + "/mtp.safetensors", sz)) m.extras.push_back("MTP head");
     if (file_size(m.dir + "/dflash2/model.safetensors", sz)) m.extras.push_back("DFlash2 drafter");
+    if (file_size(m.dir + "/dflash/model.safetensors", sz)) m.extras.push_back("LiLiCorr drafter");
     out.push_back(m);
   }
   return out;

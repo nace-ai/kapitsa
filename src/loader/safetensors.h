@@ -9,11 +9,12 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ni {
 
-enum class DType { F32, F16, BF16, U32, I32, U8, I8, I64, Unknown };
+enum class DType { F32, F16, BF16, U32, I32, U8, I8, I64, F8E4M3, Unknown };
 size_t dtype_size(DType d);
 
 struct Tensor {
@@ -57,6 +58,41 @@ class WeightStore {
   std::map<std::string, Tensor> tensors_;
   std::vector<Buffer> files_;
   size_t total_ = 0;
+};
+
+// The tensor directory of a folder of safetensors files (headers only), for loaders that place and convert tensors
+// themselves: any byte range of a tensor can be read from any thread (uncached preads).
+class SafetensorsIndex {
+ public:
+  struct Entry {
+    int file = -1;
+    size_t off = 0, len = 0;  // absolute file offset, bytes
+    DType dtype = DType::Unknown;
+    std::vector<int64_t> shape;
+    int64_t numel() const {
+      int64_t n = 1;
+      for (auto v : shape) n *= v;
+      return n;
+    }
+  };
+  // every *.safetensors in dir (follows symlinks); `skip` leaves tensors out of the directory (a vision tower)
+  explicit SafetensorsIndex(const std::string& dir, const std::function<bool(const std::string&)>& skip = nullptr);
+  ~SafetensorsIndex();
+  SafetensorsIndex(const SafetensorsIndex&) = delete;
+  SafetensorsIndex& operator=(const SafetensorsIndex&) = delete;
+  const Entry* find(const std::string& name) const;
+  const Entry& get(const std::string& name) const;  // fatal when missing
+  // bytes [off, off + n) of the tensor into dst; fatal on a read error
+  void read(const Entry& t, size_t off, void* dst, size_t n) const;
+  const std::unordered_map<std::string, Entry>& all() const { return t_; }
+  const std::string& dir() const { return dir_; }
+  const std::string& path(const Entry& t) const { return paths_[size_t(t.file)]; }
+
+ private:
+  std::string dir_;
+  std::vector<int> fds_;
+  std::vector<std::string> paths_;
+  std::unordered_map<std::string, Entry> t_;
 };
 
 } // namespace ni
