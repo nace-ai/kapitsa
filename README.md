@@ -101,42 +101,30 @@ does not enable parallel generation. `brew services start kapitsa` keeps a serve
 
 ## Benchmarks
 
-Reads: prompt tokens per second (prefill) for a 4K- and a 16K-token prompt. Writes: tokens per second of a coding
-answer (decode, temperature 0.6). Each engine runs in the setup that writes fastest ([all setups](docs/benchmarks.md)).
+Writing speed: tokens per second of a coding answer (decode, temperature 0.6), each engine in the setup that writes
+fastest ([all setups](docs/benchmarks.md)).
 
 ### MacBook Pro (2024) · M4 Pro · 48 GB
 
-| Qwen3.6 35B-A3B, tok/s | Reads 4K | Reads 16K | Writes |
-| --- | ---: | ---: | ---: |
-| llama.cpp + MTP | 663 | 545 | 69 |
-| Ollama (MLX runner, MTP) | 892 | 776 | 89 |
-| LM Studio (MLX engine) | 957 | 846 | 86 |
-| MTPLX | 918 | 804 | 80 |
-| oMLX + DFlash2 | 1,035 | 901 | 127 |
-| **Kapitsa** | **1,169** | **986** | **154** |
-| *Kapitsa vs next-fastest* | *1.1×* | *1.1×* | *1.2×* |
+| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| --- | ---: | ---: |
+| llama.cpp + MTP | 69 tok/s | 18 tok/s |
+| Ollama (MLX runner, MTP) | 89 tok/s | 32 tok/s |
+| LM Studio (MLX engine) | 86 tok/s | 15 tok/s |
+| MTPLX | 80 tok/s | 36 tok/s |
+| oMLX + DFlash2 | 127 tok/s | 45 tok/s |
+| **Kapitsa** | **154 tok/s** | **63 tok/s** |
 
-| Qwen3.8 27B, tok/s | Reads 4K | Reads 16K | Writes |
-| --- | ---: | ---: | ---: |
-| llama.cpp + MTP | 84 | 77 | 18 |
-| Ollama (MLX runner, MTP) | 124 | 119 | 32 |
-| LM Studio (MLX engine) | 127 | 122 | 15 |
-| MTPLX | 126 | 121 | 36 |
-| oMLX + DFlash2 | 136 | 128 | 45 |
-| **Kapitsa** | **389** | **335** | **63** |
-| *Kapitsa vs next-fastest* | *2.9×* | *2.6×* | *1.4×* |
-
-| Nemotron 3.5 Bolt 74B-A9B, tok/s | Reads 4K | Reads 16K | Writes |
-| --- | ---: | ---: | ---: |
-| mlx-vlm | 300 | 296 | 32 |
-| oMLX | 296 | 300 | 34 |
-| oMLX + LiLiCorr | 288 | 297 | fails |
-| **Kapitsa** | **436** | **385** | **64** |
-| *Kapitsa vs next-fastest* | *1.5×* | *1.3×* | *1.9×* |
+| Engine | Nemotron 3.5 Bolt 74B-A9B |
+| --- | ---: |
+| mlx-vlm | 32 tok/s |
+| oMLX | 34 tok/s |
+| oMLX + LiLiCorr | fails when sampling |
+| **Kapitsa** | **64 tok/s** |
 
 Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. Qwen3.5 4B:
 being measured.
-<!-- Qwen3.5 4B slot: | Qwen3.5 4B, tok/s | Reads 4K | Reads 16K | Writes |, rows as above. -->
+<!-- Qwen3.5 4B slot: a column "Qwen3.5 4B" in the Qwen table above, "N tok/s" per engine. -->
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro (2024) · M4 Pro · 48 GB</summary>
@@ -156,11 +144,10 @@ A follow-up is the time to the first token of an answer in a conversation that a
 
 ### MacBook Pro · M5 Max · 128 GB
 
-| Kapitsa, tok/s | Reads 4K | Reads 16K | Writes |
-| --- | ---: | ---: | ---: |
-| Qwen3.6 35B-A3B | 2,224 | 2,011 | 250 |
-| Qwen3.8 27B | 430 | 400 | 73 |
-| Other engines | — | — | — |
+| Engine | Qwen3.6 35B-A3B | Qwen3.8 27B |
+| --- | ---: | ---: |
+| **Kapitsa** | **250 tok/s** | **73 tok/s** |
+| Other engines | — | — |
 
 Other engines on this Mac: coming. Nemotron 3.5 Bolt here: not measured yet.
 
