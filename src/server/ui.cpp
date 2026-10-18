@@ -112,16 +112,21 @@ void home(const std::string& version) {
   std::vector<std::string> o;
   // the header: the logo (a beam diffracted by a standing wave of light) beside the wordmark, its intro first where it
   // may play
-  const std::vector<std::string> head = {badge(" kapitsa ") + "  " + dim(version), "fast local AI on Apple silicon",
-                                         dim(this_mac())};
+  // the tagline (the README's), shorter where it does not fit beside the logo
+  const int room = columns() - (2 + kLogoCols + 3) - 1;
+  std::string tagline = "the fastest inference engine for Qwen and Nemotron on Apple silicon";
+  if (width(tagline) > room) tagline = "fastest Qwen and Nemotron engine for Apple silicon";
+  if (width(tagline) > room) tagline = "fast Qwen and Nemotron on Apple silicon";
+  const std::vector<std::string> head = {badge(" kapitsa ") + "  " + dim(version), tagline, dim(this_mac())};
   const hub::CatalogModel* best = best_here();
   fputs("\n", stdout);
   fflush(stdout);
   if (W >= 60) {
     intro(head, 1);
-  } else {
-    o.push_back("  " + head[0] + "   " + head[1]);
-    o.push_back("  " + head[2]);
+  } else {  // no room for the logo: the wordmark, then the tagline and this Mac under it
+    o.push_back("  " + head[0]);
+    o.push_back("  " + clip(head[1], W - 3));
+    o.push_back("  " + clip(head[2], W - 3));
   }
   o.push_back("");
 
