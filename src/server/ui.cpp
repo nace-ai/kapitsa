@@ -145,9 +145,9 @@ void home(const std::string& version) {
   // may play
   // the tagline (the README's), shorter where it does not fit beside the logo
   const int room = columns() - (2 + kLogoCols + 3) - 1;
-  std::string tagline = "the fastest inference engine for Qwen and Nemotron on Apple silicon";
-  if (width(tagline) > room) tagline = "fastest Qwen and Nemotron engine for Apple silicon";
-  if (width(tagline) > room) tagline = "fast Qwen and Nemotron on Apple silicon";
+  std::string tagline = "the fastest Apple silicon inference engine built for Qwen and Nemotron";
+  if (width(tagline) > room) tagline = "fastest Apple silicon engine built for Qwen and Nemotron";
+  if (width(tagline) > room) tagline = "built for Qwen and Nemotron on Apple silicon";
   const std::vector<std::string> head = {badge(" kapitsa ") + "  " + dim(version), tagline, dim(this_mac())};
   const hub::CatalogModel* best = best_here();
   fputs("\n", stdout);

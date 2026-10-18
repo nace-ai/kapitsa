@@ -1,10 +1,10 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa: the fastest inference engine for Qwen and Nemotron on Apple silicon. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa: the fastest Apple silicon inference engine built for Qwen and Nemotron. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
 </picture>
 
-[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Connect your apps](#connect-your-apps) · [Benchmarks](#benchmarks) · [Architecture](#architecture)
+[Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Benchmarks](#benchmarks) · [Connect your apps](#connect-your-apps) · [Architecture](#architecture)
 
 ## Install
 
@@ -34,13 +34,13 @@ git clone https://github.com/nace-ai/kapitsa.git && cd kapitsa && ./install.sh
 ## Quick start
 
 ```bash
-kapitsa serve --model 35b
+kapitsa opencode --model 35b
 ```
 
-Open **http://127.0.0.1:8000** to chat. The first start downloads Qwen3.6 35B-A3B and its companion files (22.1 GB);
-later starts reuse them, offline too. It needs a Mac with 32 GB or more; on a 16-24 GB Mac use `--model 4b`.
-`kapitsa serve` alone asks which model to start, the best for your Mac first, and `kapitsa doctor` shows which models
-and context sizes fit it.
+This starts Qwen3.6 35B-A3B (a 22.1 GB download the first time) and opens [opencode](https://opencode.ai) on it.
+`kapitsa claude` and `kapitsa codex` work the same way. For the chat page and the API at **http://127.0.0.1:8000**,
+run `kapitsa serve --model 35b`. The 35B needs a Mac with 32 GB or more; on a 16-24 GB Mac use `--model 4b`.
+`kapitsa doctor` shows which models and context sizes fit your Mac.
 
 <!-- Demo slot: record docs/assets/demo.gif from main once the terminal UI (opt/tui) lands, then uncomment.
 <p align="center"><img src="docs/assets/demo.gif" alt="kapitsa claude: Claude Code on a local model" width="830"></p>
@@ -67,40 +67,6 @@ kapitsa pull 27b               # download without starting a server
 kapitsa list                   # show downloaded models
 kapitsa rm 27b                 # delete one
 ```
-
-## Connect your apps
-
-Launch an installed coding agent against Kapitsa:
-
-```bash
-kapitsa claude
-kapitsa codex
-kapitsa opencode
-kapitsa pi
-```
-
-Each launcher reuses a server on port 8000 or starts one for the session, and stops it when the agent exits. To choose
-the model, add `--model bolt` or `--model 35b`. [Agent setup and options](docs/usage.md#coding-agents)
-
-For API clients, use `http://127.0.0.1:8000/v1` for OpenAI Chat Completions and Responses, or
-`http://127.0.0.1:8000` for Anthropic Messages. Streaming, reasoning and tool calls are supported. Any API key works
-locally unless you start the server with `--api-key`.
-
-<details>
-<summary>Example API request</summary>
-
-```bash
-curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
-  "model": "qwen3.5-4b",
-  "messages": [{"role": "user", "content": "Explain speculative decoding."}]
-}'
-```
-
-</details>
-
-Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached; it
-does not enable parallel generation. `brew services start kapitsa` keeps a server running in the background.
-[All server options and API details](docs/usage.md#server-options)
 
 ## Benchmarks
 
@@ -171,6 +137,40 @@ GPU during the Bolt runs (alike for every engine) and the M5 Max runs (flagged f
 quality.
 [How it was measured](docs/benchmarks.md) · [M5 Max report](docs/benchmarks-m5-max.md) ·
 [Run the benchmarks yourself](bench/harness/README.md)
+
+## Connect your apps
+
+Launch an installed coding agent against Kapitsa:
+
+```bash
+kapitsa claude
+kapitsa codex
+kapitsa opencode
+kapitsa pi
+```
+
+Each launcher reuses a server on port 8000 or starts one for the session, and stops it when the agent exits. To choose
+the model, add `--model bolt` or `--model 35b`. [Agent setup and options](docs/usage.md#coding-agents)
+
+For API clients, use `http://127.0.0.1:8000/v1` for OpenAI Chat Completions and Responses, or
+`http://127.0.0.1:8000` for Anthropic Messages. Streaming, reasoning and tool calls are supported. Any API key works
+locally unless you start the server with `--api-key`.
+
+<details>
+<summary>Example API request</summary>
+
+```bash
+curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{
+  "model": "qwen3.5-4b",
+  "messages": [{"role": "user", "content": "Explain speculative decoding."}]
+}'
+```
+
+</details>
+
+Use `--ctx` to set the context length and `--mem-budget` to limit GPU memory. `--slots` keeps conversations cached; it
+does not enable parallel generation. `brew services start kapitsa` keeps a server running in the background.
+[All server options and API details](docs/usage.md#server-options)
 
 ## Architecture
 
