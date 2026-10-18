@@ -236,6 +236,28 @@ hf download ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF NVIDIA-Nemotron
 The configs' notes give each choice (mlx-vlm's MTP block size and llama.cpp's drafter depths come from smoke tests).
 The 4K / 16K reference prompt lengths (4183 / 16513) were counted with this model's tokenizer and chat template.
 
+### Nemotron 3.5 Lightning (`configs/lightning.json`) [mlx-vlm 0.7.8 and git main 73d366e, oMLX 0.7.1rc1, mlx-lm 0.32.2, llama.cpp 0.7.0]
+
+Kapitsa and mlx-vlm read NVIDIA's own NVFP4 checkpoint, the folder `kapitsa pull lightning` writes (the DSpark drafter
+in `dflash/`), linked as `$M/nemotron-3.5-lightning-nvfp4`; mlx-vlm 0.7.8 runs it plain and with the DSpark drafter,
+and its MTP drafter for Nemotron-H is newer than that release, so `lightning-mlxvlm-mtp` uses `MLX_VLM_MAIN_PYTHON`
+(git main 73d366e, as for Super-VL). oMLX and mlx-lm cannot read NVIDIA's checkpoint (ModelOpt `MIXED_PRECISION`:
+NVFP4 experts with FP8 Mamba projections) and run mlx-community's MLX 4-bit conversion; oMLX's MTP path runs a 4-bit
+conversion that keeps the MTP head. llama.cpp runs ggml-org's official Q4_0 GGUF with its MTP head, and NVIDIA's
+DSpark drafter as a GGUF:
+
+```bash
+hf download mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit --revision 55ac8c89261109b36c04371cd3f479a4594208c8 --local-dir $M/lightning-mlx-4bit
+hf download EigenLabs/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-MLX-4bit-mtp --revision 153c469494b3f16a0eaa752dae25cfc9452ce5c6 --local-dir $M/lightning-mlx-4bit-mtp
+hf download ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf \
+    mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --revision 8a08a1c81dadcc75d35dbb96016cfd344b632e67 --local-dir $M/lightning-gguf
+hf download magnitudedev/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-GGUF --revision ed35fc990759330e325ab9e41bcf80737ab4dafc --local-dir $M/lightning-gguf/dspark
+```
+
+(`LIGHTNING_GGUF_DIR` names another GGUF folder.) The configs' notes give each choice; the speculative depths and
+block sizes come from smoke tests. The 4K / 16K reference prompt lengths (4184 / 16517) were counted with this
+model's tokenizer and chat template.
+
 ### MTPLX (`configs/mtplx.json`) [2.12.2]
 
 `uv tool install mtplx` (or `pip install mtplx`); set `MTPLX_BIN` unless `mtplx` is on PATH. The settings are the
