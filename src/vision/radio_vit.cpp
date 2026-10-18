@@ -62,12 +62,20 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
     logi("vision: %s has a RADIO tower with %s, which Kapitsa does not run: images are off", dir.c_str(), w.c_str());
     return false;
   }
-  bool tower = false, proj = false;
+  bool tower = false, proj = false, final_ln = false;
   for (const std::string& n : vit_tensor_names(dir)) {
     tower = tower || n == std::string(kTower) + "patch_generator.embedder.weight";
     proj = proj || n == std::string(kProj) + "1.weight";
+    // Super-VL: NVIDIA's code layer-normalizes the tower's output before the projector whenever the language model
+    // has MTP layers, without a config flag; the weights are the only sign of it
+    final_ln = final_ln || n == "vision_projector.vision_final_layernorm.weight";
   }
   if (!tower || !proj) return false;  // a text-only conversion of the model
+  if (final_ln) {
+    logi("vision: %s has a RADIO tower with a final LayerNorm on the tower, which Kapitsa does not run: images are off",
+         dir.c_str());
+    return false;
+  }
   // the processor: preprocessor_config.json (or processor_config.json's image_processor), else config.json
   json pp = vit_read_json(dir + "/preprocessor_config.json");
   const json pc = vit_read_json(dir + "/processor_config.json");
