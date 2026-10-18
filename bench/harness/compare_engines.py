@@ -10,6 +10,9 @@ the lock `lockf -k <file> <cmd>` takes; the wait is logged):
   sampling foreign GPU load every 2 s (server tree recomputed per sample) -> stop the server and wait
   until its processes are gone, the port is closed and GPU/system memory is back near the baseline
   -> release the lock. Results go to <out>/results/<label>-<stamp>.json with provenance merged in.
+When the caller already holds the lock (`lockf -k <lock file> env NACE_GPU_LOCK_HELD=1 compare_engines.py ...`,
+e.g. to put a time limit on a run), the harness does not take it again; run one engine's configs per call then, so
+the lock is released between engines.
 
 usage: compare_engines.py <configs.json> [more.json ...] [--only label,glob*] [--list] [--dry-run] [--check-flags]
                           [--sizes 4000,16000] [--bench-args "..."] [--reverse] [--quiet-timeout 300]
@@ -50,6 +53,7 @@ Placeholders in cmd, env, prepare, stop, version_cmd, requires_paths, pid_file a
   {env:NAME} / {env:NAME=DEFAULT}   an environment variable (or local.env entry), else DEFAULT (expanded)
   {first:A|B|...}                   the first alternative that is an existing file or a command on PATH
   {ollama_gguf:TAG|TAG2}            the GGUF weights blob of an Ollama tag, read from the Ollama store's manifests
+  {ollama_gguf_draft:TAG|TAG2}      the tag's separate draft GGUF (image.draft layer: e.g. qwen3.5:4b's MTP head)
 """
 import argparse, copy, fnmatch, glob, hashlib, json, os, re, shlex, shutil, signal, socket, subprocess, sys, time, urllib.parse, urllib.request
 
@@ -193,6 +197,10 @@ def _resolve(inner, ctx):
         if arg not in ctx.setdefault("gguf", {}):
             ctx["gguf"][arg] = ollama_gguf(arg)
         return ctx["gguf"][arg]
+    if name == "ollama_gguf_draft" and has_arg:
+        if arg not in ctx.setdefault("gguf_draft", {}):
+            ctx["gguf_draft"][arg] = ollama_gguf(arg, "draft")
+        return ctx["gguf_draft"][arg]
     raise ResolveError(f"unknown placeholder {{{inner}}}")
 
 
@@ -284,22 +292,23 @@ def _load_manifest(text, want_format="gguf", depth=0, store=None):
     raise ResolveError("unrecognised manifest format")
 
 
-def ollama_model_layer(tag):
-    """(blob path, digest, size, manifest path) of the model weights layer of an Ollama tag."""
+def ollama_model_layer(tag, kind="model"):
+    """(blob path, digest, size, manifest path) of the model weights layer of an Ollama tag (kind "draft": its
+    separate draft model layer, e.g. the MTP head of qwen3.5:4b-mtp-q4_K_M)."""
     errs = []
     for p in ollama_manifest_paths(tag):
         try:
             man = _load_manifest(open(p).read())
             for l in man["layers"]:
-                if str(l.get("mediaType", "")).endswith("image.model"):
+                if str(l.get("mediaType", "")).endswith("image." + kind):
                     return _blob(l["digest"]), l["digest"], l.get("size"), p
-            errs.append(f"{p}: no image.model layer")
+            errs.append(f"{p}: no image.{kind} layer")
         except Exception as e:
             errs.append(f"{p}: {e}")
     # fallback: ask a running Ollama server for the Modelfile (FROM <blob path>)
     ollama = next(filter(None, (_exe(x) for x in OLLAMA_CANDIDATES)), None)
     for host in ("127.0.0.1:11434",):
-        if not ollama:
+        if not ollama or kind != "model":
             break
         out = run([ollama, "show", "--modelfile", tag], timeout=15, env=dict(os.environ, OLLAMA_HOST=host))
         m = re.search(r"^FROM\s+(/\S+sha256-([0-9a-f]{64}))\s*$", out, re.M)
@@ -308,11 +317,11 @@ def ollama_model_layer(tag):
     raise ResolveError(f"Ollama tag {tag} not found in {ollama_models_dir()}/manifests*" + (f" ({'; '.join(errs)})" if errs else ""))
 
 
-def ollama_gguf(tags):
+def ollama_gguf(tags, kind="model"):
     errs = []
     for tag in tags.split("|"):
         try:
-            path, digest, size, man = ollama_model_layer(tag)
+            path, digest, size, man = ollama_model_layer(tag, kind)
             if not os.path.isfile(path):
                 raise ResolveError(f"blob {path} missing")
             with open(path, "rb") as fh:
@@ -653,6 +662,8 @@ def model_weights(c, ctx, env=None):
                 break
         for k, v in ctx.get("gguf", {}).items():
             info["gguf"] = {"tags": k, "bytes": os.path.getsize(v), "digest": os.path.basename(v)}
+        for k, v in ctx.get("gguf_draft", {}).items():
+            info["gguf_draft"] = {"tags": k, "bytes": os.path.getsize(v), "digest": os.path.basename(v)}
         mp = expand(c.get("model_path") or "", ctx)
         if mp and os.path.isdir(mp):
             fs = [f for f in glob.glob(os.path.join(mp, "*.safetensors"))]
@@ -668,7 +679,9 @@ def system_state():
          "hw_model": run(["sysctl", "-n", "hw.model"]), "cpu": run(["sysctl", "-n", "machdep.cpu.brand_string"]),
          "memsize": run(["sysctl", "-n", "hw.memsize"]), "power": run(["pmset", "-g", "batt"]).split("\n")[0],
          "powermode": (re.search(r"powermode\s+(\d+)", run(["pmset", "-g"])) or [None, None])[1],
-         "vm": bench.vm_snapshot(), "gpu_mem": gpu_mem()}
+         "vm": bench.vm_snapshot(), "gpu_mem": gpu_mem(),
+         # free disk: LM Studio's MLX engine and MTPLX keep follow-up checkpoints on disk only above 10 GiB free
+         "disk_free_bytes": shutil.disk_usage(os.path.expanduser("~")).free}
     try:
         with urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=1) as r:
             d["ollama_app_loaded"] = [m.get("name") for m in json.load(r).get("models", [])]
@@ -906,17 +919,19 @@ def plan(c, args, stamp):
 
 
 class NoLock:
-    """For "lock": "external": the GPU lock is held by whoever started the (cmd null) server."""
+    """For "lock": "external" (the GPU lock is held by whoever started the (cmd null) server) and for
+    NACE_GPU_LOCK_HELD=1 (the caller of this script holds it, e.g. `lockf -k <lock file> ...`)."""
 
-    def __init__(self, log):
-        self.log, self.wait_s = log, 0.0
+    def __init__(self, log, why="config lock=external"):
+        self.log, self.wait_s, self.why, self.t0 = log, 0.0, why, None
 
     def acquire(self):
-        self.log(f"GPU lock held externally (config lock=external); holders now: {gpu_hogs.lock_holders()}")
+        self.log(f"GPU lock held externally ({self.why}); holders now: {gpu_hogs.lock_holders()}")
+        self.t0 = time.time()
         return self
 
-    def release(self):
-        return 0.0
+    def release(self):  # how long this config ran inside the externally held lock
+        return time.time() - self.t0 if self.t0 else 0.0
 
 
 def run_config(c, args, stamp):
@@ -929,6 +944,8 @@ def run_config(c, args, stamp):
     port = p["port"]
     if c.get("lock") == "external":  # cmd null and the server's own launcher holds the lock (lockf -k ... serve)
         lock = NoLock(lambda m: log(f"{label}: {m}"))
+    elif os.environ.get("NACE_GPU_LOCK_HELD"):  # our caller holds it (lockf -k <lock file> ... compare_engines.py)
+        lock = NoLock(lambda m: log(f"{label}: {m}"), "by the caller, NACE_GPU_LOCK_HELD=1")
     else:
         lock = gpu_hogs.GpuLock(timeout=args.lock_timeout, log=lambda m: log(f"{label}: {m}"))
     try:
@@ -1077,7 +1094,8 @@ def run_config(c, args, stamp):
                    "version": p["version"], "version_config": c.get("version"), "model_name": c.get("model_name"),
                    "model_path": c.get("model_path"), "note": c.get("note"), "config": cfg, "provenance": prov,
                    "gpu_lock": dict(result.get("gpu_lock") or {}, harness_wait_s=round(lock.wait_s or 0, 2),
-                                    harness_held_s=round(held, 1)),
+                                    harness_held_s=round(held, 1),
+                                    harness_lock=f"held {lock.why}" if isinstance(lock, NoLock) else "flock by the harness"),
                    "teardown": teardown})
     if c.get("version") not in (None, "auto"):
         det = detect_version(c, p["cmd"], ctx)

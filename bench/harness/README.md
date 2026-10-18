@@ -47,6 +47,9 @@ Each engine has different hidden defaults. The harness sends everything explicit
 - **One engine at a time.** Every run holds an exclusive lock on `~/.cache/nace-gpu.lock` (BSD `flock`, the same
   lock `lockf -k` takes; `BENCH_GPU_LOCK` names another file) from server start until its memory is released. Run
   every other GPU job on the Mac under the same lock (`lockf -k ~/.cache/nace-gpu.lock <command>`), or close it.
+  To wait in `lockf` or put a time limit on a run, take the lock outside and run one engine's configs per call, e.g.
+  `lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py <configs> --only <labels>`:
+  the harness then does not take the lock itself, and the lock is released between engines.
 - **Quiet GPU.** After the warm-up the harness waits (up to 5 minutes) until no other process uses more than 5% of
   the GPU for 15 s and the server itself is idle; if that never happens, it measures anyway and lets the monitor flag
   the run. A contention monitor samples every process's GPU time every 2 s during the benchmark; foreign load above
@@ -89,9 +92,15 @@ hf download Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed mtp.safetensors mtplx_ru
 # DFlash2 drafters (Kapitsa and oMLX)
 hf download incoai/Qwen3.6-35B-A3B-DFlash2 --revision 51ef7b6923ad6c14cb1bb41c37a9041446496ab6 --local-dir $M/drafters/Qwen3.6-35B-A3B-DFlash2
 hf download incoai/Qwen3.8-27B-DFlash2 --revision 015e795645c74b1a0eeef3b570031fb62e769bc5 --local-dir $M/drafters/Qwen3.8-27B-DFlash2
-# Optional, the small model for a quick check of the setup (configs/kapitsa.json, q35-4b-kapitsa)
+# Qwen3.5-4B: lmstudio-community's 4-bit trunk plus Qwen's own MTP head (the files `kapitsa pull 4b` puts in
+# ~/.cache/kapitsa/models/qwen3.5-4b-4bit; a link to that folder works too)
 hf download lmstudio-community/Qwen3.5-4B-MLX-4bit --revision c43ee1d65576a5d98de1e8405cac93c371a655c1 --local-dir $M/qwen3.5-4b-4bit-mtp
 python3 ../../tools/mtp_sidecar.py Qwen/Qwen3.5-4B $M/qwen3.5-4b-4bit-mtp/mtp.safetensors
+# ... and for MTPLX and Ollama's MLX runner the same trunk with the MTP head and runtime file of MTPLX's 4B release
+mkdir $M/qwen3.5-4b-4bit-mtplx && cp -c $M/qwen3.5-4b-4bit-mtp/*.json $M/qwen3.5-4b-4bit-mtp/*.jinja $M/qwen3.5-4b-4bit-mtp/model.safetensors $M/qwen3.5-4b-4bit-mtplx/
+hf download Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed mtp.safetensors mtplx_runtime.json --revision 550153beba237bb1f2f6ccba31ccedfe48ff78ec --local-dir $M/qwen3.5-4b-4bit-mtplx
+# ... and for oMLX's Lightning MTP a view of that folder whose index lists the head (no data copied)
+python3 tools/omlx_mtp_farm.py $M/qwen3.5-4b-4bit-mtplx $M/qwen3.5-4b-4bit-omlx-mtp
 # GGUF (llama.cpp and Ollama): see "Ollama"
 ```
 
@@ -116,10 +125,12 @@ engines' single slot. The version is the checkout's git revision.
 
 The official release (`llama-<build>-bin-macos-arm64.tar.gz` from github.com/ggml-org/llama.cpp/releases) or
 `brew install llama.cpp`; set `LLAMA_SERVER` unless `llama-server` is on PATH. Four configs per model: plain and MTP
-with `--spec-draft-n-max` 1, 2 and 3 (the MTP head is inside the GGUF). Settings: `-c 32768 -np 1 -ngl 999 -fa on
--b 2048 -ub 2048 -lm none --jinja`, the official Qwen chat template from the MLX folder (Ollama's GGUFs carry none),
-`--min-p 0`. `-lm none` loads the weights instead of mapping them, so they count in the memory column like everyone
-else's. `flag_check` maps flags a newer llama-server renamed; `--dry-run --check-flags` shows the mapping.
+with `--spec-draft-n-max` 1, 2 and 3 (the MTP head is inside the GGUF; for the 4B it is the Ollama tag's separate
+draft GGUF, passed with `-md`, and n-max 6, unsloth's recommendation for this model, is a fifth config). Settings:
+`-c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja`, the official Qwen chat template from the MLX
+folder (Ollama's GGUFs carry none), `--min-p 0`. `-lm none` loads the weights instead of mapping them, so they count
+in the memory column like everyone else's. `flag_check` maps flags a newer llama-server renamed;
+`--dry-run --check-flags` shows the mapping.
 
 ### Ollama (`configs/ollama.json`) [0.40.5]
 
@@ -127,17 +138,19 @@ The Ollama app (ollama.com or github.com/ollama/ollama/releases); `ollama` on PA
 `OLLAMA_BIN`. The harness starts its own `ollama serve` on another port over your model store, with 32K context, one
 slot and flash attention, so the app's settings do not leak in.
 
-- **GGUF, MTP on (as shipped):** `ollama pull qwen3.6:35b-a3b-mtp-q4_K_M` and `ollama pull qwen3.8:27b-mtp-q4_K_M`
-  (explicit tags: on Apple silicon the bare tags resolve to the MLX builds). Ollama's own MTP depth is used: 2 for the
-  35B, 4 for the 27B. These blobs are also llama.cpp's weights.
+- **GGUF, MTP on (as shipped):** `ollama pull qwen3.6:35b-a3b-mtp-q4_K_M`, `ollama pull qwen3.8:27b-mtp-q4_K_M` and
+  `ollama pull qwen3.5:4b-mtp-q4_K_M` (explicit tags: on Apple silicon the bare tags resolve to the MLX builds).
+  Ollama's own MTP depth is used: 2 for the 35B, 4 for the 27B, 1 for the 4B (whose MTP head is a separate draft
+  GGUF in the tag, `{ollama_gguf_draft:...}`). These blobs are also llama.cpp's weights.
 - **GGUF, MTP off:** a derived tag on the same blob, e.g. for the 35B a Modelfile with
   `FROM qwen3.6:35b-a3b-mtp-q4_K_M` and `PARAMETER draft_num_predict 0`, then
-  `ollama create qwen3.6-35b-a3b-nomtp -f Modelfile` (and `qwen3.8-27b-nomtp` likewise).
+  `ollama create qwen3.6-35b-a3b-nomtp -f Modelfile` (and `qwen3.8-27b-nomtp`, `qwen3.5-4b-nomtp` likewise).
 - **MLX runner:** Ollama's MLX runner on the same MLX 4-bit weights as the other engines, imported into a separate
   store without copying by `tools/ollama_mlx_import.py` (APFS clones with Ollama's tensor names; needs numpy and
   the store on the same volume as the weights; `tools/ollama_mlx_verify.py` checks it tensor by tensor). Start a
   dedicated server on that store, then import (the 27B: `--renderer qwen3.8 --parser qwen3.5 --requires 0.32.12`,
-  default `--mtp-quant`, `presence_penalty 0`):
+  default `--mtp-quant`, `presence_penalty 0`; the 4B: `--src $M/qwen3.5-4b-4bit-mtplx --name
+  nace/qwen3.5:4b-mlx-4bit-mtp`, default `--mtp-quant`, otherwise as the 35B):
 
   ```bash
   S=~/models/ollama-mlx   # = OLLAMA_MLX_MODELS
@@ -152,12 +165,14 @@ slot and flash attention, so the app's settings do not leak in.
 ### LM Studio (`configs/lmstudio.json`) [llmster 0.0.25-1, MLX runtime 1.13.1]
 
 Headless LM Studio: `curl -fsSL https://lmstudio.ai/install.sh | bash`, then `lms runtime update --all`. Get LM Studio's
-staff picks as its users do: `lms get qwen/qwen3.6-35b-a3b` and `lms get qwen/qwen3.8-27b`, MLX 4-bit variants
-(lmstudio-community's MLX repos: the same shards as the MLX folders above, so you can link those files into
-`~/.lmstudio/models/lmstudio-community/<repo>/` instead of downloading them again, but keep the hub entry: only
-its `model.yaml` lets `reasoning_effort: "none"` switch thinking off). `launchers/lmstudio_serve.sh` starts a fresh
+staff picks as its users do: `lms get qwen/qwen3.6-35b-a3b`, `lms get qwen/qwen3.8-27b` and `lms get qwen/qwen3.5-4b`,
+MLX 4-bit variants (lmstudio-community's MLX repos: the same shards as the MLX folders above, so you can link those
+files into `~/.lmstudio/models/lmstudio-community/<repo>/` instead of downloading them again, but keep the hub entry:
+only its `model.yaml` lets `reasoning_effort: "none"` switch thinking off). `launchers/lmstudio_serve.sh` starts a fresh
 daemon per run, loads the model with `--context-length 32768 --parallel 1`, starts the server and streams LM
-Studio's logs. Its MLX engine has no speculative decoding for these models, and nothing else to tune.
+Studio's logs. Its MLX engine has no speculative decoding for these models, and nothing else to tune. Its prompt
+cache keeps the checkpoints that serve follow-up turns on disk (an unlinked file in /tmp) only while at least 10 GiB
+of the disk is free; below that, a follow-up turn of these hybrid models reads the whole conversation again.
 
 ### mlx-lm (`configs/mlx-lm.json`) [0.32.2, mlx 0.32.4]
 
@@ -170,8 +185,10 @@ mlx-lm has no MTP or drafter path for these models. Prompt cache for follow-up t
 The release wheel from github.com/jundot/omlx/releases into its own venv (`uv venv && uv pip install <wheel URL>`);
 set `OMLX_BIN`. Best measured setting: DFlash2 speculative decoding with the same drafter as Kapitsa, quantized to
 4-bit at load, block 5 (the DFlash2 authors' oMLX recipe), verify mode `adaptive` on the 35B and `dflash` on the 27B
-(whichever was faster in smoke tests). Plain configs for comparison. The harness builds oMLX's model folder and
-settings file in its state directory and empties oMLX's SSD KV cache before each run.
+(whichever was faster in smoke tests). On the 4B, Lightning MTP (oMLX's built-in MTP path) with the MTP head of
+MTPLX's 4B release, through the index view `tools/omlx_mtp_farm.py` makes; it was faster than DFlash with z-lab's
+DFlash v1 drafter for this model at any block size and verify mode tried. Plain configs for comparison. The harness
+builds oMLX's model folder and settings file in its state directory and empties oMLX's SSD KV cache before each run.
 
 ### Nemotron 3.5 Bolt (`configs/bolt.json`) [oMLX 0.7.1rc1, mlx-vlm 0.7.8, mlx 0.32.4]
 
@@ -259,6 +276,7 @@ Placeholders, usable in `cmd`, `env`, `prepare`, `stop`, `requires_paths`, `pid_
 | `{env:NAME}`, `{env:NAME=DEFAULT}` | An environment variable (or `local.env` entry), else `DEFAULT` (which may hold placeholders) |
 | `{first:A\|B}` | The first alternative that is an existing file or a command on PATH |
 | `{ollama_gguf:TAG\|TAG2}` | The GGUF weights blob of an Ollama tag, read from the store's manifests |
+| `{ollama_gguf_draft:TAG\|TAG2}` | The tag's separate draft GGUF (its `image.draft` layer), e.g. the MTP head of `qwen3.5:4b-mtp-q4_K_M` |
 
 Environment variables (or `local.env`): `BENCH_MODELS`, `BENCH_OUT`, `BENCH_GPU_LOCK`, `BENCH_GPU_AMBIENT`, and the
 engine locations in `local.env.example`.
@@ -296,4 +314,5 @@ the sampling flags change the run (`--help`). Wrap your own server's whole lifet
 | `launchers/lmstudio_serve.sh` | LM Studio's daemon as a foreground benchmark server |
 | `tools/mlx_serve_pack.py` | mlx-serve's model folders from the shared weights (clones) and the vendor files that differ |
 | `tools/ollama_mlx_import.py`, `tools/ollama_mlx_verify.py` | Zero-copy import of MLX weights for Ollama's MLX runner, and its check |
+| `tools/omlx_mtp_farm.py` | Zero-copy view of an MLX folder whose index lists its side-car MTP head, for oMLX's Lightning MTP |
 | `local.env.example` | Paths for this Mac, copied to `local.env` |

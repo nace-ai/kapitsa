@@ -67,5 +67,33 @@
   "model": "nace/qwen3.8:27b-mlx-4bit-mtp",
   "requires_ollama_tag": "nace/qwen3.8:27b-mlx-4bit-mtp",
   "note": "Ollama's MLX runner on the same MLX 4-bit trunk + MTP head as the other MLX engines, imported without copying (tools/ollama_mlx_import.py). Built-in MTP with the adaptive depth controller; parameters as the official qwen3.8 tag. The official MLX tag (qwen3.8:27b-nvfp4) is a different quantization."
+ },
+ {
+  "label": "q35-4b-ollama-mtp",
+  "extends": "q36-35b-ollama-mtp",
+  "display": "Ollama GGUF + MTP (shipped depth 1)",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "ollama:qwen3.5:4b-mtp-q4_K_M",
+  "model": "qwen3.5:4b-mtp-q4_K_M",
+  "requires_ollama_tag": "qwen3.5:4b-mtp-q4_K_M",
+  "note": "As the larger models: dedicated server, the tag as shipped. For the 4B the MTP head is a separate draft GGUF in the tag (image.draft layer) and the shipped depth is 1 (draft_num_predict 1); the tag's presence_penalty 1.5 is overridden with 0 by every request."
+ },
+ {
+  "label": "q35-4b-ollama-nomtp",
+  "extends": "q35-4b-ollama-mtp",
+  "display": "Ollama GGUF (MTP off)",
+  "model_path": "ollama:qwen3.5-4b-nomtp",
+  "model": "qwen3.5-4b-nomtp",
+  "requires_ollama_tag": "qwen3.5-4b-nomtp",
+  "note": "Derived model: `FROM qwen3.5:4b-mtp-q4_K_M` + `PARAMETER draft_num_predict 0`."
+ },
+ {
+  "label": "q35-4b-ollama-mlx-q4",
+  "extends": "q36-35b-ollama-mlx-q4",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtplx",
+  "model": "nace/qwen3.5:4b-mlx-4bit-mtp",
+  "requires_ollama_tag": "nace/qwen3.5:4b-mlx-4bit-mtp",
+  "note": "Ollama's MLX runner on the same MLX 4-bit trunk as the other MLX engines, imported without copying (tools/ollama_mlx_import.py, default --mtp-quant 4:64), with the MTP head of MTPLX's 4B release (Ollama's own MLX tags of this model, qwen3.5:4b-mlx, have no MTP head). Built-in MTP with the adaptive depth controller; parameters as the official qwen3.5 tag."
  }
 ]

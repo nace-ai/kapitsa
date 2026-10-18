@@ -80,5 +80,54 @@
   "display": "llama.cpp + MTP (n-max 3)",
   "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"],
   "note": "n-max 3: llama-server's default depth, the fastest of the three on this model."
+ },
+ {
+  "label": "q35-4b-llamacpp",
+  "extends": "q36-35b-llamacpp",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "Ollama's GGUF of qwen3.5:4b-mtp-q4_K_M (Q4_K_M, blob a9d0a3e1; its MTP head is the tag's separate draft GGUF, blob 83ba6dc1)",
+  "cmd": ["{env:LLAMA_SERVER={first:llama-server|/opt/homebrew/bin/llama-server}}",
+          "-m", "{env:QWEN35_4B_GGUF={ollama_gguf:qwen3.5:4b-mtp-q4_K_M|qwen3.5-4b-nomtp}}",
+          "--host", "127.0.0.1", "--port", "8083", "-a", "qwen3.5-4b", "-c", "32768", "-np", "1", "-ngl", "999",
+          "-fa", "on", "-b", "2048", "-ub", "2048", "-lm", "none", "--jinja",
+          "--chat-template-file", "{models}/qwen3.5-4b-4bit-mtp/chat_template.jinja",
+          "--reasoning-format", "deepseek", "--cache-ram", "8192", "--ctx-checkpoints", "32",
+          "--temp", "0.6", "--top-p", "0.95", "--top-k", "20", "--min-p", "0", "--no-webui"],
+  "model": "qwen3.5-4b",
+  "gguf_expect": "a9d0a3e1",
+  "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/chat_template.jinja"],
+  "note": "Same settings as the larger models, on the Q4_K_M GGUF Ollama ships for the 4B (read from the Ollama store; QWEN35_4B_GGUF names a copy elsewhere) with the official Qwen3.5-4B chat template (the MLX folder's, identical to Qwen/Qwen3.5-4B's). The tag's vision projector is not loaded (text only)."
+ },
+ {
+  "label": "q35-4b-llamacpp-mtp1",
+  "extends": "q35-4b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 1)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "1",
+                 "-md", "{env:QWEN35_4B_GGUF_DRAFT={ollama_gguf_draft:qwen3.5:4b-mtp-q4_K_M}}"],
+  "note": "MTP speculative decoding with Qwen's MTP head. Unlike the larger models' GGUFs, Ollama ships the 4B's head as a separate draft GGUF in the same tag (the MTP layer blk.32 and a copy of the token embedding, Q8_0, 0.81 GB), passed with -md. n-max 1: Ollama's shipped depth for this model."
+ },
+ {
+  "label": "q35-4b-llamacpp-mtp2",
+  "extends": "q35-4b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 2)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2",
+                 "-md", "{env:QWEN35_4B_GGUF_DRAFT={ollama_gguf_draft:qwen3.5:4b-mtp-q4_K_M}}"],
+  "note": "n-max 2."
+ },
+ {
+  "label": "q35-4b-llamacpp-mtp3",
+  "extends": "q35-4b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 3)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3",
+                 "-md", "{env:QWEN35_4B_GGUF_DRAFT={ollama_gguf_draft:qwen3.5:4b-mtp-q4_K_M}}"],
+  "note": "n-max 3: llama-server's default depth (Qwen's SGLang recommendation is 3 steps too)."
+ },
+ {
+  "label": "q35-4b-llamacpp-mtp6",
+  "extends": "q35-4b-llamacpp",
+  "display": "llama.cpp + MTP (n-max 6)",
+  "cmd_append": ["--spec-type", "draft-mtp", "--spec-draft-n-max", "6",
+                 "-md", "{env:QWEN35_4B_GGUF_DRAFT={ollama_gguf_draft:qwen3.5:4b-mtp-q4_K_M}}"],
+  "note": "n-max 6: unsloth's llama.cpp recommendation for this model (Qwen3.5-4B-MTP-GGUF model card)."
  }
 ]
