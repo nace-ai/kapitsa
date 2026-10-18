@@ -324,16 +324,7 @@ void on_signal(int sig) {
 
 void hide_cursor() {
   if (g_hidden) return;
-  static bool once = [] {
-    atexit(restore_cursor);
-    for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE}) {
-      struct sigaction old {};
-      sigaction(sig, nullptr, &old);
-      if (old.sa_handler == SIG_DFL) signal(sig, on_signal);
-    }
-    return true;
-  }();
-  (void)once;
+  guard_signals();
   g_hidden = true;
   put("\033[?25l");
 }
@@ -375,6 +366,19 @@ void redraw(const std::string& before = "") {
 }
 
 }  // namespace
+
+void guard_signals() {
+  static bool once = [] {
+    atexit(restore_cursor);
+    for (int sig : {SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE}) {
+      struct sigaction old {};
+      sigaction(sig, nullptr, &old);
+      if (old.sa_handler == SIG_DFL) signal(sig, on_signal);
+    }
+    return true;
+  }();
+  (void)once;
+}
 
 bool fancy() { return caps().fancy; }
 bool live() { return caps().live; }

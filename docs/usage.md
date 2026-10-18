@@ -7,8 +7,8 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 
 | Command | What it does |
 | --- | --- |
-| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`. Without `--model`, the best model for this Mac ([Server options](#server-options)). |
-| `kapitsa claude`, `kapitsa codex`, `kapitsa opencode` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
+| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`. Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
 | `kapitsa rm M...` | Deletes downloaded models. Folders outside the store are left alone. |
@@ -17,7 +17,25 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
-download (the parts are kept); the coding-agent commands exit with the agent's code.
+download (the parts are kept) or when the model question is cancelled; the coding-agent commands exit with the agent's
+code.
+
+### Which model
+
+Run in a terminal without `--model`, `kapitsa serve` and the coding-agent commands ask which model to start: the models
+with their download size, ✓ where downloaded and ★ on the best for this Mac, then the chosen model's precisions with
+their sizes and whether each fits this Mac's memory (the engine's own plan of its headers; a model or precision that
+does not fit is marked too big and can still be chosen, with a warning). ↑ and ↓ (or j and k) move, Enter chooses, Esc
+goes back or cancels, Ctrl+C cancels. A model not downloaded yet says how much it downloads, then downloads as usual.
+
+The first choice is the last one, so Enter twice starts the same model again. It is kept in
+`~/.cache/kapitsa/state.json` (`KAPITSA_HOME`), and a `--model` that names a catalog model, typed in a terminal, updates
+it too; with no last choice, the best model for this Mac comes first. A coding-agent command that finds a server
+already running on its port uses it and says so (stop it to pick another model).
+
+Nothing is asked where nobody could answer: when stdin, stdout or stderr is not a terminal (the Nace Agent app,
+scripts, `brew services`), with `TERM=dumb`, `CI` or `KAPITSA_NO_PROMPT=1` set, with `--yes`, or in a background job.
+Those start the best model for this Mac, with the same output as before.
 
 ## Models and downloads
 
@@ -143,6 +161,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
 | `--image-max-pixels N` | `1200000` (Bolt `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
+| `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
 
 ## APIs
 
@@ -197,6 +216,7 @@ kapitsa claude --model 27b                    # Claude Code on the 27B
 kapitsa claude -p "what does this repo do?"   # other arguments go to the agent
 kapitsa codex exec "fix the failing test"
 kapitsa opencode run "add a --verbose flag"
+kapitsa pi -p "list the TODOs in this repo"
 ```
 
 Each command checks that the agent is installed (else it says how to install it). If Kapitsa is serving on `127.0.0.1:P`
@@ -205,7 +225,8 @@ an error). Otherwise the command downloads the model if needed, starts `kapitsa 
 128K tokens that one conversation can hold beside the model in this Mac's memory (`--ctx N` sets it), logging to
 `~/.cache/kapitsa/logs/serve-P.log`, and stops it when the agent exits or the command is killed.
 
-`--api-key K` is the server's key, if it has one. All other arguments go to the agent, and everything after
+Without `--model` in a terminal, the command asks which model to start ([Which model](#which-model)); `--yes` skips
+the question. `--api-key K` is the server's key, if it has one. All other arguments go to the agent, and everything after
 `--` too (for the agent's own `--model`, `--port` or `--help`). Ctrl+C and Ctrl+Z reach the agent, and the command exits
 with its exit code. Each agent is set up for that run only (its configuration files are not changed), and its other
 tools and MCP servers work as usual:
@@ -220,6 +241,11 @@ tools and MCP servers work as usual:
 - **opencode** uses a `kapitsa` provider, OpenAI-compatible on `/v1`, with reasoning on, the context and output limits
   and effort variants, for its main, small and built-in agents, merged into your `OPENCODE_CONFIG_CONTENT`. From
   opencode 2 on, it runs with `--standalone` unless you pick a server.
+- **Pi** uses the Anthropic Messages API through a `kapitsa` provider, with the server's model and context window. An
+  extension adds the provider for that run (`pi -e ~/.cache/kapitsa/agents/pi-kapitsa.js`); `~/.pi` is not changed.
+  Each turn's reasoning goes back as it was generated (in the thinking block's signature, a turn cut short included),
+  so every request of a tool loop continues the prompt the server has cached; Pi's thinking levels become the model's
+  reasoning efforts. Install it with `npm install -g @earendil-works/pi-coding-agent`.
 
 ## Images
 
@@ -290,7 +316,8 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, the last model chosen in `state.json`. |
+| `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
 | `HF_TOKEN` | the token `hf auth login` saved | Hugging Face token for gated or private repos. |
 | `HF_ENDPOINT` | `https://huggingface.co` | A Hugging Face mirror. |
 | `HF_HOME`, `HF_HUB_CACHE` | `~/.cache/huggingface`, `$HF_HOME/hub` | The Hugging Face cache, whose files downloads reuse. |

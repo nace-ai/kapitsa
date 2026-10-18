@@ -1,4 +1,4 @@
-// kapitsa claude|codex|opencode: a coding agent on Kapitsa in one command. It uses the Kapitsa already serving on
+// kapitsa claude|codex|opencode|pi: a coding agent on Kapitsa in one command. It uses the Kapitsa already serving on
 // 127.0.0.1:<port>, or starts one (`kapitsa serve` from this binary, logging to a file, with a context sized for
 // agents), waits for it, runs the agent pointed at it (src/api/clients.cpp: its environment and options), and stops
 // the server it started when the agent exits, with the agent's exit code.
@@ -7,6 +7,7 @@
 #include "gguf/import.h"
 #include "server/cli.h"
 #include "server/beam.h"
+#include "server/picker.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -36,10 +37,10 @@ using json = nlohmann::ordered_json;
 namespace {
 
 const char* kHelp =
-    "kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [agent arguments] [-- agent arguments]\n\n"
-    "Starts Claude Code, Codex or opencode on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default 8000), the\n"
-    "agent uses that server; otherwise one is started for it (downloading the model the first time) with the largest\n"
-    "context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
+    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--ctx N] [--api-key K] [agent arguments] [-- agent arguments]\n\n"
+    "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
+    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with the\n"
+    "largest context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
     "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
@@ -49,6 +50,7 @@ const char* kHelp =
     "  kapitsa claude -p \"what does this repo do?\"\n"
     "  kapitsa codex exec \"fix the failing test\"\n"
     "  kapitsa opencode run \"add a --verbose flag\"\n"
+    "  kapitsa pi -p \"list the TODOs in this repo\"\n"
     "Arguments after -- go to the agent too (for its own --model, --port or --help).\n";
 
 // The executable of this process, for the server it starts
@@ -185,6 +187,27 @@ Session session_since(const std::string& path, long from) {
   return s;
 }
 
+// Writes `content` to `path` (its folder made first), unless the file already holds it; "" or what went wrong
+std::string write_file(const std::string& path, const std::string& content) {
+  if (FILE* f = fopen(path.c_str(), "rb")) {
+    std::string cur(content.size() + 1, '\0');
+    cur.resize(fread(cur.data(), 1, cur.size(), f));
+    fclose(f);
+    if (cur == content) return "";
+  }
+  for (size_t p = path.find('/', 1); p != std::string::npos; p = path.find('/', p + 1)) mkdir(path.substr(0, p).c_str(), 0755);
+  const std::string tmp = path + ".tmp." + std::to_string(getpid());
+  FILE* f = fopen(tmp.c_str(), "wb");
+  if (!f) return strerror(errno);
+  const bool ok = fwrite(content.data(), 1, content.size(), f) == content.size();
+  if (fclose(f) != 0 || !ok || rename(tmp.c_str(), path.c_str()) != 0) {
+    const std::string e = strerror(errno);
+    unlink(tmp.c_str());
+    return e;
+  }
+  return "";
+}
+
 long file_size_of(const std::string& path) {
   struct stat st;
   return stat(path.c_str(), &st) == 0 ? long(st.st_size) : 0;
@@ -263,6 +286,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string help = "kapitsa " + name + " --help";
   std::string model, key;
   int port = 8000, ctx = 0;
+  bool yes = false;
   std::vector<std::string> args;
   for (int i = first; i < argc; ++i) {
     const std::string a = argv[i];
@@ -283,13 +307,16 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       if (term::fancy()) {
         char b[4096];
         snprintf(b, sizeof b, kHelp, hub::tilde(hub::home_dir()).c_str());
-        term::help(b);
+        std::string h = b;  // in a terminal, without --model, it asks which model to start
+        h.insert(h.find("\n\nEvery other argument"), "\n  --yes         don't ask which model to start: the best for this Mac");
+        term::help(h);
       } else {
         printf(kHelp, hub::tilde(hub::home_dir()).c_str());
       }
       return 0;
     }
-    if (is("--model")) model = value("--model");
+    if (a == "--yes") yes = true;
+    else if (is("--model")) model = value("--model");
     else if (is("--port")) port = to_int("--port", value("--port"), help.c_str());
     else if (is("--ctx")) ctx = to_int("--ctx", value("--ctx"), help.c_str());
     else if (is("--api-key")) key = value("--api-key");
@@ -316,6 +343,8 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const std::string log = hub::home_dir() + "/logs/serve-" + std::to_string(port) + ".log";
   const int found = probe(port, key, &run, &why);
   if (found < 0) return fail(why);
+  // no --model in a terminal: which model, asked (picker.h), unless a server already runs on the port
+  const bool ask = model.empty() && ui::can_prompt(yes);
   if (found == 1) {
     if (!model.empty()) {
       hub::ModelRef want;
@@ -327,6 +356,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
       if (want.id != run.model && want.name != run.model)
         return fail("The Kapitsa on port " + std::to_string(port) + " serves " + run.model + ", not " + model +
                     ". Stop it, or pass --port to start " + model + " on another port.");
+      ui::remember(want);
     }
     if (ctx > 0 && ctx != run.context && term::fancy())
       ui::warning("The server on port " + std::to_string(port) + " is already running with a " + term::context(run.context) +
@@ -338,6 +368,11 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     // start one: the model (downloaded first, with its progress here), a context sized for agents, then `serve`
     EngineOptions opt;
     const size_t budget = default_mem_budget();
+    if (ask) {
+      const auto pick = ui::pick_model(opt, budget, "kapitsa " + name);
+      if (!pick) return 130;
+      model = *pick;  // as if --model named it
+    }
     hub::ModelRef ref;
     std::string serve_model = model;
     try {
@@ -347,6 +382,7 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
         serve_model = ref.model && ref.variant ? hub::short_name(*ref.model, *ref.variant) : ref.dir;
       } else {
         ref = for_this_mac(hub::resolve(expand_home(model)), opt, budget);
+        ui::remember(ref);
       }
       hub::ensure(ref, hub::PullOptions{});
     } catch (const hub::Stopped& e) {
@@ -479,11 +515,17 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   }
   api::AgentLaunch l;
   try {
-    l = api::agent_launch(name, path, s, args, env, name == "opencode" ? major_version(path) : -1);
+    l = api::agent_launch(name, path, s, args, env, name == "opencode" ? major_version(path) : -1,
+                          hub::home_dir() + "/agents");
   } catch (const std::exception& e) {
     if (server > 0) kill(server, SIGTERM), waitpid(server, nullptr, 0);
     return fail(e.what());
   }
+  for (const auto& [file, content] : l.files)
+    if (const std::string e = write_file(file, content); !e.empty()) {
+      if (server > 0) kill(server, SIGTERM), waitpid(server, nullptr, 0);
+      return fail("Can't write " + hub::tilde(file) + ": " + e);
+    }
   for (const auto& u : l.unset) env.erase(u);
   for (const auto& [k, v] : l.set) env[k] = v;
   std::vector<std::string> cenv;
@@ -495,11 +537,17 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
   const bool tui = term::fancy();
   const long log_from = server > 0 ? 0 : file_size_of(log);  // the requests of this session, for the line at its end
   if (tui) {
-    if (server == 0)
-      ui::ok("Kapitsa on " + term::bold("http://127.0.0.1:" + std::to_string(port)) + term::dim("  " + std::string(term::kDot) + "  ") +
-             run.model + term::dim("  " + std::string(term::kDot) + "  ") + term::context(run.context) + " context " +
-             term::dim("(already running)"));
-    else
+    if (server == 0 && ask) {  // the question was skipped for it
+      const std::string l = "Using the running server: " + term::bold(ui::model_label(run.model)), why = "stop it to pick another model";
+      if (4 + term::width(l) + 3 + term::width(why) <= term::columns() - 1) ui::ok(l + term::dim(" (" + why + ")"));
+      else ui::ok(l), ui::note(why);
+    } else if (server == 0) {
+      const std::string dot = term::dim("  " + std::string(term::kDot) + "  "),
+                        rest = dot + run.model + dot + term::context(run.context) + " context";
+      const std::string l = "Kapitsa on " + term::bold("http://127.0.0.1:" + std::to_string(port)) + rest + " " + term::dim("(already running)");
+      // in a narrow terminal: shorter
+      ui::ok(4 + term::width(l) <= term::columns() - 1 ? l : "Kapitsa already running on " + term::bold(":" + std::to_string(port)) + rest);
+    } else
       ui::note("http://127.0.0.1:" + std::to_string(port) + "  " + term::kDot + "  log " + hub::tilde(log));
     for (const auto& n : l.notes) ui::note(n);
     term::line("", stderr);

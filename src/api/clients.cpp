@@ -9,7 +9,9 @@ namespace ni::api {
 
 using ojson = nlohmann::ordered_json;
 
-bool known_agent(const std::string& name) { return name == "claude" || name == "codex" || name == "opencode"; }
+bool known_agent(const std::string& name) {
+  return name == "claude" || name == "codex" || name == "opencode" || name == "pi";
+}
 
 std::string agent_install_hint(const std::string& name) {
   if (name == "claude")
@@ -21,6 +23,9 @@ std::string agent_install_hint(const std::string& name) {
   if (name == "opencode")
     return "opencode is not installed (no `opencode` on the PATH). Install it:\n"
            "  curl -fsSL https://opencode.ai/install | bash      (or: npm install -g opencode-ai)";
+  if (name == "pi")
+    return "Pi is not installed (no `pi` on the PATH). Install it:\n"
+           "  npm install -g @earendil-works/pi-coding-agent";
   return "";
 }
 
@@ -164,13 +169,58 @@ AgentLaunch opencode(const std::string& path, const AgentServer& s, const std::v
   return l;
 }
 
+// Pi's provider for the server: an extension that `kapitsa pi` loads for that run (pi -e), so nothing in ~/.pi
+// changes. It reads the server from the environment, so the file stays the same and runs on other ports don't race.
+// Anthropic Messages: each turn's reasoning goes back exactly (in our signature; a turn cut short keeps its thinking,
+// with an empty signature), so every request of a tool loop continues the prompt the server has cached. Pi's thinking
+// levels go as efforts (adaptive thinking), which the server maps for the models that have levels.
+const char* const kPiExtension = R"JS(// Kapitsa as a provider for Pi, written by `kapitsa pi`, which loads it for one run (pi -e): the server it started
+// or found, from the environment it gives Pi (KAPITSA_PI_BASE_URL, KAPITSA_PI_MODEL, KAPITSA_PI_CONTEXT, KAPITSA_API_KEY).
+export default function (pi) {
+  const env = process.env;
+  if (!env.KAPITSA_PI_BASE_URL || !env.KAPITSA_PI_MODEL) return;
+  const context = Number(env.KAPITSA_PI_CONTEXT) || 32768;
+  pi.registerProvider("kapitsa", {
+    name: "Kapitsa",
+    baseUrl: env.KAPITSA_PI_BASE_URL,
+    api: "anthropic-messages",
+    apiKey: "$KAPITSA_API_KEY",
+    models: [{
+      id: env.KAPITSA_PI_MODEL,
+      name: env.KAPITSA_PI_MODEL + " (Kapitsa)",
+      reasoning: true,
+      input: ["text", "image"],
+      contextWindow: context,
+      maxTokens: Math.min(32768, Math.max(1024, Math.floor(context / 4))),
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      compat: { forceAdaptiveThinking: true, allowEmptySignature: true },
+    }],
+  });
+}
+)JS";
+
+AgentLaunch pi(const std::string& path, const AgentServer& s, const std::vector<std::string>& args, const std::string& dir) {
+  AgentLaunch l;
+  const std::string ext = (dir.empty() ? std::string(".") : dir) + "/pi-kapitsa.js";
+  l.files = {{ext, kPiExtension}};
+  l.set = {{"KAPITSA_API_KEY", s.api_key.empty() ? "kapitsa" : s.api_key},
+           {"KAPITSA_PI_BASE_URL", s.base_url},
+           {"KAPITSA_PI_MODEL", s.model},
+           {"KAPITSA_PI_CONTEXT", std::to_string(s.context)}};
+  l.argv = {path, "-e", ext, "--provider", "kapitsa", "--model", s.model};
+  l.argv.insert(l.argv.end(), args.begin(), args.end());
+  return l;
+}
+
 }  // namespace
 
 AgentLaunch agent_launch(const std::string& name, const std::string& path, const AgentServer& s,
-                         const std::vector<std::string>& args, const std::map<std::string, std::string>& env, int major) {
+                         const std::vector<std::string>& args, const std::map<std::string, std::string>& env, int major,
+                         const std::string& dir) {
   if (name == "claude") return claude(path, s, args, env);
   if (name == "codex") return codex(path, s, args);
   if (name == "opencode") return opencode(path, s, args, env, major);
+  if (name == "pi") return pi(path, s, args, dir);
   throw std::runtime_error("unknown coding agent: " + name);
 }
 

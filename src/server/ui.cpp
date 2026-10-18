@@ -162,8 +162,8 @@ void home(const std::string& version) {
   o.push_back("");
 
   o.push_back(section("Get started"));
-  two_columns(o, {{"kapitsa serve", "start the best model for this Mac" + (best ? " (" + hub::short_name(*best) + ")" : std::string())},
-                  {"kapitsa serve --model 27b", "start another one (downloaded the first time)"},
+  two_columns(o, {{"kapitsa serve", "pick a model and start it" + (best ? " (the best here: " + hub::short_name(*best) + ")" : std::string())},
+                  {"kapitsa serve --model 27b", "start that one (downloaded the first time)"},
                   {"kapitsa claude", "Claude Code on it, in one command"}},
               4, W);
   paragraph(o, "Chat at http://127.0.0.1:8000  " + std::string(kDot) + "  OpenAI and Anthropic APIs at /v1", 4, W, dim);
@@ -232,7 +232,7 @@ void home(const std::string& version) {
       const char* cmd;
       const char* name;
     };
-    const A agents[] = {{"claude", "Claude Code"}, {"codex", "Codex"}, {"opencode", "opencode"}};
+    const A agents[] = {{"claude", "Claude Code"}, {"codex", "Codex"}, {"opencode", "opencode"}, {"pi", "Pi"}};
     int cw = 0, nw2 = 0;
     for (const A& a : agents) cw = std::max(cw, width(a.cmd) + 8), nw2 = std::max(nw2, width(a.name));
     for (const A& a : agents) {

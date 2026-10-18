@@ -22,6 +22,7 @@
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "server/cli.h"
+#include "server/picker.h"
 #include "server/ui.h"
 #include "util/log.h"
 #include "util/term.h"
@@ -264,13 +265,14 @@ static void print_help() {
          "http://127.0.0.1:8000/v1. Or start a coding agent on it in one command:\n\n"
          "  kapitsa claude                Claude Code\n"
          "  kapitsa codex                 Codex\n"
-         "  kapitsa opencode              opencode\n\n"
+         "  kapitsa opencode              opencode\n"
+         "  kapitsa pi                    Pi\n\n"
          "Models (with the files that speed them up; <model>:<variant> picks another precision):\n%s"
          "  or a Hugging Face repo of a Qwen3.5-family model in MLX format, bf16 or 3-8-bit (org/name[@revision]),\n"
          "  or a model folder, or a .gguf file (converted once into a model folder).\n\n"
          "Commands:\n"
          "  serve        start the server: chat page at /, OpenAI and Anthropic APIs at /v1 (kapitsa serve --help)\n"
-         "  claude, codex, opencode [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
+         "  claude, codex, opencode, pi [--model M] [--port P] [--ctx N] [--api-key K] [agent args]\n"
          "               start that coding agent on Kapitsa: on the server already running on the port, else on one\n"
          "               started for it (with a context sized for agents; kapitsa claude --help)\n"
          "  pull MODEL   download a model without starting it (kapitsa pull --help)\n"
@@ -309,9 +311,12 @@ static void print_serve_help() {
          "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt): OpenAI image_url parts, Anthropic image blocks and\n"
          "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n");
-  if (term::fancy())  // in a terminal the engine's log goes to a file, unless --verbose
+  if (term::fancy()) {  // in a terminal the engine's log goes to a file, unless --verbose; without --model it asks
     h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +
                                             hub::tilde(hub::home_dir()) + "/logs/serve-PORT.log)");
+    h.insert(h.find("\n\nEndpoints:"), "\n  --yes                  don't ask which model to start (in a terminal, without --model): the best for\n"
+                                         "                         this Mac");
+  }
   show_help(h);
 }
 
@@ -467,7 +472,7 @@ static int serve(int argc, char** argv, int first) {
   EngineOptions opt;
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
-  bool verbose = false;
+  bool verbose = false, yes = false;
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
@@ -491,6 +496,7 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
+    else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
@@ -511,6 +517,17 @@ static int serve(int argc, char** argv, int first) {
 
   // the model: a name, a repo or a folder; downloaded (or completed) first if needed
   const size_t budget = opt.mem_budget_gb > 0 ? size_t(opt.mem_budget_gb * 1e9) : default_mem_budget();
+  // none named, in a terminal: which one, asked under the header (picker.h); a busy port fails before the question
+  bool header = false;
+  if (model.empty() && ui::can_prompt(yes)) {
+    if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
+    ui::serve_header(KAPITSA_VERSION);
+    header = true;
+    const auto pick = ui::pick_model(opt, budget, "kapitsa serve");
+    if (!pick) return 130;
+    model = *pick;
+  }
+  const bool chosen = !model.empty();  // named or picked: kept for the next question
   hub::ModelRef ref;
   try {
     if (model.empty()) {
@@ -574,11 +591,12 @@ static int serve(int argc, char** argv, int first) {
       return fail(ref.dir + " has no config.json. --model takes a model folder (config.json, *.safetensors, "
                   "tokenizer.json), a model name (kapitsa --help) or a Hugging Face repo.", 2);
   }
+  if (chosen) ui::remember(ref);
   // fail now, not after loading the model, when the port is taken
   if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
   const std::string log_path = tui ? ui::serve_log_file(port) : "";
   if (tui) {
-    ui::serve_header(KAPITSA_VERSION);
+    if (!header) ui::serve_header(KAPITSA_VERSION);
     for (const auto& n : notes) ui::note(n);
   }
   try {
@@ -1144,7 +1162,7 @@ int main(int argc, char** argv) {
   if (cmd == "mtp-sidecar") return mtp_sidecar(argc, argv);
   if (cmd == "import") return gguf::run_import(argc, argv);
   if (cmd == "doctor") return ni::run_doctor(argc - 2, argv + 2);
-  if (cmd == "claude" || cmd == "codex" || cmd == "opencode") return launch_agent(cmd, argc, argv, 2);
+  if (cmd == "claude" || cmd == "codex" || cmd == "opencode" || cmd == "pi") return launch_agent(cmd, argc, argv, 2);
   if (cmd[0] == '-') return serve(argc, argv, 1);  // options only: `kapitsa --model DIR ...` (older scripts)
   usage_error("unknown command \"" + cmd + "\"");
 }

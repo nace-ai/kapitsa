@@ -2,7 +2,7 @@
 //  - request mapping: multi-turn conversations with tools, thinking / reasoning round trips, system merging, images;
 //  - the exact event sequences of streamed replies (text, reasoning + text, reasoning + 2 tool calls, a custom tool
 //    call, a length cutoff, a stop sequence, errors) and the non-streamed responses;
-//  - what `kapitsa claude|codex|opencode` gives each client;
+//  - what `kapitsa claude|codex|opencode|pi` gives each client;
 //  - with a model folder (its chat template and tokenizer): tool loops through the template, the generated turns parsed
 //    as the engine parses them, streamed, read back as each client reads them and sent back: the next request's prompt
 //    must continue the previous prompt and the generated tokens exactly (the engine then reuses its cache).
@@ -626,6 +626,17 @@ void clients() {
     refused = true;
   }
   check(refused, "opencode: an OPENCODE_CONFIG_CONTENT that is not an object is refused");
+
+  AgentServer ks{"http://127.0.0.1:8000", "qwen3.6-35b-a3b:6bit", 131072, ""};
+  AgentLaunch p = agent_launch("pi", "/bin/pi", ks, {"-p", "hi", "--thinking", "high"}, {}, -1, "/k/agents");
+  check(p.argv == std::vector<std::string>{"/bin/pi", "-e", "/k/agents/pi-kapitsa.js", "--provider", "kapitsa", "--model",
+                                           "qwen3.6-35b-a3b:6bit", "-p", "hi", "--thinking", "high"} &&
+            has(p, "KAPITSA_PI_BASE_URL", "http://127.0.0.1:8000") && has(p, "KAPITSA_PI_MODEL", "qwen3.6-35b-a3b:6bit") &&
+            has(p, "KAPITSA_PI_CONTEXT", "131072") && has(p, "KAPITSA_API_KEY", "kapitsa") && p.files.size() == 1 &&
+            p.files[0].first == "/k/agents/pi-kapitsa.js" &&
+            p.files[0].second.find("api: \"anthropic-messages\"") != std::string::npos &&
+            p.files[0].second.find("export default function (pi)") != std::string::npos,
+        "pi: its provider as an extension for the run (pi -e, nothing in ~/.pi), the server in its environment");
 }
 
 // ---------------------------------------------------------------- round trips through a chat template

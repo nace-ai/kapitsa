@@ -39,8 +39,8 @@ kapitsa serve --model 35b
 
 Open **http://127.0.0.1:8000** to chat. The first start downloads Qwen3.6 35B-A3B and its companion files (22.1 GB);
 later starts reuse them, offline too. It needs a Mac with 32 GB or more; on a 16-24 GB Mac use `--model 4b`.
-`kapitsa serve` alone starts the best model for your Mac, and `kapitsa doctor` shows which models and context sizes
-fit it.
+`kapitsa serve` alone asks which model to start, the best for your Mac first, and `kapitsa doctor` shows which models
+and context sizes fit it.
 
 <!-- Demo slot: record docs/assets/demo.gif from main once the terminal UI (opt/tui) lands, then uncomment.
 <p align="center"><img src="docs/assets/demo.gif" alt="kapitsa claude: Claude Code on a local model" width="830"></p>
@@ -76,6 +76,7 @@ Launch an installed coding agent against Kapitsa:
 kapitsa claude
 kapitsa codex
 kapitsa opencode
+kapitsa pi
 ```
 
 Each launcher reuses a server on port 8000 or starts one for the session, and stops it when the agent exits. To choose

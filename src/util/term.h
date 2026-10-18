@@ -77,6 +77,9 @@ void status(const std::vector<std::string>& rows);
 void keep_status();
 // Removes the status block for good (before the process exits: a fatal error)
 void end_status();
+// The handlers that take the status block off the screen and show the cursor when a signal ends the process: put in
+// with the first status block, or before it by code whose own handlers pass the signal on to them
+void guard_signals();
 
 // A spinner on the status line: "⠹ <label>  <seconds>  <detail>" until done()
 class Spinner {
