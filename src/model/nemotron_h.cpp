@@ -673,23 +673,45 @@ void NemotronH::load(int prefill_chunk) {
   }
   if (embed_.fmt != NhFmt::BF16 && embed_.fmt != NhFmt::Q8)
     fatal("%s: the embedding is neither BF16 nor Q8_0", path_.c_str());
-  // 2. place, and cut the reads into jobs of ~16 MB
+  // 2. place, and cut the reads into jobs of ~16 MB. Placement: every tensor's codes / scales / vector packed into
+  // buffers of at most 1 GiB, biggest first, each into the first buffer with room, and each buffer allocated at the
+  // size it holds (filling 1 GiB buffers in load order left ~3.4 GB of their tails unused but resident).
   const size_t kChunk = size_t(1) << 30, kJob = size_t(16) << 20;
-  size_t used = kChunk;  // in the current arena buffer
-  auto place = [&](size_t bytes, const char* label) -> Buffer {
-    bytes = align_up(std::max<size_t>(bytes, 16), 256);
-    if (bytes > kChunk) {
-      arena_.push_back(g.alloc(bytes, label, false));
-      return arena_.back().view(0, bytes);
-    }
-    if (used + bytes > kChunk) {
-      arena_.push_back(g.alloc(kChunk, "nh_weights", false));
-      used = 0;
-    }
-    Buffer b = arena_.back().view(used, bytes);
-    used += bytes;
-    return b;
+  struct Slot {
+    Buffer* dst;
+    size_t bytes, chunk = 0, off = 0;
   };
+  std::vector<Slot> slots;
+  const bool map_embed = map_embed_;
+  for (Want& w : wants) {
+    if (w.m == &embed_ && embed_.fmt == NhFmt::BF16 && map_embed) continue;
+    if (w.vec) {
+      slots.push_back({w.vec, size_t(w.parts[0]->numel()) * 4});
+      continue;
+    }
+    NhMat& m = *w.m;
+    slots.push_back({&m.q, m.q_row * m.N * m.E});
+    if (m.s_row) slots.push_back({&m.s, m.s_row * m.N * m.E});
+  }
+  for (Slot& sl : slots) sl.bytes = align_up(std::max<size_t>(sl.bytes, 16), 256);
+  {
+    std::vector<size_t> order(slots.size());
+    for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return slots[a].bytes > slots[b].bytes; });
+    std::vector<size_t> used;  // per buffer
+    for (size_t i : order) {
+      Slot& sl = slots[i];
+      size_t c = 0;
+      while (c < used.size() && (used[c] + sl.bytes > std::max(kChunk, sl.bytes) || (sl.bytes > kChunk && used[c])))
+        ++c;
+      if (c == used.size()) used.push_back(0);
+      sl.chunk = c;
+      sl.off = used[c];
+      used[c] += sl.bytes;
+    }
+    for (size_t c = 0; c < used.size(); ++c) arena_.push_back(g.alloc(used[c], "nh_weights", false));
+    for (Slot& sl : slots) *sl.dst = arena_[sl.chunk].view(sl.off, sl.bytes);
+  }
   std::vector<Job> jobs;
   uint64_t src_bytes = 0;
   for (Want& w : wants) {
@@ -716,7 +738,6 @@ void NemotronH::load(int prefill_chunk) {
     }
     if (w.vec) {
       const SafetensorsIndex::Entry& t = *w.parts[0];
-      *w.vec = place(size_t(t.numel()) * 4, "nh_vectors");
       Job j;
       j.t = &t;
       j.kind = w.vk;
@@ -728,8 +749,7 @@ void NemotronH::load(int prefill_chunk) {
       continue;
     }
     NhMat& m = *w.m;
-    m.q = place(m.q_row * m.N * m.E, "nh_codes");
-    m.s = m.s_row ? place(m.s_row * m.N * m.E, "nh_scales") : m.q;
+    if (!m.s_row) m.s = m.q;
     weight_bytes_ += m.q.size + (m.s_row ? m.s.size : 0);
     const size_t rb = nh_src_row_bytes(m.fmt, m.K);
     const int64_t per = std::max<int64_t>(1, int64_t(kJob / std::max<size_t>(rb, 1)));
