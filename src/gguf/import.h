@@ -7,9 +7,10 @@
 //
 // Formats, per GGUF type: Q4_0 / Q4_1 / Q4_K keep their codes as 4-bit group 32 (scales and offsets rounded to bf16);
 // Q8_0 and Q6_K become 8-bit group 64, Q5_0 / Q5_1 / Q5_K 6-bit group 64, IQ4_NL / IQ4_XS / MXFP4 / NVFP4 5-bit group
-// 64, Q2_K / Q3_K 4-bit group 32 (all re-quantized from the GGUF's values; Q2_K / Q3_K with a warning); F32 / F16 /
-// BF16 become bf16. MoE experts (whose kernels have no 4-bit group 32) take 5-bit group 64 from 4-bit types, and a
-// layer's experts share one format, as do a dense layer's gate and up. IQ1 / IQ2 / IQ3 and ternary types are refused.
+// 64, IQ3_XXS / IQ3_S / Q3_K 4-bit group 32, IQ1 / IQ2 / Q2_K 3-bit group 64 (all re-quantized from the GGUF's values);
+// F32 / F16 / BF16 become bf16. In a file that is mostly 4-bit or better (unsloth's UD mixes), its 1-3-bit tensors
+// take the file's majority format instead. MoE experts (whose kernels have no group-32 forms) take 5-bit group 64 from
+// 4-bit types, and a layer's experts share one format, as do a dense layer's gate and up. Ternary types are refused.
 #pragma once
 #include <string>
 
@@ -21,6 +22,7 @@ struct ImportOptions {
   std::string name;          // folder name in the models dir ("": from the file name)
   int threads = 0;           // 0: this Mac's performance cores, at most 8
   bool force = false;        // convert again over an existing folder of that name
+  bool dry_run = false;      // print what would be written (formats per GGUF type, size, folder) and write nothing
   bool progress = true;
 };
 

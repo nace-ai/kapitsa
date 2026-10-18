@@ -1,7 +1,10 @@
-// GGUF block decoders (written from the format's layout: ggml-common.h's block structs) and MLX affine encoders.
+// GGUF block decoders (written from the format's layout: ggml-common.h's block structs) and MLX affine encoders. The
+// IQ1 / IQ2 / IQ3 decoders follow ggml's dequantize_row_iq* (ggml/src/ggml-quants.c, MIT License, Copyright (c)
+// 2023-2026 The ggml authors; see THIRD_PARTY_NOTICES), with its codebooks in iq_grids.h.
 #include "gguf/quant.h"
 
 #include "gguf/gguf.h"
+#include "gguf/iq_grids.h"
 
 #include <algorithm>
 #include <cmath>
@@ -247,6 +250,148 @@ void dq_iq4_xs(const uint8_t* b, float* y) {
   }
 }
 
+// ---- IQ1 / IQ2 / IQ3: 256 values per block, 8-value groups looked up in a codebook (iq_grids.h)
+
+// IQ2 / IQ3 signs: 7 stored bits per 8 values, the 8th the parity of the 7 (ggml's ksigns_iq2xs)
+inline uint32_t iq_signs(uint32_t s7) { return s7 | (uint32_t(__builtin_popcount(s7) & 1) << 7); }
+inline float iq_sign(uint32_t signs, int j) { return (signs >> j) & 1 ? -1.0f : 1.0f; }
+inline float grid_byte(uint64_t g, int j) { return float(uint8_t(g >> (8 * j))); }
+inline float grid_int8(uint64_t g, int j) { return float(int8_t(uint8_t(g >> (8 * j)))); }
+
+// 2.06 bits: per 32 values 4 one-byte grid indices, then 4 x 7 sign bits and a 4-bit scale
+void dq_iq2_xxs(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  for (int ib = 0; ib < 8; ++ib) {
+    uint32_t idx, aux;
+    memcpy(&idx, b + 2 + 8 * ib, 4);
+    memcpy(&aux, b + 6 + 8 * ib, 4);
+    const float db = d * (0.5f + float(aux >> 28)) * 0.25f;
+    for (int l = 0; l < 4; ++l) {
+      const uint64_t g = iq::kIq2xxs[(idx >> (8 * l)) & 255];
+      const uint32_t s = iq_signs((aux >> (7 * l)) & 127);
+      for (int j = 0; j < 8; ++j) y[32 * ib + 8 * l + j] = db * grid_byte(g, j) * iq_sign(s, j);
+    }
+  }
+}
+
+// 2.31 bits: 16-bit entries (9-bit grid index, 7 sign bits), two 4-bit scales per 32 values
+void dq_iq2_xs(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  const uint8_t* sc = b + 66;
+  for (int ib = 0; ib < 8; ++ib) {
+    const float db[2] = {d * (0.5f + float(sc[ib] & 0xF)) * 0.25f, d * (0.5f + float(sc[ib] >> 4)) * 0.25f};
+    for (int l = 0; l < 4; ++l) {
+      uint16_t v;
+      memcpy(&v, b + 2 + 2 * (4 * ib + l), 2);
+      const uint64_t g = iq::kIq2xs[v & 511];
+      const uint32_t s = iq_signs(v >> 9);
+      for (int j = 0; j < 8; ++j) y[32 * ib + 8 * l + j] = db[l / 2] * grid_byte(g, j) * iq_sign(s, j);
+    }
+  }
+}
+
+// 2.56 bits: 10-bit grid indices (8 low bits + 2 in qh), 8 stored sign bits per 8 values, two 4-bit scales per 32
+void dq_iq2_s(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  const uint8_t* qs = b + 2;
+  const uint8_t* signs = b + 34;
+  const uint8_t* qh = b + 66;
+  const uint8_t* sc = b + 74;
+  for (int ib = 0; ib < 8; ++ib) {
+    const float db[2] = {d * (0.5f + float(sc[ib] & 0xF)) * 0.25f, d * (0.5f + float(sc[ib] >> 4)) * 0.25f};
+    for (int l = 0; l < 4; ++l) {
+      const uint64_t g = iq::kIq2s[qs[4 * ib + l] | ((uint32_t(qh[ib]) << (8 - 2 * l)) & 0x300)];
+      const uint32_t s = signs[4 * ib + l];
+      for (int j = 0; j < 8; ++j) y[32 * ib + 8 * l + j] = db[l / 2] * grid_byte(g, j) * iq_sign(s, j);
+    }
+  }
+}
+
+// 3.06 bits: per 32 values 8 one-byte indices of 4-value grid points, then 4 x 7 sign bits and a 4-bit scale
+void dq_iq3_xxs(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  const uint8_t* qs = b + 2;
+  const uint8_t* sas = b + 66;
+  for (int ib = 0; ib < 8; ++ib) {
+    uint32_t aux;
+    memcpy(&aux, sas + 4 * ib, 4);
+    const float db = d * (0.5f + float(aux >> 28)) * 0.5f;
+    for (int l = 0; l < 4; ++l) {
+      const uint32_t s = iq_signs((aux >> (7 * l)) & 127);
+      const uint32_t g1 = iq::kIq3xxs[qs[8 * ib + 2 * l]], g2 = iq::kIq3xxs[qs[8 * ib + 2 * l + 1]];
+      for (int j = 0; j < 4; ++j) {
+        y[32 * ib + 8 * l + j] = db * grid_byte(g1, j) * iq_sign(s, j);
+        y[32 * ib + 8 * l + j + 4] = db * grid_byte(g2, j) * iq_sign(s, j + 4);
+      }
+    }
+  }
+}
+
+// 3.44 bits: 9-bit indices of 4-value grid points (8 low bits + 1 in qh), 8 stored sign bits per 8 values, a 4-bit
+// scale per 32 values (two per byte)
+void dq_iq3_s(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  const uint8_t* qs = b + 2;
+  const uint8_t* qh = b + 66;
+  const uint8_t* signs = b + 74;
+  const uint8_t* sc = b + 106;
+  for (int ib = 0; ib < 8; ++ib) {
+    const int nib = (sc[ib / 2] >> (4 * (ib % 2))) & 0xF;
+    const float db = d * float(1 + 2 * nib);
+    const uint32_t h = qh[ib];
+    for (int l = 0; l < 4; ++l) {
+      const uint32_t g1 = iq::kIq3s[qs[8 * ib + 2 * l] | ((h << (8 - 2 * l)) & 256)];
+      const uint32_t g2 = iq::kIq3s[qs[8 * ib + 2 * l + 1] | ((h << (7 - 2 * l)) & 256)];
+      const uint32_t s = signs[4 * ib + l];
+      for (int j = 0; j < 4; ++j) {
+        y[32 * ib + 8 * l + j] = db * grid_byte(g1, j) * iq_sign(s, j);
+        y[32 * ib + 8 * l + j + 4] = db * grid_byte(g2, j) * iq_sign(s, j + 4);
+      }
+    }
+  }
+}
+
+// 1.56 bits: 11-bit indices of 8-value ternary grid points, a 3-bit scale and a +-1/8 shift per 32 values
+void dq_iq1_s(const uint8_t* b, float* y) {
+  const float d = f16_at(b);
+  const uint8_t* qs = b + 2;
+  for (int ib = 0; ib < 8; ++ib) {
+    uint16_t qh;
+    memcpy(&qh, b + 34 + 2 * ib, 2);
+    const float dl = d * float(2 * ((qh >> 12) & 7) + 1);
+    const float delta = qh & 0x8000 ? -0.125f : 0.125f;
+    for (int l = 0; l < 4; ++l) {
+      const uint64_t g = iq::kIq1s[qs[4 * ib + l] | (((qh >> (3 * l)) & 7) << 8)];
+      for (int j = 0; j < 8; ++j) y[32 * ib + 8 * l + j] = dl * (grid_int8(g, j) + delta);
+    }
+  }
+}
+
+// 1.75 bits: as IQ1_S with a 3-bit scale per 16 values and a shift per 8; the block's fp16 scale is spread over the
+// top nibbles of the four scale words
+void dq_iq1_m(const uint8_t* b, float* y) {
+  const uint8_t* qs = b;
+  const uint8_t* qh = b + 32;
+  uint16_t sc[4];
+  memcpy(sc, b + 48, 8);
+  const uint16_t dbits = uint16_t((sc[0] >> 12) | ((sc[1] >> 8) & 0x00F0) | ((sc[2] >> 4) & 0x0F00) | (sc[3] & 0xF000));
+  const float d = from_f16(dbits);
+  for (int ib = 0; ib < 8; ++ib) {
+    const float dl1 = d * float(2 * ((sc[ib / 2] >> (6 * (ib % 2) + 0)) & 7) + 1);
+    const float dl2 = d * float(2 * ((sc[ib / 2] >> (6 * (ib % 2) + 3)) & 7) + 1);
+    const uint8_t h0 = qh[2 * ib], h1 = qh[2 * ib + 1];
+    const uint32_t idx[4] = {qs[4 * ib + 0] | ((uint32_t(h0) << 8) & 0x700), qs[4 * ib + 1] | ((uint32_t(h0) << 4) & 0x700),
+                             qs[4 * ib + 2] | ((uint32_t(h1) << 8) & 0x700), qs[4 * ib + 3] | ((uint32_t(h1) << 4) & 0x700)};
+    const float delta[4] = {h0 & 0x08 ? -0.125f : 0.125f, h0 & 0x80 ? -0.125f : 0.125f, h1 & 0x08 ? -0.125f : 0.125f,
+                            h1 & 0x80 ? -0.125f : 0.125f};
+    for (int l = 0; l < 4; ++l) {
+      const uint64_t g = iq::kIq1s[idx[l]];
+      const float dl = l < 2 ? dl1 : dl2;
+      for (int j = 0; j < 8; ++j) y[32 * ib + 8 * l + j] = dl * (grid_int8(g, j) + delta[l]);
+    }
+  }
+}
+
 void dq_mxfp4(const uint8_t* b, float* y) {
   const float d = e8m0_half(b[0]);
   const uint8_t* q = b + 1;
@@ -273,6 +418,7 @@ bool can_dequantize(uint32_t t) {
   switch (t) {
     case kF32: case kF16: case kBF16: case kQ4_0: case kQ4_1: case kQ5_0: case kQ5_1: case kQ8_0: case kQ2_K:
     case kQ3_K: case kQ4_K: case kQ5_K: case kQ6_K: case kIQ4_NL: case kIQ4_XS: case kMXFP4: case kNVFP4:
+    case kIQ2_XXS: case kIQ2_XS: case kIQ2_S: case kIQ3_XXS: case kIQ3_S: case kIQ1_S: case kIQ1_M:
       return true;
     default:
       return false;
@@ -310,6 +456,13 @@ void dequantize(uint32_t t, const uint8_t* src, float* dst, size_t n) {
     case kIQ4_XS: f = dq_iq4_xs; break;
     case kMXFP4: f = dq_mxfp4; break;
     case kNVFP4: f = dq_nvfp4; break;
+    case kIQ2_XXS: f = dq_iq2_xxs; break;
+    case kIQ2_XS: f = dq_iq2_xs; break;
+    case kIQ2_S: f = dq_iq2_s; break;
+    case kIQ3_XXS: f = dq_iq3_xxs; break;
+    case kIQ3_S: f = dq_iq3_s; break;
+    case kIQ1_S: f = dq_iq1_s; break;
+    case kIQ1_M: f = dq_iq1_m; break;
   }
   for (size_t i = 0; i < n / be; ++i) f(src + i * bb, dst + i * be);
 }
