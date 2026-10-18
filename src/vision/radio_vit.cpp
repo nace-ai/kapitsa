@@ -51,7 +51,8 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
   // NVIDIA's NemotronH Omni projector: vision_final_layernorm if the config has it (Bolt: false), else whether the
   // language model has MTP layers (Super-VL's config predates the field: its tower was trained with the LayerNorm
   // Megatron puts at the end of every block built from a config with MTP)
-  if (root.contains("vision_final_layernorm") && root["vision_final_layernorm"].is_boolean())
+  const bool ln_flag = root.contains("vision_final_layernorm") && root["vision_final_layernorm"].is_boolean();
+  if (ln_flag)
     r.final_ln = root["vision_final_layernorm"].get<bool>();
   else
     r.final_ln = t.contains("num_nextn_predict_layers") && t["num_nextn_predict_layers"].is_number_integer() &&
@@ -70,16 +71,24 @@ bool RadioViT::supports(const std::string& dir, RadioViTConfig* c) {
     logi("vision: %s has a RADIO tower with %s, which Kapitsa does not run: images are off", dir.c_str(), w.c_str());
     return false;
   }
-  bool tower = false, proj = false, final_ln = false;
+  bool tower = false, proj = false, ln_w = false, ln_b = false;
   for (const std::string& n : vit_tensor_names(dir)) {
     tower = tower || n == std::string(kTower) + "patch_generator.embedder.weight";
     proj = proj || n == std::string(kProj) + "1.weight";
-    final_ln = final_ln || n == std::string(kFinalLn) + "weight";
+    ln_w = ln_w || n == std::string(kFinalLn) + "weight";
+    ln_b = ln_b || n == std::string(kFinalLn) + "bias";
   }
   if (!tower || !proj) return false;  // a text-only conversion of the model
-  if (r.final_ln && !final_ln) {
+  if (r.final_ln && !(ln_w && ln_b)) {
     logi("vision: %s: the config asks for a LayerNorm on the RADIO tower's output that its files lack: images are off",
          dir.c_str());
+    return false;
+  }
+  // the LayerNorm's weights without a config that turns it on either way: which projector they were trained with is
+  // unknown, so images stay off rather than skip it or guess
+  if (!r.final_ln && !ln_flag && (ln_w || ln_b)) {
+    logi("vision: %s: its files have a LayerNorm on the RADIO tower's output that its config neither turns on nor "
+         "off: images are off", dir.c_str());
     return false;
   }
   // the processor: preprocessor_config.json (or processor_config.json's image_processor), else config.json
