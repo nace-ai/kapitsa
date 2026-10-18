@@ -42,7 +42,7 @@
 #include <thread>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.1.33"
+#define KAPITSA_VERSION "0.1.34"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
