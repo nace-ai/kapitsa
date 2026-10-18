@@ -46,8 +46,8 @@ struct EngineOptions {
   std::string dflash;
   // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
   // model's processor resizes); vision::kModelDefaultPixels = the encoder's default (1.2 million; Nemotron 3.5 Bolt
-  // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.6 / 3.8: 16.7 million, Bolt and Super-VL: 13312
-  // patches of 16x16).
+  // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.5-4B, Qwen3.6, Qwen3.8: 16.7 million, Bolt and
+  // Super-VL: 13312 patches of 16x16).
   long image_max_pixels = vision::kModelDefaultPixels;
 };
 

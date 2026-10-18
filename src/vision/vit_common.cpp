@@ -276,6 +276,8 @@ void vit_qkv_split(Encoder& e, const Buffer& y, const Buffer& bias, const Buffer
   e.dispatch((uint32_t(heads * HD) + 255) / 256, uint32_t(rows), 1, 256);
 }
 
+bool vit_attention_has(int HD) { return HD == 64 || HD == 72 || HD == 80; }
+
 void vit_attention(VitCmds& cs, const Buffer& Q, const Buffer& K, const Buffer& V, const Buffer& out, int N, int ld,
                    int heads, int HD) {
   static std::mutex mu;

@@ -288,7 +288,13 @@ NI_INLINE void vit_attn_impl(const device half* Q, const device half* K, const d
     threadgroup half vs[kVitBK * (D + 8)];                                                                     \
     vit_attn_impl<D, NSG, RB>(Q, K, V, O, p, tg, tid, sg, lane, kt, vs);                                       \
   }
-// threadgroup = NSG simdgroups x RB blocks of 8 queries each
+// threadgroup = NSG simdgroups x RB blocks of 8 queries each. Head dimensions: 64 (the Qwen3.5-4B's tower), 72 (the
+// Qwen3.6-35B-A3B's and Qwen3.8-27B's), 80 (the RADIO tower of Nemotron 3.5 Bolt and Super-VL); vit_common.cpp's
+// vit_attention_has lists them.
+NI_VIT_ATTN(vit_attn_d64_s4, 64, 4, 1)
+NI_VIT_ATTN(vit_attn_d64_s8, 64, 8, 1)
+NI_VIT_ATTN(vit_attn_d64_s4r2, 64, 4, 2)
+NI_VIT_ATTN(vit_attn_d64_s8r2, 64, 8, 2)
 NI_VIT_ATTN(vit_attn_d72_s4, 72, 4, 1)
 NI_VIT_ATTN(vit_attn_d72_s8, 72, 8, 1)
 NI_VIT_ATTN(vit_attn_d72_s4r2, 72, 4, 2)

@@ -263,10 +263,11 @@ tools and MCP servers work as usual:
 
 ## Images
 
-`qwen3.6-35b-a3b`, `qwen3.8-27b`, `nemotron-3.5-bolt` and `nemotron-3.5-super-vl` read images. Their vision towers
-come with the download and load with the first image: about 0.9 GB of GPU memory for the Qwen models, 1.7 GB for Bolt
-and for Super-VL. On a model without one, such as the 4B, each image becomes a short note in the prompt, so agents that
-attach screenshots keep working.
+Every catalog model reads images, in every precision: `qwen3.5-4b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`,
+`nemotron-3.5-bolt` and `nemotron-3.5-super-vl`. Their vision towers come with the download and load with the first
+image: about 0.67 GB of GPU memory for the 4B's, 0.9 GB for the 35B's and the 27B's (bf16 in every precision), 1.7 GB
+for Bolt's and for Super-VL's. On a model without one, such as a text-only conversion, each image becomes a short note
+in the prompt, so agents that attach screenshots keep working.
 
 | API | Image part |
 | --- | --- |

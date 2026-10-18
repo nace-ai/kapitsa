@@ -50,8 +50,11 @@ bool QwenViT::supports(const std::string& dir, QwenViTConfig* c) {
     return false;
   }
   const json t = root.contains("text_config") ? root["text_config"] : root;
-  if (q.out_hidden != t.value("hidden_size", 0) || q.hidden % q.heads || (q.hidden / q.heads) != 72 || q.in_ch != 3 ||
-      q.merge != 2 || q.hidden % 64) {
+  // a head dimension the attention kernels are built for (Qwen3.5-4B: 64, of hidden 1024 in 24 blocks; Qwen3.6-35B-A3B
+  // and Qwen3.8-27B: 72, of 1152 in 27 blocks); the rest of the tower takes any width that is a multiple of 64
+  const int hd = q.heads > 0 && q.hidden % q.heads == 0 ? q.hidden / q.heads : 0;
+  if (q.out_hidden != t.value("hidden_size", 0) || !vit_attention_has(hd) || q.in_ch != 3 || q.merge != 2 ||
+      q.hidden % 64) {
     logi("vision: %s has a vision tower of a shape Kapitsa does not run (hidden %d, %d heads, out %d): images are off",
          dir.c_str(), q.hidden, q.heads, q.out_hidden);
     return false;
@@ -383,8 +386,8 @@ void QwenViT::load() {
     B.n2b = w_.vec(b + "norm2.bias");
     B.qkv = w_.lin(b + "attn.qkv");
     B.proj = w_.lin(b + "attn.proj");
-    B.fc1 = w_.lin(b + "mlp.linear_fc1", inter_pad_, 0);  // [4352, hidden]: zero rows past 4304
-    B.fc2 = w_.lin(b + "mlp.linear_fc2", 0, inter_pad_);  // [hidden, 4352]: zero columns past 4304
+    B.fc1 = w_.lin(b + "mlp.linear_fc1", inter_pad_, 0);  // [inter_pad, hidden]: zero rows past inter
+    B.fc2 = w_.lin(b + "mlp.linear_fc2", 0, inter_pad_);  // [hidden, inter_pad]: zero columns past inter
   }
   mnw_ = w_.vec("merger.norm.weight");
   mnb_ = w_.vec("merger.norm.bias");

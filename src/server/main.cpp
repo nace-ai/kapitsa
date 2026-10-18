@@ -312,8 +312,8 @@ static void print_serve_help() {
          "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
-         "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt and Super-VL): OpenAI image_url parts, Anthropic image\n"
-         "blocks and Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
+         "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
+         "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n");
   if (term::fancy()) {  // in a terminal the engine's log goes to a file, unless --verbose; without --model it asks
     h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +
