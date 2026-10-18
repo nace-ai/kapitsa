@@ -261,9 +261,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
 
   if (nh_ && !lp.dflash_off && lp.dflash_left_out.empty()) {
     if (lp.dflash.empty()) {
-      logi("LiLiCorr: no drafter found next to %s", opts_.model_dir.c_str());
+      logi("Nemotron-H: no block drafter found next to %s", opts_.model_dir.c_str());
     } else {
-      lili_ = std::make_unique<LiliCorr>(*nh_, lp.dflash);
+      lili_ = NhDrafter::open(*nh_, lp.dflash);
     }
   }
 
@@ -304,7 +304,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       vision_ = std::make_unique<vision::Vision>(std::move(enc));
     }
   }
-  const std::string mode = lili_ ? std::string("LiLiCorr speculative decoding (7-token blocks)")
+  const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");
@@ -346,12 +346,12 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
   if (NemotronH::is_model(model_dir)) {
-    // the LiLiCorr drafter in the model's dflash/ folder (auto), or the one named
+    // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
-      lp.dflash = lp.dflash_auto ? LiliCorr::find(model_dir) : want;
+      lp.dflash = lp.dflash_auto ? NhDrafter::find(model_dir) : want;
       if (!lp.dflash.empty()) {
         size_t per_slot = 0;
-        lp.dflash_bytes = lp.dflash_found_bytes = LiliCorr::plan_bytes(lp.dflash, &per_slot) + 3 * per_slot * size_t(slots);
+        lp.dflash_bytes = lp.dflash_found_bytes = NhDrafter::plan_bytes(lp.dflash, &per_slot) + 3 * per_slot * size_t(slots);
         if (lp.dflash_auto &&
             !conversation_fits(model_dir, context, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0)) {
           lp.dflash_left_out = lp.dflash;
@@ -991,8 +991,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     else DFlash2::rewind(*slot.dseq, start);
   }
   if (lili_) {
-    if (start == 0) LiliCorr::reset(*slot.lseq);
-    else LiliCorr::rewind(*slot.lseq, start);
+    if (start == 0) NhDrafter::reset(*slot.lseq);
+    else NhDrafter::rewind(*slot.lseq, start);
   }
   for (auto& c : slot.ckpts)
     if (c.pos > start) c.pos = -1;
@@ -1074,7 +1074,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // Other requests take their turns between chunks up to the first row the drafter captures (its capture buffer is
   // shared); from there the prefill runs to its end (at most two chunks).
   const int capture_from = dfl_ ? std::max(start, n - DFlash2::kCtxKeep)
-                         : lili_ ? std::max(start, n - lili_->config().window)
+                         : lili_ ? std::max(start, n - lili_->window())
                                  : n;
   double t_enc = 0, h_commit = 0;  // the last chunk's commit: ms since t0, host clock
   // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
@@ -1208,8 +1208,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
+  // (Nemotron-H: the whitespace before </think> stays in the reasoning, as its template renders returned turns)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools);
+                      think_tools, nh_ != nullptr);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -1270,7 +1271,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // proposals after the anchor tokens[P]), then the target's verify of the 8 rows (capturing the drafter's
     // features), per-row sampling and the acceptance on the GPU; the host reads the accepted count.
     LiliSeq& d = *slot.lseq;
-    constexpr int B = LiliCorr::kB;
+    constexpr int B = NhDrafter::kB;
     int P = n, m_prev = 0;
     req_cycles = 0;
     // parked: the rows the last cycle kept go into the ring now (the verify's captured features are shared)
@@ -1582,7 +1583,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (mmp) std::copy(keys.begin(), keys.end(), slot.tokens.begin());  // image rows: their keys
   res.completion_tokens = gen;
   if ((dfl_ || lili_) && spec_cycles_ > 0)
-    logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? "lilicorr" : "dflash", double(spec_accepted_) / spec_cycles_,
+    logd("%s: %.2f tokens/cycle over %ld cycles", lili_ ? lili_->name() : "dflash", double(spec_accepted_) / spec_cycles_,
          spec_cycles_);
   else if (depth > 0 && spec_cycles_ > 0)
     logd("spec: %.2f accepted/drafted over %ld cycles", double(spec_accepted_) / (spec_cycles_ * depth), spec_cycles_);
@@ -1706,7 +1707,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   }
   if (lili_) {
     lili_->encode_copy(*e, *slot.lckpts[size_t(best - slot.ckpts.data())], *slot.lseq);
-    LiliCorr::rewind(*slot.lseq, start);
+    NhDrafter::rewind(*slot.lseq, start);
     lili_->begin_prefill(n, start);
   }
   SamplingParams sp;

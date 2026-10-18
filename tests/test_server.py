@@ -30,6 +30,26 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
 ]
 
+def hosts_call(name, args):
+    """A call that reads /etc/hosts: read_file on the path, or run_shell on a command naming it (Nemotron 3.5
+    Lightning counts the lines with `wc -l < /etc/hosts`; either is a tool call the server must return)."""
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except ValueError:
+            return False
+    return (name == "read_file" and args.get("path") == "/etc/hosts") or \
+        (name == "run_shell" and "/etc/hosts" in str(args.get("command", "")))
+
+
+def hosts_result(name, args=None):
+    """What a call on /etc/hosts returns: the file for read_file, `wc -l`'s output through run_shell."""
+    if name != "run_shell":
+        return hosts
+    cmd = str((json.loads(args) if isinstance(args, str) else (args or {})).get("command", ""))
+    return "3\n" if "<" in cmd else "3 /etc/hosts\n"
+
+
 def auth():
     return {"Authorization": "Bearer " + API_KEY} if API_KEY else {}
 
@@ -132,7 +152,7 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("variant") == dv and
                   j.get("repo") == repo and j.get("revision") == rev and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
-    # NVIDIA's Nemotron 3.5 checkpoints: one variant each, the LiLiCorr drafter in dflash/
+    # NVIDIA's Nemotron 3.5 checkpoints: one variant each, the LiLiCorr (Bolt, Super-VL) or DSpark (Lightning) drafter in dflash/
     for name, dv, repo, rev, comp, aliases in [
             ("nemotron-3.5-bolt", "24gb", "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB",
              "c6cc2e8ffa353403213d6b9b18aaf8eb684d705a",
@@ -143,11 +163,17 @@ def cli_checks(kapitsa):
              ("lilicorr", "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
               "292bf1efc06ba39567da7351f2ad7a522afa3959", "dflash"),
              ["super", "super-vl", "nemotron-super", "NEMOTRON-3.5-SUPER-VL:nvfp4",
-              "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"])]:
+              "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4"]),
+            ("nemotron-3.5-lightning", "nvfp4", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+             "bee7596271d1495f6992ae224aefde4410e816b8",
+             ("dspark", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
+              "6d127b50ecd98562cea85d0087680b7d86091fb0", "dflash"),
+             ["lightning", "nemotron-lightning", "nemotron-3.5-lightning:nvfp4",
+              "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4"])]:
         for a in aliases:
             j = plan(a)
             got = [(c["kind"], c["repo"], c["revision"], c["into"]) for c in j.get("companions", [])]
-            check(f"cli: {a} -> {name}:{dv} with its LiLiCorr drafter",
+            check(f"cli: {a} -> {name}:{dv} with its {comp[0]} drafter",
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
                   j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
@@ -310,8 +336,8 @@ r6 = post({"messages": [{"role": "system", "content": "You are a coding agent. U
                         {"role": "user", "content": "Read the file /etc/hosts and tell me how many lines it has."}],
            "tools": TOOLS, "max_tokens": 4096, "temperature": 0, "top_k": 1, "stream": True}, stream=True)
 tc6 = r6["tool_calls"]
-check("thinking + tools: read_file returned as a tool call",
-      r6["finish"] == "tool_calls" and len(tc6) >= 1 and tc6[0]["function"]["name"] == "read_file",
+check("thinking + tools: a call on /etc/hosts returned as a tool call",
+      r6["finish"] == "tool_calls" and len(tc6) >= 1 and hosts_call(tc6[0]["function"]["name"], tc6[0]["function"]["arguments"]),
       str(r6["finish"]) + " " + json.dumps(tc6)[:200] + " reasoning tail " + repr(r6["reasoning"][-200:]))
 
 # 7. one-offs never evict the conversation in progress, whatever their length (2 slots): a long one-off,
@@ -414,9 +440,9 @@ a_body = {"model": "m", "max_tokens": 4096, "temperature": 0, "top_k": 1,
           "messages": [{"role": "user", "content": [{"type": "text", "text": "Read the file /etc/hosts and tell me how many lines it has."}]}]}
 st, m1 = call("/v1/messages", a_body)
 uses = [b for b in m1.get("content", []) if b["type"] == "tool_use"] if st == 200 else []
-check("anthropic: non-streamed tool call (stop_reason tool_use, tool_use read_file /etc/hosts, usage)",
+check("anthropic: non-streamed tool call (stop_reason tool_use, tool_use on /etc/hosts, usage)",
       st == 200 and m1["type"] == "message" and m1["stop_reason"] == "tool_use" and len(uses) >= 1 and
-      uses[0]["name"] == "read_file" and uses[0]["input"].get("path") == "/etc/hosts" and
+      hosts_call(uses[0]["name"], uses[0]["input"]) and
       m1["usage"]["input_tokens"] + m1["usage"]["cache_read_input_tokens"] > 0 and m1["usage"]["output_tokens"] > 0,
       json.dumps(m1)[:400])
 thinking = [b for b in m1.get("content", []) if b["type"] == "thinking"] if st == 200 else []
@@ -426,7 +452,7 @@ first = m1["usage"]["input_tokens"] + m1["usage"]["cache_read_input_tokens"] if 
 st, n = call("/v1/messages/count_tokens", {k: v for k, v in a_body.items() if k not in ("max_tokens", "temperature", "top_k")})
 check("anthropic: count_tokens counts the prompt", st == 200 and n.get("input_tokens") == first, f"{n} vs {first}")
 a_body["messages"] += [{"role": "assistant", "content": m1.get("content", [])},
-                       {"role": "user", "content": [{"type": "tool_result", "tool_use_id": uses[0]["id"] if uses else "x", "content": hosts},
+                       {"role": "user", "content": [{"type": "tool_result", "tool_use_id": uses[0]["id"] if uses else "x", "content": hosts_result(uses[0]["name"], uses[0]["input"]) if uses else hosts},
                                                     {"type": "text", "text": "<system-reminder>Answer briefly.</system-reminder>"}]}]
 st, ev = call("/v1/messages", dict(a_body, stream=True), stream=True)
 names = [e for e, _ in ev] if st == 200 else []
@@ -472,15 +498,24 @@ calls_ = [o for o in done.get("output", []) if o["type"] == "function_call"]
 check("responses stream: created, in_progress, items, completed; sequence numbers in order",
       names[:2] == ["response.created", "response.in_progress"] and names[-1] == "response.completed" and
       [d["sequence_number"] for _, d in ev] == list(range(len(ev))), str(names)[:300])
-check("responses stream: a function_call read_file /etc/hosts",
-      len(calls_) >= 1 and calls_[0]["name"] == "read_file" and json.loads(calls_[0]["arguments"]).get("path") == "/etc/hosts",
+check("responses stream: a function_call on /etc/hosts",
+      len(calls_) >= 1 and hosts_call(calls_[0]["name"], calls_[0]["arguments"]),
       json.dumps(done.get("output"))[:300])
 first_r = done.get("usage", {}).get("input_tokens", 0)
-r_body["input"] = r_input + done.get("output", []) + [{"type": "function_call_output", "call_id": c["call_id"], "output": hosts} for c in calls_]
+r_body["input"] = r_input + done.get("output", []) + [{"type": "function_call_output", "call_id": c["call_id"], "output": hosts_result(c["name"], c["arguments"])} for c in calls_]
 st, r2 = call("/v1/responses", r_body)
+# (a model may check once more with another call, e.g. Lightning reads the file after `wc -l`: up to 2 more rounds)
+rl, rounds = r2, 0
+while st == 200 and rounds < 2 and any(o["type"] == "function_call" for o in rl["output"]) and \
+        not any(o["type"] == "message" for o in rl["output"]):
+    more = [o for o in rl["output"] if o["type"] == "function_call"]
+    r_body["input"] = r_body["input"] + rl["output"] + [{"type": "function_call_output", "call_id": c["call_id"],
+                                                         "output": hosts_result(c["name"], c["arguments"])} for c in more]
+    st, rl = call("/v1/responses", r_body)
+    rounds += 1
 check("responses: the tool loop's next request is answered (mentions 3)",
-      st == 200 and r2["status"] == "completed" and any(o["type"] == "message" and "3" in o["content"][0]["text"] for o in r2["output"]),
-      json.dumps(r2)[:300])
+      st == 200 and rl["status"] == "completed" and any(o["type"] == "message" and "3" in o["content"][0]["text"] for o in rl["output"]),
+      json.dumps(rl)[:300])
 check("responses: its prompt is cached (input_tokens_details.cached_tokens >= the first prompt)",
       st == 200 and r2["usage"]["input_tokens_details"]["cached_tokens"] >= first_r, json.dumps(r2.get("usage")))
 st, p1 = call("/v1/responses", {"model": "m", "input": "Say just the word: apple.", "reasoning": {"effort": "none"}, "max_output_tokens": 20})

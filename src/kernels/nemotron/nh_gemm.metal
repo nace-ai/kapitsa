@@ -74,6 +74,9 @@ NI_INLINE void nh_dq16(const device uchar* q, const device uchar* s, uint K, uin
   }
 }
 
+#ifndef NI_UNROLL
+#define NI_UNROLL _Pragma("clang loop unroll(full)")
+#endif
 template <int FMT, int MODE, int BM>
 NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const device uchar* Ws, device void* Y,
                             constant NhGemmP& p, const device uint4* tiles, const device uint* ntiles,
@@ -95,8 +98,8 @@ NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const 
   }
   const uint sm = sg / 2, sn = sg % 2;
   simdgroup_float8x8 acc[FM][4];
-  for (int i = 0; i < FM; ++i)
-    for (int j = 0; j < 4; ++j) acc[i][j] = simdgroup_float8x8(0);
+  NI_UNROLL for (int i = 0; i < FM; ++i)
+    NI_UNROLL for (int j = 0; j < 4; ++j) acc[i][j] = simdgroup_float8x8(0);
   // X: BM rows x 32 halfs per K step; 128 threads take BM * 32 / 128 halfs each (8 bytes x BM / 16)
   constexpr int XH = BM * 32 / 128;               // halfs per thread: 4 (BM 16), 8 (32), 16 (64)
   const uint xr_ = tid / (32 / XH), xk = (tid % (32 / XH)) * XH;
@@ -125,24 +128,24 @@ NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const 
     }
     nh_dq16<FMT>(q, s, p.K, wn, k0 + tk, tab, ws + tr * kGLD + tk);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    for (int kk = 0; kk < kGBK / 8; ++kk) {
+    NI_UNROLL for (int kk = 0; kk < kGBK / 8; ++kk) {
       simdgroup_half8x8 a[FM], b[4];
-      for (int i = 0; i < FM; ++i) simdgroup_load(a[i], xs + (sm * (BM / 2) + i * 8) * kGLD + kk * 8, kGLD);
-      for (int j = 0; j < 4; ++j) simdgroup_load(b[j], ws + (sn * 32 + j * 8) * kGLD + kk * 8, kGLD, ulong2(0, 0), true);
-      for (int i = 0; i < FM; ++i)
-        for (int j = 0; j < 4; ++j) simdgroup_multiply_accumulate(acc[i][j], a[i], b[j], acc[i][j]);
+      NI_UNROLL for (int i = 0; i < FM; ++i) simdgroup_load(a[i], xs + (sm * (BM / 2) + i * 8) * kGLD + kk * 8, kGLD);
+      NI_UNROLL for (int j = 0; j < 4; ++j) simdgroup_load(b[j], ws + (sn * 32 + j * 8) * kGLD + kk * 8, kGLD, ulong2(0, 0), true);
+      NI_UNROLL for (int i = 0; i < FM; ++i)
+        NI_UNROLL for (int j = 0; j < 4; ++j) simdgroup_multiply_accumulate(acc[i][j], a[i], b[j], acc[i][j]);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
   // store: lane element (row rc.x, cols rc.y, rc.y + 1) of each 8x8 fragment
   const uint qq = lane / 4;
   const uint rr = (qq & 4) + (lane / 2) % 4, cc = (qq & 2) * 2 + (lane % 2) * 2;
-  for (int i = 0; i < FM; ++i) {
+  NI_UNROLL for (int i = 0; i < FM; ++i) {
     const uint m = m0 + sm * (BM / 2) + i * 8 + rr;
     if (m >= M) continue;
     const uint yrow = MODE == 2 ? sorted[m] : m;
-    for (int j = 0; j < 4; ++j)
-      for (int e = 0; e < 2; ++e) {
+    NI_UNROLL for (int j = 0; j < 4; ++j)
+      NI_UNROLL for (int e = 0; e < 2; ++e) {
         const uint n = n0 + sn * 32 + j * 8 + cc + e;
         if (n >= p.N) continue;
         float v = acc[i][j].thread_elements()[e] * gs;

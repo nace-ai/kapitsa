@@ -54,7 +54,9 @@ std::vector<std::string> vit_tensor_names(const std::string& dir) {
       std::string h(len, '\0');
       if (!f.read(h.data(), std::streamsize(len))) continue;
       try {
-        for (auto& [k, v] : nlohmann::json::parse(h).items()) names.push_back(k);
+        // a named header: a range-for over items() of parse()'s temporary reads it after its end (C++20)
+        const nlohmann::json hdr = nlohmann::json::parse(h);
+        for (auto& [k, v] : hdr.items()) names.push_back(k);
       } catch (...) {
       }
     }
@@ -275,6 +277,8 @@ void vit_qkv_split(Encoder& e, const Buffer& y, const Buffer& bias, const Buffer
   e.val(5, qp);
   e.dispatch((uint32_t(heads * HD) + 255) / 256, uint32_t(rows), 1, 256);
 }
+
+bool vit_attention_has(int HD) { return HD == 64 || HD == 72 || HD == 80; }
 
 void vit_attention(VitCmds& cs, const Buffer& Q, const Buffer& K, const Buffer& V, const Buffer& out, int N, int ld,
                    int heads, int HD) {

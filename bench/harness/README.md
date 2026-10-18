@@ -111,6 +111,12 @@ mkdir $M/qwen3.5-4b-4bit-mtplx && cp -c $M/qwen3.5-4b-4bit-mtp/*.json $M/qwen3.5
 hf download Youssofal/Qwen3.5-4B-MTPLX-Optimized-Speed mtp.safetensors mtplx_runtime.json --revision 550153beba237bb1f2f6ccba31ccedfe48ff78ec --local-dir $M/qwen3.5-4b-4bit-mtplx
 # ... and for oMLX's Lightning MTP a view of that folder whose index lists the head (no data copied)
 python3 tools/omlx_mtp_farm.py $M/qwen3.5-4b-4bit-mtplx $M/qwen3.5-4b-4bit-omlx-mtp
+# Qwen3.5-4B at bf16 (q35-4b-bf16-*): the files `kapitsa pull 4b:bf16` puts in ~/.cache/kapitsa/models/qwen3.5-4b-bf16
+# (mlx-community/Qwen3.5-4B-bf16 @491fdc7 plus the same MTP head); MTPLX reads clones of them plus its 4B runtime file,
+# and oMLX's DFlash drafter is z-lab's DFlash v1 drafter for the 4B
+ln -s ~/.cache/kapitsa/models/qwen3.5-4b-bf16 $M/qwen3.5-4b-bf16-mtp
+mkdir $M/qwen3.5-4b-bf16-mtplx && cp -c $M/qwen3.5-4b-bf16-mtp/* $M/qwen3.5-4b-bf16-mtplx/ && cp -c $M/qwen3.5-4b-4bit-mtplx/mtplx_runtime.json $M/qwen3.5-4b-bf16-mtplx/
+hf download z-lab/Qwen3.5-4B-DFlash config.json model.safetensors --revision 9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf --local-dir $M/drafters/Qwen3.5-4B-DFlash
 # GGUF (llama.cpp and Ollama): see "Ollama"
 ```
 
@@ -235,6 +241,28 @@ hf download ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF NVIDIA-Nemotron
 
 The configs' notes give each choice (mlx-vlm's MTP block size and llama.cpp's drafter depths come from smoke tests).
 The 4K / 16K reference prompt lengths (4183 / 16513) were counted with this model's tokenizer and chat template.
+
+### Nemotron 3.5 Lightning (`configs/lightning.json`) [mlx-vlm 0.7.8 and git main 73d366e, oMLX 0.7.1rc1, mlx-lm 0.32.2, llama.cpp 0.7.0]
+
+Kapitsa and mlx-vlm read NVIDIA's own NVFP4 checkpoint, the folder `kapitsa pull lightning` writes (the DSpark drafter
+in `dflash/`), linked as `$M/nemotron-3.5-lightning-nvfp4`; mlx-vlm 0.7.8 runs it plain and with the DSpark drafter,
+and its MTP drafter for Nemotron-H is newer than that release, so `lightning-mlxvlm-mtp` uses `MLX_VLM_MAIN_PYTHON`
+(git main 73d366e, as for Super-VL). oMLX and mlx-lm cannot read NVIDIA's checkpoint (ModelOpt `MIXED_PRECISION`:
+NVFP4 experts with FP8 Mamba projections) and run mlx-community's MLX 4-bit conversion; oMLX's MTP path runs a 4-bit
+conversion that keeps the MTP head. llama.cpp runs ggml-org's official Q4_0 GGUF with its MTP head, and NVIDIA's
+DSpark drafter as a GGUF:
+
+```bash
+hf download mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit --revision 55ac8c89261109b36c04371cd3f479a4594208c8 --local-dir $M/lightning-mlx-4bit
+hf download EigenLabs/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-MLX-4bit-mtp --revision 153c469494b3f16a0eaa752dae25cfc9452ce5c6 --local-dir $M/lightning-mlx-4bit-mtp
+hf download ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf \
+    mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf --revision 8a08a1c81dadcc75d35dbb96016cfd344b632e67 --local-dir $M/lightning-gguf
+hf download magnitudedev/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-GGUF --revision ed35fc990759330e325ab9e41bcf80737ab4dafc --local-dir $M/lightning-gguf/dspark
+```
+
+(`LIGHTNING_GGUF_DIR` names another GGUF folder.) The configs' notes give each choice; the speculative depths and
+block sizes come from smoke tests. The 4K / 16K reference prompt lengths (4184 / 16517) were counted with this
+model's tokenizer and chat template.
 
 ### MTPLX (`configs/mtplx.json`) [2.12.2]
 

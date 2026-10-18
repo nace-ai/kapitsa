@@ -1,0 +1,25 @@
+{
+  "repo": "magnitudedev/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-GGUF",
+  "revision": "ed35fc990759330e325ab9e41bcf80737ab4dafc",
+  "role": "llama.cpp: DSpark drafter",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "size": 1611
+    },
+    {
+      "path": "LICENSE",
+      "size": 2618
+    },
+    {
+      "path": "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark.gguf",
+      "size": 1357001312,
+      "sha256": "14fcc5296ca9be2fa2156275fd1811de966835e2894729907a03cf7f80634856"
+    },
+    {
+      "path": "README.md",
+      "size": 1326
+    }
+  ],
+  "total_bytes": 1357006867
+}

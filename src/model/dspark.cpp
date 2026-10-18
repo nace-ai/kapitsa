@@ -1,0 +1,556 @@
+#include "model/dspark.h"
+#include "util/bf16.h"
+#include "util/log.h"
+
+#include <nlohmann/json.hpp>
+
+#include <sys/stat.h>
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <fstream>
+
+namespace ni {
+
+namespace {
+
+Pipeline pipe(const std::string& n) { return NemotronH::pipeline(n); }
+
+// host mirrors of the kernel parameter structs (nh_lili.metal, nh_dspark.metal)
+struct QkP {
+  uint32_t H, HD, pos0, rope;
+  float eps, theta;
+};
+struct RingKvP {
+  uint32_t pos0, W, Hkv, HD;
+};
+struct AttnP {
+  uint32_t P, lo, W, Hq, Hkv, B;
+  float scale;
+};
+struct CandP {
+  uint32_t V, K, nchunks, row0, ld;
+};
+struct WalkP {
+  uint32_t S, K, R, P;
+  float gs;
+};
+struct DepthP {
+  uint32_t S, K;
+  float ratio;
+  uint32_t mode;
+};
+
+nlohmann::json read_json(const std::string& path) {
+  std::ifstream f(path);
+  if (!f) return {};
+  try {
+    return nlohmann::json::parse(f);
+  } catch (...) {
+    return {};
+  }
+}
+
+// as loaded: NVFP4 as stored, BF16 matrices quantized to Q8 (34 bytes per 32), BF16 vectors as fp32, the Markov
+// embedding as stored; of the embedding table only the mask token's row
+size_t loaded_bytes(const SafetensorsIndex& idx, int hidden) {
+  size_t w = 0;
+  for (const auto& [name, t] : idx.all()) {
+    if (name.find("embed_tokens.") != std::string::npos) w += size_t(hidden) * 4;
+    else if (name.find("markov_w1") != std::string::npos) w += t.len;
+    else if (t.dtype == DType::BF16 && t.shape.size() == 2 && t.shape[1] % 32 == 0) w += size_t(t.numel()) * 34 / 32;
+    else if (t.dtype == DType::BF16) w += size_t(t.numel()) * 4;
+    else w += t.len;
+  }
+  return w;
+}
+
+}  // namespace
+
+bool DSpark::is_dspark(const std::string& dir, int hidden) {
+  const nlohmann::json c = read_json(dir + "/config.json");
+  if (!c.is_object() || !c.contains("dflash_config") || !c["dflash_config"].is_object()) return false;
+  const bool markov = c.value("dspark_fixup_head_type", std::string()) == "markov" || c.value("markov_rank", 0) > 0;
+  struct stat st;
+  return markov && c.value("hidden_size", 0) == hidden && stat((dir + "/model.safetensors").c_str(), &st) == 0;
+}
+
+size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
+  const nlohmann::json c = read_json(dir + "/config.json");
+  const SafetensorsIndex idx(dir);
+  const nlohmann::json& d = c.contains("dflash_config") ? c["dflash_config"] : c;
+  const int64_t H = c.value("hidden_size", 2688), NL = c.value("num_hidden_layers", 6);
+  const int64_t W = d.value("swa_window_size", c.value("sliding_window", 1024)), hkv = c.value("num_key_value_heads", 2);
+  const int64_t hd = c.value("head_dim", 128), V = c.value("vocab_size", 131072), I = c.value("intermediate_size", 6144);
+  const size_t w = loaded_bytes(idx, int(H));
+  const size_t ring = size_t(NL) * 2 * size_t(hkv) * size_t(W) * size_t(hd) * 2 + 256;
+  if (per_slot) *per_slot = ring;
+  const int64_t nl = d.contains("target_layer_ids") ? int64_t(d["target_layer_ids"].size()) : 6;
+  // prompt capture (window rows of every tap) and its half copy, commit buffers (window rows), the pass (8 rows:
+  // activations, the slots' logits, candidates)
+  const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + size_t(W) * (size_t(H) * 6 + size_t(hkv) * size_t(hd) * 8 + 4) +
+                      size_t(kB) * (size_t(V) * 4 + size_t(I) * 8 + size_t(H) * 24 + size_t(nl) * size_t(H) * 4) +
+                      std::max<size_t>(64 * 12288, size_t(kB) * size_t(nl) * size_t(H)) * 2 + (size_t(4) << 20);
+  return w + bufs;
+}
+
+// ---- loading ----
+// NVFP4 (ModelOpt) as the target's kernels run it; BF16 matrices quantized to Q8 rows (drafts only propose)
+NhMat DSpark::mat(const std::string& name) {
+  const SafetensorsIndex& idx = *st_;
+  const SafetensorsIndex::Entry& t = idx.get(name);
+  const std::string base = name.size() > 7 && name.compare(name.size() - 7, 7, ".weight") == 0 ? name.substr(0, name.size() - 7) : name;
+  const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
+  Gpu& g = Gpu::get();
+  NhMat m;
+  uint32_t N = 0, K = 0;
+  if (!nh_describe(t, sc, m.fmt, N, K) || (m.fmt != NhFmt::FP4 && m.fmt != NhFmt::BF16))
+    fatal("%s: tensor %s has a format the drafter does not run", path_.c_str(), name.c_str());
+  m.N = N;
+  m.K = K;
+  std::vector<uint8_t> raw(t.len);
+  idx.read(t, 0, raw.data(), t.len);
+  if (m.fmt == NhFmt::FP4) {
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    nh_repack_rows(m.fmt, m.K, raw.data(), N, m.q.as<uint8_t>(), nullptr);
+    idx.read(*sc, 0, m.s.ptr(), m.s_row * N);
+    if (const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2")) idx.read(*s2, 0, &m.gs, 4);
+  } else {
+    if (m.K % 32) fatal("%s: %s cannot be quantized (K = %u)", path_.c_str(), name.c_str(), m.K);
+    m.fmt = NhFmt::Q8;
+    nh_row_bytes(m.fmt, m.K, m.q_row, m.s_row);
+    m.q = g.alloc(m.q_row * N, name.c_str(), false);
+    m.s = g.alloc(m.s_row * N, "scales", false);
+    std::vector<float> row(m.K);
+    const uint16_t* src = reinterpret_cast<const uint16_t*>(raw.data());
+    for (uint32_t r = 0; r < N; ++r) {
+      for (uint32_t i = 0; i < m.K; ++i) row[i] = bf16_to_f32(src[size_t(r) * m.K + i]);
+      nh_quant_q8(row.data(), m.K, m.q.as<uint8_t>() + size_t(r) * m.q_row, m.s.as<uint8_t>() + size_t(r) * m.s_row);
+    }
+  }
+  owned_.push_back(m.q);
+  owned_.push_back(m.s);
+  weight_bytes_ += m.q.size + m.s.size;
+  return m;
+}
+
+std::vector<float> DSpark::host(const std::string& name) {
+  const SafetensorsIndex::Entry& t = st_->get(name);
+  if (t.dtype != DType::BF16 && t.dtype != DType::F32) fatal("%s: %s is neither BF16 nor F32", path_.c_str(), name.c_str());
+  std::vector<uint8_t> raw(t.len);
+  st_->read(t, 0, raw.data(), t.len);
+  std::vector<float> v(size_t(t.numel()));
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (t.dtype == DType::F32) {
+      memcpy(&v[i], raw.data() + 4 * i, 4);
+    } else {
+      uint16_t h;
+      memcpy(&h, raw.data() + 2 * i, 2);
+      v[i] = bf16_to_f32(h);
+    }
+  }
+  return v;
+}
+
+Buffer DSpark::upload(const void* p, size_t bytes, const char* label) {
+  Buffer b = Gpu::get().alloc(std::max<size_t>(bytes, 16), label, false);
+  memcpy(b.ptr(), p, bytes);
+  owned_.push_back(b);
+  weight_bytes_ += b.size;
+  return b;
+}
+
+Buffer DSpark::vec(const std::string& name) {
+  const std::vector<float> v = host(name);
+  return upload(v.data(), v.size() * 4, name.c_str());
+}
+
+DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(dir) {
+  while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
+  const NhConfig& tc = tg_.config();
+  if (!is_dspark(path_, tc.hidden)) fatal("%s is not a DSpark drafter for this model", dir.c_str());
+  const nlohmann::json j = read_json(path_ + "/config.json");
+  const nlohmann::json& d = j["dflash_config"];
+  H_ = j.value("hidden_size", 0);
+  NL_ = j.value("num_hidden_layers", 0);
+  I_ = j.value("intermediate_size", 0);
+  hq_ = j.value("num_attention_heads", 0);
+  hkv_ = j.value("num_key_value_heads", 0);
+  window_ = d.value("swa_window_size", j.value("sliding_window", 1024));
+  eps_ = j.value("rms_norm_eps", 1e-6f);
+  theta_ = j.value("rope_theta", 10000.0f);
+  mask_id_ = d.value("mask_token_id", j.value("mask_token_id", -1));
+  rank_ = j.value("dspark_markov_rank", j.value("markov_rank", 0));
+  // the outputs of target_layer_ids are the inputs of the next layers; the last layer's output (an id of layers - 1)
+  // is captured after the trunk (NemotronH: capture slot `layers`)
+  if (d.contains("target_layer_ids"))
+    for (auto& v : d["target_layer_ids"]) taps_.push_back(v.get<int>() + 1);
+  // block_size counts the anchor when dspark_bonus_anchor is set (8 rows: the anchor + 7 proposals)
+  const int block = j.value("block_size", 8) + (j.value("dspark_bonus_anchor", false) ? 0 : 1);
+  const bool causal = d.value("causal", j.value("dflash_query_causal", false));
+  const std::string rope = j.contains("rope_parameters") && !j["rope_parameters"].is_null() ? "scaled" : "";
+  if (H_ != tc.hidden || NL_ <= 0 || block != kB || j.value("head_dim", 128) != 128 || hq_ <= 0 || hkv_ <= 0 ||
+      hq_ % hkv_ || mask_id_ < 0 || mask_id_ >= tg_.vocab() || taps_.empty() || !causal || rank_ <= 0 || rank_ % 16 ||
+      rank_ > 1024 || tg_.vocab() > 64 * 2048 /* the candidates kernel's 64 chunks */ || d.value("sample_from_anchor", j.value("sample_from_anchor", true)) || j.value("has_lm_head", false) ||
+      !rope.empty() || j.value("vocab_size", 0) != tg_.vocab() || window_ <= 0)
+    fatal("%s: unsupported DSpark drafter (hidden %d, block %d, Markov rank %d)", dir.c_str(), H_, block, rank_);
+  for (int l : taps_)
+    if (l < 1 || l > tc.layers) fatal("%s: target layer %d out of range", dir.c_str(), l - 1);
+  K_ = 16;
+  if (const char* v = getenv("NI_DSPARK_K")) K_ = std::clamp(atoi(v), 1, kMaxCand);
+  head_rows_ = tg_.vocab();
+  if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
+  if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
+  const double t0 = now_ms();
+  st_ = std::make_unique<SafetensorsIndex>(path_);
+  load();
+  st_.reset();
+  alloc_buffers();
+  logi("DSpark drafter: %d layers, window %d, %d KV heads, Markov rank %d over %d candidates, %.2f GB (NVFP4 as "
+       "stored, BF16 matrices as Q8, the target's embedding and LM head), loaded in %.1f s",
+       NL_, window_, hkv_, rank_, K_, weight_bytes_ / 1e9, (now_ms() - t0) / 1000);
+}
+
+DSpark::~DSpark() {
+  Gpu& g = Gpu::get();
+  for (auto& b : owned_) g.release(b);
+}
+
+void DSpark::load() {
+  fc_ = mat("fc.weight");
+  if (int(fc_.K) != int(taps_.size()) * H_ || int(fc_.N) != H_) fatal("%s: fc of an unexpected shape", path_.c_str());
+  enc_norm_ = vec("hidden_norm.weight");
+  out_norm_ = vec("norm.weight");
+  dl_.resize(size_t(NL_));
+  for (int i = 0; i < NL_; ++i) {
+    DLayer& L = dl_[size_t(i)];
+    const std::string b = "layers." + std::to_string(i) + ".";
+    L.attn_norm = vec(b + "input_layernorm.weight");
+    L.ffn_norm = vec(b + "post_attention_layernorm.weight");
+    L.qn = vec(b + "self_attn.q_norm.weight");
+    L.kn = vec(b + "self_attn.k_norm.weight");
+    if (st_->find(b + "self_attn.attention_sink_bias")) {
+      L.sinks = vec(b + "self_attn.attention_sink_bias");
+    } else {
+      const std::vector<float> none(size_t(hq_), -1e30f);  // no sinks: a logit that adds nothing
+      L.sinks = upload(none.data(), none.size() * 4, "dspark_no_sinks");
+    }
+    L.q = mat(b + "self_attn.q_proj.weight");
+    L.k = mat(b + "self_attn.k_proj.weight");
+    L.v = mat(b + "self_attn.v_proj.weight");
+    L.o = mat(b + "self_attn.o_proj.weight");
+    L.gate = mat(b + "mlp.gate_proj.weight");
+    L.up = mat(b + "mlp.up_proj.weight");
+    L.down = mat(b + "mlp.down_proj.weight");
+  }
+  // the embedding: the drafter's table equals the target's except the mask token's (trained) row
+  {
+    const SafetensorsIndex::Entry* t = st_->find("embed_tokens.weight");
+    std::vector<float> row(static_cast<size_t>(H_));
+    if (t) {
+      if (t->dtype != DType::BF16 || t->shape.size() != 2 || int(t->shape[1]) != H_)
+        fatal("%s: embed_tokens of an unexpected format", path_.c_str());
+      std::vector<uint16_t> raw(static_cast<size_t>(H_));
+      st_->read(*t, size_t(mask_id_) * size_t(H_) * 2, raw.data(), raw.size() * 2);
+      for (int i = 0; i < H_; ++i) row[size_t(i)] = bf16_to_f32(raw[size_t(i)]);
+    } else {
+      fatal("%s: no embed_tokens (the mask token's row)", path_.c_str());
+    }
+    mask_row_ = upload(row.data(), row.size() * 4, "dspark_mask_row");
+  }
+  // Markov head: W1 BF16 [V][rank] as stored, W2 NVFP4 [V][rank]
+  {
+    const SafetensorsIndex::Entry& t = st_->get("markov_head.markov_w1.weight");
+    if (t.dtype != DType::BF16 || t.shape.size() != 2 || int(t.shape[0]) != tg_.vocab() || int(t.shape[1]) != rank_)
+      fatal("%s: markov_w1 of an unexpected format", path_.c_str());
+    Buffer b = Gpu::get().alloc(t.len, "dspark_markov_w1", false);
+    st_->read(t, 0, b.ptr(), t.len);
+    owned_.push_back(b);
+    weight_bytes_ += b.size;
+    w1_ = b;
+  }
+  w2_ = mat("markov_head.markov_w2.weight");
+  if (w2_.fmt != NhFmt::FP4 || int(w2_.N) != tg_.vocab() || int(w2_.K) != rank_)
+    fatal("%s: markov_w2 of an unexpected format", path_.c_str());
+}
+
+void DSpark::alloc_buffers() {
+  Gpu& g = Gpu::get();
+  const size_t B = kB, H = size_t(H_), S = B - 1, K = size_t(kMaxCand);
+  const size_t nl = taps_.size(), W = size_t(window_), V = size_t(tg_.vocab());
+  auto al = [&](size_t bytes, const char* label) {
+    Buffer b = g.alloc(std::max<size_t>(bytes, 16), label);
+    owned_.push_back(b);
+    return b;
+  };
+  pfeat_ = al(W * nl * H * 4, "dspark_pfeat");
+  pfeat_h_ = al(W * nl * H * 2, "dspark_pfeat_h");
+  vfeat_ = al(B * nl * H * 4, "dspark_vfeat");
+  x_ = al(B * H * 4, "dspark_x");
+  n_ = al(B * H * 4, "dspark_n");
+  t2_ = al(B * H * 4, "dspark_t2");
+  q_ = al(B * size_t(hq_) * 128 * 4, "dspark_q");
+  k_ = al(B * size_t(hkv_) * 128 * 4, "dspark_k");
+  v_ = al(B * size_t(hkv_) * 128 * 4, "dspark_v");
+  ao_ = al(B * size_t(hq_) * 128 * 4, "dspark_ao");
+  gt_ = al(B * size_t(I_) * 4, "dspark_gate");
+  upb_ = al(B * size_t(I_) * 4, "dspark_up");
+  hfin_ = al(B * H * 4, "dspark_hfin");
+  logits_ = al(S * V * 4, "dspark_logits");
+  const size_t nch = (V + 2047) / 2048;
+  cv_ = al(S * nch * K * 4, "dspark_cv");
+  ci_ = al(S * nch * K * 4, "dspark_ci");
+  ms_ = al(S * nch * 8, "dspark_ms");
+  cand_ = al(S * K * 4, "dspark_cand");
+  clp_ = al(S * K * 4, "dspark_clp");
+  qlp_ = al(S * K * 4, "dspark_qlp");
+  picks_ = al(S * 4, "dspark_picks");
+  cg_ = al(W * H * 4, "dspark_cg");
+  cgh_ = al(W * H * 2, "dspark_cgh");
+  ck_ = al(W * size_t(hkv_) * 128 * 4, "dspark_ck");
+  cv2_ = al(W * size_t(hkv_) * 128 * 4, "dspark_cv2");
+  rscale_ = al(W * 4, "dspark_rscale");
+  xh_ = al(std::max<size_t>(64 * 12288, B * nl * H) * 2, "dspark_xh");
+  // capture hooks: the taps' inputs (the last one: the trunk's output, slot `layers`), in fc's column order
+  for (NhCapture* h : {&hook_pf_, &hook_v_}) {
+    h->slot.assign(size_t(tg_.config().layers) + 1, -1);
+    for (size_t j = 0; j < nl; ++j) h->slot[size_t(taps_[j])] = int(j);
+    h->ld = uint32_t(nl * H);
+  }
+  hook_pf_.feat = pfeat_;
+  hook_v_.feat = vfeat_;
+}
+
+std::unique_ptr<LiliSeq> DSpark::new_seq() {
+  Gpu& g = Gpu::get();
+  auto d = std::make_unique<LiliSeq>();
+  const size_t ring = size_t(NL_) * hkv_ * window_ * 128 * 2;
+  d->ring_k = g.alloc(ring, "dspark_ring_k");
+  d->ring_v = g.alloc(ring, "dspark_ring_v");
+  d->anchor = g.alloc(16, "dspark_unused");
+  return d;
+}
+
+void DSpark::encode_copy(Encoder& e, const LiliSeq& src, LiliSeq& dst) {
+  for (int i = 0; i < 2; ++i) {
+    const Buffer& a = i == 0 ? src.ring_k : src.ring_v;
+    const Buffer& b = i == 0 ? dst.ring_k : dst.ring_v;
+    const uint32_t n = uint32_t(std::min(a.size, b.size) / 16);
+    e.use(pipe("copy_u32"));
+    e.buf(0, a);
+    e.buf(1, b);
+    e.val(2, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  }
+  dst.ctx = src.ctx;
+  dst.hi = src.hi;
+}
+
+// ---- context ----
+void DSpark::begin_prefill(int n, int start) {
+  pf_n_ = n;
+  pf_lo_ = std::max(start, n - window_);
+  hook_pf_.pos_base = pf_lo_;
+  hook_pf_.rows = n - pf_lo_;
+  tg_.set_capture(&hook_pf_);
+}
+
+void DSpark::end_prefill() { tg_.set_capture(nullptr); }
+
+void DSpark::arm_verify(int P) {
+  hook_v_.pos_base = P;
+  hook_v_.rows = kB;
+  tg_.set_capture(&hook_v_);
+}
+
+void DSpark::disarm() { tg_.set_capture(nullptr); }
+
+void DSpark::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled) {
+  if (M == 1) {
+    tg_.enc_mv_rows(e, W, x, y, M, epi);
+    return;
+  }
+  const Buffer& xh = M * size_t(W.K) * 2 <= xh_.size ? xh_ : pfeat_h_;
+  if (scaled) {
+    // rows to half with a per-row scale (inputs that may leave half's range), the product scaled back
+    const uint32_t pk[1] = {W.K};
+    e.use(pipe("nh_rows_half_scaled"));
+    e.buf(0, x);
+    e.buf(1, xh);
+    e.buf(2, rscale_);
+    e.bytes(3, pk, sizeof pk);
+    e.dispatch(uint32_t(M), 1, 1, 1024);
+    tg_.enc_gemm(e, W, xh, y, M, epi);
+    const uint32_t pn[1] = {W.N};
+    e.use(pipe("nh_rows_scale"));
+    e.buf(0, y);
+    e.buf(1, rscale_);
+    e.bytes(2, pn, sizeof pn);
+    e.dispatch(uint32_t(M), (W.N + 255) / 256, 1, 256);
+  } else {
+    tg_.enc_rows_half(e, x, xh, M, int(W.K));
+    tg_.enc_gemm(e, W, xh, y, M, epi);
+  }
+}
+
+void DSpark::enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) {
+  if (R <= 0) return;
+  // g = RMSNorm(fc(features)); the raw residual-stream features go to half with a per-row scale
+  lin(e, fc_, feat, cg_, R, 0, true);
+  tg_.enc_norm(e, cg_, enc_norm_, cg_, R, H_, eps_);
+  if (R > 1) tg_.enc_rows_half(e, cg_, cgh_, R, H_);
+  const size_t ring_layer = size_t(hkv_) * window_ * 128 * 2;
+  for (int l = 0; l < NL_; ++l) {
+    const DLayer& L = dl_[size_t(l)];
+    if (R == 1) {
+      tg_.enc_mv(e, L.k, cg_, ck_, R, 0);
+      tg_.enc_mv(e, L.v, cg_, cv2_, R, 0);
+    } else {
+      tg_.enc_gemm(e, L.k, cgh_, ck_, R, 0);
+      tg_.enc_gemm(e, L.v, cgh_, cv2_, R, 0);
+    }
+    const QkP qp{uint32_t(hkv_), 128, uint32_t(pos0), 1, eps_, theta_};
+    e.use(pipe("nh_qk_norm_rope"));
+    e.buf(0, ck_);
+    e.buf(1, L.kn);
+    e.val(2, qp);
+    e.dispatch(uint32_t(R), uint32_t(hkv_), 1, 128);
+    const RingKvP rp{uint32_t(pos0), uint32_t(window_), uint32_t(hkv_), 128};
+    e.use(pipe("nh_lili_ring_write"));
+    e.buf(0, ck_);
+    e.buf(1, cv2_);
+    e.buf(2, d.ring_k, size_t(l) * ring_layer);
+    e.buf(3, d.ring_v, size_t(l) * ring_layer);
+    e.val(4, rp);
+    e.dispatch(uint32_t(R), uint32_t(2 * hkv_), 1, 128);
+  }
+}
+
+void DSpark::encode_prefill_commit(Encoder& e, LiliSeq& d) {
+  enc_commit_rows(e, d, pfeat_, pf_n_ - pf_lo_, pf_lo_);
+  d.ctx = pf_n_;
+  d.hi = std::max(d.hi, d.ctx);
+}
+
+void DSpark::encode_commit(Encoder& e, LiliSeq& d, int m) {
+  enc_commit_rows(e, d, vfeat_, m, d.ctx);
+  d.ctx += m;
+  d.hi = std::max(d.hi, d.ctx);
+}
+
+// ---- drafting pass ----
+void DSpark::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
+  if (d.ctx != P) fatal("DSpark: drafting at %d with context %d", P, d.ctx);
+  const uint32_t H = uint32_t(H_), B = kB, S = B - 1, K = uint32_t(K_);
+  const int R = int(B);
+  // the block: the anchor's embedding (the target's table), the mask token's row below it
+  tg_.enc_embed(e, s.tok, P, 1, x_);
+  e.use(pipe("nh_dsp_mask_rows"));
+  e.buf(0, x_);
+  e.buf(1, mask_row_);
+  e.val(2, H);
+  e.dispatch(S, (H + 255) / 256, 1, 256);
+  const size_t ring_layer = size_t(hkv_) * window_ * 128 * 2;
+  for (int l = 0; l < NL_; ++l) {
+    const DLayer& L = dl_[size_t(l)];
+    tg_.enc_norm(e, x_, L.attn_norm, n_, R, int(H), eps_);
+    tg_.enc_rows_half(e, n_, xh_, R, int(H));  // shared by q, k, v
+    tg_.enc_gemm(e, L.q, xh_, q_, R, 0);
+    tg_.enc_gemm(e, L.k, xh_, k_, R, 0);
+    tg_.enc_gemm(e, L.v, xh_, v_, R, 0);
+    const QkP qp{uint32_t(hq_), 128, uint32_t(P), 1, eps_, theta_};
+    e.use(pipe("nh_qk_norm_rope"));
+    e.buf(0, q_);
+    e.buf(1, L.qn);
+    e.val(2, qp);
+    e.dispatch(B, uint32_t(hq_), 1, 128);
+    const QkP kp{uint32_t(hkv_), 128, uint32_t(P), 1, eps_, theta_};
+    e.use(pipe("nh_qk_norm_rope"));
+    e.buf(0, k_);
+    e.buf(1, L.kn);
+    e.val(2, kp);
+    e.dispatch(B, uint32_t(hkv_), 1, 128);
+    const AttnP ap{uint32_t(P), uint32_t(std::max({0, P - window_, d.hi - window_})), uint32_t(window_), uint32_t(hq_),
+                   uint32_t(hkv_), B, 1.0f / std::sqrt(128.0f)};
+    e.use(pipe("nh_dsp_attn"));
+    e.buf(0, q_);
+    e.buf(1, k_);
+    e.buf(2, v_);
+    e.buf(3, d.ring_k, size_t(l) * ring_layer);
+    e.buf(4, d.ring_v, size_t(l) * ring_layer);
+    e.buf(5, L.sinks);
+    e.buf(6, ao_);
+    e.val(7, ap);
+    e.dispatch(uint32_t(hkv_), B, 1, uint32_t(32 * (hq_ / hkv_)));
+    lin(e, L.o, ao_, x_, R, 1);  // the residual add in the GEMM's epilogue
+    tg_.enc_norm(e, x_, L.ffn_norm, n_, R, int(H), eps_);
+    tg_.enc_rows_half(e, n_, xh_, R, int(H));  // shared by gate, up
+    tg_.enc_gemm(e, L.gate, xh_, gt_, R, 0);
+    tg_.enc_gemm(e, L.up, xh_, upb_, R, 0);
+    const uint32_t n = B * uint32_t(I_);
+    e.use(pipe("nh_swiglu"));
+    e.buf(0, gt_);
+    e.buf(1, upb_);
+    e.buf(2, gt_);
+    e.val(3, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+    lin(e, L.down, gt_, t2_, R, 0, true);  // (silu(gate) * up may leave half's range)
+    const uint32_t nx = B * H;
+    e.use(pipe("nh_add"));
+    e.buf(0, x_);
+    e.buf(1, t2_);
+    e.buf(2, x_);
+    e.val(3, nx);
+    e.dispatch((nx + 255) / 256, 1, 1, 256);
+  }
+  tg_.enc_norm(e, x_, out_norm_, hfin_, R, int(H), eps_);
+  // slot logits (rows 1..7) with the target's LM head (rows [0, head_rows_): NI_DSPARK_HEAD), their top-K candidates
+  NhMat head = tg_.lm_head();
+  head.N = uint32_t(head_rows_);
+  const uint32_t V = head.N;
+  lin(e, head, hfin_.view(size_t(H) * 4, size_t(S) * H * 4), logits_, int(S), 0);
+  const uint32_t nch = (V + 2047) / 2048;
+  const CandP cp{V, K, nch, 0, V};
+  e.use(pipe("nh_cand1"));
+  e.buf(0, logits_);
+  e.buf(1, cv_);
+  e.buf(2, ci_);
+  e.buf(3, ms_);
+  e.val(4, cp);
+  e.dispatch(nch, S, 1, 256);
+  e.use(pipe("nh_cand2"));
+  e.buf(0, cv_);
+  e.buf(1, ci_);
+  e.buf(2, ms_);
+  e.buf(3, cand_);
+  e.buf(4, clp_);
+  e.val(5, cp);
+  e.dispatch(1, 1, 1, S);
+  // the Markov head's walk from the anchor: tokens[P + 1 .. P + 7]
+  const WalkP wp{S, K, uint32_t(rank_), uint32_t(P), w2_.gs};
+  e.use(pipe("nh_dsp_walk"));
+  e.buf(0, cand_);
+  e.buf(1, clp_);
+  e.buf(2, w1_);
+  e.buf(3, w2_.q);
+  e.buf(4, w2_.s);
+  e.buf(5, s.tok);
+  e.buf(6, picks_);
+  e.buf(7, qlp_);
+  e.val(8, wp);
+  e.dispatch(1, 1, 1, 32 * K);
+  // the coming verify's depth from the corrected probabilities of the picks (NI_DSPARK_DYN; 0 verifies every draft)
+  const DepthP dp{S, K, dyn_ratio_, 0};
+  e.use(pipe("nh_lili_depth"));
+  e.buf(0, qlp_);
+  e.buf(1, picks_);
+  e.buf(2, tg_.live_rows());
+  e.val(3, dp);
+  e.buf(4, qlp_);
+  e.dispatch(1, 1, 1, 1);
+}
+
+}  // namespace ni

@@ -438,7 +438,7 @@ void plan(const hub::ModelRef& r) {
                                                         (r.variant->name == r.model->default_variant ? "  " + std::string(kDot) + "  the default" : ""))});
   if (r.variant)
     for (const auto& c : r.variant->companions)
-      rows.push_back({c.kind == "dflash2" || c.kind == "lilicorr" ? "drafter" : "MTP head",
+      rows.push_back({c.kind == "dflash2" || c.kind == "lilicorr" || c.kind == "dspark" ? "drafter" : "MTP head",
                       c.repo + dim(" @ " + short_rev(c.revision) + (c.kind == "mtp-sidecar" ? ", its mtp.* tensors" : ""))});
   rows.push_back({"API name", r.id});
   for (const auto& [k, v] : rows) o.push_back("    " + left(dim(k), 11) + clip(v, W - 15));
@@ -518,6 +518,7 @@ std::string decoding(const std::string& ready) {
   if (const size_t p = mode.find(", images on"); p != std::string::npos) mode.resize(p);
   if (mode.rfind("DFlash2", 0) == 0) return "DFlash2 drafter " + dim("(speculative decoding)");
   if (mode.rfind("LiLiCorr", 0) == 0) return "LiLiCorr drafter " + dim("(speculative decoding)");
+  if (mode.rfind("DSpark", 0) == 0) return "DSpark drafter " + dim("(speculative decoding)");
   if (mode.rfind("MTP", 0) == 0) return "MTP head " + dim("(speculative decoding, " + after(mode, "depth ") + " ahead)");
   if (mode.rfind("plain", 0) == 0) return "plain " + dim("(no speculative decoding)");
   return mode;

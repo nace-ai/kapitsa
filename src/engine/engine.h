@@ -47,8 +47,8 @@ struct EngineOptions {
   std::string dflash;
   // Images (models with a vision tower): at most this many pixels per image (fewer tokens, faster; resized as the
   // model's processor resizes); vision::kModelDefaultPixels = the encoder's default (1.2 million; Nemotron 3.5 Bolt
-  // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.6 / 3.8: 16.7 million, Bolt and Super-VL: 13312
-  // patches of 16x16).
+  // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.5-4B, Qwen3.6, Qwen3.8: 16.7 million, Bolt and
+  // Super-VL: 13312 patches of 16x16).
   long image_max_pixels = vision::kModelDefaultPixels;
 };
 
@@ -318,7 +318,7 @@ class Engine {
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
-  std::unique_ptr<LiliCorr> lili_;  // Nemotron-H: the LiLiCorr block drafter
+  std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   std::unique_ptr<vision::Vision> vision_;  // the image encoder, for models that take images
   std::vector<int> img_pre_, img_post_;     // the tokens its processor puts around an image's rows (Nemotron: <img>)
   // `ids` with each image placeholder expanded to its image's rows (vision::expand with the encoder's marks)

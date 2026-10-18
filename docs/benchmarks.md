@@ -1,8 +1,9 @@
 # Benchmarks
 
 How fast Kapitsa runs Qwen3.6-35B-A3B and Qwen3.8-27B on a MacBook Pro (Nemotron 3.5 Bolt and the small Qwen3.5-4B
-have their own sections: [Bolt](#nemotron-35-bolt-74b-a9b-2026-10-18), [4B](#qwen35-4b-2026-10-18), and so has
-Nemotron 3.5 Super-VL on the [M5 Max](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18)), compared with the
+have their own sections: [Bolt](#nemotron-35-bolt-74b-a9b-2026-10-18), [4B](#qwen35-4b-2026-10-18), and so have
+Nemotron 3.5 Super-VL and Lightning on the M5 Max: [Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
+[Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the
 engines people run these models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a
 day later: [its own section](#mlx-serve-2026-10-18)). Each engine ran at its latest release with its own best
 settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
@@ -327,6 +328,69 @@ ones measured outside the server (672-684 / 514-516 tok/s at 4K / 16K). At T = 0
 [confirmations](../bench/results/2026-10-18-m5-max/confirmations/): Kapitsa 78.7 / 80.3 tok/s decode there, the others
 within 3% of the rows above except llama.cpp + LiLiCorr (28.6 tok/s sampled).
 
+## Nemotron 3.5 Lightning 30B-A3B (M5 Max, 128 GB, 2026-10-18)
+
+NVIDIA's NVFP4 checkpoint (`nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4`: NVFP4 experts, shared expert and LM
+head, FP8 Mamba projections, BF16 attention; 18.2 GB of weights) with its DSpark draft model, on the M5 Max (40-core
+GPU, 128 GB, macOS 26.4), against every engine that runs the model on a Mac:
+
+- Kapitsa and mlx-vlm 0.7.8 read NVIDIA's checkpoint itself, both with the same DSpark drafter. mlx-vlm's MTP drafter
+  for Nemotron-H is newer than that release, so its MTP row ran git main 73d366e, an unreleased build.
+- oMLX 0.7.1rc1 and mlx-lm 0.32.2 cannot read it (ModelOpt `MIXED_PRECISION`: NVFP4 experts with FP8 Mamba
+  projections; mlx-lm refuses it, oMLX fails to load it). They ran mlx-community's MLX 4-bit conversion
+  (`mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit`, affine 4-bit from NVIDIA's BF16 weights, 17.8 GB).
+  oMLX's MTP path ran EigenLabs' 4-bit conversion, which keeps the MTP head (mlx-community's drops it); neither oMLX
+  nor mlx-lm has a drafter path for Nemotron-H.
+- llama.cpp 0.7.0 (b11669, the latest release) ran ggml-org's official Q4_0 GGUF (18.9 GB) with the model's MTP head
+  (ggml-org's `mtp-...-Q4_0.gguf`) at each depth, and NVIDIA's DSpark drafter as a community GGUF (NVFP4; ggml-org
+  publishes none).
+
+One session on 2026-10-18, every configuration run twice, with
+[configs/lightning.json](../bench/harness/configs/lightning.json); the table has each configuration's second valid run.
+Result files, weights and revisions: [bench/results/2026-10-18-m5-max-lightning](../bench/results/2026-10-18-m5-max-lightning/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (DSpark drafter) | **238.7** (231.1–243.4) | **218.1** (211.2–258.2)<sup>1</sup> | 1,899 | 1,861 | 0.07 | 0.09 | **18.6** + 0.7 mapped<sup>2</sup> | pass |
+| Kapitsa (no drafter) | 160.1 (160.1–160.3) | 160.3 (160.1–160.7) | 1,850 | 1,802 | 0.08 | 0.09 | 17.9 + 0.7 mapped | pass |
+| oMLX + MTP (depth 2), MLX 4-bit | 189.9 (183.5–196.2) | 199.3 (188.7–202.4) | 3,521 | 3,613 | 0.12 | 0.15 | 21.6 | pass |
+| oMLX, MLX 4-bit (no speculation) | 164.7 (161.8–166.2) | 166.6 (164.8–167.6) | **3,606** | **3,756** | 0.11 | 0.14 | 20.9 | pass |
+| llama.cpp + MTP (n-max 3) | 159.1 (147.1–176.1) | 162.0 (150.6–170.0) | 2,835 | 2,812 | 0.08 | 0.09 | 24.2 | pass |
+| llama.cpp + MTP (n-max 2) | 156.3 (148.2–167.0) | 163.0 (151.8–168.4) | 2,838 | 2,841 | 0.08 | **0.08** | 24.1 | pass |
+| llama.cpp + MTP (n-max 1) | 142.4 (140.5–148.5) | 142.3 (140.7–146.3) | 2,831 | 2,840 | 0.07 | 0.08 | 24.1 | pass |
+| llama.cpp (no speculation) | 116.8 (115.5–117.0) | 113.2 (112.8–114.8) | 2,662 | 2,823 | **0.07** | 0.08 | 22.4 | pass |
+| llama.cpp + DSpark drafter (n-max 3) | 85.1 (84.9–86.5) | 88.4 (80.0–92.3) | 2,572 | 2,650 | 0.08 | 0.09 | 25.3 | pass |
+| mlx-lm, MLX 4-bit | 139.3 (135.5–140.7) | 145.6 (145.0–146.9) | 3,365 | 3,422 | 0.08 | 0.11 | 21.1 | pass |
+| mlx-vlm + DSpark drafter (block 6) | 137.4 (131.3–144.4) | 146.3 (120.6–149.5) | 2,400 | 2,722 | 0.28 | 0.31 | 29.3 | pass |
+| mlx-vlm + MTP (git main, block 4) | 121.5 (107.1–132.2) | 122.5 (116.1–132.6) | 2,524 | 2,842 | 0.28 | 0.32 | 46.5 | pass |
+| mlx-vlm (no speculation) | 108.9 (108.5–109.0) | 111.0 (109.4–111.4) | 2,557 | 2,939 | 0.29 | 0.31 | 27.7 | pass |
+
+1. Greedy decoding with the drafter varies from answer to answer (near-ties in the verified tokens send the five
+   greedy answers down slightly different paths with different acceptance): Kapitsa's first run gave a greedy median
+   of 241.7 (236.2–254.8) and a sampled one of 229.9.
+2. Kapitsa maps the BF16 embedding from its file (0.7 GB of clean file pages outside the process footprint). The
+   others' memory includes their whole weights: mlx-vlm turns the FP8 layers into BF16 at load.
+
+Kapitsa writes fastest, sampled (1.26× oMLX + MTP, the next fastest) and greedy (1.09×), and uses the least memory. It
+reads prompts slowest: every other engine prefills at 2,400–3,760 tok/s against Kapitsa's 1,860–1,900 (oMLX on its
+4-bit weights fastest, 1.9–2.0× Kapitsa; Kapitsa runs Lightning's prefill on the GPU only), and its follow-ups
+(0.07 / 0.09 s) tie llama.cpp's rather than lead. Without a drafter, Kapitsa's 160 tok/s is just behind oMLX's plain
+165 on its smaller 4-bit weights (Kapitsa reads Lightning's FP8 Mamba and BF16 attention layers as stored).
+Speculative settings came from smoke tests: mlx-vlm's DSpark block 6 beat 4 and 8 (NVIDIA's DFlash drafter was slower
+still), its MTP block 4 beat 2, 3 and 5, oMLX's fixed MTP depth 2 beat its default depth 1, depths 3 and 4 and its
+adaptive mode, and llama.cpp's DSpark GGUF was faster at n-max 3 than 7, and slower than no drafter at either (its
+NVFP4 drafter GGUF).
+
+Conditions: desktop apps stayed open. One `com.apple.WebKit` process used 5–7% of the GPU throughout, so every run is
+flagged CONTENTION in its prefill phases except oMLX + MTP's and mlx-vlm's plain one (foreign load 3–6% mean, up to
+16%; Kapitsa's, in its longer prefill phases, 5.7–6.4% mean). llama.cpp + MTP n-max 1's second run is INVALID (one
+sampled answer closed a reasoning block it never opened, `</think>`), so it ran a third time, the run in the table. At
+T = 0.6 two of llama.cpp + MTP n-max 2's answers and one greedy answer of plain llama.cpp repeat themselves (flagged,
+kept). The first run of each configuration is in
+[confirmations](../bench/results/2026-10-18-m5-max-lightning/confirmations/): Kapitsa 229.9 / 241.7 tok/s decode
+there (1.18× / 1.18× oMLX + MTP's 195.4 / 204.5 in the same pass), the others' sampled decode within 5% of the rows
+above except llama.cpp + MTP n-max 1 (128.5 tok/s) and llama.cpp + DSpark (89.8).
+
 ## mlx-serve (2026-10-18)
 
 [mlx-serve](https://github.com/ddalcu/mlx-serve) 26.10.2 (its latest release, MLX 0.32.3), a Zig server over MLX with
@@ -518,6 +582,51 @@ answers each; [tuning](../bench/results/2026-10-18-4b/README.md#tuning)). oMLX: 
 DFlash with z-lab's Qwen3.5-4B drafter (DFlash v1, quantized to 4 bits at load) at most 89.9 / 98.0 (block 5, verify
 `adaptive`; block 9 and verify `dflash` were slower), no speculation 84.9 / 81.8. MTPLX: depth 1 104.5 / 108.6, depth
 2 103.8 / 109.2, and depth 3, its runtime file's default, 87.7 / 102.6.
+
+### Full precision (bf16), a partial bracket
+
+The same protocol on the model's bf16 weights,
+[mlx-community/Qwen3.5-4B-bf16](https://huggingface.co/mlx-community/Qwen3.5-4B-bf16) @491fdc7 (8.5 GB: 7.8 GB of
+language model and the same 0.6 GB vision tower), the files `kapitsa pull 4b:bf16` downloads, with the same Qwen MTP
+head as the 4-bit model. Four engine setups ran on 2026-10-18 between 15:30 and 15:55, one at a time under the GPU
+lock, each started after other apps had used less than 3% of the GPU for 60 s; the MLX engines read Kapitsa's files
+through APFS clones. **The bracket is incomplete:** the disk then ran short, so there is no closing Kapitsa run, and
+mlx-lm, LM Studio, llama.cpp and Ollama were not run at bf16 (LM Studio needs 10 GiB of free disk for its follow-up
+checkpoints, and llama.cpp and Ollama need Ollama's 9.2 GB BF16 GGUF). Result files:
+[bench/results/2026-10-18-4b/bf16](../bench/results/2026-10-18-4b/bf16/).
+
+**Kapitsa was not the fastest writer at bf16.** oMLX with z-lab's DFlash drafter wrote 59.4 tok/s at T = 0.6 and
+MTPLX at depth 3 wrote 54.2, against Kapitsa's 44.3: 1.34× and 1.23× faster (greedy: 61.5 and 58.8 against 45.1).
+Our best explanation: at bf16 a forward pass reads 7.8 GB of weights, so the rate follows how many tokens a pass
+yields. oMLX's DFlash drafts up to four tokens a pass (2.5 on average) and got 2.8 tokens out of each pass, MTPLX
+drafts three, and Kapitsa's MTP head one, so a Kapitsa pass yields at most two (depth 1 is its default for this model,
+and it has no drafter for the 4B). At 4-bit, where a pass reads about a quarter of the bytes, Kapitsa's depth 1 was
+the fastest setup measured. Kapitsa still read long prompts 1.7–1.9× faster than the next fastest engine here,
+answered follow-ups fastest and used the least memory.
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| oMLX + DFlash (z-lab drafter, block 5) | **59.4** (54.3–63.0) | **61.5** (59.2–69.1) | 859 | 823 | 0.30 | 0.42 | 12.6 | pass |
+| MTPLX (sustained profile, depth 3) | 54.2 (49.7–55.7) | 58.8 (57.4–61.6) | 820 | 751 | 0.11 | 0.15 | 20.3<sup>2</sup> | pass |
+| **Kapitsa** (MTP head) | 44.3 (42.6–47.3) | 45.1 (44.0–45.6) | **1,737** | **1,401** | **0.06** | **0.07** | **9.7** | pass |
+| oMLX (no speculation) | 27.6 (27.0–27.8) | 26.3 (25.9–27.1)<sup>1</sup> | 907 | 812 | 0.27 | 0.41 | 11.8 | pass |
+
+No run of this bracket was flagged for contention. Kapitsa's run (15:30) came first; there is no closing run to check
+it against. One greedy run of Kapitsa, of oMLX + DFlash and of MTPLX looped (distinct-4-gram under 0.5; flagged, not
+invalid).
+
+1. Three of oMLX's five greedy runs without speculation looped, and macOS swapped 12,062 pages (about 190 MB) during
+   that phase; its sampled median, 27.6 tok/s, is the cleaner figure. Reading 7.8 GB a pass at the M4 Pro's 273 GB/s
+   bounds decoding without speculation at about 33 tok/s.
+2. MTPLX's peak includes its session cache, which keeps earlier conversations for follow-up turns.
+
+**Settings.** As at 4-bit, except where short runs before the bracket measured faster (three sampled and three greedy
+answers each; [tuning](../bench/results/2026-10-18-4b/bf16/tuning/)). oMLX: DFlash with z-lab's Qwen3.5-4B drafter
+([z-lab/Qwen3.5-4B-DFlash](https://huggingface.co/z-lab/Qwen3.5-4B-DFlash) @9a1996c, DFlash v1, quantized to 4 bits
+at load), block 5, verify `adaptive`, 59.1 / 63.2 tok/s, against block 9 57.0 / 56.8 and Lightning MTP with the bf16
+head 49.5 / 48.2 (at 4-bit Lightning MTP had been the faster). MTPLX: depth 3, 54.5 / 59.0, against depth 2 52.4 /
+54.9 and depth 1 43.7 / 41.0, with Qwen's bf16 head (Kapitsa's file) and the runtime file of MTPLX's 4B release.
+Kapitsa: its defaults, the bf16 weights with the MTP head (`kapitsa pull 4b:bf16`).
 
 ## Your Mac: `kapitsa bench`
 

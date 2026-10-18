@@ -81,5 +81,7 @@ void vit_qkv_split(Encoder& e, const Buffer& y, const Buffer& bias, const Buffer
 // command buffers of bounded work. The kernel: vit_attn_d<HD>_s4 (NI_VIT_ATTN names another of that head dimension).
 void vit_attention(VitCmds& cs, const Buffer& Q, const Buffer& K, const Buffer& V, const Buffer& out, int N, int ld,
                    int heads, int HD);
+// Whether vit_attention has kernels for head dimension HD (vit.metal instantiates 64, 72 and 80)
+bool vit_attention_has(int HD);
 
 }  // namespace ni::vision

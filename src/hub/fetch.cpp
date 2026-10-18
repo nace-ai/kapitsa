@@ -1272,7 +1272,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
         cbytes += f->size;
       }
       mcomp.push_back(ojson{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"commit", L.commit}, {"files", cf}});
-      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : c.kind == "lilicorr" ? "LiLiCorr drafter " : "MTP head ") +
+      extras.push_back((c.kind == "dflash2" ? "DFlash2 drafter " : c.kind == "lilicorr" ? "LiLiCorr drafter " : c.kind == "dspark" ? "DSpark drafter " : "MTP head ") +
                        fmt_bytes(cbytes));
     }
   }
@@ -1679,7 +1679,12 @@ std::vector<Installed> installed() {
     uint64_t sz;
     if (file_size(m.dir + "/mtp.safetensors", sz)) m.extras.push_back("MTP head");
     if (file_size(m.dir + "/dflash2/model.safetensors", sz)) m.extras.push_back("DFlash2 drafter");
-    if (file_size(m.dir + "/dflash/model.safetensors", sz)) m.extras.push_back("LiLiCorr drafter");
+    if (file_size(m.dir + "/dflash/model.safetensors", sz)) {
+      // Nemotron 3.5's block drafters: DSpark (Lightning) or LiLiCorr (Bolt, Super-VL)
+      std::ifstream f(m.dir + "/dflash/config.json");
+      const std::string c((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+      m.extras.push_back(c.find("\"dspark_fixup_head_type\"") != std::string::npos ? "DSpark drafter" : "LiLiCorr drafter");
+    }
     out.push_back(m);
   }
   return out;

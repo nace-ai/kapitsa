@@ -23,8 +23,8 @@ state for later turns; requests sent at once take turns on the GPU.
    recurrent state and checkpoints. Only the uncached suffix needs prefill when a compatible checkpoint exists.
 3. **Prefill the target model.** The selected backend processes prompt chunks, using its own attention, recurrent
    and feed-forward kernels. Models with a vision tower can insert image embeddings into those prompt rows.
-4. **Draft and verify.** Qwen uses DFlash2 when available, otherwise its MTP head where supported. Bolt uses
-   LiLiCorr. The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
+4. **Draft and verify.** Qwen uses DFlash2 when available, otherwise its MTP head where supported. Nemotron uses a
+   block drafter: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
    not become committed recurrent history. Plain generation is available with `--spec 0`.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
@@ -44,7 +44,7 @@ and the tokenizer run before a request takes its turn.
 | Backend | `Qwen35` | `NemotronH` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 |
 | Other layers | Attention; dense FFN or MoE | Attention; LatentMoE |
-| Default speculation | DFlash2 on 35B/27B; MTP on 4B | LiLiCorr block drafter |
+| Default speculation | DFlash2 on 35B/27B; MTP on 4B | LiLiCorr block drafter (DSpark on Lightning) |
 | Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint |
 | Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type |
 | Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work |
@@ -80,12 +80,12 @@ The model catalog pins checkpoint and companion revisions. Downloads resume and 
 loader supplies weights to the backends; Bolt repacks codes and scales into its GPU layout at load time. Supported
 Qwen GGUF files are converted once into a reusable model folder.
 
-Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints or `RadioViT` for Nemotron
-3.5 Bolt's and Super-VL's C-RADIO ViT-H/16 tower and projector (Super-VL layer-normalizes the tower's output first).
-The tower loads on the first image request; CPU image preparation and cached GPU embeddings feed the model's prefill.
-Qwen uses M-RoPE positions; Bolt and Super-VL wrap image rows in their image tokens and use attention without
-positional embeddings. The current 4B tower shape is unsupported. The text
-benchmarks do not measure images.
+Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints (the 4B's tower: 24 blocks, head
+dimension 64; the 35B's and 27B's: 27 blocks, head dimension 72) or `RadioViT` for Nemotron 3.5 Bolt's and Super-VL's
+C-RADIO ViT-H/16 tower and projector (Super-VL layer-normalizes the tower's output first). The tower loads on the
+first image request; CPU image preparation and cached GPU embeddings feed the model's prefill. Qwen uses M-RoPE
+positions; Bolt and Super-VL wrap image rows in their image tokens and use attention without positional embeddings.
+The text benchmarks do not measure images.
 
 Memory planning happens before weights load. Per-slot KV caches grow within a budget derived from Metal's recommended
 working set or `--mem-budget`. Under pressure, the engine can release cached image data, idle slots' KV caches and
@@ -101,7 +101,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h) |
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal) |
-| Nemotron backend and drafter | [`nemotron_h.h`](../src/model/nemotron_h.h), [`lilicorr.h`](../src/model/lilicorr.h) |
+| Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |

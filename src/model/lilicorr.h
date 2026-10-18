@@ -7,6 +7,7 @@
 // the target (NemotronH::encode_verify + encode_accept).
 #pragma once
 #include "model/nemotron_h.h"
+#include "model/nh_drafter.h"
 
 #include <memory>
 #include <string>
@@ -32,7 +33,7 @@ struct LiliSeq {
   int hi = 0;             // one past the highest position written since the reset: the ring holds [hi - window, hi)
 };
 
-class LiliCorr {
+class LiliCorr : public NhDrafter {
  public:
   static constexpr int kB = 8;         // block: anchor + 7 proposals
   static constexpr int kAnchors = 64;  // anchor slots: a restored checkpoint up to 63 positions back still has its own
@@ -48,28 +49,30 @@ class LiliCorr {
   // memory: weights as loaded and buffers; *per_slot: one sequence's ring (a slot holds three: live + 2 snapshots)
   static size_t plan_bytes(const std::string& dir, size_t* per_slot);
 
-  std::unique_ptr<LiliSeq> new_seq();
+  const char* name() const override { return "LiLiCorr"; }
+  int window() const override { return cfg_.window; }
+  std::unique_ptr<LiliSeq> new_seq() override;
   static void reset(LiliSeq& d) { d.ctx = d.hi = 0; }
   // prefix reuse: context back to pos (ring entries of positions >= pos are dead; the draft reads
   // [max(pos - window, hi - window), pos))
   static void rewind(LiliSeq& d, int pos) { d.ctx = pos; }
-  void encode_copy(Encoder& e, const LiliSeq& src, LiliSeq& dst);
+  void encode_copy(Encoder& e, const LiliSeq& src, LiliSeq& dst) override;
 
   // ---- context ----
   // Prompt rows [start, n): begin_prefill arms the target capture of the rows the window still sees,
   // [max(start, n - window), n); the target's prefill passes capture them; encode_prefill_commit projects them
   // into d (d.ctx = n); end_prefill disarms.
-  void begin_prefill(int n, int start);
-  void encode_prefill_commit(Encoder& e, LiliSeq& d);
-  void end_prefill();
+  void begin_prefill(int n, int start) override;
+  void encode_prefill_commit(Encoder& e, LiliSeq& d) override;
+  void end_prefill() override;
   // Decode: arm_verify(P) before the target's verify at P (captures its rows); encode_commit(e, d, m) commits verify
   // rows 0..m-1 at positions d.ctx .. d.ctx + m - 1.
-  void arm_verify(int P);
-  void disarm();
-  void encode_commit(Encoder& e, LiliSeq& d, int m);
+  void arm_verify(int P) override;
+  void disarm() override;
+  void encode_commit(Encoder& e, LiliSeq& d, int m) override;
 
   // ---- drafting: block [tokens[P], mask x 7] at positions P..P+7 (d.ctx == P) -> tokens[P+1 .. P+7] ----
-  void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P);
+  void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) override;
   const int* cand_ids() const { return cand_.as<int>(); }  // [7][8] of the last pass (tests)
   void debug_feature_stats() const;                        // magnitudes of the last prompt's captured features
 

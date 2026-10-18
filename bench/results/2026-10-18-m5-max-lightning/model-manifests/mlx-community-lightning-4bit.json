@@ -1,0 +1,61 @@
+{
+  "repo": "mlx-community/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-4bit",
+  "revision": "55ac8c89261109b36c04371cd3f479a4594208c8",
+  "role": "oMLX, mlx-lm",
+  "files": [
+    {
+      "path": ".gitattributes",
+      "size": 1570
+    },
+    {
+      "path": "README.md",
+      "size": 1440
+    },
+    {
+      "path": "chat_template.jinja",
+      "size": 9867
+    },
+    {
+      "path": "config.json",
+      "size": 2932
+    },
+    {
+      "path": "generation_config.json",
+      "size": 210
+    },
+    {
+      "path": "model-00001-of-00004.safetensors",
+      "size": 5118631442,
+      "sha256": "12e2ba8a7f0990b7e34ddb25cf4043fe39b105215fe61a0b7dc1447be6b247b3"
+    },
+    {
+      "path": "model-00002-of-00004.safetensors",
+      "size": 5291568433,
+      "sha256": "a095b11193a9d58e2c67c83bc2aff0eedde8f76b77ff8ee4781fe08f6c3f5363"
+    },
+    {
+      "path": "model-00003-of-00004.safetensors",
+      "size": 5291568429,
+      "sha256": "c55808e0cf33a6b957d34ab57caf4185c4aed49c6ef15c7c69683e7af7e892cc"
+    },
+    {
+      "path": "model-00004-of-00004.safetensors",
+      "size": 2073657055,
+      "sha256": "9c541daef892060fffb831afb9e20251ff18c492df7bacd0bfee4d8e43124d89"
+    },
+    {
+      "path": "model.safetensors.index.json",
+      "size": 65410
+    },
+    {
+      "path": "tokenizer.json",
+      "size": 17077484,
+      "sha256": "623c34567aebb18582765289fbe23d901c62704d6518d71866e0e58db892b5b7"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size": 430
+    }
+  ],
+  "total_bytes": 17792584702
+}

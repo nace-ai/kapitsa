@@ -7,6 +7,7 @@
 #include "hub/hub.h"
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
+#include "model/nh_drafter.h"
 #include "model/qwen35.h"
 #include "util/term.h"
 
@@ -336,7 +337,6 @@ int run_doctor(int argc, char** argv) {
     MemPlan m;
     LoadPlan lp;
     const bool nemotron = NemotronH::is_model(dir);
-    const char* drafter = nemotron ? "LiLiCorr drafter" : "DFlash2 drafter";
     int slots = slots_opt;  // as the engine would start it: the ones asked for, else auto_slots
     try {
       if (slots <= 0) {
@@ -351,6 +351,9 @@ int run_doctor(int argc, char** argv) {
       else if (!as_json) printf("  %s: cannot read (%s)\n", dir.c_str(), e.what());
       continue;
     }
+    // Nemotron-H's block drafters: LiLiCorr (Bolt, Super-VL) or DSpark (Lightning)
+    const bool dspark = nemotron && NhDrafter::kind(lp.dflash.empty() ? lp.dflash_left_out : lp.dflash) == "dspark";
+    const char* drafter = !nemotron ? "DFlash2 drafter" : dspark ? "DSpark drafter" : "LiLiCorr drafter";
     const int ch = lp.prefill_chunk;
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
     const Qwen35::AnePlan ap = nemotron ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0} : Qwen35::ane_plan(dir, m);
@@ -388,7 +391,7 @@ int run_doctor(int argc, char** argv) {
     o["dflash_drafter"] = dfl;
     o["dflash_used"] = !lp.dflash.empty();
     o["dflash_bytes"] = lp.dflash_found_bytes;
-    o["decoding"] = !lp.dflash.empty() ? (nemotron ? "lilicorr" : "dflash2") : m.mtp ? "mtp" : "plain";
+    o["decoding"] = !lp.dflash.empty() ? (dspark ? "dspark" : nemotron ? "lilicorr" : "dflash2") : m.mtp ? "mtp" : "plain";
     const auto enc = vision::open_encoder(dir);  // images: the encoder's weights load with the first image
     o["image_encoder_bytes"] = enc ? enc->weight_bytes() : 0;
     o["decode_tps_estimate"] = std::round(dec);
@@ -447,7 +450,7 @@ int run_doctor(int argc, char** argv) {
     if (dec > 0)
       printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; %s add their "
              "measured factors (docs/benchmarks.md)\n",
-             dec, m.decode_bytes / 1e9, pf, nemotron ? "the LiLiCorr drafter and the Neural Engine split" : "MTP / Neural Engine");
+             dec, m.decode_bytes / 1e9, pf, nemotron ? "the block drafter and the Neural Engine split" : "MTP / Neural Engine");
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;

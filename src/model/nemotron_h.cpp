@@ -419,7 +419,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_rows", "nh_gnorm", "nh_conv_ring", "nh_accept", "nh_capture", "nh_gemm_",
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
-                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_"};
+                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_"};
   std::vector<std::string> v;
   for (const std::string& n : g.function_names())
     for (const char* pre : prefixes)
@@ -635,6 +635,7 @@ void NemotronH::load(int prefill_chunk) {
   std::vector<Want> wants;
   // names: the parts' tensor names ("x.weight"); q8: a BF16 matrix becomes Q8 rows (NI_NH_BF16=1 keeps it BF16)
   static const bool keep_bf16 = getenv("NI_NH_BF16") && atoi(getenv("NI_NH_BF16"));
+  static const bool attn_q8 = getenv("NI_NH_ATTN_Q8") && atoi(getenv("NI_NH_ATTN_Q8"));
   auto mat_from = [&](NhMat& m, std::vector<const SafetensorsIndex::Entry*> parts, const std::vector<std::string>& names,
                       bool q8 = false) {
     auto base = [](const std::string& n) { return n.substr(0, n.size() - 7); };  // "x.weight" -> "x"
@@ -725,25 +726,32 @@ void NemotronH::load(int prefill_chunk) {
       if (int(L.in.N) != cfg_.in_proj() || int(L.in.K) != cfg_.hidden || int(L.out.K) != cfg_.d_inner)
         fatal("%s: layer %d's Mamba projections disagree with config.json", path_.c_str(), i);
     } else if (L.kind == 'A') {
-      mat(L.q, mx + "q_proj.weight");
-      mat(L.k, mx + "k_proj.weight");
-      mat(L.v, mx + "v_proj.weight");
-      mat(L.o, mx + "o_proj.weight");
+      // BF16 projections (Lightning's) stay BF16: as Q8_0 rows, decode is 3.5% faster but the KL to the fp32
+      // reference grows from 2.8e-3 to 3.7e-3 (NI_NH_ATTN_Q8=1 quantizes them)
+      mat(L.q, mx + "q_proj.weight", attn_q8);
+      mat(L.k, mx + "k_proj.weight", attn_q8);
+      mat(L.v, mx + "v_proj.weight", attn_q8);
+      mat(L.o, mx + "o_proj.weight", attn_q8);
     } else {
       L.E = cfg_.n_exp[size_t(i)];
       L.k_used = cfg_.top_k[size_t(i)];
       L.I = cfg_.exp_I[size_t(i)];
       mat(L.router, mx + "gate.weight");
       vec(L.exp_bias, mx + "gate.e_score_correction_bias");
-      mat(L.lat_down, mx + "fc1_latent_proj.weight", true);
-      mat(L.lat_up, mx + "fc2_latent_proj.weight", true);
+      // latent projections (LatentMoE); without them (moe_latent_size null: Lightning) the experts act on the hidden
+      // state itself
+      if (idx.find(mx + "fc1_latent_proj.weight") || cfg_.latent != cfg_.hidden) {
+        mat(L.lat_down, mx + "fc1_latent_proj.weight", true);
+        mat(L.lat_up, mx + "fc2_latent_proj.weight", true);
+      }
       experts(L.up_e, mx + "experts.", L.E, "up_proj");
       experts(L.down_e, mx + "experts.", L.E, "down_proj");
       mat(L.up_s, mx + "shared_experts.up_proj.weight");
       mat(L.down_s, mx + "shared_experts.down_proj.weight");
+      // (NVFP4 experts run on K % 32 designs: per-pair matvecs and the prefill GEMMs; Lightning's down K is 1856)
       if (!((L.up_e.fmt == NhFmt::IQ2 && L.down_e.fmt == NhFmt::IQ2) ||
-            (L.up_e.fmt == NhFmt::FP4 && L.down_e.fmt == NhFmt::FP4 && L.up_e.K % 128 == 0 && L.down_e.K % 128 == 0)))
-        fatal("%s: layer %d's experts are neither IQ2_XXS nor NVFP4 (K %% 128)", path_.c_str(), i);
+            (L.up_e.fmt == NhFmt::FP4 && L.down_e.fmt == NhFmt::FP4 && L.up_e.K % 32 == 0 && L.down_e.K % 32 == 0)))
+        fatal("%s: layer %d's experts are neither IQ2_XXS nor NVFP4 (K %% 32)", path_.c_str(), i);
       if (int(L.router.N) != L.E || int(L.up_e.N) != L.I || int(L.up_e.K) != cfg_.latent || int(L.down_e.K) != L.I)
         fatal("%s: layer %d's expert shapes disagree with config.json", path_.c_str(), i);
     }
@@ -905,10 +913,11 @@ std::string NemotronH::formats_summary() const {
   // the format of each part (first layer of its kind), e.g. Bolt's "IQ2_XXS experts, NVFP4 Mamba, Q8_0 attention /
   // latent / head, BF16 embedding / router"
   NhFmt ex = NhFmt::F32, sh = NhFmt::F32, mb = NhFmt::F32, at = NhFmt::F32, lt = NhFmt::F32, rt = NhFmt::F32;
+  bool has_lt = false;
   for (const NhLayer& L : layers_) {
     if (L.kind == 'M') mb = L.in.fmt;
     if (L.kind == 'A') at = L.q.fmt;
-    if (L.kind == 'E') ex = L.up_e.fmt, sh = L.up_s.fmt, lt = L.lat_down.fmt, rt = L.router.fmt;
+    if (L.kind == 'E') ex = L.up_e.fmt, sh = L.up_s.fmt, lt = L.lat_down.fmt, rt = L.router.fmt, has_lt = bool(L.lat_down);
   }
   std::string r = std::string(fmt_name(ex)) + " experts";
   if (sh != ex) r += std::string(", ") + fmt_name(sh) + " shared expert";
@@ -916,6 +925,7 @@ std::string NemotronH::formats_summary() const {
   // attention, latent and head grouped by format
   std::vector<std::pair<NhFmt, std::string>> g;
   for (auto [f, n] : {std::pair<NhFmt, const char*>{at, "attention"}, {lt, "latent"}, {head_.fmt, "head"}}) {
+    if (!has_lt && !strcmp(n, "latent")) continue;
     auto it = std::find_if(g.begin(), g.end(), [&](auto& x) { return x.first == f; });
     if (it == g.end()) g.push_back({f, n});
     else it->second += std::string(" / ") + n;
@@ -1006,17 +1016,21 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.hidden = c.hidden;
   m.layers = c.layers;
   const bool keep_bf16 = getenv("NI_NH_BF16") && atoi(getenv("NI_NH_BF16"));
+  const bool attn_q8 = getenv("NI_NH_ATTN_Q8") && atoi(getenv("NI_NH_ATTN_Q8"));
   std::string fmts;  // the matrix formats present (in tensor-name order)
   bool ane_fmts = true;  // the Neural Engine split stages NVFP4 / FP8 Mamba projections, an IQ2_XXS / NVFP4 shared expert
   for (const auto& [name, t] : idx.all()) {
     // as loaded: GGUF blocks, NVFP4 and FP8 keep their size (codes and scales apart), BF16 vectors become fp32, BF16
-    // latent projections Q8_0 (34 bytes per 32)
+    // latent projections (and with NI_NH_ATTN_Q8 attention projections) Q8_0 (34 bytes per 32)
     const bool vector = t.shape.size() == 1 || name.find("conv1d") != std::string::npos;
     const bool embedding = name.find("embeddings.") != std::string::npos;
     // the BF16 embedding is mapped from its file (NI_NH_MAP_EMBED): clean file pages, the rows in use
     const bool mapped = embedding && t.dtype == DType::BF16 && !(getenv("NI_NH_MAP_EMBED") && !atoi(getenv("NI_NH_MAP_EMBED")));
-    const bool to_q8 = !keep_bf16 && t.dtype == DType::BF16 && t.shape.size() == 2 &&
-                       name.find("latent_proj.weight") != std::string::npos && t.shape[1] % 32 == 0;
+    const bool to_q8 = !keep_bf16 && t.dtype == DType::BF16 && t.shape.size() == 2 && t.shape[1] % 32 == 0 &&
+                       (name.find("latent_proj.weight") != std::string::npos ||
+                        (attn_q8 && name.find("mixer.") != std::string::npos && name.find("_proj.weight") != std::string::npos &&
+                         (name.find(".q_proj.") != std::string::npos || name.find(".k_proj.") != std::string::npos ||
+                          name.find(".v_proj.") != std::string::npos || name.find(".o_proj.") != std::string::npos)));
     const size_t loaded = to_q8 ? t.len / 2 * 34 / 32 : t.dtype == DType::BF16 && vector ? 2 * t.len : t.len;
     if (!mapped) m.weights += loaded;
     if (embedding) continue;  // one row per token
@@ -1279,6 +1293,17 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
     e.buf(3, y);
     e.val(4, p);
     e.dispatch((W.N + rows_per_tg - 1) / rows_per_tg, 1, 1, 128);
+    return;
+  }
+  // F32 (Lightning's router) for 2-8 rows: one threadgroup per output row over K (verify: 0.38 ms less per cycle)
+  if (R >= 2 && W.fmt == NhFmt::F32 && epi == 0 && W.K % 4 == 0 && (xs ? xs : W.K) % 4 == 0) {
+    const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
+    e.use(pipe("nh_mv_f32_sk"));
+    e.buf(0, W.q);
+    e.buf(2, x);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch(W.N, 1, 1, 256);
     return;
   }
   const int rk = R <= 1 ? 1 : R <= 2 ? 2 : R <= 4 ? 4 : 8;
@@ -1569,7 +1594,67 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch((H + 15) / 16, 1, 1, 128);
     return;
   }
+  if (R == 1 && fuse_dec_ && !L.lat_up && L.router.fmt == NhFmt::F32 && L.up_s.fmt == NhFmt::FP4 &&
+      L.down_s.fmt == NhFmt::FP4 && L.up_e.fmt == NhFmt::FP4 && L.E <= 512 && L.k_used <= 32 && cfg_.hidden % 32 == 0 &&
+      cfg_.shared_I % 32 == 0) {
+    // one token, no latent projections (Lightning): 4 dispatches (nh_zh_moe.metal)
+    const uint32_t H = uint32_t(cfg_.hidden), S = uint32_t(cfg_.shared_I), I = uint32_t(L.I);
+    const uint32_t tg_r = (uint32_t(L.E) + 15) / 16, tg_u = k * ((I + 15) / 16);
+    const MoeDecP dp{H, uint32_t(L.E), k, cfg_.w_norm ? 1u : 0u, cfg_.w_scale, H, S, I, uint32_t(L.up_e.q_exp()),
+                     uint32_t(L.up_e.s_exp()), tg_r, 0, tg_u};
+    e.use(pipe("nh_moe_ah"));
+    e.buf(0, xn_);
+    e.buf(1, L.router.q);
+    e.buf(4, L.up_s.q);
+    e.buf(5, L.up_s.s);
+    e.buf(6, rl_);
+    e.buf(8, sh_);
+    e.buf(9, L.exp_bias);
+    e.buf(10, eid_);
+    e.buf(11, ew_);
+    e.buf(12, route_ctr_);
+    e.val(13, dp);
+    e.val(14, L.up_s.gs);
+    e.dispatch(tg_r + (S + 15) / 16, 1, 1, 128);
+    e.use(pipe("nh_moe_b4"));
+    e.buf(0, L.up_e.q);
+    e.buf(1, L.up_e.s);
+    e.buf(2, xn_);
+    e.buf(3, h_);
+    e.buf(4, eid_);
+    e.buf(5, L.down_s.q);
+    e.buf(6, L.down_s.s);
+    e.buf(7, sh_);
+    e.buf(8, sd_);
+    e.val(9, dp);
+    e.buf(10, L.up_e.gse);
+    e.val(11, L.down_s.gs);
+    e.dispatch(tg_u + (H + 15) / 16, 1, 1, 128);
+    const MoeP mp{I, H, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
+                  uint32_t(L.down_e.s_exp()), I};
+    e.use(pipe("nh_x4_moe_dn"));
+    e.buf(0, L.down_e.q);
+    e.buf(1, L.down_e.s);
+    e.buf(2, h_);
+    e.buf(3, part_);
+    e.buf(4, eid_);
+    e.buf(5, ew_);
+    e.val(6, mp);
+    e.buf(8, live_all_);
+    e.buf(9, L.down_e.gse);
+    e.dispatch((H + 7) / 8, k, 1, 64);
+    e.use(pipe("nh_moe_dh"));
+    e.buf(0, part_);
+    e.buf(1, sd_);
+    e.buf(2, x_);
+    e.val(3, dp);
+    e.dispatch((H + 255) / 256, 1, 1, 256);
+    return;
+  }
   const bool gm = gemm_rows_ && R >= 2;
+  // without latent projections (Lightning) the experts read the normed hidden state, their sum goes into x_
+  const bool lat = bool(L.lat_up);
+  const Buffer& lin = lat ? lat_ : xn_;
   // With a grouped encoder (NI_NH_GROUP): router, latent down and shared up run together, then routed down and shared
   // down; a serial encoder runs them one after another in the same order.
   const bool grouped = e.grouped();
@@ -1577,8 +1662,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   if (grouped) e.group_begin();
   enc_mv(e, L.router, xn_, rl_, R, 0, uint32_t(cfg_.hidden), uint32_t(cfg_.max_E));
   if (grouped) {
-    if (gm) enc_gemm(e, L.lat_down, xnh_, lat_, R, 0);
-    else enc_mv(e, L.lat_down, xn_, lat_, R, 0);
+    if (lat && gm) enc_gemm(e, L.lat_down, xnh_, lat_, R, 0);
+    else if (lat) enc_mv(e, L.lat_down, xn_, lat_, R, 0);
     if (gm) enc_gemm(e, L.up_s, xnh_, shh_, R, 2);
     else enc_mv(e, L.up_s, xn_, sh_, R, 2);
     e.group_end();
@@ -1597,7 +1682,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   // latent projection; routed experts: per (row, expert) pair matvecs (a verify block's 72 pairs average ~1.4 rows per expert, so
   // grouping the pairs by expert into 8-row MMA tiles (1.02 ms per layer) or 16-row GEMM tiles (~1.8) measured slower
   // than 0.82 ms per layer for the pairs; so did decoding each expert row once for all of its pairs, which spills)
-  if (!grouped) {
+  if (!grouped && lat) {
     if (gm) enc_gemm(e, L.lat_down, xnh_, lat_, R, 0);
     else enc_mv(e, L.lat_down, xn_, lat_, R, 0);
   }
@@ -1613,7 +1698,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.use(pipe("nh_x4_moe_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
-      e.buf(2, lat_);
+      e.buf(2, lin);
       e.buf(3, h_);
       e.buf(4, eid_);
       e.val(5, mp);
@@ -1621,7 +1706,9 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.buf(9, L.up_e.gse);
       e.dispatch((uint32_t(L.I) + 31) / 32, npairs, 1, 256);
       if (grouped) e.group_begin();
-      e.use(pipe("nh_x4_moe_dn_sum"));  // (the rows' sums into lo_: no nh_moe2_sum2 below)
+      // (the rows' sums into lo_: no nh_moe2_sum2 below; without latent projections the partials, then their sums
+      // added into the residual by nh_moe2_sum2_add)
+      e.use(pipe(lat ? "nh_x4_moe_dn_sum" : "nh_x4_moe_dn"));
       e.buf(0, L.down_e.q);
       e.buf(1, L.down_e.s);
       e.buf(2, h_);
@@ -1654,7 +1741,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.use(pipe(up8 ? "nh_x2_moeb_up8" : "nh_x2_moeb_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
-      e.buf(2, lat_);
+      e.buf(2, lin);
       e.buf(3, h_);
       e.buf(4, x2tiles_);
       e.buf(5, x2sorted_);
@@ -1675,7 +1762,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.use(pipe(x2 ? "nh_x2_moe_up4" : "nh_moe2_up_iq2"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
-      e.buf(2, lat_);
+      e.buf(2, lin);
       e.buf(3, h_);
       e.buf(4, eid_);
       e.val(5, mp);
@@ -1700,7 +1787,16 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       else enc_mv(e, L.down_s, sh_, x_, R, 1);
       e.group_end();
     }
-    if (!fp4) {
+    // the experts' weighted sum: into lo_ for the latent up projection (NVFP4: summed by nh_x4_moe_dn_sum above),
+    // else added into the residual
+    if (!lat) {
+      e.use(pipe("nh_moe2_sum2_add"));
+      e.buf(0, part_);
+      e.buf(1, x_);
+      e.val(2, mp);
+      e.buf(3, live());
+      e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
+    } else if (!fp4) {
       e.use(pipe("nh_moe2_sum"));
       e.buf(0, part_);
       e.buf(1, lo_);
@@ -1711,20 +1807,22 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   }
   // shared expert on the full hidden state; both branches add into the residual stream
   if (grouped) {  // (the shared expert ran above)
-    if (gm) {
+    if (lat && gm) {
       enc_rows_half(e, lo_, loh_, R, cfg_.latent);
       enc_gemm(e, L.lat_up, loh_, x_, R, 1);
-    } else {
+    } else if (lat) {
       enc_mv(e, L.lat_up, lo_, x_, R, 1);
     }
   } else if (gm) {
     enc_gemm(e, L.up_s, xnh_, shh_, R, 2);
-    enc_rows_half(e, lo_, loh_, R, cfg_.latent);
-    enc_gemm(e, L.lat_up, loh_, x_, R, 1);
+    if (lat) {
+      enc_rows_half(e, lo_, loh_, R, cfg_.latent);
+      enc_gemm(e, L.lat_up, loh_, x_, R, 1);
+    }
     enc_gemm(e, L.down_s, shh_, x_, R, 1);
   } else {
     enc_mv(e, L.up_s, xn_, sh_, R, 2);
-    enc_mv(e, L.lat_up, lo_, x_, R, 1);
+    if (lat) enc_mv(e, L.lat_up, lo_, x_, R, 1);
     enc_mv(e, L.down_s, sh_, x_, R, 1);
   }
 }
@@ -1770,6 +1868,7 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       enc_moe(e, L, R);
     }
   }
+  if (cap_) enc_capture(e, cfg_.layers, x_, pos0, R);  // (a drafter reading the trunk's output: slot `layers`)
   if (!commit) {
     s.n_pend = R;  // until commit_rows() says how many were accepted
     s.pend_pos = pos0;
@@ -1993,6 +2092,19 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
     e.dispatch((W.N + 7) / 8, 1, 1, 32);
     return;
   }
+  // BF16 up to 8 rows (Lightning's attention in verify): nh_xb_v8, the x8 design with the weights converted to half
+  // as nh_gemm_bf16w converts them (a verify's 24 projections 0.70 against 2.47 ms on nh_gemm_bf16w_m16)
+  if (W.fmt == NhFmt::BF16 && v8_ && M <= 8 && W.K % 128 == 0 && (x_ld ? x_ld : W.K) % 8 == 0) {
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe("nh_xb_v8"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.q);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 15) / 16, 1, 1, 256);
+    return;
+  }
   // up to 8 rows (verify, the drafter's block): the 8-row MMA kernels (weights decoded into registers)
   if (M <= 8 && v8_ && W.fmt != NhFmt::FP8 && W.fmt != NhFmt::BF16) {
     // split-K: 4 simdgroups share 8 NB rows and split K (measured 6-35% over a block of rows per simdgroup); 32 rows
@@ -2161,8 +2273,10 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       e.buf(5, live_all_);
       if (L.E <= 512) e.dispatch((uint32_t(T) + 7) / 8, 1, 1, 256);
       else e.dispatch(uint32_t(T), 1, 1, 512);
-      // latent, the pairs grouped by expert, routed experts, combine
-      enc_gemm(e, L.lat_down, pxh_, plat_, T, 3);
+      // latent, the pairs grouped by expert, routed experts, combine (without latent projections the experts read the
+      // normed rows pxh_ and their sum is added into px_)
+      const bool lat = bool(L.lat_up);
+      if (lat) enc_gemm(e, L.lat_down, pxh_, plat_, T, 3);
       // rows per expert tile: as many as the pairs per expert make worth it
       // (NVFP4 experts: nh_x4_moe_*, tiles of 32 or 16 rows)
       const bool fp4e = L.up_e.fmt == NhFmt::FP4 && x4_;
@@ -2187,8 +2301,10 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         const GemmP gp{P, uint32_t(L.I), uint32_t(cfg_.latent), uint32_t(cfg_.latent), uint32_t(L.I), 1.0f, 2,
                        uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), k};
         const bool fp4 = L.up_e.fmt == NhFmt::FP4;
-        e.use(pipe((fp4 ? (x4_ ? "nh_x4_moe_up" : "nh_gemm_fp4_moe_up") : "nh_gemm_iq2_moe_up") + ms));
-        e.buf(0, plat_);
+        // (nh_x4_moe_* need K % 128: Lightning's down projection, K 1856, stays on nh_gemm_fp4_moe_dn)
+        const bool x4m = fp4 && x4_ && L.up_e.K % 128 == 0;
+        e.use(pipe((x4m ? "nh_x4_moe_up" : fp4 ? "nh_gemm_fp4_moe_up" : "nh_gemm_iq2_moe_up") + ms));
+        e.buf(0, lat ? plat_ : pxh_);
         e.buf(1, L.up_e.q);
         e.buf(2, L.up_e.s);
         e.buf(3, ph_);
@@ -2204,7 +2320,8 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         const GemmP gp{P, uint32_t(cfg_.latent), uint32_t(L.I), uint32_t(L.I), uint32_t(cfg_.latent), 1.0f, 0,
                        uint32_t(L.down_e.q_exp()), uint32_t(L.down_e.s_exp()), k};
         const bool fp4 = L.down_e.fmt == NhFmt::FP4;
-        e.use(pipe((fp4 ? (x4_ ? "nh_x4_moe_dn" : "nh_gemm_fp4_moe_dn") : "nh_gemm_iq2_moe_dn") + ms));
+        const bool x4m = fp4 && x4_ && L.down_e.K % 128 == 0;
+        e.use(pipe((x4m ? "nh_x4_moe_dn" : fp4 ? "nh_gemm_fp4_moe_dn" : "nh_gemm_iq2_moe_dn") + ms));
         e.buf(0, ph_);
         e.buf(1, L.down_e.q);
         e.buf(2, L.down_e.s);
@@ -2218,19 +2335,19 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         e.dispatch((uint32_t(cfg_.latent) + 63) / 64, max_tiles, 1, 128);
       }
       const CombineP cp{uint32_t(cfg_.latent), k};
-      e.use(pipe("nh_moe_combine"));
+      e.use(pipe(lat ? "nh_moe_combine" : "nh_moe_combine_add"));
       e.buf(0, pout_);
       e.buf(1, pew_);
-      e.buf(2, plo_);
+      e.buf(2, lat ? plo_ : px_);
       e.val(3, cp);
       e.dispatch(uint32_t(T), 1, 1, 256);
       // shared expert; both branches add into the residual stream
       if (ffn_ane) {
-        enc_gemm(e, L.lat_up, plo_, px_, T, 1);
+        if (lat) enc_gemm(e, L.lat_up, plo_, px_, T, 1);
         ane_->ffn_join(e, i, px_, T);
       } else {
         enc_gemm(e, L.up_s, pxh_, psh_, T, 2);
-        enc_gemm(e, L.lat_up, plo_, px_, T, 1);
+        if (lat) enc_gemm(e, L.lat_up, plo_, px_, T, 1);
         enc_gemm(e, L.down_s, psh_, px_, T, 1);
       }
     }
@@ -2238,6 +2355,7 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
     // work is not held back behind one long buffer (a split chunk already ends one at every Neural Engine handoff)
     if (!split && T >= 256 && i + 1 < cfg_.layers) e.split();
   }
+  if (cap_) enc_capture(e, cfg_.layers, px_, pos0, T);
 }
 
 }  // namespace ni

@@ -14,7 +14,8 @@
 //   repo; "mtp-sidecar": built from an official checkpoint's mtp.* tensors, with the result's sha256 and size) and a
 //   DFlash2 drafter ("dflash2", in the dflash2/ folder that `--dflash auto` looks in first). Both run with a trunk of
 //   any precision (the drafter reads the trunk's embedding and output layer in any format). Nemotron 3.5 Bolt's and
-//   Super-VL's companion is NVIDIA's LiLiCorr drafter for each ("lilicorr", in dflash/ as oMLX lays it out).
+//   Super-VL's companion is NVIDIA's LiLiCorr drafter for each ("lilicorr", in dflash/ as oMLX lays it out),
+//   Lightning's NVIDIA's DSpark drafter ("dspark", in dflash/ too).
 // - download_gb is shown before a download (weights and companions). Memory needs no entry: the engine plans it
 //   from the variant's headers.
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
@@ -79,6 +80,15 @@ Companion lilicorr_super() {
           .repo = "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4-LiLiCorr",
           .revision = "292bf1efc06ba39567da7351f2ad7a522afa3959",
           .files = {"config.json", "model.safetensors"},
+          .subdir = "dflash"};
+}
+
+Companion dspark_lightning() {
+  // NVIDIA's DSpark block drafter for Lightning (NVFP4 MLP and Markov head, BF16 attention), in dflash/
+  return {.kind = "dspark",
+          .repo = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark",
+          .revision = "6d127b50ecd98562cea85d0087680b7d86091fb0",
+          .files = {"config.json", "model.safetensors", "LICENSE"},
           .subdir = "dflash"};
 }
 
@@ -234,6 +244,21 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "59b8721646c38111a242da18218859fb2b454322",
             .companions = {lilicorr_super()},
             .download_gb = 76.38},
+       }},
+      {.name = "nemotron-3.5-lightning",
+       .aliases = {"nemotron-lightning", "lightning"},
+       .title = "Nemotron 3.5 Lightning 30B-A3B",
+       .about = "NVIDIA's hybrid Mamba-2 MoE, 3B active, NVFP4 experts: fast replies on 32 GB Macs and up",
+       // one variant: NVIDIA's NVFP4 checkpoint, its safetensors as they are (its MTP head is not used)
+       .default_variant = "nvfp4",
+       .fallbacks = {},
+       .variants = {
+           {.name = "nvfp4",
+            .quant = "NVFP4 experts / shared expert / head, FP8 Mamba, BF16 attention / embedding, F32 router",
+            .repo = "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+            .revision = "bee7596271d1495f6992ae224aefde4410e816b8",
+            .companions = {dspark_lightning()},
+            .download_gb = 22.93},
        }},
       // Kept last until its repo is published (`kapitsa serve` without --model would otherwise pick it on a 128 GB
       // Mac): TODO pin the repo's revision after the upload, set download_gb from its listing, then move it up.

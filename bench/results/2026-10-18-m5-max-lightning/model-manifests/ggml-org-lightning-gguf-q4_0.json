@@ -1,0 +1,18 @@
+{
+  "repo": "ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF",
+  "revision": "8a08a1c81dadcc75d35dbb96016cfd344b632e67",
+  "role": "llama.cpp",
+  "files": [
+    {
+      "path": "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf",
+      "size": 18898091584,
+      "sha256": "61f87e75974e4b535dcdf9aad056541a9514f1dfa4538b463b081d19b7a00e3c"
+    },
+    {
+      "path": "mtp-NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf",
+      "size": 1155907520,
+      "sha256": "19f964207d5236dc88662686f00604a5494974c23fb04dd16a5ad7b2eebbd5b4"
+    }
+  ],
+  "total_bytes": 20053999104
+}

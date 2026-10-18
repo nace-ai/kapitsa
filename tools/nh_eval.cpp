@@ -6,13 +6,15 @@
 //                                                       bench/quality/llama_ref.cpp)
 //   nh_eval <dir> --dump-ref F @ids...             writes such a file from this model
 //   nh_eval <dir> --gen N [--temp T] [--spec] @ids  prefill + N decoded tokens: ids, prefill and decode speed;
-//                                                       --spec decodes with the LiLiCorr drafter found next to the
-//                                                       model (tokens per cycle, the drafts' acceptance)
+//                                                       --spec decodes with the block drafter (LiLiCorr, DSpark)
+//                                                       found next to the model or named by --drafter DIR (tokens
+//                                                       per cycle, the drafts' acceptance)
 //   --image F (repeatable): the images of the sequences, in order of their runs of <image> tokens (each run as long
 //   as the model's processor makes that image; its <img> / </img> marks already in the ids); --skip N[,N2,...]:
 //   statistics from position N on (e.g. an answer after an image prompt), per sequence or one for all
 #include "metal/gpu.h"
 #include "model/lilicorr.h"
+#include "model/nh_drafter.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
 #include "vision/encoder.h"
@@ -91,7 +93,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "usage: nh_eval <dir> [--ref F | --dump-ref F | --gen N [--temp T]] [--chunk R] [--topk K] @ids...\n");
     return 1;
   }
-  std::string model = argv[1], ref_file, dump_file;
+  std::string model = argv[1], ref_file, dump_file, drafter;
   int gen = -1, chunk = 512, topk = 64;
   std::vector<int> skips;
   std::vector<std::string> image_files;
@@ -109,6 +111,7 @@ int main(int argc, char** argv) {
     else if (a == "--gen") gen = std::stoi(next());
     else if (a == "--temp") temp = std::stof(next());
     else if (a == "--spec") spec = true;
+    else if (a == "--drafter") drafter = next(), spec = true;
     else if (a == "--chunk") chunk = std::stoi(next());
     else if (a == "--topk") topk = std::stoi(next());
     else if (a == "--skip") {
@@ -169,12 +172,12 @@ int main(int argc, char** argv) {
     sp.top_p = 0.95f;
     sp.top_k = 20;
     sp.seed = 1234;
-    std::unique_ptr<LiliCorr> lili;
+    std::unique_ptr<NhDrafter> lili;
     std::unique_ptr<LiliSeq> d;
     if (spec) {
-      const std::string dp = LiliCorr::find(model);
-      if (dp.empty()) fatal("no LiLiCorr drafter next to %s", model.c_str());
-      lili = std::make_unique<LiliCorr>(m, dp);
+      const std::string dp = drafter.empty() ? NhDrafter::find(model) : drafter;
+      if (dp.empty()) fatal("no block drafter next to %s", model.c_str());
+      lili = NhDrafter::open(m, dp);
       d = lili->new_seq();
       lili->begin_prefill(n, 0);
     }
@@ -212,10 +215,11 @@ int main(int argc, char** argv) {
       if (!m.ane_finish_chunk()) fatal("the Neural Engine split failed on a chunk (rerun with NI_ANE=0)");
     }
     const double t_pf = now_ms() - t0;
-    if (lili && getenv("NH_FEATURE_STATS")) lili->debug_feature_stats();
+    if (lili && getenv("NH_FEATURE_STATS"))
+      if (auto* lc = dynamic_cast<LiliCorr*>(lili.get())) lc->debug_feature_stats();
     t0 = now_ms();
     int produced = 1, cycles = 0;
-    double spec_gpu_ms = 0;
+    double spec_gpu_ms = 0, draft_gpu_ms = 0;
     if (!lili) {
       // as the engine: the next step is encoded and queued while the current one runs
       std::unique_ptr<Encoder> next;
@@ -229,7 +233,7 @@ int main(int argc, char** argv) {
       if (next) next->wait();
       produced = gen;
     } else {
-      constexpr int B = LiliCorr::kB;
+      constexpr int B = NhDrafter::kB;
       int P = n, m_prev = 0;
       double gpu_ms = 0;  // GPU time of the drafting and verify command buffers (the rest of the wall time: host gaps)
       while (produced < gen) {
@@ -246,6 +250,7 @@ int main(int argc, char** argv) {
         m.set_dynamic_rows(false);
         e2->commit_and_wait();
         gpu_ms += e1->gpu_ms() + e2->gpu_ms();
+        draft_gpu_ms += e1->gpu_ms();
         const int a = m.accepted();
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
@@ -267,8 +272,9 @@ int main(int argc, char** argv) {
     printf("prefill %d tokens in %.0f ms (%.1f tok/s); decode %d tokens in %.0f ms (%.2f tok/s)", n, t_pf,
            n / (t_pf / 1000), produced - 1, t_dec, produced > 1 ? (produced - 1) / (t_dec / 1000) : 0.0);
     if (cycles)
-      printf("; %d cycles, %.2f tokens per cycle, %.1f ms per cycle (GPU %.1f)", cycles, double(produced - 1) / cycles,
-             t_dec / cycles, spec_gpu_ms / cycles);
+      printf("; %d cycles, %.2f tokens per cycle, %.1f ms per cycle (GPU %.1f: drafting %.2f, verify %.2f)", cycles,
+             double(produced - 1) / cycles, t_dec / cycles, spec_gpu_ms / cycles, draft_gpu_ms / cycles,
+             (spec_gpu_ms - draft_gpu_ms) / cycles);
     const AneStats& as = m.ane_stats();
     if (as.chunks) printf("; ANE %d chunks, busy %.0f ms", as.chunks, as.ane_ms);
     task_vm_info_data_t vi;

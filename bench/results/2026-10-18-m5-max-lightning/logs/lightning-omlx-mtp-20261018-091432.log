@@ -1,0 +1,235 @@
+2026-10-18 09:14:33,511 - omlx.settings - INFO - Saved settings to <run-root>/state/omlx/lightning-mtp/base/settings.json
+INFO:     Uvicorn running on http://127.0.0.1:8276 (Press CTRL+C to quit)
+2026-10-18 09:14:34,332 - omlx.scheduler - INFO - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-10-18 09:14:34,412 - omlx.server - INFO - Headless mode: serving the API without the web UI
+2026-10-18 09:14:34,418 - omlx.server - INFO - CORS origins: ['*']
+2026-10-18 09:14:34,418 - omlx.model_settings - INFO - Loaded settings for 1 models
+2026-10-18 09:14:34,427 - omlx.model_discovery - INFO - Discovered model: lightning-mlx-4bit-mtp (type: llm, engine: batched, size: 18.12GB)
+2026-10-18 09:14:34,427 - omlx.engine_pool - INFO - Discovered 1 models
+2026-10-18 09:14:34,428 - omlx.server_metrics - INFO - Loaded all-time stats from <run-root>/state/omlx/lightning-mtp/base/stats.json
+2026-10-18 09:14:34,430 - omlx.server - INFO - Server initialized with 1 models
+2026-10-18 09:14:34,431 - omlx.server - INFO - Default model: lightning-mlx-4bit-mtp
+2026-10-18 09:14:34,431 - omlx.server - INFO - Memory guard tier: aggressive (guard on)
+2026-10-18 09:14:34,431 - omlx.server - INFO - Default max tokens: 32768
+2026-10-18 09:14:34,431 - omlx.server - INFO - HF Downloader initialized
+2026-10-18 09:14:34,431 - omlx.server - INFO - ModelScope SDK not installed, MS downloader disabled
+2026-10-18 09:14:34,432 - omlx.server - INFO - oQ Quantizer initialized
+2026-10-18 09:14:34,434 - omlx.server - INFO - HF Uploader initialized
+INFO:     Started server process [90601]
+INFO:     Waiting for application startup.
+2026-10-18 09:14:34,451 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=124518
+2026-10-18 09:14:34,451 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.6GB, interval=1.0s)
+INFO:     Application startup complete.
+2026-10-18 09:14:35,376 - omlx.engine_pool - INFO - Loading model: lightning-mlx-4bit-mtp
+2026-10-18 09:14:35,377 - omlx.utils.model_loading - INFO - M5 sorted gather_qmm reroute installed (issue #2267)
+2026-10-18 09:14:35,382 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)
+2026-10-18 09:14:35,383 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-10-18 09:14:35,383 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)
+2026-10-18 09:14:35,383 - omlx.utils.model_loading - INFO - Speculative backend selected for <run-root>/state/omlx/lightning-mtp/models/lightning-mlx-4bit-mtp: Lightning MTP (model_type=nemotron_h, active)
+2026-10-18 09:14:37,472 - omlx.patches.qwen35_moe_router - INFO - Qwen MoE fused router top-k patch applied
+2026-10-18 09:14:37,473 - omlx.patches.sdpa256_attention - INFO - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, always force bounded for qualifying calls (#2025))
+2026-10-18 09:14:37,475 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 steel patch skipped: NAX GPU, MLX native fused SDPA is faster
+2026-10-18 09:14:37,475 - omlx.patches.qwen35_q4_mlp - INFO - Qwen quantized MLP prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 09:14:37,475 - omlx.patches.qwen35_q4_mlp - INFO - Qwen mlx-lm quantized prefill linear patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 09:14:37,477 - omlx.patches.qwen35_moe_weighted_sum - INFO - Qwen3.5/3.6 MoE weighted-sum patch applied (min_tokens=1024)
+2026-10-18 09:14:37,477 - omlx.patches.qwen35_ragged_decode - INFO - qwen3_5 ragged decode threadgroup fallback patch applied
+2026-10-18 09:14:37,707 - omlx.scheduler - INFO - Loaded 1 additional EOS token(s) from generation_config.json: {2}
+2026-10-18 09:14:37,707 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-10-18 09:14:37,712 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+2026-10-18 09:14:37,712 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-10-18 09:14:37,718 - omlx.memory_monitor - INFO - Model info set: 52 layers (6 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 384.00 KB
+2026-10-18 09:14:37,718 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-10-18 09:14:37,718 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-10-18 09:14:37,719 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <run-root>/state/omlx/lightning-mtp/base/kv-cache
+2026-10-18 09:14:37,720 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0
+2026-10-18 09:14:37,720 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<run-root>/state/omlx/lightning-mtp/base/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=0, disk_free=68.44 GB, cache_used=0 B, incompatible_files=0
+2026-10-18 09:14:37,720 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+2026-10-18 09:14:37,720 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<run-root>/state/omlx/lightning-mtp/base/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+2026-10-18 09:14:37,720 - omlx.scheduler - INFO - paged SSD cache enabled: <run-root>/state/omlx/lightning-mtp/base/kv-cache, block_size=2048, max_blocks=100000
+2026-10-18 09:14:37,720 - omlx.engine_core - INFO - Engine started
+2026-10-18 09:14:37,721 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (29 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=None)
+2026-10-18 09:14:37,721 - omlx.engine.batched - INFO - BatchedEngine loaded: <run-root>/state/omlx/lightning-mtp/models/lightning-mlx-4bit-mtp
+2026-10-18 09:14:37,722 - omlx.engine_pool - INFO - Loaded model: lightning-mlx-4bit-mtp (actual: 17.41GB, local estimate: 18.12GB, full model: 18.12GB, total: 18.12GB)
+2026-10-18 09:14:37,723 - omlx.engine.batched - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+2026-10-18 09:14:37,747 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-10-18 09:14:38,368 - omlx.scheduler - INFO - Reserved prefill capacity for 2930 tokens across 6 caches (+0.01GB)
+2026-10-18 09:14:38,663 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=0 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:14:39,087 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[0] finish=length tokens=64 cycles=29 tok/cycle=2.21 accept=33/52 (63.5%) depth[d1=23/29,d2=10/23] emits[init=2,draft=33,bonus=10,verify=19] timing[backbone=384.5ms mtp=27.8ms sample=1.2ms cache=2.5ms]
+2026-10-18 09:14:39,090 - omlx.scheduler - INFO - Using boundary cache snapshot for e87920eb-4297-41f7-b69d-1633b989f203: storing 2924/2994 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-18 09:14:39,091 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=0.5ms/1, prefix_cache_lookup=0.3ms/1, store_cache_main_boundary=2.0ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+2026-10-18 09:14:39,092 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 64 tokens in 1.34s (149.3 tok/s), prompt: 2930, finish_reason=length, max_tokens=64, request_max_tokens=64, stream_model_ttft=0.92s, stream_visible_ttft=0.92s
+2026-10-18 09:14:39,342 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=1 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:14:39,492 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[1] finish=stop tokens=27 cycles=10 tok/cycle=2.70 accept=15/19 (78.9%) depth[d1=9/10,d2=6/9] emits[init=2,draft=15,bonus=6,verify=4] timing[backbone=131.6ms mtp=11.4ms sample=0.4ms cache=0.6ms]
+2026-10-18 09:14:39,495 - omlx.scheduler - INFO - Using boundary cache snapshot for 64b0a561-7b85-4826-b716-2d961a206ced: storing 459/491 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:14:39,495 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=0.8ms/2, prefix_cache_lookup=0.4ms/2, store_cache_main_boundary=4.4ms/2, store_cache_main_collect=0.0ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.2ms/1
+2026-10-18 09:14:39,497 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 26 tokens in 0.40s (168.0 tok/s), prompt: 465, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.25s, stream_visible_ttft=0.25s
+2026-10-18 09:14:39,649 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=2 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:14:42,418 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[2] finish=length tokens=512 cycles=202 tok/cycle=2.53 accept=308/374 (82.4%) depth[d1=172/202,d2=136/172] emits[init=2,draft=308,bonus=136,verify=66] timing[backbone=2497.6ms mtp=189.2ms sample=8.1ms cache=12.1ms]
+2026-10-18 09:14:42,421 - omlx.scheduler - INFO - Using boundary cache snapshot for e162f93b-1e84-45b8-963a-733fb692ebc7: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:14:42,421 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=1.2ms/3, prefix_cache_lookup=0.4ms/3, store_cache_main_boundary=6.3ms/3, store_cache_main_collect=0.0ms/3, store_cache_main_dispatch=0.2ms/3, store_cache_worker_sync=0.2ms/2
+2026-10-18 09:14:42,422 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.92s (184.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.15s, stream_visible_ttft=0.15s
+2026-10-18 09:14:42,573 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=3 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:14:45,251 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[3] finish=length tokens=512 cycles=205 tok/cycle=2.50 accept=305/373 (81.8%) depth[d1=168/205,d2=137/168] emits[init=2,draft=305,bonus=137,verify=68] timing[backbone=2436.1ms mtp=166.7ms sample=7.5ms cache=10.6ms]
+2026-10-18 09:14:45,254 - omlx.scheduler - INFO - Using boundary cache snapshot for 5ad91427-3b6b-4cd0-956d-29624de1eae5: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:14:45,254 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=1.6ms/4, prefix_cache_lookup=0.4ms/4, store_cache_main_boundary=8.4ms/4, store_cache_main_collect=0.0ms/4, store_cache_main_dispatch=0.3ms/4, store_cache_worker_sync=0.3ms/3
+2026-10-18 09:14:45,255 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.83s (190.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.15s, stream_visible_ttft=0.15s
+2026-10-18 09:14:45,398 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=4 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:14:48,129 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[4] finish=length tokens=512 cycles=215 tok/cycle=2.38 accept=295/381 (77.4%) depth[d1=166/215,d2=129/166] emits[init=2,draft=295,bonus=129,verify=86] timing[backbone=2494.7ms mtp=161.4ms sample=7.2ms cache=11.3ms]
+2026-10-18 09:14:48,132 - omlx.scheduler - INFO - Using boundary cache snapshot for 1e6207d9-f2c9-40b4-b8e5-bd62324042cf: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:14:48,132 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.1ms/5, prefix_cache_lookup=0.4ms/5, store_cache_main_boundary=10.3ms/5, store_cache_main_collect=0.0ms/5, store_cache_main_dispatch=0.4ms/5, store_cache_worker_sync=0.3ms/4
+2026-10-18 09:14:48,133 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.88s (187.2 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:16:49,844 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=5 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:16:52,522 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[5] finish=length tokens=512 cycles=208 tok/cycle=2.46 accept=302/376 (80.3%) depth[d1=168/208,d2=134/168] emits[init=2,draft=302,bonus=134,verify=74] timing[backbone=2434.4ms mtp=169.8ms sample=7.5ms cache=10.8ms]
+2026-10-18 09:16:52,525 - omlx.scheduler - INFO - Using boundary cache snapshot for 9aae185d-cc31-4611-9e0d-3518c3c23458: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:16:52,525 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.6ms/6, prefix_cache_lookup=0.5ms/6, store_cache_main_boundary=12.2ms/6, store_cache_main_collect=0.1ms/6, store_cache_main_dispatch=0.4ms/6, store_cache_worker_sync=0.4ms/5
+2026-10-18 09:16:52,526 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.82s (190.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:16:52,667 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=6 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:16:55,450 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[6] finish=length tokens=512 cycles=217 tok/cycle=2.36 accept=293/382 (76.7%) depth[d1=165/217,d2=128/165] emits[init=2,draft=293,bonus=128,verify=89] timing[backbone=2529.9ms mtp=175.1ms sample=7.9ms cache=12.3ms]
+2026-10-18 09:16:55,453 - omlx.scheduler - INFO - Using boundary cache snapshot for 909bfe36-e661-4355-9ea3-5d02ae44e1da: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:16:55,453 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=3.1ms/7, prefix_cache_lookup=0.5ms/7, store_cache_main_boundary=14.1ms/7, store_cache_main_collect=0.1ms/7, store_cache_main_dispatch=0.5ms/7, store_cache_worker_sync=0.5ms/6
+2026-10-18 09:16:55,454 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.93s (183.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:16:55,594 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=7 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:16:58,367 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[7] finish=length tokens=512 cycles=213 tok/cycle=2.40 accept=297/376 (79.0%) depth[d1=164/212,d2=133/164] copy=0/7 in 1 emits[init=2,draft=297,bonus=133,verify=80] timing[backbone=2517.6ms mtp=176.7ms sample=7.9ms cache=11.5ms]
+2026-10-18 09:16:58,370 - omlx.scheduler - INFO - Using boundary cache snapshot for 0d485b7f-9b8f-4d1a-9b26-f42e1194cac1: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:16:58,370 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=3.6ms/8, prefix_cache_lookup=0.5ms/8, store_cache_main_boundary=16.0ms/8, store_cache_main_collect=0.1ms/8, store_cache_main_dispatch=0.6ms/8, store_cache_worker_sync=0.5ms/7
+2026-10-18 09:16:58,371 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.91s (184.4 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:16:58,511 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=8 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:01,119 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[8] finish=length tokens=512 cycles=200 tok/cycle=2.56 accept=299/361 (82.8%) depth[d1=163/198,d2=136/163] copy=11/14 in 2 emits[init=2,draft=310,bonus=137,verify=63] timing[backbone=2373.7ms mtp=157.3ms sample=7.1ms cache=9.8ms]
+2026-10-18 09:17:01,122 - omlx.scheduler - INFO - Using boundary cache snapshot for e46bfc3b-b2dd-4fa6-8317-26a8496d76ec: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:01,123 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=4.1ms/9, prefix_cache_lookup=0.6ms/9, store_cache_main_boundary=18.0ms/9, store_cache_main_collect=0.1ms/9, store_cache_main_dispatch=0.6ms/9, store_cache_worker_sync=0.6ms/8
+2026-10-18 09:17:01,123 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.75s (196.0 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:01,265 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=9 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:03,958 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[9] finish=length tokens=512 cycles=210 tok/cycle=2.44 accept=300/379 (79.2%) depth[d1=169/210,d2=131/169] emits[init=2,draft=300,bonus=131,verify=79] timing[backbone=2452.6ms mtp=164.6ms sample=7.5ms cache=11.0ms]
+2026-10-18 09:17:03,961 - omlx.scheduler - INFO - Using boundary cache snapshot for b86d7366-8fee-4974-a017-e2b8d53d0888: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:03,961 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=4.5ms/10, prefix_cache_lookup=0.6ms/10, store_cache_main_boundary=20.0ms/10, store_cache_main_collect=0.1ms/10, store_cache_main_dispatch=0.7ms/10, store_cache_worker_sync=0.7ms/9
+2026-10-18 09:17:03,961 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.84s (189.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:04,182 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=10 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:06,726 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[10] finish=length tokens=512 cycles=203 tok/cycle=2.52 accept=307/369 (83.2%) depth[d1=166/203,d2=141/166] emits[init=2,draft=307,bonus=141,verify=62] timing[backbone=2359.7ms mtp=111.6ms sample=7.3ms cache=10.2ms]
+2026-10-18 09:17:06,729 - omlx.scheduler - INFO - Using boundary cache snapshot for ea0a14a5-f10a-405d-b386-129e70dec32a: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:06,729 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=4.9ms/11, prefix_cache_lookup=0.6ms/11, store_cache_main_boundary=21.9ms/11, store_cache_main_collect=0.1ms/11, store_cache_main_dispatch=0.8ms/11, store_cache_worker_sync=0.7ms/10
+2026-10-18 09:17:06,730 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.68s (200.9 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.13s, stream_visible_ttft=0.13s
+2026-10-18 09:17:06,870 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=11 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:09,469 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[11] finish=length tokens=512 cycles=210 tok/cycle=2.44 accept=300/382 (78.5%) depth[d1=173/209,d2=127/173] copy=0/7 in 1 emits[init=2,draft=300,bonus=127,verify=83] timing[backbone=2417.2ms mtp=106.7ms sample=7.2ms cache=11.1ms]
+2026-10-18 09:17:09,472 - omlx.scheduler - INFO - Using boundary cache snapshot for f2c275e9-b833-4c94-b4b3-948be9df6f23: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:09,472 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=5.5ms/12, prefix_cache_lookup=0.7ms/12, store_cache_main_boundary=23.8ms/12, store_cache_main_collect=0.1ms/12, store_cache_main_dispatch=0.8ms/12, store_cache_worker_sync=0.8ms/11
+2026-10-18 09:17:09,473 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.74s (196.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:09,613 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=12 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:12,238 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[12] finish=length tokens=512 cycles=209 tok/cycle=2.45 accept=301/373 (80.7%) depth[d1=164/209,d2=137/164] emits[init=2,draft=301,bonus=137,verify=72] timing[backbone=2433.3ms mtp=114.5ms sample=7.7ms cache=11.0ms]
+2026-10-18 09:17:12,241 - omlx.scheduler - INFO - Using boundary cache snapshot for 889fba66-15d1-415d-8a7d-d94b5e3f7996: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:12,241 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=5.8ms/13, prefix_cache_lookup=0.7ms/13, store_cache_main_boundary=25.7ms/13, store_cache_main_collect=0.1ms/13, store_cache_main_dispatch=0.9ms/13, store_cache_worker_sync=0.9ms/12
+2026-10-18 09:17:12,242 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.77s (194.8 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:12,383 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=13 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:15,050 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[13] finish=length tokens=512 cycles=211 tok/cycle=2.43 accept=299/380 (78.7%) depth[d1=169/211,d2=130/169] emits[init=2,draft=299,bonus=130,verify=81] timing[backbone=2473.6ms mtp=115.1ms sample=7.8ms cache=11.8ms]
+2026-10-18 09:17:15,053 - omlx.scheduler - INFO - Using boundary cache snapshot for a534d531-d86f-4edc-b869-f8b02bb5e23c: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:15,053 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=6.2ms/14, prefix_cache_lookup=0.8ms/14, store_cache_main_boundary=27.9ms/14, store_cache_main_collect=0.1ms/14, store_cache_main_dispatch=1.0ms/14, store_cache_worker_sync=0.9ms/13
+2026-10-18 09:17:15,054 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.81s (191.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:15,197 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=14 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:17,725 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[14] finish=length tokens=512 cycles=198 tok/cycle=2.59 accept=312/371 (84.1%) depth[d1=173/198,d2=139/173] emits[init=2,draft=312,bonus=139,verify=59] timing[backbone=2338.6ms mtp=114.0ms sample=7.3ms cache=9.9ms]
+2026-10-18 09:17:17,728 - omlx.scheduler - INFO - Using boundary cache snapshot for 9273cf21-6c61-497b-aa83-6cc693a17460: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:17,728 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=6.6ms/15, prefix_cache_lookup=0.8ms/15, store_cache_main_boundary=30.0ms/15, store_cache_main_collect=0.1ms/15, store_cache_main_dispatch=1.1ms/15, store_cache_worker_sync=1.0ms/14
+2026-10-18 09:17:17,729 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 512 tokens in 2.67s (202.2 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:18,340 - omlx.scheduler - INFO - Reserved prefill capacity for 4185 tokens across 6 caches (+0.01GB)
+2026-10-18 09:17:19,014 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=15 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:19,308 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[15] finish=stop tokens=44 cycles=20 tok/cycle=2.20 accept=22/35 (62.9%) depth[d1=15/20,d2=7/15] emits[init=2,draft=22,bonus=7,verify=13] timing[backbone=268.2ms mtp=16.1ms sample=0.7ms cache=1.5ms]
+2026-10-18 09:17:19,311 - omlx.scheduler - INFO - Using boundary cache snapshot for d53c1cfe-c147-47d1-a619-09e1a54447bd: storing 4179/4228 tokens (tail terminal, 2 intermediate snapshots)
+2026-10-18 09:17:19,311 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=7.3ms/16, prefix_cache_lookup=1.2ms/16, store_cache_main_boundary=31.8ms/16, store_cache_main_collect=0.1ms/16, store_cache_main_dispatch=1.1ms/16, store_cache_worker_sync=1.0ms/15
+2026-10-18 09:17:19,312 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 43 tokens in 1.48s (144.5 tok/s), prompt: 4185, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=1.18s, stream_visible_ttft=1.18s
+2026-10-18 09:17:20,327 - omlx.scheduler - INFO - Prefix cache restore for e64a7645-e372-4daf-82a2-2c1f75603521: source=paged cached=4179 suffix=71 blocks=3 lookup=0.180ms reconstruct=4.859ms promote=True
+2026-10-18 09:17:20,334 - omlx.scheduler - INFO - Reserved prefill capacity for 4250 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:20,459 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=16 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:20,489 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[16] finish=stop tokens=4 cycles=2 tok/cycle=2.00 accept=0/2 (0.0%) depth[d1=0/2,d2=0/0] emits[init=2,draft=0,bonus=0,verify=2] timing[backbone=27.0ms mtp=1.9ms sample=0.1ms cache=0.2ms]
+2026-10-18 09:17:20,492 - omlx.scheduler - INFO - Using boundary cache snapshot for e64a7645-e372-4daf-82a2-2c1f75603521: storing 4244/4253 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:20,492 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=7.8ms/17, prefix_cache_lookup=1.4ms/17, prefix_cache_reconstruct=4.9ms/1, store_cache_main_boundary=33.7ms/17, store_cache_main_collect=0.2ms/17, store_cache_main_dispatch=1.2ms/17, store_cache_worker_sync=1.1ms/16
+2026-10-18 09:17:20,493 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 3 tokens in 0.17s (89.1 tok/s), prompt: 4250, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 09:17:21,505 - omlx.scheduler - INFO - Prefix cache restore for d69754d5-0c5b-49bc-ac31-317860864c0d: source=paged cached=4244 suffix=36 blocks=3 lookup=0.189ms reconstruct=4.908ms promote=True
+2026-10-18 09:17:21,512 - omlx.scheduler - INFO - Reserved prefill capacity for 4280 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:21,606 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=17 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:21,663 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[17] finish=stop tokens=7 cycles=4 tok/cycle=1.75 accept=1/5 (20.0%) depth[d1=1/4,d2=0/1] emits[init=2,draft=1,bonus=0,verify=4] timing[backbone=51.2ms mtp=3.5ms sample=0.1ms cache=0.5ms]
+2026-10-18 09:17:21,666 - omlx.scheduler - INFO - Using boundary cache snapshot for d69754d5-0c5b-49bc-ac31-317860864c0d: storing 4274/4286 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:21,666 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=8.5ms/18, prefix_cache_lookup=1.6ms/18, prefix_cache_reconstruct=9.8ms/2, store_cache_main_boundary=35.7ms/18, store_cache_main_collect=0.2ms/18, store_cache_main_dispatch=1.3ms/18, store_cache_worker_sync=1.2ms/17
+2026-10-18 09:17:21,667 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 6 tokens in 0.17s (99.5 tok/s), prompt: 4280, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.11s, stream_visible_ttft=0.11s
+2026-10-18 09:17:22,685 - omlx.scheduler - INFO - Prefix cache restore for 0e0dbe78-0ad1-44d2-93b9-32cb5402604e: source=paged cached=4274 suffix=32 blocks=3 lookup=0.233ms reconstruct=5.631ms promote=True
+2026-10-18 09:17:22,692 - omlx.scheduler - INFO - Reserved prefill capacity for 4306 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:22,778 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=18 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:23,929 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[18] finish=stop tokens=177 cycles=78 tok/cycle=2.27 accept=87/128 (68.0%) depth[d1=52/76,d2=35/52] copy=10/14 in 2 emits[init=2,draft=97,bonus=35,verify=43] timing[backbone=1053.0ms mtp=67.2ms sample=3.1ms cache=7.0ms]
+2026-10-18 09:17:23,931 - omlx.scheduler - INFO - Using boundary cache snapshot for 0e0dbe78-0ad1-44d2-93b9-32cb5402604e: storing 4300/4482 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:23,932 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=8.9ms/19, prefix_cache_lookup=1.8ms/19, prefix_cache_reconstruct=15.4ms/3, store_cache_main_boundary=37.6ms/19, store_cache_main_collect=0.2ms/19, store_cache_main_dispatch=1.3ms/19, store_cache_worker_sync=1.3ms/18
+2026-10-18 09:17:23,932 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 176 tokens in 1.25s (152.5 tok/s), prompt: 4306, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.10s, stream_visible_ttft=0.10s
+2026-10-18 09:17:24,539 - omlx.scheduler - INFO - Reserved prefill capacity for 16517 tokens across 6 caches (+0.08GB)
+2026-10-18 09:17:28,596 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=19 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:28,881 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[19] finish=stop tokens=32 cycles=15 tok/cycle=2.13 accept=15/26 (57.7%) depth[d1=11/15,d2=4/11] emits[init=2,draft=15,bonus=4,verify=11] timing[backbone=261.7ms mtp=14.4ms sample=0.9ms cache=1.3ms]
+2026-10-18 09:17:28,884 - omlx.scheduler - INFO - Using boundary cache snapshot for d245182c-67b5-400b-b510-38bc2d328f47: storing 16511/16548 tokens (tail terminal, 8 intermediate snapshots)
+2026-10-18 09:17:28,884 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=9.5ms/20, prefix_cache_lookup=2.5ms/20, prefix_cache_reconstruct=15.4ms/3, store_cache_main_boundary=39.6ms/20, store_cache_main_collect=0.2ms/20, store_cache_main_dispatch=1.4ms/20, store_cache_worker_sync=1.3ms/19
+2026-10-18 09:17:28,885 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 31 tokens in 4.84s (107.4 tok/s), prompt: 16517, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=4.55s, stream_visible_ttft=4.56s
+2026-10-18 09:17:29,917 - omlx.scheduler - INFO - Prefix cache restore for d66b1d40-c760-4e37-990e-9e88cf5ab1b2: source=paged cached=16511 suffix=59 blocks=9 lookup=0.626ms reconstruct=10.865ms promote=True
+2026-10-18 09:17:29,929 - omlx.scheduler - INFO - Reserved prefill capacity for 16570 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:30,059 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=20 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:30,098 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[20] finish=stop tokens=4 cycles=2 tok/cycle=2.00 accept=0/2 (0.0%) depth[d1=0/2,d2=0/0] emits[init=2,draft=0,bonus=0,verify=2] timing[backbone=34.9ms mtp=2.5ms sample=0.1ms cache=0.2ms]
+2026-10-18 09:17:30,100 - omlx.scheduler - INFO - Using boundary cache snapshot for d66b1d40-c760-4e37-990e-9e88cf5ab1b2: storing 16564/16573 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:30,101 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=10.1ms/21, prefix_cache_lookup=3.1ms/21, prefix_cache_reconstruct=26.2ms/4, store_cache_main_boundary=41.4ms/21, store_cache_main_collect=0.2ms/21, store_cache_main_dispatch=1.5ms/21, store_cache_worker_sync=1.4ms/20
+2026-10-18 09:17:30,102 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 3 tokens in 0.20s (70.9 tok/s), prompt: 16570, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.15s, stream_visible_ttft=0.15s
+2026-10-18 09:17:31,127 - omlx.scheduler - INFO - Prefix cache restore for 2c38cfab-ccb1-4b6c-8885-a54ead82f8b8: source=paged cached=16564 suffix=36 blocks=9 lookup=0.575ms reconstruct=10.399ms promote=True
+2026-10-18 09:17:31,140 - omlx.scheduler - INFO - Reserved prefill capacity for 16600 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:31,236 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=21 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:31,368 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[21] finish=stop tokens=13 cycles=7 tok/cycle=1.86 accept=4/10 (40.0%) depth[d1=3/7,d2=1/3] emits[init=2,draft=4,bonus=1,verify=6] timing[backbone=120.5ms mtp=7.5ms sample=0.3ms cache=0.8ms]
+2026-10-18 09:17:31,370 - omlx.scheduler - INFO - Using boundary cache snapshot for 2c38cfab-ccb1-4b6c-8885-a54ead82f8b8: storing 16594/16612 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:31,371 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=10.6ms/22, prefix_cache_lookup=3.7ms/22, prefix_cache_reconstruct=36.6ms/5, store_cache_main_boundary=43.2ms/22, store_cache_main_collect=0.2ms/22, store_cache_main_dispatch=1.5ms/22, store_cache_worker_sync=1.5ms/21
+2026-10-18 09:17:31,371 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 12 tokens in 0.26s (89.0 tok/s), prompt: 16600, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.12s, stream_visible_ttft=0.12s
+2026-10-18 09:17:32,404 - omlx.scheduler - INFO - Prefix cache restore for 7d004de5-2121-4fc1-8474-e1c96e7e3794: source=paged cached=16594 suffix=38 blocks=9 lookup=0.623ms reconstruct=10.117ms promote=True
+2026-10-18 09:17:32,417 - omlx.scheduler - INFO - Reserved prefill capacity for 16632 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:32,520 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=22 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:33,681 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[22] finish=stop tokens=134 cycles=63 tok/cycle=2.13 accept=69/103 (67.0%) depth[d1=40/63,d2=29/40] emits[init=2,draft=69,bonus=29,verify=34] timing[backbone=1083.9ms mtp=53.2ms sample=2.4ms cache=5.4ms]
+2026-10-18 09:17:33,683 - omlx.scheduler - INFO - Using boundary cache snapshot for 7d004de5-2121-4fc1-8474-e1c96e7e3794: storing 16626/16765 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:33,684 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=10.8ms/23, prefix_cache_lookup=4.3ms/23, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=45.0ms/23, store_cache_main_collect=0.2ms/23, store_cache_main_dispatch=1.6ms/23, store_cache_worker_sync=1.6ms/22
+2026-10-18 09:17:33,684 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 133 tokens in 1.29s (114.2 tok/s), prompt: 16632, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.13s, stream_visible_ttft=0.13s
+2026-10-18 09:17:33,963 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=23 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:34,095 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[23] finish=stop tokens=27 cycles=10 tok/cycle=2.70 accept=15/19 (78.9%) depth[d1=9/10,d2=6/9] emits[init=2,draft=15,bonus=6,verify=4] timing[backbone=119.1ms mtp=8.2ms sample=0.4ms cache=0.6ms]
+2026-10-18 09:17:34,098 - omlx.scheduler - INFO - Using boundary cache snapshot for 5156534c-7b80-49a9-a16f-8d35952b1b31: storing 459/491 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:34,098 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=11.4ms/24, prefix_cache_lookup=4.4ms/24, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=46.8ms/24, store_cache_main_collect=0.2ms/24, store_cache_main_dispatch=1.7ms/24, store_cache_worker_sync=1.6ms/23
+2026-10-18 09:17:34,099 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 26 tokens in 0.31s (191.0 tok/s), prompt: 465, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.18s, stream_visible_ttft=0.18s
+2026-10-18 09:17:34,287 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=24 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:34,430 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[24] finish=stop tokens=27 cycles=10 tok/cycle=2.70 accept=15/19 (78.9%) depth[d1=9/10,d2=6/9] emits[init=2,draft=15,bonus=6,verify=4] timing[backbone=126.4ms mtp=10.8ms sample=0.4ms cache=0.7ms]
+2026-10-18 09:17:34,433 - omlx.scheduler - INFO - Using boundary cache snapshot for 529deef4-9f05-485b-87fa-185e82062621: storing 459/491 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:34,433 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=11.8ms/25, prefix_cache_lookup=4.4ms/25, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=48.8ms/25, store_cache_main_collect=0.2ms/25, store_cache_main_dispatch=1.8ms/25, store_cache_worker_sync=1.7ms/24
+2026-10-18 09:17:34,434 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 26 tokens in 0.33s (78.2 tok/s), prompt: 465, finish_reason=stop, max_tokens=512, request_max_tokens=512
+2026-10-18 09:17:34,636 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=25 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:35,296 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[25] finish=stop tokens=126 cycles=50 tok/cycle=2.52 accept=74/92 (80.4%) depth[d1=42/50,d2=32/42] emits[init=2,draft=74,bonus=32,verify=18] timing[backbone=598.0ms mtp=41.6ms sample=1.9ms cache=2.7ms]
+2026-10-18 09:17:35,301 - omlx.scheduler - INFO - Using boundary cache snapshot for df344b55-a77c-4416-96a7-9215f5ad4fa7: storing 534/665 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:35,301 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=11.9ms/26, prefix_cache_lookup=4.5ms/26, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=50.7ms/26, store_cache_main_collect=0.2ms/26, store_cache_main_dispatch=1.8ms/26, store_cache_worker_sync=1.8ms/25
+2026-10-18 09:17:35,302 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 125 tokens in 0.87s (187.9 tok/s), prompt: 540, finish_reason=stop, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.20s, stream_visible_ttft=0.20s
+2026-10-18 09:17:35,494 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=26 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:36,012 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[26] finish=stop tokens=89 cycles=38 tok/cycle=2.34 accept=49/66 (74.2%) depth[d1=28/38,d2=21/28] emits[init=2,draft=49,bonus=21,verify=17] timing[backbone=465.0ms mtp=34.6ms sample=1.5ms cache=2.4ms]
+2026-10-18 09:17:36,015 - omlx.scheduler - INFO - Using boundary cache snapshot for aa5c12ab-7f36-4f91-a2c7-ac11458c1192: storing 459/553 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:36,015 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=12.5ms/27, prefix_cache_lookup=4.6ms/27, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=52.5ms/27, store_cache_main_collect=0.3ms/27, store_cache_main_dispatch=1.9ms/27, store_cache_worker_sync=1.9ms/26
+2026-10-18 09:17:36,016 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 88 tokens in 0.71s (168.6 tok/s), prompt: 465, finish_reason=tool_calls, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.19s, stream_visible_ttft=0.19s
+2026-10-18 09:17:36,201 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=27 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:36,440 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[27] finish=stop tokens=47 cycles=18 tok/cycle=2.61 accept=27/34 (79.4%) depth[d1=16/18,d2=11/16] emits[init=2,draft=27,bonus=11,verify=7] timing[backbone=215.5ms mtp=14.6ms sample=0.7ms cache=1.0ms]
+2026-10-18 09:17:36,442 - omlx.scheduler - INFO - Using boundary cache snapshot for 8657ee9b-37df-41ae-8546-12985ece17e0: storing 459/511 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 09:17:36,443 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=13.2ms/28, prefix_cache_lookup=4.6ms/28, prefix_cache_reconstruct=46.8ms/6, store_cache_main_boundary=54.3ms/28, store_cache_main_collect=0.3ms/28, store_cache_main_dispatch=2.0ms/28, store_cache_worker_sync=1.9ms/27
+2026-10-18 09:17:36,443 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 46 tokens in 0.42s (108.4 tok/s), prompt: 465, finish_reason=stop, max_tokens=4096, request_max_tokens=4096
+2026-10-18 09:17:36,450 - omlx.scheduler - INFO - Prefix cache restore for 9faf20d9-9877-4da4-b770-0fd0c3d44d4d: source=paged cached=534 suffix=6 blocks=1 lookup=0.042ms reconstruct=2.384ms promote=True
+2026-10-18 09:17:36,454 - omlx.scheduler - INFO - Reserved prefill capacity for 540 tokens across 6 caches (+0.00GB)
+2026-10-18 09:17:36,486 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=28 (model has mtp_forward, batch=1, primed=0)
+2026-10-18 09:17:37,445 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[28] finish=stop tokens=188 cycles=70 tok/cycle=2.69 accept=114/132 (86.4%) depth[d1=64/68,d2=50/64] copy=2/14 in 2 emits[init=2,draft=116,bonus=50,verify=20] timing[backbone=868.1ms mtp=60.8ms sample=2.7ms cache=5.3ms]
+2026-10-18 09:17:37,446 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=13.2ms/29, prefix_cache_lookup=4.7ms/29, prefix_cache_reconstruct=49.1ms/7, store_cache_main_boundary=54.4ms/29, store_cache_main_collect=0.3ms/28, store_cache_main_dispatch=2.0ms/28, store_cache_worker_sync=2.0ms/28
+2026-10-18 09:17:37,447 - omlx.server - INFO - Chat completion: model=lightning-mlx-4bit-mtp, 187 tokens in 1.00s (194.7 tok/s), prompt: 540, finish_reason=stop, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.04s, stream_visible_ttft=0.04s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-10-18 09:17:37,688 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped
+2026-10-18 09:17:37,688 - omlx.server - INFO - Process memory enforcer stopped
+2026-10-18 09:17:37,688 - omlx.admin.hf_downloader - INFO - HF Downloader shut down
+2026-10-18 09:17:37,688 - omlx.server - INFO - HF Downloader stopped
+2026-10-18 09:17:37,688 - omlx.engine_pool - INFO - Unloading model: lightning-mlx-4bit-mtp (immediate abort)
+2026-10-18 09:17:37,688 - omlx.engine_core - INFO - Engine stopped
+2026-10-18 09:17:37,688 - omlx.scheduler - INFO - Scheduler shutdown initiated...
+2026-10-18 09:17:37,689 - omlx.cache.paged_ssd_cache - INFO - Shutting down PagedSSDCacheManager...
+2026-10-18 09:17:37,690 - omlx.cache.paged_ssd_cache - INFO - Flushed 31 hot cache blocks to SSD
+2026-10-18 09:17:37,782 - omlx.scheduler - INFO - Scheduler shutdown completed
+2026-10-18 09:17:37,783 - omlx.cache.paged_cache - INFO - PagedCacheManager cleared (reset to 256 initial blocks)
+2026-10-18 09:17:37,810 - omlx.scheduler - INFO - Deep reset completed - all caches cleared
+2026-10-18 09:17:37,863 - omlx.engine.batched - INFO - BatchedEngine stopped
+2026-10-18 09:17:38,432 - omlx.engine_pool - INFO - Unloaded model: lightning-mlx-4bit-mtp, freed=17.26GB (expected>=16.12GB), active_memory: 1.02KB (settled)
+2026-10-18 09:17:38,473 - omlx.engine_pool - INFO - Engine pool shutdown complete
+2026-10-18 09:17:38,474 - omlx.server - INFO - Engine pool shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [90601]

@@ -1,0 +1,1030 @@
+INFO:     Started server process [56387]
+INFO:     Waiting for application startup.
+2026-10-18 09:04:20,956 - INFO - Pre-loading language model: ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4
+2026-10-18 09:04:20,957 - INFO - APC enabled (block_size=16, num_blocks=2048, hash=fast, disk=False)
+2026-10-18 09:04:20,957 - INFO - Loading model: ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4
+2026-10-18 09:04:22,186 - INFO - Model and processor loaded successfully.
+2026-10-18 09:04:22,186 - INFO - Loading speculative drafter (dflash): ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash
+2026-10-18 09:04:22,260 - INFO - Drafter ready; speculative decoding enabled.
+2026-10-18 09:04:22,260 - INFO - APC self-check ok mode=exact schema=v4 layers=29 types=[ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,ArraysCache] caps=[checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,checkpoint,pageable,checkpoint,checkpoint,checkpoint,checkpoint]
+2026-10-18 09:04:22,260 - INFO - Language model ready, continuous batching enabled.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8273 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52898 - "GET /v1/models HTTP/1.1" 200 OK
+2026-10-18 09:04:24,684 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:52901 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:04:24,686 - INFO - Generation queued: request=1173e8710 prompt_tokens=2929 max_tokens=64 images=0 audio=0 videos=0
+2026-10-18 09:04:24,692 - INFO - Prefill started: request=1173e8710 backend=continuous_batching prompt_tokens=2929 images=0 audio=0 videos=0
+2026-10-18 09:04:25,566 - INFO - Prefill progress: request=1173e8710 tokens=2048/2929 (69.9%)
+2026-10-18 09:04:25,929 - INFO - Prefill progress: request=1173e8710 tokens=2928/2929 (100.0%)
+2026-10-18 09:04:25,945 - INFO - Prefill completed: request=1173e8710 prompt_tokens=2929 cached_tokens=0 elapsed=1.096s rate=2671.3 tok/s
+2026-10-18 09:04:25,945 - INFO - Decode started: request=1173e8710 time_to_first_token=1.262s
+2026-10-18 09:04:26,068 - INFO - Decode progress: request=1173e8710 generated_tokens=10 elapsed=0.123s rate=48.2 tok/s
+2026-10-18 09:04:26,154 - INFO - Decode progress: request=1173e8710 generated_tokens=20 elapsed=0.208s rate=51.2 tok/s
+2026-10-18 09:04:26,194 - INFO - Decode progress: request=1173e8710 generated_tokens=30 elapsed=0.248s rate=106190.2 tok/s
+2026-10-18 09:04:26,315 - INFO - Decode progress: request=1173e8710 generated_tokens=40 elapsed=0.370s rate=47.9 tok/s
+2026-10-18 09:04:26,405 - INFO - Decode progress: request=1173e8710 generated_tokens=50 elapsed=0.460s rate=34.3 tok/s
+2026-10-18 09:04:26,470 - INFO - Decode progress: request=1173e8710 generated_tokens=60 elapsed=0.525s rate=49.9 tok/s
+2026-10-18 09:04:26,491 - INFO - Decode completed: request=1173e8710 generated_tokens=64 elapsed=0.546s rate=115.4 tok/s finish_reason=length
+2026-10-18 09:04:26,492 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=2929 generated_tokens=64 elapsed=1.832s prefill=2671.3 tok/s decode=117.2 tok/s finish_reason=length in_flight=0
+2026-10-18 09:04:26,500 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:52915 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:04:26,501 - INFO - Generation queued: request=117528920 prompt_tokens=455 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:04:26,508 - INFO - Prefill started: request=117528920 backend=continuous_batching prompt_tokens=455 images=0 audio=0 videos=0
+2026-10-18 09:04:26,790 - INFO - Prefill progress: request=117528920 tokens=454/455 (99.8%)
+2026-10-18 09:04:26,804 - INFO - Prefill completed: request=117528920 prompt_tokens=455 cached_tokens=0 elapsed=0.234s rate=1943.4 tok/s
+2026-10-18 09:04:26,804 - INFO - Decode started: request=117528920 time_to_first_token=0.304s
+2026-10-18 09:04:26,862 - INFO - Decode progress: request=117528920 generated_tokens=10 elapsed=0.058s rate=105263.6 tok/s
+2026-10-18 09:04:26,912 - INFO - Decode progress: request=117528920 generated_tokens=20 elapsed=0.108s rate=39.7 tok/s
+2026-10-18 09:04:26,936 - INFO - Decode completed: request=117528920 generated_tokens=27 elapsed=0.132s rate=196.8 tok/s finish_reason=stop
+2026-10-18 09:04:26,937 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=455 generated_tokens=27 elapsed=0.444s prefill=1943.4 tok/s decode=204.3 tok/s finish_reason=tool_calls in_flight=0
+2026-10-18 09:04:26,945 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:52918 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:04:26,945 - INFO - Generation queued: request=1173ea7e0 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:04:26,953 - INFO - Prefill started: request=1173ea7e0 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:04:27,184 - INFO - Prefill progress: request=1173ea7e0 tokens=85/86 (98.8%)
+2026-10-18 09:04:27,197 - INFO - Prefill completed: request=1173ea7e0 prompt_tokens=86 cached_tokens=0 elapsed=0.187s rate=460.9 tok/s
+2026-10-18 09:04:27,198 - INFO - Decode started: request=1173ea7e0 time_to_first_token=0.253s
+2026-10-18 09:04:27,307 - INFO - Decode progress: request=1173ea7e0 generated_tokens=10 elapsed=0.109s rate=22387.9 tok/s
+2026-10-18 09:04:27,366 - INFO - Decode progress: request=1173ea7e0 generated_tokens=20 elapsed=0.168s rate=77416.1 tok/s
+2026-10-18 09:04:27,446 - INFO - Decode progress: request=1173ea7e0 generated_tokens=30 elapsed=0.248s rate=49.9 tok/s
+2026-10-18 09:04:27,547 - INFO - Decode progress: request=1173ea7e0 generated_tokens=40 elapsed=0.349s rate=27057.8 tok/s
+2026-10-18 09:04:27,614 - INFO - Decode progress: request=1173ea7e0 generated_tokens=50 elapsed=0.416s rate=138.6 tok/s
+2026-10-18 09:04:27,696 - INFO - Decode progress: request=1173ea7e0 generated_tokens=60 elapsed=0.499s rate=27118.6 tok/s
+2026-10-18 09:04:27,754 - INFO - Decode progress: request=1173ea7e0 generated_tokens=70 elapsed=0.557s rate=50.0 tok/s
+2026-10-18 09:04:27,834 - INFO - Decode progress: request=1173ea7e0 generated_tokens=80 elapsed=0.637s rate=51.1 tok/s
+2026-10-18 09:04:27,915 - INFO - Decode progress: request=1173ea7e0 generated_tokens=90 elapsed=0.718s rate=26087.2 tok/s
+2026-10-18 09:04:28,017 - INFO - Decode progress: request=1173ea7e0 generated_tokens=100 elapsed=0.820s rate=45.0 tok/s
+2026-10-18 09:04:28,099 - INFO - Decode progress: request=1173ea7e0 generated_tokens=110 elapsed=0.902s rate=50.4 tok/s
+2026-10-18 09:04:28,201 - INFO - Decode progress: request=1173ea7e0 generated_tokens=120 elapsed=1.004s rate=103443.3 tok/s
+2026-10-18 09:04:28,281 - INFO - Decode progress: request=1173ea7e0 generated_tokens=130 elapsed=1.084s rate=28537.2 tok/s
+2026-10-18 09:04:28,339 - INFO - Decode progress: request=1173ea7e0 generated_tokens=140 elapsed=1.141s rate=32086.2 tok/s
+2026-10-18 09:04:28,421 - INFO - Decode progress: request=1173ea7e0 generated_tokens=150 elapsed=1.223s rate=431.9 tok/s
+2026-10-18 09:04:28,524 - INFO - Decode progress: request=1173ea7e0 generated_tokens=160 elapsed=1.327s rate=24120.8 tok/s
+2026-10-18 09:04:28,584 - INFO - Decode progress: request=1173ea7e0 generated_tokens=170 elapsed=1.386s rate=19078.1 tok/s
+2026-10-18 09:04:28,643 - INFO - Decode progress: request=1173ea7e0 generated_tokens=180 elapsed=1.446s rate=28202.4 tok/s
+2026-10-18 09:04:28,725 - INFO - Decode progress: request=1173ea7e0 generated_tokens=190 elapsed=1.527s rate=48.7 tok/s
+2026-10-18 09:04:28,828 - INFO - Decode progress: request=1173ea7e0 generated_tokens=200 elapsed=1.631s rate=398.6 tok/s
+2026-10-18 09:04:28,890 - INFO - Decode progress: request=1173ea7e0 generated_tokens=210 elapsed=1.693s rate=52.6 tok/s
+2026-10-18 09:04:28,970 - INFO - Decode progress: request=1173ea7e0 generated_tokens=220 elapsed=1.772s rate=50.2 tok/s
+2026-10-18 09:04:29,029 - INFO - Decode progress: request=1173ea7e0 generated_tokens=230 elapsed=1.831s rate=52.6 tok/s
+2026-10-18 09:04:29,110 - INFO - Decode progress: request=1173ea7e0 generated_tokens=240 elapsed=1.913s rate=46.1 tok/s
+2026-10-18 09:04:29,173 - INFO - Decode progress: request=1173ea7e0 generated_tokens=250 elapsed=1.975s rate=45.6 tok/s
+2026-10-18 09:04:29,214 - INFO - Decode progress: request=1173ea7e0 generated_tokens=260 elapsed=2.016s rate=106667.5 tok/s
+2026-10-18 09:04:29,273 - INFO - Decode progress: request=1173ea7e0 generated_tokens=270 elapsed=2.076s rate=108590.4 tok/s
+2026-10-18 09:04:29,345 - INFO - Decode progress: request=1173ea7e0 generated_tokens=280 elapsed=2.147s rate=31088.7 tok/s
+2026-10-18 09:04:29,370 - INFO - Decode progress: request=1173ea7e0 generated_tokens=290 elapsed=2.173s rate=172648.1 tok/s
+2026-10-18 09:04:29,423 - INFO - Decode progress: request=1173ea7e0 generated_tokens=300 elapsed=2.225s rate=324.9 tok/s
+2026-10-18 09:04:29,476 - INFO - Decode progress: request=1173ea7e0 generated_tokens=310 elapsed=2.279s rate=27057.6 tok/s
+2026-10-18 09:04:29,527 - INFO - Decode progress: request=1173ea7e0 generated_tokens=320 elapsed=2.330s rate=31496.1 tok/s
+2026-10-18 09:04:29,604 - INFO - Decode progress: request=1173ea7e0 generated_tokens=330 elapsed=2.407s rate=38.6 tok/s
+2026-10-18 09:04:29,629 - INFO - Decode progress: request=1173ea7e0 generated_tokens=340 elapsed=2.432s rate=169006.7 tok/s
+2026-10-18 09:04:29,741 - INFO - Decode progress: request=1173ea7e0 generated_tokens=350 elapsed=2.543s rate=115.3 tok/s
+2026-10-18 09:04:29,820 - INFO - Decode progress: request=1173ea7e0 generated_tokens=360 elapsed=2.623s rate=39.0 tok/s
+2026-10-18 09:04:29,860 - INFO - Decode progress: request=1173ea7e0 generated_tokens=370 elapsed=2.662s rate=144592.2 tok/s
+2026-10-18 09:04:29,919 - INFO - Decode progress: request=1173ea7e0 generated_tokens=380 elapsed=2.721s rate=146351.2 tok/s
+2026-10-18 09:04:29,997 - INFO - Decode progress: request=1173ea7e0 generated_tokens=390 elapsed=2.799s rate=52.9 tok/s
+2026-10-18 09:04:30,045 - INFO - Decode progress: request=1173ea7e0 generated_tokens=400 elapsed=2.847s rate=272.6 tok/s
+2026-10-18 09:04:30,116 - INFO - Decode progress: request=1173ea7e0 generated_tokens=410 elapsed=2.918s rate=144572.8 tok/s
+2026-10-18 09:04:30,174 - INFO - Decode progress: request=1173ea7e0 generated_tokens=420 elapsed=2.977s rate=32214.3 tok/s
+2026-10-18 09:04:30,224 - INFO - Decode progress: request=1173ea7e0 generated_tokens=430 elapsed=3.027s rate=161083.4 tok/s
+2026-10-18 09:04:30,301 - INFO - Decode progress: request=1173ea7e0 generated_tokens=440 elapsed=3.104s rate=37.7 tok/s
+2026-10-18 09:04:30,362 - INFO - Decode progress: request=1173ea7e0 generated_tokens=450 elapsed=3.164s rate=111.3 tok/s
+2026-10-18 09:04:30,414 - INFO - Decode progress: request=1173ea7e0 generated_tokens=460 elapsed=3.217s rate=29813.5 tok/s
+2026-10-18 09:04:30,490 - INFO - Decode progress: request=1173ea7e0 generated_tokens=470 elapsed=3.293s rate=27971.9 tok/s
+2026-10-18 09:04:30,515 - INFO - Decode progress: request=1173ea7e0 generated_tokens=480 elapsed=3.318s rate=177779.2 tok/s
+2026-10-18 09:04:30,593 - INFO - Decode progress: request=1173ea7e0 generated_tokens=490 elapsed=3.395s rate=134845.6 tok/s
+2026-10-18 09:04:30,674 - INFO - Decode progress: request=1173ea7e0 generated_tokens=500 elapsed=3.477s rate=320.5 tok/s
+2026-10-18 09:04:30,770 - INFO - Decode progress: request=1173ea7e0 generated_tokens=510 elapsed=3.573s rate=108590.4 tok/s
+2026-10-18 09:04:30,788 - INFO - Decode completed: request=1173ea7e0 generated_tokens=512 elapsed=3.590s rate=142.3 tok/s finish_reason=length
+2026-10-18 09:04:30,789 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.850s prefill=460.9 tok/s decode=142.6 tok/s finish_reason=length in_flight=0
+2026-10-18 09:04:30,797 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:52941 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:04:30,797 - INFO - Generation queued: request=117529c70 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:04:30,804 - INFO - Prefill started: request=117529c70 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:04:31,041 - INFO - Prefill progress: request=117529c70 tokens=85/86 (98.8%)
+2026-10-18 09:04:31,054 - INFO - Prefill completed: request=117529c70 prompt_tokens=86 cached_tokens=0 elapsed=0.189s rate=454.7 tok/s
+2026-10-18 09:04:31,054 - INFO - Decode started: request=117529c70 time_to_first_token=0.257s
+2026-10-18 09:04:31,164 - INFO - Decode progress: request=117529c70 generated_tokens=10 elapsed=0.110s rate=25532.3 tok/s
+2026-10-18 09:04:31,223 - INFO - Decode progress: request=117529c70 generated_tokens=20 elapsed=0.170s rate=84803.7 tok/s
+2026-10-18 09:04:31,302 - INFO - Decode progress: request=117529c70 generated_tokens=30 elapsed=0.248s rate=49.7 tok/s
+2026-10-18 09:04:31,401 - INFO - Decode progress: request=117529c70 generated_tokens=40 elapsed=0.347s rate=29776.9 tok/s
+2026-10-18 09:04:31,467 - INFO - Decode progress: request=117529c70 generated_tokens=50 elapsed=0.414s rate=142.3 tok/s
+2026-10-18 09:04:31,550 - INFO - Decode progress: request=117529c70 generated_tokens=60 elapsed=0.497s rate=26058.7 tok/s
+2026-10-18 09:04:31,609 - INFO - Decode progress: request=117529c70 generated_tokens=70 elapsed=0.555s rate=50.1 tok/s
+2026-10-18 09:04:31,689 - INFO - Decode progress: request=117529c70 generated_tokens=80 elapsed=0.635s rate=51.0 tok/s
+2026-10-18 09:04:31,789 - INFO - Decode progress: request=117529c70 generated_tokens=90 elapsed=0.735s rate=49.0 tok/s
+2026-10-18 09:04:31,891 - INFO - Decode progress: request=117529c70 generated_tokens=100 elapsed=0.837s rate=386.6 tok/s
+2026-10-18 09:04:31,974 - INFO - Decode progress: request=117529c70 generated_tokens=110 elapsed=0.920s rate=23999.9 tok/s
+2026-10-18 09:04:32,093 - INFO - Decode progress: request=117529c70 generated_tokens=120 elapsed=1.039s rate=23762.6 tok/s
+2026-10-18 09:04:32,151 - INFO - Decode progress: request=117529c70 generated_tokens=130 elapsed=1.097s rate=24365.3 tok/s
+2026-10-18 09:04:32,230 - INFO - Decode progress: request=117529c70 generated_tokens=140 elapsed=1.177s rate=51.4 tok/s
+2026-10-18 09:04:32,317 - INFO - Decode progress: request=117529c70 generated_tokens=150 elapsed=1.263s rate=160.6 tok/s
+2026-10-18 09:04:32,418 - INFO - Decode progress: request=117529c70 generated_tokens=160 elapsed=1.364s rate=50.9 tok/s
+2026-10-18 09:04:32,477 - INFO - Decode progress: request=117529c70 generated_tokens=170 elapsed=1.423s rate=24464.8 tok/s
+2026-10-18 09:04:32,556 - INFO - Decode progress: request=117529c70 generated_tokens=180 elapsed=1.502s rate=51.1 tok/s
+2026-10-18 09:04:32,616 - INFO - Decode progress: request=117529c70 generated_tokens=190 elapsed=1.562s rate=103006.7 tok/s
+2026-10-18 09:04:32,677 - INFO - Decode progress: request=117529c70 generated_tokens=200 elapsed=1.623s rate=291.9 tok/s
+2026-10-18 09:04:32,801 - INFO - Decode progress: request=117529c70 generated_tokens=210 elapsed=1.747s rate=49.2 tok/s
+2026-10-18 09:04:32,883 - INFO - Decode progress: request=117529c70 generated_tokens=220 elapsed=1.829s rate=32563.5 tok/s
+2026-10-18 09:04:32,942 - INFO - Decode progress: request=117529c70 generated_tokens=230 elapsed=1.888s rate=119400.8 tok/s
+2026-10-18 09:04:32,999 - INFO - Decode progress: request=117529c70 generated_tokens=240 elapsed=1.945s rate=31250.0 tok/s
+2026-10-18 09:04:33,063 - INFO - Decode progress: request=117529c70 generated_tokens=250 elapsed=2.009s rate=437.1 tok/s
+2026-10-18 09:04:33,145 - INFO - Decode progress: request=117529c70 generated_tokens=260 elapsed=2.092s rate=28742.3 tok/s
+2026-10-18 09:04:33,227 - INFO - Decode progress: request=117529c70 generated_tokens=270 elapsed=2.173s rate=27427.9 tok/s
+2026-10-18 09:04:33,347 - INFO - Decode progress: request=117529c70 generated_tokens=280 elapsed=2.293s rate=48.8 tok/s
+2026-10-18 09:04:33,386 - INFO - Decode progress: request=117529c70 generated_tokens=290 elapsed=2.333s rate=90563.4 tok/s
+2026-10-18 09:04:33,448 - INFO - Decode progress: request=117529c70 generated_tokens=300 elapsed=2.394s rate=421.0 tok/s
+2026-10-18 09:04:33,515 - INFO - Decode progress: request=117529c70 generated_tokens=310 elapsed=2.461s rate=24742.0 tok/s
+2026-10-18 09:04:33,627 - INFO - Decode progress: request=117529c70 generated_tokens=320 elapsed=2.574s rate=26965.9 tok/s
+2026-10-18 09:04:33,667 - INFO - Decode progress: request=117529c70 generated_tokens=330 elapsed=2.613s rate=140349.2 tok/s
+2026-10-18 09:04:33,745 - INFO - Decode progress: request=117529c70 generated_tokens=340 elapsed=2.692s rate=26461.3 tok/s
+2026-10-18 09:04:33,833 - INFO - Decode progress: request=117529c70 generated_tokens=350 elapsed=2.779s rate=138.6 tok/s
+2026-10-18 09:04:33,916 - INFO - Decode progress: request=117529c70 generated_tokens=360 elapsed=2.862s rate=134845.6 tok/s
+2026-10-18 09:04:34,035 - INFO - Decode progress: request=117529c70 generated_tokens=370 elapsed=2.981s rate=50.4 tok/s
+2026-10-18 09:04:34,074 - INFO - Decode progress: request=117529c70 generated_tokens=380 elapsed=3.020s rate=77918.9 tok/s
+2026-10-18 09:04:34,132 - INFO - Decode progress: request=117529c70 generated_tokens=390 elapsed=3.078s rate=29776.9 tok/s
+2026-10-18 09:04:34,215 - INFO - Decode progress: request=117529c70 generated_tokens=400 elapsed=3.161s rate=44.4 tok/s
+2026-10-18 09:04:34,258 - INFO - Decode progress: request=117529c70 generated_tokens=410 elapsed=3.204s rate=103009.2 tok/s
+2026-10-18 09:04:34,316 - INFO - Decode progress: request=117529c70 generated_tokens=420 elapsed=3.262s rate=32171.8 tok/s
+2026-10-18 09:04:34,366 - INFO - Decode progress: request=117529c70 generated_tokens=430 elapsed=3.312s rate=26490.1 tok/s
+2026-10-18 09:04:34,391 - INFO - Decode progress: request=117529c70 generated_tokens=440 elapsed=3.337s rate=162153.8 tok/s
+2026-10-18 09:04:34,442 - INFO - Decode progress: request=117529c70 generated_tokens=450 elapsed=3.388s rate=373.1 tok/s
+2026-10-18 09:04:34,495 - INFO - Decode progress: request=117529c70 generated_tokens=460 elapsed=3.441s rate=27809.6 tok/s
+2026-10-18 09:04:34,519 - INFO - Decode progress: request=117529c70 generated_tokens=470 elapsed=3.466s rate=153847.7 tok/s
+2026-10-18 09:04:34,597 - INFO - Decode progress: request=117529c70 generated_tokens=480 elapsed=3.543s rate=29376.3 tok/s
+2026-10-18 09:04:34,648 - INFO - Decode progress: request=117529c70 generated_tokens=490 elapsed=3.594s rate=103896.3 tok/s
+2026-10-18 09:04:34,701 - INFO - Decode progress: request=117529c70 generated_tokens=500 elapsed=3.648s rate=455.6 tok/s
+2026-10-18 09:04:34,756 - INFO - Decode progress: request=117529c70 generated_tokens=510 elapsed=3.702s rate=118819.5 tok/s
+2026-10-18 09:04:34,756 - INFO - Decode completed: request=117529c70 generated_tokens=512 elapsed=3.702s rate=138.0 tok/s finish_reason=length
+2026-10-18 09:04:34,757 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.967s prefill=454.7 tok/s decode=138.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:04:34,764 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:52963 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:04:34,765 - INFO - Generation queued: request=115dd6db0 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:04:34,773 - INFO - Prefill started: request=115dd6db0 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:04:35,001 - INFO - Prefill progress: request=115dd6db0 tokens=85/86 (98.8%)
+2026-10-18 09:04:35,015 - INFO - Prefill completed: request=115dd6db0 prompt_tokens=86 cached_tokens=0 elapsed=0.183s rate=469.9 tok/s
+2026-10-18 09:04:35,015 - INFO - Decode started: request=115dd6db0 time_to_first_token=0.251s
+2026-10-18 09:04:35,126 - INFO - Decode progress: request=115dd6db0 generated_tokens=10 elapsed=0.111s rate=26030.9 tok/s
+2026-10-18 09:04:35,186 - INFO - Decode progress: request=115dd6db0 generated_tokens=20 elapsed=0.171s rate=79738.7 tok/s
+2026-10-18 09:04:35,265 - INFO - Decode progress: request=115dd6db0 generated_tokens=30 elapsed=0.250s rate=50.1 tok/s
+2026-10-18 09:04:35,345 - INFO - Decode progress: request=115dd6db0 generated_tokens=40 elapsed=0.330s rate=29629.7 tok/s
+2026-10-18 09:04:35,411 - INFO - Decode progress: request=115dd6db0 generated_tokens=50 elapsed=0.396s rate=139.0 tok/s
+2026-10-18 09:04:35,494 - INFO - Decode progress: request=115dd6db0 generated_tokens=60 elapsed=0.479s rate=34531.8 tok/s
+2026-10-18 09:04:35,553 - INFO - Decode progress: request=115dd6db0 generated_tokens=70 elapsed=0.538s rate=49.0 tok/s
+2026-10-18 09:04:35,633 - INFO - Decode progress: request=115dd6db0 generated_tokens=80 elapsed=0.618s rate=51.4 tok/s
+2026-10-18 09:04:35,735 - INFO - Decode progress: request=115dd6db0 generated_tokens=90 elapsed=0.720s rate=49.6 tok/s
+2026-10-18 09:04:35,838 - INFO - Decode progress: request=115dd6db0 generated_tokens=100 elapsed=0.823s rate=366.1 tok/s
+2026-10-18 09:04:35,921 - INFO - Decode progress: request=115dd6db0 generated_tokens=110 elapsed=0.906s rate=22284.2 tok/s
+2026-10-18 09:04:36,041 - INFO - Decode progress: request=115dd6db0 generated_tokens=120 elapsed=1.026s rate=83626.4 tok/s
+2026-10-18 09:04:36,100 - INFO - Decode progress: request=115dd6db0 generated_tokens=130 elapsed=1.085s rate=103006.7 tok/s
+2026-10-18 09:04:36,158 - INFO - Decode progress: request=115dd6db0 generated_tokens=140 elapsed=1.143s rate=52.3 tok/s
+2026-10-18 09:04:36,244 - INFO - Decode progress: request=115dd6db0 generated_tokens=150 elapsed=1.228s rate=156.1 tok/s
+2026-10-18 09:04:36,326 - INFO - Decode progress: request=115dd6db0 generated_tokens=160 elapsed=1.311s rate=79732.8 tok/s
+2026-10-18 09:04:36,407 - INFO - Decode progress: request=115dd6db0 generated_tokens=170 elapsed=1.392s rate=77417.5 tok/s
+2026-10-18 09:04:36,465 - INFO - Decode progress: request=115dd6db0 generated_tokens=180 elapsed=1.450s rate=31007.9 tok/s
+2026-10-18 09:04:36,606 - INFO - Decode progress: request=115dd6db0 generated_tokens=190 elapsed=1.591s rate=50.3 tok/s
+2026-10-18 09:04:36,647 - INFO - Decode progress: request=115dd6db0 generated_tokens=200 elapsed=1.632s rate=396.4 tok/s
+2026-10-18 09:04:36,710 - INFO - Decode progress: request=115dd6db0 generated_tokens=210 elapsed=1.695s rate=140349.2 tok/s
+2026-10-18 09:04:36,809 - INFO - Decode progress: request=115dd6db0 generated_tokens=220 elapsed=1.794s rate=49.6 tok/s
+2026-10-18 09:04:36,847 - INFO - Decode progress: request=115dd6db0 generated_tokens=230 elapsed=1.832s rate=88237.6 tok/s
+2026-10-18 09:04:36,926 - INFO - Decode progress: request=115dd6db0 generated_tokens=240 elapsed=1.911s rate=49.0 tok/s
+2026-10-18 09:04:36,987 - INFO - Decode progress: request=115dd6db0 generated_tokens=250 elapsed=1.972s rate=488.7 tok/s
+2026-10-18 09:04:37,049 - INFO - Decode progress: request=115dd6db0 generated_tokens=260 elapsed=2.034s rate=100846.9 tok/s
+2026-10-18 09:04:37,108 - INFO - Decode progress: request=115dd6db0 generated_tokens=270 elapsed=2.093s rate=31830.8 tok/s
+2026-10-18 09:04:37,169 - INFO - Decode progress: request=115dd6db0 generated_tokens=280 elapsed=2.154s rate=104801.3 tok/s
+2026-10-18 09:04:37,227 - INFO - Decode progress: request=115dd6db0 generated_tokens=290 elapsed=2.212s rate=52.8 tok/s
+2026-10-18 09:04:37,280 - INFO - Decode progress: request=115dd6db0 generated_tokens=300 elapsed=2.265s rate=36.7 tok/s
+2026-10-18 09:04:37,308 - INFO - Decode progress: request=115dd6db0 generated_tokens=310 elapsed=2.293s rate=166665.4 tok/s
+2026-10-18 09:04:37,385 - INFO - Decode progress: request=115dd6db0 generated_tokens=320 elapsed=2.370s rate=141184.3 tok/s
+2026-10-18 09:04:37,435 - INFO - Decode progress: request=115dd6db0 generated_tokens=330 elapsed=2.420s rate=162178.3 tok/s
+2026-10-18 09:04:37,510 - INFO - Decode progress: request=115dd6db0 generated_tokens=340 elapsed=2.495s rate=39.5 tok/s
+2026-10-18 09:04:37,595 - INFO - Decode progress: request=115dd6db0 generated_tokens=350 elapsed=2.580s rate=29.7 tok/s
+2026-10-18 09:04:37,648 - INFO - Decode progress: request=115dd6db0 generated_tokens=360 elapsed=2.633s rate=30848.0 tok/s
+2026-10-18 09:04:37,700 - INFO - Decode progress: request=115dd6db0 generated_tokens=370 elapsed=2.685s rate=28811.7 tok/s
+2026-10-18 09:04:37,751 - INFO - Decode progress: request=115dd6db0 generated_tokens=380 elapsed=2.735s rate=138717.4 tok/s
+2026-10-18 09:04:37,800 - INFO - Decode progress: request=115dd6db0 generated_tokens=390 elapsed=2.785s rate=147234.1 tok/s
+2026-10-18 09:04:37,856 - INFO - Decode progress: request=115dd6db0 generated_tokens=400 elapsed=2.840s rate=215.9 tok/s
+2026-10-18 09:04:37,908 - INFO - Decode progress: request=115dd6db0 generated_tokens=410 elapsed=2.893s rate=108590.4 tok/s
+2026-10-18 09:04:37,957 - INFO - Decode progress: request=115dd6db0 generated_tokens=420 elapsed=2.942s rate=40.9 tok/s
+2026-10-18 09:04:38,010 - INFO - Decode progress: request=115dd6db0 generated_tokens=430 elapsed=2.995s rate=67227.6 tok/s
+2026-10-18 09:04:38,114 - INFO - Decode progress: request=115dd6db0 generated_tokens=440 elapsed=3.099s rate=145454.1 tok/s
+2026-10-18 09:04:38,168 - INFO - Decode progress: request=115dd6db0 generated_tokens=450 elapsed=3.153s rate=219.3 tok/s
+2026-10-18 09:04:38,230 - INFO - Decode progress: request=115dd6db0 generated_tokens=460 elapsed=3.215s rate=144572.8 tok/s
+2026-10-18 09:04:38,289 - INFO - Decode progress: request=115dd6db0 generated_tokens=470 elapsed=3.274s rate=131876.9 tok/s
+2026-10-18 09:04:38,348 - INFO - Decode progress: request=115dd6db0 generated_tokens=480 elapsed=3.333s rate=28302.2 tok/s
+2026-10-18 09:04:38,425 - INFO - Decode progress: request=115dd6db0 generated_tokens=490 elapsed=3.410s rate=38.9 tok/s
+2026-10-18 09:04:38,506 - INFO - Decode progress: request=115dd6db0 generated_tokens=500 elapsed=3.491s rate=33.8 tok/s
+2026-10-18 09:04:38,554 - INFO - Decode progress: request=115dd6db0 generated_tokens=510 elapsed=3.539s rate=47.9 tok/s
+2026-10-18 09:04:38,570 - INFO - Decode completed: request=115dd6db0 generated_tokens=512 elapsed=3.555s rate=143.7 tok/s finish_reason=length
+2026-10-18 09:04:38,571 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.812s prefill=469.9 tok/s decode=144.0 tok/s finish_reason=length in_flight=0
+2026-10-18 09:06:40,356 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53616 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:06:40,356 - INFO - Generation queued: request=117528b90 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:06:40,364 - INFO - Prefill started: request=117528b90 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:06:40,695 - INFO - Prefill progress: request=117528b90 tokens=85/86 (98.8%)
+2026-10-18 09:06:40,708 - INFO - Prefill completed: request=117528b90 prompt_tokens=86 cached_tokens=0 elapsed=0.290s rate=296.7 tok/s
+2026-10-18 09:06:40,708 - INFO - Decode started: request=117528b90 time_to_first_token=0.352s
+2026-10-18 09:06:40,798 - INFO - Decode progress: request=117528b90 generated_tokens=10 elapsed=0.090s rate=89888.6 tok/s
+2026-10-18 09:06:40,857 - INFO - Decode progress: request=117528b90 generated_tokens=20 elapsed=0.149s rate=96777.1 tok/s
+2026-10-18 09:06:40,916 - INFO - Decode progress: request=117528b90 generated_tokens=30 elapsed=0.208s rate=23621.7 tok/s
+2026-10-18 09:06:40,974 - INFO - Decode progress: request=117528b90 generated_tokens=40 elapsed=0.266s rate=98764.4 tok/s
+2026-10-18 09:06:41,060 - INFO - Decode progress: request=117528b90 generated_tokens=50 elapsed=0.352s rate=143.1 tok/s
+2026-10-18 09:06:41,142 - INFO - Decode progress: request=117528b90 generated_tokens=60 elapsed=0.434s rate=61068.8 tok/s
+2026-10-18 09:06:41,222 - INFO - Decode progress: request=117528b90 generated_tokens=70 elapsed=0.514s rate=88237.6 tok/s
+2026-10-18 09:06:41,324 - INFO - Decode progress: request=117528b90 generated_tokens=80 elapsed=0.616s rate=48.4 tok/s
+2026-10-18 09:06:41,405 - INFO - Decode progress: request=117528b90 generated_tokens=90 elapsed=0.697s rate=55300.5 tok/s
+2026-10-18 09:06:41,506 - INFO - Decode progress: request=117528b90 generated_tokens=100 elapsed=0.798s rate=328.7 tok/s
+2026-10-18 09:06:41,589 - INFO - Decode progress: request=117528b90 generated_tokens=110 elapsed=0.881s rate=140349.2 tok/s
+2026-10-18 09:06:41,690 - INFO - Decode progress: request=117528b90 generated_tokens=120 elapsed=0.982s rate=48.7 tok/s
+2026-10-18 09:06:41,769 - INFO - Decode progress: request=117528b90 generated_tokens=130 elapsed=1.061s rate=51.0 tok/s
+2026-10-18 09:06:41,850 - INFO - Decode progress: request=117528b90 generated_tokens=140 elapsed=1.142s rate=30690.8 tok/s
+2026-10-18 09:06:41,936 - INFO - Decode progress: request=117528b90 generated_tokens=150 elapsed=1.229s rate=150.3 tok/s
+2026-10-18 09:06:42,039 - INFO - Decode progress: request=117528b90 generated_tokens=160 elapsed=1.331s rate=29665.7 tok/s
+2026-10-18 09:06:42,099 - INFO - Decode progress: request=117528b90 generated_tokens=170 elapsed=1.391s rate=29411.7 tok/s
+2026-10-18 09:06:42,158 - INFO - Decode progress: request=117528b90 generated_tokens=180 elapsed=1.450s rate=68771.2 tok/s
+2026-10-18 09:06:42,215 - INFO - Decode progress: request=117528b90 generated_tokens=190 elapsed=1.507s rate=52.6 tok/s
+2026-10-18 09:06:42,297 - INFO - Decode progress: request=117528b90 generated_tokens=200 elapsed=1.589s rate=392.1 tok/s
+2026-10-18 09:06:42,359 - INFO - Decode progress: request=117528b90 generated_tokens=210 elapsed=1.652s rate=24047.7 tok/s
+2026-10-18 09:06:42,481 - INFO - Decode progress: request=117528b90 generated_tokens=220 elapsed=1.773s rate=49.4 tok/s
+2026-10-18 09:06:42,601 - INFO - Decode progress: request=117528b90 generated_tokens=230 elapsed=1.893s rate=50.5 tok/s
+2026-10-18 09:06:42,640 - INFO - Decode progress: request=117528b90 generated_tokens=240 elapsed=1.932s rate=94490.4 tok/s
+2026-10-18 09:06:42,701 - INFO - Decode progress: request=117528b90 generated_tokens=250 elapsed=1.993s rate=47.0 tok/s
+2026-10-18 09:06:42,770 - INFO - Decode progress: request=117528b90 generated_tokens=260 elapsed=2.062s rate=29776.1 tok/s
+2026-10-18 09:06:42,796 - INFO - Decode progress: request=117528b90 generated_tokens=270 elapsed=2.088s rate=161059.3 tok/s
+2026-10-18 09:06:42,871 - INFO - Decode progress: request=117528b90 generated_tokens=280 elapsed=2.163s rate=27273.3 tok/s
+2026-10-18 09:06:42,947 - INFO - Decode progress: request=117528b90 generated_tokens=290 elapsed=2.239s rate=39.4 tok/s
+2026-10-18 09:06:43,045 - INFO - Decode progress: request=117528b90 generated_tokens=300 elapsed=2.337s rate=35.3 tok/s
+2026-10-18 09:06:43,127 - INFO - Decode progress: request=117528b90 generated_tokens=310 elapsed=2.419s rate=114835.6 tok/s
+2026-10-18 09:06:43,187 - INFO - Decode progress: request=117528b90 generated_tokens=320 elapsed=2.479s rate=152862.1 tok/s
+2026-10-18 09:06:43,267 - INFO - Decode progress: request=117528b90 generated_tokens=330 elapsed=2.559s rate=30848.0 tok/s
+2026-10-18 09:06:43,389 - INFO - Decode progress: request=117528b90 generated_tokens=340 elapsed=2.681s rate=50.6 tok/s
+2026-10-18 09:06:43,450 - INFO - Decode progress: request=117528b90 generated_tokens=350 elapsed=2.742s rate=410.3 tok/s
+2026-10-18 09:06:43,552 - INFO - Decode progress: request=117528b90 generated_tokens=360 elapsed=2.844s rate=102134.7 tok/s
+2026-10-18 09:06:43,631 - INFO - Decode progress: request=117528b90 generated_tokens=370 elapsed=2.924s rate=50.8 tok/s
+2026-10-18 09:06:43,691 - INFO - Decode progress: request=117528b90 generated_tokens=380 elapsed=2.983s rate=52.7 tok/s
+2026-10-18 09:06:43,729 - INFO - Decode progress: request=117528b90 generated_tokens=390 elapsed=3.021s rate=140349.2 tok/s
+2026-10-18 09:06:43,855 - INFO - Decode progress: request=117528b90 generated_tokens=400 elapsed=3.148s rate=37.8 tok/s
+2026-10-18 09:06:43,896 - INFO - Decode progress: request=117528b90 generated_tokens=410 elapsed=3.189s rate=135590.6 tok/s
+2026-10-18 09:06:44,016 - INFO - Decode progress: request=117528b90 generated_tokens=420 elapsed=3.309s rate=49.3 tok/s
+2026-10-18 09:06:44,097 - INFO - Decode progress: request=117528b90 generated_tokens=430 elapsed=3.389s rate=49.3 tok/s
+2026-10-18 09:06:44,156 - INFO - Decode progress: request=117528b90 generated_tokens=440 elapsed=3.449s rate=146351.2 tok/s
+2026-10-18 09:06:44,217 - INFO - Decode progress: request=117528b90 generated_tokens=450 elapsed=3.510s rate=403.2 tok/s
+2026-10-18 09:06:44,301 - INFO - Decode progress: request=117528b90 generated_tokens=460 elapsed=3.593s rate=104811.5 tok/s
+2026-10-18 09:06:44,360 - INFO - Decode progress: request=117528b90 generated_tokens=470 elapsed=3.652s rate=31210.0 tok/s
+2026-10-18 09:06:44,399 - INFO - Decode progress: request=117528b90 generated_tokens=480 elapsed=3.692s rate=67037.6 tok/s
+2026-10-18 09:06:44,480 - INFO - Decode progress: request=117528b90 generated_tokens=490 elapsed=3.772s rate=27713.9 tok/s
+2026-10-18 09:06:44,542 - INFO - Decode progress: request=117528b90 generated_tokens=500 elapsed=3.834s rate=412.1 tok/s
+2026-10-18 09:06:44,604 - INFO - Decode progress: request=117528b90 generated_tokens=510 elapsed=3.896s rate=26726.6 tok/s
+2026-10-18 09:06:44,604 - INFO - Decode completed: request=117528b90 generated_tokens=512 elapsed=3.896s rate=131.2 tok/s finish_reason=length
+2026-10-18 09:06:44,605 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=4.255s prefill=296.7 tok/s decode=131.4 tok/s finish_reason=length in_flight=0
+2026-10-18 09:06:44,613 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53637 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:06:44,614 - INFO - Generation queued: request=1173eb260 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:06:44,622 - INFO - Prefill started: request=1173eb260 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:06:44,848 - INFO - Prefill progress: request=1173eb260 tokens=85/86 (98.8%)
+2026-10-18 09:06:44,861 - INFO - Prefill completed: request=1173eb260 prompt_tokens=86 cached_tokens=0 elapsed=0.181s rate=474.4 tok/s
+2026-10-18 09:06:44,861 - INFO - Decode started: request=1173eb260 time_to_first_token=0.248s
+2026-10-18 09:06:44,970 - INFO - Decode progress: request=1173eb260 generated_tokens=10 elapsed=0.109s rate=25104.7 tok/s
+2026-10-18 09:06:45,029 - INFO - Decode progress: request=1173eb260 generated_tokens=20 elapsed=0.168s rate=25861.9 tok/s
+2026-10-18 09:06:45,109 - INFO - Decode progress: request=1173eb260 generated_tokens=30 elapsed=0.248s rate=47.9 tok/s
+2026-10-18 09:06:45,208 - INFO - Decode progress: request=1173eb260 generated_tokens=40 elapsed=0.347s rate=25723.5 tok/s
+2026-10-18 09:06:45,275 - INFO - Decode progress: request=1173eb260 generated_tokens=50 elapsed=0.414s rate=135.6 tok/s
+2026-10-18 09:06:45,358 - INFO - Decode progress: request=1173eb260 generated_tokens=60 elapsed=0.497s rate=30113.3 tok/s
+2026-10-18 09:06:45,417 - INFO - Decode progress: request=1173eb260 generated_tokens=70 elapsed=0.556s rate=49.2 tok/s
+2026-10-18 09:06:45,496 - INFO - Decode progress: request=1173eb260 generated_tokens=80 elapsed=0.635s rate=52.4 tok/s
+2026-10-18 09:06:45,577 - INFO - Decode progress: request=1173eb260 generated_tokens=90 elapsed=0.716s rate=28004.1 tok/s
+2026-10-18 09:06:45,680 - INFO - Decode progress: request=1173eb260 generated_tokens=100 elapsed=0.819s rate=42.7 tok/s
+2026-10-18 09:06:45,764 - INFO - Decode progress: request=1173eb260 generated_tokens=110 elapsed=0.903s rate=49.5 tok/s
+2026-10-18 09:06:45,845 - INFO - Decode progress: request=1173eb260 generated_tokens=120 elapsed=0.984s rate=50.8 tok/s
+2026-10-18 09:06:45,926 - INFO - Decode progress: request=1173eb260 generated_tokens=130 elapsed=1.065s rate=29739.8 tok/s
+2026-10-18 09:06:46,004 - INFO - Decode progress: request=1173eb260 generated_tokens=140 elapsed=1.143s rate=50.9 tok/s
+2026-10-18 09:06:46,069 - INFO - Decode progress: request=1173eb260 generated_tokens=150 elapsed=1.208s rate=39.5 tok/s
+2026-10-18 09:06:46,130 - INFO - Decode progress: request=1173eb260 generated_tokens=160 elapsed=1.269s rate=96777.1 tok/s
+2026-10-18 09:06:46,251 - INFO - Decode progress: request=1173eb260 generated_tokens=170 elapsed=1.390s rate=30848.9 tok/s
+2026-10-18 09:06:46,310 - INFO - Decode progress: request=1173eb260 generated_tokens=180 elapsed=1.449s rate=51.8 tok/s
+2026-10-18 09:06:46,348 - INFO - Decode progress: request=1173eb260 generated_tokens=190 elapsed=1.487s rate=123075.5 tok/s
+2026-10-18 09:06:46,422 - INFO - Decode progress: request=1173eb260 generated_tokens=200 elapsed=1.561s rate=107.8 tok/s
+2026-10-18 09:06:46,501 - INFO - Decode progress: request=1173eb260 generated_tokens=210 elapsed=1.640s rate=40.8 tok/s
+2026-10-18 09:06:46,608 - INFO - Decode progress: request=1173eb260 generated_tokens=220 elapsed=1.747s rate=28537.0 tok/s
+2026-10-18 09:06:46,647 - INFO - Decode progress: request=1173eb260 generated_tokens=230 elapsed=1.786s rate=142856.1 tok/s
+2026-10-18 09:06:46,725 - INFO - Decode progress: request=1173eb260 generated_tokens=240 elapsed=1.864s rate=52.1 tok/s
+2026-10-18 09:06:46,854 - INFO - Decode progress: request=1173eb260 generated_tokens=250 elapsed=1.993s rate=36.1 tok/s
+2026-10-18 09:06:46,916 - INFO - Decode progress: request=1173eb260 generated_tokens=260 elapsed=2.055s rate=25779.0 tok/s
+2026-10-18 09:06:46,996 - INFO - Decode progress: request=1173eb260 generated_tokens=270 elapsed=2.135s rate=22944.3 tok/s
+2026-10-18 09:06:47,075 - INFO - Decode progress: request=1173eb260 generated_tokens=280 elapsed=2.214s rate=152878.5 tok/s
+2026-10-18 09:06:47,153 - INFO - Decode progress: request=1173eb260 generated_tokens=290 elapsed=2.292s rate=49.9 tok/s
+2026-10-18 09:06:47,235 - INFO - Decode progress: request=1173eb260 generated_tokens=300 elapsed=2.374s rate=403.2 tok/s
+2026-10-18 09:06:47,298 - INFO - Decode progress: request=1173eb260 generated_tokens=310 elapsed=2.437s rate=29197.0 tok/s
+2026-10-18 09:06:47,337 - INFO - Decode progress: request=1173eb260 generated_tokens=320 elapsed=2.476s rate=150016.3 tok/s
+2026-10-18 09:06:47,402 - INFO - Decode progress: request=1173eb260 generated_tokens=330 elapsed=2.541s rate=27618.1 tok/s
+2026-10-18 09:06:47,427 - INFO - Decode progress: request=1173eb260 generated_tokens=340 elapsed=2.566s rate=151905.2 tok/s
+2026-10-18 09:06:47,505 - INFO - Decode progress: request=1173eb260 generated_tokens=350 elapsed=2.644s rate=34.3 tok/s
+2026-10-18 09:06:47,533 - INFO - Decode progress: request=1173eb260 generated_tokens=360 elapsed=2.672s rate=171442.1 tok/s
+2026-10-18 09:06:47,609 - INFO - Decode progress: request=1173eb260 generated_tokens=370 elapsed=2.748s rate=37.9 tok/s
+2026-10-18 09:06:47,660 - INFO - Decode progress: request=1173eb260 generated_tokens=380 elapsed=2.799s rate=31829.9 tok/s
+2026-10-18 09:06:47,686 - INFO - Decode progress: request=1173eb260 generated_tokens=390 elapsed=2.825s rate=179113.7 tok/s
+2026-10-18 09:06:47,766 - INFO - Decode progress: request=1173eb260 generated_tokens=400 elapsed=2.905s rate=430.1 tok/s
+2026-10-18 09:06:47,846 - INFO - Decode progress: request=1173eb260 generated_tokens=410 elapsed=2.985s rate=99999.2 tok/s
+2026-10-18 09:06:47,897 - INFO - Decode progress: request=1173eb260 generated_tokens=420 elapsed=3.036s rate=121832.7 tok/s
+2026-10-18 09:06:47,947 - INFO - Decode progress: request=1173eb260 generated_tokens=430 elapsed=3.086s rate=35714.3 tok/s
+2026-10-18 09:06:48,023 - INFO - Decode progress: request=1173eb260 generated_tokens=440 elapsed=3.162s rate=39.8 tok/s
+2026-10-18 09:06:48,102 - INFO - Decode progress: request=1173eb260 generated_tokens=450 elapsed=3.241s rate=35.6 tok/s
+2026-10-18 09:06:48,155 - INFO - Decode progress: request=1173eb260 generated_tokens=460 elapsed=3.294s rate=38.7 tok/s
+2026-10-18 09:06:48,206 - INFO - Decode progress: request=1173eb260 generated_tokens=470 elapsed=3.345s rate=28135.7 tok/s
+2026-10-18 09:06:48,283 - INFO - Decode progress: request=1173eb260 generated_tokens=480 elapsed=3.422s rate=30418.3 tok/s
+2026-10-18 09:06:48,334 - INFO - Decode progress: request=1173eb260 generated_tokens=490 elapsed=3.473s rate=29126.5 tok/s
+2026-10-18 09:06:48,388 - INFO - Decode progress: request=1173eb260 generated_tokens=500 elapsed=3.527s rate=371.0 tok/s
+2026-10-18 09:06:48,415 - INFO - Decode progress: request=1173eb260 generated_tokens=510 elapsed=3.554s rate=151905.2 tok/s
+2026-10-18 09:06:48,433 - INFO - Decode completed: request=1173eb260 generated_tokens=512 elapsed=3.572s rate=143.0 tok/s finish_reason=length
+2026-10-18 09:06:48,434 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.827s prefill=474.4 tok/s decode=143.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:06:48,442 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53656 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:06:48,442 - INFO - Generation queued: request=117529c40 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:06:48,450 - INFO - Prefill started: request=117529c40 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:06:48,676 - INFO - Prefill progress: request=117529c40 tokens=85/86 (98.8%)
+2026-10-18 09:06:48,689 - INFO - Prefill completed: request=117529c40 prompt_tokens=86 cached_tokens=0 elapsed=0.185s rate=464.3 tok/s
+2026-10-18 09:06:48,689 - INFO - Decode started: request=117529c40 time_to_first_token=0.247s
+2026-10-18 09:06:48,778 - INFO - Decode progress: request=117529c40 generated_tokens=10 elapsed=0.089s rate=98764.4 tok/s
+2026-10-18 09:06:48,838 - INFO - Decode progress: request=117529c40 generated_tokens=20 elapsed=0.149s rate=83626.4 tok/s
+2026-10-18 09:06:48,896 - INFO - Decode progress: request=117529c40 generated_tokens=30 elapsed=0.207s rate=28469.7 tok/s
+2026-10-18 09:06:48,954 - INFO - Decode progress: request=117529c40 generated_tokens=40 elapsed=0.265s rate=91955.5 tok/s
+2026-10-18 09:06:49,016 - INFO - Decode progress: request=117529c40 generated_tokens=50 elapsed=0.327s rate=370.3 tok/s
+2026-10-18 09:06:49,119 - INFO - Decode progress: request=117529c40 generated_tokens=60 elapsed=0.430s rate=93025.1 tok/s
+2026-10-18 09:06:49,259 - INFO - Decode progress: request=117529c40 generated_tokens=70 elapsed=0.570s rate=73394.4 tok/s
+2026-10-18 09:06:49,340 - INFO - Decode progress: request=117529c40 generated_tokens=80 elapsed=0.651s rate=47.7 tok/s
+2026-10-18 09:06:49,399 - INFO - Decode progress: request=117529c40 generated_tokens=90 elapsed=0.710s rate=49.5 tok/s
+2026-10-18 09:06:49,485 - INFO - Decode progress: request=117529c40 generated_tokens=100 elapsed=0.796s rate=149.7 tok/s
+2026-10-18 09:06:49,588 - INFO - Decode progress: request=117529c40 generated_tokens=110 elapsed=0.899s rate=49.8 tok/s
+2026-10-18 09:06:49,670 - INFO - Decode progress: request=117529c40 generated_tokens=120 elapsed=0.981s rate=49.2 tok/s
+2026-10-18 09:06:49,730 - INFO - Decode progress: request=117529c40 generated_tokens=130 elapsed=1.041s rate=25834.4 tok/s
+2026-10-18 09:06:49,789 - INFO - Decode progress: request=117529c40 generated_tokens=140 elapsed=1.100s rate=32967.5 tok/s
+2026-10-18 09:06:49,873 - INFO - Decode progress: request=117529c40 generated_tokens=150 elapsed=1.183s rate=42.6 tok/s
+2026-10-18 09:06:49,954 - INFO - Decode progress: request=117529c40 generated_tokens=160 elapsed=1.265s rate=33659.9 tok/s
+2026-10-18 09:06:50,056 - INFO - Decode progress: request=117529c40 generated_tokens=170 elapsed=1.366s rate=117067.4 tok/s
+2026-10-18 09:06:50,115 - INFO - Decode progress: request=117529c40 generated_tokens=180 elapsed=1.426s rate=27088.5 tok/s
+2026-10-18 09:06:50,154 - INFO - Decode progress: request=117529c40 generated_tokens=190 elapsed=1.465s rate=103009.2 tok/s
+2026-10-18 09:06:50,277 - INFO - Decode progress: request=117529c40 generated_tokens=200 elapsed=1.587s rate=415.1 tok/s
+2026-10-18 09:06:50,338 - INFO - Decode progress: request=117529c40 generated_tokens=210 elapsed=1.649s rate=50.2 tok/s
+2026-10-18 09:06:50,398 - INFO - Decode progress: request=117529c40 generated_tokens=220 elapsed=1.709s rate=52.1 tok/s
+2026-10-18 09:06:50,499 - INFO - Decode progress: request=117529c40 generated_tokens=230 elapsed=1.810s rate=81359.5 tok/s
+2026-10-18 09:06:50,579 - INFO - Decode progress: request=117529c40 generated_tokens=240 elapsed=1.890s rate=49.9 tok/s
+2026-10-18 09:06:50,645 - INFO - Decode progress: request=117529c40 generated_tokens=250 elapsed=1.955s rate=150.9 tok/s
+2026-10-18 09:06:50,749 - INFO - Decode progress: request=117529c40 generated_tokens=260 elapsed=2.060s rate=50.1 tok/s
+2026-10-18 09:06:50,870 - INFO - Decode progress: request=117529c40 generated_tokens=270 elapsed=2.181s rate=51.8 tok/s
+2026-10-18 09:06:50,930 - INFO - Decode progress: request=117529c40 generated_tokens=280 elapsed=2.241s rate=30038.1 tok/s
+2026-10-18 09:06:51,030 - INFO - Decode progress: request=117529c40 generated_tokens=290 elapsed=2.340s rate=49.1 tok/s
+2026-10-18 09:06:51,093 - INFO - Decode progress: request=117529c40 generated_tokens=300 elapsed=2.404s rate=348.6 tok/s
+2026-10-18 09:06:51,217 - INFO - Decode progress: request=117529c40 generated_tokens=310 elapsed=2.528s rate=28268.5 tok/s
+2026-10-18 09:06:51,297 - INFO - Decode progress: request=117529c40 generated_tokens=320 elapsed=2.608s rate=48.4 tok/s
+2026-10-18 09:06:51,357 - INFO - Decode progress: request=117529c40 generated_tokens=330 elapsed=2.668s rate=50.9 tok/s
+2026-10-18 09:06:51,396 - INFO - Decode progress: request=117529c40 generated_tokens=340 elapsed=2.706s rate=101689.7 tok/s
+2026-10-18 09:06:51,457 - INFO - Decode progress: request=117529c40 generated_tokens=350 elapsed=2.768s rate=405.0 tok/s
+2026-10-18 09:06:51,535 - INFO - Decode progress: request=117529c40 generated_tokens=360 elapsed=2.846s rate=37.6 tok/s
+2026-10-18 09:06:51,561 - INFO - Decode progress: request=117529c40 generated_tokens=370 elapsed=2.872s rate=118230.7 tok/s
+2026-10-18 09:06:51,613 - INFO - Decode progress: request=117529c40 generated_tokens=380 elapsed=2.924s rate=151905.2 tok/s
+2026-10-18 09:06:51,692 - INFO - Decode progress: request=117529c40 generated_tokens=390 elapsed=3.002s rate=25210.5 tok/s
+2026-10-18 09:06:51,751 - INFO - Decode progress: request=117529c40 generated_tokens=400 elapsed=3.062s rate=30.1 tok/s
+2026-10-18 09:06:51,834 - INFO - Decode progress: request=117529c40 generated_tokens=410 elapsed=3.144s rate=109587.9 tok/s
+2026-10-18 09:06:51,884 - INFO - Decode progress: request=117529c40 generated_tokens=420 elapsed=3.195s rate=117647.8 tok/s
+2026-10-18 09:06:51,962 - INFO - Decode progress: request=117529c40 generated_tokens=430 elapsed=3.272s rate=89549.4 tok/s
+2026-10-18 09:06:52,011 - INFO - Decode progress: request=117529c40 generated_tokens=440 elapsed=3.322s rate=40.8 tok/s
+2026-10-18 09:06:52,101 - INFO - Decode progress: request=117529c40 generated_tokens=450 elapsed=3.412s rate=199.9 tok/s
+2026-10-18 09:06:52,181 - INFO - Decode progress: request=117529c40 generated_tokens=460 elapsed=3.492s rate=40.3 tok/s
+2026-10-18 09:06:52,234 - INFO - Decode progress: request=117529c40 generated_tokens=470 elapsed=3.545s rate=27303.6 tok/s
+2026-10-18 09:06:52,260 - INFO - Decode progress: request=117529c40 generated_tokens=480 elapsed=3.571s rate=162153.8 tok/s
+2026-10-18 09:06:52,311 - INFO - Decode progress: request=117529c40 generated_tokens=490 elapsed=3.622s rate=105730.1 tok/s
+2026-10-18 09:06:52,363 - INFO - Decode progress: request=117529c40 generated_tokens=500 elapsed=3.674s rate=380.6 tok/s
+2026-10-18 09:06:52,414 - INFO - Decode progress: request=117529c40 generated_tokens=510 elapsed=3.725s rate=28537.0 tok/s
+2026-10-18 09:06:52,415 - INFO - Decode completed: request=117529c40 generated_tokens=512 elapsed=3.725s rate=137.2 tok/s finish_reason=length
+2026-10-18 09:06:52,415 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.980s prefill=464.3 tok/s decode=137.4 tok/s finish_reason=length in_flight=0
+2026-10-18 09:06:52,424 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53683 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:06:52,424 - INFO - Generation queued: request=1173ea1e0 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:06:52,432 - INFO - Prefill started: request=1173ea1e0 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:06:52,668 - INFO - Prefill progress: request=1173ea1e0 tokens=85/86 (98.8%)
+2026-10-18 09:06:52,680 - INFO - Prefill completed: request=1173ea1e0 prompt_tokens=86 cached_tokens=0 elapsed=0.193s rate=445.9 tok/s
+2026-10-18 09:06:52,681 - INFO - Decode started: request=1173ea1e0 time_to_first_token=0.257s
+2026-10-18 09:06:52,791 - INFO - Decode progress: request=1173ea1e0 generated_tokens=10 elapsed=0.111s rate=24640.2 tok/s
+2026-10-18 09:06:52,852 - INFO - Decode progress: request=1173ea1e0 generated_tokens=20 elapsed=0.171s rate=85106.2 tok/s
+2026-10-18 09:06:52,930 - INFO - Decode progress: request=1173ea1e0 generated_tokens=30 elapsed=0.249s rate=50.9 tok/s
+2026-10-18 09:06:53,030 - INFO - Decode progress: request=1173ea1e0 generated_tokens=40 elapsed=0.349s rate=27523.2 tok/s
+2026-10-18 09:06:53,096 - INFO - Decode progress: request=1173ea1e0 generated_tokens=50 elapsed=0.416s rate=131.9 tok/s
+2026-10-18 09:06:53,157 - INFO - Decode progress: request=1173ea1e0 generated_tokens=60 elapsed=0.476s rate=51.9 tok/s
+2026-10-18 09:06:53,216 - INFO - Decode progress: request=1173ea1e0 generated_tokens=70 elapsed=0.536s rate=50.2 tok/s
+2026-10-18 09:06:53,298 - INFO - Decode progress: request=1173ea1e0 generated_tokens=80 elapsed=0.617s rate=113737.8 tok/s
+2026-10-18 09:06:53,398 - INFO - Decode progress: request=1173ea1e0 generated_tokens=90 elapsed=0.717s rate=49.5 tok/s
+2026-10-18 09:06:53,500 - INFO - Decode progress: request=1173ea1e0 generated_tokens=100 elapsed=0.820s rate=45.4 tok/s
+2026-10-18 09:06:53,584 - INFO - Decode progress: request=1173ea1e0 generated_tokens=110 elapsed=0.903s rate=49.9 tok/s
+2026-10-18 09:06:53,684 - INFO - Decode progress: request=1173ea1e0 generated_tokens=120 elapsed=1.004s rate=53.3 tok/s
+2026-10-18 09:06:53,765 - INFO - Decode progress: request=1173ea1e0 generated_tokens=130 elapsed=1.084s rate=122444.0 tok/s
+2026-10-18 09:06:53,844 - INFO - Decode progress: request=1173ea1e0 generated_tokens=140 elapsed=1.163s rate=52.7 tok/s
+2026-10-18 09:06:53,927 - INFO - Decode progress: request=1173ea1e0 generated_tokens=150 elapsed=1.246s rate=418.9 tok/s
+2026-10-18 09:06:54,029 - INFO - Decode progress: request=1173ea1e0 generated_tokens=160 elapsed=1.348s rate=35037.2 tok/s
+2026-10-18 09:06:54,089 - INFO - Decode progress: request=1173ea1e0 generated_tokens=170 elapsed=1.408s rate=97953.5 tok/s
+2026-10-18 09:06:54,147 - INFO - Decode progress: request=1173ea1e0 generated_tokens=180 elapsed=1.467s rate=29666.7 tok/s
+2026-10-18 09:06:54,206 - INFO - Decode progress: request=1173ea1e0 generated_tokens=190 elapsed=1.525s rate=29484.6 tok/s
+2026-10-18 09:06:54,288 - INFO - Decode progress: request=1173ea1e0 generated_tokens=200 elapsed=1.607s rate=448.9 tok/s
+2026-10-18 09:06:54,371 - INFO - Decode progress: request=1173ea1e0 generated_tokens=210 elapsed=1.690s rate=95238.4 tok/s
+2026-10-18 09:06:54,470 - INFO - Decode progress: request=1173ea1e0 generated_tokens=220 elapsed=1.790s rate=30227.1 tok/s
+2026-10-18 09:06:54,549 - INFO - Decode progress: request=1173ea1e0 generated_tokens=230 elapsed=1.869s rate=99168.0 tok/s
+2026-10-18 09:06:54,631 - INFO - Decode progress: request=1173ea1e0 generated_tokens=240 elapsed=1.950s rate=50.7 tok/s
+2026-10-18 09:06:54,737 - INFO - Decode progress: request=1173ea1e0 generated_tokens=250 elapsed=2.057s rate=37.0 tok/s
+2026-10-18 09:06:54,841 - INFO - Decode progress: request=1173ea1e0 generated_tokens=260 elapsed=2.160s rate=48.5 tok/s
+2026-10-18 09:06:54,900 - INFO - Decode progress: request=1173ea1e0 generated_tokens=270 elapsed=2.219s rate=29593.7 tok/s
+2026-10-18 09:06:54,959 - INFO - Decode progress: request=1173ea1e0 generated_tokens=280 elapsed=2.279s rate=118230.7 tok/s
+2026-10-18 09:06:55,039 - INFO - Decode progress: request=1173ea1e0 generated_tokens=290 elapsed=2.358s rate=49.6 tok/s
+2026-10-18 09:06:55,141 - INFO - Decode progress: request=1173ea1e0 generated_tokens=300 elapsed=2.461s rate=44.8 tok/s
+2026-10-18 09:06:55,205 - INFO - Decode progress: request=1173ea1e0 generated_tokens=310 elapsed=2.524s rate=26875.1 tok/s
+2026-10-18 09:06:55,264 - INFO - Decode progress: request=1173ea1e0 generated_tokens=320 elapsed=2.583s rate=35660.9 tok/s
+2026-10-18 09:06:55,323 - INFO - Decode progress: request=1173ea1e0 generated_tokens=330 elapsed=2.643s rate=48.1 tok/s
+2026-10-18 09:06:55,368 - INFO - Decode progress: request=1173ea1e0 generated_tokens=340 elapsed=2.688s rate=131148.0 tok/s
+2026-10-18 09:06:55,423 - INFO - Decode progress: request=1173ea1e0 generated_tokens=350 elapsed=2.742s rate=327.6 tok/s
+2026-10-18 09:06:55,476 - INFO - Decode progress: request=1173ea1e0 generated_tokens=360 elapsed=2.796s rate=117647.8 tok/s
+2026-10-18 09:06:55,554 - INFO - Decode progress: request=1173ea1e0 generated_tokens=370 elapsed=2.873s rate=37.6 tok/s
+2026-10-18 09:06:55,604 - INFO - Decode progress: request=1173ea1e0 generated_tokens=380 elapsed=2.924s rate=109086.8 tok/s
+2026-10-18 09:06:55,655 - INFO - Decode progress: request=1173ea1e0 generated_tokens=390 elapsed=2.975s rate=111110.3 tok/s
+2026-10-18 09:06:55,741 - INFO - Decode progress: request=1173ea1e0 generated_tokens=400 elapsed=3.061s rate=113.7 tok/s
+2026-10-18 09:06:55,795 - INFO - Decode progress: request=1173ea1e0 generated_tokens=410 elapsed=3.115s rate=170212.3 tok/s
+2026-10-18 09:06:55,872 - INFO - Decode progress: request=1173ea1e0 generated_tokens=420 elapsed=3.192s rate=26578.1 tok/s
+2026-10-18 09:06:55,933 - INFO - Decode progress: request=1173ea1e0 generated_tokens=430 elapsed=3.252s rate=26936.0 tok/s
+2026-10-18 09:06:55,972 - INFO - Decode progress: request=1173ea1e0 generated_tokens=440 elapsed=3.292s rate=86334.5 tok/s
+2026-10-18 09:06:56,070 - INFO - Decode progress: request=1173ea1e0 generated_tokens=450 elapsed=3.389s rate=35.3 tok/s
+2026-10-18 09:06:56,098 - INFO - Decode progress: request=1173ea1e0 generated_tokens=460 elapsed=3.417s rate=162153.8 tok/s
+2026-10-18 09:06:56,148 - INFO - Decode progress: request=1173ea1e0 generated_tokens=470 elapsed=3.467s rate=133330.2 tok/s
+2026-10-18 09:06:56,252 - INFO - Decode progress: request=1173ea1e0 generated_tokens=480 elapsed=3.572s rate=38.4 tok/s
+2026-10-18 09:06:56,339 - INFO - Decode progress: request=1173ea1e0 generated_tokens=490 elapsed=3.658s rate=136352.5 tok/s
+2026-10-18 09:06:56,425 - INFO - Decode progress: request=1173ea1e0 generated_tokens=500 elapsed=3.745s rate=38.0 tok/s
+2026-10-18 09:06:56,509 - INFO - Decode progress: request=1173ea1e0 generated_tokens=510 elapsed=3.828s rate=30418.3 tok/s
+2026-10-18 09:06:56,509 - INFO - Decode completed: request=1173ea1e0 generated_tokens=512 elapsed=3.829s rate=133.5 tok/s finish_reason=length
+2026-10-18 09:06:56,510 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=4.093s prefill=445.9 tok/s decode=133.7 tok/s finish_reason=length in_flight=0
+2026-10-18 09:06:56,518 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53710 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:06:56,518 - INFO - Generation queued: request=edfeea180 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:06:56,526 - INFO - Prefill started: request=edfeea180 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:06:56,753 - INFO - Prefill progress: request=edfeea180 tokens=85/86 (98.8%)
+2026-10-18 09:06:56,767 - INFO - Prefill completed: request=edfeea180 prompt_tokens=86 cached_tokens=0 elapsed=0.185s rate=466.0 tok/s
+2026-10-18 09:06:56,767 - INFO - Decode started: request=edfeea180 time_to_first_token=0.249s
+2026-10-18 09:06:56,858 - INFO - Decode progress: request=edfeea180 generated_tokens=10 elapsed=0.091s rate=113198.2 tok/s
+2026-10-18 09:06:56,917 - INFO - Decode progress: request=edfeea180 generated_tokens=20 elapsed=0.150s rate=64691.0 tok/s
+2026-10-18 09:06:56,975 - INFO - Decode progress: request=edfeea180 generated_tokens=30 elapsed=0.208s rate=23437.4 tok/s
+2026-10-18 09:06:57,053 - INFO - Decode progress: request=edfeea180 generated_tokens=40 elapsed=0.286s rate=27777.7 tok/s
+2026-10-18 09:06:57,116 - INFO - Decode progress: request=edfeea180 generated_tokens=50 elapsed=0.349s rate=357.8 tok/s
+2026-10-18 09:06:57,219 - INFO - Decode progress: request=edfeea180 generated_tokens=60 elapsed=0.452s rate=86021.5 tok/s
+2026-10-18 09:06:57,360 - INFO - Decode progress: request=edfeea180 generated_tokens=70 elapsed=0.593s rate=71429.2 tok/s
+2026-10-18 09:06:57,461 - INFO - Decode progress: request=edfeea180 generated_tokens=80 elapsed=0.695s rate=49.0 tok/s
+2026-10-18 09:06:57,541 - INFO - Decode progress: request=edfeea180 generated_tokens=90 elapsed=0.774s rate=28880.9 tok/s
+2026-10-18 09:06:57,648 - INFO - Decode progress: request=edfeea180 generated_tokens=100 elapsed=0.881s rate=36.8 tok/s
+2026-10-18 09:06:57,732 - INFO - Decode progress: request=edfeea180 generated_tokens=110 elapsed=0.965s rate=27242.0 tok/s
+2026-10-18 09:06:57,812 - INFO - Decode progress: request=edfeea180 generated_tokens=120 elapsed=1.045s rate=29557.1 tok/s
+2026-10-18 09:06:57,892 - INFO - Decode progress: request=edfeea180 generated_tokens=130 elapsed=1.125s rate=53.4 tok/s
+2026-10-18 09:06:57,950 - INFO - Decode progress: request=edfeea180 generated_tokens=140 elapsed=1.184s rate=30112.2 tok/s
+2026-10-18 09:06:58,075 - INFO - Decode progress: request=edfeea180 generated_tokens=150 elapsed=1.308s rate=254.5 tok/s
+2026-10-18 09:06:58,137 - INFO - Decode progress: request=edfeea180 generated_tokens=160 elapsed=1.370s rate=155835.0 tok/s
+2026-10-18 09:06:58,196 - INFO - Decode progress: request=edfeea180 generated_tokens=170 elapsed=1.430s rate=121213.8 tok/s
+2026-10-18 09:06:58,256 - INFO - Decode progress: request=edfeea180 generated_tokens=180 elapsed=1.489s rate=29447.2 tok/s
+2026-10-18 09:06:58,307 - INFO - Decode progress: request=edfeea180 generated_tokens=190 elapsed=1.541s rate=149053.2 tok/s
+2026-10-18 09:06:58,360 - INFO - Decode progress: request=edfeea180 generated_tokens=200 elapsed=1.593s rate=371.3 tok/s
+2026-10-18 09:06:58,413 - INFO - Decode progress: request=edfeea180 generated_tokens=210 elapsed=1.647s rate=172655.1 tok/s
+2026-10-18 09:06:58,491 - INFO - Decode progress: request=edfeea180 generated_tokens=220 elapsed=1.724s rate=146346.2 tok/s
+2026-10-18 09:06:58,609 - INFO - Decode progress: request=edfeea180 generated_tokens=230 elapsed=1.842s rate=48.2 tok/s
+2026-10-18 09:06:58,719 - INFO - Decode progress: request=edfeea180 generated_tokens=240 elapsed=1.952s rate=30651.2 tok/s
+2026-10-18 09:06:58,786 - INFO - Decode progress: request=edfeea180 generated_tokens=250 elapsed=2.019s rate=138.3 tok/s
+2026-10-18 09:06:58,909 - INFO - Decode progress: request=edfeea180 generated_tokens=260 elapsed=2.143s rate=51.7 tok/s
+2026-10-18 09:06:58,970 - INFO - Decode progress: request=edfeea180 generated_tokens=270 elapsed=2.203s rate=147229.1 tok/s
+2026-10-18 09:06:59,029 - INFO - Decode progress: request=edfeea180 generated_tokens=280 elapsed=2.263s rate=61538.7 tok/s
+2026-10-18 09:06:59,129 - INFO - Decode progress: request=edfeea180 generated_tokens=290 elapsed=2.362s rate=22879.2 tok/s
+2026-10-18 09:06:59,213 - INFO - Decode progress: request=edfeea180 generated_tokens=300 elapsed=2.446s rate=260.0 tok/s
+2026-10-18 09:06:59,296 - INFO - Decode progress: request=edfeea180 generated_tokens=310 elapsed=2.529s rate=50.4 tok/s
+2026-10-18 09:06:59,335 - INFO - Decode progress: request=edfeea180 generated_tokens=320 elapsed=2.569s rate=142005.9 tok/s
+2026-10-18 09:06:59,395 - INFO - Decode progress: request=edfeea180 generated_tokens=330 elapsed=2.629s rate=27087.8 tok/s
+2026-10-18 09:06:59,447 - INFO - Decode progress: request=edfeea180 generated_tokens=340 elapsed=2.680s rate=34091.1 tok/s
+2026-10-18 09:06:59,475 - INFO - Decode progress: request=edfeea180 generated_tokens=350 elapsed=2.708s rate=356.3 tok/s
+2026-10-18 09:06:59,581 - INFO - Decode progress: request=edfeea180 generated_tokens=360 elapsed=2.814s rate=38.4 tok/s
+2026-10-18 09:06:59,658 - INFO - Decode progress: request=edfeea180 generated_tokens=370 elapsed=2.891s rate=29739.6 tok/s
+2026-10-18 09:06:59,718 - INFO - Decode progress: request=edfeea180 generated_tokens=380 elapsed=2.952s rate=27810.3 tok/s
+2026-10-18 09:06:59,778 - INFO - Decode progress: request=edfeea180 generated_tokens=390 elapsed=3.012s rate=117070.6 tok/s
+2026-10-18 09:06:59,846 - INFO - Decode progress: request=edfeea180 generated_tokens=400 elapsed=3.079s rate=35.6 tok/s
+2026-10-18 09:06:59,874 - INFO - Decode progress: request=edfeea180 generated_tokens=410 elapsed=3.107s rate=137928.9 tok/s
+2026-10-18 09:06:59,924 - INFO - Decode progress: request=edfeea180 generated_tokens=420 elapsed=3.157s rate=114285.6 tok/s
+2026-10-18 09:06:59,975 - INFO - Decode progress: request=edfeea180 generated_tokens=430 elapsed=3.209s rate=27491.3 tok/s
+2026-10-18 09:07:00,001 - INFO - Decode progress: request=edfeea180 generated_tokens=440 elapsed=3.234s rate=150944.2 tok/s
+2026-10-18 09:07:00,053 - INFO - Decode progress: request=edfeea180 generated_tokens=450 elapsed=3.286s rate=438.7 tok/s
+2026-10-18 09:07:00,132 - INFO - Decode progress: request=edfeea180 generated_tokens=460 elapsed=3.365s rate=40.8 tok/s
+2026-10-18 09:07:00,218 - INFO - Decode progress: request=edfeea180 generated_tokens=470 elapsed=3.451s rate=25131.3 tok/s
+2026-10-18 09:07:00,285 - INFO - Decode progress: request=edfeea180 generated_tokens=480 elapsed=3.518s rate=22900.6 tok/s
+2026-10-18 09:07:00,371 - INFO - Decode progress: request=edfeea180 generated_tokens=490 elapsed=3.604s rate=37.8 tok/s
+2026-10-18 09:07:00,451 - INFO - Decode progress: request=edfeea180 generated_tokens=500 elapsed=3.684s rate=35.5 tok/s
+2026-10-18 09:07:00,499 - INFO - Decode progress: request=edfeea180 generated_tokens=510 elapsed=3.733s rate=47.4 tok/s
+2026-10-18 09:07:00,518 - INFO - Decode completed: request=edfeea180 generated_tokens=512 elapsed=3.752s rate=136.2 tok/s finish_reason=length
+2026-10-18 09:07:00,519 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=4.007s prefill=466.0 tok/s decode=136.5 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:00,600 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53732 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:00,601 - INFO - Generation queued: request=117863740 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:00,609 - INFO - Prefill started: request=117863740 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:07:00,838 - INFO - Prefill progress: request=117863740 tokens=85/86 (98.8%)
+2026-10-18 09:07:00,852 - INFO - Prefill completed: request=117863740 prompt_tokens=86 cached_tokens=0 elapsed=0.185s rate=463.8 tok/s
+2026-10-18 09:07:00,852 - INFO - Decode started: request=117863740 time_to_first_token=0.251s
+2026-10-18 09:07:00,954 - INFO - Decode progress: request=117863740 generated_tokens=10 elapsed=0.103s rate=51.9 tok/s
+2026-10-18 09:07:00,991 - INFO - Decode progress: request=117863740 generated_tokens=20 elapsed=0.139s rate=85719.3 tok/s
+2026-10-18 09:07:01,046 - INFO - Decode progress: request=117863740 generated_tokens=30 elapsed=0.195s rate=26143.9 tok/s
+2026-10-18 09:07:01,121 - INFO - Decode progress: request=117863740 generated_tokens=40 elapsed=0.269s rate=28302.2 tok/s
+2026-10-18 09:07:01,218 - INFO - Decode progress: request=117863740 generated_tokens=50 elapsed=0.366s rate=394.3 tok/s
+2026-10-18 09:07:01,335 - INFO - Decode progress: request=117863740 generated_tokens=60 elapsed=0.483s rate=52.6 tok/s
+2026-10-18 09:07:01,431 - INFO - Decode progress: request=117863740 generated_tokens=70 elapsed=0.579s rate=51.6 tok/s
+2026-10-18 09:07:01,487 - INFO - Decode progress: request=117863740 generated_tokens=80 elapsed=0.635s rate=26030.7 tok/s
+2026-10-18 09:07:01,600 - INFO - Decode progress: request=117863740 generated_tokens=90 elapsed=0.748s rate=52.4 tok/s
+2026-10-18 09:07:01,699 - INFO - Decode progress: request=117863740 generated_tokens=100 elapsed=0.847s rate=40.5 tok/s
+2026-10-18 09:07:01,815 - INFO - Decode progress: request=117863740 generated_tokens=110 elapsed=0.964s rate=51.8 tok/s
+2026-10-18 09:07:01,873 - INFO - Decode progress: request=117863740 generated_tokens=120 elapsed=1.021s rate=34731.8 tok/s
+2026-10-18 09:07:01,966 - INFO - Decode progress: request=117863740 generated_tokens=130 elapsed=1.115s rate=53.9 tok/s
+2026-10-18 09:07:02,021 - INFO - Decode progress: request=117863740 generated_tokens=140 elapsed=1.170s rate=25974.1 tok/s
+2026-10-18 09:07:02,079 - INFO - Decode progress: request=117863740 generated_tokens=150 elapsed=1.228s rate=434.8 tok/s
+2026-10-18 09:07:02,156 - INFO - Decode progress: request=117863740 generated_tokens=160 elapsed=1.305s rate=101265.4 tok/s
+2026-10-18 09:07:02,231 - INFO - Decode progress: request=117863740 generated_tokens=170 elapsed=1.379s rate=54.1 tok/s
+2026-10-18 09:07:02,268 - INFO - Decode progress: request=117863740 generated_tokens=180 elapsed=1.416s rate=63491.8 tok/s
+2026-10-18 09:07:02,328 - INFO - Decode progress: request=117863740 generated_tokens=190 elapsed=1.476s rate=43.3 tok/s
+2026-10-18 09:07:02,383 - INFO - Decode progress: request=117863740 generated_tokens=200 elapsed=1.531s rate=121.3 tok/s
+2026-10-18 09:07:02,477 - INFO - Decode progress: request=117863740 generated_tokens=210 elapsed=1.626s rate=31787.3 tok/s
+2026-10-18 09:07:02,553 - INFO - Decode progress: request=117863740 generated_tokens=220 elapsed=1.701s rate=134841.4 tok/s
+2026-10-18 09:07:02,607 - INFO - Decode progress: request=117863740 generated_tokens=230 elapsed=1.755s rate=27087.8 tok/s
+2026-10-18 09:07:02,720 - INFO - Decode progress: request=117863740 generated_tokens=240 elapsed=1.868s rate=52.0 tok/s
+2026-10-18 09:07:02,780 - INFO - Decode progress: request=117863740 generated_tokens=250 elapsed=1.928s rate=338.7 tok/s
+2026-10-18 09:07:02,839 - INFO - Decode progress: request=117863740 generated_tokens=260 elapsed=1.987s rate=101265.4 tok/s
+2026-10-18 09:07:02,913 - INFO - Decode progress: request=117863740 generated_tokens=270 elapsed=2.062s rate=54.3 tok/s
+2026-10-18 09:07:02,969 - INFO - Decode progress: request=117863740 generated_tokens=280 elapsed=2.118s rate=58394.4 tok/s
+2026-10-18 09:07:03,043 - INFO - Decode progress: request=117863740 generated_tokens=290 elapsed=2.191s rate=32921.7 tok/s
+2026-10-18 09:07:03,125 - INFO - Decode progress: request=117863740 generated_tokens=300 elapsed=2.273s rate=158.3 tok/s
+2026-10-18 09:07:03,222 - INFO - Decode progress: request=117863740 generated_tokens=310 elapsed=2.370s rate=26030.3 tok/s
+2026-10-18 09:07:03,278 - INFO - Decode progress: request=117863740 generated_tokens=320 elapsed=2.427s rate=95238.4 tok/s
+2026-10-18 09:07:03,334 - INFO - Decode progress: request=117863740 generated_tokens=330 elapsed=2.482s rate=110085.0 tok/s
+2026-10-18 09:07:03,389 - INFO - Decode progress: request=117863740 generated_tokens=340 elapsed=2.538s rate=52.3 tok/s
+2026-10-18 09:07:03,434 - INFO - Decode progress: request=117863740 generated_tokens=350 elapsed=2.582s rate=399.7 tok/s
+2026-10-18 09:07:03,482 - INFO - Decode progress: request=117863740 generated_tokens=360 elapsed=2.630s rate=43.5 tok/s
+2026-10-18 09:07:03,505 - INFO - Decode progress: request=117863740 generated_tokens=370 elapsed=2.653s rate=145454.1 tok/s
+2026-10-18 09:07:03,576 - INFO - Decode progress: request=117863740 generated_tokens=380 elapsed=2.724s rate=74531.8 tok/s
+2026-10-18 09:07:03,623 - INFO - Decode progress: request=117863740 generated_tokens=390 elapsed=2.772s rate=167811.5 tok/s
+2026-10-18 09:07:03,670 - INFO - Decode progress: request=117863740 generated_tokens=400 elapsed=2.819s rate=598.2 tok/s
+2026-10-18 09:07:03,742 - INFO - Decode progress: request=117863740 generated_tokens=410 elapsed=2.890s rate=42.7 tok/s
+2026-10-18 09:07:03,788 - INFO - Decode progress: request=117863740 generated_tokens=420 elapsed=2.936s rate=30303.0 tok/s
+2026-10-18 09:07:03,836 - INFO - Decode progress: request=117863740 generated_tokens=430 elapsed=2.984s rate=76675.3 tok/s
+2026-10-18 09:07:03,883 - INFO - Decode progress: request=117863740 generated_tokens=440 elapsed=3.031s rate=153842.2 tok/s
+2026-10-18 09:07:03,956 - INFO - Decode progress: request=117863740 generated_tokens=450 elapsed=3.104s rate=466.1 tok/s
+2026-10-18 09:07:04,050 - INFO - Decode progress: request=117863740 generated_tokens=460 elapsed=3.199s rate=112678.5 tok/s
+2026-10-18 09:07:04,107 - INFO - Decode progress: request=117863740 generated_tokens=470 elapsed=3.255s rate=53.3 tok/s
+2026-10-18 09:07:04,143 - INFO - Decode progress: request=117863740 generated_tokens=480 elapsed=3.292s rate=123717.2 tok/s
+2026-10-18 09:07:04,203 - INFO - Decode progress: request=117863740 generated_tokens=490 elapsed=3.351s rate=43.6 tok/s
+2026-10-18 09:07:04,258 - INFO - Decode progress: request=117863740 generated_tokens=500 elapsed=3.407s rate=120.8 tok/s
+2026-10-18 09:07:04,306 - INFO - Decode progress: request=117863740 generated_tokens=510 elapsed=3.454s rate=101697.0 tok/s
+2026-10-18 09:07:04,306 - INFO - Decode completed: request=117863740 generated_tokens=512 elapsed=3.454s rate=147.9 tok/s finish_reason=length
+2026-10-18 09:07:04,307 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.713s prefill=463.8 tok/s decode=148.2 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:04,315 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53751 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:04,315 - INFO - Generation queued: request=edfeeae40 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:04,323 - INFO - Prefill started: request=edfeeae40 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:07:04,550 - INFO - Prefill progress: request=edfeeae40 tokens=85/86 (98.8%)
+2026-10-18 09:07:04,563 - INFO - Prefill completed: request=edfeeae40 prompt_tokens=86 cached_tokens=0 elapsed=0.184s rate=468.1 tok/s
+2026-10-18 09:07:04,563 - INFO - Decode started: request=edfeeae40 time_to_first_token=0.249s
+2026-10-18 09:07:04,666 - INFO - Decode progress: request=edfeeae40 generated_tokens=10 elapsed=0.102s rate=54.3 tok/s
+2026-10-18 09:07:04,702 - INFO - Decode progress: request=edfeeae40 generated_tokens=20 elapsed=0.138s rate=85404.0 tok/s
+2026-10-18 09:07:04,757 - INFO - Decode progress: request=edfeeae40 generated_tokens=30 elapsed=0.194s rate=28169.1 tok/s
+2026-10-18 09:07:04,832 - INFO - Decode progress: request=edfeeae40 generated_tokens=40 elapsed=0.268s rate=22556.5 tok/s
+2026-10-18 09:07:04,911 - INFO - Decode progress: request=edfeeae40 generated_tokens=50 elapsed=0.347s rate=386.6 tok/s
+2026-10-18 09:07:05,007 - INFO - Decode progress: request=edfeeae40 generated_tokens=60 elapsed=0.443s rate=31048.3 tok/s
+2026-10-18 09:07:05,062 - INFO - Decode progress: request=edfeeae40 generated_tokens=70 elapsed=0.498s rate=114838.7 tok/s
+2026-10-18 09:07:05,136 - INFO - Decode progress: request=edfeeae40 generated_tokens=80 elapsed=0.573s rate=88887.8 tok/s
+2026-10-18 09:07:05,232 - INFO - Decode progress: request=edfeeae40 generated_tokens=90 elapsed=0.668s rate=52.9 tok/s
+2026-10-18 09:07:05,310 - INFO - Decode progress: request=edfeeae40 generated_tokens=100 elapsed=0.747s rate=495.7 tok/s
+2026-10-18 09:07:05,407 - INFO - Decode progress: request=edfeeae40 generated_tokens=110 elapsed=0.844s rate=51.9 tok/s
+2026-10-18 09:07:05,502 - INFO - Decode progress: request=edfeeae40 generated_tokens=120 elapsed=0.939s rate=53.6 tok/s
+2026-10-18 09:07:05,576 - INFO - Decode progress: request=edfeeae40 generated_tokens=130 elapsed=1.013s rate=34833.5 tok/s
+2026-10-18 09:07:05,651 - INFO - Decode progress: request=edfeeae40 generated_tokens=140 elapsed=1.088s rate=36035.8 tok/s
+2026-10-18 09:07:05,733 - INFO - Decode progress: request=edfeeae40 generated_tokens=150 elapsed=1.170s rate=41.2 tok/s
+2026-10-18 09:07:05,811 - INFO - Decode progress: request=edfeeae40 generated_tokens=160 elapsed=1.247s rate=72291.2 tok/s
+2026-10-18 09:07:05,886 - INFO - Decode progress: request=edfeeae40 generated_tokens=170 elapsed=1.323s rate=24793.0 tok/s
+2026-10-18 09:07:05,942 - INFO - Decode progress: request=edfeeae40 generated_tokens=180 elapsed=1.379s rate=26518.9 tok/s
+2026-10-18 09:07:06,055 - INFO - Decode progress: request=edfeeae40 generated_tokens=190 elapsed=1.492s rate=154823.8 tok/s
+2026-10-18 09:07:06,132 - INFO - Decode progress: request=edfeeae40 generated_tokens=200 elapsed=1.569s rate=45.7 tok/s
+2026-10-18 09:07:06,190 - INFO - Decode progress: request=edfeeae40 generated_tokens=210 elapsed=1.626s rate=54.2 tok/s
+2026-10-18 09:07:06,225 - INFO - Decode progress: request=edfeeae40 generated_tokens=220 elapsed=1.662s rate=109086.8 tok/s
+2026-10-18 09:07:06,286 - INFO - Decode progress: request=edfeeae40 generated_tokens=230 elapsed=1.722s rate=27810.3 tok/s
+2026-10-18 09:07:06,332 - INFO - Decode progress: request=edfeeae40 generated_tokens=240 elapsed=1.769s rate=41.2 tok/s
+2026-10-18 09:07:06,405 - INFO - Decode progress: request=edfeeae40 generated_tokens=250 elapsed=1.842s rate=442.3 tok/s
+2026-10-18 09:07:06,498 - INFO - Decode progress: request=edfeeae40 generated_tokens=260 elapsed=1.934s rate=51.4 tok/s
+2026-10-18 09:07:06,554 - INFO - Decode progress: request=edfeeae40 generated_tokens=270 elapsed=1.991s rate=56338.5 tok/s
+2026-10-18 09:07:06,609 - INFO - Decode progress: request=edfeeae40 generated_tokens=280 elapsed=2.046s rate=55.3 tok/s
+2026-10-18 09:07:06,646 - INFO - Decode progress: request=edfeeae40 generated_tokens=290 elapsed=2.083s rate=127647.9 tok/s
+2026-10-18 09:07:06,768 - INFO - Decode progress: request=edfeeae40 generated_tokens=300 elapsed=2.205s rate=132.4 tok/s
+2026-10-18 09:07:06,827 - INFO - Decode progress: request=edfeeae40 generated_tokens=310 elapsed=2.264s rate=72506.0 tok/s
+2026-10-18 09:07:06,884 - INFO - Decode progress: request=edfeeae40 generated_tokens=320 elapsed=2.320s rate=31704.9 tok/s
+2026-10-18 09:07:06,960 - INFO - Decode progress: request=edfeeae40 generated_tokens=330 elapsed=2.397s rate=142860.8 tok/s
+2026-10-18 09:07:07,036 - INFO - Decode progress: request=edfeeae40 generated_tokens=340 elapsed=2.472s rate=36309.4 tok/s
+2026-10-18 09:07:07,114 - INFO - Decode progress: request=edfeeae40 generated_tokens=350 elapsed=2.551s rate=47.6 tok/s
+2026-10-18 09:07:07,171 - INFO - Decode progress: request=edfeeae40 generated_tokens=360 elapsed=2.608s rate=51.9 tok/s
+2026-10-18 09:07:07,248 - INFO - Decode progress: request=edfeeae40 generated_tokens=370 elapsed=2.685s rate=98357.3 tok/s
+2026-10-18 09:07:07,306 - INFO - Decode progress: request=edfeeae40 generated_tokens=380 elapsed=2.742s rate=134083.6 tok/s
+2026-10-18 09:07:07,419 - INFO - Decode progress: request=edfeeae40 generated_tokens=390 elapsed=2.856s rate=29888.2 tok/s
+2026-10-18 09:07:07,477 - INFO - Decode progress: request=edfeeae40 generated_tokens=400 elapsed=2.914s rate=438.8 tok/s
+2026-10-18 09:07:07,535 - INFO - Decode progress: request=edfeeae40 generated_tokens=410 elapsed=2.972s rate=100413.0 tok/s
+2026-10-18 09:07:07,595 - INFO - Decode progress: request=edfeeae40 generated_tokens=420 elapsed=3.032s rate=42.5 tok/s
+2026-10-18 09:07:07,643 - INFO - Decode progress: request=edfeeae40 generated_tokens=430 elapsed=3.080s rate=113740.8 tok/s
+2026-10-18 09:07:07,714 - INFO - Decode progress: request=edfeeae40 generated_tokens=440 elapsed=3.151s rate=30457.3 tok/s
+2026-10-18 09:07:07,770 - INFO - Decode progress: request=edfeeae40 generated_tokens=450 elapsed=3.206s rate=122.9 tok/s
+2026-10-18 09:07:07,819 - INFO - Decode progress: request=edfeeae40 generated_tokens=460 elapsed=3.256s rate=153847.7 tok/s
+2026-10-18 09:07:07,867 - INFO - Decode progress: request=edfeeae40 generated_tokens=470 elapsed=3.304s rate=114285.6 tok/s
+2026-10-18 09:07:07,915 - INFO - Decode progress: request=edfeeae40 generated_tokens=480 elapsed=3.351s rate=108601.4 tok/s
+2026-10-18 09:07:07,963 - INFO - Decode progress: request=edfeeae40 generated_tokens=490 elapsed=3.399s rate=124999.0 tok/s
+2026-10-18 09:07:08,041 - INFO - Decode progress: request=edfeeae40 generated_tokens=500 elapsed=3.477s rate=234.1 tok/s
+2026-10-18 09:07:08,135 - INFO - Decode progress: request=edfeeae40 generated_tokens=510 elapsed=3.572s rate=47.9 tok/s
+2026-10-18 09:07:08,135 - INFO - Decode completed: request=edfeeae40 generated_tokens=512 elapsed=3.572s rate=143.1 tok/s finish_reason=length
+2026-10-18 09:07:08,136 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.828s prefill=468.1 tok/s decode=143.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:08,144 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53767 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:08,144 - INFO - Generation queued: request=edfeeaf60 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:08,152 - INFO - Prefill started: request=edfeeaf60 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:07:08,381 - INFO - Prefill progress: request=edfeeaf60 tokens=85/86 (98.8%)
+2026-10-18 09:07:08,395 - INFO - Prefill completed: request=edfeeaf60 prompt_tokens=86 cached_tokens=0 elapsed=0.185s rate=464.9 tok/s
+2026-10-18 09:07:08,395 - INFO - Decode started: request=edfeeaf60 time_to_first_token=0.251s
+2026-10-18 09:07:08,498 - INFO - Decode progress: request=edfeeaf60 generated_tokens=10 elapsed=0.103s rate=53.0 tok/s
+2026-10-18 09:07:08,535 - INFO - Decode progress: request=edfeeaf60 generated_tokens=20 elapsed=0.140s rate=81353.3 tok/s
+2026-10-18 09:07:08,592 - INFO - Decode progress: request=edfeeaf60 generated_tokens=30 elapsed=0.197s rate=27972.0 tok/s
+2026-10-18 09:07:08,666 - INFO - Decode progress: request=edfeeaf60 generated_tokens=40 elapsed=0.271s rate=25342.8 tok/s
+2026-10-18 09:07:08,745 - INFO - Decode progress: request=edfeeaf60 generated_tokens=50 elapsed=0.350s rate=404.9 tok/s
+2026-10-18 09:07:08,841 - INFO - Decode progress: request=edfeeaf60 generated_tokens=60 elapsed=0.446s rate=26726.0 tok/s
+2026-10-18 09:07:08,898 - INFO - Decode progress: request=edfeeaf60 generated_tokens=70 elapsed=0.503s rate=146346.2 tok/s
+2026-10-18 09:07:08,973 - INFO - Decode progress: request=edfeeaf60 generated_tokens=80 elapsed=0.578s rate=67985.2 tok/s
+2026-10-18 09:07:09,067 - INFO - Decode progress: request=edfeeaf60 generated_tokens=90 elapsed=0.672s rate=56.5 tok/s
+2026-10-18 09:07:09,144 - INFO - Decode progress: request=edfeeaf60 generated_tokens=100 elapsed=0.749s rate=524.7 tok/s
+2026-10-18 09:07:09,202 - INFO - Decode progress: request=edfeeaf60 generated_tokens=110 elapsed=0.807s rate=54.4 tok/s
+2026-10-18 09:07:09,239 - INFO - Decode progress: request=edfeeaf60 generated_tokens=120 elapsed=0.844s rate=107619.0 tok/s
+2026-10-18 09:07:09,298 - INFO - Decode progress: request=edfeeaf60 generated_tokens=130 elapsed=0.903s rate=30456.2 tok/s
+2026-10-18 09:07:09,371 - INFO - Decode progress: request=edfeeaf60 generated_tokens=140 elapsed=0.976s rate=27149.7 tok/s
+2026-10-18 09:07:09,421 - INFO - Decode progress: request=edfeeaf60 generated_tokens=150 elapsed=1.026s rate=435.5 tok/s
+2026-10-18 09:07:09,469 - INFO - Decode progress: request=edfeeaf60 generated_tokens=160 elapsed=1.074s rate=43.6 tok/s
+2026-10-18 09:07:09,567 - INFO - Decode progress: request=edfeeaf60 generated_tokens=170 elapsed=1.172s rate=29268.8 tok/s
+2026-10-18 09:07:09,626 - INFO - Decode progress: request=edfeeaf60 generated_tokens=180 elapsed=1.231s rate=26666.7 tok/s
+2026-10-18 09:07:09,682 - INFO - Decode progress: request=edfeeaf60 generated_tokens=190 elapsed=1.287s rate=112157.7 tok/s
+2026-10-18 09:07:09,765 - INFO - Decode progress: request=edfeeaf60 generated_tokens=200 elapsed=1.370s rate=141.8 tok/s
+2026-10-18 09:07:09,865 - INFO - Decode progress: request=edfeeaf60 generated_tokens=210 elapsed=1.470s rate=31414.1 tok/s
+2026-10-18 09:07:09,982 - INFO - Decode progress: request=edfeeaf60 generated_tokens=220 elapsed=1.587s rate=21602.0 tok/s
+2026-10-18 09:07:10,097 - INFO - Decode progress: request=edfeeaf60 generated_tokens=230 elapsed=1.702s rate=50.7 tok/s
+2026-10-18 09:07:10,153 - INFO - Decode progress: request=edfeeaf60 generated_tokens=240 elapsed=1.758s rate=28201.6 tok/s
+2026-10-18 09:07:10,212 - INFO - Decode progress: request=edfeeaf60 generated_tokens=250 elapsed=1.817s rate=312.6 tok/s
+2026-10-18 09:07:10,290 - INFO - Decode progress: request=edfeeaf60 generated_tokens=260 elapsed=1.895s rate=27713.9 tok/s
+2026-10-18 09:07:10,345 - INFO - Decode progress: request=edfeeaf60 generated_tokens=270 elapsed=1.951s rate=55171.9 tok/s
+2026-10-18 09:07:10,401 - INFO - Decode progress: request=edfeeaf60 generated_tokens=280 elapsed=2.006s rate=30611.9 tok/s
+2026-10-18 09:07:10,438 - INFO - Decode progress: request=edfeeaf60 generated_tokens=290 elapsed=2.043s rate=148148.3 tok/s
+2026-10-18 09:07:10,512 - INFO - Decode progress: request=edfeeaf60 generated_tokens=300 elapsed=2.117s rate=37.0 tok/s
+2026-10-18 09:07:10,561 - INFO - Decode progress: request=edfeeaf60 generated_tokens=310 elapsed=2.166s rate=28469.7 tok/s
+2026-10-18 09:07:10,633 - INFO - Decode progress: request=edfeeaf60 generated_tokens=320 elapsed=2.238s rate=28368.9 tok/s
+2026-10-18 09:07:10,680 - INFO - Decode progress: request=edfeeaf60 generated_tokens=330 elapsed=2.285s rate=41.2 tok/s
+2026-10-18 09:07:10,704 - INFO - Decode progress: request=edfeeaf60 generated_tokens=340 elapsed=2.309s rate=165534.9 tok/s
+2026-10-18 09:07:10,751 - INFO - Decode progress: request=edfeeaf60 generated_tokens=350 elapsed=2.356s rate=487.4 tok/s
+2026-10-18 09:07:10,802 - INFO - Decode progress: request=edfeeaf60 generated_tokens=360 elapsed=2.407s rate=142856.1 tok/s
+2026-10-18 09:07:10,849 - INFO - Decode progress: request=edfeeaf60 generated_tokens=370 elapsed=2.454s rate=29999.3 tok/s
+2026-10-18 09:07:10,873 - INFO - Decode progress: request=edfeeaf60 generated_tokens=380 elapsed=2.478s rate=157880.0 tok/s
+2026-10-18 09:07:10,945 - INFO - Decode progress: request=edfeeaf60 generated_tokens=390 elapsed=2.550s rate=32345.8 tok/s
+2026-10-18 09:07:11,002 - INFO - Decode progress: request=edfeeaf60 generated_tokens=400 elapsed=2.607s rate=30.1 tok/s
+2026-10-18 09:07:11,051 - INFO - Decode progress: request=edfeeaf60 generated_tokens=410 elapsed=2.656s rate=68766.8 tok/s
+2026-10-18 09:07:11,123 - INFO - Decode progress: request=edfeeaf60 generated_tokens=420 elapsed=2.728s rate=146351.2 tok/s
+2026-10-18 09:07:11,196 - INFO - Decode progress: request=edfeeaf60 generated_tokens=430 elapsed=2.801s rate=26996.4 tok/s
+2026-10-18 09:07:11,259 - INFO - Decode progress: request=edfeeaf60 generated_tokens=440 elapsed=2.864s rate=27586.1 tok/s
+2026-10-18 09:07:11,362 - INFO - Decode progress: request=edfeeaf60 generated_tokens=450 elapsed=2.967s rate=314.7 tok/s
+2026-10-18 09:07:11,443 - INFO - Decode progress: request=edfeeaf60 generated_tokens=460 elapsed=3.048s rate=25423.9 tok/s
+2026-10-18 09:07:11,505 - INFO - Decode progress: request=edfeeaf60 generated_tokens=470 elapsed=3.110s rate=113740.8 tok/s
+2026-10-18 09:07:11,606 - INFO - Decode progress: request=edfeeaf60 generated_tokens=480 elapsed=3.211s rate=24844.8 tok/s
+2026-10-18 09:07:11,644 - INFO - Decode progress: request=edfeeaf60 generated_tokens=490 elapsed=3.249s rate=112675.6 tok/s
+2026-10-18 09:07:11,766 - INFO - Decode progress: request=edfeeaf60 generated_tokens=500 elapsed=3.371s rate=381.9 tok/s
+2026-10-18 09:07:11,807 - INFO - Decode progress: request=edfeeaf60 generated_tokens=510 elapsed=3.412s rate=131148.0 tok/s
+2026-10-18 09:07:11,824 - INFO - Decode completed: request=edfeeaf60 generated_tokens=512 elapsed=3.429s rate=149.0 tok/s finish_reason=length
+2026-10-18 09:07:11,824 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.686s prefill=464.9 tok/s decode=149.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:11,833 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53785 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:11,833 - INFO - Generation queued: request=1173e87a0 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:11,841 - INFO - Prefill started: request=1173e87a0 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:07:12,079 - INFO - Prefill progress: request=1173e87a0 tokens=85/86 (98.8%)
+2026-10-18 09:07:12,092 - INFO - Prefill completed: request=1173e87a0 prompt_tokens=86 cached_tokens=0 elapsed=0.186s rate=462.5 tok/s
+2026-10-18 09:07:12,092 - INFO - Decode started: request=1173e87a0 time_to_first_token=0.259s
+2026-10-18 09:07:12,195 - INFO - Decode progress: request=1173e87a0 generated_tokens=10 elapsed=0.103s rate=53.6 tok/s
+2026-10-18 09:07:12,232 - INFO - Decode progress: request=1173e87a0 generated_tokens=20 elapsed=0.140s rate=86639.2 tok/s
+2026-10-18 09:07:12,326 - INFO - Decode progress: request=1173e87a0 generated_tokens=30 elapsed=0.234s rate=53.0 tok/s
+2026-10-18 09:07:12,381 - INFO - Decode progress: request=1173e87a0 generated_tokens=40 elapsed=0.289s rate=121829.2 tok/s
+2026-10-18 09:07:12,463 - INFO - Decode progress: request=1173e87a0 generated_tokens=50 elapsed=0.371s rate=38.5 tok/s
+2026-10-18 09:07:12,520 - INFO - Decode progress: request=1173e87a0 generated_tokens=60 elapsed=0.428s rate=135594.9 tok/s
+2026-10-18 09:07:12,594 - INFO - Decode progress: request=1173e87a0 generated_tokens=70 elapsed=0.502s rate=52.5 tok/s
+2026-10-18 09:07:12,670 - INFO - Decode progress: request=1173e87a0 generated_tokens=80 elapsed=0.578s rate=114285.6 tok/s
+2026-10-18 09:07:12,785 - INFO - Decode progress: request=1173e87a0 generated_tokens=90 elapsed=0.693s rate=30151.3 tok/s
+2026-10-18 09:07:12,844 - INFO - Decode progress: request=1173e87a0 generated_tokens=100 elapsed=0.751s rate=452.7 tok/s
+2026-10-18 09:07:12,941 - INFO - Decode progress: request=1173e87a0 generated_tokens=110 elapsed=0.849s rate=51.2 tok/s
+2026-10-18 09:07:13,016 - INFO - Decode progress: request=1173e87a0 generated_tokens=120 elapsed=0.924s rate=35928.5 tok/s
+2026-10-18 09:07:13,072 - INFO - Decode progress: request=1173e87a0 generated_tokens=130 elapsed=0.980s rate=85106.2 tok/s
+2026-10-18 09:07:13,146 - INFO - Decode progress: request=1173e87a0 generated_tokens=140 elapsed=1.054s rate=55.6 tok/s
+2026-10-18 09:07:13,284 - INFO - Decode progress: request=1173e87a0 generated_tokens=150 elapsed=1.192s rate=38.9 tok/s
+2026-10-18 09:07:13,383 - INFO - Decode progress: request=1173e87a0 generated_tokens=160 elapsed=1.290s rate=53.6 tok/s
+2026-10-18 09:07:13,478 - INFO - Decode progress: request=1173e87a0 generated_tokens=170 elapsed=1.386s rate=51.6 tok/s
+2026-10-18 09:07:13,538 - INFO - Decode progress: request=1173e87a0 generated_tokens=180 elapsed=1.446s rate=139528.5 tok/s
+2026-10-18 09:07:13,594 - INFO - Decode progress: request=1173e87a0 generated_tokens=190 elapsed=1.501s rate=23233.1 tok/s
+2026-10-18 09:07:13,653 - INFO - Decode progress: request=1173e87a0 generated_tokens=200 elapsed=1.561s rate=443.7 tok/s
+2026-10-18 09:07:13,752 - INFO - Decode progress: request=1173e87a0 generated_tokens=210 elapsed=1.660s rate=51.6 tok/s
+2026-10-18 09:07:13,870 - INFO - Decode progress: request=1173e87a0 generated_tokens=220 elapsed=1.777s rate=19123.7 tok/s
+2026-10-18 09:07:13,964 - INFO - Decode progress: request=1173e87a0 generated_tokens=230 elapsed=1.872s rate=31372.6 tok/s
+2026-10-18 09:07:14,080 - INFO - Decode progress: request=1173e87a0 generated_tokens=240 elapsed=1.988s rate=52.2 tok/s
+2026-10-18 09:07:14,221 - INFO - Decode progress: request=1173e87a0 generated_tokens=250 elapsed=2.129s rate=144.3 tok/s
+2026-10-18 09:07:14,299 - INFO - Decode progress: request=1173e87a0 generated_tokens=260 elapsed=2.207s rate=98359.5 tok/s
+2026-10-18 09:07:14,356 - INFO - Decode progress: request=1173e87a0 generated_tokens=270 elapsed=2.264s rate=30113.3 tok/s
+2026-10-18 09:07:14,433 - INFO - Decode progress: request=1173e87a0 generated_tokens=280 elapsed=2.341s rate=51.3 tok/s
+2026-10-18 09:07:14,509 - INFO - Decode progress: request=1173e87a0 generated_tokens=290 elapsed=2.417s rate=35190.2 tok/s
+2026-10-18 09:07:14,567 - INFO - Decode progress: request=1173e87a0 generated_tokens=300 elapsed=2.475s rate=440.1 tok/s
+2026-10-18 09:07:14,645 - INFO - Decode progress: request=1173e87a0 generated_tokens=310 elapsed=2.553s rate=52.3 tok/s
+2026-10-18 09:07:14,781 - INFO - Decode progress: request=1173e87a0 generated_tokens=320 elapsed=2.689s rate=51.3 tok/s
+2026-10-18 09:07:14,859 - INFO - Decode progress: request=1173e87a0 generated_tokens=330 elapsed=2.767s rate=29197.0 tok/s
+2026-10-18 09:07:14,937 - INFO - Decode progress: request=1173e87a0 generated_tokens=340 elapsed=2.845s rate=25586.6 tok/s
+2026-10-18 09:07:15,017 - INFO - Decode progress: request=1173e87a0 generated_tokens=350 elapsed=2.924s rate=46.7 tok/s
+2026-10-18 09:07:15,096 - INFO - Decode progress: request=1173e87a0 generated_tokens=360 elapsed=3.003s rate=52.6 tok/s
+2026-10-18 09:07:15,153 - INFO - Decode progress: request=1173e87a0 generated_tokens=370 elapsed=3.061s rate=28235.2 tok/s
+2026-10-18 09:07:15,231 - INFO - Decode progress: request=1173e87a0 generated_tokens=380 elapsed=3.139s rate=28368.9 tok/s
+2026-10-18 09:07:15,289 - INFO - Decode progress: request=1173e87a0 generated_tokens=390 elapsed=3.196s rate=96386.2 tok/s
+2026-10-18 09:07:15,389 - INFO - Decode progress: request=1173e87a0 generated_tokens=400 elapsed=3.296s rate=410.8 tok/s
+2026-10-18 09:07:15,467 - INFO - Decode progress: request=1173e87a0 generated_tokens=410 elapsed=3.375s rate=24193.7 tok/s
+2026-10-18 09:07:15,545 - INFO - Decode progress: request=1173e87a0 generated_tokens=420 elapsed=3.453s rate=50.7 tok/s
+2026-10-18 09:07:15,625 - INFO - Decode progress: request=1173e87a0 generated_tokens=430 elapsed=3.532s rate=102996.8 tok/s
+2026-10-18 09:07:15,684 - INFO - Decode progress: request=1173e87a0 generated_tokens=440 elapsed=3.592s rate=59701.2 tok/s
+2026-10-18 09:07:15,773 - INFO - Decode progress: request=1173e87a0 generated_tokens=450 elapsed=3.681s rate=132.3 tok/s
+2026-10-18 09:07:15,855 - INFO - Decode progress: request=1173e87a0 generated_tokens=460 elapsed=3.763s rate=50.2 tok/s
+2026-10-18 09:07:15,995 - INFO - Decode progress: request=1173e87a0 generated_tokens=470 elapsed=3.903s rate=51.0 tok/s
+2026-10-18 09:07:16,054 - INFO - Decode progress: request=1173e87a0 generated_tokens=480 elapsed=3.961s rate=51.0 tok/s
+2026-10-18 09:07:16,151 - INFO - Decode progress: request=1173e87a0 generated_tokens=490 elapsed=4.059s rate=25586.6 tok/s
+2026-10-18 09:07:16,215 - INFO - Decode progress: request=1173e87a0 generated_tokens=500 elapsed=4.122s rate=303.0 tok/s
+2026-10-18 09:07:16,294 - INFO - Decode progress: request=1173e87a0 generated_tokens=510 elapsed=4.202s rate=92661.8 tok/s
+2026-10-18 09:07:16,312 - INFO - Decode completed: request=1173e87a0 generated_tokens=512 elapsed=4.219s rate=121.1 tok/s finish_reason=length
+2026-10-18 09:07:16,312 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=4.486s prefill=462.5 tok/s decode=121.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:16,321 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53804 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:16,321 - INFO - Generation queued: request=117528b90 prompt_tokens=86 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:16,329 - INFO - Prefill started: request=117528b90 backend=continuous_batching prompt_tokens=86 images=0 audio=0 videos=0
+2026-10-18 09:07:16,567 - INFO - Prefill progress: request=117528b90 tokens=85/86 (98.8%)
+2026-10-18 09:07:16,580 - INFO - Prefill completed: request=117528b90 prompt_tokens=86 cached_tokens=0 elapsed=0.193s rate=444.9 tok/s
+2026-10-18 09:07:16,580 - INFO - Decode started: request=117528b90 time_to_first_token=0.259s
+2026-10-18 09:07:16,683 - INFO - Decode progress: request=117528b90 generated_tokens=10 elapsed=0.103s rate=54.1 tok/s
+2026-10-18 09:07:16,720 - INFO - Decode progress: request=117528b90 generated_tokens=20 elapsed=0.140s rate=79731.3 tok/s
+2026-10-18 09:07:16,776 - INFO - Decode progress: request=117528b90 generated_tokens=30 elapsed=0.196s rate=9393.4 tok/s
+2026-10-18 09:07:16,851 - INFO - Decode progress: request=117528b90 generated_tokens=40 elapsed=0.271s rate=51.4 tok/s
+2026-10-18 09:07:16,935 - INFO - Decode progress: request=117528b90 generated_tokens=50 elapsed=0.355s rate=38.9 tok/s
+2026-10-18 09:07:16,991 - INFO - Decode progress: request=117528b90 generated_tokens=60 elapsed=0.411s rate=55.4 tok/s
+2026-10-18 09:07:17,070 - INFO - Decode progress: request=117528b90 generated_tokens=70 elapsed=0.489s rate=24120.2 tok/s
+2026-10-18 09:07:17,147 - INFO - Decode progress: request=117528b90 generated_tokens=80 elapsed=0.567s rate=28742.3 tok/s
+2026-10-18 09:07:17,263 - INFO - Decode progress: request=117528b90 generated_tokens=90 elapsed=0.683s rate=52.2 tok/s
+2026-10-18 09:07:17,325 - INFO - Decode progress: request=117528b90 generated_tokens=100 elapsed=0.745s rate=45.3 tok/s
+2026-10-18 09:07:17,384 - INFO - Decode progress: request=117528b90 generated_tokens=110 elapsed=0.804s rate=27586.1 tok/s
+2026-10-18 09:07:17,460 - INFO - Decode progress: request=117528b90 generated_tokens=120 elapsed=0.880s rate=91256.1 tok/s
+2026-10-18 09:07:17,538 - INFO - Decode progress: request=117528b90 generated_tokens=130 elapsed=0.958s rate=24193.0 tok/s
+2026-10-18 09:07:17,594 - INFO - Decode progress: request=117528b90 generated_tokens=140 elapsed=1.014s rate=32520.1 tok/s
+2026-10-18 09:07:17,697 - INFO - Decode progress: request=117528b90 generated_tokens=150 elapsed=1.117s rate=42.0 tok/s
+2026-10-18 09:07:17,739 - INFO - Decode progress: request=117528b90 generated_tokens=160 elapsed=1.159s rate=9128.9 tok/s
+2026-10-18 09:07:17,799 - INFO - Decode progress: request=117528b90 generated_tokens=170 elapsed=1.219s rate=48.4 tok/s
+2026-10-18 09:07:17,844 - INFO - Decode progress: request=117528b90 generated_tokens=180 elapsed=1.264s rate=105730.1 tok/s
+2026-10-18 09:07:17,919 - INFO - Decode progress: request=117528b90 generated_tokens=190 elapsed=1.339s rate=23323.6 tok/s
+2026-10-18 09:07:18,041 - INFO - Decode progress: request=117528b90 generated_tokens=200 elapsed=1.461s rate=35.0 tok/s
+2026-10-18 09:07:18,101 - INFO - Decode progress: request=117528b90 generated_tokens=210 elapsed=1.521s rate=25668.7 tok/s
+2026-10-18 09:07:18,159 - INFO - Decode progress: request=117528b90 generated_tokens=220 elapsed=1.579s rate=85106.2 tok/s
+2026-10-18 09:07:18,276 - INFO - Decode progress: request=117528b90 generated_tokens=230 elapsed=1.696s rate=98764.4 tok/s
+2026-10-18 09:07:18,334 - INFO - Decode progress: request=117528b90 generated_tokens=240 elapsed=1.754s rate=86639.2 tok/s
+2026-10-18 09:07:18,414 - INFO - Decode progress: request=117528b90 generated_tokens=250 elapsed=1.834s rate=45.8 tok/s
+2026-10-18 09:07:18,493 - INFO - Decode progress: request=117528b90 generated_tokens=260 elapsed=1.912s rate=31662.6 tok/s
+2026-10-18 09:07:18,570 - INFO - Decode progress: request=117528b90 generated_tokens=270 elapsed=1.990s rate=149073.9 tok/s
+2026-10-18 09:07:18,649 - INFO - Decode progress: request=117528b90 generated_tokens=280 elapsed=2.069s rate=52.7 tok/s
+2026-10-18 09:07:18,688 - INFO - Decode progress: request=117528b90 generated_tokens=290 elapsed=2.108s rate=104801.3 tok/s
+2026-10-18 09:07:18,747 - INFO - Decode progress: request=117528b90 generated_tokens=300 elapsed=2.166s rate=468.6 tok/s
+2026-10-18 09:07:18,795 - INFO - Decode progress: request=117528b90 generated_tokens=310 elapsed=2.215s rate=28169.1 tok/s
+2026-10-18 09:07:18,819 - INFO - Decode progress: request=117528b90 generated_tokens=320 elapsed=2.239s rate=102125.0 tok/s
+2026-10-18 09:07:18,867 - INFO - Decode progress: request=117528b90 generated_tokens=330 elapsed=2.286s rate=152883.9 tok/s
+2026-10-18 09:07:18,938 - INFO - Decode progress: request=117528b90 generated_tokens=340 elapsed=2.358s rate=39.7 tok/s
+2026-10-18 09:07:18,990 - INFO - Decode progress: request=117528b90 generated_tokens=350 elapsed=2.410s rate=514.4 tok/s
+2026-10-18 09:07:19,063 - INFO - Decode progress: request=117528b90 generated_tokens=360 elapsed=2.483s rate=94490.4 tok/s
+2026-10-18 09:07:19,114 - INFO - Decode progress: request=117528b90 generated_tokens=370 elapsed=2.534s rate=96777.1 tok/s
+2026-10-18 09:07:19,188 - INFO - Decode progress: request=117528b90 generated_tokens=380 elapsed=2.608s rate=27303.8 tok/s
+2026-10-18 09:07:19,237 - INFO - Decode progress: request=117528b90 generated_tokens=390 elapsed=2.657s rate=39.9 tok/s
+2026-10-18 09:07:19,288 - INFO - Decode progress: request=117528b90 generated_tokens=400 elapsed=2.708s rate=398.0 tok/s
+2026-10-18 09:07:19,364 - INFO - Decode progress: request=117528b90 generated_tokens=410 elapsed=2.784s rate=31209.1 tok/s
+2026-10-18 09:07:19,437 - INFO - Decode progress: request=117528b90 generated_tokens=420 elapsed=2.857s rate=42.4 tok/s
+2026-10-18 09:07:19,487 - INFO - Decode progress: request=117528b90 generated_tokens=430 elapsed=2.907s rate=83619.9 tok/s
+2026-10-18 09:07:19,547 - INFO - Decode progress: request=117528b90 generated_tokens=440 elapsed=2.967s rate=26725.8 tok/s
+2026-10-18 09:07:19,611 - INFO - Decode progress: request=117528b90 generated_tokens=450 elapsed=3.031s rate=339.7 tok/s
+2026-10-18 09:07:19,693 - INFO - Decode progress: request=117528b90 generated_tokens=460 elapsed=3.113s rate=48.4 tok/s
+2026-10-18 09:07:19,773 - INFO - Decode progress: request=117528b90 generated_tokens=470 elapsed=3.193s rate=26030.1 tok/s
+2026-10-18 09:07:19,856 - INFO - Decode progress: request=117528b90 generated_tokens=480 elapsed=3.276s rate=48.9 tok/s
+2026-10-18 09:07:19,918 - INFO - Decode progress: request=117528b90 generated_tokens=490 elapsed=3.338s rate=74996.4 tok/s
+2026-10-18 09:07:19,982 - INFO - Decode progress: request=117528b90 generated_tokens=500 elapsed=3.402s rate=358.5 tok/s
+2026-10-18 09:07:20,064 - INFO - Decode progress: request=117528b90 generated_tokens=510 elapsed=3.484s rate=97164.6 tok/s
+2026-10-18 09:07:20,080 - INFO - Decode completed: request=117528b90 generated_tokens=512 elapsed=3.500s rate=146.0 tok/s finish_reason=length
+2026-10-18 09:07:20,080 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=3.766s prefill=444.9 tok/s decode=146.3 tok/s finish_reason=length in_flight=0
+2026-10-18 09:07:20,184 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53826 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:20,188 - INFO - Generation queued: request=117863530 prompt_tokens=4184 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:20,196 - INFO - Prefill started: request=117863530 backend=continuous_batching prompt_tokens=4184 images=0 audio=0 videos=0
+2026-10-18 09:07:20,965 - INFO - Prefill progress: request=117863530 tokens=2048/4184 (48.9%)
+2026-10-18 09:07:21,729 - INFO - Prefill progress: request=117863530 tokens=4096/4184 (97.9%)
+2026-10-18 09:07:21,896 - INFO - Prefill progress: request=117863530 tokens=4183/4184 (100.0%)
+2026-10-18 09:07:21,911 - INFO - Prefill completed: request=117863530 prompt_tokens=4184 cached_tokens=0 elapsed=1.644s rate=2544.4 tok/s
+2026-10-18 09:07:21,911 - INFO - Decode started: request=117863530 time_to_first_token=1.727s
+2026-10-18 09:07:22,045 - INFO - Decode progress: request=117863530 generated_tokens=10 elapsed=0.134s rate=47.0 tok/s
+2026-10-18 09:07:22,088 - INFO - Decode progress: request=117863530 generated_tokens=20 elapsed=0.177s rate=80540.2 tok/s
+2026-10-18 09:07:22,173 - INFO - Decode progress: request=117863530 generated_tokens=30 elapsed=0.262s rate=69362.0 tok/s
+2026-10-18 09:07:22,283 - INFO - Decode progress: request=117863530 generated_tokens=40 elapsed=0.372s rate=47.7 tok/s
+2026-10-18 09:07:22,371 - INFO - Decode completed: request=117863530 generated_tokens=49 elapsed=0.460s rate=104.4 tok/s finish_reason=stop
+2026-10-18 09:07:22,372 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=4184 generated_tokens=49 elapsed=2.200s prefill=2544.4 tok/s decode=106.6 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:23,393 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53846 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:23,396 - INFO - Generation queued: request=1173eb800 prompt_tokens=4254 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:23,404 - INFO - Prefill started: request=1173eb800 backend=continuous_batching prompt_tokens=4254 images=0 audio=0 videos=0
+2026-10-18 09:07:23,682 - INFO - Prefill progress: request=1173eb800 tokens=4253/4254 (100.0%)
+2026-10-18 09:07:23,696 - INFO - Prefill completed: request=1173eb800 prompt_tokens=4254 cached_tokens=4183 elapsed=0.191s rate=22244.5 tok/s
+2026-10-18 09:07:23,697 - INFO - Decode started: request=1173eb800 time_to_first_token=0.304s
+2026-10-18 09:07:23,776 - INFO - Decode progress: request=1173eb800 generated_tokens=10 elapsed=0.079s rate=41.8 tok/s
+2026-10-18 09:07:23,842 - INFO - Decode completed: request=1173eb800 generated_tokens=18 elapsed=0.146s rate=116.8 tok/s finish_reason=stop
+2026-10-18 09:07:23,843 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=4254 generated_tokens=18 elapsed=0.460s prefill=22244.5 tok/s decode=123.6 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:24,865 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53856 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:24,868 - INFO - Generation queued: request=edfeeb4d0 prompt_tokens=4298 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:24,876 - INFO - Prefill started: request=edfeeb4d0 backend=continuous_batching prompt_tokens=4298 images=0 audio=0 videos=0
+2026-10-18 09:07:25,121 - INFO - Prefill progress: request=edfeeb4d0 tokens=4297/4298 (100.0%)
+2026-10-18 09:07:25,134 - INFO - Prefill completed: request=edfeeb4d0 prompt_tokens=4298 cached_tokens=4253 elapsed=0.156s rate=27592.7 tok/s
+2026-10-18 09:07:25,134 - INFO - Decode started: request=edfeeb4d0 time_to_first_token=0.269s
+2026-10-18 09:07:25,184 - INFO - Decode progress: request=edfeeb4d0 generated_tokens=10 elapsed=0.050s rate=100837.4 tok/s
+2026-10-18 09:07:25,234 - INFO - Decode completed: request=edfeeb4d0 generated_tokens=17 elapsed=0.099s rate=160.9 tok/s finish_reason=stop
+2026-10-18 09:07:25,234 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=4298 generated_tokens=17 elapsed=0.379s prefill=27592.7 tok/s decode=170.9 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:26,254 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53865 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:26,259 - INFO - Generation queued: request=117863d40 prompt_tokens=4334 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:26,267 - INFO - Prefill started: request=117863d40 backend=continuous_batching prompt_tokens=4334 images=0 audio=0 videos=0
+2026-10-18 09:07:26,504 - INFO - Prefill progress: request=117863d40 tokens=4333/4334 (100.0%)
+2026-10-18 09:07:26,518 - INFO - Prefill completed: request=117863d40 prompt_tokens=4334 cached_tokens=4297 elapsed=0.148s rate=29367.0 tok/s
+2026-10-18 09:07:26,518 - INFO - Decode started: request=117863d40 time_to_first_token=0.263s
+2026-10-18 09:07:26,602 - INFO - Decode progress: request=117863d40 generated_tokens=10 elapsed=0.084s rate=51.5 tok/s
+2026-10-18 09:07:26,639 - INFO - Decode progress: request=117863d40 generated_tokens=20 elapsed=0.121s rate=67417.5 tok/s
+2026-10-18 09:07:26,716 - INFO - Decode progress: request=117863d40 generated_tokens=30 elapsed=0.198s rate=74766.6 tok/s
+2026-10-18 09:07:26,793 - INFO - Decode progress: request=117863d40 generated_tokens=40 elapsed=0.275s rate=27459.7 tok/s
+2026-10-18 09:07:26,833 - INFO - Decode progress: request=117863d40 generated_tokens=50 elapsed=0.315s rate=388.8 tok/s
+2026-10-18 09:07:26,892 - INFO - Decode progress: request=117863d40 generated_tokens=60 elapsed=0.374s rate=28169.1 tok/s
+2026-10-18 09:07:26,965 - INFO - Decode progress: request=117863d40 generated_tokens=70 elapsed=0.447s rate=99177.2 tok/s
+2026-10-18 09:07:27,038 - INFO - Decode completed: request=117863d40 generated_tokens=80 elapsed=0.520s rate=152.0 tok/s finish_reason=stop
+2026-10-18 09:07:27,038 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=4334 generated_tokens=80 elapsed=0.796s prefill=29367.0 tok/s decode=153.9 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:27,148 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53870 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:27,161 - INFO - Generation queued: request=edfee9d30 prompt_tokens=16516 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:27,169 - INFO - Prefill started: request=edfee9d30 backend=continuous_batching prompt_tokens=16516 images=0 audio=0 videos=0
+2026-10-18 09:07:27,891 - INFO - Prefill progress: request=edfee9d30 tokens=2048/16516 (12.4%)
+2026-10-18 09:07:28,569 - INFO - Prefill progress: request=edfee9d30 tokens=4096/16516 (24.8%)
+2026-10-18 09:07:29,254 - INFO - Prefill progress: request=edfee9d30 tokens=6144/16516 (37.2%)
+2026-10-18 09:07:29,977 - INFO - Prefill progress: request=edfee9d30 tokens=8192/16516 (49.6%)
+2026-10-18 09:07:30,708 - INFO - Prefill progress: request=edfee9d30 tokens=10240/16516 (62.0%)
+2026-10-18 09:07:31,440 - INFO - Prefill progress: request=edfee9d30 tokens=12288/16516 (74.4%)
+2026-10-18 09:07:32,202 - INFO - Prefill progress: request=edfee9d30 tokens=14336/16516 (86.8%)
+2026-10-18 09:07:33,007 - INFO - Prefill progress: request=edfee9d30 tokens=16384/16516 (99.2%)
+2026-10-18 09:07:33,174 - INFO - Prefill progress: request=edfee9d30 tokens=16515/16516 (100.0%)
+2026-10-18 09:07:33,190 - INFO - Prefill completed: request=edfee9d30 prompt_tokens=16516 cached_tokens=0 elapsed=5.954s rate=2773.9 tok/s
+2026-10-18 09:07:33,190 - INFO - Decode started: request=edfee9d30 time_to_first_token=6.041s
+2026-10-18 09:07:33,376 - INFO - Decode progress: request=edfee9d30 generated_tokens=10 elapsed=0.187s rate=117644.6 tok/s
+2026-10-18 09:07:33,467 - INFO - Decode progress: request=edfee9d30 generated_tokens=20 elapsed=0.277s rate=45.4 tok/s
+2026-10-18 09:07:33,558 - INFO - Decode completed: request=edfee9d30 generated_tokens=27 elapsed=0.368s rate=70.7 tok/s finish_reason=stop
+2026-10-18 09:07:33,558 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=16516 generated_tokens=27 elapsed=6.432s prefill=2773.9 tok/s decode=73.4 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:34,596 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53913 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:34,610 - INFO - Generation queued: request=1173e92b0 prompt_tokens=16564 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:34,618 - INFO - Prefill started: request=1173e92b0 backend=continuous_batching prompt_tokens=16564 images=0 audio=0 videos=0
+2026-10-18 09:07:34,894 - INFO - Prefill progress: request=1173e92b0 tokens=16563/16564 (100.0%)
+2026-10-18 09:07:34,915 - INFO - Prefill completed: request=1173e92b0 prompt_tokens=16564 cached_tokens=16515 elapsed=0.189s rate=87449.9 tok/s
+2026-10-18 09:07:34,915 - INFO - Decode started: request=1173e92b0 time_to_first_token=0.319s
+2026-10-18 09:07:34,967 - INFO - Decode completed: request=1173e92b0 generated_tokens=4 elapsed=0.052s rate=57.5 tok/s finish_reason=stop
+2026-10-18 09:07:34,968 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=16564 generated_tokens=4 elapsed=0.399s prefill=87449.9 tok/s decode=76.7 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:36,007 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53922 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:36,021 - INFO - Generation queued: request=1178620f0 prompt_tokens=16594 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:36,029 - INFO - Prefill started: request=1178620f0 backend=continuous_batching prompt_tokens=16594 images=0 audio=0 videos=0
+2026-10-18 09:07:36,277 - INFO - Prefill progress: request=1178620f0 tokens=16593/16594 (100.0%)
+2026-10-18 09:07:36,291 - INFO - Prefill completed: request=1178620f0 prompt_tokens=16594 cached_tokens=16563 elapsed=0.156s rate=106254.4 tok/s
+2026-10-18 09:07:36,291 - INFO - Decode started: request=1178620f0 time_to_first_token=0.284s
+2026-10-18 09:07:36,382 - INFO - Decode completed: request=1178620f0 generated_tokens=7 elapsed=0.091s rate=65.6 tok/s finish_reason=stop
+2026-10-18 09:07:36,383 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=16594 generated_tokens=7 elapsed=0.402s prefill=106254.4 tok/s decode=76.5 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:37,415 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53929 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:37,429 - INFO - Generation queued: request=edfeeb4a0 prompt_tokens=16620 max_tokens=256 images=0 audio=0 videos=0
+2026-10-18 09:07:37,437 - INFO - Prefill started: request=edfeeb4a0 backend=continuous_batching prompt_tokens=16620 images=0 audio=0 videos=0
+2026-10-18 09:07:37,680 - INFO - Prefill progress: request=edfeeb4a0 tokens=16619/16620 (100.0%)
+2026-10-18 09:07:37,695 - INFO - Prefill completed: request=edfeeb4a0 prompt_tokens=16620 cached_tokens=16593 elapsed=0.150s rate=110549.2 tok/s
+2026-10-18 09:07:37,695 - INFO - Decode started: request=edfeeb4a0 time_to_first_token=0.280s
+2026-10-18 09:07:37,785 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=10 elapsed=0.090s rate=57414.7 tok/s
+2026-10-18 09:07:37,846 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=20 elapsed=0.151s rate=69161.0 tok/s
+2026-10-18 09:07:37,930 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=30 elapsed=0.235s rate=25104.9 tok/s
+2026-10-18 09:07:38,032 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=40 elapsed=0.337s rate=98368.5 tok/s
+2026-10-18 09:07:38,096 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=50 elapsed=0.401s rate=43.5 tok/s
+2026-10-18 09:07:38,139 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=60 elapsed=0.444s rate=99581.9 tok/s
+2026-10-18 09:07:38,266 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=70 elapsed=0.571s rate=38.9 tok/s
+2026-10-18 09:07:38,327 - INFO - Decode progress: request=edfeeb4a0 generated_tokens=80 elapsed=0.632s rate=28846.8 tok/s
+2026-10-18 09:07:38,347 - INFO - Decode completed: request=edfeeb4a0 generated_tokens=85 elapsed=0.652s rate=128.8 tok/s finish_reason=stop
+2026-10-18 09:07:38,348 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=16620 generated_tokens=85 elapsed=0.953s prefill=110549.2 tok/s decode=130.3 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:38,438 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53935 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:38,439 - INFO - Generation queued: request=117862780 prompt_tokens=455 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:38,447 - INFO - Prefill started: request=117862780 backend=continuous_batching prompt_tokens=455 images=0 audio=0 videos=0
+2026-10-18 09:07:38,746 - INFO - Prefill progress: request=117862780 tokens=454/455 (99.8%)
+2026-10-18 09:07:38,760 - INFO - Prefill completed: request=117862780 prompt_tokens=455 cached_tokens=0 elapsed=0.251s rate=1812.7 tok/s
+2026-10-18 09:07:38,761 - INFO - Decode started: request=117862780 time_to_first_token=0.322s
+2026-10-18 09:07:38,818 - INFO - Decode progress: request=117862780 generated_tokens=10 elapsed=0.057s rate=99177.2 tok/s
+2026-10-18 09:07:38,869 - INFO - Decode progress: request=117862780 generated_tokens=20 elapsed=0.108s rate=39.4 tok/s
+2026-10-18 09:07:38,894 - INFO - Decode completed: request=117862780 generated_tokens=27 elapsed=0.134s rate=194.4 tok/s finish_reason=stop
+2026-10-18 09:07:38,895 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=455 generated_tokens=27 elapsed=0.464s prefill=1812.7 tok/s decode=201.9 tok/s finish_reason=tool_calls in_flight=0
+2026-10-18 09:07:38,903 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=False in_flight=1
+2026-10-18 09:07:38,904 - INFO - Generation queued: request=edfee9850 prompt_tokens=455 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:38,912 - INFO - Prefill started: request=edfee9850 backend=continuous_batching prompt_tokens=455 images=0 audio=0 videos=0
+2026-10-18 09:07:39,025 - INFO - Prefill completed: request=edfee9850 prompt_tokens=455 cached_tokens=454 elapsed=0.012s rate=38632.3 tok/s
+2026-10-18 09:07:39,026 - INFO - Decode started: request=edfee9850 time_to_first_token=0.122s
+2026-10-18 09:07:39,074 - INFO - Decode progress: request=edfee9850 generated_tokens=10 elapsed=0.049s rate=131148.0 tok/s
+2026-10-18 09:07:39,121 - INFO - Decode progress: request=edfee9850 generated_tokens=20 elapsed=0.095s rate=154823.8 tok/s
+2026-10-18 09:07:39,144 - INFO - Decode completed: request=edfee9850 generated_tokens=27 elapsed=0.118s rate=219.8 tok/s finish_reason=stop
+2026-10-18 09:07:39,166 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=False backend=continuous_batching prompt_tokens=455 generated_tokens=27 elapsed=0.270s prefill=38632.3 tok/s decode=228.2 tok/s finish_reason=tool_calls in_flight=0
+INFO:     127.0.0.1:53938 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:39,174 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53939 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:39,175 - INFO - Generation queued: request=116561760 prompt_tokens=530 max_tokens=512 images=0 audio=0 videos=0
+2026-10-18 09:07:39,183 - INFO - Prefill started: request=116561760 backend=continuous_batching prompt_tokens=530 images=0 audio=0 videos=0
+2026-10-18 09:07:39,467 - INFO - Prefill progress: request=116561760 tokens=529/530 (99.8%)
+2026-10-18 09:07:39,481 - INFO - Prefill completed: request=116561760 prompt_tokens=530 cached_tokens=454 elapsed=0.196s rate=2698.4 tok/s
+2026-10-18 09:07:39,481 - INFO - Decode started: request=116561760 time_to_first_token=0.307s
+2026-10-18 09:07:39,564 - INFO - Decode progress: request=116561760 generated_tokens=10 elapsed=0.083s rate=21582.9 tok/s
+2026-10-18 09:07:39,620 - INFO - Decode progress: request=116561760 generated_tokens=20 elapsed=0.138s rate=102563.9 tok/s
+2026-10-18 09:07:39,674 - INFO - Decode progress: request=116561760 generated_tokens=30 elapsed=0.193s rate=25585.8 tok/s
+2026-10-18 09:07:39,729 - INFO - Decode progress: request=116561760 generated_tokens=40 elapsed=0.248s rate=27179.9 tok/s
+2026-10-18 09:07:39,825 - INFO - Decode progress: request=116561760 generated_tokens=50 elapsed=0.344s rate=39.1 tok/s
+2026-10-18 09:07:39,873 - INFO - Decode progress: request=116561760 generated_tokens=60 elapsed=0.392s rate=63999.9 tok/s
+2026-10-18 09:07:39,936 - INFO - Decode progress: request=116561760 generated_tokens=70 elapsed=0.455s rate=23880.7 tok/s
+2026-10-18 09:07:39,972 - INFO - Decode progress: request=116561760 generated_tokens=80 elapsed=0.491s rate=135594.9 tok/s
+2026-10-18 09:07:40,046 - INFO - Decode progress: request=116561760 generated_tokens=90 elapsed=0.565s rate=52.1 tok/s
+2026-10-18 09:07:40,118 - INFO - Decode progress: request=116561760 generated_tokens=100 elapsed=0.636s rate=393.0 tok/s
+2026-10-18 09:07:40,166 - INFO - Decode progress: request=116561760 generated_tokens=110 elapsed=0.684s rate=7523.5 tok/s
+2026-10-18 09:07:40,268 - INFO - Decode progress: request=116561760 generated_tokens=120 elapsed=0.786s rate=29776.9 tok/s
+2026-10-18 09:07:40,304 - INFO - Decode progress: request=116561760 generated_tokens=130 elapsed=0.822s rate=63999.9 tok/s
+2026-10-18 09:07:40,359 - INFO - Decode progress: request=116561760 generated_tokens=140 elapsed=0.878s rate=99168.0 tok/s
+2026-10-18 09:07:40,433 - INFO - Decode completed: request=116561760 generated_tokens=147 elapsed=0.952s rate=153.4 tok/s finish_reason=stop
+2026-10-18 09:07:40,434 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=530 generated_tokens=147 elapsed=1.266s prefill=2698.4 tok/s decode=154.4 tok/s finish_reason=stop in_flight=0
+2026-10-18 09:07:40,443 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53946 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:40,443 - INFO - Generation queued: request=1165bd250 prompt_tokens=455 max_tokens=4096 images=0 audio=0 videos=0
+2026-10-18 09:07:40,450 - INFO - Prefill started: request=1165bd250 backend=continuous_batching prompt_tokens=455 images=0 audio=0 videos=0
+2026-10-18 09:07:40,560 - INFO - Prefill completed: request=1165bd250 prompt_tokens=455 cached_tokens=454 elapsed=0.012s rate=37619.8 tok/s
+2026-10-18 09:07:40,560 - INFO - Decode started: request=1165bd250 time_to_first_token=0.118s
+2026-10-18 09:07:40,660 - INFO - Decode progress: request=1165bd250 generated_tokens=10 elapsed=0.100s rate=56.4 tok/s
+2026-10-18 09:07:40,716 - INFO - Decode progress: request=1165bd250 generated_tokens=20 elapsed=0.155s rate=54.2 tok/s
+2026-10-18 09:07:40,772 - INFO - Decode progress: request=1165bd250 generated_tokens=30 elapsed=0.211s rate=25183.2 tok/s
+2026-10-18 09:07:40,845 - INFO - Decode progress: request=1165bd250 generated_tokens=40 elapsed=0.285s rate=70586.3 tok/s
+2026-10-18 09:07:40,921 - INFO - Decode progress: request=1165bd250 generated_tokens=50 elapsed=0.361s rate=377.4 tok/s
+2026-10-18 09:07:40,960 - INFO - Decode progress: request=1165bd250 generated_tokens=60 elapsed=0.400s rate=100837.4 tok/s
+2026-10-18 09:07:41,015 - INFO - Decode completed: request=1165bd250 generated_tokens=69 elapsed=0.455s rate=149.6 tok/s finish_reason=stop
+2026-10-18 09:07:41,016 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=455 generated_tokens=69 elapsed=0.580s prefill=37619.8 tok/s decode=151.8 tok/s finish_reason=tool_calls in_flight=0
+2026-10-18 09:07:41,023 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=False in_flight=1
+2026-10-18 09:07:41,024 - INFO - Generation queued: request=116562570 prompt_tokens=455 max_tokens=4096 images=0 audio=0 videos=0
+2026-10-18 09:07:41,032 - INFO - Prefill started: request=116562570 backend=continuous_batching prompt_tokens=455 images=0 audio=0 videos=0
+2026-10-18 09:07:41,140 - INFO - Prefill completed: request=116562570 prompt_tokens=455 cached_tokens=454 elapsed=0.012s rate=38612.1 tok/s
+2026-10-18 09:07:41,140 - INFO - Decode started: request=116562570 time_to_first_token=0.117s
+2026-10-18 09:07:41,240 - INFO - Decode progress: request=116562570 generated_tokens=10 elapsed=0.100s rate=52.8 tok/s
+2026-10-18 09:07:41,296 - INFO - Decode progress: request=116562570 generated_tokens=20 elapsed=0.155s rate=55.4 tok/s
+2026-10-18 09:07:41,351 - INFO - Decode progress: request=116562570 generated_tokens=30 elapsed=0.210s rate=25263.3 tok/s
+2026-10-18 09:07:41,424 - INFO - Decode progress: request=116562570 generated_tokens=40 elapsed=0.284s rate=71428.0 tok/s
+2026-10-18 09:07:41,501 - INFO - Decode progress: request=116562570 generated_tokens=50 elapsed=0.360s rate=362.0 tok/s
+2026-10-18 09:07:41,540 - INFO - Decode progress: request=116562570 generated_tokens=60 elapsed=0.400s rate=134066.9 tok/s
+2026-10-18 09:07:41,596 - INFO - Decode completed: request=116562570 generated_tokens=69 elapsed=0.455s rate=149.5 tok/s finish_reason=stop
+2026-10-18 09:07:41,617 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=False backend=continuous_batching prompt_tokens=455 generated_tokens=69 elapsed=0.600s prefill=38612.1 tok/s decode=151.6 tok/s finish_reason=tool_calls in_flight=0
+INFO:     127.0.0.1:53949 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:41,625 - INFO - Request started: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1
+INFO:     127.0.0.1:53953 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-10-18 09:07:41,626 - INFO - Generation queued: request=116562930 prompt_tokens=530 max_tokens=4096 images=0 audio=0 videos=0
+2026-10-18 09:07:41,634 - INFO - Prefill started: request=116562930 backend=continuous_batching prompt_tokens=530 images=0 audio=0 videos=0
+2026-10-18 09:07:41,751 - INFO - Prefill completed: request=116562930 prompt_tokens=530 cached_tokens=529 elapsed=0.012s rate=44470.4 tok/s
+2026-10-18 09:07:41,751 - INFO - Decode started: request=116562930 time_to_first_token=0.126s
+2026-10-18 09:07:41,851 - INFO - Decode progress: request=116562930 generated_tokens=10 elapsed=0.100s rate=56.3 tok/s
+2026-10-18 09:07:41,926 - INFO - Decode progress: request=116562930 generated_tokens=20 elapsed=0.175s rate=54.7 tok/s
+2026-10-18 09:07:41,981 - INFO - Decode progress: request=116562930 generated_tokens=30 elapsed=0.230s rate=30150.5 tok/s
+2026-10-18 09:07:42,018 - INFO - Decode progress: request=116562930 generated_tokens=40 elapsed=0.266s rate=124999.0 tok/s
+2026-10-18 09:07:42,080 - INFO - Decode progress: request=116562930 generated_tokens=50 elapsed=0.329s rate=397.2 tok/s
+2026-10-18 09:07:42,151 - INFO - Decode progress: request=116562930 generated_tokens=60 elapsed=0.400s rate=44.3 tok/s
+2026-10-18 09:07:42,175 - INFO - Decode progress: request=116562930 generated_tokens=70 elapsed=0.423s rate=88565.2 tok/s
+2026-10-18 09:07:42,300 - INFO - Decode progress: request=116562930 generated_tokens=80 elapsed=0.549s rate=29484.6 tok/s
+2026-10-18 09:07:42,356 - INFO - Decode progress: request=116562930 generated_tokens=90 elapsed=0.604s rate=94117.7 tok/s
+2026-10-18 09:07:42,413 - INFO - Decode progress: request=116562930 generated_tokens=100 elapsed=0.661s rate=48.7 tok/s
+2026-10-18 09:07:42,469 - INFO - Decode progress: request=116562930 generated_tokens=110 elapsed=0.718s rate=27777.7 tok/s
+2026-10-18 09:07:42,524 - INFO - Decode progress: request=116562930 generated_tokens=120 elapsed=0.773s rate=53333.1 tok/s
+2026-10-18 09:07:42,597 - INFO - Decode progress: request=116562930 generated_tokens=130 elapsed=0.846s rate=111110.3 tok/s
+2026-10-18 09:07:42,653 - INFO - Decode progress: request=116562930 generated_tokens=140 elapsed=0.901s rate=33755.4 tok/s
+2026-10-18 09:07:42,713 - INFO - Decode progress: request=116562930 generated_tokens=150 elapsed=0.961s rate=397.4 tok/s
+2026-10-18 09:07:42,790 - INFO - Decode progress: request=116562930 generated_tokens=160 elapsed=1.039s rate=54.9 tok/s
+2026-10-18 09:07:42,828 - INFO - Decode progress: request=116562930 generated_tokens=170 elapsed=1.077s rate=105263.6 tok/s
+2026-10-18 09:07:42,903 - INFO - Decode progress: request=116562930 generated_tokens=180 elapsed=1.152s rate=52.7 tok/s
+2026-10-18 09:07:42,960 - INFO - Decode progress: request=116562930 generated_tokens=190 elapsed=1.208s rate=121832.7 tok/s
+2026-10-18 09:07:43,055 - INFO - Decode progress: request=116562930 generated_tokens=200 elapsed=1.304s rate=46.2 tok/s
+2026-10-18 09:07:43,131 - INFO - Decode progress: request=116562930 generated_tokens=210 elapsed=1.380s rate=117083.3 tok/s
+2026-10-18 09:07:43,168 - INFO - Decode completed: request=116562930 generated_tokens=215 elapsed=1.416s rate=151.1 tok/s finish_reason=stop
+2026-10-18 09:07:43,168 - INFO - Request completed: endpoint=/chat/completions model=~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=530 generated_tokens=215 elapsed=1.550s prefill=44470.4 tok/s decode=151.8 tok/s finish_reason=stop in_flight=0
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [56387]

@@ -1,32 +1,32 @@
 # Kapitsa on M5 Max, 128 GB
 
-Measured on 2026-10-17 (Qwen) and 2026-10-18 (Nemotron 3.5 Super-VL) with the stock benchmark harness. **Every run passed correctness checks but was flagged for background GPU contention.** These are measurements with desktop applications open, not an idle-machine comparison or a maximum-performance claim. Super-VL, a 96 GB+ model, was also measured against every other engine that runs it on a Mac ([below](#nemotron-35-super-vl-against-the-other-engines)).
+Measured on 2026-10-17 (Qwen) and 2026-10-18 (Nemotron 3.5 Super-VL and Lightning) with the stock benchmark harness. **Every run passed correctness checks but was flagged for background GPU contention.** These are measurements with desktop applications open, not an idle-machine comparison or a maximum-performance claim. Super-VL, a 96 GB+ model, and Lightning were also measured against every other engine that runs them on a Mac ([Super-VL](#nemotron-35-super-vl-against-the-other-engines), [Lightning](#nemotron-35-lightning-against-the-other-engines)).
 
 ## Results
 
-| Metric | Qwen3.6-35B-A3B | Qwen3.8-27B | Nemotron 3.5 Super-VL 120B-A12B |
-| --- | ---: | ---: | ---: |
-| Sampled decode, median (range), tok/s | 249.8 (236.7–300.2) | 72.9 (65.7–83.5) | 84.5 (78.1–93.2) |
-| Greedy decode, median (range), tok/s | 297.4 (275.3–300.7) | 83.7 (79.6–92.7) | 87.0 (76.3–90.0) |
-| Cold prefill, 4K, tok/s | 2,224 | 430 | 627 |
-| Cold prefill, 16K, tok/s | 2,011 | 400 | 509 |
-| Cached TTFT, 4K, ms | 34.9 | 121.6 | 220 |
-| Cached TTFT, 16K, ms | 40.2 | 135.3 | 260 |
-| Peak process-tree memory, GiB | 21.0 | 19.4 | 70.4 (+1.0 mapped) |
-| Tool-call checks | Pass | Pass | Pass |
-| Invalid measurements | None | None | None |
-| GPU contention | Flagged | Flagged | Flagged (prefill phases) |
+| Metric | Qwen3.6-35B-A3B | Qwen3.8-27B | Nemotron 3.5 Super-VL 120B-A12B | Nemotron 3.5 Lightning 30B-A3B |
+| --- | ---: | ---: | ---: | ---: |
+| Sampled decode, median (range), tok/s | 249.8 (236.7–300.2) | 72.9 (65.7–83.5) | 84.5 (78.1–93.2) | 238.7 (231.1–243.4) |
+| Greedy decode, median (range), tok/s | 297.4 (275.3–300.7) | 83.7 (79.6–92.7) | 87.0 (76.3–90.0) | 218.1 (211.2–258.2) |
+| Cold prefill, 4K, tok/s | 2,224 | 430 | 627 | 1,899 |
+| Cold prefill, 16K, tok/s | 2,011 | 400 | 509 | 1,861 |
+| Cached TTFT, 4K, ms | 34.9 | 121.6 | 220 | 73 |
+| Cached TTFT, 16K, ms | 40.2 | 135.3 | 260 | 88 |
+| Peak process-tree memory, GiB | 21.0 | 19.4 | 70.4 (+1.0 mapped) | 18.6 (+0.7 mapped) |
+| Tool-call checks | Pass | Pass | Pass | Pass |
+| Invalid measurements | None | None | None | None |
+| GPU contention | Flagged | Flagged | Flagged (prefill phases) | Flagged (prefill phases) |
 
-Super-VL is NVIDIA's NVFP4 checkpoint with its LiLiCorr drafter, Kapitsa's default for it (`kapitsa pull super-vl`); two of its ten decode answers repeated themselves (flagged by the harness, kept), and its prompts were 4,186 / 16,515 tokens. For the Qwen models: each decode median has five valid trials. All 20 decode requests ended at exactly 512 tokens with `finish_reason=length`, with no thinking leak or repetition-loop flag. Cold prompts reported zero cached tokens and stayed within the harness's 1% token-count tolerance. The 35B prompt lengths were 4,135 / 16,287 tokens; the 27B lengths were 4,134 / 16,285. Each prefill cell is one cold request; each cached TTFT cell is the median of three follow-ups. This session contains one full run per model; the ranges above are within-run ranges, not confidence intervals or independent-session variation.
+Super-VL is NVIDIA's NVFP4 checkpoint with its LiLiCorr drafter, Kapitsa's default for it (`kapitsa pull super-vl`); two of its ten decode answers repeated themselves (flagged by the harness, kept), and its prompts were 4,186 / 16,515 tokens. Lightning is NVIDIA's NVFP4 checkpoint with its DSpark drafter, Kapitsa's default for it (`kapitsa pull lightning`); none of its ten decode answers repeated itself, and its prompts were 4,184 / 16,516 tokens. For the Qwen models: each decode median has five valid trials. All 20 decode requests ended at exactly 512 tokens with `finish_reason=length`, with no thinking leak or repetition-loop flag. Cold prompts reported zero cached tokens and stayed within the harness's 1% token-count tolerance. The 35B prompt lengths were 4,135 / 16,287 tokens; the 27B lengths were 4,134 / 16,285. Each prefill cell is one cold request; each cached TTFT cell is the median of three follow-ups. This session contains one full run per model; the ranges above are within-run ranges, not confidence intervals or independent-session variation.
 
 ## Background load and runtime checks
 
-| Condition | Qwen3.6-35B-A3B | Qwen3.8-27B | Super-VL |
-| --- | ---: | ---: | ---: |
-| Mean foreign GPU activity | 10.11% | 17.67% | 13.95% |
-| Maximum foreign GPU activity | 28.71% | 35.09% | 64.19% |
-| Quiet wait before measurement | 187.2 s | 18.8 s | 300 s (not quiet; measured anyway) |
-| Ambient GPU activity, mean | 0% | 0% | 0% |
+| Condition | Qwen3.6-35B-A3B | Qwen3.8-27B | Super-VL | Lightning |
+| --- | ---: | ---: | ---: | ---: |
+| Mean foreign GPU activity | 10.11% | 17.67% | 13.95% | 6.41% |
+| Maximum foreign GPU activity | 28.71% | 35.09% | 64.19% | 11.28% |
+| Quiet wait before measurement | 187.2 s | 18.8 s | 300 s (not quiet; measured anyway) | 120 s (not quiet; measured anyway) |
+| Ambient GPU activity, mean | 0% | 0% | 0% | 0% |
 
 The monitor identified `cmux` and `com.apple.WebKit` as the main foreign GPU users and flagged every measured phase. Both models reached the harness's initial quiet window, but background activity resumed during measurement. The default 5% contention threshold and ambient-process list were unchanged. Keep this qualification attached when quoting these scores.
 
@@ -62,6 +62,38 @@ NVIDIA's checkpoint and mlx-vlm 0.7.8 (none loads model type `nemotron_h_omni`),
 kernels). On the 48 GB M4 Pro, Kapitsa refuses Super-VL before downloading it: its weights alone (70.1 GB) exceed the
 38.6 GB of GPU memory there.
 
+## Nemotron 3.5 Lightning against the other engines
+
+Measured on 2026-10-18 with [configs/lightning.json](../bench/harness/configs/lightning.json): every engine that runs
+Lightning on a Mac, each at its latest release with its own best settings (mlx-vlm's MTP row at an unreleased build,
+git main 73d366e, because its Nemotron-H MTP drafter came after 0.7.8), every configuration run twice; the table has
+the second valid runs. oMLX and mlx-lm cannot read NVIDIA's checkpoint and ran MLX 4-bit conversions; llama.cpp ran
+ggml-org's Q4_0 GGUF. Details, footnotes and the weights:
+[docs/benchmarks.md](benchmarks.md#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18).
+
+| Engine (setting) | Decode T = 0.6, tok/s | Greedy, tok/s | Prefill 4K / 16K, tok/s | Cached TTFT 4K / 16K, s | Peak memory, GiB | Tools |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** (DSpark drafter) | **238.7** (231.1–243.4) | **218.1** (211.2–258.2) | 1,899 / 1,861 | 0.07 / 0.09 | **18.6** + 0.7 mapped | Pass |
+| Kapitsa (no drafter) | 160.1 (160.1–160.3) | 160.3 (160.1–160.7) | 1,850 / 1,802 | 0.08 / 0.09 | 17.9 + 0.7 mapped | Pass |
+| oMLX 0.7.1rc1 + MTP (depth 2), MLX 4-bit | 189.9 (183.5–196.2) | 199.3 (188.7–202.4) | 3,521 / 3,613 | 0.12 / 0.15 | 21.6 | Pass |
+| oMLX, MLX 4-bit | 164.7 (161.8–166.2) | 166.6 (164.8–167.6) | **3,606 / 3,756** | 0.11 / 0.14 | 20.9 | Pass |
+| llama.cpp 0.7.0 + MTP (n-max 3) | 159.1 (147.1–176.1) | 162.0 (150.6–170.0) | 2,835 / 2,812 | 0.08 / 0.09 | 24.2 | Pass |
+| llama.cpp + MTP (n-max 2) | 156.3 (148.2–167.0) | 163.0 (151.8–168.4) | 2,838 / 2,841 | 0.08 / **0.08** | 24.1 | Pass |
+| llama.cpp + MTP (n-max 1) | 142.4 (140.5–148.5) | 142.3 (140.7–146.3) | 2,831 / 2,840 | 0.07 / 0.08 | 24.1 | Pass |
+| llama.cpp (no speculation) | 116.8 (115.5–117.0) | 113.2 (112.8–114.8) | 2,662 / 2,823 | **0.07** / 0.08 | 22.4 | Pass |
+| llama.cpp + DSpark (n-max 3) | 85.1 (84.9–86.5) | 88.4 (80.0–92.3) | 2,572 / 2,650 | 0.08 / 0.09 | 25.3 | Pass |
+| mlx-lm 0.32.2, MLX 4-bit | 139.3 (135.5–140.7) | 145.6 (145.0–146.9) | 3,365 / 3,422 | 0.08 / 0.11 | 21.1 | Pass |
+| mlx-vlm 0.7.8 + DSpark (block 6) | 137.4 (131.3–144.4) | 146.3 (120.6–149.5) | 2,400 / 2,722 | 0.28 / 0.31 | 29.3 | Pass |
+| mlx-vlm (git main) + MTP (block 4) | 121.5 (107.1–132.2) | 122.5 (116.1–132.6) | 2,524 / 2,842 | 0.28 / 0.32 | 46.5 | Pass |
+| mlx-vlm 0.7.8 | 108.9 (108.5–109.0) | 111.0 (109.4–111.4) | 2,557 / 2,939 | 0.29 / 0.31 | 27.7 | Pass |
+
+Kapitsa writes fastest (1.26× oMLX + MTP sampled, 1.09× greedy) and uses the least memory; it prefills slowest (about
+half of oMLX's rate) and its follow-ups tie llama.cpp's. Every row except oMLX + MTP's and mlx-vlm's plain one is
+flagged for contention: a desktop `com.apple.WebKit` process used 5–7% of the GPU throughout, more during the prefill
+phases. Not run: mlx-lm and oMLX on NVIDIA's checkpoint (ModelOpt `MIXED_PRECISION`), oMLX or mlx-lm with a drafter
+(no Nemotron-H drafter path), mlx-vlm 0.7.8 with MTP. Lightning also fits the 48 GB M4 Pro; it has not been measured
+there.
+
 ## Machine and method
 
 Measured on 2026-10-17 on a MacBook Pro (`Mac17,6`) with an Apple M5 Max, 18 CPU cores, 40 GPU cores and 128 GiB unified memory. macOS 26.4 (25E246), AC power, Automatic power mode. The battery was charging; the internal display and an external 3840 × 1600 display at 144 Hz were attached. Normal desktop applications remained open.
@@ -70,7 +102,7 @@ The Release build uses Apple Clang 21.0.0 and CMake 4.3.3, built from `c36bfe375
 
 Decode is the median of five 512-token coding answers at each temperature, measured over the middle of the streamed response. Sampling uses temperature 0.6, top_p 0.95 and top_k 20; greedy uses temperature 0. Cold prefill uses the frozen corpus with a nonce to prevent prefix reuse. Cached TTFT is the median of three append-only follow-up turns. Text benchmarks disable thinking. Tool checks exercise streaming, non-streaming and tool-result round trips with thinking on and off. Memory is the peak physical footprint of the server process tree, in GiB.
 
-This is an inference performance measurement on one laptop. It does not measure model task accuracy. Only Super-VL was compared with other engines on this laptop. The separate M4 Pro report used a different machine and macOS version; these results do not establish an isolated hardware speedup.
+This is an inference performance measurement on one laptop. It does not measure model task accuracy. Only Super-VL and Lightning were compared with other engines on this laptop. The separate M4 Pro report used a different machine and macOS version; these results do not establish an isolated hardware speedup.
 
 ## Recorded artifacts
 
@@ -80,6 +112,7 @@ This is an inference performance measurement on one laptop. It does not measure 
 * [27B result](../bench/results/2026-10-17-m5-max/q38-27b-kapitsa-20261017-163524.json)
 * [Machine and build record](../bench/results/2026-10-17-m5-max/machine.json)
 * Super-VL, all engines: [results, logs, machine record and model manifests](../bench/results/2026-10-18-m5-max/) (Kapitsa built from `opt/super-vl`, d6fb99d)
+* Lightning, all engines: [results, logs, machine record and model manifests](../bench/results/2026-10-18-m5-max-lightning/) (Kapitsa built from `opt/lightning`, 80e4608)
 * [Pinned model manifests with file sizes and SHA-256 hashes](../bench/results/2026-10-17-m5-max/model-manifests/)
 * [Harness transcript](../bench/results/2026-10-17-m5-max/harness.log) and [server logs](../bench/results/2026-10-17-m5-max/logs/)
 

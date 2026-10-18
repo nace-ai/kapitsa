@@ -24,8 +24,9 @@ struct Stopped : Error {
 // the app and the CLI download the same bytes.
 struct Companion {
   std::string kind;                // "mtp": an MTP head's files; "dflash2": a DFlash2 drafter; "lilicorr": a LiLiCorr
-                                   // drafter (Nemotron 3.5); "mtp-sidecar": mtp.safetensors built from an official
-                                   // checkpoint's mtp.* tensors
+                                   // drafter (Nemotron 3.5 Bolt, Super-VL); "dspark": a DSpark drafter (Nemotron 3.5
+                                   // Lightning); "mtp-sidecar": mtp.safetensors built from an official checkpoint's
+                                   // mtp.* tensors
   std::string repo, revision;
   std::vector<std::string> files;  // the files taken from the repo ("mtp-sidecar": none)
   std::string subdir;              // where they go in the model's folder ("" = beside the weights)

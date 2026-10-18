@@ -40,9 +40,9 @@ std::string calls_str(const std::vector<ToolCall>& v) {
 // One generated turn: `text` as the model would write it after the generation prompt (in the think block
 // when `in_think`), ending by itself when `ended`.
 Out run(const Tokenizer& tok, const std::string& text, bool think_tools, bool in_think = true, bool ended = true,
-        const ojson& tools = kTools) {
+        const ojson& tools = kTools, bool think_ws = false) {
   OutputParser p(tok, tok.find("<think>"), tok.find("</think>"), tok.find("<tool_call>"), tok.find("</tool_call>"),
-                 in_think, !tools.empty(), tools, think_tools);
+                 in_think, !tools.empty(), tools, think_tools, think_ws);
   Out o;
   auto add = [&](const ChatDelta& d) {
     o.reasoning += d.reasoning;
@@ -186,6 +186,14 @@ int main(int argc, char** argv) {
     const std::string t = "x\n" + read_a;
     Out off = run(tok, t, false, true, true, ojson::array()), on = run(tok, t, true, true, true, ojson::array());
     check(same_stream(off, on) && on.calls.empty(), "request without tools: unchanged");
+  }
+  {
+    // think_ws (Nemotron 3.5): the whitespace before </think> stays in the reasoning; without it, it is dropped
+    const std::string t = "Let me check.\n</think>\n" + call("read_file", param("path", "/etc/hosts"));
+    Out ws = run(tok, t, true, true, true, kTools, true), no = run(tok, t, true);
+    check(ws.reasoning == "Let me check.\n" && no.reasoning == "Let me check." && ws.content.empty() &&
+              calls_str(ws.calls) == calls_str(no.calls) && ws.calls.size() == 1,
+          "think_ws: the newline before </think> stays in the reasoning", ws.reasoning + "|" + no.reasoning);
   }
   // Every case once more fed token by token is what run() does; also check the streamed deltas add up.
   {
