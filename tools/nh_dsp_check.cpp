@@ -2,7 +2,7 @@
 // attention (nh_dsp_attn, a ring that wraps), its mask rows (nh_dsp_mask_rows) and Markov walk over candidates
 // (nh_dsp_walk, NVFP4 W2), the MoE sums of layers without latent projections (nh_moe2_sum2_add,
 // nh_moe_combine_add, the fused one-token layer's nh_moe_ah / nh_moe_dh), and the 8-row BF16 product (nh_xb_v8:
-// Lightning's attention in verify). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
+// Lightning's attention in verify) and the F32 router of verify rows (nh_mv_f32_sk). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
 //   nh_dsp_check
 #include "metal/gpu.h"
 #include "model/nemotron_h.h"
@@ -440,6 +440,41 @@ void check_moe_ah() {
   report("nh_moe_dh", derr, 1e-5);
 }
 
+void check_f32_sk() {
+  const uint32_t N = 13, K = 300;
+  for (uint32_t R : {2u, 5u, 8u}) {
+    std::vector<float> w(size_t(N) * K), x(size_t(R) * (K + 8));
+    for (auto& v : w) v = nrand();
+    for (auto& v : x) v = nrand();
+    Gpu& g = Gpu::get();
+    Buffer bw = up(w, "w"), bx = up(x, "x"), by = g.alloc(size_t(R) * (N + 3) * 4, "y");
+    struct {
+      uint32_t N, K, xs, ys;
+      float gs;
+      uint32_t R;
+    } p{N, K, K + 8, N + 3, 1.0f, R};
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_mv_f32_sk"));
+    e->buf(0, bw);
+    e->buf(2, bx);
+    e->buf(3, by);
+    e->bytes(4, &p, sizeof p);
+    e->dispatch(N, 1, 1, 256);
+    e->commit_and_wait();
+    double err = 0, mx = 0;
+    for (uint32_t r = 0; r < R; ++r)
+      for (uint32_t n = 0; n < N; ++n) {
+        double ref = 0;
+        for (uint32_t k = 0; k < K; ++k) ref += double(w[size_t(n) * K + k]) * x[size_t(r) * (K + 8) + k];
+        err = std::max(err, std::fabs(ref - by.as<float>()[size_t(r) * (N + 3) + n]));
+        mx = std::max(mx, std::fabs(ref));
+      }
+    char name[64];
+    snprintf(name, sizeof name, "nh_mv_f32_sk R%u", R);
+    report(name, err / mx, 1e-6);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -451,6 +486,7 @@ int main() {
   check_sums();
   check_xb_v8();
   check_moe_ah();
+  check_f32_sk();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }

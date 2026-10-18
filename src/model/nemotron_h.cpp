@@ -1293,6 +1293,17 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
     e.dispatch((W.N + rows_per_tg - 1) / rows_per_tg, 1, 1, 128);
     return;
   }
+  // F32 (Lightning's router) for 2-8 rows: one threadgroup per output row over K (verify: 0.38 ms less per cycle)
+  if (R >= 2 && W.fmt == NhFmt::F32 && epi == 0 && W.K % 4 == 0 && (xs ? xs : W.K) % 4 == 0) {
+    const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
+    e.use(pipe("nh_mv_f32_sk"));
+    e.buf(0, W.q);
+    e.buf(2, x);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch(W.N, 1, 1, 256);
+    return;
+  }
   const int rk = R <= 1 ? 1 : R <= 2 ? 2 : R <= 4 ? 4 : 8;
   const char* fm = W.fmt == NhFmt::Q8    ? "q8"
                    : W.fmt == NhFmt::FP4 ? "fp4"

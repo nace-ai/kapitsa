@@ -79,3 +79,31 @@
   for (uint j = 0; j < p.k; ++j) v += part[size_t(j) * p.H + n];
   x[n] += v + sd[n];
 }
+
+// ---- F32 matrix (Lightning's router [128][2688]) x up to 8 rows (verify): one threadgroup per output row, its 256
+// threads over K in float4 steps, fp32 sums reduced over the threadgroup (nh_mv_f32_r8 ran 128 simdgroups in all:
+// 31 us per layer). NhMvParams [[4]] (x_stride / y_stride in floats; R <= 8). grid: N threadgroups x 256 threads ----
+[[kernel]] void nh_mv_f32_sk(const device float* W [[buffer(0)]], const device float* x [[buffer(2)]],
+                             device float* y [[buffer(3)]], constant NhMvParams& p [[buffer(4)]],
+                             uint n [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                             uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float red[8][8];
+  float acc[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  const device float4* w4 = (const device float4*)(W + size_t(n) * p.K);
+  for (uint c = tid; c < p.K / 4; c += ntg) {
+    const float4 w = w4[c];
+    for (uint r = 0; r < 8; ++r)
+      if (r < p.R) acc[r] += dot(w, ((const device float4*)(x + size_t(r) * p.x_stride))[c]);
+  }
+  for (uint r = 0; r < 8; ++r) {
+    const float v = simd_sum(acc[r]);
+    if (lane == 0) red[sg][r] = v;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid < p.R) {
+    float v = 0.0f;
+    for (uint j = 0; j < ntg / 32; ++j) v += red[j][tid];
+    y[size_t(tid) * p.y_stride + n] = v * p.gs;
+  }
+}
