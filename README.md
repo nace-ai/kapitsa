@@ -1,7 +1,7 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa: the fastest inference engine for Qwen and Nemotron on Apple silicon. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa: the fastest inference engine for Qwen and Nemotron on Apple silicon. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
 </picture>
 
 [Install](#install) · [Quick start](#quick-start) · [Models](#models) · [Connect your apps](#connect-your-apps) · [Benchmarks](#benchmarks) · [Architecture](#architecture)
@@ -47,14 +47,14 @@ Open **http://127.0.0.1:8000** to chat. The first start downloads the model and 
 
 ## Models
 
-| Model | CLI name | Architecture | Precisions and download size | Speculation |
-| --- | --- | --- | --- | --- |
-| Qwen3.5-4B | `4b` | Dense, 4B | **4-bit 3.3 GB** · 6-bit 4.3 · 8-bit 5.4 · bf16 9.3 | MTP |
-| Qwen3.6-35B-A3B | `35b` | MoE, 3B active | **4-bit 22.1 GB** · 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 | DFlash2 / MTP |
-| Qwen3.8-27B | `27b` | Dense, 27B | **4-bit 20.2 GB** · 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 | DFlash2 / MTP |
-| Nemotron 3.5 Bolt 74B-A9B | `bolt` | Hybrid Mamba-2 MoE, 9B active | **NVIDIA 24 GB 25.1 GB** (2-bit experts, NVFP4, 8-bit) | LiLiCorr |
+| Model | Download | Speculation |
+| --- | --- | --- |
+| **Qwen3.5-4B** · `4b`<br><sub>dense</sub> | **4-bit · 3.3 GB**<br><sub>also 6-bit 4.3 · 8-bit 5.4 · bf16 9.3 GB</sub> | MTP |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active</sub> | **4-bit · 22.1 GB**<br><sub>also 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 GB</sub> | DFlash2 / MTP |
+| **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | LiLiCorr |
 
-Bold is the default; bf16 is full precision. Pick another with `--model 35b:6bit`, `--model 27b:bf16` and so on.
+bf16 is full precision; pick another precision with `--model 35b:6bit`, `--model 27b:bf16` and so on.
 
 Downloads include the model's companion files ([precisions](docs/usage.md#precisions)). Bolt is NVIDIA's own `24gb` checkpoint. Qwen3.6, Qwen3.8 and Bolt read
 [images](docs/usage.md#images); the 4B is text only. Other Qwen3.5-family models load from a Hugging Face repo, a
