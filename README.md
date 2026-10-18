@@ -127,6 +127,19 @@ and the MLX engines, Q4_K_M on llama.cpp. Nemotron 3.5 Bolt runs NVIDIA's own 24
 
 Bolt is NVIDIA's 24 GB checkpoint on every engine; oMLX's LiLiCorr drafter fails every sampled request. Qwen3.5 4B:
 being measured.
+
+Full precision on this Mac: the 35B (72 GB) and 27B (59 GB) don't fit in 48 GB; the 4B does.
+
+| Engine | Qwen3.5 4B · bf16 |
+| --- | ---: |
+| llama.cpp | — |
+| Ollama | — |
+| LM Studio (MLX engine) | — |
+| MTPLX | — |
+| oMLX | — |
+| **Kapitsa** | — |
+
+— : being measured.
 <!-- Qwen3.5 4B slot: a column "Qwen3.5 4B" in the Qwen table above, "N tok/s" per engine. -->
 
 <details>
@@ -149,10 +162,25 @@ A follow-up is the time to the first token of an answer in a conversation that a
 
 | Engine | Qwen3.6 35B-A3B · 4-bit | Qwen3.8 27B · 4-bit |
 | --- | ---: | ---: |
+| llama.cpp + MTP | — | — |
+| Ollama (MLX runner, MTP) | — | — |
+| LM Studio (MLX engine) | — | — |
+| MTPLX | — | — |
+| oMLX + DFlash2 | — | — |
 | **Kapitsa** | **250 tok/s** | **73 tok/s** |
-| Other engines | — | — |
 
-Other engines on this Mac: coming. Nemotron 3.5 Bolt here: not measured yet.
+Full precision, which only fits a Mac this size:
+
+| Engine | Qwen3.6 35B-A3B · bf16 | Qwen3.8 27B · bf16 |
+| --- | ---: | ---: |
+| llama.cpp | — | — |
+| Ollama | — | — |
+| LM Studio (MLX engine) | — | — |
+| MTPLX | — | — |
+| oMLX | — | — |
+| **Kapitsa** | — | — |
+
+— : being measured. Nemotron 3.5 Bolt on this Mac: not measured yet.
 
 <details>
 <summary>Follow-ups and memory, MacBook Pro · M5 Max · 128 GB</summary>
