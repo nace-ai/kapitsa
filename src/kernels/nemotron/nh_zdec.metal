@@ -122,8 +122,9 @@ struct NhMoeDecP {
   }
 }
 
-// ---- NVFP4 experts and shared expert ----
-// grid: tg_r + tg_l + ceil(S / 16) threadgroups x 128 threads (4 simdgroups x 4 rows)
+// ---- NVFP4 experts and shared expert: 4 rows per simdgroup, any simdgroup count (the engine: 8, 32 rows per
+// threadgroup, as nh_x4_moe_*) ----
+// grid: tg_r + tg_l + ceil(S / rows) threadgroups
 [[kernel]] void nh_moe_a4(const device float* xn [[buffer(0)]], const device uchar* rw [[buffer(1)]],
                           const device uchar* lq [[buffer(2)]], const device uchar* ls [[buffer(3)]],
                           const device uchar* uq [[buffer(4)]], const device uchar* us [[buffer(5)]],
@@ -167,7 +168,7 @@ struct NhMoeDecP {
   nh_x4_mv_impl<0, 2>(uq, us, xn, sh, p.S, p.H, gs_up, ((tg - p.tg_r - p.tg_l) * nsg + sg) * 4, lane, tlh);
 }
 
-// grid: tg_u = k * ceil(I / 16) + ceil(H / 16) threadgroups x 128 threads. gse: the routed experts' up scales.
+// grid: tg_u = k * ceil(I / rows) + ceil(H / rows) threadgroups. gse: the routed experts' up scales.
 [[kernel]] void nh_moe_b4(const device uchar* eq [[buffer(0)]], const device uchar* es [[buffer(1)]],
                           const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
                           const device int* eid [[buffer(4)]], const device uchar* dq [[buffer(5)]],
@@ -181,7 +182,7 @@ struct NhMoeDecP {
   nh_x4_lut_to_tg(tlh, tid, nsg * 32);
   const uint tg = tgp.x;
   if (tg < p.tg_u) {  // routed up: pair j = tg / tiles per expert
-    const uint per = (p.I + 15) / 16, j = tg / per, e = uint(eid[j]);
+    const uint per = (p.I + 4 * nsg - 1) / (4 * nsg), j = tg / per, e = uint(eid[j]);
     nh_x4_mv_impl<0, 2>(eq + size_t(e) * p.up_q_stride, es + size_t(e) * p.up_s_stride, lat, h + size_t(j) * p.I, p.I,
                         p.L, gse[e], ((tg % per) * nsg + sg) * 4, lane, tlh);
     return;

@@ -425,7 +425,9 @@ int main(int argc, char** argv) {
       for (size_t i = 0; i < lat.size(); ++i) lath.as<__fp16>()[i] = __fp16(lat[i]);
       live.as<uint32_t>()[0] = 0xffffffffu;
       struct { uint32_t I, D, k, uqs, uss, dqs, dss, hs; } mp{I, D, k, uint32_t(uq), uint32_t(us), uint32_t(dq), uint32_t(ds), I};
+      for (uint32_t thr : {64u, 128u, 256u})
       if (R <= 8 && want("moe pair")) {
+        const uint32_t rows_tg = thr / 8;  // 4 rows per simdgroup
         auto enc = [&](Encoder& e) {
           e.use(NemotronH::pipeline("nh_x4_moe_up"));
           e.buf(0, Uq);
@@ -436,7 +438,7 @@ int main(int argc, char** argv) {
           e.bytes(5, &mp, sizeof mp);
           e.buf(7, live);
           e.buf(9, Gu);
-          e.dispatch((I + 7) / 8, P, 1, 64);
+          e.dispatch((I + rows_tg - 1) / rows_tg, P, 1, thr);
           e.use(NemotronH::pipeline("nh_x4_moe_dn"));
           e.buf(0, Dq);
           e.buf(1, Ds);
@@ -447,7 +449,7 @@ int main(int argc, char** argv) {
           e.bytes(6, &mp, sizeof mp);
           e.buf(8, live);
           e.buf(9, Gd);
-          e.dispatch((D + 7) / 8, P, 1, 64);
+          e.dispatch((D + rows_tg - 1) / rows_tg, P, 1, thr);
           e.use(NemotronH::pipeline("nh_moe2_sum"));
           e.buf(0, pb);
           e.buf(1, ob);
@@ -476,13 +478,17 @@ int main(int argc, char** argv) {
           if (rd >= 2) tm.t.push_back(e->gpu_ms() / 10);
         }
         const double bytes = double(P) * (uq + us + dq + ds);
-        printf("moe pair R=%u: up + down + sum %8.4f ms %6.1f GB/s  err h %.1e out %.1e\n", R, tm.med(),
+        printf("moe pair R=%u, %u threads: up + down + sum %8.4f ms %6.1f GB/s  err h %.1e out %.1e\n", R, thr, tm.med(),
                bytes / tm.med() / 1e6, he / hm, oe / max_abs(o));
       }
-      if (R > 8 && want("moe gemm")) {
-        // bucket the pairs, then the prefill GEMMs as the engine runs them (rows per tile from the pairs per expert)
-        const uint32_t per = P / E, bm = per >= 40 ? 64 : per >= 12 ? 32 : 16;
+      for (int x4 = 0; x4 < 2; ++x4)
+      if (R > 8 && want(x4 ? "moe x4" : "moe gemm")) {
+        // bucket the pairs, then the prefill GEMMs as the engine runs them (rows per tile from the pairs per expert);
+        // x4: nh_x4_moe_up / _dn_m32 (32-row tiles)
+        const uint32_t per = P / E, bm = x4 ? (per >= 12 ? 32 : 16) : per >= 40 ? 64 : per >= 12 ? 32 : 16;
         const std::string ms = "_m" + std::to_string(bm);
+        const std::string kup = (x4 ? "nh_x4_moe_up" : "nh_gemm_fp4_moe_up") + ms,
+                          kdn = (x4 ? "nh_x4_moe_dn" : "nh_gemm_fp4_moe_dn") + ms;
         Buffer sorted = g.alloc(P * 4, "sorted"), rank = g.alloc(P * 4, "rank"),
                tiles = g.alloc((P / 16 + E + 2) * 16, "tiles"), ntl = g.alloc(16, "ntiles"),
                hh = g.alloc(size_t(P) * I * 2, "hh"), ows = g.alloc(size_t(R) * D * 2, "lo");
@@ -500,7 +506,7 @@ int main(int argc, char** argv) {
           e.dispatch(1, 1, 1, 1024);
           struct { uint32_t M, N, K, x_ld, y_ld; float gs; uint32_t epi, qe, se, k; } gu{P, I, D, D, I, 1.0f, 2,
                                                                                           uint32_t(uq), uint32_t(us), k};
-          e.use(NemotronH::pipeline("nh_gemm_fp4_moe_up" + ms));
+          e.use(NemotronH::pipeline(kup));
           e.buf(0, lath);
           e.buf(1, Uq);
           e.buf(2, Us);
@@ -514,7 +520,7 @@ int main(int argc, char** argv) {
           e.dispatch((I + 63) / 64, max_tiles, 1, 128);
           struct { uint32_t M, N, K, x_ld, y_ld; float gs; uint32_t epi, qe, se, k; } gd{P, D, I, I, D, 1.0f, 0,
                                                                                           uint32_t(dq), uint32_t(ds), k};
-          e.use(NemotronH::pipeline("nh_gemm_fp4_moe_dn" + ms));
+          e.use(NemotronH::pipeline(kdn));
           e.buf(0, hh);
           e.buf(1, Dq);
           e.buf(2, Ds);
@@ -557,8 +563,8 @@ int main(int argc, char** argv) {
           e->commit_and_wait();
           if (rd >= 2) tm.t.push_back(e->gpu_ms());
         }
-        printf("moe gemm R=%u (tiles of %u): bucket + up + down + combine %8.3f ms %5.2f TF  err h %.1e out %.1e\n", R,
-               bm, tm.med(), 4.0 * P * I * D / tm.med() / 1e9, he / hm, oe / max_abs(o));
+        printf("moe %s R=%u (tiles of %u): bucket + up + down + combine %8.3f ms %5.2f TF  err h %.1e out %.1e\n",
+               x4 ? "x4" : "gemm", R, bm, tm.med(), 4.0 * P * I * D / tm.med() / 1e9, he / hm, oe / max_abs(o));
         for (Buffer* b : {&sorted, &rank, &tiles, &ntl, &hh, &ows}) g.release(*b);
       }
       for (Buffer* b : {&eidb, &ewb, &latf, &lath, &hb, &pb, &ob, &live}) g.release(*b);
@@ -627,7 +633,7 @@ int main(int argc, char** argv) {
            PART = g.alloc(size_t(k) * L * 4, "part"), SD = g.alloc(H * 4, "sd"), LO = g.alloc(L * 4, "lo");
     memset(CTR.ptr(), 0, 16);
     struct MoeDecP_ { uint32_t H, E, k, norm; float scale; uint32_t L, S, I, uqs, uss, tg_r, tg_l, tg_u; } dp{
-        H, E, k, 1, 5.0f, L, S, I, uint32_t(uq), uint32_t(us), (E + 15) / 16, (L + 15) / 16, k * ((I + 15) / 16)};
+        H, E, k, 1, 5.0f, L, S, I, uint32_t(uq), uint32_t(us), (E + 31) / 32, (L + 31) / 32, k * ((I + 31) / 32)};
     struct MoeP_ { uint32_t I, D, k, uqs, uss, dqs, dss, hs; } mp{I, L, k, uint32_t(uq), uint32_t(us), uint32_t(dq), uint32_t(ds), I};
     struct MvP_ { uint32_t N, K, xs, ys; float gs; uint32_t R; };
     auto fused = [&](Encoder& e) {
@@ -647,7 +653,7 @@ int main(int argc, char** argv) {
       e.buf(12, CTR);
       e.bytes(13, &dp, sizeof dp);
       e.val(14, su.gs);
-      e.dispatch(dp.tg_r + dp.tg_l + (S + 15) / 16, 1, 1, 128);
+      e.dispatch(dp.tg_r + dp.tg_l + (S + 31) / 32, 1, 1, 256);
       e.use(NemotronH::pipeline("nh_moe_b4"));
       e.buf(0, UQ);
       e.buf(1, US);
@@ -661,7 +667,7 @@ int main(int argc, char** argv) {
       e.bytes(9, &dp, sizeof dp);
       e.buf(10, GU);
       e.val(11, sdn.gs);
-      e.dispatch(dp.tg_u + (H + 15) / 16, 1, 1, 128);
+      e.dispatch(dp.tg_u + (H + 31) / 32, 1, 1, 256);
       e.use(NemotronH::pipeline("nh_x4_moe_dn"));
       e.buf(0, DQ);
       e.buf(1, DS);
@@ -672,7 +678,7 @@ int main(int argc, char** argv) {
       e.bytes(6, &mp, sizeof mp);
       e.buf(8, live);
       e.buf(9, GD);
-      e.dispatch((L + 7) / 8, k, 1, 64);
+      e.dispatch((L + 31) / 32, k, 1, 256);
       e.use(NemotronH::pipeline("nh_moe_d1"));
       e.buf(0, LQU);
       e.buf(1, LSU);
@@ -680,7 +686,7 @@ int main(int argc, char** argv) {
       e.buf(3, SD);
       e.buf(4, X1);
       e.bytes(5, &dp, sizeof dp);
-      e.dispatch((H + 15) / 16, 1, 1, 128);
+      e.dispatch((H + 31) / 32, 1, 1, 256);
     };
     auto mv = [&](Encoder& e, const char* name, const Buffer& q, const Buffer& sc, const Buffer& x, const Buffer& y,
                   uint32_t N, uint32_t K, float gs, uint32_t rows_tg, uint32_t thr) {

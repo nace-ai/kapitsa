@@ -413,6 +413,10 @@ void LiliCorr::alloc_buffers() {
   aout_ = al(Hh * 4, "lili_aout");
   scores_ = al(S * K * 4, "lili_scores");
   picks_ = al(S * 4, "lili_picks");
+  // a verify row's cost grows with the experts it adds: top-22 of 512 (Super-VL) reads ~3x Bolt's top-9 per row
+  // (384 tokens, greedy: 0.04 70-76 / 67-68 tok/s on code / prose, 0.1 72-83 / 70-82, 0.2 77-84 / 72-81, 0.35 76-84 /
+  // 71-77)
+  if (tg_.config().max_k > 16) dyn_ratio_ = 0.15f;
   if (const char* v = getenv("NI_LILI_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_LILI_DYN_P")) dyn_mode_ = uint32_t(atoi(v));
   cg_ = al(W * H * 4, "lili_cg");
