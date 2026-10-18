@@ -13,7 +13,9 @@
 #include <libproc.h>
 #include <mach/mach.h>
 #include <spawn.h>
+#include <sys/file.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -155,38 +157,28 @@ bool mac_model(const std::string& identifier, std::string* name, int* year) {
 std::string chip_short(const std::string& chip) { return chip.rfind("Apple ", 0) == 0 ? chip.substr(6) : chip; }
 
 std::string mac_display(const std::string& name, int year, const std::string& chip, const std::string& identifier) {
+  (void)chip;  // shown beside the name by every caller
   if (name.empty()) return identifier;
-  std::string n = name;
-  const size_t open = n.rfind('('), close = n.rfind(')');
-  if (open == std::string::npos || close == std::string::npos || close < open) return n;
-  // the parenthesis' parts: "16-inch", "M5 Pro or M5 Max" (the chip it is), the year where it has none
+  // Apple's names since the M5 give the chip instead of the year ("MacBook Pro (14-inch, M5)", "Mac mini (M6)"): shown
+  // as the older ones are, with the year ("MacBook Pro (14-inch, 2025)"), since the chip is shown beside it. A name with
+  // a year is Apple's as it is.
+  const size_t open = name.rfind('('), close = name.rfind(')');
+  if (open == std::string::npos || close == std::string::npos || close < open || year <= 0) return name;
   std::vector<std::string> parts;
   for (size_t a = open + 1; a <= close;) {
-    size_t b = n.find(", ", a);
+    size_t b = name.find(", ", a);
     if (b == std::string::npos || b > close) b = close;
-    parts.push_back(n.substr(a, b - a));
+    parts.push_back(name.substr(a, b - a));
     a = b + (b == close ? 1 : 2);
   }
-  const std::string c = chip_short(chip);
-  bool has_year = false;
-  for (auto& p : parts) {
-    if (p.find(" or ") != std::string::npos) {
-      for (size_t a = 0; a <= p.size();) {
-        size_t b = p.find(" or ", a);
-        if (b == std::string::npos) b = p.size();
-        if (p.substr(a, b - a) == c) {
-          p = c;
-          break;
-        }
-        a = b + 4;
-      }
-    }
-    if (std::regex_search(p, std::regex("\\b20\\d\\d\\b"))) has_year = true;
-  }
-  if (!has_year && year > 0) parts.push_back(std::to_string(year));
+  static const std::regex has_year("\\b20\\d\\d\\b"), names_chip("M\\d+( (Pro|Max|Ultra))?( or M\\d+( (Pro|Max|Ultra))?)*");
+  for (const auto& p : parts)
+    if (std::regex_search(p, has_year)) return name;
   std::string inner;
-  for (const auto& p : parts) inner += (inner.empty() ? "" : ", ") + p;
-  return n.substr(0, open + 1) + inner + n.substr(close);
+  for (const auto& p : parts)
+    if (!std::regex_match(p, names_chip)) inner += (inner.empty() ? "" : ", ") + p;
+  inner += (inner.empty() ? "" : ", ") + std::to_string(year);
+  return name.substr(0, open + 1) + inner + name.substr(close);
 }
 
 Mac this_mac() {
@@ -378,6 +370,60 @@ Footprint footprint(const std::set<int>& pids, bool mapped) {
     f.mapped_clean = any ? clean : -1;
   }
   return f;
+}
+
+std::string GpuLock::path() {
+  if (const char* p = getenv("BENCH_GPU_LOCK"); p && *p) {
+    const std::string s = p;
+    const char* h = getenv("HOME");
+    return s.rfind("~/", 0) == 0 && h ? h + s.substr(1) : s;
+  }
+  const char* h = getenv("HOME");
+  return std::string(h ? h : "") + "/.cache/nace-gpu.lock";
+}
+
+bool GpuLock::acquire(const std::function<void(const std::string&)>& waiting) {
+  release();
+  const std::string p = path();
+  mkdir(p.substr(0, p.find_last_of('/')).c_str(), 0755);
+  const int fd = open(p.c_str(), O_RDONLY | O_CREAT | O_CLOEXEC, 0644);
+  if (fd < 0) return false;
+  if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+    if (waiting) waiting(lock_holders(p));
+    // block in flock() as lockf does: the kernel queues blocked waiters, so polling would lose every release to them
+    while (flock(fd, LOCK_EX) != 0)
+      if (errno != EINTR) {
+        const int e = errno;
+        close(fd);
+        errno = e;
+        return false;
+      }
+  }
+  fd_ = fd;
+  return true;
+}
+
+void GpuLock::release() {
+  if (fd_ < 0) return;
+  flock(fd_, LOCK_UN);
+  close(fd_);
+  fd_ = -1;
+}
+
+std::string lock_holders(const std::string& path) {
+  const std::string out = run_output({"/usr/sbin/lsof", "-t", path});
+  std::string names;
+  std::map<int, std::string> comm;
+  for (const auto& p : all_procs()) comm[p.pid] = p.comm;
+  for (size_t a = 0; a < out.size();) {
+    size_t b = out.find('\n', a);
+    if (b == std::string::npos) b = out.size();
+    const int pid = atoi(out.substr(a, b - a).c_str());
+    a = b + 1;
+    if (pid <= 0 || pid == getpid()) continue;
+    names += (names.empty() ? "" : ", ") + app_name(pid, comm.count(pid) ? comm[pid] : "?") + " (pid " + std::to_string(pid) + ")";
+  }
+  return names;
 }
 
 std::vector<int> other_kapitsas(int except) {

@@ -5,10 +5,13 @@
 //   bench_test plan RESULT.json LOGIN  the pull request's plan and the issue form's address for a result, as JSON
 //   bench_test machine                 this Mac and its conditions now, as the command records them
 //   bench_test run PORT                the protocol against a server on 127.0.0.1:PORT, with fixed nonces
+//   bench_test lock [HOLD_S]           takes the GPU lock (BENCH_GPU_LOCK), holds it HOLD_S seconds
 #include "bench/bench.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <thread>
 #include <fstream>
 #include <sstream>
 
@@ -90,12 +93,15 @@ int self_test() {
     const char* want;
   };
   for (const Disp& d : {Disp{"MacBook Pro (16-inch, 2024)", 2024, "Apple M4 Pro", "MacBook Pro (16-inch, 2024)"},
-                        Disp{"MacBook Pro (14-inch, M5)", 2025, "Apple M5", "MacBook Pro (14-inch, M5, 2025)"},
-                        Disp{"MacBook Pro (16-inch, M5 Pro or M5 Max)", 2026, "Apple M5 Max", "MacBook Pro (16-inch, M5 Max, 2026)"},
-                        Disp{"MacBook Pro (16-inch, M5 Pro or M5 Max)", 2026, "Apple M9", "MacBook Pro (16-inch, M5 Pro or M5 Max, 2026)"},
-                        Disp{"Mac mini (M6)", 2026, "Apple M6", "Mac mini (M6, 2026)"},
+                        Disp{"MacBook Pro (14-inch, M5)", 2025, "Apple M5", "MacBook Pro (14-inch, 2025)"},
+                        Disp{"MacBook Pro (16-inch, M5 Pro or M5 Max)", 2026, "Apple M5 Max", "MacBook Pro (16-inch, 2026)"},
+                        Disp{"Mac mini (M6)", 2026, "Apple M6", "Mac mini (2026)"},
+                        Disp{"Mac mini (M5 Pro)", 2026, "Apple M5 Pro", "Mac mini (2026)"},
+                        Disp{"MacBook Air (13-inch, M5)", 2026, "Apple M5", "MacBook Air (13-inch, 2026)"},
                         Disp{"MacBook Pro (14-inch, Nov 2023)", 2023, "Apple M3", "MacBook Pro (14-inch, Nov 2023)"},
-                        Disp{"Mac Studio (M5 Ultra)", 2026, "Apple M5 Ultra", "Mac Studio (M5 Ultra, 2026)"},
+                        Disp{"MacBook Air (15-inch, M4, 2025)", 2025, "Apple M4", "MacBook Air (15-inch, M4, 2025)"},
+                        Disp{"iMac (24-inch, 2024, Four ports)", 2024, "Apple M4", "iMac (24-inch, 2024, Four ports)"},
+                        Disp{"Mac Studio (M5 Ultra)", 2026, "Apple M5 Ultra", "Mac Studio (2026)"},
                         Disp{"", 0, "Apple M9", "Mac99,1"}}) {
     const std::string got = mac_display(d.name, d.year, d.chip, "Mac99,1");
     check(got == d.want, std::string("display of ") + (*d.name ? d.name : "an unknown Mac"), got);
@@ -300,6 +306,22 @@ int run_protocol(int port) {
   return 0;
 }
 
+// The GPU lock (BENCH_GPU_LOCK names a test file): takes it, says how long it waited and who held it, holds it for
+// `hold` seconds, releases it
+int lock_test(double hold) {
+  const auto t0 = std::chrono::steady_clock::now();
+  std::string holders;
+  bool waited = false;
+  GpuLock l;
+  const bool ok = l.acquire([&](const std::string& who) { holders = who, waited = true; });
+  const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+  printf("%s\n", ojson{{"ok", ok}, {"path", GpuLock::path()}, {"waited", waited}, {"wait_s", secs}, {"holders", holders}}.dump().c_str());
+  fflush(stdout);
+  if (ok && hold > 0) std::this_thread::sleep_for(std::chrono::milliseconds(long(hold * 1000)));
+  l.release();
+  return ok ? 0 : 1;
+}
+
 int machine() {
   const Mac m = this_mac();
   const Power p = power();
@@ -328,6 +350,7 @@ int main(int argc, char** argv) {
   if (cmd == "plan" && argc > 3) return plan(argv[2], argv[3]);
   if (cmd == "machine") return machine();
   if (cmd == "run" && argc > 2) return run_protocol(atoi(argv[2]));
-  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT\n");
+  if (cmd == "lock") return lock_test(argc > 2 ? atof(argv[2]) : 0);
+  fprintf(stderr, "usage: bench_test self | protocol CASES.json | result [quick] | plan RESULT.json LOGIN | machine | run PORT | lock [HOLD_S]\n");
   return 2;
 }

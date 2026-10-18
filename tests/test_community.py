@@ -124,9 +124,13 @@ p = subprocess.run([sys.executable, os.path.join(REPO, "tools", "community_table
                    capture_output=True, text=True)
 md = open(out).read() if os.path.exists(out) else ""
 check(p.returncode == 0 and "skipped" in p.stderr, "the table is written; a file that is not a result is skipped", p.stderr[-200:])
-i_m5, i_m4 = md.find("## MacBook Pro (16-inch, M5 Max, 2026) · M5 Max 40-core GPU · 128 GB"), md.find(
+i_m5, i_m4 = md.find("## MacBook Pro (16-inch, 2026) · M5 Max 40-core GPU · 128 GB"), md.find(
     "## MacBook Pro (16-inch, 2024) · M4 Pro 20-core GPU · 48 GB")
-check(0 < i_m5 < i_m4, "grouped by Mac, the newest first, named with the year and the chip it is")
+check(0 < i_m5 < i_m4, "grouped by Mac, the newest first, an M5 Mac named with its year")
+for name, year, want in (("MacBook Pro (14-inch, M5)", 2025, "MacBook Pro (14-inch, 2025)"), ("Mac mini (M6)", 2026, "Mac mini (2026)"),
+                         ("MacBook Air (15-inch, M4, 2025)", 2025, "MacBook Air (15-inch, M4, 2025)"),
+                         ("MacBook Pro (16-inch, M5 Pro or M5 Max)", 2026, "MacBook Pro (16-inch, 2026)")):
+    check(ct.mac_name({"name": name, "year": year, "identifier": "x", "chip": "Apple M5"}) == want, f"the table names {name} {want}")
 check("### Qwen3.6 35B-A3B · 4-bit" in md and "### Qwen3.8 27B · 6-bit" in md, "then by model and precision")
 rows = [l for l in md.splitlines() if l.startswith("| [2026-")]
 check(len(rows) == 3, "a row per run", str(len(rows)))

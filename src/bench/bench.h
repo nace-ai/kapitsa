@@ -149,8 +149,9 @@ Mac this_mac();
 bool mac_model(const std::string& identifier, std::string* name, int* year);
 // The table itself (bench/community/mac-models.json)
 const ojson& mac_models();
-// "MacBook Pro (16-inch, 2024)"; a name without a year gets it ("MacBook Pro (14-inch, M5, 2025)"), and "M5 Pro or
-// M5 Max" becomes the chip it is; the identifier when not known
+// "MacBook Pro (16-inch, 2024)": Apple's name, or for a name with the chip instead of a year (the M5 Macs' "MacBook Pro
+// (14-inch, M5)") the year instead of the chip, "MacBook Pro (14-inch, 2025)", as the chip is shown beside it; the
+// identifier when not known
 std::string mac_display(const std::string& name, int year, const std::string& chip, const std::string& identifier);
 std::string chip_short(const std::string& chip);  // "Apple M4 Pro" -> "M4 Pro"
 
@@ -191,6 +192,26 @@ struct Footprint {
 Footprint footprint(const std::set<int>& pids, bool mapped = false);
 // Other Kapitsa processes running (not this one, not `except`)
 std::vector<int> other_kapitsas(int except = 0);
+
+// The harness's GPU lock (bench/harness/gpu_hogs.py GpuLock): an exclusive flock on BENCH_GPU_LOCK, else
+// ~/.cache/nace-gpu.lock, the lock `lockf -k <file> <cmd>` takes, so a benchmark never runs beside another GPU job that
+// takes it. Opened read-only (the file may be immutable) with close-on-exec (the server does not inherit it), created
+// if missing, never removed.
+class GpuLock {
+ public:
+  static std::string path();
+  ~GpuLock() { release(); }
+  // Takes it: at once, or after calling waiting() with who holds it and blocking until they release it. False (errno
+  // set) when the file can't be opened.
+  bool acquire(const std::function<void(const std::string& holders)>& waiting = nullptr);
+  void release();
+  bool held() const { return fd_ >= 0; }
+
+ private:
+  int fd_ = -1;
+};
+// Who holds a lock file: "lockf (pid 123), Python (pid 456)"
+std::string lock_holders(const std::string& path);
 
 // ---------------------------------------------------------------- GPU contention (monitor.cpp: gpu_hogs.py)
 

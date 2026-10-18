@@ -25,17 +25,19 @@ def chip_short(chip):
 
 
 def mac_name(mac):
-    """Apple's name, with the year where it has none and the chip where it names two (as `kapitsa bench` shows it)"""
-    name, year, chip = mac.get("name"), mac.get("year"), chip_short(mac.get("chip", ""))
+    """Apple's name, or for a name with the chip instead of a year (the M5 Macs' "MacBook Pro (14-inch, M5)") the year
+    instead of the chip, as `kapitsa bench` shows it: the chip is shown beside it"""
+    name, year = mac.get("name"), mac.get("year")
     if not name:
         return mac["identifier"]
     m = re.fullmatch(r"(.*)\((.*)\)", name)
-    if not m:
+    if not m or not year:
         return name
     parts = m.group(2).split(", ")
-    parts = [chip if " or " in p and chip in p.split(" or ") else p for p in parts]
-    if year and not any(re.search(r"\b20\d\d\b", p) for p in parts):
-        parts.append(str(year))
+    if any(re.search(r"\b20\d\d\b", p) for p in parts):
+        return name
+    chip = re.compile(r"M\d+( (Pro|Max|Ultra))?( or M\d+( (Pro|Max|Ultra))?)*")
+    parts = [p for p in parts if not chip.fullmatch(p)] + [str(year)]
     return f"{m.group(1)}({', '.join(parts)})"
 
 

@@ -315,29 +315,6 @@ std::string drafter_of(const hub::ModelRef& ref) {
   return "";
 }
 
-// ---------------------------------------------------------------- the GPU lock (gpu_hogs.GpuLock)
-
-std::string lock_path() {
-  if (const char* p = getenv("BENCH_GPU_LOCK"); p && *p) return expand_home(p);
-  const char* h = getenv("HOME");
-  return std::string(h ? h : "") + "/.cache/nace-gpu.lock";
-}
-
-std::string lock_holders(const std::string& path) {
-  std::string names;
-  FILE* p = popen(("/usr/sbin/lsof -t " + shell_quote(path) + " 2>/dev/null").c_str(), "r");
-  if (!p) return "";
-  char line[64];
-  while (fgets(line, sizeof line, p)) {
-    const int pid = atoi(line);
-    if (pid <= 0 || pid == getpid()) continue;
-    const std::string n = app_name(pid, "pid " + std::to_string(pid));
-    names += (names.empty() ? "" : ", ") + n + " (pid " + std::to_string(pid) + ")";
-  }
-  pclose(p);
-  return names;
-}
-
 // ---------------------------------------------------------------- the server
 
 struct Server {
@@ -678,21 +655,19 @@ int run(const Options& o) {
 
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
   // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)
-  int lock_fd = -1;
+  GpuLock lock;
   if (!env_on("NACE_GPU_LOCK_HELD")) {
-    const std::string lp = lock_path();
-    mkdir((lp.substr(0, lp.find_last_of('/'))).c_str(), 0755);
-    lock_fd = open(lp.c_str(), O_RDONLY | O_CREAT | O_CLOEXEC, 0644);
-    if (lock_fd < 0) warn_line("Can't open the GPU lock " + lp + " (" + strerror(errno) + "): running without it.");
-    if (lock_fd >= 0 && flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
-      const std::string who = lock_holders(lp);
-      say("Waiting for the GPU lock " + lp + (who.empty() ? "" : ", held by " + who));
-      Ticker t("Waiting for the GPU lock");
-      if (!who.empty()) t.detail("held by " + who);
-      if (flock(lock_fd, LOCK_EX) != 0) return fail("Can't take the GPU lock " + lp + ": " + strerror(errno));
-      t.done();
-      if (g_tui) ui::ok("GPU lock taken after " + term::duration(t.secs()));
+    std::unique_ptr<Ticker> t;
+    const bool ok = lock.acquire([&](const std::string& who) {
+      say("Waiting for the GPU lock " + GpuLock::path() + (who.empty() ? "" : ", held by " + who));
+      t = std::make_unique<Ticker>("Waiting for the GPU lock");
+      if (!who.empty()) t->detail("held by " + who);
+    });
+    if (t) {
+      t->done();
+      if (g_tui && ok) ui::ok("GPU lock taken after " + term::duration(t->secs()));
     }
+    if (!ok) warn_line("Can't take the GPU lock " + GpuLock::path() + " (" + strerror(errno) + "): running without it.");
   }
 
   // ---- the server: compare_engines.py's start (its own session, NI_* cleared, one slot, 32K context)
@@ -753,7 +728,7 @@ int run(const Options& o) {
   auto own = [&] { return process_tree({int(srv.pid)}); };
   auto cleanup = [&] {
     stop_server(srv);
-    if (lock_fd >= 0) close(lock_fd), lock_fd = -1;
+    lock.release();
     sigaction(SIGINT, &old_int, nullptr);
     sigaction(SIGTERM, &old_term, nullptr);
     sigaction(SIGHUP, &old_hup, nullptr);

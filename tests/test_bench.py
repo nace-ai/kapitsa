@@ -13,6 +13,7 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
 5. Submitting: the plan and the issue form's address, `kapitsa bench submit --dry-run` with and without gh, and a
    stand-in gh that records what it is asked: nothing without a yes typed at a terminal, then the pull request's calls.
 6. `kapitsa bench` fails before loading anything when the model can't be had (a home without models, no network).
+7. The GPU lock, on a test file: it waits for lockf's holder and names it, and lockf waits for it.
 """
 import glob, http.server, json, os, pty, random, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
 import urllib.parse
@@ -444,6 +445,27 @@ r = run([KAPITSA, "bench", "--model", os.path.join(home, "nothing-here")], env=n
 check(r.returncode == 2, "a folder that is not a model is refused", (r.stdout + r.stderr)[-200:])
 r = run([KAPITSA, "bench", "--help"], env=nogh)
 check(r.returncode == 0 and "kapitsa bench [--model MODEL]" in r.stdout, "--help")
+
+# ---------------------------------------------------------------- 7. the GPU lock (a test file, immutable like this Mac's)
+lockfile = os.path.join(tmp, "gpu.lock")
+open(lockfile, "w").close()
+subprocess.run(["chflags", "uchg", lockfile], check=True)
+lenv = dict(os.environ, BENCH_GPU_LOCK=lockfile)
+holder = subprocess.Popen(["lockf", "-k", lockfile, "sleep", "2"])
+time.sleep(0.5)
+r = run([BENCH_TEST, "lock"], env=lenv)
+info = json.loads(r.stdout or "{}")
+holder.wait()
+check(info.get("ok") and info.get("waited") and info.get("wait_s", 0) >= 1.0 and "lockf" in info.get("holders", ""),
+      "waits for lockf's holder of an immutable lock file, and names it", r.stdout)
+p = subprocess.Popen([BENCH_TEST, "lock", "2"], env=lenv, stdout=subprocess.PIPE, text=True)
+first = p.stdout.readline()
+r2 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
+p.wait()
+r3 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
+check(json.loads(first).get("ok") and r2.returncode != 0 and r3.returncode == 0,
+      "while it holds the lock lockf can't take it; released after", f"{first} {r2.returncode} {r3.returncode}")
+subprocess.run(["chflags", "nouchg", lockfile])
 
 shutil.rmtree(tmp, ignore_errors=True)
 shutil.rmtree(gh_dir, ignore_errors=True)
