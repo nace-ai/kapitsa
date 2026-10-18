@@ -223,7 +223,7 @@ const std::vector<CatalogModel>& catalog() {
       {.name = "nemotron-3.5-super-vl",
        .aliases = {"nemotron-super", "super-vl", "super"},
        .title = "Nemotron 3.5 Super-VL 120B-A12B",
-       .about = "NVIDIA's hybrid Mamba-2 MoE, 12B active, NVFP4 experts (text; 96 GB+ Macs, 128 GB for full context)",
+       .about = "NVIDIA's hybrid Mamba-2 MoE, 12B active, NVFP4 experts (96 GB+ Macs, 128 GB for full context)",
        // one variant: NVIDIA's NVFP4 checkpoint, its safetensors as they are
        .default_variant = "nvfp4",
        .fallbacks = {},

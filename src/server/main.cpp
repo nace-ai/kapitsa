@@ -304,12 +304,12 @@ static void print_serve_help() {
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
-         "                         tokens; Nemotron 3.5 Bolt 1400000, which its small text needs; more keeps finer\n"
-         "                         detail and takes longer; 0 = the model's own limit)\n\n"
+         "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
+         "                         more keeps finer detail and takes longer; 0 = the model's own limit)\n\n"
          "Endpoints: GET / (chat page), POST /v1/chat/completions (OpenAI), POST /v1/responses (OpenAI Responses),\n"
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
-         "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt): OpenAI image_url parts, Anthropic image blocks and\n"
-         "Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
+         "Images (Qwen3.6, Qwen3.8, Nemotron 3.5 Bolt and Super-VL): OpenAI image_url parts, Anthropic image\n"
+         "blocks and Responses input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
          "Tuning switches (NI_* variables): docs/usage.md.\n");
   if (term::fancy()) {  // in a terminal the engine's log goes to a file, unless --verbose; without --model it asks
     h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +

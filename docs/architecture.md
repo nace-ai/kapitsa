@@ -72,9 +72,10 @@ loader supplies weights to the backends; Bolt repacks codes and scales into its 
 Qwen GGUF files are converted once into a reusable model folder.
 
 Vision is optional. `open_encoder` selects `QwenViT` for supported Qwen checkpoints or `RadioViT` for Nemotron
-3.5 Bolt's C-RADIO ViT-H/16 tower and projector. The tower loads on the first image request; CPU image preparation
-and cached GPU embeddings feed the model's prefill. Qwen uses M-RoPE positions; Bolt wraps image rows in its image
-tokens and uses attention without positional embeddings. The current 4B tower shape is unsupported. The text
+3.5 Bolt's and Super-VL's C-RADIO ViT-H/16 tower and projector (Super-VL layer-normalizes the tower's output first).
+The tower loads on the first image request; CPU image preparation and cached GPU embeddings feed the model's prefill.
+Qwen uses M-RoPE positions; Bolt and Super-VL wrap image rows in their image tokens and use attention without
+positional embeddings. The current 4B tower shape is unsupported. The text
 benchmarks do not measure images.
 
 Memory planning happens before weights load. Per-slot KV caches grow within a budget derived from Metal's recommended
