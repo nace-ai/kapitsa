@@ -610,6 +610,26 @@ void Qwen4Exp::enc_gr_rows(Encoder& e, const GatedRes& g, int R, const Buffer& X
       float eps;
     } fp{uint32_t(R), D, S, rank, SD / 1024, u_ld, inject ? 1u : 0u, g.inj ? 1u : 0u, cfg_.eps};
     const std::string b = "_b" + std::to_string(g.down.bits);
+    // hc_down_sk3 / hc_up_mix3 (zqwen4v.metal): the same arithmetic with more work per threadgroup, every row
+    // (<= 4) in each threadgroup: 2 weight rows per simdgroup of the down projection, 2 blocks of 16 channels per
+    // threadgroup of the up projection; decode logits bitwise equal to hc_down_sk2 / hc_up_mix2's (NI_HC3=0: those)
+    static const bool hc3 = !(getenv("NI_HC3") && !strcmp(getenv("NI_HC3"), "0"));
+    constexpr int nr = 2, cpt = 2;
+    if (hc3 && R <= 4 && rank <= 512 && rank % (8 * nr) == 0 && D % (16 * cpt) == 0) {
+      e.use(pipe("hc_down_sk3_n" + std::to_string(nr) + b));
+      e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
+      e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, g.down.w->buf); e.buf(6, g.down.s->buf);
+      e.buf(7, g.down.b->buf); e.buf(8, hpart_); e.buf(9, hx2_); e.buf(10, hstat_);
+      e.val(11, fp);
+      e.dispatch(rank / (8 * nr), SD / 1024, 1, 256);
+      e.use(pipe("hc_up_mix3_c" + std::to_string(cpt) + b));
+      e.buf(0, hpart_); e.buf(1, hx2_); e.buf(2, hstat_); e.buf(3, g.norm->buf);
+      e.buf(4, g.up.w->buf); e.buf(5, g.up.s->buf); e.buf(6, g.up.b->buf); e.buf(7, u);
+      e.buf(8, X, x_row0 * SD * 4); e.buf(9, yb_); e.buf(10, inj_out);
+      e.val(11, fp);
+      e.dispatch(D / (16 * cpt), 1, 1, 256);
+      return;
+    }
     e.use(pipe("hc_down_sk2" + b));
     e.buf(0, X, x_row0 * SD * 4); e.buf(1, yb_); e.buf(2, inj_prev); e.buf(3, g.norm->buf);
     e.buf(4, g.inj ? g.inj.w->buf : g.norm->buf); e.buf(5, g.down.w->buf); e.buf(6, g.down.s->buf);
@@ -896,8 +916,7 @@ void Qwen4Exp::enc_ple_rows(Encoder& e, Seq& s, int R, int pos0, const Buffer& r
   if (R == 1) {
     enc_qmv_multi(e, {{&ple_key_, ple_k_}, {&ple_val_, ple_v_}}, rows, nullptr);
   } else {
-    enc_qmvr(e, ple_key_, rows, ple_k_, R, false);
-    enc_qmvr(e, ple_val_, rows, ple_v_, R, false);
+    enc_rows(e, {{&ple_key_, ple_k_}, {&ple_val_, ple_v_}}, rows, R);
   }
   const PleParams p{uint32_t(R), uint32_t(cfg_.hidden), uint32_t(c4_.hc), uint32_t(pos0), cfg_.eps, kRing,
                     uint32_t(c4_.ngram)};

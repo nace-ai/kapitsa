@@ -917,40 +917,50 @@ struct HcFoldParams {
 NI_INLINE float bf_dot4(const device bfloat* w, float4 v) {
   return v.x * float(w[0]) + v.y * float(w[1]) + v.z * float(w[2]) + v.w * float(w[3]);
 }
-template <int BITS>
-NI_INLINE void hc_down_sk2_impl(const device float* X, const device float* y, const device float* inj_prev,
-                                const device float* w, const device bfloat* winj, const device uint32_t* W,
-                                const device bfloat* Ws, const device bfloat* Wb, device float* part, device float* X2,
-                                device float* stat, constant HcFoldParams& p, uint3 tg, uint tid, uint sg, uint lane,
-                                threadgroup float4* scratch) {
-  const uint SD = p.S * p.D, n = tg.x * 8 + sg, c = tg.y, r = tg.z;
-  const uint s_lo = c * 1024 / p.D;
-  {
-    const uint k0 = c * 1024 + lane * 32, s = k0 / p.D, c0 = k0 - s * p.D;
-    const float a = p.has_y ? inj_prev[r * 4 + s] : 0.0f;
-    const device float4* x4 = (const device float4*)(X + r * SD + k0);
-    const device float4* y4 = (const device float4*)(y + r * p.D + c0);
-    const device float4* w4 = (const device float4*)(w + k0);
-    float xv[32];
-    float xs = 0.0f;
-    for (uint i = 0; i < 8; ++i) {
-      const float4 v = (x4[i] + a * y4[i]) * w4[i];
-      xv[4 * i] = v.x, xv[4 * i + 1] = v.y, xv[4 * i + 2] = v.z, xv[4 * i + 3] = v.w;
-      xs += v.x + v.y + v.z + v.w;
-    }
-    const device uint32_t* wr = W + size_t(n) * (SD * BITS / 32) + k0 * BITS / 32;
-    float q[16], d = 0.0f;
-    const uint g = n * (SD / 64) + k0 / 64;
-    for (uint h = 0; h < 2; ++h) {
-      unpack16<BITS>(wr + h * (16 * BITS / 32), q);
-      for (uint j = 0; j < 16; ++j) d += q[j] * xv[h * 16 + j];
-    }
-    const float val = float(Ws[g]) * d + float(Wb[g]) * xs;
-    const float p0 = simd_sum(s == s_lo ? val : 0.0f), p1 = simd_sum(s == s_lo ? 0.0f : val);
-    if (lane == 0) *(device float2*)(part + ((c * p.R + r) * p.rank + n) * 2) = float2(p0, p1);
+// One row r of hc_down_sk2 (the partials of weight row n over chunk c; also zqwen4v.metal's multi-row form, so
+// that a verify row's arithmetic is a decode step's)
+// hc_down_sk2 in two parts (also zqwen4v.metal's forms, so that their arithmetic per row is the same): the lane's 32
+// inputs of chunk c for row r (v = (X + a y) * w and their sum), then weight row n's partials over them
+NI_INLINE void hc_down_sk2_x(const device float* X, const device float* y, const device float* inj_prev,
+                             const device float* w, constant HcFoldParams& p, uint c, uint r, uint lane,
+                             thread float (&xv)[32], thread float& xs) {
+  const uint SD = p.S * p.D;
+  const uint k0 = c * 1024 + lane * 32, s = k0 / p.D, c0 = k0 - s * p.D;
+  const float a = p.has_y ? inj_prev[r * 4 + s] : 0.0f;
+  const device float4* x4 = (const device float4*)(X + r * SD + k0);
+  const device float4* y4 = (const device float4*)(y + r * p.D + c0);
+  const device float4* w4 = (const device float4*)(w + k0);
+  xs = 0.0f;
+  for (uint i = 0; i < 8; ++i) {
+    const float4 v = (x4[i] + a * y4[i]) * w4[i];
+    xv[4 * i] = v.x, xv[4 * i + 1] = v.y, xv[4 * i + 2] = v.z, xv[4 * i + 3] = v.w;
+    xs += v.x + v.y + v.z + v.w;
   }
-  if (tg.x != 0) return;
-  // row block 0: X2 = v, the chunk's per-stream sums of squares and injection dots (of v * w, before the scale)
+}
+template <int BITS>
+NI_INLINE void hc_down_sk2_dot(const device uint32_t* W, const device bfloat* Ws, const device bfloat* Wb,
+                               device float* part, constant HcFoldParams& p, uint n, uint c, uint r, uint lane,
+                               thread const float (&xv)[32], float xs) {
+  const uint SD = p.S * p.D;
+  const uint s_lo = c * 1024 / p.D;
+  const uint k0 = c * 1024 + lane * 32, s = k0 / p.D;
+  const device uint32_t* wr = W + size_t(n) * (SD * BITS / 32) + k0 * BITS / 32;
+  float q[16], d = 0.0f;
+  const uint g = n * (SD / 64) + k0 / 64;
+  for (uint h = 0; h < 2; ++h) {
+    unpack16<BITS>(wr + h * (16 * BITS / 32), q);
+    for (uint j = 0; j < 16; ++j) d += q[j] * xv[h * 16 + j];
+  }
+  const float val = float(Ws[g]) * d + float(Wb[g]) * xs;
+  const float p0 = simd_sum(s == s_lo ? val : 0.0f), p1 = simd_sum(s == s_lo ? 0.0f : val);
+  if (lane == 0) *(device float2*)(part + ((c * p.R + r) * p.rank + n) * 2) = float2(p0, p1);
+}
+// One row r of hc_down_sk2's row block 0: X2 = v, the chunk's per-stream sums of squares and injection dots
+NI_INLINE void hc_down_sk2_stat(const device float* X, const device float* y, const device float* inj_prev,
+                                const device float* w, const device bfloat* winj, device float* X2, device float* stat,
+                                constant HcFoldParams& p, uint c, uint r, uint tid, threadgroup float4* scratch) {
+  const uint SD = p.S * p.D;
+  const uint s_lo = c * 1024 / p.D;
   const uint k = c * 1024 + tid * 4, s = k / p.D, c0 = k - s * p.D;
   const float a = p.has_y ? inj_prev[r * 4 + s] : 0.0f;
   const float4 v = *(const device float4*)(X + r * SD + k) + a * *(const device float4*)(y + r * p.D + c0);
@@ -973,6 +983,18 @@ NI_INLINE void hc_down_sk2_impl(const device float* X, const device float* y, co
     *(device float4*)(st + 6) = d1;
   }
 }
+template <int BITS>
+NI_INLINE void hc_down_sk2_impl(const device float* X, const device float* y, const device float* inj_prev,
+                                const device float* w, const device bfloat* winj, const device uint32_t* W,
+                                const device bfloat* Ws, const device bfloat* Wb, device float* part, device float* X2,
+                                device float* stat, constant HcFoldParams& p, uint3 tg, uint tid, uint sg, uint lane,
+                                threadgroup float4* scratch) {
+  float xv[32], xs;
+  hc_down_sk2_x(X, y, inj_prev, w, p, tg.y, tg.z, lane, xv, xs);
+  hc_down_sk2_dot<BITS>(W, Ws, Wb, part, p, tg.x * 8 + sg, tg.y, tg.z, lane, xv, xs);
+  if (tg.x != 0) return;
+  hc_down_sk2_stat(X, y, inj_prev, w, winj, X2, stat, p, tg.y, tg.z, tid, scratch);
+}
 #define NI_HC_DOWN_SK2(NAME, BITS)                                                                             \
   [[kernel]] void NAME(const device float* X [[buffer(0)]], const device float* y [[buffer(1)]],               \
                        const device float* inj_prev [[buffer(2)]], const device float* w [[buffer(3)]],        \
@@ -989,13 +1011,13 @@ NI_HC_DOWN_SK2(hc_down_sk2_b4, 4)
 NI_HC_DOWN_SK2(hc_down_sk2_b6, 6)
 NI_HC_DOWN_SK2(hc_down_sk2_b8, 8)
 
-template <int BITS>
-NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2, const device float* stat,
-                               const device float* w, const device uint32_t* W, const device bfloat* Ws,
-                               const device bfloat* Wb, device float* u, device float* X, device float* y,
-                               device float* inj, constant HcFoldParams& p, uint2 tg, uint tid, uint sg, uint lane,
-                               threadgroup float* hs, threadgroup float* hsum, threadgroup float* inv) {
-  const uint r = tg.y, SD = p.S * p.D, K = p.rank;
+// hc_up_mix2 for row r in two parts (also zqwen4v.metal's multi-row form): the row's inverse RMS, injection weights
+// (threadgroup 0), h and its 16-sums in threadgroup memory; then the up projection, gates and outputs of the
+// threadgroup's channels
+NI_INLINE void hc_up_mix2_prep(const device float* part, const device float* stat, device float* inj,
+                               constant HcFoldParams& p, uint tgx, uint r, uint tid, threadgroup float* hs,
+                               threadgroup float* hsum, threadgroup float* inv) {
+  const uint K = p.rank;
   if (tid < 4) {  // stream tid's inverse RMS; then its share of the injection dots (threadgroup 0)
     float ss = 0.0f;
     for (uint c = 0; c < p.kc; ++c) {
@@ -1006,7 +1028,7 @@ NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2,
     inv[tid] = metal::precise::rsqrt(ss / float(p.D) + p.eps);
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (tg.x == 0 && p.has_inj && tid < 4) {  // inj[q] = 2 sigmoid(sum_s inv[s] dot_s[q] / S)
+  if (tgx == 0 && p.has_inj && tid < 4) {  // inj[q] = 2 sigmoid(sum_s inv[s] dot_s[q] / S)
     float d = 0.0f;
     for (uint c = 0; c < p.kc; ++c) {
       const uint s_lo = c * 1024 / p.D;
@@ -1031,8 +1053,15 @@ NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2,
     hsum[i] = t;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
+}
+template <int BITS>
+NI_INLINE void hc_up_mix2_out(const device float* X2, const device float* w, const device uint32_t* W,
+                              const device bfloat* Ws, const device bfloat* Wb, device float* u, device float* X,
+                              device float* y, constant HcFoldParams& p, uint tgx, uint r, uint sg, uint lane,
+                              threadgroup const float* hs, threadgroup const float* hsum, threadgroup const float* inv) {
+  const uint SD = p.S * p.D, K = p.rank;
   const uint rl = lane / 4, qq = lane % 4;
-  const uint ch = (tg.x * 8 + sg) * 2 + rl / 4, s = rl % 4;
+  const uint ch = (tgx * 8 + sg) * 2 + rl / 4, s = rl % 4;
   const uint row = s * p.D + ch, per = K / 4;
   const device uint32_t* wr = W + size_t(row) * (K * BITS / 32);
   float q[16], m = 0.0f;
@@ -1057,6 +1086,15 @@ NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2,
     u[r * p.u_ld + ch] = v / float(p.S);
     if (p.has_y) y[r * p.D + ch] = 0.0f;
   }
+}
+template <int BITS>
+NI_INLINE void hc_up_mix2_impl(const device float* part, const device float* X2, const device float* stat,
+                               const device float* w, const device uint32_t* W, const device bfloat* Ws,
+                               const device bfloat* Wb, device float* u, device float* X, device float* y,
+                               device float* inj, constant HcFoldParams& p, uint2 tg, uint tid, uint sg, uint lane,
+                               threadgroup float* hs, threadgroup float* hsum, threadgroup float* inv) {
+  hc_up_mix2_prep(part, stat, inj, p, tg.x, tg.y, tid, hs, hsum, inv);
+  hc_up_mix2_out<BITS>(X2, w, W, Ws, Wb, u, X, y, p, tg.x, tg.y, sg, lane, hs, hsum, inv);
 }
 #define NI_HC_UP_MIX2(NAME, BITS)                                                                              \
   [[kernel]] void NAME(const device float* part [[buffer(0)]], const device float* X2 [[buffer(1)]],           \

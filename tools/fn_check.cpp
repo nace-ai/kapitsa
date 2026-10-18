@@ -10,6 +10,7 @@
 #include "util/bf16.h"
 #include "util/log.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -728,9 +729,244 @@ void test_wfmt6() {
   }
 }
 
+
+// Verify kernels (qwen4v.metal) against the one-row kernels decode runs, bit for bit: the multi-row folded gated
+// residual (hc_down_skr + hc_up_mixr) against R one-row threadgroups of hc_down_sk2 + hc_up_mix2
+void test_hc_rows(int bits) {
+  const uint32_t D = 768, S = 4, SD = S * D, RK = 128, G = 64, KC = SD / 1024;
+  for (uint32_t R = 1; R <= 4; ++R)
+    for (int mode = 0; mode < 2; ++mode) {
+      Buf X(R * SD), y(R * D), injp(R * S), w(SD), winj(S * SD, 2);
+      Buf Wd(size_t(RK) * SD * bits / 32), Sd(RK * SD / G, 2), Bd(RK * SD / G, 2);
+      Buf Wu(size_t(SD) * RK * bits / 32), Su(SD * RK / G, 2), Bu(SD * RK / G, 2);
+      X.fill(-2, 2), y.fill(-1, 1), injp.fill(0, 2), w.fill(0.5f, 1.5f), winj.fill_bf16(-0.05f, 0.05f);
+      for (size_t i = 0; i < Wd.n; ++i) Wd.b.as<uint32_t>()[i] = uint32_t(rng());
+      for (size_t i = 0; i < Wu.n; ++i) Wu.b.as<uint32_t>()[i] = uint32_t(rng());
+      const float sc = bits == 4 ? 0.004f : 0.0003f;
+      Sd.fill_bf16(sc / 2, sc), Bd.fill_bf16(-sc * (1 << bits) / 2, 0), Su.fill_bf16(sc, 2 * sc), Bu.fill_bf16(-sc * (1 << bits), 0);
+      struct Out {
+        Buf X, y, u, inj, part, X2, stat;
+        Out(uint32_t R, uint32_t SD, uint32_t D, uint32_t S, uint32_t KC, uint32_t RK)
+            : X(R * SD), y(R * D), u(R * D), inj(R * S), part(KC * R * RK * 2), X2(R * SD), stat(R * KC * 10) {}
+      };
+      Out a(R, SD, D, S, KC, RK), b(R, SD, D, S, KC, RK);
+      for (Out* o : {&a, &b}) {
+        memcpy(o->X.f(), X.f(), R * SD * 4);
+        memcpy(o->y.f(), y.f(), R * D * 4);
+      }
+      struct { uint32_t R, D, S, rank, kc, u_ld, has_y, has_inj; float eps; } p{R, D, S, RK, KC, D, uint32_t(mode), uint32_t(mode), 1e-6f};
+      const std::string sfx = "_b" + std::to_string(bits);
+      auto bind_down = [&](Out& o) {
+        return [&](Encoder& e) {
+          e.buf(0, o.X.b); e.buf(1, o.y.b); e.buf(2, injp.b); e.buf(3, w.b); e.buf(4, winj.b); e.buf(5, Wd.b);
+          e.buf(6, Sd.b); e.buf(7, Bd.b); e.buf(8, o.part.b); e.buf(9, o.X2.b); e.buf(10, o.stat.b); e.val(11, p);
+        };
+      };
+      auto bind_up = [&](Out& o) {
+        return [&](Encoder& e) {
+          e.buf(0, o.part.b); e.buf(1, o.X2.b); e.buf(2, o.stat.b); e.buf(3, w.b); e.buf(4, Wu.b); e.buf(5, Su.b);
+          e.buf(6, Bu.b); e.buf(7, o.u.b); e.buf(8, o.X.b); e.buf(9, o.y.b); e.buf(10, o.inj.b); e.val(11, p);
+        };
+      };
+      run(("hc_down_sk2" + sfx).c_str(), bind_down(a), RK / 8, KC, R, 256);
+      run(("hc_up_mix2" + sfx).c_str(), bind_up(a), D / 16, R, 1, 256);
+      constexpr int nr = 2, cpt = 2;
+      run(("hc_down_sk3_n" + std::to_string(nr) + sfx).c_str(), bind_down(b), RK / (8 * nr), KC, 1, 256);
+      run(("hc_up_mix3_c" + std::to_string(cpt) + sfx).c_str(), bind_up(b), D / (16 * cpt), 1, 1, 256);
+      auto diff = [](Buf& x, Buf& z) {
+        size_t bad = 0;
+        double mx = 0;
+        for (size_t i = 0; i < x.n; ++i)
+          if (memcmp(x.f() + i, z.f() + i, 4)) ++bad, mx = std::max(mx, double(std::fabs(x.f()[i] - z.f()[i])));
+        if (bad && getenv("FN_VERBOSE")) printf("   %zu of %zu differ (max %.3g)\n", bad, x.n, mx);
+        return bad ? 1.0 : 0.0;
+      };
+      const double e = diff(a.X, b.X) + diff(a.y, b.y) + diff(a.u, b.u) + (mode ? diff(a.inj, b.inj) : 0.0) +
+                       diff(a.part, b.part) + diff(a.X2, b.X2) + diff(a.stat, b.stat);
+      char nm[96];
+      snprintf(nm, sizeof nm, "hc_*3%s R=%u %s == one-row", sfx.c_str(), R, mode ? "inject" : "plain");
+      report(nm, e, 0);
+    }
+}
+
+// The multi-segment row GEMV (qmvs_multi: 4- and 8-bit segments sharing x) against qmv2_multi_r2 (decode) per row
+void test_qmvs_rows() {
+  const uint32_t K = 1536, G = 64;
+  const uint32_t Ns[4] = {96, 40, 8, 4}, bits[4] = {4, 4, 8, 8};
+  std::vector<Buf*> Wq, Sq, Bq;
+  for (int i = 0; i < 4; ++i) {
+    Wq.push_back(new Buf(size_t(Ns[i]) * K * bits[i] / 32));
+    Sq.push_back(new Buf(Ns[i] * K / G, 2));
+    Bq.push_back(new Buf(Ns[i] * K / G, 2));
+    for (size_t j = 0; j < Wq[i]->n; ++j) Wq[i]->b.as<uint32_t>()[j] = uint32_t(rng());
+    Sq[i]->fill_bf16(0.001f, 0.01f), Bq[i]->fill_bf16(-0.05f, 0.0f);
+  }
+  for (uint32_t R = 2; R <= 4; ++R) {
+    Buf x(R * K);
+    x.fill(-2, 2);
+    std::vector<Buf*> ya, yb;
+    for (int i = 0; i < 4; ++i) ya.push_back(new Buf(R * Ns[i])), yb.push_back(new Buf(R * Ns[i]));
+    // decode kernel, one row at a time
+    for (uint32_t r = 0; r < R; ++r) {
+      struct { uint32_t K, nseg; float eps; uint32_t norm, write_xn, N[4], tg_begin[5], bits[4]; } p{};
+      p.K = K, p.nseg = 4;
+      uint32_t tg = 0;
+      for (int i = 0; i < 4; ++i) p.N[i] = Ns[i], p.bits[i] = bits[i], p.tg_begin[i] = tg, tg += (Ns[i] + 15) / 16;
+      p.tg_begin[4] = tg;
+      run("qmv2_multi_r2", [&](Encoder& e) {
+        for (int i = 0; i < 4; ++i) {
+          e.buf(i * 4, Wq[i]->b); e.buf(i * 4 + 1, Sq[i]->b); e.buf(i * 4 + 2, Bq[i]->b);
+          e.buf(i * 4 + 3, ya[i]->b, size_t(r) * Ns[i] * 4);
+        }
+        e.buf(16, x.b, size_t(r) * K * 4); e.val(17, p); e.buf(18, x.b); e.buf(19, x.b);
+      }, tg, 1, 1, 256);
+    }
+    struct { uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4]; } q{};
+    q.K = K, q.R = R, q.nseg = 4, q.x_ld = K;
+    uint32_t tg = 0;
+    for (int i = 0; i < 4; ++i) q.N[i] = Ns[i], q.bits[i] = bits[i], q.y_ld[i] = Ns[i], q.tg_begin[i] = tg, tg += (Ns[i] + 7) / 8;
+    q.tg_begin[4] = tg;
+    run("qmvs_multi", [&](Encoder& e) {
+      for (int i = 0; i < 4; ++i) {
+        e.buf(i * 4, Wq[i]->b); e.buf(i * 4 + 1, Sq[i]->b); e.buf(i * 4 + 2, Bq[i]->b); e.buf(i * 4 + 3, yb[i]->b);
+      }
+      e.buf(16, x.b); e.val(17, q);
+    }, R, tg, 1, 64);
+    double e = 0;
+    for (int i = 0; i < 4; ++i) e += memcmp(ya[i]->f(), yb[i]->f(), size_t(R) * Ns[i] * 4) == 0 ? 0 : 1;
+    char nm[64];
+    snprintf(nm, sizeof nm, "qmvs_multi R=%u == qmv2_multi_r2", R);
+    report(nm, e, 0);
+    for (int i = 0; i < 4; ++i) memset(yb[i]->f(), 0, size_t(R) * Ns[i] * 4);
+    run("qmvp_multi", [&](Encoder& e) {
+      for (int i = 0; i < 4; ++i) {
+        e.buf(i * 4, Wq[i]->b); e.buf(i * 4 + 1, Sq[i]->b); e.buf(i * 4 + 2, Bq[i]->b); e.buf(i * 4 + 3, yb[i]->b);
+      }
+      e.buf(16, x.b); e.val(17, q);
+    }, tg, 1, 1, 64 * ((R + 1) / 2));
+    e = 0;  // (two token rows per simdgroup: the compiler's fast math orders the sums differently)
+    for (int i = 0; i < 4; ++i)
+      e = std::max(e, cmp(size_t(R) * Ns[i], [&](size_t j) { return yb[i]->f()[j]; }, [&](size_t j) { return ya[i]->f()[j]; }));
+    snprintf(nm, sizeof nm, "qmvp_multi R=%u ~ qmv2_multi_r2", R);
+    report(nm, e, 1e-4);
+    for (int i = 0; i < 4; ++i) delete ya[i], delete yb[i];
+  }
+  for (int i = 0; i < 4; ++i) delete Wq[i], delete Sq[i], delete Bq[i];
+}
+
+// The verify MoE (moe4_unique + moe4_gate_up + moe4_down) against the decode kernels (moe_gate_up3_r2 + moe_down2_w)
+// run row by row on the same top-k, bit for bit; small = the moe4_down_s instance only (shader validation)
+void test_moe4_rows(bool small) {
+  const uint32_t D = 512, I = 128, SI = 128, k = 10, E = 24, G = 64;
+  Buf gw(size_t(E) * I * D / 8), gs(E * I * D / G, 2), gb(E * I * D / G, 2);
+  Buf uw(size_t(E) * I * D / 8), us(E * I * D / G, 2), ub(E * I * D / G, 2);
+  Buf dw(size_t(E) * D * I / 8), ds(E * D * I / G, 2), db(E * D * I / G, 2);
+  Buf sgw(size_t(SI) * D / 8), sgs(SI * D / G, 2), sgb(SI * D / G, 2);
+  Buf suw(size_t(SI) * D / 8), sus(SI * D / G, 2), sub(SI * D / G, 2);
+  Buf sdw(size_t(D) * SI / 8), sds(D * SI / G, 2), sdb(D * SI / G, 2);
+  for (Buf* b : {&gw, &uw, &dw, &sgw, &suw, &sdw})
+    for (size_t i = 0; i < b->n; ++i) b->b.as<uint32_t>()[i] = uint32_t(rng());
+  for (Buf* b : {&gs, &us, &ds, &sgs, &sus, &sds}) b->fill_bf16(0.002f, 0.01f);
+  for (Buf* b : {&gb, &ub, &db, &sgb, &sub, &sdb}) b->fill_bf16(-0.06f, 0.0f);
+  struct { uint32_t D, I, SI, k; float eps; } mp{D, I, SI, k, 1e-6f};
+  for (uint32_t R = 1; R <= 4; ++R) {
+    Buf x(R * D), idx(R * k), wts(R * (k + 1)), ya(R * D), yb(R * D), h1((k + 1) * I), hR(R * (k + 1) * I);
+    Buf ue(64), umask(64), uslot(64), un(4), dummy(64);
+    x.fill(-2, 2), wts.fill(0.0f, 0.3f), ya.fill(-1, 1);
+    memcpy(yb.f(), ya.f(), R * D * 4);
+    for (uint32_t r = 0; r < R; ++r) {  // distinct experts per row, overlapping across rows
+      std::vector<uint32_t> pool(E);
+      for (uint32_t i = 0; i < E; ++i) pool[i] = i;
+      std::shuffle(pool.begin(), pool.end(), rng);
+      for (uint32_t s2 = 0; s2 < k; ++s2) idx.b.as<uint32_t>()[r * k + s2] = pool[s2];
+    }
+    if (!small) {
+      for (uint32_t r = 0; r < R; ++r) {
+        uint32_t Ev = E;
+        run("moe_gate_up3_r2", [&](Encoder& e) {
+          e.buf(0, gw.b); e.buf(1, gs.b); e.buf(2, gb.b); e.buf(3, uw.b); e.buf(4, us.b); e.buf(5, ub.b);
+          e.buf(6, sgw.b); e.buf(7, sgs.b); e.buf(8, sgb.b); e.buf(9, suw.b); e.buf(10, sus.b); e.buf(11, sub.b);
+          e.buf(12, x.b, size_t(r) * D * 4); e.buf(13, dummy.b); e.buf(14, dummy.b); e.buf(15, h1.b); e.val(16, mp);
+          e.buf(17, idx.b, size_t(r) * k * 4); e.buf(18, wts.b, size_t(r) * (k + 1) * 4); e.val(19, Ev);
+        }, I / 16, k + 1, 1, 256);
+        run("moe_down2_w", [&](Encoder& e) {
+          e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
+          e.buf(6, h1.b); e.buf(7, idx.b, size_t(r) * k * 4); e.buf(8, wts.b, size_t(r) * (k + 1) * 4);
+          e.buf(9, ya.b, size_t(r) * D * 4); e.val(10, mp);
+        }, D / 16, 1, 1, 256);
+      }
+    }
+    const struct { uint32_t R, k; } rk{R, k};
+    run("moe4_unique", [&](Encoder& e) {
+      e.buf(0, idx.b); e.buf(1, ue.b); e.buf(2, umask.b); e.buf(3, uslot.b); e.buf(4, un.b); e.val(5, rk);
+    }, 1, 1, 1, 32);
+    run("moe4_gate_up", [&](Encoder& e) {
+      e.buf(0, gw.b); e.buf(1, gs.b); e.buf(2, gb.b); e.buf(3, uw.b); e.buf(4, us.b); e.buf(5, ub.b);
+      e.buf(6, sgw.b); e.buf(7, sgs.b); e.buf(8, sgb.b); e.buf(9, suw.b); e.buf(10, sus.b); e.buf(11, sub.b);
+      e.buf(12, x.b); e.buf(13, hR.b); e.val(14, mp); e.buf(15, ue.b); e.buf(16, umask.b); e.buf(17, uslot.b);
+      e.buf(18, un.b); e.val(19, R);
+    }, R, I / 16, R * k + 1, 256);
+    run(small ? "moe4_down_s" : "moe4_down", [&](Encoder& e) {
+      e.buf(0, dw.b); e.buf(1, ds.b); e.buf(2, db.b); e.buf(3, sdw.b); e.buf(4, sds.b); e.buf(5, sdb.b);
+      e.buf(6, hR.b); e.buf(7, idx.b); e.buf(8, wts.b); e.buf(9, yb.b); e.val(10, mp);
+    }, R, D / 16, 1, 256);
+    char nm[64];
+    if (small) {
+      bool finite = true;
+      for (size_t i = 0; i < yb.n; ++i) finite = finite && std::isfinite(yb.f()[i]);
+      snprintf(nm, sizeof nm, "moe4 R=%u (validation run) finite", R);
+      report(nm, finite ? 0.0 : 1.0, 0);
+    } else {
+      snprintf(nm, sizeof nm, "moe4 R=%u == decode MoE per row", R);
+      report(nm, memcmp(ya.f(), yb.f(), size_t(R) * D * 4) == 0 ? 0.0 : 1.0, 0);
+    }
+  }
+}
+
+// The row kernels (qmvs_multi / qmvs_multi_f6g64, one segment) against the decode kernels Flash-Next runs for single
+// matrices: qmv3_b4_r2 (K > 4096: GDN out), qmv2_b4_g64_r4 (the LM head), qmvg_f6g64_r2 (attention o), per row
+void test_qmvs_single() {
+  struct Case { const char* dec; int bits; uint32_t N, K, rows, nsg; };
+  const Case cs[] = {{"qmv3_b4_r2", 4, 96, 6144, 2, 8}, {"qmv2_b4_g64_r4", 4, 128, 2560, 4, 4}, {"qmvg_f6g64_r2", 6, 64, 3072, 2, 8},
+                     {"qmv3_b8_r2", 8, 48, 6144, 2, 8}};
+  for (const Case& c : cs) {
+    const uint32_t G = 64, R = 4;
+    Buf W(size_t(c.N) * c.K * c.bits / 32 + 4), S(c.N * c.K / G, 2), B(c.N * c.K / G, 2), x(R * c.K), ya(R * c.N), yb(R * c.N);
+    for (size_t j = 0; j < W.n; ++j) W.b.as<uint32_t>()[j] = uint32_t(rng());
+    S.fill_bf16(0.001f, 0.01f), B.fill_bf16(-0.05f, 0.0f), x.fill(-2, 2);
+    for (uint32_t r = 0; r < R; ++r) {
+      struct { uint32_t N, K, xs, ys; float eps; } q{c.N, c.K, c.K, c.N, 1e-6f};
+      run(c.dec, [&](Encoder& e) {
+        e.buf(0, W.b); e.buf(1, S.b); e.buf(2, B.b); e.buf(3, x.b, size_t(r) * c.K * 4); e.buf(4, ya.b, size_t(r) * c.N * 4);
+        e.val(5, q); e.buf(6, ya.b); e.buf(7, ya.b);
+      }, (c.N + c.rows * c.nsg - 1) / (c.rows * c.nsg), 1, 1, 32 * c.nsg);
+    }
+    struct { uint32_t K, R, nseg, x_ld, N[4], tg_begin[5], bits[4], y_ld[4], add[4]; } q{};
+    q.K = c.K, q.R = R, q.nseg = 1, q.x_ld = c.K, q.N[0] = c.N, q.bits[0] = uint32_t(c.bits), q.y_ld[0] = c.N;
+    q.tg_begin[1] = (c.N + 7) / 8;
+    run(c.bits == 6 ? "qmvs_multi_f6g64" : "qmvs_multi", [&](Encoder& e) {
+      for (int i = 0; i < 4; ++i) { e.buf(i * 4, W.b); e.buf(i * 4 + 1, S.b); e.buf(i * 4 + 2, B.b); e.buf(i * 4 + 3, yb.b); }
+      e.buf(16, x.b); e.val(17, q);
+    }, R, q.tg_begin[1], 1, 64);
+    char nm[64];
+    snprintf(nm, sizeof nm, "qmvs R=4 == %s", c.dec);
+    report(nm, memcmp(ya.f(), yb.f(), size_t(R) * c.N * 4) == 0 ? 0.0 : 1.0, 0);
+  }
+}
+
 int kernels() {
   if (getenv("FN_WFMT")) {
     test_wfmt6();
+    return g_fail ? 1 : 0;
+  }
+  if (getenv("FN_ROWS")) {  // only the verify kernels (zqwen4v.metal) against the decode kernels
+    test_hc_rows(4);
+    test_hc_rows(6);
+    test_hc_rows(8);
+    // (qmv2_multi_r2: 16 KB of threadgroup memory, past what shader validation accepts)
+    if (!getenv("MTL_SHADER_VALIDATION")) test_qmvs_rows(), test_qmvs_single();
+    test_moe4_rows(getenv("MTL_SHADER_VALIDATION") != nullptr);
+    printf("%s\n", g_fail ? "FAILED" : "all kernels match");
     return g_fail ? 1 : 0;
   }
   test_topk512();
@@ -745,6 +981,12 @@ int kernels() {
   test_hc_fold(4);
   test_hc_fold(6);
   test_hc_fold(8);
+  test_hc_rows(4);
+  test_hc_rows(6);
+  test_hc_rows(8);
+  // (qmv2_multi_r2: 16 KB of threadgroup memory, past what shader validation accepts)
+  if (!getenv("MTL_SHADER_VALIDATION")) test_qmvs_rows(), test_qmvs_single();
+  test_moe4_rows(getenv("MTL_SHADER_VALIDATION") != nullptr);
   test_ple();
   test_qsa();
   test_qsa_sparse();

@@ -70,7 +70,7 @@ class Qwen4Exp : public Qwen35 {
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   void encode_logits_rows(Encoder& e, int T, const Buffer& out) override;
   // speculative decoding (qwen4_exp_spec.cpp)
-  int default_spec_depth() const override { return 1; }
+  int default_spec_depth() const override { return 2; }
   size_t hidden_row_bytes() const override { return size_t(c4_.hc) * size_t(cfg_.hidden) * 4; }
   void encode_mtp(Encoder& e, Seq& s, int mpos0, int R, int tok0, const Buffer& h, int h_row0, int draft_out,
                   bool h_trunk = true) override;
@@ -112,6 +112,19 @@ class Qwen4Exp : public Qwen35 {
                       const Buffer& inj_out);
   void enc_inject(Encoder& e, int R, const Buffer& X, const Buffer& inj);  // X += inj * y, y = 0 (yb_ rows)
   void enc_expand(Encoder& e, int R);                     // x_ rows = 4 copies of the yb_ rows, yb_ = 0
+  // R rows (verify / MTP history) of projections sharing x (rows x_ld floats apart) on the row kernels
+  // (zqwen4v.metal: a simdgroup per token row, the decode kernels' arithmetic per row): 4/8-bit segments in one
+  // dispatch, other formats one dispatch per format; y rows y_ld (0: N) floats apart
+  struct RowSeg {
+    const QLinear* L;
+    Buffer y;
+    bool add = false;
+    uint32_t y_ld = 0;
+  };
+  void enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld = 0);
+  // the MoE of R rows of xrn_ into yb_ (router on the row kernels, the 512-expert top-k per row, the experts)
+  void enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer);
+  void enc_moe4_down(Encoder& e, const Layer& L, int R, const Buffer& idx, const Buffer& wts);
   // R rows (verify / MTP) of the token mixers on the row GEMVs; u in xrn_, output to yb_
   void enc_gdn4_rows(Encoder& e, Seq& s, int li, const Layer& L, int R);
   void enc_attn4_rows(Encoder& e, const Seq& s, const Layer& L, const Qwen4Layer& F, const Buffer& kc, const Buffer& vc,

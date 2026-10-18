@@ -632,12 +632,26 @@ int main(int argc, char** argv) {
     while (int(out.size()) < n_gen && !stop2) {
       double tc0 = now_ms();
       grow(P + D + 3);  // nothing in flight: every cycle is waited for
+      static const bool split_t = getenv("NI_SPEC_SPLIT") != nullptr;  // timing: drafts and verify apart
+      std::unique_ptr<Encoder> ed;
       auto e = g.begin();
       m.encode_mtp(*e, s, P - c, c, P - c + 1, m.hidden_rows(), h_row0, P + 1);
       for (int k = 2; k <= D; ++k)
         m.encode_mtp(*e, s, P + k - 2, 1, P + k - 1, m.mtp_post(), k == 2 ? c - 1 : 0, P + k, false);
+      if (split_t) {
+        e->commit_and_wait();
+        ed = std::move(e);
+        e = g.begin();
+      }
       m.encode_verify(*e, s, P, D + 1, sp, uint32_t(P));
       e->commit_and_wait();
+      if (split_t) {
+        static double sd = 0, sv = 0;
+        static int ns = 0;
+        sd += ed->gpu_ms();
+        sv += e->gpu_ms();
+        if (++ns % 32 == 0) fprintf(stderr, "split timing: drafts %.2f ms, verify %.2f ms (mean of %d cycles)\n", sd / ns, sv / ns, ns);
+      }
       const int* y = m.samples();
       int* tk = s.tokens();
       int a = 0;
