@@ -14,6 +14,11 @@ The measurements behind docs/PERF.md "Weight formats and default precisions".
   bf16 layer, or published packs streamed from their repos); exact KL over the vocabulary at the head. `--f32`
   (used for every published number) computes both sides with fp32 activations: MLX's bf16 activations add rounding
   noise of the size of an 8-bit quantization's error. `--local DIR` takes the bf16 weights from a folder instead.
+- `eval_qwen4_exp.py`: the same for Qwen3.8-Flash-Next (qwen4_exp, 360 GB bf16) with mlx-vlm's modules, one sequence
+  at a time (mlx-vlm's batched QSA prefill is wrong for B > 1), fp32 with `MLX_ENABLE_TF32=0` (MLX otherwise runs fp32
+  GEMMs as TF32 on the M5, 8e-4 relative error per GEMM; this applies to `eval_stream.py --f32` too); also the
+  streaming pass of `tools/convert_qwen4_exp.py` (experts staged 4-bit, the rest bf16) and `local` scoring of recipes
+  and of the finished pack (reference files for `ni_eval --ref`, per-layer hidden states).
 - `check_rtn.py`: whether a published MLX pack is exactly round-to-nearest of the bf16 weights (one layer; `--gpu`
   quantizes on the GPU as `mlx_lm.convert` does, the CPU rounds ~1% of the codes differently).
 - `fetch_text.py`: downloads a repo's text-model tensors only (parallel range requests).
