@@ -42,6 +42,9 @@ def hosts_call(name, args):
         (name == "run_shell" and "/etc/hosts" in str(args.get("command", "")))
 
 
+hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
+
+
 def hosts_result(name, args=None):
     """What a call on /etc/hosts returns: the file for read_file, `wc -l`'s output through run_shell."""
     if name != "run_shell":
@@ -297,13 +300,24 @@ msgs += [{"role": "assistant", "content": r["content"], "tool_calls": [
           "content": "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"}]
 r2 = post({"messages": msgs, "tools": TOOLS, "max_tokens": 2048, "stream": True,
            "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
-check("tool result: final answer mentions 3", "3" in r2["content"], repr(r2["content"])[:200])
+# (a model may check once more with another call, e.g. Qwen3.8-Flash-Next runs `wc -l` after reading the file: up to 2
+#  more rounds, as in the Responses loop below)
+rl, rounds = r2, 0
+while rounds < 2 and rl["finish"] == "tool_calls" and rl["tool_calls"] and "3" not in rl["content"]:
+    msgs += [{"role": "assistant", "content": rl["content"], "tool_calls": [
+                {"id": c["id"], "type": "function", "function": c["function"]} for c in rl["tool_calls"]]}] + \
+            [{"role": "tool", "tool_call_id": c["id"], "content": hosts_result(c["function"]["name"], c["function"]["arguments"])}
+             for c in rl["tool_calls"]]
+    rl = post({"messages": msgs, "tools": TOOLS, "max_tokens": 2048, "stream": True,
+               "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
+    rounds += 1
+check("tool result: final answer mentions 3", "3" in rl["content"], repr(rl["content"])[:200])
 cached = r2["usage"]["prompt_tokens_details"]["cached_tokens"] if r2["usage"] else 0
 check("tool result: prefix reused (cached >= first prompt)", cached >= first_prompt,
       f"cached={cached} first_prompt={first_prompt} usage={r2['usage']}")
 
 # 3. next user turn: reuse from the checkpoint
-msgs += [{"role": "assistant", "content": r2["content"]},
+msgs += [{"role": "assistant", "content": rl["content"]},
          {"role": "user", "content": "Thanks. Now in one word: what OS uses /etc/hosts?"}]
 r3 = post({"messages": msgs, "tools": TOOLS, "max_tokens": 1024, "chat_template_kwargs": {"enable_thinking": False}})
 u = r3["usage"]
@@ -429,7 +443,6 @@ def blocks_of(events):
 A_TOOLS = [{"name": t["function"]["name"], "description": t["function"]["description"],
             "input_schema": t["function"]["parameters"]} for t in TOOLS]
 CTX = json.loads(get("/v1/models", auth())[2])["data"][0]["context_length"]
-hosts = "127.0.0.1 localhost\n255.255.255.255 broadcasthost\n::1 localhost\n"
 
 # 8. Anthropic: a Claude Code-like tool loop (adaptive thinking shown as a signature only, every turn's thinking kept)
 a_body = {"model": "m", "max_tokens": 4096, "temperature": 0, "top_k": 1,
