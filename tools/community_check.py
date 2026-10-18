@@ -325,8 +325,8 @@ def github(schema):
     return 0 if ok else 1
 
 
-def from_issue(number, repo, schema, use_git=True):
-    """A result submitted as an issue: its JSON out of the form, checked, written into bench/community/results/"""
+def from_issue(number, repo, schema, use_git=True, into=RESULTS):
+    """A result submitted as an issue: its JSON out of the form, checked, written into bench/community/results/ (into)"""
     body = subprocess.run(["gh", "issue", "view", str(number), "--repo", repo, "--json", "body", "--jq", ".body"],
                           capture_output=True, text=True, check=True).stdout
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", body, re.S) or re.search(r"(\{.*\})", body, re.S)
@@ -342,10 +342,10 @@ def from_issue(number, repo, schema, use_git=True):
     print(markdown(report))
     if not ok:
         return 1
-    os.makedirs(RESULTS, exist_ok=True)
-    with open(os.path.join(RESULTS, name), "w", encoding="utf-8") as fh:
+    os.makedirs(into, exist_ok=True)
+    with open(os.path.join(into, name), "w", encoding="utf-8") as fh:
         fh.write(text)
-    print(f"-> bench/community/results/{name} (from issue #{number}); then python3 tools/community_table.py")
+    print(f"-> {os.path.join(os.path.relpath(into, REPO), name)} (from issue #{number}); then python3 tools/community_table.py")
     return 0
 
 
@@ -355,6 +355,7 @@ def main():
     ap.add_argument("--github", action="store_true", help="check a pull request's results in CI (env GH_TOKEN, GITHUB_REPOSITORY, PR_NUMBER)")
     ap.add_argument("--from-issue", type=int, metavar="N", help="take a result from issue N (with gh) into bench/community/results/")
     ap.add_argument("--repo", default="nace-ai/kapitsa", help="for --from-issue")
+    ap.add_argument("--into", default=RESULTS, help="for --from-issue: where the result goes (default bench/community/results)")
     ap.add_argument("--no-schema", action="store_true", help="skip the schema (when jsonschema is not installed)")
     ap.add_argument("--no-git", action="store_true", help="known versions from CMakeLists.txt only, not the git tags")
     a = ap.parse_args()
@@ -368,7 +369,7 @@ def main():
     if a.github:
         return github(schema)
     if a.from_issue:
-        return from_issue(a.from_issue, a.repo, schema, not a.no_git)
+        return from_issue(a.from_issue, a.repo, schema, not a.no_git, a.into)
     if not a.files:
         ap.error("name result files, or --github / --from-issue")
     report, ok = check_texts([(f, open(f, encoding="utf-8").read()) for f in a.files], schema, not a.no_git)
