@@ -571,6 +571,77 @@ int main(int argc, char** argv) {
     }
   }
 
+  // ---------------- prefill attention: nh_attn_pf2_q1 / _q2 against nh_attn_prefill ----------------
+  if (want("attn")) {
+    struct Case { uint32_t T, pos0, Hq, Hkv; };
+    const std::vector<Case> cases = small ? std::vector<Case>{{77, 40, 16, 2}, {16, 0, 16, 1}}
+                                          : std::vector<Case>{{2048, 0, 32, 2}, {2048, 14336, 32, 2}};
+    for (const Case& cs : cases) {
+      const uint32_t cap = cs.pos0 + cs.T + 8;
+      std::vector<float> q(size_t(cs.T) * cs.Hq * 128);
+      for (auto& v : q) v = nrand();
+      Buffer Q = g.alloc(q.size() * 4, "q"), KC = g.alloc(size_t(cs.Hkv) * cap * 128 * 2, "kc"),
+             VC = g.alloc(size_t(cs.Hkv) * cap * 128 * 2, "vc"), O1 = g.alloc(size_t(cs.T) * cs.Hq * 128 * 2, "o1"),
+             O2 = g.alloc(size_t(cs.T) * cs.Hq * 128 * 2, "o2");
+      memcpy(Q.ptr(), q.data(), q.size() * 4);
+      for (size_t i = 0; i < KC.size / 2; ++i) KC.as<__fp16>()[i] = __fp16(nrand());
+      for (size_t i = 0; i < VC.size / 2; ++i) VC.as<__fp16>()[i] = __fp16(nrand());
+      struct { uint32_t T, pos0, cap, Hq, Hkv; float scale; } p1{cs.T, cs.pos0, cap, cs.Hq, cs.Hkv, 1.0f / std::sqrt(128.0f)};
+      struct { uint32_t T, pos0, cap, Hq, Hkv; float scale; uint32_t qb0; } p2{cs.T, cs.pos0, cap, cs.Hq, cs.Hkv, p1.scale, 0};
+      const std::vector<std::string> names = {"nh_attn_prefill", "nh_attn_pf2_q1_h4_k32"};
+      auto run = [&](Encoder& e, size_t which, const Buffer& o) {
+        const std::string& n = names[which];
+        e.use(NemotronH::pipeline(n));
+        e.buf(0, Q);
+        e.buf(1, KC);
+        e.buf(2, VC);
+        e.buf(3, o);
+        if (which == 0) {
+          e.bytes(4, &p1, sizeof p1);
+          e.dispatch((cs.T + 31) / 32, cs.Hq, 1, 128);
+        } else {
+          e.bytes(4, &p2, sizeof p2);
+          const uint32_t qr = uint32_t(n[13] - '0'), nsg = uint32_t(n[16] - '0'), bq = 8 * qr;
+          e.dispatch((cs.T + bq - 1) / bq, cs.Hq / nsg, 1, 32 * nsg);
+        }
+      };
+      // (under Metal's validation layer nh_attn_prefill's 26 KB of threadgroup memory count double, past 32 KB: no
+      // baseline there)
+      const bool validating = getenv("MTL_SHADER_VALIDATION") != nullptr;
+      if (!validating) {
+        auto e = g.begin();
+        run(*e, 0, O1);
+        e->commit_and_wait();
+      }
+      for (size_t which = validating ? 1 : 0; which < names.size(); ++which) {
+        if (cs.Hq / cs.Hkv % (which ? uint32_t(names[which][16] - '0') : 1u)) continue;
+        {
+          auto e = g.begin();
+          run(*e, which, O2);
+          e->commit_and_wait();
+        }
+        size_t diff = 0;
+        double md = 0;
+        for (size_t i = 0; i < O1.size / 2; ++i) {
+          const float a = float(O1.as<__fp16>()[i]), b = float(O2.as<__fp16>()[i]);
+          if (a != b) ++diff;
+          md = std::max(md, double(std::fabs(a - b)));
+        }
+        Timer tm;
+        for (int rd = 0; rd < reps + 1; ++rd) {
+          auto e = g.begin();
+          run(*e, which, O2);
+          e->commit_and_wait();
+          if (rd >= 1) tm.t.push_back(e->gpu_ms());
+        }
+        const double fl = 4.0 * cs.T * (cs.pos0 + cs.T / 2.0) * 128.0 * cs.Hq;
+        printf("attn T %u pos0 %u Hq %u Hkv %u %-22s %8.3f ms %5.2f TF  %zu values differ (max %.1e)\n", cs.T, cs.pos0,
+               cs.Hq, cs.Hkv, names[which].c_str(), tm.med(), fl / tm.med() / 1e9, diff, md);
+      }
+      for (Buffer* b : {&Q, &KC, &VC, &O1, &O2}) g.release(*b);
+    }
+  }
+
   // ---------------- the one-token MoE layer (NVFP4) ----------------
   // the fused layer (nh_moe_a4, nh_moe_b4, nh_x4_moe_dn_sum, nh_moe_d2) against the separate kernels
   if (want("zdec")) {

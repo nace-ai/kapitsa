@@ -2090,15 +2090,53 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       e.buf(3, s.vc[size_t(i)]);
       e.val(4, kp);
       e.dispatch(uint32_t(T), uint32_t(2 * cfg_.hkv), 1, uint32_t(cfg_.hd));
-      const AttnPfP ap{uint32_t(T), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
-                       1.0f / std::sqrt(float(cfg_.hd))};
-      e.use(pipe("nh_attn_prefill"));
-      e.buf(0, pq_);
-      e.buf(1, s.kc[size_t(i)]);
-      e.buf(2, s.vc[size_t(i)]);
-      e.buf(3, poh_);
-      e.val(4, ap);
-      e.dispatch((uint32_t(T) + 31) / 32, uint32_t(cfg_.hq), 1, 128);
+      if ((cfg_.hq / cfg_.hkv) % 4 == 0) {
+        // 4 heads per threadgroup (nh_attn_pf2: the same values as nh_attn_prefill); a pass longer than ~25 ms (2048
+        // rows after 14336 positions: ~330 ms on the M5 Max's 40 cores) in pieces of equal work over the row blocks,
+        // each in a command buffer of its own (outside a Neural Engine split chunk)
+        const uint32_t nb = (uint32_t(T) + 7) / 8;
+        const double work = double(T) * (double(pos0) + T / 2.0) * cfg_.hq;  // row x key x head
+        const double est_ms = work * 3.3e-7 * 40.0 / std::max(1, Gpu::get().core_count());
+        const int pieces = split ? 1 : std::clamp(int(std::ceil(est_ms / 25.0)), 1, int(nb));
+        uint32_t b0 = 0;
+        for (int pc = 0; pc < pieces; ++pc) {
+          // row blocks [b0, b1): the work of rows [0, 8 b) grows as 8 b (pos0 + 4 b)
+          uint32_t b1 = nb;
+          if (pc + 1 < pieces) {
+            const double target = (pc + 1) * (double(T) * (double(pos0) + T / 2.0)) / pieces;
+            b1 = b0;
+            while (b1 < nb && 8.0 * b1 * (double(pos0) + 4.0 * b1) < target) ++b1;
+            b1 = std::max(b1, b0 + 1);
+          }
+          if (b1 > nb) b1 = nb;
+          if (b1 <= b0) break;
+          const struct {
+            uint32_t T, pos0, cap, Hq, Hkv;
+            float scale;
+            uint32_t qb0;
+          } ap{uint32_t(T), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
+               1.0f / std::sqrt(float(cfg_.hd)), b0};
+          if (pc > 0) e.split();
+          e.use(pipe("nh_attn_pf2_q1_h4_k32"));
+          e.buf(0, pq_);
+          e.buf(1, s.kc[size_t(i)]);
+          e.buf(2, s.vc[size_t(i)]);
+          e.buf(3, poh_);
+          e.bytes(4, &ap, sizeof ap);
+          e.dispatch(b1 - b0, uint32_t(cfg_.hq) / 4, 1, 128);
+          b0 = b1;
+        }
+      } else {
+        const AttnPfP ap{uint32_t(T), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
+                         1.0f / std::sqrt(float(cfg_.hd))};
+        e.use(pipe("nh_attn_prefill"));
+        e.buf(0, pq_);
+        e.buf(1, s.kc[size_t(i)]);
+        e.buf(2, s.vc[size_t(i)]);
+        e.buf(3, poh_);
+        e.val(4, ap);
+        e.dispatch((uint32_t(T) + 31) / 32, uint32_t(cfg_.hq), 1, 128);
+      }
       enc_gemm(e, L.o, poh_, px_, T, 1);
     } else {
       const uint32_t k = uint32_t(L.k_used), P = uint32_t(T) * k;
