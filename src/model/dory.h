@@ -12,7 +12,8 @@
 //    tokens to their final loop's; the cache costs what a one-loop model's does at any loop count. A step's result
 //    depends on how the tokens are grouped into steps (as in vLLM and llama.cpp): a prompt chunk's tokens see each
 //    other's same-loop keys, decoded tokens one at a time see final-loop keys.
-//  - per-loop: a cache per loop (the model as trained; steps do not matter), loops x the recurrent layers' KV.
+//  - per-loop: a cache per loop (what NVIDIA's vLLM and llama.cpp commands run; steps do not matter), loops x the
+//    recurrent layers' KV.
 // Sliding-window layers keep a ring of window + 8 positions; full-attention layers a cache that grows with the
 // conversation. A ring cannot go back further than its 8 spare positions, so checkpoints (Model::save / restore,
 // the engine's turn boundaries) hold copies of the rings.

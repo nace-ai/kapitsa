@@ -267,8 +267,8 @@ chat template and the request say (thinking on by default in Chat Completions an
   count reads its prompt again (on another slot when one is free, so the conversation in progress keeps its cache).
 - **KV cache (`--loop-kv`):** `last-loop` (the default, NVIDIA's `recurrent_kv_cache_mode: last_loop`) keeps one cache per
   layer, each loop writing over the previous one's, so a conversation's KV cache is the size of a one-loop model's at
-  any loop count: 36 KB per token plus 114 MB of sliding-window rings. `per-loop` keeps a cache per loop, as the model
-  was trained (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both.
+  any loop count: 36 KB per token plus 114 MB of sliding-window rings. `per-loop` keeps a cache per loop, as NVIDIA's vLLM
+  and llama.cpp commands run it (56 KB per token at 2 loops, 96 KB at 4). `kapitsa doctor` shows both.
 - **Replies that think to the end:** as NVIDIA's `force_nonempty_content` (on by default here), a reply whose answer is
   empty returns its reasoning as its content too; `"chat_template_kwargs": {"force_nonempty_content": false}` turns it
   off.

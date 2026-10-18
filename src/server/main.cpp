@@ -334,7 +334,7 @@ static void print_serve_help() {
          "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
          "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
          "  --loop-kv MODE         Dory: last-loop (default: one cache per layer, the size of a 1-loop model's) or\n"
-         "                         per-loop (a cache per loop, as the model was trained; more memory)\n"
+         "                         per-loop (a cache per loop, as NVIDIA's vLLM commands run it; more memory)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
