@@ -173,6 +173,22 @@ set `OMLX_BIN`. Best measured setting: DFlash2 speculative decoding with the sam
 (whichever was faster in smoke tests). Plain configs for comparison. The harness builds oMLX's model folder and
 settings file in its state directory and empties oMLX's SSD KV cache before each run.
 
+### Nemotron 3.5 Bolt (`configs/bolt.json`) [oMLX 0.7.1rc1, mlx-vlm 0.7.8, mlx 0.32.4]
+
+One folder, `nemotron-3.5-bolt-24gb`, for every engine: NVIDIA's 24 GB checkpoint with its LiLiCorr drafter in
+`dflash/`, plus the MLX model file the MLX engines need (`nemotron_bolt.py`, Trust Remote Code). The MLX bundle
+carries NVIDIA's files byte-identical, so it serves all three:
+
+```bash
+hf download txgsync/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr-MLX --revision 98c0cb759b3e6d7ee6f962a7282901a804498e54 --local-dir $M/nemotron-3.5-bolt-24gb
+```
+
+(`kapitsa serve --model bolt` downloads NVIDIA's own repos instead: `nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB`
+and its `-LiLiCorr` drafter.) oMLX and mlx-vlm are the engines that load this checkpoint on a Mac; oMLX's drafter
+path works only greedy in 0.7.1rc1, so `bolt-omlx-lilicorr-greedy` measures it at temperature 0 throughout. The
+oMLX + drafter launcher (`launchers/omlx_bolt_serve.sh`) follows the bundle's README: load, unload, load again with
+the drafter. `MLX_VLM_PYTHON` names a Python with mlx-vlm.
+
 ### MTPLX (`configs/mtplx.json`) [2.12.2]
 
 `uv tool install mtplx` (or `pip install mtplx`); set `MTPLX_BIN` unless `mtplx` is on PATH. The settings are the
