@@ -129,6 +129,7 @@ class Qwen4Exp : public Qwen35 {
   bool qsa_sparse(int pos) const { return (pos + 1) / c4_.ix_ratio > c4_.ix_budget / c4_.ix_ratio; }
   // block scores and key lists (idx_ / cnt_ rows 0..R-1) of R rows at positions pos0.. whose index queries are iq_ rows
   // iq_row0..; the score scratch grows on demand (between passes)
+  void regrow(Encoder& e, Buffer& b, size_t bytes, const char* label);  // (qscore_ / qmask_, see the .cpp)
   void enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int iq_row0);
   // the same as bit rows (mask rows row0.. of qmask_, mwords words each) for the masked prefill attention
   void enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords);

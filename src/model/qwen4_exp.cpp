@@ -740,13 +740,21 @@ struct AttnSparseParams {
 };
 }  // namespace
 
+// A scratch buffer grown while a prompt is encoded: the command buffers already committed for it (the earlier layers
+// of this chunk, the chunk before) may still read the old one, and they hold no reference to it, so it is released
+// only once the command buffer being encoded, the last of them, has completed.
+void Qwen4Exp::regrow(Encoder& e, Buffer& b, size_t bytes, const char* label) {
+  if (b) {
+    Buffer old = b;
+    e.on_completed([old]() mutable { Gpu::get().release(old); });
+  }
+  b = Gpu::get().alloc(bytes, label);
+}
+
 void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int iq_row0) {
   const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);  // blocks of the last row
   const size_t need = size_t(R) * nb * 4;
-  if (qscore_.size < need) {  // between passes only: grows before the command buffer that uses it runs
-    Gpu::get().release(qscore_);
-    qscore_ = Gpu::get().alloc(std::max(need, size_t(4) << 20), "qsa_scores");
-  }
+  if (qscore_.size < need) regrow(e, qscore_, std::max(need, size_t(4) << 20), "qsa_scores");
   const QsaSelParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0), uint32_t(c4_.ix_ratio),
                        uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, qidx_ld_};
   e.use(pipe("qsa_score"));
@@ -762,14 +770,8 @@ void Qwen4Exp::enc_qsa_select(Encoder& e, const Buffer& bk, int R, int pos0, int
 void Qwen4Exp::enc_qsa_mask(Encoder& e, const Buffer& bk, int R, int pos0, int row0, uint32_t mwords) {
   const uint32_t nb = uint32_t(pos0 + R) / uint32_t(c4_.ix_ratio);
   const size_t need = size_t(R) * nb * 4, mneed = size_t(row0 + R) * mwords * 4;
-  if (qscore_.size < need) {  // between passes only (see enc_qsa_select)
-    Gpu::get().release(qscore_);
-    qscore_ = Gpu::get().alloc(std::max(need, size_t(4) << 20), "qsa_scores");
-  }
-  if (qmask_.size < mneed) {
-    Gpu::get().release(qmask_);
-    qmask_ = Gpu::get().alloc(std::max(size_t(tmax_) * mwords * 4, mneed), "qsa_mask");
-  }
+  if (qscore_.size < need) regrow(e, qscore_, std::max(need, size_t(4) << 20), "qsa_scores");
+  if (qmask_.size < mneed) regrow(e, qmask_, std::max(size_t(tmax_) * mwords * 4, mneed), "qsa_mask");
   const QsaSelParams p{uint32_t(R), uint32_t(c4_.ix_heads), uint32_t(c4_.ix_dim), uint32_t(pos0), uint32_t(c4_.ix_ratio),
                        uint32_t(c4_.ix_budget / c4_.ix_ratio), nb, mwords};
   e.use(pipe("qsa_score"));
