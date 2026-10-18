@@ -7,6 +7,9 @@
 //   bench_test run PORT                the protocol against a server on 127.0.0.1:PORT, with fixed nonces
 //   bench_test lock [HOLD_S]           takes the GPU lock (BENCH_GPU_LOCK), holds it HOLD_S seconds
 #include "bench/bench.h"
+#ifndef KAPITSA_VERSION
+#define KAPITSA_VERSION "0.0.0"
+#endif
 
 #include <chrono>
 #include <cmath>
@@ -211,7 +214,7 @@ int result(bool quick) {
   if (quick) in.settings.decode_runs = 3, in.settings.greedy_runs = 3, in.settings.sizes = {4000};
   in.settings.model = "qwen3.6-35b-a3b";
   in.settings.ref_prompt_tokens = reference_prompt_tokens("qwen3.5");
-  in.version = "0.1.31", in.commit = "940ee7d";
+  in.version = KAPITSA_VERSION, in.commit = "940ee7d";
   in.time_utc = "2026-10-18T09:12:44Z";
   in.power_start = {.source = "ac", .battery_percent = 84, .low_power_mode = false, .power_mode = "high"};
   in.power_end = in.power_start;
