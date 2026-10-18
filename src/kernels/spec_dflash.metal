@@ -258,7 +258,7 @@ struct DflAttnParams {
 
 // Draft attention, one split of the context of one kv head (SPEC §5): 4 simdgroups = the 4 q heads
 // sharing the kv head, 8 block rows each. Context key j is visible to row r iff j >= P + r - 2047
-// (Splash's per-row window, draft.metal; equal to REF/MLX's query - key < 2048); the 8 block keys
+// (a per-row window, equal to REF/MLX's query - key < 2048); the 8 block keys
 // are visible to every row (is_causal = false) and are added by the last split. fp32 scores and
 // online softmax; partials are combined by dfl_attn_reduce in split order.
 // Tiles of 16 keys: lane (rg, kl) scores rows 4rg..4rg+3 against key kl; for P.V each lane owns
@@ -650,8 +650,7 @@ struct DflRowsParams {
 // MLX affine 4/8-bit weights, group 64. A simdgroup owns 8 weight rows; per 64-group every lane
 // loads 16 contiguous codes of its row (opt/shortpf qmms layout: lane row fm, slot q = fn/2,
 // fragment f, element e <-> k = 64g + 16q + 8(f/4) + f%4 + 4e) and turns them into exact half
-// MMA operands (code | 0x6400 = 1024 + code, minus 1024: exact; the exact-code idea is Splash's,
-// Apache-2.0). 8 MMAs per group into a zeroed fp32 C, then the fp32 epilogue
+// MMA operands (code | 0x6400 = 1024 + code, minus 1024: exact). 8 MMAs per group into a zeroed fp32 C, then the fp32 epilogue
 //   acc += s . C + b . sum(x over the group)
 // applies the scale/bias once per group (no half rounding of dequantized weights). X is gathered
 // from the row-major half table with four 8-byte loads per lane per group.

@@ -10,11 +10,9 @@
 //  * one MMA chain per 64-group, closed by an fp32 epilogue per group and output:
 //      y += s * dot + (b - 1024 s) * sum_k x[k]
 //    with the group sums of the (half-rounded) inputs precomputed per token row.
-//  This is Splash's Apple9 register-tile idea (incoai/splash, Apache-2.0,
-//  runtime/metal/kernels/decode/linear_gguf_sgmatrix.metal: integer codes as exact bf16 MMA operands,
-//  one fp32 epilogue per coefficient group); Kapitsa reads the MLX weight layout
-//  directly (no repacked weight image), with half activations (11-bit mantissa) instead of bf16.
-//  See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES for upstream references and license notices.
+//  The Apple9 register-tile technique: integer codes as exact MMA operands, one fp32 epilogue per
+//  coefficient group, reading the MLX weight layout directly (no repacked weight image), with half
+//  activations (11-bit mantissa).
 //
 // Activations: an "X8 table" per 64-group holds the 8 rows' inputs already in the per-lane B-fragment
 // order, so a lane reads its 16 operand halfs of a group with two 16-byte loads:

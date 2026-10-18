@@ -1,5 +1,4 @@
-// GPU + Neural Engine FFN split (see ffn_split.h). Design from Splash (incoai/splash,
-// Apache-2.0, runtime/ops/AneFfn.cpp). See ACKNOWLEDGMENTS.md and THIRD_PARTY_NOTICES.
+// GPU + Neural Engine FFN split (see ffn_split.h).
 #include "ane/ffn_split.h"
 #include "util/log.h"
 
@@ -312,8 +311,8 @@ void FfnSplit::free_all() {
 
 // The ANE's share of the FFN over R tokens (layout [1,1,channels,tokens], tokens innermost).
 // int8 values are read as code/128 so fp16 sums cannot overflow; per-row weight scales and the
-// per-token input scale carry the magnitude back. silu(g) = g/2 (1 + tanh(g/2)) (Splash found the
-// ANE's sigmoid much less accurate for small gate values). The intermediate is rotated in
+// per-token input scale carry the magnitude back. silu(g) = g/2 (1 + tanh(g/2)) (the
+// ANE's sigmoid is much less accurate for small gate values). The intermediate is rotated in
 // 512-blocks (a grouped 1x1 conv against the program's only constant) and quantized per token;
 // the output is down's partial before its token scales plus a last row holding the intermediate's
 // per-token scale, applied with the input's by the GPU join in fp32. Up's token scale is left out

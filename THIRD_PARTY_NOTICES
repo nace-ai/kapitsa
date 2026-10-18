@@ -10,10 +10,8 @@ bench/harness/corpus/NOTICE.md.
 Splash (Inco), Apache License 2.0
 https://github.com/incoai/splash
 
-Kapitsa credits Splash for the adapted private AppleNeuralEngine interface declarations and method-signature
-table in src/ane/ane.mm and the adapted rotation helper in src/kernels/ane_ffn.metal. Their file headers identify
-Kapitsa's changes. Splash also supplies reference designs for the GPU/Neural Engine split and speculative
-verification kernels. ACKNOWLEDGMENTS.md maps these components to the upstream source files.
+The private AppleNeuralEngine interface declarations and method-signature table in src/ane/ane.mm and the
+ane_rotate_block helper in src/kernels/ane_ffn.metal are adapted from Splash. Their file headers note the changes.
 
 Review reference: be3b083c5f413673d44e44881042e875e674e333 (not an assertion of the original import revision).
 The Apache License 2.0 text is included in LICENSE. These portions remain under Apache-2.0.
@@ -23,7 +21,7 @@ MLX (Apple), reference designs and format compatibility, MIT License
 https://github.com/ml-explore/mlx
 
 MLX is credited for attention and matrix-fragment layouts, affine quantization formats and reference
-quantization behavior. Kapitsa does not link to the MLX runtime. See ACKNOWLEDGMENTS.md and the per-file comments.
+quantization behavior. Kapitsa does not link to the MLX runtime. See the per-file comments.
 MLX's license notice is reproduced below to accompany that credit.
 
 MIT License

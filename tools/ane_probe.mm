@@ -1,12 +1,11 @@
 // ane_probe: phase-0 probe for a GPU + Neural Engine split of the dense prefill FFN
 // Standalone: it does not touch the engine.
 //
-// It drives Apple's private AppleNeuralEngine.framework the way Splash does (incoai/splash,
-// Apache-2.0, runtime/ane/Program.mm and runtime/ops/AneFfn.cpp): the _ANEClient / _ANEModel /
+// It drives Apple's private AppleNeuralEngine.framework: the _ANEClient / _ANEModel /
 // _ANERequest selectors, MIL text programs whose weights are IOSurface-backed tensor_buffer
 // inputs (not constants), one function per row count in one program, W8A8 with a Hadamard
 // rotation of the intermediate inside the program, and MTLSharedEvent ordering between the GPU
-// and the ANE. Those ideas are Splash's; this code is ours.
+// and the ANE.
 //
 //   ane_probe mil   [--units U] [--rows R,..]   print the MIL program only
 //   ane_probe sync  [--units U] [--rows R,R,..] [--iters N] [--wfp16] [--norot]
@@ -20,7 +19,7 @@
 //       then waits and joins. Reports GPU part alone, ANE alone and the split.
 //
 // Shapes are the Qwen3.8-27B FFN: hidden 5120, intermediate 17408 = 34 units of 512 channels;
-// --units is the ANE's share (default 25, Splash's choice on this M4 Pro).
+// --units is the ANE's share (default 25 on this M4 Pro).
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurface.h>
 #import <Metal/Metal.h>
@@ -47,7 +46,7 @@
 
 using namespace ni;
 
-// ---- the private interface (selectors as Splash resolves them) ----
+// ---- the private interface (selectors as resolved at runtime) ----
 @protocol NiAneModel
 + (id)modelAtURL:(NSURL*)url key:(NSString*)key;
 - (NSDictionary*)modelAttributes;
@@ -201,8 +200,8 @@ struct Shape {
 
 // The ANE's share of a SwiGLU FFN over `R` tokens (layout [1,1,channels,tokens], tokens innermost).
 // int8 values are read as code/128 so fp16 sums cannot overflow; per-row weight scales and the
-// per-token input scale carry the magnitude back. silu(g) = g/2 (1 + tanh(g/2)) (Splash found the
-// ANE's sigmoid much less accurate for small gate values). The intermediate is rotated in
+// per-token input scale carry the magnitude back. silu(g) = g/2 (1 + tanh(g/2)) (the
+// ANE's sigmoid is much less accurate for small gate values). The intermediate is rotated in
 // 512-blocks (a grouped 1x1 conv against a constant) and quantized per token; the output is
 // down's partial before its token scale plus one last row holding that scale, applied by the
 // GPU join in fp32.
@@ -443,7 +442,7 @@ id make_request(const Api& api, const Binding& b, id events) {
                                             transactionHandle:nil];
 }
 
-// ---- all surfaces of the split, as in Splash's layout ----
+// ---- all surfaces of the split ----
 struct Split {
   Shape sh;
   std::vector<Surface> x;           // int8 [2560][2048] per hidden segment

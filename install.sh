@@ -79,7 +79,7 @@ mkdir -p "$PREFIX" || die "can't create $PREFIX (--prefix picks another folder).
 PREFIX="$(cd "$PREFIX" && pwd)" || die "can't resolve the install folder $PREFIX."
 NOTICE_DIR="$(dirname "$PREFIX")/share/kapitsa"
 mkdir -p "$NOTICE_DIR" || die "can't create the license notices folder $NOTICE_DIR."
-for notice in LICENSE THIRD_PARTY_NOTICES ACKNOWLEDGMENTS.md; do
+for notice in LICENSE THIRD_PARTY_NOTICES; do
   install -m 0644 "$notice" "$NOTICE_DIR/$notice" || die "can't install $notice in $NOTICE_DIR."
 done
 install -m 0755 build/kapitsa "$PREFIX/kapitsa" || die "can't write $PREFIX/kapitsa (--prefix picks another folder)."
