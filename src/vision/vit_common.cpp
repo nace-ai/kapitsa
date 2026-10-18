@@ -54,7 +54,9 @@ std::vector<std::string> vit_tensor_names(const std::string& dir) {
       std::string h(len, '\0');
       if (!f.read(h.data(), std::streamsize(len))) continue;
       try {
-        for (auto& [k, v] : nlohmann::json::parse(h).items()) names.push_back(k);
+        // a named header: a range-for over items() of parse()'s temporary reads it after its end (C++20)
+        const nlohmann::json hdr = nlohmann::json::parse(h);
+        for (auto& [k, v] : hdr.items()) names.push_back(k);
       } catch (...) {
       }
     }
