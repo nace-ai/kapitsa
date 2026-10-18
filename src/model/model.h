@@ -18,6 +18,7 @@ struct Seq {
   // max_seq). It grows on demand up to `limit` (Model::reserve); encoding past it is a fatal "context full".
   int cap = 0;
   int limit = 0;                   // the conversation's context: max positions
+  int loops = 0;                   // looped models (Dory): the recurrent block's loop count (0: the model's default)
   Buffer tok;                      // int32 [limit + 8]
   std::vector<Buffer> conv, rec;   // per layer (recurrent layers only: GDN / Mamba-2)
   std::vector<Buffer> kc, vc;      // per layer (attention layers only), half [Hkv, cap, D]

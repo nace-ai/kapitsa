@@ -46,13 +46,14 @@ Those start the best model for this Mac, with the same output as before.
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron-Labs Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
 | `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
-its DSpark draft model for Lightning.
+its DSpark draft model for Lightning. Dory has none: it decodes without one.
 
 `--model` takes a name or alias (`35b`), one with a variant (`35b:6bit`), a Hugging Face repo (`org/name[@revision]`,
 see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file
@@ -85,7 +86,9 @@ download is always the same bytes. After a Kapitsa update that pins newer revisi
 files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's own
 mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
 Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
-projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding).
+projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding). Dory has two,
+NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format it was pre-trained in, with BF16
+embedding and head; 3.2 GB) and `bf16` (8.0 GB).
 
 ### Other models
 
@@ -167,6 +170,8 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
+| `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
+| `--loop-kv MODE` | `last-loop` | Dory: the shared block's KV cache, `last-loop` (one per layer) or `per-loop` (one per loop, more memory). |
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
@@ -284,10 +289,11 @@ tools and MCP servers work as usual:
 
 ## Images
 
-Every catalog model except `nemotron-3.5-lightning` (a text-only model) reads images, in every precision:
+Every catalog model except `nemotron-3.5-lightning` and `nemotron-labs-dory1.0-4b` (text-only models) reads images, in
+every precision:
 `qwen3.5-4b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `nemotron-3.5-bolt` and `nemotron-3.5-super-vl`. Their vision towers come with the download and load with the first
 image: about 0.67 GB of GPU memory for the 4B's, 0.9 GB for the 35B's and the 27B's (bf16 in every precision), 1.7 GB
-for Bolt's and for Super-VL's. On a model without one, such as Lightning or a text-only conversion, each image becomes a short note
+for Bolt's and for Super-VL's. On a model without one, such as Lightning, Dory or a text-only conversion, each image becomes a short note
 in the prompt, so agents that attach screenshots keep working.
 
 | API | Image part |

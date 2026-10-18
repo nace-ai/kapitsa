@@ -668,7 +668,8 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  s.ref_prompt_tokens = reference_prompt_tokens(NemotronH::is_model(ref.dir) ? "nemotron-h" : "qwen3.5");
+  s.ref_prompt_tokens =
+      reference_prompt_tokens(NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h" : "qwen3.5");
 
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
   // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)

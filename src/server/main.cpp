@@ -107,15 +107,19 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     // it raises on "high")
     const std::string e = b["reasoning_effort"];
     if (e == "none" || e == "minimal" || !r.template_kwargs.contains("reasoning_effort")) api::apply_effort(e, r.template_kwargs);
+    r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
+  r.loops = api::request_loops_field(b);
   return r;
 }
 
 static json usage_json(const ChatResult& res) {
-  return json{{"prompt_tokens", res.prompt_tokens},
-              {"completion_tokens", res.completion_tokens},
-              {"total_tokens", res.prompt_tokens + res.completion_tokens},
-              {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
+  json u{{"prompt_tokens", res.prompt_tokens},
+         {"completion_tokens", res.completion_tokens},
+         {"total_tokens", res.prompt_tokens + res.completion_tokens},
+         {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
+  if (res.loops > 0) u["kapitsa"] = api::kapitsa_usage(res);  // looped models: the loop count the request ran
+  return u;
 }
 
 static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, bool with_index) {
@@ -326,6 +330,11 @@ static void print_serve_help() {
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
+         "  --loops N              Dory: the shared block's loops per token, 1-4 (default 2, NVIDIA's recommendation;\n"
+         "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
+         "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
+         "  --loop-kv MODE         Dory: last-loop (default: one cache per layer, the size of a 1-loop model's) or\n"
+         "                         per-loop (a cache per loop, as the model was trained; more memory)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
@@ -520,12 +529,25 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--loops") {
+      opt.loops = to_int(a, next(), help);
+      if (opt.loops < 1 || opt.loops > Dory::kMaxLoops) usage_error("--loops: 1 to 4", help);
+    } else if (a == "--loop-kv") {
+      LoopKv kv;
+      opt.loop_kv = next();
+      if (!parse_loop_kv(opt.loop_kv, &kv)) usage_error("--loop-kv: last-loop or per-loop", help);
+    }
     else if (a == "--verbose") verbose = true;  // the terminal UI's: the engine's log on screen too
     else if (a == "--yes") yes = true;          // the terminal UI's: no question, the best model for this Mac
     else if (i == first && first == 2 && !a.empty() && a[0] != '-') model = a;  // kapitsa serve 35b
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  {  // looped models: the memory plans before the model loads count what it will run
+    LoopKv kv = LoopKv::last_loop;
+    if (!opt.loop_kv.empty()) parse_loop_kv(opt.loop_kv, &kv);
+    Dory::set_serving(opt.loops, kv);
+  }
   const bool tui = term::fancy();  // a terminal: the styled screen, the engine's log in a file
   if (tui) ui::serve_begin(verbose);
   std::vector<std::string> notes;  // the terminal UI's, shown under its header once the server will start

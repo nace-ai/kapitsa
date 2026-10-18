@@ -185,6 +185,21 @@ def cli_checks(kapitsa):
                   j.get("model") == name + ":" + dv and j.get("id") == name and j.get("kind") == "catalog" and
                   j.get("repo") == repo and j.get("revision") == rev and got == [comp] and
                   j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # NVIDIA's Dory: NVFP4 (default) and BF16, no drafter
+    for a, dv, repo, rev in [
+            ("dory", "nvfp4", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4", "41f02335e1a1ad3289b8b32485e2265cbe97cfdf"),
+            ("nemotron-labs-dory1.0-4b", "nvfp4", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-NVFP4",
+             "41f02335e1a1ad3289b8b32485e2265cbe97cfdf"),
+            ("dory:bf16", "bf16", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16", "b366b87f762ea334ba3eb55912031baba1515810"),
+            ("nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16", "bf16", "nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-BF16",
+             "b366b87f762ea334ba3eb55912031baba1515810")]:
+        name = "nemotron-labs-dory1.0-4b"
+        j = plan(a)
+        check(f"cli: {a} -> {name}:{dv}, no drafter",
+              j.get("model") == name + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
+              j.get("revision") == rev and j.get("companions") == [] and
+              j.get("id") == (name if dv == "nvfp4" else name + ":" + dv) and
+              j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
@@ -534,6 +549,57 @@ check("responses: a prompt over the context is 400 context_length_exceeded",
 st, r = call("/v1/responses", {"model": "m", "input": "Count from 1 to 100.", "reasoning": {"effort": "none"}, "max_output_tokens": 8})
 check("responses: a max_output_tokens cut is status incomplete", st == 200 and r["status"] == "incomplete" and
       r["incomplete_details"] == {"reason": "max_output_tokens"}, json.dumps(r)[:300])
+
+# ---------------------------------------------------------------- looped models (Dory)
+# 10. A looped model reports the loop count each request ran (usage.kapitsa.loops): a request's "loops", else its
+#     reasoning effort (low 1, medium 2, high 4) or Anthropic thinking (off 1, a budget by its size), else the server's
+#     default. A cached prefix is reused only at the loop count that computed it.
+probe = post({"messages": [{"role": "user", "content": "Say hi."}], "max_tokens": 4,
+              "chat_template_kwargs": {"enable_thinking": False}})
+if (probe.get("usage") or {}).get("kapitsa"):
+    base_loops = probe["usage"]["kapitsa"]["loops"]
+    lmsgs = [{"role": "system", "content": "[loops] You are terse. " + "Answer in one short sentence. " * 30},
+             {"role": "user", "content": "What is the capital of France?"}]
+    def lp(**kw):
+        return post(dict({"messages": lmsgs, "max_tokens": 16, "temperature": 0, "top_k": 1,
+                          "chat_template_kwargs": {"enable_thinking": False}}, **kw))
+    la = lp(loops=1)
+    lb = lp(loops=1)
+    lc = lp(loops=2)
+    ld = lp(loops=2)
+    n_l = la["usage"]["prompt_tokens"]
+    check("loops: usage.kapitsa.loops reports the request's loops",
+          la["usage"]["kapitsa"]["loops"] == 1 and lc["usage"]["kapitsa"]["loops"] == 2, json.dumps(lc["usage"]))
+    check("loops: the same loop count reuses the cached prompt",
+          lb["usage"]["prompt_tokens_details"]["cached_tokens"] >= n_l - GEN_TAIL and
+          ld["usage"]["prompt_tokens_details"]["cached_tokens"] >= n_l - GEN_TAIL, json.dumps([lb["usage"], ld["usage"]]))
+    check("loops: another loop count reads the prompt again (no cached tokens)",
+          lc["usage"]["prompt_tokens_details"]["cached_tokens"] == 0, json.dumps(lc["usage"]))
+    check("loops: the same greedy answer at the same loop count",
+          la["choices"][0]["message"]["content"] == lb["choices"][0]["message"]["content"],
+          repr([la["choices"][0]["message"]["content"], lb["choices"][0]["message"]["content"]]))
+    le = lp(reasoning_effort="low")
+    lh = lp(reasoning_effort="high")
+    check("loops: reasoning_effort low runs 1 loop, high 4",
+          le["usage"]["kapitsa"]["loops"] == 1 and lh["usage"]["kapitsa"]["loops"] == 4,
+          json.dumps([le["usage"], lh["usage"]]))
+    try:
+        lp(loops=9)
+        bad_loops = False
+    except urllib.error.HTTPError as e:
+        bad_loops = e.code == 400
+    check("loops: 9 loops is a 400", bad_loops)
+    st, ma = call("/v1/messages", {"model": "m", "max_tokens": 8, "messages": [{"role": "user", "content": "Say hi."}]})
+    st2, mb = call("/v1/messages", {"model": "m", "max_tokens": 64, "thinking": {"type": "enabled", "budget_tokens": 20000},
+                                    "messages": [{"role": "user", "content": "Say hi."}]})
+    st3, mc = call("/v1/messages", {"model": "m", "max_tokens": 64, "thinking": {"type": "adaptive"},
+                                    "messages": [{"role": "user", "content": "Say hi."}]})
+    check("loops: Anthropic thinking off 1 loop, a 20000-token budget 4, adaptive the server's default",
+          st == st2 == st3 == 200 and ma["usage"]["kapitsa"]["loops"] == 1 and mb["usage"]["kapitsa"]["loops"] == 4 and
+          mc["usage"]["kapitsa"]["loops"] == base_loops, json.dumps([ma.get("usage"), mb.get("usage"), mc.get("usage")]))
+    st, rr = call("/v1/responses", {"model": "m", "input": "Say hi.", "reasoning": {"effort": "high"}, "max_output_tokens": 64})
+    check("loops: Responses reasoning.effort high runs 4 loops",
+          st == 200 and rr["usage"]["kapitsa"]["loops"] == 4, json.dumps(rr.get("usage")))
 
 # ---------------------------------------------------------------- requests in flight at once
 # Each request in flight has a slot of its own and they take turns on the GPU between prefill chunks and decode cycles;

@@ -297,6 +297,8 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
   if (body.contains("top_k") && body["top_k"].is_number()) r.top_k = body["top_k"];
   const ojson reasoning = body.contains("reasoning") && body["reasoning"].is_object() ? body["reasoning"] : ojson::object();
   apply_effort(str(reasoning, "effort"), r.template_kwargs);
+  r.effort = str(reasoning, "effort");   // looped models: the loop count (Engine::request_loops)
+  r.loops = request_loops_field(body);
   if (body.contains("chat_template_kwargs") && body["chat_template_kwargs"].is_object())
     for (auto& [k, v] : body["chat_template_kwargs"].items()) r.template_kwargs[k] = v;
 
@@ -502,12 +504,13 @@ std::string ResponsesStream::end(const ChatResult& res) {
   }
   const bool cut = res.finish_reason == "length";
   std::string s = close(cut);
-  const ojson usage = {{"input_tokens", res.prompt_tokens},
-                       {"input_tokens_details", {{"cached_tokens", res.cached_tokens},
-                                                 {"cache_write_tokens", res.prompt_tokens - res.cached_tokens}}},
-                       {"output_tokens", res.completion_tokens},
-                       {"output_tokens_details", {{"reasoning_tokens", res.reasoning_tokens}}},
-                       {"total_tokens", res.prompt_tokens + res.completion_tokens}};
+  ojson usage = {{"input_tokens", res.prompt_tokens},
+                 {"input_tokens_details", {{"cached_tokens", res.cached_tokens},
+                                           {"cache_write_tokens", res.prompt_tokens - res.cached_tokens}}},
+                 {"output_tokens", res.completion_tokens},
+                 {"output_tokens_details", {{"reasoning_tokens", res.reasoning_tokens}}},
+                 {"total_tokens", res.prompt_tokens + res.completion_tokens}};
+  if (res.loops > 0) usage["kapitsa"] = kapitsa_usage(res);
   final_ = response(cut ? "incomplete" : "completed", usage, nullptr,
                     cut ? ojson{{"reason", "max_output_tokens"}} : ojson());
   return s + event(cut ? "response.incomplete" : "response.completed", {{"response", final_}});

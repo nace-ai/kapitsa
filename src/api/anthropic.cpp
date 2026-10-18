@@ -286,6 +286,13 @@ ChatRequest messages_prompt(const ojson& body, bool* show_thinking) {
   r.template_kwargs["enable_thinking"] = think;
   if (show_thinking) *show_thinking = str(th, "display") != "omitted";
   if (think && body.contains("output_config")) apply_effort(str(body["output_config"], "effort"), r.template_kwargs);
+  // looped models (Engine::request_loops): thinking off (disabled, absent) 1 loop, a budget by its size, adaptive or
+  // enabled without a budget the server's default; output_config.effort or a "loops" field first
+  if (!think) r.thinking_budget = 0;
+  else if (th.contains("budget_tokens") && th["budget_tokens"].is_number_integer())
+    r.thinking_budget = int(std::clamp<int64_t>(th["budget_tokens"].get<int64_t>(), 0, INT32_MAX));
+  if (think && body.contains("output_config")) r.effort = str(body["output_config"], "effort");
+  r.loops = request_loops_field(body);
   // context_management keeping every turn's thinking (Claude Code: clear_thinking keep "all"): every assistant turn
   // is rendered with its reasoning (Qwen3.6's preserve_thinking), so the prompt of the next request continues what the
   // engine generated whatever comes after it
@@ -343,10 +350,12 @@ std::pair<std::string, ojson> messages_stop(const ChatResult& res) {
 }
 
 ojson messages_usage(const ChatResult& res) {
-  return {{"input_tokens", res.prompt_tokens - res.cached_tokens},
-          {"cache_creation_input_tokens", 0},
-          {"cache_read_input_tokens", res.cached_tokens},
-          {"output_tokens", res.completion_tokens}};
+  ojson u = {{"input_tokens", res.prompt_tokens - res.cached_tokens},
+             {"cache_creation_input_tokens", 0},
+             {"cache_read_input_tokens", res.cached_tokens},
+             {"output_tokens", res.completion_tokens}};
+  if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);
+  return u;
 }
 
 ojson messages_response(const std::string& id, const std::string& model, const ChatResult& res, bool show_thinking) {

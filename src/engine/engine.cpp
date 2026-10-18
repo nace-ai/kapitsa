@@ -11,6 +11,8 @@
 #include <chrono>
 #include <cstring>
 #include <deque>
+#include <map>
+#include <mutex>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -189,18 +191,30 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
             "--mem-budget can help.",
             opts_.model_dir.c_str(), need.bytes / 1e9, need.parts.c_str(), budget_ / 1e9, rws / 1e9);
   }
-  if (NemotronH::is_model(opts_.model_dir)) {
-    auto m = std::make_unique<NemotronH>(opts_.model_dir, opts_.prefill_chunk);
-    nh_ = m.get();
-    model_ = std::move(m);
-    // the publisher's sampling settings (generation_config.json; Nemotron 3.5: temperature 1.0, top-p 0.95, no
-    // top-k: the sampler's 32)
+  // the publisher's sampling settings (generation_config.json; Nemotron 3.5 and Dory: temperature 1.0, top-p 0.95, no
+  // top-k: the sampler's 32)
+  auto publisher_sampling = [&] {
     auto gc = nlohmann::json::parse(read_file(opts_.model_dir + "/generation_config.json"), nullptr, false);
     if (!gc.is_discarded() && gc.is_object()) {
       if (gc.contains("temperature") && gc["temperature"].is_number()) defaults_.temperature = gc["temperature"];
       if (gc.contains("top_p") && gc["top_p"].is_number()) defaults_.top_p = gc["top_p"];
       defaults_.top_k = gc.contains("top_k") && gc["top_k"].is_number() ? gc["top_k"].get<int>() : 0;
     }
+  };
+  if (Dory::is_model(opts_.model_dir)) {
+    LoopKv kv = LoopKv::last_loop;
+    if (!opts_.loop_kv.empty() && !parse_loop_kv(opts_.loop_kv, &kv))
+      fatal("--loop-kv: last-loop or per-loop, not \"%s\"", opts_.loop_kv.c_str());
+    if (opts_.loops < 0 || opts_.loops > Dory::kMaxLoops) fatal("--loops: 1 to %d", Dory::kMaxLoops);
+    auto m = std::make_unique<Dory>(opts_.model_dir, opts_.prefill_chunk, opts_.loops, kv);
+    dory_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
+  } else if (NemotronH::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<NemotronH>(opts_.model_dir, opts_.prefill_chunk);
+    nh_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -309,8 +323,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                                  : std::string("plain decoding");
-  logi("engine ready: %s, context %d, %d slots, %s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
-       mode.c_str(), vision_ ? ", images on" : "");
+  const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
+                                         std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
+                                         " KV"
+                                   : std::string();
+  logi("engine ready: %s, context %d, %d slots, %s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
+       mode.c_str(), looped.c_str(), vision_ ? ", images on" : "");
 }
 
 Engine::~Engine() = default;
@@ -323,9 +341,11 @@ size_t default_mem_budget() {
 
 // The model's memory plan from its headers: a Nemotron-H or a Qwen3.5-family folder.
 static MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
+  if (Dory::is_model(model_dir)) return Dory::plan(model_dir, prefill_chunk);
   return NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk) : Qwen35::plan(model_dir, prefill_chunk);
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
+  if (Dory::is_model(model_dir)) return 0;
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
@@ -346,7 +366,9 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
-  if (NemotronH::is_model(model_dir)) {
+  if (Dory::is_model(model_dir)) {
+    lp.dflash_off = true;  // plain decoding (no drafter for Dory)
+  } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
       lp.dflash = lp.dflash_auto ? NhDrafter::find(model_dir) : want;
@@ -1009,8 +1031,8 @@ std::string chat_template_source(const std::string& model_dir) {
 
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
   const bool images = vision_ != nullptr;  // image parts render as the model's placeholder, else as a note
-  if (nh_) {
-    // Nemotron 3.5's template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
+  if (nh_ || dory_) {
+    // Nemotron 3.5's (and Dory's) template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
     // reasoning efforts, and truncate_history_thinking = false for preserve_thinking (every turn's reasoning kept, as
     // the Anthropic API's keep-all asks: the next request's prompt then continues what was generated)
     const auto& k = r.template_kwargs;
@@ -1028,11 +1050,54 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
   return render_chat(*tmpl_, r, add_generation_prompt, images);
 }
 
+// Whether a chat template reads message content as a string only (Dory's: a content array would render as its repr):
+// a user message of one text part, rendered, must show the text and nothing of the part's markup. Cached per template.
+static bool string_content_template(const minja::chat_template& tmpl) {
+  static std::mutex mu;
+  static std::map<const void*, bool> known;
+  std::lock_guard<std::mutex> lk(mu);
+  if (auto it = known.find(&tmpl); it != known.end()) return it->second;
+  static const std::string needle = "\x01kapitsa-typed-content\x01";
+  bool str_only = false;
+  try {
+    minja::chat_template_inputs in;
+    in.messages = ojson::array({{{"role", "user"}, {"content", ojson::array({{{"type", "text"}, {"text", needle}}})}}});
+    in.add_generation_prompt = false;
+    minja::chat_template_options opt;
+    opt.apply_polyfills = false;
+    const std::string out = tmpl.apply(in, opt);
+    str_only = out.find(needle) == std::string::npos || out.find("'type'") != std::string::npos ||
+               out.find("\"type\"") != std::string::npos;
+  } catch (...) {
+  }
+  known[&tmpl] = str_only;
+  return str_only;
+}
+
+// A content array as one string: its text parts joined by newlines (vLLM's "string" content format)
+static ojson flatten_content(const ojson& messages) {
+  ojson out = messages;
+  for (auto& m : out) {
+    if (!m.is_object() || !m.contains("content") || !m["content"].is_array()) continue;
+    std::string s;
+    bool first = true;
+    for (const auto& p : m["content"])
+      if (p.is_object() && p.contains("text") && p["text"].is_string()) {
+        if (!first) s += "\n";
+        s += p["text"].get<std::string>();
+        first = false;
+      }
+    m["content"] = s;
+  }
+  return out;
+}
+
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
                         bool images) {
   minja::chat_template_inputs in;
   int dropped = 0;
   in.messages = images ? vision::without_image_data(r.messages) : without_images(r.messages, &dropped);
+  if (!images && string_content_template(tmpl)) in.messages = flatten_content(in.messages);
   if (dropped && add_generation_prompt) logi("chat: %d image(s) left out: this model can't read images", dropped);
   // A system message after the first message (an agent's hook output, a mode change) is a system turn where it
   // stands: the Qwen3.5+ templates raise on it. It goes through the template as a marker tool response (not a user
@@ -1083,8 +1148,9 @@ int Engine::count_tokens(const ChatRequest& r) const {
   return int(expand_images(ids, images).ids.size());  // the images' rows
 }
 
-Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm) {
-  auto lcp = [&](const Slot& s) { return common_rows(s, prompt, mm); };
+Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm, int loops) {
+  // (a looped model's cached state is only valid for the loop count that computed it)
+  auto lcp = [&](const Slot& s) { return dory_ && s.loops != loops ? size_t(0) : common_rows(s, prompt, mm); };
   // What a slot can actually reuse: its live state if the prompt extends it, else its newest
   // checkpoint inside the common prefix. A shared prefix without a usable state is worthless
   // and choosing that slot would only destroy its conversation.
@@ -1195,6 +1261,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
+  const int loops = request_loops(r);  // looped models (0 otherwise)
+  res.loops = loops;
   if (n + 1 >= opts_.context) {  // every slot holds opts_.context positions
     res.finish_reason = "error";
     res.error = "prompt (" + std::to_string(n) + " tokens) exceeds the context window (" + std::to_string(opts_.context) + ")";
@@ -1220,7 +1288,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   Slot* picked = nullptr;
   bool queued = false;
   for (;;) {
-    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp);
+    if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp, loops);
     if (picked) break;
     if (!queued) {
       slot_queue_.push_back(arrival);
@@ -1264,7 +1332,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   ++slot.gen;
 
   // ---- prefix reuse ----
-  const size_t common = common_rows(slot, keys, mmp);
+  // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
+  const size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
+  if (dory_ && slot.loops != loops && !slot.tokens.empty())
+    logi("chat: %d loops on slot %d, whose cache holds %d-loop KV: the prompt is read from the start", loops,
+         int(&slot - slots_.data()), slot.loops);
+  if (dory_) slot.loops = s.loops = loops;
 
   // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
   // checkpoint, as below), before any state changes, so a failure leaves the slot as it was ----
@@ -1582,7 +1655,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }();
   // (Nemotron-H: the whitespace before </think> stays in the reasoning, as its template renders returned turns)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, nh_ != nullptr);
+                      think_tools, nh_ != nullptr || dory_ != nullptr);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -2002,6 +2075,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   res.content += tail.content;
   for (auto& tc : tail.tool_calls) res.tool_calls.push_back(tc);
   if (!tail.reasoning.empty() || !tail.content.empty() || !tail.tool_calls.empty()) on_delta(tail);
+  // Dory (NVIDIA's nemotron_v3 reasoning parser): with force_nonempty_content, on by default here (the card asks
+  // coding agents to set it), a reply that put everything in its reasoning and left the content empty returns that
+  // text as its content too (a last delta), so agents that read the content alone get the answer
+  if (dory_ && res.tool_calls.empty() && content_text(ojson(res.content)).empty() && !res.reasoning.empty()) {
+    const auto f = r.template_kwargs.find("force_nonempty_content");
+    const bool force = f == r.template_kwargs.end() || !f->is_boolean() || f->get<bool>();
+    if (force) {
+      ChatDelta d;
+      d.content = res.reasoning;
+      res.content = res.reasoning;
+      res.reasoning.clear();
+      on_delta(d);
+    }
+  }
   if (parser.promoted() > 0)
     logi("chat: %d tool call(s) written inside the reasoning returned as tool calls", parser.promoted());
   slot.tokens.assign(s.tokens(), s.tokens() + fed_until);
@@ -2040,11 +2127,32 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
          "(+%.0f ms decode/resize before the request)", mm.spans.size(),
          [&] { int t = 0; for (auto& sp : mm.spans) t += sp.n; return t; }(), img_encoded, img_ms, img_reused,
          int(mm.spans.size()) - img_encoded - img_reused, img_prep_ms);
+  char lp[32] = "";
+  if (loops > 0) snprintf(lp, sizeof lp, ", %d loop%s", loops, loops > 1 ? "s" : "");
   logi("chat: prompt %d (cached %d) in %.0f ms (+%.1f ms template/tokenize; last chunk: encoded by %.1f ms, GPU start "
-       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s", n, start, res.prefill_ms,
+       "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
-       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc);
+       gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc, lp);
   return res;
+}
+
+int Engine::request_loops(const ChatRequest& r) const {
+  if (!dory_) return 0;
+  int l = 0;
+  if (r.loops > 0) {
+    l = r.loops;
+  } else if (!r.effort.empty()) {
+    // OpenAI's reasoning effort: minimal / low 1 loop, medium 2, high / xhigh 4 (none: thinking off, 1 loop)
+    const std::string& e = r.effort;
+    if (e == "none" || e == "minimal" || e == "low") l = 1;
+    else if (e == "medium") l = 2;
+    else if (e == "high" || e == "xhigh" || e == "max") l = 4;
+  } else if (r.thinking_budget >= 0) {
+    // Anthropic's thinking: disabled 1 loop, a budget by its size (under 4096 tokens 1, under 16384 2, else 4)
+    l = r.thinking_budget < 4096 ? 1 : r.thinking_budget < 16384 ? 2 : 4;
+  }
+  if (l <= 0) l = dory_->default_loops();
+  return std::clamp(l, 1, Dory::kMaxLoops);
 }
 
 void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {

@@ -41,6 +41,16 @@ add_custom_command(
   DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
   COMMENT "Embedding the Nemotron-H Metal kernels")
 
+# Dory kernels: a third embedded source, compiled only when a Dory model loads.
+file(GLOB NI_DORY_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/dory/*.metal)
+set(NI_DORY_EMBED ${CMAKE_BINARY_DIR}/generated/dory_kernels_embed.cpp)
+add_custom_command(
+  OUTPUT ${NI_DORY_EMBED}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_DORY_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
+          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_dory.cmake
+  DEPENDS ${NI_DORY_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_dory.cmake
+  COMMENT "Embedding the Dory Metal kernels")
+
 # kapitsa bench (src/bench/): the harness's frozen prompt corpus and Apple's names for the Mac models, embedded
 set(NI_BENCH_CORPUS ${CMAKE_BINARY_DIR}/generated/bench_corpus.cpp)
 add_custom_command(
@@ -61,7 +71,7 @@ file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security")

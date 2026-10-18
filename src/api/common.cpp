@@ -80,6 +80,17 @@ bool apply_effort(const std::string& effort, ojson& kwargs) {
   return true;
 }
 
+int request_loops_field(const ojson& body) {
+  if (!body.is_object() || !body.contains("loops") || body["loops"].is_null()) return 0;
+  const ojson& v = body["loops"];
+  if (!v.is_number_integer() || v.get<int64_t>() < 1 || v.get<int64_t>() > Dory::kMaxLoops)
+    throw ApiError(400, "invalid_request_error", "loops: a whole number from 1 to " + std::to_string(Dory::kMaxLoops), "",
+                   "loops");
+  return int(v.get<int64_t>());
+}
+
+ojson kapitsa_usage(const ChatResult& res) { return res.loops > 0 ? ojson{{"loops", res.loops}} : ojson(); }
+
 void join_text(std::string& acc, const std::string& piece) {
   if (piece.empty()) return;
   if (!acc.empty() && acc.back() != '\n' && piece.front() != '\n') acc += '\n';

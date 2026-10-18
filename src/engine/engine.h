@@ -4,6 +4,7 @@
 #pragma once
 #include "hub/hub.h"
 #include "model/dflash2.h"
+#include "model/dory.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -49,6 +50,10 @@ struct EngineOptions {
   // and Super-VL 1.4 million), 0 = the model's own limit (Qwen3.5-4B, Qwen3.6, Qwen3.8: 16.7 million, Bolt and
   // Super-VL: 13312 patches of 16x16).
   long image_max_pixels = vision::kModelDefaultPixels;
+  // Looped models (Dory): the recurrent block's loop count when a request names none (0: the model's default, 2 for
+  // Dory 1.0; requests choose 1-4 with "loops" or a reasoning effort), and the recurrent layers' KV ("": last-loop)
+  int loops = 0;
+  std::string loop_kv;
 };
 
 // Slots when none are asked for (EngineOptions::slots 0): kAutoSlots, so that an agent's conversation and its parallel
@@ -143,6 +148,12 @@ struct ChatRequest {
   uint32_t seed = 0;
   std::vector<std::string> stop;
   std::shared_ptr<LiveDecode> live;  // the request's progress for a display, or null
+  // Looped models (Dory): the loop count asked for ("loops" in the body, 0: none), else derived from the reasoning
+  // effort (OpenAI's reasoning_effort / reasoning.effort: minimal and low 1, medium 2, high and xhigh 4) or Anthropic's
+  // thinking (disabled 1, a budget by its size); "" / -1: the server's default
+  int loops = 0;
+  std::string effort;
+  int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
 };
 
 struct ToolCall {
@@ -177,6 +188,7 @@ struct ChatResult {
   double queue_ms = 0;
   int yields = 0;
   int batched = 0;  // decode cycles it ran in one pass with other requests' (batched decode)
+  int loops = 0;    // looped models: the loop count the request ran (0: not a looped model)
 };
 
 // The engine's GPU turn: one request at a time encodes and runs model work. FIFO (a ticket lock): a request that gives
@@ -266,6 +278,7 @@ class Engine {
     uint64_t gen = 0;                 // requests run on this slot
     int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
+    int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
     uint64_t arrival = 0;             // that request's number (requests_ when it arrived)
     // that request waits for memory other requests' KV caches hold: before its prefill (nothing of it on the GPU
@@ -277,7 +290,7 @@ class Engine {
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
   // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
-  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr);
+  Slot* pick_slot(const std::vector<int>& prompt, uint64_t arrival, const vision::Prompt* mm = nullptr, int loops = 0);
   // Rows of `keys` (a prompt's prefix-reuse keys; mm: its images, null for text) that slot's tokens share as a
   // reusable prefix: the common prefix, cut before any image that is not the same image in both
   static size_t common_rows(const Slot& slot, const std::vector<int>& keys, const vision::Prompt* mm);
@@ -352,6 +365,7 @@ class Engine {
   std::unique_ptr<Model> model_;
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
+  Dory* dory_ = nullptr;     // model_ when it is a Dory model
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
@@ -386,6 +400,11 @@ class Engine {
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
+
+ public:
+  // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the
+  // server's default); 0 for other models
+  int request_loops(const ChatRequest& r) const;
 };
 
 } // namespace ni
