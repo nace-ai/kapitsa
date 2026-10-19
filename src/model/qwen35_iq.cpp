@@ -183,18 +183,21 @@ void Qwen35::enc_moe_prefill_iq(Encoder& e, const Layer& L, int T, const Buffer&
   e.val(5, bp);
   e.dispatch(1, 1, 1, 1024);
   const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E);
+  // gate/up on 32-deep K steps (104 GPRs against 124), down 64 output columns per threadgroup: a 4-layer model of
+  // Qwen3.6-35B-A3B UD-IQ2_XXS reads a 4096-token prompt in 919 instead of 940 ms on the M1 Pro (2048: 446 / 455;
+  // 64: 31.2 / 30.7)
   const kp::QrmIq gp{I, uint32_t(D), uint32_t(D), I, sec(L.eg)};
-  e.use(pipe_iq("qrmi_gu_" + L.eg.fmt() + "_m32_n64"));
+  e.use(pipe_iq("qrmi_gu_" + L.eg.fmt() + "_m32_n64_k32"));
   e.buf(0, xh_); e.buf(1, L.eg.w->buf); e.buf(2, L.eu.w->buf); e.buf(3, hhalf_);
   e.val(4, gp);
   e.buf(5, tiles_); e.buf(6, ntiles_); e.buf(7, stok_);
   e.dispatch(I / 64, max_tiles, 1, 128);
   const kp::QrmIq dp{uint32_t(D), I, I, uint32_t(D), sec(L.ed)};
-  e.use(pipe_iq("qrmi_dn_" + L.ed.fmt() + "_m32_n128"));
+  e.use(pipe_iq("qrmi_dn_" + L.ed.fmt() + "_m32_n64"));
   e.buf(0, hhalf_); e.buf(1, L.ed.w->buf); e.buf(2, yd_);
   e.val(3, dp);
   e.buf(4, tiles_); e.buf(5, ntiles_); e.buf(6, spair_);
-  e.dispatch(uint32_t(D) / 128, max_tiles, 1, 128);
+  e.dispatch(uint32_t(D) / 64, max_tiles, 1, 128);
   // the shared expert on all rows: half h in hh_ (row stride shared_I), down into ys_
   if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
     enc_qmm(e, L.sg, xh_, sgb_, T, false);

@@ -366,6 +366,17 @@ void case_rows(const Layer& l, uint32_t R) {
   const std::string gf = fmt_name(l.g.type), df = fmt_name(l.d.type);
   // gate/up: nr rows per simdgroup, nsg simdgroups; down: dnr rows per threadgroup of k + 1 simdgroups, t16: the
   // lanes of a row share its h (I = 512)
+  // BENCH_GU="name:nr:nsg,...": extra gate/up kernels (--src), timed beside the default
+  auto enc_gu = [&](Encoder& e, int r, const std::string& name, int nr, uint32_t nsg) {
+    e.use(pipe(name));
+    e.buf(0, l.g.buf); e.buf(1, l.u.buf);
+    e.buf(2, l.sg.w); e.buf(3, l.sg.sb); e.buf(4, l.sg.bb);
+    e.buf(5, l.su.w); e.buf(6, l.su.sb); e.buf(7, l.su.bb);
+    e.buf(8, xn); e.buf(9, h);
+    e.val(10, p);
+    e.buf(11, idx, size_t(r) * R * k * 4);
+    e.dispatch((Imax + nr * nsg - 1) / (nr * nsg), k + 1, R, 32 * nsg);
+  };
   auto enc = [&](Encoder& e, int r, int nr, uint32_t nsg, int dnr, bool t16, int parts = 3) {
     if (parts & 1) {
       e.use(pipe("moei_gu_rows_" + gf + "_r" + std::to_string(nr)));
@@ -459,6 +470,38 @@ void case_rows(const Layer& l, uint32_t R) {
   std::vector<Variant> vs;
   for (const Cfg& c : cfgs) vs.push_back({label(c), [&, c](Encoder& e, int r) { enc(e, r, c.nr, c.nsg, c.dnr, c.t16); }});
   time_variants(vs, 20, rot, R * k * eb + sb, "GB/s (experts read)");
+  if (const char* bg = getenv("BENCH_GU")) {  // experimental gate/up kernels against the default, alone
+    std::vector<Variant> gv;
+    gv.push_back({"gate/up default", [&](Encoder& e, int r) { enc(e, r, cfgs[0].nr, cfgs[0].nsg, cfgs[0].dnr, cfgs[0].t16, 1); }});
+    std::string spec = bg;
+    for (size_t a = 0; a < spec.size();) {
+      size_t b = spec.find(',', a);
+      if (b == std::string::npos) b = spec.size();
+      const std::string it = spec.substr(a, b - a);
+      const size_t c1 = it.find(':'), c2 = it.find(':', c1 + 1);
+      const std::string name = it.substr(0, c1);
+      const int nr = atoi(it.substr(c1 + 1, c2 - c1 - 1).c_str());
+      const uint32_t nsg = uint32_t(atoi(it.substr(c2 + 1).c_str()));
+      // check against the default's h
+      {
+        auto e = g.begin();
+        enc(*e, 0, cfgs[0].nr, cfgs[0].nsg, cfgs[0].dnr, cfgs[0].t16, 1);
+        e->commit_and_wait();
+      }
+      std::vector<float> ref(h.as<float>(), h.as<float>() + size_t(R) * (k + 1) * Imax);
+      {
+        auto e = g.begin();
+        enc_gu(*e, 0, name, nr, nsg);
+        e->commit_and_wait();
+      }
+      double md = 0, mr = 0;
+      for (size_t i = 0; i < ref.size(); ++i) md = std::max(md, double(std::fabs(h.as<float>()[i] - ref[i]))), mr = std::max(mr, double(std::fabs(ref[i])));
+      printf("    %s: max |h - default h| / max |h| = %.2e\n", it.c_str(), md / mr);
+      gv.push_back({it, [&, name, nr, nsg](Encoder& e, int r) { enc_gu(e, r, name, nr, nsg); }});
+      a = b + 1;
+    }
+    time_variants(gv, 20, rot, 0, "");
+  }
   if (g_variants) {  // the two kernels alone
     std::vector<Variant> parts;
     for (const Cfg& c : cfgs) {
@@ -642,9 +685,13 @@ void case_pf(const Layer& l, uint32_t T) {
   const std::string gf = fmt_name(l.g.type), df = fmt_name(l.d.type);
   struct Cfg {
     uint32_t gbn, gwn, dbn, dwn;
+    const char* gk = "";  // "_k32": 32-deep K steps
+    const char* dk = "";
   };
-  std::vector<Cfg> cfgs = {{64, 4, 128, 4}};
-  if (g_variants) cfgs = {{64, 4, 128, 4}, {32, 2, 128, 4}, {64, 4, 64, 4}, {32, 2, 64, 4}};
+  std::vector<Cfg> cfgs = {{64, 4, 64, 4, "_k32", ""}};  // the model's (Qwen35::enc_moe_prefill_iq)
+  if (g_variants || g_validate)
+    cfgs = {{64, 4, 128, 4}, {64, 4, 64, 4}, {64, 4, 64, 4, "_k32", ""}, {64, 4, 64, 4, "_k32", "_k32"},
+            {64, 4, 128, 4, "_k32", "_k32"}, {32, 2, 128, 4}};
   auto enc = [&](Encoder& e, const Cfg& c, bool bucket) {
     if (bucket) {
       Bucket2Params bp{P, k, E, BM, 0};
@@ -654,13 +701,13 @@ void case_pf(const Layer& l, uint32_t T) {
       e.dispatch(1, 1, 1, 1024);
     }
     QrmIqParams gp{I, D, D, I, l.g.sec()};
-    e.use(pipe("qrmi_gu_" + gf + "_m32_n" + std::to_string(c.gbn)));
+    e.use(pipe("qrmi_gu_" + gf + "_m32_n" + std::to_string(c.gbn) + c.gk));
     e.buf(0, X); e.buf(1, l.g.buf); e.buf(2, l.u.buf); e.buf(3, H);
     e.val(4, gp);
     e.buf(5, tiles); e.buf(6, nt); e.buf(7, xrows);
     e.dispatch(I / c.gbn, max_tiles, 1, 32 * c.gwn);
     QrmIqParams dp{D, I, I, D, l.d.sec()};
-    e.use(pipe("qrmi_dn_" + df + "_m32_n" + std::to_string(c.dbn)));
+    e.use(pipe("qrmi_dn_" + df + "_m32_n" + std::to_string(c.dbn) + c.dk));
     e.buf(0, H); e.buf(1, l.d.buf); e.buf(2, Y);
     e.val(3, dp);
     e.buf(4, tiles); e.buf(5, nt); e.buf(6, yrows);
@@ -699,14 +746,14 @@ void case_pf(const Layer& l, uint32_t T) {
         ey.add(Y.as<float>()[size_t(pr) * D + n], a, a2);
       }
     }
-    printf("  pf T=%u %s/%s gu n%u/%u sg, dn n%u/%u sg: H rel.err %.2e (vs fp64 %.2e), Y rel.err %.2e (vs fp64 %.2e)%s\n",
-           T, gf.c_str(), df.c_str(), c.gbn, c.gwn, c.dbn, c.dwn, eh.rel(), eh.rel2(), ey.rel(), ey.rel2(),
+    printf("  pf T=%u %s/%s gu n%u%s/%u sg, dn n%u%s/%u sg: H rel.err %.2e (vs fp64 %.2e), Y rel.err %.2e (vs fp64 %.2e)%s\n",
+           T, gf.c_str(), df.c_str(), c.gbn, c.gk, c.gwn, c.dbn, c.dk, c.dwn, eh.rel(), eh.rel2(), ey.rel(), ey.rel2(),
            eh.rel() > 2e-3 || ey.rel() > 1e-5 ? "  FAILED" : "");
   }
   const double flop = 2.0 * P * (2.0 * I * D + double(D) * I);
   std::vector<Variant> vs;
   for (const Cfg& c : cfgs)
-    vs.push_back({"bucket3 + qrmi gu n" + std::to_string(c.gbn) + " dn n" + std::to_string(c.dbn),
+    vs.push_back({"bucket3 + qrmi gu n" + std::to_string(c.gbn) + c.gk + " dn n" + std::to_string(c.dbn) + c.dk,
                   [&, c](Encoder& e, int) { enc(e, c, true); }});
   time_variants(vs, std::max(1u, 8192u / T), 1, flop / 1e3, "GFLOP/s");
 }
