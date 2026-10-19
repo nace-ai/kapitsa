@@ -1,0 +1,1371 @@
+[
+ {
+  "label": "dory-kapitsa",
+  "display": "Kapitsa (NVFP4, 2 loops, last-loop KV)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8301",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8301/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "Kapitsa's defaults on NVIDIA's NVFP4 checkpoint read as stored (NVFP4 linears, BF16 embedding; the LM head as 8-bit rows): 2 loops, last-loop KV, one token per pass. --slots 1 for parity with the others' single sequence.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-kapitsa-perloop",
+  "display": "Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8302",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--loop-kv",
+   "per"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8302/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "As dory-kapitsa with per-loop KV (--loop-kv per: a cache per loop, as NVIDIA's own commands run the model), which turns on speculative decoding (prompt lookup, else drafts by the model itself at one loop): its fastest setting.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-kapitsa-L1",
+  "display": "Kapitsa (NVFP4, 1 loop)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8303",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--loops",
+   "1"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8303/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "As dory-kapitsa (per-loop KV, speculative decoding) with 1 loop.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-kapitsa-L4",
+  "display": "Kapitsa (NVFP4, 4 loops, last-loop KV)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8304",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1",
+   "--loops",
+   "4"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8304/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-nvfp4/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "As dory-kapitsa (per-loop KV, speculative decoding) with 4 loops.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-kapitsa-bf16",
+  "display": "Kapitsa (BF16, 2 loops, last-loop KV)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{models}/nemotron-labs-dory1.0-4b-bf16",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/nemotron-labs-dory1.0-4b-bf16",
+   "--model-id",
+   "dory",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8305",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8305/v1",
+  "model": "dory",
+  "requires_paths": [
+   "{models}/nemotron-labs-dory1.0-4b-bf16/model.safetensors"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "Kapitsa's defaults on NVIDIA's BF16 checkpoint.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q5km",
+  "display": "llama.cpp (NVIDIA fork, Q5_K_M, 2 loops, last-loop KV)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8311",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:2,dory.recurrent_kv_cache_mode=str:last_loop"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8311/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on NVIDIA's Q5_K_M GGUF (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args).",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q5km-perloop",
+  "display": "llama.cpp (NVIDIA fork, Q5_K_M, per-loop KV)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8313",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:2,dory.recurrent_kv_cache_mode=str:per_loop"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8313/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on NVIDIA's Q5_K_M GGUF (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. Per-loop KV (the card's command's mode). Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args).",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q5km-L1",
+  "display": "llama.cpp (NVIDIA fork, Q5_K_M, 1 loop)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8314",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:1,dory.recurrent_kv_cache_mode=str:last_loop"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8314/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on NVIDIA's Q5_K_M GGUF (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. 1 loop. Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args).",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q5km-L4",
+  "display": "llama.cpp (NVIDIA fork, Q5_K_M, 4 loops)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8315",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:4,dory.recurrent_kv_cache_mode=str:last_loop"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8315/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on NVIDIA's Q5_K_M GGUF (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. 4 loops, last-loop KV. Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args).",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q5km-ngram",
+  "display": "llama.cpp (NVIDIA fork, Q5_K_M, n-gram speculation)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8316",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:2,dory.recurrent_kv_cache_mode=str:last_loop",
+   "--spec-type",
+   "ngram-mod"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8316/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on NVIDIA's Q5_K_M GGUF (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. With its n-gram speculative decoding (--spec-type ngram-mod, defaults). Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args).",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-llamacpp-q4km",
+  "display": "llama.cpp (NVIDIA fork, Q4_K_M)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_GGUF_Q4={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q4_K_M.gguf}",
+  "cmd": [
+   "{env:LLAMA_SERVER_DORY=llama-server}",
+   "-m",
+   "{env:DORY_GGUF_Q4={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q4_K_M.gguf}",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8317",
+   "-a",
+   "dory",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--temp",
+   "0.6",
+   "--top-p",
+   "0.95",
+   "--top-k",
+   "20",
+   "--min-p",
+   "0",
+   "--no-webui",
+   "--override-kv",
+   "dory.num_loops=int:2,dory.recurrent_kv_cache_mode=str:last_loop"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8317/v1",
+  "model": "dory",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{env:DORY_GGUF_Q4={models}/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q4_K_M.gguf}"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517",
+   "--decode-tokens",
+   "256",
+   "--decode-runs",
+   "2",
+   "--greedy-runs",
+   "2"
+  ],
+  "note": "NVIDIA's llama.cpp fork (brianchmielNV/llama.cpp @ 98a74c97, the build the model card gives) on a Q4_K_M requantized from NVIDIA's Q5_K_M GGUF (llama-quantize --allow-requantize; no 4-bit GGUF is published) (nvidia/NVIDIA-Nemotron-Labs-Dory1.0-4B-GGUF @ 0963c80, sha256 96080be4...). -c 32768 -np 1, -ngl 999, -b 2048, -lm none (weights count in phys_footprint), prompt cache at --cache-ram 8192, --min-p 0, the GGUF's own chat template (--jinja), loops and KV mode by --override-kv as the card shows. Flash attention on and -ub 2048: its fastest reading and writing in a sweep (4K prompt, 2 loops, last-loop: -fa on -ub 2048 450 tok/s and 6.1 tok/s; -fa off 409-427 and 5.4-5.6). It writes about 6 tok/s, so its decode runs are 2 x 256 tokens (bench_args). Not run on 2026-10-19: the Mac had no room for its source GGUF beside the runs.",
+  "agent_trace": "none",
+  "enabled": false
+ },
+ {
+  "label": "dory-mlxlm-4bit",
+  "display": "mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8321",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 2,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "per_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8321/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Per-loop KV (its default)."
+ },
+ {
+  "label": "dory-mlxlm-4bit-lastloop",
+  "display": "mlx-lm (PR #1988, 4-bit, last-loop KV)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit-lastloop",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8322",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit-lastloop"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit-lastloop",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit-lastloop/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 2,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "last_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8322/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Last-loop KV.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-mlxlm-4bit-L1",
+  "display": "mlx-lm (PR #1988, 4-bit, 1 loop)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit-L1",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8323",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit-L1"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit-L1",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit-L1/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 1,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "per_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8323/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. 1 loop.",
+  "agent_trace": "none"
+ },
+ {
+  "label": "dory-mlxlm-4bit-L4",
+  "display": "mlx-lm (PR #1988, 4-bit, 4 loops)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit-L4",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8324",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit-L4"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit-L4",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit-L4/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 4,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "per_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8324/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. 4 loops, per-loop KV.",
+  "agent_trace": "none"
+ }
+]

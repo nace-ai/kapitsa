@@ -35,7 +35,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | — |
 | Qwen3.8<br>Flash‑Next<br><sub>180B · 4-bit · 128 GB</sub> | — | — | — | — | — | — | — | — |
 | ***Nemotron*** | | | | | | | | |
-| Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
+| Dory&nbsp;4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
 | Lightning<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
 | Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | 32 |
 | Super‑VL<br><sub>NVFP4 · 96&nbsp;GB+</sub> | — | — | — | — | — | — | — | — |
@@ -44,6 +44,8 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 drafter on Bolt; mlx-serve the faster of MTP and DFlash2. <sup>*</sup> Measured later with its new drafter; the old build, rerun as a control, matched its 122. A real
 opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 ([details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)).</sub>
+
+<sub>Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV), MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](docs/benchmarks.md#nemotron-labs-dory10-4b-2026-10-19)).</sub>
 
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 

@@ -7,7 +7,8 @@ Qwen3.8-Flash-Next and Nemotron 3.5 Super-VL and Lightning on the M5 Max:
 [Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
 [Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
 models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
-section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19);
+Nemotron-Labs Dory1.0 4B: [its own section](#nemotron-labs-dory10-4b-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
 request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
 best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
@@ -936,6 +937,35 @@ The engines whose Bolt cell says "no support" (checked 2026-10-19):
   `MISSING WEIGHT: model.embed_tokens.weight` (Bolt's weights sit under `language_model.backbone`, in IQ2_XXS, Q8_0 and
   NVFP4 blocks, none of mlx-serve's quantization modes), with NVIDIA's config.json and with the bundle's
   ([logs](../bench/results/2026-10-19-m4pro/support-checks/)).
+
+## Nemotron-Labs Dory1.0 4B (2026-10-19)
+
+NVIDIA's looped 4B (its 40-sublayer shared block runs 2 times per token by default) on the M4 Pro (48 GB, macOS 27.0.1).
+The README's cells come from one hold of the GPU lock: Kapitsa (main at 18a03e1) first and last, the harness's T = 0.6
+coding answer (its decode phase; llama.cpp 2 runs of 256 tokens, the others 5 of 512), with
+[configs/dory.json](../bench/harness/configs/dory.json). Result files:
+[bench/results/2026-10-19-dory](../bench/results/2026-10-19-dory/).
+
+| Engine (setting) | Weights | T = 0.6 (tok/s) |
+| --- | --- | ---: |
+| **Kapitsa** (per-loop KV, `--loop-kv per`: speculative decoding), first / last | NVIDIA's NVFP4 (8-bit LM head) | 62.9&nbsp;⚠ / 64.1 |
+| Kapitsa (last-loop KV, its default) | NVIDIA's NVFP4 (8-bit LM head) | 59.6 |
+| llama.cpp: NVIDIA's Dory fork (`brianchmielNV/llama.cpp` at 98a74c97, the model card's build), last-loop KV, `-fa on` | NVIDIA's Q5_K_M GGUF | 5.7&nbsp;⚠ |
+| mlx-lm with its Dory pull request (`ml-explore/mlx-lm#1988` at 208065f), per-loop KV (its default) | snsnc's MLX 4-bit (affine, groups of 64, from NVIDIA's BF16) | 48.3 |
+
+All at 2 loops; ⚠: another app used just over the harness's 5% threshold of the GPU during that run (mean 5.1%).
+The README shows Kapitsa's clean last run and llama.cpp's run in this hold. Earlier the same day, in their own holds
+and unflagged, the llama.cpp fork wrote 8.3 tok/s at T = 0.6 (6.4 greedy) and, with the same GGUF: prefill
+430 / 389 tok/s at 4K / 16K, cached follow-ups 0.60 / 0.56 s, 11.1 GB peak (`-c 32768`), tool calls pass; with
+per-loop KV 6.1 tok/s and 15.6 GB, with its n-gram speculation (`--spec-type ngram-mod`) 6.1 tok/s at T = 0.6; at 1 and 4
+loops 9.3 and 3.4 tok/s. Its graph runs dozens of small operations per sublayer, so a token's 112 sublayer passes cost
+thousands of dispatches, and its decoding stays near 8 tok/s whatever the KV mode or attention setting
+(`-fa on` / `off`, `-ub` 512-2048: 5.4-6.1 tok/s after a 4K prompt).
+
+The engines whose Dory cell says "no support" (checked 2026-10-19): Ollama 0.40.6 (its llama.cpp library has no `dory`
+architecture), LM Studio (llama.cpp runtime 2.60.0: no `dory` architecture; MLX runtime with mlx-lm 0.31.4: no Dory
+model), oMLX, mlx-serve and MTPLX (no Dory model in their code). The MLX column is mlx-lm with its unmerged Dory pull
+request; released mlx-lm and mlx-vlm have no Dory model.
 
 ## Your Mac: `kapitsa bench`
 
