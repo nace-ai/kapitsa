@@ -393,9 +393,12 @@ int run_doctor(int argc, char** argv) {
       const char* v = getenv("NI_NH_NGRAM");
       lookup = std::min(v && *v ? atoi(v) : m.formats.find("NVFP4") == std::string::npos ? 4 : 0, NemotronH::kMaxRows - 1);
     }
-    // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
-    const Qwen35::AnePlan ap = nemotron || dory ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0}
-                                                : Qwen35::ane_plan(dir, m);
+    // Neural Engine split: the Qwen dense FFN's (calibration of this Mac or the chip's default share, as the engine
+    // decides); Nemotron-H's Mamba projections and shared expert (nemotron_ane.h: the bytes its plan holds, as
+    // conversation_fits counts them); none for Dory
+    const Qwen35::AnePlan ap = dory       ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0}
+                               : nemotron ? Qwen35::AnePlan{0, 0, m.ane ? "Mamba projections and shared expert" : "off", m.ane}
+                                          : Qwen35::ane_plan(dir, m);
     // Dory: the loops it runs and the KV per token of each mode (the full-attention layers'; the sliding-window
     // layers keep rings of window + 8 positions per conversation)
     std::string dory_note;
@@ -520,7 +523,10 @@ int run_doctor(int argc, char** argv) {
       printf("    images: %s, +%.2f GB when the first image arrives (not counted above)\n", enc->name().c_str(),
              enc->weight_bytes() / 1e9);
     if (dory) printf("    %s\n", dory_note.c_str());
-    if (m.dense && !dory)
+    if (nemotron)
+      printf("    prefill: Neural Engine split %s\n",
+             ane_bytes ? ("on: " + src + ", " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "off");
+    if (m.dense && !dory && !nemotron)
       printf("    prefill: Neural Engine split %s\n",
              units ? (std::to_string(units) + "/" + std::to_string(total) + " units (" + src + ")").c_str()
                    : ("off: " + src).c_str());
