@@ -15,45 +15,52 @@ constant constexpr uint kDD = 256;   // head dim
 constant constexpr uint kDH = 128;   // half of it (the rope pairs)
 
 // ---- q / k / v of R rows: rope, justnorm, q x sqk^2; k and v (half) into a cache at their slots ----
+// The rows come from the attention's joint projection (q | k | v | g columns of one matrix, run with tensor scale 1):
+// each part is scaled by its own NVFP4 tensor scale here (1 for BF16).
 struct DoryPrepP {
   uint R, pos0;      // rows, position of row 0
   uint Hq, Hkv;
   uint rows;         // the destination's rows (ring size, linear cap, or a prefill chunk's T)
   uint ring;         // 1: slot = position % rows; 0: slot = position - base
   uint base;         // (linear) position of slot 0: 0 for a cache, pos0 for a prefill chunk's own K / V buffer
-  uint q_ld, kv_ld;  // floats per input row of q (Hq x 256) and of k / v (Hkv x 256)
+  uint in_ld;        // floats per input row
+  uint q_off, k_off, v_off;  // columns of q, k, v in an input row
+  float sq, sk, sv;  // the parts' tensor scales
 };
 // grid: (Hq + 2 Hkv, R) x 128 threads; thread t holds elements t and t + 128 of its head (a rope pair).
-// q is rewritten in place (fp32); inv_freq: fp32 [128], 1 / theta^(2i / 256) of the layer's rope.
-[[kernel]] void dory_prep(device float* q [[buffer(0)]], const device float* k [[buffer(1)]],
-                          const device float* v [[buffer(2)]], const device float* sqk2 [[buffer(3)]],
-                          const device float* inv_freq [[buffer(4)]], device half* kc [[buffer(5)]],
-                          device half* vc [[buffer(6)]], constant DoryPrepP& p [[buffer(7)]],
-                          uint2 tg [[threadgroup_position_in_grid]], uint t [[thread_index_in_threadgroup]]) {
+// q out: fp32 [R][Hq x 256]; inv_freq: fp32 [128], 1 / theta^(2i / 256) of the layer's rope.
+[[kernel]] void dory_prep(const device float* in [[buffer(0)]], device float* qo [[buffer(1)]],
+                          const device float* sqk2 [[buffer(3)]], const device float* inv_freq [[buffer(4)]],
+                          device half* kc [[buffer(5)]], device half* vc [[buffer(6)]],
+                          constant DoryPrepP& p [[buffer(7)]], uint2 tg [[threadgroup_position_in_grid]],
+                          uint t [[thread_index_in_threadgroup]]) {
   threadgroup float scratch[32];
   const uint head = tg.x, r = tg.y;
   const uint pos = p.pos0 + r;
   const uint slot = p.ring ? pos % p.rows : pos - p.base;
+  const device float* row = in + size_t(r) * p.in_ld;
   if (head >= p.Hq + p.Hkv) {  // v: copied
     const uint vh = head - p.Hq - p.Hkv;
-    const device float* src = v + size_t(r) * p.kv_ld + vh * kDD;
+    const device float* src = row + p.v_off + vh * kDD;
     device half* dst = vc + (size_t(vh) * p.rows + slot) * kDD;
-    dst[t] = half(src[t]);
-    dst[t + kDH] = half(src[t + kDH]);
+    dst[t] = half(src[t] * p.sv);
+    dst[t + kDH] = half(src[t + kDH] * p.sv);
     return;
   }
   const bool isq = head < p.Hq;
   const uint hh = isq ? head : head - p.Hq;
-  device float* src = isq ? q + size_t(r) * p.q_ld + hh * kDD : (device float*)(k + size_t(r) * p.kv_ld + hh * kDD);
-  const float x1 = src[t], x2 = src[t + kDH];
+  const device float* src = row + (isq ? p.q_off : p.k_off) + hh * kDD;
+  const float sc = isq ? p.sq : p.sk;
+  const float x1 = src[t] * sc, x2 = src[t + kDH] * sc;
   const float ang = float(pos) * inv_freq[t];
   const float c = metal::precise::cos(ang), s = metal::precise::sin(ang);
   const float y1 = x1 * c - x2 * s, y2 = x2 * c + x1 * s;
   const float ss = tg_sum(y1 * y1 + y2 * y2, scratch, t, kDH);
   const float inv = metal::precise::rsqrt(ss + DORY_EPS);
   if (isq) {
-    src[t] = sqk2[hh * kDD + t] * (y1 * inv);
-    src[t + kDH] = sqk2[hh * kDD + t + kDH] * (y2 * inv);
+    device float* dst = qo + (size_t(r) * p.Hq + hh) * kDD;
+    dst[t] = sqk2[hh * kDD + t] * (y1 * inv);
+    dst[t + kDH] = sqk2[hh * kDD + t + kDH] * (y2 * inv);
   } else {
     device half* dst = kc + (size_t(hh) * p.rows + slot) * kDD;
     dst[t] = half(y1 * inv);
@@ -144,11 +151,42 @@ constant constexpr uint kDoryKT = 16;
   out[(size_t(r) * p.Hq + h) * kDD + d] = num / den;
 }
 
+// The decode attention's partials combined and gated (dory_attn_reduce, then the gate of dory_gate_norm) in one pass,
+// without the norm over all heads: o_proj is linear and the residual normalizes its output (dory_slerp's
+// justnorm(y)), so that norm's scale cancels. out[r] = o * sigmoid(g * sg * s_gate^2), fp32 [R][Hq x 256].
+// grid: (Hq, R) x 256 (a thread per head dim)
+struct DoryRedGateP {
+  uint Hq, nchunks, g_ld;
+  float sg;
+};
+[[kernel]] void dory_attn_reduce_gate(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                      const device float* g [[buffer(2)]], const device float* sg2 [[buffer(3)]],
+                                      device float* out [[buffer(4)]], constant DoryRedGateP& p [[buffer(5)]],
+                                      uint2 tg [[threadgroup_position_in_grid]], uint2 tp [[thread_position_in_threadgroup]]) {
+  const uint h = tg.x, r = tg.y, d = tp.x;
+  const size_t base = (size_t(r) * p.Hq + h) * p.nchunks;
+  float M = -INFINITY;
+  for (uint c = 0; c < p.nchunks; ++c) M = max(M, part_ml[(base + c) * 2]);
+  float num = 0.0f, den = 0.0f;
+  for (uint c = 0; c < p.nchunks; ++c) {
+    const float mc = part_ml[(base + c) * 2];
+    if (mc == -INFINITY) continue;
+    const float w = metal::precise::exp(mc - M);
+    num += w * part_o[(base + c) * kDD + d];
+    den += w * part_ml[(base + c) * 2 + 1];
+  }
+  const uint i = h * kDD + d;
+  const float gv = (g[size_t(r) * p.g_ld + i] * p.sg) * sg2[i];
+  out[size_t(r) * p.Hq * kDD + i] = (num / den) * (1.0f / (1.0f + metal::precise::exp(-gv)));
+}
+
 // ---- row kernels ----
 struct DoryRowP {
   uint D;
   uint x_ld, y_ld;  // floats (or halves) per row
   uint out_half;    // 1: y is half
+  uint g_ld;        // floats per row of the second input (the gate rows / the MLP's up rows)
+  float s1, s2;     // tensor scales of the first and second input (NVFP4 parts; 1 for BF16)
 };
 
 // Attention output gate and norm: y = justnorm(a * sigmoid(g * sg2)) over D (all heads). grid: R x 1024
@@ -158,19 +196,32 @@ struct DoryRowP {
                                uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
   threadgroup float scratch[32];
   const device float* ar = a + size_t(r) * p.x_ld;
-  const device float* gr = g + size_t(r) * p.x_ld;
+  const device float* gr = g + size_t(r) * p.g_ld;
   float ss = 0.0f;
   for (uint i = tid; i < p.D; i += ntg) {
-    const float v = ar[i] * (1.0f / (1.0f + metal::precise::exp(-(gr[i] * sg2[i]))));
+    const float v = ar[i] * (1.0f / (1.0f + metal::precise::exp(-((gr[i] * p.s2) * sg2[i]))));
     ss += v * v;
   }
   ss = tg_sum(ss, scratch, tid, ntg);
   const float inv = metal::precise::rsqrt(ss + DORY_EPS);
   for (uint i = tid; i < p.D; i += ntg) {
-    const float v = ar[i] * (1.0f / (1.0f + metal::precise::exp(-(gr[i] * sg2[i])))) * inv;
+    const float v = ar[i] * (1.0f / (1.0f + metal::precise::exp(-((gr[i] * p.s2) * sg2[i])))) * inv;
     if (p.out_half) ((device half*)y)[size_t(r) * p.y_ld + i] = half(v);
     else ((device float*)y)[size_t(r) * p.y_ld + i] = v;
   }
+}
+
+// The MLP's activation for decode rows (fp32), without the norm over the FFN width: down_proj is linear and the
+// residual normalizes its output, so that norm's scale cancels. y = silu(g s1 sg) (u s2 su). grid: (ceil(D / 256), R)
+// x 256
+[[kernel]] void dory_swiglu(const device float* g [[buffer(0)]], const device float* u [[buffer(1)]],
+                            const device float* sg [[buffer(2)]], const device float* su [[buffer(3)]],
+                            device float* y [[buffer(4)]], constant DoryRowP& p [[buffer(5)]],
+                            uint2 tg [[threadgroup_position_in_grid]], uint2 tp [[thread_position_in_threadgroup]]) {
+  const uint i = tg.x * 256 + tp.x, r = tg.y;
+  if (i >= p.D) return;
+  const float a = (g[size_t(r) * p.x_ld + i] * p.s1) * sg[i], b = (u[size_t(r) * p.g_ld + i] * p.s2) * su[i];
+  ((device float*)y)[size_t(r) * p.y_ld + i] = a / (1.0f + metal::precise::exp(-a)) * b;
 }
 
 // MLP activation and norm: y = justnorm(silu(g * sg) * (u * su)) over D (the FFN width). grid: R x 1024
@@ -181,17 +232,17 @@ struct DoryRowP {
                                  uint ntg [[threads_per_threadgroup]]) {
   threadgroup float scratch[32];
   const device float* gr = g + size_t(r) * p.x_ld;
-  const device float* ur = u + size_t(r) * p.x_ld;
+  const device float* ur = u + size_t(r) * p.g_ld;
   float ss = 0.0f;
   for (uint i = tid; i < p.D; i += ntg) {
-    const float a = gr[i] * sg[i], b = ur[i] * su[i];
+    const float a = (gr[i] * p.s1) * sg[i], b = (ur[i] * p.s2) * su[i];
     const float v = a / (1.0f + metal::precise::exp(-a)) * b;
     ss += v * v;
   }
   ss = tg_sum(ss, scratch, tid, ntg);
   const float inv = metal::precise::rsqrt(ss + DORY_EPS);
   for (uint i = tid; i < p.D; i += ntg) {
-    const float a = gr[i] * sg[i], b = ur[i] * su[i];
+    const float a = (gr[i] * p.s1) * sg[i], b = (ur[i] * p.s2) * su[i];
     const float v = a / (1.0f + metal::precise::exp(-a)) * b * inv;
     if (p.out_half) ((device half*)y)[size_t(r) * p.y_ld + i] = half(v);
     else ((device float*)y)[size_t(r) * p.y_ld + i] = v;
@@ -288,6 +339,30 @@ struct DorySlerpP {
       hr[i] = hv[j] * ic;
       if (p.write_half) xh[size_t(r) * p.D + i] = half(hv[j] * ic);
     }
+  }
+}
+
+// Self-speculation's verify: the loop after a drafted loop 0, from the draft's rows: h = justnorm(state + inp) (the
+// next loop's input, as dory_slerp's mode 2 makes it) and inp = the input rows. grid: R x 1024
+[[kernel]] void dory_loop_resume(const device float* state [[buffer(0)]], const device float* inp0 [[buffer(1)]],
+                                 device float* h [[buffer(2)]], device float* inp [[buffer(3)]],
+                                 constant DorySlerpP& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                                 uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float scratch[32];
+  float hv[4];
+  float s = 0.0f;
+  for (uint j = 0; j < 4; ++j) {
+    const uint i = tid + j * ntg;
+    const float a = i < p.D ? state[size_t(r) * p.D + i] : 0.0f, b = i < p.D ? inp0[size_t(r) * p.D + i] : 0.0f;
+    if (i < p.D) inp[size_t(r) * p.D + i] = b;
+    hv[j] = i < p.D ? a + b : 0.0f;
+    s += hv[j] * hv[j];
+  }
+  s = tg_sum(s, scratch, tid, ntg);
+  const float ic = metal::precise::rsqrt(s + DORY_EPS);
+  for (uint j = 0; j < 4; ++j) {
+    const uint i = tid + j * ntg;
+    if (i < p.D) h[size_t(r) * p.D + i] = hv[j] * ic;
   }
 }
 

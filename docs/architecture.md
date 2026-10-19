@@ -54,23 +54,23 @@ One request alone runs the single-stream path unchanged. Requests decoded togeth
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
 `NI_BATCH=0` makes them take turns instead.
 
-## Two model backends
+## Three model backends
 
-| | Qwen3.5 family | Nemotron 3.5 Bolt |
-| --- | --- | --- |
-| Backend | `Qwen35` | `NemotronH` |
-| Recurrent layers | Gated DeltaNet | Mamba-2 |
-| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE |
-| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning) |
-| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint |
-| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type |
-| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work |
+| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron-Labs Dory |
+| --- | --- | --- | --- |
+| Backend | `Qwen35` | `NemotronH` | `Dory` |
+| Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) |
+| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning) | None with last-loop KV; prompt lookup with per-loop KV |
+| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints |
+| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) |
+| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None |
 
 Qwen3.8-Flash-Next (`Qwen4Exp`) is a subclass of `Qwen35` that reuses its projections, DeltaNet, attention, experts,
 sampler and KV handling, and adds the 4-stream hyper-connection residual, the per-layer n-gram embedding (hashed and
 gathered on the CPU from a mapped table) and the sparse-attention indexer.
 
-Both implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
+All three implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
 Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
 new architecture requires more than implementing `Model` if it needs a new drafter, tokenizer behavior or vision tower.
 
@@ -121,6 +121,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h) |
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h) |
+| Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |

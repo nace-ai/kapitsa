@@ -62,6 +62,36 @@ static bool ends_with_query(const ojson& messages) {
   return !wrapped;
 }
 
+// Prompt lookup (n-gram drafts): the tokens that followed the latest earlier occurrence of the last n tokens of
+// tokens[0, P] (n from `nmax` down to `nmin`), up to `k` of them, into out (empty: no match). The search looks back
+// at most `window` positions.
+static void ngram_drafts(const int* tok, int P, int k, std::vector<int>& out, int nmax = 4, int nmin = 2,
+                         int window = 16384) {
+  out.clear();
+  for (int n = nmax; n >= nmin; --n) {
+    if (P + 1 < n + 1) continue;
+    const int* key = tok + P + 1 - n;  // the last n tokens, ending at P
+    const int lo = std::max(0, P + 1 - window);
+    for (int i = P - n; i >= lo; --i) {  // an earlier occurrence starting at i (ending before P)
+      if (tok[i] != key[0] || !std::equal(key, key + n, tok + i)) continue;
+      const int from = i + n;            // what followed it
+      for (int j = 0; j < k && from + j <= P; ++j) out.push_back(tok[from + j]);
+      if (!out.empty()) return;
+    }
+  }
+}
+
+// Dory's speculative drafts (per-loop KV): NI_DORY_SPEC = both (the default: prompt lookup, else self-speculation),
+// ngram (prompt lookup only) or self
+static std::string dory_spec_kind() {
+  static const std::string k = [] {
+    const char* v = getenv("NI_DORY_SPEC");
+    const std::string s = v && *v ? v : "both";
+    return s == "ngram" || s == "self" ? s : std::string("both");
+  }();
+  return k;
+}
+
 // ---- the GPU turn ----
 
 void TurnLock::lock() {
@@ -248,6 +278,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const int id = tok_.find(end);
     if (id >= 0 && std::find(stop_ids_.begin(), stop_ids_.end(), id) == stop_ids_.end()) stop_ids_.push_back(id);
   }
+  // Dory: speculative decoding, exact only with per-loop KV (with last-loop KV the rows of a verify pass would see
+  // each other's same-loop keys, where decoding them one by one sees final-loop ones): prompt lookup, else drafts by
+  // the model itself run with one loop (NI_DORY_SPEC). --spec N drafts per cycle (0 = plain decoding); by default 2
+  // for a request of 2 loops and 3 for 3-4 (M4 Pro, 128-token greedy replies, against plain per-loop decoding:
+  // 2 loops +17% on a short prompt, -2% after 2.9K tokens (3 drafts: +22% / -8%); 4 loops 3 drafts +57% / +19%)
+  if (dory_ && dory_->kv_mode() == LoopKv::per_loop) {
+    dory_spec_ = opts_.spec_depth < 0 ? 3 : std::min(opts_.spec_depth, Dory::kMaxRows - 1);
+    dory_spec_auto_ = opts_.spec_depth < 0;
+  }
   if (opts_.spec_depth < 0) opts_.spec_depth = q35_ ? q35_->default_spec_depth() : 0;
   spec_ = q35_ && opts_.spec_depth > 0 && q35_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
@@ -326,6 +365,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
+                         : dory_spec_ > 0 ? "speculative decoding (" +
+                                                    (dory_spec_kind() == "ngram"  ? std::string("prompt lookup")
+                                                     : dory_spec_kind() == "self" ? std::string("1-loop drafts")
+                                                                                  : std::string("prompt lookup, else 1-loop drafts")) +
+                                                    ", " + (dory_spec_auto_ ? std::string("2-3") : std::to_string(dory_spec_)) +
+                                                    " per cycle)"
                                  : std::string("plain decoding");
   const std::string looped = dory_ ? ", " + std::to_string(dory_->default_loops()) + " loops by default (requests take 1-" +
                                          std::to_string(Dory::kMaxLoops) + "), " + loop_kv_name(dory_->kv_mode()) +
@@ -1952,6 +1997,66 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     q35_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
+  } else if (dory_spec_ > 0) {
+    // Dory speculative decoding (per-loop KV). Prompt lookup: when the last tokens occurred earlier in the
+    // conversation, the tokens that followed them are the drafts, and one pass of the full loop count verifies them
+    // with the pending token. Self-speculation (on by default; NI_DORY_SPEC=ngram turns it off; requests of 2+
+    // loops): otherwise the model with one loop drafts K tokens (its input layers and loop 0 are the full model's own: their KV is kept), and the
+    // verify runs loops 1.., the output layers and the head of the K + 1 rows. The samples taken at each row's position
+    // accept the drafts that agree with them, so the reply is the one plain decoding writes (up to near-ties: the verify
+    // pass's products read half rows).
+    const std::string spec_kind = dory_spec_kind();
+    const bool use_ngram = spec_kind != "self", use_self = spec_kind != "ngram" && loops > 1;
+    const int K = dory_spec_auto_ ? (loops >= 3 ? 3 : 2) : dory_spec_;
+    int P = n;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    std::vector<int> nd;
+    while (go) {
+      if (P + K + 2 >= s.cap) {
+        if (mtp_e) mtp_e->wait();
+        if (P + K + 2 >= s.limit || !grow_kv(std::min(s.limit, P + K + 3), [] {})) {
+          finish = "length";
+          res.context_full = true;
+          break;
+        }
+      }
+      if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
+      nd.clear();
+      if (use_ngram) ngram_drafts(s.tokens(), P, K, nd);
+      auto e2 = g.begin();
+      if (!nd.empty()) {
+        int* tw = s.tokens();
+        for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
+        dory_->encode_verify(*e2, s, P, int(nd.size()) + 1);
+        dory_->encode_accept(*e2, s, P, int(nd.size()) + 1, int(nd.size()), sp);
+      } else if (use_self) {
+        for (int j = 0; j < K; ++j) dory_->encode_draft(*e2, s, P + j, j);
+        dory_->encode_verify_drafted(*e2, s, P, K + 1);
+        dory_->encode_accept(*e2, s, P, K + 1, K, sp);
+      } else {
+        dory_->encode_verify(*e2, s, P, 1);
+        dory_->encode_accept(*e2, s, P, 1, 0, sp);
+      }
+      e2->commit_and_wait();
+      const int a = dory_->accepted();
+      const int* tk = s.tokens();
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      cycle_done(m);
+      P += m;
+      if (go && contended()) yield_turn(res);
+    }
+    fed_until = P;
   } else if (depth > 0) {
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
     // with the pending token, accepted rows are committed through the DeltaNet tape.
@@ -2119,7 +2224,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
   char cyc[64] = "";
-  if ((dfl_ || lili_) && req_cycles > 0) snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
+  if ((dfl_ || lili_ || dory_spec_) && req_cycles > 0)
+    snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
   char conc[256] = "";
   if (res.yields > 0 || res.queue_ms > 0 || res.batched > 0)

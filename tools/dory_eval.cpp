@@ -1,10 +1,13 @@
 // Dory checks against reference runs (a reference folder holds <name>.json: {"prompt_ids": [...], "gen": [...]} and
 // its logits; scratchpad scripts write them from NVIDIA's model code in PyTorch):
 //   dory_eval <dir> --ref R [--out O] [--prompts a,b] [--loops N] [--kv last-loop|per-loop] [--chunk C]
-//             [--greedy N] [--tf 0|1]
+//             [--greedy N] [--tf 0|1] [--spec K] [--pf-sweep n1,n2,...]
 // For each reference: teacher forcing (the prompt in prefill chunks of C rows, then the reference's tokens one decode
 // step each, as the reference ran them): O/<name>.kap.npy, fp32 [1 + steps][vocab] next-token logits; and greedy
-// decoding of N tokens from the prompt: O/<name>.greedy.json (the tokens, prefill and decode times).
+// decoding of N tokens from the prompt: O/<name>.greedy.json (the tokens, prefill and decode times). --spec K (per-loop
+// KV): the greedy decoding again by self-speculation (K drafts by one loop per cycle, verified by the full count), its
+// tokens checked against the plain decoding's, its tokens per cycle and speed. --pf-sweep: after each prompt, the time
+// of a follow-up prefill of n more tokens (the prompt's own tokens again), best of 3, for each n.
 #include "metal/gpu.h"
 #include "model/dory.h"
 #include "util/log.h"
@@ -50,11 +53,12 @@ void write_npy(const std::string& path, const std::vector<float>& data, size_t r
 int main(int argc, char** argv) {
   if (argc < 3) {
     fprintf(stderr, "usage: dory_eval <dir> --ref R [--out O] [--prompts a,b] [--loops N] [--kv last-loop|per-loop] "
-                    "[--chunk C] [--greedy N] [--tf 0|1]\n");
+                    "[--chunk C] [--greedy N] [--tf 0|1] [--spec K] [--pf-sweep n1,n2]\n");
     return 1;
   }
   std::string model = argv[1], ref, out, only;
-  int loops = 0, chunk = 2048, greedy = 0, tf = 1;
+  int loops = 0, chunk = 2048, greedy = 0, tf = 1, spec = 0;
+  std::vector<int> sweep;
   LoopKv kv = LoopKv::last_loop;
   for (int i = 2; i < argc; ++i) {
     std::string a = argv[i];
@@ -71,12 +75,18 @@ int main(int argc, char** argv) {
     } else if (a == "--chunk") chunk = std::stoi(next());
     else if (a == "--greedy") greedy = std::stoi(next());
     else if (a == "--tf") tf = std::stoi(next());
+    else if (a == "--spec") spec = std::stoi(next());
+    else if (a == "--pf-sweep") {
+      std::stringstream ss(next());
+      for (std::string t; std::getline(ss, t, ',');) sweep.push_back(std::stoi(t));
+    }
     else fatal("unknown argument %s", a.c_str());
   }
   if (getenv("DORY_KINFO")) {  // the Dory kernels' static threadgroup memory and thread limits (no model needed)
     Gpu::get().compile_extra("Dory", kDoryKernelSource);
     for (const char* k : {"dory_prep", "dory_attn_partial", "dory_attn_reduce", "dory_attn_prefill", "dory_gate_norm",
-                          "dory_swiglu_norm", "dory_slerp", "dory_loop_start", "dory_kv_store"}) {
+                          "dory_swiglu_norm", "dory_slerp", "dory_loop_start", "dory_kv_store", "dory_attn_reduce_gate",
+                          "dory_loop_resume"}) {
       const Pipeline p = Gpu::get().pipeline(k);
       printf("%-20s tg_mem %6u B  max threads %4u\n", k, p.tg_mem, p.max_threads);
     }
@@ -109,7 +119,9 @@ int main(int argc, char** argv) {
     const std::vector<int> gen = j["gen"].get<std::vector<int>>();
     const int n = int(prompt.size());
     const int steps = int(gen.size());
-    auto s = m.new_seq(n + std::max(steps, greedy) + 64);
+    int most = 0;
+    for (int v : sweep) most = std::max(most, v);
+    auto s = m.new_seq(n + std::max({steps, greedy, most}) + 64);
     s->loops = loops;
     SamplingParams sp;  // greedy
     auto prefill = [&](double* ms) {
@@ -138,6 +150,35 @@ int main(int argc, char** argv) {
       write_npy(out + "/" + name + ".kap.npy", L, L.size() / size_t(V), size_t(V));
       fprintf(stderr, "%s: teacher-forced %d positions\n", name.c_str(), int(L.size() / size_t(V)));
     }
+    if (!sweep.empty()) {
+      // follow-up prefills: n more tokens after the prompt, at the positions a follow-up turn would take
+      prefill(nullptr);
+      if (Encoder::profiling()) Encoder::profile_report(1);
+      std::string line;
+      for (int v : sweep) {
+        int* tw = s->tokens();
+        for (int i = 0; i < v; ++i) tw[n + i] = prompt[size_t(i % n)];
+        double best = 1e30;
+        for (int rep = 0; rep < 3; ++rep) {
+          const double t0 = now_ms();
+          for (int p0 = 0; p0 < v; p0 += m.prefill_chunk()) {
+            const int T = std::min(m.prefill_chunk(), v - p0);
+            auto e = g.begin();
+            m.encode_prefill(*e, *s, n + p0, T, sp, 0, p0 + T == v);
+            e->commit_and_wait();
+          }
+          best = std::min(best, now_ms() - t0);
+        }
+        if (Encoder::profiling()) {  // NI_PROFILE=1: the kernels of this size's 3 prefills
+          fprintf(stderr, "-- follow-up prefill of %d tokens:\n", v);
+          Encoder::profile_report(3);
+        }
+        char b[64];
+        snprintf(b, sizeof b, " %d:%.1f", v, best);
+        line += b;
+      }
+      fprintf(stderr, "%s: follow-up prefill ms after %d tokens (n:ms)%s\n", name.c_str(), n, line.c_str());
+    }
     if (greedy > 0) {
       double pf_ms = 0;
       prefill(&pf_ms);
@@ -157,6 +198,34 @@ int main(int argc, char** argv) {
       nlohmann::json o{{"name", name}, {"gen", toks}, {"prefill_ms", pf_ms}, {"decode_ms", dec_ms},
                        {"loops", m.loops_of(*s)}, {"kv", loop_kv_name(m.kv_mode())}};
       std::ofstream(out + "/" + name + ".greedy.json") << o.dump();
+      if (spec > 0) {
+        // the same greedy decoding by self-speculation: K drafts by one loop, the verify of K + 1 rows, the acceptance
+        if (m.kv_mode() != LoopKv::per_loop) fprintf(stderr, "%s: --spec needs --kv per-loop (exact only then)\n", name.c_str());
+        const int K = std::min(spec, Dory::kMaxRows - 1);
+        prefill(nullptr);
+        std::vector<int> st{s->tokens()[n]};
+        int P = n, cycles = 0;
+        const double t2 = now_ms();
+        while (int(st.size()) < int(toks.size())) {
+          if (std::find(m.eos_ids().begin(), m.eos_ids().end(), st.back()) != m.eos_ids().end()) break;
+          auto e = g.begin();
+          for (int j = 0; j < K; ++j) m.encode_draft(*e, *s, P + j, j);
+          m.encode_verify_drafted(*e, *s, P, K + 1);
+          m.encode_accept(*e, *s, P, K + 1, K, sp);
+          e->commit_and_wait();
+          const int acc = m.accepted();
+          for (int i = 1; i <= acc + 1 && int(st.size()) < int(toks.size()); ++i) st.push_back(s->tokens()[P + i]);
+          P += acc + 1;
+          ++cycles;
+        }
+        const double sp_ms = now_ms() - t2;
+        int eq = 0;
+        while (eq < int(std::min(st.size(), toks.size())) && st[size_t(eq)] == toks[size_t(eq)]) ++eq;
+        fprintf(stderr, "%s: self-speculation K=%d: %zu tokens in %d cycles (%.2f tok/cycle), %.1f tok/s; equal to plain "
+                        "decoding for %d of %zu\n",
+                name.c_str(), K, st.size(), cycles, cycles ? double(st.size() - 1) / cycles : 0.0,
+                st.size() > 1 ? (st.size() - 1) / (sp_ms / 1000) : 0.0, eq, toks.size());
+      }
       int same = 0;
       while (same < int(std::min(toks.size(), gen.size())) && toks[size_t(same)] == gen[size_t(same)]) ++same;
       fprintf(stderr, "%s: greedy %zu tokens (prefill %d in %.0f ms, decode %.1f tok/s), equal to the reference for %d of %zu\n",

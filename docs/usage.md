@@ -97,7 +97,9 @@ projections, attention and head, BF16 latent projections, which load as 8-bit, r
 NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format most of its pre-training ran in,
 with BF16 embedding and head; 3.2 GB) and `bf16` (8.0 GB). Along two replies (320 positions), the NVFP4 checkpoint's
 next-token distributions are a KL of 0.020 from the BF16 checkpoint's on average (NVIDIA's code, 2 loops), with the same
-top token at 94% of positions.
+top token at 94% of positions. With `nvfp4` the LM head loads as 8-bit rows (quantized from its BF16 at load: a
+next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 positions, about 7% faster writing;
+`NI_DORY_HEAD=bf16` keeps it BF16).
 
 ### Other models
 
@@ -177,7 +179,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
-| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
 | `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
@@ -282,7 +284,19 @@ chat template and the request say (thinking on by default in Chat Completions an
   little: on the BF16 weights at 2 loops, along four replies (504 positions), per-loop's next-token distributions are a
   KL of 0.0009 from last-loop's on average, with the same top token at 99.2% of positions (about a twentieth of the
   NVFP4 checkpoint's difference from BF16); greedy replies first differ after 10, 88 and 130 tokens, and not within 160
-  on the fourth.
+  on the fourth. Long prompts move them further apart (a prompt longer than a prefill chunk, 2,048 tokens, reads its
+  later chunks against final-loop keys with last-loop KV): after a 2,866-token prompt, a KL of 0.044 and the same top
+  token at 92.5% of 160 positions, the greedy replies differing after 17 tokens. Both modes match NVIDIA's code for
+  their mode.
+- **Speculative decoding (`per-loop` only):** with `--loop-kv per-loop`, each cycle drafts a few tokens and one pass of
+  the full loop count checks them: drafts from earlier in the conversation when its last tokens occurred before
+  (prompt lookup), else from the model itself run with one loop (its input layers and first loop are the full model's
+  own, so the check reuses them). The reply is the one plain decoding writes (up to rounding where two tokens are
+  nearly tied: the checking pass reads its rows at half precision). On the M4 Pro, 128-token replies against plain
+  per-loop decoding: 2 loops +17% after a short prompt, about even after 2,866 tokens; 4 loops +57% and +19% (2 drafts
+  a cycle at 2 loops, 3 at 4). Last-loop KV cannot check several tokens at once (decoding token by token, each token's
+  loops see the earlier tokens' final-loop keys, which a pass over several tokens does not have yet), so it decodes
+  one token per pass. `NI_DORY_SPEC=ngram` keeps only prompt lookup, `--spec 0` turns it off.
 - **Replies that think to the end:** as NVIDIA's `force_nonempty_content` (on by default here), a reply whose answer is
   empty returns its reasoning as its content too; `"chat_template_kwargs": {"force_nonempty_content": false}` turns it
   off.
@@ -493,6 +507,8 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_DSPARK_DYN` | `0.2` | Nemotron Lightning's DSpark draft model: how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
 | `NI_DSPARK_K` | `16` | Nemotron Lightning's DSpark draft model: the candidates per draft position its Markov head rescores (1-32). |
 | `NI_LILI_DYN` | `0.04` | Nemotron's LiLiCorr draft model: how many of its 7 drafts are verified is chosen per cycle, weighing their expected acceptance against each extra row's cost (this value, relative to a cycle's fixed cost); `0` verifies all 7. |
+| `NI_DORY_HEAD` | `q8` with `nvfp4` | Dory: `bf16` keeps the `nvfp4` checkpoint's LM head BF16 (about 7% slower writing; next-token KL 7e-6 from the 8-bit rows it runs as by default); `q8` also runs the `bf16` checkpoint's head as 8-bit rows. |
+| `NI_DORY_SPEC` | `both` | Dory with `--loop-kv per-loop`: the drafts of speculative decoding, `both` (prompt lookup, else the model itself at one loop), `ngram` (prompt lookup only) or `self`; `--spec 0` decodes plainly. |
 | `NI_PREWARM` | on | `0` creates the GPU pipelines on first use instead of at load. |
 
 The other `NI_*` switches exist for development and A/B tests.

@@ -49,8 +49,11 @@ struct DoryConfig {
 struct DoryLayer {
   char kind = 'M';
   bool rec = false;   // in the recurrent block
-  NhMat q, k, v, g, o;
-  NhMat gate, up, down;
+  NhMat qkvg, o;       // attention: q | k | v | g rows as one matrix (one product), o
+  NhMat gu, down;      // MLP: gate | up rows as one matrix, down
+  NhFmt fmt_any() const { return kind == 'M' ? gu.fmt : qkvg.fmt; }
+  float sq = 1, sk = 1, sv = 1, sg = 1;  // the joint matrices' parts' NVFP4 tensor scales (1 for BF16)
+  float sgate = 1, sup = 1;
   Buffer alpha;       // fp32 [hidden]: |alpha x ngpt_alpha_init / initializer_range|
   Buffer sqk2;        // fp32 [hq x hd]: (sqk x sqrt(hd) / initializer_range)^2
   Buffer sg2;         // fp32 [hq x hd]: (s_gate x sqrt(gate_init) / initializer_range)^2
@@ -108,6 +111,23 @@ class Dory : public Model {
   int prefill_chunk() const override { return tmax_; }
   bool can_snapshot() const override { return false; }
 
+  // ---- speculative decoding (exact with per-loop KV, up to half-row rounding: the engine runs it only then) ----
+  // Rows [pos, pos + R) (R <= kMaxRows) through the whole model as one step: with per-loop KV each row sees the
+  // earlier rows' keys of its own loop, as decoding them one by one would. Next-token logits of each row in logits().
+  void encode_verify(Encoder& e, Seq& s, int pos, int R);
+  // Self-speculation: the draft at pos (row `row` of the coming verify) is the model with one loop: the input layers
+  // and loop 0 (with per-loop KV the target's own values, kept for the verify), then the output layers (their KV is
+  // overwritten by the verify) and the draft head; its greedy token into tokens[pos + 1].
+  void encode_draft(Encoder& e, Seq& s, int pos, int row);
+  // The verify of rows [pos, pos + R) whose first R - 1 were drafted: the last row's input layers and loop 0, then
+  // loops 1.. and the output layers and head of all R rows (logits()).
+  void encode_verify_drafted(Encoder& e, Seq& s, int pos, int R);
+  // After a verify: each row's token sampled with sp (step = its position, as a plain decode samples it), the drafts
+  // tokens[pos + 1 .. pos + K] accepted while they agree, tokens[pos + 1 + a] = samples[a]; accepted() = a once the
+  // command buffer has completed.
+  void encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp);
+  int accepted() const { return acc_.as<int>()[0]; }
+
   // ---- tools ----
   // logits of rows [0, T) of the last pass (fp32 [T][vocab]): a decode step's row 0, a prefill's last row
   float* logits() { return logits_.as<float>(); }
@@ -125,6 +145,11 @@ class Dory : public Model {
 
   // passes
   void enc_rows(Encoder& e, Seq& s, int pos0, int R);           // R <= kMaxRows rows; final hidden rows in x_
+  // the stages of a rows pass: input layers; the loops [l0, l1) of `loops` (h = x_ entering loop l0); output layers
+  void enc_input_rows(Encoder& e, Seq& s, int pos0, int R);
+  void enc_loops_rows(Encoder& e, Seq& s, int pos0, int R, int l0, int l1, int loops);
+  void enc_output_rows(Encoder& e, Seq& s, int pos0, int R);
+  void enc_copy_rows(Encoder& e, const Buffer& src, const Buffer& dst, int R);
   void enc_prefill_rows(Encoder& e, Seq& s, int pos0, int T);   // GEMM pass; final hidden rows in px_
   void enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int R, int mode);
   void enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int T, int mode, bool last_loop);
@@ -159,12 +184,15 @@ class Dory : public Model {
   Buffer dummy_;                 // bound where a shared kernel declares a buffer Dory's formats never read
 
   // decode / verify activations (kMaxRows rows)
-  Buffer x_, inp_, y_, q_, k_, v_, g_, ao_, mg_, mu_, mh_, part_o_, part_ml_;
+  Buffer x_, inp_, y_, q_, qkvg_, ao_, mgu_, mh_, part_o_, part_ml_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_;
+  Buffer st0_, inp0_, acc_, live_all_;  // self-speculation: drafted rows' state after loop 0 and input rows; acceptance
+  Buffer x4part_, x4cnt_;               // NVFP4 9-32-row GEMMs: split-K partials and arrival counters
+  Buffer xh_;                           // 2-8 rows as half (the 8-row MMA products of a verify pass)
   int attn_max_chunks_ = 64;
   // prefill activations (tmax_ rows; on first use)
   bool pf_alloc_ = false;
-  Buffer px_, pxh_, pinp_, py_, pq_, pk_, pv_, pg_, pck_, pcv_, pao_, paoh_, pmg_, pmu_, pmh_;
+  Buffer px_, pxh_, pinp_, py_, pq_, pqkvg_, pck_, pcv_, pao_, paoh_, pgu_, pmh_;
 };
 
 }  // namespace ni

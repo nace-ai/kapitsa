@@ -27,7 +27,8 @@ namespace {
 
 // host mirrors of the kernel parameter structs (src/kernels/dory/*.metal, src/kernels/nemotron/*.metal)
 struct PrepP {
-  uint32_t R, pos0, Hq, Hkv, rows, ring, base, q_ld, kv_ld;
+  uint32_t R, pos0, Hq, Hkv, rows, ring, base, in_ld, q_off, k_off, v_off;
+  float sq, sk, sv;
 };
 struct AttnP {
   uint32_t R, pos0, Hq, Hkv, rows, ring, window, chunk, nchunks, k0;
@@ -38,7 +39,8 @@ struct AttnPfP {
   float scale;
 };
 struct RowP {
-  uint32_t D, x_ld, y_ld, out_half;
+  uint32_t D, x_ld, y_ld, out_half, g_ld;
+  float s1, s2;
 };
 struct SlerpP {
   uint32_t D, mode, write_half;
@@ -246,47 +248,80 @@ void Dory::load(int prefill_chunk) {
   struct Job {
     const SafetensorsIndex::Entry* t = nullptr;
     NhMat* m = nullptr;
-    int64_t r0 = 0, rows = 0;
-    bool scales = false;  // NVFP4 block scales copied as they are
+    int64_t r0 = 0, rows = 0;  // source rows
+    bool scales = false;       // NVFP4 block scales copied as they are
     size_t bytes = 0;
+    int64_t dst_row = 0;       // the part's first row in the (joint) matrix
   };
   std::vector<Job> jobs;
   size_t src_bytes = 0;
-  auto mat = [&](NhMat& m, const std::string& name) {
-    const SafetensorsIndex::Entry& w = idx.get(name);
-    const std::string base = name.substr(0, name.size() - 7);  // "x.weight" -> "x"
-    const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
-    uint32_t N = 0, K = 0;
-    if (!nh_describe(w, sc, m.fmt, N, K) || (m.fmt != NhFmt::BF16 && m.fmt != NhFmt::FP4))
-      fatal("%s: tensor %s has a format Kapitsa does not run for Dory (BF16 or NVFP4)", path_.c_str(), name.c_str());
+  // A matrix, or the rows of several (`names`, same format and K) as one joint matrix: q | k | v | g and gate | up run as
+  // one product. NVFP4 parts keep their own tensor scales (weight_scale_2, in `scales`): the joint matrix runs with
+  // tensor scale 1 and its readers scale each part (ModelOpt shares one scale across q / k / v and across gate / up).
+  auto mats = [&](NhMat& m, const std::vector<std::string>& names, std::vector<float>* scales) {
+    std::vector<const SafetensorsIndex::Entry*> ws, scs;
+    uint32_t N = 0, K0 = 0;
+    for (size_t i = 0; i < names.size(); ++i) {
+      const std::string& name = names[i];
+      const SafetensorsIndex::Entry& w = idx.get(name);
+      const std::string base = name.substr(0, name.size() - 7);  // "x.weight" -> "x"
+      const SafetensorsIndex::Entry* sc = idx.find(base + ".weight_scale");
+      NhFmt f;
+      uint32_t n = 0, K = 0;
+      if (!nh_describe(w, sc, f, n, K) || (f != NhFmt::BF16 && f != NhFmt::FP4))
+        fatal("%s: tensor %s has a format Kapitsa does not run for Dory (BF16 or NVFP4)", path_.c_str(), name.c_str());
+      if (i == 0) m.fmt = f, K0 = K;
+      else if (f != m.fmt || K != K0) fatal("%s: %s differs from %s in format or width", path_.c_str(), name.c_str(), names[0].c_str());
+      float gs = 1.0f;
+      if (f == NhFmt::FP4) {
+        const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2");
+        if (!s2 || s2->dtype != DType::F32 || s2->len != 4) fatal("%s: %s has no weight_scale_2", path_.c_str(), name.c_str());
+        idx.read(*s2, 0, &gs, 4);
+      }
+      if (scales) scales->push_back(gs);
+      ws.push_back(&w);
+      scs.push_back(sc);
+      N += n;
+    }
     m.N = N;
-    m.K = K;
+    m.K = K0;
     m.E = 1;
-    nh_row_bytes(m.fmt, K, m.q_row, m.s_row);
+    nh_row_bytes(m.fmt, K0, m.q_row, m.s_row);
     m.q = g.alloc(std::max<size_t>(m.q_row * N, 16), "dory_weights", false);
     owned_.push_back(m.q);
+    m.gs = 1.0f;
     if (m.fmt == NhFmt::FP4) {
-      if (!sc || sc->len != m.s_row * N) fatal("%s: %s has no NVFP4 scales of its size", path_.c_str(), name.c_str());
       m.s = g.alloc(std::max<size_t>(m.s_row * N, 16), "dory_scales", false);
       owned_.push_back(m.s);
-      const SafetensorsIndex::Entry* s2 = idx.find(base + ".weight_scale_2");
-      if (!s2 || s2->dtype != DType::F32 || s2->len != 4) fatal("%s: %s has no weight_scale_2", path_.c_str(), name.c_str());
-      idx.read(*s2, 0, &m.gs, 4);
-      jobs.push_back({sc, &m, 0, int64_t(N), true, sc->len});
-      src_bytes += sc->len;
+      if (!scales) {  // a single matrix: its own tensor scale in the kernel
+        const std::string base = names[0].substr(0, names[0].size() - 7);
+        idx.read(idx.get(base + ".weight_scale_2"), 0, &m.gs, 4);
+      }
     } else {
       m.s = m.q;
-      m.gs = 1.0f;
     }
-    const size_t rb = nh_src_row_bytes(m.fmt, K);
-    if (w.len != rb * N) fatal("%s: tensor %s's size disagrees with its shape", path_.c_str(), name.c_str());
-    const int64_t per = std::max<int64_t>(1, int64_t((size_t(16) << 20) / rb));
-    for (int64_t r0 = 0; r0 < int64_t(N); r0 += per) {
-      const int64_t n = std::min<int64_t>(per, int64_t(N) - r0);
-      jobs.push_back({&w, &m, r0, n, false, rb * size_t(n)});
+    const size_t rb = nh_src_row_bytes(m.fmt, K0);
+    int64_t row = 0;
+    for (size_t i = 0; i < ws.size(); ++i) {
+      const SafetensorsIndex::Entry& w = *ws[i];
+      const int64_t n = int64_t(w.len / rb);
+      if (w.len != rb * size_t(n)) fatal("%s: tensor %s's size disagrees with its shape", path_.c_str(), names[i].c_str());
+      if (m.fmt == NhFmt::FP4) {
+        if (!scs[i] || scs[i]->len != m.s_row * size_t(n))
+          fatal("%s: %s has no NVFP4 scales of its size", path_.c_str(), names[i].c_str());
+        jobs.push_back({scs[i], &m, 0, n, true, scs[i]->len, row});
+        src_bytes += scs[i]->len;
+      }
+      const int64_t per = std::max<int64_t>(1, int64_t((size_t(16) << 20) / rb));
+      for (int64_t r0 = 0; r0 < n; r0 += per) {
+        const int64_t k = std::min<int64_t>(per, n - r0);
+        jobs.push_back({&w, &m, r0, k, false, rb * size_t(k), row});
+      }
+      src_bytes += w.len;
+      row += n;
     }
-    src_bytes += w.len;
   };
+  auto mat = [&](NhMat& m, const std::string& name) { mats(m, {name}, nullptr); };
   // fp32 vectors computed from BF16 ones as NVIDIA's code does in fp32 (f: x * scale, then squared or abs)
   auto vec = [&](Buffer& b, const std::string& name, size_t n, float scale, int op) {
     const SafetensorsIndex::Entry& t = idx.get(name);
@@ -317,26 +352,25 @@ void Dory::load(int prefill_chunk) {
     L.kind = c.kind[size_t(l)];
     L.rec = c.recurrent(l);
     if (L.kind == 'M') {
-      mat(L.gate, mx + "gate_proj.weight");
-      mat(L.up, mx + "up_proj.weight");
+      std::vector<float> sc;
+      mats(L.gu, {mx + "gate_proj.weight", mx + "up_proj.weight"}, &sc);
+      L.sgate = sc[0], L.sup = sc[1];
       mat(L.down, mx + "down_proj.weight");
       vec(L.sug, mx + "suv_gate", size_t(c.ffn), suv_f, 0);
       vec(L.suu, mx + "suv_up", size_t(c.ffn), suv_f, 0);
       vec(L.alpha, b + "mlp_alpha", H, alpha_scale, 2);
-      if (int(L.gate.N) != c.ffn || int(L.gate.K) != c.hidden || L.up.N != L.gate.N || int(L.down.N) != c.hidden ||
-          int(L.down.K) != c.ffn)
+      if (int(L.gu.N) != 2 * c.ffn || int(L.gu.K) != c.hidden || int(L.down.N) != c.hidden || int(L.down.K) != c.ffn)
         fatal("%s: layer %d's MLP shapes disagree with config.json", path_.c_str(), l);
     } else {
-      mat(L.q, mx + "q_proj.weight");
-      mat(L.k, mx + "k_proj.weight");
-      mat(L.v, mx + "v_proj.weight");
-      mat(L.g, mx + "g_proj.weight");
+      std::vector<float> sc;
+      mats(L.qkvg, {mx + "q_proj.weight", mx + "k_proj.weight", mx + "v_proj.weight", mx + "g_proj.weight"}, &sc);
+      L.sq = sc[0], L.sk = sc[1], L.sv = sc[2], L.sg = sc[3];
       mat(L.o, mx + "o_proj.weight");
       vec(L.sqk2, mx + "sqk", QD, sqk_f, 1);
       vec(L.sg2, mx + "s_gate", QD, sg_f, 1);
       vec(L.alpha, b + "attn_alpha", H, alpha_scale, 2);
-      if (L.q.N != QD || int(L.k.N) != c.hkv * c.hd || L.v.N != L.k.N || L.g.N != QD || int(L.o.N) != c.hidden ||
-          L.o.K != QD || int(L.q.K) != c.hidden)
+      if (L.qkvg.N != 2 * QD + 2 * size_t(c.hkv) * c.hd || int(L.o.N) != c.hidden || L.o.K != QD ||
+          int(L.qkvg.K) != c.hidden)
         fatal("%s: layer %d's attention shapes disagree with config.json", path_.c_str(), l);
       L.cache = nc;
       const int n = L.rec && kv_ == LoopKv::per_loop ? kMaxLoops : 1;
@@ -413,16 +447,52 @@ void Dory::load(int prefill_chunk) {
         const Job& j = jobs[k];
         NhMat& m = *j.m;
         if (j.scales) {
-          idx.read(*j.t, 0, m.s.ptr(), j.t->len);
+          idx.read(*j.t, 0, m.s.as<uint8_t>() + m.s_row * size_t(j.dst_row), j.t->len);
           continue;
         }
         const size_t rb = nh_src_row_bytes(m.fmt, m.K);
         raw.resize(rb * size_t(j.rows));
         idx.read(*j.t, rb * size_t(j.r0), raw.data(), raw.size());
-        nh_repack_rows(m.fmt, m.K, raw.data(), j.rows, m.q.as<uint8_t>() + m.q_row * size_t(j.r0), nullptr);
+        nh_repack_rows(m.fmt, m.K, raw.data(), j.rows, m.q.as<uint8_t>() + m.q_row * size_t(j.dst_row + j.r0), nullptr);
       }
     });
   for (auto& t : th) t.join();
+  // The LM head: NVIDIA's checkpoints keep it BF16. With NVFP4 linears it runs as Q8_0 rows, quantized here: half its
+  // bytes per decoded token (5-9% faster decoding on the M4 Pro), next-token KL 7e-6 from the BF16 head (the top token
+  // the same at 319 of 320 positions). NI_DORY_HEAD=bf16 keeps it BF16; =q8 also quantizes the BF16 checkpoint's.
+  const char* hv = getenv("NI_DORY_HEAD");
+  const bool fp4 = !layers_.empty() && layers_[0].fmt_any() == NhFmt::FP4;
+  if (hv && *hv ? !strcmp(hv, "q8") : fp4) {
+    NhMat q8;
+    q8.fmt = NhFmt::Q8;
+    q8.N = head_.N;
+    q8.K = head_.K;
+    nh_row_bytes(NhFmt::Q8, q8.K, q8.q_row, q8.s_row);
+    q8.q = g.alloc(q8.q_row * q8.N, "dory_head_q8", false);
+    q8.s = g.alloc(q8.s_row * q8.N, "dory_head_q8_scales", false);
+    const unsigned nt = std::max(2u, std::min(10u, std::thread::hardware_concurrency()));
+    std::vector<std::thread> qt;
+    for (unsigned t = 0; t < nt; ++t)
+      qt.emplace_back([&, t] {
+        std::vector<float> row(head_.K);
+        for (size_t r = t; r < head_.N; r += nt) {
+          const uint16_t* src = head_.q.as<uint16_t>() + r * head_.K;
+          for (size_t i = 0; i < head_.K; ++i) row[i] = bf16_to_f32(src[i]);
+          nh_quant_q8(row.data(), head_.K, q8.q.as<uint8_t>() + r * q8.q_row, q8.s.as<uint8_t>() + r * q8.s_row);
+        }
+      });
+    for (auto& t : qt) t.join();
+    for (auto it = owned_.begin(); it != owned_.end(); ++it)
+      if (it->mtl == head_.q.mtl) {
+        g.release(*it);
+        owned_.erase(it);
+        break;
+      }
+    head_ = q8;
+    owned_.push_back(q8.q);
+    owned_.push_back(q8.s);
+    logi("Dory: LM head as Q8_0 rows%s", fp4 ? "" : " (NI_DORY_HEAD=q8)");
+  }
   g.make_resident(owned_);
   dummy_ = g.alloc(4096, "dory_dummy");
   alloc_buffers();
@@ -434,7 +504,7 @@ void Dory::load(int prefill_chunk) {
 
 std::string Dory::formats_summary() const {
   NhFmt at = NhFmt::F32, ml = NhFmt::F32;
-  for (const DoryLayer& L : layers_) (L.kind == 'M' ? ml : at) = L.kind == 'M' ? L.gate.fmt : L.q.fmt;
+  for (const DoryLayer& L : layers_) (L.kind == 'M' ? ml : at) = L.kind == 'M' ? L.gu.fmt : L.qkvg.fmt;
   std::string r = at == ml ? std::string(fmt_name(at)) + " attention / MLP"
                            : std::string(fmt_name(at)) + " attention, " + fmt_name(ml) + " MLP";
   return r + ", " + fmt_name(head_.fmt) + " head, BF16 embedding";
@@ -448,12 +518,9 @@ void Dory::alloc_buffers() {
   inp_ = g.alloc(R * H * 4, "dory_inp");
   y_ = g.alloc(R * H * 4, "dory_y");
   q_ = g.alloc(R * QD * 4, "dory_q");
-  k_ = g.alloc(R * KD * 4, "dory_k");
-  v_ = g.alloc(R * KD * 4, "dory_v");
-  g_ = g.alloc(R * QD * 4, "dory_g");
+  qkvg_ = g.alloc(R * (2 * QD + 2 * KD) * 4, "dory_qkvg");
   ao_ = g.alloc(R * QD * 4, "dory_ao");
-  mg_ = g.alloc(R * F * 4, "dory_mg");
-  mu_ = g.alloc(R * F * 4, "dory_mu");
+  mgu_ = g.alloc(R * 2 * F * 4, "dory_mgu");
   mh_ = g.alloc(R * F * 4, "dory_mh");
   part_o_ = g.alloc(R * size_t(cfg_.hq) * attn_max_chunks_ * size_t(cfg_.hd) * 4, "dory_part_o");
   part_ml_ = g.alloc(R * size_t(cfg_.hq) * attn_max_chunks_ * 2 * 4, "dory_part_ml");
@@ -463,6 +530,17 @@ void Dory::alloc_buffers() {
   cand_i_ = g.alloc(nchunk1 * 64 * 4, "dory_cand_i");
   sprob_ = g.alloc(64 * 4, "dory_sprob");
   samp_ = g.alloc(64 * 4, "dory_samples");
+  // the NVFP4 9-32-row kernels' split-K partials (4 parts of K <= 8192, 32 rows, the widest joint matrix) and arrival
+  // counters (zero; every call leaves them zero)
+  xh_ = g.alloc(R * size_t(std::max({cfg_.hidden, cfg_.ffn, cfg_.hq * cfg_.hd})) * 2, "dory_rows_half");
+  x4part_ = g.alloc(size_t(4) * ((size_t(2 * cfg_.ffn) + 63) / 64) * 2048 * 4, "dory_x4_partials");
+  x4cnt_ = g.alloc(4096, "dory_x4_counters");
+  memset(x4cnt_.ptr(), 0, 4096);
+  st0_ = g.alloc(R * H * 4, "dory_draft_state");
+  inp0_ = g.alloc(R * H * 4, "dory_draft_inp");
+  acc_ = g.alloc(64, "dory_accepted");
+  live_all_ = g.alloc(16, "dory_live_all");
+  live_all_.as<uint32_t>()[0] = 0xffffffffu;
 }
 
 void Dory::alloc_prefill() {
@@ -475,15 +553,12 @@ void Dory::alloc_prefill() {
   pinp_ = g.alloc(T * H * 4, "dory_pf_inp");
   py_ = g.alloc(T * H * 4, "dory_pf_y");
   pq_ = g.alloc(T * QD * 4, "dory_pf_q");
-  pk_ = g.alloc(T * KD * 4, "dory_pf_k");
-  pv_ = g.alloc(T * KD * 4, "dory_pf_v");
-  pg_ = g.alloc(T * QD * 4, "dory_pf_g");
+  pqkvg_ = g.alloc(T * (2 * QD + 2 * KD) * 4, "dory_pf_qkvg");
   pck_ = g.alloc(T * KD * 2, "dory_pf_ck");
   pcv_ = g.alloc(T * KD * 2, "dory_pf_cv");
   pao_ = g.alloc(T * QD * 4, "dory_pf_ao");
   paoh_ = g.alloc(T * QD * 2, "dory_pf_aoh");
-  pmg_ = g.alloc(T * F * 4, "dory_pf_mg");
-  pmu_ = g.alloc(T * F * 4, "dory_pf_mu");
+  pgu_ = g.alloc(T * 2 * F * 4, "dory_pf_gu");
   pmh_ = g.alloc(T * F * 2, "dory_pf_mh");
   pf_alloc_ = true;
 }
@@ -534,7 +609,7 @@ MemPlan Dory::plan(const std::string& path, int prefill_chunk, LoopKv kv, int lo
   m.activations = R * (3 * H + 4 * QD + 2 * KD + 3 * F + V) * 4 + R * size_t(c.hq) * 64 * (size_t(c.hd) + 2) * 4 +
                   (size_t(16) << 20);
   const size_t T = size_t(std::max(kMaxRows, prefill_chunk));
-  m.activations += T * (H * (4 + 2 + 4 + 4) + QD * (4 + 4 + 4 + 2) + KD * (4 + 4 + 2 + 2) + F * (4 + 4 + 2));
+  m.activations += T * (H * (4 + 2 + 4 + 4) + QD * (4 + 4 + 4 + 4 + 2) + KD * (4 + 4 + 2 + 2) + F * (4 + 4 + 2));
   return m;
 }
 
@@ -706,6 +781,56 @@ void Dory::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, 
     return;
   }
   const int rk = R <= 1 ? 1 : R <= 2 ? 2 : R <= 4 ? 4 : 8;
+  if (R > 1 && R <= kMaxRows && W.K % 128 == 0 && epi == 0) {
+    // 2-8 rows (verify passes): the rows as half, then the 8-row MMA kernels, whose cost hardly grows with the rows
+    // (tools/dory_mv_bench, M4 Pro, q|k|v|g 2560 -> 10240: one row on nh_x4_mv_l0 66 us; 2, 4 and 8 rows on nh_x4_v8_l0
+    // 79 us each, on the generic nh_mv_fp4_r* 119 / 137 / 788 us, and fp32-row variants of nh_x4_mv_l0 grow with
+    // the rows as well: its one-row loop is ALU-bound). The rows' products differ from one-row decoding's by the
+    // rounding of half inputs.
+    const uint32_t D = W.K;
+    e.use(pipe("dory_rows_half"));
+    e.buf(0, x);
+    e.buf(1, xh_);
+    e.val(2, D);
+    e.dispatch(uint32_t(R), 1, 1, 256);
+    struct V8P {  // NhV8P
+      uint32_t N, K, x_ld, y_ld, R;
+      float gs;
+      uint32_t epi;
+    } p{W.N, W.K, W.K, W.N, uint32_t(R), W.gs, 0};
+    if (W.fmt == NhFmt::FP4) {
+      e.use(pipe("nh_x4_v8_l0"));
+      e.buf(0, xh_);
+      e.buf(1, W.q);
+      e.buf(2, W.s);
+      e.buf(3, y);
+      e.val(4, p);
+      e.dispatch((W.N + 15) / 16, 1, 1, 256);
+      return;
+    }
+    if (W.fmt == NhFmt::BF16) {
+      e.use(pipe("nh_xb_v8"));
+      e.buf(0, xh_);
+      e.buf(1, W.q);
+      e.buf(2, W.q);
+      e.buf(3, y);
+      e.val(4, p);
+      e.dispatch((W.N + 15) / 16, 1, 1, 256);
+      return;
+    }
+    if (W.fmt == NhFmt::Q8) {  // the 8-bit head: split-K over 4 simdgroups, 16 rows per threadgroup (as Nemotron-H's)
+      const uint32_t nb = W.N >= 4096 && W.N <= 32768 ? 4 : 2, rows_tg = 8 * nb;
+      e.use(pipe(std::string("nh_v8_q8_s") + std::to_string(nb)));
+      e.buf(0, xh_);
+      e.buf(1, W.q);
+      e.buf(2, W.s);
+      e.buf(3, y);
+      e.val(4, p);
+      e.buf(8, dummy_);
+      e.dispatch((W.N + rows_tg - 1) / rows_tg, 1, 1, 128);
+      return;
+    }
+  }
   const char* fm = W.fmt == NhFmt::FP4 ? "fp4" : W.fmt == NhFmt::Q8 ? "q8" : "bf16";
   const std::string name = std::string("nh_mv_") + fm + "_r" + std::to_string(rk) + (epi == 1 ? "_add" : "");
   const uint32_t nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1, nsg = 4;
@@ -720,6 +845,45 @@ void Dory::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, 
 }
 
 void Dory::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi) {
+  struct V8P {  // NhV8P
+    uint32_t N, K, x_ld, y_ld, R;
+    float gs;
+    uint32_t epi;
+  };
+  // NVFP4 up to 32 rows (a short prompt or follow-up): the x4 kernels, 8 rows on 8 simdgroups splitting K, 9-32 rows
+  // in SK parts of K summed by the last part to arrive (Nemotron-H's: nh_x_fp4.metal)
+  if (W.fmt == NhFmt::FP4 && M <= 32 && W.K % 128 == 0) {
+    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
+    if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
+      const V8P p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
+      e.use(pipe(tb == 1 ? "nh_x4_v8_l0" : tb == 2 ? "nh_x4_mm16_l0" : tb == 3 ? "nh_x4_mm24_l0" : "nh_x4_mm32_l0"));
+      e.buf(0, xh);
+      e.buf(1, W.q);
+      e.buf(2, W.s);
+      e.buf(3, y);
+      e.val(4, p);
+      if (tb == 1) {
+        e.dispatch((W.N + 15) / 16, 1, 1, 256);
+      } else {
+        e.buf(5, x4part_);
+        e.buf(6, x4cnt_);
+        e.dispatch(sk, tiles, 1, 128);
+      }
+      return;
+    }
+  }
+  // BF16 up to 8 rows: nh_xb_v8 (the x4 design, weights converted to half as the tile GEMM converts them)
+  if (W.fmt == NhFmt::BF16 && M <= 8 && W.K % 128 == 0) {
+    const V8P p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe("nh_xb_v8"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.q);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 15) / 16, 1, 1, 256);
+    return;
+  }
   const int bm = M <= 16 ? 16 : M <= 32 ? 32 : 64;
   const std::string name = std::string(W.fmt == NhFmt::FP4 ? "nh_gemm_fp4" : W.fmt == NhFmt::Q8 ? "nh_gemm_q8" : "nh_gemm_bf16w") +
                            "_m" + std::to_string(bm);
@@ -752,35 +916,33 @@ void Dory::enc_slerp(Encoder& e, const Buffer& h, const Buffer& y, const Buffer&
 void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int R, int mode) {
   const DoryConfig& c = cfg_;
   const uint32_t QD = uint32_t(c.hq * c.hd), KD = uint32_t(c.hkv * c.hd);
+  const uint32_t NQ = 2 * QD + 2 * KD, F = uint32_t(c.ffn);
   if (L.kind == 'M') {
-    enc_mv(e, L.gate, x_, mg_, R, 0);
-    enc_mv(e, L.up, x_, mu_, R, 0);
-    const RowP rp{uint32_t(c.ffn), uint32_t(c.ffn), uint32_t(c.ffn), 0};
-    e.use(pipe("dory_swiglu_norm"));
-    e.buf(0, mg_);
-    e.buf(1, mu_);
+    enc_mv(e, L.gu, x_, mgu_, R, 0);
+    // the activation without the norm over the FFN width (the residual's justnorm of down_proj's output cancels it)
+    const RowP rp{F, 2 * F, F, 0, 2 * F, L.sgate, L.sup};
+    e.use(pipe("dory_swiglu"));
+    e.buf(0, mgu_);
+    e.buf(1, mgu_, size_t(F) * 4);
     e.buf(2, L.sug);
     e.buf(3, L.suu);
     e.buf(4, mh_);
     e.val(5, rp);
-    e.dispatch(uint32_t(R), 1, 1, 1024);
+    e.dispatch((F + 255) / 256, uint32_t(R), 1, 256);
     enc_mv(e, L.down, mh_, y_, R, 0);
     enc_slerp(e, x_, y_, L.alpha, inp_, nullptr, R, mode);
     return;
   }
-  enc_mv(e, L.q, x_, q_, R, 0);
-  enc_mv(e, L.k, x_, k_, R, 0);
-  enc_mv(e, L.v, x_, v_, R, 0);
-  enc_mv(e, L.g, x_, g_, R, 0);
+  enc_mv(e, L.qkvg, x_, qkvg_, R, 0);
   const int ci = cache_index(L, loop);
   const uint32_t rows = uint32_t(cache_rows(s, ci)), ring = is_ring(ci) ? 1u : 0u;
   if (!s.kc[size_t(ci)]) fatal("Dory: cache %d of loop %d not allocated", ci, loop);
   if (!ring && pos0 + R > s.cap) fatal("context full (%d)", s.cap);
-  const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring, 0, QD, KD};
+  const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring, 0, NQ, 0, QD, QD + KD,
+                 L.sq, L.sk, L.sv};
   e.use(pipe("dory_prep"));
-  e.buf(0, q_);
-  e.buf(1, k_);
-  e.buf(2, v_);
+  e.buf(0, qkvg_);
+  e.buf(1, q_);
   e.buf(3, L.sqk2);
   e.buf(4, L.kind == 'S' ? inv_swa_ : inv_full_);
   e.buf(5, s.kc[size_t(ci)]);
@@ -805,20 +967,19 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
   e.buf(4, part_ml_);
   e.val(5, ap);
   e.dispatch(nch, uint32_t(c.hkv), uint32_t(R), 32 * uint32_t(c.hq / c.hkv));
-  e.use(pipe("dory_attn_reduce"));
+  const struct {
+    uint32_t Hq, nchunks, g_ld;
+    float sg;
+  } rg{uint32_t(c.hq), nch, NQ, L.sg};
+  // combined, gated, not normalized (o_proj is linear and the residual's justnorm of its output cancels the norm)
+  e.use(pipe("dory_attn_reduce_gate"));
   e.buf(0, part_o_);
   e.buf(1, part_ml_);
-  e.buf(2, ao_);
-  e.val(3, ap);
+  e.buf(2, qkvg_, size_t(QD + 2 * KD) * 4);
+  e.buf(3, L.sg2);
+  e.buf(4, ao_);
+  e.bytes(5, &rg, sizeof rg);
   e.dispatch(uint32_t(c.hq), uint32_t(R), 1, uint32_t(c.hd));
-  const RowP rp{QD, QD, QD, 0};
-  e.use(pipe("dory_gate_norm"));
-  e.buf(0, ao_);
-  e.buf(1, g_);
-  e.buf(2, L.sg2);
-  e.buf(3, ao_);
-  e.val(4, rp);
-  e.dispatch(uint32_t(R), 1, 1, 1024);
   enc_mv(e, L.o, ao_, y_, R, 0);
   enc_slerp(e, x_, y_, L.alpha, inp_, nullptr, R, mode);
 }
@@ -829,13 +990,13 @@ void Dory::enc_layer_rows(Encoder& e, Seq& s, const DoryLayer& L, int loop, int 
 void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, int pos0, int T, int mode, bool write) {
   const DoryConfig& c = cfg_;
   const uint32_t QD = uint32_t(c.hq * c.hd), KD = uint32_t(c.hkv * c.hd);
+  const uint32_t NQ = 2 * QD + 2 * KD, F = uint32_t(c.ffn);
   if (L.kind == 'M') {
-    enc_gemm(e, L.gate, pxh_, pmg_, T, 0);
-    enc_gemm(e, L.up, pxh_, pmu_, T, 0);
-    const RowP rp{uint32_t(c.ffn), uint32_t(c.ffn), uint32_t(c.ffn), 1};
+    enc_gemm(e, L.gu, pxh_, pgu_, T, 0);
+    const RowP rp{F, 2 * F, F, 1, 2 * F, L.sgate, L.sup};
     e.use(pipe("dory_swiglu_norm"));
-    e.buf(0, pmg_);
-    e.buf(1, pmu_);
+    e.buf(0, pgu_);
+    e.buf(1, pgu_, size_t(F) * 4);
     e.buf(2, L.sug);
     e.buf(3, L.suu);
     e.buf(4, pmh_);
@@ -845,20 +1006,17 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
     enc_slerp(e, px_, py_, L.alpha, pinp_, &pxh_, T, mode);
     return;
   }
-  enc_gemm(e, L.q, pxh_, pq_, T, 0);
-  enc_gemm(e, L.k, pxh_, pk_, T, 0);
-  enc_gemm(e, L.v, pxh_, pv_, T, 0);
-  enc_gemm(e, L.g, pxh_, pg_, T, 0);
+  enc_gemm(e, L.qkvg, pxh_, pqkvg_, T, 0);
   const int ci = cache_index(L, loop);
   const uint32_t rows = uint32_t(cache_rows(s, ci)), ring = is_ring(ci) ? 1u : 0u;
   if (!s.kc[size_t(ci)]) fatal("Dory: cache %d of loop %d not allocated", ci, loop);
   if (!ring && pos0 + T > s.cap) fatal("context full (%d)", s.cap);
-  // q in place; the chunk's own keys / values (half [Hkv][T][256]) into pck_ / pcv_
-  const PrepP pp{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), uint32_t(T), 0, uint32_t(pos0), QD, KD};
+  // q into pq_; the chunk's own keys / values (half [Hkv][T][256]) into pck_ / pcv_
+  const PrepP pp{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), uint32_t(T), 0, uint32_t(pos0), NQ, 0,
+                 QD, QD + KD, L.sq, L.sk, L.sv};
   e.use(pipe("dory_prep"));
-  e.buf(0, pq_);
-  e.buf(1, pk_);
-  e.buf(2, pv_);
+  e.buf(0, pqkvg_);
+  e.buf(1, pq_);
   e.buf(3, L.sqk2);
   e.buf(4, L.kind == 'S' ? inv_swa_ : inv_full_);
   e.buf(5, pck_);
@@ -891,10 +1049,10 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
     e.val(4, sp);
     e.dispatch(uint32_t(T) - r0, 2 * uint32_t(c.hkv), 1, 32);
   }
-  const RowP rp{QD, QD, QD, 1};
+  const RowP rp{QD, QD, QD, 1, NQ, 1.0f, L.sg};
   e.use(pipe("dory_gate_norm"));
   e.buf(0, pao_);
-  e.buf(1, pg_);
+  e.buf(1, pqkvg_, size_t(QD + 2 * KD) * 4);
   e.buf(2, L.sg2);
   e.buf(3, paoh_);
   e.val(4, rp);
@@ -903,9 +1061,8 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   enc_slerp(e, px_, py_, L.alpha, pinp_, &pxh_, T, mode);
 }
 
-void Dory::enc_rows(Encoder& e, Seq& s, int pos0, int R) {
+void Dory::enc_input_rows(Encoder& e, Seq& s, int pos0, int R) {
   if (R < 1 || R > kMaxRows) fatal("Dory: %d rows in one pass", R);
-  const int loops = loops_of(s);
   const DoryConfig& c = cfg_;
   enc_embed(e, s.tok, pos0, R, x_);
   for (int l = 0; l < c.n_in; ++l) enc_layer_rows(e, s, layers_[size_t(l)], 0, pos0, R, 0);
@@ -916,12 +1073,94 @@ void Dory::enc_rows(Encoder& e, Seq& s, int pos0, int R) {
   e.buf(2, dummy_);
   e.val(3, ls);
   e.dispatch(uint32_t(R), 1, 1, 1024);
-  for (int i = 0; i < loops; ++i)
+}
+
+// loops [l0, l1) of a pass of `loops` (the end of loop `loops - 1` leaves the state for the output layers, every
+// earlier loop's end the next loop's input)
+void Dory::enc_loops_rows(Encoder& e, Seq& s, int pos0, int R, int l0, int l1, int loops) {
+  const DoryConfig& c = cfg_;
+  for (int i = l0; i < l1; ++i)
     for (int l = c.n_in; l < c.n_in + c.n_rec; ++l) {
       const int mode = l + 1 < c.n_in + c.n_rec ? 0 : i + 1 < loops ? 2 : 1;
       enc_layer_rows(e, s, layers_[size_t(l)], i, pos0, R, mode);
     }
+}
+
+void Dory::enc_output_rows(Encoder& e, Seq& s, int pos0, int R) {
+  const DoryConfig& c = cfg_;
   for (int l = c.n_in + c.n_rec; l < c.layers; ++l) enc_layer_rows(e, s, layers_[size_t(l)], 0, pos0, R, 0);
+}
+
+void Dory::enc_rows(Encoder& e, Seq& s, int pos0, int R) {
+  const int loops = loops_of(s);
+  enc_input_rows(e, s, pos0, R);
+  enc_loops_rows(e, s, pos0, R, 0, loops, loops);
+  enc_output_rows(e, s, pos0, R);
+}
+
+void Dory::enc_copy_rows(Encoder& e, const Buffer& src, const Buffer& dst, int R) {
+  const uint32_t n = uint32_t(size_t(R) * cfg_.hidden * 4 / 16);
+  e.use(pipe("dory_copy4"));
+  e.buf(0, src);
+  e.buf(1, dst);
+  e.val(2, n);
+  e.dispatch((n + 255) / 256, 1, 1, 256);
+}
+
+// ---- speculative decoding ----
+void Dory::encode_verify(Encoder& e, Seq& s, int pos, int R) {
+  enc_rows(e, s, pos, R);
+  enc_head(e, x_, R, logits_, size_t(cfg_.vocab));
+}
+
+void Dory::encode_draft(Encoder& e, Seq& s, int pos, int row) {
+  const size_t rb = size_t(cfg_.hidden) * 4;
+  enc_input_rows(e, s, pos, 1);
+  enc_loops_rows(e, s, pos, 1, 0, 1, 1);  // loop 0, ending as a 1-loop model's: x_ = the state after it
+  enc_copy_rows(e, x_, st0_.view(size_t(row) * rb, rb), 1);
+  enc_copy_rows(e, inp_, inp0_.view(size_t(row) * rb, rb), 1);
+  enc_output_rows(e, s, pos, 1);
+  enc_head(e, x_, 1, logits_, size_t(cfg_.vocab));
+  SamplingParams greedy;
+  enc_sample(e, logits_, s.tok, pos + 1, greedy, uint32_t(pos));
+}
+
+void Dory::encode_verify_drafted(Encoder& e, Seq& s, int pos, int R) {
+  if (R < 1 || R > kMaxRows) fatal("Dory: verify of %d rows", R);
+  const int loops = loops_of(s);
+  const size_t rb = size_t(cfg_.hidden) * 4;
+  // the last row: its input layers and loop 0
+  enc_input_rows(e, s, pos + R - 1, 1);
+  enc_loops_rows(e, s, pos + R - 1, 1, 0, 1, 1);
+  enc_copy_rows(e, x_, st0_.view(size_t(R - 1) * rb, rb), 1);
+  enc_copy_rows(e, inp_, inp0_.view(size_t(R - 1) * rb, rb), 1);
+  // every row from its state after loop 0: loops 1.., the output layers, the head
+  const SlerpP lp{uint32_t(cfg_.hidden), 0, 0};
+  e.use(pipe("dory_loop_resume"));
+  e.buf(0, st0_);
+  e.buf(1, inp0_);
+  e.buf(2, x_);
+  e.buf(3, inp_);
+  e.val(4, lp);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+  enc_loops_rows(e, s, pos, R, 1, loops, loops);
+  enc_output_rows(e, s, pos, R);
+  enc_head(e, x_, R, logits_, size_t(cfg_.vocab));
+}
+
+void Dory::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {
+  for (int r = 0; r < R; ++r)
+    enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos + r));
+  const struct {
+    uint32_t P, K;
+  } ap{uint32_t(pos), uint32_t(K)};
+  e.use(pipe("nh_accept"));
+  e.buf(0, samp_);
+  e.buf(1, s.tok);
+  e.buf(2, acc_);
+  e.bytes(3, &ap, sizeof ap);
+  e.buf(4, live_all_);
+  e.dispatch(1, 1, 1, 1);
 }
 
 void Dory::enc_prefill_rows(Encoder& e, Seq& s, int pos0, int T) {
@@ -1012,10 +1251,10 @@ void Dory::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingPar
   if (T > tmax_) fatal("Dory: prefill of %d rows > chunk %d", T, tmax_);
   Buffer last;
   const size_t row = size_t(cfg_.hidden) * 4;
-  if (T <= kMaxRows) {
+  if (T == 1) {  // one token: the decode pass
     enc_rows(e, s, pos0, T);
     last = x_.view(size_t(T - 1) * row, row);
-  } else {
+  } else {  // the GEMM pass (2-8 rows: the 8-row x4 kernels, as fast as one row)
     enc_prefill_rows(e, s, pos0, T);
     last = px_.view(size_t(T - 1) * row, row);
   }
