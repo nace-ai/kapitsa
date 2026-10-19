@@ -41,7 +41,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | --- | ---: | ---: | ---: | ---: |
 | Dory&nbsp;4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
 | Lightning<br><sub>NVFP4</sub> | — | — | — | — |
-| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
+| Bolt&nbsp;74B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
 
 <sub>Ollama, LM Studio, MTPLX and mlx-serve can't run these Nemotron checkpoints, so the Nemotron tables leave them out.
 MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
@@ -68,7 +68,7 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 | --- | ---: | ---: | ---: | ---: |
 | Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — |
 | Lightning<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 159 | 139 |
-| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | — | — | — | — |
+| Bolt&nbsp;74B<br><sub>2/4/8-bit mix</sub> | — | — | — | — |
 | Super‑VL<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | 66 | 46 |
 
 <sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. Flash-Next: the same 4-bit weights and MTP head on
