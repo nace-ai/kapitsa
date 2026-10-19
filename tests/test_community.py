@@ -73,6 +73,13 @@ refused(lambda r: r["model"].update(name="llama-3-8b", catalog=False), "a model 
 refused(lambda r: r["model"].update(variant="3bit"), "a precision the model has not", "has no variant")
 refused(lambda r: r["model"].update(precision="6-bit"), "a precision that is not its variant's", "precision")
 refused(lambda r: r["model"].update(title="Qwen3.6-35B"), "a wrong title", "title")
+dory = copy.deepcopy(full)
+dory["model"].update(name="nemotron-labs-dory1.0-4b", title="Nemotron-Labs Dory1.0 4B", variant="nvfp4",
+                     precision=cat["nemotron-labs-dory1.0-4b"]["variants"]["nvfp4"])
+e = cc.check_result(dory, cat, macs, versions)[0]
+check(not any("title" in x for x in e), "a title from an earlier release passes (Dory's, until 0.1.35)", str(e))
+check(ct.model_name(dory["model"]) == "Nemotron Dory1.0 4B", "the table names a model as the catalog does now",
+      ct.model_name(dory["model"]))
 refused(lambda r: r["mac"].update(name="MacBook Pro (14-inch, 2024)"), "a Mac name that is not its identifier's", "is MacBook Pro (16-inch, 2024)")
 refused(lambda r: r["mac"].update(identifier="Mac99,9"), "a name for an identifier the table does not have", "not in mac-models.json")
 refused(lambda r: r.update(invalid=["decode: reasoning text returned (12 chars)"]), "invalid measurements", "invalid measurements")

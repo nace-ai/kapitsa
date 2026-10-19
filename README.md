@@ -51,7 +51,7 @@ drafter on Bolt; mlx-serve the faster of MTP and DFlash2. <sup>*</sup> Measured 
 opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 ([details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)).</sub>
 
-<sub>Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV), MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](docs/benchmarks.md#nemotron-labs-dory10-4b-2026-10-19)).</sub>
+<sub>Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV), MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](docs/benchmarks.md#nemotron-dory10-4b-2026-10-19)).</sub>
 
 <sub>Lightning: NVIDIA's NVFP4 with its DSpark drafter on Kapitsa and MLX (mlx-vlm); oMLX and llama.cpp not measured yet ([details](docs/benchmarks.md#nemotron-35-lightning)).</sub>
 

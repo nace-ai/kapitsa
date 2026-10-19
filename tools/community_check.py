@@ -37,6 +37,10 @@ LABELS = {"benchmark": ("0E8A16", "A kapitsa bench result"), "quick": ("C5DEF5",
 
 # ---------------------------------------------------------------- what the repository knows
 
+# Titles a catalog model had in earlier releases, which the results those releases wrote carry
+FORMER_TITLES = {"nemotron-labs-dory1.0-4b": ("Nemotron-Labs Dory1.0 4B",)}  # until 0.1.35
+
+
 def catalog(repo=REPO):
     """{name: {"title", "variants": {variant: precision}}} from src/hub/catalog.cpp"""
     src = open(os.path.join(repo, "src", "hub", "catalog.cpp"), encoding="utf-8").read()
@@ -102,7 +106,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
         errs.append(f"model {m['name']} is not in the catalog (src/hub/catalog.cpp)")
     else:
         c = cat[m["name"]]
-        if m["title"] != c["title"]:
+        if m["title"] != c["title"] and m["title"] not in FORMER_TITLES.get(m["name"], ()):
             errs.append(f"model title {m['title']!r} is not the catalog's {c['title']!r}")
         if m["variant"] not in c["variants"]:
             errs.append(f"{m['name']} has no variant {m['variant']!r} ({', '.join(c['variants'])})")

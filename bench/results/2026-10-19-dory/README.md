@@ -1,6 +1,6 @@
 # Results, 2026-10-19: Nemotron-Labs Dory1.0 4B
 
-The result files behind [Nemotron-Labs Dory1.0 4B](../../../docs/benchmarks.md#nemotron-labs-dory10-4b-2026-10-19) of
+The result files behind [Nemotron-Labs Dory1.0 4B](../../../docs/benchmarks.md#nemotron-dory10-4b-2026-10-19) of
 docs/benchmarks.md, written by [bench/harness](../../harness/README.md) with [configs/dory.json](../../harness/configs/dory.json)
 on a MacBook Pro (M4 Pro, 48 GB, macOS 27.0.1, on AC power). Times are local (UTC+5).
 

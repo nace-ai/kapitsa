@@ -8,7 +8,7 @@ Qwen3.8-Flash-Next and Nemotron 3.5 Super-VL and Lightning on the M5 Max:
 [Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
 models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
 section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19);
-Nemotron-Labs Dory1.0 4B: [its own section](#nemotron-labs-dory10-4b-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+Nemotron Dory1.0 4B: [its own section](#nemotron-dory10-4b-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
 request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
 best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
@@ -1023,7 +1023,7 @@ measured here. oMLX and llama.cpp were not measured either. This disk holds Kapi
 competitor's MLX 4-bit or Q4_0 files (17–19 GiB), not both, so their runs could not have Kapitsa in the same hold, and
 they were stopped to finish sooner.
 
-## Nemotron-Labs Dory1.0 4B (2026-10-19)
+## Nemotron Dory1.0 4B (2026-10-19)
 
 NVIDIA's looped 4B (its 40-sublayer shared block runs 2 times per token by default) on the M4 Pro (48 GB, macOS 27.0.1).
 The README's cells come from one hold of the GPU lock: Kapitsa (main at 18a03e1) first and last, the harness's T = 0.6

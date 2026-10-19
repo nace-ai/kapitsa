@@ -10,7 +10,9 @@ each row lists its run's flags. Quick runs say so. Files that are not results (o
 with a warning; tools/community_check.py is the full check, run on every pull request. --check: exit 1 when RESULTS.md
 is not what this would write (it changes nothing).
 """
-import argparse, glob, json, os, re, statistics, sys
+import argparse, functools, glob, json, os, re, statistics, sys
+
+import community_check  # the catalog, from the same folder
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -42,8 +44,14 @@ def mac_name(mac):
     return f"{m.group(1)}({', '.join(parts)})"
 
 
+@functools.lru_cache(maxsize=None)
+def catalog_titles():
+    return {name: m["title"] for name, m in community_check.catalog().items()}
+
+
 def model_name(m):
-    t = m.get("title") or m["name"]
+    # the catalog's title, so a result from a release that titled the model differently sits under today's name
+    t = catalog_titles().get(m["name"]) or m.get("title") or m["name"]
     return t.replace("-", " ", 1) if t.startswith("Qwen") else t
 
 

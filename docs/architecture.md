@@ -56,7 +56,7 @@ two candidates are within the batched pass's rounding of each other, and sampled
 
 ## Three model backends
 
-| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron-Labs Dory |
+| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory |
 | --- | --- | --- | --- |
 | Backend | `Qwen35` | `NemotronH` | `Dory` |
 | Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) |

@@ -248,7 +248,7 @@ const std::vector<CatalogModel>& catalog() {
        }},
       {.name = "nemotron-labs-dory1.0-4b",
        .aliases = {"dory", "dory-4b", "dory1.0-4b"},
-       .title = "Nemotron-Labs Dory1.0 4B",
+       .title = "Nemotron Dory1.0 4B",
        .about = "NVIDIA's looped 4B: a shared block run 1-4 times per token (--loops; 2 by default), small and fast",
        .brief = "NVIDIA looped 4B: small and fast",
        // NVIDIA's checkpoints as they are: NVFP4 (its native pre-training format; W4A16 with BF16 embedding and LM
