@@ -2384,12 +2384,18 @@ void NemotronH::alloc_prefill(int T) {
 void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi, uint32_t y_ld,
                          uint32_t x_ld) {
   if (W.fmt == NhFmt::F32 || W.E != 1) fatal("enc_gemm: unsupported matrix");
-  // FP8 up to 32 rows: the x8 kernels (nh_x4's designs; 9-32 rows share x4's split-K buffers)
-  if (W.fmt == NhFmt::FP8 && x8_ && M <= 32 && W.K % 128 == 0 && (x_ld ? x_ld : W.K) % 8 == 0) {
+  // FP8 up to 32 rows: the x8 kernels (nh_x4's designs; 9-32 rows share x4's split-K buffers); a dense model's
+  // K % 128 != 0 (the Nano 4B's hidden 3136: Mamba in_proj, MLP up) on their tail variants (*_t: the last K % 128
+  // inputs as one more, masked step) instead of nh_gemm_fp8_m16 / m32 (M1 Pro, 2-8 rows: in_proj 0.337 vs 0.815 ms,
+  // MLP up 0.245 vs 0.624, as one row's nh_x8_mv takes 0.331 / 0.274; 9-24 rows 21-27% faster, 25-32 within 2%)
+  const bool x8_tail = dense_ && W.K % 128 != 0 && W.K % 32 == 0;
+  if (W.fmt == NhFmt::FP8 && x8_ && M <= 32 && (W.K % 128 == 0 || x8_tail) && (x_ld ? x_ld : W.K) % 8 == 0) {
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
     const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
-      e.use(pipe(tb == 1 ? "nh_x8_v8" : tb == 2 ? "nh_x8_mm16" : tb == 3 ? "nh_x8_mm24" : "nh_x8_mm32"));
+      std::string name = tb == 1 ? "nh_x8_v8" : tb == 2 ? "nh_x8_mm16" : tb == 3 ? "nh_x8_mm24" : "nh_x8_mm32";
+      if (W.K % 128) name += "_t";
+      e.use(pipe(name));
       e.buf(0, xh);
       e.buf(1, W.q);
       e.buf(2, W.q);

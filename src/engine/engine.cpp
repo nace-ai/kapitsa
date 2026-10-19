@@ -357,9 +357,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   // A dense Nemotron-H model (Nemotron Nano) has no block drafter: prompt lookup drafts up to K tokens per cycle
   // (--spec K, else NI_NH_NGRAM=K), verified in one pass; the reply is the one plain decoding writes. By default 4
-  // where the MLP layers are BF16 (the Nano 4B: a verify pass's 2-8 rows read each weight once, as one row does;
-  // decoding 4-8% faster on an M1 Pro) and off for NVFP4 (the Nano 9B v2: within 2% either way there, the M1's
-  // NVFP4 products of several rows being bound by their arithmetic, not by the weights' bytes).
+  // where the MLP layers are BF16 or FP8 (the Nano 4B: a verify pass's 2-8 rows read each weight once, as one row
+  // does; on an M1 Pro decoding 4-8% faster in BF16; in FP8 with its 8-bit head 1% on the benchmark's code (4% with
+  // the BF16 head), 1.4-2.3x on replies that repeat their prompt, 4-5% slower on free prose that drafts rarely match)
+  // and off for NVFP4 (the Nano 9B v2: within 2% either way there, the M1's NVFP4 products of several rows being
+  // bound by their arithmetic, not by the weights' bytes).
   if (nh_ && !lili_ && spec_asked != 0) {
     const auto& kind = nh_->config().kind;
     if (std::find(kind.begin(), kind.end(), 'E') == kind.end()) {

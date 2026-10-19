@@ -259,8 +259,8 @@ class NemotronH : public Model {
   bool x8_ = true;  // FP8 x8 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X8=0: the generic ones
   Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
   // A dense model (no MoE layers: Nemotron Nano 4B / 9B v2). Its products of K % 128 != 0 (hidden 3136, the 9B's MLP
-  // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t), which the MoE models' paths
-  // do not take.
+  // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t, nh_x8_*_t), which the MoE
+  // models' paths do not take.
   bool dense_ = false;
   // NVFP4 codes in layout L2 (nh_x_fp4.metal): the dense models on the M1's GPU family, as Dory (NI_NH_FP4=l0 / l2
   // overrides); every NVFP4 product then runs on the x4 kernels or nh_gemm_fp4l2_*

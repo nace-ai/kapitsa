@@ -15,7 +15,10 @@
 //                          ceil(N / (NR x simdgroups)) x 32 x simdgroups (the engine: NR 4, 2 simdgroups)
 //   nh_x8_v8               R <= 8, NhV8P [[4]] (X half [R][x_ld], Y per p.epi). grid ceil(N / 16) x 256
 //   nh_x8_mm16/24/32       R <= 16 / 24 / 32, NhV8P [[4]], part [[5]], cnt [[6]] as nh_x4_mm16/24/32
-// Requirements: K % 128 == 0 for v8 / mm, K % 32 for mv; X rows 16-byte aligned (x_ld % 8 == 0).
+//   nh_x8_v8_t, nh_x8_mm16/24/32_t   the same for K % 128 != 0 (K % 32 == 0: the Nano 4B's hidden 3136): the last
+//                          K % 128 inputs as one more step, its 32-element groups past K zero (read nothing); the full
+//                          steps as the kernels above
+// Requirements: K % 128 == 0 for v8 / mm (K % 32 for mv and the _t kernels); X rows 16-byte aligned (x_ld % 8 == 0).
 
 // bytes 0, 2 / 1, 3 of w as half2, x 2^-8
 NI_INLINE half2 nh_x8_02(uint w) { return as_type<half2>(((w & 0x00800080u) << 8) | ((w & 0x007F007Fu) << 7)); }
@@ -90,6 +93,21 @@ NH_X8_MV(nh_x8_mv_n8, 8, 0)
 
 // ---- 8 rows (verify): nh_x4_v8's design; the lane of column pair c reads 32 code bytes per row and step (elements
 // 32 c .. 32 c + 31 of the 128-element step: groups 2c, 2c + 1) ----
+// The 16 fragments of one 128-element step: X pairs a0 / a1 (token fn), b0 / b1 (token fn + 1), the NF rows' 32 code
+// bytes c0 / c1 (groups 2c, 2c + 1)
+template <int NF>
+NI_INLINE void nh_x8_v8_frags(uint4 a0, uint4 a1, uint4 b0, uint4 b1, thread const uint4* c0, thread const uint4* c1,
+                              thread float2* acc) {
+  _Pragma("clang loop unroll(full)")
+  for (int fr = 0; fr < 16; ++fr) {
+    const uint wa = (fr < 8 ? a0 : a1)[(fr & 7) >> 1], wb = (fr < 8 ? b0 : b1)[(fr & 7) >> 1];
+    const half2 bf = half2(as_type<half2>(wa)[fr & 1], as_type<half2>(wb)[fr & 1]);
+    _Pragma("clang loop unroll(full)")
+    for (int f = 0; f < NF; ++f) nh_x4_mma(acc[f], nh_x8_pair(c0[f], c1[f], uint(fr)), bf);
+  }
+}
+
+template <bool TAIL>
 NI_INLINE void nh_x8_v8_impl(const device half* X, const device uchar* q, device void* Y, constant NhV8P& p, uint tg,
                              uint sg, uint nsg, uint lane, threadgroup float2* red) {
   constexpr int NF = 2;
@@ -123,13 +141,24 @@ NI_INLINE void nh_x8_v8_impl(const device half* X, const device uchar* q, device
       }
       if (!l0) a0 = a1 = uint4(0);
       if (!l1) b0 = b1 = uint4(0);
+      nh_x8_v8_frags<NF>(a0, a1, b0, b1, c0, c1, acc);
+    }
+    // TAIL: the last K % 128 inputs (K % 32 == 0) as one more step, the simdgroup next in the interleave's: its
+    // 32-element groups at and past K are zero and read nothing (a lane's A pairs: its column pair c's group; its B
+    // rows: k-slot fm's group, fm >> 1)
+    if (TAIL && K % 128 != 0 && (K / 128) % KS == ks) {
+      const uint k0 = K / 128 * 128, ng = (K % 128) / 32;
+      const bool xok = (fm >> 1) < ng, wok = c < ng;
+      uint4 a0 = uint4(0), a1 = uint4(0), b0 = uint4(0), b1 = uint4(0);
+      if (xok && l0) a0 = *(const device uint4*)(xa + k0), a1 = *(const device uint4*)(xa + k0 + 16);
+      if (xok && l1) b0 = *(const device uint4*)(xb + k0), b1 = *(const device uint4*)(xb + k0 + 16);
+      uint4 c0[NF], c1[NF];
       _Pragma("clang loop unroll(full)")
-      for (int fr = 0; fr < 16; ++fr) {
-        const uint wa = (fr < 8 ? a0 : a1)[(fr & 7) >> 1], wb = (fr < 8 ? b0 : b1)[(fr & 7) >> 1];
-        const half2 bf = half2(as_type<half2>(wa)[fr & 1], as_type<half2>(wb)[fr & 1]);
-        _Pragma("clang loop unroll(full)")
-        for (int f = 0; f < NF; ++f) nh_x4_mma(acc[f], nh_x8_pair(c0[f], c1[f], uint(fr)), bf);
+      for (int f = 0; f < NF; ++f) {
+        c0[f] = wok ? *(const device uint4*)(qr[f] + k0) : uint4(0);
+        c1[f] = wok ? *(const device uint4*)(qr[f] + k0 + 16) : uint4(0);
       }
+      nh_x8_v8_frags<NF>(a0, a1, b0, b1, c0, c1, acc);
     }
   }
   if (ks)
@@ -153,12 +182,22 @@ NI_INLINE void nh_x8_v8_impl(const device half* X, const device uchar* q, device
     uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
     uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float2 red[8 * 2 * 32];
-  nh_x8_v8_impl(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
+  nh_x8_v8_impl<false>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
+}
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_x8_v8_t(
+    const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 2 * 32];
+  nh_x8_v8_impl<true>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
 }
 
 // ---- up to 32 rows: nh_x4_mm's design (X staged per 128-element step in the A operands' order, split K summed in a
 // fixed order by the last part to arrive) ----
-template <int TB>
+// TAIL: K % 128 != 0 (K % 32 == 0): the last K % 128 inputs are one more step (in the last part), staged with its
+// 16-element blocks at and past K zero and its column pairs' codes there zero (none of them read)
+template <int TB, bool TAIL>
 NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device void* Y, constant NhV8P& p, uint tile,
                              uint pi, uint SK, uint sg, uint nsg, uint lane, uint tid, threadgroup half* xs,
                              device float2* part, device atomic_uint* cnt, threadgroup uint* arrival) {
@@ -166,7 +205,7 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
   const uint n0 = (tile * nsg + sg) * 8 * NF;
-  const uint N = p.N, K = p.K, nthr = nsg * 32, S_all = K / 128, per = (S_all + SK - 1) / SK;
+  const uint N = p.N, K = p.K, nthr = nsg * 32, S_all = TAIL ? (K + 127) / 128 : K / 128, per = (S_all + SK - 1) / SK;
   const uint st_lo = min(pi * per, S_all), S = min(st_lo + per, S_all) - st_lo;
   const device uchar* qr[NF];
   _Pragma("clang loop unroll(full)")
@@ -181,10 +220,12 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
     _Pragma("clang loop unroll(full)")
     for (int b = 0; b < TB; ++b) acc[f][b] = simdgroup_float8x8(0);
   for (uint st = 0; st < S; ++st) {
+    // the step's inputs before K: 128, or with TAIL the last step's K % 128 (a multiple of 32)
+    const uint valid = TAIL ? min(128u, K - (st_lo + st) * 128) : 128u;
     for (uint i = tid; i < 8 * TB * 8; i += nthr) {
       const uint t = i >> 3, pb = i & 7;
       uint4 v0 = uint4(0), v1 = uint4(0);
-      if (t < p.R) {
+      if (t < p.R && (!TAIL || 16 * pb < valid)) {
         const device uint4* src = (const device uint4*)(xp + size_t(t) * p.x_ld + st * 128 + 16 * pb);
         v0 = src[0];
         v1 = src[1];
@@ -202,8 +243,12 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
     uint4 c0[NF], c1[NF];
     _Pragma("clang loop unroll(full)")
     for (int f = 0; f < NF; ++f) {
-      c0[f] = *(const device uint4*)(qr[f] + st * 128);
-      c1[f] = *(const device uint4*)(qr[f] + st * 128 + 16);
+      if (!TAIL || 32 * c < valid) {
+        c0[f] = *(const device uint4*)(qr[f] + st * 128);
+        c1[f] = *(const device uint4*)(qr[f] + st * 128 + 16);
+      } else {
+        c0[f] = c1[f] = uint4(0);
+      }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     _Pragma("clang loop unroll(full)")
@@ -267,7 +312,7 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
 }
 
 // grid: (SK, ceil(N / 64)) threadgroups x 128 threads; part / cnt as nh_x4_mm16/24/32
-#define NH_X8_MM(NAME, TB)                                                                                         \
+#define NH_X8_MM(NAME, TB, TAIL)                                                                                   \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
                        const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]],                   \
                        const device uchar* Ws [[buffer(2)]], device void* Y [[buffer(3)]],                        \
@@ -279,8 +324,11 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
     threadgroup half xs[8 * TB * kX4Ld];                                                                           \
     threadgroup uint arrival[1];                                                                                   \
     if (ntg.x > 16u) return;                                                                                       \
-    nh_x8_mm_impl<TB>(X, Wq, Y, p, tg.y, tg.x, ntg.x, sg, nsg, lane, tid, xs, part, cnt, arrival);                 \
+    nh_x8_mm_impl<TB, TAIL>(X, Wq, Y, p, tg.y, tg.x, ntg.x, sg, nsg, lane, tid, xs, part, cnt, arrival);           \
   }
-NH_X8_MM(nh_x8_mm16, 2)
-NH_X8_MM(nh_x8_mm24, 3)
-NH_X8_MM(nh_x8_mm32, 4)
+NH_X8_MM(nh_x8_mm16, 2, false)
+NH_X8_MM(nh_x8_mm24, 3, false)
+NH_X8_MM(nh_x8_mm32, 4, false)
+NH_X8_MM(nh_x8_mm16_t, 2, true)
+NH_X8_MM(nh_x8_mm24_t, 3, true)
+NH_X8_MM(nh_x8_mm32_t, 4, true)

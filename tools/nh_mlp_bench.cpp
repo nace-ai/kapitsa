@@ -4,20 +4,26 @@
 //   nh_mlp_bench [--check] [--time] [--reps n] [filter ...]   (neither --check nor --time: both)
 // Checks (small sizes: they also run under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1, except attn5, whose 17 KB of
 // threadgroup memory validation doubles past 32 KB):
-//   tail   nh_x4_v8[_l0]_t, nh_x4_mm16/24/32[_l0]_t and nh_xb_v8_t at K % 128 = 32, 64, 96 against fp64 products of the
-//          kernels' operands; at K % 128 = 0 bit for bit against nh_x4_v8 / nh_x4_mm* / nh_xb_v8
+//   tail   nh_x4_v8[_l0]_t, nh_x4_mm16/24/32[_l0]_t, nh_xb_v8_t and nh_x8_v8_t / nh_x8_mm16/24/32_t at K % 128 = 32,
+//          64, 96 (K 96 and 160 too: no full step, one) against fp64 products of the kernels' operands; at K % 128 = 0
+//          bit for bit against nh_x4_v8 / nh_x4_mm* / nh_xb_v8 / nh_x8_v8 / nh_x8_mm*
+//   4b8    nh_x8_v8_t at the Nano 4B FP8's shapes (K 3136; N 17504, 5120, 1024, 12544), 1-8 rows, against fp64, and
+//          nh_x8_v8 at K 3072 / 3200 beside it (not small: run without validation)
 //   relu2  nh_x4_mv_relu2 (layout L2) bit for bit against nh_x4_mv_l0_relu2 (layout L0), and fp64
 //   ssm80  nh_ssm_h80 (a 21-row prefill chunk) and nh_ssm1 at head dim 80 (one decode row; a verify block that first
 //          commits pending rows) against an fp64 scan
 //   attn5  nh_attn_pf2_q1_h5_k32 bit for bit against nh_attn_prefill (40 query heads over 8 KV heads)
 //   nh_mlp_bench --dump F: the outputs of the MoE models' and Dory's kernels whose source the dense models' changed
-//          (nh_x4_v8 / nh_x4_mm16/24/32 in both layouts, nh_xb_v8, nh_x4_mv*) on seeded inputs, every byte into F: a
-//          build before the change and one after must write the same file
+//          (nh_x4_v8 / nh_x4_mm16/24/32 in both layouts, nh_xb_v8, nh_x4_mv*, nh_x8_v8 / nh_x8_mm16/24/32 / nh_x8_mv*)
+//          on seeded inputs, every byte into F: a build before the change and one after must write the same file
 // Timings: back-to-back calls in one command buffer over rotating weight copies (~200 MB per shape, so no call finds
 // its weights in the system cache), median of --reps buffers; us per call and GB/s of weight bytes.
 //   mv     one row: the Nano 4B's BF16 shapes (nh_mv_bf16_r1), the 9B v2's NVFP4 ones (nh_x4_mv in layouts L2 / L0),
 //          its BF16 layers' and its LM head (BF16 and Q8_0: nh_mv_q8_r1)
 //   v8     8 rows: nh_xb_v8[_t] at the 4B's shapes, nh_x4_v8[_t] at the 9B's
+//   4B fp8 the Nano 4B FP8's FP8 matrices: nh_x8_mv (one row), nh_x8_v8[_t] (2-8 rows) and nh_x8_mm16/24/32[_t] (9-32)
+//          against nh_gemm_fp8_m16 / m32, the tile GEMM they replace at K % 128 != 0; its LM head as Q8_0 rows
+//          (nh_mv_q8_r1, nh_v8_q8_s2)
 //   gemm   a 2048-row prefill chunk: nh_gemm_bf16w_m64 at the 4B's shapes, nh_gemm_fp4l2_m64 at the 9B's (TFLOPS)
 // (filter: substrings of the case label)
 #include "metal/gpu.h"
@@ -162,6 +168,37 @@ Mat make_bf16(uint32_t N, uint32_t K, int copies, bool keep) {
   return m;
 }
 
+// FP8 E4M3 rows as ModelOpt writes them (one byte per element, one scale per tensor), through the engine's repack
+// (nh_repack_rows); gs is NhMat::gs (the tensor scale x 256), w the codes' values x 2^-8 (exact), as the kernels take
+// them. Realistic codes: exponents mostly 3..12, some subnormals, both signs (no NaN code).
+Mat make_fp8(uint32_t N, uint32_t K, int copies, bool keep) {
+  Mat m;
+  m.fmt = NhFmt::FP8;
+  m.N = N, m.K = K, m.copies = copies;
+  m.gs = 0.0019f * 256.0f;
+  m.qb = size_t(N) * K;
+  std::vector<uint8_t> src(m.qb);
+  for (size_t i = 0; i < src.size(); ++i) {
+    const uint64_t r = rnd();
+    uint8_t b = (r & 31) == 0 ? uint8_t((r >> 8) & 7) : uint8_t(0x18 + ((r >> 8) % 0x48));
+    if ((b & 0x7F) == 0x7F) b = 0x7E;
+    src[i] = uint8_t(b | ((r >> 20) & 0x80));
+  }
+  Gpu& g = Gpu::get();
+  m.q = g.alloc(m.qb * size_t(copies), "mlp_fp8", false);
+  m.s = m.q;  // (no scales: the kernels' buffer 2 is unused)
+  nh_repack_rows(NhFmt::FP8, K, src.data(), N, m.q.as<uint8_t>(), nullptr);
+  for (int c = 1; c < copies; ++c) memcpy(m.q.as<uint8_t>() + size_t(c) * m.qb, m.q.as<uint8_t>(), m.qb);
+  if (keep) {
+    m.w.resize(size_t(N) * K);
+    for (size_t i = 0; i < m.w.size(); ++i) {
+      const double v = e4m3(uint8_t(src[i] & 0x7F)) / 256.0;
+      m.w[i] = float((src[i] & 0x80) ? -v : v);
+    }
+  }
+  return m;
+}
+
 Mat make_q8(uint32_t N, uint32_t K, int copies) {
   Mat m;
   m.fmt = NhFmt::Q8;
@@ -198,20 +235,23 @@ struct V8P {
   uint32_t epi;
 };
 
+// the x4 / x8 one-row kernels (8 rows per 64-thread threadgroup; fp32 x and y, the epilogue in the name)
+bool x_mv(const std::string& name) { return name.rfind("nh_x4_mv", 0) == 0 || name.rfind("nh_x8_mv", 0) == 0; }
+
 // One product: kernel `name` over rows [0, R) of x (fp32 for the one-row kernels, half for the rest) into y
 void enc_product(Encoder& e, const std::string& name, const Mat& m, int copy, const Buffer& x, const Buffer& y,
                  uint32_t R, uint32_t epi, const Buffer& part, const Buffer& cnt) {
   Gpu& g = Gpu::get();
   e.use(g.pipeline(name));
   const size_t qo = size_t(copy) * m.qb, so = m.sb ? size_t(copy) * m.sb : qo;
-  if (name.rfind("nh_x4_mv", 0) == 0 || name.rfind("nh_mv_", 0) == 0) {
+  if (x_mv(name) || name.rfind("nh_mv_", 0) == 0) {
     const MvP p{m.N, m.K, m.K, m.N, m.gs, R};
     e.buf(0, m.q, qo);
     e.buf(1, m.s, so);
     e.buf(2, x);
     e.buf(3, y);
     e.bytes(4, &p, sizeof p);
-    if (name.rfind("nh_x4_mv", 0) == 0) e.dispatch((m.N + 7) / 8, 1, 1, 64);
+    if (x_mv(name)) e.dispatch((m.N + 7) / 8, 1, 1, 64);
     else {
       const uint32_t rk = R <= 1 ? 1 : R <= 2 ? 2 : R <= 4 ? 4 : 8, nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1;
       e.dispatch((m.N + nr * 4 - 1) / (nr * 4), 1, 1, 128);
@@ -259,7 +299,13 @@ void enc_product(Encoder& e, const std::string& name, const Mat& m, int copy, co
     e.dispatch((m.N + 63) / 64, (R + bm - 1) / bm, 1, 128);
     return;
   }
-  if (name.rfind("nh_x4_mm", 0) == 0) {
+  if (name.rfind("nh_v8_", 0) == 0) {  // nh_v8.metal's split-K kernels: 8 NB rows per 128-thread threadgroup
+    const uint32_t nb = uint32_t(name.back() - '0');
+    e.buf(8, part);  // (the IQ2 grid's slot: Q8 and FP4 do not read it)
+    e.dispatch((m.N + 8 * nb - 1) / (8 * nb), 1, 1, 128);
+    return;
+  }
+  if (name.rfind("nh_x4_mm", 0) == 0 || name.rfind("nh_x8_mm", 0) == 0) {
     const uint32_t sk = m.K <= 8192 ? 4 : 8;
     e.buf(5, part);
     e.buf(6, cnt);
@@ -287,7 +333,7 @@ bool want(const std::vector<std::string>& filters, const std::string& label) {
 // y (R rows, fp32 or half per epi) against the fp64 products of m's operands with x (half rows) times gs
 void check_product(const std::string& name, const Mat& m, uint32_t R, uint32_t epi, Buffer& part, Buffer& cnt) {
   Gpu& g = Gpu::get();
-  const bool mv = name.rfind("nh_x4_mv", 0) == 0, half_in = !mv;
+  const bool mv = x_mv(name), half_in = !mv;
   std::vector<float> xf(size_t(R) * m.K);
   for (auto& v : xf) v = half_round(nrand());
   Buffer x = g.alloc(xf.size() * (half_in ? 2 : 4), "mlp_x");
@@ -301,15 +347,22 @@ void check_product(const std::string& name, const Mat& m, uint32_t R, uint32_t e
   auto e = g.begin();
   enc_product(*e, name, m, 0, x, y, R, epi, part, cnt);
   e->commit_and_wait();
+  std::vector<double> ref(size_t(R) * m.N);
+  parallel_for(m.N, [&](size_t n0, size_t n1) {
+    for (uint32_t t = 0; t < R; ++t)
+      for (size_t n = n0; n < n1; ++n) {
+        double a = 0;
+        const float* wr = m.w.data() + n * m.K;
+        const float* xr = xf.data() + size_t(t) * m.K;
+        for (uint32_t k = 0; k < m.K; ++k) a += double(wr[k]) * double(xr[k]);
+        ref[size_t(t) * m.N + n] = a;
+      }
+  });
   double err = 0, mx = 0;
   int bad_nan = 0;
   for (uint32_t t = 0; t < R; ++t)
     for (uint32_t n = 0; n < m.N; ++n) {
-      double a = 0;
-      const float* wr = m.w.data() + size_t(n) * m.K;
-      const float* xr = xf.data() + size_t(t) * m.K;
-      for (uint32_t k = 0; k < m.K; ++k) a += double(wr[k]) * double(xr[k]);
-      a *= m.gs;
+      double a = ref[size_t(t) * m.N + n] * m.gs;
       if (epi == 2) a = a > 0 ? a * a : 0.0;
       const double v = half_out ? double(float(y.as<__fp16>()[size_t(t) * m.N + n])) : double(y.as<float>()[size_t(t) * m.N + n]);
       if (!std::isfinite(v)) ++bad_nan;
@@ -330,7 +383,7 @@ void check_product(const std::string& name, const Mat& m, uint32_t R, uint32_t e
 void check_twins(const std::string& a, const Mat& ma, const std::string& b, const Mat& mb, uint32_t R, uint32_t epi,
                  Buffer& part, Buffer& cnt) {
   Gpu& g = Gpu::get();
-  const bool half_in = a.rfind("nh_x4_mv", 0) != 0;
+  const bool half_in = !x_mv(a);
   Buffer x = g.alloc(size_t(R) * ma.K * (half_in ? 2 : 4), "mlp_x");
   for (size_t i = 0; i < size_t(R) * ma.K; ++i) {
     // subnormal and tiny inputs too (layout L2's products must stay L0's)
@@ -362,7 +415,7 @@ void checks_tail(const std::vector<std::string>& f) {
   Buffer part = g.alloc(size_t(8) * 16 * 2048 * 4, "mlp_part"), cnt = g.alloc(4096, "mlp_cnt");
   memset(cnt.ptr(), 0, cnt.size);
   const uint32_t N = 160;  // 2.5 row tiles of 64, 10 of 16: partial tiles at both sizes
-  for (uint32_t K : {1056u, 1088u, 1120u, 3136u}) {
+  for (uint32_t K : {96u, 160u, 1056u, 1088u, 1120u, 3136u}) {  // (96, 160: no full step, one)
     for (bool l2 : {true, false}) {
       Mat m = make_fp4(N, K, l2, 1, true);
       const std::string sfx = std::string(l2 ? "" : "_l0") + "_t";
@@ -381,6 +434,15 @@ void checks_tail(const std::vector<std::string>& f) {
         for (uint32_t epi : {0u, 2u}) check_product("nh_xb_v8_t", b, R, epi, part, cnt);
       release(b);
     }
+    if (want(f, "tail+fp8")) {
+      Mat m8 = make_fp8(N, K, 1, true);
+      for (uint32_t R : {1u, 2u, 5u, 8u})
+        for (uint32_t epi : {0u, 2u}) check_product("nh_x8_v8_t", m8, R, epi, part, cnt);
+      for (auto [kn, R] : {std::pair<const char*, uint32_t>{"nh_x8_mm16_t", 9}, {"nh_x8_mm16_t", 16},
+                           {"nh_x8_mm24_t", 17}, {"nh_x8_mm24_t", 24}, {"nh_x8_mm32_t", 25}, {"nh_x8_mm32_t", 32}})
+        check_product(kn, m8, R, R == 16 ? 2u : 0u, part, cnt);
+      release(m8);
+    }
   }
   // K % 128 == 0: the tail kernels are their twins
   if (want(f, "tail+twin")) {
@@ -394,7 +456,34 @@ void checks_tail(const std::vector<std::string>& f) {
     Mat b = make_bf16(N, 1024, 1, false);
     check_twins("nh_xb_v8_t", b, "nh_xb_v8", b, 7, 0, part, cnt);
     release(b);
+    Mat m8 = make_fp8(N, 1024, 1, false);
+    for (uint32_t epi : {0u, 2u}) check_twins("nh_x8_v8_t", m8, "nh_x8_v8", m8, 8, epi, part, cnt);
+    for (auto [kn, R] : {std::pair<const char*, uint32_t>{"nh_x8_mm16", 13}, {"nh_x8_mm24", 20}, {"nh_x8_mm32", 30}})
+      check_twins(std::string(kn) + "_t", m8, kn, m8, R, 0, part, cnt);
+    release(m8);
   }
+  g.release(part);
+  g.release(cnt);
+}
+
+// The Nano 4B FP8's products of K % 128 != 0 at its shapes (hidden 3136: Mamba in_proj, attention q / k / v, MLP up,
+// epilogues as the model runs them, and the up's without relu^2) on nh_x8_v8_t, 1-8 rows, against fp64; nh_x8_v8 at
+// K 3072 and 3200 (K % 128 == 0) beside them
+void checks_4b8(const std::vector<std::string>& f) {
+  if (!want(f, "4b8")) return;
+  Gpu& g = Gpu::get();
+  Buffer part = g.alloc(4096, "mlp_part"), cnt = g.alloc(4096, "mlp_cnt");
+  memset(cnt.ptr(), 0, cnt.size);
+  const struct {
+    uint32_t N, epi;
+  } sh[] = {{17504, 0}, {5120, 0}, {1024, 0}, {12544, 2}};
+  for (const auto& s : sh)
+    for (uint32_t K : {3136u, 3072u, 3200u}) {
+      Mat m = make_fp8(s.N, K, 1, true);
+      for (uint32_t epi = 0; epi <= s.epi; epi += 2)
+        for (uint32_t R = 1; R <= 8; ++R) check_product(K % 128 ? "nh_x8_v8_t" : "nh_x8_v8", m, R, epi, part, cnt);
+      release(m);
+    }
   g.release(part);
   g.release(cnt);
 }
@@ -654,7 +743,7 @@ void dump(const std::string& path) {
   memset(cnt.ptr(), 0, cnt.size);
   size_t n = 0;
   auto run = [&](const std::string& name, const Mat& m, uint32_t R, uint32_t epi) {
-    const bool mv = name.rfind("nh_x4_mv", 0) == 0;
+    const bool mv = x_mv(name);
     Buffer x = g.alloc(size_t(R) * m.K * 4, "mlp_x"), y = g.alloc(size_t(R) * m.N * 4 + 64, "mlp_y");
     for (size_t i = 0; i < size_t(R) * m.K; ++i) {
       float v = nrand();
@@ -692,6 +781,17 @@ void dump(const std::string& path) {
       for (uint32_t epi : {0u, 1u, 2u, 3u}) run("nh_xb_v8", m, R, epi);
     release(m);
   }
+  for (auto [N, K] : {std::pair<uint32_t, uint32_t>{1000, 2048}, {4096, 4096}, {256, 4096}, {4096, 8192}}) {
+    g_rng = 50 + N + K;
+    Mat m = make_fp8(N, K, 1, false);
+    for (uint32_t R : {1u, 2u, 5u, 8u})
+      for (uint32_t epi : {0u, 1u, 2u, 3u}) run("nh_x8_v8", m, R, epi);
+    for (auto [kn, R] : {std::pair<const char*, uint32_t>{"nh_x8_mm16", 9}, {"nh_x8_mm16", 16}, {"nh_x8_mm24", 20},
+                         {"nh_x8_mm32", 25}, {"nh_x8_mm32", 32}})
+      for (uint32_t epi : {0u, 1u, 2u}) run(kn, m, R, epi);
+    for (const char* e : {"", "_add", "_relu2"}) run(std::string("nh_x8_mv") + e, m, 1, 0);
+    release(m);
+  }
   fclose(f);
   g.release(part);
   g.release(cnt);
@@ -707,7 +807,7 @@ double median(std::vector<double> v) {
 void time_case(const std::string& label, const std::string& name, const Mat& m, uint32_t R, uint32_t epi, int reps,
                Buffer& part, Buffer& cnt) {
   Gpu& g = Gpu::get();
-  const bool half_in = name.rfind("nh_x4_mv", 0) != 0 && name.rfind("nh_mv_", 0) != 0;
+  const bool half_in = !x_mv(name) && name.rfind("nh_mv_", 0) != 0;
   Buffer x = g.alloc(size_t(R) * m.K * 4, "mlp_x"), y = g.alloc(size_t(R) * m.N * 4 + 64, "mlp_y");
   for (size_t i = 0; i < size_t(R) * m.K; ++i) {
     if (half_in) x.as<__fp16>()[i] = __fp16(nrand());
@@ -768,6 +868,14 @@ void timings(const std::vector<std::string>& f, int reps) {
     time_case(l, std::string("nh_mv_bf16_r1") + (s.epi == 1 ? "_add" : s.epi == 2 ? "_relu2" : ""), m, 1, 0, reps, part, cnt);
     release(m);
   }
+  // the Nano 4B FP8's LM head as Q8_0 rows (its default): one row (nh_mv_q8_r1), 2-8 rows (nh_v8_q8_s2, as enc_gemm
+  // runs a 131k-row head)
+  if (want(f, "4B head q8")) {
+    Mat m = make_q8(131072, 3136, 1);
+    time_case("4B head q8 mv", "nh_mv_q8_r1", m, 1, 0, reps, part, cnt);
+    for (uint32_t R : {2u, 5u, 8u}) time_case("4B head q8 v8", "nh_v8_q8_s2", m, R, 0, reps, part, cnt);
+    release(m);
+  }
   if (want(f, "9B head q8 mv")) {
     Mat m = make_q8(131072, 4480, 1);
     time_case("9B head q8 mv", "nh_mv_q8_r1", m, 1, 0, reps, part, cnt);
@@ -794,6 +902,33 @@ void timings(const std::vector<std::string>& f, int reps) {
     if (!want(f, l + "+fp4")) continue;
     Mat m = make_fp4(s.N, s.K, true, copies_for(size_t(s.N) * s.K * 9 / 16), false);
     time_case(l, s.K % 128 ? "nh_x4_v8_t" : "nh_x4_v8", m, 8, s.epi == 2 ? 2 : 0, reps, part, cnt);
+    release(m);
+  }
+  // Nano 4B FP8: its FP8 matrices (the other projections and the head are BF16): one row (x8 mv), 2-8 rows on the x8
+  // kernels against the tile GEMM the tail variants replace (nh_gemm_fp8_m16), 9-32 rows on the split-K kernels against
+  // nh_gemm_fp8_m16 / m32
+  const S f4[] = {{"4B fp8 in_proj", 17504, 3136, 0}, {"4B fp8 out_proj", 3136, 7680, 1},
+                  {"4B fp8 mlp up", 12544, 3136, 2},  {"4B fp8 mlp down", 3136, 12544, 1}};
+  for (const S& s : f4) {
+    const std::string l = std::string(s.label);
+    if (!want(f, l + " mv+fp8") && !want(f, l + " v8+fp8") && !want(f, l + " mm+fp8")) continue;
+    Mat m = make_fp8(s.N, s.K, copies_for(size_t(s.N) * s.K), false);
+    const std::string t = s.K % 128 ? "_t" : "";
+    const uint32_t epi = s.epi == 2 ? 2 : 0;
+    if (want(f, l + " mv+fp8"))
+      time_case(l + " mv", std::string("nh_x8_mv") + (s.epi == 1 ? "_add" : s.epi == 2 ? "_relu2" : ""), m, 1, 0,
+                reps, part, cnt);
+    if (want(f, l + " v8+fp8"))
+      for (uint32_t R : {2u, 3u, 5u, 8u}) {
+        time_case(l + " v8", "nh_x8_v8" + t, m, R, epi, reps, part, cnt);
+        time_case(l + " v8", "nh_gemm_fp8_m16", m, R, epi, reps, part, cnt);
+      }
+    if (want(f, l + " mm+fp8"))
+      for (uint32_t R : {9u, 16u, 24u, 32u}) {
+        time_case(l + " mm", std::string(R <= 16 ? "nh_x8_mm16" : R <= 24 ? "nh_x8_mm24" : "nh_x8_mm32") + t, m, R, epi,
+                  reps, part, cnt);
+        time_case(l + " mm", R <= 16 ? "nh_gemm_fp8_m16" : "nh_gemm_fp8_m32", m, R, epi, reps, part, cnt);
+      }
     release(m);
   }
   for (const S& s : b4) {
@@ -889,6 +1024,7 @@ int main(int argc, char** argv) {
   }
   if (check) {
     checks_tail(filters);
+    checks_4b8(filters);
     checks_relu2(filters);
     checks_ssm(filters);
     checks_attn(filters);
