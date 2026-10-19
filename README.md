@@ -31,9 +31,9 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5 4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 73 |
-| Qwen3.8 27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark> | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
-| Qwen3.6 35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | 86 |
+| Qwen3.5<br>4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 73 |
+| Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark> | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
+| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | 86 |
 
 #### Nemotron
 
@@ -57,10 +57,10 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5 4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
-| Qwen3.8 27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.6 35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.8 Flash‑Next 180B‑A7B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77 |
+| Qwen3.5<br>4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
+| Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
+| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
+| Qwen3.8<br>Flash‑Next<br>180B‑A7B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77 |
 
 #### Nemotron
 
