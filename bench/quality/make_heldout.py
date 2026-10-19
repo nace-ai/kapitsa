@@ -3,9 +3,11 @@
 
   make_heldout.py <model dir with tokenizer.json (+ chat template)> [out dir]
 
-Four sequences of 1024 tokens from fixed texts in src/ (Kapitsa's own code and docs, and a coding-agent chat
-written for this set): code_cpp (C++), code_py (Python), prose (English technical prose), chat (a multi-turn
-agent conversation with tool calls, rendered with the model's chat template). The Qwen3.5 / 3.6 / 3.8 models share
+Five sequences of 1024 tokens from fixed texts in src/ (Kapitsa's own code and docs, a coding-agent chat written
+for this set, and competition math): code_cpp (C++), code_py (Python), prose (English technical prose), chat (a
+multi-turn agent conversation with tool calls, rendered with the model's chat template), math (level-5 MATH-500
+problems and their reference solutions as a chat, rendered the same way; src/math.json names the problems). The
+published quality tables average the first four; math is reported on its own. The Qwen3.5 / 3.6 / 3.8 models share
 one tokenizer; the script prints a hash of the ids so runs can be matched. Needs `tokenizers` and `jinja2`.
 """
 import hashlib, json, os, sys
@@ -32,6 +34,7 @@ texts = {
     "code_py": open(os.path.join(here, "src/code_py.txt")).read(),
     "prose": open(os.path.join(here, "src/prose.txt")).read(),
     "chat": render_chat(json.load(open(os.path.join(here, "src/chat.json")))["messages"]),
+    "math": render_chat(json.load(open(os.path.join(here, "src/math.json")))["messages"]),
 }
 h = hashlib.sha256()
 for name, text in texts.items():

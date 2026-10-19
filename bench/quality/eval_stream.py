@@ -7,19 +7,29 @@ sequences run through each layer in BF16 with mlx-lm's
 own modules. Every candidate quantization runs through the same layer beside it, on its own hidden states:
   rtn:<spec>   round-to-nearest from the BF16 layer with mx.quantize (what mlx_lm.convert does), recipe below
   repo:<id>    the candidate's own published tensors, streamed the same way (DWQ, mixed recipes, ...)
-At the end the reference's final norm and LM head give fp32 log-probs; each candidate's (its own head, dequantized
-to fp32) are compared position by position: exact KL(BF16 || candidate) over the whole vocabulary, top-1 agreement,
-perplexity. The BF16 run's top-K log-probs can be written as a reference file for Kapitsa's tools/ni_eval --ref.
+At the end the reference's final norm and LM head give fp32 log-probs; each candidate's (its own head) are compared
+position by position: exact KL(BF16 || candidate) over the whole vocabulary, top-1 agreement, perplexity. The BF16
+run's top-K log-probs can be written as a reference file for Kapitsa's tools/ni_eval --ref.
 
-  eval_stream.py --base <repo>[@rev] --cand NAME=SPEC ... --ids @f1 @f2 ... [--out results.json]
-                 [--dump-ref ref.bin] [--topk 256] [--budget-gb 6] [--conns 16] [--layers N] [--local DIR]
+  eval_stream.py --base <repo>[@rev] --cand NAME=SPEC ... [--cands FILE] --ids @f1 @f2 ... [--out results.json]
+                 [--aside NAME,...] [--positions out.npz] [--dump-ref ref.bin] [--topk 256] [--budget-gb 6]
+                 [--conns 16] [--layers N] [--local DIR]
 
-rtn spec: rtn:<bits>[:<group>] or rtn:<mode> (mxfp4, nvfp4, mxfp8), then optional ",role=<bits>[:<group>]" overrides
-for roles embed, head, attn, gdn, router, experts, shared, mlp. MLX's own default for MoE models (8-bit router and
-shared-expert gate) applies unless overridden. Example: rtn:4,attn=8,gdn=8,embed=8,head=8 (8-bit except the experts).
+rtn spec: <default>[,<sel>=<q>]...: the default is <bits>[:<group>], an MLX mode (mxfp4, nvfp4, mxfp8) or bf16
+(unquantized), then overrides, applied left to right (a later match wins). <sel> is a role, L<a>[-<b>] (every
+linear of decoder layers a..b) or L<a>[-<b>].<role>. Roles: embed, head, attn, gdn, mix (attn or gdn: the layer's
+token mixer), mlp (dense MLP), down (down_proj), gu (gate_proj and up_proj), router, experts, shared. MLX's own
+default for MoE models (8-bit router and shared-expert gate) applies unless overridden. Examples:
+rtn:4,attn=8,gdn=8,embed=8,head=8 (8-bit except the experts); rtn:4,L56-63=8 (layers 56-63 8-bit);
+rtn:bf16,L5.mlp=4 (the BF16 model with layer 5's MLP 4-bit: the KL that one part adds).
+
+Candidates that agree on the embedding and on every layer so far share one hidden state, and a layer is quantized
+once per distinct recipe: forks such as rtn:bf16,L<i>.mix=4 for every i cost one pass from layer i on, not a model
+each. --cands reads NAME=SPEC lines. --aside names sequences kept out of the headline numbers (reported per
+sequence only). --positions writes every candidate's per-position KL, top-1 agreement and NLL.
 --local DIR reads the base tensors from a local MLX directory instead (tests). --layers N stops after N layers
 (debug: the head then runs on partial hidden states). GPU work holds ~/.cache/nace-gpu.lock, released while waiting
-for downloads.
+for downloads (NI_LOCK_HELD=1: the caller holds it for the whole run).
 """
 import argparse
 import fcntl
@@ -31,7 +41,7 @@ import sys
 import threading
 import time
 import urllib.request
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
 import mlx.core as mx
@@ -229,30 +239,35 @@ class Prefetch:
 
 # ---------------------------------------------------------------- recipes
 
-ROLES = ("embed", "head", "attn", "gdn", "router", "experts", "shared", "mlp")
+ROLES = ("embed", "head", "attn", "gdn", "mix", "mlp", "down", "gu", "router", "experts", "shared", "all")
 
 
-def role_of(path):
-    """Role of a module path relative to a decoder layer (or 'embed' / 'head')."""
+def roles_of(path):
+    """Roles of a module path relative to a decoder layer (or 'embed' / 'head')."""
     if path in ("embed", "head"):
-        return path
+        return {path}
+    r = set()
     if path.startswith("linear_attn."):
-        return "gdn"
-    if path.startswith("self_attn."):
-        return "attn"
-    if path in ("mlp.gate", "mlp.shared_expert_gate"):
-        return "router"
-    if path.startswith("mlp.switch_mlp."):
-        return "experts"
-    if path.startswith("mlp.shared_expert."):
-        return "shared"
-    if path.startswith("mlp."):
-        return "mlp"
-    return None
+        r |= {"gdn", "mix"}
+    elif path.startswith("self_attn."):
+        r |= {"attn", "mix"}
+    elif path in ("mlp.gate", "mlp.shared_expert_gate"):
+        r.add("router")
+    elif path.startswith("mlp.switch_mlp."):
+        r.add("experts")
+    elif path.startswith("mlp.shared_expert."):
+        r.add("shared")
+    elif path.startswith("mlp."):
+        r.add("mlp")
+    if path.endswith("down_proj"):
+        r.add("down")
+    elif path.endswith(("gate_proj", "up_proj")):
+        r.add("gu")
+    return r
 
 
 def parse_q(s):
-    """'4' / '4:32' / 'nvfp4' -> dict(bits, group_size, mode)"""
+    """'4' / '4:32' / 'nvfp4' -> dict(bits, group_size, mode); 'bf16' -> None"""
     if s in ("mxfp4", "nvfp4", "mxfp8"):
         return {"mode": s, "bits": 8 if s == "mxfp8" else 4, "group_size": 16 if s == "nvfp4" else 32}
     if s in ("bf16", "none"):
@@ -261,37 +276,42 @@ def parse_q(s):
     return {"mode": "affine", "bits": int(b), "group_size": int(g or 64)}
 
 
+def qkey(q):
+    return None if q is None else (q["bits"], q["group_size"], q["mode"])
+
+
 class Recipe:
     def __init__(self, spec, moe):
         parts = spec.split(",")
         self.default = parse_q(parts[0])
-        self.over = {}
+        self.rules = []  # (layer range or None, role, q): applied in order, a later match wins
         if moe:  # mlx-lm's quant_predicate for qwen3_5 MoE: 8-bit router and shared-expert gate
-            self.over["router"] = {"mode": "affine", "bits": 8, "group_size": 64}
+            self.rules.append((None, "router", {"mode": "affine", "bits": 8, "group_size": 64}))
         for p in parts[1:]:
-            r, _, q = p.partition("=")
-            if r not in ROLES:
-                raise SystemExit(f"unknown role {r} in {spec}")
-            self.over[r] = parse_q(q)
+            sel, _, q = p.partition("=")
+            layers, role = None, sel
+            if sel[:1] == "L" and sel[1:2].isdigit():
+                rng, _, role = sel[1:].partition(".")
+                a, _, b = rng.partition("-")
+                layers = (int(a), int(b or a))
+                role = role or "all"
+            if role not in ROLES or (role == "all" and layers is None) or (layers and role in ("embed", "head")):
+                raise SystemExit(f"bad override {p} in {spec}")
+            self.rules.append((layers, role, parse_q(q)))
 
-    def q(self, path):
-        r = role_of(path)
-        return self.over.get(r, self.default) if r in self.over else self.default
+    def q(self, path, layer=None):
+        """quantization of 'embed', 'head' or a module path of decoder layer `layer` (None: bf16)"""
+        rs = roles_of(path)
+        out = self.default
+        for layers, role, q in self.rules:
+            if layers is not None and (layer is None or not layers[0] <= layer <= layers[1]):
+                continue
+            if role in rs or (role == "all" and layer is not None):
+                out = q
+        return out
 
 
 # ---------------------------------------------------------------- model pieces
-
-def quantize_module(mod, prefix, qfor):
-    """nn.quantize over a module tree with per-path settings qfor(path) -> dict or None (keep)."""
-    def pred(path, m):
-        if not hasattr(m, "to_quantized"):
-            return False
-        q = qfor(path if not prefix else prefix)
-        if q is None:
-            return False
-        return {"group_size": q["group_size"], "bits": q["bits"], "mode": q["mode"]}
-    nn.quantize(mod, class_predicate=pred)
-
 
 def repo_qcfg(cfg, full_prefix):
     """qfor(path) from an MLX repo's config quantization block (per-module entries keyed by full path)."""
@@ -329,17 +349,23 @@ def load_layer(targs, i, weights, qfor=None):
     return layer
 
 
-def rtn_layer(targs, i, bf16_weights, recipe):
+def rtn_layer(targs, i, bf16_weights, plan):
+    """DecoderLayer i from its BF16 weights, each linear quantized as `plan` ({path: qkey or None}) says."""
     layer = qwen3_5.DecoderLayer(targs, i)
     layer.load_weights(list(bf16_weights.items()), strict=True)
 
     def pred(path, m):
         if not hasattr(m, "to_quantized"):
             return False
-        q = recipe.q(path)
-        return False if q is None else {"group_size": q["group_size"], "bits": q["bits"], "mode": q["mode"]}
+        k = plan.get(path)
+        return False if k is None else {"bits": k[0], "group_size": k[1], "mode": k[2]}
     nn.quantize(layer, class_predicate=pred)
     return layer
+
+
+def linear_paths(targs, i):
+    """Paths of the quantizable modules of decoder layer i (built lazily: nothing is allocated)."""
+    return sorted(p for p, m in qwen3_5.DecoderLayer(targs, i).named_modules() if hasattr(m, "to_quantized"))
 
 
 def dequant_f32(m):
@@ -350,6 +376,27 @@ def dequant_f32(m):
     return m.weight.astype(mx.float32)
 
 
+class Head:
+    """An LM head (or a tied embedding) as fp32 logits of fp32 rows: x @ W.T, quantized or not (no dequantized copy
+    of a quantized head is kept)."""
+
+    def __init__(self, w, scales=None, biases=None, q=None):
+        if scales is None:
+            self.w = w.astype(mx.float32)
+            mx.eval(self.w)
+            self.q = None
+        else:
+            self.w, self.s, self.b, self.q = w, scales.astype(mx.float32), \
+                (biases.astype(mx.float32) if biases is not None else None), q
+            mx.eval(self.w, self.s, *([self.b] if self.b is not None else []))
+
+    def __call__(self, x):
+        if self.q is None:
+            return x @ self.w.T
+        return mx.quantized_matmul(x, self.w, self.s, self.b, transpose=True, group_size=self.q["group_size"],
+                                   bits=self.q["bits"], mode=self.q["mode"])
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -357,8 +404,11 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--local")
     ap.add_argument("--cand", action="append", default=[])
+    ap.add_argument("--cands", help="file of NAME=SPEC lines (# comments)")
     ap.add_argument("--ids", nargs="+", required=True)
+    ap.add_argument("--aside", default="", help="sequences left out of the headline numbers (comma list)")
     ap.add_argument("--out")
+    ap.add_argument("--positions", help="npz of per-position KL / top-1 / NLL per candidate")
     ap.add_argument("--dump-ref")
     ap.add_argument("--topk", type=int, default=256)
     ap.add_argument("--budget-gb", type=float, default=6.0)
@@ -373,6 +423,9 @@ def main():
     if a.cpu:
         mx.set_default_device(mx.cpu)
         os.environ["NI_LOCK_HELD"] = "1"
+    cand_specs = list(a.cand)
+    if a.cands:
+        cand_specs += [l.strip() for l in open(a.cands) if l.strip() and not l.lstrip().startswith("#")]
 
     seqs = []
     for f in a.ids:
@@ -383,6 +436,8 @@ def main():
     n = len(seqs[0])
     assert all(len(s) == n for s in seqs), "sequences must have one length"
     names = [os.path.basename(f.lstrip("@")).rsplit(".", 1)[0] for f in a.ids]
+    aside = set(x for x in a.aside.split(",") if x)
+    main_rows = [b for b, nm in enumerate(names) if nm not in aside]
 
     t0 = time.time()
     base = Source(a.base, a.local, a.conns)
@@ -395,18 +450,23 @@ def main():
     log(f"base {base.repo}@{(base.rev or 'local')[:12]}: {len(base.index)} tensors, {L} layers, "
         f"{'MoE' if moe else 'dense'}, hidden {targs.hidden_size}")
 
-    cands = []  # (name, kind, recipe | Source)
-    for c in a.cand:
+    # candidates: (name, kind, recipe | Source, spec); the reference is the BF16 recipe
+    cands = [("bf16", "rtn", Recipe("bf16", False), "bf16")]
+    for c in cand_specs:
         name, _, spec = c.partition("=")
+        if name == "bf16" or any(name == x[0] for x in cands):
+            raise SystemExit(f"duplicate candidate name {name}")
         if spec.startswith("rtn:"):
-            cands.append((name, "rtn", Recipe(spec[4:], moe)))
+            cands.append((name, "rtn", Recipe(spec[4:], moe), spec))
         elif spec.startswith("repo:"):
-            s = Source(spec[5:], None, a.conns)
-            cands.append((name, "repo", s))
-            log(f"candidate {name}: {s.repo}@{s.rev[:12]}, {len(s.index)} tensors")
+            s = Source(None, spec[5:], a.conns) if os.path.isdir(spec[5:]) else Source(spec[5:], None, a.conns)
+            cands.append((name, "repo", s, spec))
+            log(f"candidate {name}: {s.repo}@{(s.rev or 'local')[:12]}, {len(s.index)} tensors")
         else:
             raise SystemExit(f"bad candidate {c}")
-    sources = [base] + [c[2] for c in cands if c[1] == "repo"]
+    repos = [c for c in cands if c[1] == "repo"]
+    sources = [base] + [c[2] for c in repos]
+    part_of = {c[0]: 1 + j for j, c in enumerate(repos)}  # index of a repo candidate's tensors in a unit's parts
     units = ["embed"] + [("layer", i) for i in range(L)] + ["head"]
     pf = Prefetch(sources, units, a.budget_gb * 1e9, a.conns)
 
@@ -417,9 +477,6 @@ def main():
         if u == "head":
             return k[:k.index("model.norm")] if "model.norm" in k else k[:k.index("lm_head")]
         return k[:k.index(".layers.") + len(".layers.")] + f"{u[1]}."
-
-    ids = mx.array(seqs)
-    hidden = OrderedDict()  # model name -> [B, N, H] bf16 (fp32 with --f32)
 
     def f32(m):
         """--f32: a module's floating-point parameters (bf16 weights, norms, quantization scales and biases) in fp32;
@@ -433,39 +490,58 @@ def main():
     def act(h):
         return h.astype(mx.float32) if a.f32 else h
 
+    # Shared hidden states: a stream is named by the recipe that produced it (embedding, then each layer's plan);
+    # candidates on the same stream share it. cur[name] = the candidate's stream id.
+    sig_ids = {}
+
+    def sig(key):
+        return sig_ids.setdefault(key, len(sig_ids))
+
+    hidden = {}
+    cur = {}
+    ids = mx.array(seqs)
+
     # embeddings
     parts, _ = pf.get("embed")
     GpuLock.take()
     bt = parts[0]
     emb_name = next(k for k in bt if k.endswith("embed_tokens.weight"))
     E = bt[emb_name]
-    hidden["bf16"] = act(E[ids])
-    embeds = {"bf16": E}
-    ri = 1
-    for name, kind, obj in cands:
+    embeds = {}  # qkey or ('repo', name) -> Embedding module (the tied head of tied models)
+    for name, kind, obj, _ in cands:
         if kind == "rtn":
-            q = obj.q("embed")
-            m = nn.Embedding(*E.shape)
-            m.weight = E
-            if q is not None:
-                m = m.to_quantized(group_size=q["group_size"], bits=q["bits"], mode=q["mode"])
+            key = qkey(obj.q("embed"))
+            if key not in embeds:
+                m = nn.Embedding(*E.shape)
+                m.weight = E
+                if key is not None:
+                    m = m.to_quantized(group_size=key[1], bits=key[0], mode=key[2])
+                embeds[key] = m
         else:
-            t = parts[ri]
-            ri += 1
+            key = ("repo", name)
             pre = prefix_of(obj, "embed")
-            ew = strip(t, pre + "embed_tokens.")
-            qfor = repo_qcfg(obj.config, pre)
+            ew = strip(parts[part_of[name]], pre + "embed_tokens.")
             m = nn.Embedding(*E.shape)
             if "scales" in ew:
-                q = qfor("embed_tokens")
+                q = repo_qcfg(obj.config, pre)("embed_tokens")
                 m = m.to_quantized(group_size=q["group_size"], bits=q["bits"], mode=q["mode"])
             m.load_weights(list(ew.items()))
-        embeds[name] = m
-        hidden[name] = act(m(ids))
-    mx.eval(list(hidden.values()))
+            embeds[key] = m
+        s = sig(("embed", key))
+        cur[name] = s
+        if s not in hidden:
+            m = embeds[key]
+            if a.f32 and hasattr(m, "scales"):  # dequantized rows in fp32 (no bf16 rounding of s * q + b)
+                bi = getattr(m, "biases", None)
+                hidden[s] = mx.dequantize(m.weight[ids], m.scales[ids], bi[ids] if bi is not None else None,
+                                          m.group_size, m.bits, mode=m.mode, dtype=mx.float32)
+            else:
+                hidden[s] = act(m(ids))
+            mx.eval(hidden[s])
     pf.done("embed")
-    log(f"embeddings done ({pf.rate():.1f} MB/s)")
+    log(f"embeddings done: {len(hidden)} streams ({pf.rate():.1f} MB/s)")
 
+    paths = {}  # layer kind (is_linear) -> quantizable module paths
     for i in range(L):
         u = ("layer", i)
         parts, sz = pf.get(u)
@@ -473,28 +549,45 @@ def main():
         tl = time.time()
         pre = prefix_of(base, u)
         bw = strip(parts[0], pre)
-        layer = f32(load_layer(targs, i, bw))
-        hidden["bf16"] = layer(hidden["bf16"], mask="causal" if not layer.is_linear else None)
-        mx.eval(hidden["bf16"])
-        del layer
-        ri = 1
-        for name, kind, obj in cands:
+        lin = (i + 1) % targs.full_attention_interval != 0
+        if lin not in paths:
+            paths[lin] = linear_paths(targs, i)
+        # each candidate's plan for this layer; streams that need it
+        plans = OrderedDict()  # plan key -> {old stream: new stream}
+        nxt = {}
+        for name, kind, obj, _ in cands:
             if kind == "rtn":
-                lyr = f32(rtn_layer(targs, i, bw, obj))
+                pk = ("rtn",) + tuple((p, qkey(obj.q(p, i))) for p in paths[lin])
             else:
-                t = parts[ri]
-                ri += 1
+                pk = ("repo", name)
+            s = sig((cur[name], pk))
+            plans.setdefault(pk, {})[cur[name]] = s
+            nxt[name] = s
+        uses = Counter(old for m in plans.values() for old in m)
+        for pk, m in plans.items():
+            if pk[0] == "rtn":
+                lyr = f32(rtn_layer(targs, i, bw, dict(pk[1:])))
+            else:
+                name = pk[1]
+                obj = next(c[2] for c in cands if c[0] == name)
                 cp = prefix_of(obj, u)
-                lyr = f32(load_layer(targs, i, strip(t, cp), repo_qcfg(obj.config, cp)))
-            hidden[name] = lyr(hidden[name], mask="causal" if not lyr.is_linear else None)
-            mx.eval(hidden[name])
+                lyr = f32(load_layer(targs, i, strip(parts[part_of[name]], cp), repo_qcfg(obj.config, cp)))
+            for old, new in m.items():
+                hidden[new] = lyr(hidden[old], mask="causal" if not lyr.is_linear else None)
+                mx.eval(hidden[new])
+                uses[old] -= 1
+                if uses[old] == 0:
+                    del hidden[old]
             del lyr
+            mx.clear_cache()
+        cur = nxt
         del bw, parts
         pf.done(u)
         mx.clear_cache()
         el = time.time() - t0
-        log(f"layer {i + 1}/{L} ({'GDN' if (i + 1) % targs.full_attention_interval else 'attention'}) "
-            f"compute {time.time() - tl:.1f} s, {pf.rate():.1f} MB/s, {el / 60:.1f} min")
+        log(f"layer {i + 1}/{L} ({'GDN' if lin else 'attention'}): {len(plans)} recipes, {len(hidden)} streams, "
+            f"compute {time.time() - tl:.1f} s, {pf.rate():.1f} MB/s, active {mx.get_active_memory() / 1e9:.1f} GB "
+            f"(peak {mx.get_peak_memory() / 1e9:.1f}), {el / 60:.1f} min")
 
     # head: final norm + LM head per model, fp32 log-probs, exact KL against bf16
     parts, _ = pf.get("head")
@@ -503,109 +596,135 @@ def main():
     bt = parts[0]
     norm_w = bt[pre + "model.norm.weight"]
     tied = targs.tie_word_embeddings or (pre + "lm_head.weight") not in bt
-    # each model's fp32 head as a function: rebuilt lazily per chunk, so no dequantized copy stays resident (the 27B's
-    # is 5 GB in fp32)
-    heads = {}
-    if tied:
-        heads["bf16"] = (lambda E=embeds["bf16"]: E.astype(mx.float32))
-    else:
-        heads["bf16"] = (lambda W=bt[pre + "lm_head.weight"]: W.astype(mx.float32))
-    norms = {"bf16": norm_w}
-    ri = 1
-    for name, kind, obj in cands:
+    heads = {}  # head key -> Head
+    norms = {}  # head key -> final norm weight
+    pair_of = {}  # candidate -> (stream, head key)
+    for name, kind, obj, _ in cands:
         if kind == "rtn":
-            if tied:
-                heads[name] = (lambda m=embeds[name]: dequant_f32(m))
-            else:
-                q = obj.q("head")
-                hw = bt[pre + "lm_head.weight"]
-                if q is None:
-                    heads[name] = (lambda W=hw: W.astype(mx.float32))
+            hk = ("tied", qkey(obj.q("embed"))) if tied else qkey(obj.q("head"))
+            if hk not in heads:
+                if tied:
+                    m = embeds[hk[1]]
+                    heads[hk] = Head(m.weight, getattr(m, "scales", None), getattr(m, "biases", None),
+                                     {"bits": m.bits, "group_size": m.group_size, "mode": m.mode}
+                                     if hasattr(m, "scales") else None)
                 else:
-                    qq = mx.quantize(hw, q["group_size"], q["bits"], mode=q["mode"])
-                    wq, sc, bi = (tuple(qq) + (None,))[:3]
-                    mx.eval(wq, sc, *( [bi] if bi is not None else []))
-                    heads[name] = (lambda wq=wq, sc=sc, bi=bi, q=q: mx.dequantize(
-                        wq, sc, bi, q["group_size"], q["bits"], mode=q["mode"], dtype=mx.float32))
-            norms[name] = norm_w
+                    hw = bt[pre + "lm_head.weight"]
+                    if hk is None:
+                        heads[hk] = Head(hw)
+                    else:
+                        q = {"bits": hk[0], "group_size": hk[1], "mode": hk[2]}
+                        qq = tuple(mx.quantize(hw, q["group_size"], q["bits"], mode=q["mode"])) + (None,)
+                        heads[hk] = Head(qq[0], qq[1], qq[2], q)
+                norms[hk] = norm_w
         else:
-            t = parts[ri]
-            ri += 1
+            hk = ("repo", name)
+            t = parts[part_of[name]]
             cp = prefix_of(obj, "head")
-            norms[name] = t[cp + "model.norm.weight"]
+            norms[hk] = t[cp + "model.norm.weight"]
             if tied:
-                heads[name] = (lambda m=embeds[name]: dequant_f32(m))
+                m = embeds[hk]
+                heads[hk] = Head(m.weight, getattr(m, "scales", None), getattr(m, "biases", None),
+                                 {"bits": m.bits, "group_size": m.group_size, "mode": m.mode}
+                                 if hasattr(m, "scales") else None)
             else:
                 hw = strip(t, cp + "lm_head.")
                 if "scales" in hw:
                     q = repo_qcfg(obj.config, cp)("lm_head")
-                    heads[name] = (lambda hw=hw, q=q: mx.dequantize(hw["weight"], hw["scales"], hw.get("biases"),
-                                                                     q["group_size"], q["bits"], mode=q["mode"],
-                                                                     dtype=mx.float32))
+                    heads[hk] = Head(hw["weight"], hw["scales"], hw.get("biases"), q)
                 else:
-                    heads[name] = (lambda W=hw["weight"]: W.astype(mx.float32))
+                    heads[hk] = Head(hw["weight"])
+        pair_of[name] = (cur[name], hk)
+    ref_pair = pair_of["bf16"]
+    pairs = list(OrderedDict.fromkeys(pair_of.values()))
     B = len(seqs)
-    res = {name: {"kl": [], "agree": 0, "nll": 0.0, "n": 0} for name in hidden}
+    P = n - 1
+    res = {p: {"kl": np.zeros((B, P), np.float32), "agree": np.zeros((B, P), bool), "nll": np.zeros((B, P), np.float32)}
+           for p in pairs}
     dump = open(a.dump_ref, "wb") if a.dump_ref else None
     if dump:
         dump.write(b"NIEVREF2" + struct.pack("<3I", B, targs.vocab_size, a.topk))
     eps = targs.rms_norm_eps
+    log(f"head: {len(pairs)} distinct (stream, head) pairs, {len(heads)} heads")
+
+    def normed(p, b, c0, c1):
+        h = hidden[p[0]][b, c0:c1]
+        w = norms[p[1]]
+        if a.f32:
+            return mx.fast.rms_norm(h.astype(mx.float32), w.astype(mx.float32), eps)
+        return mx.fast.rms_norm(h, w, eps).astype(mx.float32)
+
+    th = time.time()
     for b in range(B):
         seq = seqs[b]
         tgt = mx.array(seq[1:])
-        hn = {name: mx.fast.rms_norm(h[b, : n - 1].astype(mx.float32) if a.f32 else h[b, : n - 1],
-                                     norms[name].astype(mx.float32) if a.f32 else norms[name], eps).astype(mx.float32)
-              for name, h in hidden.items()}
         top_rows = []
-        for c0 in range(0, n - 1, a.chunk):
-            c1 = min(n - 1, c0 + a.chunk)
-            lr = hn["bf16"][c0:c1] @ heads["bf16"]().T
+        for c0 in range(0, P, a.chunk):
+            c1 = min(P, c0 + a.chunk)
+            lr = heads[ref_pair[1]](normed(ref_pair, b, c0, c1))
             lr = lr - mx.logsumexp(lr, axis=-1, keepdims=True)
             pr = mx.exp(lr)
             ar = mx.argmax(lr, -1)
             t = tgt[c0:c1]
-            res["bf16"]["nll"] -= float(mx.sum(mx.take_along_axis(lr, t[:, None], -1)).item())
-            res["bf16"]["n"] += c1 - c0
+            r = res[ref_pair]
+            r["nll"][b, c0:c1] = -np.array(mx.take_along_axis(lr, t[:, None], -1)[:, 0])
+            r["agree"][b, c0:c1] = True
             if dump:
                 ti = mx.argsort(-lr, axis=-1)[:, : a.topk]
                 tv = mx.take_along_axis(lr, ti, -1)
                 tl = mx.take_along_axis(lr, t[:, None], -1)[:, 0]
                 mx.eval(ti, tv, tl)
                 top_rows.append((np.array(tl, dtype=np.float32), np.array(ti).astype(np.uint32), np.array(tv, dtype=np.float32)))
-            for name in hidden:
-                if name == "bf16":
+            for p in pairs:
+                if p == ref_pair:
                     continue
-                lq = hn[name][c0:c1] @ heads[name]().T
+                lq = heads[p[1]](normed(p, b, c0, c1))
                 lq = lq - mx.logsumexp(lq, axis=-1, keepdims=True)
                 kl = mx.maximum(mx.sum(pr * (lr - lq), -1), 0)
-                r = res[name]
-                r["kl"] += np.array(kl).tolist()
-                r["agree"] += int(mx.sum(mx.argmax(lq, -1) == ar).item())
-                r["nll"] -= float(mx.sum(mx.take_along_axis(lq, t[:, None], -1)).item())
-                r["n"] += c1 - c0
+                ag = mx.argmax(lq, -1) == ar
+                nl = -mx.take_along_axis(lq, t[:, None], -1)[:, 0]
+                mx.eval(kl, ag, nl)
+                r = res[p]
+                r["kl"][b, c0:c1] = np.array(kl)
+                r["agree"][b, c0:c1] = np.array(ag)
+                r["nll"][b, c0:c1] = np.array(nl)
         if dump:
             dump.write(struct.pack("<I", n) + np.array(seq, dtype=np.int32).tobytes())
             for tl, ti, tv in top_rows:
                 for p in range(len(tl)):
                     dump.write(tl[p:p + 1].tobytes() + np.stack([ti[p], tv[p].view(np.uint32)], 1).astype(np.uint32).tobytes())
-        log(f"scored {names[b]}")
+        log(f"scored {names[b]} ({time.time() - th:.0f} s)")
     GpuLock.release()
     if dump:
         dump.close()
-    out = {"base": f"{base.repo}@{base.rev}", "layers": L, "sequences": names, "positions": res["bf16"]["n"],
-           "elapsed_min": round((time.time() - t0) / 60, 1), "candidates": {}}
-    for name, r in res.items():
-        k = np.array(r["kl"]) if r["kl"] else np.zeros(1)
-        e = {"ppl": math.exp(r["nll"] / max(r["n"], 1))}
-        if name != "bf16":
-            e.update({"kl_mean": float(k.mean()), "kl_median": float(np.median(k)), "kl_p95": float(np.percentile(k, 95)),
-                      "kl_p99": float(np.percentile(k, 99)), "kl_max": float(k.max()), "top1_agree": r["agree"] / r["n"]})
-            spec = next(c for c in a.cand if c.startswith(name + "="))
-            e["spec"] = spec.partition("=")[2]
+
+    def stats(r, rows, ref):
+        e = {"ppl": math.exp(float(r["nll"][rows].mean()))}
+        if not ref:
+            k = r["kl"][rows].ravel()
+            e.update({"kl_mean": float(k.mean()), "kl_median": float(np.median(k)),
+                      "kl_p95": float(np.percentile(k, 95)), "kl_p99": float(np.percentile(k, 99)),
+                      "kl_max": float(k.max()), "top1_agree": float(r["agree"][rows].mean())})
+        return e
+
+    out = {"base": f"{base.repo}@{base.rev}", "layers": L, "sequences": [names[b] for b in main_rows],
+           "aside": sorted(aside), "positions": len(main_rows) * P, "elapsed_min": round((time.time() - t0) / 60, 1),
+           "candidates": {}}
+    for name, kind, obj, spec in cands:
+        r = res[pair_of[name]]
+        e = stats(r, main_rows, name == "bf16")
+        e["spec"] = spec
+        e["per_sequence"] = {names[b]: stats(r, [b], name == "bf16") for b in range(B)}
         out["candidates"][name] = e
-        log(name, json.dumps(e))
+        log(name, json.dumps({k: v for k, v in e.items() if k != "per_sequence"}))
     if a.out:
         json.dump(out, open(a.out, "w"), indent=1)
+    if a.positions:
+        arr = {}
+        for name, *_ in cands:
+            r = res[pair_of[name]]
+            arr[f"{name}/kl"], arr[f"{name}/agree"], arr[f"{name}/nll"] = r["kl"], r["agree"], r["nll"]
+        np.savez_compressed(a.positions, sequences=np.array(names), **arr)
 
 
 if __name__ == "__main__":
