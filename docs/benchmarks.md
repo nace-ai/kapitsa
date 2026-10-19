@@ -37,7 +37,7 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - One session, Kapitsa first and last (each cell is the newest run with an unflagged decode phase, else the newest run).
   Results: [bench/results/2026-10-18-m5-max-session](../bench/results/2026-10-18-m5-max-session/).
 - MLX: mlx-vlm with MTP on the 4B (Qwen's 4-bit head, block 3; mlx-lm 135) and the 27B (the model's head; mlx-lm 30),
-  mlx-lm on the 35B. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt;
+  mlx-vlm with DFlash2 on the 35B (incoai's drafter, block 5; mlx-lm 112). oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt;
   mlx-serve MTP on the 4B and 35B (DFlash2 209 tok/s), DFlash2 on the 27B (MTP 80); llama.cpp MTP n-max 2 on the 4B and
   35B, 3 on the 27B.
 - Other apps used the GPU during both of Kapitsa's 27B runs (contention flagged: 102 and, first run, 115 tok/s; greedy
