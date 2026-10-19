@@ -47,13 +47,14 @@ static int env_int(const char* n, int def) {
   return v && *v ? atoi(v) : def;
 }
 
-// The large prefill tiles of the formats other than bf16 with M tiles along grid x (enc_qrf), the M1's default
-// (NI_QRF_MF=0/1 overrides): the threadgroups running together share the weight tile through the cache. Each output
-// keeps its K order, so the results are the same bit for bit. M1 Pro, 2048 x 8192 x 2048 alone: 6-bit group 64 25.3 ->
-// 23.8 ms, 5-bit 24.9 -> 23.8, 3-bit 27.3 -> 25.8, 4-bit group 32 59.5 -> 21.4; a 40-layer stand-in of
-// Qwen3.6-35B-A3B UD-IQ2_XXS (6-bit projections from Q5_K) reads 4096 tokens in 8.28 instead of 9.02 s. The other chips
-// keep the N-fast order until measured there.
-static bool qrf_mf_low() {
+// The large prefill tiles with M tiles along grid x for the formats other than bf16 (enc_qrf: 3/5/6-bit and 4-bit
+// group 32; enc_qmm_large: 8-bit), the M1's default (NI_QRF_MF=0/1 overrides): the threadgroups running together
+// share the weight tile through the cache. Each output keeps its K order, so the results are the same bit for bit.
+// M1 Pro, 2048 x 8192 x 2048 alone: 6-bit group 64 25.3 -> 23.8 ms, 5-bit 24.9 -> 23.8, 3-bit 27.3 -> 25.8, 4-bit
+// group 32 59.5 -> 21.4, 8-bit 26.6 -> 24.9; a 40-layer stand-in of Qwen3.6-35B-A3B UD-IQ2_XXS (6-bit projections from
+// Q5_K, 8-bit from Q6_K) reads 4096 tokens in 8.15 instead of 9.07 s (6-bit alone: 8.28). The other chips keep the
+// N-fast order until measured there.
+static bool prefill_mfast() {
   static const bool v = env_int("NI_QRF_MF", Gpu::get().apple_family() <= 7 ? 1 : 0) != 0;
   return v;
 }
@@ -305,6 +306,7 @@ void Qwen35::prewarm_pipelines() {
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
+  if (qmm8_on() && prefill_mfast()) names.insert("qmr8_k32_w14_m32_n128_mf");
   if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
     for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
@@ -360,7 +362,7 @@ void Qwen35::prewarm_pipelines() {
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
-      } else if (qrf_mf_low()) {
+      } else if (prefill_mfast()) {
         names.insert("qrf_" + f + "_m32_n128_mf");
       }
       for (int t = 1; t <= 8; ++t) {
@@ -1910,7 +1912,7 @@ static bool qmm8_for(const QLinear& L) { return qmm8_mode() == 2 || (qmm8_mode()
 // Prefill GEMM for the formats of wfmt.metal (bf16, 3/5/6-bit, 4-bit group 32): qmr's tiles (m32 x n128 from 64
 // rows, m16 x n64 below, m8 x n64 up to 8). NI_QRF16_MF (read once; default on): bf16 large tiles with the M
 // tiles along grid x, so the threadgroups running together share the weight tile through the cache.
-// NI_QRF_MF (read once; default on for the M1 (Apple7) only): the other formats' large tiles too (qrf_mf_low).
+// NI_QRF_MF (read once; default on for the M1 (Apple7) only): the other formats' large tiles too (prefill_mfast).
 void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
   std::string n = "qrf_" + L.fmt();
@@ -1918,7 +1920,7 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   bool mfast = false;
   if (M <= 8) n += "_m8_n64", bm = 8, bn = 64, th = 64;
   else if (M < 64 || L.N <= 64) n += "_m16_n64", bm = 16, bn = 64;
-  else if (L.dense() ? mf : qrf_mf_low()) n += "_m32_n128_mf", mfast = true;
+  else if (L.dense() ? mf : prefill_mfast()) n += "_m32_n128_mf", mfast = true;
   else n += "_m32_n128";
   e.use(pipe(n));
   kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
@@ -1932,14 +1934,15 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
 void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   const QmrSel& q = qmr_sel();
   if (q.on && qmm8_for(L) && L.bits == 8 && L.gs == 64 && L.K % 64 == 0) {
-    const bool small = M < 64 || L.N <= 64;
-    const char* n = small ? "qmr8_k32_w14_m16_n64" : "qmr8_k32_w14_m32_n128";
+    const bool small = M < 64 || L.N <= 64, mfast = !small && prefill_mfast();
+    const char* n = small ? "qmr8_k32_w14_m16_n64" : mfast ? "qmr8_k32_w14_m32_n128_mf" : "qmr8_k32_w14_m32_n128";
     const uint32_t bm = small ? 16 : 32, bn = small ? 64 : 128;
     e.use(pipe(n));
     kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
     e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
     e.val(5, p);
-    e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
+    if (mfast) e.dispatch((M + bm - 1) / bm, (L.N + bn - 1) / bn, 1, 128);
+    else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
     return;
   }
   if (q.on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
