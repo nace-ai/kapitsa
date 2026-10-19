@@ -8,6 +8,9 @@
 
 ## Install
 
+**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later; 16 GB of memory for the
+4B models, 32 GB for the 27B and 35B, 96 GB for Super-VL and 128 GB for Flash-Next.
+
 ```bash
 brew install nace-ai/tap/kapitsa
 # or: curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/install.sh | bash
@@ -17,7 +20,7 @@ brew install nace-ai/tap/kapitsa
 kapitsa opencode --model 35b    # also: kapitsa claude, kapitsa codex, kapitsa pi
 ```
 
-<sub>The 35B needs a Mac with 32 GB or more; use `--model 4b` on 16-24 GB. `kapitsa serve` starts the chat page and the
+<sub>On a 16-24 GB Mac use `--model 4b`. `kapitsa serve` starts the chat page and the
 OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usage guide](docs/usage.md)</sub>
 
 ## Benchmarks
