@@ -110,7 +110,7 @@
   "model_name": "Qwen3.8-27B",
   "model_path": "{models}/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX",
   "prepare": [{"clean_dir": "{state}/rapid-mlx/q38-27b-mtp"}, {"write_json": {"path": "{state}/rapid-mlx/q38-27b-mtp/harness.json", "data": {"home_of": "rapid-mlx, emptied before each run"}}}],
-  "cmd": ["{env:RAPID_MLX_BIN=rapid-mlx}", "--no-telemetry", "serve", "{models}/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX", "--host", "127.0.0.1", "--port", "8291", "--served-model-name", "qwen3.8-27b", "--max-num-seqs", "1", "--context-length", "32768", "--prefill-step-size", "512", "--disable-disk-caches", "--disable-model-downloads", "--no-preflight"],
+  "cmd": ["{env:RAPID_MLX_BIN=rapid-mlx}", "--no-telemetry", "serve", "{models}/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX", "--host", "127.0.0.1", "--port", "8291", "--served-model-name", "qwen3.8-27b", "--max-num-seqs", "1", "--context-length", "32768", "--prefill-step-size", "512", "--disable-disk-caches", "--disable-model-downloads", "--no-preflight", "--speculative-config", "{\"method\":\"mtp\",\"model\":\"{models}/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors\",\"num_speculative_tokens\":3}"],
   "env": {"HOME": "{state}/rapid-mlx/q38-27b-mtp", "HF_HUB_OFFLINE": "1", "RAPID_MLX_TELEMETRY": "0", "DO_NOT_TRACK": "1", "RAPID_MLX_DISABLE_VERSION_CHECK": "1"},
   "env_clear_prefixes": ["RAPID_MLX_"],
   "base_url": "http://127.0.0.1:8291/v1",
@@ -119,7 +119,7 @@
   "requires_paths": ["{models}/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/config.json"],
   "version_cmd": ["{env:RAPID_MLX_PYTHON=python3}", "-c", "import importlib.metadata as m; print(*(n + ' ' + m.version(n) for n in ('rapid-mlx', 'mlx', 'mlx-lm', 'mlx-vlm')))"],
   "log_grep": ["[Ss]peculative|MTP|mtp|accept|draft", "[Ll]oad|model|prefix|cache|[Pp]refill", "[Ee]rror|Traceback|WARNING"],
-  "note": "Rapid-MLX 0.16.3 on the pack its catalog names for this model (alias qwen3.8-27b-4bit = rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX @ eb4e4dd3, 15.2 GiB, 4-bit with an MTP sidecar), with the MTP the catalog turns on by default for it (3 draft tokens). Otherwise as q35-4b-rapidmlx."
+  "note": "Rapid-MLX 0.16.3 on the pack its catalog names for this model (alias qwen3.8-27b-4bit = rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX @ eb4e4dd3, 15.2 GiB, 4-bit with an MTP sidecar), with the MTP its catalog pairs with it (the pack's own mtp/ sidecar, 3 draft tokens), named in --speculative-config: served by path, Rapid-MLX does not apply the alias's MTP default (its log says 'spec decode OFF'). Otherwise as q35-4b-rapidmlx."
  },
  {
   "label": "q36-35b-rapidmlx",
