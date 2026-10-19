@@ -1,0 +1,28 @@
+
+===== lightning-lmstudio  [lmstudio] LM Studio (llama.cpp engine, Q4_K_M GGUF)  version llmster 0.0.25-1, llama.cpp runtime 2.60.0 (b11698, 2a667032d)
+[18:04:08] lightning-lmstudio: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 75564 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[18:04:08] lightning-lmstudio: starting <repo>/bench/harness/launchers/lmstudio_serve.sh serve 8197 nvidia/nemotron-3.5-lightning lightning-lmstudio --context-length 32768 --parallel 1
+[18:04:26] lightning-lmstudio: ready after 18s (pid 90663, listener 90663)
+[18:04:28] lightning-lmstudio:  warm-up prefill~2.9k+decode64: ok (1.92s)
+[18:04:28] lightning-lmstudio:  warm-up tools: ok (0.5s)
+[18:05:30] lightning-lmstudio: gpu busy (62s): com.apple.WebKit[3316] 6%
+[18:06:32] lightning-lmstudio: gpu busy (124s): com.apple.WebKit[3316] 6%
+[18:07:34] lightning-lmstudio: gpu busy (185s): com.apple.WebKit[3316] 6%
+[18:08:36] lightning-lmstudio: gpu busy (247s): com.apple.WebKit[3316] 6%
+[18:09:29] lightning-lmstudio: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-lmstudio
+  decode T=0.6: 113.05 tok/s (e2e 113.11; 512 tok, finish=length, d4=0.5258)
+  decode T=0.6: 113.72 tok/s (e2e 113.71; 512 tok, finish=length, d4=0.9425)
+  decode T=0.6: 110.50 tok/s (e2e 110.53; 512 tok, finish=length, d4=0.9647)
+  decode T=0.6: 109.76 tok/s (e2e 109.68; 512 tok, finish=length, d4=0.4544) flags ['repetition loop (distinct-4-gram 0.4544)']
+  decode T=0.6: 109.44 tok/s (e2e 109.37; 512 tok, finish=length, d4=0.9485)
+  decode median 110.5 (min 109.44, max 113.72) over 5/5 valid
+  decode T=0: median 107.1 (min 106.29, max 109.18) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.95s -> 2140 tok/s, cold cached=None | cached TTFT median 0.22s over 3 turns (cached [None, None, None])
+  prefill 16000: 16517 tok (ref 16517), TTFT 7.31s -> 2260 tok/s, cold cached=None | cached TTFT median 0.12s over 3 turns (cached [None, None, None])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 4.74 GB, resident mapped files 22.85 GB, swap used 14577.19 MB
+  -> <run-root>/out-nemotron/results/lightning-lmstudio-20261018-180407.json
+[18:10:49] lightning-lmstudio: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[18:10:49] lightning-lmstudio: -> <run-root>/out-nemotron/results/lightning-lmstudio-20261018-180407.json  flags: 2

@@ -1,0 +1,28 @@
+
+===== q38-27b-lmstudio  [lmstudio] LM Studio (MLX engine)  version llmster 0.0.25-1, MLX runtime 1.13.1 (mlx-engine ab52366, mlx 0.32.3, mlx-lm 0.31.4.dev132, mlx-vlm 0.7.3)
+[18:10:49] q38-27b-lmstudio: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 90617 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[18:10:49] q38-27b-lmstudio: starting <repo>/bench/harness/launchers/lmstudio_serve.sh serve 8197 qwen/qwen3.8-27b q38-27b-lmstudio --context-length 32768 --parallel 1
+[18:10:59] q38-27b-lmstudio: ready after 10s (pid 5729, listener 5729)
+[18:11:15] q38-27b-lmstudio:  warm-up prefill~2.9k+decode64: ok (15.89s)
+[18:11:20] q38-27b-lmstudio:  warm-up tools: ok (4.51s)
+[18:12:22] q38-27b-lmstudio: gpu busy (62s): com.apple.WebKit[3316] 5%
+[18:13:23] q38-27b-lmstudio: gpu busy (124s): com.apple.WebKit[3316] 6%
+[18:14:25] q38-27b-lmstudio: gpu busy (185s): com.apple.WebKit[3316] 5%
+[18:15:27] q38-27b-lmstudio: gpu busy (247s): com.apple.WebKit[3316] 7%
+[18:16:20] q38-27b-lmstudio: GPU not quiet after 301s (['com.apple.WebKit[3316] 5%']); benchmarking anyway, contention will be flagged
+== q38-27b-lmstudio
+  decode T=0.6: 31.79 tok/s (e2e 31.92; 511 tok, finish=length, d4=0.8571) flags ['completion_tokens=511 != 512']
+  decode T=0.6: 31.74 tok/s (e2e 32.06; 511 tok, finish=length, d4=0.6526) flags ['completion_tokens=511 != 512']
+  decode T=0.6: 31.67 tok/s (e2e 31.68; 511 tok, finish=length, d4=0.8068) flags ['completion_tokens=511 != 512']
+  decode T=0.6: 30.84 tok/s (e2e 31.10; 511 tok, finish=length, d4=0.871) flags ['completion_tokens=511 != 512']
+  decode T=0.6: 30.95 tok/s (e2e 31.13; 511 tok, finish=length, d4=0.9544) flags ['completion_tokens=511 != 512']
+  decode median 31.67 (min 30.84, max 31.79) over 5/5 valid
+  decode T=0: median 31.34 (min 31.12, max 32.07) over 5/5 valid flags ['completion_tokens=511 != 512']
+  prefill 4000: 4132 tok (ref 4133), TTFT 19.00s -> 217 tok/s, cold cached=None | cached TTFT median 0.28s over 3 turns (cached [None, None, None])
+  prefill 16000: 16284 tok (ref 16286), TTFT 77.36s -> 211 tok/s, cold cached=None | cached TTFT median 0.36s over 3 turns (cached [None, None, None])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 23.40 GB, resident mapped files 0.00 GB, swap used 14691.38 MB
+  -> <run-root>/out/results/q38-27b-lmstudio-20261018-181049.json
+[18:21:46] q38-27b-lmstudio: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[18:21:46] q38-27b-lmstudio: -> <run-root>/out/results/q38-27b-lmstudio-20261018-181049.json  flags: 4

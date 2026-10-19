@@ -1,0 +1,26 @@
+2026-10-18 17:16:44 start dory-kapitsa
+2026-10-18 17:29:37 end dory-kapitsa rc=0
+2026-10-18 17:29:37 start lightning-mtplx
+2026-10-18 17:45:01 end lightning-mtplx rc=0
+2026-10-18 17:45:01 start lightning-mlxserve-mtp
+2026-10-18 17:57:12 end lightning-mlxserve-mtp rc=0
+2026-10-18 17:57:12 start lightning-lmstudio
+2026-10-18 18:09:33 start lightning-ollama-mlx
+2026-10-18 18:10:49 end lightning-lmstudio rc=0
+2026-10-18 18:11:13 start super-lmstudio
+2026-10-18 18:28:07 end lightning-ollama-mlx rc=0
+2026-10-18 18:28:07 start lightning-kapitsa
+2026-10-18 18:36:23 end super-lmstudio rc=0
+2026-10-18 18:48:51 end lightning-kapitsa rc=0
+2026-10-18 18:48:51 start flash-mtplx
+2026-10-18 19:00:41 start super-kapitsa
+2026-10-18 19:03:28 end flash-mtplx rc=0
+2026-10-18 19:19:27 end super-kapitsa rc=0
+2026-10-18 19:28:01 start flash-lmstudio
+2026-10-18 19:30:01 start super-ollama-mlx
+2026-10-18 19:32:21 end flash-lmstudio rc=0
+2026-10-18 19:40:28 end super-ollama-mlx rc=0
+2026-10-18 19:40:28 start flash-mlxserve-mtp
+2026-10-18 19:57:08 end flash-mlxserve-mtp rc=0
+2026-10-18 19:57:08 start dory-kapitsa
+2026-10-18 19:57:40 start flash-kapitsa

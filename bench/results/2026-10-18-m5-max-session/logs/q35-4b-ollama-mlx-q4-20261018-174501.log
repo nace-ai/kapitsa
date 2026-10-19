@@ -1,0 +1,233 @@
+time=2026-10-18T17:45:01.915-07:00 level=INFO source=routes.go:2439 msg="server config" env="map[HTTPS_PROXY: HTTP_PROXY: LLAMA_ARG_FIT: LLAMA_ARG_FIT_TARGET: NO_PROXY: OLLAMA_CONTEXT_LENGTH:32768 OLLAMA_CREATE_REMOTE:false OLLAMA_DEBUG:INFO OLLAMA_DEBUG_LOG_REQUESTS:false OLLAMA_EDITOR: OLLAMA_FLASH_ATTENTION:true OLLAMA_GO_TEMPLATE:true OLLAMA_GPU_OVERHEAD:0 OLLAMA_HOST:http://127.0.0.1:8193 OLLAMA_IGPU_ENABLE: OLLAMA_KEEP_ALIVE:2562047h47m16.854775807s OLLAMA_KV_CACHE_TYPE: OLLAMA_LLM_LIBRARY: OLLAMA_LOAD_TIMEOUT:5m0s OLLAMA_MAX_LOADED_MODELS:1 OLLAMA_MAX_QUEUE:512 OLLAMA_MAX_TRANSFER_STREAMS:4 OLLAMA_MODELS:~/.cache/kapitsa/benchmark-models/ollama-mlx OLLAMA_NOHISTORY:false OLLAMA_NOPRUNE:true OLLAMA_NO_CLOUD:false OLLAMA_NUM_PARALLEL:1 OLLAMA_ORIGINS:[http://localhost https://localhost http://localhost:* https://localhost:* http://127.0.0.1 https://127.0.0.1 http://127.0.0.1:* https://127.0.0.1:* http://0.0.0.0 https://0.0.0.0 http://0.0.0.0:* https://0.0.0.0:* app://* file://* tauri://* vscode-webview://* vscode-file://*] OLLAMA_REMOTES:[ollama.com] OLLAMA_SCHED_SPREAD:false http_proxy: https_proxy: no_proxy:]"
+time=2026-10-18T17:45:01.915-07:00 level=INFO source=routes.go:2441 msg="Ollama cloud disabled: false"
+time=2026-10-18T17:45:01.919-07:00 level=INFO source=routes.go:2501 msg="Listening on 127.0.0.1:8193 (version 0.40.6)"
+time=2026-10-18T17:45:01.920-07:00 level=INFO source=runner.go:60 msg="discovering available GPUs..."
+time=2026-10-18T17:45:02.037-07:00 level=INFO source=types.go:32 msg="inference compute" id=0 filter_id=0 library=Metal compute=0.0 name=MTL0 description="Apple M5 Max" libdirs="" driver=0.0 pci_id="" type=iGPU total="107.5 GiB" available="107.5 GiB"
+time=2026-10-18T17:45:02.037-07:00 level=INFO source=routes.go:2551 msg="vram-based default context" total_vram="107.5 GiB" default_num_ctx=262144
+time=2026-10-18T17:45:02.199-07:00 level=INFO source=model_recommendations.go:177 msg="model recommendations cache sleep scheduled" wait=3h35m17.983212231s consecutive_failures=0
+[GIN] 2026/10/18 - 17:45:03 | 200 |     6.31975ms |       127.0.0.1 | GET      "/v1/models"
+time=2026-10-18T17:45:04.007-07:00 level=INFO source=sched.go:664 msg="system memory" total="128.0 GiB" free="100.4 GiB" free_swap="0 B"
+time=2026-10-18T17:45:04.007-07:00 level=INFO source=sched.go:671 msg="gpu memory" id=0 library=Metal available="107.0 GiB" free="107.5 GiB" minimum="512.0 MiB" overhead="0 B"
+time=2026-10-18T17:45:04.007-07:00 level=INFO source=client.go:517 msg="starting mlx runner subprocess" model=nace/qwen3.5:4b-mlx-4bit-mtp port=63585
+time=2026-10-18T17:45:04.009-07:00 level=INFO source=images.go:422 msg="template selection" model=registry.ollama.ai/nace/qwen3.5:4b-mlx-4bit-mtp selected=renderer_parser renderer=qwen3.5 parser=qwen3.5 go_template=null chat_template=null harmony=null renderer_parser="[completion vision tools thinking]"
+time=2026-10-18T17:45:04.009-07:00 level=INFO source=sched.go:788 msg="loaded runners" count=1
+time=2026-10-18T17:45:04.038-07:00 level=INFO source=server.go:46 msg="MLX engine initialized" "MLX version"=0.32.3-96-gbebd642 device=gpu
+time=2026-10-18T17:45:04.050-07:00 level=INFO source=model.go:137 msg="Model architecture" arch=Qwen3_5ForConditionalGeneration
+time=2026-10-18T17:45:04.324-07:00 level=INFO source=runner.go:285 msg="Loaded tensors from manifest" count=1250
+time=2026-10-18T17:45:04.633-07:00 level=INFO source=grammar.go:79 msg="Structured output initialized" library=xgrammar version=v0.2.7 vocab_size=248320 path=~/.local/opt/ollama-0.40.6/mlx_metal_v4/libollama_xgrammar.dylib
+time=2026-10-18T17:45:04.674-07:00 level=INFO source=runner.go:331 msg="Starting HTTP server" host=127.0.0.1 port=63585
+time=2026-10-18T17:45:04.709-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=52.417µs status="200 OK"
+time=2026-10-18T17:45:04.709-07:00 level=INFO source=client.go:112 msg="mlx runner is ready" port=63585
+time=2026-10-18T17:45:04.711-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=2923 matched=0 cached=0 left=2923
+time=2026-10-18T17:45:05.054-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2048 total=2923
+time=2026-10-18T17:45:05.227-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2922 total=2923
+[GIN] 2026/10/18 - 17:45:05 | 200 |  1.600864375s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:45:05.606-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=896.442625ms status="200 OK"
+time=2026-10-18T17:45:05.610-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=32 drafted=44 accepted=32 acceptance=0.73 avg_draft=1.38 max_draft=3 avg_accepted=1.00 depth_over_time="0.0/0 1.0/1 1.0/1 1.5/2 2.0/2 2.0/2 2.5/3 1.0/2"
+time=2026-10-18T17:45:05.615-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.71 GiB" held="3.11 GiB"
+time=2026-10-18T17:45:05.615-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=6.566792ms status="200 OK"
+time=2026-10-18T17:45:05.615-07:00 level=INFO source=prefix_cache.go:151 msg="cache miss" total=428 matched=2 cached=0 left=428
+time=2026-10-18T17:45:05.704-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=427 total=428
+[GIN] 2026/10/18 - 17:45:05 | 200 |  221.269583ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:45:05.828-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=11 drafted=17 accepted=17 acceptance=1.00 avg_draft=1.55 max_draft=3 avg_accepted=1.55 depth_over_time="1.0/1 1.0/1 1.0/1 1.0/1 1.0/1 2.0/2 2.0/2 2.5/3"
+time=2026-10-18T17:45:05.828-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=213.018ms status="200 OK"
+time=2026-10-18T17:45:05.833-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.25 GiB" held="3.36 GiB"
+time=2026-10-18T17:45:05.833-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=3.08725ms status="200 OK"
+time=2026-10-18T17:45:05.833-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=2 cached=2 left=83
+time=2026-10-18T17:45:05.876-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=82 total=83
+[GIN] 2026/10/18 - 17:45:08 | 200 |  2.622643667s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:45:08.451-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.618363125s status="200 OK"
+time=2026-10-18T17:45:08.456-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=230 drafted=433 accepted=282 acceptance=0.65 avg_draft=1.88 max_draft=4 avg_accepted=1.23 depth_over_time="2.2/3 3.3/4 2.4/4 2.9/4 1.1/2 1.0/2 1.0/2 1.0/1"
+time=2026-10-18T17:45:08.461-07:00 level=INFO source=pipeline.go:110 msg=memory peak="3.84 GiB" held="3.47 GiB"
+time=2026-10-18T17:45:08.461-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=7.9305ms status="200 OK"
+time=2026-10-18T17:45:08.461-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=2 left=83
+time=2026-10-18T17:45:08.507-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=82 total=83
+[GIN] 2026/10/18 - 17:45:11 | 200 |  2.887022833s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:45:11.339-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.877510208s status="200 OK"
+time=2026-10-18T17:45:11.339-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=278 drafted=362 accepted=234 acceptance=0.65 avg_draft=1.30 max_draft=5 avg_accepted=0.84 depth_over_time="1.0/2 1.0/1 1.0/1 1.0/2 2.2/5 1.4/4 1.1/3 1.6/3"
+time=2026-10-18T17:45:11.348-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.09 GiB" held="3.63 GiB"
+time=2026-10-18T17:45:11.348-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=7.794041ms status="200 OK"
+time=2026-10-18T17:45:11.349-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T17:45:11.381-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:45:13 | 200 |  2.543635875s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:45:13.883-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.534409459s status="200 OK"
+time=2026-10-18T17:45:13.883-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=216 drafted=425 accepted=296 acceptance=0.70 avg_draft=1.97 max_draft=4 avg_accepted=1.37 depth_over_time="1.1/2 2.1/3 2.0/2 2.0/3 3.0/4 2.8/4 1.6/4 1.0/2"
+time=2026-10-18T17:45:13.888-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.12 GiB" held="3.80 GiB"
+time=2026-10-18T17:50:14.545-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=42.708µs status="200 OK"
+time=2026-10-18T17:50:14.545-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=25 left=60
+time=2026-10-18T17:50:14.584-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=59 total=60
+[GIN] 2026/10/18 - 17:50:17 | 200 |  2.548998375s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:17.093-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.547688041s status="200 OK"
+time=2026-10-18T17:50:17.093-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=272 drafted=360 accepted=240 acceptance=0.67 avg_draft=1.32 max_draft=4 avg_accepted=0.88 depth_over_time="1.4/4 1.1/2 1.0/1 1.0/2 2.4/4 1.1/3 1.4/3 1.1/2"
+time=2026-10-18T17:50:17.097-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.25 GiB" held="3.91 GiB"
+time=2026-10-18T17:50:17.097-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.934833ms status="200 OK"
+time=2026-10-18T17:50:17.097-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:17.125-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:19 | 200 |   2.48001375s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:19.574-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.4768245s status="200 OK"
+time=2026-10-18T17:50:19.574-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=286 drafted=288 accepted=226 acceptance=0.78 avg_draft=1.01 max_draft=2 avg_accepted=0.79 depth_over_time="1.0/1 1.0/2 1.0/1 1.0/1 1.0/1 1.0/2 1.0/1 1.0/1"
+time=2026-10-18T17:50:19.576-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.22 GiB" held="4.03 GiB"
+time=2026-10-18T17:50:19.576-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=27.75µs status="200 OK"
+time=2026-10-18T17:50:19.576-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:19.604-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:22 | 200 |  2.441371917s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:22.016-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.439756792s status="200 OK"
+time=2026-10-18T17:50:22.016-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=280 drafted=283 accepted=232 acceptance=0.82 avg_draft=1.01 max_draft=3 avg_accepted=0.83 depth_over_time="1.0/1 1.0/1 1.0/1 1.0/1 1.0/2 1.0/1 1.0/1 1.1/3"
+time=2026-10-18T17:50:22.019-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.37 GiB" held="4.14 GiB"
+time=2026-10-18T17:50:22.019-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=625.292µs status="200 OK"
+time=2026-10-18T17:50:22.019-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:22.047-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:24 | 200 |  2.342617583s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:24.359-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.340346042s status="200 OK"
+time=2026-10-18T17:50:24.359-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=224 drafted=431 accepted=288 acceptance=0.67 avg_draft=1.92 max_draft=4 avg_accepted=1.29 depth_over_time="3.1/4 2.3/3 1.1/2 1.0/2 2.5/4 1.2/3 1.2/3 3.0/4"
+time=2026-10-18T17:50:24.363-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.60 GiB" held="4.26 GiB"
+time=2026-10-18T17:50:24.363-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.936958ms status="200 OK"
+time=2026-10-18T17:50:24.364-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:24.392-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:26 | 200 |  2.441228208s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:26.801-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.437772541s status="200 OK"
+time=2026-10-18T17:50:26.806-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=220 drafted=494 accepted=292 acceptance=0.59 avg_draft=2.25 max_draft=4 avg_accepted=1.33 depth_over_time="2.7/3 2.0/4 1.4/3 1.2/3 1.7/4 3.1/4 3.0/4 2.8/3"
+time=2026-10-18T17:50:26.810-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.71 GiB" held="4.37 GiB"
+time=2026-10-18T17:50:26.894-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=36.083µs status="200 OK"
+time=2026-10-18T17:50:26.894-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:26.922-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:29 | 200 |  2.535284167s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:29.428-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.533991083s status="200 OK"
+time=2026-10-18T17:50:29.428-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=280 drafted=386 accepted=232 acceptance=0.60 avg_draft=1.38 max_draft=4 avg_accepted=0.83 depth_over_time="3.0/4 1.7/3 1.0/2 1.1/3 1.1/2 1.0/2 1.0/1 1.0/2"
+time=2026-10-18T17:50:29.431-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.83 GiB" held="4.49 GiB"
+time=2026-10-18T17:50:29.431-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=677.25µs status="200 OK"
+time=2026-10-18T17:50:29.431-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:29.459-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:31 | 200 |  2.431921208s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:31.861-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.430076833s status="200 OK"
+time=2026-10-18T17:50:31.861-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=288 drafted=289 accepted=224 acceptance=0.78 avg_draft=1.00 max_draft=2 avg_accepted=0.78 depth_over_time="1.0/1 1.0/1 1.0/1 1.0/2 1.0/1 1.0/1 1.0/1 1.0/1"
+time=2026-10-18T17:50:31.863-07:00 level=INFO source=pipeline.go:110 msg=memory peak="4.80 GiB" held="4.61 GiB"
+time=2026-10-18T17:50:31.863-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=38.458µs status="200 OK"
+time=2026-10-18T17:50:31.863-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=26 cached=24 left=61
+time=2026-10-18T17:50:31.893-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:34 | 200 |  2.498220833s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:34.360-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.496902834s status="200 OK"
+time=2026-10-18T17:50:34.360-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=286 drafted=304 accepted=226 acceptance=0.74 avg_draft=1.06 max_draft=4 avg_accepted=0.79 depth_over_time="1.0/1 1.1/3 1.0/2 1.0/2 1.0/2 1.0/1 1.0/1 1.3/4"
+time=2026-10-18T17:50:34.364-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.06 GiB" held="4.77 GiB"
+time=2026-10-18T17:50:34.364-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.923542ms status="200 OK"
+time=2026-10-18T17:50:34.364-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=24 cached=24 left=61
+time=2026-10-18T17:50:34.392-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:36 | 200 |  2.418827708s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:36.780-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.415658125s status="200 OK"
+time=2026-10-18T17:50:36.784-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=284 drafted=287 accepted=228 acceptance=0.79 avg_draft=1.01 max_draft=2 avg_accepted=0.80 depth_over_time="1.1/2 1.0/1 1.0/2 1.0/1 1.0/1 1.0/1 1.0/2 1.0/1"
+time=2026-10-18T17:50:36.786-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.08 GiB" held="4.88 GiB"
+time=2026-10-18T17:50:36.786-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=4.622ms status="200 OK"
+time=2026-10-18T17:50:36.787-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=85 matched=25 cached=24 left=61
+time=2026-10-18T17:50:36.815-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=60 total=61
+[GIN] 2026/10/18 - 17:50:39 | 200 |  2.454433709s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:39.235-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=2.448411084s status="200 OK"
+time=2026-10-18T17:50:39.239-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=288 drafted=288 accepted=224 acceptance=0.78 avg_draft=1.00 max_draft=2 avg_accepted=0.78 depth_over_time="1.0/1 1.0/1 1.0/1 1.0/1 1.0/1 1.0/2 1.0/1 1.0/1"
+time=2026-10-18T17:50:39.241-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.23 GiB" held="5.05 GiB"
+time=2026-10-18T17:50:39.330-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=36.083µs status="200 OK"
+time=2026-10-18T17:50:39.334-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=4135 matched=2 cached=2 left=4133
+time=2026-10-18T17:50:39.691-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2048 total=4133
+time=2026-10-18T17:50:40.138-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4096 total=4133
+time=2026-10-18T17:50:40.196-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4132 total=4133
+[GIN] 2026/10/18 - 17:50:40 | 200 |  1.146161792s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:40.475-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=1.144395s status="200 OK"
+time=2026-10-18T17:50:40.475-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=23 drafted=46 accepted=32 acceptance=0.70 avg_draft=2.00 max_draft=4 avg_accepted=1.39 depth_over_time="1.0/1 1.0/1 3.0/3 3.3/4 1.0/1 1.3/2 1.7/3 3.3/4"
+time=2026-10-18T17:50:40.480-07:00 level=INFO source=pipeline.go:110 msg=memory peak="6.86 GiB" held="5.21 GiB"
+time=2026-10-18T17:50:41.487-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=35.625µs status="200 OK"
+time=2026-10-18T17:50:41.489-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=4207 matched=4130 cached=4130 left=77
+time=2026-10-18T17:50:41.531-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=76 total=77
+[GIN] 2026/10/18 - 17:50:41 | 200 |  106.535125ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:41.592-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=104.600209ms status="200 OK"
+time=2026-10-18T17:50:41.592-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=4 drafted=12 accepted=10 acceptance=0.83 avg_draft=3.00 max_draft=3 avg_accepted=2.50 depth_over_time="3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:41.595-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.57 GiB" held="5.31 GiB"
+time=2026-10-18T17:50:42.598-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=48.417µs status="200 OK"
+time=2026-10-18T17:50:42.600-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=4243 matched=4202 cached=4202 left=41
+time=2026-10-18T17:50:42.637-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=40 total=41
+[GIN] 2026/10/18 - 17:50:42 | 200 |  101.176333ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:42.697-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=99.415416ms status="200 OK"
+time=2026-10-18T17:50:42.697-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=4 drafted=13 accepted=11 acceptance=0.85 avg_draft=3.25 max_draft=4 avg_accepted=2.75 depth_over_time="3.0/3 3.0/3 3.0/3 4.0/4"
+time=2026-10-18T17:50:42.702-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.73 GiB" held="5.41 GiB"
+time=2026-10-18T17:50:43.700-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=39.041µs status="200 OK"
+time=2026-10-18T17:50:43.703-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=4273 matched=4238 cached=4238 left=35
+time=2026-10-18T17:50:43.739-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=34 total=35
+[GIN] 2026/10/18 - 17:50:44 | 200 |  978.198709ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:44.677-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=976.111542ms status="200 OK"
+time=2026-10-18T17:50:44.681-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=71 drafted=212 accepted=185 acceptance=0.87 avg_draft=2.99 max_draft=4 avg_accepted=2.61 depth_over_time="3.0/3 3.1/4 3.0/3 3.0/3 3.0/3 3.1/4 3.0/3 2.7/3"
+time=2026-10-18T17:50:44.685-07:00 level=INFO source=pipeline.go:110 msg=memory peak="5.88 GiB" held="5.52 GiB"
+time=2026-10-18T17:50:44.777-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=36.083µs status="200 OK"
+time=2026-10-18T17:50:44.785-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=16284 matched=5 cached=2 left=16282
+time=2026-10-18T17:50:45.138-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2048 total=16282
+time=2026-10-18T17:50:45.538-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4096 total=16282
+time=2026-10-18T17:50:45.966-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=6144 total=16282
+time=2026-10-18T17:50:46.418-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=8192 total=16282
+time=2026-10-18T17:50:46.895-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=10240 total=16282
+time=2026-10-18T17:50:47.394-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=12288 total=16282
+time=2026-10-18T17:50:47.915-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=14336 total=16282
+time=2026-10-18T17:50:48.441-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=16281 total=16282
+[GIN] 2026/10/18 - 17:50:48 | 200 |  3.989660792s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:48.765-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=17 drafted=55 accepted=36 acceptance=0.65 avg_draft=3.24 max_draft=4 avg_accepted=2.12 depth_over_time="3.0/3 3.0/3 3.0/3 4.0/4 3.5/4 3.0/3 3.5/4 3.0/3"
+time=2026-10-18T17:50:48.765-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=3.986996375s status="200 OK"
+time=2026-10-18T17:50:48.772-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.93 GiB" held="6.27 GiB"
+time=2026-10-18T17:50:49.769-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=40.959µs status="200 OK"
+time=2026-10-18T17:50:49.778-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=16354 matched=16279 cached=16279 left=75
+time=2026-10-18T17:50:49.824-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=74 total=75
+[GIN] 2026/10/18 - 17:50:49 | 200 |  176.842042ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:49.943-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=174.127375ms status="200 OK"
+time=2026-10-18T17:50:49.943-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=7 drafted=22 accepted=17 acceptance=0.77 avg_draft=3.14 max_draft=4 avg_accepted=2.43 depth_over_time="3.0/3 3.0/3 3.0/3 4.0/4 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:49.949-07:00 level=INFO source=pipeline.go:110 msg=memory peak="6.77 GiB" held="6.36 GiB"
+time=2026-10-18T17:50:50.956-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=79.25µs status="200 OK"
+time=2026-10-18T17:50:50.964-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=16400 matched=16349 cached=16349 left=51
+time=2026-10-18T17:50:51.052-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=50 total=51
+[GIN] 2026/10/18 - 17:50:51 | 200 |  202.365292ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:51.156-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=199.392209ms status="200 OK"
+time=2026-10-18T17:50:51.156-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=5 drafted=21 accepted=18 acceptance=0.86 avg_draft=4.20 max_draft=5 avg_accepted=3.60 depth_over_time="4.0/4 4.0/4 4.0/4 5.0/5 4.0/4"
+time=2026-10-18T17:50:51.160-07:00 level=INFO source=pipeline.go:110 msg=memory peak="6.99 GiB" held="6.52 GiB"
+time=2026-10-18T17:50:52.164-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=40.625µs status="200 OK"
+time=2026-10-18T17:50:52.172-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=16438 matched=16395 cached=16395 left=43
+time=2026-10-18T17:50:52.213-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=42 total=43
+[GIN] 2026/10/18 - 17:50:53 | 200 |  1.207747916s |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:53.369-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=1.204760291s status="200 OK"
+time=2026-10-18T17:50:53.369-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=64 drafted=223 accepted=192 acceptance=0.86 avg_draft=3.48 max_draft=6 avg_accepted=3.00 depth_over_time="4.1/5 3.5/4 2.1/3 3.1/4 3.1/4 3.8/5 5.1/6 3.0/4"
+time=2026-10-18T17:50:53.378-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.26 GiB" held="6.63 GiB"
+time=2026-10-18T17:50:53.471-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=35.083µs status="200 OK"
+time=2026-10-18T17:50:53.473-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=428 matched=427 cached=423 left=5
+time=2026-10-18T17:50:53.494-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4 total=5
+[GIN] 2026/10/18 - 17:50:53 | 200 |  122.783833ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:53.593-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=121.197208ms status="200 OK"
+time=2026-10-18T17:50:53.593-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=7 drafted=22 accepted=21 acceptance=0.95 avg_draft=3.14 max_draft=4 avg_accepted=3.00 depth_over_time="3.0/3 3.0/3 4.0/4 3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:53.598-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.38 GiB" held="6.95 GiB"
+time=2026-10-18T17:50:53.598-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=3.029375ms status="200 OK"
+time=2026-10-18T17:50:53.599-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=428 matched=427 cached=423 left=5
+time=2026-10-18T17:50:53.607-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=4 total=5
+time=2026-10-18T17:50:53.702-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=104.138709ms status="200 OK"
+[GIN] 2026/10/18 - 17:50:53 | 200 |  108.595042ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:53.702-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=7 drafted=21 accepted=21 acceptance=1.00 avg_draft=3.00 max_draft=3 avg_accepted=3.00 depth_over_time="3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:53.705-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.32 GiB" held="6.95 GiB"
+time=2026-10-18T17:50:53.705-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.661ms status="200 OK"
+time=2026-10-18T17:50:53.706-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=504 matched=423 cached=423 left=81
+time=2026-10-18T17:50:53.745-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=80 total=81
+[GIN] 2026/10/18 - 17:50:54 | 200 |  528.967084ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:54.232-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=525.997083ms status="200 OK"
+time=2026-10-18T17:50:54.232-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=37 drafted=113 accepted=74 acceptance=0.65 avg_draft=3.05 max_draft=4 avg_accepted=2.00 depth_over_time="3.0/3 3.2/4 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.2/4"
+time=2026-10-18T17:50:54.237-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.42 GiB" held="7.00 GiB"
+time=2026-10-18T17:50:54.237-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=3.048042ms status="200 OK"
+time=2026-10-18T17:50:54.237-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=426 matched=424 cached=423 left=3
+time=2026-10-18T17:50:54.245-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=2 total=3
+[GIN] 2026/10/18 - 17:50:54 | 200 |   274.04575ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:54.506-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=269.557041ms status="200 OK"
+time=2026-10-18T17:50:54.506-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=20 drafted=60 accepted=46 acceptance=0.77 avg_draft=3.00 max_draft=3 avg_accepted=2.30 depth_over_time="3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:54.509-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.47 GiB" held="7.10 GiB"
+time=2026-10-18T17:50:54.509-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=955.375µs status="200 OK"
+time=2026-10-18T17:50:54.510-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=426 matched=425 cached=424 left=2
+time=2026-10-18T17:50:54.518-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=1 total=2
+[GIN] 2026/10/18 - 17:50:54 | 200 |  249.324375ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:54.756-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=247.028584ms status="200 OK"
+time=2026-10-18T17:50:54.756-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=18 drafted=54 accepted=47 acceptance=0.87 avg_draft=3.00 max_draft=3 avg_accepted=2.61 depth_over_time="3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:54.759-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.57 GiB" held="7.20 GiB"
+time=2026-10-18T17:50:54.759-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=GET path=/v1/status took=1.327917ms status="200 OK"
+time=2026-10-18T17:50:54.761-07:00 level=INFO source=prefix_cache.go:151 msg="cache hit" total=506 matched=454 cached=454 left=52
+time=2026-10-18T17:50:54.792-07:00 level=INFO source=pipeline.go:228 msg="Prompt processing progress" processed=51 total=52
+[GIN] 2026/10/18 - 17:50:55 | 200 |  297.308042ms |       127.0.0.1 | POST     "/v1/chat/completions"
+time=2026-10-18T17:50:55.054-07:00 level=INFO source=server.go:252 msg=ServeHTTP method=POST path=/v1/completions took=294.353917ms status="200 OK"
+time=2026-10-18T17:50:55.054-07:00 level=INFO source=speculate_stats.go:62 msg="speculative decode stats" iterations=20 drafted=60 accepted=31 acceptance=0.52 avg_draft=3.00 max_draft=3 avg_accepted=1.55 depth_over_time="3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3 3.0/3"
+time=2026-10-18T17:50:55.057-07:00 level=INFO source=pipeline.go:110 msg=memory peak="7.62 GiB" held="7.25 GiB"
+time=2026-10-18T17:50:55.190-07:00 level=INFO source=client.go:151 msg="stopping mlx runner subprocess" pid=50087

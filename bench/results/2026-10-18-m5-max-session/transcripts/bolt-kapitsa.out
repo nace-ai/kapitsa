@@ -1,0 +1,28 @@
+
+===== bolt-kapitsa  [kapitsa] Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill)  version 474b3e6
+[17:09:47] bolt-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 73482 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[17:09:47] bolt-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-bolt-24gb --model-id bolt --host 127.0.0.1 --port 8250 --ctx 32768 --slots 1
+[17:09:53] bolt-kapitsa: ready after 6s (pid 73530, listener 73530)
+[17:09:57] bolt-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.77s)
+[17:09:58] bolt-kapitsa:  warm-up tools: ok (0.96s)
+[17:10:59] bolt-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 5%
+[17:12:01] bolt-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 7%
+[17:13:03] bolt-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 5%
+[17:14:04] bolt-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 6%
+[17:14:58] bolt-kapitsa: GPU not quiet after 300s (['com.apple.WebKit[3316] 5%']); benchmarking anyway, contention will be flagged
+== bolt-kapitsa
+  decode T=0.6: 104.01 tok/s (e2e 105.53; 512 tok, finish=length, d4=0.6295)
+  decode T=0.6: 130.66 tok/s (e2e 128.78; 512 tok, finish=length, d4=0.6831)
+  decode T=0.6: 127.73 tok/s (e2e 125.71; 512 tok, finish=length, d4=0.945)
+  decode T=0.6: 127.05 tok/s (e2e 126.40; 512 tok, finish=length, d4=0.8857)
+  decode T=0.6: 111.11 tok/s (e2e 111.42; 512 tok, finish=length, d4=0.8606)
+  decode median 127.05 (min 104.01, max 130.66) over 5/5 valid
+  decode T=0: median 119.38 (min 103.19, max 128.58) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 4.48s -> 934 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [4224, 4271, 4311])
+  prefill 16000: 16515 tok (ref 16514), TTFT 17.38s -> 950 tok/s, cold cached=0 | cached TTFT median 0.16s over 3 turns (cached [16549, 16581, 16616])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.68 GB, resident mapped files 1.00 GB, swap used 14426.5 MB
+  -> <run-root>/out/results/bolt-kapitsa-20261018-170946.json
+[17:16:29] bolt-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[17:16:29] bolt-kapitsa: -> <run-root>/out/results/bolt-kapitsa-20261018-170946.json  flags: 1

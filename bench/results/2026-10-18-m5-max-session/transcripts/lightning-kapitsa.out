@@ -1,0 +1,28 @@
+
+===== lightning-kapitsa  [kapitsa] Kapitsa (DSpark drafter)  version 474b3e6
+[18:42:48] lightning-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 42655 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[18:42:48] lightning-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4 --model-id lightning --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-lightning-nvfp4/dflash --host 127.0.0.1 --port 8270 --ctx 32768 --slots 1
+[18:42:56] lightning-kapitsa: ready after 8s (pid 74776, listener 74776)
+[18:42:58] lightning-kapitsa:  warm-up prefill~2.9k+decode64: ok (2.02s)
+[18:42:59] lightning-kapitsa:  warm-up tools: ok (0.38s)
+[18:44:00] lightning-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[18:45:02] lightning-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 6%
+[18:46:04] lightning-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 7%
+[18:47:06] lightning-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 6%
+[18:47:59] lightning-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-kapitsa
+  decode T=0.6: 259.54 tok/s (e2e 251.61; 512 tok, finish=length, d4=0.8603)
+  decode T=0.6: 238.05 tok/s (e2e 235.14; 512 tok, finish=length, d4=0.9314)
+  decode T=0.6: 244.65 tok/s (e2e 240.99; 512 tok, finish=length, d4=0.8612)
+  decode T=0.6: 209.46 tok/s (e2e 204.89; 512 tok, finish=length, d4=0.9556)
+  decode T=0.6: 226.27 tok/s (e2e 223.79; 512 tok, finish=length, d4=0.962)
+  decode median 238.05 (min 209.46, max 259.54) over 5/5 valid
+  decode T=0: median 237.09 (min 196.77, max 261.22) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 2.22s -> 1888 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4214, 4243, 4276])
+  prefill 16000: 16519 tok (ref 16517), TTFT 9.00s -> 1835 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16550, 16575, 16608])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 18.63 GB, resident mapped files 0.66 GB, swap used 14812.75 MB
+  -> <run-root>/out-nemotron/results/lightning-kapitsa-20261018-184248.json
+[18:48:51] lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[18:48:51] lightning-kapitsa: -> <run-root>/out-nemotron/results/lightning-kapitsa-20261018-184248.json  flags: 1

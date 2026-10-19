@@ -1,0 +1,233 @@
+{
+ "label": "flash-lmstudio",
+ "schema": 2,
+ "when": "2026-10-18 19:32:16",
+ "invalid": [
+  "harness: server never became ready (4s); see <run-root>/out-nemotron/logs/flash-lmstudio-20261018-193211.log"
+ ],
+ "flags": [],
+ "config_label": "flash-lmstudio",
+ "display": "LM Studio (llama.cpp engine, Q4_K_M GGUF)",
+ "engine": "lmstudio",
+ "version": "llmster 0.0.25-1, llama.cpp runtime 2.60.0 (b11698, 2a667032d)",
+ "version_config": "auto",
+ "model_name": "Qwen3.8-Flash-Next",
+ "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.8-Flash-Next-GGUF",
+ "note": "LM Studio's staff pick for Flash-Next is GGUF only (lmstudio-community Q4_K_M @ 158fc825, 119.2 GB, no MTP head), so it runs on LM Studio's llama.cpp engine at its defaults.",
+ "config": {
+  "label": "flash-lmstudio",
+  "display": "LM Studio (llama.cpp engine, Q4_K_M GGUF)",
+  "engine": "lmstudio",
+  "version": "auto",
+  "lms_format": "gguf",
+  "model_name": "Qwen3.8-Flash-Next",
+  "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.8-Flash-Next-GGUF",
+  "cmd": [
+   "{harness}/launchers/lmstudio_serve.sh",
+   "serve",
+   "8197",
+   "qwen/qwen3.8-flash-next",
+   "flash-lmstudio",
+   "--context-length",
+   "32768",
+   "--parallel",
+   "1"
+  ],
+  "env": {
+   "LMS": "{env:LMS_BIN=~/.lmstudio/bin/lms}"
+  },
+  "stop": [
+   "{harness}/launchers/lmstudio_serve.sh",
+   "stop"
+  ],
+  "pid_file": "~/.lmstudio/.internal/llmster-pid.lock",
+  "base_url": "http://127.0.0.1:8197/v1",
+  "model": "flash-lmstudio",
+  "ready_timeout": 1200,
+  "requires_paths": [
+   "{env:LMS_BIN=~/.lmstudio/bin/lms}",
+   "~/.lmstudio/hub/models/qwen/qwen3.8-flash-next/model.yaml",
+   "~/.lmstudio/models/lmstudio-community/Qwen3.8-Flash-Next-GGUF/Qwen3.8-Flash-Next-Q4_K_M-00001-of-00003.gguf"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286"
+  ],
+  "note": "LM Studio's staff pick for Flash-Next is GGUF only (lmstudio-community Q4_K_M @ 158fc825, 119.2 GB, no MTP head), so it runs on LM Studio's llama.cpp engine at its defaults."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 14813.12,
+    "swapouts": 81442009,
+    "swapins": 70602349,
+    "pageouts": 5982131,
+    "memorystatus_level": 93
+   },
+   "gpu_mem": {
+    "in_use": 1702789120,
+    "alloc": 8033992704,
+    "util_pct": 11
+   },
+   "disk_free_bytes": 204566188032,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/bench/harness/launchers/lmstudio_serve.sh",
+   "serve",
+   "8197",
+   "qwen/qwen3.8-flash-next",
+   "flash-lmstudio",
+   "--context-length",
+   "32768",
+   "--parallel",
+   "1"
+  ],
+  "cmd_shell": "<repo>/bench/harness/launchers/lmstudio_serve.sh serve 8197 qwen/qwen3.8-flash-next flash-lmstudio --context-length 32768 --parallel 1",
+  "env": {
+   "LMS": "~/.lmstudio/bin/lms"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "~/.lmstudio/models/lmstudio-community/Qwen3.8-Flash-Next-GGUF",
+   "safetensors_bytes": 0,
+   "safetensors_files": []
+  },
+  "harness": {
+   "git_head": "474b3e6a4d8a9f2c282d7077c0191bcd2ec3cede",
+   "dirty": true
+  },
+  "config_file": "configs/flash-next.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "LLAMA_SERVER",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OMLX_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "lmstudio": {
+   "home": "~/.lmstudio",
+   "llmster": "0.0.25-1",
+   "lms_cli_commit": "69d945a",
+   "settings": {
+    "defaultContextLength": {
+     "type": "custom",
+     "value": 8192
+    },
+    "modelLoadingGuardrails": {
+     "mode": "high",
+     "customThresholdBytes": 4294967296,
+     "alwaysAllowLoadAnyway": false
+    },
+    "separateReasoningContentInAPI": true,
+    "jitModelTTL": {
+     "enabled": true,
+     "ttlSeconds": 3600
+    },
+    "unloadPreviousJITModelOnLoad": true,
+    "backendDownloadChannel": "stable"
+   },
+   "runtime_selection": "backend-preferences-v1.json",
+   "runtimes": {
+    "gguf": {
+     "name": "llama.cpp-mac-arm64-apple-metal-advsimd",
+     "version": "2.60.0",
+     "release_notes": "- llama.cpp release b11698 (commit 2a667032d)\n",
+     "llama_cpp": "b11698, 2a667032d",
+     "vendor": []
+    },
+    "safetensors": {
+     "name": "mlx-llm-mac-arm64-apple-metal-advsimd",
+     "version": "1.13.1",
+     "release_notes": "- Updated MLX to 0.32.3\n- Updated transformers, tokenizers, huggingface-hub, and other Python dependencies\n\nMLX version info:\n- mlx-engine==ab52366\n- mlx==0.32.3\n- mlx-lm==0.31.4.dev132\n- mlx-vlm==0.7.3\n",
+     "mlx_engine": "ab52366",
+     "vendor": [
+      "_amphibian/app-mlx-generate-mac14-arm64@39",
+      "_amphibian/cpython3.11-mac-arm64@10"
+     ],
+     "packages": {
+      "mlx": "0.32.3",
+      "mlx_metal": "0.32.3",
+      "mlx_lm": "0.31.4.dev132",
+      "mlx_vlm": "0.7.3",
+      "transformers": "5.18.0"
+     }
+    }
+   }
+  },
+  "prepare": [],
+  "env_relevant": {
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "OMLX_BIN": "~/venvs/omlx/bin/omlx",
+   "OLLAMA_BIN": "~/.local/opt/ollama-0.40.6/ollama",
+   "MLX_SERVE_BIN": "~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MTPLX_BIN": "~/.local/bin/mtplx",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "BENCH_OUT": "<run-root>/out-nemotron"
+  },
+  "ready_s": 4.0
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0,
+  "harness_held_s": 9.7,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "teardown": {
+  "stop_cmd": "No models to unload.\nError: The server is not running.\nShutting down llmster...\nDone.",
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 1702789120,
+   "alloc": 8067547136,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 14813.12,
+   "swapouts": 81442009,
+   "swapins": 70602361,
+   "pageouts": 5982131,
+   "memorystatus_level": 93
+  },
+  "disk_free_bytes": 204565901312
+ },
+ "server_log": [
+  "llmster v0.0.25+1 is running (PID: 79980)",
+  "llama.cpp-mac-arm64-apple-metal-advsimd@2.60.0       \u2713            GGUF",
+  "llama.cpp-mac-arm64-apple-metal-advsimd@2.41.0                    GGUF",
+  "mlx-llm-mac-arm64-apple-metal-advsimd@1.13.1         \u2713            MLX",
+  "mlx-llm-mac-arm64-apple-metal-advsimd@1.11.0                      MLX",
+  "### lms load qwen/qwen3.8-flash-next --identifier flash-lmstudio -y --context-length 32768 --parallel 1",
+  "[server] [2026-10-18 19:32:15][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Loading model: qwen/qwen3.8-flash-next",
+  "[server] [2026-10-18 19:32:15][ERROR][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Error in channel handler: Error: Model loading was stopped due to insufficient system resources. Under the current settings, this model requires approximately 117.52 GB of memory, and continuing to load it wo",
+  "\u001b[K\u001b[?25hError: Model loading was stopped due to insufficient system resources. Under the current settings, this model requires approximately 117.52 GB of memory, and continuing to load it would likely overload your system and cause it to freeze. If you think this is incorrect, you can adjust the mo"
+ ],
+ "server_log_path": "logs/flash-lmstudio-20261018-193211.log"
+}

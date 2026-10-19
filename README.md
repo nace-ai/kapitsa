@@ -59,10 +59,10 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5<br>4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
-| Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.8<br>Flash‑Next<br>180B‑A7B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77 |
+| Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**294&nbsp;tok/s**</mark> | — | — | 213 | 175 | 154 | — | — |
+| Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**115&nbsp;tok/s**</mark> | — | — | 68 | 69 | 32 | — | 30 |
+| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**272&nbsp;tok/s**</mark> | — | — | 166 | 123 | 127 | — | 112 |
+| Qwen3.8<br>Flash‑Next<br>180B‑A7B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 107 | 🟩&nbsp;**108** | 60<sup>†</sup> | 88 | —<br><sub>won't load</sub> | 96 | 77 |
 
 #### Nemotron
 
@@ -70,12 +70,13 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | — | — | — | — |
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 159 | 139 |
-| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | — | — | — | — |
+| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**127&nbsp;tok/s**</mark> | — | —<br><sub>no Metal support</sub> | — |
 | Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | 66 | 46 |
 
-<sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. Flash-Next: the same 4-bit weights and MTP head on
-Kapitsa, oMLX and MLX (mlx-vlm); Kapitsa leads greedy (108
-against 106) and on memory (70.5 GB against 104). Nemotron: NVIDIA's NVFP4 on Kapitsa and mlx-vlm, MLX 4-bit on oMLX
+<sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. MLX on the 27B and 35B: mlx-lm.
+Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's 4.7-bit pack, MTPLX its
+author's pack, Ollama its NVFP4 tag. <sup>†</sup> Ollama fails every 4K and 16K prompt there (out of GPU memory). LM Studio refuses to load its
+119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve 78.8, oMLX 104). Nemotron: NVIDIA's NVFP4 on Kapitsa and mlx-vlm, MLX 4-bit on oMLX
 and mlx-lm, Q4_0 on llama.cpp; on Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).</sub>
 
 <sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md).</sub>

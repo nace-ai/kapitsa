@@ -1,0 +1,31 @@
+
+===== lightning-mlxserve-mtp  [mlx-serve] mlx-serve + MTP (MLX 4-bit with MTP head)  version 26.10.2
+[17:51:00] lightning-mlxserve-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 49972 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[17:51:01] lightning-mlxserve-mtp: starting ~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model ~/.cache/kapitsa/benchmark-models/lightning-mlx-4bit-mtp --host 127.0.0.1 --port 8173 --ctx-size 32768 --no-drafter
+[17:51:05] lightning-mlxserve-mtp: ready after 4s (pid 62583, listener 62583)
+[17:51:07] lightning-mlxserve-mtp:  warm-up prefill~2.9k+decode64: ok (2.62s)
+[17:51:08] lightning-mlxserve-mtp:  warm-up tools: ok (0.91s)
+[17:51:11] lightning-mlxserve-mtp:  warm-up decode512#1: ok (2.83s)
+[17:51:14] lightning-mlxserve-mtp:  warm-up decode512#2: ok (2.81s)
+[17:51:17] lightning-mlxserve-mtp:  warm-up decode512#3: ok (2.89s)
+[17:52:19] lightning-mlxserve-mtp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[17:53:20] lightning-mlxserve-mtp: gpu busy (124s): com.apple.WebKit[3316] 5%
+[17:54:22] lightning-mlxserve-mtp: gpu busy (185s): com.apple.WebKit[3316] 6%
+[17:55:24] lightning-mlxserve-mtp: gpu busy (247s): com.apple.WebKit[3316] 6%
+[17:56:17] lightning-mlxserve-mtp: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== lightning-mlxserve-mtp
+  decode T=0.6: 192.00 tok/s (e2e 190.49; 512 tok, finish=length, d4=0.9307)
+  decode T=0.6: 189.11 tok/s (e2e 187.42; 512 tok, finish=length, d4=0.9145)
+  decode T=0.6: 189.42 tok/s (e2e 187.82; 512 tok, finish=length, d4=0.9419)
+  decode T=0.6: 190.08 tok/s (e2e 188.40; 512 tok, finish=length, d4=0.9631)
+  decode T=0.6: 190.00 tok/s (e2e 188.32; 512 tok, finish=length, d4=0.6964)
+  decode median 190.0 (min 189.11, max 192.0) over 5/5 valid
+  decode T=0: median 190.68 (min 189.52, max 191.93) over 5/5 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 1.19s -> 3504 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [4226, 4280, 4319])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.10s -> 3236 tok/s, cold cached=0 | cached TTFT median 0.06s over 3 turns (cached [16543, 16568, 16601])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.36 GB, resident mapped files 0.00 GB, swap used 14564.62 MB
+  -> <run-root>/out-nemotron/results/lightning-mlxserve-mtp-20261018-175100.json
+[17:57:12] lightning-mlxserve-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[17:57:12] lightning-mlxserve-mtp: -> <run-root>/out-nemotron/results/lightning-mlxserve-mtp-20261018-175100.json  flags: 1

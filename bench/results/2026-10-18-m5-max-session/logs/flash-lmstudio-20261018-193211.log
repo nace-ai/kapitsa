@@ -1,0 +1,30 @@
+Waking up LM Studio service...
+llmster started (PID: 79980).
+llmster v0.0.25+1 is running (PID: 79980)
+LLM ENGINE                                        SELECTED    MODEL FORMAT
+llama.cpp-mac-arm64-apple-metal-advsimd@2.60.0       ✓            GGUF    
+llama.cpp-mac-arm64-apple-metal-advsimd@2.41.0                    GGUF    
+mlx-llm-mac-arm64-apple-metal-advsimd@1.13.1         ✓            MLX     
+mlx-llm-mac-arm64-apple-metal-advsimd@1.11.0                      MLX     
+[model] Streaming logs from LM Studio
+[model] 
+[server] Streaming logs from LM Studio
+[server] 
+[runtime] Streaming logs from LM Studio
+[runtime] 
+### lms load qwen/qwen3.8-flash-next --identifier flash-lmstudio -y --context-length 32768 --parallel 1
+[server] [2026-10-18 19:32:15][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listDownloadedModels] Listing downloaded models
+[server] [2026-10-18 19:32:15][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Loading model: qwen/qwen3.8-flash-next
+[server] [2026-10-18 19:32:15][DEBUG][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Found 1 model(s) for key: qwen/qwen3.8-flash-next
+[server] [2026-10-18 19:32:15][ERROR][LMSAuthenticator][Client=lms-cli][Endpoint=loadModel] Error in channel handler: Error: Model loading was stopped due to insufficient system resources. Under the current settings, this model requires approximately 117.52 GB of memory, and continuing to load it would likely overload your system and cause it to freeze. If you think this is incorrect, you can adjust the model loading guardrails in settings.
+[server]     at _0x55a679.guardrailHasEnoughResourcesForModelOrThrow (../../.bundle/daemon/index.js:356:4086)
+[server]     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+[server]     at async _0x55a679.loadIndexedModelRepresentation (../../.bundle/daemon/index.js:369:8186)
+[server]     at async _0x55a679.loadModel (../../.bundle/daemon/index.js:369:1233)
+[server]     at async _0x1baf09.<computed>.loadModel (../../.bundle/daemon/index.js:369:77135)
+[server]     at async Object.handler (../../.bundle/daemon/index.js:498:5757)
+
+[K[?25hError: Model loading was stopped due to insufficient system resources. Under the current settings, this model requires approximately 117.52 GB of memory, and continuing to load it would likely overload your system and cause it to freeze. If you think this is incorrect, you can adjust the model loading guardrails in settings.
+[server] [2026-10-18 19:32:16][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-18 19:32:16][INFO][LMSAuthenticator][Client=lms-cli][Endpoint=listLoaded] Listing loaded models
+[server] [2026-10-18 19:32:16][INFO] Server stopped.

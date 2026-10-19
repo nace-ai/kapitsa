@@ -1,0 +1,92 @@
+  ███╗   ███╗ ████████╗ ██████╗  ██╗      ██╗  ██╗
+  ████╗ ████║ ╚══██╔══╝ ██╔══██╗ ██║      ╚██╗██╔╝
+  ██╔████╔██║    ██║    ██████╔╝ ██║       ╚███╔╝ 
+  ██║╚██╔╝██║    ██║    ██╔═══╝  ██║       ██╔██╗ 
+  ██║ ╚═╝ ██║    ██║    ██║      ███████╗ ██╔╝ ██╗
+  ╚═╝     ╚═╝    ╚═╝    ╚═╝      ╚══════╝ ╚═╝  ╚═╝
+
+  Native MTP speculative decoding · Apple Silicon
+
+╭─ MTPLX 2.12.2 ───────────────────────────────────────────────────────────────╮
+│                                                                              │
+│      Model  qwen3.5-4b                                                       │
+│    Profile  sustained (Sustained: long-context native-MTP path with bounded  │
+│             memory)                                                          │
+│        API  http://127.0.0.1:8082/v1                                         │
+│       Mode  Sustained MTP                                                    │
+│    Browser  http://127.0.0.1:8082/                                           │
+│  Listening  127.0.0.1:8082                                                   │
+│    Loading  ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bi…  │
+│     Warmup  16 tokens                                                        │
+│       Auth  API key: leave blank for localhost                               │
+│       Stop  Ctrl-C                                                           │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+[1/6] Server config ready: http://127.0.0.1:8082/v1
+[2/6] Model resolved: ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bit-mtplx
+[3/6] Runtime contract verified — profile: sustained
+      Loading the model can take about a minute on first start.
+
+[4/6] Preparing Sustained MTP runtime
+[4/6] Checking local acceleration runtime
+      This may take a few seconds.
+[4/6] Runtime checks complete
+[5/6] Loading model weights: ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bit-mtplx
+      This is the long step; MTPLX is mapping the model into MLX.
+      Model load in progress (this may take a minute).
+[5/6] Model loaded in 1.8s
+[5/6] Installing native-MTP draft head
+[frspec] disabled (MTPLX_FRSPEC_DRAFT=None)
+[5/6] Chat template profile: local_qwen36
+[5/6] Context window: 32768 tokens
+[mtplx] dense-decode ceiling auto: 131072 tokens (15% RAM over 32768 B/token, from the model config)
+[5/6] Memory plan: 128G Mac: engine budget 90.0G, weights 2.9G, context 32768, session bank up to 48.0G
+[5/6] GPU residency keepalive: every 1s for 600s after each request
+[mtplx] session-bank budget: 48.0G total (auto: machine memory plan, yields to live KV), 32.0G per-session cap, 48 entries max, model weights 2.9G. Override: MTPLX_SESSION_BANK_MAX_BYTES / MTPLX_SESSION_BANK_PER_SESSION_BYTES (sizes like 12G or 12GiB).
+[6/6] Warming model with 16 tokens
+[6/6] Extended warmup continues silently in the background
+[6/6] Warmup complete in 1.7s (38.37 tok/s)
+
+MTPLX is ready.
+Chat UI: http://127.0.0.1:8082/
+OpenAI API Base URL: http://127.0.0.1:8082/v1
+Model: qwen3.5-4b
+Reasoning history: scoped (active round only) (policy auto)
+API key: leave blank for localhost
+Health check: http://127.0.0.1:8082/health
+Keep this terminal open. Press Ctrl-C to stop MTPLX.
+[mtplx] chat turn segmentation {"enabled": true, "reason": "structure holds and all 12 probe renders give the single-call ids when cut", "tokenizer": "TokenizerWrapper"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 2927, "completion_tokens": 64, "max_tokens": 64, "effective_max_tokens": 64, "finish_reason": "length", "elapsed_s": 1.061639, "tok_s": 152.18515, "end_to_end_tok_s": 60.284134, "seed": 628174913, "attempts": 1, "blank_retries": 0, "text_preview": "The first file in the repository context is `modeling_ctrl.py`, which implements the **CTRL (Conditional Text Retrieval "}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 0.389122, "tok_s": 178.450604, "end_to_end_tok_s": 69.387009, "seed": 793690862, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.043753, "tok_s": 171.236726, "end_to_end_tok_s": 168.213387, "seed": 1052594049, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, production-ready implementation of a Least Recently Used (LRU) Cache\nwi"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.14758, "tok_s": 166.199517, "end_to_end_tok_s": 162.664659, "seed": 872088227, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache: A comprehensive, thread-safe LRU Cache with Time-To-Live (TTL) expiry.\n\nThis module provide"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.072075, "tok_s": 170.328749, "end_to_end_tok_s": 166.662586, "seed": 807799098, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_ttl.py\n\nA comprehensive implementation of an LRU (Least Recently Used) cache with Time-To-Live ("}
+{"event": "mtplx_ssd_session_cache_reconcile", "dir": "~/.mtplx/session-bank", "files_deleted": 0, "dirs_deleted": 0, "disk_bytes_deleted": 0, "elapsed_s": 22.787, "entries": 90, "disk_bytes": 25904328704, "max_bytes": 107374182400, "interrupted": false}
+[mtplx] background warmup {"state": "done", "elapsed_s": 102.726, "resubmits": 0, "steps": [{"kind": "gqa_packed_pipelines", "state": "skipped", "elapsed_s": 0.0}, {"kind": "ladder", "context": 512, "state": "ok", "elapsed_s": 0.157, "tok_s": 313.97}, {"kind": "ladder", "context": 2560, "state": "ok", "elapsed_s": 0.594, "tok_s": 306.67}]}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.072806, "tok_s": 170.700631, "end_to_end_tok_s": 166.622959, "seed": 1094891352, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, production-grade implementation of an LRU (Least Recently Used) cache\nw"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.951069, "tok_s": 176.640466, "end_to_end_tok_s": 173.496452, "seed": 282742947, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache: A robust, thread-safe LRU Cache with Time-To-Live (TTL) support.\n\nThis module provides a co"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.014394, "tok_s": 173.337761, "end_to_end_tok_s": 169.851742, "seed": 1669816494, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_ttl: A high-performance, thread-safe LRU Cache with TTL (Time-To-Live) expiry.\n\nThis module prov"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 3.007277, "tok_s": 173.316728, "end_to_end_tok_s": 170.253674, "seed": 1504348562, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_ttl: A thread-safe LRU Cache with Time-To-Live (TTL) expiry.\n\nThis module provides a robust impl"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.985305, "tok_s": 174.98045, "end_to_end_tok_s": 171.506766, "seed": 851749307, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache_module.py\n\nA comprehensive, production-ready Python module implementing a Least Recently Use"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.835119, "tok_s": 185.134267, "end_to_end_tok_s": 180.592059, "seed": 1218519178, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA comprehensive, production-ready implementation of an LRU (Least Recently Used) ca"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.802315, "tok_s": 186.71214, "end_to_end_tok_s": 182.706114, "seed": 1724095365, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, production-ready implementation of an LRU (Least Recently Used) cache\nw"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.779189, "tok_s": 188.282509, "end_to_end_tok_s": 184.226436, "seed": 1625263253, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, thread-safe, LRU (Least Recently Used) cache implementation\nwith Time-T"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.78361, "tok_s": 187.903105, "end_to_end_tok_s": 183.933843, "seed": 1781253980, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, production-grade implementation of an LRU (Least Recently Used) cache\nw"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 2.874317, "tok_s": 181.436053, "end_to_end_tok_s": 178.129297, "seed": 110651848, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_ttl_cache.py\n\nA comprehensive, thread-safe, LRU (Least Recently Used) cache implementation\nwith Time-T"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4133, "completion_tokens": 76, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 1.366708, "tok_s": 161.794729, "end_to_end_tok_s": 55.608084, "seed": 105372254, "attempts": 1, "blank_retries": 0, "text_preview": "The file `modeling_granite_speech.py` defines the `GraniteSpeechModel` architecture, which integrates an audio encoder ("}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4227, "completion_tokens": 17, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 0.141972, "tok_s": 186.801985, "end_to_end_tok_s": 119.742062, "seed": 696861745, "attempts": 1, "blank_retries": 0, "text_preview": "One function defined in that file is `GraniteSpeechModel.get_audio_features`."}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4267, "completion_tokens": 42, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 0.390472, "tok_s": 120.962603, "end_to_end_tok_s": 107.562118, "seed": 1181401499, "attempts": 1, "blank_retries": 0, "text_preview": "One class defined in that file is `GraniteSpeechModel`. Other examples include `GraniteSpeechCTCEncoder`, `GraniteSpeech"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4325, "completion_tokens": 256, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "length", "elapsed_s": 1.474107, "tok_s": 179.895432, "end_to_end_tok_s": 173.664463, "seed": 1646985342, "attempts": 1, "blank_retries": 0, "text_preview": "The `modeling_granite_speech.py` file imports the following modules:\n\n*   `math`\n*   `dataclasses` (specifically `datacl"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16287, "completion_tokens": 62, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 4.407929, "tok_s": 144.969132, "end_to_end_tok_s": 14.065562, "seed": 1397106202, "attempts": 1, "blank_retries": 0, "text_preview": "The first file, `modeling_granite_speech.py`, defines the `GraniteSpeech` model architecture, which integrates an audio "}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16367, "completion_tokens": 25, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 0.310851, "tok_s": 122.257036, "end_to_end_tok_s": 80.424319, "seed": 1514099925, "attempts": 1, "blank_retries": 0, "text_preview": "One function defined in `modeling_granite_speech.py` is `GraniteSpeechModel.get_audio_features`."}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16415, "completion_tokens": 24, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 0.242337, "tok_s": 142.046716, "end_to_end_tok_s": 99.03576, "seed": 483707903, "attempts": 1, "blank_retries": 0, "text_preview": "One class defined in `modeling_granite_speech.py` is `GraniteSpeechCTCEncoder`."}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16455, "completion_tokens": 256, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "length", "elapsed_s": 1.689358, "tok_s": 158.191109, "end_to_end_tok_s": 151.536822, "seed": 75581366, "attempts": 1, "blank_retries": 0, "text_preview": "The `modeling_granite_speech.py` file imports the following modules:\n\n*   `math`\n*   `dataclasses`\n*   `torch`\n*   `torc"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 0.130757, "tok_s": 227.310517, "end_to_end_tok_s": 206.490361, "seed": 617078681, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 0.126237, "tok_s": 233.848488, "end_to_end_tok_s": 213.883691, "seed": 1248943502, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 810, "completion_tokens": 63, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 0.377875, "tok_s": 184.999864, "end_to_end_tok_s": 166.721836, "seed": 520386558, "attempts": 1, "blank_retries": 0, "text_preview": "The entry point is the `if __name__ == '__main__':` block. It calls the `main()` function, which simply prints the messa"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 728, "completion_tokens": 61, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 0.548507, "tok_s": 172.893591, "end_to_end_tok_s": 111.21102, "seed": 2047833601, "attempts": 1, "blank_retries": 0, "text_preview": "The user wants me to open a file called src/main.py and explain what the entry point does. I should first read the file "}
+{"event": "mtplx_openai_generation", "prompt_tokens": 728, "completion_tokens": 63, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 0.318423, "tok_s": 204.993295, "end_to_end_tok_s": 197.849978, "seed": 842792531, "attempts": 1, "blank_retries": 0, "text_preview": "The user wants me to open and read the file src/main.py to understand what the entry point does. I'll use the read_file "}
+{"event": "mtplx_openai_generation", "prompt_tokens": 809, "completion_tokens": 109, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 0.68472, "tok_s": 170.483461, "end_to_end_tok_s": 159.189167, "seed": 508466772, "attempts": 1, "blank_retries": 0, "text_preview": "The file is quite short. I can see the entry point is the `main()` function which prints a greeting message and returns "}
+[mtplx] shutdown: flushing 13 pending SSD session-cache write(s) (bounded 10s)...
+[mtplx] shutdown: SSD session cache flushed 13/13 pending write(s) in 5.56s

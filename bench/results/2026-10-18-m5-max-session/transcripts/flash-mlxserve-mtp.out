@@ -1,0 +1,31 @@
+
+===== flash-mlxserve-mtp  [mlx-serve] mlx-serve + MTP (vendor's iQ-MLX 4.7 bpw pack)  version 26.10.2
+[19:49:58] flash-mlxserve-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 97593 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[19:49:58] flash-mlxserve-mtp: starting ~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model ~/.cache/kapitsa/benchmark-models/mlx-serve/Qwen3.8-Flash-Next-MLX-Serve-iQ-MLX-4.7bpw --host 127.0.0.1 --port 8173 --ctx-size 32768 --mtp
+[19:50:16] flash-mlxserve-mtp: ready after 18s (pid 18352, listener 18352)
+[19:50:21] flash-mlxserve-mtp:  warm-up prefill~2.9k+decode64: ok (4.83s)
+[19:50:22] flash-mlxserve-mtp:  warm-up tools: ok (0.98s)
+[19:50:28] flash-mlxserve-mtp:  warm-up decode512#1: ok (5.28s)
+[19:50:33] flash-mlxserve-mtp:  warm-up decode512#2: ok (5.4s)
+[19:50:39] flash-mlxserve-mtp:  warm-up decode512#3: ok (5.7s)
+[19:51:41] flash-mlxserve-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[19:52:42] flash-mlxserve-mtp: gpu busy (124s): com.apple.WebKit[3316] 7%
+[19:53:44] flash-mlxserve-mtp: gpu busy (186s): com.apple.WebKit[3316] 6%
+[19:54:46] flash-mlxserve-mtp: gpu busy (247s): com.apple.WebKit[3316] 7%
+[19:55:40] flash-mlxserve-mtp: GPU not quiet after 301s (['com.apple.WebKit[3316] 5%']); benchmarking anyway, contention will be flagged
+== flash-mlxserve-mtp
+  decode T=0.6: 100.38 tok/s (e2e 100.46; 512 tok, finish=length, d4=0.9944)
+  decode T=0.6: 111.39 tok/s (e2e 111.00; 512 tok, finish=length, d4=0.8973)
+  decode T=0.6: 114.54 tok/s (e2e 113.60; 512 tok, finish=length, d4=0.6969)
+  decode T=0.6: 107.60 tok/s (e2e 106.89; 512 tok, finish=length, d4=0.9239)
+  decode T=0.6: 104.70 tok/s (e2e 104.22; 512 tok, finish=length, d4=0.9169)
+  decode median 107.6 (min 100.38, max 114.54) over 5/5 valid
+  decode T=0: median 112.42 (min 111.04, max 117.82) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 2.40s -> 1720 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [4104, 4208, 4240])
+  prefill 16000: 16286 tok (ref 16286), TTFT 7.62s -> 2136 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [16337, 16362, 16400])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 78.81 GB, resident mapped files 5.20 GB, swap used 14789.0 MB
+  -> <run-root>/out-nemotron/results/flash-mlxserve-mtp-20261018-194958.json
+[19:57:08] flash-mlxserve-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:57:08] flash-mlxserve-mtp: -> <run-root>/out-nemotron/results/flash-mlxserve-mtp-20261018-194958.json  flags: 1

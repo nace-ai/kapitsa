@@ -1,0 +1,31 @@
+2026-10-18 16:50:51 start q36-35b-kapitsa
+2026-10-18 16:56:44 end q36-35b-kapitsa rc=0
+2026-10-18 16:56:44 start q38-27b-kapitsa
+2026-10-18 17:04:01 end q38-27b-kapitsa rc=0
+2026-10-18 17:04:01 start q35-4b-kapitsa
+2026-10-18 17:09:46 end q35-4b-kapitsa rc=0
+2026-10-18 17:09:46 start bolt-kapitsa
+2026-10-18 17:16:29 end bolt-kapitsa rc=0
+2026-10-18 17:16:29 start q36-35b-ollama-mlx-q4
+2026-10-18 17:22:47 end q36-35b-ollama-mlx-q4 rc=0
+2026-10-18 17:22:47 start q38-27b-ollama-mlx-q4
+2026-10-18 17:37:39 end q38-27b-ollama-mlx-q4 rc=0
+2026-10-18 17:37:39 start q35-4b-ollama-mlx-q4
+2026-10-18 17:51:00 end q35-4b-ollama-mlx-q4 rc=0
+2026-10-18 17:51:00 start q36-35b-lmstudio
+2026-10-18 18:04:07 end q36-35b-lmstudio rc=0
+2026-10-18 18:04:07 start q38-27b-lmstudio
+2026-10-18 18:21:46 end q38-27b-lmstudio rc=0
+2026-10-18 18:21:46 start q35-4b-lmstudio
+2026-10-18 18:42:48 end q35-4b-lmstudio rc=0
+2026-10-18 18:42:48 start q36-35b-mtplx
+2026-10-18 18:55:43 end q36-35b-mtplx rc=0
+2026-10-18 18:55:43 start q38-27b-mtplx
+2026-10-18 19:11:54 end q38-27b-mtplx rc=0
+2026-10-18 19:11:54 start q35-4b-mtplx
+2026-10-18 19:25:51 end q35-4b-mtplx rc=0
+2026-10-18 19:25:51 start q36-35b-mlxlm
+2026-10-18 19:32:11 end q36-35b-mlxlm rc=0
+2026-10-18 19:32:11 start q38-27b-mlxlm
+2026-10-18 19:49:58 end q38-27b-mlxlm rc=0
+2026-10-18 19:49:58 start q35-4b-mlxlm

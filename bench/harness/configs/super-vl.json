@@ -171,5 +171,43 @@
   "requires_paths": ["{env:SUPER_VL_GGUF_DIR={models}/super-vl-gguf}/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_0.gguf",
                      "{env:SUPER_VL_GGUF_DIR={models}/super-vl-gguf}/lilicorr-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf"],
   "note": "NVIDIA's LiLiCorr drafter as ggml-org converted it (lilicorr-...-NVFP4.gguf, 1.35 GB, from nvidia/...-NVFP4-LiLiCorr), run by llama.cpp's DFlash path (PR #30506: --spec-type draft-dflash; the GGUF's lilicorr.* keys select LiLiCorr's head). The only GGUF of the drafter is NVFP4, which the Metal backend has no kernels for. n-max 7 = the drafter's full block (block_size 8); llama-server's default n-max 3 caps it at 3 drafts. Smoke tests (2 runs each, 4K prompt; T = 0.6 / greedy tok/s): n-max 3 25.2 / 23.5, n-max 7 30.0 / 29.4, against 36.9 / 35.8 without a drafter, with about 4.7 tokens accepted per cycle."
+ },
+ {
+  "label": "super-ollama-mlx",
+  "display": "Ollama MLX runner (NVIDIA NVFP4 tag + MTP head, adaptive depth)",
+  "engine": "ollama",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+  "model_path": "ollama:nemotron-3.5-super:120b-a12b-nvfp4",
+  "cmd": ["{env:OLLAMA_BIN={first:ollama|/Applications/Ollama.app/Contents/Resources/ollama}}", "serve"],
+  "env": {"OLLAMA_HOST": "127.0.0.1:8085", "OLLAMA_MODELS": "{env:OLLAMA_MODELS=~/.ollama/models}", "OLLAMA_NOPRUNE": "1", "OLLAMA_CONTEXT_LENGTH": "32768", "OLLAMA_NUM_PARALLEL": "1", "OLLAMA_MAX_LOADED_MODELS": "1", "OLLAMA_KEEP_ALIVE": "-1", "OLLAMA_FLASH_ATTENTION": "1"},
+  "env_clear_prefixes": ["OLLAMA_", "LLAMA_ARG_"],
+  "base_url": "http://127.0.0.1:8085/v1",
+  "model": "nemotron-3.5-super:120b-a12b-nvfp4",
+  "requires_ollama_tag": "nemotron-3.5-super:120b-a12b-nvfp4",
+  "ready_timeout": 900,
+  "adaptive_warm": true,
+  "log_grep": ["starting runner|ollama runner|mlx runner is ready", "speculative decode stats", "Loaded tensors|memory|model weights", "version|inference compute", "warn|WARN|error|Error"],
+  "bench_args": ["--ref-prompt-tokens", "4000:4183,16000:16513"],
+  "note": "Ollama 0.40.6's official tag for Super on Apple silicon: NVIDIA's NVFP4 checkpoint with its MTP head (text only), served by Ollama's MLX runner with its built-in adaptive MTP (no knobs). Dedicated server with 32K context, one slot."
+ },
+ {
+  "label": "super-lmstudio",
+  "display": "LM Studio (llama.cpp engine, Q4_K_M GGUF)",
+  "engine": "lmstudio",
+  "version": "auto",
+  "lms_format": "gguf",
+  "model_name": "Nemotron-3.5-Super-VL-120B-A12B-NVFP4",
+  "model_path": "~/.lmstudio/models/lmstudio-community/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF",
+  "cmd": ["{harness}/launchers/lmstudio_serve.sh", "serve", "8197", "nvidia/nemotron-3.5-super-vl", "super-lmstudio", "--context-length", "32768", "--parallel", "1"],
+  "env": {"LMS": "{env:LMS_BIN=~/.lmstudio/bin/lms}"},
+  "stop": ["{harness}/launchers/lmstudio_serve.sh", "stop"],
+  "pid_file": "~/.lmstudio/.internal/llmster-pid.lock",
+  "base_url": "http://127.0.0.1:8197/v1",
+  "model": "super-lmstudio",
+  "ready_timeout": 900,
+  "requires_paths": ["{env:LMS_BIN=~/.lmstudio/bin/lms}", "~/.lmstudio/hub/models/nvidia/nemotron-3.5-super-vl/model.yaml", "~/.lmstudio/models/lmstudio-community/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q4_K_M-00001-of-00002.gguf"],
+  "bench_args": ["--ref-prompt-tokens", "4000:4183,16000:16513"],
+  "note": "LM Studio's staff pick for Super-VL is GGUF only (lmstudio-community Q4_K_M), so it runs on LM Studio's llama.cpp engine at its defaults; its MLX engine cannot load NVIDIA's checkpoint (nemotron_h_omni)."
  }
 ]

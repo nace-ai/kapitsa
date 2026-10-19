@@ -1,0 +1,31 @@
+
+===== flash-mtplx  [mtplx] MTPLX (Bare-Speed pack, turbo profile, depth 3)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[18:55:43] flash-mtplx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 87704 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[18:55:43] flash-mtplx: starting ~/.local/bin/mtplx serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-mtplx-bare --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --profile turbo --depth 3
+[18:56:03] flash-mtplx: ready after 20s (pid 2484, listener 2484)
+[18:56:08] flash-mtplx:  warm-up prefill~2.9k+decode64: ok (4.92s)
+[18:56:10] flash-mtplx:  warm-up tools: ok (1.34s)
+[18:56:16] flash-mtplx:  warm-up decode512#1: ok (6.21s)
+[18:56:22] flash-mtplx:  warm-up decode512#2: ok (6.48s)
+[18:56:29] flash-mtplx:  warm-up decode512#3: ok (6.18s)
+[18:57:30] flash-mtplx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[18:58:32] flash-mtplx: gpu busy (124s): com.apple.WebKit[3316] 6%
+[18:59:34] flash-mtplx: gpu busy (185s): com.apple.WebKit[3316] 7%
+[19:00:36] flash-mtplx: gpu busy (247s): com.apple.WebKit[3316] 6%
+[19:01:29] flash-mtplx: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== flash-mtplx
+  decode T=0.6: 86.19 tok/s (e2e 85.27; 512 tok, finish=length, d4=0.8995)
+  decode T=0.6: 90.70 tok/s (e2e 89.80; 512 tok, finish=length, d4=0.6761)
+  decode T=0.6: 88.47 tok/s (e2e 87.10; 512 tok, finish=length, d4=0.9292)
+  decode T=0.6: 86.04 tok/s (e2e 85.45; 512 tok, finish=length, d4=0.9142)
+  decode T=0.6: 88.35 tok/s (e2e 88.19; 512 tok, finish=length, d4=0.9397)
+  decode median 88.35 (min 86.04, max 90.7) over 5/5 valid
+  decode T=0: median 88.97 (min 88.47, max 96.86) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 3.27s -> 1263 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [4181, 4209, 4243])
+  prefill 16000: 16286 tok (ref 16286), TTFT 10.09s -> 1614 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [16335, 16363, 16397])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 91.44 GB, resident mapped files 5.89 GB, swap used 14877.12 MB
+  -> <run-root>/out-nemotron/results/flash-mtplx-20261018-185543.json
+[19:03:28] flash-mtplx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:03:28] flash-mtplx: -> <run-root>/out-nemotron/results/flash-mtplx-20261018-185543.json  flags: 1

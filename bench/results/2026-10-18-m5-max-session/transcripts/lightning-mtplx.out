@@ -1,0 +1,31 @@
+
+===== lightning-mtplx  [mtplx] MTPLX (MLX 4-bit with MTP head, depth 1)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[17:37:39] lightning-mtplx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 17153 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[17:37:39] lightning-mtplx: starting ~/.local/bin/mtplx serve --model ~/.cache/kapitsa/benchmark-models/lightning-mlx-4bit-mtp --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --depth 1
+[17:37:53] lightning-mtplx: ready after 14s (pid 33993, listener 33993)
+[17:37:56] lightning-mtplx:  warm-up prefill~2.9k+decode64: ok (3.26s)
+[17:37:57] lightning-mtplx:  warm-up tools: ok (0.51s)
+[17:38:02] lightning-mtplx:  warm-up decode512#1: ok (4.67s)
+[17:38:06] lightning-mtplx:  warm-up decode512#2: ok (4.75s)
+[17:38:11] lightning-mtplx:  warm-up decode512#3: ok (4.35s)
+[17:39:13] lightning-mtplx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[17:40:14] lightning-mtplx: gpu busy (124s): com.apple.WebKit[3316] 6%
+[17:41:16] lightning-mtplx: gpu busy (185s): com.apple.WebKit[3316] 7%
+[17:42:18] lightning-mtplx: gpu busy (247s): com.apple.WebKit[3316] 6%
+[17:43:12] lightning-mtplx: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== lightning-mtplx
+  decode T=0.6: 130.37 tok/s (e2e 128.57; 512 tok, finish=length, d4=0.8619)
+  decode T=0.6: 131.16 tok/s (e2e 130.17; 512 tok, finish=length, d4=0.655)
+  decode T=0.6: 132.94 tok/s (e2e 132.14; 512 tok, finish=length, d4=0.4355) flags ['repetition loop (distinct-4-gram 0.4355)']
+  decode T=0.6: 136.75 tok/s (e2e 136.00; 512 tok, finish=length, d4=0.7295)
+  decode T=0.6: 123.12 tok/s (e2e 122.99; 512 tok, finish=length, d4=0.9475)
+  decode median 131.16 (min 123.12, max 136.75) over 5/5 valid
+  decode T=0: median 138.49 (min 133.23, max 141.08) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4971)']
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.39s -> 3020 tok/s, cold cached=0 | cached TTFT median 0.06s over 3 turns (cached [4227, 4284, 4317])
+  prefill 16000: 16517 tok (ref 16517), TTFT 5.33s -> 3098 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [16555, 16584, 16621])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 30.81 GB, resident mapped files 0.00 GB, swap used 14588.62 MB
+  -> <run-root>/out-nemotron/results/lightning-mtplx-20261018-173739.json
+[17:45:01] lightning-mtplx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[17:45:01] lightning-mtplx: -> <run-root>/out-nemotron/results/lightning-mtplx-20261018-173739.json  flags: 4

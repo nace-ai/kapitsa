@@ -1,0 +1,31 @@
+
+===== q35-4b-mtplx  [mtplx] MTPLX (sustained profile, depth 1)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[19:19:27] q35-4b-mtplx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 36982 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[19:19:27] q35-4b-mtplx: starting ~/.local/bin/mtplx serve --model ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bit-mtplx --model-id qwen3.5-4b --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --profile sustained --depth 1
+[19:19:34] q35-4b-mtplx: ready after 6s (pid 53136, listener 53136)
+[19:19:35] q35-4b-mtplx:  warm-up prefill~2.9k+decode64: ok (1.12s)
+[19:19:35] q35-4b-mtplx:  warm-up tools: ok (0.43s)
+[19:19:38] q35-4b-mtplx:  warm-up decode512#1: ok (3.22s)
+[19:19:42] q35-4b-mtplx:  warm-up decode512#2: ok (3.32s)
+[19:19:45] q35-4b-mtplx:  warm-up decode512#3: ok (3.25s)
+[19:20:47] q35-4b-mtplx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[19:21:48] q35-4b-mtplx: gpu busy (123s): com.apple.WebKit[3316] 6%
+[19:22:50] q35-4b-mtplx: gpu busy (185s): com.apple.WebKit[3316] 6%
+[19:23:52] q35-4b-mtplx: gpu busy (247s): com.apple.WebKit[3316] 6%
+[19:24:45] q35-4b-mtplx: GPU not quiet after 300s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== q35-4b-mtplx
+  decode T=0.6: 169.58 tok/s (e2e 170.37; 512 tok, finish=length, d4=0.7232)
+  decode T=0.6: 180.01 tok/s (e2e 176.98; 512 tok, finish=length, d4=0.727)
+  decode T=0.6: 172.73 tok/s (e2e 172.99; 512 tok, finish=length, d4=0.9763)
+  decode T=0.6: 176.16 tok/s (e2e 172.76; 512 tok, finish=length, d4=0.9193)
+  decode T=0.6: 175.13 tok/s (e2e 174.51; 512 tok, finish=length, d4=0.566)
+  decode median 175.13 (min 169.58, max 180.01) over 5/5 valid
+  decode T=0: median 185.65 (min 182.25, max 190.91) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 0.90s -> 4597 tok/s, cold cached=0 | cached TTFT median 0.05s over 3 turns (cached [4206, 4241, 4306])
+  prefill 16000: 16287 tok (ref 16286), TTFT 3.97s -> 4098 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16346, 16389, 16436])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 15.88 GB, resident mapped files 0.00 GB, swap used 14837.12 MB
+  -> <run-root>/out/results/q35-4b-mtplx-20261018-191927.json
+[19:25:51] q35-4b-mtplx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:25:51] q35-4b-mtplx: -> <run-root>/out/results/q35-4b-mtplx-20261018-191927.json  flags: 1

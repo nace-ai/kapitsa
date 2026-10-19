@@ -1,0 +1,7 @@
+
+===== flash-lmstudio  [lmstudio] LM Studio (llama.cpp engine, Q4_K_M GGUF)  version llmster 0.0.25-1, llama.cpp runtime 2.60.0 (b11698, 2a667032d)
+[19:32:12] flash-lmstudio: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 71230 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[19:32:12] flash-lmstudio: starting <repo>/bench/harness/launchers/lmstudio_serve.sh serve 8197 qwen/qwen3.8-flash-next flash-lmstudio --context-length 32768 --parallel 1
+[19:32:16] flash-lmstudio: FAILED: server never became ready (4s); see <run-root>/out-nemotron/logs/flash-lmstudio-20261018-193211.log
+[19:32:21] flash-lmstudio: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:32:21] flash-lmstudio: -> <run-root>/out-nemotron/results/flash-lmstudio-20261018-193211.json  INVALID: ['harness: server never became ready (4s); see <run-root>/out-nemotron/logs/flash-lmstudio-20261018-193211.log']

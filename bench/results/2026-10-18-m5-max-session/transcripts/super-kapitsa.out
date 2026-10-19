@@ -1,0 +1,28 @@
+
+===== super-kapitsa  [kapitsa] Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill)  version 474b3e6
+[19:11:55] super-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 13014 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[19:11:55] super-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4 --model-id super-vl --dflash ~/.cache/kapitsa/benchmark-models/nemotron-3.5-super-vl-nvfp4/dflash --host 127.0.0.1 --port 8260 --ctx 32768 --slots 1
+[19:12:11] super-kapitsa: ready after 16s (pid 37040, listener 37040)
+[19:12:17] super-kapitsa:  warm-up prefill~2.9k+decode64: ok (6.27s)
+[19:12:19] super-kapitsa:  warm-up tools: ok (1.67s)
+[19:13:21] super-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[19:14:22] super-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 7%
+[19:15:24] super-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 6%
+[19:16:26] super-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 7%
+[19:17:20] super-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-kapitsa
+  decode T=0.6: 82.18 tok/s (e2e 80.75; 512 tok, finish=length, d4=0.8874)
+  decode T=0.6: 78.59 tok/s (e2e 78.38; 512 tok, finish=length, d4=0.6861)
+  decode T=0.6: 79.38 tok/s (e2e 78.68; 512 tok, finish=length, d4=0.9533)
+  decode T=0.6: 84.30 tok/s (e2e 85.35; 512 tok, finish=length, d4=0.4189) flags ['repetition loop (distinct-4-gram 0.4189)']
+  decode T=0.6: 82.14 tok/s (e2e 81.58; 512 tok, finish=length, d4=0.9252)
+  decode median 82.14 (min 78.59, max 84.3) over 5/5 valid
+  decode T=0: median 85.4 (min 79.19, max 86.53) over 5/5 valid
+  prefill 4000: 4181 tok (ref 4183), TTFT 6.17s -> 677 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [4228, 4262, 4304])
+  prefill 16000: 16515 tok (ref 16513), TTFT 23.43s -> 705 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [16554, 16601, 16652])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.22 GB, resident mapped files 1.00 GB, swap used 14845.12 MB
+  -> <run-root>/out-nemotron/results/super-kapitsa-20261018-191154.json
+[19:19:27] super-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:19:27] super-kapitsa: -> <run-root>/out-nemotron/results/super-kapitsa-20261018-191154.json  flags: 2

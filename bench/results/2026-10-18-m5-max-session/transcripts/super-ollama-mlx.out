@@ -1,0 +1,31 @@
+
+===== super-ollama-mlx  [ollama] Ollama MLX runner (NVIDIA NVFP4 tag + MTP head, adaptive depth)  version 0.40.6
+[19:32:22] super-ollama-mlx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 75497 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[19:32:22] super-ollama-mlx: starting ~/.local/opt/ollama-0.40.6/ollama serve
+[19:32:24] super-ollama-mlx: ready after 2s (pid 80410, listener 80410)
+[19:32:39] super-ollama-mlx:  warm-up prefill~2.9k+decode64: ok (14.72s)
+[19:32:39] super-ollama-mlx:  warm-up tools: ok (0.95s)
+[19:32:48] super-ollama-mlx:  warm-up decode512#1: ok (8.46s)
+[19:32:56] super-ollama-mlx:  warm-up decode512#2: ok (8.5s)
+[19:33:05] super-ollama-mlx:  warm-up decode512#3: ok (8.94s)
+[19:34:07] super-ollama-mlx: gpu busy (62s): com.apple.WebKit[3316] 7%
+[19:35:09] super-ollama-mlx: gpu busy (124s): com.apple.WebKit[3316] 7%
+[19:36:11] super-ollama-mlx: gpu busy (186s): com.apple.WebKit[3316] 7%
+[19:37:13] super-ollama-mlx: gpu busy (248s): com.apple.WebKit[3316] 7%
+[19:38:07] super-ollama-mlx: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== super-ollama-mlx
+  decode T=0.6: 64.21 tok/s (e2e 64.64; 512 tok, finish=length, d4=0.7639)
+  decode T=0.6: 67.96 tok/s (e2e 68.43; 512 tok, finish=length, d4=0.9147)
+  decode T=0.6: 57.21 tok/s (e2e 57.73; 512 tok, finish=length, d4=0.5748)
+  decode T=0.6: 60.48 tok/s (e2e 60.64; 512 tok, finish=length, d4=0.9454)
+  decode T=0.6: 64.57 tok/s (e2e 65.95; 512 tok, finish=length, d4=0.7495)
+  decode median 64.21 (min 57.21, max 67.96) over 5/5 valid
+  decode T=0: median 58.86 (min 57.63, max 60.77) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.384)']
+  prefill 4000: 4186 tok (ref 4183), TTFT 4.05s -> 1034 tok/s, cold cached=2 | cached TTFT median 0.26s over 3 turns (cached [4251, 4285, 4325])
+  prefill 16000: 16515 tok (ref 16513), TTFT 14.50s -> 1139 tok/s, cold cached=3 | cached TTFT median 0.28s over 3 turns (cached [16554, 16598, 16640])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 88.86 GB, resident mapped files 0.00 GB, swap used 14805.12 MB
+  -> <run-root>/out-nemotron/results/super-ollama-mlx-20261018-193221.json
+[19:40:28] super-ollama-mlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[19:40:28] super-ollama-mlx: -> <run-root>/out-nemotron/results/super-ollama-mlx-20261018-193221.json  flags: 2

@@ -1,0 +1,31 @@
+
+===== q36-35b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.6
+[17:16:29] q36-35b-ollama-mlx-q4: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 88536 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[17:16:29] q36-35b-ollama-mlx-q4: starting ~/.local/opt/ollama-0.40.6/ollama serve
+[17:16:32] q36-35b-ollama-mlx-q4: ready after 3s (pid 88572, listener 88572)
+[17:16:38] q36-35b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (5.82s)
+[17:16:39] q36-35b-ollama-mlx-q4:  warm-up tools: ok (0.39s)
+[17:16:42] q36-35b-ollama-mlx-q4:  warm-up decode512#1: ok (3.76s)
+[17:16:46] q36-35b-ollama-mlx-q4:  warm-up decode512#2: ok (3.79s)
+[17:16:50] q36-35b-ollama-mlx-q4:  warm-up decode512#3: ok (3.58s)
+[17:17:52] q36-35b-ollama-mlx-q4: gpu busy (62s): com.apple.WebKit[3316] 6%
+[17:18:53] q36-35b-ollama-mlx-q4: gpu busy (123s): com.apple.WebKit[3316] 5%
+[17:19:55] q36-35b-ollama-mlx-q4: gpu busy (185s): com.apple.WebKit[3316] 6%
+[17:20:57] q36-35b-ollama-mlx-q4: gpu busy (247s): com.apple.WebKit[3316] 7%
+[17:21:50] q36-35b-ollama-mlx-q4: GPU not quiet after 300s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== q36-35b-ollama-mlx-q4
+  decode T=0.6: 170.59 tok/s (e2e 171.13; 512 tok, finish=length, d4=0.9488)
+  decode T=0.6: 167.01 tok/s (e2e 167.68; 512 tok, finish=length, d4=0.7158)
+  decode T=0.6: 166.40 tok/s (e2e 167.22; 512 tok, finish=length, d4=0.971)
+  decode T=0.6: 164.80 tok/s (e2e 164.74; 512 tok, finish=length, d4=0.9439)
+  decode T=0.6: 165.99 tok/s (e2e 164.92; 512 tok, finish=length, d4=0.701)
+  decode median 166.4 (min 164.8, max 170.59) over 5/5 valid
+  decode T=0: median 175.49 (min 171.85, max 176.43) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 1.12s -> 3690 tok/s, cold cached=2 | cached TTFT median 0.10s over 3 turns (cached [4128, 4190, 4297])
+  prefill 16000: 16287 tok (ref 16286), TTFT 3.89s -> 4185 tok/s, cold cached=2 | cached TTFT median 0.12s over 3 turns (cached [16282, 16343, 16407])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 32.23 GB, resident mapped files 0.00 GB, swap used 14402.5 MB
+  -> <run-root>/out/results/q36-35b-ollama-mlx-q4-20261018-171629.json
+[17:22:47] q36-35b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[17:22:47] q36-35b-ollama-mlx-q4: -> <run-root>/out/results/q36-35b-ollama-mlx-q4-20261018-171629.json
