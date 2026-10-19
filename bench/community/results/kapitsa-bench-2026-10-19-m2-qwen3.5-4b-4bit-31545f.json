@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-19T17:57:53Z",
+  "kapitsa": {
+    "version": "0.1.38",
+    "commit": "3cc97ce"
+  },
+  "mac": {
+    "identifier": "Mac14,7",
+    "name": "MacBook Pro (13-inch, M2, 2022)",
+    "year": 2022,
+    "chip": "Apple M2",
+    "cpu_cores": 8,
+    "gpu_cores": 10,
+    "memory_gb": 16,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "qwen3.5-4b",
+    "title": "Qwen3.5-4B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "c43ee1d",
+    "decoding": "DFlash2",
+    "decoding_detail": "DFlash2 speculative decoding (verify 7 of 7)",
+    "drafter": "z-lab/Qwen3.5-4B-DFlash@9a1996c"
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 64.53,
+      "runs_tps": [
+        62.21,
+        64.53,
+        68.57,
+        60.7,
+        70.96
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 62.66,
+      "runs_tps": [
+        58.67,
+        71.05,
+        62.66,
+        74.93,
+        58.19
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4130,
+        "ttft_s": 15.8126,
+        "tps": 261.2,
+        "followup_s": [
+          0.1294,
+          0.1845,
+          0.1244
+        ],
+        "followup_median_s": 0.1294
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16286,
+        "ttft_s": 66.1616,
+        "tps": 246.2,
+        "followup_s": [
+          0.1882,
+          0.21,
+          0.21
+        ],
+        "followup_median_s": 0.21
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.37
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "fair",
+    "swapouts": 30924,
+    "gpu_quiet_wait_s": 108.7,
+    "gpu_other_mean_pct": 9.36,
+    "gpu_other_max_pct": 69.13,
+    "gpu_ambient_mean_pct": 0.64,
+    "gpu_users": [
+      "OpenChamber"
+    ],
+    "contention": [
+      "decode",
+      "decode_greedy",
+      "prefill_4000",
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "prefill_16000: 30924 pages swapped out during the phase",
+    "CONTENTION: sustained foreign GPU load > 5% in ['decode', 'decode_greedy', 'prefill_4000', 'prefill_16000'] (mean 9.36%, top ['OpenChamber'])"
+  ],
+  "invalid": []
+}
