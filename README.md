@@ -8,8 +8,7 @@
 
 ## Install
 
-**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later; 16 GB of memory for the
-4B models, 32 GB for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL and 128 GB for Flash-Next.
+**Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
 ```bash
 brew install nace-ai/tap/kapitsa
