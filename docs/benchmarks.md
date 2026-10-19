@@ -8,7 +8,8 @@ Qwen3.8-Flash-Next and Nemotron 3.5 Super-VL and Lightning on the M5 Max:
 [Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
 models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
 section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19);
-Nemotron Dory1.0 4B: [its own section](#nemotron-dory10-4b-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+Nemotron Dory1.0 4B: [its own section](#nemotron-dory10-4b-2026-10-19); the 16 GB MacBook Pro M1 Pro: [its own
+section](#macbook-pro-m1-pro-16-gb-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
 request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
 best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
@@ -1051,6 +1052,70 @@ The engines whose Dory cell says "no support" (checked 2026-10-19): Ollama 0.40.
 architecture), LM Studio (llama.cpp runtime 2.60.0: no `dory` architecture; MLX runtime with mlx-lm 0.31.4: no Dory
 model), oMLX, mlx-serve and MTPLX (no Dory model in their code). The MLX column is mlx-lm with its unmerged Dory pull
 request; released mlx-lm and mlx-vlm have no Dory model.
+
+## MacBook Pro M1 Pro, 16 GB (2026-10-19)
+
+The 16 GB Mac: a MacBook Pro (14-inch, 2021), `MacBookPro18,3`, M1 Pro with an 8-core CPU and a 14-core GPU, 16 GB,
+macOS 27.0.1, on AC power (Automatic power mode; this model has no High Power mode). Of the catalog, Qwen3.5-4B and
+Nemotron Dory1.0 4B fit it: `kapitsa doctor` gives Kapitsa a 12.2 GB GPU budget (Metal's recommended working set is
+12.7 GB), and `kapitsa serve` refuses the 27B, the 35B, Flash-Next, Lightning, Bolt and Super-VL before downloading
+anything, each because its weights alone exceed that budget. Without `--model` it starts the 4B at 4-bit; a 27,476-token
+conversation in its default 32K context ran without swapping (the server's footprint: 5.3 GB).
+
+It is also the first M1 that ran Kapitsa. 0.1.35 stopped at the first sampled request with the default DFlash drafter:
+the M1's GPU compiles the drafter's `dfl_dist_rows` kernel for 576 threads per threadgroup, and it is dispatched with
+1024 ([#55](https://github.com/nace-ai/kapitsa/pull/55): a kernel is now compiled for the size it is dispatched with;
+0.1.36 has the fix). main also did not build with the Command Line Tools a Mac on macOS 14.4 or earlier can install
+([#54](https://github.com/nace-ai/kapitsa/pull/54)). With 0.1.36 on this Mac the server tests pass on the 4B (44 checks)
+and on Dory (52), greedy answers are the same with DFlash, MTP and plain decoding (six prompts, up to 17,919 prompt
+tokens), and so are Dory's with per-loop speculative decoding and without, at 2 and 4 loops.
+
+### Qwen3.5-4B at 4-bit: short runs of every engine
+
+One hold of the GPU lock, 08:48-09:30, Kapitsa first (LM Studio in another at 09:35): each engine and setting in a short run of the harness's decode
+phase, the T = 0.6 coding answer, 3 runs of 512 tokens, median (`--skip greedy,prefill,tools,agent --bench-args
+"--decode-runs 3"`), on the same 4-bit weights where the engine accepts them; nothing was flagged for contention.
+Kapitsa is the 0.1.36 release. These runs chose each engine's setting for the README's cells; the full protocol
+(5 runs, greedy, 4K and 16K prefill, cached follow-ups, memory, tool calls) follows. Result files:
+[bench/results/2026-10-19-m1pro-16gb](../bench/results/2026-10-19-m1pro-16gb/).
+
+| Engine (setting) | T = 0.6 (tok/s): median (min-max) |
+| --- | ---: |
+| **Kapitsa** 0.1.36 (DFlash drafter, its default) | **85.4** (72.4-95.6) |
+| mlx-serve 26.10.2 + MTP, max depth 2 | 62.4 (61.8-62.8) |
+| mlx-serve + MTP, max depth 3 (its setting on the M4 Pro) | 61.1 (60.1-62.7) |
+| mlx-serve + MTP, max depth 4 | 60.8 (58.5-69.3) |
+| oMLX 0.7.1rc1 + MTP (Lightning MTP, MTPLX's head) | 56.5 (55.4-57.2) |
+| Ollama 0.40.6, MLX runner + MTP (adaptive depth) | 56.0 (55.8-56.8) |
+| mlx-serve + DFlash (z-lab's drafter), block 4 | 55.6 (54.2-56.0) |
+| mlx-serve + DFlash, block 5 | 52.0 (51.1-55.4) |
+| oMLX + DFlash (z-lab's drafter at 4-bit, adaptive verify), block 4 | 50.8 (50.5-51.1) |
+| mlx-lm 0.32.2 | 47.4 (46.0-47.5) |
+| LM Studio (llmster 0.0.25-1, MLX runtime 1.13.1) | 44.6 (44.5-44.9) |
+| oMLX + DFlash, block 5 | 44.1 (43.9-46.5)<sup>1</sup> |
+| MTPLX 2.12.2 (sustained profile, depth 1) | 41.6 (41.5-41.7) |
+| llama.cpp b11669 + MTP, n-max 3 (Q4_K_M) | 40.8 (38.8-42.7) |
+| llama.cpp + MTP, n-max 6 | 39.2 (35.7-42.8) |
+| llama.cpp, no MTP | 38.2 (38.1-38.2) |
+| llama.cpp + MTP, n-max 2 | 37.7 (37.1-41.0) |
+| mlx-vlm 0.7.8 + MTP, block 2 | 37.2 (36.4-37.8)<sup>1</sup> |
+| mlx-vlm + MTP, block 3 (its setting on the M4 Pro) | 36.6 (35.5-36.9) |
+| MTPLX, depth 2 | 35.4 (34.6-36.0)<sup>2</sup> |
+| llama.cpp + MTP, n-max 1 | 34.5 (33.7-34.9) |
+| Ollama, GGUF + MTP (shipped depth 1, Q4_K_M) | 33.1 (32.9-34.3) |
+| mlx-vlm + MTP, block 4 | 6.9 (6.7-6.9) |
+Kapitsa wrote 1.37x the next engine's rate (mlx-serve with MTP). On this GPU speculative decoding pays less: a verify
+pass reads the weights once for several tokens but has to compute all of them, and the M1 computes more slowly for its
+bandwidth. Kapitsa's 8-row verify of the 4B reads its weights at 78-91 GB/s, against 130-177 GB/s for a one-token step
+(`bench_v8`, `bench_qmv`), so a verify costs about twice a step; several engines' MTP is no faster than their plain
+decoding here (llama.cpp at n-max 1 and 2, mlx-vlm at any block). Kapitsa's defaults (DFlash, all 7 drafts verified)
+held up on this Mac too, in a sweep of 3-run decodes the same morning (T = 0.6 / greedy tok/s): verify depth 7 82.4 /
+88.0 and again 80.2 / 84.3, depth 5 84.3 / 83.6, depth 3 72.1 / 74.3; MTP instead of the drafter, depth 4 78.6 / 78.9.
+
+1. One or two of the three runs fell into a repetition loop (distinct 4-grams below 0.5), which flatters speculative
+   decoding.
+2. The disk had 9.5 GiB free at the start, under the 10 GiB below which MTPLX keeps no prompt cache on disk (no
+   effect on this phase).
 
 ## Your Mac: `kapitsa bench`
 
