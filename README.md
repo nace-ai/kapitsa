@@ -42,7 +42,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Model | <mark>**Kapitsa**</mark> | oMLX | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
-| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | — | — | — | — |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**106&nbsp;tok/s**</mark> | — | — | 65 |
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
 
 <sub>Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so this Nemotron table leaves them out.
@@ -52,6 +52,8 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 ([details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)).</sub>
 
 <sub>Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV), MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](docs/benchmarks.md#nemotron-labs-dory10-4b-2026-10-19)).</sub>
+
+<sub>Lightning: NVIDIA's NVFP4 with its DSpark drafter on Kapitsa and MLX (mlx-vlm); oMLX and llama.cpp not measured yet ([details](docs/benchmarks.md#nemotron-35-lightning)).</sub>
 
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 

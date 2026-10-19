@@ -54,6 +54,16 @@ Kapitsa 0.1.35 (main at a47341b); the agent phase left out (`--skip agent`).
 mlx-serve's MTP run on the 27B was stopped in its warm-up to finish sooner and is not in the folder. Rapid-MLX 0.16.3
 ran from a venv with mlx 0.32.4, mlx-lm 0.31.3 and mlx-vlm 0.7.2, its telemetry off; `<rapid-mlx-venv>` in its file.
 
+## Nemotron 3.5 Lightning (configs/lightning.json)
+
+One hold with Kapitsa 0.1.35 (main at a47341b), the agent phase left out.
+
+| Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Foreign GPU, mean / max (%) | Ambient GPU, mean (%) | Flagged |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `lightning-kapitsa-20261019-074714.json` | 07:47 | Kapitsa, before | 105.8 / 116.0 | 0.0 / 0.0 | 0.0 | — |
+| `lightning-mlxvlm-dspark-20261019-074924.json` | 07:50 | mlx-vlm, DSpark | 65.0 / 67.7 | 0.0 / 1.1 | 0.0 | — |
+| `lightning-kapitsa-20261019-075244.json` | 07:53 | Kapitsa, after | 106.0 / 115.2 | 0.1 / 1.8 | 0.0 | — |
+
 ## Nemotron 3.5 Bolt (configs/bolt.json)
 
 | Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Foreign GPU, mean / max (%) | Ambient GPU, mean (%) | Flagged |

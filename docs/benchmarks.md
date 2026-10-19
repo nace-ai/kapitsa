@@ -1006,6 +1006,23 @@ The engines whose Bolt cell says "no support" (checked 2026-10-19):
   NVFP4 blocks, none of mlx-serve's quantization modes), with NVIDIA's config.json and with the bundle's
   ([logs](../bench/results/2026-10-19-m4pro/support-checks/)).
 
+### Nemotron 3.5 Lightning
+
+NVIDIA's NVFP4 checkpoint with its DSpark drafter, the folder `kapitsa pull lightning` writes, with the setups of the
+[M5 Max bracket](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18). One hold, 07:47–07:55, Kapitsa 0.1.35
+first and last; mlx-vlm 0.7.8 read the same files with the same DSpark drafter (block 6). Nothing was flagged.
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| Kapitsa (DSpark drafter), before | 105.8 (102.4–110.2) | 116.0 (105.4–117.8) | 945 | 864 | 0.15 | 0.17 | 18.6 + 0.7 mapped | pass |
+| mlx-vlm + DSpark (block 6) | 65.0 (63.6–67.0) | 67.7 (66.9–71.1) | 721 | 658 | 0.30 | 0.33 | 28.8 | pass |
+| Kapitsa (DSpark drafter), after | 106.0 (93.1–117.0) | 115.2 (103.2–126.2) | 944 | 859 | 0.15 | 0.15 | 18.6 + 0.7 mapped | pass |
+
+The MLX cell is mlx-vlm's: mlx-lm cannot read NVIDIA's checkpoint and runs an MLX 4-bit conversion, which was not
+measured here. oMLX and llama.cpp were not measured either. This disk holds Kapitsa's copy (21.4 GiB) or one
+competitor's MLX 4-bit or Q4_0 files (17–19 GiB), not both, so their runs could not have Kapitsa in the same hold, and
+they were stopped to finish sooner.
+
 ## Nemotron-Labs Dory1.0 4B (2026-10-19)
 
 NVIDIA's looped 4B (its 40-sublayer shared block runs 2 times per token by default) on the M4 Pro (48 GB, macOS 27.0.1).
