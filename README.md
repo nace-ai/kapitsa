@@ -24,6 +24,8 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 ## Benchmarks
 
+![Decode speed of a 512-token coding answer, in tokens per second, for Kapitsa and eight other engines on a MacBook Pro M4 Pro 48 GB, an M5 Max 128 GB and an M1 Pro 16 GB, each engine in its fastest setup; the numbers are in the tables below](docs/assets/benchmarks.webp)
+
 <sub>Writing speed of a coding answer, each engine in its fastest setup. 🟩 fastest per model · — not measured ·
 [details](docs/benchmarks.md#the-readmes-tables)</sub>
 
