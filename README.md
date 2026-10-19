@@ -22,7 +22,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 ## Benchmarks
 
-<sub>Writing speed of a coding answer, each engine in its fastest setup; the fastest per model in bold; — not measured;
+<sub>Writing speed of a coding answer, each engine in its fastest setup; 🟩 the fastest per model; — not measured;
 ⚠ other apps used the GPU. [How it was measured](docs/benchmarks.md)</sub>
 
 ### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
