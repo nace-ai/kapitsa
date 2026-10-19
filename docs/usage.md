@@ -548,7 +548,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_IMAGE_CACHE_MB` | `256` | GPU memory kept for the embeddings of recent images. |
 | `NI_NH_BF16` | off | Nemotron Super-VL: `1` keeps its BF16 latent projections in BF16 instead of 8-bit (exact; about 4% slower decoding). |
 | `NI_NH_ATTN_Q8` | off | Nemotron Lightning: `1` stores its BF16 attention projections in 8-bit (about 3% faster decoding, slightly less accurate). |
-| `NI_NH_HEAD` | `q8` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 checkpoint's BF16 LM head (the 9B v2's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
+| `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
 | `NI_NH_NGRAM` | `4` with BF16, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
 | `NI_NH_FP4` | `l2` on M1 Macs, else `l0` | Dense Nemotron-H models: how NVFP4 codes are laid out for the GPU, as `NI_DORY_FP4`; both give the same outputs to the bit. |
 | `NI_DSPARK_DYN` | `0.2` | Nemotron Lightning's DSpark draft model: how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |

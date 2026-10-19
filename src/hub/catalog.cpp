@@ -310,8 +310,8 @@ const std::vector<CatalogModel>& catalog() {
        .about = "NVIDIA's small hybrid Mamba-2 model, text only: prompt lookup drafts from the conversation",
        .brief = "NVIDIA hybrid 4B, text only",
        // NVIDIA's checkpoints as they are: ModelOpt FP8 (W8A16; NVIDIA keeps 39 of its projections and the LM head in
-       // BF16) by default, as it decodes 33 against 24 tok/s for BF16 on an M1 Pro 16 GB in 2.7 GB less memory, and
-       // BF16. No drafter: prompt lookup.
+       // BF16, the head loading as 8-bit rows) by default, as it decodes 35 against 24 tok/s for BF16 on an M1 Pro
+       // 16 GB in 3 GB less memory, and BF16. No drafter: prompt lookup.
        .default_variant = "fp8",
        .fallbacks = {},
        .variants = {

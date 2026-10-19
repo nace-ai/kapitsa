@@ -290,8 +290,9 @@ namespace {
 bool dense_model(const NhConfig& c) { return std::find(c.kind.begin(), c.kind.end(), 'E') == c.kind.end(); }
 
 // The LM head as Q8_0 rows (quantized at load, half the bytes a decoded token reads) for a dense model whose own
-// linears are NVFP4 (Nemotron Nano 9B v2, which NVIDIA quantized with the head left BF16), as Dory runs its NVFP4
-// checkpoint's head; NI_NH_HEAD=bf16 keeps it BF16, =q8 also quantizes a BF16 checkpoint's (a dense model's).
+// linears are NVFP4 or FP8 (Nemotron Nano 9B v2's NVFP4 and Nano 4B's FP8 checkpoints, both of which NVIDIA quantized
+// with the head left BF16), as Dory runs its NVFP4 checkpoint's head; NI_NH_HEAD=bf16 keeps it BF16, =q8 also
+// quantizes a BF16 checkpoint's (a dense model's).
 bool head_q8(const NhConfig& c, const SafetensorsIndex& idx, const std::string& pre) {
   if (!dense_model(c)) return false;
   if (const char* v = getenv("NI_NH_HEAD"); v && *v) {
@@ -300,9 +301,11 @@ bool head_q8(const NhConfig& c, const SafetensorsIndex& idx, const std::string& 
   }
   for (int i = 0; i < c.layers; ++i)
     for (const char* n : {"in_proj", "up_proj"}) {
-      const SafetensorsIndex::Entry* s =
-          idx.find(pre + "backbone.layers." + std::to_string(i) + ".mixer." + n + ".weight_scale");
+      const std::string w = pre + "backbone.layers." + std::to_string(i) + ".mixer." + n + ".weight";
+      const SafetensorsIndex::Entry* s = idx.find(w + "_scale");
       if (s && s->dtype == DType::F8E4M3) return true;  // NVFP4 block scales
+      const SafetensorsIndex::Entry* q = idx.find(w);
+      if (q && q->dtype == DType::F8E4M3) return true;  // FP8 E4M3 weights (ModelOpt FP8)
     }
   return false;
 }
@@ -1141,7 +1144,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.layers = c.layers;
   const bool keep_bf16 = getenv("NI_NH_BF16") && atoi(getenv("NI_NH_BF16"));
   const bool attn_q8 = getenv("NI_NH_ATTN_Q8") && atoi(getenv("NI_NH_ATTN_Q8"));
-  // a dense NVFP4 model's BF16 LM head becomes Q8_0 rows at load (head_q8)
+  // a dense NVFP4 or FP8 model's BF16 LM head becomes Q8_0 rows at load (head_q8)
   const std::string pre = idx.find("language_model.backbone.embeddings.weight") ? "language_model." : "";
   const bool head8 = head_q8(c, idx, pre);
   std::string fmts;  // the matrix formats present (in tensor-name order)
