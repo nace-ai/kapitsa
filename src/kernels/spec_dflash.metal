@@ -1289,16 +1289,21 @@ struct DflAcceptParams {
 }
 
 // Dynamic verify depth (MoE targets): stop verifying once the drafter is unlikely to have been right so far.
-// c_j = the walk's probability of its choice (softmax(S_j)[k_j] at T = 0, q_j(d_j) at T > 0).
-//  T > 0: verify proposal p iff prod_{j < p} c_j >= tau. The decision about d_p must not depend on d_p itself:
-//         given the accepted prefix d_0 .. d_{p-1} it is then fixed, and each position is either an ordinary
-//         speculative step or the bonus draw from p_p, so the emitted law stays exactly the target's. (A rule
-//         that also used c_p would skip unlikely draws of q_p and draw from p_p instead, which is biased;
-//         dflash_accept_test's dynamic-depth cases detect that rule.)
-//  T = 0: verify proposal p iff prod_{j <= p} c_j >= tau (greedy output is the verify argmax whatever is
-//         verified, so the proposal's own confidence may be used).
+//  T > 0: verify proposal p iff prod_{j <= p} s_j >= tau, s_j = sum_k softmax(S_j)_k^2 (the chance that two draws
+//         from the walk's distribution at j agree: a proxy for q_j's acceptance). Every s_j is a property of
+//         proposal j's distribution, fixed before d_j is drawn, so the decision about d_p never depends on d_p
+//         itself: given the accepted prefix d_0 .. d_{p-1} it is fixed, and each position is either an ordinary
+//         speculative step or the bonus draw from p_p, so the emitted law stays exactly the target's. (A rule that
+//         used c_p = the probability of d_p itself would skip unlikely draws of q_p and draw from p_p instead, which
+//         is biased; dflash_accept_test's dynamic-depth cases detect that rule.) Replayed on 3490 cycles verified
+//         at full depth (4 prompts x 6 seeds, 35B, T = 0.6, M5 Max, with the measured cost per depth), the old rule
+//         (rule 2) gives 285.1 tok/s at tau 0.3, this one 297.2 at tau 0.3 (every prompt +2.6-4.6%); with the costs of
+//         the MMA-exact expert passes (cheaper rows) 320.4 vs 339.8, tau 0.3 still the best of 0.15-0.5.
+//  T = 0: verify proposal p iff prod_{j <= p} c_j >= tau, c_j = softmax(S_j)[k_j] (greedy output is the verify
+//         argmax whatever is verified, so the proposal's own confidence may be used).
 // Proposal 0 is always verified. kdyn = {K, K + 1}; the verify then routes experts only for the K + 1 live rows
-// (moe8_plan row limit) and dfl_accept stops at K. rule: 0 = as above, 1 = inclusive at any T (tests only).
+// (moe8_plan row limit) and dfl_accept stops at K. rule: 0 = as above; 1 = prod_{j <= p} c_j at any T (tests only:
+// biased at T > 0); 2 = the earlier T > 0 rule, prod_{j < p} q_j(d_j) >= tau (exact; NI_DFLASH_DYN_RULE=2).
 // grid 1 x 32.
 struct DflDepthParams {
   uint kmax;
@@ -1308,21 +1313,25 @@ struct DflDepthParams {
 [[kernel]] void dfl_depth(const device float* walk_s [[buffer(0)]], const device int* walk_k [[buffer(1)]],
                           const device float* qprob [[buffer(2)]], device uint* kdyn [[buffer(3)]],
                           constant DflDepthParams& p [[buffer(4)]], uint lane [[thread_index_in_simdgroup]]) {
-  float c = 1.0f;  // lane j < 7: c_j
+  const bool sampled = p.temp > 0.0f;
+  float c = 1.0f;  // lane j < 7: the factor of proposal j
   if (lane < 7) {
     const int kj = walk_k[lane];
-    if (p.temp > 0.0f) {
+    if (sampled && p.rule == 2) {
       c = qprob[lane * 16 + kj];
     } else {
       float mx = -INFINITY;
       for (uint k = 0; k < 16; ++k) mx = max(mx, walk_s[lane * 16 + k]);
-      float z = 0.0f;
-      for (uint k = 0; k < 16; ++k) z += exp(walk_s[lane * 16 + k] - mx);
-      c = exp(walk_s[lane * 16 + kj] - mx) / z;
+      float z = 0.0f, z2 = 0.0f;
+      for (uint k = 0; k < 16; ++k) {
+        const float e = exp(walk_s[lane * 16 + k] - mx);
+        z += e;
+        z2 += e * e;
+      }
+      c = sampled && p.rule == 0 ? z2 / (z * z) : exp(walk_s[lane * 16 + kj] - mx) / z;
     }
   }
-  const bool excl = p.temp > 0.0f && p.rule == 0;
-  const float cum = excl ? simd_prefix_exclusive_product(c) : simd_prefix_inclusive_product(c);
+  const float cum = sampled && p.rule == 2 ? simd_prefix_exclusive_product(c) : simd_prefix_inclusive_product(c);
   const bool keep = lane < p.kmax && (lane == 0 || cum >= p.tau);
   const uint k = simd_min(keep ? 32u : lane);  // leading proposals kept (cum is non-increasing)
   if (lane == 0) {

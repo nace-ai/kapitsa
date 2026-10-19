@@ -412,9 +412,18 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
   // there it would only cost acceptance.
   dyn_tau_ = tg_.config().moe ? 0.5f : 0.0f;
   if (const char* v = getenv("NI_DFLASH_DYN")) dyn_tau_ = tg_.config().moe ? float(atof(v)) : 0.0f;
-  // T > 0 uses the exact (exclusive-product) rule: default tau 0.3 (35B code_35b 512, T = 0.6: 139.2 tok/s
-  // without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7); NI_DFLASH_DYN_T overrides
+  // T > 0 uses an exact rule (dfl_depth): default tau 0.3 (offline replay, 35B T = 0.6, 4 prompts x 6 seeds: 0.25 /
+  // 0.3 / 0.35 within 0.4%); NI_DFLASH_DYN_T overrides. NI_DFLASH_DYN_RULE=2: the earlier T > 0 rule (exclusive
+  // product of the walk's q; 35B code_35b 512, T = 0.6: 139.2 tok/s without, 149.4 / 147.8 / 140.3 at 0.3 / 0.5 / 0.7)
+  // Rule 0 is the default on the M5 (Apple10), where it was measured; other Macs keep rule 2, which they were tuned
+  // with, until it is measured there.
   dyn_tau_t_ = dyn_tau_ > 0 ? 0.3f : 0.0f;
+  dyn_rule_ = Gpu::get().apple10() ? 0u : 2u;
+  if (const char* v = getenv("NI_DFLASH_DYN_RULE")) {  // rule 1 is biased at T > 0 (dflash_accept_test only)
+    const int r = atoi(v);
+    if (r != 0 && r != 2) fatal("NI_DFLASH_DYN_RULE=%s: 0 or 2 (rule 1 is biased at T > 0, for tests only)", v);
+    dyn_rule_ = uint32_t(r);
+  }
   if (const char* v = getenv("NI_DFLASH_DYN_T")) dyn_tau_t_ = tg_.config().moe ? float(atof(v)) : 0.0f;
   if (dyn_tau_ <= 0) dyn_tau_t_ = 0.0f;
   if (dyn_tau_ > 0) logi("DFlash2: dynamic verify depth, tau %.3f (T = 0) / %.3f (T > 0)", dyn_tau_, dyn_tau_t_);
@@ -1355,7 +1364,8 @@ void DFlash2::encode_cycle_draft(Encoder& e, Seq& s, DFlashSeq& d, int P, int m_
 void DFlash2::encode_cycle_verify(Encoder& e, Seq& s, int P, int K, const SamplingParams& sp) {
   const Buffer rows = kdyn_.view(4, 4);
   if (dyn_tau_ > 0) {
-    kp::DflDepth dp{uint32_t(K), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f, 0u};
+    kp::DflDepth dp{uint32_t(K), sp.temperature > 0 ? dyn_tau_t_ : dyn_tau_, sp.temperature > 0 ? sp.temperature : 0.0f,
+                    dyn_rule_};
     e.use(dpipe("dfl_depth"));
     e.buf(0, walk_s_); e.buf(1, walk_k_); e.buf(2, qprob_); e.buf(3, kdyn_);
     e.val(4, dp);

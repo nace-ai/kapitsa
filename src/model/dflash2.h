@@ -266,7 +266,8 @@ class DFlash2 {
   // acceptance: target distributions of the verify rows, result {a, token}
   Buffer dist_id_, dist_p_, dist_keep_, acc_, kdyn_, gst_;
   float dyn_tau_ = 0.0f;    // T = 0 (0: dynamic depth off)
-  float dyn_tau_t_ = 0.0f;  // T > 0 (exclusive-product rule)
+  float dyn_tau_t_ = 0.0f;  // T > 0
+  uint32_t dyn_rule_ = 0;   // dfl_depth rule (NI_DFLASH_DYN_RULE)
   bool exact_moe_ = true;  // T > 0 on MoE targets: row-independent expert numerics (NI_DFLASH_EXACT_MOE=0 off)
   // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_DFLASH_QT; 0 = argmax chain with one-hot q)
   float walk_tf_ = 1.0f;

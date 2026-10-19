@@ -9,8 +9,8 @@
 //    out; the joint law of the first two emitted tokens is tested against p(t1) p(t2|t1) (chi-square,
 //    cells with expected count < 5 pooled), in several regimes: random p and q, q = p, q disjoint from p
 //    (always rejected: residual = p), point masses, p(d) = 0 for some proposals, K = 1..7, and with the
-//    dynamic verify depth (dfl_depth before dfl_accept): its exact T > 0 rule must pass; the rule that also uses
-//    the proposal's own confidence (rule 1, not used by the engine at T > 0) must fail in the depth-sensitive
+//    dynamic verify depth (dfl_depth before dfl_accept): its exact T > 0 rules (0, and 2, the earlier one) must
+//    pass; the rule that also uses the proposal's own confidence (rule 1, not used by the engine at T > 0) must fail in the depth-sensitive
 //    regime (q = p at the first proposal, q = 0.9 / 0.1 vs p = 1/2 at the second: that rule emits 0.55 / 0.45).
 #include "metal/gpu.h"
 #include "model/kparams.h"
@@ -339,18 +339,20 @@ int main(int argc, char** argv) {
     int regime, K;
     float temp;
     float tau = 0.0f;  // > 0: dynamic verify depth (dfl_depth) with this threshold
-    int rule = 0;      // dfl_depth rule (1 = inclusive product at T > 0: biased, expected to fail)
+    int rule = 0;      // dfl_depth rule (1 = own confidence at T > 0: biased, expected to fail; 2 = the earlier rule)
   };
   std::vector<Case> cases = {{kRandom, Kmain, 0.6f}, {kEqual, Kmain, 0.6f}, {kDisjoint, Kmain, 0.6f},
                              {kPoint, Kmain, 0.6f},  {kMixed, Kmain, 0.6f}, {kRandom, 1, 0.6f},
                              {kRandom, 7, 1.0f},     {kMixed, 7, 1.0f},
                              {kRandom, 3, 0.6f, 0.1f}, {kRandom, 7, 1.0f, 0.05f}, {kMixed, 7, 0.6f, 0.2f},
-                             {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1}};
+                             {kEqual, 7, 0.6f, 0.3f},  {kBias, 3, 0.6f, 0.3f},       {kBias, 3, 0.6f, 0.3f, 1},
+                             {kBias, 3, 0.6f, 0.3f, 2}, {kMixed, 7, 0.6f, 0.2f, 2}};
   Pipeline acc = g.pipeline("dfl_accept"), dep = g.pipeline("dfl_depth");
   const int B = 4096;  // trials per command buffer
   Buffer tok = g.alloc(size_t(B) * 16 * 4), cand = g.alloc(size_t(B) * 112 * 4), qp = g.alloc(size_t(B) * 112 * 4);
   Buffer wk = g.alloc(size_t(B) * 8 * 4), did = g.alloc(size_t(B) * 256 * 4), dp = g.alloc(size_t(B) * 256 * 4);
   Buffer res = g.alloc(size_t(B) * 4 * 4), samp = g.alloc(64), scratch = g.alloc(64), kd = g.alloc(size_t(B) * 16);
+  Buffer ws = g.alloc(size_t(B) * 112 * 4);  // the walk's scores: log q, so softmax(S_j) = q_j (dfl_depth)
   for (size_t ci = 0; ci < cases.size(); ++ci) {
     if (only >= 0 && int(ci) != only) continue;
     const Case& cs = cases[ci];
@@ -368,6 +370,7 @@ int main(int argc, char** argv) {
         memcpy(tok.as<int>() + i * 16, s.tokens.data(), 64);
         memcpy(cand.as<int>() + i * 112, s.cand.data(), 112 * 4);
         memcpy(qp.as<float>() + i * 112, s.qp.data(), 112 * 4);
+        for (int j = 0; j < 112; ++j) ws.as<float>()[i * 112 + j] = s.qp[j] > 0 ? std::log(s.qp[j]) : -1e30f;
         memcpy(wk.as<int>() + i * 8, s.wk.data(), 32);
         memcpy(did.as<int>() + i * 256, s.did.data(), 256 * 4);
         memcpy(dp.as<float>() + i * 256, s.dp.data(), 256 * 4);
@@ -378,7 +381,7 @@ int main(int argc, char** argv) {
           if (cs.tau > 0) {  // the drafter's depth decision from this trial's q and walk choices
             kp::DflDepth dpp{uint32_t(cs.K), cs.tau, cs.temp, uint32_t(cs.rule)};
             e->use(dep);
-            e->buf(0, qp, size_t(i) * 448); e->buf(1, wk, size_t(i) * 32); e->buf(2, qp, size_t(i) * 448);
+            e->buf(0, ws, size_t(i) * 448); e->buf(1, wk, size_t(i) * 32); e->buf(2, qp, size_t(i) * 448);
             e->buf(3, kd, size_t(i) * 16);
             e->val(4, dpp);
             e->dispatch(1, 1, 1, 32);

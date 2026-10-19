@@ -498,6 +498,23 @@ int main(int argc, char** argv) {
           for (int k = 0; k < 16; ++k) z += std::exp(S[k] - mx);
           fprintf(conf, " %.4f", std::exp(S[dfl->walk_k()[p]] - mx) / z);
         }
+        // sampled runs: the walk's q of each chosen proposal (what the T > 0 depth rule reads), and K verified
+        if (sp.temperature > 0)
+          for (int p = 0; p < 7; ++p) fprintf(conf, " %.4f", dfl->qprob()[p * 16 + dfl->walk_k()[p]]);
+        fprintf(conf, " | %d |", dfl->verified(K));
+        // per proposal, features of its whole distribution (fixed before it is sampled, so a depth rule may
+        // read them at T > 0): max and sum of squares of the softmax of S_p, then of the walk's q
+        for (int p = 0; p < 7; ++p) {
+          const float* S = dfl->walk_scores() + p * 16;
+          float mx = S[0], z = 0, cm = 0, c2 = 0, qm = 0, q2 = 0;
+          for (int k = 1; k < 16; ++k) mx = std::max(mx, S[k]);
+          for (int k = 0; k < 16; ++k) z += std::exp(S[k] - mx);
+          for (int k = 0; k < 16; ++k) {
+            const float c = std::exp(S[k] - mx) / z, q = dfl->qprob()[p * 16 + k];
+            cm = std::max(cm, c); c2 += c * c; qm = std::max(qm, q); q2 += q * q;
+          }
+          fprintf(conf, " %.4f %.4f %.4f %.4f", cm, c2, qm, q2);
+        }
         fprintf(conf, "\n");
       }
       int mm = 0;  // tokens emitted = rows committed this cycle
