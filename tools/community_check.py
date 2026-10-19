@@ -112,7 +112,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
             errs.append(f"{m['name']} has no variant {m['variant']!r} ({', '.join(c['variants'])})")
         elif m["precision"] != c["variants"][m["variant"]]:
             errs.append(f"precision {m['precision']!r} is not {m['name']}:{m['variant']}'s ({c['variants'][m['variant']]!r})")
-    if m["decoding"] in ("DFlash2", "LiLiCorr") and not m["drafter"]:
+    if m["decoding"] in ("DFlash2", "LiLiCorr", "DSpark") and not m["drafter"]:
         errs.append(f"{m['decoding']} decoding without its drafter")
     # the Mac
     mac = r["mac"]

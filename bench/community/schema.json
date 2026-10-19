@@ -47,7 +47,7 @@
         "precision": {"type": "string", "maxLength": 60},
         "catalog": {"type": "boolean", "description": "A catalog model at its pinned weights (only these are added to the table)."},
         "revision": {"type": ["string", "null"], "pattern": "^[0-9a-f]{7}$", "description": "The weights' pinned revision, short."},
-        "decoding": {"enum": ["DFlash2", "LiLiCorr", "MTP", "plain", "unknown"]},
+        "decoding": {"enum": ["DFlash2", "LiLiCorr", "DSpark", "MTP", "plain", "unknown"]},
         "decoding_detail": {"type": "string", "maxLength": 120, "description": "The server's own words for it, from its log's engine ready line."},
         "drafter": {"type": ["string", "null"], "maxLength": 120, "description": "The drafter's repo@revision when one was used."}
       }

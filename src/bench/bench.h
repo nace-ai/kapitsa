@@ -287,7 +287,7 @@ struct ModelInfo {
   std::string quant;       // "MLX affine 4-bit, group 64"
   bool catalog = false;
   std::string repo, revision;
-  std::string decoding;        // "DFlash2", "LiLiCorr", "MTP", "plain" (from the server's "engine ready" line)
+  std::string decoding;        // "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain" (from the server's "engine ready" line)
   std::string decoding_detail; // that line's decoding part
   std::string drafter;         // "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6", "" when none
 };

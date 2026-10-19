@@ -73,6 +73,14 @@ refused(lambda r: r["model"].update(name="llama-3-8b", catalog=False), "a model 
 refused(lambda r: r["model"].update(variant="3bit"), "a precision the model has not", "has no variant")
 refused(lambda r: r["model"].update(precision="6-bit"), "a precision that is not its variant's", "precision")
 refused(lambda r: r["model"].update(title="Qwen3.6-35B"), "a wrong title", "title")
+lightning = copy.deepcopy(full)  # what kapitsa bench writes for Lightning: DSpark decoding, with its drafter
+lightning["model"].update(name="nemotron-3.5-lightning", title=cat["nemotron-3.5-lightning"]["title"], variant="nvfp4",
+                          precision=cat["nemotron-3.5-lightning"]["variants"]["nvfp4"], decoding="DSpark",
+                          drafter="nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@" + "0" * 40)
+errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(lightning)]
+e = cc.check_result(lightning, cat, macs, versions)[0]
+check(not errs and not any("decoding" in x or "drafter" in x for x in e), "DSpark decoding (Lightning) passes", str(errs + e)[:300])
+refused(lambda r: r["model"].update(decoding="DSpark", drafter=None), "DSpark decoding without its drafter", "drafter")
 dory = copy.deepcopy(full)
 dory["model"].update(name="nemotron-labs-dory1.0-4b", title="Nemotron-Labs Dory1.0 4B", variant="nvfp4",
                      precision=cat["nemotron-labs-dory1.0-4b"]["variants"]["nvfp4"])

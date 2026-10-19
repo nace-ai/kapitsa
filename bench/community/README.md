@@ -34,7 +34,7 @@ The JSON follows [schema.json](schema.json) and is about 2 KB:
 - **The Mac:** its model identifier (`sysctl hw.model`, e.g. `Mac16,7`) with Apple's name for it and the year
   ([mac-models.json](mac-models.json)), the chip, CPU and GPU cores, memory, macOS version and build.
 - **Kapitsa:** its version and commit; the model, its precision, its pinned weights' revision, and how it decoded (the
-  DFlash2 or LiLiCorr drafter, the MTP head, or plain).
+  DFlash2, LiLiCorr or DSpark drafter, the MTP head, or plain).
 - **The numbers:** writing speed (decode) at temperature 0.6 and greedy, each run's and the median; reading a 4K- and
   a 16K-token prompt (prefill: tokens per second to the first token); the time to the first token of three follow-ups in
   each conversation; the server's peak memory; whether tool calls work.
