@@ -11,3 +11,5 @@
 2026-10-19 00:47:09 start q36-35b-mlxvlm-dflash2
 2026-10-19 00:53:47 end q36-35b-mlxvlm-dflash2 rc=0
 2026-10-19 00:53:47 start q35-4b-mlxserve-mtp
+2026-10-19 01:05:13 end q35-4b-mlxserve-mtp rc=0
+2026-10-19 01:05:13 start q35-4b-mlxserve-dflash

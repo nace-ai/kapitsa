@@ -1,0 +1,7 @@
+
+===== super-mlxserve  [mlx-serve] mlx-serve (MLX 4-bit text-only conversion, no speculation)  version 26.10.2
+[01:05:14] super-mlxserve: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 85650 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/super-vl.json configs/lightning.json --o
+[01:05:14] super-mlxserve: starting ~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model ~/.cache/kapitsa/benchmark-models/super-vl-mlx-4bit-rapid --host 127.0.0.1 --port 8173 --ctx-size 32768 --no-drafter
+[01:05:16] super-mlxserve: FAILED: server never became ready (2s); see <run-root>/out-extra/logs/super-mlxserve-20261019-010513.log
+[01:05:21] super-mlxserve: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[01:05:21] super-mlxserve: -> <run-root>/out-extra/results/super-mlxserve-20261019-010513.json  INVALID: ['harness: server never became ready (2s); see <run-root>/out-extra/logs/super-mlxserve-20261019-010513.log']
