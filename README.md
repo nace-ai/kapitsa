@@ -45,7 +45,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | — | — | — | — |
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
 
-<sub>Ollama, LM Studio, MTPLX and mlx-serve can't run these Nemotron checkpoints, so the Nemotron tables leave them out.
+<sub>Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so this Nemotron table leaves them out.
 MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
 drafter on Bolt; mlx-serve the faster of MTP and DFlash2. <sup>*</sup> Measured later with its new drafter; the old build, rerun as a control, matched its 122. A real
 opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
@@ -66,18 +66,18 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 #### Nemotron
 
-| Model | <mark>**Kapitsa**</mark> | oMLX | llama.cpp | MLX |
-| --- | ---: | ---: | ---: | ---: |
-| Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | — | — | — | — |
-| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 159 | 139 |
-| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**127&nbsp;tok/s**</mark> | — | —<br><sub>no Metal support</sub> | — |
-| Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | 66 | 46 |
+| Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | — | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | — |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 190 | 153 | 131 | 110 | 159 | 139 |
+| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**127&nbsp;tok/s**</mark> | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | — |
+| Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | — | 64 | — | 61 | 66 | 46 |
 
 <sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. MLX on the 27B and 35B: mlx-lm.
 Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's 4.7-bit pack, MTPLX its
 author's pack, Ollama its NVFP4 tag. <sup>†</sup> Ollama fails every 4K and 16K prompt there (out of GPU memory). LM Studio refuses to load its
-119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve 78.8, oMLX 104). Nemotron: NVIDIA's NVFP4 on Kapitsa and mlx-vlm, MLX 4-bit on oMLX
-and mlx-lm, Q4_0 on llama.cpp; on Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).</sub>
+119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve 78.8, oMLX 104). Nemotron: NVIDIA's NVFP4 on Kapitsa, mlx-vlm and Ollama, MLX 4-bit on oMLX,
+mlx-lm, mlx-serve and MTPLX, Q4_0 on llama.cpp, Q4_K_M on LM Studio; on Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).</sub>
 
 <sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md).</sub>
 
