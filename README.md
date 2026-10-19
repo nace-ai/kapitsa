@@ -29,20 +29,19 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | **Kapitsa** | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ***Qwen · 4-bit*** | | | | | | | | |
-| Qwen3.5&nbsp;4B<sup>*</sup> | **179&nbsp;tok/s** | 102 | — | 109 | 104 | 81 | 70 | 73 |
-| Qwen3.8&nbsp;27B | **63&nbsp;tok/s** | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
-| Qwen3.6&nbsp;35B | **154&nbsp;tok/s** | 127 | 124 | 89 | 80 | 86 | 69 | — |
-| Flash‑Next&nbsp;180B<br><sub>128 GB Macs</sub> | — | — | — | — | — | — | — | — |
+| ***Qwen*** | | | | | | | | |
+| Qwen3.5&nbsp;4B<sup>*</sup><br><sub>4-bit</sub> | **179&nbsp;tok/s** | 102 | — | 109 | 104 | 81 | 70 | 73 |
+| Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | **63&nbsp;tok/s** | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
+| Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | **154&nbsp;tok/s** | 127 | 124 | 89 | 80 | 86 | 69 | — |
+| Flash‑Next&nbsp;180B<br><sub>4-bit · 128 GB Macs</sub> | — | — | — | — | — | — | — | — |
 | ***Nemotron*** | | | | | | | | |
-| Dory&nbsp;4B | — | — | — | — | — | — | — | — |
-| Lightning&nbsp;30B | — | — | — | — | — | — | — | — |
-| Bolt&nbsp;74B | **64&nbsp;tok/s** | 34&nbsp;⚠ | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | —<br><sub>no Metal support</sub> | 32 |
-| Super‑VL&nbsp;120B<br><sub>96 GB+ Macs</sub> | — | — | — | — | — | — | — | — |
+| Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
+| Lightning&nbsp;30B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
+| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | **64&nbsp;tok/s** | 34&nbsp;⚠ | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | —<br><sub>no Metal support</sub> | 32 |
+| Super‑VL&nbsp;120B<br><sub>NVFP4 · 96 GB+ Macs</sub> | — | — | — | — | — | — | — | — |
 
 <sub>MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
-drafter on Bolt; mlx-serve the faster of MTP and DFlash2. Bolt is NVIDIA's 24 GB checkpoint, the other Nemotron models
-NVFP4. <sup>*</sup> Measured later with its new drafter; the old build, rerun as a control, matched its 122. A real
+drafter on Bolt; mlx-serve the faster of MTP and DFlash2. <sup>*</sup> Measured later with its new drafter; the old build, rerun as a control, matched its 122. A real
 opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 ([details](docs/benchmarks.md#a-real-coding-agent-session-2026-10-18)).</sub>
 
@@ -50,16 +49,16 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 | Model | **Kapitsa** | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| ***Qwen · 4-bit*** | | | | | | | | |
-| Qwen3.5&nbsp;4B | — | — | — | — | — | — | — | — |
-| Qwen3.8&nbsp;27B | **73&nbsp;tok/s** | — | — | — | — | — | — | — |
-| Qwen3.6&nbsp;35B | **250&nbsp;tok/s** | — | — | — | — | — | — | — |
-| Flash‑Next&nbsp;180B | 102&nbsp;tok/s | **107** | — | — | — | — | 96 | 77&nbsp;⚠ |
+| ***Qwen*** | | | | | | | | |
+| Qwen3.5&nbsp;4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
+| Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | **73&nbsp;tok/s** | — | — | — | — | — | — | — |
+| Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | **250&nbsp;tok/s** | — | — | — | — | — | — | — |
+| Flash‑Next&nbsp;180B<br><sub>4-bit</sub> | 102&nbsp;tok/s | **107** | — | — | — | — | 96 | 77&nbsp;⚠ |
 | ***Nemotron*** | | | | | | | | |
-| Dory&nbsp;4B | — | — | — | — | — | — | — | — |
-| Lightning&nbsp;30B | **239&nbsp;tok/s** | 190 | — | — | — | — | 159 | 139 |
-| Bolt&nbsp;74B | — | — | — | — | — | — | — | — |
-| Super‑VL&nbsp;120B | **85&nbsp;tok/s** | 52 | — | — | — | — | 66 | 46 |
+| Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
+| Lightning&nbsp;30B<br><sub>NVFP4</sub> | **239&nbsp;tok/s** | 190 | — | — | — | — | 159 | 139 |
+| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | — | — | — | — | — | — | — | — |
+| Super‑VL&nbsp;120B<br><sub>NVFP4</sub> | **85&nbsp;tok/s** | 52 | — | — | — | — | 66 | 46 |
 
 <sub>Other apps used the GPU during Kapitsa's 27B and 35B runs here. Flash-Next: the same 4-bit weights and MTP head on
 Kapitsa, oMLX and MLX (mlx-vlm); Kapitsa leads greedy (108
