@@ -1719,14 +1719,20 @@ bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x,
   const int bits = segs[0].L->bits;
   const uint32_t K = segs[0].L->K;
   if (bits != 4 && bits != 8) return false;
+  // 4-bit group 32 (GGUF imports' Q4_K LM heads), one matrix, on the M1 (Apple7): its 248K-row head on
+  // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); not yet
+  // measured on the other chips
+  const bool g32 = segs.size() == 1 && !gu && bits == 4 && segs[0].L->gs == 32 && !segs[0].L->iq &&
+                   Gpu::get().apple_family() <= 7;
   for (const Seg& s : segs)
-    if (!(s.L->q4() || s.L->q8()) || s.L->bits != bits || s.L->K != K) return false;
+    if (!(s.L->q4() || s.L->q8() || g32) || s.L->bits != bits || s.L->K != K) return false;
   if (K % 64 || (xn_out && !norm)) return false;
   // one threadgroup per token row and 8 weight rows (2 simdgroups x 4 rows: the qmvrc1 layout, its token rows
   // adjacent in the grid so they share each weight block through the cache)
   constexpr int nt = 1, rows = 4, nsg = 2;
   char name[96];
-  snprintf(name, sizeof name, "qmvf%s_b%d_t%d_r%d%s", gu ? "_gu" : "", bits, nt, rows, norm ? "_norm" : "");
+  snprintf(name, sizeof name, "qmvf%s_b%d%s_t%d_r%d%s", gu ? "_gu" : "", bits, g32 ? "g32" : "", nt, rows,
+           norm ? "_norm" : "");
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(name);
   if (it == cache.end()) it = cache.emplace(name, Gpu::get().pipeline(name)).first;
