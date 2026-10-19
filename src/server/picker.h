@@ -36,6 +36,11 @@ struct Pick {
 std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const std::string& command, int context = 0,
                                bool ask_context = true);
 
+// A download that does not fit the disk (hub::PullOptions::make_room): the other downloaded models, each with what
+// deleting it gives back (one that is an APFS clone of another copy frees nothing), to select (space) and delete
+// (Enter, once the selection frees enough). True when it deleted some; false when cancelled or nobody could answer.
+bool make_room(const hub::SpaceShort& s);
+
 // Keeps a catalog model named with --model (or picked) as the next picker's first choice, when a person runs the
 // command in a terminal (the app's and scripts' runs leave it alone); other models are not kept
 void remember(const hub::ModelRef& r);

@@ -274,6 +274,18 @@ def cli_checks(kapitsa):
     check("cli: rm deletes it", rc == 0 and "Deleted qwen3.5-4b:4bit" in out and not os.path.exists(m4), out)
     rc, _, err = run("rm", folder)
     check("cli: rm leaves a folder of yours alone", rc == 2 and os.path.exists(folder), err)
+    # rm says what it gives back: a model that is an APFS clone of another copy frees nothing
+    a, b = os.path.join(models, "copy-a"), os.path.join(models, "copy-b")
+    os.makedirs(a)
+    with open(os.path.join(a, "config.json"), "w") as f:
+        f.write("{}")
+    with open(os.path.join(a, "model.safetensors"), "wb") as f:
+        f.write(os.urandom(20 << 20))
+    subprocess.run(["cp", "-c", "-R", a, b], check=True)  # a clone: the same blocks
+    rc, out, err = run("rm", "copy-b")
+    check("cli: rm of a clone frees nothing, and says so", rc == 0 and "nothing freed" in out and not os.path.exists(b), out + err)
+    rc, out, err = run("rm", "copy-a")
+    check("cli: rm of the last copy frees its size", rc == 0 and "MB freed" in out and not os.path.exists(a), out + err)
     # the port is checked before the model loads
     s = socket.socket()
     s.bind(("127.0.0.1", 0))

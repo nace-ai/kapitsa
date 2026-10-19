@@ -5,6 +5,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -92,9 +93,20 @@ struct ModelRef {
 // "org/name[@revision]", or a local folder. Throws Error with the choices when `arg` is none of them.
 ModelRef resolve(const std::string& arg);
 
+// A download that does not fit the disk: what it needs and what is free beyond the 1 GB ensure() keeps spare
+struct SpaceShort {
+  std::string model;  // "qwen3.6-35b-a3b:4bit"
+  std::string dir;    // its folder (not one to delete to make room)
+  uint64_t need = 0;  // bytes left to download
+  uint64_t free = 0;  // bytes free beyond the spare
+};
+
 struct PullOptions {
   std::vector<std::string> from;  // folders to take files from that match the pinned files' checksums
   bool progress = true;           // progress line on stderr
+  // Asked when the download does not fit the disk (in a terminal, ui::make_room offers to delete other downloaded
+  // models); true when it freed space, and the check runs again
+  std::function<bool(const SpaceShort&)> make_room;
 };
 
 // Makes sure everything the model needs is in ref.dir and returns it. A finished download (its manifest, written
@@ -129,6 +141,10 @@ struct Installed {
   std::vector<std::string> extras;   // "MTP head", "DFlash2 drafter"
 };
 std::vector<Installed> installed();
+// What deleting `dir` gives back to the disk: each file's data that no APFS clone shares (ATTR_CMNEXT_PRIVATESIZE),
+// else its allocated size. A model cloned from another copy (Nace Agent's, a --from folder, the Hugging Face cache)
+// frees little or nothing.
+uint64_t freeable_bytes(const std::string& dir);
 
 // tools/mtp_sidecar.py: mtp.safetensors from an official Qwen3.5 checkpoint's 15 bf16 mtp.* tensors (a Hugging
 // Face repo, fetched by range requests at `revision`, or a local folder of HF safetensors). Norm weights get + 1

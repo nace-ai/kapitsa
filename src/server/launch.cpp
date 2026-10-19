@@ -389,7 +389,9 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
         ref = for_this_mac(hub::resolve(expand_home(model)), opt, budget);
         ui::remember(ref);
       }
-      hub::ensure(ref, hub::PullOptions{});
+      hub::PullOptions po;
+      if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
+      hub::ensure(ref, po);
     } catch (const hub::Stopped& e) {
       if (term::fancy()) term::status(""), ui::warning(e.what());
       else fprintf(stderr, "\n%s\n", e.what());

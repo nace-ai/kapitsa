@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <signal.h>
+#include <sys/attr.h>
 #include <sys/clonefile.h>
 #include <sys/file.h>
 #include <sys/mount.h>
@@ -896,6 +897,19 @@ void place(const std::string& src, const std::string& dst) {
   if (rename(tmp.c_str(), dst.c_str()) != 0) throw Error(disk_error(errno, dst));
 }
 
+// The bytes of a file no APFS clone shares (getattrlist's ATTR_CMNEXT_PRIVATESIZE), or -1 where the volume does not say
+static int64_t private_size(const std::string& path) {
+  struct attrlist al {};
+  al.bitmapcount = ATTR_BIT_MAP_COUNT;
+  al.forkattr = ATTR_CMNEXT_PRIVATESIZE;
+  struct __attribute__((packed)) {
+    uint32_t length;
+    off_t size;
+  } buf {};
+  if (getattrlist(path.c_str(), &al, &buf, sizeof buf, FSOPT_NOFOLLOW | FSOPT_ATTR_CMN_EXTENDED) != 0) return -1;
+  return buf.size;
+}
+
 uint64_t free_bytes(const std::string& path) {
   std::string p = path;
   struct statfs s;
@@ -903,7 +917,11 @@ uint64_t free_bytes(const std::string& path) {
     if (p == "/" || p == ".") return UINT64_MAX;
     p = dirname_of(p);
   }
-  return uint64_t(s.f_bavail) * uint64_t(s.f_bsize);
+  const uint64_t f = uint64_t(s.f_bavail) * uint64_t(s.f_bsize);
+  // tests: this many bytes of the free space count as taken, to reach the out-of-space paths without filling a disk
+  const char* taken = getenv("KAPITSA_TEST_DISK_TAKEN");
+  const uint64_t t = taken && *taken ? strtoull(taken, nullptr, 10) : 0;
+  return f > t ? f - t : 0;
 }
 
 // ---------------------------------------------------------------- MTP sidecar (tools/mtp_sidecar.py)
@@ -1370,11 +1388,28 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     need += t->size - part;
     todo.push_back(t.get());
   }
-  const uint64_t free = free_bytes(ref.dir), margin = 1ull << 30;
-  if (need + margin > free)
+  const uint64_t margin = 1ull << 30;
+  uint64_t free = free_bytes(ref.dir);
+  if (need + margin > free && opt.make_room) {  // a person at a terminal: which models to delete, asked
+    if (spin) spin->done();
+    spin.reset();
+    if (opt.make_room(SpaceShort{ref.name, ref.dir, need, free > margin ? free - margin : 0})) free = free_bytes(ref.dir);
+  }
+  if (need + margin > free) {
+    // the downloaded models that would make room, by what deleting each gives back
+    std::vector<std::pair<uint64_t, std::string>> rm;
+    for (const auto& m : installed())
+      if (m.dir != ref.dir)
+        if (const uint64_t b = freeable_bytes(m.dir); b >= (100ull << 20)) rm.emplace_back(b, m.name);
+    std::sort(rm.rbegin(), rm.rend());
+    std::string hint;
+    for (size_t i = 0; i < rm.size() && i < 3; ++i)
+      hint += std::string(i ? ", " : "") + "kapitsa rm " + rm[i].second + " (" + fmt_bytes(rm[i].first) + ")";
     throw Error("Not enough disk space for " + ref.name + ": it needs " + fmt_bytes(need) + " more and " +
                 fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping 1 GB spare) on the disk of " +
-                tilde(models_dir()) + ". Free some space, or set KAPITSA_HOME to a folder on a bigger disk.");
+                tilde(models_dir()) + "." + (hint.empty() ? " Free some space," : " Deleting a model frees space: " + hint + ";") +
+                " or set KAPITSA_HOME to a folder on a bigger disk.");
+  }
   for (auto& [src, t] : reuse) place(src, t->final_path);
   const bool tui = opt.progress && term::fancy();
   if (spin) spin->done();
@@ -1610,6 +1645,31 @@ std::string plan_dir(const ModelRef& ref) {
     return "";
   }
   return dir;
+}
+
+uint64_t freeable_bytes(const std::string& dir) {
+  uint64_t total = 0;
+  std::vector<std::string> stack{dir};
+  while (!stack.empty()) {
+    const std::string d = stack.back();
+    stack.pop_back();
+    DIR* dd = opendir(d.c_str());
+    if (!dd) continue;
+    while (dirent* e = readdir(dd)) {
+      const std::string fn = e->d_name;
+      if (fn == "." || fn == "..") continue;
+      const std::string p = d + "/" + fn;
+      struct stat st;
+      if (lstat(p.c_str(), &st) != 0) continue;
+      if (S_ISDIR(st.st_mode)) stack.push_back(p);
+      else if (S_ISREG(st.st_mode)) {
+        const int64_t own = private_size(p);
+        total += own >= 0 ? uint64_t(own) : uint64_t(st.st_blocks) * 512;
+      }
+    }
+    closedir(dd);
+  }
+  return total;
 }
 
 std::vector<Installed> installed() {

@@ -11,7 +11,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
-| `kapitsa rm M...` | Deletes downloaded models. Folders outside the store are left alone. |
+| `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
@@ -164,7 +164,13 @@ conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and t
 - `HF_TOKEN`, or the token `hf auth login` saved, is sent for gated or private repos; `HF_ENDPOINT` points at a mirror.
 
 `kapitsa list` shows the store and the variants not downloaded yet; `kapitsa rm 35b:6bit` deletes a variant
-(`kapitsa rm 35b`: the default one, or the only one downloaded).
+(`kapitsa rm 35b`: the default one, or the only one downloaded). It says how much space it gave back: a model that is an APFS clone of
+another copy (Nace Agent's, a `--from` folder, the Hugging Face cache) frees nothing.
+
+When a download does not fit the disk (Kapitsa keeps 1 GB spare), `kapitsa serve`, `kapitsa pull`, `kapitsa bench`
+and the coding-agent commands, run in a terminal, list the other downloaded models with what deleting each would free:
+space selects, Enter deletes them and the download goes on once they free enough, Esc cancels. Elsewhere (the app,
+scripts) the error names the `kapitsa rm` commands that would make room.
 
 ## Server options
 

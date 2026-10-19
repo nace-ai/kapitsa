@@ -656,7 +656,11 @@ int run(const Options& o) {
 
   // ---- the download, before the GPU lock (it needs no GPU)
   try {
-    if (ref.kind != hub::ModelRef::kLocal && !external) ref.dir = hub::ensure(ref, hub::PullOptions{});
+    if (ref.kind != hub::ModelRef::kLocal && !external) {
+      hub::PullOptions po;
+      if (!o.json && ui::can_prompt(o.yes)) po.make_room = ui::make_room;  // out of disk space: what to delete, asked
+      ref.dir = hub::ensure(ref, po);
+    }
   } catch (const hub::Stopped& e) {
     if (g_tui) term::status(""), ui::warning(e.what());
     else fprintf(stderr, "\n%s\n", e.what());

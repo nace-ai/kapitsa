@@ -18,6 +18,7 @@
 #include <atomic>
 #include <climits>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <sstream>
@@ -410,7 +411,7 @@ class Raw {
   bool handlers_ = false;
 };
 
-enum class Key { kNone, kUp, kDown, kLeft, kRight, kEnter, kEsc, kCancel, kFirst, kLast, kDigit, kTab, kBackTab };
+enum class Key { kNone, kUp, kDown, kLeft, kRight, kEnter, kEsc, kCancel, kFirst, kLast, kDigit, kTab, kBackTab, kSpace };
 struct Press {
   Key key = Key::kNone;
   int digit = 0;
@@ -468,6 +469,7 @@ Press read_key(int ms) {
   }
   if (c == '\r' || c == '\n') return {Key::kEnter};
   if (c == '\t') return {Key::kTab};
+  if (c == ' ') return {Key::kSpace};
   if (c == 3 || c == 4 || c == 'q') return {Key::kCancel};  // Ctrl+C, Ctrl+D
   if (c == 'k' || c == 16) return {Key::kUp};                // Ctrl+P
   if (c == 'j' || c == 14) return {Key::kDown};              // Ctrl+N
@@ -784,6 +786,112 @@ std::string model_label(const std::string& id) {
   } catch (const std::exception&) {
   }
   return id;
+}
+
+bool make_room(const hub::SpaceShort& s) {
+  if (!can_prompt(false)) return false;
+  (void)accent(" ");
+  guard_signals();
+  // the other downloaded models, each with what deleting it gives back (one cloned from another copy, such as Nace
+  // Agent's, frees nothing)
+  struct Row {
+    hub::Installed m;
+    uint64_t frees = 0;
+    bool sel = false;
+  };
+  std::vector<Row> rows;
+  {
+    Spinner sp("Checking what each downloaded model takes on the disk");
+    for (auto& m : hub::installed())
+      if (m.dir != s.dir) rows.push_back({m, hub::freeable_bytes(m.dir)});
+    sp.done();
+  }
+  if (rows.empty()) return false;
+  std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.frees > b.frees; });
+  const uint64_t short_by = s.need > s.free ? s.need - s.free : 0;
+  const uint64_t kNothing = 100ull << 20;  // below this, deleting it does not help
+  auto chosen = [&] {
+    uint64_t t = 0;
+    for (const auto& r : rows)
+      if (r.sel) t += r.frees;
+    return t;
+  };
+  Raw raw;
+  size_t cur = 0;
+  auto draw = [&] {
+    const int W = layout_width();
+    std::vector<std::string> o = {""};
+    warning_lines(o, "Not enough disk space for " + s.model + ": it needs " + hub::fmt_bytes(s.need) + ", and " +
+                         hub::fmt_bytes(s.free) + " is free.", W);
+    o.push_back("");
+    o.push_back("  " + bold("Delete models to make room"));
+    int nw = 0, sw = 0;
+    for (const auto& r : rows) nw = std::max(nw, width(r.m.name)), sw = std::max(sw, width(hub::fmt_bytes(r.m.bytes)));
+    nw = std::min(nw, std::max(16, W - 44 - sw));
+    for (size_t i = 0; i < rows.size(); ++i) {
+      const Row& r = rows[i];
+      const bool here = i == cur, none = r.frees < kNothing;
+      const std::string name = clip(r.m.name, nw);
+      const std::string what = none ? dim("frees nothing: shared with another copy")
+                                    : (r.sel ? accent("frees " + hub::fmt_bytes(r.frees)) : "frees " + hub::fmt_bytes(r.frees));
+      o.push_back("  " + (here ? accent(kArrow) : std::string(" ")) + " " + (r.sel ? accent("[x]") : dim("[ ]")) + " " +
+                  left(here ? accent(bold(name)) : none ? dim(name) : name, nw) + "   " +
+                  right(dim(hub::fmt_bytes(r.m.bytes)), sw) + "   " + what);
+    }
+    o.push_back("");
+    const uint64_t c = chosen();
+    if (c == 0) o.push_back("  " + dim("Select models that free " + hub::fmt_bytes(short_by) + " or more"));
+    else if (c >= short_by) o.push_back("  " + accent(kOk) + " frees " + hub::fmt_bytes(c) + dim(": enough"));
+    else o.push_back("  " + warn("frees " + hub::fmt_bytes(c) + ", " + hub::fmt_bytes(short_by - c) + " short"));
+    const std::string sep = dim("  " + std::string(kDot) + "  ");
+    o.push_back("  ↑↓" + dim(" move") + sep + "space" + dim(" select") + sep + "enter" + dim(" delete, then download") +
+                sep + "esc" + dim(" cancel"));
+    status(o);
+  };
+  draw();
+  bool go = false;
+  if (raw.on()) {
+    int cols = columns();
+    for (;;) {
+      const Press p = read_key(250);
+      if (p.key == Key::kNone) {
+        if (columns() != cols) cols = columns(), draw();
+        continue;
+      }
+      const size_t n = rows.size();
+      if (p.key == Key::kCancel || p.key == Key::kEsc) break;
+      if (p.key == Key::kUp) cur = (cur + n - 1) % n;
+      else if (p.key == Key::kDown) cur = (cur + 1) % n;
+      else if (p.key == Key::kFirst) cur = 0;
+      else if (p.key == Key::kLast) cur = n - 1;
+      else if (p.key == Key::kSpace || p.key == Key::kLeft || p.key == Key::kRight) rows[cur].sel = !rows[cur].sel;
+      else if (p.key == Key::kEnter) {
+        if (!rows[cur].sel && chosen() < short_by) rows[cur].sel = true;  // Enter on a row takes it
+        if (chosen() >= short_by && chosen() > 0) {
+          go = true;
+          break;
+        }
+      }
+      draw();
+    }
+  }
+  status("");
+  raw.restore();
+  if (!go) return false;
+  bool any = false;
+  const std::string root = hub::models_dir() + "/";
+  for (const Row& r : rows) {
+    if (!r.sel || r.m.dir.compare(0, root.size(), root) != 0 || r.m.dir.size() <= root.size()) continue;
+    std::error_code ec;
+    std::filesystem::remove_all(r.m.dir, ec);
+    if (ec) {
+      line("  " + warn(kWarn) + " Can't delete " + hub::tilde(r.m.dir) + ": " + ec.message(), stderr);
+      continue;
+    }
+    line("  " + accent(kOk) + " Deleted " + bold(r.m.name) + dim("  " + hub::fmt_bytes(r.frees) + " freed"), stderr);
+    any = true;
+  }
+  return any;
 }
 
 }  // namespace ni::ui
