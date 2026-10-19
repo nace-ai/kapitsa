@@ -73,6 +73,10 @@ class Gpu {
   bool archive(const std::string& fn, const std::string& path);
   // required=false returns an empty Pipeline (pso null) instead of exiting when creation fails
   Pipeline pipeline(const std::string& fn, bool required = true);
+  // `p`'s kernel compiled for `threads` threads per threadgroup (MTLComputePipelineDescriptor's
+  // maxTotalThreadsPerThreadgroup: the compiler fits them, spilling registers if it must). For a GPU whose compiler
+  // gives the kernel fewer by default than it is dispatched with (Encoder::dispatch asks); cached.
+  Pipeline pipeline_threads(const Pipeline& p, uint32_t threads);
   // kernels in the library and the extra libraries (+ the format kernels)
   std::vector<std::string> function_names(bool formats = false);
 
@@ -157,10 +161,12 @@ class Encoder {
   void* enc_ = nullptr;
   std::vector<void*> prev_;   // command buffers committed by signal_event / split (retained)
   const char* cur_name_ = "";
+  void* cur_pso_ = nullptr;
   uint32_t cur_max_threads_ = 0;  // the pipeline's maxTotalThreadsPerThreadgroup (dispatch checks it)
   bool concurrent_ = false;
   bool auto_barrier_ = false, in_group_ = false, group_first_ = false, dispatched_ = false;
   void pre_dispatch();
+  void fit_threads(uint32_t threads);
 };
 
 } // namespace ni

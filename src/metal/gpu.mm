@@ -20,6 +20,8 @@ extern const char* const kKernelSource;
 struct Gpu::Impl {
   std::mutex mu;
   std::unordered_map<std::string, Pipeline> pipelines;
+  // pipeline_threads: (default pipeline, threads per threadgroup) -> the pipeline compiled for that many
+  std::map<std::pair<void*, uint32_t>, Pipeline> wide;
   NSMutableArray* retained = [NSMutableArray new]; // keeps MTLBuffers alive
   // The kernels for weight formats without specialized kernels (bf16, 3/5/6-bit, 4-bit group 32, parts of
   // 8-bit; src/kernels/wfmt.metal): the same source compiled with NI_WF_INST, on the first lookup of a kernel
@@ -277,6 +279,36 @@ Pipeline Gpu::pipeline(const std::string& fn, bool required) {
   }
 }
 
+Pipeline Gpu::pipeline_threads(const Pipeline& p, uint32_t threads) {
+  const auto key = std::make_pair(p.pso, threads);
+  {
+    std::lock_guard<std::mutex> lk(impl_->mu);
+    auto it = impl_->wide.find(key);
+    if (it != impl_->wide.end()) return it->second;
+  }
+  @autoreleasepool {
+    id<MTLFunction> f = find_function(*this, library_, impl_, p.name);
+    MTLComputePipelineDescriptor* d = [MTLComputePipelineDescriptor new];
+    d.computeFunction = f;
+    d.maxTotalThreadsPerThreadgroup = threads;
+    NSError* err = nil;
+    id<MTLComputePipelineState> pso =
+        f ? [dev(device_) newComputePipelineStateWithDescriptor:d options:MTLPipelineOptionNone reflection:nil error:&err]
+          : nil;
+    if (!pso || pso.maxTotalThreadsPerThreadgroup < threads)
+      fatal("kernel %s: %u threads per threadgroup, this GPU allows %u%s%s", p.name, threads,
+            pso ? (uint32_t)pso.maxTotalThreadsPerThreadgroup : p.max_threads, err ? ": " : "",
+            err ? [[err description] UTF8String] : "");
+    Pipeline w{(__bridge_retained void*)pso, p.name, (uint32_t)pso.maxTotalThreadsPerThreadgroup,
+               (uint32_t)pso.threadExecutionWidth, (uint32_t)pso.staticThreadgroupMemoryLength};
+    std::lock_guard<std::mutex> lk(impl_->mu);
+    auto [it, fresh] = impl_->wide.emplace(key, w);
+    if (fresh) logi("kernel %s compiled for %u threads per threadgroup (this GPU's default: %u)", p.name, threads, p.max_threads);
+    else CFRelease(w.pso);  // another thread made it first
+    return it->second;
+  }
+}
+
 bool Gpu::archive(const std::string& fn, const std::string& path) {
   compile();
   @autoreleasepool {
@@ -361,7 +393,20 @@ static inline id<MTLComputeCommandEncoder> E(void* p) { return (__bridge id<MTLC
 void Encoder::use(const Pipeline& p) {
   [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)p.pso];
   cur_name_ = p.name;
+  cur_pso_ = p.pso;
   cur_max_threads_ = p.max_threads;
+}
+
+// A GPU's compiler may give a kernel fewer threads per threadgroup than it is dispatched with (register pressure
+// differs between GPU families: dfl_dist_rows gets 576 on the M1 Pro, 1024 on the M4 Pro), and a dispatch above that
+// fails the command buffer. Such a kernel switches to its pipeline compiled for the dispatch's size; on GPUs whose
+// pipelines allow every dispatch, nothing changes.
+void Encoder::fit_threads(uint32_t threads) {
+  if (!cur_max_threads_ || threads <= cur_max_threads_) return;
+  Pipeline w = Gpu::get().pipeline_threads(Pipeline{cur_pso_, cur_name_, cur_max_threads_}, threads);
+  [E(enc_) setComputePipelineState:(__bridge id<MTLComputePipelineState>)w.pso];
+  cur_pso_ = w.pso;
+  cur_max_threads_ = w.max_threads;
 }
 
 namespace {
@@ -438,10 +483,7 @@ void Encoder::pre_dispatch() {
 }
 
 void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint32_t ty, uint32_t tz) {
-  // A GPU whose compiler gives a kernel fewer threads per threadgroup than it is dispatched with (register
-  // pressure differs between GPU families) would fail the command buffer: name the kernel instead.
-  if (cur_max_threads_ && tx * ty * tz > cur_max_threads_)
-    fatal("kernel %s: %u threads per threadgroup, this GPU allows %u", cur_name_, tx * ty * tz, cur_max_threads_);
+  fit_threads(tx * ty * tz);
   pre_dispatch();
   [E(enc_) dispatchThreadgroups:MTLSizeMake(gx, gy, gz) threadsPerThreadgroup:MTLSizeMake(tx, ty, tz)];
   if (dup_kernel(cur_name_))
@@ -463,6 +505,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
   }
 }
 void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uint32_t ty, uint32_t tz) {
+  fit_threads(tx * ty * tz);
   pre_dispatch();
   [E(enc_) dispatchThreadgroupsWithIndirectBuffer:(__bridge id<MTLBuffer>)args.mtl
                              indirectBufferOffset:args.offset + off
