@@ -37,7 +37,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | ***Nemotron*** | | | | | | | | |
 | Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
 | Lightning<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
-| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 34&nbsp;⚠ | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | —<br><sub>no Metal support</sub> | 32 |
+| Bolt&nbsp;74B<br><sub>NVIDIA 24 GB</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | 32 |
 | Super‑VL<br><sub>NVFP4 · 96&nbsp;GB+</sub> | — | — | — | — | — | — | — | — |
 
 <sub>MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no

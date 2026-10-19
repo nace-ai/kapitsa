@@ -1,0 +1,355 @@
+{
+ "label": "bolt-omlx",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": false,
+    "s": 0.5,
+    "error": "RuntimeError('HTTP 409: {\"error\":{\"message\":\"Model \\'nemotron-3.5-bolt-24gb\\' failed to load: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named \\'mlx_vlm.speculative.drafters.nemotron_h_omni\\'; LLM fallback also failed: Model type nemotron_h_omni not supported.. Reloa"
+   },
+   {
+    "name": "tools",
+    "ok": false,
+    "s": 0.01,
+    "error": "RuntimeError('HTTP 409: {\"error\":{\"message\":\"Model \\'nemotron-3.5-bolt-24gb\\' is unavailable after a previous load failure: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named \\'mlx_vlm.speculative.drafters.nemotron_h_omni\\'; LLM fallback also failed: Model type nemotro"
+   }
+  ],
+  "ok": false
+ },
+ "schema": 2,
+ "when": "2026-10-19 04:11:53",
+ "invalid": [
+  "harness: warm-up failed: RuntimeError('HTTP 409: {\"error\":{\"message\":\"Model \\'nemotron-3.5-bolt-24gb\\' failed to load: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named \\'mlx_vlm.speculative.drafters.nemotron_h_omni\\'; LLM fallback also failed: Model type nemotron_h_omni not supported.. Reloa"
+ ],
+ "flags": [],
+ "config_label": "bolt-omlx",
+ "display": "oMLX (the bundle's model file, no drafter)",
+ "engine": "omlx",
+ "version": "omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+ "model_path": "{models}/nemotron-3.5-bolt-24gb",
+ "note": "oMLX with the bundle's MLX model file (Trust Remote Code), no speculative decoding; cache flags as in omlx.json.",
+ "config": {
+  "label": "bolt-omlx",
+  "display": "oMLX (the bundle's model file, no drafter)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+  "model_path": "{models}/nemotron-3.5-bolt-24gb",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/nemotron-3.5-bolt-24gb",
+     "dst": "{state}/omlx/bolt/models/nemotron-3.5-bolt-24gb"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/bolt/base-plain/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "nemotron-3.5-bolt-24gb": {
+        "trust_remote_code": true,
+        "dflash_enabled": false
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/bolt/base-plain/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{env:OMLX_BIN=omlx}",
+   "serve",
+   "--model-dir",
+   "{state}/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8242",
+   "--base-path",
+   "{state}/omlx/bolt/base-plain",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/bolt/base-plain/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_clear_prefixes": [
+   "OMLX_"
+  ],
+  "base_url": "http://127.0.0.1:8242/v1",
+  "model": "nemotron-3.5-bolt-24gb",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/nemotron-3.5-bolt-24gb/model.safetensors.index.json",
+   "{models}/nemotron-3.5-bolt-24gb/nemotron_bolt.py"
+  ],
+  "log_grep": [
+   "DFlash|drafter|LiLiCorr|dflash",
+   "memory|guard",
+   "[Ll]oaded model|Discovered model|remote code",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514"
+  ],
+  "note": "oMLX with the bundle's MLX model file (Trust Remote Code), no speculative decoding; cache flags as in omlx.json."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "Mac16,7",
+   "cpu": "Apple M4 Pro",
+   "memsize": "51539607552",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "2",
+   "vm": {
+    "swap_used_mb": 698.81,
+    "swapouts": 22193300,
+    "swapins": 17610190,
+    "pageouts": 664129,
+    "memorystatus_level": 89
+   },
+   "gpu_mem": {
+    "in_use": 160333824,
+    "alloc": 3327049728,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 11248132096,
+   "ollama_app_loaded": []
+  },
+  "cmd": [
+   "<omlx-venv>/bin/omlx",
+   "serve",
+   "--model-dir",
+   "<out>/state/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8242",
+   "--base-path",
+   "<out>/state/omlx/bolt/base-plain",
+   "--paged-ssd-cache-dir",
+   "<out>/state/omlx/bolt/base-plain/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "cmd_shell": "'<omlx-venv>/bin/omlx' serve --model-dir <out>/state/omlx/bolt/models --no-hf-cache --headless --host 127.0.0.1 --port 8242 --base-path <out>/state/omlx/bolt/base-plain --paged-ssd-cache-dir <out>/state/omlx/bolt/base-plain/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [
+   "OMLX_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/nemotron-3.5-bolt-24gb",
+   "safetensors_bytes": 24083745496,
+   "safetensors_files": [
+    "model-00001-of-00090.safetensors",
+    "model-00002-of-00090.safetensors",
+    "model-00003-of-00090.safetensors",
+    "model-00004-of-00090.safetensors",
+    "model-00005-of-00090.safetensors",
+    "model-00006-of-00090.safetensors",
+    "model-00007-of-00090.safetensors",
+    "model-00008-of-00090.safetensors",
+    "model-00009-of-00090.safetensors",
+    "model-00010-of-00090.safetensors",
+    "model-00011-of-00090.safetensors",
+    "model-00012-of-00090.safetensors",
+    "model-00013-of-00090.safetensors",
+    "model-00014-of-00090.safetensors",
+    "model-00015-of-00090.safetensors",
+    "model-00016-of-00090.safetensors",
+    "model-00017-of-00090.safetensors",
+    "model-00018-of-00090.safetensors",
+    "model-00019-of-00090.safetensors",
+    "model-00020-of-00090.safetensors",
+    "model-00021-of-00090.safetensors",
+    "model-00022-of-00090.safetensors",
+    "model-00023-of-00090.safetensors",
+    "model-00024-of-00090.safetensors",
+    "model-00025-of-00090.safetensors",
+    "model-00026-of-00090.safetensors",
+    "model-00027-of-00090.safetensors",
+    "model-00028-of-00090.safetensors",
+    "model-00029-of-00090.safetensors",
+    "model-00030-of-00090.safetensors",
+    "model-00031-of-00090.safetensors",
+    "model-00032-of-00090.safetensors",
+    "model-00033-of-00090.safetensors",
+    "model-00034-of-00090.safetensors",
+    "model-00035-of-00090.safetensors",
+    "model-00036-of-00090.safetensors",
+    "model-00037-of-00090.safetensors",
+    "model-00038-of-00090.safetensors",
+    "model-00039-of-00090.safetensors",
+    "model-00040-of-00090.safetensors",
+    "model-00041-of-00090.safetensors",
+    "model-00042-of-00090.safetensors",
+    "model-00043-of-00090.safetensors",
+    "model-00044-of-00090.safetensors",
+    "model-00045-of-00090.safetensors",
+    "model-00046-of-00090.safetensors",
+    "model-00047-of-00090.safetensors",
+    "model-00048-of-00090.safetensors",
+    "model-00049-of-00090.safetensors",
+    "model-00050-of-00090.safetensors",
+    "model-00051-of-00090.safetensors",
+    "model-00052-of-00090.safetensors",
+    "model-00053-of-00090.safetensors",
+    "model-00054-of-00090.safetensors",
+    "model-00055-of-00090.safetensors",
+    "model-00056-of-00090.safetensors",
+    "model-00057-of-00090.safetensors",
+    "model-00058-of-00090.safetensors",
+    "model-00059-of-00090.safetensors",
+    "model-00060-of-00090.safetensors",
+    "model-00061-of-00090.safetensors",
+    "model-00062-of-00090.safetensors",
+    "model-00063-of-00090.safetensors",
+    "model-00064-of-00090.safetensors",
+    "model-00065-of-00090.safetensors",
+    "model-00066-of-00090.safetensors",
+    "model-00067-of-00090.safetensors",
+    "model-00068-of-00090.safetensors",
+    "model-00069-of-00090.safetensors",
+    "model-00070-of-00090.safetensors",
+    "model-00071-of-00090.safetensors",
+    "model-00072-of-00090.safetensors",
+    "model-00073-of-00090.safetensors",
+    "model-00074-of-00090.safetensors",
+    "model-00075-of-00090.safetensors",
+    "model-00076-of-00090.safetensors",
+    "model-00077-of-00090.safetensors",
+    "model-00078-of-00090.safetensors",
+    "model-00079-of-00090.safetensors",
+    "model-00080-of-00090.safetensors",
+    "model-00081-of-00090.safetensors",
+    "model-00082-of-00090.safetensors",
+    "model-00083-of-00090.safetensors",
+    "model-00084-of-00090.safetensors",
+    "model-00085-of-00090.safetensors",
+    "model-00086-of-00090.safetensors",
+    "model-00087-of-00090.safetensors",
+    "model-00088-of-00090.safetensors",
+    "model-00089-of-00090.safetensors",
+    "model-00090-of-00090.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "7bf5c07947aff31b5887e93292e078058ec282de",
+   "dirty": true
+  },
+  "config_file": "configs/bolt.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "LMS_BIN",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_PYTHON",
+   "OLLAMA_BIN",
+   "OMLX_BIN",
+   "RAPID_MLX_BIN",
+   "RAPID_MLX_PYTHON"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "Claude Helper",
+   "VisualIntelligenceCore",
+   "cameracaptured",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "symlink <out>/state/omlx/bolt/models/nemotron-3.5-bolt-24gb -> <models>/nemotron-3.5-bolt-24gb",
+   "write <out>/state/omlx/bolt/base-plain/model_settings.json: {\"version\": 1, \"models\": {\"nemotron-3.5-bolt-24gb\": {\"trust_remote_code\": true, \"dflash_enabled\": false}}}",
+   "empty <out>/state/omlx/bolt/base-plain/kv-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "<models>",
+   "BENCH_OUT": "<out>",
+   "BENCH_GPU_AMBIENT": "Claude Helper,Claude,cameracaptured",
+   "MLX_VLM_PYTHON": "<omlx-venv>/bin/python",
+   "MLX_SERVE_BIN": "<mlx-serve-26.10.2>/mlx-serve",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "OLLAMA_BIN": "/Applications/Ollama.app/Contents/Resources/ollama",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 2.6,
+  "server_pid": 12653,
+  "listener_pid": 12653
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0,
+  "harness_held_s": 8.9,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 160333824,
+   "alloc": 3327049728,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 698.81,
+   "swapouts": 22193300,
+   "swapins": 17610190,
+   "pageouts": 664129,
+   "memorystatus_level": 89
+  },
+  "disk_free_bytes": 11246882816
+ },
+ "server_log": [
+  "2026-10-19 04:11:53,135 - omlx.model_discovery - INFO - Discovered model: nemotron-3.5-bolt-24gb (type: vlm, engine: vlm, size: 23.55GB, text-only: 22.27GB)",
+  "2026-10-19 04:11:53,143 - omlx.server - INFO - Memory guard tier: aggressive (guard on)",
+  "2026-10-19 04:11:53,264 - omlx.process_memory_enforcer - WARNING - Metal cap (37.4GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (46.5GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=466",
+  "2026-10-19 04:11:53,264 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=36.4GB, interval=1.0s)",
+  "2026-10-19 04:11:53,805 - root - ERROR - Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'",
+  "2026-10-19 04:11:53,807 - omlx.engine_pool - WARNING - VLM loading failed for nemotron-3.5-bolt-24gb, falling back to LLM: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'",
+  "Traceback (most recent call last):",
+  "    raise ValueError(msg)",
+  "ValueError: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'",
+  "Traceback (most recent call last):",
+  "    raise RuntimeError(",
+  "RuntimeError: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'; LLM fallback also failed: Model type nemotron_h_omni not supported.",
+  "2026-10-19 04:11:53,986 - omlx.server - WARNING - POST /v1/chat/completions \u2192 409: Model 'nemotron-3.5-bolt-24gb' failed to load: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'; LLM fallback also failed: Model type nem",
+  "2026-10-19 04:11:53,992 - omlx.engine_pool - WARNING - Skipping load retry for 'nemotron-3.5-bolt-24gb' after cached failure: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'; LLM fallback also failed: Model type nemotro",
+  "2026-10-19 04:11:53,992 - omlx.server - WARNING - POST /v1/chat/completions \u2192 409: Model 'nemotron-3.5-bolt-24gb' is unavailable after a previous load failure: VLM load failed: Model type nemotron_h_omni not supported. Error: No module named 'mlx_vlm.speculative.drafters.nemotron_h_omni'; LLM fallba",
+  "2026-10-19 04:11:54,199 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped",
+  "2026-10-19 04:11:54,199 - omlx.server - INFO - Process memory enforcer stopped"
+ ],
+ "server_log_path": "logs/bolt-omlx-20261019-041150.log"
+}

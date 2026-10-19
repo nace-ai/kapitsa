@@ -7,7 +7,7 @@ Qwen3.8-Flash-Next and Nemotron 3.5 Super-VL and Lightning on the M5 Max:
 [Super-VL](#nemotron-35-super-vl-120b-a12b-m5-max-128-gb-2026-10-18),
 [Lightning](#nemotron-35-lightning-30b-a3b-m5-max-128-gb-2026-10-18)), compared with the engines people run these
 models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and mlx-serve, a day later: [its own
-section](#mlx-serve-2026-10-18)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
 request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
 best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
@@ -902,6 +902,40 @@ Run index (local time, UTC+5; "Started" is when the session began, after start-u
 | `q38-27b-mlxserve-mtp-20261018-212503.json` | 21:26 | 0.9 / 37.1 | 8.3 | 10.9 | Chrome, Slack |
 | `q38-27b-mlxserve-dflash2-20261018-213146.json` | 21:33 | 0.4 / 10.7 | 10.5 | 11.9 | — |
 | `q38-27b-kapitsa-20261018-213837.json` | 21:39 | 0.3 / 2.0 | 16.1 | 11.8 | — |
+
+## The M4 Pro table filled in (2026-10-19)
+
+Runs for the M4 Pro table's empty and flagged cells, on the same MacBook Pro (M4 Pro, 48 GB, macOS 27.0.1, High Power
+mode, AC power) with this harness: one hold of the GPU lock per model, Kapitsa (main at 474b3e6) first and last as the
+control. Result files: [bench/results/2026-10-19-m4pro](../bench/results/2026-10-19-m4pro/).
+
+### Nemotron 3.5 Bolt
+
+oMLX again (no drafter), with no run flagged: 34.6 (33.6–34.7) tok/s at T = 0.6 and 34.1 greedy, prefill 298 / 307
+tok/s at 4K / 16K, follow-ups 0.73 / 0.83 s, peak 30.4 GB. Its 2026-10-18 run, whose 16K prefill was flagged, gave
+33.9 / 34.1, 296 / 300, 0.72 / 0.72 s and 30.3 GB. Kapitsa before and after it: 66.4 and 69.1 tok/s at T = 0.6 (69.9
+and 68.4 greedy), 502–519 / 492–513 tok/s prefill, 0.23–0.26 / 0.27–0.29 s follow-ups, 22.7–22.8 GB (the table keeps
+its 2026-10-18 figure, 63.9).
+
+oMLX reads Bolt through the layout of NVIDIA's Bolt bundle for MLX, whose config.json names the bundle's model file
+(`model_file: nemotron_bolt.py`, model type `nemotron_h_nano_omni`). The folder `kapitsa pull bolt` writes holds
+NVIDIA's own config.json (model type `nemotron_h_omni`), which oMLX 0.7.1rc1 refuses (`Model type nemotron_h_omni not
+supported`, [failed](../bench/results/2026-10-19-m4pro/failed/)); this run read NVIDIA's files with the bundle's
+config.json, the layout of the 2026-10-18 runs and of the [harness README](../bench/harness/README.md).
+
+The engines whose Bolt cell says "no support" (checked 2026-10-19):
+
+- **Ollama** 0.40.6, its latest release (0.40.7-rc0 changes nothing for Bolt): its library page still says Apple
+  Silicon / Metal is not supported for `nemotron-3.5-bolt`.
+- **LM Studio** (llmster 0.0.25-1): no newer runtime on its stable or beta channel than MLX 1.13.1 and llama.cpp 2.60.0
+  (llama.cpp b11698). The MLX runtime refused NVIDIA's checkpoint on 2026-10-18 (`No LM Runtime found for model format
+  'torchSafetensors'`); the llama.cpp runtime's Metal library has MXFP4 kernels but none for NVFP4, the format of
+  Bolt's Mamba projections in NVIDIA's GGUF, so those layers would run on the CPU, as in llama.cpp. LM Studio's catalog
+  has no Bolt entry.
+- **mlx-serve** 26.10.2, its latest release: it reads the config, loads the checkpoint's 28,885 tensors and stops at
+  `MISSING WEIGHT: model.embed_tokens.weight` (Bolt's weights sit under `language_model.backbone`, in IQ2_XXS, Q8_0 and
+  NVFP4 blocks, none of mlx-serve's quantization modes), with NVIDIA's config.json and with the bundle's
+  ([logs](../bench/results/2026-10-19-m4pro/support-checks/)).
 
 ## Your Mac: `kapitsa bench`
 
