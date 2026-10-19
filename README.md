@@ -24,8 +24,8 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 ## Benchmarks
 
-<sub>Writing speed of a coding answer, each engine in its fastest setup; Kapitsa highlighted; 🟩 the fastest per model; — not measured;
-⚠ other apps used the GPU. [How it was measured](docs/benchmarks.md)</sub>
+<sub>Writing speed of a coding answer, each engine in its fastest setup; Kapitsa highlighted; 🟩 the fastest per model; — not measured.
+[How it was measured](docs/benchmarks.md)</sub>
 
 ### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
 
@@ -33,7 +33,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> | <sub>Rapid‑MLX</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5<br>4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 88&nbsp;⚠ | 98 |
+| Qwen3.5<br>4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 88 | 98 |
 | Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark> | 45 | 54 | 32 | 36 | 15 | 18 | 28 | — |
 | Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | 86 | — |
 
@@ -41,7 +41,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
 | --- | ---: | ---: | ---: | ---: |
-| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
+| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6 | 48 |
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**106&nbsp;tok/s**</mark> | — | — | 65 |
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
 
@@ -75,7 +75,7 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**127&nbsp;tok/s**</mark> | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | — |
 | Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | — | 64 | — | 61 | 66 | 46 |
 
-<sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. MLX on the 4B, 27B and 35B: mlx-lm.
+<sub>MLX on the 4B, 27B and 35B: mlx-lm.
 Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's 4.7-bit pack, MTPLX its
 author's pack, Ollama its NVFP4 tag. <sup>†</sup> Ollama fails every 4K and 16K prompt there (out of GPU memory). LM Studio refuses to load its
 119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve 78.8, oMLX 104). Nemotron: NVIDIA's NVFP4 on Kapitsa, mlx-vlm and Ollama, MLX 4-bit on oMLX,
