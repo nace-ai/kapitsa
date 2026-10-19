@@ -50,7 +50,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.1.36"
+#define KAPITSA_VERSION "0.1.37"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
