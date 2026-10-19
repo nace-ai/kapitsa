@@ -4,9 +4,9 @@
   <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen and Nemotron. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa 154, oMLX with DFlash2 127, Ollama 89, LM Studio 86, MTPLX 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
 </picture>
 
-[Install](#install) · [Benchmarks](#benchmarks) · [Models](#models) · [Docs](docs/usage.md)
+[Quickstart](#quickstart) · [CLI](#cli) · [Benchmarks](#benchmarks) · [Models](#models) · [Docs](docs/usage.md)
 
-## Install
+## Quickstart
 
 **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.
 
@@ -17,7 +17,15 @@ brew install nace-ai/tap/kapitsa
 
 ```bash
 kapitsa opencode --model 35b    # also: kapitsa claude, kapitsa codex, kapitsa pi
+```
+
+<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies.</sub>
+
+## CLI
+
+```bash
 kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0.1:8000
+kapitsa claude                  # Claude Code on Kapitsa (also: codex, opencode, pi)
 kapitsa doctor                  # this Mac's GPU and memory, and which models fit it
 kapitsa bench                   # benchmark this Mac, share it with the community
 kapitsa pull 27b                # download a model without starting it
@@ -27,8 +35,8 @@ kapitsa import model.gguf       # use a Qwen GGUF from LM Studio, Ollama or llam
 kapitsa update                  # update now (it also updates itself)
 ```
 
-<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies. `kapitsa <command> --help` has the
-options. [Usage guide](docs/usage.md)</sub>
+<sub>`--model` picks the model and its precision (`35b:6bit`). `kapitsa <command> --help` has the options.
+[Usage guide](docs/usage.md)</sub>
 
 ## Benchmarks
 
