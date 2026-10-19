@@ -19,7 +19,7 @@ brew install nace-ai/tap/kapitsa
 kapitsa opencode --model 35b    # also: kapitsa claude, kapitsa codex, kapitsa pi
 ```
 
-<sub>On a 16-24 GB Mac use `--model 4b`. `kapitsa serve` starts the chat page and the
+<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies. `kapitsa serve` starts the chat page and the
 OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usage guide](docs/usage.md)</sub>
 
 ## Benchmarks
@@ -109,6 +109,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Model | Download | Speculation |
 | --- | --- | --- |
 | **Qwen3.5-4B** · `4b`<br><sub>dense</sub> | **4-bit · 4.6 GB**<br><sub>also 6-bit 5.6 · 8-bit 6.7 · bf16 10.6 GB</sub> | DFlash / MTP |
+| **Qwen3.5-9B** · `9b`<br><sub>dense</sub> | **4-bit · 9.0 GB** | DFlash / MTP |
 | **Qwen3.8-27B** · `27b`<br><sub>dense</sub> | **4-bit · 20.2 GB**<br><sub>also 5-bit 23.5 · 6-bit 26.9 · 8-bit 33.6 · bf16 58.8 GB</sub> | DFlash2 / MTP |
 | **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active</sub> | **4-bit · 22.1 GB**<br><sub>also 5-bit 26.4 · 6-bit 30.7 · 8-bit 39.4 · bf16 71.9 GB</sub> | DFlash2 / MTP |
 | **Qwen3.8-Flash-Next 180B-A7B** · `flash-next`<br><sub>MoE, 7B active; 128 GB Macs</sub> | **4-bit · 105.9 GB**<br><sub>4/6/8-bit MLX; its 32 GB n-gram table stays on the SSD</sub> | MTP |

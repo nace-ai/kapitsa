@@ -132,7 +132,8 @@ def check(name, ok, detail=""):
 # defaults.
 DEFAULTS = {"qwen3.6-35b-a3b": ("4bit", "Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf"),
             "qwen3.8-27b": ("4bit", "lmstudio-community/Qwen3.8-27B-MLX-4bit", "6067b15cf581666a4aecf6af3afaba4bb5efc20c"),
-            "qwen3.5-4b": ("4bit", "lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1")}
+            "qwen3.5-4b": ("4bit", "lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1"),
+            "qwen3.5-9b": ("4bit", "lmstudio-community/Qwen3.5-9B-MLX-4bit", "b455506b0f574c74616dbcd56879bde38fafcff3")}
 PINNED = {
     "qwen3.6-35b-a3b": ("Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed", "95460516fbfe34c48f577f67c9ed191f5d61fbaf",
                         [("dflash2", "incoai/Qwen3.6-35B-A3B-DFlash2", "51ef7b6923ad6c14cb1bb41c37a9041446496ab6", "dflash2")]),
@@ -142,6 +143,9 @@ PINNED = {
     "qwen3.5-4b": ("lmstudio-community/Qwen3.5-4B-MLX-4bit", "c43ee1d65576a5d98de1e8405cac93c371a655c1",
                    [("mtp-sidecar", "Qwen/Qwen3.5-4B", "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a", "."),
                     ("dflash", "z-lab/Qwen3.5-4B-DFlash", "9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf", "dflash2")]),
+    "qwen3.5-9b": ("lmstudio-community/Qwen3.5-9B-MLX-4bit", "b455506b0f574c74616dbcd56879bde38fafcff3",
+                   [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
+                    ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
 
 def cli_checks(kapitsa):
@@ -162,7 +166,8 @@ def cli_checks(kapitsa):
                           ("qwen3.8-27b", ["27b:4bit", "27B:4BIT", "lmstudio-community/Qwen3.8-27B-MLX-4bit",
                                            "hf.co/lmstudio-community/Qwen3.8-27B-MLX-4bit"]),
                           ("qwen3.5-4b", ["4b:4bit", "qwen3.5-4b:4bit",
-                                          "lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1"])]:
+                                          "lmstudio-community/Qwen3.5-4B-MLX-4bit@c43ee1d65576a5d98de1e8405cac93c371a655c1"]),
+                          ("qwen3.5-9b", ["9b:4bit", "QWEN3.5-9B:4bit", "lmstudio-community/Qwen3.5-9B-MLX-4bit"])]:
         repo, rev, comps = PINNED[name]
         dv = DEFAULTS[name][0]
         for a in aliases:
@@ -175,7 +180,7 @@ def cli_checks(kapitsa):
                   j.get("revision") == rev and got == comps and j.get("downloaded") is False, json.dumps(j))
     # a name without a variant: the default (offline nothing can be planned, so no fallback for a smaller Mac)
     for name, aliases in [("qwen3.6-35b-a3b", ["35b", "qwen3.6-35b", "QWEN3.6-35B-A3B"]), ("qwen3.8-27b", ["27b"]),
-                          ("qwen3.5-4b", ["4b", "qwen3.5-4b"])]:
+                          ("qwen3.5-4b", ["4b", "qwen3.5-4b"]), ("qwen3.5-9b", ["9b", "qwen3.5-9b"])]:
         dv, repo, rev = DEFAULTS[name]
         for a in aliases:
             j = plan(a)

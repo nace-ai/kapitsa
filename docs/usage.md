@@ -47,6 +47,7 @@ Those start the best model for this Mac, with the same output as before.
 | Name | Aliases | What it is | Download | Variants |
 | --- | --- | --- | ---: | --- |
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
+| `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default) |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
@@ -71,7 +72,7 @@ see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./
 
 The first start of a model downloads it; later starts use the copy on disk, offline too. A catalog model that would not
 start on this Mac is refused before the download, naming one that fits. Without `--model`, `kapitsa serve` takes the
-first of `35b`, `27b` and `4b` that holds one conversation of 32K tokens (or of the `--context` given) within this
+first of `35b`, `27b`, `9b` and `4b` that holds one conversation of 32K tokens (or of the `--context` given) within this
 Mac's memory budget (a model not downloaded yet is planned from its file headers, a few hundred KB).
 
 The API calls the model by its name (`qwen3.5-4b`), as `name:variant` for a variant other than the default
@@ -82,13 +83,13 @@ request's `model` field is not checked.
 
 Each Qwen model comes in several precisions, its variants. Download sizes, companions included:
 
-| Variant | Weights | `4b` | `27b` | `35b` |
-| --- | --- | ---: | ---: | ---: |
-| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 20.2 GB | 22.1 GB |
-| `5bit` | MLX affine 5-bit, group 64 | - | 23.5 GB | 26.4 GB |
-| `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | 26.9 GB | 30.7 GB |
-| `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | 33.6 GB | 39.4 GB |
-| `bf16` | unquantized, where it fits | 10.6 GB | 58.8 GB | 71.9 GB |
+| Variant | Weights | `4b` | `9b` | `27b` | `35b` |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `4bit` (default) | MLX affine 4-bit, group 64: the fastest | 4.6 GB | 9.0 GB | 20.2 GB | 22.1 GB |
+| `5bit` | MLX affine 5-bit, group 64 | - | - | 23.5 GB | 26.4 GB |
+| `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
+| `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | - | 33.6 GB | 39.4 GB |
+| `bf16` | unquantized, where it fits | 10.6 GB | - | 58.8 GB | 71.9 GB |
 
 Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
 variants fit this Mac. Every variant keeps the model's MTP head and draft model, and pins its repo to a revision, so a
@@ -388,10 +389,10 @@ tools and MCP servers work as usual:
 ## Images
 
 Every catalog model except `nemotron-3.5-lightning` and `nemotron-labs-dory1.0-4b` (text-only models) reads images, in
-every precision: `qwen3.5-4b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`, `nemotron-3.5-bolt` and
-`nemotron-3.5-super-vl`. Their vision towers come with the download and load with the first image: about 0.67 GB of GPU
-memory for the 4B's, 0.9 GB for the 35B's, the 27B's and Flash-Next's (bf16 in every precision), 1.7 GB for Bolt's and
-for Super-VL's. On a model without one, such as Lightning, Dory or a text-only conversion, each image becomes a short
+every precision: `qwen3.5-4b`, `qwen3.5-9b`, `qwen3.6-35b-a3b`, `qwen3.8-27b`, `qwen3.8-flash-next`,
+`nemotron-3.5-bolt` and `nemotron-3.5-super-vl`. Their vision towers come with the download and load with the first
+image: about 0.67 GB of GPU memory for the 4B's, 0.9 GB for the 9B's, the 35B's, the 27B's and Flash-Next's (bf16 in
+every precision), 1.7 GB for Bolt's and for Super-VL's. On a model without one, such as Lightning, Dory or a text-only conversion, each image becomes a short
 note in the prompt, so agents that attach screenshots keep working.
 
 | API | Image part |
@@ -444,12 +445,12 @@ the same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `de
 What fits, for the 4-bit variants at `--context 64k --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:
 
-| Mac RAM | Budget | `4b` | `27b` | `35b` |
-| --- | --- | --- | --- | --- |
-| 16 GB | 11.0-12.9 GB | yes (174K-225K) | no | no |
-| 24 GB | 16.5-19.3 GB | yes (323K-399K) | only at the larger budget (23K) | no |
-| 32 GB | 22.0-25.7 GB | yes (472K-572K) | yes (62K-80K) | yes (50K-153K) |
-| 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (184K-265K) | yes (475K-724K) |
+| Mac RAM | Budget | `4b` | `9b` | `27b` | `35b` |
+| --- | --- | --- | --- | --- | --- |
+| 16 GB | 11.0-12.9 GB | yes (174K-225K) | yes (89K-140K) | no | no |
+| 24 GB | 16.5-19.3 GB | yes (323K-399K) | yes (238K-314K) | only at the larger budget (23K) | no |
+| 32 GB | 22.0-25.7 GB | yes (472K-572K) | yes (387K-487K) | yes (62K-80K) | yes (50K-153K) |
+| 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (685K-837K) | yes (184K-265K) | yes (475K-724K) |
 
 On a 48 GB Mac the 35B also fits in 6-bit with a full conversation and its draft model, in 8-bit only with shorter ones.
 Flash-Next needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budget, and on 96 GB (about 72 GB) its fixed

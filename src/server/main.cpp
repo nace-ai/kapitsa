@@ -166,7 +166,7 @@ static double to_gb(const std::string& opt, const std::string& v, const char* he
 // The order best_model tries the catalog in: the most capable model first (the catalog itself lists the models from
 // small to large, Qwen first, as the README and the picker show them); catalog models not named here come last.
 static std::vector<const hub::CatalogModel*> by_preference() {
-  static const char* const kOrder[] = {"qwen3.6-35b-a3b", "qwen3.8-27b", "qwen3.5-4b", "nemotron-3.5-bolt",
+  static const char* const kOrder[] = {"qwen3.6-35b-a3b", "qwen3.8-27b", "qwen3.5-9b", "qwen3.5-4b", "nemotron-3.5-bolt",
                                        "nemotron-3.5-super-vl", "nemotron-3.5-lightning"};
   std::vector<const hub::CatalogModel*> out;
   for (const char* n : kOrder)

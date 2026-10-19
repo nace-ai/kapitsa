@@ -79,6 +79,25 @@ Companion dflash4() {
           .subdir = "dflash2"};
 }
 
+Companion mtp9() {
+  // as the 4B's: built from the official checkpoint's 15 mtp.* tensors (487 MB by range requests, not the 19 GB
+  // checkpoint), byte for byte what tools/mtp_sidecar.py makes; bf16, quantized to 4-bit at load
+  return {.kind = "mtp-sidecar",
+          .repo = "Qwen/Qwen3.5-9B",
+          .revision = "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+          .sha256 = "5f7c656b3930220c704c52d6c9ad0ab82cacf8da4b66c2f2361cbc3acee25a1f",
+          .size = 486582960};
+}
+
+Companion dflash9() {
+  // z-lab's DFlash (v1) block drafter for Qwen3.5-9B (2.58 GB of bf16, 4-bit at load), in dflash2/ as the 4B's
+  return {.kind = "dflash",
+          .repo = "z-lab/Qwen3.5-9B-DFlash",
+          .revision = "5fc3b3d474760f18c516db87d84c37edbfd3ede6",
+          .files = {"config.json", "model.safetensors"},
+          .subdir = "dflash2"};
+}
+
 Companion lilicorr_bolt() {
   // NVIDIA's LiLiCorr block drafter for Bolt (1.11B, NVFP4 / BF16), in dflash/ where --dflash auto finds it
   return {.kind = "lilicorr",
@@ -144,6 +163,21 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "491fdc7c087ba7fb48adcb1253f8e76d011db783",
             .companions = {mtp4(), dflash4()},
             .download_gb = 10.62},
+       }},
+      {.name = "qwen3.5-9b",
+       .aliases = {"9b"},
+       .title = "Qwen3.5-9B",
+       .about = "the 4B's bigger sibling: the most capable model for a 16 GB Mac",
+       .brief = "more capable than the 4B, for 16-24 GB Macs",
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit, group 64",
+            .repo = "lmstudio-community/Qwen3.5-9B-MLX-4bit",
+            .revision = "b455506b0f574c74616dbcd56879bde38fafcff3",
+            .companions = {mtp9(), dflash9()},
+            .download_gb = 9.05},
        }},
       {.name = "qwen3.8-27b",
        .aliases = {"27b"},
