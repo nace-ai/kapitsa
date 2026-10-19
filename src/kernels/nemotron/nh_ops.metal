@@ -149,6 +149,78 @@ NI_INLINE float nh_conv(const device float* zx, const device float* ring, const 
   }
 }
 
+// The same scan for another head dim HD (Nemotron Nano 4B / 9B v2: 80): a threadgroup of 4 x HD threads per head
+// (HD state rows x 4 lanes of 32 columns), the head group's 256 B / C channels staged by the first 256 threads, the
+// head's x channels by the first HD, dt by thread HD; the same update and sums as nh_ssm.
+// grid: NH threadgroups x 4 HD threads.
+template <uint HD>
+NI_INLINE void nh_ssm_hd(const device float* zx, device float* ring, device float* state, device float* y,
+                         const device float* conv_w, const device float* conv_b, const device float* A,
+                         const device float* Dsk, const device float* dt_bias, constant NhSsmParams& p, uint h, uint tid,
+                         threadgroup float* sbc, threadgroup float* sx, threadgroup float* sdt) {
+  const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
+  const uint g = h / (p.NH / p.NG);
+  const uint row = tid >> 2, qq = tid & 3;
+  const uint cbc = DI + (tid < 128 ? g * p.DS + tid : p.NG * p.DS + g * p.DS + (tid - 128));
+  const uint cx = h * p.HD + tid % HD;
+  float st[32];
+  device float* sp = state + (size_t(h) * p.HD + row) * p.DS + qq * 32;
+  for (int i = 0; i < 8; ++i) {
+    float4 v = ((device float4*)sp)[i];
+    st[i * 4 + 0] = v.x; st[i * 4 + 1] = v.y; st[i * 4 + 2] = v.z; st[i * 4 + 3] = v.w;
+  }
+  const float Ah = A[h], Dh = Dsk[h], dtb = dt_bias[h];
+  for (uint t0 = 0; t0 < p.T; t0 += kSsmNB) {
+    const uint nb = min(kSsmNB, p.T - t0);
+    for (uint i = 0; i < nb; ++i) {
+      if (tid < 256) sbc[i * 256 + tid] = nh_conv(zx, ring, conv_w, conv_b, p, DI, CH, int(t0 + i), cbc);
+      if (tid < HD) sx[i * HD + tid] = nh_conv(zx, ring, conv_w, conv_b, p, DI, CH, int(t0 + i), cx);
+      if (tid == HD) {
+        const float dt = softplus(zx[size_t(t0 + i) * p.zx_stride + DI + CH + h] + dtb);
+        sdt[i * 2] = dt;
+        sdt[i * 2 + 1] = metal::precise::exp(dt * Ah);
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = 0; i < nb; ++i) {
+      const float dt = sdt[i * 2], dA = sdt[i * 2 + 1];
+      const float xv = sx[i * HD + row];
+      const float xdt = xv * dt;
+      float acc = 0.0f;
+      for (int n = 0; n < 32; ++n) {
+        st[n] = st[n] * dA + sbc[i * 256 + qq * 32 + n] * xdt;
+        acc += st[n] * sbc[i * 256 + 128 + qq * 32 + n];
+      }
+      acc += simd_shuffle_xor(acc, 1);
+      acc += simd_shuffle_xor(acc, 2);
+      if (qq == 0) {
+        const size_t t = t0 + i;
+        const float z = zx[t * p.zx_stride + h * p.HD + row];
+        y[t * DI + h * p.HD + row] = (acc + Dh * xv) * silu(z);
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+  if (p.write)
+    for (int i = 0; i < 8; ++i) ((device float4*)sp)[i] = float4(st[i * 4], st[i * 4 + 1], st[i * 4 + 2], st[i * 4 + 3]);
+  // one row: this position's conv input into its ring slot (as nh_ssm)
+  if (p.write && p.T == 1) {
+    const uint slot = (p.pos0 & 3u) * CH;
+    if (tid < HD) ring[slot + cx] = zx[DI + cx];
+    if (h % (p.NH / p.NG) == 0 && tid < 256) ring[slot + cbc] = zx[DI + cbc];
+  }
+}
+
+[[kernel, max_total_threads_per_threadgroup(320)]] void nh_ssm_h80(
+    const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]], device float* state [[buffer(2)]],
+    device float* y [[buffer(3)]], const device float* conv_w [[buffer(4)]], const device float* conv_b [[buffer(5)]],
+    const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],
+    const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
+    uint h [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]]) {
+  threadgroup float sbc[kSsmNB * 256], sx[kSsmNB * 80], sdt[kSsmNB * 2];
+  nh_ssm_hd<80>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, h, tid, sbc, sx, sdt);
+}
+
 // Short passes (decode, verify, the pending-row flush; T <= 8): 8 state rows of one head per threadgroup, one
 // simdgroup per row with lane l holding states 4l .. 4l + 3 (coalesced float4 loads and stores); the conv of the
 // head group's B and C channels (one per thread), the rows' x channels and dt are staged in threadgroup memory once.
@@ -234,6 +306,92 @@ NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const d
     }
   }
 }
+
+// The same short-pass scan with RPS state rows per simdgroup: 8 RPS rows of a head per threadgroup (the dense Nemotron
+// Nano models: head dim 80, 40 or 80 rows), so the head group's B / C conv, the rows' x and dt are staged once for 8 RPS
+// rows instead of 8 (nh_ssm1 at head dim 80: ten threadgroups per head each stage the group's 256 B / C channels, ~70
+// GB/s of state traffic on an M1 Pro). Each row's update is nh_ssm1's, in the same order: the same outputs to the bit.
+// grid: NH * HD / (8 RPS) threadgroups x 256 threads; HD % (8 RPS) == 0.
+template <int RPS>
+NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device float* state, device float* y,
+                             const device float* conv_w, const device float* conv_b, const device float* A,
+                             const device float* Dsk, const device float* dt_bias, constant NhSsmParams& p,
+                             const device uint* live, const device float* zp, uint np, uint tgi, uint tid, uint sg,
+                             uint lane, threadgroup float4 (*sbc)[64], threadgroup float* sx, threadgroup float (*sdt)[2]) {
+  constexpr uint RT = 8 * RPS;  // state rows per threadgroup
+  const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
+  const uint tg_per_head = p.HD / RT;
+  const uint h = tgi / tg_per_head, row0 = (tgi % tg_per_head) * RT;
+  const uint g = h / (p.NH / p.NG);
+  const uint cbc = DI + (tid < 128 ? g * p.DS + tid : p.NG * p.DS + g * p.DS + (tid - 128));
+  const float Ah = A[h], Dh = Dsk[h], dtb = dt_bias[h];
+  const uint T = p.write ? p.T : min(p.T, live[0]);
+  const uint n = np + T;
+  for (uint c = 0; c < n; ++c) {
+    ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc);
+    if (tid < RT) sx[c * RT + tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid);
+    if (tid == RT) {
+      const float zdt = c < np ? zp[size_t(c) * p.zx_stride + DI + CH + h] : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
+      const float dt = softplus(zdt + dtb);
+      sdt[c][0] = dt;
+      sdt[c][1] = metal::precise::exp(dt * Ah);
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  device float4* sp[RPS];
+  float4 st[RPS];
+  _Pragma("clang loop unroll(full)")
+  for (int i = 0; i < RPS; ++i) {
+    sp[i] = (device float4*)(state + (size_t(h) * p.HD + row0 + sg * RPS + uint(i)) * p.DS) + lane;
+    st[i] = *sp[i];
+  }
+  for (uint c = 0; c < n; ++c) {
+    const float dt = sdt[c][0], dA = sdt[c][1];
+    _Pragma("clang loop unroll(full)")
+    for (int i = 0; i < RPS; ++i) {
+      const uint r = sg * RPS + uint(i);
+      const float xv = sx[c * RT + r];
+      st[i] = st[i] * dA + sbc[c][lane] * (xv * dt);
+      if (c + 1 == np) *sp[i] = st[i];  // the pending rows committed
+      if (c < np) continue;
+      const float acc = simd_sum(dot(st[i], sbc[c][32 + lane]));
+      if (lane == 0) {
+        const uint t = c - np, cx = h * p.HD + row0 + r;
+        const float z = zx[size_t(t) * p.zx_stride + cx];
+        y[size_t(t) * DI + cx] = (acc + Dh * xv) * silu(z);
+      }
+    }
+  }
+  if (p.write && T > 0) {
+    _Pragma("clang loop unroll(full)")
+    for (int i = 0; i < RPS; ++i) *sp[i] = st[i];
+    // one row (decode): the conv input goes into this position's ring slot here (read by no head in this pass)
+    if (p.T == 1 && np == 0) {
+      const uint slot = (p.pos0 & 3u) * CH;
+      if (tid < RT) ring[slot + h * p.HD + row0 + tid] = zx[DI + h * p.HD + row0 + tid];
+      if (h % (p.NH / p.NG) == 0 && row0 == 0) ring[slot + cbc] = zx[DI + cbc];
+    }
+  }
+}
+
+#define NH_SSM1R(NAME, RPS)                                                                                        \
+  [[kernel]] void NAME(const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]],                     \
+                       device float* state [[buffer(2)]], device float* y [[buffer(3)]],                          \
+                       const device float* conv_w [[buffer(4)]], const device float* conv_b [[buffer(5)]],        \
+                       const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],                \
+                       const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],          \
+                       const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],             \
+                       constant NhSsm1P& q [[buffer(12)]], uint tgi [[threadgroup_position_in_grid]],             \
+                       uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
+                       uint lane [[thread_index_in_simdgroup]]) {                                                 \
+    threadgroup float4 sbc[2 * kSsmNB][64];                                                                        \
+    threadgroup float sx[2 * kSsmNB * 8 * RPS];                                                                    \
+    threadgroup float sdt[2 * kSsmNB][2];                                                                          \
+    nh_ssm1r_impl<RPS>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, tgi, tid, sg, lane,  \
+                       sbc, sx, sdt);                                                                              \
+  }
+NH_SSM1R(nh_ssm1r5, 5)    // 40 rows per threadgroup
+NH_SSM1R(nh_ssm1r10, 10)  // 80 rows: a head per threadgroup at head dim 80
 
 // The conv ring after a pass of T rows at pos0: the raw xBC of its last min(T, 3) rows into their slots.
 // grid: ceil(CH * min(T, 3) / 256) x 256 threads

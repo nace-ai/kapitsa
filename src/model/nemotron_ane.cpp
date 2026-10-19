@@ -90,6 +90,8 @@ NhAne::NhAne(NemotronH& m, const NhAneConfig& c) : m_(m), cfg_(c) {
     if (mfmt_.empty()) mfmt_ = fi;
     if ((fi != "fp4" && fi != "fp8") || fi != fo || fi != mfmt_)
       throw std::runtime_error("the Mamba projections are neither NVFP4 nor FP8");
+    if (l.in.l2 || l.out.l2)  // (the staging kernels read layout L0; a dense model on the M1 repacks to L2)
+      throw std::runtime_error("the Mamba projections' NVFP4 codes are in layout L2");
   }
   for (int i : moe_) {
     const NhLayer& l = m.layers()[size_t(i)];

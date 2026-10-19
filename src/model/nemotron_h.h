@@ -1,14 +1,16 @@
-// NVIDIA Nemotron-H hybrid (Mamba-2 + attention + LatentMoE with per-layer expert counts and widths), from NVIDIA's
-// safetensors checkpoints as they are: Nemotron 3.5 Bolt 74B-A9B (IQ2_XXS experts, NVFP4 Mamba projections, Q8_0 LM
-// head / attention / latent projections as GGUF blocks) and Nemotron 3.5 Super-VL 120B-A12B (NVFP4 experts and shared
-// expert, FP8 E4M3 Mamba projections / attention / LM head with one scale per tensor, BF16 latent projections), BF16
-// embedding and router. Weights go into GPU buffers at load with codes and scales apart
+// NVIDIA Nemotron-H hybrid (Mamba-2 + attention + LatentMoE with per-layer expert counts and widths, or dense relu^2
+// MLP layers), from NVIDIA's safetensors checkpoints as they are: Nemotron 3.5 Bolt 74B-A9B (IQ2_XXS experts, NVFP4
+// Mamba projections, Q8_0 LM head / attention / latent projections as GGUF blocks) and Nemotron 3.5 Super-VL 120B-A12B
+// (NVFP4 experts and shared expert, FP8 E4M3 Mamba projections / attention / LM head with one scale per tensor, BF16
+// latent projections), BF16 embedding and router; the dense Nemotron Nano 4B (BF16) and Nano 9B v2 (NVFP4 with BF16
+// attention, first and last layers and LM head). Weights go into GPU buffers at load with codes and scales apart
 // (src/kernels/nemotron/nh_mv.metal). No vision tower.
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
 #include "model/nemotron_ane.h"
 
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <string>
@@ -19,8 +21,8 @@ namespace ni {
 
 struct NhConfig {
   int hidden = 0, layers = 0, vocab = 0;
-  std::vector<char> kind;  // per layer: 'M' Mamba-2, 'A' attention, 'E' LatentMoE
-  // Mamba-2
+  std::vector<char> kind;  // per layer: 'M' Mamba-2, 'A' attention, 'E' LatentMoE, 'D' dense MLP ('-' in the pattern)
+  // Mamba-2 (head_dim 64, or 80: the Nano 4B / 9B v2)
   int d_inner = 0, d_state = 0, n_group = 0, n_head = 0, head_dim = 0, conv_k = 4;
   int conv_ch() const { return d_inner + 2 * n_group * d_state; }
   int in_proj() const { return 2 * d_inner + 2 * n_group * d_state + n_head; }
@@ -32,6 +34,10 @@ struct NhConfig {
   bool w_norm = true;
   std::vector<int> n_exp, top_k, exp_I;
   int max_E = 0, max_k = 0, max_I = 0;
+  // dense MLP layers: relu^2(x W_up^T) W_down^T, the shared expert's computation (per layer: the intermediate size)
+  std::vector<int> mlp_I;
+  int max_mlp_I = 0;
+  int ffn_I() const { return std::max(shared_I, max_mlp_I); }  // the widest relu^2 intermediate of a row
   float eps = 1e-5f;
   std::vector<int> eos;
   int bos = -1;
@@ -74,7 +80,7 @@ struct NhLayer {
   Buffer conv_w, conv_b, A, D, dt_bias, gnorm;
   // attention
   NhMat q, k, v, o;
-  // LatentMoE
+  // LatentMoE; up_s / down_s: its shared expert, or a dense MLP layer's ('D') up / down projections (the same product)
   NhMat router, lat_down, lat_up, up_e, down_e, up_s, down_s;
   Buffer exp_bias;
   int E = 0, k_used = 0, I = 0;
@@ -208,6 +214,7 @@ class NemotronH : public Model {
                const Buffer* zp = nullptr, int np = 0, int parts = 3);
   void enc_attn(Encoder& e, Seq& s, int li, int pos0, int R);
   void enc_moe(Encoder& e, const NhLayer& L, int R);
+  void enc_mlp(Encoder& e, const NhLayer& L, int R);
   // prefill of T rows (> kMaxRows) with GEMMs; the final hidden rows (pre-norm) stay in px_
   void enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T);
   void alloc_prefill(int T);
@@ -251,6 +258,13 @@ class NemotronH : public Model {
   bool x4_ = true;  // NVFP4 x4 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X4=0: the older ones
   bool x8_ = true;  // FP8 x8 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X8=0: the generic ones
   Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
+  // A dense model (no MoE layers: Nemotron Nano 4B / 9B v2). Its products of K % 128 != 0 (hidden 3136, the 9B's MLP
+  // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t), which the MoE models' paths
+  // do not take.
+  bool dense_ = false;
+  // NVFP4 codes in layout L2 (nh_x_fp4.metal): the dense models on the M1's GPU family, as Dory (NI_NH_FP4=l0 / l2
+  // overrides); every NVFP4 product then runs on the x4 kernels or nh_gemm_fp4l2_*
+  bool fp4_l2_ = false;
   bool x2_ = true;  // IQ2_XXS x2 kernels (subnormal-half weights); NI_NH_X2=0: the older ones (fused decode excepted)
   Buffer x2sorted_, x2tiles_, x2args_, x2rank_;  // verify routed experts grouped by expert (nh_x2_bucket)
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows

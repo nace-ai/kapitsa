@@ -250,3 +250,4 @@ NI_INLINE void nh_attn_pf2_impl(const device float* q, const device half* kc, co
   }
 // name: nh_attn_pf2_q<QR>_h<NSG>_k<BK>
 NH_ATTN_PF2(nh_attn_pf2_q1_h4_k32, 1, 4, 32)
+NH_ATTN_PF2(nh_attn_pf2_q1_h5_k32, 1, 5, 32)  // 5 query heads per KV head (Nemotron Nano 4B / 9B v2: 40 over 8)
