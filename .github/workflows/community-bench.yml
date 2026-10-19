@@ -81,6 +81,11 @@ jobs:
           git switch -c "$branch"
           git commit -m "bench/community/RESULTS.md: the community results, rewritten from bench/community/results" -- bench/community/RESULTS.md
           git push origin "$branch"
-          gh pr create --base main --head "$branch" --title "Community results: RESULTS.md rewritten" \
-            --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."
+          if ! gh pr create --base main --head "$branch" --title "Community results: RESULTS.md rewritten" \
+            --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."; then
+            # the repository's "Allow GitHub Actions to create and approve pull requests" is off: no branch left behind
+            git push origin --delete "$branch"
+            echo "::error::GitHub Actions may not open pull requests here (Settings, Actions, General: Allow GitHub Actions to create and approve pull requests). Until then run python3 tools/community_table.py and land RESULTS.md in a pull request."
+            exit 1
+          fi
           gh pr merge "$branch" --squash --delete-branch
