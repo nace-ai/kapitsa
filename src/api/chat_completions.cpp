@@ -21,6 +21,21 @@ ojson chat_tool_calls(const std::vector<ToolCall>& tcs, size_t index0, bool with
   return a;
 }
 
+ojson chat_error(const std::string& message, const std::string& type, const std::string& code, const std::string& param) {
+  return {{"error",
+           {{"message", message}, {"type", type}, {"param", param.empty() ? ojson() : ojson(param)},
+            {"code", code.empty() ? ojson() : ojson(code)}}}};
+}
+
+std::pair<int, ojson> chat_failure(const ChatResult& res) {
+  if (res.prompt_limit > 0)
+    return {400, chat_error("This model's maximum context length is " + std::to_string(res.prompt_limit) +
+                                " tokens. However, your messages resulted in " + std::to_string(res.prompt_tokens) +
+                                " tokens. Please reduce the length of the messages.",
+                            "invalid_request_error", "context_length_exceeded", "messages")};
+  return {400, chat_error(res.error.empty() ? "the request failed" : res.error)};
+}
+
 std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage) const {
   ojson c{{"id", id_},
           {"object", "chat.completion.chunk"},
@@ -52,19 +67,15 @@ std::string ChatCompletionsStream::keepalive() {
   // socket timer; opencode's chunkTimeout: 300 s in 1.x, 900 s in 2.x's own OpenAI-compatible client) or its parsed
   // SSE events, which leave comments out (opencode 2's AI SDK path moves its deadline only on an event). A chunk
   // resets both kinds, a comment only the first, and parsers that read every line as "data: " JSON fail on a comment.
-  // Clients skip the empty content, as they do the role chunk's (the AI SDK and opencode add text only when non-empty).
-  return chunk(ojson{{"content", ""}}, nullptr);
+  // The delta carries nothing, not even empty content, so no client takes it for the start of text, wherever it lands
+  // (a reply also goes quiet mid-reasoning while the parser holds back a tool call, or while it waits for memory).
+  return chunk(ojson::object(), nullptr);
 }
 
 std::string ChatCompletionsStream::end(const ChatResult& res) {
-  std::string s;
-  if (res.finish_reason == "error") {
-    s = "data: " + dump(ojson{{"error", {{"message", res.error}, {"type", "invalid_request_error"}}}}) + "\n\n";
-  } else if (res.finish_reason != "cancelled") {
-    const ojson u = chat_usage(res);
-    s = chunk(ojson::object(), res.finish_reason, &u);
-  }
-  return s + "data: [DONE]\n\n";
+  if (res.finish_reason == "error") return "data: " + dump(chat_failure(res).second) + "\n\ndata: [DONE]\n\n";
+  const ojson u = chat_usage(res);
+  return chunk(ojson::object(), res.finish_reason, &u) + "data: [DONE]\n\n";
 }
 
 }  // namespace ni::api

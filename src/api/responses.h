@@ -83,7 +83,6 @@ class ResponsesStream : public StreamWriter {
   std::string item_id_, text_;  // the open item
   ojson output_ = ojson::array();
   ojson final_;
-  bool items_ = false;  // an output item has been added (keepalives are then SSE comments)
 };
 
 // The whole response of a non-streamed request: the output items a stream would produce

@@ -223,7 +223,7 @@ with oc.responses.stream(model="error", input="hi") as s:
 check("responses: an error after the start is a response.failed event", types[-1] == "response.failed", types)
 
 # ---------------------------------------------------------------- OpenAI Chat Completions (streams, a keepalive chunk
-# after the role chunk and after every delta)
+# after the role chunk and after every delta; a prompt over the context is a plain 400)
 
 CHUNK = openai.types.chat.ChatCompletionChunk
 chat_want = {"text": ("stop", "", "Hello", 0), "reasoning-text": ("stop", "Think.", "Hi", 0),
@@ -245,10 +245,10 @@ for name, (finish, think, text, ncalls) in chat_want.items():
           len(chunks) == len(events) and content == text and reasoning == think and
           chunks[-1].choices[0].finish_reason == finish and chunks[-1].usage.prompt_tokens_details.cached_tokens == 60,
           [c.model_dump(exclude_unset=True) for c in chunks])
-    keep = [c for c in chunks if c.choices[0].delta.content == "" and c.choices[0].delta.role is None]
-    check(f"chat {name}: each keepalive comes out as a chunk with empty content and no finish_reason",
-          len(keep) == sum(d["choices"][0]["delta"] == {"content": ""} for _, d in events) >= 2 and
-          all(c.choices[0].finish_reason is None for c in keep), [c.model_dump(exclude_unset=True) for c in keep])
+    keep = [c for c in chunks if c.choices[0].delta.model_dump(exclude_unset=True) == {} and c.choices[0].finish_reason is None]
+    check(f"chat {name}: each keepalive comes out as a chunk with an empty delta and no finish_reason",
+          len(keep) == sum(d["choices"][0]["delta"] == {} and d["choices"][0]["finish_reason"] is None for _, d in events) >= 2,
+          [c.model_dump(exclude_unset=True) for c in chunks])
     with oc.chat.completions.stream(model=name, messages=MSG) as s:
         for _ in s:
             pass
@@ -270,6 +270,12 @@ try:
     check("chat: an error event in the stream raises", False, "no error")
 except openai.APIError as e:
     check("chat: an error event in the stream raises APIError with its message", "the engine failed" in str(e), e)
+try:
+    oc.chat.completions.create(model="too-long", messages=MSG, stream=True)
+    check("chat: a too-long prompt raises BadRequestError", False, "no error")
+except openai.BadRequestError as e:
+    check("chat: a too-long prompt, streamed, raises BadRequestError with code context_length_exceeded",
+          e.status_code == 400 and e.code == "context_length_exceeded" and "maximum context length" in str(e), e)
 
 server.shutdown()
 print("FAILED: %d" % fails if fails else "ALL PASSED")

@@ -250,10 +250,13 @@ class Engine {
   // one); with every slot busy a request waits for one, first come first served. `on_prompt`, if given, is called once
   // the prompt is tokenized and matched against the slot's cache, before the prefill, with prompt_tokens and
   // cached_tokens set (not when the request fails before that). `cancelled`, if given, is polled while the request
-  // waits for a slot or for memory (a client gone before its first token).
+  // waits for a slot or for memory (a client gone before its first token). `on_accepted`, if given, is called earlier,
+  // once the prompt is rendered, tokenized and within the context (prompt_tokens set), before the request waits for the
+  // GPU or a slot; returning false gives the request up ("cancelled").
   ChatResult chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
                   const std::function<void(const ChatResult&)>& on_prompt = nullptr,
-                  const std::function<bool()>& cancelled = nullptr);
+                  const std::function<bool()>& cancelled = nullptr,
+                  const std::function<bool(const ChatResult&)>& on_accepted = nullptr);
   // History prefill (NI_HISTORY_PREFILL): after a reply, prefills the conversation as the next request
   // will render it (the template drops this turn's think block, so the generated tokens in the live
   // state do not match it) from the turn-boundary checkpoint, so that a follow-up prefills only its

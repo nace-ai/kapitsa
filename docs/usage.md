@@ -229,11 +229,12 @@ OpenAI clients use the base URL `http://127.0.0.1:8000/v1`, Anthropic clients `h
 | `GET /health` | `{"status":"ok"}` |
 | `GET /` | The chat page: one file that talks only to this server and keeps its conversations in the browser. |
 
-Every API streams (server-sent events) or answers in one JSON reply. A stream with nothing to send for 15 s (a long
-prefill) gets a keepalive, so clients do not drop it: a `ping` event (Messages), a `response.in_progress` event
-(Responses), a chunk with empty `content` (Chat Completions). A prompt longer than the context is a 400 error
-(Messages: "prompt is too long", which Claude Code answers by compacting; Responses: `context_length_exceeded`); a
-streamed chat completion starts at once, before its request has a slot, and reports it as an `error` event.
+Every API streams (server-sent events) or answers in one JSON reply. A prompt longer than the context is a 400 error,
+streamed or not (Messages: "prompt is too long", which Claude Code answers by compacting; Responses and Chat
+Completions: `context_length_exceeded`). A stream with nothing to send for 15 s (a long prefill; for Chat Completions,
+whose stream starts before the request has a slot, also the wait for one) gets a keepalive, so clients do not drop
+it: a `ping` event (Messages), a `response.in_progress` event (Responses), a chunk with an empty delta (Chat
+Completions).
 
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"model": "qwen3.5-4b",

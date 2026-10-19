@@ -534,8 +534,13 @@ void responses_events() {
     k.begin(result("stop"));
     const std::string before = k.keepalive();
     k.delta(content("x"));
-    check(parse_sse(before)[0].name == "response.in_progress" && k.keepalive() == ": keepalive\n\n",
-          "responses stream: keepalive is response.in_progress before any output, then a comment");
+    const std::string after = k.keepalive();
+    const auto ka = parse_sse(before), kb = parse_sse(after);
+    check(ka.size() == 1 && kb.size() == 1 && ka[0].name == "response.in_progress" && kb[0].name == "response.in_progress" &&
+              kb[0].data["sequence_number"].get<int>() > ka[0].data["sequence_number"].get<int>() + 1 &&
+              kb[0].data["response"]["output"].empty(),
+          "responses stream: keepalive is response.in_progress, before output and after it (an event Codex's idle timer "
+          "counts), numbered in sequence", after);
   }
   {
     ChatResult r = result("error");
@@ -563,7 +568,8 @@ void responses_events() {
   }
 }
 
-// The Chat Completions stream: the bytes the server wrote before its chunks came from a StreamWriter, and the keepalive
+// The Chat Completions stream: the bytes the server wrote before its chunks came from a StreamWriter, the keepalive, and
+// the errors (a failure before the stream starts is chat_failure's HTTP error; after it, the same error as an event)
 void chat_events() {
   auto chunk = [](const std::string& delta, const std::string& finish = "null", const std::string& usage = "") {
     return R"(data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":123,"model":"m","choices":[{"index":0,"delta":)" +
@@ -594,32 +600,51 @@ void chat_events() {
     ChatDelta d = reasoning("r");
     d.content = "c";
     d.tool_calls = {{"call_A", "Read", R"({"file_path":"/a"})"}, {"call_B", "Read", R"({"file_path":"/b"})"}};
-    std::string s = w.begin(ChatResult{}) + w.delta(d) + w.delta(call("call_C", "Read", R"({"file_path":"/c"})"));
+    std::string s = w.begin(ChatResult{});
+    s += w.delta(d);
+    s += w.delta(call("call_C", "Read", R"({"file_path":"/c"})"));
     const std::string want = role + chunk(R"({"reasoning_content":"r"})") + chunk(R"({"content":"c"})") +
                              chunk(R"({"tool_calls":[)" + tool("call_A", "/a", 0) + "," + tool("call_B", "/b", 1) + "]}") +
                              chunk(R"({"tool_calls":[)" + tool("call_C", "/c", 2) + "]}");
     check(s == want, "chat stream: a delta's reasoning, text and calls are a chunk each, in that order", s);
   }
   {
-    ChatCompletionsStream w("chatcmpl-1", "m", 123);
-    ChatResult err = result("error");
-    err.error = "prompt (140000 tokens) exceeds the context window (131072)";
-    const std::string s = w.begin(ChatResult{}) + w.end(err);
-    check(s == role + R"j(data: {"error":{"message":"prompt (140000 tokens) exceeds the context window (131072)","type":"invalid_request_error"}})j" "\n\n" + done,
-          "chat stream: a failure before any token is an error event after the role chunk, then [DONE]", s);
     ChatResult cut = result("length");
     cut.loops = 2;
     check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(cut) ==
               chunk("{}", R"("length")", usage.substr(0, usage.size() - 1) + R"(,"kapitsa":{"loops":2}})") + done,
           "chat stream: a length cut, a looped model's loop count in usage");
-    check(ChatCompletionsStream("chatcmpl-1", "m", 123).end(result("cancelled")) == done,
-          "chat stream: a cancelled reply ends with [DONE] alone");
+  }
+  {
+    ChatResult big = result("error");
+    big.prompt_tokens = 140000, big.prompt_limit = 131070;
+    big.error = "prompt (140000 tokens) exceeds the context window (131072)";
+    auto [st, body] = chat_failure(big);
+    check(st == 400 && body == J(R"({"error": {"message": "This model's maximum context length is 131070 tokens. However, your messages resulted in 140000 tokens. Please reduce the length of the messages.",
+                                                "type": "invalid_request_error", "param": "messages", "code": "context_length_exceeded"}})"),
+          "chat: a prompt the context cannot hold is a 400 context_length_exceeded, in OpenAI's words", body.dump());
+    ChatResult bad = result("error");
+    bad.error = "images: the image at https://x/a.png can't be read";
+    bad.invalid_request = true;
+    auto [st2, body2] = chat_failure(bad);
+    check(st2 == 400 && body2 == J(R"({"error": {"message": "images: the image at https://x/a.png can't be read",
+                                                  "type": "invalid_request_error", "param": null, "code": null}})"),
+          "chat: another failure is a 400 with the engine's message", body2.dump());
+    ChatCompletionsStream w("chatcmpl-1", "m", 123);
+    std::string s = w.begin(ChatResult{});
+    s += w.end(big);  // the memory for the KV cache ran out after the stream started: the same error, as an event
+    check(s == role + "data: " + api::dump(body) + "\n\n" + done,
+          "chat stream: a failure after the start is chat_failure's error as an event, then [DONE]", s);
   }
   {
     ChatCompletionsStream w("chatcmpl-1", "m", 123);
     const std::string k = w.keepalive();
-    check(k == chunk(R"({"content":""})"), "chat stream: the keepalive is a chunk with empty content, finish_reason null", k);
-    std::string s = w.begin(ChatResult{}) + w.keepalive() + w.delta(content("Hi")) + w.keepalive() + w.end(result("stop"));
+    check(k == chunk("{}"), "chat stream: the keepalive is a chunk with an empty delta, finish_reason null", k);
+    std::string s = w.begin(ChatResult{});
+    s += w.keepalive();
+    s += w.delta(content("Hi"));
+    s += w.keepalive();
+    s += w.end(result("stop"));
     std::string text;
     int chunks = 0;
     for (const auto& e : parse_sse(s.substr(0, s.size() - done.size()))) {
@@ -980,14 +1005,22 @@ void dump_cases(const std::string& dir) {
       if (c.name != "error") write("anthropic-" + c.name + (show ? "" : "-omitted") + ".json", api::dump(messages_response("msg_" + c.name, "m", r, show)));
     }
     ResponsesStream w(rq, "resp_" + c.name, "m", 1760000000);
-    std::string sse = w.begin(r) + w.keepalive();
-    for (auto& d : c.deltas) sse += w.delta(d) + w.keepalive();
+    std::string sse = w.begin(r);
+    sse += w.keepalive();  // a statement each: keepalive() numbers its event after the ones before it
+    for (auto& d : c.deltas) {
+      sse += w.delta(d);
+      sse += w.keepalive();
+    }
     sse += w.end(r);
     write("responses-" + c.name + ".sse", sse);
     if (c.name != "error") write("responses-" + c.name + ".json", api::dump(responses_response(rq, "resp_" + c.name, "m", 1760000000, r)));
     ChatCompletionsStream cw("chatcmpl-" + c.name, "m", 1760000000);
-    std::string chat = cw.begin(r) + cw.keepalive();
-    for (auto& d : c.deltas) chat += cw.delta(d) + cw.keepalive();
+    std::string chat = cw.begin(r);
+    chat += cw.keepalive();
+    for (auto& d : c.deltas) {
+      chat += cw.delta(d);
+      chat += cw.keepalive();
+    }
     chat += cw.end(r);
     write("chat-" + c.name + ".sse", chat);
   }
@@ -1000,6 +1033,9 @@ void dump_cases(const std::string& dir) {
   auto [rs, rb] = responses_failure(big);
   write("responses-too-long.json", api::dump(rb));
   write("responses-too-long.status", std::to_string(rs));
+  auto [cs, cb] = chat_failure(big);
+  write("chat-too-long.json", api::dump(cb));
+  write("chat-too-long.status", std::to_string(cs));
   write("anthropic-count.json", api::dump(ojson{{"input_tokens", 1234}}));
 }
 

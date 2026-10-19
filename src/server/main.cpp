@@ -378,35 +378,46 @@ std::string ni::port_problem(const std::string& host, int port) {
 }
 
 // One streamed reply. The engine runs in a thread of its own and hands the writer's events to the connection's thread
-// through a queue. So an Anthropic or Responses reply is still a plain HTTP error when the request fails before its
-// first event (a prompt the context cannot hold: Claude Code and Codex recover from those errors), and that event goes
-// out as soon as the prompt is counted; a Chat Completions stream starts at once, as it always has, and reports a
-// failure in the stream. Either way the connection gets keepalive events while the engine waits for another request
-// or prefills a long prompt (clients drop a stream that is idle for minutes), and a client that goes away meanwhile is
-// noticed within a second (the engine then drops a Chat Completions request that still waits for a slot).
+// through a queue. So a reply is still a plain HTTP error when the request fails before its stream starts (a prompt the
+// context cannot hold: Claude Code, Codex and opencode recover from those errors by compacting). An Anthropic or
+// Responses stream starts once the prompt is matched against its slot's cache (its first event carries the cached
+// tokens); a Chat Completions stream as soon as the prompt is known to fit, before the request waits for a slot, and
+// the engine takes a slot only once that first chunk is out, so a client gone by then costs no prefill. From then on
+// the connection gets keepalive events while the engine is quiet (a wait for a slot or for memory, a long prefill:
+// clients drop a stream that is idle for minutes), and a client that goes away is noticed within a second.
 struct StreamJob {
   std::mutex mu;  // the queue, the flags and every call into the writer
   std::condition_variable cv;
   std::deque<std::string> out;
-  bool started = false, done = false;
+  bool started = false, sent = false, done = false;  // sent: the first event is out
   std::atomic<bool> cancelled{false};
   ChatResult result;
   std::thread worker;
-  ~StreamJob() {
+  void cancel() {  // the client is gone
+    std::lock_guard<std::mutex> lk(mu);
     cancelled = true;
+    cv.notify_all();
+  }
+  ~StreamJob() {
+    cancel();
     if (worker.joinable()) worker.join();
   }
 };
 
-// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before any; with no
-// failure reply the stream starts at once, begin() before the request runs. Then calls after(result) (the reply is
-// out) from the connection's thread.
+// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before the stream starts:
+// once the prompt is matched against the slot's cache, or `early`, as soon as the request is accepted. Then calls
+// after(result) (the reply is out) from the connection's thread.
 static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
-                         std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter) {
+                         std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter,
+                         bool early = false) {
   auto job = std::make_shared<StreamJob>();
-  if (!failure) job->out.push_back(w->begin(ChatResult{})), job->started = true;
-  job->worker = std::thread([&engine, r, w, meter, raw = job.get()] {
+  job->worker = std::thread([&engine, r, w, meter, early, raw = job.get()] {
+    auto start = [&](const ChatResult& prompt) {  // with raw->mu held
+      raw->out.push_back(w->begin(prompt));
+      raw->started = true;
+      raw->cv.notify_all();
+    };
     ChatResult out = engine.chat(
         r,
         [&](const ChatDelta& d) {
@@ -418,13 +429,19 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
           return !raw->cancelled.load();
         },
         [&](const ChatResult& prompt) {
+          if (early) return;
           std::lock_guard<std::mutex> lk(raw->mu);
-          if (raw->started) return;  // started at once
-          raw->out.push_back(w->begin(prompt));
-          raw->started = true;
-          raw->cv.notify_all();
+          start(prompt);
         },
-        [raw] { return raw->cancelled.load(); });
+        [raw] { return raw->cancelled.load(); },
+        [&](const ChatResult& prompt) {
+          if (!early) return true;
+          std::unique_lock<std::mutex> lk(raw->mu);
+          start(prompt);
+          // the engine goes on to a slot once the first event is out: no prefill for a client already gone
+          raw->cv.wait(lk, [&] { return raw->sent || raw->cancelled.load(); });
+          return !raw->cancelled.load();
+        });
     std::lock_guard<std::mutex> lk(raw->mu);
     if (raw->started && out.finish_reason != "cancelled") raw->out.push_back(w->end(out));
     raw->result = std::move(out);
@@ -445,14 +462,15 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
   }
   res.set_header("Cache-Control", "no-cache");
   res.set_chunked_content_provider("text/event-stream", [job, w, after, meter](size_t, httplib::DataSink& sink) {
-    // the client is gone: the engine stops at its next token, or drops the request while it waits for a slot
+    // the client is gone: the engine stops at its next token, or gives the request up before it takes a slot
     auto gone = [&] {
-      job->cancelled = true;
+      job->cancel();
       job->worker.join();
       ui::done(meter, job->result);
       return false;
     };
-    auto sent = std::chrono::steady_clock::now();
+    auto last = std::chrono::steady_clock::now();  // the last write
+    bool first = true;
     for (;;) {
       std::deque<std::string> batch;
       bool done;
@@ -460,7 +478,7 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
         std::unique_lock<std::mutex> lk(job->mu);
         // a second at a time while nothing comes, to see whether the client is still there
         job->cv.wait_for(lk, std::chrono::seconds(1), [&] { return !job->out.empty() || job->done; });
-        if (job->out.empty() && !job->done && std::chrono::steady_clock::now() - sent >= std::chrono::seconds(15))
+        if (job->out.empty() && !job->done && std::chrono::steady_clock::now() - last >= std::chrono::seconds(15))
           job->out.push_back(w->keepalive());  // 15 s without an event
         batch.swap(job->out);
         done = job->done;
@@ -468,7 +486,13 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
       if (batch.empty() && !sink.is_writable()) return gone();
       for (const auto& e : batch)
         if (!sink.write(e.data(), e.size())) return gone();
-      if (!batch.empty()) sent = std::chrono::steady_clock::now();
+      if (!batch.empty()) last = std::chrono::steady_clock::now();
+      if (!batch.empty() && first) {  // an early stream's engine goes on to a slot now
+        first = false;
+        std::lock_guard<std::mutex> lk(job->mu);
+        job->sent = true;
+        job->cv.notify_all();
+      }
       if (done) break;
     }
     sink.done();
@@ -732,16 +756,16 @@ static int serve(int argc, char** argv, int first) {
       r = parse_request(body, engine.request_defaults());
     } catch (const std::exception& ex) {
       res.status = 400;
-      res.set_content(json{{"error", {{"message", std::string("bad request: ") + ex.what()}, {"type", "invalid_request_error"}}}}.dump(),
-                      "application/json");
+      res.set_content(api::dump(api::chat_error(std::string("bad request: ") + ex.what())), "application/json");
       return;
     }
+    const bool stream = body.contains("stream") && body["stream"].is_boolean() && body["stream"].get<bool>();
     const std::string id = "chatcmpl-" + std::to_string(std::time(nullptr)) + std::to_string(rand() % 100000);
     const long created = long(std::time(nullptr));
     const std::string model = engine.model_id();
     const auto meter = ui::meter(req, r);
     r.live = ui::live_of(meter);
-    if (!body.value("stream", false)) {
+    if (!stream) {
       ChatResult out = engine.chat(r, [&](const ChatDelta&) {
         ui::token(meter);
         return true;
@@ -749,8 +773,9 @@ static int serve(int argc, char** argv, int first) {
       ui::done(meter, out);
       prefill_after(r, out);
       if (out.finish_reason == "error") {
-        res.status = 400;
-        res.set_content(json{{"error", {{"message", out.error}, {"type", "invalid_request_error"}}}}.dump(), "application/json");
+        auto [status, err] = api::chat_failure(out);
+        res.status = status;
+        res.set_content(api::dump(err), "application/json");
         return;
       }
       json msg{{"role", "assistant"}, {"content", out.content}};
@@ -762,12 +787,12 @@ static int serve(int argc, char** argv, int first) {
              {"model", model},
              {"choices", json::array({json{{"index", 0}, {"message", msg}, {"finish_reason", out.finish_reason}}})},
              {"usage", api::chat_usage(out)}};
-      res.set_content(j.dump(), "application/json");
+      res.set_content(api::dump(j), "application/json");
       return;
     }
-    // the stream (src/api/chat_completions.cpp) starts at once: no failure reply, a failure is its last event
-    stream_reply(engine, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, nullptr,
-                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter);
+    // the stream (src/api/chat_completions.cpp) starts as soon as the prompt is known to fit, before the slot
+    stream_reply(engine, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, api::chat_failure,
+                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter, true);
   });
 
   // Anthropic Messages (src/api/anthropic.cpp)

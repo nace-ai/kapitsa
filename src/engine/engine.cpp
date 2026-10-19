@@ -1251,7 +1251,8 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
 
 ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const ChatDelta&)>& on_delta,
                         const std::function<void(const ChatResult&)>& on_prompt,
-                        const std::function<bool()>& cancelled) {
+                        const std::function<bool()>& cancelled,
+                        const std::function<bool(const ChatResult&)>& on_accepted) {
   const uint64_t arrival = ++requests_;
   // images: fetched, decoded and resized before the GPU turn (a slow download holds up no other request)
   std::vector<vision::Source> img_src;
@@ -1319,6 +1320,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return res;
   }
   const double tok_wall = now_ms() - t_req;  // template + tokenizer
+  if (on_accepted && !on_accepted(res)) {  // e.g. a stream whose client is gone before its first event
+    res.finish_reason = "cancelled";
+    return res;
+  }
 
   // ---- the GPU turn, then a free slot (first come first served when every slot is busy) ----
   std::unique_lock<TurnLock> turn(turn_);
@@ -1337,6 +1342,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   Slot* picked = nullptr;
   bool queued = false;
   for (;;) {
+    if (cancelled && cancelled()) {  // before a slot is picked: a client gone while its request waited takes none
+      if (queued) {
+        slot_queue_.erase(std::find(slot_queue_.begin(), slot_queue_.end(), arrival));
+        turn_.notify();
+      }
+      res.finish_reason = "cancelled";
+      return res;
+    }
     if (slot_queue_.empty() || slot_queue_.front() == arrival) picked = pick_slot(keys, arrival, mmp, loops);
     if (picked) break;
     if (!queued) {
@@ -1344,12 +1357,6 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       queued = true;
       logi("chat: all %d slots are busy: a request waits for one (%zu waiting; --slots sets how many requests run "
            "at once)", int(slots_.size()), slot_queue_.size());
-    }
-    if (cancelled && cancelled()) {
-      slot_queue_.erase(std::find(slot_queue_.begin(), slot_queue_.end(), arrival));
-      turn_.notify();
-      res.finish_reason = "cancelled";
-      return res;
     }
     turn_.wait_event(turn_.events(), cancelled);  // a request ending frees its slot
   }

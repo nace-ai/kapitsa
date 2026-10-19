@@ -390,7 +390,6 @@ std::string ResponsesStream::open(Kind k) {
   std::string s = close();
   open_ = k;
   text_.clear();
-  items_ = true;
   const int index = int(output_.size());
   if (k == kReasoning) {
     item_id_ = item_id("rs");
@@ -455,7 +454,6 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
   }
   for (const auto& tc : d.tool_calls) {
     s += close();
-    items_ = true;
     const int index = int(output_.size());
     ojson item;
     if (custom_.count(tc.name)) {
@@ -490,10 +488,10 @@ std::string ResponsesStream::delta(const ChatDelta& d) {
 }
 
 std::string ResponsesStream::keepalive() {
-  // before any output a lifecycle event the clients' idle timers count; after it, a comment (an in_progress event
-  // carries the response with an empty output, which a client would take for the output so far)
-  if (!items_) return event("response.in_progress", {{"response", response("in_progress", nullptr, nullptr, nullptr)}});
-  return ": keepalive\n\n";
+  // a lifecycle event, which the clients' idle timers count (Codex's, 300 s, skips SSE comments), also once output has
+  // started: the clients leave its empty output alone (Codex logs it as unhandled; the openai SDKs' stream state and
+  // the AI SDK skip it)
+  return event("response.in_progress", {{"response", response("in_progress", nullptr, nullptr, nullptr)}});
 }
 
 std::string ResponsesStream::end(const ChatResult& res) {
