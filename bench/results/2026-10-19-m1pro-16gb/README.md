@@ -39,6 +39,25 @@ follows.
 | `q35-4b-mlxvlm-mtp-b4-20261019-092521.json` | 09:29 | mlx-vlm server + MTP (block 4) | 6.9 (6.7-6.9) | — |
 | `q35-4b-lmstudio-20261019-093551.json` | 09:37 | LM Studio (MLX engine) | 44.6 (44.5-44.9) | decode: completion_tokens=511 != 512; disk: 9.9 GiB free at start, under the 10 GiB below which lmstudio keeps no prompt cache on disk |
 
+## Nemotron Dory1.0 4B ([dory](dory/))
+
+One hold of the GPU lock, 09:37-09:50, Kapitsa (the 0.1.36 release, from a copy outside any git checkout) first and
+last: `configs/dory.json`, the decode phase (`--skip greedy,prefill,tools,agent`; llama.cpp 2 runs of 256 tokens, the
+others 5 of 512).
+
+| Result file | Started | Run | Decode, T = 0.6 (tok/s): median (min-max) | Flags |
+| --- | --- | --- | ---: | --- |
+| `dory-kapitsa-perloop-20261019-093758.json` | 09:38 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 30.8 (30.0-31.7) | — |
+| `dory-kapitsa-20261019-094017.json` | 09:40 | Kapitsa (NVFP4, 2 loops, last-loop KV) | 35.2 (34.7-35.5) | — |
+| `dory-llamacpp-q5km-20261019-094216.json` | 09:43 | llama.cpp (NVIDIA fork, Q5_K_M, 2 loops, last-loop KV) | 4.4 (4.4-4.5) | decode: repetition loop (distinct-4-gram 0.4955) |
+| `dory-mlxlm-4bit-20261019-094528.json` | 09:46 | mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV) | 29.9 (29.6-30.1) | decode: content contains </think>; decode: repetition loop (distinct-4-gram 0.4786) |
+| `dory-kapitsa-perloop-20261019-094750.json` | 09:48 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 31.7 (30.7-33.6) | — |
+
+The mlx-lm result is marked invalid because one of its five answers contains `</think>`; its median is over the other
+four.
+
+## Notes
+
 - Kapitsa is the 0.1.36 release binary (954fca0). Its file records the version `cdc1ca5`: the harness takes the version
   of a binary that sits in a git checkout from that checkout, and the release was installed in `/opt/homebrew/bin`,
   which is Homebrew's own checkout. Later runs use a copy outside any checkout.

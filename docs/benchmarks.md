@@ -1117,6 +1117,28 @@ held up on this Mac too, in a sweep of 3-run decodes the same morning (T = 0.6 /
 2. The disk had 9.5 GiB free at the start, under the 10 GiB below which MTPLX keeps no prompt cache on disk (no
    effect on this phase).
 
+### Nemotron Dory1.0 4B
+
+The README's cell comes from one hold of the GPU lock, 09:37-09:50, Kapitsa first and last, the decode phase of the
+harness (the T = 0.6 coding answer; llama.cpp 2 runs of 256 tokens, the others 5 of 512) with
+[configs/dory.json](../bench/harness/configs/dory.json), as [on the M4 Pro](#nemotron-dory10-4b-2026-10-19).
+
+| Engine (setting) | Weights | T = 0.6 (tok/s): median (min-max) |
+| --- | --- | ---: |
+| **Kapitsa** 0.1.36 (last-loop KV, its default: one token per pass) | NVIDIA's NVFP4 (8-bit LM head) | **35.2** (34.7-35.5) |
+| Kapitsa (per-loop KV, `--loop-kv per`: speculative decoding), first / last | NVIDIA's NVFP4 (8-bit LM head) | 30.8 (30.0-31.7) / 31.7 (30.7-33.6) |
+| mlx-lm with its Dory pull request (`ml-explore/mlx-lm#1988` at 208065f), per-loop KV | snsnc's MLX 4-bit | 29.9 (29.6-30.1)<sup>1</sup> |
+| llama.cpp: NVIDIA's Dory fork (`brianchmielNV/llama.cpp` at 98a74c97), last-loop KV | NVIDIA's Q5_K_M GGUF | 4.4 (4.4-4.5) |
+
+All at 2 loops. Unlike on the M4 Pro (per-loop 64.1 against last-loop 59.6 tok/s), Kapitsa's per-loop speculative
+decoding is slower than its default here: a verify pass of 2-8 rows costs the M1 about 1.6 times a one-row step
+(`dory_mv_bench`, the q|k|v|g product: 170 against 108 us), more than the accepted drafts make up, so the README shows
+the default. The engines with no Dory model (Ollama 0.40.6, LM Studio with llmster 0.0.25-1, oMLX 0.7.1rc1, mlx-serve
+26.10.2, MTPLX 2.12.2) are the versions checked on the M4 Pro the same day.
+
+1. One of the five answers echoed the prompt and closed a `</think>` block, which makes the harness mark the result
+   invalid; the median is over the other four.
+
 ## Your Mac: `kapitsa bench`
 
 `kapitsa bench` runs this protocol for Kapitsa alone, from the `kapitsa` binary: no Python, no configs, no weights to

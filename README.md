@@ -93,10 +93,13 @@ mlx-lm, mlx-serve and MTPLX, Q4_0 on llama.cpp, Q4_K_M on LM Studio; on Lightnin
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
 | --- | ---: | ---: | ---: | ---: |
-| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | — | —<br><sub>no support</sub> | — | — |
+| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**35&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 4 | 30 |
 
-<sub>Short runs (3 of the coding answer each; the full protocol and Dory follow). oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner
-with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm ([details](docs/benchmarks.md#macbook-pro-m1-pro-16-gb-2026-10-19)).</sub>
+<sub>Qwen: short runs (3 coding answers each; the full protocol follows). oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP,
+MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.</sub>
+
+<sub>Dory: 2 loops; Kapitsa last-loop KV, its default (per-loop speculation: 31 on this Mac), llama.cpp NVIDIA's Dory fork on its Q5_K_M, MLX
+mlx-lm's Dory pull request on snsnc's 4-bit ([details](docs/benchmarks.md#macbook-pro-m1-pro-16-gb-2026-10-19)).</sub>
 
 <sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md).</sub>
 
