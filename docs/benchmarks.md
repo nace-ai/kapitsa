@@ -46,7 +46,8 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`, build 36c2937; other apps used the GPU during it), llama.cpp
   NVIDIA's Dory fork (98a74c97) on its Q5_K_M, MLX mlx-lm's Dory pull request (208065f) on snsnc's 4-bit.
 - Super-VL: mlx-serve 26.10.2 loads neither NVIDIA's checkpoint nor the text-only MLX 4-bit conversion
-  (`error: UnsupportedNemotronLatentMoe`). mlx-serve's DFlash on the 4B: 228 tok/s, below its MTP.
+  (`error: UnsupportedNemotronLatentMoe`). MTPLX 2.12.2 runs that conversion without MTP (it has no MTP head): 44 tok/s;
+  its memory guard aborts the 16K-token prompt (the run is INVALID for that; its decode, 4K and tool phases are valid). mlx-serve's DFlash on the 4B: 228 tok/s, below its MTP.
 - Rapid-MLX 0.16.3: on the 4B MTP with Qwen's 4-bit head, 3 drafts; on the 27B MTP on its own pack (its mtp/ sidecar,
   3 drafts; served by path it needs the head named, else it decodes plain at 32 tok/s); on the 35B no speculation (its catalog turns it off
   for this MoE).

@@ -1,0 +1,26 @@
+
+===== super-mtplx  [mtplx] MTPLX (MLX 4-bit text-only conversion, no MTP)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[01:11:26] super-mtplx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 98092 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/super-vl.json configs/lightning.json --o
+[01:11:26] super-mtplx: starting ~/.local/bin/mtplx serve --model ~/.cache/kapitsa/benchmark-models/super-vl-mlx-4bit-rapid --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --no-mtp
+[01:11:38] super-mtplx: ready after 12s (pid 11902, listener 11902)
+[01:11:43] super-mtplx:  warm-up prefill~2.9k+decode64: ok (5.09s)
+[01:11:46] super-mtplx:  warm-up tools: ok (2.71s)
+[01:12:48] super-mtplx: gpu busy (62s): com.apple.WebKit[3316] 7%
+[01:13:48] super-mtplx: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== super-mtplx
+  decode T=0.6: 44.07 tok/s (e2e 43.97; 512 tok, finish=length, d4=0.5373)
+  decode T=0.6: 44.24 tok/s (e2e 44.45; 512 tok, finish=length, d4=0.8697)
+  decode T=0.6: 44.40 tok/s (e2e 44.10; 512 tok, finish=length, d4=0.9269)
+  decode T=0.6: 43.10 tok/s (e2e 43.15; 512 tok, finish=length, d4=0.8524)
+  decode T=0.6: 42.94 tok/s (e2e 43.07; 512 tok, finish=length, d4=0.9795)
+  decode median 44.07 (min 42.94, max 44.4) over 5/5 valid
+  decode T=0: median 43.55 (min 43.27, max 43.96) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 5.24s -> 798 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [4217, 4261, 4303])
+  prefill 16000: None tok (ref 16513), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 95.55 GB, resident mapped files 0.00 GB, swap used 14343.12 MB
+  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/out-extra/results/super-mtplx-20261019-011126.json
+[01:17:06] super-mtplx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[01:17:06] super-mtplx: -> <run-root>/out-extra/results/super-mtplx-20261019-011126.json  INVALID: ['prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 1
