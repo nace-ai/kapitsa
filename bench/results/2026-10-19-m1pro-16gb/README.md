@@ -77,6 +77,46 @@ others 5 of 512).
 The mlx-lm result is marked invalid because one of its five answers contains `</think>`; its median is over the other
 four.
 
+## Rapid-MLX on Qwen3.5-4B ([rapid-mlx](rapid-mlx/))
+
+Rapid-MLX 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2) was installed after the other engines' runs. Its two
+settings in short runs ([rapid-mlx/tuning](rapid-mlx/tuning/)), 12:12-12:16, the decode phase only, as above; then the
+faster in a bracket of its own, 12:51-13:02, the full protocol, Kapitsa 0.1.36 first and last.
+
+| Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Flags |
+| --- | --- | --- | ---: | --- |
+| `tuning/q35-4b-rapidmlx-20261019-121142.json` | 12:13 | Rapid-MLX (no speculation), short run | 51.1 / — | decode: repetition loop (distinct-4-gram 0.4776) |
+| `tuning/q35-4b-rapidmlx-mtp-20261019-121356.json` | 12:15 | Rapid-MLX + MTP, short run | 44.4 / — | — |
+| `q35-4b-kapitsa-20261019-125108.json` | 12:51 | Kapitsa (DFlash drafter) | 78.4 / 88.2 | decode: repetition loop (distinct-4-gram 0.4566) |
+| `q35-4b-rapidmlx-20261019-125436.json` | 12:55 | Rapid-MLX (no speculation) | 51.5 / 55.1 | — |
+| `q35-4b-kapitsa-20261019-125911.json` | 12:59 | Kapitsa (DFlash drafter) | 89.3 / 86.8 | decode: repetition loop (3 of 5 answers) |
+
+## Qwen3.5-9B at 4-bit ([qwen3.5-9b](qwen3.5-9b/))
+
+Not in Kapitsa's catalog: lmstudio-community/Qwen3.5-9B-MLX-4bit @b455506 with z-lab/Qwen3.5-9B-DFlash @5fc3b3d.
+The configs are in [qwen3.5-9b/q35-9b.json](qwen3.5-9b/q35-9b.json) (pass it after `configs/*.json`); mlx-serve's
+folder is `tools/mlx_serve_pack.py qwen3.5-9b`. Kapitsa is the 0.1.37 release (a copy outside any git checkout).
+
+The full protocol, one hold of the GPU lock, 12:28-12:51, Kapitsa first and last:
+
+| Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Flags and invalid phases |
+| --- | --- | --- | ---: | --- |
+| `q35-9b-kapitsa-20261019-122844.json` | 12:29 | Kapitsa (DFlash drafter) | 47.1 / 54.1 | decode: repetition loop (distinct-4-gram 0.4818) |
+| `q35-9b-mlxserve-mtp-d2-20261019-123412.json` | 12:35 | mlx-serve + MTP (max depth 2) | 37.4 / 37.9 | prefill_16000: request failed (HTTP 400, the prompt does not fit mlx-serve's memory check) |
+| `q35-9b-mlxlm-20261019-123857.json` | 12:39 | mlx-lm | 29.7 / 31.2 | decode: repetition loop (distinct-4-gram 0.4532) |
+| `q35-9b-kapitsa-20261019-124541.json` | 12:46 | Kapitsa (DFlash drafter) | 50.7 / 52.1 | — |
+
+No phase swapped. Short runs before it ([qwen3.5-9b/tuning](qwen3.5-9b/tuning/)), 12:01-12:11, the decode phase only
+(`--skip greedy,prefill,tools,agent --bench-args "--decode-runs 3"`):
+
+| Result file | Started | Run | Decode, T = 0.6 (tok/s): median (min-max) |
+| --- | --- | --- | ---: |
+| `q35-9b-kapitsa-20261019-115732.json` | 12:01 | Kapitsa (DFlash drafter) | 40.2 (40.0-50.5) |
+| `q35-9b-mlxlm-20261019-120228.json` | 12:03 | mlx-lm | 29.5 (29.4-29.7) |
+| `q35-9b-mlxserve-dflash-20261019-120414.json` | 12:05 | mlx-serve + DFlash (z-lab drafter, block 4) | 29.6 (26.4-29.6) |
+| `q35-9b-mlxserve-mtp-d2-20261019-120659.json` | 12:08 | mlx-serve + MTP (max depth 2) | 37.1 (35.8-38.1) |
+| `q35-9b-mlxserve-mtp-d3-20261019-120920.json` | 12:10 | mlx-serve + MTP (max depth 3) | 35.9 (35.6-36.1) |
+
 ## Notes
 
 - Kapitsa is the 0.1.36 release binary (954fca0). Its file records the version `cdc1ca5`: the harness takes the version

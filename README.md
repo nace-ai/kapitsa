@@ -71,7 +71,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> | <sub>Rapid‑MLX</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 55 | 62 | 55 | 42 | 47 | 38 | 46 | — |
+| Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 55 | 62 | 55 | 42 | 47 | 38 | 46 | 52 |
 
 #### Nemotron
 

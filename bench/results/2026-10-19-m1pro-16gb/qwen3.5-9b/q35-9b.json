@@ -1,0 +1,198 @@
+[
+ {
+  "label": "q35-9b-kapitsa",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa (DFlash drafter)",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/qwen3.5-9b-4bit",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.5-9b-4bit",
+   "--model-id",
+   "qwen3.5-9b",
+   "--dflash",
+   "{models}/drafters/Qwen3.5-9B-DFlash",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "model": "qwen3.5-9b",
+  "requires_paths": [
+   "{models}/qwen3.5-9b-4bit/config.json",
+   "{models}/drafters/Qwen3.5-9B-DFlash/model.safetensors"
+  ],
+  "note": "lmstudio-community/Qwen3.5-9B-MLX-4bit @b455506 with z-lab's DFlash drafter z-lab/Qwen3.5-9B-DFlash @5fc3b3d."
+ },
+ {
+  "label": "q35-9b-kapitsa-plain",
+  "extends": "q35-9b-kapitsa",
+  "display": "Kapitsa (no speculation)",
+  "cmd": [
+   "{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}",
+   "serve",
+   "--model",
+   "{models}/qwen3.5-9b-4bit",
+   "--model-id",
+   "qwen3.5-9b",
+   "--dflash",
+   "none",
+   "--spec",
+   "0",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-9b-4bit/config.json"
+  ],
+  "note": "The same trunk without speculative decoding."
+ },
+ {
+  "label": "q35-9b-mlxlm",
+  "extends": "q35-4b-mlxlm",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/qwen3.5-9b-4bit",
+  "cmd": [
+   "{env:MLX_LM_SERVER=mlx_lm.server}",
+   "--model",
+   "{models}/qwen3.5-9b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8081",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-9b-4bit/config.json"
+  ],
+  "note": "Same weights folder; no speculative decoding."
+ },
+ {
+  "label": "q35-9b-mlxserve-dflash",
+  "extends": "q35-4b-mlxserve-dflash",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/qwen3.5-9b-4bit",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-9b-dflash"
+   },
+   {
+    "write_json": {
+     "path": "{state}/mlx-serve/q35-9b-dflash/harness.json",
+     "data": {
+      "home_of": "mlx-serve, emptied before each run"
+     }
+    }
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/qwen3.5-9b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--drafter",
+   "{models}/drafters/Qwen3.5-9B-DFlash",
+   "--no-mtp",
+   "--draft-block-size",
+   "4"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-9b-dflash"
+  },
+  "model": "qwen3.5-9b-4bit",
+  "requires_paths": [
+   "{models}/qwen3.5-9b-4bit/config.json",
+   "{models}/drafters/Qwen3.5-9B-DFlash/model.safetensors"
+  ],
+  "note": "mlx-serve 26.10.2 with the same z-lab drafter (8-bit at load on M1-M4), block 4 as on the 4B."
+ },
+ {
+  "label": "q35-9b-mlxserve-mtp-d2",
+  "extends": "q35-4b-mlxserve-mtp",
+  "display": "mlx-serve + MTP (max depth 2)",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-9b-mtp"
+   },
+   {
+    "write_json": {
+     "path": "{state}/mlx-serve/q35-9b-mtp/harness.json",
+     "data": {
+      "home_of": "mlx-serve, emptied before each run"
+     }
+    }
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-9b-mtp"
+  },
+  "model": "qwen3.5-9b-4bit-mlx-serve",
+  "requires_paths": [
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve/config.json",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve/mtp/weights.safetensors"
+  ],
+  "note": "mlx-serve 26.10.2 on the 9B trunk every engine reads (lmstudio-community/Qwen3.5-9B-MLX-4bit @b455506, cloned) with the sidecar mtp/weights.safetensors: mlx-community/Qwen3.5-9B-MTP-4bit @222dfd2 (Qwen's MTP head at 4 bits) renamed to mtp.* (tools/mlx_serve_pack.py qwen3.5-9b). MTP with exact verification, --no-drafter, max depth 2 (the 4B's best on this Mac)."
+ },
+ {
+  "label": "q35-9b-mlxserve-mtp-d3",
+  "extends": "q35-9b-mlxserve-mtp-d2",
+  "display": "mlx-serve + MTP (max depth 3)",
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "3"
+  ]
+ }
+]

@@ -62,7 +62,9 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (the cell is its first run; its
   last: 78.5 tok/s at T = 0.6, 90.0 greedy). Each engine in its fastest setting on this Mac, chosen in short runs:
   oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
-  Kapitsa reads 16K-token prompts more slowly than mlx-lm and LM Studio here (269 tok/s against 289 and 277).
+  Rapid-MLX (no speculation, its faster setting here) in a bracket of its own, Kapitsa 0.1.36 first and last.
+  Kapitsa reads 16K-token prompts more slowly than mlx-lm, Rapid-MLX and LM Studio here (269 tok/s against 289, 286 and
+  277).
 - Dory: 2 loops; Kapitsa last-loop KV, its default, measured later with 0.1.37 (Dory's NVFP4 in layout L2 on the M1:
   40.5 tok/s, against 35.2 with 0.1.36 in the bracket; per-loop speculation 36.7), llama.cpp NVIDIA's Dory fork on its
   Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
@@ -1153,6 +1155,19 @@ against 269 tok/s), LM Studio 3% faster (277); at 4K they are even (306-308).
 2. LM Studio stops at 511 of the 512 requested tokens; its rates use the 511.
 3. MTPLX answered the 16K prompt without its token counts (the harness's check fails) and failed the tool-call checks.
 
+Rapid-MLX 0.16.3 ran in a bracket of its own, 12:51-13:02, with the same protocol and Kapitsa 0.1.36 first and last
+(its result files: [rapid-mlx](../bench/results/2026-10-19-m1pro-16gb/rapid-mlx/)); its short runs at 12:12-12:16 chose
+no speculation (51.1 tok/s at T = 0.6) over MTP with Qwen's head (44.4):
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** 0.1.36 (DFlash drafter), first | 78.4 (71.4-83.0) | **88.2** (86.0-88.9) | **305** / 267 | **0.11** / **0.14** | **4.4** | pass |
+| **Kapitsa**, last | **89.3** (74.1-120.6)<sup>1</sup> | 86.8 (82.0-88.7) | 302 / 265 | 0.12 / 0.15 | **4.4** | pass |
+| Rapid-MLX 0.16.3 (no speculation) | 51.5 (51.5-51.8) | 55.1 (50.5-55.6) | 284 / **286** | 0.76 / 0.81 | 7.2 | pass |
+
+1. Three of the five answers fell into repetition loops (distinct 4-grams below 0.5), which flatters speculative
+   decoding.
+
 ### Qwen3.5-4B at 4-bit: short runs of every engine
 
 One hold of the GPU lock, 08:48-09:30, Kapitsa first (LM Studio in another at 09:35): each engine and setting in a short run of the harness's decode
@@ -1226,6 +1241,50 @@ The engines with no Dory model were checked on this Mac: oMLX 0.7.1rc1 (no `mlx_
 
 1. One of the five answers echoed the prompt and closed a `</think>` block, which makes the harness mark the result
    invalid; the median is over the other four.
+
+### Qwen3.5-9B at 4-bit (not in the catalog)
+
+The largest Qwen3.5 that fits this Mac with a drafter: lmstudio-community/Qwen3.5-9B-MLX-4bit (`b455506`, 5.6 GB) and
+z-lab/Qwen3.5-9B-DFlash (`5fc3b3d`), served with `kapitsa serve --model <folder> --dflash <drafter folder>`. Kapitsa
+0.1.37 holds it in the 12.2 GB budget with the full 32K context: 7.9 GB allocated with its default 4 slots, the drafter
+1.0 GB of it at 4 bits. On it `tests/test_server.py` stopped at an HTTP 500: a reply that `max_tokens` cut inside an
+emoji was not valid UTF-8 ([#76](https://github.com/nace-ai/kapitsa/pull/76) fixes that; then its 44 checks pass).
+Greedy answers with DFlash equal plain decoding's on 5 of the 6 prompts with 0.1.37. The sixth parts late in the
+answer where plain decoding's top two logits are 0.0003 apart; it equals plain decoding's too with
+[#77](https://github.com/nace-ai/kapitsa/pull/77)'s verify tiling.
+
+The full protocol in one hold of the GPU lock, 12:28-12:51, Kapitsa 0.1.37 first and last, each engine in the setting
+its short run chose (below). Result files and the configs:
+[bench/results/2026-10-19-m1pro-16gb/qwen3.5-9b](../bench/results/2026-10-19-m1pro-16gb/qwen3.5-9b/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** 0.1.37 (DFlash drafter), first | 47.1 (44.1-63.3) | **54.1** (49.8-54.9) | 166 / 154 | **0.18** / **0.20** | 7.8 | pass |
+| **Kapitsa**, last | **50.7** (44.4-54.5) | 52.1 (50.0-55.0) | 164 / 153 | **0.18** / 0.24 | 7.8 | pass |
+| mlx-serve 26.10.2 (MTP, max depth 2) | 37.4 (35.9-38.5) | 37.9 (37.1-38.6) | 159 / —<sup>1</sup> | 0.79 / —<sup>1</sup> | **7.0** | fail<sup>2</sup> |
+| mlx-lm 0.32.2 | 29.7 (29.5-29.8) | 31.2 (30.7-31.3) | **170** / **165** | 0.59 / 0.71 | 9.6 | pass |
+
+Kapitsa decodes 1.26-1.36x mlx-serve's rate and 1.59-1.71x mlx-lm's, and answers cached follow-ups 3-4x sooner.
+It loses on reading prompts: mlx-lm reads a 4K-token prompt 2-3% faster and a 16K-token one 7% faster (165 against
+153-154 tok/s).
+
+1. mlx-serve refused the 16K-token prompt: "Prompt (16286 tokens) requires ~1636MB GPU memory but only ~958MB is
+   available".
+2. With thinking on, mlx-serve answered the tool-call request without a call.
+
+Short runs before it (12:01-12:11), 3 decodes of the T = 0.6 coding answer each, as for the 4B:
+
+| Engine (setting) | T = 0.6 (tok/s): median (min-max) |
+| --- | ---: |
+| **Kapitsa** 0.1.37 (DFlash drafter) | **40.2** (40.0-50.5) |
+| mlx-serve + MTP (Qwen's head at 4 bits, mlx-community/Qwen3.5-9B-MTP-4bit `222dfd2`), max depth 2 | 37.1 (35.8-38.1) |
+| mlx-serve + MTP, max depth 3 | 35.9 (35.6-36.1) |
+| mlx-serve + DFlash (z-lab's drafter), block 4 | 29.6 (26.4-29.6) |
+| mlx-lm 0.32.2 | 29.5 (29.4-29.7) |
+
+Not run on the 9B: oMLX, MTPLX, Ollama, LM Studio and llama.cpp. Their installs had been removed to make room for the
+9B's 8 GB, and this Mac's disk has no room for them next to it. mlx-serve's MTP head is attached with
+`tools/mlx_serve_pack.py qwen3.5-9b` (the trunk cloned, the head's tensors renamed to `mtp.*`).
 
 ## Your Mac: `kapitsa bench`
 
