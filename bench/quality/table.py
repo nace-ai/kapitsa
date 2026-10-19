@@ -13,14 +13,25 @@ def f(x, d=4):
 
 def stream(path):
     r = json.load(open(path))
-    print(f"base {r['base']}, {r['positions']} positions ({', '.join(r['sequences'])}), {r['layers']} layers")
-    print("| variant | recipe | KL mean | KL p95 | KL p99 | top-1 agree | PPL (bf16 " + f(r["candidates"]["bf16"]["ppl"], 3) + ") |")
-    print("|---|---|---:|---:|---:|---:|---:|")
-    for name, e in sorted(r["candidates"].items(), key=lambda kv: kv[1].get("kl_mean", 0)):
+    aside = r.get("aside") or []
+    print(f"base {r['base']}, {r['positions']} positions ({', '.join(r['sequences'])})"
+          + (f", aside: {', '.join(aside)}" if aside else "") + f", {r['layers']} layers")
+    c = r["candidates"]
+    ref = (c.get("4bit") or {}).get("bytes")
+    # decode: bytes read per forward pass (every linear and the LM head); cycle: plus the DFlash2 draft head
+    print("| variant | recipe | KL mean | KL p95 | KL p99 | top-1 agree | PPL (bf16 " + f(c["bf16"]["ppl"], 3) + ") |"
+          + "".join(f" {a} KL |" for a in aside) + " decode GB | vs 4bit | + draft head GB |")
+    print("|---|---|---:|---:|---:|---:|---:|" + "---:|" * len(aside) + "---:|---:|---:|")
+    for name, e in sorted(c.items(), key=lambda kv: kv[1].get("kl_mean", 0)):
         if name == "bf16":
             continue
+        b = e.get("bytes") or {}
+        rel = f"{100 * (b['decode'] / ref['decode'] - 1):+.1f}%" if ref and b.get("decode") else "-"
+        ps = e.get("per_sequence") or {}
         print(f"| {name} | `{e['spec']}` | {e['kl_mean']:.5f} | {e['kl_p95']:.4f} | {e['kl_p99']:.4f} | "
-              f"{100 * e['top1_agree']:.2f}% | {e['ppl']:.3f} |")
+              f"{100 * e['top1_agree']:.2f}% | {e['ppl']:.3f} |"
+              + "".join(f" {f((ps.get(a) or {}).get('kl_mean'), 5)} |" for a in aside)
+              + f" {f(b.get('decode') and b['decode'] / 1e9, 2)} | {rel} | {f(b.get('dflash2_cycle') and b['dflash2_cycle'] / 1e9, 2)} |")
 
 
 def last_json(p):

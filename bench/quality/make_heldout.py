@@ -6,8 +6,8 @@
 Five sequences of 1024 tokens from fixed texts in src/ (Kapitsa's own code and docs, a coding-agent chat written
 for this set, and competition math): code_cpp (C++), code_py (Python), prose (English technical prose), chat (a
 multi-turn agent conversation with tool calls, rendered with the model's chat template), math (level-5 MATH-500
-problems and their reference solutions as a chat, rendered the same way; src/math.json names the problems). The
-published quality tables average the first four; math is reported on its own. The Qwen3.5 / 3.6 / 3.8 models share
+problems and their reference solutions as a chat, rendered the same way: two problems and the start of a third fit;
+src/math.json names them). The published quality tables average the first four; math is reported on its own. The Qwen3.5 / 3.6 / 3.8 models share
 one tokenizer; the script prints a hash of the ids so runs can be matched. Needs `tokenizers` and `jinja2`.
 """
 import hashlib, json, os, sys
