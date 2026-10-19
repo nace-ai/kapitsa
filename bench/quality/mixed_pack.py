@@ -161,6 +161,7 @@ def main():
     ap.add_argument("--from", dest="srcs", action="append", required=True, help="local pack dir or repo[@rev]")
     ap.add_argument("--modules", action="append", required=True, help="selector list for the preceding --from")
     ap.add_argument("--conns", type=int, default=16)
+    ap.add_argument("--min-free-gb", type=float, default=6.0, help="refuse a fetch that leaves less free disk")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     if len(a.srcs) != len(a.modules):
@@ -229,8 +230,8 @@ def main():
                 rewrite_header(dst, n, keep)
             continue
         size = sum(p.index[k][2]["data_offsets"][1] - p.index[k][2]["data_offsets"][0] for k in names)
-        if shutil.disk_usage(out).free - size < 6e9:
-            sys.exit(f"fetching {size / 1e9:.2f} GB would leave less than 6 GB free")
+        if shutil.disk_usage(out).free - size < a.min_free_gb * 1e9:
+            sys.exit(f"fetching {size / 1e9:.2f} GB would leave less than {a.min_free_gb:g} GB free")
         hdr, off = {}, 0
         for k in names:
             e = p.index[k][2]
