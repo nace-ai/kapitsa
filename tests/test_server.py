@@ -101,6 +101,18 @@ def post(body, stream=False):
             out["usage"] = c.get("usage")
     return out
 
+def chat_stream(body):
+    """(status, [(t, data), ...]) of a streamed chat completion: when each data line came (s) and its JSON ("[DONE]")"""
+    req = urllib.request.Request(BASE + "/v1/chat/completions", data=json.dumps(dict(body, stream=True)).encode(),
+                                 headers={"Content-Type": "application/json", **auth()})
+    t0, out = time.time(), []
+    r = urllib.request.urlopen(req, timeout=900)
+    for line in r:
+        line = line.decode().strip()
+        if line.startswith("data: "):
+            out.append((time.time() - t0, "[DONE]" if line == "data: [DONE]" else json.loads(line[6:])))
+    return r.status, out
+
 fails = 0
 def check(name, ok, detail=""):
     global fails
@@ -722,6 +734,42 @@ after = post(counting("c6", 8), stream=True)
 check("a client gone mid-stream: the request beside it is answered, the next one starts at once",
       beside["usage"]["completion_tokens"] == 100 and after["usage"]["completion_tokens"] == 8 and time.time() - t0 < 10,
       f"beside {beside['usage']}, next request {time.time() - t0:.1f} s")
+
+# 10e. a Chat Completions stream starts at once, with its role chunk, and gets a keepalive chunk (empty content) after
+#      15 s without one (opencode, Cline and other OpenAI-compatible clients drop a stream idle for minutes): a prompt
+#      over the context is an error event in it; a request waiting for a slot has its stream already; a cold prefill
+#      longer than 15 s gets keepalives before its first token
+ROLE = {"role": "assistant", "content": ""}
+def is_keepalive(d):
+    return isinstance(d, dict) and d["choices"][0]["delta"] == {"content": ""} and d["choices"][0]["finish_reason"] is None
+st, ev = chat_stream({"messages": [{"role": "user", "content": long_text}], "max_tokens": 10})
+check("chat stream: a prompt over the context is an error event after the role chunk (HTTP 200), then [DONE]",
+      st == 200 and len(ev) == 3 and ev[0][1]["choices"][0]["delta"] == ROLE and
+      "exceeds the context window" in ev[1][1].get("error", {}).get("message", "") and ev[2][1] == "[DONE]", str(ev)[:300])
+hold = threading.Thread(target=together, args=([counting(f"h{i} {time.time()}", 300) for i in range(SLOTS)],))
+hold.start()
+time.sleep(1.0)
+st, ev = chat_stream(counting(f"w {time.time()}", 8))
+hold.join()
+first = next((t for t, d in ev if isinstance(d, dict) and d["choices"][0]["delta"].get("content")), None)
+check("chat stream: with every slot busy, a request's role chunk comes at once, its first token once a slot frees",
+      st == 200 and ev[0][1]["choices"][0]["delta"] == ROLE and ev[0][0] < 1.0 and first and first > ev[0][0] + 1.0 and
+      ev[-1][1] == "[DONE]", f"role chunk {ev[0][0]:.2f} s, first token {first} s")
+probe = post({"messages": [{"role": "user", "content": f"[probe {time.time()}] " + "hello " * 4000 + "\nSay ok."}],
+              "max_tokens": 1, "stream": True, "chat_template_kwargs": {"enable_thinking": False}}, stream=True)
+rate = probe["usage"]["prompt_tokens"] / probe["t_first"] if probe["t_first"] else 0  # cold prefill, tokens per second
+n = int(min(rate * 20, CTX * 0.8))
+if not rate or n / rate < 16:
+    print(f"SKIP chat stream: keepalives in a cold prefill over 15 s ({n} tokens prefill in {n / max(rate, 1):.0f} s here)")
+else:
+    st, ev = chat_stream({"messages": [{"role": "user", "content": f"[keepalive {time.time()}] " + "hello " * n + "\nSay ok."}],
+                          "max_tokens": 4, "chat_template_kwargs": {"enable_thinking": False}})
+    keep = [t for t, d in ev if is_keepalive(d)]
+    first = next((t for t, d in ev if isinstance(d, dict) and d["choices"][0]["delta"].get("content")), None)
+    check(f"chat stream: a cold prefill of {n} tokens ({n / rate:.0f} s) gets a keepalive chunk every 15 s before its "
+          "first token, then the reply",
+          keep and 15 <= keep[0] < 17.5 and all(14 <= b - a < 17.5 for a, b in zip(keep, keep[1:])) and first and
+          first > keep[-1] and ev[-1][1] == "[DONE]", f"keepalives at {keep}, first token {first}")
 
 print("FAILED: %d" % fails if fails else "ALL PASSED")
 sys.exit(1 if fails else 0)

@@ -141,6 +141,8 @@ AgentLaunch opencode(const std::string& path, const AgentServer& s, const std::v
   providers["kapitsa"] = {
       {"npm", "@ai-sdk/openai-compatible"},
       {"name", "Kapitsa"},
+      // no timeouts: the server sends its headers at once and a chunk every 15 s of a wait or a long prefill, which
+      // resets opencode's chunkTimeout (5 min in 1.19, 15 in 2.x); its whole-request timeout has no default
       {"options", {{"baseURL", s.base_url + "/v1"}, {"apiKey", s.api_key.empty() ? "kapitsa" : s.api_key}}},
       {"models",
        {{s.model,

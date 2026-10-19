@@ -18,6 +18,7 @@
 // ("serve" is optional for options-only command lines; build/nace-infer-server is a symlink kept for old scripts.)
 #include <cstring>
 #include "api/anthropic.h"
+#include "api/chat_completions.h"
 #include "api/responses.h"
 #include "engine/doctor.h"
 #include "engine/engine.h"
@@ -111,25 +112,6 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
   }
   r.loops = api::request_loops_field(b);
   return r;
-}
-
-static json usage_json(const ChatResult& res) {
-  json u{{"prompt_tokens", res.prompt_tokens},
-         {"completion_tokens", res.completion_tokens},
-         {"total_tokens", res.prompt_tokens + res.completion_tokens},
-         {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
-  if (res.loops > 0) u["kapitsa"] = api::kapitsa_usage(res);  // looped models: the loop count the request ran
-  return u;
-}
-
-static json tool_calls_json(const std::vector<ToolCall>& tcs, size_t index0, bool with_index) {
-  json a = json::array();
-  for (size_t i = 0; i < tcs.size(); ++i) {
-    json t{{"id", tcs[i].id}, {"type", "function"}, {"function", {{"name", tcs[i].name}, {"arguments", tcs[i].arguments}}}};
-    if (with_index) t["index"] = index0 + i;
-    a.push_back(t);
-  }
-  return a;
 }
 
 // ---------------------------------------------------------------- command line
@@ -395,11 +377,13 @@ std::string ni::port_problem(const std::string& host, int port) {
   return why;
 }
 
-// One streamed reply of the Anthropic or Responses API. The engine runs in a thread of its own and hands the writer's
-// events to the connection's thread through a queue. So the reply is still a plain HTTP error when the request fails
-// before its first event (a prompt the context cannot hold: Claude Code and Codex recover from those errors), the
-// first event goes out as soon as the prompt is counted, and the connection gets keepalive events while the engine
-// waits for another request or prefills a long prompt (clients drop a stream that is idle for minutes).
+// One streamed reply. The engine runs in a thread of its own and hands the writer's events to the connection's thread
+// through a queue. So an Anthropic or Responses reply is still a plain HTTP error when the request fails before its
+// first event (a prompt the context cannot hold: Claude Code and Codex recover from those errors), and that event goes
+// out as soon as the prompt is counted; a Chat Completions stream starts at once, as it always has, and reports a
+// failure in the stream. Either way the connection gets keepalive events while the engine waits for another request
+// or prefills a long prompt (clients drop a stream that is idle for minutes), and a client that goes away meanwhile is
+// noticed within a second (the engine then drops a Chat Completions request that still waits for a slot).
 struct StreamJob {
   std::mutex mu;  // the queue, the flags and every call into the writer
   std::condition_variable cv;
@@ -414,12 +398,14 @@ struct StreamJob {
   }
 };
 
-// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before any; then calls
-// after(result) (the reply is out) from the connection's thread.
+// Runs `r` and answers it as a stream of `w`'s events, or with failure(result) when it fails before any; with no
+// failure reply the stream starts at once, begin() before the request runs. Then calls after(result) (the reply is
+// out) from the connection's thread.
 static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<api::StreamWriter> w, httplib::Response& res,
                          std::function<std::pair<int, json>(const ChatResult&)> failure,
                          std::function<void(const ChatResult&)> after, std::shared_ptr<ui::Meter> meter) {
   auto job = std::make_shared<StreamJob>();
+  if (!failure) job->out.push_back(w->begin(ChatResult{})), job->started = true;
   job->worker = std::thread([&engine, r, w, meter, raw = job.get()] {
     ChatResult out = engine.chat(
         r,
@@ -433,6 +419,7 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
         },
         [&](const ChatResult& prompt) {
           std::lock_guard<std::mutex> lk(raw->mu);
+          if (raw->started) return;  // started at once
           raw->out.push_back(w->begin(prompt));
           raw->started = true;
           raw->cv.notify_all();
@@ -458,21 +445,30 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
   }
   res.set_header("Cache-Control", "no-cache");
   res.set_chunked_content_provider("text/event-stream", [job, w, after, meter](size_t, httplib::DataSink& sink) {
+    // the client is gone: the engine stops at its next token, or drops the request while it waits for a slot
+    auto gone = [&] {
+      job->cancelled = true;
+      job->worker.join();
+      ui::done(meter, job->result);
+      return false;
+    };
+    auto sent = std::chrono::steady_clock::now();
     for (;;) {
       std::deque<std::string> batch;
       bool done;
       {
         std::unique_lock<std::mutex> lk(job->mu);
-        if (!job->cv.wait_for(lk, std::chrono::seconds(15), [&] { return !job->out.empty() || job->done; }))
+        // a second at a time while nothing comes, to see whether the client is still there
+        job->cv.wait_for(lk, std::chrono::seconds(1), [&] { return !job->out.empty() || job->done; });
+        if (job->out.empty() && !job->done && std::chrono::steady_clock::now() - sent >= std::chrono::seconds(15))
           job->out.push_back(w->keepalive());  // 15 s without an event
         batch.swap(job->out);
         done = job->done;
       }
+      if (batch.empty() && !sink.is_writable()) return gone();
       for (const auto& e : batch)
-        if (!sink.write(e.data(), e.size())) {
-          job->cancelled = true;  // the client is gone: the engine stops at its next token
-          return false;
-        }
+        if (!sink.write(e.data(), e.size())) return gone();
+      if (!batch.empty()) sent = std::chrono::steady_clock::now();
       if (done) break;
     }
     sink.done();
@@ -722,6 +718,12 @@ static int serve(int argc, char** argv, int first) {
            {"last_id", engine.model_id()}};
     res.set_content(j.dump(), "application/json");
   });
+
+  // After a reply: prefill the conversation as its next request will render it (NI_HISTORY_PREFILL), in its own thread
+  auto prefill_after = [&engine](const ChatRequest& r, const ChatResult& out) {
+    std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
+  };
+
   srv.Post("/v1/chat/completions", [&](const httplib::Request& req, httplib::Response& res) {
     json body;
     ChatRequest r;
@@ -745,7 +747,7 @@ static int serve(int argc, char** argv, int first) {
         return true;
       });
       ui::done(meter, out);
-      std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
+      prefill_after(r, out);
       if (out.finish_reason == "error") {
         res.status = 400;
         res.set_content(json{{"error", {{"message", out.error}, {"type", "invalid_request_error"}}}}.dump(), "application/json");
@@ -753,65 +755,20 @@ static int serve(int argc, char** argv, int first) {
       }
       json msg{{"role", "assistant"}, {"content", out.content}};
       if (!out.reasoning.empty()) msg["reasoning_content"] = out.reasoning;
-      if (!out.tool_calls.empty()) msg["tool_calls"] = tool_calls_json(out.tool_calls, 0, false);
+      if (!out.tool_calls.empty()) msg["tool_calls"] = api::chat_tool_calls(out.tool_calls, 0, false);
       json j{{"id", id},
              {"object", "chat.completion"},
              {"created", created},
              {"model", model},
              {"choices", json::array({json{{"index", 0}, {"message", msg}, {"finish_reason", out.finish_reason}}})},
-             {"usage", usage_json(out)}};
+             {"usage", api::chat_usage(out)}};
       res.set_content(j.dump(), "application/json");
       return;
     }
-    res.set_header("Cache-Control", "no-cache");
-    res.set_chunked_content_provider("text/event-stream", [=, &engine](size_t, httplib::DataSink& sink) {
-      auto send = [&](const json& delta, const json& finish, const json* usage) {
-        json c{{"id", id},
-               {"object", "chat.completion.chunk"},
-               {"created", created},
-               {"model", model},
-               {"choices", json::array({json{{"index", 0}, {"delta", delta}, {"finish_reason", finish}}})}};
-        if (usage) c["usage"] = *usage;
-        std::string s = "data: " + c.dump() + "\n\n";
-        return sink.write(s.data(), s.size());
-      };
-      if (!send(json{{"role", "assistant"}, {"content", ""}}, nullptr, nullptr)) return false;
-      size_t ntool = 0;
-      ChatResult out = engine.chat(
-          r,
-          [&](const ChatDelta& d) {
-            ui::token(meter);
-            bool ok = true;
-            if (!d.reasoning.empty()) ok = ok && send(json{{"reasoning_content", d.reasoning}}, nullptr, nullptr);
-            if (!d.content.empty()) ok = ok && send(json{{"content", d.content}}, nullptr, nullptr);
-            if (!d.tool_calls.empty()) {
-              ok = ok && send(json{{"tool_calls", tool_calls_json(d.tool_calls, ntool, true)}}, nullptr, nullptr);
-              ntool += d.tool_calls.size();
-            }
-            return ok;
-          },
-          nullptr, [&] { return !sink.is_writable(); });  // a client gone while the request waits for a slot
-      if (out.finish_reason == "error") {
-        std::string s = "data: " + json{{"error", {{"message", out.error}, {"type", "invalid_request_error"}}}}.dump() + "\n\n";
-        sink.write(s.data(), s.size());
-      } else if (out.finish_reason != "cancelled") {
-        json u = usage_json(out);
-        send(json::object(), out.finish_reason, &u);
-      }
-      std::string done = "data: [DONE]\n\n";
-      sink.write(done.data(), done.size());
-      sink.done();
-      ui::done(meter, out);
-      // the reply is out: prefill the history as the next turn will render it (NI_HISTORY_PREFILL)
-      std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
-      return true;
-    });
+    // the stream (src/api/chat_completions.cpp) starts at once: no failure reply, a failure is its last event
+    stream_reply(engine, r, std::make_shared<api::ChatCompletionsStream>(id, model, created), res, nullptr,
+                 [&, r](const ChatResult& out) { prefill_after(r, out); }, meter);
   });
-
-  // After a reply: prefill the conversation as its next request will render it (NI_HISTORY_PREFILL), in its own thread
-  auto prefill_after = [&engine](const ChatRequest& r, const ChatResult& out) {
-    std::thread([&engine, r, out] { engine.prefill_history(r, out); }).detach();
-  };
 
   // Anthropic Messages (src/api/anthropic.cpp)
   srv.Post("/v1/messages", [&](const httplib::Request& req, httplib::Response& res) {

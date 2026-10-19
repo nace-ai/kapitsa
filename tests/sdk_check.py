@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""The Anthropic and OpenAI Python SDKs read Kapitsa's Messages and Responses replies (no model, no GPU).
+"""The Anthropic and OpenAI Python SDKs read Kapitsa's Messages and Responses replies and its Chat Completions streams
+(no model, no GPU).
 
     python -m venv venv && venv/bin/pip install anthropic openai
     venv/bin/python tests/sdk_check.py build/api_test
 
 Runs `api_test --dump` for the replies of each scenario (as the server writes them: text, reasoning + text, reasoning
-+ two tool calls, a custom tool call, a length cut, the context running out, a stop sequence, errors), serves them from
-a fake server, and checks that each SDK parses them: every event and response validates against the SDK's own types
-(pydantic, required fields and literals), the stream helpers assemble the same message or response as the
-non-streamed reply, and the errors come out as the SDKs' error classes with the messages the agents key on."""
++ two tool calls, a custom tool call, a length cut, the context running out, a stop sequence, errors; streams with
+keepalives), serves them from a fake server, and checks that each SDK parses them: every event and response validates
+against the SDK's own types (pydantic, required fields and literals), the stream helpers assemble the same message or
+response as the non-streamed reply, and the errors come out as the SDKs' error classes with the messages the agents
+key on."""
 import json, os, subprocess, sys, tempfile, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -28,8 +30,8 @@ def check(name, ok, detail=""):
 
 
 class Fake(BaseHTTPRequestHandler):
-    """POST /v1/messages, /v1/messages/count_tokens, /v1/responses: the recorded reply of the scenario the request's
-    model names (a stream when it asks for one)"""
+    """POST /v1/messages, /v1/messages/count_tokens, /v1/responses, /v1/chat/completions (streams only): the recorded
+    reply of the scenario the request's model names (a stream when it asks for one)"""
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
@@ -37,7 +39,8 @@ class Fake(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-        api = "responses" if self.path.startswith("/v1/responses") else "anthropic"
+        api = "responses" if self.path.startswith("/v1/responses") else \
+            "chat" if self.path.startswith("/v1/chat/completions") else "anthropic"
         name = "count" if self.path.startswith("/v1/messages/count_tokens") else body.get("model", "")
         base = os.path.join(CASES, f"{api}-{name}")
         status = int(open(base + ".status").read()) if os.path.exists(base + ".status") else 200
@@ -67,14 +70,14 @@ def plain(items):
 
 
 def raw_events(path):
-    """(event name, data) of a recorded stream"""
+    """(event name, data) of a recorded stream (a Chat Completions stream's closing [DONE] left out)"""
     out = []
     for frame in open(path).read().split("\n\n"):
         name = data = None
         for line in frame.split("\n"):
             if line.startswith("event: "):
                 name = line[7:]
-            elif line.startswith("data: "):
+            elif line.startswith("data: ") and line != "data: [DONE]":
                 data = json.loads(line[6:])
         if data is not None:
             out.append((name, data))
@@ -218,6 +221,55 @@ with oc.responses.stream(model="error", input="hi") as s:
     for ev in s:
         types.append(ev.type)
 check("responses: an error after the start is a response.failed event", types[-1] == "response.failed", types)
+
+# ---------------------------------------------------------------- OpenAI Chat Completions (streams, a keepalive chunk
+# after the role chunk and after every delta)
+
+CHUNK = openai.types.chat.ChatCompletionChunk
+chat_want = {"text": ("stop", "", "Hello", 0), "reasoning-text": ("stop", "Think.", "Hi", 0),
+             "reasoning-tools": ("tool_calls", "Two reads.", "", 2), "custom-tool": ("tool_calls", "Patch.", "", 1),
+             "length": ("length", "long", "cut", 0), "context-full": ("length", "", "cut", 0),
+             "stop-sequence": ("stop", "", "abc", 0)}
+for name, (finish, think, text, ncalls) in chat_want.items():
+    events, bad = raw_events(os.path.join(CASES, f"chat-{name}.sse")), []
+    for _, data in events:
+        try:
+            CHUNK.model_validate(data)
+        except Exception as e:
+            bad.append(str(e)[:300])
+    check(f"chat {name}: every chunk, keepalives included, validates as a ChatCompletionChunk", not bad, bad)
+    chunks = list(oc.chat.completions.create(model=name, messages=MSG, stream=True))
+    content = "".join(c.choices[0].delta.content or "" for c in chunks)
+    reasoning = "".join((c.choices[0].delta.model_extra or {}).get("reasoning_content") or "" for c in chunks)
+    check(f"chat {name}: chat.completions.create(stream=True) yields every chunk, text {text!r}, reasoning {think!r}",
+          len(chunks) == len(events) and content == text and reasoning == think and
+          chunks[-1].choices[0].finish_reason == finish and chunks[-1].usage.prompt_tokens_details.cached_tokens == 60,
+          [c.model_dump(exclude_unset=True) for c in chunks])
+    keep = [c for c in chunks if c.choices[0].delta.content == "" and c.choices[0].delta.role is None]
+    check(f"chat {name}: each keepalive comes out as a chunk with empty content and no finish_reason",
+          len(keep) == sum(d["choices"][0]["delta"] == {"content": ""} for _, d in events) >= 2 and
+          all(c.choices[0].finish_reason is None for c in keep), [c.model_dump(exclude_unset=True) for c in keep])
+    with oc.chat.completions.stream(model=name, messages=MSG) as s:
+        for _ in s:
+            pass
+        try:
+            final = s.get_final_completion()
+        except openai.LengthFinishReasonError as e:  # the helper's parsing refuses a reply cut by length
+            final = e.completion
+    msg = final.choices[0].message
+    check(f"chat {name}: chat.completions.stream assembles the reply (finish_reason {finish}, {ncalls} tool calls)",
+          final.choices[0].finish_reason == finish and (msg.content or "") == text and len(msg.tool_calls or []) == ncalls,
+          final)
+    if name == "reasoning-tools":
+        check("chat: tool calls carry their arguments and ids, indexed 0, 1",
+              [json.loads(t.function.arguments) for t in msg.tool_calls] == [{"file_path": "/a"}, {"file_path": "/b", "limit": 5}]
+              and [t.id for t in msg.tool_calls] == ["call_A", "call_B"], msg.tool_calls)
+try:
+    for _ in oc.chat.completions.create(model="error", messages=MSG, stream=True):
+        pass
+    check("chat: an error event in the stream raises", False, "no error")
+except openai.APIError as e:
+    check("chat: an error event in the stream raises APIError with its message", "the engine failed" in str(e), e)
 
 server.shutdown()
 print("FAILED: %d" % fails if fails else "ALL PASSED")

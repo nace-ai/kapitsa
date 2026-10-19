@@ -1,5 +1,6 @@
 // What the Anthropic Messages and OpenAI Responses endpoints share: errors, SSE frames, ids, reasoning carried
-// through an opaque field, reasoning effort, and the stream writer interface the server drives.
+// through an opaque field, reasoning effort, and the stream writer interface the server drives (Chat Completions uses
+// it too).
 #pragma once
 #include "engine/engine.h"
 
@@ -53,8 +54,9 @@ void join_text(std::string& acc, const std::string& piece);
 ojson arguments_object(const ojson& args);
 
 // The events of one streamed reply. The server calls begin() once the engine has counted the prompt and matched it
-// against its cache (prompt_tokens and cached_tokens set), delta() for each engine delta, keepalive() when nothing
-// was sent for a while, and end() with the finished result. Each returns the SSE text to send (possibly empty).
+// against its cache (prompt_tokens and cached_tokens set), or at once, without them, for a stream that starts before
+// the request runs (Chat Completions), delta() for each engine delta, keepalive() when nothing was sent for a while,
+// and end() with the finished result. Each returns the SSE text to send (possibly empty).
 class StreamWriter {
  public:
   virtual ~StreamWriter() = default;
