@@ -66,8 +66,8 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
   last: 78.5 tok/s at T = 0.6, 90.0 greedy). Each engine in its fastest setting on this Mac, chosen in short runs:
   oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
   Rapid-MLX (no speculation, its faster setting here) in a bracket of its own, Kapitsa 0.1.36 first and last.
-  Kapitsa reads 16K-token prompts more slowly than mlx-lm, Rapid-MLX and LM Studio here (269 tok/s against 289, 286 and
-  277).
+  Kapitsa 0.1.36 reads 16K-token prompts more slowly than mlx-lm, Rapid-MLX and LM Studio here (269 tok/s against 289,
+  286 and 277); main since #89 and #92 reads them at 343-349.
 - Dory: 2 loops; Kapitsa last-loop KV, its default, measured later with 0.1.37 (Dory's NVFP4 in layout L2 on the M1:
   40.5 tok/s, against 35.2 with 0.1.36 in the bracket; per-loop speculation 36.7), llama.cpp NVIDIA's Dory fork on its
   Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
@@ -1151,6 +1151,15 @@ against 62.9), answers cached follow-ups soonest (0.11 / 0.15 s; next MTPLX at 4
 and uses the least memory. It loses on reading long prompts: on this Mac its prefill runs on
 the GPU alone (its Neural Engine split has no share for the M1), and mlx-lm reads a 16K-token prompt 7% faster (289
 against 269 tok/s), LM Studio 3% faster (277); at 4K they are even (306-308).
+
+Since 0.1.37, main has three M1-specific changes, measured on this Mac in interleaved A/Bs against main before each.
+[#89](https://github.com/nace-ai/kapitsa/pull/89) runs the prefill attention on 16-key tiles.
+[#92](https://github.com/nace-ai/kapitsa/pull/92) runs the prefill GEMMs on tiles with 64-deep K steps. Together they
+take the 4B's 4K / 16K-token prompts from 301-305 / 264-267 tok/s (main before them) to 388-389 / 343-349, ahead of
+mlx-lm's 308 / 289 here.
+[#77](https://github.com/nace-ai/kapitsa/pull/77) changes the 8-row verify GEMM's tiling, for 3-5% shorter DFlash
+cycles (greedy decode 88.2 / 88.1 to 91.5 / 90.1 tok/s). The table above is 0.1.36; the README's cells move with the
+next release's run.
 
 1. More than 16 GB in use during the prompt phases (Ollama's MLX runner peaked at 11.1 GB in its own processes, llama.cpp
    at 11.1 GB): pages were swapped out during the 4K and 16K prefills (Ollama 126,496 pages at 16K, llama.cpp 83,764),
