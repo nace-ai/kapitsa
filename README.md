@@ -22,12 +22,12 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 ## Benchmarks
 
-<sub>Writing speed of a coding answer, each engine in its fastest setup; 🟩 the fastest per model; — not measured;
+<sub>Writing speed of a coding answer, each engine in its fastest setup; Kapitsa highlighted; 🟩 the fastest per model; — not measured;
 ⚠ other apps used the GPU. [How it was measured](docs/benchmarks.md)</sub>
 
 ### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
 
-| Model | **Kapitsa** | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
+| Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ***Qwen*** | | | | | | | | |
 | Qwen3.5&nbsp;4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | — | 109 | 104 | 81 | 70 | 73 |
@@ -47,13 +47,13 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 ### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
-| Model | **Kapitsa** | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
+| Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ***Qwen*** | | | | | | | | |
 | Qwen3.5&nbsp;4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
 | Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
 | Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Flash‑Next<br><sub>4-bit</sub> | 102&nbsp;tok/s | 🟩&nbsp;<mark>**107**</mark> | — | — | — | — | 96 | 77&nbsp;⚠ |
+| Flash‑Next<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77&nbsp;⚠ |
 | ***Nemotron*** | | | | | | | | |
 | Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
 | Lightning<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | — | — | — | — | 159 | 139 |
