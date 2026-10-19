@@ -99,7 +99,15 @@ struct X8PrepParams {
   uint xn_ld;
   uint write_lo;  // 1: also the residual table lo = half(x - hi) and its group sums (two-term inputs)
   uint unroll;    // x8_prep2 with norm: 4 independent sum-of-squares chains (more loads in flight)
+  uint write_t;   // x8_prep2: also the T table (buffer 8) of the tensor_ops GEMM (tensor/verify8t.metal)
 };
+
+// The T table of qmm8t (src/kernels/tensor/verify8t.metal): half rows [8][K], each 64-group's inputs permuted so
+// that slot 4 c + 16 jb + kk holds input 16 c + 8 (jb >> 1) + 2 kk + (jb & 1) (the matrix unit's operand layout).
+NI_INLINE uint v8t_input_of_slot(uint s) {
+  const uint c = (s >> 2) & 3, jb = (s >> 4) & 3, kk = s & 3;
+  return 16 * c + 8 * (jb >> 1) + 2 * kk + (jb & 1);
+}
 
 // grid: 8 threadgroups (token rows) x 256 threads.
 [[kernel]] void x8_prep(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
@@ -153,6 +161,7 @@ struct X8PrepParams {
                          device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
                          device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
                          device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
+                         device half* table_t [[buffer(8)]],
                          uint tg [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half stg[2][8][256];
@@ -237,6 +246,14 @@ struct X8PrepParams {
     device half* dst = (which ? table_lo : table) + ((tg * 4 + gi) * 32 + l2) * 16 + hf * 8;
     *(device uint4*)dst = uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])),
                                 as_type<uint>(half2(o[4], o[5])), as_type<uint>(half2(o[6], o[7])));
+  }
+  if (p.write_t) {  // T table: thread = (row tid / 32, 8 slots of this threadgroup's 256)
+    const uint tt = tid / 32, s0 = (tid % 32) * 8, gb = s0 & ~63u;
+    half o[8];
+    for (int i = 0; i < 8; ++i) o[i] = stg[0][tt][gb + v8t_input_of_slot((s0 + i) & 63)];
+    *(device uint4*)(table_t + tt * p.K + tg * 256 + s0) =
+        uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])), as_type<uint>(half2(o[4], o[5])),
+              as_type<uint>(half2(o[6], o[7])));
   }
 }
 
@@ -1451,12 +1468,12 @@ struct SwigluX8Params {
 // table with group sums in x8_prep2's addition order (8 consecutive inputs sequentially: this lane's 4, then the odd
 // neighbour's 4; then lanes 2, 4, 8 apart = x8_prep2's 1, 2, 4), i.e. bitwise the table x8_prep2 would build from
 // gdn_step_verify8's fp32 rows. grid Hv x 256 (simdgroup = row).
-[[kernel]] void gdn_gnorm_x8(const device float* o_raw [[buffer(0)]], const device float* z [[buffer(1)]],
-                             const device bfloat* norm_w [[buffer(2)]], device half* table [[buffer(3)]],
-                             device float* sums [[buffer(4)]], constant GdnVerifyParams& p [[buffer(5)]],
-                             uint h [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup half hs[8][128];
+// TW (gdn_gnorm_x8t): threads 128-255 also write the T table of qmm8t (buffer 6, rows of Hv * 128 inputs)
+template <bool TW>
+NI_INLINE void gdn_gnorm_x8_impl(const device float* o_raw, const device float* z, const device bfloat* norm_w,
+                                 device half* table, device float* sums, constant GdnVerifyParams& p,
+                                 device half* table_t, threadgroup half (*hs)[128], uint h, uint tid, uint sg,
+                                 uint lane) {
   constexpr uint D = 128;
   const uint t = sg;
   float4 r = float4(0.0f);
@@ -1492,5 +1509,29 @@ struct SwigluX8Params {
     device half* dst = table + ((2 * h + gi) * 32 + l2) * 16 + hf * 8;
     *(device uint4*)dst = uint4(as_type<uint>(half2(o8[0], o8[1])), as_type<uint>(half2(o8[2], o8[3])),
                                 as_type<uint>(half2(o8[4], o8[5])), as_type<uint>(half2(o8[6], o8[7])));
+  } else if (TW) {
+    const uint i = tid - 128, tt = i / 16, s0 = (i % 16) * 8, gb = s0 & ~63u;
+    half o8[8];
+    for (int j = 0; j < 8; ++j) o8[j] = hs[tt][gb + v8t_input_of_slot((s0 + j) & 63)];
+    *(device uint4*)(table_t + tt * (p.Hv * D) + h * D + s0) =
+        uint4(as_type<uint>(half2(o8[0], o8[1])), as_type<uint>(half2(o8[2], o8[3])),
+              as_type<uint>(half2(o8[4], o8[5])), as_type<uint>(half2(o8[6], o8[7])));
   }
+}
+[[kernel]] void gdn_gnorm_x8(const device float* o_raw [[buffer(0)]], const device float* z [[buffer(1)]],
+                             const device bfloat* norm_w [[buffer(2)]], device half* table [[buffer(3)]],
+                             device float* sums [[buffer(4)]], constant GdnVerifyParams& p [[buffer(5)]],
+                             uint h [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half hs[8][128];
+  gdn_gnorm_x8_impl<false>(o_raw, z, norm_w, table, sums, p, table, hs, h, tid, sg, lane);
+}
+[[kernel]] void gdn_gnorm_x8t(const device float* o_raw [[buffer(0)]], const device float* z [[buffer(1)]],
+                              const device bfloat* norm_w [[buffer(2)]], device half* table [[buffer(3)]],
+                              device float* sums [[buffer(4)]], constant GdnVerifyParams& p [[buffer(5)]],
+                              device half* table_t [[buffer(6)]],
+                              uint h [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                              uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup half hs[8][128];
+  gdn_gnorm_x8_impl<true>(o_raw, z, norm_w, table, sums, p, table_t, hs, h, tid, sg, lane);
 }

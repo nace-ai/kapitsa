@@ -270,6 +270,7 @@ struct X8Prep {
   float eps;
   uint32_t xn_ld, write_lo;
   uint32_t unroll;  // x8_prep2 norm: 4 independent sum-of-squares chains
+  uint32_t write_t;  // x8_prep2: also the T table (buffer 8) of qmm8t (src/kernels/tensor/verify8t.metal)
 };
 
 struct Qmm8 {

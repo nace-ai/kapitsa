@@ -17,6 +17,18 @@
 
 namespace ni {
 
+extern const char* const kTensorKernelSource;
+
+// The GPU's matrix units through Metal 4 tensor_ops (qmm8t): Apple10 (M5) on macOS 26
+static bool tw_supported() {
+  static const bool ok = [] {
+    if (Gpu::get().apple_family() < 10) return false;
+    if (__builtin_available(macOS 26.0, *)) return true;
+    return false;
+  }();
+  return ok;
+}
+
 static Pipeline pipe8(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
@@ -61,6 +73,7 @@ V8Knobs& v8_knobs() {
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
     d.gdnsplit = env_int("NI_V8_GDNSPLIT", d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
+    d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
     return d;
   }();
   return k;
@@ -85,6 +98,7 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
     else if (key == "prepu") k.prepu = v;
     else if (key == "skip") k.skip = v;
     else if (key == "pad") k.pad = v;
+    else if (key == "tw") k.tw = v;
     else fatal("knobs: unknown key '%s'", key.c_str());
     a = b + 1;
   }
@@ -114,6 +128,10 @@ void Qwen35::v8_alloc() {
   v8t_ = g.alloc(size_t(W) * 8 * 2, "x8_table");
   v8s_ = g.alloc(size_t(W) / 64 * 8 * 4, "x8_sums");
   v8tl_ = g.alloc(size_t(W) * 8 * 2, "x8_table_lo");
+  if (tw_supported()) {
+    v8tt_ = g.alloc(size_t(W) * 8 * 2, "x8_table_t");
+    g.compile_extra("tensor", kTensorKernelSource, true);
+  }
   v8sl_ = g.alloc(size_t(W) / 64 * 8 * 4, "x8_sums_lo");
   const int tiles = cfg_.moe ? kMaxVerify * cfg_.top_k + 1 : 1;
   const int Ih = cfg_.moe ? std::max(cfg_.moe_I, cfg_.shared_I) : std::max(cfg_.dense_I, 64);
@@ -142,15 +160,18 @@ void Qwen35::v8_alloc() {
   v8_ready_ = true;
 }
 
-void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo, int x_ld,
-                    const Buffer* xn_out) {
+bool Qwen35::v8_tw() const { return v8_knobs().tw && tw_supported() && v8tt_.size; }
+
+bool Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo, int x_ld,
+                    const Buffer* xn_out, bool tw) {
   if (K % 64 || R < 1 || R > 8) fatal("x8_prep: K=%d R=%d", K, R);
-  if (norm && (v8_knobs().skip & 256)) return;
-  kp::X8Prep p{uint32_t(K), uint32_t(R), uint32_t(x_ld ? x_ld : K), norm ? 1u : 0u, xn_out ? 1u : 0u, cfg_.eps,
-               uint32_t(K), lo ? 1u : 0u, v8_knobs().prepu ? 1u : 0u};
   // x8_prep2 (default): K/256 threadgroups, coalesced table stores; NI_V8_PREP=1: x8_prep (8 threadgroups)
   static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
   const bool v2 = !prep1 && K % 256 == 0;
+  const bool wt = tw && v2 && v8_tw() && size_t(K) * 16 <= v8tt_.size;
+  if (norm && (v8_knobs().skip & 256)) return wt;
+  kp::X8Prep p{uint32_t(K), uint32_t(R), uint32_t(x_ld ? x_ld : K), norm ? 1u : 0u, xn_out ? 1u : 0u, cfg_.eps,
+               uint32_t(K), lo ? 1u : 0u, v8_knobs().prepu ? 1u : 0u, wt ? 1u : 0u};
   e.use(pipe8(v2 ? "x8_prep2" : "x8_prep"));
   e.buf(0, x);
   e.buf(1, norm ? norm->buf : x);
@@ -160,7 +181,9 @@ void Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
   e.val(5, p);
   e.buf(6, v8tl_);
   e.buf(7, v8sl_);
+  e.buf(8, wt ? v8tt_ : v8tl_);  // (unused unless write_t)
   e.dispatch(v2 ? uint32_t(K / 256) : 8u, 1, 1, 256);
+  return wt;
 }
 
 // Tiling of the qmm8 grid: nf fragments (8 rows each) per simdgroup, cs column blocks per threadgroup,
@@ -214,8 +237,29 @@ static V8Plan v8_plan(uint32_t N, uint32_t K, int nf_def) {
   return p;
 }
 
+// qmm8t's tiling: NT weight rows per simdgroup (16; 32 for grids beyond 8192 threadgroups of 16, the LM heads), ks
+// k-slices per threadgroup (4 for K 2049-4096, else 8), PF prefetching the next group (all but K <= 2048 at NT 16).
+// bench_v8 cmp / bench_tq (median of 8-15 interleaved runs, us; vs qmm8snb with the M5's v8_plan and with its best
+// tiling nf1 cs1 ks8): 35B GDN in_proj 12352x2048 31.0 vs 39.1 / 34.9; q|k|v 9216x2048 24.5 vs 28.9 / 27.2; GDN out /
+// o 2048x4096 12.8 vs 16.4 / 15.4; LM head 248320x2048 530 vs 638 / 655; 27B GDN in_proj 16480x5120 105.6 vs 114.5,
+// o 5120x6144 43.7 vs 47.6, LM head 248320x5120 1503 vs 1577.
+// NI_V8T_NT / NI_V8T_KS / NI_V8T_PF override (tuning).
+struct V8tPlan {
+  int nt, ks, pf;
+};
+static V8tPlan v8t_plan(uint32_t Ntot, uint32_t K) {
+  static const int nt_env = env_int("NI_V8T_NT", 0), ks_env = env_int("NI_V8T_KS", 0), pf_env = env_int("NI_V8T_PF", -1);
+  const uint32_t gpr = K / 64;
+  V8tPlan p{(Ntot + 15) / 16 > 8192 ? 32 : 16, gpr > 32 && gpr <= 64 ? 4 : 8, 0};
+  if (nt_env == 16 || nt_env == 32) p.nt = nt_env;
+  if (ks_env >= 1 && ks_env <= 8) p.ks = ks_env;
+  p.pf = pf_env >= 0 ? (pf_env ? 1 : 0) : (p.nt == 32 || gpr > 32 ? 1 : 0);
+  while (p.ks > 1 && gpr < uint32_t(p.ks)) p.ks /= 2;
+  return p;
+}
+
 void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
-                      bool x2) {
+                      bool x2, const Buffer* tt) {
   if (segs.empty() || segs.size() > 4) fatal("qmm8: %zu segments", segs.size());
   const uint32_t K = segs[0].L->K;
   const int bits = segs[0].L->bits;
@@ -224,8 +268,8 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     if (!segs[i].L->same_format(*segs[0].L)) {
       std::vector<Seg8> same, rest;
       for (auto& sg : segs) (sg.L->same_format(*segs[0].L) ? same : rest).push_back(sg);
-      enc_qmm8(e, same, R, table, sums, x2);
-      enc_qmm8(e, rest, R, table, sums, x2);
+      enc_qmm8(e, same, R, table, sums, x2, tt);
+      enc_qmm8(e, rest, R, table, sums, x2, tt);
       return;
     }
   uint32_t Ntot = 0;
@@ -264,6 +308,37 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     e.buf(17, sums);
     e.val(18, p);
     e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
+    return;
+  }
+  if (tt && !x2 && bits == 4 && segs[0].L->q4() && segs[0].L->gs == 64 && K % 64 == 0 && v8_tw() &&
+      size_t(K) * 16 <= tt->size) {
+    const V8tPlan pl = v8t_plan(Ntot, K);
+    kp::Qmm8 p{};
+    p.K = K;
+    p.R = uint32_t(R);
+    p.nseg = uint32_t(segs.size());
+    p.ks = uint32_t(pl.ks);
+    uint32_t tg = 0;
+    e.use(pipe8(std::string(pl.pf ? "qmm8tp" : "qmm8t") + "_b4_nt" + std::to_string(pl.nt)));
+    for (size_t i = 0; i < 4; ++i) {
+      const Seg8& sg = segs[std::min(i, segs.size() - 1)];
+      if (i < segs.size()) {
+        p.N[i] = sg.L->N;
+        p.y_ld[i] = sg.y_ld ? sg.y_ld : sg.L->N;
+        p.add[i] = sg.add ? 1u : 0u;
+        p.tg_begin[i] = tg;
+        tg += (sg.L->N + pl.nt - 1) / pl.nt;
+      }
+      e.buf(int(i * 4 + 0), sg.L->w->buf);
+      e.buf(int(i * 4 + 1), sg.L->s->buf);
+      e.buf(int(i * 4 + 2), sg.L->b->buf);
+      e.buf(int(i * 4 + 3), sg.y);
+    }
+    p.tg_begin[segs.size()] = tg;
+    e.buf(16, *tt);
+    e.buf(17, sums);
+    e.val(18, p);
+    e.dispatch(tg, 1, 1, 32 * pl.ks);
     return;
   }
   if (segs[0].L->gs != 64) fatal("qmm8: group %d", segs[0].L->gs);
@@ -325,8 +400,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
                        int R) {
   const int D = cfg_.hidden, HD = cfg_.hq * cfg_.head_dim;
   const int skip = v8_knobs().skip;
-  enc_x8(e, x_, R, D, L.in_norm);
-  if (!(skip & 512)) enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_);
+  const bool tq = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+  if (!(skip & 512)) enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_, false, tq ? &v8tt_ : nullptr);
   if (skip & 2) {
     enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
     return;
@@ -375,8 +450,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
   e.val(4, rp);
   e.dispatch(cfg_.hq, R, 1, cfg_.head_dim);
-  enc_x8(e, attn_out_, R, HD, nullptr);
-  if (!(skip & 64)) enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+  const bool to = enc_x8(e, attn_out_, R, HD, nullptr, false, 0, nullptr, true);
+  if (!(skip & 64)) enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
 }
 
 void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
@@ -527,8 +602,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     const Layer& L = layers_[i];
     const int skip = v8_knobs().skip;
     if (L.linear) {
-      enc_x8(e, x_, R, D, L.in_norm);
-      if (!(skip & 32)) enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_);
+      const bool ti = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+      if (!(skip & 32))
+        enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_, false, ti ? &v8tt_ : nullptr);
       if (!(skip & 4)) {
         e.use(pipe8("gdn_prep_verify"));
         e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
@@ -544,6 +620,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       const int split_thr = v8_knobs().gdnsplit;
       const bool split = gdn8 && cfg_.lin_dv == 128 && cfg_.lin_dk == 128 && split_thr >= 32 && split_thr <= 1024 &&
                          split_thr % 32 == 0 && 128 % (split_thr / 8) == 0;
+      const bool tgn = v8_tw() && size_t(VD) * 16 <= v8tt_.size;
       if (!(skip & 1) && split) {
         // value-row blocks of split_thr / 32 simdgroups x 4 rows, then the gated norm into the table
         e.use(pipe8("gdn_step_verify8s"));
@@ -553,9 +630,11 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
         e.val(12, gv);
         e.buf(13, v8cnt_);
         e.dispatch(cfg_.lin_hv, 128 / (split_thr / 8), 1, uint32_t(split_thr));
-        e.use(pipe8("gdn_gnorm_x8"));
+        // gdn_gnorm_x8t: also the T table of qmm8t
+        e.use(pipe8(tgn ? "gdn_gnorm_x8t" : "gdn_gnorm_x8"));
         e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, v8t_); e.buf(4, v8s_);
         e.val(5, gv);
+        if (tgn) e.buf(6, v8tt_);
         e.dispatch(cfg_.lin_hv, 1, 1, 256);
       } else if (!(skip & 1)) {
         e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
@@ -565,8 +644,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
         e.val(12, gv);
         e.dispatch(cfg_.lin_hv, 1, 1, 1024);
       }
-      if (!split) enc_x8(e, gout_, R, VD, nullptr);
-      if (!(skip & 64)) enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+      bool to = tgn && split && !(skip & 1);
+      if (!split) to = enc_x8(e, gout_, R, VD, nullptr, false, 0, nullptr, true);
+      if (!(skip & 64)) enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
     } else {
       enc_attn8(e, s, L, s.kc[i], s.vc[i], s.cap, pos, R);
     }
@@ -575,9 +655,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
     if (cap_) enc_capture(e, i, pos, R);  // block-drafter capture (DFlash2), off unless armed
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
-  enc_x8(e, x_, R, D, final_norm_);
+  const bool tl = enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
   if (v8_knobs().skip & 128) return;
-  enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_);
+  enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   kp::TopkStage ts{V, K, chunk};
@@ -639,8 +719,8 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
     if (L.linear) {
-      enc_x8(e, x_, R, D, L.in_norm);
-      enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_);
+      const bool ti = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+      enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_, false, ti ? &v8tt_ : nullptr);
       e.group_begin();
       for (size_t g = 0; g < groups.size(); ++g) {
         Seq& s = *groups[g].s;
@@ -682,19 +762,22 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
         }
       }
       e.group_end();
-      if (split) {  // the gated norm of all rows into the out_proj's table
+      bool to = false;
+      if (split) {  // the gated norm of all rows into the out_proj's table (gdn_gnorm_x8t: and the T table)
         const kp::GdnVerify ga{uint32_t(R), 0u, uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
-        e.use(pipe8("gdn_gnorm_x8"));
+        to = v8_tw() && size_t(VD) * 16 <= v8tt_.size;
+        e.use(pipe8(to ? "gdn_gnorm_x8t" : "gdn_gnorm_x8"));
         e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, v8t_); e.buf(4, v8s_);
         e.val(5, ga);
+        if (to) e.buf(6, v8tt_);
         e.dispatch(cfg_.lin_hv, 1, 1, 256);
       } else {
-        enc_x8(e, gout_, R, VD, nullptr);
+        to = enc_x8(e, gout_, R, VD, nullptr, false, 0, nullptr, true);
       }
-      enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+      enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
     } else {
-      enc_x8(e, x_, R, D, L.in_norm);
-      enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_);
+      const bool tq = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+      enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_, false, tq ? &v8tt_ : nullptr);
       // each sequence's history chunks as enc_attn8 cuts them, its partials in a region of their own (the
       // sequences' chunks x rows share the buffer's 1024)
       std::vector<kp::AttnRows> rp(groups.size());
@@ -764,8 +847,8 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
         e.dispatch(cfg_.hq, groups[g].R, 1, cfg_.head_dim);
       }
       e.group_end();
-      enc_x8(e, attn_out_, R, HD, nullptr);
-      enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
+      const bool to = enc_x8(e, attn_out_, R, HD, nullptr, false, 0, nullptr, true);
+      enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
     }
     if (cfg_.moe) enc_moe8(e, L, R, i);
     else enc_mlp8(e, L, R);
@@ -784,8 +867,8 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
     e.group_end();
   }
   for (const VerifyGroup& gr : groups) gr.s->n_pend = 0;  // folded by this pass; commit_rows() sets the new count
-  enc_x8(e, x_, R, D, final_norm_);
-  enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_);
+  const bool tl = enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
+  enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
   // sampling: the top-k stage once over every row (the largest candidate count any group needs), the second stage
   // per group with its parameters
   uint32_t Kmax = 1;

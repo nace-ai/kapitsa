@@ -68,7 +68,8 @@ class Gpu {
   // Compiles another embedded kernel source as a library of its own, once per key (the Nemotron-H kernels:
   // a model family's kernels, compiled only when such a model loads). pipeline() looks in these libraries
   // after the base library and before the weight-format one.
-  void compile_extra(const std::string& key, const char* source);
+  // metal4: compiled as Metal 4 (tensor_ops; macOS 26) instead of Metal 3.2.
+  void compile_extra(const std::string& key, const char* source, bool metal4 = false);
   // Compiles `fn` for this GPU into a binary archive at `path` (machine code; no GPU work);
   // ni_compile reads code size, stack (spills) and GPR count from it.
   bool archive(const std::string& fn, const std::string& path);

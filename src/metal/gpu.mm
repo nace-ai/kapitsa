@@ -197,13 +197,17 @@ void Gpu::release(Buffer& b) {
 }
 
 static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, bool wf, double* ms,
-                                      bool metal32 = false) {
+                                      bool metal32 = false, bool metal4 = false) {
   MTLCompileOptions* o = [MTLCompileOptions new];
   // extra libraries (Nemotron-H) use Metal 3.2 for device-scope fences (atomic_thread_fence with thread_scope_device)
   o.languageVersion = MTLLanguageVersion3_1;
   if (metal32) {
     // MTLLanguageVersion3_2 by value ((3 << 16) + 2): a build with the macOS 14 SDK gets Metal 3.2 on macOS 15 too
     if (@available(macOS 15.0, *)) o.languageVersion = (MTLLanguageVersion)((3 << 16) + 2);
+  }
+  // Metal 4 (macOS 26): the tensor types and Metal Performance Primitives' tensor_ops (matmul2d)
+  if (metal4) {
+    if (@available(macOS 26.0, *)) o.languageVersion = (MTLLanguageVersion)(4 << 16);
   }
   // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
   // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
@@ -249,14 +253,14 @@ void Gpu::compile_formats() {
   }
 }
 
-void Gpu::compile_extra(const std::string& key, const char* source) {
+void Gpu::compile_extra(const std::string& key, const char* source, bool metal4) {
   compile();
   std::lock_guard<std::mutex> lk(impl_->wf_mu);
   for (auto& [k, lib] : impl_->extra)
     if (k == key) return;
   @autoreleasepool {
     double ms = 0;
-    id<MTLLibrary> lib = compile_library(dev(device_), std::string(source), false, &ms, true);
+    id<MTLLibrary> lib = compile_library(dev(device_), std::string(source), false, &ms, !metal4, metal4);
     impl_->extra.push_back({key, lib});
     logi("compiled the %s kernels in %.0f ms", key.c_str(), ms);
   }

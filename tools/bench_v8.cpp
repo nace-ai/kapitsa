@@ -21,6 +21,9 @@
 #include <vector>
 
 using namespace ni;
+namespace ni {
+extern const char* const kTensorKernelSource;
+}
 
 struct QMat {
   Buffer w, s, b;
@@ -85,6 +88,7 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
   const bool x2 = getenv("KERNEL") && !strcmp(getenv("KERNEL"), "qmm8x2");
   Buffer x = g.alloc(size_t(8) * K * 4), table = g.alloc(size_t(K) * 8 * 2), sums = g.alloc(size_t(K) / 64 * 8 * 4);
   Buffer table_lo = g.alloc(size_t(K) * 8 * 2), sums_lo = g.alloc(size_t(K) / 64 * 8 * 4);
+  Buffer ttab = g.alloc(size_t(K) * 8 * 2);  // qmm8t's T table
   Buffer y = g.alloc(size_t(8) * N * 4);
   std::normal_distribution<float> nd(0.0f, 1.0f);
   for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
@@ -92,10 +96,11 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
     auto e = g.begin();
     const bool v2 = K % 256 == 0 && !getenv("PREP1");
     e->use(g.pipeline(v2 ? "x8_prep2" : "x8_prep"));
-    kp::X8Prep pp{K, R, K, 0, 0, 1e-6f, K, x2 ? 1u : 0u};
+    kp::X8Prep pp{K, R, K, 0, 0, 1e-6f, K, x2 ? 1u : 0u, 0u, v2 ? 1u : 0u};
     e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
     e->val(5, pp);
     e->buf(6, table_lo); e->buf(7, sums_lo);
+    e->buf(8, ttab);
     e->dispatch(v2 ? K / 256 : 8, 1, 1, 256);
     e->commit_and_wait();
   }
@@ -128,11 +133,13 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
   }
   const std::string kn = std::string(getenv("KERNEL") ? getenv("KERNEL") : bits == 4 ? "qmm8pf" : "qmm8") + "_b" + std::to_string(bits) +
                          "_nf" + std::to_string(c.nf);
-  Pipeline p = g.pipeline(kn);
-  const bool staged = kn.rfind("qmm8t_", 0) == 0 || kn.rfind("qmm8abl3_", 0) == 0;  // table staged: ks = 1
-  const int ks = staged ? 1 : c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
-  c.cs = std::max(1, std::min(c.cs > 0 ? c.cs : 8, 8 / ks));  // <= 8 simdgroups per threadgroup
-  const uint32_t rows_tg = 8 * c.nf * c.cs, ntg = (N + rows_tg - 1) / rows_tg;
+  // KERNEL=qmm8t / qmm8tp (the tensor_ops GEMM): nf = NT rows per simdgroup (16, 32), cs = 1
+  const bool tens = kn.rfind("qmm8t", 0) == 0;
+  if (tens) g.compile_extra("tensor", kTensorKernelSource, true);
+  Pipeline p = g.pipeline(tens ? std::string(getenv("KERNEL")) + "_b4_nt" + std::to_string(c.nf) : kn);
+  const int ks = c.ks > 0 ? c.ks : auto_ks(N, K, c.nf);
+  c.cs = tens ? 1 : std::max(1, std::min(c.cs > 0 ? c.cs : 8, 8 / ks));  // <= 8 simdgroups per threadgroup
+  const uint32_t rows_tg = tens ? uint32_t(c.nf) : 8 * c.nf * c.cs, ntg = (N + rows_tg - 1) / rows_tg;
   kp::Qmm8 prm{};
   prm.K = K;
   prm.R = R;
@@ -151,7 +158,7 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
         e->buf(sgi * 4 + 0, mats[i].w); e->buf(sgi * 4 + 1, mats[i].s); e->buf(sgi * 4 + 2, mats[i].b);
         e->buf(sgi * 4 + 3, y);
       }
-      e->buf(16, table); e->buf(17, sums);
+      e->buf(16, tens ? ttab : table); e->buf(17, sums);
       e->val(18, prm);
       e->buf(19, table_lo); e->buf(20, sums_lo);
       e->dispatch(ntg, 1, 1, 32 * c.cs * ks);
@@ -181,6 +188,7 @@ static Result run_qmm8(Gpu& g, uint32_t N, uint32_t K, int bits, Cfg c, uint32_t
   }
   for (auto& m : mats) { g.release(m.w); g.release(m.s); g.release(m.b); }
   g.release(x); g.release(table); g.release(sums); g.release(y); g.release(table_lo); g.release(sums_lo);
+  g.release(ttab);
   return {best * 1000 / copies, mbytes * copies / (best * 1e-3) / 1e9, maxerr};
 }
 
@@ -269,7 +277,7 @@ static void run_dfl_cmp(Gpu& g, const char* what, uint32_t N, uint32_t K, bool g
     kp::X8Prep pp{K, 8, K, 0, 0, 1e-6f, K, 0u};
     e->buf(0, x); e->buf(1, x); e->buf(2, table); e->buf(3, sums); e->buf(4, x);
     e->val(5, pp);
-    e->buf(6, table); e->buf(7, sums);
+    e->buf(6, table); e->buf(7, sums); e->buf(8, table);
     e->dispatch(K / 256, 1, 1, 256);
     e->commit_and_wait();
   }
@@ -352,14 +360,14 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
   Buffer x = g.alloc(size_t(8) * K * 4), y = g.alloc(size_t(8) * N * 4);
   std::normal_distribution<float> nd(0.0f, 1.0f);
   for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
-  Buffer tab = g.alloc(size_t(K) * 8 * 2), sum = g.alloc(size_t(K) / 64 * 8 * 4);
+  Buffer tab = g.alloc(size_t(K) * 8 * 2), sum = g.alloc(size_t(K) / 64 * 8 * 4), ttab = g.alloc(size_t(K) * 8 * 2);
   {
     auto e = g.begin();
     e->use(g.pipeline("x8_prep2"));
-    kp::X8Prep pp{K, 8, K, 0, 0, 1e-6f, K, 0u};
+    kp::X8Prep pp{K, 8, K, 0, 0, 1e-6f, K, 0u, 0u, 1u};
     e->buf(0, x); e->buf(1, x); e->buf(2, tab); e->buf(3, sum); e->buf(4, x);
     e->val(5, pp);
-    e->buf(6, tab); e->buf(7, sum);
+    e->buf(6, tab); e->buf(7, sum); e->buf(8, ttab);
     e->dispatch(K / 256, 1, 1, 256);
     e->commit_and_wait();
   }
@@ -367,6 +375,7 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
     std::string name;
     Pipeline p;
     int nf, cs, ks;
+    bool tens;
     uint32_t ntg;
     kp::Qmm8 prm;
     std::vector<double> t;
@@ -382,13 +391,15 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
       if (b == std::string::npos) break;
       a = b + 1;
     }
-    k.nf = f.size() > 1 ? atoi(f[1].c_str()) : 2;
-    k.name = f[0] + "_nf" + std::to_string(k.nf);
+    k.tens = f[0].rfind("qmm8t", 0) == 0;  // qmm8t_b4 / qmm8tp_b4: nf = NT weight rows per simdgroup
+    if (k.tens) g.compile_extra("tensor", kTensorKernelSource, true);
+    k.nf = f.size() > 1 ? atoi(f[1].c_str()) : k.tens ? 16 : 2;
+    k.name = f[0] + (k.tens ? "_nt" : "_nf") + std::to_string(k.nf);
     k.p = g.pipeline(k.name);
     k.ks = f.size() > 3 && atoi(f[3].c_str()) > 0 ? atoi(f[3].c_str()) : auto_ks(N, K, k.nf);
     const int maxsg = f[0].find("16_") != std::string::npos || f[0].size() > 2 && f[0].substr(f[0].size() - 2) == "16" ? 16 : 8;
-    k.cs = std::max(1, std::min(f.size() > 2 && atoi(f[2].c_str()) > 0 ? atoi(f[2].c_str()) : 8, maxsg / k.ks));
-    const uint32_t rows_tg = 8 * k.nf * k.cs;
+    k.cs = k.tens ? 1 : std::max(1, std::min(f.size() > 2 && atoi(f[2].c_str()) > 0 ? atoi(f[2].c_str()) : 8, maxsg / k.ks));
+    const uint32_t rows_tg = k.tens ? uint32_t(k.nf) : 8 * k.nf * k.cs;
     k.ntg = (N + rows_tg - 1) / rows_tg;
     k.prm = kp::Qmm8{};
     k.prm.K = K;
@@ -408,7 +419,7 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
         e->buf(sgi * 4 + 0, mats[i].w); e->buf(sgi * 4 + 1, mats[i].s); e->buf(sgi * 4 + 2, mats[i].b);
         e->buf(sgi * 4 + 3, y);
       }
-      e->buf(16, tab); e->buf(17, sum);
+      e->buf(16, k.tens ? ttab : tab); e->buf(17, sum);
       e->val(18, k.prm);
       e->buf(19, tab); e->buf(20, sum);
       e->dispatch(k.ntg, 1, 1, 32 * k.cs * k.ks);
@@ -426,12 +437,13 @@ static void run_cmp(Gpu& g, uint32_t N, uint32_t K, int reps, const std::vector<
     std::sort(t.begin(), t.end());
     const double mn = t.front(), med = t[t.size() / 2];
     if (i == 0) base_med = med;
-    printf("%-22s nf%d cs%d ks%d tg%5u | min %8.1f us %6.1f GB/s | median %8.1f us %6.1f GB/s | med/first %.3f\n",
-           k.name.c_str(), k.nf, k.cs, k.ks, k.ntg, mn, mbytes / (mn * 1e3), med, mbytes / (med * 1e3), med / base_med);
+    printf("%-22s nf%d cs%d ks%d tg%5u mt%4u | min %8.1f us %6.1f GB/s | median %8.1f us %6.1f GB/s | med/first %.3f\n",
+           k.name.c_str(), k.nf, k.cs, k.ks, k.ntg, k.p.max_threads, mn, mbytes / (mn * 1e3), med, mbytes / (med * 1e3),
+           med / base_med);
   }
   fflush(stdout);
   for (auto& m : mats) { g.release(m.w); g.release(m.s); g.release(m.b); }
-  for (Buffer* b : {&x, &y, &tab, &sum}) g.release(*b);
+  for (Buffer* b : {&x, &y, &tab, &sum, &ttab}) g.release(*b);
 }
 
 int main(int argc, char** argv) {

@@ -126,9 +126,11 @@ struct V8Knobs {
   // 8192 conv / attention projections, 16384 ring commit. With NI_AB: the in-pipeline cost of those kernels.
   int skip = 0;
   int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
+  int tw = 1;   // the dense 4-bit verify GEMMs on the GPU's matrix units (qmm8t; Apple10 = M5 and macOS 26, else off)
 };
 V8Knobs& v8_knobs();
-// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad); unknown keys are fatal
+// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw); unknown keys
+// are fatal
 V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
 class Qwen35 : public Model {
@@ -316,9 +318,10 @@ class Qwen35 : public Model {
     uint32_t y_ld = 0;  // 0: N
     bool add = false;   // y += X W^T
   };
-  // y_i[R, N_i] = X W_i^T for up to 4 matrices sharing K and bits (x2: two-term hi+lo inputs)
+  // y_i[R, N_i] = X W_i^T for up to 4 matrices sharing K and bits (x2: two-term hi+lo inputs). tt: the same
+  // inputs as a T table (enc_x8 with tw), for qmm8t on the GPU's matrix units (V8Knobs::tw; 4-bit group 64)
   void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
-                bool x2 = false);
+                bool x2 = false, const Buffer* tt = nullptr);
   // h = half(silu(X Wg^T) * (X Wu^T)) written as the down projection's X8 table h + sums hs (4-bit, N % 64 == 0)
   void enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
                const Buffer& h, const Buffer& hs);
@@ -474,9 +477,12 @@ class Qwen35 : public Model {
   // ---- 8-row verify path (qwen35_v8.cpp) ----
   void v8_alloc();
   void encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step);
-  // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table
-  void enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
-              const Buffer* xn_out = nullptr);
+  // x rows (fp32, x_ld floats apart) -> X8 table (+ group sums), optional RMSNorm, optional lo table.
+  // tw: also the T table v8tt_ of qmm8t when that path is on (v8_tw()); returns whether it was written.
+  bool enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo = false, int x_ld = 0,
+              const Buffer* xn_out = nullptr, bool tw = false);
+  // the 8-row GEMMs on the matrix units (qmm8t, src/kernels/tensor/verify8t.metal): an M5 and V8Knobs::tw
+  bool v8_tw() const;
   void enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
   void enc_mlp8(Encoder& e, const Layer& L, int R);
   void enc_moe8(Encoder& e, const Layer& L, int R, int li);
@@ -539,6 +545,7 @@ class Qwen35 : public Model {
   bool v8_ready_ = false;
   Buffer v8g_, v8u_;  // split MLP: fp32 gate / up rows [8][I]
   Buffer v8cnt_;      // gdn_step_verify8s: per-head arrival counters (zero between dispatches)
+  Buffer v8tt_;  // T table (qmm8t's input layout)
   Buffer v8t_, v8s_, v8tl_, v8sl_, v8h_, v8hs_, v8tiles_, v8nt_, v8slot_, v8args_, v8out_, v8sh_, v8ustat_, v8sm_, v8hsc_, v8xn_;
 };
 
