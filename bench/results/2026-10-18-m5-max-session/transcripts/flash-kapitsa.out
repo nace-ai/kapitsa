@@ -1,0 +1,28 @@
+
+===== flash-kapitsa  [kapitsa] Kapitsa (MTP, default depth)  version 474b3e6
+[20:10:11] flash-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 34467 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[20:10:12] flash-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --model-id flash-next --dflash none --host 127.0.0.1 --port 8280 --ctx 32768 --slots 1
+[20:10:32] flash-kapitsa: ready after 20s (pid 61395, listener 61395)
+[20:10:37] flash-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.82s)
+[20:10:37] flash-kapitsa:  warm-up tools: ok (0.87s)
+[20:11:39] flash-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 7%
+[20:12:41] flash-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 6%
+[20:13:43] flash-kapitsa: gpu busy (186s): com.apple.WebKit[3316] 7%
+[20:14:45] flash-kapitsa: gpu busy (248s): com.apple.WebKit[3316] 6%
+[20:15:39] flash-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-kapitsa
+  decode T=0.6: 105.73 tok/s (e2e 104.56; 512 tok, finish=length, d4=0.9619)
+  decode T=0.6: 105.08 tok/s (e2e 104.02; 512 tok, finish=length, d4=0.9303)
+  decode T=0.6: 105.38 tok/s (e2e 104.01; 512 tok, finish=length, d4=0.9545)
+  decode T=0.6: 98.64 tok/s (e2e 97.87; 512 tok, finish=length, d4=0.9601)
+  decode T=0.6: 103.35 tok/s (e2e 103.56; 512 tok, finish=length, d4=0.9636)
+  decode median 105.08 (min 98.64, max 105.73) over 5/5 valid
+  decode T=0: median 107.74 (min 105.2, max 109.71) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 4.73s -> 875 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4166, 4194, 4228])
+  prefill 16000: 16288 tok (ref 16286), TTFT 18.85s -> 864 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [16321, 16349, 16383])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 70.47 GB, resident mapped files 5.49 GB, swap used 14757.0 MB
+  -> <run-root>/out-nemotron/results/flash-kapitsa-20261018-201011.json
+[20:17:16] flash-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[20:17:16] flash-kapitsa: -> <run-root>/out-nemotron/results/flash-kapitsa-20261018-201011.json  flags: 1

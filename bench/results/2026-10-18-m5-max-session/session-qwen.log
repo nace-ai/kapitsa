@@ -29,3 +29,7 @@
 2026-10-18 19:32:11 start q38-27b-mlxlm
 2026-10-18 19:49:58 end q38-27b-mlxlm rc=0
 2026-10-18 19:49:58 start q35-4b-mlxlm
+2026-10-18 20:03:18 end q35-4b-mlxlm rc=0
+2026-10-18 20:03:18 start q36-35b-omlx-best
+2026-10-18 20:23:23 end q36-35b-omlx-best rc=0
+2026-10-18 20:23:23 start q38-27b-omlx-best

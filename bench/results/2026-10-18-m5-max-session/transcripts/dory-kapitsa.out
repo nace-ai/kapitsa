@@ -1,0 +1,28 @@
+
+===== dory-kapitsa  [kapitsa] Kapitsa (2 loops, the default)  version 474b3e6
+[20:03:18] dory-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 33381 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/lightning.json configs
+[20:03:18] dory-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/nemotron-labs-dory1.0-4b-nvfp4 --model-id dory --host 127.0.0.1 --port 8290 --ctx 32768 --slots 1
+[20:03:24] dory-kapitsa: ready after 6s (pid 46517, listener 46517)
+[20:03:28] dory-kapitsa:  warm-up prefill~2.9k+decode64: ok (3.22s)
+[20:03:28] dory-kapitsa:  warm-up tools: ok (0.76s)
+[20:04:30] dory-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[20:05:32] dory-kapitsa: gpu busy (123s): com.apple.WebKit[3316] 5%
+[20:06:34] dory-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 7%
+[20:07:35] dory-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 6%
+[20:08:29] dory-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== dory-kapitsa
+  decode T=0.6: 97.41 tok/s (e2e 97.20; 512 tok, finish=length, d4=0.7233)
+  decode T=0.6: 98.83 tok/s (e2e 97.04; 512 tok, finish=length, d4=0.5699)
+  decode T=0.6: 97.34 tok/s (e2e 97.39; 512 tok, finish=length, d4=0.715)
+  decode T=0.6: 97.50 tok/s (e2e 96.84; 512 tok, finish=length, d4=0.7869)
+  decode T=0.6: 98.69 tok/s (e2e 96.64; 512 tok, finish=length, d4=0.593)
+  decode median 97.5 (min 97.34, max 98.83) over 5/5 valid
+  decode T=0: median 98.27 (min 98.15, max 98.46) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 3.82s -> 1095 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [4225, 4281, 4338])
+  prefill 16000: 16520 tok (ref 16518), TTFT 15.71s -> 1052 tok/s, cold cached=0 | cached TTFT median 0.17s over 3 turns (cached [16558, 16608, 16664])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 3.92 GB, resident mapped files 0.62 GB, swap used 14757.0 MB
+  -> <run-root>/out-nemotron/results/dory-kapitsa-20261018-200318.json
+[20:10:11] dory-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[20:10:11] dory-kapitsa: -> <run-root>/out-nemotron/results/dory-kapitsa-20261018-200318.json  flags: 1

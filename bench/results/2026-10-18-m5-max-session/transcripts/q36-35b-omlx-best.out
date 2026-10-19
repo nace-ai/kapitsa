@@ -1,0 +1,31 @@
+
+===== q36-35b-omlx-best  [omlx] oMLX + DFlash2 (drafter 4-bit, block 5, adaptive verify)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[20:17:16] q36-35b-omlx-best: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 46487 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[20:17:16] q36-35b-omlx-best: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/out/state/omlx/q36-35b-best/models --no-hf-cache --headless --host 127.0.0.1 --port 8141 --base-path <run-root>/out/state/omlx/q36-35b-best/base --paged-ssd-cache-dir <run-root>/out/state/omlx/q36-35b-best/base/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[20:17:18] q36-35b-omlx-best: ready after 2s (pid 76411, listener 76411)
+[20:17:26] q36-35b-omlx-best:  warm-up prefill~2.9k+decode64: ok (7.8s)
+[20:17:27] q36-35b-omlx-best:  warm-up tools: ok (0.53s)
+[20:17:29] q36-35b-omlx-best:  warm-up decode512#1: ok (2.37s)
+[20:17:31] q36-35b-omlx-best:  warm-up decode512#2: ok (2.34s)
+[20:17:34] q36-35b-omlx-best:  warm-up decode512#3: ok (2.52s)
+[20:18:36] q36-35b-omlx-best: gpu busy (62s): com.apple.WebKit[3316] 6%
+[20:19:38] q36-35b-omlx-best: gpu busy (124s): com.apple.WebKit[3316] 6%
+[20:20:40] q36-35b-omlx-best: gpu busy (186s): com.apple.WebKit[3316] 6%
+[20:21:41] q36-35b-omlx-best: gpu busy (247s): com.apple.WebKit[3316] 7%
+[20:22:35] q36-35b-omlx-best: GPU not quiet after 301s (['com.apple.WebKit[3316] 5%']); benchmarking anyway, contention will be flagged
+== q36-35b-omlx-best
+  decode T=0.6: 232.45 tok/s (e2e 225.39; 512 tok, finish=length, d4=0.968)
+  decode T=0.6: 253.78 tok/s (e2e 249.98; 512 tok, finish=length, d4=0.9339)
+  decode T=0.6: 219.75 tok/s (e2e 218.98; 512 tok, finish=length, d4=0.9776)
+  decode T=0.6: 222.75 tok/s (e2e 234.85; 512 tok, finish=length, d4=0.5733)
+  decode T=0.6: 244.23 tok/s (e2e 246.01; 512 tok, finish=length, d4=0.9611)
+  decode median 232.45 (min 219.75, max 253.78) over 5/5 valid
+  decode T=0: median 245.48 (min 222.32, max 260.2) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 1.39s -> 2968 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [4127, 4181, 4229])
+  prefill 16000: 16287 tok (ref 16286), TTFT 5.17s -> 3153 tok/s, cold cached=0 | cached TTFT median 0.23s over 3 turns (cached [16280, 16329, 16375])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 23.09 GB, resident mapped files 0.01 GB, swap used 14749.0 MB
+  -> <run-root>/out/results/q36-35b-omlx-best-20261018-201716.json
+[20:23:23] q36-35b-omlx-best: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[20:23:23] q36-35b-omlx-best: -> <run-root>/out/results/q36-35b-omlx-best-20261018-201716.json  flags: 1

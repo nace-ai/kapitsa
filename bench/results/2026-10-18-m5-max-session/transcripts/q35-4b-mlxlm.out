@@ -1,0 +1,28 @@
+
+===== q35-4b-mlxlm  [mlx-lm] mlx-lm  version mlx_lm 0.32.2 mlx 0.32.4
+[19:57:09] q35-4b-mlxlm: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 18314 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[19:57:09] q35-4b-mlxlm: starting ~/venvs/mlx-lm/bin/mlx_lm.server --model ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bit-mtp --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[19:57:11] q35-4b-mlxlm: ready after 2s (pid 33403, listener 33403)
+[19:57:12] q35-4b-mlxlm:  warm-up prefill~2.9k+decode64: ok (1.36s)
+[19:57:13] q35-4b-mlxlm:  warm-up tools: ok (0.35s)
+[19:58:14] q35-4b-mlxlm: gpu busy (62s): com.apple.WebKit[3316] 6%
+[19:59:16] q35-4b-mlxlm: gpu busy (124s): com.apple.WebKit[3316] 6%
+[20:00:18] q35-4b-mlxlm: gpu busy (185s): com.apple.WebKit[3316] 6%
+[20:01:20] q35-4b-mlxlm: gpu busy (247s): com.apple.WebKit[3316] 6%
+[20:02:13] q35-4b-mlxlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== q35-4b-mlxlm
+  decode T=0.6: 130.57 tok/s (e2e 130.51; 512 tok, finish=length, d4=0.7213)
+  decode T=0.6: 135.11 tok/s (e2e 135.08; 512 tok, finish=length, d4=0.9509)
+  decode T=0.6: 136.90 tok/s (e2e 134.50; 512 tok, finish=length, d4=0.4684) flags ['repetition loop (distinct-4-gram 0.4684)']
+  decode T=0.6: 134.62 tok/s (e2e 134.24; 512 tok, finish=length, d4=0.7234)
+  decode T=0.6: 135.66 tok/s (e2e 133.70; 512 tok, finish=length, d4=0.9664)
+  decode median 135.11 (min 130.57, max 136.9) over 5/5 valid
+  decode T=0: median 143.43 (min 143.28, max 145.07) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.90s -> 4582 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4130, 4205, 4241])
+  prefill 16000: 16288 tok (ref 16286), TTFT 3.90s -> 4177 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16284, 16360, 16429])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 6.92 GB, resident mapped files 0.01 GB, swap used 14757.0 MB
+  -> <run-root>/out/results/q35-4b-mlxlm-20261018-195708.json
+[20:03:18] q35-4b-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[20:03:18] q35-4b-mlxlm: -> <run-root>/out/results/q35-4b-mlxlm-20261018-195708.json  flags: 2
