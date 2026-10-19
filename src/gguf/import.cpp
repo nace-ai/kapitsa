@@ -20,6 +20,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/clonefile.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
@@ -103,6 +104,16 @@ bool is_file(const std::string& p) {
   return stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
 }
 
+// the device of a path, or of its closest existing parent
+dev_t device_of(std::string p) {
+  struct stat st;
+  while (stat(p.c_str(), &st) != 0) {
+    if (p == "/" || p.empty() || p == ".") return 0;
+    p = dir_name(p);
+  }
+  return st.st_dev;
+}
+
 uint64_t free_bytes(std::string p) {
   struct statfs s;
   while (statfs(p.c_str(), &s) != 0) {
@@ -163,13 +174,17 @@ std::string ftype_name(int64_t t) {
 
 struct Fmt {
   int bits = 16, gs = 0;  // bits 16: bf16
-  bool dense() const { return bits == 16; }
-  bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs; }
+  uint32_t iq = 0;        // routed experts kept in llama.cpp's blocks: their type (IQ2_XXS, IQ2_S, IQ3_S)
+  bool dense() const { return bits == 16 && !iq; }
+  bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs && iq == o.iq; }
   bool operator!=(const Fmt& o) const { return !(*this == o); }
 };
 const Fmt kBf16{16, 0}, k3g64{3, 64}, k4g32{4, 32}, k4g64{4, 64}, k5g64{5, 64}, k6g64{6, 64}, k8g64{8, 64};
+Fmt iq_fmt(uint32_t t) { return Fmt{t == kIQ3_S ? 3 : 2, 256, t}; }
+uint64_t iq_block_bytes(uint32_t t) { return t == kIQ2_XXS ? 66 : t == kIQ2_S ? 82 : 110; }
 
 std::string fmt_name(Fmt f) {
+  if (f.iq) return type_name(f.iq) + " (as stored)";
   return f.dense() ? "bf16" : std::to_string(f.bits) + "-bit group " + std::to_string(f.gs);
 }
 
@@ -363,8 +378,8 @@ struct Lin {
   uint64_t srb = 0;               // bytes of a source row (K values)
   int file = 0;
   uint64_t off_w = 0, off_s = 0, off_b = 0;
-  uint64_t row_w() const { return fmt.dense() ? K * 2 : K * uint64_t(fmt.bits) / 8; }
-  uint64_t row_s() const { return fmt.dense() ? 0 : K / uint64_t(fmt.gs) * 2; }
+  uint64_t row_w() const { return fmt.iq ? K / 256 * iq_block_bytes(fmt.iq) : fmt.dense() ? K * 2 : K * uint64_t(fmt.bits) / 8; }
+  uint64_t row_s() const { return fmt.dense() || fmt.iq ? 0 : K / uint64_t(fmt.gs) * 2; }
   uint64_t src_bytes() const { return rows * srb; }
 };
 
@@ -390,6 +405,7 @@ struct Plan {
   std::string mtp_source;
   std::map<std::string, int> conv_count;  // "Q4_K -> 4-bit group 32" -> tensors
   std::set<std::string> low, notes;
+  bool iq = false;  // routed experts kept as stored (Fmt::iq): they go to experts*.safetensors
 };
 
 struct Builder {
@@ -448,7 +464,7 @@ struct Builder {
     if (L.fmt == k4g32 && exact4(L.src->type) && L.mult.empty()) k += " (codes as stored)";
     else if (L.fmt.dense() && L.src->type == kBF16) k += " (as stored)";
     ++P.conv_count[(L.mtp ? "MTP head: " : "") + k];
-    if (type_class(L.src->type) <= kC3 && !P.follow) P.low.insert(type_name(L.src->type));
+    if (type_class(L.src->type) <= kC3 && !P.follow && !L.fmt.iq) P.low.insert(type_name(L.src->type));
   }
 
   // a float parameter, bf16
@@ -633,6 +649,26 @@ struct Builder {
         linear(f, usrc, x + "up_proj", I, H, k4g32, m, 0, true, E, 0, int64_t(e));
         linear(f, d, x + "down_proj", H, I, k4g32, RowMap{0, 0, e * H}, 0, true, E, 0, int64_t(e));
       }
+      return;
+    }
+    // trunk, routed experts in IQ2_XXS / IQ2_S / IQ3_S: kept as stored (src/kernels/wfmt_iq.metal reads the blocks; a
+    // GGUF's IQ2_XXS experts converted to 3-bit group 64 took 1.7x their bytes, which put Qwen3.6-35B-A3B's unsloth
+    // UD-IQ2_XXS at 15 GB instead of 11). Gate and up of one type, in tensors of their own; shapes the kernels take.
+    if (!gu && iq_gpu_type(g->type) && u->type == g->type && iq_gpu_type(d->type) && H % 512 == 0 && I % 256 == 0 &&
+        !getenv("KAPITSA_IMPORT_IQ_CONVERT")) {
+      auto stacked_iq = [&](const Tensor* t, const std::string& n, uint64_t N, uint64_t K) {
+        Lin& L = linear(f, t, out + "mlp.switch_mlp." + n, E * N, K, iq_fmt(t->type));
+        L.shape = {int64_t(E), int64_t(N), int64_t(K)};
+      };
+      stacked_iq(g, "gate_proj", I, H);
+      stacked_iq(u, "up_proj", I, H);
+      stacked_iq(d, "down_proj", H, I);
+      P.iq = true;
+      linear(f, sg, out + "mlp.shared_expert.gate_proj", S, H, k8g64);
+      linear(f, su, out + "mlp.shared_expert.up_proj", S, H, k8g64);
+      linear(f, sd, out + "mlp.shared_expert.down_proj", H, S, k8g64);
+      linear(f, router, out + "mlp.gate", E, H, dense_format(router->type));
+      linear(f, sgate, out + "mlp.shared_expert_gate", 1, H, dense_format(sgate->type));
       return;
     }
     // trunk: the layer's experts in one format, from their least precise tensor
@@ -852,12 +888,14 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
   // quantization: the most common format of the quantized trunk linears, the others per module
   std::map<std::pair<int, int>, int> n;
   for (const Lin& L : P.lins)
-    if (!L.param && !L.mtp && !L.fmt.dense()) ++n[{L.fmt.bits, L.fmt.gs}];
+    if (!L.param && !L.mtp && !L.fmt.dense() && !L.fmt.iq) ++n[{L.fmt.bits, L.fmt.gs}];
   if (!n.empty()) {
     auto top = std::max_element(n.begin(), n.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
     ojson q{{"group_size", top.second}, {"bits", top.first}, {"mode", "affine"}};
     for (const Lin& L : P.lins)
-      if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
+      if (L.fmt.iq)  // llama.cpp's blocks as stored (mode iq2_xxs / iq2_s / iq3_s)
+        q[L.name] = ojson{{"group_size", 256}, {"bits", L.fmt.bits}, {"mode", lower(type_name(L.fmt.iq))}};
+      else if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
         q[L.name] = ojson{{"group_size", L.fmt.gs}, {"bits", L.fmt.bits}};
     c["quantization"] = q;
     c["quantization_config"] = q;
@@ -1036,6 +1074,19 @@ void convert_rows(const Lin& L, const uint8_t* src, uint64_t s0, uint64_t r0, ui
 void convert(const Lin& L, const std::vector<OutFile>& files, int threads, Progress& prog) {
   const OutFile& of = files[size_t(L.file)];
   const uint64_t srb = L.srb;
+  if (L.fmt.iq) {  // routed experts kept as stored: their bytes (an experts file without the GGUF's clone)
+    if (of.fd < 0) return;  // in the clone, where they are already
+    std::vector<uint8_t> buf;
+    for (uint64_t o = 0; o < L.src->bytes; o += kChunkBytes) {
+      if (g_stop) throw Error("Stopped; nothing was kept. The same command starts the conversion again.");
+      const uint64_t n = std::min<uint64_t>(kChunkBytes, L.src->bytes - o);
+      buf.resize(size_t(n));
+      L.f->read(*L.src, o, buf.data(), buf.size());
+      pwrite_all(of.fd, buf.data(), buf.size(), of.data0 + L.off_w + o, of.name);
+      prog.add(n);
+    }
+    return;
+  }
   // the whole tensor when its rows are reordered by value head (moderate sizes), else chunks of rows
   const bool whole = L.map.vfrom >= 0;
   const uint64_t step = whole ? L.rows : std::max<uint64_t>(1, kChunkBytes / std::max<uint64_t>(srb, 1));
@@ -1283,40 +1334,58 @@ std::string import_model(const ImportOptions& opt) {
       P.notes.insert("not converted: " + t.name + " (a tensor Kapitsa's Qwen3.5 does not use)");
   Tok tok = make_tokenizer(f, P.hp);
 
-  // output files: trunk shards of at most 5 GB, then mtp.safetensors
+  // output files: trunk shards of at most 5 GB, the routed experts kept as stored (experts*.safetensors, one per GGUF
+  // part that holds them), then mtp.safetensors
   uint64_t cur = 0, total = 0, src_total = 0;
   int shards = 0;
   for (Lin& L : P.lins) {
-    if (L.mtp) continue;
+    if (L.mtp || L.fmt.iq) continue;
     const uint64_t b = L.rows * L.row_w() + 2 * L.rows * L.row_s();
     if (shards == 0 || (cur + b > kShardBytes && cur > 0)) ++shards, cur = 0;
     L.file = shards - 1;
     cur += b;
   }
-  std::vector<std::vector<Lin*>> per(size_t(shards + (P.has_mtp ? 1 : 0)));
+  std::vector<int> xparts;  // the GGUF part of each experts file
+  for (const Lin& L : P.lins)
+    if (L.fmt.iq && std::find(xparts.begin(), xparts.end(), L.src->part) == xparts.end()) xparts.push_back(L.src->part);
+  const int nx = int(xparts.size());
+  std::vector<std::vector<Lin*>> per(size_t(shards + nx + (P.has_mtp ? 1 : 0)));
   for (Lin& L : P.lins) {
-    if (L.mtp) L.file = shards;
+    if (L.mtp) L.file = shards + nx;
+    else if (L.fmt.iq) L.file = shards + int(std::find(xparts.begin(), xparts.end(), L.src->part) - xparts.begin());
     per[size_t(L.file)].push_back(&L);
-    src_total += L.src_bytes();
   }
   for (int i = 0; i < shards; ++i) {
     char b[64];
     snprintf(b, sizeof b, "model-%05d-of-%05d.safetensors", i + 1, shards);
     P.files.push_back(shards == 1 ? "model.safetensors" : b);
   }
+  for (int i = 0; i < nx; ++i) {
+    char b[64];
+    snprintf(b, sizeof b, "experts-%05d-of-%05d.safetensors", i + 1, nx);
+    P.files.push_back(nx == 1 ? "experts.safetensors" : b);
+  }
   if (P.has_mtp) P.files.push_back("mtp.safetensors");
+  // An experts file is, where it can be, an APFS clone of its GGUF part with a safetensors header written over the
+  // GGUF's (its tensor data then sits where the GGUF has it: no second copy of the experts on the disk, and the folder
+  // keeps working when the GGUF is deleted); else (another disk, KAPITSA_IMPORT_COPY=1) a file of the experts' bytes.
+  const bool copy_env = getenv("KAPITSA_IMPORT_COPY") && atoi(getenv("KAPITSA_IMPORT_COPY")) > 0;
+  std::vector<bool> xclone(size_t(nx), false);
+  std::vector<uint64_t> xdata0(size_t(nx), 0);  // the GGUF part's tensor data start
+  std::vector<std::string> xheader(static_cast<size_t>(nx));  // the clone's header
   // headers and offsets
   std::vector<std::string> headers(P.files.size());
   std::vector<uint64_t> sizes(P.files.size());
   json weight_map = json::object();
   uint64_t trunk_bytes = 0;
   for (size_t fi = 0; fi < P.files.size(); ++fi) {
+    const bool xf = int(fi) >= shards && int(fi) < shards + nx;
     json h = json::object();
     uint64_t off = 0;
     for (Lin* L : per[fi]) {
       auto put = [&](const std::string& n, const char* dt, std::vector<int64_t> shape, uint64_t bytes) {
         h[n] = json{{"dtype", dt}, {"shape", shape}, {"data_offsets", {off, off + bytes}}};
-        if (fi < size_t(shards)) weight_map[n] = P.files[fi];
+        if (fi < size_t(shards + nx)) weight_map[n] = P.files[fi];
         const uint64_t at = off;
         off += bytes;
         return at;
@@ -1326,6 +1395,11 @@ std::string import_model(const ImportOptions& opt) {
         continue;
       }
       std::vector<int64_t> ws = L->shape, ss = L->shape;
+      if (L->fmt.iq) {  // the blocks as bytes: [E, N, K / 256 * block bytes]
+        ws.back() = int64_t(L->row_w());
+        L->off_w = put(L->name + ".weight", "U8", ws, L->rows * L->row_w());
+        continue;
+      }
       if (L->fmt.dense()) {
         L->off_w = put(L->name + ".weight", "BF16", ws, L->rows * L->row_w());
         continue;
@@ -1345,8 +1419,45 @@ std::string import_model(const ImportOptions& opt) {
     hs.append((8 - hs.size() % 8) % 8, ' ');
     headers[fi] = hs;
     sizes[fi] = 8 + hs.size() + off;
+    if (xf) {
+      // the clone's header: the tensors at their places in the GGUF part, its data start the safetensors' (the JSON
+      // padded with spaces over the GGUF's header)
+      const size_t xi = size_t(fi) - size_t(shards);
+      const int part = xparts[xi];
+      uint64_t d0 = UINT64_MAX;
+      for (const auto& t : f.tensors())
+        if (t.part == part) d0 = std::min(d0, t.offset);
+      json c = json::object();
+      for (Lin* L : per[fi]) {
+        std::vector<int64_t> ws = L->shape;
+        ws.back() = int64_t(L->row_w());
+        c[L->name + ".weight"] =
+            json{{"dtype", "U8"}, {"shape", ws}, {"data_offsets", {L->src->offset - d0, L->src->offset - d0 + L->src->bytes}}};
+      }
+      c["__metadata__"] = json{{"format", "gguf-iq"}, {"source", base_name(f.parts()[size_t(part)])}};
+      std::string cs = c.dump();
+      xdata0[xi] = d0;
+      if (!copy_env && d0 != UINT64_MAX && cs.size() + 8 <= d0 &&
+          device_of(f.parts()[size_t(part)]) == device_of(models)) {
+        cs.append(size_t(d0 - 8 - cs.size()), ' ');
+        xheader[xi] = cs;
+        xclone[xi] = true;
+      }
+      for (Lin* L : per[fi])
+        if (!xclone[xi]) src_total += L->src_bytes();
+      total += xclone[xi] ? d0 : sizes[fi];  // a clone writes its header's pages
+      trunk_bytes += off;
+      continue;
+    }
+    for (Lin* L : per[fi]) src_total += L->src_bytes();
     total += sizes[fi];
     if (fi < size_t(shards)) trunk_bytes += off;
+  }
+  if (nx) {
+    const bool all = std::find(xclone.begin(), xclone.end(), false) == xclone.end();
+    P.notes.insert(all ? "MoE experts kept as stored (IQ2_XXS / IQ2_S / IQ3_S): read in place through an APFS clone of "
+                         "the GGUF (no second copy on the disk)"
+                       : "MoE experts kept as stored (IQ2_XXS / IQ2_S / IQ3_S), copied into experts.safetensors");
   }
   total += tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size() + (1u << 20);
 
@@ -1460,6 +1571,28 @@ std::string import_model(const ImportOptions& opt) {
     for (size_t i = 0; i < P.files.size(); ++i) {
       OutFile& o = outs[i];
       o.name = tmp + "/" + P.files[i];
+      const bool xf = int(i) >= shards && int(i) < shards + nx;
+      if (xf && xclone[i - size_t(shards)]) {
+        // the GGUF part's clone with the safetensors header over its own (falls back to a copy)
+        const size_t xi = i - size_t(shards);
+        char real[PATH_MAX];
+        const std::string src = f.parts()[size_t(xparts[xi])];
+        if (clonefile(realpath(src.c_str(), real) ? real : src.c_str(), o.name.c_str(), 0) == 0) {
+          const int fd = open(o.name.c_str(), O_WRONLY);
+          if (fd < 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          const uint64_t hl = xheader[xi].size();
+          pwrite_all(fd, &hl, 8, 0, o.name);
+          pwrite_all(fd, xheader[xi].data(), xheader[xi].size(), 8, o.name);
+          if (close(fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+          continue;  // fd stays -1: convert() leaves its tensors alone
+        }
+        xclone[xi] = false;
+        for (Lin* L : per[i]) src_total += L->src_bytes();
+        if (free_bytes(models) < sizes[i] + kKeepFree)
+          throw Error("Not enough disk space: the GGUF can't be cloned into " + hub::tilde(models) + " (" +
+                      strerror(errno) + "), and a copy of its experts takes " + gb(sizes[i]) + ", which would leave "
+                      "less than 6 GB free.");
+      }
       o.fd = open(o.name.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
       if (o.fd < 0) throw Error("Can't create " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
       fcntl(o.fd, F_NOCACHE, 1);
@@ -1475,7 +1608,7 @@ std::string import_model(const ImportOptions& opt) {
     for (const Lin& L : P.lins) convert(L, outs, threads, prog);
     prog.end();
     for (auto& o : outs) {
-      if (close(o.fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
+      if (o.fd >= 0 && close(o.fd) != 0) throw Error("Can't write " + hub::tilde(o.name) + ": " + strerror(errno) + ".");
       o.fd = -1;
     }
     if (shards > 0) {
@@ -1539,7 +1672,8 @@ int run_import(int argc, char** argv) {
       "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
       "5-bit (group 64), IQ3_x/Q3_K 4-bit group 32, IQ1/IQ2/Q2_K 3-bit group 64, F16/BF16/F32 bf16; in a mostly\n"
       "4-bit-or-better file its 1-3-bit tensors take the file's majority format. MoE experts take 5-bit group 64 from\n"
-      "4-bit types.\n";
+      "4-bit types; in IQ2_XXS / IQ2_S / IQ3_S they stay as stored, read in place through an APFS clone of the GGUF\n"
+      "(no second copy on the disk; KAPITSA_IMPORT_COPY=1 copies them).\n";
   for (int i = 2; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {
