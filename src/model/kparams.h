@@ -322,4 +322,24 @@ struct Moe8CombineX8 {
   uint32_t unroll, write_t;
 };
 
+// wfmt_iq.metal: routed experts in llama.cpp's IQ blocks
+struct IqSec {
+  uint32_t x1, x2, x3, d;
+};
+
+struct MoeIq {
+  uint32_t D, I, SI, k;
+  IqSec gu, dn;
+};
+
+struct Moe8Iq {
+  uint32_t K, N, h_stride, hs_stride, k;
+  IqSec sec;
+};
+
+struct QrmIq {
+  uint32_t N, K, x_ld, y_ld;
+  IqSec sec;
+};
+
 } // namespace ni::kp

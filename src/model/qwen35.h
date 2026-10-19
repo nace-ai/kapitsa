@@ -11,6 +11,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ni {
@@ -33,15 +34,21 @@ struct QLinear {
   int bits = 4, gs = 64;
   bool mtp = false;   // part of the MTP head (8-bit prefill GEMM on qmr8 since it was introduced)
   bool gate = false;  // the trunk's MoE router / shared-expert gate: their 8-bit prefill GEMMs keep the old kernels
+  // Routed experts of a GGUF import kept in llama.cpp's blocks (src/kernels/wfmt_iq.metal): their GGUF type
+  // (gguf::kIQ2_XXS, kIQ2_S or kIQ3_S; bits 2 / 3, gs 256, s and b point at w), 0 otherwise. w is the stacked
+  // [E, N, K] matrix in the kernels' layout, its sections at these byte offsets (Q at 0).
+  uint32_t iq = 0;
+  uint32_t iq_x1 = 0, iq_x2 = 0, iq_x3 = 0, iq_d = 0;
   explicit operator bool() const { return w != nullptr; }
-  bool dense() const { return bits == 16; }
-  bool q4() const { return bits == 4 && gs == 64; }  // the specialized 4-bit kernels
-  bool q8() const { return bits == 8 && gs == 64; }  // the specialized 8-bit kernels
-  // kernel-name suffix of the format: "f16" (bf16) or "f<bits>g<gs>"
-  std::string fmt() const { return bits == 16 ? std::string("f16") : "f" + std::to_string(bits) + "g" + std::to_string(gs); }
-  bool same_format(const QLinear& o) const { return bits == o.bits && (bits == 16 || gs == o.gs); }
-  size_t row_bytes() const { return size_t(K) * size_t(bits) / 8; }
-  size_t group_row_bytes() const { return bits == 16 ? 0 : size_t(K / gs) * 2; }  // scales (or biases) per row
+  bool dense() const { return bits == 16 && !iq; }
+  bool q4() const { return bits == 4 && gs == 64 && !iq; }  // the specialized 4-bit kernels
+  bool q8() const { return bits == 8 && gs == 64 && !iq; }  // the specialized 8-bit kernels
+  // kernel-name suffix of the format: "f16" (bf16), "f<bits>g<gs>", or iq2xxs / iq2s / iq3s
+  std::string fmt() const;
+  std::string name() const;  // "4-bit group 64", "bf16", "IQ2_XXS", ...
+  bool same_format(const QLinear& o) const { return iq == o.iq && bits == o.bits && (bits == 16 || gs == o.gs); }
+  size_t row_bytes() const;  // weight bytes per row (IQ: the blocks', d included)
+  size_t group_row_bytes() const { return bits == 16 || iq ? 0 : size_t(K / gs) * 2; }  // scales (or biases) per row
 };
 
 // Formats with a full set of kernels: 4-bit and 8-bit group 64 (specialized), and the generic ones of wfmt.metal.
@@ -64,6 +71,7 @@ struct Qwen35Config {
   bool moe = false;
   int experts = 0, top_k = 0, moe_I = 0, shared_I = 0, dense_I = 0;
   bool norm_topk = true;
+  bool iq = false;  // routed experts in llama.cpp's IQ blocks (GGUF imports): their own MoE kernels (qwen35_iq.cpp)
   std::vector<int> eos;
   int group_size = 64;
 };
@@ -502,6 +510,13 @@ class Qwen35 : public Model {
   // next_norm: the norm of what follows (the next layer's input norm, or the final norm); when given, the combine may
   // also write that norm's X8 table (V8Knobs::fuse & 1; with v8_tw() also the T table). Returns whether it did.
   bool enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm = nullptr);
+  // ---- routed experts in llama.cpp's IQ blocks (GGUF imports; qwen35_iq.cpp) ----
+  void load_iq_experts();
+  std::string iq_layer_check(const Layer& L) const;  // "" when the IQ MoE kernels take the layer
+  void enc_moe_iq_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
+  void enc_moe8_iq(Encoder& e, const Layer& L, int R, int li);
+  void enc_moe_prefill_iq(Encoder& e, const Layer& L, int T, const Buffer& x, bool xh_ready);
+  std::unordered_map<const Tensor*, std::string> iq_src_;  // IQ experts' deferred tensors until load_iq_experts
 
   std::string dir_;
   std::string prefix_;

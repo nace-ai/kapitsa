@@ -1,5 +1,6 @@
 #include "model/qwen35.h"
 #include "ane/ffn_split.h"
+#include "gguf/gguf.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -39,6 +40,15 @@ bool format_supported(int bits, int gs) {
 }
 std::string format_name(int bits, int gs) {
   return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
+}
+std::string QLinear::fmt() const {
+  if (iq) return iq == gguf::kIQ2_XXS ? "iq2xxs" : iq == gguf::kIQ2_S ? "iq2s" : "iq3s";
+  return bits == 16 ? std::string("f16") : "f" + std::to_string(bits) + "g" + std::to_string(gs);
+}
+std::string QLinear::name() const { return iq ? gguf::type_name(iq) : format_name(bits, gs); }
+size_t QLinear::row_bytes() const {
+  if (iq) return size_t(K) / 256 * (iq == gguf::kIQ2_XXS ? 66 : iq == gguf::kIQ2_S ? 82 : 110);
+  return size_t(K) * size_t(bits) / 8;
 }
 static bool gdn_par();
 static bool qmm8_on();
@@ -341,7 +351,16 @@ void Qwen35::prewarm_pipelines() {
                                &L.su, &L.sd, &L.mg, &L.mu, &L.md})
         see(*q);
       if (L.mg && L.mg.q8()) names.insert("mlp_gate_up_f8g64");
-      if (L.eg && !L.eg.q4() && L.eg.bits != 4) {
+      if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
+        const bool t16 = cfg_.moe_I == 512 && cfg_.shared_I == 512;
+        for (const std::string& n : {"moei_gu_rows_" + L.eg.fmt() + "_r2", "moe8i_gu_" + L.eg.fmt(),
+                                     "qrmi_gu_" + L.eg.fmt() + "_m32_n64", "moei_down_rows_" + L.ed.fmt() + "_r8" +
+                                     (t16 ? "_t16" : ""), "moe8i_down_" + L.ed.fmt() + "_nf2",
+                                     "qrmi_dn_" + L.ed.fmt() + "_m32_n128", std::string("moe_bucket3"),
+                                     std::string("moe_topk256_rows"), std::string("moe8_plan"),
+                                     std::string("moe8_combine"), std::string("moe_combine")})
+          names.insert(n);
+      } else if (L.eg && !L.eg.q4() && L.eg.bits != 4) {
         moe_gen = true;
         names.insert("qrmf_gu_" + L.eg.fmt() + "_m32_n64");
         names.insert("qrmf_dn_" + L.eg.fmt() + "_m32_n128");
@@ -432,6 +451,8 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
   cfg.shared_I = t.value("shared_expert_intermediate_size", 0);
   cfg.dense_I = t.value("intermediate_size", 0);
   cfg.norm_topk = t.value("norm_topk_prob", true);
+  for (auto& [k, v] : quant.items())
+    if (v.is_object() && v.value("mode", std::string()).rfind("iq", 0) == 0) cfg.iq = true;
   auto eos = root.contains("eos_token_id") ? root["eos_token_id"] : t["eos_token_id"];
   if (eos.is_array())
     for (auto& e : eos) cfg.eos.push_back(e);
@@ -483,12 +504,38 @@ const Tensor* Qwen35::bf16_copy(const Tensor* t, float offset) {
   return &owned_.back();
 }
 
+// The GGUF type of a module kept in llama.cpp's IQ blocks (quantization mode iq2_xxs / iq2_s / iq3_s), else 0
+static uint32_t iq_mode(const std::string& full, const std::string& name) {
+  for (const auto& key : {full, name})
+    if (quant_cfg_.contains(key) && quant_cfg_[key].is_object()) {
+      const std::string m = quant_cfg_[key].value("mode", std::string());
+      if (m == "iq2_xxs") return gguf::kIQ2_XXS;
+      if (m == "iq2_s") return gguf::kIQ2_S;
+      if (m == "iq3_s") return gguf::kIQ3_S;
+    }
+  return 0;
+}
+
 QLinear Qwen35::qlin(const std::string& name, bool required) {
   QLinear L;
   const std::string full = tname(name);
   L.w = ws_.find(full + ".weight");
   if (!L.w) {
     if (required) fatal("missing %s.weight", full.c_str());
+    return L;
+  }
+  if (const uint32_t t = iq_mode(full, name)) {
+    // routed experts in llama.cpp's blocks, [E, N, K / 256 * block bytes] as bytes: read by load_iq_experts
+    const size_t bb = t == gguf::kIQ2_XXS ? 66 : t == gguf::kIQ2_S ? 82 : 110;
+    if (L.w->dtype != DType::U8 || L.w->shape.size() != 3 || L.w->shape[2] % int64_t(bb))
+      fatal("%s.weight: not the %s blocks of stacked experts", full.c_str(), gguf::type_name(t).c_str());
+    L.iq = t;
+    L.bits = t == gguf::kIQ3_S ? 3 : 2;
+    L.gs = 256;
+    L.N = uint32_t(L.w->shape[1]);
+    L.K = uint32_t(L.w->shape[2] / int64_t(bb) * 256);
+    L.s = L.b = L.w;
+    iq_src_[L.w] = full + ".weight";
     return L;
   }
   L.s = ws_.find(full + ".scales");
@@ -539,13 +586,18 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   load_config(dir);
   // Text-only engine for now: skip the vision tower and (until speculative decoding lands) MTP. Under the test
   // transforms (NI_DEQUANT / NI_REQUANT) the linears they select are read only when converted.
+  // routed experts in llama.cpp's IQ blocks (GGUF imports) are read by load_iq_experts, into their GPU layout
+  WeightStore::Filter defer = [td = transform_defer()](const std::string& n) {
+    if (n.size() > 7 && n.compare(n.size() - 7, 7, ".weight") == 0 && iq_mode(n.substr(0, n.size() - 7), "")) return true;
+    return td && td(n);
+  };
   ws_.open_dir(
       dir,
       [](const std::string& n) {
         return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
                n.rfind("mtp.", 0) != 0;
       },
-      nullptr, transform_defer());
+      nullptr, defer);
   if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
   else if (ws_.has("model.language_model.embed_tokens.weight")) hf_names_ = true;  // official Hugging Face layout
   else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
@@ -639,7 +691,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
     if (converted)
       logi("converted %d parameter tensors to bf16 at load (%d values not exactly representable)", converted, lossy);
     auto check = [](const QLinear& q) {
-      if (q && !q.dense() && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
+      if (q && !q.dense() && !q.iq && (q.s->dtype != DType::BF16 || q.b->dtype != DType::BF16))
         fatal("quantized weights with non-bf16 scales/biases are not supported");
     };
     check(embed_);
@@ -649,6 +701,7 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
                                &L.eu, &L.ed, &L.sg, &L.su, &L.sd, &L.mg, &L.mu, &L.md})
         check(*q);
   }
+  load_iq_experts();
   // Checks the kernels' assumptions.
   check_shapes();
   test_transforms();
@@ -749,8 +802,10 @@ std::vector<Qwen35::ActBuf> Qwen35::act_layout(const Qwen35Config& c, int T, int
   const size_t P = Tz * std::max(c.top_k, 1);
   const size_t I = size_t(std::max({c.moe_I, c.shared_I, c.dense_I, 1}));
   // fused MoE prefill: T shared-expert rows after the P pair rows (hg/hu stay: a layer the fused kernels
-  // do not support falls back to the original path)
-  const size_t S = c.moe && moe_fused() ? Tz : 0;
+  // do not support falls back to the original path). IQ experts (GGUF imports) run their own prefill: neither (the
+  // 35B's 2048-row chunk: 86 MB less), unless an MTP head's experts (4-bit) may take the other paths.
+  const bool iq_only = c.iq && !mtp;
+  const size_t S = c.moe && moe_fused() && !iq_only ? Tz : 0;
   const size_t W = size_t(std::max({c.hidden, c.lin_hv * c.lin_dv, c.hq * c.head_dim, c.dense_I}));  // widest half row
   // MoE-only buffers (routing, sorted pairs, expert outputs, the shared expert's fallback rows) take one
   // row on dense models
@@ -764,8 +819,8 @@ std::vector<Qwen35::ActBuf> Qwen35::act_layout(const Qwen35Config& c, int T, int
       {&Qwen35::stok_, (Pm + S) * 4, "stok"},
       {&Qwen35::tiles_, (Pm + S + size_t(std::max(c.experts, 1)) + 1) * 3 * 4, "tiles"},
       {&Qwen35::ntiles_, 16, "ntiles"},
-      {&Qwen35::hg_, (c.moe ? P : hgu_rows) * I * 4, "hg"},
-      {&Qwen35::hu_, (c.moe ? P : hgu_rows) * I * 4, "hu"},
+      {&Qwen35::hg_, (c.moe ? (iq_only ? 1 : P) : hgu_rows) * I * 4, "hg"},
+      {&Qwen35::hu_, (c.moe ? (iq_only ? 1 : P) : hgu_rows) * I * 4, "hu"},
       {&Qwen35::hhalf_, (P + S) * I * 2, "hhalf"},
       {&Qwen35::yd_, (Pm + S) * D * 4, "yd"},
       {&Qwen35::sgb_, Tm * I * 4, "sgb"},
@@ -907,9 +962,17 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
     } else {
       m.formats = format_name(q.value("bits", 4), q.value("group_size", 64));
       std::map<std::string, int> other;
-      for (auto& [k, v] : q.items())
-        if (v.is_object() && (v.value("bits", 4) != q.value("bits", 4) || v.value("group_size", 64) != q.value("group_size", 64)))
+      for (auto& [k, v] : q.items()) {
+        if (!v.is_object()) continue;
+        const std::string mode = v.value("mode", std::string());
+        if (mode.rfind("iq", 0) == 0) {  // llama.cpp's IQ blocks: IQ2_XXS, IQ2_S, IQ3_S
+          std::string u = mode;
+          for (auto& c : u) c = char(toupper(static_cast<unsigned char>(c)));
+          ++other[u];
+        } else if (v.value("bits", 4) != q.value("bits", 4) || v.value("group_size", 64) != q.value("group_size", 64)) {
           ++other[format_name(v.value("bits", 4), v.value("group_size", 64))];
+        }
+      }
       for (auto& [f, n] : other) m.formats += " + " + std::to_string(n) + " modules " + f;
     }
   }
@@ -1420,7 +1483,8 @@ void Qwen35::test_transforms() {
     for (QLinear* q : {&L.qkv, &L.z, &L.a, &L.b, &L.out}) apply(*q, "gdn", i);
     for (QLinear* q : {&L.q, &L.k, &L.v, &L.o}) apply(*q, "attn", i);
     for (QLinear* q : {&L.router, &L.shared_gate}) apply(*q, "router", i);
-    for (QLinear* q : {&L.eg, &L.eu, &L.ed}) apply(*q, "experts", i);
+    for (QLinear* q : {&L.eg, &L.eu, &L.ed})
+      if (!q->iq) apply(*q, "experts", i);
     for (QLinear* q : {&L.sg, &L.su, &L.sd}) apply(*q, "shared", i);
     for (QLinear* q : {&L.mg, &L.mu, &L.md}) apply(*q, "mlp", i);
   }
@@ -1460,6 +1524,11 @@ void Qwen35::check_formats() const {
   if (!cfg_.moe) return;
   auto all = [&](const Layer& L, const char* what) {
     if (!L.eg) return;
+    if (L.eg.iq || L.eu.iq || L.ed.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
+      const std::string why = iq_layer_check(L);
+      if (!why.empty()) fatal("%s: IQ experts (%s) need %s", what, L.eg.name().c_str(), why.c_str());
+      return;
+    }
     if (!L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su))
       fatal("%s: experts' gate/up/down (or the shared expert's gate/up) differ in format", what);
     if (!moe_prefill_format(L.eg))
@@ -1474,7 +1543,7 @@ void Qwen35::check_formats() const {
 std::string Qwen35::formats_summary() const {
   std::map<std::string, size_t> bytes;  // format -> weight bytes
   auto add = [&](const QLinear& q) {
-    if (q) bytes[format_name(q.bits, q.gs)] += q.w->buf.size + (q.dense() ? 0 : q.s->buf.size + q.b->buf.size);
+    if (q) bytes[q.name()] += q.w->buf.size + (q.dense() || q.iq ? 0 : q.s->buf.size + q.b->buf.size);
   };
   add(embed_);
   if (lm_head_.w != embed_.w) add(lm_head_);
@@ -2282,6 +2351,10 @@ void Qwen35::enc_qmm_moe(Encoder& e, const QLinear& L, const Buffer& xh, const B
 }
 
 void Qwen35::enc_moe_prefill(Encoder& e, const Layer& L, int T, const Buffer& xbuf, bool xh_ready) {
+  if (L.eg.iq) {
+    enc_moe_prefill_iq(e, L, T, xbuf, xh_ready);
+    return;
+  }
   if (shortpf() && T <= shortpf_moe_max() && enc_moe_prefill_small(e, L, T, xbuf, xh_ready)) return;
   if ((moe_fused() || L.eg.bits != 4) && enc_moe_prefill_fused(e, L, T, xbuf, xh_ready)) return;
   if (L.eg.bits != 4) fatal("MoE prefill: no kernels for %s experts", format_name(L.eg.bits, L.eg.gs).c_str());

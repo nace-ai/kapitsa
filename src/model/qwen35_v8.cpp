@@ -533,6 +533,10 @@ static int moe_emu_mode() {
 
 // MoE block for R rows: x_ += sum_j w_j expert_j(n) + w_s shared(n), n = norm(x_).
 bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm) {
+  if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
+    enc_moe8_iq(e, L, R, li);
+    return false;
+  }
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
   // other expert formats: wfmt.metal's moe8g_* passes for the format pairs they have (the experts de-duplicated over

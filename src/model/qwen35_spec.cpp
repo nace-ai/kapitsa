@@ -721,13 +721,21 @@ void Qwen35::enc_attn_rows(Encoder& e, const Seq& s, const Layer& L, const Buffe
 void Qwen35::enc_moe_rows(Encoder& e, const Layer& L, int R, const Buffer& x, bool mtp_layer, const Buffer* in) {
   const int D = cfg_.hidden, k = cfg_.top_k;
   if (in && in->mtl != xrn_.mtl) fatal("enc_moe_rows: the input rows must be xrn_");
-  enc_qmvr_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, in ? *in : x, in ? nullptr : L.post_norm, R, &xrn_);
+  // IQ experts (GGUF imports) at one row: their bf16 router and shared gate on the decode matvec with the norm folded
+  // (qmvg_multi_f16, 14 us per layer on the M1 Pro) instead of a row norm and two X8 tables and 8-row GEMMs (54 us)
+  if (L.eg.iq && R == 1 && !in) enc_qmv_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, x, L.post_norm, &xrn_);
+  else
+    enc_qmvr_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, in ? *in : x, in ? nullptr : L.post_norm, R, &xrn_);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   // E = 256, k <= 8 (Qwen3.5/3.6): the unrolled form; any other E <= 512, k <= 16: one simdgroup per row
   e.use(pipe2(cfg_.experts == 256 && k <= 8 ? "moe_topk256_rows" : "moe_topk_rows"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(R, 1, 1, 32);
+  if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
+    enc_moe_iq_rows(e, L, R, x);
+    return;
+  }
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
   // opt-in: measured slower than per-row expert reads on M4 Pro
   static const bool no_dedupe = !env_on("NI_DEDUPE");
