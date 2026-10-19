@@ -123,7 +123,8 @@ struct V8Knobs {
   // timing only (wrong outputs): skip kernel groups of a dense verify / drafting pass. Verify: 1 GDN step, 2 attention
   // core, 4 GDN prep, 8 MLP down, 16 MLP gate/up, 32 GDN in_proj, 64 GDN out / attention o, 128 LM head + sampling,
   // 256 normed X8 preps, 512 attention q|k|v; drafter: 1024 MLP gate/up, 2048 MLP down, 4096 LM head,
-  // 8192 conv / attention projections, 16384 ring commit. With NI_AB: the in-pipeline cost of those kernels.
+  // 8192 conv / attention projections, 16384 ring commit, 32768 attention, 262144 attention reduce. With NI_AB: the
+  // in-pipeline cost of those kernels.
   int skip = 0;
   int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
   int tw = 1;   // the dense 4-bit verify GEMMs on the GPU's matrix units (qmm8t; Apple10 = M5 and macOS 26, else off)
@@ -135,10 +136,11 @@ struct V8Knobs {
   int tkp = -1;  // NI_V8_MOE_TOPKPLAN: the router top-k inside moe8_plan (-1 = the environment's)
   int shs = -1;  // NI_V8_MOE_SHS: the shared expert as small tiles (with split 8; -1 = the environment's)
   int split = -1;  // NI_V8_MOE_SPLIT: experts with 3..split rows as 2-row small tiles (-1 = the environment's)
+  int dfl = 0;  // drafter experiments (DFlash2::encode_draft_impl): variant bits, A/B'd per cycle with NI_AB
 };
 V8Knobs& v8_knobs();
 // "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw, fuse, emu, shs,
-// split, tkp); unknown keys are fatal
+// split, tkp, dfl); unknown keys are fatal
 V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
 class Qwen35 : public Model {

@@ -92,7 +92,7 @@ int main(int argc, char** argv) {
     A.L.w = &A.w; A.L.s = &A.s; A.L.b = &A.b;
     B.L.w = &B.w; B.L.s = &B.s; B.L.b = &B.b;
     Buffer xh = g.alloc(size_t(8) * K * 2), xs = g.alloc(size_t(K / 64) * 8 * 4);
-    Buffer y = g.alloc(size_t(8) * N * 4), hh = g.alloc(size_t(8) * N * 2), hs = g.alloc(size_t(N / 64 + 1) * 8 * 4);
+    Buffer y = g.alloc(size_t(8) * N * 4), hh = g.alloc(size_t(16) * N * 2), hs = g.alloc(size_t(N / 64 + 1) * 8 * 4);
     std::uniform_real_distribution<float> ud(-2.0f, 2.0f);
     __fp16* X = xh.as<__fp16>();
     for (size_t i = 0; i < size_t(8) * K; ++i) X[i] = __fp16(ud(rng));

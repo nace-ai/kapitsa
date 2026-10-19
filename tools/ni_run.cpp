@@ -407,6 +407,8 @@ int main(int argc, char** argv) {
     float div_logit[2] = {0, 0};
     std::vector<int> acc_hist(K + 1, 0), reached(K, 0), acc_pos(K, 0);
     double gpu_sum = 0, wall_sum = 0;
+    std::vector<double> draft_ms, draft_ab[2];  // GPU time of the drafting command buffers (modes 2, 3)
+    double gap_sum = 0;
     bool stop2 = false;
     if (Encoder::profiling()) Encoder::profile_report(1);
     // NI_DFLASH_CB: 1 = the whole cycle in one command buffer; 2 = its drafting and verify halves as two
@@ -483,6 +485,11 @@ int main(int argc, char** argv) {
       const double gms = e->gpu_ms() + (e1 ? e1->gpu_ms() : 0.0);
       gpu_sum += gms;
       wall_sum += wall;
+      if (e1 && cycles > 0) {
+        draft_ms.push_back(e1->gpu_ms());
+        draft_ab[cycles & 1].push_back(e1->gpu_ms());
+        gap_sum += e->gpu_start_host_ms() - e1->gpu_end_host_ms();  // GPU idle between the drafting pass and the verify
+      }
       if (cycles > 0) ab_ms[cycles & 1].push_back(gms);  // the first cycle includes the first drafting half
       const int a = dfl->accepted();
       const int* tk = s.tokens();
@@ -574,6 +581,23 @@ int main(int argc, char** argv) {
       fprintf(stderr, "cycle trace (ms, mean of %d): host encodes the verify %.3f | GPU idle verify->draft %.3f, draft %.3f, "
               "idle draft->verify %.3f, verify %.3f | verify commit->start %.3f, host wake-up %.3f\n", ntr, tr[0] / ntr,
               tr[6] / ntr, tr[1] / ntr, tr[2] / ntr, tr[3] / ntr, tr[5] / ntr, tr[4] / ntr);
+    if (!draft_ms.empty()) {
+      std::vector<double> v = draft_ms;
+      std::sort(v.begin(), v.end());
+      double mean = 0;
+      for (double x : v) mean += x;
+      fprintf(stderr, "drafting pass: GPU ms/cycle mean %.3f median %.3f p10 %.3f p90 %.3f (%zu cycles); GPU idle before "
+              "the verify %.3f ms/cycle\n", mean / v.size(), v[v.size() / 2], v[v.size() / 10], v[v.size() * 9 / 10], v.size(),
+              gap_sum / v.size());
+      if (ab) {
+        double mab[2] = {0, 0};
+        for (int k = 0; k < 2; ++k) {
+          for (double x : draft_ab[k]) mab[k] += x;
+          mab[k] /= std::max<size_t>(1, draft_ab[k].size());
+        }
+        fprintf(stderr, "drafting pass AB: A mean %.3f | B mean %.3f | B - A %+.3f ms\n", mab[0], mab[1], mab[1] - mab[0]);
+      }
+    }
     if (ab) {
       double med[2], mean[2];
       for (int k = 0; k < 2; ++k) {

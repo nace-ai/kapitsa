@@ -260,7 +260,7 @@ static void run_dfl_cmp(Gpu& g, const char* what, uint32_t N, uint32_t K, bool g
   // inputs in both layouts (same values)
   Buffer x = g.alloc(size_t(8) * K * 4), table = g.alloc(size_t(K) * 8 * 2), sums = g.alloc(size_t(K) / 64 * 8 * 4);
   Buffer xh = g.alloc(size_t(8) * K * 2), xs = g.alloc(size_t(K) / 64 * 8 * 4);
-  Buffer y = g.alloc(size_t(8) * N * 4), hh = g.alloc(size_t(8) * N * 2), hs = g.alloc(size_t(N) / 64 * 8 * 4);
+  Buffer y = g.alloc(size_t(8) * N * 4), hh = g.alloc(size_t(16) * N * 2), hs = g.alloc(size_t(N) / 64 * 8 * 4);
   std::normal_distribution<float> nd(0.0f, 1.0f);
   for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
   for (uint32_t t = 0; t < 8; ++t)

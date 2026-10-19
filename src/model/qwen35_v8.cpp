@@ -105,6 +105,7 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
     else if (key == "split") k.split = v;
     else if (key == "shs") k.shs = v;
     else if (key == "tkp") k.tkp = v;
+    else if (key == "dfl") k.dfl = v;
     else fatal("knobs: unknown key '%s'", key.c_str());
     a = b + 1;
   }

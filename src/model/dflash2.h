@@ -227,14 +227,15 @@ class DFlash2 {
 
   void load_config(const std::string& dir);
   const Tensor* own(const Tensor& t, const char* label);
-  QLinear quantize(const std::vector<const Tensor*>& parts, const char* label);
+  QLinear quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm = {});
   QLinear row_view(const QLinear& src, uint32_t r0, uint32_t n);
   void alloc_buffers();
 
+  // dfl_qmm8, or the target's tensor-op GEMM qmm8t (src/kernels/tensor/verify8t.metal) on the X8 table's T table
+  // when the target has it on (Qwen35::v8_tw) and every segment is 4-bit group 64 with oscale 1
   void enc_qmm8(Encoder& e, const std::vector<DflSeg8>& segs, const Buffer& xh, const Buffer& xs, uint32_t K,
-                uint32_t x_ld) {
-    dfl_enc_qmm8(e, segs, xh, xs, K, x_ld);
-  }
+                uint32_t x_ld);
+  bool tw_for(const std::vector<DflSeg8>& segs, uint32_t K) const;
   void enc_qmm8_gu(Encoder& e, const QLinear& g, const QLinear& u, const Buffer& xh, const Buffer& xs) {
     dfl_enc_qmm8_gu(e, g, u, xh, xs, hh_, hs_);
   }
@@ -261,7 +262,7 @@ class DFlash2 {
   int pf_n_ = 0, pf_rows_ = 0;
 
   // pass buffers (8 rows)
-  Buffer h_, n_, xh_, xs_, hh_, hs_, dyn_, q_, kv_, Q_, Kb_, Vb_, part_o_, part_ml_, u_;
+  Buffer h_, n_, xh_, xs_, xh2_, xs2_, hh_, hs_, gu_g_, gu_u_, dyn_, q_, kv_, Q_, Kb_, Vb_, part_o_, part_ml_, u_;
   Buffer logits_, sel_, tk_v_, tk_i_, cand_v_, cand_i_, edges_, walk_s_, qprob_, walk_k_, rope_cs_;
   // acceptance: target distributions of the verify rows, result {a, token}
   Buffer dist_id_, dist_p_, dist_keep_, acc_, kdyn_, gst_;
@@ -288,10 +289,13 @@ class DFlash2 {
   const QLinear& draft_head() const { return head_n_ ? head_sub_ : tg_.lm_head(); }
   uint32_t draft_vocab() const { return head_n_ ? head_n_ : uint32_t(cfg_.vocab); }
   void enc_to_v8(Encoder& e, const Buffer& xh, uint32_t K, const Buffer& table);
+  void enc_qmm8_cp(Encoder& e, const QLinear& L, const Tensor* base, const Buffer& xh, const Buffer& xs);
   // context commit
   Buffer capt_, y8_, c8_, kv8_, cdbg_;
   Buffer pcap_, xph_, yph_, cph_, kvph_;
-  int max_splits_ = 32;
+  int max_splits_ = 32;  // partial buffers (attention splits)
+  // context splits of the draft attention (NI_DFLASH_ATTN_SPLITS, <= max_splits_)
+  int attn_splits_ = std::clamp(getenv("NI_DFLASH_ATTN_SPLITS") ? atoi(getenv("NI_DFLASH_ATTN_SPLITS")) : 16, 1, 32);
   bool h0_set_ = false, debug_ = false;
   int attn_variant_ = 0, pf8_ = -1;
   std::map<std::string, Buffer> dbg_;
