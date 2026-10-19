@@ -17,10 +17,18 @@ brew install nace-ai/tap/kapitsa
 
 ```bash
 kapitsa opencode --model 35b    # also: kapitsa claude, kapitsa codex, kapitsa pi
+kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0.1:8000
+kapitsa doctor                  # this Mac's GPU and memory, and which models fit it
+kapitsa bench                   # benchmark this Mac, share it with the community
+kapitsa pull 27b                # download a model without starting it
+kapitsa list                    # downloaded models and their size
+kapitsa rm 27b                  # delete a downloaded model
+kapitsa import model.gguf       # use a Qwen GGUF from LM Studio, Ollama or llama.cpp
+kapitsa update                  # update now (it also updates itself)
 ```
 
-<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies. `kapitsa serve` starts the chat page and the
-OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usage guide](docs/usage.md)</sub>
+<sub>On a 16-24 GB Mac use `--model 9b`, or `4b` for the quickest replies. `kapitsa <command> --help` has the
+options. [Usage guide](docs/usage.md)</sub>
 
 ## Benchmarks
 
