@@ -34,8 +34,16 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
   ([details](#nemotron-35-lightning)).
 
 **MacBook Pro M5 Max 128 GB**
-- MLX on the 4B, 27B and 35B: mlx-lm. Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX
-  Flash-Next run.
+- One session, Kapitsa first and last (each cell is the newest run with an unflagged decode phase, else the newest run).
+  Results: [bench/results/2026-10-18-m5-max-session](../bench/results/2026-10-18-m5-max-session/).
+- MLX on the 4B, 27B and 35B: mlx-lm. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt;
+  mlx-serve MTP on the 4B and 35B (DFlash2 209 tok/s), DFlash2 on the 27B (MTP 80); llama.cpp MTP n-max 2 on the 4B and
+  35B, 3 on the 27B.
+- Other apps used the GPU during both of Kapitsa's 27B runs (contention flagged: 102 and, first run, 115 tok/s; greedy
+  113 and 110) and the MLX Flash-Next run. mlx-serve's DFlash2 draft tree on the 27B (blocks of 16) wrote 130 tok/s
+  sampled, 143 greedy, unflagged.
+- Bolt: oMLX's LiLiCorr drafter fails at T = 0.6; run greedy throughout it writes 121-124 tok/s, against Kapitsa's
+  greedy 125 (the first run 119).
 - Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's
   4.7-bit pack, MTPLX its author's pack, Ollama its NVFP4 tag. Ollama fails every 4K and 16K prompt there (out of GPU
   memory). LM Studio refuses to load its 119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve
