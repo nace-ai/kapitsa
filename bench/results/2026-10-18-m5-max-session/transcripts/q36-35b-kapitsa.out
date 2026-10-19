@@ -1,28 +1,28 @@
 
 ===== q36-35b-kapitsa  [kapitsa] Kapitsa (DFlash2 drafter)  version 474b3e6
-[16:50:51] q36-35b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 31631 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
-[16:50:51] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/.cache/kapitsa/benchmark-models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
-[16:50:57] q36-35b-kapitsa: ready after 6s (pid 31730, listener 31730)
-[16:50:59] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (1.57s)
-[16:50:59] q36-35b-kapitsa:  warm-up tools: ok (0.34s)
-[16:52:01] q36-35b-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 5%
-[16:53:03] q36-35b-kapitsa: gpu busy (123s): com.apple.WebKit[3316] 6%
-[16:54:04] q36-35b-kapitsa: gpu busy (185s): com.apple.WebKit[3316] 5%
-[16:55:06] q36-35b-kapitsa: gpu busy (247s): com.apple.WebKit[3316] 7%
-[16:56:00] q36-35b-kapitsa: GPU not quiet after 300s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+[23:23:39] q36-35b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 44150 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[23:23:39] q36-35b-kapitsa: starting <repo>/build/kapitsa serve --model ~/.cache/kapitsa/benchmark-models/qwen3.6-35b-a3b-4bit --model-id qwen3.6-35b-a3b --dflash ~/.cache/kapitsa/benchmark-models/drafters/Qwen3.6-35B-A3B-DFlash2 --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:23:43] q36-35b-kapitsa: ready after 4s (pid 71985, listener 71985)
+[23:23:45] q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (1.57s)
+[23:23:45] q36-35b-kapitsa:  warm-up tools: ok (0.33s)
+[23:24:47] q36-35b-kapitsa: gpu busy (62s): com.apple.WebKit[3316] 6%
+[23:25:49] q36-35b-kapitsa: gpu busy (124s): com.apple.WebKit[3316] 7%
+[23:26:51] q36-35b-kapitsa: gpu busy (186s): com.apple.WebKit[3316] 6%
+[23:27:53] q36-35b-kapitsa: gpu busy (248s): com.apple.WebKit[3316] 7%
+[23:28:46] q36-35b-kapitsa: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
 == q36-35b-kapitsa
-  decode T=0.6: 266.90 tok/s (e2e 269.10; 512 tok, finish=length, d4=0.9951)
-  decode T=0.6: 271.75 tok/s (e2e 270.32; 512 tok, finish=length, d4=0.5856)
-  decode T=0.6: 262.38 tok/s (e2e 262.51; 512 tok, finish=length, d4=0.9836)
-  decode T=0.6: 326.54 tok/s (e2e 323.55; 512 tok, finish=length, d4=0.9684)
-  decode T=0.6: 280.91 tok/s (e2e 279.76; 512 tok, finish=length, d4=0.9831)
-  decode median 271.75 (min 262.38, max 326.54) over 5/5 valid
-  decode T=0: median 306.96 (min 299.8, max 310.73) over 5/5 valid
-  prefill 4000: 4133 tok (ref 4133), TTFT 1.71s -> 2419 tok/s, cold cached=0 | cached TTFT median 0.03s over 3 turns (cached [4165, 4207, 4244])
-  prefill 16000: 16284 tok (ref 16286), TTFT 7.87s -> 2068 tok/s, cold cached=0 | cached TTFT median 0.03s over 3 turns (cached [16326, 16374, 16413])
+  decode T=0.6: 270.32 tok/s (e2e 270.33; 512 tok, finish=length, d4=0.9768)
+  decode T=0.6: 312.74 tok/s (e2e 308.14; 512 tok, finish=length, d4=0.7041)
+  decode T=0.6: 281.45 tok/s (e2e 283.66; 512 tok, finish=length, d4=0.5642)
+  decode T=0.6: 271.06 tok/s (e2e 271.48; 512 tok, finish=length, d4=0.9678)
+  decode T=0.6: 297.74 tok/s (e2e 292.30; 512 tok, finish=length, d4=0.5792)
+  decode median 281.45 (min 270.32, max 312.74) over 5/5 valid
+  decode T=0: median 317.48 (min 310.64, max 319.94) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 1.70s -> 2434 tok/s, cold cached=0 | cached TTFT median 0.03s over 3 turns (cached [4169, 4214, 4253])
+  prefill 16000: 16284 tok (ref 16286), TTFT 7.82s -> 2081 tok/s, cold cached=0 | cached TTFT median 0.04s over 3 turns (cached [16322, 16359, 16406])
   tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
   tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
-  memory: phys_footprint_peak 20.90 GB, resident mapped files 0.01 GB, swap used 14860.94 MB
-  -> <run-root>/out/results/q36-35b-kapitsa-20261018-165051.json
-[16:56:44] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
-[16:56:44] q36-35b-kapitsa: -> <run-root>/out/results/q36-35b-kapitsa-20261018-165051.json  flags: 1
+  memory: phys_footprint_peak 20.88 GB, resident mapped files 0.01 GB, swap used 14508.94 MB
+  -> <run-root>/out/results/q36-35b-kapitsa-20261018-232339.json
+[23:29:31] q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:29:31] q36-35b-kapitsa: -> <run-root>/out/results/q36-35b-kapitsa-20261018-232339.json  flags: 1

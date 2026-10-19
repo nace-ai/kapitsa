@@ -204,6 +204,39 @@ int main(int argc, char** argv) {
     check(r == on.reasoning && c == on.content, "deltas add up to the result");
   }
 
+  // Text is always well-formed UTF-8 (JSON can carry nothing else): a character the generation cut off, or bytes the
+  // model wrote ill-formed, come out as U+FFFD, one per maximal subpart (as Python's decode(errors="replace")).
+  {
+    const std::string R = "\xEF\xBF\xBD";
+    const std::vector<std::pair<std::string, std::string>> cases = {
+        {"h\xC3\xA9llo \xF0\x9F\x91\x8B \xE4\xB8\x96", "h\xC3\xA9llo \xF0\x9F\x91\x8B \xE4\xB8\x96"},  // well-formed
+        {"Hi! \xF0\x9F\x91", "Hi! " + R},                     // cut after 3 of 4 bytes
+        {"a\xC3(b", "a" + R + "(b"},                          // lead byte without its continuation
+        {"\xED\xA0\x80", R + R + R},                          // a surrogate's encoding
+        {"\xC0\xAF", R + R},                                  // overlong
+        {"\xF4\x90\x80\x80", R + R + R + R},                  // past U+10FFFF
+        {"x\xFF\x80y", "x" + R + R + "y"},                    // bytes that never start a character
+    };
+    bool ok = true;
+    std::string bad;
+    for (auto& [in, want] : cases)
+      if (utf8_valid(in) != want) ok = false, bad += " [" + in + "] -> [" + utf8_valid(in) + "]";
+    check(ok, "utf8_valid: U+FFFD per maximal subpart, well-formed text unchanged", bad);
+    // a reply cut by max_tokens inside an emoji (Qwen3.5-9B's "Say hi." at 4 tokens): the parser's text ends in U+FFFD
+    std::vector<int> byte_id(256, -1);
+    for (int id = 0; id < tok.vocab_size(); ++id)
+      if (tok.token_bytes(id).size() == 1 && byte_id[uint8_t(tok.token_bytes(id)[0])] < 0)
+        byte_id[uint8_t(tok.token_bytes(id)[0])] = id;
+    OutputParser p(tok, tok.find("<think>"), tok.find("</think>"), tok.find("<tool_call>"), tok.find("</tool_call>"),
+                   false, false, ojson::array(), false, false);
+    std::string content;
+    std::vector<int> ids = tok.encode("Hi!");
+    for (int b : {0xF0, 0x9F, 0x91}) ids.push_back(byte_id[b]);
+    for (int id : ids) content += p.push(id).content;
+    content += p.finish(false).content;
+    check(content == "Hi!" + R, "a reply cut inside a character ends in U+FFFD", content);
+  }
+
   printf(fails ? "FAILED: %d\n" : "ALL PASSED\n", fails);
   return fails ? 1 : 0;
 }

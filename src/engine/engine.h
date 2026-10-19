@@ -119,6 +119,24 @@ int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budg
 // nothing planned, a downloaded one or the default. *fits: whether the returned variant fits.
 hub::ModelRef pick_variant(const hub::CatalogModel& m, const EngineOptions& opt, size_t budget, bool* fits = nullptr);
 
+// What `--context` takes: tokens ("131072"), k or m of them as model cards count them (1024 and 1,048,576 tokens:
+// "128k", "1m"), or max (kContextMax): the model's own limit. 0, with *why, when it is none of those.
+constexpr int kContextMax = -1;
+int parse_context(const std::string& s, std::string* why);
+// The longest context the model was trained for: max_position_embeddings in its config.json (262,144 tokens for the
+// Qwen3.5 family, Dory and Bolt, 1,048,576 for Lightning and Super-VL); 0 when it does not say.
+int model_context_limit(const std::string& model_dir);
+// `context` within the model's limit, if it states one
+int context_within_limit(const std::string& model_dir, int context);
+// The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: kDefaultContext (128K),
+// or the model's limit where that is less, or less where this Mac's memory is tight: the largest, in 8K steps down to
+// kMinDefaultContext (32K), that keeps the drafter the model has at 32K, with one full conversation beside it. The
+// model and its precision are picked at 32K, and a context costs no memory until a conversation fills it (the KV
+// cache grows with it). *why, if given: why it is less than kDefaultContext.
+constexpr int kDefaultContext = 131072, kMinDefaultContext = 32768;
+enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
+int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);
+
 struct ChatRequest;
 // The model's chat template: <dir>/chat_template.jinja, else tokenizer_config.json's chat_template ("" if none)
 std::string chat_template_source(const std::string& model_dir);

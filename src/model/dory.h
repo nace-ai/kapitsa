@@ -189,6 +189,11 @@ class Dory : public Model {
   Buffer st0_, inp0_, acc_, live_all_;  // self-speculation: drafted rows' state after loop 0 and input rows; acceptance
   Buffer x4part_, x4cnt_;               // NVFP4 9-32-row GEMMs: split-K partials and arrival counters
   Buffer xh_;                           // 2-8 rows as half (the 8-row MMA products of a verify pass)
+  // NVFP4 codes in layout L2 (nh_x_fp4.metal) instead of L0, read by the L2 kernels (nh_x4_mv, nh_x4_v8, nh_x4_mm*,
+  // nh_gemm_fp4l2_m*): on the M1's GPU (Apple7) their decode is 12-16% faster at Dory's shapes, with the same outputs
+  // to the bit (the layouts' values differ by powers of 2, which the kernels undo exactly). NI_DORY_FP4=l0 / l2.
+  bool fp4_l2_ = false;
+  static const char* x4(const NhMat& W, const char* l2, const char* l0) { return W.l2 ? l2 : l0; }
   int attn_max_chunks_ = 64;
   // prefill activations (tmax_ rows; on first use)
   bool pf_alloc_ = false;

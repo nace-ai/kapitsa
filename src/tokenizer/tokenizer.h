@@ -43,7 +43,12 @@ class Tokenizer {
   mutable std::mutex cache_mu_;
 };
 
-// Incremental UTF-8-safe detokenizer: feeds token ids, emits only complete UTF-8 text.
+// `s` with every ill-formed UTF-8 subsequence replaced by U+FFFD (one per maximal subpart, as Python's
+// decode(errors="replace")): JSON can carry nothing else.
+std::string utf8_valid(const std::string& s);
+
+// Incremental UTF-8-safe detokenizer: feeds token ids, emits only complete, well-formed UTF-8 text. A sequence the
+// generation cut off (flush) or the model wrote ill-formed comes out as U+FFFD.
 class StreamDecoder {
  public:
   explicit StreamDecoder(const Tokenizer& t) : tok_(t) {}

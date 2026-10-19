@@ -523,7 +523,10 @@ std::string count(double n) {
   return b;
 }
 
-std::string context(int n) { return n > 0 && n % 1024 == 0 ? std::to_string(n / 1024) + "K" : count(n); }
+std::string context(int n) {
+  if (n > 0 && n % 1048576 == 0) return std::to_string(n / 1048576) + "M";
+  return n > 0 && n % 1024 == 0 ? std::to_string(n / 1024) + "K" : count(n);
+}
 
 void line(const std::string& s, FILE* f) {
   std::lock_guard<std::mutex> lk(g_mu);

@@ -1,0 +1,29 @@
+
+===== bolt-omlx-lilicorr  [omlx] oMLX + LiLiCorr drafter (the bundle's model file)  version unknown
+[23:17:26] bolt-omlx-lilicorr: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 43281 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[23:17:26] bolt-omlx-lilicorr: starting <repo>/bench/harness/launchers/omlx_bolt_serve.sh 8241 18241 nemotron-3.5-bolt-24gb --model-dir <run-root>/out/state/omlx/bolt/models --no-hf-cache --headless --base-path <run-root>/out/state/omlx/bolt/base-lilicorr --paged-ssd-cache-dir <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[23:17:37] bolt-omlx-lilicorr: ready after 10s (pid 58938, listener 58938)
+[23:17:39] bolt-omlx-lilicorr:  warm-up prefill~2.9k+decode64: ok (2.94s)
+[23:17:40] bolt-omlx-lilicorr:  warm-up tools: ok (0.81s)
+[23:18:42] bolt-omlx-lilicorr: gpu busy (62s): com.apple.WebKit[3316] 6%
+[23:19:44] bolt-omlx-lilicorr: gpu busy (124s): com.apple.WebKit[3316] 7%
+[23:20:46] bolt-omlx-lilicorr: gpu busy (186s): com.apple.WebKit[3316] 6%
+[23:21:48] bolt-omlx-lilicorr: gpu busy (248s): com.apple.WebKit[3316] 7%
+[23:22:42] bolt-omlx-lilicorr: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== bolt-omlx-lilicorr
+  decode T=0.6: NA tok/s (e2e NA; None tok, finish=None, d4=None) INVALID ['usage.completion_tokens missing (no fallback to event counts)'] flags ['finish_reason=None (expected length)']
+  decode T=0.6: NA tok/s (e2e NA; None tok, finish=None, d4=None) INVALID ['usage.completion_tokens missing (no fallback to event counts)'] flags ['finish_reason=None (expected length)']
+  decode T=0.6: NA tok/s (e2e NA; None tok, finish=None, d4=None) INVALID ['usage.completion_tokens missing (no fallback to event counts)'] flags ['finish_reason=None (expected length)']
+  decode T=0.6: NA tok/s (e2e NA; None tok, finish=None, d4=None) INVALID ['usage.completion_tokens missing (no fallback to event counts)'] flags ['finish_reason=None (expected length)']
+  decode T=0.6: NA tok/s (e2e NA; None tok, finish=None, d4=None) INVALID ['usage.completion_tokens missing (no fallback to event counts)'] flags ['finish_reason=None (expected length)']
+  decode median None (min None, max None) over 0/5 valid
+  decode T=0: median 119.39 (min 117.96, max 133.08) over 5/5 valid
+  prefill 4000: None tok (ref 4183), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  prefill 16000: None tok (ref 16514), TTFT NAs -> None tok/s, cold cached=None | cached TTFT median NAs over 0 turns (cached []) INVALID ['usage.prompt_tokens missing', 'turn 1 returned no content; not substituting text, cached test skipped']
+  tools(think=False): stream ok=False [] leak=False | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=False | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 32.83 GB, resident mapped files 0.01 GB, swap used 14508.94 MB
+  INVALID: ['decode: usage.completion_tokens missing (no fallback to event counts)', 'prefill_4000: usage.prompt_tokens missing', 'cached_4000: turn 1 returned no content; not substituting text, cached test skipped', 'prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']
+  -> <run-root>/out/results/bolt-omlx-lilicorr-20261018-231726.json
+[23:23:39] bolt-omlx-lilicorr: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:23:39] bolt-omlx-lilicorr: -> <run-root>/out/results/bolt-omlx-lilicorr-20261018-231726.json  INVALID: ['decode: usage.completion_tokens missing (no fallback to event counts)', 'prefill_4000: usage.prompt_tokens missing', 'cached_4000: turn 1 returned no content; not substituting text, cached test skipped', 'prefill_16000: usage.prompt_tokens missing', 'cached_16000: turn 1 returned no content; not substituting text, cached test skipped']  flags: 2

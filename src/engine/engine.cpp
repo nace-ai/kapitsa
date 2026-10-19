@@ -8,7 +8,9 @@
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <climits>
 #include <cstring>
 #include <deque>
 #include <map>
@@ -389,9 +391,23 @@ size_t default_mem_budget() {
 }
 
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
-  if (Dory::is_model(model_dir)) return Dory::plan(model_dir, prefill_chunk);
-  if (Qwen4Exp::is_model(model_dir)) return Qwen4Exp::plan(model_dir, prefill_chunk);
-  return NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk) : Qwen35::plan(model_dir, prefill_chunk);
+  // kept per process: a model's headers do not change while it is planned, and the largest take most of a second to
+  // read (Super-VL's), which the picker, `kapitsa doctor` and default_context would otherwise pay on every plan
+  static std::mutex mu;
+  static std::map<std::string, MemPlan> plans;
+  const std::string key = model_dir + "\n" + std::to_string(prefill_chunk) + "\n" + std::to_string(Dory::serving_loops()) +
+                          loop_kv_name(Dory::serving_kv());  // Dory's plan counts the loops and KV it serves with
+  {
+    std::lock_guard<std::mutex> lk(mu);
+    if (const auto it = plans.find(key); it != plans.end()) return it->second;
+  }
+  const MemPlan p = Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
+                    : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
+                    : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
+                                                     : Qwen35::plan(model_dir, prefill_chunk);
+  std::lock_guard<std::mutex> lk(mu);
+  plans.emplace(key, p);
+  return p;
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
   if (Dory::is_model(model_dir)) return 0;
@@ -497,13 +513,85 @@ bool conversation_fits(const std::string& model_dir, int context, int slots, siz
   return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
 }
 
+int parse_context(const std::string& s, std::string* why) {
+  std::string v;
+  for (const char c : s) v += char(tolower(static_cast<unsigned char>(c)));
+  if (v == "max") return kContextMax;
+  size_t i = 0;
+  long long n = 0, unit = 1;
+  while (i < v.size() && isdigit(static_cast<unsigned char>(v[i])) && n <= INT_MAX) n = n * 10 + (v[i++] - '0');
+  if (i > 0 && i + 1 == v.size() && (v[i] == 'k' || v[i] == 'm')) unit = v[i++] == 'k' ? 1024 : 1048576;
+  if (i == 0 || i != v.size() || n < 1 || n * unit > INT_MAX) {
+    if (why) *why = "--context takes tokens (131072), k or m of them (128k, 1m) or max, not \"" + s + "\"";
+    return 0;
+  }
+  return int(n * unit);
+}
+
+int model_context_limit(const std::string& model_dir) {
+  std::ifstream f(model_dir + "/config.json");
+  if (!f) return 0;
+  const nlohmann::json j = nlohmann::json::parse(f, nullptr, false);
+  if (!j.is_object()) return 0;
+  // the language model's config where it has one of its own (the Qwen3.5 family: text_config; Bolt: llm_config)
+  static const nlohmann::json none;
+  for (const char* k : {"text_config", "llm_config", ""}) {
+    const nlohmann::json& c = !*k ? j : j.contains(k) ? j[k] : none;
+    if (c.is_object() && c.contains("max_position_embeddings") && c["max_position_embeddings"].is_number_integer()) {
+      const long long n = c["max_position_embeddings"].get<long long>();
+      return n > 0 ? int(std::min<long long>(n, INT_MAX)) : 0;
+    }
+  }
+  return 0;
+}
+
+int context_within_limit(const std::string& model_dir, int context) {
+  const int limit = model_context_limit(model_dir);
+  return limit > 0 ? std::min(context, limit) : context;
+}
+
+int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why) {
+  const int limit = model_context_limit(model_dir);
+  const int top = limit > 0 ? std::min(kDefaultContext, limit) : kDefaultContext;
+  const int floor = std::min(kMinDefaultContext, top);
+  ContextWhy w = top < kDefaultContext ? ContextWhy::kModelLimit : ContextWhy::kDefault;
+  int c = top;
+  try {
+    const int slots = fit_slots(opt.slots);
+    const bool spec_off = opt.spec_depth == 0;
+    // the drafter the model has at 32K: a longer context by default never costs it
+    const std::string keep = plan_load(model_dir, opt.dflash, spec_off, floor, slots, budget, opt.prefill_chunk).dflash;
+    auto keeps = [&](int ctx) {
+      const LoadPlan lp = plan_load(model_dir, opt.dflash, spec_off, ctx, slots, budget, opt.prefill_chunk);
+      return lp.dflash == keep &&
+             conversation_fits(model_dir, ctx, slots, budget > lp.dflash_bytes ? budget - lp.dflash_bytes : 0);
+    };
+    if (!keeps(top)) {
+      // the largest 8K step between that does (a longer context only takes more): found by halving, a few plans
+      int lo = floor / 8192, hi = (top - 1) / 8192;
+      while (lo < hi) {
+        const int mid = (lo + hi + 1) / 2;
+        if (keeps(mid * 8192)) lo = mid;
+        else hi = mid - 1;
+      }
+      c = std::max(floor, lo * 8192);
+      w = keep.empty() ? ContextWhy::kMemory : ContextWhy::kMemoryWithDrafter;
+    }
+  } catch (const std::exception&) {  // headers that cannot be planned: the engine reports it when it loads them
+    c = floor;
+  }
+  if (why) *why = w;
+  return c;
+}
+
 int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budget) {
   try {
     const std::string dir = hub::plan_dir(ref);
     if (dir.empty()) return -1;
-    if (!conversation_fits(dir, opt.context, fit_slots(opt.slots), budget)) return 0;
-    const LoadPlan lp =
-        plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, fit_slots(opt.slots), budget, opt.prefill_chunk);
+    // a context past the model's own limit is planned at the limit, as the server would run it
+    const int ctx = context_within_limit(dir, opt.context);
+    if (!conversation_fits(dir, ctx, fit_slots(opt.slots), budget)) return 0;
+    const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, ctx, fit_slots(opt.slots), budget, opt.prefill_chunk);
     return lp.dflash_left_out.empty() ? 1 : 0;
   } catch (const std::exception&) {  // headers that cannot be planned (a damaged download): unknown
     return -1;

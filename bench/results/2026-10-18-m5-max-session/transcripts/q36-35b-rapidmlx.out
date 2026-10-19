@@ -1,0 +1,25 @@
+
+===== q36-35b-rapidmlx  [rapid-mlx] Rapid-MLX (no speculation: its catalog disables it for this MoE)  version 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)
+[00:30:12] q36-35b-rapidmlx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 6686 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/rapid-mlx.json configs/flash-next.json --
+[00:30:12] q36-35b-rapidmlx: starting ~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/qwen3.6-35b-a3b-4bit --host 127.0.0.1 --port 8291 --served-model-name qwen3.6-35b-a3b --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight
+[00:30:20] q36-35b-rapidmlx: ready after 8s (pid 20878, listener 20878)
+[00:30:22] q36-35b-rapidmlx:  warm-up prefill~2.9k+decode64: ok (1.78s)
+[00:30:23] q36-35b-rapidmlx:  warm-up tools: ok (0.65s)
+[00:31:24] q36-35b-rapidmlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[00:32:24] q36-35b-rapidmlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== q36-35b-rapidmlx
+  decode T=0.6: 96.37 tok/s (e2e 96.37; 512 tok, finish=length, d4=0.9314)
+  decode T=0.6: 97.80 tok/s (e2e 97.77; 512 tok, finish=length, d4=0.9788)
+  decode T=0.6: 97.84 tok/s (e2e 97.78; 512 tok, finish=length, d4=0.9718)
+  decode T=0.6: 97.65 tok/s (e2e 97.57; 512 tok, finish=length, d4=0.7381)
+  decode T=0.6: 97.39 tok/s (e2e 97.32; 512 tok, finish=length, d4=0.9809)
+  decode median 97.65 (min 96.37, max 97.84) over 5/5 valid
+  decode T=0: median 99.71 (min 98.99, max 100.19) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 1.24s -> 3324 tok/s, cold cached=None | cached TTFT median 0.15s over 3 turns (cached [4116, 4166, 4198])
+  prefill 16000: 16285 tok (ref 16286), TTFT 5.41s -> 3012 tok/s, cold cached=None | cached TTFT median 0.21s over 3 turns (cached [16256, 16320, 16382])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 24.93 GB, resident mapped files 0.01 GB, swap used 14356.94 MB
+  -> <run-root>/out-extra/results/q36-35b-rapidmlx-20261019-003012.json
+[00:33:51] q36-35b-rapidmlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:33:51] q36-35b-rapidmlx: -> <run-root>/out-extra/results/q36-35b-rapidmlx-20261019-003012.json

@@ -1,0 +1,25 @@
+
+===== flash-rapidmlx  [rapid-mlx] Rapid-MLX (no speculation)  version 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)
+[00:53:47] flash-rapidmlx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 58979 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/rapid-mlx.json configs/flash-next.json -
+[00:53:47] flash-rapidmlx: starting ~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8291 --served-model-name flash-next --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight
+[00:54:00] flash-rapidmlx: ready after 12s (pid 73565, listener 73565)
+[00:54:13] flash-rapidmlx:  warm-up prefill~2.9k+decode64: ok (13.48s)
+[00:54:15] flash-rapidmlx:  warm-up tools: ok (2.2s)
+[00:55:17] flash-rapidmlx: gpu busy (62s): com.apple.WebKit[3316] 7%
+[00:56:17] flash-rapidmlx: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== flash-rapidmlx
+  decode T=0.6: 46.24 tok/s (e2e 46.09; 512 tok, finish=length, d4=0.922)
+  decode T=0.6: 48.11 tok/s (e2e 47.97; 512 tok, finish=length, d4=0.6625)
+  decode T=0.6: 49.52 tok/s (e2e 49.52; 512 tok, finish=length, d4=0.517)
+  decode T=0.6: 48.14 tok/s (e2e 48.20; 512 tok, finish=length, d4=0.7701)
+  decode T=0.6: 48.71 tok/s (e2e 48.48; 512 tok, finish=length, d4=0.8038)
+  decode median 48.14 (min 46.24, max 49.52) over 5/5 valid
+  decode T=0: median 54.67 (min 51.96, max 55.52) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 9.59s -> 431 tok/s, cold cached=None | cached TTFT median 0.32s over 3 turns (cached [4117, 4184, 4217])
+  prefill 16000: 16286 tok (ref 16286), TTFT 28.11s -> 579 tok/s, cold cached=None | cached TTFT median 0.37s over 3 turns (cached [16271, 16335, 16386])
+  tools(think=False): stream ok=False [] leak=True | nonstream ok=True | roundtrip=None
+  tools(think=True): stream ok=False [] leak=True | nonstream ok=True | roundtrip=None
+  memory: phys_footprint_peak 74.55 GB, resident mapped files 5.13 GB, swap used 14356.94 MB
+  -> <run-root>/out-extra/results/flash-rapidmlx-20261019-005347.json
+[00:59:20] flash-rapidmlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:59:20] flash-rapidmlx: -> <run-root>/out-extra/results/flash-rapidmlx-20261019-005347.json  flags: 1

@@ -4,14 +4,15 @@
 //
 // Weights: codes [N][K/2] bytes, a 16-element block in 8 bytes; UE4M3 block scales [N][K/16]; the tensor scale gs
 // applied once at the end. Two layouts of a block's 8 code bytes:
-//   L0 (Kapitsa's repack today): byte i = element i (low nibble) | element i + 8 (high nibble), codes as ModelOpt
+//   L0 (the default repack): byte i = element i (low nibble) | element i + 8 (high nibble), codes as ModelOpt
 //      writes them (s e1 e0 m). Kernels *_l0: a threadgroup table maps a code byte to its two values as half2.
 //   L2: little-endian word h (0, 1): nibble j (0..3) = element 4h + j, nibble 4 + j = element 8 + 4h + j, each code
 //      stored as (m2 m1 m0 s) = ((c & 7) << 1) | (c >> 3). The pair (nibble j, nibble j + 4) of a word then becomes
 //      the half2 bits of E2M1 x 2^-14 with three integer ops (nh_x4_l2m): the nibbles masked in place and one
 //      multiply by 2^a + 2^b put the magnitude at half bits 9-11 and the sign at bit 15 (the shifted copies never
 //      overlap, so there are no carries); E2M1 0.5 lands on a half subnormal, which this GPU keeps (fast math
-//      included; nh_x4_bench probe). 1-7% faster than L0 below.
+//      included; nh_x4_bench probe). 1-7% faster than L0 below; on the M1 Pro 12-16% at Dory's shapes, which repacks
+//      to L2 on the M1's GPU family (Dory::load). Every kernel's output equals its L0 twin's to the bit.
 // Products: decode in fp32 (activations fp32, fp32 sums); multi-row on 8x8x8 simdgroup MMAs with the decoded weights
 // x their block scale as the A operand (exact in half: <= 6 significant bits), X (half rows) as B, fp32 accumulators.
 //
@@ -123,7 +124,10 @@ NI_INLINE void nh_x4_mv_impl(const device uchar* q, const device uchar* s, const
     for (uint k0 = lane * 32; k0 < K; k0 += 1024) {
       float4 xv[8];
       _Pragma("clang loop unroll(full)")
-      for (int i = 0; i < 8; ++i) xv[i] = ((const device float4*)(x + k0))[i];
+      // L2: x scaled by 2^15 so every product is L0's (E2M1 x 2^-14 x 2^15 x = E2M1 x 2 x), exactly: unscaled,
+      // inputs below ~1e-34 (a gated attention head that is shut) give products under fp32's normal range,
+      // flushed to zero where L0's stay normal, and a flushed term can break an FMA rounding tie differently
+      for (int i = 0; i < 8; ++i) xv[i] = ((const device float4*)(x + k0))[i] * (L == 0 ? 1.0f : 32768.0f);
       _Pragma("clang loop unroll(full)")
       for (int j = 0; j < NR; ++j) {
         const size_t n = rows[j];
@@ -147,7 +151,7 @@ NI_INLINE void nh_x4_mv_impl(const device uchar* q, const device uchar* s, const
       }
     }
   }
-  const float post = gs * (L == 0 ? 0.5f : 16384.0f);  // pair values E2M1 x 2 (L0) / E2M1 x 2^-14 (L2)
+  const float post = gs * 0.5f;  // products E2M1 x 2 x x (L0's pairs; L2's with x x 2^15)
   for (int j = 0; j < NR; ++j) {
     float v = simd_sum(acc[j]) * post;
     const uint n = row0 + uint(j);

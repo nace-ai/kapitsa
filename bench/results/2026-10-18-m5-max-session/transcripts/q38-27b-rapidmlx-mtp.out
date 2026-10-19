@@ -1,0 +1,25 @@
+
+===== q38-27b-rapidmlx-mtp  [rapid-mlx] Rapid-MLX + MTP (its own 27B pack, MTP sidecar on by default)  version 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)
+[00:33:51] q38-27b-rapidmlx-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 19076 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/rapid-mlx.json --only q38-27b-rapidmlx-m
+[00:33:51] q38-27b-rapidmlx-mtp: starting ~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX --host 127.0.0.1 --port 8291 --served-model-name qwen3.8-27b --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight --speculative-config '{"method":"mtp","model":"~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors","num_speculative_tokens":3}'
+[00:33:59] q38-27b-rapidmlx-mtp: ready after 8s (pid 28863, listener 28863)
+[00:34:03] q38-27b-rapidmlx-mtp:  warm-up prefill~2.9k+decode64: ok (4.38s)
+[00:34:05] q38-27b-rapidmlx-mtp:  warm-up tools: ok (1.41s)
+[00:35:07] q38-27b-rapidmlx-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[00:36:07] q38-27b-rapidmlx-mtp: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== q38-27b-rapidmlx-mtp
+  decode T=0.6: 67.31 tok/s (e2e 66.28; 512 tok, finish=length, d4=0.8728)
+  decode T=0.6: 62.71 tok/s (e2e 62.57; 512 tok, finish=length, d4=0.9643)
+  decode T=0.6: 61.14 tok/s (e2e 60.03; 512 tok, finish=length, d4=0.9142)
+  decode T=0.6: 55.87 tok/s (e2e 55.62; 512 tok, finish=length, d4=0.9544)
+  decode T=0.6: 57.51 tok/s (e2e 56.73; 512 tok, finish=length, d4=0.941)
+  decode median 61.14 (min 55.87, max 67.31) over 5/5 valid
+  decode T=0: median 58.18 (min 53.48, max 59.05) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 5.55s -> 745 tok/s, cold cached=None | cached TTFT median 0.28s over 3 turns (cached [4119, 4215, 4247])
+  prefill 16000: 16286 tok (ref 16286), TTFT 23.24s -> 701 tok/s, cold cached=None | cached TTFT median 0.34s over 3 turns (cached [16256, 16350, 16408])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.21 GB, resident mapped files 0.01 GB, swap used 14356.94 MB
+  -> <run-root>/out-extra/results/q38-27b-rapidmlx-mtp-20261019-003351.json
+[00:38:43] q38-27b-rapidmlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:38:43] q38-27b-rapidmlx-mtp: -> <run-root>/out-extra/results/q38-27b-rapidmlx-mtp-20261019-003351.json  flags: 1

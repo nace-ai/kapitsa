@@ -33,3 +33,55 @@
 2026-10-18 20:03:18 start q36-35b-omlx-best
 2026-10-18 20:23:23 end q36-35b-omlx-best rc=0
 2026-10-18 20:23:23 start q38-27b-omlx-best
+2026-10-18 20:31:01 end q38-27b-omlx-best rc=0
+2026-10-18 20:31:01 start q35-4b-omlx-best
+2026-10-18 20:37:18 end q35-4b-omlx-best rc=0
+2026-10-18 20:37:18 start q36-35b-mlxserve-mtp
+2026-10-18 20:43:16 end q36-35b-mlxserve-mtp rc=0
+2026-10-18 20:43:16 start q36-35b-mlxserve-dflash2
+2026-10-18 20:49:20 end q36-35b-mlxserve-dflash2 rc=0
+2026-10-18 20:49:20 start q38-27b-mlxserve-mtp
+2026-10-18 20:56:57 end q38-27b-mlxserve-mtp rc=0
+2026-10-18 20:56:57 start q38-27b-mlxserve-dflash2
+2026-10-18 21:04:08 end q38-27b-mlxserve-dflash2 rc=0
+2026-10-18 21:04:08 start q38-27b-llamacpp-mtp1
+2026-10-18 21:13:14 end q38-27b-llamacpp-mtp1 rc=0
+2026-10-18 21:13:14 start q38-27b-llamacpp-mtp2
+2026-10-18 21:21:50 end q38-27b-llamacpp-mtp2 rc=0
+2026-10-18 21:21:50 start q38-27b-llamacpp-mtp3
+2026-10-18 21:30:03 end q38-27b-llamacpp-mtp3 rc=0
+2026-10-18 21:30:03 start q35-4b-llamacpp-mtp1
+2026-10-18 21:36:08 end q35-4b-llamacpp-mtp1 rc=0
+2026-10-18 21:36:08 start q35-4b-llamacpp-mtp2
+2026-10-18 21:42:11 end q35-4b-llamacpp-mtp2 rc=0
+2026-10-18 21:42:11 start q35-4b-llamacpp-mtp3
+2026-10-18 21:48:13 end q35-4b-llamacpp-mtp3 rc=0
+2026-10-18 21:48:13 start q35-4b-llamacpp-mtp6
+2026-10-18 21:54:21 end q35-4b-llamacpp-mtp6 rc=0
+2026-10-18 21:54:21 start q36-35b-llamacpp-mtp1
+2026-10-18 22:00:32 end q36-35b-llamacpp-mtp1 rc=0
+2026-10-18 22:00:32 start q36-35b-llamacpp-mtp2
+2026-10-18 22:06:38 end q36-35b-llamacpp-mtp2 rc=0
+2026-10-18 22:06:38 start q36-35b-llamacpp-mtp3
+2026-10-18 22:12:44 end q36-35b-llamacpp-mtp3 rc=0
+2026-10-18 22:12:44 start bolt-omlx-lilicorr
+2026-10-18 22:27:51 end bolt-omlx-lilicorr rc=0
+2026-10-18 22:27:51 start bolt-omlx-lilicorr-greedy
+2026-10-18 22:39:30 end bolt-omlx-lilicorr-greedy rc=143
+2026-10-18 22:39:30 start bolt-omlx
+2026-10-18 22:39:32 start bolt-omlx-lilicorr
+2026-10-18 22:46:59 end bolt-omlx rc=0
+2026-10-18 22:46:59 start bolt-mlxvlm
+2026-10-18 23:02:06 end bolt-omlx-lilicorr rc=0
+2026-10-18 23:02:06 start bolt-omlx-lilicorr-greedy
+2026-10-18 23:10:07 start bolt-omlx-lilicorr
+2026-10-18 23:10:30 end bolt-mlxvlm rc=0
+2026-10-18 23:10:30 start q36-35b-kapitsa
+2026-10-18 23:17:26 end bolt-omlx-lilicorr-greedy rc=0
+2026-10-18 23:29:31 end q36-35b-kapitsa rc=0
+2026-10-18 23:29:31 start q38-27b-kapitsa
+2026-10-18 23:36:46 end q38-27b-kapitsa rc=0
+2026-10-18 23:36:46 start q35-4b-kapitsa
+2026-10-18 23:42:30 end q35-4b-kapitsa rc=0
+2026-10-18 23:42:30 start bolt-kapitsa
+2026-10-18 23:49:09 end bolt-kapitsa rc=0
