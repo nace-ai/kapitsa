@@ -44,7 +44,8 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
   sampled, 143 greedy, unflagged.
 - Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`, build 36c2937; other apps used the GPU during it), llama.cpp
   NVIDIA's Dory fork (98a74c97) on its Q5_K_M, MLX mlx-lm's Dory pull request (208065f) on snsnc's 4-bit.
-- Rapid-MLX 0.16.3 on the 4B: MTP with Qwen's 4-bit head, 3 drafts.
+- Rapid-MLX 0.16.3: on the 4B MTP with Qwen's 4-bit head, 3 drafts; on the 35B no speculation (its catalog turns it off
+  for this MoE).
 - Bolt: oMLX's LiLiCorr drafter fails at T = 0.6; run greedy throughout it writes 121-124 tok/s, against Kapitsa's
   greedy 125 (the first run 119).
 - Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's
