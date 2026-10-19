@@ -53,7 +53,7 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 | Qwen3.5&nbsp;4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
 | Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
 | Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Flash‑Next<br><sub>4-bit</sub> | 102&nbsp;tok/s | **107** | — | — | — | — | 96 | 77&nbsp;⚠ |
+| Flash‑Next<br><sub>4-bit</sub> | 102&nbsp;tok/s | 🟩&nbsp;<mark>**107**</mark> | — | — | — | — | 96 | 77&nbsp;⚠ |
 | ***Nemotron*** | | | | | | | | |
 | Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — | — | — | — | — |
 | Lightning<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | — | — | — | — | 159 | 139 |
