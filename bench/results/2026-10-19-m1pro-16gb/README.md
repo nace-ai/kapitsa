@@ -5,6 +5,27 @@ docs/benchmarks.md, written by [bench/harness](../../harness/README.md) on a Mac
 `MacBookPro18,3`: M1 Pro with an 8-core CPU and a 14-core GPU, 16 GB, macOS 27.0.1 (26A434), on AC power (Automatic
 power mode). Times are local (UTC+5).
 
+## Qwen3.5-4B at 4-bit, the full protocol (the folder itself)
+
+One hold of the GPU lock, 10:09-10:48, Kapitsa 0.1.36 (the release, from a copy outside any git checkout) first and
+last, each engine in the setting the short runs chose, the harness's full protocol (`--skip agent` is implied: the 4B
+has no recorded agent session). The engine state each run left was deleted after it (the 16 GB Mac's disk).
+
+| Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Flags and invalid phases |
+| --- | --- | --- | ---: | --- |
+| `q35-4b-kapitsa-20261019-100914.json` | 10:09 | Kapitsa (DFlash drafter) | 85.5 / 88.0 | decode: repetition loop (distinct-4-gram 0.4747) |
+| `q35-4b-omlx-best-20261019-101234.json` | 10:13 | oMLX + MTP (Lightning MTP, MTPLX's head) | 54.6 / 57.4 | decode: repetition loop (distinct-4-gram 0.4724); decode: repetition loop (distinct-4-gram 0.4733) |
+| `q35-4b-mlxserve-mtp-d2-20261019-101733.json` | 10:18 | mlx-serve + MTP (max depth 2) | 62.3 / 62.9 | — |
+| `q35-4b-ollama-mlx-q4-20261019-102204.json` | 10:23 | Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth) | 55.3 / 57.4 | decode: repetition loop (distinct-4-gram 0.4761); prefill_4000: 6964 pages swapped out during the phase; prefill_16000: 126496 pages swapped out during the phase |
+| `q35-4b-mtplx-20261019-102635.json` | 10:28 | MTPLX (sustained profile, depth 1) | 41.5 / 43.9 | prefill_16000: usage.prompt_tokens missing; cached_16000: turn 1 returned no content; not substituting text, cached test skipped; decode_greedy: repetition loop (distinct-4-gram 0.4724) |
+| `q35-4b-lmstudio-20261019-103118.json` | 10:32 | LM Studio (MLX engine) | 47.3 / 50.7 | decode: completion_tokens=511 != 512; decode: repetition loop (distinct-4-gram 0.4565); decode: repetition loop (distinct-4-gram 0.4642); decode_greedy: completion_tokens=511 != 512 |
+| `q35-4b-llamacpp-mtp3-20261019-103601.json` | 10:36 | llama.cpp + MTP (n-max 3) | 37.8 / 44.0 | prefill_4000: 8904 pages swapped out during the phase; prefill_16000: 83764 pages swapped out during the phase; tools: 74060 pages swapped out during the phase |
+| `q35-4b-mlxlm-20261019-104040.json` | 10:41 | mlx-lm | 46.4 / 49.8 | decode_greedy: repetition loop (distinct-4-gram 0.4478) |
+| `q35-4b-kapitsa-20261019-104505.json` | 10:45 | Kapitsa (DFlash drafter) | 78.5 / 90.0 | — |
+
+Ollama's and llama.cpp's prefill phases swapped (pages swapped out during the phase), so they do not count; MTPLX's
+16K prompt came back without token counts and its tool calls failed.
+
 ## Qwen3.5-4B at 4-bit, short runs ([tuning](tuning/))
 
 One hold of the GPU lock, 08:48-09:30, Kapitsa first, and LM Studio in another at 09:35. Each config ran its decode

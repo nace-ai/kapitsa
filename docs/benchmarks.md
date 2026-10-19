@@ -44,11 +44,13 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
   llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).
 
 **MacBook Pro M1 Pro 16 GB**
-- Qwen: short runs (3 coding answers each; the full protocol follows). oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX
-  runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
-- Dory: 2 loops; Kapitsa last-loop KV, its default (per-loop speculation: 31 tok/s on this Mac), llama.cpp NVIDIA's
-  Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit
-  ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
+- Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (the cell is its first run; its
+  last: 78.5 tok/s at T = 0.6, 90.0 greedy). Each engine in its fastest setting on this Mac, chosen in short runs:
+  oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
+  Kapitsa reads 16K-token prompts more slowly than mlx-lm and LM Studio here (269 tok/s against 289 and 277).
+- Dory: 2 loops; Kapitsa last-loop KV, its default, measured later with 0.1.37 (Dory's NVFP4 in layout L2 on the M1:
+  40.5 tok/s, against 35.2 with 0.1.36 in the bracket; per-loop speculation 36.7), llama.cpp NVIDIA's Dory fork on its
+  Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
 
 ## Summary
 
@@ -1105,6 +1107,37 @@ the M1's GPU compiles the drafter's `dfl_dist_rows` kernel for 576 threads per t
 and on Dory (52), greedy answers are the same with DFlash, MTP and plain decoding (six prompts, up to 17,919 prompt
 tokens), and so are Dory's with per-loop speculative decoding and without, at 2 and 4 loops.
 
+### Qwen3.5-4B at 4-bit: the full protocol
+
+One hold of the GPU lock, 10:09-10:48, Kapitsa 0.1.36 first and last, every engine in the setting the short runs below
+chose: the harness's full protocol (5 runs of the coding answer at T = 0.6 and 5 greedy, 4K and 16K cold prompts with
+three cached follow-ups each, tool calls, peak memory). Result files:
+[bench/results/2026-10-19-m1pro-16gb](../bench/results/2026-10-19-m1pro-16gb/).
+
+| Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** 0.1.36 (DFlash drafter), first | **85.5** (77.9-88.6) | 88.0 (86.0-90.3) | 306 / 269 | **0.11** / **0.15** | **4.4** | pass |
+| **Kapitsa**, last | 78.5 (75.1-88.8) | **90.0** (87.4-91.8) | 306 / 269 | 0.12 / 0.15 | **4.4** | pass |
+| mlx-serve 26.10.2 (MTP, max depth 2) | 62.3 (60.2-63.2) | 62.9 (61.5-63.3) | 286 / 229 | 0.62 / 1.08 | 5.9 | pass |
+| Ollama 0.40.6 (MLX runner + MTP) | 55.3 (54.8-56.1) | 57.4 (57.0-58.3) | swapped<sup>1</sup> | 0.32 / 0.54 | 11.1 | pass |
+| oMLX 0.7.1rc1 (MTP) | 54.6 (54.2-56.3) | 57.4 (56.8-57.6) | 281 / 240 | 0.52 / 0.96 | 7.4 | pass |
+| LM Studio (MLX runtime 1.13.1) | 47.3 (46.1-48.3)<sup>2</sup> | 50.7 (50.4-51.1)<sup>2</sup> | **308** / 277 | 0.84 / 1.55 | 8.8 | pass |
+| mlx-lm 0.32.2 | 46.4 (45.8-47.3) | 49.8 (49.5-50.1) | **308** / **289** | 0.38 / 0.48 | 7.3 | pass |
+| MTPLX 2.12.2 (depth 1) | 41.5 (39.8-42.4) | 43.9 (42.5-45.0) | 305 / —<sup>3</sup> | 0.19 / —<sup>3</sup> | 9.3 | fail |
+| llama.cpp b11669 (MTP, n-max 3; Q4_K_M) | 37.8 (37.4-39.0) | 44.0 (43.8-46.7) | swapped<sup>1</sup> | 0.46 / 0.70 | 11.1 | pass |
+
+Kapitsa writes 1.37x the next engine's rate at T = 0.6 (85.5 against mlx-serve's 62.3) and 1.40x greedy (88.0
+against 62.9), answers cached follow-ups soonest (0.11 / 0.15 s; next MTPLX at 4K, 0.19 s, and mlx-lm at 16K, 0.48 s),
+and uses the least memory. It loses on reading long prompts: on this Mac its prefill runs on
+the GPU alone (its Neural Engine split has no share for the M1), and mlx-lm reads a 16K-token prompt 7% faster (289
+against 269 tok/s), LM Studio 3% faster (277); at 4K they are even (306-308).
+
+1. More than 16 GB in use during the prompt phases (Ollama's MLX runner peaked at 11.1 GB in its own processes, llama.cpp
+   at 11.1 GB): pages were swapped out during the 4K and 16K prefills (Ollama 126,496 pages at 16K, llama.cpp 83,764),
+   so those phases do not count; their decode phases did not swap.
+2. LM Studio stops at 511 of the 512 requested tokens; its rates use the 511.
+3. MTPLX answered the 16K prompt without its token counts (the harness's check fails) and failed the tool-call checks.
+
 ### Qwen3.5-4B at 4-bit: short runs of every engine
 
 One hold of the GPU lock, 08:48-09:30, Kapitsa first (LM Studio in another at 09:35): each engine and setting in a short run of the harness's decode
@@ -1168,8 +1201,13 @@ harness (the T = 0.6 coding answer; llama.cpp 2 runs of 256 tokens, the others 5
 All at 2 loops. Unlike on the M4 Pro (per-loop 64.1 against last-loop 59.6 tok/s), Kapitsa's per-loop speculative
 decoding is slower than its default here: a verify pass of 2-8 rows costs the M1 about 1.6 times a one-row step
 (`dory_mv_bench`, the q|k|v|g product: 170 against 108 us), more than the accepted drafts make up, so the README shows
-the default. The engines with no Dory model (Ollama 0.40.6, LM Studio with llmster 0.0.25-1, oMLX 0.7.1rc1, mlx-serve
-26.10.2, MTPLX 2.12.2) are the versions checked on the M4 Pro the same day.
+the default. Kapitsa 0.1.37, the next release, reads Dory's NVFP4 in layout L2 on the M1 ([#72](https://github.com/nace-ai/kapitsa/pull/72),
+the same outputs to the bit): in its own hold at 10:49, 40.5 tok/s (40.0-40.8) with last-loop KV and 36.7 (34.6-37.2)
+with per-loop speculation, against 35.2 and 30.8 / 31.7 with 0.1.36 above; the README's cell is the 40.5.
+
+The engines with no Dory model were checked on this Mac: oMLX 0.7.1rc1 (no `mlx_lm.models.dory`), mlx-serve 26.10.2
+(`MissingWeight` at load), MTPLX 2.12.2 ("incompatible-architecture"), Ollama 0.40.6 ("unknown model architecture:
+'dory'"); LM Studio's runtimes (llama.cpp 2.60.0, MLX 1.13.1) are the versions found without Dory support on the M4 Pro.
 
 1. One of the five answers echoed the prompt and closed a `</think>` block, which makes the harness mark the result
    invalid; the median is over the other four.
