@@ -74,6 +74,7 @@ V8Knobs& v8_knobs() {
     d.gdnsplit = env_int("NI_V8_GDNSPLIT", d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
     d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
+    d.fuse = env_int("NI_V8_FUSE", d.fuse);
     return d;
   }();
   return k;
@@ -99,6 +100,7 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
     else if (key == "skip") k.skip = v;
     else if (key == "pad") k.pad = v;
     else if (key == "tw") k.tw = v;
+    else if (key == "fuse") k.fuse = v;
     else fatal("knobs: unknown key '%s'", key.c_str());
     a = b + 1;
   }
@@ -397,10 +399,10 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
 
 // Attention block for R rows at positions pos..pos+R-1: x_ += o_proj(attn(norm(x_))).
 void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos,
-                       int R) {
+                       int R, bool table_ready) {
   const int D = cfg_.hidden, HD = cfg_.hq * cfg_.head_dim;
   const int skip = v8_knobs().skip;
-  const bool tq = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+  const bool tq = table_ready ? v8_tw() : enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
   if (!(skip & 512)) enc_qmm8(e, {{&L.q, qg_}, {&L.k, kr_}, {&L.v, vr_}}, R, v8t_, v8s_, false, tq ? &v8tt_ : nullptr);
   if (skip & 2) {
     enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_);
@@ -496,7 +498,7 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
 }
 
 // MoE block for R rows: x_ += sum_j w_j expert_j(n) + w_s shared(n), n = norm(x_).
-void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
+bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm) {
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
   const uint32_t I = uint32_t(cfg_.moe_I);
   // other expert formats: wfmt.metal's moe8g_* passes for the format pairs they have (the experts de-duplicated over
@@ -511,7 +513,7 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
     if (!have.count(combo) || !L.eg.same_format(L.eu) || !L.eg.same_format(L.ed) || !L.sg.same_format(L.su) ||
         !L.sg.same_format(L.sd)) {
       enc_moe_rows(e, L, R, x_, false);
-      return;
+      return false;
     }
   }
   if (cfg_.shared_I != cfg_.moe_I || I % 64 || E > 1024 || k > 8 || D % 64) fatal("moe8: unsupported expert layout");
@@ -582,11 +584,29 @@ void Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li) {
     e.buf(6, v8sm_); e.buf(7, v8nt_);
     e.dispatch_indirect(v8args_, 36, 32 * s_nsg);
   }
+  // with the next norm: the combine also writes that norm's X8 table as x8_prep2 would (moe8_combine_x8: one
+  // threadgroup per row, N / 4 threads; bitwise moe8_combine + x8_prep2)
+  static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
+  const V8Knobs& kn = v8_knobs();
+  // with qmm8t on (v8_tw()), also its T table, so the next GEMMs find both tables written
+  const bool wt = v8_tw();
+  if (next_norm && (kn.fuse & 1) && !(kn.skip & 256) && !prep1 && D % 256 == 0 && D <= 2048 &&
+      (!wt || size_t(D) * 16 <= v8tt_.size)) {
+    kp::Moe8CombineX8 cp{uint32_t(D), uint32_t(k), uint32_t(R), cfg_.eps, kn.prepu ? 1u : 0u, wt ? 1u : 0u};
+    e.use(pipe8("moe8_combine_x8"));
+    e.buf(0, v8out_); e.buf(1, v8sh_); e.buf(2, rwts_); e.buf(3, x_);
+    e.buf(4, next_norm->buf); e.buf(5, v8t_); e.buf(6, v8s_);
+    e.val(7, cp);
+    e.buf(8, wt ? v8tt_ : v8t_);  // (unused unless write_t)
+    e.dispatch(8, 1, 1, uint32_t(D / 4));
+    return true;
+  }
   kp::Moe8Combine cp{uint32_t(D), uint32_t(k)};
   e.use(pipe8("moe8_combine"));
   e.buf(0, v8out_); e.buf(1, v8sh_); e.buf(2, rwts_); e.buf(3, x_);
   e.val(4, cp);
   e.dispatch((D / 4 + 63) / 64, R, 1, 64);
+  return false;
 }
 
 void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
@@ -598,15 +618,17 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
   enc_embed(e, s.tok, pos, R, x_);
   kp::GdnVerify gv{uint32_t(R), uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
+  bool table_ready = false;  // the previous layer's MoE combine wrote this layer's input-norm table
   for (int i = 0; i < cfg_.layers; ++i) {
     const Layer& L = layers_[i];
     const int skip = v8_knobs().skip;
     if (L.linear) {
-      const bool ti = enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
+      const bool ti = table_ready ? v8_tw() : enc_x8(e, x_, R, D, L.in_norm, false, 0, nullptr, true);
       if (!(skip & 32))
         enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_, false, ti ? &v8tt_ : nullptr);
       if (!(skip & 4)) {
-        e.use(pipe8("gdn_prep_verify"));
+        // fuse & 4: gdn_prep_verify8 (the rows' q / k norms reduced together; bitwise gdn_prep_verify)
+        e.use(pipe8(R <= 8 && cfg_.lin_dk == 128 && (v8_knobs().fuse & 4) ? "gdn_prep_verify8" : "gdn_prep_verify"));
         e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
         e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
         e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
@@ -648,14 +670,16 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       if (!split) to = enc_x8(e, gout_, R, VD, nullptr, false, 0, nullptr, true);
       if (!(skip & 64)) enc_qmm8(e, {{&L.out, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
     } else {
-      enc_attn8(e, s, L, s.kc[i], s.vc[i], s.cap, pos, R);
+      enc_attn8(e, s, L, s.kc[i], s.vc[i], s.cap, pos, R, table_ready);
     }
-    if (cfg_.moe) enc_moe8(e, L, R, i);
+    table_ready = false;
+    if (cfg_.moe)
+      table_ready = enc_moe8(e, L, R, i, i + 1 < cfg_.layers ? layers_[i + 1].in_norm : final_norm_);
     else enc_mlp8(e, L, R);
-    if (cap_) enc_capture(e, i, pos, R);  // block-drafter capture (DFlash2), off unless armed
+    if (cap_) enc_capture(e, i, pos, R);  // block-drafter capture (DFlash2), off unless armed (reads x_ only)
   }
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
-  const bool tl = enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
+  const bool tl = table_ready ? v8_tw() : enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
   if (v8_knobs().skip & 128) return;
   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;

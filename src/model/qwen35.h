@@ -127,10 +127,13 @@ struct V8Knobs {
   int skip = 0;
   int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
   int tw = 1;   // the dense 4-bit verify GEMMs on the GPU's matrix units (qmm8t; Apple10 = M5 and macOS 26, else off)
+  // fused verify passes (verify8_fuse.metal, bitwise the passes they replace): 1 = MoE combine + the next norm's X8
+  // table (and qmm8t's T table with tw), 4 = GDN prep with the rows' norms reduced together
+  int fuse = 5;
 };
 V8Knobs& v8_knobs();
-// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw); unknown keys
-// are fatal
+// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw, fuse); unknown
+// keys are fatal
 V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
 class Qwen35 : public Model {
@@ -483,9 +486,13 @@ class Qwen35 : public Model {
               const Buffer* xn_out = nullptr, bool tw = false);
   // the 8-row GEMMs on the matrix units (qmm8t, src/kernels/tensor/verify8t.metal): an M5 and V8Knobs::tw
   bool v8_tw() const;
-  void enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R);
+  // table_ready: the layer's input-norm table is already written (by the previous layer's enc_moe8)
+  void enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
+                 bool table_ready = false);
   void enc_mlp8(Encoder& e, const Layer& L, int R);
-  void enc_moe8(Encoder& e, const Layer& L, int R, int li);
+  // next_norm: the norm of what follows (the next layer's input norm, or the final norm); when given, the combine may
+  // also write that norm's X8 table (V8Knobs::fuse & 1; with v8_tw() also the T table). Returns whether it did.
+  bool enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm = nullptr);
 
   std::string dir_;
   std::string prefix_;
