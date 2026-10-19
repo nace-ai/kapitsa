@@ -97,6 +97,11 @@ static const QmrSel& qmr_sel() {
     if (v && !strcmp(v, "0")) return q;
     q.on = true;
     q.name = "qmr_k32_w14_m32_n128";
+    // The M1 (Apple7): 64-deep K steps on 32x64 tiles of 64 threads. bench_qmm on the M1 Pro, 2048-row chunks of
+    // Qwen3.5-4B's and 9B's projections: 3.07-3.17 TFLOP/s against 2.53-2.69 for qmr_k32_w14_m32_n128, on all 9
+    // shapes (4B: 8192x2560 28.7 vs 33.9 ms, 2560x9216 30.6 vs 36.2; 9B: 8192x4096 43.4 vs 51.5, 4096x12288 65.2
+    // vs 77.2), the fastest of the 7 qmr tiles on each
+    if (Gpu::get().apple_family() <= 7) q.name = "qmr_k64_w12_m32_n64", q.bn = 64, q.threads = 64;
     if (v && *v && strcmp(v, "1") != 0) {
       unsigned bm = 0, bn = 0, wm = 0, wn = 0;
       const char* w = strstr(v, "_w");
@@ -289,7 +294,8 @@ void Qwen35::prewarm_pipelines() {
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
-  if (Gpu::get().apple_family() <= 7) names.insert("attn_prefill11_k16xr");  // the M1's prefill attention
+  if (Gpu::get().apple_family() <= 7)  // the M1's prefill attention and tiles (enc_attn_prefill, qmr_sel, enc_qmm_gu)
+    for (const char* n : {"attn_prefill11_k16xr", "qmr_k64_w12_m32_n64", "qmr_gu_k64_w14_m32_n64"}) names.insert(n);
   if (cfg_.moe && moe_qmr()) {
     names.insert("qrm_gu_k32_m" + std::to_string(moe_qmr()) + "_n64");
     names.insert("qrm_dn_k32_m" + std::to_string(moe_qmr()) + "_n128");
@@ -2197,10 +2203,13 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     e.dispatch((G.N + t.bn - 1) / t.bn, (M + t.bm - 1) / t.bm, 1, t.th);
     return true;
   }
+  // the M1 (Apple7): 64-deep K steps (bench_qmm on the M1 Pro, 2048 rows: 4B 9216x2560 3.25 vs 3.02 TFLOP/s, 9B
+  // 12288x4096 3.27 vs 3.03, the faster of the 3 qmr_gu tiles on both)
+  static const char* const gu = Gpu::get().apple_family() <= 7 ? "qmr_gu_k64_w14_m32_n64" : "qmr_gu_k32_w14_m32_n64";
   static const bool on = [] {
     const char* g = getenv("NI_QMM_GU");
     const bool v = !(g && !strcmp(g, "0")) && qmr_sel().on;
-    if (v) logi("NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k32_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)");
+    if (v) logi("NI_QMM_GU: dense gate/up/SwiGLU fused (%s, m16_n64 / m8_n32 below 64 rows)", gu);
     return v;
   }();
   auto ok8 = [](const QLinear& q) { return q.bits == 8 && q.gs == 64 && q.K % 64 == 0; };
@@ -2227,7 +2236,7 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     return true;
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
-  const char* n = "qmr_gu_k32_w14_m32_n64";
+  const char* n = gu;
   uint32_t bm = 32, bn = 64, th = 128;
   if (b8) n = M < 64 ? "qmr8_gu_k32_w14_m16_n64" : "qmr8_gu_k32_w14_m32_n64", bm = M < 64 ? 16 : 32;
   else if (M <= 8) n = "qmr_gu_k64_w12_m8_n32", bm = 8, bn = 32, th = 64;
