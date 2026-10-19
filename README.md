@@ -88,16 +88,12 @@ mlx-lm, mlx-serve and MTPLX, Q4_0 on llama.cpp, Q4_K_M on LM Studio; on Lightnin
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> | <sub>Rapid‑MLX</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 57 | 62 | 56 | 42 | 45 | 41 | 47 | — |
-| Qwen3.8<br>27B<br><sub>4-bit</sub><br><sub>16&nbsp;GB too small</sub> | — | — | — | — | — | — | — | — | — |
-| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub><br><sub>16&nbsp;GB too small</sub> | — | — | — | — | — | — | — | — | — |
 
 #### Nemotron
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | — | —<br><sub>no support</sub> | — | — |
-| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4 · 16&nbsp;GB too small</sub> | — | — | — | — |
-| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix · 16&nbsp;GB too small</sub> | — | — | — | — |
 
 <sub>Short runs (3 of the coding answer each; the full protocol and Dory follow). oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner
 with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm ([details](docs/benchmarks.md#macbook-pro-m1-pro-16-gb-2026-10-19)).</sub>
