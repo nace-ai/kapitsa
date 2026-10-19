@@ -1,0 +1,31 @@
+
+===== q35-4b-mlxserve-dflash  [mlx-serve] mlx-serve + DFlash (z-lab drafter)  version 26.10.2
+[01:05:21] q35-4b-mlxserve-dflash: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 97856 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/mlx-vlm.json configs/m
+[01:05:21] q35-4b-mlxserve-dflash: starting ~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model ~/.cache/kapitsa/benchmark-models/mlx-serve/qwen3.5-4b-4bit-mlx-serve --host 127.0.0.1 --port 8173 --ctx-size 32768 --drafter ~/.cache/kapitsa/benchmark-models/drafters/Qwen3.5-4B-DFlash --no-mtp --draft-block-size 4
+[01:05:25] q35-4b-mlxserve-dflash: ready after 4s (pid 98115, listener 98115)
+[01:05:31] q35-4b-mlxserve-dflash:  warm-up prefill~2.9k+decode64: ok (5.66s)
+[01:05:31] q35-4b-mlxserve-dflash:  warm-up tools: ok (0.26s)
+[01:05:34] q35-4b-mlxserve-dflash:  warm-up decode512#1: ok (2.48s)
+[01:05:36] q35-4b-mlxserve-dflash:  warm-up decode512#2: ok (2.31s)
+[01:05:38] q35-4b-mlxserve-dflash:  warm-up decode512#3: ok (2.23s)
+[01:06:40] q35-4b-mlxserve-dflash: gpu busy (62s): com.apple.WebKit[3316] 6%
+[01:07:42] q35-4b-mlxserve-dflash: gpu busy (124s): com.apple.WebKit[3316] 7%
+[01:08:44] q35-4b-mlxserve-dflash: gpu busy (186s): com.apple.WebKit[3316] 7%
+[01:09:46] q35-4b-mlxserve-dflash: gpu busy (248s): com.apple.WebKit[3316] 7%
+[01:10:39] q35-4b-mlxserve-dflash: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== q35-4b-mlxserve-dflash
+  decode T=0.6: 250.75 tok/s (e2e 251.84; 512 tok, finish=length, d4=0.9583)
+  decode T=0.6: 227.99 tok/s (e2e 228.57; 512 tok, finish=length, d4=0.4561) flags ['repetition loop (distinct-4-gram 0.4561)']
+  decode T=0.6: 231.62 tok/s (e2e 230.88; 512 tok, finish=length, d4=0.6916)
+  decode T=0.6: 207.61 tok/s (e2e 207.82; 512 tok, finish=length, d4=0.7289)
+  decode T=0.6: 218.34 tok/s (e2e 218.16; 512 tok, finish=length, d4=0.4837) flags ['repetition loop (distinct-4-gram 0.4837)']
+  decode median 227.99 (min 207.61, max 250.75) over 5/5 valid
+  decode T=0: median 226.48 (min 209.79, max 240.16) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 0.77s -> 5384 tok/s, cold cached=0 | cached TTFT median 0.06s over 3 turns (cached [4103, 4169, 4213])
+  prefill 16000: 16285 tok (ref 16286), TTFT 3.50s -> 4651 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [16254, 16319, 16367])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 8.84 GB, resident mapped files 0.00 GB, swap used 14348.94 MB
+  -> <run-root>/out-followup/results/q35-4b-mlxserve-dflash-20261019-010521.json
+[01:11:26] q35-4b-mlxserve-dflash: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[01:11:26] q35-4b-mlxserve-dflash: -> <run-root>/out-followup/results/q35-4b-mlxserve-dflash-20261019-010521.json  flags: 3

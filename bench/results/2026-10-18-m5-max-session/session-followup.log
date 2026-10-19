@@ -13,3 +13,5 @@
 2026-10-19 00:53:47 start q35-4b-mlxserve-mtp
 2026-10-19 01:05:13 end q35-4b-mlxserve-mtp rc=0
 2026-10-19 01:05:13 start q35-4b-mlxserve-dflash
+2026-10-19 01:11:26 end q35-4b-mlxserve-dflash rc=0
+2026-10-19 01:11:26 start dory-kapitsa-perloop
