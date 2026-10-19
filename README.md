@@ -52,7 +52,7 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> | <sub>Rapid‑MLX</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**332&nbsp;tok/s**</mark> | 192 | — | 213 | 175 | 154 | 160 | 148 | 187 |
-| Qwen3.8<br>27B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 93 | 🟩&nbsp;**130** | 68 | 69 | 32 | 51 | 30 | — |
+| Qwen3.8<br>27B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 93 | 🟩&nbsp;**130** | 68 | 69 | 32 | 51 | 30 | 61 |
 | Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**281&nbsp;tok/s**</mark> | 232 | 264 | 166 | 123 | 127 | 171 | 112 | 98 |
 | Qwen3.8<br>Flash‑Next<br>180B‑A7B<br><sub>4-bit</sub> | <mark>**105&nbsp;tok/s**</mark> | 107 | 🟩&nbsp;**108** | 60 | 88 | —<br><sub>won't load</sub> | 96 | 77 | — |
 
