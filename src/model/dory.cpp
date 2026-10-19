@@ -242,6 +242,11 @@ void Dory::load(int prefill_chunk) {
   const double t0 = now_ms();
   tmax_ = std::max(kMaxRows, prefill_chunk);
   Gpu& g = Gpu::get();
+  // NVFP4 layout (dory.h): L2 on the M1's GPU family (M1 Pro, dory_mv_bench's one-row decode, L2 / L0: q|k|v|g 89.7 /
+  // 106.8 us, o 41.4 / 47.5, gate|up 122.7 / 146.6, down 68.4 / 77.3), L0 elsewhere as before
+  const char* fv = getenv("NI_DORY_FP4");
+  if (fv && *fv && strcmp(fv, "l0") && strcmp(fv, "l2")) fatal("NI_DORY_FP4=%s: expected l0 or l2", fv);
+  fp4_l2_ = fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7;
   st_ = std::make_unique<SafetensorsIndex>(path_);
   const SafetensorsIndex& idx = *st_;
   // matrices: one GPU buffer for the codes and one for the scales each, filled by parallel row jobs
@@ -290,6 +295,7 @@ void Dory::load(int prefill_chunk) {
     m.q = g.alloc(std::max<size_t>(m.q_row * N, 16), "dory_weights", false);
     owned_.push_back(m.q);
     m.gs = 1.0f;
+    m.l2 = fp4_l2_ && m.fmt == NhFmt::FP4;
     if (m.fmt == NhFmt::FP4) {
       m.s = g.alloc(std::max<size_t>(m.s_row * N, 16), "dory_scales", false);
       owned_.push_back(m.s);
@@ -453,7 +459,8 @@ void Dory::load(int prefill_chunk) {
         const size_t rb = nh_src_row_bytes(m.fmt, m.K);
         raw.resize(rb * size_t(j.rows));
         idx.read(*j.t, rb * size_t(j.r0), raw.data(), raw.size());
-        nh_repack_rows(m.fmt, m.K, raw.data(), j.rows, m.q.as<uint8_t>() + m.q_row * size_t(j.dst_row + j.r0), nullptr);
+        nh_repack_rows(m.fmt, m.K, raw.data(), j.rows, m.q.as<uint8_t>() + m.q_row * size_t(j.dst_row + j.r0), nullptr,
+                       m.l2);
       }
     });
   for (auto& t : th) t.join();
@@ -497,9 +504,9 @@ void Dory::load(int prefill_chunk) {
   dummy_ = g.alloc(4096, "dory_dummy");
   alloc_buffers();
   logi("Dory: %d layers (%d input, %d recurrent x %d loops, %d output), %.2f GB of weights read in %.1f s (%s); "
-       "recurrent KV %s",
+       "recurrent KV %s%s",
        c.layers, c.n_in, c.n_rec, loops_, c.n_out, src_bytes / 1e9, (now_ms() - t0) / 1000, formats_summary().c_str(),
-       loop_kv_name(kv_));
+       loop_kv_name(kv_), fp4 && fp4_l2_ ? "; NVFP4 codes in layout L2" : "");
 }
 
 std::string Dory::formats_summary() const {
@@ -771,7 +778,7 @@ void Dory::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const
 void Dory::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int R, int epi) {
   if (R == 1 && W.fmt == NhFmt::FP4 && W.K % 32 == 0 && epi <= 1) {
     const MvP p{W.N, W.K, W.K, W.N, W.gs, 1};
-    e.use(pipe(epi ? "nh_x4_mv_l0_add" : "nh_x4_mv_l0"));
+    e.use(pipe(epi ? x4(W, "nh_x4_mv_add", "nh_x4_mv_l0_add") : x4(W, "nh_x4_mv", "nh_x4_mv_l0")));
     e.buf(0, W.q);
     e.buf(1, W.s);
     e.buf(2, x);
@@ -799,7 +806,7 @@ void Dory::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, 
       uint32_t epi;
     } p{W.N, W.K, W.K, W.N, uint32_t(R), W.gs, 0};
     if (W.fmt == NhFmt::FP4) {
-      e.use(pipe("nh_x4_v8_l0"));
+      e.use(pipe(x4(W, "nh_x4_v8", "nh_x4_v8_l0")));
       e.buf(0, xh_);
       e.buf(1, W.q);
       e.buf(2, W.s);
@@ -831,6 +838,7 @@ void Dory::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, 
       return;
     }
   }
+  if (W.l2) fatal("Dory: NVFP4 rows in layout L2 need the x4 kernels (%d rows, K %u)", R, W.K);
   const char* fm = W.fmt == NhFmt::FP4 ? "fp4" : W.fmt == NhFmt::Q8 ? "q8" : "bf16";
   const std::string name = std::string("nh_mv_") + fm + "_r" + std::to_string(rk) + (epi == 1 ? "_add" : "");
   const uint32_t nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1, nsg = 4;
@@ -856,7 +864,10 @@ void Dory::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& 
     const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
       const V8P p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
-      e.use(pipe(tb == 1 ? "nh_x4_v8_l0" : tb == 2 ? "nh_x4_mm16_l0" : tb == 3 ? "nh_x4_mm24_l0" : "nh_x4_mm32_l0"));
+      e.use(pipe(tb == 1   ? x4(W, "nh_x4_v8", "nh_x4_v8_l0")
+                 : tb == 2 ? x4(W, "nh_x4_mm16", "nh_x4_mm16_l0")
+                 : tb == 3 ? x4(W, "nh_x4_mm24", "nh_x4_mm24_l0")
+                           : x4(W, "nh_x4_mm32", "nh_x4_mm32_l0")));
       e.buf(0, xh);
       e.buf(1, W.q);
       e.buf(2, W.s);
@@ -885,7 +896,7 @@ void Dory::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& 
     return;
   }
   const int bm = M <= 16 ? 16 : M <= 32 ? 32 : 64;
-  const std::string name = std::string(W.fmt == NhFmt::FP4 ? "nh_gemm_fp4" : W.fmt == NhFmt::Q8 ? "nh_gemm_q8" : "nh_gemm_bf16w") +
+  const std::string name = std::string(W.fmt == NhFmt::FP4 ? x4(W, "nh_gemm_fp4l2", "nh_gemm_fp4") : W.fmt == NhFmt::Q8 ? "nh_gemm_q8" : "nh_gemm_bf16w") +
                            "_m" + std::to_string(bm);
   const GemmP p{uint32_t(M), W.N, W.K, W.K, W.N, W.gs, uint32_t(epi), 0, 0, 1};
   e.use(pipe(name));

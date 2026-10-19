@@ -38,6 +38,14 @@ NI_INLINE void nh_dq16(const device uchar* q, const device uchar* s, uint K, uin
       dst[j] = half(nh_fp4_lut[b & 15u] * sc);
       dst[j + 8] = half(nh_fp4_lut[b >> 4] * sc);
     }
+  } else if (FMT == 6) {  // FP4 in layout L2 (nh_x_fp4.metal): word h holds element 4h + j in nibble j and 8 + 4h + j
+                          // in nibble 4 + j, codes as (m2 m1 m0 s); the same values as FMT 1
+    const uint2 c = *(const device uint2*)(q + size_t(n) * (K / 2) + k / 2);
+    const float sc = nh_ue4m3(s[size_t(n) * (K / 16) + k / 16]);
+    for (int e = 0; e < 16; ++e) {
+      const uint v = (((e >> 2) & 1 ? c.y : c.x) >> (4 * ((e & 3) + ((e >> 3) << 2)))) & 15u;
+      dst[e] = half(nh_fp4_lut[(v >> 1) | ((v & 1u) << 3)] * sc);
+    }
   } else if (FMT == 4) {  // BF16 -> half (exact for |w| in [6.1e-5, 65504])
     const device uint4* wp = (const device uint4*)(q + size_t(n) * K * 2 + k * 2);
     for (int h = 0; h < 2; ++h) {
@@ -178,6 +186,9 @@ NH_GEMM(nh_gemm_q8_m16, 0, 0, 16)
 NH_GEMM(nh_gemm_fp4_m64, 1, 0, 64)
 NH_GEMM(nh_gemm_fp4_m32, 1, 0, 32)
 NH_GEMM(nh_gemm_fp4_m16, 1, 0, 16)
+NH_GEMM(nh_gemm_fp4l2_m64, 6, 0, 64)  // NVFP4 in layout L2 (Dory on the M1)
+NH_GEMM(nh_gemm_fp4l2_m32, 6, 0, 32)
+NH_GEMM(nh_gemm_fp4l2_m16, 6, 0, 16)
 NH_GEMM(nh_gemm_iq2_m64, 2, 0, 64)
 NH_GEMM(nh_gemm_iq2_m32, 2, 0, 32)
 NH_GEMM(nh_gemm_iq2_m16, 2, 0, 16)

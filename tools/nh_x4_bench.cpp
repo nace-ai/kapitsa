@@ -536,6 +536,13 @@ int main(int argc, char** argv) {
     }
     pack(m, 2, want_l2.data(), sc.data());
     printf("l2patch: repack snippet %s\n", l2 == want_l2 ? "matches layout L2" : "DIFFERS from layout L2");
+    // the engine's own repack (nh_repack_rows, Dory on the M1) to L2 and to L0
+    std::vector<uint8_t> eng(mo.size()), want_l0(mo.size());
+    ni::nh_repack_rows(ni::NhFmt::FP4, K, mo.data(), N, eng.data(), nullptr, true);
+    printf("l2patch: nh_repack_rows L2 %s\n", eng == want_l2 ? "matches layout L2" : "DIFFERS from layout L2");
+    ni::nh_repack_rows(ni::NhFmt::FP4, K, mo.data(), N, eng.data(), nullptr, false);
+    pack(m, 0, want_l0.data(), sc.data());
+    printf("l2patch: nh_repack_rows L0 %s\n", eng == want_l0 ? "matches layout L0" : "DIFFERS from layout L0");
     g.release(o16);
     g.release(o4);
     g.release(gm.q);
