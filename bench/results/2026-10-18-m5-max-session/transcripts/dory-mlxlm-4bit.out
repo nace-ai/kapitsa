@@ -1,0 +1,28 @@
+
+===== dory-mlxlm-4bit  [mlx-lm] mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)  version mlx_lm 0.32.3.dev3+g208065f33 mlx 0.32.4
+[00:10:29] dory-mlxlm-4bit: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 70775 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/mlx-vlm.json configs/m
+[00:10:29] dory-mlxlm-4bit: starting ~/venvs/mlx-lm-dory/bin/mlx_lm.server --model <run-root>/out-followup/state/dory-mlxlm-4bit --host 127.0.0.1 --port 8321 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[00:10:31] dory-mlxlm-4bit: ready after 2s (pid 77794, listener 77794)
+[00:10:34] dory-mlxlm-4bit:  warm-up prefill~2.9k+decode64: ok (3.06s)
+[00:10:35] dory-mlxlm-4bit:  warm-up tools: ok (0.8s)
+[00:11:37] dory-mlxlm-4bit: gpu busy (62s): com.apple.WebKit[3316] 6%
+[00:12:39] dory-mlxlm-4bit: gpu busy (124s): com.apple.WebKit[3316] 6%
+[00:13:41] dory-mlxlm-4bit: gpu busy (186s): com.apple.WebKit[3316] 6%
+[00:14:43] dory-mlxlm-4bit: gpu busy (248s): com.apple.WebKit[3316] 6%
+[00:15:37] dory-mlxlm-4bit: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== dory-mlxlm-4bit
+  decode T=0.6: 76.39 tok/s (e2e 76.43; 512 tok, finish=length, d4=0.9754)
+  decode T=0.6: 77.79 tok/s (e2e 76.20; 512 tok, finish=length, d4=0.57)
+  decode T=0.6: 77.04 tok/s (e2e 76.14; 512 tok, finish=length, d4=0.9087)
+  decode T=0.6: 75.48 tok/s (e2e 75.65; 512 tok, finish=length, d4=0.9757)
+  decode T=0.6: 75.92 tok/s (e2e 75.94; 512 tok, finish=length, d4=0.9744)
+  decode median 76.39 (min 75.48, max 77.79) over 5/5 valid
+  decode T=0: median 78.19 (min 77.63, max 79.0) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 1.90s -> 2196 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [4216, 4258, 4305])
+  prefill 16000: 16516 tok (ref 16517), TTFT 7.59s -> 2176 tok/s, cold cached=0 | cached TTFT median 0.18s over 3 turns (cached [16550, 16616, 16654])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 10.03 GB, resident mapped files 0.01 GB, swap used 14372.94 MB
+  -> <run-root>/out-followup/results/dory-mlxlm-4bit-20261019-001029.json
+[00:17:24] dory-mlxlm-4bit: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:17:24] dory-mlxlm-4bit: -> <run-root>/out-followup/results/dory-mlxlm-4bit-20261019-001029.json  flags: 1

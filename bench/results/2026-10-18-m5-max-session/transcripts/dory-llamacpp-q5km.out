@@ -1,0 +1,25 @@
+
+===== dory-llamacpp-q5km  [llama.cpp] llama.cpp (NVIDIA fork, Q5_K_M, 2 loops, last-loop KV)  version 0.6.0-dev (b11551, 98a74c97e)
+[23:57:05] dory-llamacpp-q5km: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 49087 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/dory.json configs/mlx-vlm.json configs/m
+[23:57:05] dory-llamacpp-q5km: starting ~/llama.cpp/dory-98a74c97/build/bin/llama-server -m ~/.cache/kapitsa/benchmark-models/gguf/NVIDIA-Nemotron-Labs-Dory1.0-4B-Q5_K_M.gguf --host 127.0.0.1 --port 8311 -a dory -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --override-kv dory.num_loops=int:2,dory.recurrent_kv_cache_mode=str:last_loop
+[23:57:18] dory-llamacpp-q5km: ready after 12s (pid 49230, listener 49230)
+[23:57:25] dory-llamacpp-q5km:  warm-up prefill~2.9k+decode64: ok (7.54s)
+[23:57:30] dory-llamacpp-q5km:  warm-up tools: ok (5.2s)
+[23:58:32] dory-llamacpp-q5km: gpu busy (62s): com.apple.WebKit[3316] 7%
+[23:59:34] dory-llamacpp-q5km: gpu busy (123s): Slack Helper[42508] 5%
+[00:00:35] dory-llamacpp-q5km: gpu busy (185s): com.apple.WebKit[3316] 6%
+[00:01:37] dory-llamacpp-q5km: gpu busy (247s): com.apple.WebKit[3316] 6%
+[00:02:31] dory-llamacpp-q5km: GPU not quiet after 300s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== dory-llamacpp-q5km
+  decode T=0.6: 8.77 tok/s (e2e 8.77; 256 tok, finish=length, d4=1.0)
+  decode T=0.6: 9.17 tok/s (e2e 9.16; 256 tok, finish=length, d4=0.9955)
+  decode median 8.97 (min 8.77, max 9.17) over 2/2 valid
+  decode T=0: median 9.13 (min 8.92, max 9.35) over 2/2 valid
+  prefill 4000: 4182 tok (ref 4184), TTFT 2.23s -> 1879 tok/s, cold cached=0 | cached TTFT median 0.46s over 3 turns (cached [4214, 4268, 4325])
+  prefill 16000: 16518 tok (ref 16517), TTFT 12.82s -> 1288 tok/s, cold cached=0 | cached TTFT median 0.44s over 3 turns (cached [16556, 16615, 16676])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 11.18 GB, resident mapped files 0.03 GB, swap used 14372.94 MB
+  -> <run-root>/out-followup/results/dory-llamacpp-q5km-20261018-235702.json
+[00:07:14] dory-llamacpp-q5km: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:07:14] dory-llamacpp-q5km: -> <run-root>/out-followup/results/dory-llamacpp-q5km-20261018-235702.json  flags: 1

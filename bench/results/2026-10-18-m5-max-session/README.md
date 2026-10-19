@@ -31,5 +31,11 @@ memory ... would likely overload your system"); it was not overridden.
 **Dory.** `dory-kapitsa` here is build 474b3e6 with last-loop KV; the README's Dory row uses a newer build with per-loop
 KV, so this run is not in the README.
 
+**After the session (2026-10-19).** Two more queues, under the same lock, with `--quiet-timeout 120` from 00:02:
+`session-followup.log` (Dory on Kapitsa build 36c2937, NVIDIA's llama.cpp fork and mlx-lm's Dory pull request; mlx-vlm
+with MTP / DFlash2; mlx-serve on the 4B) and `session-extra.log` (Rapid-MLX 0.16.3; mlx-serve and MTPLX on Super-VL's
+text-only MLX conversion). Their configs are in `configs/dory.json`, `mlx-vlm.json`, `mlx-serve.json`, `rapid-mlx.json`
+and `super-vl.json`.
+
 Local paths are replaced by placeholders: `~` for the home folder, `<repo>` for the Kapitsa checkout, `<run-root>` for
 the run directory.
