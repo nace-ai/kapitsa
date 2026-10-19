@@ -74,5 +74,39 @@
   "requires_paths": ["{models}/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit/config.json",
                      "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
   "note": "The same pack plus --drafter incoai/Qwen3.6-35B-A3B-DFlash2 (the drafter Kapitsa and oMLX use; mlx-serve quantizes it to 8 bits at load, its default on M1-M4). The vendor ships no drafter for this model and documents DFlash for dense targets, but its loader binds DFlash drafters to MoE trunks too (the qwen3_5 MoE forward fills the drafter's layer taps). On a MoE target it verifies a fixed block (no draft tree: trees need the dense row-exact verify) and switches DFlash off for the rest of an answer once it accepts fewer than 1.8 drafts per round (its break-even bar for MoE verifies); at T = 0.6 this drafter averaged about 1.8 at block 5, so most answers finish as plain decoding. --no-mtp: with the MTP head loaded, a request admitted while the previous one is still finishing (the benchmark's back-to-back requests) is handed to MTP instead. --draft-block-size 4: fastest in smoke tests (median of 5 sampled decodes: block 4 103.9 tok/s, the default block 5 (this Mac's cap) 102.4, block 8 88.2; block 5 with the MTP head loaded 98.7). PLD, HOME and context as for MTP."
+ },
+ {
+  "label": "q35-4b-mlxserve-mtp",
+  "extends": "q36-35b-mlxserve-mtp",
+  "display": "mlx-serve + MTP",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q35-4b-mtp"},
+   {"write_json": {"path": "{state}/mlx-serve/q35-4b-mtp/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768", "--no-drafter", "--mtp-max-depth", "3"],
+  "env": {"HOME": "{state}/mlx-serve/q35-4b-mtp"},
+  "model": "qwen3.5-4b-4bit-mlx-serve",
+  "requires_paths": ["{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve/config.json",
+                     "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve/mtp/weights.safetensors"],
+  "note": "mlx-serve 26.10.2 on the 4B trunk every engine reads (lmstudio-community/Qwen3.5-4B-MLX-4bit @c43ee1d, cloned) with the sidecar mtp/weights.safetensors: mlx-community/Qwen3.5-4B-MTP-4bit @ab6f59b (Qwen's own MTP head at 4 bits) with its tensors renamed to mtp.*, as the vendor's 35B pack does with mlx-community's 35B head (the vendor publishes no 4B pack; tools/mlx_serve_pack.py qwen3.5-4b). MTP with exact verification, --no-drafter. --mtp-max-depth 3: fastest in short runs before the session (three sampled decodes each; T = 0.6 tok/s: max depth 3 136.0, 4 134.1, 2 130.5, 1 120.3, the adaptive default (cap 6) 124.0). PLD, HOME and context as on the 35B."
+ },
+ {
+  "label": "q35-4b-mlxserve-dflash",
+  "extends": "q35-4b-mlxserve-mtp",
+  "display": "mlx-serve + DFlash (z-lab drafter)",
+  "prepare": [
+   {"clean_dir": "{state}/mlx-serve/q35-4b-dflash"},
+   {"write_json": {"path": "{state}/mlx-serve/q35-4b-dflash/harness.json", "data": {"home_of": "mlx-serve, emptied before each run"}}}
+  ],
+  "cmd": ["{env:MLX_SERVE_BIN=mlx-serve}", "--serve", "--model", "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+          "--host", "127.0.0.1", "--port", "8173", "--ctx-size", "32768",
+          "--drafter", "{models}/drafters/Qwen3.5-4B-DFlash", "--no-mtp", "--draft-block-size", "4"],
+  "env": {"HOME": "{state}/mlx-serve/q35-4b-dflash"},
+  "requires_paths": ["{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve/config.json",
+                     "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"],
+  "note": "The same folder with z-lab's DFlash drafter for this model (z-lab/Qwen3.5-4B-DFlash @9a1996c, DFlash v1: no block convolutions or path selector; the drafter Kapitsa reads), named with --drafter; mlx-serve detects it from its config (block_size, mask_token_id, target_layer_ids) and quantizes it to 8 bits at load on M1-M4. --no-mtp (see q38-27b-mlxserve-dflash2). --draft-block-size 4: fastest in short runs before the session (three sampled decodes each; T = 0.6 tok/s: block 4 124.5, the default 5 (this Mac's cap) 118.5, 6 111.2). incoai publishes no DFlash2 drafter for the 4B. PLD, HOME and context as on the 35B."
  }
 ]

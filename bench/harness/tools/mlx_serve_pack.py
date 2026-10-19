@@ -5,6 +5,7 @@ the shared shards take no extra disk space.
 
   mlx_serve_pack.py qwen3.6-35b-a3b [--models DIR] [--shard FILE]
   mlx_serve_pack.py qwen3.8-27b     [--models DIR] [--shard FILE]
+  mlx_serve_pack.py qwen3.5-4b      [--models DIR] [--head-src FILE]
 
 qwen3.6-35b-a3b -> <models>/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit, which is ddalcu/Qwen3.6-35B-A3B-MLX-Serve-4bit:
   its trunk is mlx-community/Qwen3.6-35B-A3B-4bit, byte-identical (sha256) to <models>/qwen3.6-35b-a3b-4bit's
@@ -17,6 +18,12 @@ qwen3.8-27b -> <models>/mlx-serve/qwen3.8-27b-4bit-mlx-serve: the lmstudio-commu
   requests from the pack's last shard, or from a local copy of that shard (--shard, checked against its sha256).
   ddalcu's own trunk is a different conversion (bf16 embedding, some tensors quantized differently, 18.2 GB);
   every engine in the benchmark reads the lmstudio-community trunk instead.
+qwen3.5-4b -> <models>/mlx-serve/qwen3.5-4b-4bit-mlx-serve: the vendor publishes no pack for this model. The
+  lmstudio-community trunk of <models>/qwen3.5-4b-4bit-mtp (cloned) and, as the sidecar mtp/weights.safetensors, the
+  4-bit MTP head mlx-community/Qwen3.5-4B-MTP-4bit with its tensors renamed from the bare fc.weight layout to
+  mtp.fc.weight (the bytes unchanged), as the vendor's 35B pack does with mlx-community's 35B head. --head-src reads
+  the head from a local file instead of downloading it (its tensor names, dtypes and shapes are checked against the
+  pinned repo's header).
 """
 import argparse, hashlib, json, os, shutil, struct, subprocess, sys, urllib.request
 
@@ -44,6 +51,15 @@ PACKS = {
         "head_shard": "model-00004.safetensors",
         # the sidecar this script writes from that shard (deterministic): checked, so a range read cannot go wrong quietly
         "head_sha256": "b4aee9bfb627f8453cbc4224eab59aee634de8607ed1ca4e0e44aa5e001dc58c",
+    },
+    "qwen3.5-4b": {
+        "dir": "qwen3.5-4b-4bit-mlx-serve",
+        "trunk": "qwen3.5-4b-4bit-mtp",
+        "clone": ["model.safetensors", "model.safetensors.index.json", "config.json", "chat_template.jinja",
+                  "preprocessor_config.json", "processor_config.json", "tokenizer.json", "tokenizer_config.json",
+                  "video_preprocessor_config.json", "vocab.json"],
+        "head_repo": "mlx-community/Qwen3.5-4B-MTP-4bit", "head_rev": "ab6f59bc6627196c611ab8851638651078170485",
+        "head_file": "model.safetensors",
     },
 }
 
@@ -130,6 +146,38 @@ def write_head(p, out, shard):
     print(f"  wrote mtp/weights.safetensors: {len(keys)} tensors, {off / 1e6:.0f} MB (sha256 checked)")
 
 
+def write_renamed_head(p, out, src):
+    """The head file of p["head_repo"] (or a local copy, src) with every tensor renamed to mtp.<name>, bytes unchanged."""
+    u = url(p["head_repo"], p["head_rev"], p["head_file"])
+    read_remote = lambda a, b: fetch(u, a, b)
+    n = struct.unpack("<Q", read_remote(0, 8))[0]
+    ref = json.loads(read_remote(8, 8 + n))
+    ref.pop("__metadata__", None)
+    read = (lambda a, b: _read_local(src, a, b)) if src else read_remote
+    n = struct.unpack("<Q", read(0, 8))[0]
+    header = json.loads(read(8, 8 + n))
+    meta = header.pop("__metadata__", None)
+    shape = lambda h: {k: (v["dtype"], v["shape"]) for k, v in h.items()}
+    if shape(header) != shape(ref):
+        sys.exit(f"{src or u}: tensors differ from {p['head_repo']}@{p['head_rev'][:7]}")
+    keys = sorted(header, key=lambda k: header[k]["data_offsets"][0])
+    new, off = ({"__metadata__": meta} if meta else {}), 0
+    for k in keys:
+        a, b = header[k]["data_offsets"]
+        new["mtp." + k] = {"dtype": header[k]["dtype"], "shape": header[k]["shape"], "data_offsets": [off, off + b - a]}
+        off += b - a
+    raw = json.dumps(new, separators=(",", ":")).encode()
+    raw += b" " * (-len(raw) % 8)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out + ".part", "wb") as f:
+        f.write(struct.pack("<Q", len(raw)) + raw)
+        for k in keys:
+            a, b = header[k]["data_offsets"]
+            f.write(read(8 + n + a, 8 + n + b))
+    os.replace(out + ".part", out)
+    print(f"  wrote mtp/weights.safetensors: {len(keys)} tensors of {p['head_repo']}, {off / 1e6:.0f} MB, renamed to mtp.*")
+
+
 def _read_local(path, a, b):
     with open(path, "rb") as f:
         f.seek(a)
@@ -142,12 +190,13 @@ def main():
     ap.add_argument("--models", default=os.environ.get("BENCH_MODELS") or "~/models",
                     help="the harness weights folder (BENCH_MODELS, default ~/models)")
     ap.add_argument("--shard", help="27B: a local copy of the pack's model-00004.safetensors to read the head from")
+    ap.add_argument("--head-src", help="4B: a local copy of the head file to read instead of downloading it")
     a = ap.parse_args()
     p, models = PACKS[a.model], os.path.expanduser(a.models)
     out = os.path.join(models, "mlx-serve", p["dir"])
     os.makedirs(out, exist_ok=True)
     print(f"{out}:")
-    files = tree(p["repo"], p["rev"])
+    files = tree(p["repo"], p["rev"]) if "repo" in p else {}
     cloned = [(os.path.join(models, p["trunk"], f), f) for f in p["clone"]]
     cloned += [(os.path.join(models, p["drafter"], f), "drafter/" + f) for f in ("config.json", "model.safetensors")
                if "drafter" in p]
@@ -169,6 +218,8 @@ def main():
         print(f"  downloaded {f}" + (" (sha256 checked)" if want else ""))
     if "head_shard" in p:
         write_head(p, os.path.join(out, "mtp", "weights.safetensors"), a.shard)
+    if "head_repo" in p:
+        write_renamed_head(p, os.path.join(out, "mtp", "weights.safetensors"), a.head_src)
 
 
 if __name__ == "__main__":

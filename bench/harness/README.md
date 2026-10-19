@@ -207,6 +207,8 @@ python3 tools/omlx_mtp_farm.py $M/qwen3.5-4b-4bit-mtplx $M/qwen3.5-4b-4bit-omlx-
 ln -s ~/.cache/kapitsa/models/qwen3.5-4b-bf16 $M/qwen3.5-4b-bf16-mtp
 mkdir $M/qwen3.5-4b-bf16-mtplx && cp -c $M/qwen3.5-4b-bf16-mtp/* $M/qwen3.5-4b-bf16-mtplx/ && cp -c $M/qwen3.5-4b-4bit-mtplx/mtplx_runtime.json $M/qwen3.5-4b-bf16-mtplx/
 hf download z-lab/Qwen3.5-4B-DFlash config.json model.safetensors --revision 9a1996ccf887b79ab3af4fcbf8c1d1f4b5658bcf --local-dir $M/drafters/Qwen3.5-4B-DFlash
+# Qwen's 4B MTP head at 4 bits, which mlx-serve's 4B folder reads (tools/mlx_serve_pack.py qwen3.5-4b, under mlx-serve)
+hf download mlx-community/Qwen3.5-4B-MTP-4bit config.json model.safetensors --revision ab6f59bc6627196c611ab8851638651078170485 --local-dir $M/drafters/Qwen3.5-4B-MTP-4bit
 # GGUF (llama.cpp and Ollama): see "Ollama"
 ```
 
@@ -415,12 +417,16 @@ weights above (APFS clones) plus the vendor's files that differ, which the scrip
 ```bash
 python3 tools/mlx_serve_pack.py qwen3.6-35b-a3b   # into <models>/mlx-serve/: --models DIR, else $BENCH_MODELS, else ~/models
 python3 tools/mlx_serve_pack.py qwen3.8-27b
+python3 tools/mlx_serve_pack.py qwen3.5-4b --head-src $M/drafters/Qwen3.5-4B-MTP-4bit/model.safetensors
 ```
 
 On the 35B that is the vendor's pack itself: the same trunk shards (sha256-identical) with its MTP sidecar
 `mtp/weights.safetensors`. On the 27B the vendor's pack is its own conversion (bf16 embedding, some tensors
 quantized differently, 18.2 GB), so the folder holds the trunk every engine reads plus the vendor's MTP head (its 29
 `mtp.*` tensors, byte for byte, as a sidecar) and the vendor's `drafter/` (the same file as the DFlash2 drafter above).
+The vendor publishes no 4B pack: that folder is the 4B trunk every engine reads plus mlx-community's 4-bit MTP head
+(above) with its tensors renamed to `mtp.*`, as the vendor's 35B pack does with the 35B head. Its DFlash config reads
+z-lab's 4B drafter, a DFlash v1 drafter, which mlx-serve detects from its config.
 
 Two setups per model, at mlx-serve's own defaults except where short runs just before the session measured faster (five
 sampled decodes each; the [tuning table](../results/2026-10-18-mlx-serve/README.md#tuning)):
@@ -439,6 +445,14 @@ sampled decodes each; the [tuning table](../results/2026-10-18-mlx-serve/README.
 A fresh `HOME` per run (in `{state}`): no saved settings apply, and the speculation cost table mlx-serve learns while it
 runs (`~/.mlx-serve/round-cost/`) starts empty; the warm-up's three full decodes train it. 32K context, one sequence
 (its default `--max-concurrent 1`).
+
+### mlx-vlm (`configs/mlx-vlm.json`) [0.7.8, mlx 0.32.4]
+
+`uv pip install mlx-vlm` into a venv and set `MLX_VLM_PYTHON` to its Python (the published runs used the oMLX venv's
+copy of the 0.7.8 release, the build Bolt ran on). The server reads the same MLX 4-bit folders as the other engines,
+one sequence (`--max-num-seqs 1`), 2048-token prefill steps, and automatic prefix caching in memory (`APC_ENABLED=1`,
+`APC_DISK_ENABLED=0`; off by default), so follow-up turns reuse the conversation. On the 35B its fastest setup is DFlash2
+with the drafter above (`--draft-kind dflash`); the config's `note` gives the short runs that chose it.
 
 ## Configs
 

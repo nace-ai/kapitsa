@@ -1,0 +1,243 @@
+{
+ "label": "smoke-q36-mlxvlm-mtp-b3",
+ "schema": 2,
+ "when": "2026-10-19 05:18:31",
+ "invalid": [
+  "harness: server never became ready (8s); see <smoke-out>/logs/smoke-q36-mlxvlm-mtp-b3-20261019-051823.log"
+ ],
+ "flags": [],
+ "config_label": "smoke-q36-mlxvlm-mtp-b3",
+ "display": "mlx-vlm server + MTP",
+ "engine": "mlx-lm",
+ "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+ "version_config": "mlx-vlm 0.7.8, mlx 0.32.4",
+ "model_name": "Qwen3.6-35B-A3B",
+ "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+ "note": "As q36-35b-mlxvlm, with the model's MTP head as the drafter (--draft-model = the same folder, --draft-kind mtp): MTPLX's 4-bit head, the one MTPLX, oMLX and Ollama's MLX runner read.",
+ "config": {
+  "label": "smoke-q36-mlxvlm-mtp-b3",
+  "display": "mlx-vlm server + MTP",
+  "engine": "mlx-lm",
+  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8288",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "3"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "base_url": "http://127.0.0.1:8288/v1",
+  "model": "{models}/qwen3.6-35b-a3b-4bit",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/qwen3.6-35b-a3b-4bit/config.json",
+   "{models}/qwen3.6-35b-a3b-4bit/mtp.safetensors"
+  ],
+  "version_cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m, json; d = m.distribution('mlx-vlm'); print('mlx-vlm', d.version, d.read_text('direct_url.json'), 'mlx', m.version('mlx'))"
+  ],
+  "log_grep": [
+   "[Ll]oad|model|APC|prefix|cache",
+   "[Dd]raft|MTP|mtp|accept|DFlash|dflash",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "note": "As q36-35b-mlxvlm, with the model's MTP head as the drafter (--draft-model = the same folder, --draft-kind mtp): MTPLX's 4-bit head, the one MTPLX, oMLX and Ollama's MLX runner read.",
+  "adaptive_warm": true
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "Mac16,7",
+   "cpu": "Apple M4 Pro",
+   "memsize": "51539607552",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "2",
+   "vm": {
+    "swap_used_mb": 3498.69,
+    "swapouts": 22464140,
+    "swapins": 17702138,
+    "pageouts": 664529,
+    "memorystatus_level": 91
+   },
+   "gpu_mem": {
+    "in_use": 815939584,
+    "alloc": 3570171904,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 7900938240,
+   "ollama_app_loaded": []
+  },
+  "cmd": [
+   "<omlx-venv>/bin/python",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "<models>/qwen3.6-35b-a3b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8288",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "<models>/qwen3.6-35b-a3b-4bit",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "3"
+  ],
+  "cmd_shell": "'<omlx-venv>/bin/python' -m mlx_vlm.server --model <models>/qwen3.6-35b-a3b-4bit --host 127.0.0.1 --port 8288 --prefill-step-size 2048 --max-num-seqs 1 --draft-model <models>/qwen3.6-35b-a3b-4bit --draft-kind mtp --draft-block-size 3",
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+   "safetensors_bytes": 20984462832,
+   "safetensors_files": [
+    "model-00001-of-00004.safetensors",
+    "model-00002-of-00004.safetensors",
+    "model-00003-of-00004.safetensors",
+    "model-00004-of-00004.safetensors",
+    "mtp.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "474b3e6a4d8a9f2c282d7077c0191bcd2ec3cede",
+   "dirty": true
+  },
+  "config_file": "../../../../../../../..<scratch>/configs/smoke-35b.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_PYTHON",
+   "OLLAMA_BIN",
+   "OMLX_BIN",
+   "RAPID_MLX_BIN",
+   "RAPID_MLX_PYTHON"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "Claude Helper",
+   "VisualIntelligenceCore",
+   "cameracaptured",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "version_cmd_output": "mlx-vlm 0.7.8 {\"url\":\"https://github.com/Blaizzy/mlx-vlm\",\"vcs_info\":{\"vcs\":\"git\",\"commit_id\":\"9790231827a890eade1a626643a6bc94a1317c72\",\"requested_revision\":\"9790231827a890eade1a626643a6bc94a1317c72\"}} mlx 0.32.4",
+  "prepare": [],
+  "env_relevant": {
+   "BENCH_MODELS": "<models>",
+   "BENCH_OUT": "<smoke-out>",
+   "BENCH_GPU_AMBIENT": "Claude Helper,Claude,cameracaptured",
+   "OMLX_BIN": "<omlx-venv>/bin/omlx",
+   "MLX_VLM_PYTHON": "<omlx-venv>/bin/python",
+   "MLX_SERVE_BIN": "<mlx-serve-26.10.2>/mlx-serve",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "OLLAMA_BIN": "/Applications/Ollama.app/Contents/Resources/ollama",
+   "MLX_LM_SERVER": "<engines-root>/venvs/mlxlm/bin/mlx_lm.server",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 8.0
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0,
+  "harness_held_s": 13.3,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 819068928,
+   "alloc": 3533258752,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 3498.69,
+   "swapouts": 22464140,
+   "swapins": 17702190,
+   "pageouts": 665217,
+   "memorystatus_level": 91
+  },
+  "disk_free_bytes": 7900749824
+ },
+ "version_detected": null,
+ "server_log": [
+  "2026-10-19 05:18:24,622 - INFO - Pre-loading language model: <models>/qwen3.6-35b-a3b-4bit",
+  "2026-10-19 05:18:24,622 - INFO - APC enabled (block_size=16, num_blocks=2048, hash=fast, disk=False)",
+  "2026-10-19 05:18:24,623 - INFO - Loading model: <models>/qwen3.6-35b-a3b-4bit",
+  "2026-10-19 05:18:29,301 - INFO - Model and processor loaded successfully.",
+  "2026-10-19 05:18:29,302 - INFO - Loading speculative drafter (mtp): <models>/qwen3.6-35b-a3b-4bit",
+  "2026-10-19 05:18:29,389 - ERROR - Error loading model in generation thread: Received 2304 parameters not in model:",
+  "Traceback (most recent call last):",
+  "    self._initialize_model()",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/server/generation.py\", line 1116, in _initialize_model",
+  "    draft_model, resolved_kind = load_drafter(draft_model_path, kind=draft_kind)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/speculative/drafters/__init__.py\", line 223, in load_drafter",
+  "    model = splitter.load(path, source_config=config, **kwargs)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/speculative/drafters/mtp_split.py\", line 273, in load",
+  "    return load_model_weights(",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/utils.py\", line 689, in load_model_weights",
+  "    model.load_weights(list(weights.items()), strict=strict)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx/nn/layers/base.py\", line 185, in load_weights",
+  "    raise ValueError(",
+  "ValueError: Received 2304 parameters not in model:",
+  "ERROR:    Traceback (most recent call last):",
+  "    get_cached_model(model_path, adapter_path, model_kind=\"text_generation\")",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/server/app.py\", line 950, in get_cached_model",
+  "    model, processor, config = response_generator.wait_until_ready()",
+  "    raise self._load_error",
+  "    self._initialize_model()",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/server/generation.py\", line 1116, in _initialize_model",
+  "    draft_model, resolved_kind = load_drafter(draft_model_path, kind=draft_kind)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/speculative/drafters/__init__.py\", line 223, in load_drafter",
+  "    model = splitter.load(path, source_config=config, **kwargs)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/speculative/drafters/mtp_split.py\", line 273, in load",
+  "    return load_model_weights(",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx_vlm/utils.py\", line 689, in load_model_weights",
+  "    model.load_weights(list(weights.items()), strict=strict)",
+  "  File \"<omlx-venv>/lib/python3.12/site-packages/mlx/nn/layers/base.py\", line 185, in load_weights",
+  "    raise ValueError(",
+  "ValueError: Received 2304 parameters not in model:"
+ ],
+ "server_log_path": "logs/smoke-q36-mlxvlm-mtp-b3-20261019-051823.log"
+}

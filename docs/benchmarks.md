@@ -910,6 +910,41 @@ Runs for the M4 Pro table's empty and flagged cells, on the same MacBook Pro (M4
 mode, AC power) with this harness: one hold of the GPU lock per model, Kapitsa (main at 474b3e6) first and last as the
 control. Result files: [bench/results/2026-10-19-m4pro](../bench/results/2026-10-19-m4pro/).
 
+### Qwen: mlx-serve on the 4B, the MLX column on the 35B
+
+One hold of the GPU lock (06:16–06:31), each model between two Kapitsa runs. mlx-serve wrote 137.0 tok/s on
+Qwen3.5-4B and mlx-vlm 86.0 on Qwen3.6-35B-A3B, both at 4-bit, at T = 0.6; nothing in their runs was flagged.
+
+| Engine (setting) | Model | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| Kapitsa (DFlash drafter), before<sup>1</sup> | 4B | 183.4 (167.1–193.3) | 189.9 (186.8–196.8) | 1,937 | 1,595 | 0.05 | 0.06 | 4.7 | pass |
+| mlx-serve + MTP (max depth 3) | 4B | 137.0 (132.7–141.0) | 147.5 (136.4–151.5) | 874 | 797 | 0.22 | 0.28 | 8.4 | pass |
+| Kapitsa (DFlash drafter), after | 4B | 169.2 (164.2–186.1) | 194.0 (173.3–202.5) | 1,930 | 1,543 | 0.05 | 0.07 | 4.7 | pass |
+| Kapitsa (DFlash2 drafter), before | 35B | 159.1 (150.8–165.6) | 176.2 (160.9–181.7) | 1,164 | 986 | 0.06 | 0.08 | 21.2 | pass |
+| mlx-vlm + DFlash2 | 35B | 86.0 (81.0–87.2) | 90.7 (89.2–93.8) | 985 | 879 | 0.36 | 2.81<sup>2</sup> | 29.4 | pass |
+| Kapitsa (DFlash2 drafter), after | 35B | 159.6 (155.0–180.1) | 176.5 (170.2–181.0) | 1,168 | 987 | 0.06 | 0.07 | 21.2 | pass |
+
+1. Flagged for contention: Chrome used the GPU during its runs (up to 14%). The table keeps Kapitsa's 179 and 154; its
+   runs here gave 169–183 and 159–160.
+2. mlx-vlm restores this hybrid model's state at 2,048-token checkpoints, so two of the three 16K follow-ups re-read
+   about 2,000 tokens.
+
+- **mlx-serve 26.10.2 on the 4B.** The vendor publishes no 4B pack, so mlx-serve read the 4B trunk every engine reads
+  with mlx-community/Qwen3.5-4B-MTP-4bit, Qwen's own MTP head at 4 bits, as its MTP sidecar
+  (`tools/mlx_serve_pack.py qwen3.5-4b`). MTP with exact verification at max depth 3, the fastest in short runs before
+  the hold (three sampled decodes each, T = 0.6): depth 3 136.0 tok/s, 4 134.1, 2 130.5, 1 120.3, the adaptive default
+  124.0. DFlash with z-lab's 4B drafter, a DFlash v1 drafter that mlx-serve loads, was slower: 124.5 at block 4,
+  118.5 at its default 5, 111.2 at 6.
+- **The MLX column on the 35B is mlx-vlm** 0.7.8 with incoai's DFlash2 drafter (the one Kapitsa and oMLX read), its
+  fastest setup in short runs: DFlash2 85.2 tok/s, at block 8 81.6, without speculation 81.7. Its MTP path does not
+  load the MTP head of MTPLX's 35B release (experts stored one by one). mlx-lm has no speculative path for these
+  models. Its runs also replayed [the opencode session](#a-real-coding-agent-session-2026-10-18): 79.3 s, against
+  Kapitsa's 48.2 s in the same hold.
+- **Not filled this time:** the 27B's MLX cell (in short runs mlx-vlm with MTP at block 3 wrote 27.2 tok/s, DFlash2
+  24.6), a clean mlx-serve re-run on the 27B (its ⚠ stays), and the 4B's MLX cell, which keeps mlx-lm's 73 (mlx-vlm with
+  MTP wrote 86.5 there in short runs). The short runs are in
+  [tuning](../bench/results/2026-10-19-m4pro/tuning/).
+
 ### Nemotron 3.5 Bolt
 
 oMLX again (no drafter), with no run flagged: 34.6 (33.6–34.7) tok/s at T = 0.6 and 34.1 greedy, prefill 298 / 307
