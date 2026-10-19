@@ -907,8 +907,8 @@ Run index (local time, UTC+5; "Started" is when the session began, after start-u
 ## The M4 Pro table filled in (2026-10-19)
 
 Runs for the M4 Pro table's empty and flagged cells, on the same MacBook Pro (M4 Pro, 48 GB, macOS 27.0.1, High Power
-mode, AC power) with this harness: one hold of the GPU lock per model, Kapitsa (main at 474b3e6) first and last as the
-control. Result files: [bench/results/2026-10-19-m4pro](../bench/results/2026-10-19-m4pro/).
+mode, AC power) with this harness: one hold of the GPU lock per model, Kapitsa (main at 474b3e6, and 0.1.35 for the
+last holds) first and last as the control. Result files: [bench/results/2026-10-19-m4pro](../bench/results/2026-10-19-m4pro/).
 
 ### Qwen: mlx-serve on the 4B, the MLX column on the 35B
 
@@ -944,6 +944,39 @@ Qwen3.5-4B and mlx-vlm 86.0 on Qwen3.6-35B-A3B, both at 4-bit, at T = 0.6; nothi
   24.6), a clean mlx-serve re-run on the 27B (its ⚠ stays), and the 4B's MLX cell, which keeps mlx-lm's 73 (mlx-vlm with
   MTP wrote 86.5 there in short runs). The short runs are in
   [tuning](../bench/results/2026-10-19-m4pro/tuning/).
+
+### Qwen with Kapitsa 0.1.35: the MLX column on the 4B and 27B, mlx-serve on the 27B
+
+One hold per model (06:40–06:49 the 4B, 06:49–07:14 the 27B), Kapitsa 0.1.35 (main at a47341b) first and last, the
+agent session left out. The MLX cells are mlx-vlm's: 88.1 tok/s on Qwen3.5-4B and 27.9 on Qwen3.8-27B at T = 0.6, both
+with MTP. mlx-serve's clean 27B run with DFlash2 wrote 54.2, which replaces its flagged 51.9 of 2026-10-18.
+
+| Engine (setting) | Model | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K (tok/s) | Prefill 16K (tok/s) | Cached follow-up 4K (s) | Cached follow-up 16K (s) | Peak memory (GB) | Tool calls |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
+| Kapitsa (DFlash drafter), before | 4B | 176.1 (160.1–189.8) | 197.9 (189.9–204.1) | 1,940 | 1,592 | 0.05 | 0.06 | 4.7 | pass |
+| mlx-vlm + MTP (block 3)<sup>1</sup> | 4B | 88.1 (86.0–90.3) | 105.4 (101.0–108.8) | 843 | 766 | 0.31 | 3.11 | 10.5 | pass |
+| Rapid-MLX + MTP (3 drafts) | 4B | 98.1 (93.0–101.8) | 111.6 (106.8–114.8) | 814 | 767 | 0.25 | 0.33 | 7.9 | pass |
+| Kapitsa (DFlash drafter), after | 4B | 177.9 (168.0–179.6) | 179.7 (170.1–186.1) | 1,819 | 1,586 | 0.06 | 0.06 | 4.7 | pass |
+| Kapitsa (DFlash2 drafter), before<sup>2</sup> | 27B | 56.2 (51.2–66.2) | 59.4 (59.2–61.9) | 336 | 283 | 0.23 | 0.26 | 19.4 | pass |
+| mlx-vlm + MTP (block 3) | 27B | 27.9 (27.6–28.4) | 30.5 (30.5–30.5) | 131 | 125 | 0.71 | 1.18 | 26.6 | pass |
+| mlx-serve + DFlash2 (draft tree, block 8) | 27B | 54.2 (48.6–57.2) | 57.0 (55.8–63.8) | 129 | 122 | 0.29 | 0.40 | 21.5 | pass |
+| Kapitsa (DFlash2 drafter), after | 27B | 64.8 (62.0–66.6) | 64.8 (63.1–65.7) | 396 | 350 | 0.22 | 0.26 | 19.4 | pass |
+
+1. Flagged for contention in its 16K prefill (Chrome and Slack, up to 17% of the GPU); its decode phases were clean.
+   The table marks the cell.
+2. Flagged for contention in both prefills (Chrome, up to 55%), which also shows in its prefill rates. Kapitsa's closing
+   run, clean, gave 64.8 against the table's 63; on the 4B its runs gave 176.1 and 177.9 against 179.
+
+- **The MLX column.** mlx-vlm 0.7.8 with MTP is faster than mlx-lm on both: mlx-lm has no speculative path for these
+  models and wrote 73.1 tok/s on the 4B on 2026-10-18. The 4B's drafter is mlx-community/Qwen3.5-4B-MTP-4bit (Qwen's
+  head at 4 bits), the 27B's the head of MTPLX's 27B release in the model folder; block 3 was the fastest of 2 to 5 in
+  the short runs above.
+- **mlx-serve on the 27B.** DFlash2 as on 2026-10-18 (the vendor's drafter, a tree of up to 7 drafts, `--no-mtp`). Its
+  MTP setup, 38.0 tok/s ⚠ on 2026-10-18, was not re-run, to finish sooner.
+- **Rapid-MLX** 0.16.3 (`uv pip install rapid-mlx`), on the 4B only: MTP with the head its catalog pairs with the model
+  (mlx-community/Qwen3.5-4B-MTP-4bit), 3 drafts, the fastest in short runs (2 drafts 100.7, without speculation 80.4
+  tok/s). Its 35B, 27B and Bolt runs were not made. It loads Bolt through the MLX bundle's model file, on its multimodal
+  path.
 
 ### Nemotron 3.5 Bolt
 

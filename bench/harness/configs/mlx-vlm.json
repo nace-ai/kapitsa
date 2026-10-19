@@ -1,5 +1,161 @@
 [
  {
+  "label": "q35-4b-mlxvlm",
+  "display": "mlx-vlm server (no speculation)",
+  "engine": "mlx-lm",
+  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtp",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8281",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "base_url": "http://127.0.0.1:8281/v1",
+  "model": "{models}/qwen3.5-4b-4bit-mtp",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/config.json"
+  ],
+  "version_cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m, json; d = m.distribution('mlx-vlm'); print('mlx-vlm', d.version, d.read_text('direct_url.json'), 'mlx', m.version('mlx'))"
+  ],
+  "log_grep": [
+   "[Ll]oad|model|APC|prefix|cache",
+   "[Dd]raft|MTP|mtp|accept|DFlash|dflash",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "note": "mlx-vlm 0.7.8 (the latest release; MLX_VLM_PYTHON = a Python with it, mlx 0.32.4) on the same MLX 4-bit folder every engine reads (lmstudio-community/Qwen3.5-4B-MLX-4bit @c43ee1d; the folder's mtp.safetensors is not in its index, so the trunk loads without it). Automatic prefix caching on (APC_ENABLED=1, in memory only), mlx-vlm's own switch for reusing a conversation's prefix in follow-up turns (off by default); 2048-token prefill steps (its default, stated); one sequence at a time. The request's model id is the path the server was started with."
+ },
+ {
+  "label": "q35-4b-mlxvlm-mtp",
+  "extends": "q35-4b-mlxvlm",
+  "display": "mlx-vlm server + MTP",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8282",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/drafters/Qwen3.5-4B-MTP-4bit",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "3"
+  ],
+  "base_url": "http://127.0.0.1:8282/v1",
+  "adaptive_warm": true,
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/config.json",
+   "{models}/drafters/Qwen3.5-4B-MTP-4bit/model.safetensors"
+  ],
+  "note": "As q35-4b-mlxvlm, with an MTP drafter: mlx-community/Qwen3.5-4B-MTP-4bit @ab6f59b, the model's MTP head (Qwen's own, from Qwen/Qwen3.5-4B) at 4 bits as a standalone mlx-vlm drafter (model type qwen3_5_mtp). Block 3: fastest in short runs (three sampled decodes each; T = 0.6 tok/s: block 2 83.7, 3 86.5, 4 (the drafter's own) 82.7; Qwen's bf16 head from the model folder at block 3 88.9, the same within noise; z-lab's DFlash drafter 73.5 (block 16) and 72.7 (block 8); no speculation 78.8)."
+ },
+ {
+  "label": "q38-27b-mlxvlm",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{models}/qwen3.8-27b-4bit-mtp",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.8-27b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8284",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1"
+  ],
+  "base_url": "http://127.0.0.1:8284/v1",
+  "model": "{models}/qwen3.8-27b-4bit-mtp",
+  "requires_paths": [
+   "{models}/qwen3.8-27b-4bit-mtp/config.json"
+  ],
+  "note": "mlx-vlm 0.7.8 (the latest release; MLX_VLM_PYTHON = a Python with it, mlx 0.32.4) on the same MLX 4-bit folder every engine reads (lmstudio-community/Qwen3.8-27B-MLX-4bit @6067b15 with the MTP head of MTPLX's 27B release as mtp.safetensors, which is not in the index). Automatic prefix caching on (APC_ENABLED=1, in memory only); 2048-token prefill steps (its default, stated); one sequence at a time. The request's model id is the path the server was started with.",
+  "display": "mlx-vlm server (no speculation)",
+  "engine": "mlx-lm",
+  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "ready_timeout": 600,
+  "version_cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m, json; d = m.distribution('mlx-vlm'); print('mlx-vlm', d.version, d.read_text('direct_url.json'), 'mlx', m.version('mlx'))"
+  ],
+  "log_grep": [
+   "[Ll]oad|model|APC|prefix|cache",
+   "[Dd]raft|MTP|mtp|accept|DFlash|dflash",
+   "[Ee]rror|Traceback|WARNING"
+  ]
+ },
+ {
+  "label": "q38-27b-mlxvlm-mtp",
+  "extends": "q38-27b-mlxvlm",
+  "display": "mlx-vlm server + MTP",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.8-27b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8285",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/qwen3.8-27b-4bit-mtp",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "3"
+  ],
+  "base_url": "http://127.0.0.1:8285/v1",
+  "adaptive_warm": true,
+  "requires_paths": [
+   "{models}/qwen3.8-27b-4bit-mtp/config.json",
+   "{models}/qwen3.8-27b-4bit-mtp/mtp.safetensors"
+  ],
+  "note": "As q38-27b-mlxvlm, with the model's MTP head as the drafter (--draft-model = the same folder, --draft-kind mtp): the 4-bit head of MTPLX's 27B release, the one MTPLX, oMLX and Ollama's MLX runner read. Block 3: fastest in short runs (three sampled decodes each; T = 0.6 tok/s: block 3 27.2, 4 24.6, 5 18.1; incoai's DFlash2 drafter 24.6)."
+ },
+ {
   "label": "q36-35b-mlxvlm",
   "display": "mlx-vlm server (no speculation)",
   "engine": "mlx-lm",

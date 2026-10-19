@@ -36,6 +36,24 @@ larger ones, compared by range requests). The 35B runs also replayed the agent s
 | 35B | mlx-vlm | DFlash2 (default block): 85.2; block 8: 81.6; no speculation: 81.7; MTP with MTPLX's head: does not load |
 | 27B | mlx-vlm | MTP block 3: 27.2; 4: 24.6; 5: 18.1; DFlash2: 24.6 |
 
+## Qwen with Kapitsa 0.1.35 (configs/kapitsa.json, mlx-vlm.json, mlx-serve.json, rapid-mlx.json)
+
+Kapitsa 0.1.35 (main at a47341b); the agent phase left out (`--skip agent`).
+
+| Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Foreign GPU, mean / max (%) | Ambient GPU, mean (%) | Flagged |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `q35-4b-kapitsa-20261019-064021.json` | 06:40 | Kapitsa, before | 176.1 / 197.9 | 0.5 / 3.2 | 0.0 | — |
+| `q35-4b-mlxvlm-mtp-20261019-064150.json` | 06:42 | mlx-vlm, MTP | 88.1 / 105.4 | 1.1 / 16.9 | 0.9 | 16K prefill (Chrome, Slack) |
+| `q35-4b-rapidmlx-mtp-20261019-064437.json` | 06:45 | Rapid-MLX, MTP | 98.1 / 111.6 | 0.0 / 1.1 | 1.3 | — |
+| `q35-4b-kapitsa-20261019-064724.json` | 06:47 | Kapitsa, after | 177.9 / 179.7 | 0.2 / 3.4 | 0.6 | — |
+| `q38-27b-kapitsa-20261019-064855.json` | 06:49 | Kapitsa, before | 56.2 / 59.4 | 2.4 / 55.1 | 2.8 | 4K and 16K prefill (Chrome) |
+| `q38-27b-mlxvlm-mtp-20261019-065323.json` | 06:55 | mlx-vlm, MTP | 27.9 / 30.5 | 0.2 / 9.3 | 1.6 | — |
+| `q38-27b-mlxserve-dflash2-20261019-070214.json` | 07:03 | mlx-serve, DFlash2 | 54.2 / 57.0 | 0.0 / 0.8 | 4.6 | — |
+| `q38-27b-kapitsa-20261019-071035.json` | 07:11 | Kapitsa, after | 64.8 / 64.8 | 0.3 / 10.8 | 1.2 | — |
+
+mlx-serve's MTP run on the 27B was stopped in its warm-up to finish sooner and is not in the folder. Rapid-MLX 0.16.3
+ran from a venv with mlx 0.32.4, mlx-lm 0.31.3 and mlx-vlm 0.7.2, its telemetry off; `<rapid-mlx-venv>` in its file.
+
 ## Nemotron 3.5 Bolt (configs/bolt.json)
 
 | Result file | Started | Run | Decode, T = 0.6 / greedy (tok/s) | Foreign GPU, mean / max (%) | Ambient GPU, mean (%) | Flagged |

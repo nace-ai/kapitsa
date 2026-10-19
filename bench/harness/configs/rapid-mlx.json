@@ -1,0 +1,105 @@
+[
+ {
+  "label": "q35-4b-rapidmlx",
+  "display": "Rapid-MLX (no speculation)",
+  "engine": "rapid-mlx",
+  "version": "0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtp",
+  "prepare": [
+   {
+    "clean_dir": "{state}/rapid-mlx/q35-4b"
+   },
+   {
+    "write_json": {
+     "path": "{state}/rapid-mlx/q35-4b/harness.json",
+     "data": {
+      "home_of": "rapid-mlx, emptied before each run"
+     }
+    }
+   }
+  ],
+  "cmd": [
+   "{env:RAPID_MLX_BIN=rapid-mlx}",
+   "--no-telemetry",
+   "serve",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8291",
+   "--served-model-name",
+   "qwen3.5-4b",
+   "--max-num-seqs",
+   "1",
+   "--context-length",
+   "32768",
+   "--prefill-step-size",
+   "512",
+   "--disable-disk-caches",
+   "--disable-model-downloads",
+   "--no-preflight"
+  ],
+  "env": {
+   "HOME": "{state}/rapid-mlx/q35-4b",
+   "HF_HUB_OFFLINE": "1",
+   "RAPID_MLX_TELEMETRY": "0",
+   "DO_NOT_TRACK": "1",
+   "RAPID_MLX_DISABLE_VERSION_CHECK": "1"
+  },
+  "env_clear_prefixes": [
+   "RAPID_MLX_"
+  ],
+  "base_url": "http://127.0.0.1:8291/v1",
+  "model": "qwen3.5-4b",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/config.json"
+  ],
+  "version_cmd": [
+   "{env:RAPID_MLX_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m; print(*(n + ' ' + m.version(n) for n in ('rapid-mlx', 'mlx', 'mlx-lm', 'mlx-vlm')))"
+  ],
+  "log_grep": [
+   "[Ss]peculative|MTP|mtp|accept|draft",
+   "[Ll]oad|model|prefix|cache|[Pp]refill",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "note": "Rapid-MLX 0.16.3 (the latest release; RAPID_MLX_BIN = its venv's rapid-mlx, mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2) serving the same MLX 4-bit folder every engine reads, by path (lmstudio-community/Qwen3.5-4B-MLX-4bit @c43ee1d; Rapid-MLX's own alias qwen3.5-4b-4bit points at mlx-community's upload of the same conversion). The settings its catalog gives the alias (rapid-mlx info qwen3.5-4b-4bit): 512-token prefill steps, the hermes tool parser and the qwen3 reasoning parser (both detected from the folder too); its MTP is opt-in for this model (q35-4b-rapidmlx-mtp). One sequence, 32K context. No telemetry (--no-telemetry, RAPID_MLX_TELEMETRY=0, DO_NOT_TRACK=1), no version check, no downloads, no disk caches (--disable-disk-caches: no prefix-cache snapshot or KV checkpoints on disk; the in-memory prefix cache stays on), a fresh HOME per run. Without speculation it serves this vision checkpoint on its multimodal path: 80.4 tok/s at T = 0.6 in short runs, 81.8 with --no-mllm."
+ },
+ {
+  "label": "q35-4b-rapidmlx-mtp",
+  "extends": "q35-4b-rapidmlx",
+  "display": "Rapid-MLX + MTP",
+  "cmd": [
+   "{env:RAPID_MLX_BIN=rapid-mlx}",
+   "--no-telemetry",
+   "serve",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8291",
+   "--served-model-name",
+   "qwen3.5-4b",
+   "--max-num-seqs",
+   "1",
+   "--context-length",
+   "32768",
+   "--prefill-step-size",
+   "512",
+   "--disable-disk-caches",
+   "--disable-model-downloads",
+   "--no-preflight",
+   "--speculative-config",
+   "{\"method\":\"mtp\",\"model\":\"{models}/drafters/Qwen3.5-4B-MTP-4bit/model.safetensors\",\"num_speculative_tokens\":3}"
+  ],
+  "adaptive_warm": true,
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/config.json",
+   "{models}/drafters/Qwen3.5-4B-MTP-4bit/model.safetensors"
+  ],
+  "note": "As q35-4b-rapidmlx, with MTP: the head its catalog pairs with this model (mlx-community/Qwen3.5-4B-MTP-4bit @ab6f59b, Qwen's own head at 4 bits; mtp_draft_model of the alias), named in --speculative-config. With MTP it serves the text path. 3 draft tokens: fastest in short runs before the session (three sampled decodes each; T = 0.6 tok/s: 3 drafts 101.8, 2 (the alias's mtp_speculative_tokens) 100.7; no speculation 80.4)."
+ }
+]
