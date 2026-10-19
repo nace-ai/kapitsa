@@ -94,7 +94,9 @@ and mlx-lm, Q4_0 on llama.cpp; on Lightning oMLX reads prompts faster (3,600 aga
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid Mamba-2 MoE, 12B active; 96 GB+ Macs</sub> | **NVIDIA NVFP4 · 76.4 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | LiLiCorr |
 
 <sub>Other precisions: `--model 35b:6bit`, `--model 27b:bf16`. All but Lightning and Dory read images; Dory thinks 1-4
-loops per token (`--loops`). [Details](docs/usage.md#models-and-downloads)</sub>
+loops per token (`--loops`). [Details](docs/usage.md#models-and-downloads)
+Memory: 16 GB for the 4B models, 32 GB for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL, 128 GB for
+Flash-Next.</sub>
 
 ## How it works
 
