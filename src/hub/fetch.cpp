@@ -42,7 +42,7 @@
 #include <thread>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.1.38"
+#define KAPITSA_VERSION "0.1.39"
 #endif
 
 namespace ni::hub {
