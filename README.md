@@ -31,17 +31,17 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5&nbsp;4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 73 |
-| Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark> | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
-| Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | 86 |
+| Qwen3.5 4B<sup>*</sup><br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 102 | 137 | 109 | 104 | 81 | 70 | 73 |
+| Qwen3.8 27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark> | 45 | 52&nbsp;⚠ | 32 | 36 | 15 | 18 | — |
+| Qwen3.6 35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**154&nbsp;tok/s**</mark> | 127 | 124 | 89 | 80 | 86 | 69 | 86 |
 
 #### Nemotron
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: |
-| Dory&nbsp;4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
-| Lightning<br><sub>NVFP4</sub> | — | — | — | — |
-| Bolt&nbsp;74B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
+| Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 6&nbsp;⚠ | 48 |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | — | — | — | — |
+| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark> | 35 | —<br><sub>no Metal support</sub> | 32 |
 
 <sub>Ollama, LM Studio, MTPLX and mlx-serve can't run these Nemotron checkpoints, so the Nemotron tables leave them out.
 MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
@@ -57,19 +57,19 @@ opencode session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | mlx‑serve | Ollama | MTPLX | LM Studio | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Qwen3.5&nbsp;4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
-| Qwen3.8&nbsp;27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.6&nbsp;35B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
-| Qwen3.8<br>Flash‑Next<br><sub>180B · 4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77 |
+| Qwen3.5 4B<br><sub>4-bit</sub> | — | — | — | — | — | — | — | — |
+| Qwen3.8 27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**73&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
+| Qwen3.6 35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**250&nbsp;tok/s**</mark> | — | — | — | — | — | — | — |
+| Qwen3.8 Flash‑Next 180B‑A7B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark> | 🟩&nbsp;**107** | — | — | — | — | 96 | 77 |
 
 #### Nemotron
 
 | Model | <mark>**Kapitsa**</mark> | oMLX | llama.cpp | MLX |
 | --- | ---: | ---: | ---: | ---: |
-| Dory&nbsp;4B<br><sub>NVFP4</sub> | — | — | — | — |
-| Lightning<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 159 | 139 |
-| Bolt&nbsp;74B<br><sub>2/4/8-bit mix</sub> | — | — | — | — |
-| Super‑VL<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | 66 | 46 |
+| Nemotron‑Labs Dory1.0 4B<br><sub>NVFP4</sub> | — | — | — | — |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark> | 190 | 159 | 139 |
+| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | — | — | — | — |
+| Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**85&nbsp;tok/s**</mark> | 52 | 66 | 46 |
 
 <sub>Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX Flash-Next run here. Flash-Next: the same 4-bit weights and MTP head on
 Kapitsa, oMLX and MLX (mlx-vlm); Kapitsa leads greedy (108
