@@ -84,6 +84,24 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**40&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | 4 | 30 |
 
+### MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB
+
+#### Qwen
+
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> | <sub>Rapid‑MLX</sub> |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark> | 113 | 163 | 134 | 113 | 89 | 93 | 101 | 112 |
+| Qwen3.8<br>27B<br><sub>4-bit</sub> | <mark>**61&nbsp;tok/s**</mark> | 51 | 🟩&nbsp;**71** | 40 | 41 | 17 | 30 | 32 | 35 |
+| Qwen3.6<br>35B‑A3B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**167&nbsp;tok/s**</mark> | 144 | 156 | 102 | 89 | 96 | 107 | 98 | 76 |
+
+#### Nemotron
+
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**70&nbsp;tok/s**</mark> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | 13 | 53 |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**136&nbsp;tok/s**</mark> | 124 | 115 | 92 | 101 | 72 | 101 | 94 |
+| Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**79&nbsp;tok/s**</mark> | 39 | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | 41 |
+
 <sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md).</sub>
 
 ## Models
