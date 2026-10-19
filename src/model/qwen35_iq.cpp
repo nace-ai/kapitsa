@@ -9,7 +9,11 @@
 #include "model/qwen35.h"
 #include "util/log.h"
 
+#include <sys/mman.h>
+
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <thread>
 #include <unordered_map>
 
@@ -35,8 +39,29 @@ int env_int(const char* n, int def) {
 
 // The routed experts' blocks are deferred by the WeightStore: read here, one matrix at a time, and moved into the GPU
 // layout (same bytes) by parallel threads.
+// The weights are locked in memory (mlock) as they are written: IQ experts are how a model this size fits a 16 GB Mac,
+// and there the VM compressed and swapped the freshly written buffers while the rest loaded (they look idle until the
+// GPU first reads them), which the first prompt then paid back. M1 Pro 16 GB, 40 layers of the 35B-A3B (11.2 GB of
+// weights), three runs each: first 269-token prompt 15-20 s (3-5 GB swapped out, up to 10 GB in the compressor) ->
+// 0.9 s with nothing swapped out; decode unchanged (49 tok/s). NI_MLOCK=0 leaves them pageable; a lock refused
+// (past vm.user_wire_limit, 13 GB on 16 GB Macs) is logged and the load goes on without one.
 void Qwen35::load_iq_experts() {
   Gpu& g = Gpu::get();
+  bool any = false;
+  for (const Layer& L : layers_) any |= L.eg.iq || L.eu.iq || L.ed.iq;
+  if (!any) return;
+  bool lock = !(getenv("NI_MLOCK") && !strcmp(getenv("NI_MLOCK"), "0"));
+  size_t locked = 0;
+  auto wire = [&](const Buffer& b) {
+    if (!lock) return;
+    if (mlock(b.ptr(), b.size)) {
+      logi("could not lock weights in memory (%s) past %.2f GB: the rest stays pageable", strerror(errno), locked / 1e9);
+      lock = false;
+      return;
+    }
+    locked += b.size;
+  };
+  for (const Buffer& b : ws_.buffers()) wire(b);  // read already: locked before the experts' load can page it out
   std::vector<uint8_t> raw;
   size_t total = 0;
   const double t0 = now_ms();
@@ -59,6 +84,7 @@ void Qwen35::load_iq_experts() {
           th.emplace_back([&, r0, r1] { gguf::iq_repack(q->iq, raw.data() + r0 * rb, rows, q->K, r0, r1, b.as<uint8_t>()); });
       }
       for (auto& t : th) t.join();
+      wire(b);
       owned_bufs_.push_back(b);
       Tensor t = *q->w;
       t.buf = b.view(0, lay.bytes);
@@ -68,7 +94,8 @@ void Qwen35::load_iq_experts() {
       total += lay.bytes;
     }
   iq_src_.clear();
-  if (total) logi("read %.2f GB of IQ experts in %.0f ms", total / 1e9, now_ms() - t0);
+  logi("read %.2f GB of IQ experts in %.0f ms; %.2f GB of weights locked in memory", total / 1e9, now_ms() - t0,
+       locked / 1e9);
 }
 
 // What the IQ MoE kernels need of a layer (src/kernels/wfmt_iq.metal); "" when it has it
