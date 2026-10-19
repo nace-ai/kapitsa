@@ -398,10 +398,11 @@ class Qwen35 : public Model {
   // NI_QMVF (default on): R <= 2 token rows of up to 4 matrices sharing x (4- or 8-bit group 64, one width) in one
   // qmvf.metal dispatch, an RMSNorm of x folded in (xn_out: also the normalized rows, [R, K]), add[i]: y += ...;
   // gu: segments 0 / 1 are gate / up and segs[0].y gets silu(gate) * up. x_ld / y_ld: 0 = K / each matrix's N.
+  // b6: one-row decode matvecs, which may also take 6-bit group 64 (IQ models on the M1; enc_qmv_multi).
   // False (nothing encoded) when off or not applicable.
   bool enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
                 const Buffer* xn_out = nullptr, const std::vector<bool>& add = {}, uint32_t x_ld = 0,
-                uint32_t y_ld = 0, bool gu = false);
+                uint32_t y_ld = 0, bool gu = false, bool b6 = false);
   void enc_gdn(Encoder& e, Seq& s, int li, const Layer& L);
   void enc_attn(Encoder& e, Seq& s, int li, const Layer& L, int pos);
   void enc_moe(Encoder& e, const Layer& L);

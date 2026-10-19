@@ -1636,7 +1636,7 @@ void Qwen35::enc_qmv_multi(Encoder& e, std::vector<Seg> segs, const Buffer& x, c
         ((sp0 ? (sg.L->q4() || sg.L->q8()) : sg.L->same_format(f0)) ? same : other).push_back(sg);
       if (sp0) {
         enc_qmv_multi(e, same, x, norm, first ? xn_out : nullptr);
-      } else {
+      } else if (!enc_qmvf(e, same, x, 1, norm, first ? xn_out : nullptr, {}, 0, 0, false, true)) {  // qmvf_b6
         constexpr uint32_t rows = 2, nsg = 8;
         e.use(pipe("qmvg_multi_" + f0.fmt()));
         kp::QmvMulti2 p{};
@@ -1714,18 +1714,28 @@ static bool qmvf_on() {
 }
 
 bool Qwen35::enc_qmvf(Encoder& e, const std::vector<Seg>& segs, const Buffer& x, int R, const Tensor* norm,
-                      const Buffer* xn_out, const std::vector<bool>& add, uint32_t x_ld, uint32_t y_ld, bool gu) {
+                      const Buffer* xn_out, const std::vector<bool>& add, uint32_t x_ld, uint32_t y_ld, bool gu,
+                      bool b6_ok) {
   if (!qmvf_on() || R < 1 || R > 2 || segs.empty() || segs.size() > 4 || (gu && segs.size() != 2)) return false;
   const int bits = segs[0].L->bits;
   const uint32_t K = segs[0].L->K;
-  if (bits != 4 && bits != 8) return false;
+  // 6-bit group 64 (GGUF imports' Q5_K projections) in IQ models on the M1 (Apple7), the one-row decode only (b6_ok:
+  // enc_qmv_multi): the GDN and attention input projections with their norm folded, Qwen3.6-35B-A3B UD-IQ2_XXS on the
+  // M1 Pro: 12352 x 2048 (qkv | z) 144 instead of 172 us (qmvg_multi_f6g64, which normalizes x again in every
+  // threadgroup), 8192 x 2048 100 / 118. Verify / batched rows keep the X8 GEMMs (two rows here cost 1.75x one: the
+  // dequantization is per row), so a single pass stays bit-identical to a batched one; the other 6-bit models keep
+  // qmvg_multi (sums reassociated: not the same bits), the other chips until measured there. NI_QMVF6=0 turns it off.
+  static const bool b6_on = env_int("NI_QMVF6", 1) != 0;
+  const bool b6 = b6_ok && b6_on && bits == 6 && R == 1 && !gu && cfg_.iq && Gpu::get().apple_family() <= 7;
+  if (bits != 4 && bits != 8 && !b6) return false;
   // 4-bit group 32 (GGUF imports' Q4_K LM heads), one matrix, on the M1 (Apple7): its 248K-row head on
   // qmvf_b4g32 2.6 instead of 3.1 ms (qmvg_f4g32_r4_norm, Qwen3.6-35B-A3B UD-IQ2_XXS on the M1 Pro); not yet
   // measured on the other chips
   const bool g32 = segs.size() == 1 && !gu && bits == 4 && segs[0].L->gs == 32 && !segs[0].L->iq &&
                    Gpu::get().apple_family() <= 7;
   for (const Seg& s : segs)
-    if (!(s.L->q4() || s.L->q8() || g32) || s.L->bits != bits || s.L->K != K) return false;
+    if (!(s.L->q4() || s.L->q8() || g32 || (b6 && s.L->gs == 64 && !s.L->iq)) || s.L->bits != bits || s.L->K != K)
+      return false;
   if (K % 64 || (xn_out && !norm)) return false;
   // one threadgroup per token row and 8 weight rows (2 simdgroups x 4 rows: the qmvrc1 layout, its token rows
   // adjacent in the grid so they share each weight block through the cache)
