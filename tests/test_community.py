@@ -39,7 +39,7 @@ schema = json.load(open(os.path.join(REPO, "bench", "community", "schema.json"))
 cat, macs, versions = cc.catalog(), cc.mac_models(), cc.known_versions(use_git=False)
 
 # ---------------------------------------------------------------- what the checker knows
-check(list(cat) == ["qwen3.5-4b", "qwen3.8-27b", "qwen3.6-35b-a3b", "qwen3.8-flash-next", "nemotron-labs-dory1.0-4b",
+check(list(cat) == ["qwen3.5-4b", "qwen3.5-9b", "qwen3.8-27b", "qwen3.6-35b-a3b", "qwen3.8-flash-next", "nemotron-labs-dory1.0-4b",
                    "nemotron-3.5-lightning", "nemotron-3.5-bolt", "nemotron-3.5-super-vl"], "the catalog's models, in order",
       str(list(cat)))
 check(cat["qwen3.6-35b-a3b"]["variants"] == {"4bit": "4-bit", "5bit": "5-bit", "6bit": "6-bit", "8bit": "8-bit", "bf16": "bf16"},
