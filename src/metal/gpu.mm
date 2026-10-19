@@ -14,6 +14,15 @@
 #include <unordered_map>
 #include <vector>
 
+// Residency sets and MTLCompileOptions.mathMode come with the macOS 15 SDK. The Command Line Tools for macOS 14.4
+// and earlier ship the macOS 14 SDK, which lacks them: such a build goes without residency sets and sets fast math
+// with fastMathEnabled, as every build does on macOS 14.
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+#define NI_SDK_MACOS15 1
+#else
+#define NI_SDK_MACOS15 0
+#endif
+
 namespace ni {
 extern const char* const kKernelSource;
 
@@ -161,6 +170,7 @@ void Gpu::release(Buffer& b) {
   std::lock_guard<std::mutex> lk(impl_->mu);
   // The residency set holds its allocations strongly (measured: a released 256 MB buffer stays
   // allocated and resident until removed), so a buffer made resident must leave the set too.
+#if NI_SDK_MACOS15
   if (residency_) {
     if (@available(macOS 15.0, *)) {
       id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
@@ -171,6 +181,7 @@ void Gpu::release(Buffer& b) {
       }
     }
   }
+#endif
   [impl_->retained removeObjectIdenticalTo:(__bridge id)b.mtl];
   b = Buffer{};
 }
@@ -181,17 +192,22 @@ static id<MTLLibrary> compile_library(id<MTLDevice> d, const std::string& src, b
   // extra libraries (Nemotron-H) use Metal 3.2 for device-scope fences (atomic_thread_fence with thread_scope_device)
   o.languageVersion = MTLLanguageVersion3_1;
   if (metal32) {
-    if (@available(macOS 15.0, *)) o.languageVersion = MTLLanguageVersion3_2;
+    // MTLLanguageVersion3_2 by value ((3 << 16) + 2): a build with the macOS 14 SDK gets Metal 3.2 on macOS 15 too
+    if (@available(macOS 15.0, *)) o.languageVersion = (MTLLanguageVersion)((3 << 16) + 2);
   }
   // NI_MATH_SAFE=1: no fast math, for bitwise A/B of kernel variants written to sum in the same
   // order (e.g. NI_GDN_PAR). Fast math reassociates each kernel's sums its own way, so two such
   // kernels only agree to the last bit or so; with safe math they must agree exactly.
   const bool safe = getenv("NI_MATH_SAFE") && atoi(getenv("NI_MATH_SAFE")) > 0;
+#if NI_SDK_MACOS15
   if (@available(macOS 15.0, *)) {
     o.mathMode = safe ? MTLMathModeSafe : MTLMathModeFast;
   } else {
     o.fastMathEnabled = safe ? NO : YES;
   }
+#else
+  o.fastMathEnabled = safe ? NO : YES;
+#endif
   if (wf) o.preprocessorMacros = @{@"NI_WF_INST" : @1};
   NSError* err = nil;
   const double t0 = now_ms();
@@ -335,6 +351,9 @@ std::unique_ptr<Encoder> Gpu::begin_grouped() {
 }
 
 void Gpu::make_resident(const std::vector<Buffer>& bufs) {
+#if !NI_SDK_MACOS15
+  (void)bufs;
+#else
   if (@available(macOS 15.0, *)) {
     @autoreleasepool {
       if (!residency_) {
@@ -353,6 +372,7 @@ void Gpu::make_resident(const std::vector<Buffer>& bufs) {
       [rs requestResidency];
     }
   }
+#endif
 }
 
 // ---- Encoder ----

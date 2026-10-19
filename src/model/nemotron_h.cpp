@@ -932,7 +932,8 @@ std::string NemotronH::formats_summary() const {
   std::vector<std::pair<NhFmt, std::string>> g;
   for (auto [f, n] : {std::pair<NhFmt, const char*>{at, "attention"}, {lt, "latent"}, {head_.fmt, "head"}}) {
     if (!has_lt && !strcmp(n, "latent")) continue;
-    auto it = std::find_if(g.begin(), g.end(), [&](auto& x) { return x.first == f; });
+    // an init-capture: Clang 15 (the Command Line Tools on macOS 14) cannot capture a structured binding
+    auto it = std::find_if(g.begin(), g.end(), [f = f](auto& x) { return x.first == f; });
     if (it == g.end()) g.push_back({f, n});
     else it->second += std::string(" / ") + n;
   }

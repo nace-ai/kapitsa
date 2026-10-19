@@ -449,25 +449,28 @@ r = run([KAPITSA, "bench", "--help"], env=nogh)
 check(r.returncode == 0 and "kapitsa bench [--model MODEL]" in r.stdout, "--help")
 
 # ---------------------------------------------------------------- 7. the GPU lock (a test file, immutable like this Mac's)
-lockfile = os.path.join(tmp, "gpu.lock")
-open(lockfile, "w").close()
-subprocess.run(["chflags", "uchg", lockfile], check=True)
-lenv = dict(os.environ, BENCH_GPU_LOCK=lockfile)
-holder = subprocess.Popen(["lockf", "-k", lockfile, "sleep", "2"])
-time.sleep(0.5)
-r = run([BENCH_TEST, "lock"], env=lenv)
-info = json.loads(r.stdout or "{}")
-holder.wait()
-check(info.get("ok") and info.get("waited") and info.get("wait_s", 0) >= 1.0 and "lockf" in info.get("holders", ""),
-      "waits for lockf's holder of an immutable lock file, and names it", r.stdout)
-p = subprocess.Popen([BENCH_TEST, "lock", "2"], env=lenv, stdout=subprocess.PIPE, text=True)
-first = p.stdout.readline()
-r2 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
-p.wait()
-r3 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
-check(json.loads(first).get("ok") and r2.returncode != 0 and r3.returncode == 0,
-      "while it holds the lock lockf can't take it; released after", f"{first} {r2.returncode} {r3.returncode}")
-subprocess.run(["chflags", "nouchg", lockfile])
+if not shutil.which("lockf"):  # lockf(1) came with macOS 15
+    print("SKIP the GPU lock against lockf: this Mac has no lockf (macOS 14)", flush=True)
+else:
+    lockfile = os.path.join(tmp, "gpu.lock")
+    open(lockfile, "w").close()
+    subprocess.run(["chflags", "uchg", lockfile], check=True)
+    lenv = dict(os.environ, BENCH_GPU_LOCK=lockfile)
+    holder = subprocess.Popen(["lockf", "-k", lockfile, "sleep", "2"])
+    time.sleep(0.5)
+    r = run([BENCH_TEST, "lock"], env=lenv)
+    info = json.loads(r.stdout or "{}")
+    holder.wait()
+    check(info.get("ok") and info.get("waited") and info.get("wait_s", 0) >= 1.0 and "lockf" in info.get("holders", ""),
+          "waits for lockf's holder of an immutable lock file, and names it", r.stdout)
+    p = subprocess.Popen([BENCH_TEST, "lock", "2"], env=lenv, stdout=subprocess.PIPE, text=True)
+    first = p.stdout.readline()
+    r2 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
+    p.wait()
+    r3 = run(["lockf", "-k", "-t", "0", lockfile, "true"])
+    check(json.loads(first).get("ok") and r2.returncode != 0 and r3.returncode == 0,
+          "while it holds the lock lockf can't take it; released after", f"{first} {r2.returncode} {r3.returncode}")
+    subprocess.run(["chflags", "nouchg", lockfile])
 
 # ---------------------------------------------------------------- 8. the whole command, against the scripted server
 # KAPITSA_BENCH_SERVER: kapitsa bench measures the scripted server instead of starting one (no download, lock or quiet
