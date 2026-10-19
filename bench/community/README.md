@@ -17,7 +17,7 @@ else it was doing: plug it in, close other apps (browsers, video calls, anything
 until the run ends. `kapitsa bench` waits for a quiet GPU before it measures and flags anything that disturbed a
 measurement anyway.
 
-At the end it shows the exact JSON it will send and asks; nothing is sent without a yes typed at the terminal. Then:
+At the end it asks once whether to send it: Enter is yes, `n` keeps it on your Mac only. Then:
 
 - with [gh](https://cli.github.com) installed and logged in, it opens a pull request that adds the file under
   [results/](results/), from your fork (made if you have none). It uses your gh login and nothing else.
@@ -25,7 +25,8 @@ At the end it shows the exact JSON it will send and asks; nothing is sent withou
   Submit. A maintainer turns it into a pull request.
 
 `kapitsa bench submit` sends a result you saved earlier (they are in `~/.cache/kapitsa/bench/`), and
-`--submit --dry-run` prints the gh commands or the issue's address without sending anything.
+`--submit --dry-run` prints exactly what it would send, with the gh commands or the issue's address, without sending
+anything.
 
 ## What is in a result
 

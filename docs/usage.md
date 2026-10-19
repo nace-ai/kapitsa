@@ -504,12 +504,12 @@ model, its precision and how it decoded, the numbers and the conditions; no seri
 path. A run takes 3 to 15 minutes and holds the GPU lock that the benchmark harness uses (`~/.cache/nace-gpu.lock`), so
 it never runs beside a harness run.
 
-`--submit`, or yes to the question at the end of a run in a terminal, adds the result to the community results. It
-shows the exact JSON first and sends it only after a yes typed at the terminal: with [gh](https://cli.github.com)
-logged in, as a pull request from your fork (it uses your gh login and nothing else); without gh, by opening the
-"Benchmark result" issue form in the browser with the JSON filled in, for you to submit. `kapitsa bench submit [FILE]`
-sends a saved result (the newest by default), and `--submit --dry-run` prints the gh commands or the issue's address
-without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
+At the end of a run in a terminal (or with `--submit`) it asks once whether to add the result to the community
+results: Enter is yes, `n` keeps it on your Mac only. With [gh](https://cli.github.com) logged in it opens a pull
+request from your fork (it uses your gh login and nothing else); without gh it opens the "Benchmark result" issue form
+in the browser with the JSON filled in, for you to submit. `kapitsa bench submit [FILE]` sends a saved result (the
+newest by default), and `--submit --dry-run` prints exactly what it would send, with the gh commands or the issue's
+address, without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
 [bench/community](../bench/community/README.md).
 
 ## Running in the background

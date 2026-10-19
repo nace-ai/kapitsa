@@ -11,7 +11,8 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
    on every saved text, Python's rounding, bench.py's summaries; with edge cases.
 4. The result file: bench/community/schema.json (with jsonschema, when installed) and tools/community_check.py.
 5. Submitting: the plan and the issue form's address, `kapitsa bench submit --dry-run` with and without gh, and a
-   stand-in gh that records what it is asked: nothing without a yes typed at a terminal, then the pull request's calls.
+   stand-in gh that records what it is asked: nothing without an answer at a terminal, one question (Enter is a yes),
+   then the pull request's calls.
 6. `kapitsa bench` fails before loading anything when the model can't be had (a home without models, no network).
 7. The GPU lock, on a test file: it waits for lockf's holder and names it, and lockf waits for it.
 8. The whole command against the scripted server (KAPITSA_BENCH_SERVER, a test hook: no model, no lock): plain,
@@ -397,7 +398,7 @@ check(not [c for c in calls() if c["args"][:2] != ["api", "--hostname"]], "and g
 
 
 def with_terminal(args, answers, timeout=60, environ=None):
-    """Runs args on a pseudo-terminal, typing each answer when a [y/N] question appears; returns (code, output)."""
+    """Runs args on a pseudo-terminal, typing each answer when a [Y/n] question appears; returns (code, output)."""
     pid, fd = pty.fork()
     if pid == 0:
         os.execve(args[0], args, environ or env)
@@ -413,21 +414,23 @@ def with_terminal(args, answers, timeout=60, environ=None):
             if not b:
                 break
             out += b
-            if out.count(b"[y/N]") > len(answers) - len(left) and left:
+            if out.count(b"[Y/n]") > len(answers) - len(left) and left:
                 os.write(fd, (left.pop(0) + "\n").encode())
     _, st = os.waitpid(pid, 0)
     return os.waitstatus_to_exitcode(st), out.decode("utf-8", "replace")
 
 
 open(gh_log, "w").close()
-code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], ["y", "n"])
-check(code == 0 and "Not sent" in text, "a no at the second question sends nothing", text[-300:])
+code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], ["n"])
+check(code == 0 and f"Not sent. kapitsa bench submit {os.path.join(tmp, 'full.json')} sends it later" in " ".join(text.split()),
+      "a no sends nothing and names the saved file", text[-300:])
 check(all(c["args"][:2] == ["api", "--hostname"] for c in calls()), "nothing but the login was asked of gh", json.dumps(calls())[:300])
-check(json.dumps(full, indent=2)[:200] in text.replace("\r\n", "\n"), "the exact JSON is shown before the question")
+check(os.path.exists(os.path.join(tmp, "full.json")), "the result stays where it was saved")
 open(gh_log, "w").close()
-code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], ["y", "y"])
+code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], [""])
 got = calls()
-check(code == 0 and "pull/4242" in text, "two yeses open the pull request", text[-300:])
+check(code == 0 and "pull/4242" in text and text.count("[Y/n]") == 1, "one question, and Enter opens the pull request",
+      text[-300:])
 paths = [next((x for x in c["args"] if x.startswith("repos/") or x == "user"), "") for c in got]
 check(paths == ["user", "repos/nace-ai/kapitsa/forks", "repos/nace-ai/kapitsa", "repos/nace-ai/kapitsa/git/ref/heads/main",
                 "repos/tester/kapitsa/git/refs", f"repos/tester/kapitsa/contents/{plan['path']}", "repos/nace-ai/kapitsa/pulls"],

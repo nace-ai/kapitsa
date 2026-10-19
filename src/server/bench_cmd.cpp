@@ -3,7 +3,8 @@
 // 32K context, NI_* variables cleared), warms it up, waits for a quiet GPU, measures it over the local API while a
 // monitor samples the other processes' GPU time, the thermal state and the power source, then stops it. The result
 // (bench/community/schema.json) is saved and, when asked, submitted to the community results: a pull request with
-// the user's own gh login, else a prefilled issue in the browser, never without a yes typed at the terminal.
+// the user's own gh login, else a prefilled issue in the browser, never without an answer at the terminal (one
+// question; Enter is a yes).
 #include "bench/bench.h"
 #include "engine/engine.h"
 #include "gguf/gguf.h"
@@ -72,10 +73,10 @@ const char* kHelp =
     "  --quick         a shorter run: 3 runs per writing test, the 4K prompt only (marked quick in the result)\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
-    "  --submit        add the result to the community results: shows the exact JSON and asks first, then opens a\n"
-    "                  pull request with your gh login, or a prefilled issue in the browser without gh\n"
-    "  --dry-run       with --submit: print the gh commands or the issue's address; nothing is sent\n"
-    "  --yes           don't ask which model to run: the best for this Mac (a submission is still confirmed)\n\n"
+    "  --submit        add the result to the community results: asks once (Enter is yes), then opens a pull request\n"
+    "                  with your gh login, or a prefilled issue in the browser without gh\n"
+    "  --dry-run       with --submit: print what it would send, the gh commands or the issue's address; nothing is sent\n"
+    "  --yes           don't ask which model to run: the best for this Mac (submitting still asks)\n\n"
     "  kapitsa bench submit [FILE] [--dry-run]   submit a saved result (default: the newest)\n\n"
     "Community results, and how they are checked: https://github.com/nace-ai/kapitsa/blob/main/bench/community\n";
 
@@ -236,8 +237,8 @@ void card(const std::vector<std::string>& rows, int inner, FILE* f) {
   for (const auto& l : o) term::line(l, f);
 }
 
-// A yes typed at the terminal (the default is no). A long question is wrapped to the terminal's width, its last line
-// asked.
+// One question at the terminal, Enter for yes: true for an empty answer, "y" or "yes", false for anything else and at
+// the end of input. A long question is wrapped to the terminal's width, its last line asked.
 bool ask_yes(const std::string& question) {
   const int fd = open("/dev/tty", O_RDWR | O_CLOEXEC);
   if (fd < 0) return false;
@@ -246,24 +247,26 @@ bool ask_yes(const std::string& question) {
   const std::string pad(ind, ' ');
   const auto lines = term::wrap(question.substr(ind), std::max(30, std::min(term::columns(), 100) - int(ind) - 7));
   for (size_t i = 0; i + 1 < lines.size(); ++i) term::line(pad + lines[i], stderr);
-  const std::string q = pad + lines.back() + " [y/N] ";
+  const std::string q = pad + lines.back() + " [Y/n] ";
   if (write(fd, q.data(), q.size()) < 0) {
     close(fd);
     return false;
   }
   std::string ans;
-  char c;
-  while (read(fd, &c, 1) == 1 && c != '\n') ans += c;
+  bool line = false;
+  for (char c; read(fd, &c, 1) == 1;) {
+    if (c == '\n') {
+      line = true;
+      break;
+    }
+    ans += c;
+  }
   close(fd);
+  if (!line) return false;  // the end of input (Ctrl-D) is a no
   for (auto& ch : ans) ch = char(tolower(uint8_t(ch)));
   while (!ans.empty() && isspace(uint8_t(ans.back()))) ans.pop_back();
   while (!ans.empty() && isspace(uint8_t(ans.front()))) ans.erase(ans.begin());
-  return ans == "y" || ans == "yes";
-}
-
-// A line of text for the confirmation, wrapped to the terminal's width
-void say_wrapped(const std::string& text) {
-  for (const auto& l : term::wrap(text, std::max(30, std::min(term::columns(), 100) - 3))) term::line("  " + l, stderr);
+  return ans.empty() || ans == "y" || ans == "yes";
 }
 
 bool can_confirm() {
@@ -360,7 +363,15 @@ void stop_server(Server& s) {
 
 std::string pretty(const ojson& j) { return j.dump(2) + "\n"; }
 
-int submit(const ojson& result, const std::string& content, bool dry, bool asked_already) {
+// A no: the result stays where it was saved
+int not_sent(const std::string& file) {
+  term::line("  " + dim("Not sent. kapitsa bench submit " + hub::tilde(file) + " sends it later."), stderr);
+  return 0;
+}
+
+// Adds a result (saved as `file`) to the community results after one question at the terminal, Enter for yes: a pull
+// request with the user's gh login, else the issue form in the browser, prefilled
+int submit(const ojson& result, const std::string& content, const std::string& file, bool dry) {
   if (const std::string why = submit_problem(result); !why.empty()) return fail(why);
   const std::string repo = target_repo();
   const GhStatus gh = gh_status();
@@ -379,19 +390,9 @@ int submit(const ojson& result, const std::string& content, bool dry, bool asked
              fits ? "" : " (the JSON goes on the clipboard: it does not fit in the address)", url.c_str());
       return 0;
     }
-    if (!can_confirm()) return fail("Submitting needs a yes typed at a terminal. Run it in one: kapitsa bench submit FILE");
-    if (!asked_already &&
-        !ask_yes("  Add it to the community results? This opens a pull request on " + repo + " as @" + gh.login + "."))
-      return 0;
-    term::line("", stderr);
-    say_wrapped("This is what will be sent, as " + plan.path + ":");
-    term::line("", stderr);
-    fputs(content.c_str(), stderr);
-    term::line("", stderr);
-    if (!ask_yes("  Send it?")) {
-      term::line("  " + dim("Not sent. kapitsa bench submit " + hub::tilde(bench_dir()) + "/... sends it later."), stderr);
-      return 0;
-    }
+    if (!can_confirm()) return fail("Submitting asks first, at a terminal. Run it in one: kapitsa bench submit FILE");
+    if (!ask_yes("  Add it to the community results? It opens a pull request on " + repo + " as @" + gh.login + "."))
+      return not_sent(file);
     try {
       Ticker t("Submitting");
       const std::string url = open_pr(plan, gh.path, [&](const std::string& step) {
@@ -417,15 +418,10 @@ int submit(const ojson& result, const std::string& content, bool dry, bool asked
            compact.c_str());
     return 0;
   }
-  if (!can_confirm()) return fail("Submitting needs a yes typed at a terminal. Run it in one: kapitsa bench submit FILE");
-  if (!asked_already && !ask_yes("  Add it to the community results? This opens a prefilled issue on " + repo + " in the browser."))
-    return 0;
-  term::line("", stderr);
-  say_wrapped("This is what will be sent, in the issue's form:");
-  term::line("", stderr);
-  fputs((compact + "\n").c_str(), stderr);
-  term::line("", stderr);
-  if (!ask_yes(fits ? "  Open the issue form with it?" : "  Copy it to the clipboard and open the issue form?")) return 0;
+  if (!can_confirm()) return fail("Submitting asks first, at a terminal. Run it in one: kapitsa bench submit FILE");
+  if (!ask_yes("  Add it to the community results? It opens a prefilled issue on " + repo + " in the browser" +
+               (fits ? "." : ", with the result on the clipboard.")))
+    return not_sent(file);
   if (!fits) {
     FILE* p = popen("/usr/bin/pbcopy", "w");
     if (p) fputs(compact.c_str(), p), pclose(p);
@@ -462,7 +458,8 @@ int submit_saved(const std::vector<std::string>& args) {
     if (a == "--dry-run") dry = true;
     else if (a == "--help" || a == "-h") {
       printf("kapitsa bench submit [FILE] [--dry-run]: adds a saved kapitsa bench result to the community results (default:\n"
-             "the newest in %s). It shows the exact JSON and asks first.\n", hub::tilde(bench_dir()).c_str());
+             "the newest in %s). It asks once first (Enter is yes); --dry-run shows what it would send.\n",
+             hub::tilde(bench_dir()).c_str());
       return 0;
     } else if (!a.empty() && a[0] == '-') usage_error("unknown option " + a, "kapitsa bench --help");
     else file = expand_home(a);
@@ -474,7 +471,7 @@ int submit_saved(const std::vector<std::string>& args) {
   if (content.empty() || r.is_discarded() || !r.is_object()) return fail(file + " is not a kapitsa bench result.", 2);
   g_tui = term::fancy();
   if (g_tui) term::line("", stderr);
-  return submit(r, content, dry, false);
+  return submit(r, content, file, dry);
 }
 
 // ---------------------------------------------------------------- the summary
@@ -1046,17 +1043,12 @@ int run(const Options& o) {
   code = result["invalid"].empty() ? 0 : 1;
   // submitting: asked for, or offered in a terminal
   if (o.submit) {
-    const int rc = submit(result, content, o.dry, false);
+    const int rc = submit(result, content, out_path, o.dry);
     return rc ? rc : code;
   }
   if (g_tui && submit_problem(result).empty() && can_confirm()) {
     term::line("", stderr);
-    const GhStatus gh = gh_status();
-    const std::string how = gh.logged_in ? "a pull request on " + target_repo() + " as @" + gh.login
-                                         : "a prefilled issue on " + target_repo() + " in the browser";
-    if (ask_yes("  Add it to the community results? It opens " + how + ", after showing what it sends."))
-      return submit(result, content, false, true) ? 1 : code;
-    ui::note("kapitsa bench submit sends it later");
+    return submit(result, content, out_path, false) ? 1 : code;
   }
   return code;
 }
