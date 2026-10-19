@@ -107,7 +107,7 @@ for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL, 128 GB for Flash-Next.
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/how-it-works-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/how-it-works-dark.svg">
-  <img alt="How Kapitsa works. It guesses ahead, then checks in one go: a small draft model guesses the next few words, and the big model checks them all in one pass and keeps the ones it agrees with, so each pass writes several words. GPU: hand-written Metal code made for these models. Neural Engine: on the dense models it reads part of each prompt beside the GPU. Memory: each conversation keeps what it has read, so a follow-up only reads the new message; up to 4 run at once." src="docs/assets/how-it-works-light.svg">
+  <img alt="How Kapitsa works. It guesses ahead, then checks in one go: a small draft model guesses the next few words, and the big model checks them all in one pass and keeps the ones it agrees with, so each pass writes several words. GPU: hand-written Metal code made for these models. Neural Engine: on the 4B, 27B and Nemotron 3.5 models it reads part of each prompt beside the GPU. Memory: each conversation keeps what it has read, so a follow-up only reads the new message; up to 4 run at once." src="docs/assets/how-it-works-light.svg">
 </picture>
 
 <sub>[Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Press kit](docs/assets/brand/README.md) ·
