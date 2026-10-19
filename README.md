@@ -30,14 +30,14 @@ OpenAI and Anthropic APIs at http://127.0.0.1:8000. Kapitsa updates itself. [Usa
 | Model | **Kapitsa** | oMLX | mlx-serve | Ollama | MTPLX | LM Studio | llama.cpp | mlx-vlm | mlx-lm |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | ***Qwen*** | | | | | | | | | |
-| Qwen3.5 4B · 4-bit | **179 tok/s**<sup>4B</sup> | 102 tok/s | — | 109 tok/s | 104 tok/s | 81 tok/s | 70 tok/s | — | 73 tok/s |
-| Qwen3.8 27B · 4-bit | **63 tok/s** | 45 tok/s | 52 tok/s ⚠ | 32 tok/s | 36 tok/s | 15 tok/s | 18 tok/s | — | — |
-| Qwen3.6 35B-A3B · 4-bit | **154 tok/s** | 127 tok/s | 124 tok/s | 89 tok/s | 80 tok/s | 86 tok/s | 69 tok/s | — | — |
+| Qwen3.5 4B · 4-bit | **179 tok/s**<sup>4B</sup> | 102 | — | 109 | 104 | 81 | 70 | — | 73 |
+| Qwen3.8 27B · 4-bit | **63 tok/s** | 45 | 52 ⚠ | 32 | 36 | 15 | 18 | — | — |
+| Qwen3.6 35B-A3B · 4-bit | **154 tok/s** | 127 | 124 | 89 | 80 | 86 | 69 | — | — |
 | Qwen3.8-Flash-Next · 4-bit<br><sub>128 GB Macs</sub> | — | — | — | — | — | — | — | — | — |
 | ***Nemotron*** | | | | | | | | | |
 | Dory1.0 4B · NVFP4 | — | — | — | — | — | — | — | — | — |
 | Lightning 30B-A3B · NVFP4 | — | — | — | — | — | — | — | — | — |
-| Bolt 74B-A9B · NVIDIA 24 GB | **64 tok/s** | 34 tok/s ⚠ | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | —<br><sub>no Metal support</sub> | 32 tok/s | — |
+| Bolt 74B-A9B · NVIDIA 24 GB | **64 tok/s** | 34 ⚠ | — | —<br><sub>no support</sub> | —<br><sub>no support</sub> | — | —<br><sub>no Metal support</sub> | 32 | — |
 | Super-VL 120B-A12B · NVFP4<br><sub>96 GB+ Macs</sub> | — | — | — | — | — | — | — | — | — |
 
 <sub>oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt; mlx-serve the faster of MTP and DFlash2.
@@ -52,12 +52,12 @@ session on the 35B: Kapitsa **49 s**, mlx-serve 62 s, oMLX 66 s ([details](docs/
 | Qwen3.5 4B · 4-bit | — | — | — | — | — | — | — | — | — |
 | Qwen3.8 27B · 4-bit | **73 tok/s** ⚠ | — | — | — | — | — | — | — | — |
 | Qwen3.6 35B-A3B · 4-bit | **250 tok/s** ⚠ | — | — | — | — | — | — | — | — |
-| Qwen3.8-Flash-Next · 4-bit | 102 tok/s | **107 tok/s** | — | — | — | — | 96 tok/s | 77 tok/s ⚠ | —<br><sub>no support</sub> |
+| Qwen3.8-Flash-Next · 4-bit | 102 tok/s | **107** | — | — | — | — | 96 | 77 ⚠ | —<br><sub>no support</sub> |
 | ***Nemotron*** | | | | | | | | | |
 | Dory1.0 4B · NVFP4 | — | — | — | — | — | — | — | — | — |
-| Lightning 30B-A3B · NVFP4 | **239 tok/s** | 190 tok/s | — | — | — | — | 159 tok/s | 137 tok/s | 139 tok/s |
+| Lightning 30B-A3B · NVFP4 | **239 tok/s** | 190 | — | — | — | — | 159 | 137 | 139 |
 | Bolt 74B-A9B · NVIDIA 24 GB | — | — | — | — | — | — | — | — | — |
-| Super-VL 120B-A12B · NVFP4 | **85 tok/s** | 52 tok/s | — | — | — | — | 66 tok/s | 46 tok/s | 46 tok/s |
+| Super-VL 120B-A12B · NVFP4 | **85 tok/s** | 52 | — | — | — | — | 66 | 46 | 46 |
 
 <sub>Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and mlx-vlm; Kapitsa leads greedy (108 against 106)
 and on memory (70.5 GB against 104). Nemotron: NVIDIA's NVFP4 on Kapitsa and mlx-vlm, MLX 4-bit on oMLX and mlx-lm,
