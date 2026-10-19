@@ -451,6 +451,8 @@ std::string newest_result() {
   return best;
 }
 
+void print_summary(const ojson& r, const std::string& path);
+
 int submit_saved(const std::vector<std::string>& args) {
   std::string file;
   bool dry = false;
@@ -458,7 +460,7 @@ int submit_saved(const std::vector<std::string>& args) {
     if (a == "--dry-run") dry = true;
     else if (a == "--help" || a == "-h") {
       printf("kapitsa bench submit [FILE] [--dry-run]: adds a saved kapitsa bench result to the community results (default:\n"
-             "the newest in %s). It asks once first (Enter is yes); --dry-run shows what it would send.\n",
+             "the newest in %s). It shows the result and asks once (Enter is yes); --dry-run shows what it would send.\n",
              hub::tilde(bench_dir()).c_str());
       return 0;
     } else if (!a.empty() && a[0] == '-') usage_error("unknown option " + a, "kapitsa bench --help");
@@ -470,6 +472,11 @@ int submit_saved(const std::vector<std::string>& args) {
   const ojson r = ojson::parse(content, nullptr, false);
   if (content.empty() || r.is_discarded() || !r.is_object()) return fail(file + " is not a kapitsa bench result.", 2);
   g_tui = term::fancy();
+  // what it sends, as the run showed it
+  if (!dry && submit_problem(r).empty()) {
+    if (g_tui) print_summary(r, "");
+    else fprintf(stderr, "%s\n%s", result_title(r).c_str(), result_markdown(r).c_str());
+  }
   if (g_tui) term::line("", stderr);
   return submit(r, content, file, dry);
 }
@@ -493,15 +500,18 @@ std::string conditions_text(const ojson& r) {
   return s;
 }
 
+// The card's GPU line: who else used the GPU when that disturbed a measurement (its numbers carry ⚠)
 std::string gpu_text(const ojson& r) {
   const ojson& c = r["conditions"];
   char b[200];
   if (!c["contention"].empty()) {
-    std::string who, ph;
-    for (const auto& u : c["gpu_users"]) who += (who.empty() ? "" : ", ") + u.get<std::string>();
-    for (const auto& p : c["contention"]) ph += (ph.empty() ? "" : ", ") + p.get<std::string>();
-    snprintf(b, sizeof b, "other apps on the GPU (%s%s) during %s: flagged", who.empty() ? "?" : who.c_str(), "", ph.c_str());
-    return b;
+    std::vector<std::string> who;
+    for (const auto& u : c["gpu_users"]) who.push_back(u.get<std::string>());
+    std::string names;
+    for (size_t i = 0; i < who.size(); ++i) names += (i == 0 ? "" : i + 1 == who.size() ? " and " : ", ") + who[i];
+    snprintf(b, sizeof b, " used the GPU: %.0f%% on average, up to %.0f%%. Close %s for a clean run.",
+             c.value("gpu_other_mean_pct", 0.0), c.value("gpu_other_max_pct", 0.0), who.size() == 1 ? "it" : "them");
+    return "⚠ " + (names.empty() ? std::string("Other apps") : names) + b;
   }
   snprintf(b, sizeof b, "other apps under 5%% of the GPU (at most %.1f%%)", c.value("gpu_other_max_pct", 0.0));
   return b;
@@ -563,10 +573,12 @@ void print_summary(const ojson& r, const std::string& path) {
   row("Decoding", m.value("decoding_detail", m.value("decoding", std::string())));
   rows.push_back("");
   row("Conditions", conditions_text(r));
-  rows.push_back(term::left("", 13) + (busy.empty() ? dim(gpu_text(r)) : term::warn(gpu_text(r))));
+  for (const auto& l : term::wrap(gpu_text(r), inner - 13))
+    rows.push_back(term::left("", 13) + (busy.empty() ? dim(l) : term::warn(l)));
   term::line("", stderr);
   card(rows, inner, stderr);
-  for (const auto& f : r["flags"]) ui::warning(f.get<std::string>());
+  for (const auto& f : r["flags"])  // contention is on the card, in words
+    if (f.get<std::string>().rfind("CONTENTION", 0) != 0) ui::warning(f.get<std::string>());
   for (const auto& f : r["invalid"]) term::line("  " + term::red(term::kFail) + " " + f.get<std::string>(), stderr);
   if (!path.empty()) ui::note("Saved " + hub::tilde(path));
 }

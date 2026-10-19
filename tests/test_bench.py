@@ -18,7 +18,7 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
 8. The whole command against the scripted server (KAPITSA_BENCH_SERVER, a test hook: no model, no lock): plain,
    --json and on a terminal; the result saved, valid against the schema, refused for submission.
 """
-import glob, http.server, json, os, pty, random, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
+import glob, http.server, json, os, pty, random, re, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -426,6 +426,20 @@ check(code == 0 and f"Not sent. kapitsa bench submit {os.path.join(tmp, 'full.js
       "a no sends nothing and names the saved file", text[-300:])
 check(all(c["args"][:2] == ["api", "--hostname"] for c in calls()), "nothing but the login was asked of gh", json.dumps(calls())[:300])
 check(os.path.exists(os.path.join(tmp, "full.json")), "the result stays where it was saved")
+busy = json.loads(results["full"])
+busy["conditions"].update(gpu_other_mean_pct=12.4, gpu_other_max_pct=40.2, gpu_users=["Google Chrome", "Slack"],
+                          contention=["decode", "prefill_4000"])
+busy["flags"] = busy["flags"] + ["CONTENTION: sustained foreign GPU load > 5% in ['decode', 'prefill_4000'] (mean 12.4%, top "
+                                 "['Google Chrome', 'Slack'])"]
+with open(os.path.join(tmp, "busy.json"), "w") as fh:
+    json.dump(busy, fh, indent=2)
+tenv = dict(env, TERM="xterm-256color", COLUMNS="100")
+tenv.pop("NO_COLOR", None)
+code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "busy.json")], ["n"], environ=tenv)
+plain = " ".join(re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text).replace("│", " ").split())
+check(code == 0 and "Writing" in plain and "Google Chrome and Slack used the GPU: 12% on average, up to 40%. Close them for a clean run."
+      in plain and "CONTENTION" not in plain and plain.count("[Y/n]") == 1,
+      "submitting a saved result shows its card first, with who used the GPU in words", plain[-500:])
 open(gh_log, "w").close()
 code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], [""])
 got = calls()
