@@ -1,6 +1,8 @@
-# Concatenates src/kernels/common.h + src/kernels/nemotron/*.h + *.metal into one C++ string literal: the
+# Concatenates src/kernels/common.h + iq.h + src/kernels/nemotron/*.h + *.metal into one C++ string literal: the
 # Nemotron-H kernels, a library of their own compiled when a Nemotron model loads (Gpu::compile_extra).
 file(READ ${SRC_DIR}/common.h COMMON)
+file(READ ${SRC_DIR}/iq.h IQ)
+string(APPEND COMMON "\n${IQ}")
 file(GLOB HEADERS ${SRC_DIR}/nemotron/*.h)
 list(SORT HEADERS)
 set(ALL "${COMMON}\n")

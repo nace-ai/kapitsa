@@ -22,44 +22,8 @@
 // t % T), so K = 5376 (shared down) or 1536 / 2304 / 2560 (routed down) keep every lane busy. K % 256 == 0 (the
 // IQ2_XXS block: one half scale per 256 weights), N >= 1.
 
-// the 8 weights of one grid point (G: its grid word pair; s7: its 7 stored sign bits) as 4 half2 words, x 2^-24:
-// (e0, e2), (e1, e3), (e4, e6), (e5, e7)
-NI_INLINE uint4 nh_x2_dec8(uint2 G, uint s7) {
-  // lo: e0 sign -> bit 15, e1 -> 23, e2 -> 31, e3 -> 7; hi: e4 -> 15, e5 -> 23, e6 -> 31, e7 (parity) -> 7
-  const uint lo_m = (s7 * 0x20408010u) & 0x80808080u;
-  const uint hi_m = ((s7 * 0x02040800u) | (popcount(s7) << 7)) & 0x80808080u;
-  const uint lo = G.x ^ lo_m, hi = G.y ^ hi_m;
-  const uint M = 0x807F807Fu;
-  return uint4(lo & M, rotate(lo, 24u) & M, hi & M, rotate(hi, 24u) & M);
-}
-
-// d + the decoded grid point w . (xa, xb) (elements 0..3, 4..7)
-NI_INLINE float nh_x2_fma8(uint4 w, float4 xa, float4 xb, float d) {
-  const half2 w0 = as_type<half2>(w.x), w1 = as_type<half2>(w.y), w2 = as_type<half2>(w.z), w3 = as_type<half2>(w.w);
-  d = fma(float(w0.x), xa.x, d);
-  d = fma(float(w1.x), xa.y, d);
-  d = fma(float(w0.y), xa.z, d);
-  d = fma(float(w1.y), xa.w, d);
-  d = fma(float(w2.x), xb.x, d);
-  d = fma(float(w3.x), xb.y, d);
-  d = fma(float(w2.y), xb.z, d);
-  d = fma(float(w3.y), xb.w, d);
-  return d;
-}
-
-// one 32-element sub-block (codes aux) . xv[0..7], x 2^-24 (one FMA chain)
-NI_INLINE float nh_x2_dot32(uint2 aux, thread const float4* xv) {
-  constant uint2* gt = (constant uint2*)nh_iq2xxs_grid;
-  float d = nh_x2_fma8(nh_x2_dec8(gt[aux.x & 0xFFu], extract_bits(aux.y, 0, 7)), xv[0], xv[1], 0.0f);
-  d = nh_x2_fma8(nh_x2_dec8(gt[extract_bits(aux.x, 8, 8)], extract_bits(aux.y, 7, 7)), xv[2], xv[3], d);
-  d = nh_x2_fma8(nh_x2_dec8(gt[extract_bits(aux.x, 16, 8)], extract_bits(aux.y, 14, 7)), xv[4], xv[5], d);
-  return nh_x2_fma8(nh_x2_dec8(gt[aux.x >> 24], extract_bits(aux.y, 21, 7)), xv[6], xv[7], d);
-}
-
-// the sub-block scale (0.5 + s4) / 4 as the subnormal half (2 s4 + 1) 2^-24 (= 2^-21 of the scale; with the weights'
-// 2^-24, results are scaled by 2^45 at the end)
-NI_INLINE float nh_x2_sub(uint auxy) { return float(as_type<half>(ushort((auxy >> 27) | 1u))); }
-constant constexpr float kNhX2Scale = 35184372088832.0f;  // 2^45
+// (The decode helpers nh_x2_dec8 / nh_x2_fma8 / nh_x2_dot32 / nh_x2_sub and the grid are in ../iq.h, shared with the
+// Qwen MoE kernels of GGUF imports.)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // One token row: y[n] = epi(gs * W[n, :] . x) for rows row0 .. row0 + NR - 1 (clamped to N; EPI 0 store, 1 add,
