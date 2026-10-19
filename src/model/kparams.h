@@ -290,11 +290,15 @@ struct SwigluX8 {
 };
 
 struct Moe8Plan {
-  uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx, rlim;
+  uint32_t R, k, E, gu_gx, dn_gx, layer, small, sgu_gx, sdn_gx, rlim, split, shs, sep, edn_gx, topk;
 };
 
 struct Moe8s {
   uint32_t K, N, w_stride, s_stride, k, x_ld;
+};
+
+struct Moe8e {
+  uint32_t K, N, w_stride, s_stride, k;
 };
 
 struct Moe8Down {

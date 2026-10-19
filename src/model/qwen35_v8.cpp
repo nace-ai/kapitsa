@@ -101,6 +101,10 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
     else if (key == "pad") k.pad = v;
     else if (key == "tw") k.tw = v;
     else if (key == "fuse") k.fuse = v;
+    else if (key == "emu") k.emu = v;
+    else if (key == "split") k.split = v;
+    else if (key == "shs") k.shs = v;
+    else if (key == "tkp") k.tkp = v;
     else fatal("knobs: unknown key '%s'", key.c_str());
     a = b + 1;
   }
@@ -151,12 +155,16 @@ void Qwen35::v8_alloc() {
     v8tiles_ = g.alloc(size_t(tiles) * 4, "moe8_tiles");
     v8nt_ = g.alloc(16, "moe8_ntiles");
     v8slot_ = g.alloc(size_t(tiles) * 8 * 4, "moe8_slots");
-    v8args_ = g.alloc(64, "moe8_args");
+    v8args_ = g.alloc(128, "moe8_args");
     v8out_ = g.alloc(size_t(kMaxVerify) * cfg_.top_k * D * 4, "moe8_out");
     v8sh_ = g.alloc(size_t(kMaxVerify) * D * 4, "moe8_shared_out");
     v8ustat_ = g.alloc(size_t(cfg_.layers) * 4, "moe8_stats");
-    v8sm_ = g.alloc(320 * 4, "moe8_scalar_tiles");
-    v8hsc_ = g.alloc(size_t(2 * 64) * Ih * 4, "moe8_scalar_h");
+    v8sm_ = g.alloc(5 * 72 * 4, "moe8_scalar_tiles");  // verify8.metal kV8SM tiles: experts, 2 rows, 2 slots each
+    v8hsc_ = g.alloc(size_t(2 * 72) * Ih * 4, "moe8_scalar_h");
+    v8hse_ = g.alloc(size_t(2 * 72) * Ih / 64 * 4, "moe8_scalar_hsums");
+    v8sm2_ = g.alloc(5 * 72 * 4, "moe8_scalar_tiles_b");
+    v8hsc2_ = g.alloc(size_t(2 * 72) * Ih * 4, "moe8_scalar_h_b");
+    v8hse2_ = g.alloc(size_t(2 * 72) * Ih / 64 * 4, "moe8_scalar_hsums_b");
     v8xn_ = g.alloc(size_t(8) * D * 4, "x8_rows");
   }
   v8_ready_ = true;
@@ -497,6 +505,31 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   if (!(skip & 8)) enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_);
 }
 
+// The moe8e passes (MMA-exact small experts) rely on the MMA adding its products one at a time in k order with an fp32
+// rounding after each; mma_chain_check tests that on this GPU once (a fresh command buffer, before the first verify's
+// is committed). NI_V8_MOE_EMU: 0 = never use them (sampled verifies run every routed expert as an MMA tile),
+// 1 (default on the M5) = sampled verifies, 2 = greedy verifies too (instead of moe8s2's fp32 passes).
+static int moe_emu_mode() {
+  static const bool ok = [] {
+    Gpu& g = Gpu::get();
+    Buffer bad = g.alloc(16, "mma_check");
+    memset(bad.ptr(), 0, 16);
+    auto e = g.begin();
+    e->use(pipe8("mma_chain_check"));
+    e->buf(0, bad);
+    e->dispatch(64, 1, 1, 32);
+    e->commit_and_wait();
+    const uint32_t n = bad.as<uint32_t>()[0];
+    g.release(bad);
+    if (n) logi("moe8e: this GPU's MMA rounds differently (%u of 4096 check values); sampled verifies keep MMA tiles", n);
+    return n == 0;
+  }();
+  // default on the M5 (Apple10), where it was measured; other Macs keep the MMA tiles unless NI_V8_MOE_EMU is set
+  static const int env = std::clamp(env_int("NI_V8_MOE_EMU", Gpu::get().apple10() ? 1 : 0), 0, 2);
+  const int m = v8_knobs().emu >= 0 ? std::min(v8_knobs().emu, 2) : env;
+  return m && ok ? m : 0;
+}
+
 // MoE block for R rows: x_ += sum_j w_j expert_j(n) + w_s shared(n), n = norm(x_).
 bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* next_norm) {
   const int D = cfg_.hidden, k = cfg_.top_k, E = cfg_.experts;
@@ -522,52 +555,111 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   // experts used by <= small rows run as register-dequant matvecs over just those rows instead of an
   // 8-row MMA tile (35B p700: 24.0 vs 24.9 ms per verify)
   static const int small_env = std::clamp(env_int("NI_V8_MOE_SMALL", 2), 0, 2);
-  const int small = v8_moe_exact_ || !q4 ? 0 : small_env;
-  enc_x8(e, x_, R, D, L.post_norm, precise, 0, small ? &v8xn_ : nullptr);
+  // MMA-exact passes (moe8e: bitwise what the MMA tiles give the rows) for 2-row tiles: list A (experts used by
+  // <= small rows) takes them on sampled verifies (row-independent numerics; NI_V8_MOE_EMU=2: greedy ones too), else
+  // moe8s2's fp32 passes; experts with small < rows <= split become ceil(rows / 2) such tiles (in list A, or list B when
+  // A runs moe8s2), and with shs (split 8) the shared expert too: no MMA tile pass left. 35B, 64 tokens teacher-forced,
+  // sampled-verify numerics (tools/bench_verify8, interleaved): every expert on MMA tiles 11.78 ms per verify; 1-2-row
+  // experts on moe8e 11.05; + split 4 10.81; split 8 + shs 10.15.
+  // the moe8e passes reproduce the default MMA tiles (gate/up qmm8_gu1k2snb_b4: subnormal codes, scale / bias pairs,
+  // its K slices; down moe8_down_nf2): other NI_V8_GU / NI_V8_CM / NI_V8_PAIR / NI_V8_MOE_NF settings keep the MMA tiles
+  static const bool dn_default = env_int("NI_V8_MOE_NF", 2) == 2;
+  const int emode =
+      q4 && D == 2048 && I == 512 && dn_default && gu_kernel(uint32_t(D)) == "qmm8_gu1k2snb_b4" ? moe_emu_mode() : 0;
+  const bool emu = emode >= (v8_moe_exact_ ? 1 : 2);
+  const int small = !q4 ? 0 : v8_moe_exact_ && !emu ? 0 : small_env;
+  static const int split_env = std::clamp(env_int("NI_V8_MOE_SPLIT", 8), 0, 8);
+  static const int shs_env = env_int("NI_V8_MOE_SHS", 1);
+  // NI_V8_MOE_SEP=1: greedy verifies (list A on moe8s2) split too, into list B (same numerics: moe8e = MMA tiles), but
+  // slower: 11.28 vs 10.97 ms per verify (moe8s2 + MMA tiles); NI_V8_MOE_EMU=2 (everything on moe8e) 10.21 ms, but
+  // greedy logits then move from moe8s2's fp32 numerics to the MMA tiles' (ni_v8check: mean |diff| vs plain decode
+  // 0.031 instead of 0.020)
+  static const bool sep_env = env_int("NI_V8_MOE_SEP", 0) != 0;
+  const bool sep_on = emode && !emu && sep_env;
+  const int split = emu || sep_on ? std::max(v8_knobs().split >= 0 ? std::clamp(v8_knobs().split, 0, 8) : split_env, small)
+                                  : small;
+  const bool shs = (emu || sep_on) && split >= 8 && (v8_knobs().shs >= 0 ? v8_knobs().shs : shs_env) != 0;
+  const bool sep = sep_on && (split > small || shs);  // list B: moe8e beside list A's moe8s2
+  enc_x8(e, x_, R, D, L.post_norm, precise, 0, small && !emu ? &v8xn_ : nullptr);  // moe8s2 reads fp32 rows
   enc_qmm8(e, {{&L.router, rlog_, uint32_t(E)}, {&L.shared_gate, slog_, 1u}}, R, v8t_, v8s_, precise);
   kp::Topk tp{uint32_t(E), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
-  e.use(pipe8(E == 256 && k <= 8 ? "moe_topk256_rows" : "moe_topk_rows"));
-  e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
-  e.val(4, tp);
-  e.dispatch(R, 1, 1, 32);
+  // the router top-k inside moe8_plan (E == 256: its 8 simdgroups are the rows; the same topk256_row code)
+  static const bool topk_env = env_int("NI_V8_MOE_TOPKPLAN", 1) != 0;
+  const bool topk_in_plan = E == 256 && k <= 8 && (v8_knobs().tkp >= 0 ? v8_knobs().tkp != 0 : topk_env);
+  if (!topk_in_plan) {
+    e.use(pipe8(E == 256 && k <= 8 ? "moe_topk256_rows" : "moe_topk_rows"));
+    e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
+    e.val(4, tp);
+    e.dispatch(R, 1, 1, 32);
+  }
   static const int dn_nf = env_int("NI_V8_MOE_NF", 2), dn_cs = 4;
   if (D % (8 * dn_nf * dn_cs)) fatal("moe8: hidden %d", D);
   // scalar passes: 8 simdgroups x 4 columns per threadgroup, inputs staged (hidden <= 2048)
   constexpr uint32_t s_nsg = 8, SR = 4;
   if (small && D > 2048) fatal("moe8s2: hidden %d > 2048", D);
   kp::Moe8Plan pp{uint32_t(R), uint32_t(k), uint32_t(E), I / 64, uint32_t(D / (8 * dn_nf * dn_cs)), uint32_t(li),
-                  uint32_t(small), I / (SR * s_nsg), uint32_t(D) / (SR * s_nsg), v8_rlim_ ? 1u : 0u};
+                  uint32_t(small), emu ? I / 64 : I / (SR * s_nsg), emu ? uint32_t(D) / 128 : uint32_t(D) / (SR * s_nsg),
+                  v8_rlim_ ? 1u : 0u, uint32_t(split), shs ? 1u : 0u, sep ? 1u : 0u, uint32_t(D) / 128,
+                  topk_in_plan ? 1u : 0u};
   e.use(pipe8("moe8_plan"));
   e.buf(0, ridx_); e.buf(1, v8tiles_); e.buf(2, v8nt_); e.buf(3, v8slot_); e.buf(4, v8args_);
   e.val(5, pp);
   e.buf(6, v8ustat_); e.buf(7, v8sm_);
   e.buf(8, v8_rlim_ ? *v8_rlim_ : v8nt_);
+  e.buf(9, v8sm2_);
+  e.buf(10, rlog_); e.buf(11, slog_); e.buf(12, rwts_);
+  e.val(13, tp);
   e.dispatch(1, 1, 1, uint32_t(std::max(32, (E + 31) / 32 * 32)));
   // gate/up + SwiGLU per touched expert (+ the shared expert), one h table per tile; strides in the routed format's
   // words / scale groups
   const uint32_t wstride = uint32_t(size_t(I) * L.eg.row_bytes() / 4), sstride = L.eg.dense() ? 0u : I * (uint32_t(D) / L.eg.gs);
-  kp::Qmm8Gu gp{uint32_t(D), I, wstride, sstride, 1u, I * 8, I / 64 * 8};
-  e.use(pipe8(q4 ? gu_kernel(uint32_t(D)) : "moe8g_gu_" + combo));
-  e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
-  e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
-  e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
-  e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
-  e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
-  e.val(16, gp);
-  e.buf(17, v8tiles_); e.buf(18, v8nt_);
-  e.dispatch_indirect(v8args_, 0, q4 ? gu_threads() : 512u);
-  // down per tile -> per (row, slot) outputs, then the fixed-order combine
   const uint32_t dw = uint32_t(size_t(D) * L.ed.row_bytes() / 4), ds = L.ed.dense() ? 0u : uint32_t(D) * (I / L.ed.gs);
-  kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
-  if (!q4 && dn_nf != 2) fatal("moe8g: NI_V8_MOE_NF must be 2 for %s experts", L.eg.fmt().c_str());
-  e.use(pipe8(q4 ? "moe8_down_nf" + std::to_string(dn_nf) : "moe8g_down_" + combo));
-  e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
-  e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
-  e.buf(6, v8h_); e.buf(7, v8hs_); e.buf(8, v8out_); e.buf(9, v8sh_);
-  e.val(10, dp);
-  e.buf(11, v8tiles_); e.buf(12, v8nt_); e.buf(13, v8slot_);
-  e.dispatch_indirect(v8args_, 12, 32 * dn_cs);
-  if (small) {
+  if (!(shs && split >= 8)) {  // else no expert takes an MMA tile
+    kp::Qmm8Gu gp{uint32_t(D), I, wstride, sstride, 1u, I * 8, I / 64 * 8};
+    e.use(pipe8(q4 ? gu_kernel(uint32_t(D)) : "moe8g_gu_" + combo));
+    e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+    e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+    e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
+    e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+    e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
+    e.val(16, gp);
+    e.buf(17, v8tiles_); e.buf(18, v8nt_);
+    e.dispatch_indirect(v8args_, 0, q4 ? gu_threads() : 512u);
+    // down per tile -> per (row, slot) outputs, then the fixed-order combine
+    kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
+    if (!q4 && dn_nf != 2) fatal("moe8g: NI_V8_MOE_NF must be 2 for %s experts", L.eg.fmt().c_str());
+    e.use(pipe8(q4 ? "moe8_down_nf" + std::to_string(dn_nf) : "moe8g_down_" + combo));
+    e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+    e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+    e.buf(6, v8h_); e.buf(7, v8hs_); e.buf(8, v8out_); e.buf(9, v8sh_);
+    e.val(10, dp);
+    e.buf(11, v8tiles_); e.buf(12, v8nt_); e.buf(13, v8slot_);
+    e.dispatch_indirect(v8args_, 12, 32 * dn_cs);
+  }
+  // moe8e passes over a tile list (sm, h, h sums, tile count ntiles[1] at byte offset nt_off, grids at args_off)
+  auto moe8e = [&](const Buffer& sm, const Buffer& h, const Buffer& hsum, size_t nt_off, size_t args_off) {
+    kp::Moe8e ep{uint32_t(D), I, wstride, sstride, uint32_t(k)};
+    e.use(pipe8("moe8e_gu_r2"));
+    e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+    e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+    e.buf(6, v8t_); e.buf(7, v8s_); e.buf(8, h); e.buf(9, hsum);
+    e.val(10, ep);
+    e.buf(11, sm); e.buf(12, v8nt_, nt_off);
+    e.buf(13, L.sg.w->buf); e.buf(14, L.sg.s->buf); e.buf(15, L.sg.b->buf);
+    e.buf(16, L.su.w->buf); e.buf(17, L.su.s->buf); e.buf(18, L.su.b->buf);
+    e.dispatch_indirect(v8args_, args_off, 256);
+    kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
+    e.use(pipe8("moe8e_down_r2"));
+    e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+    e.buf(3, h); e.buf(4, hsum); e.buf(5, v8out_);
+    e.val(6, dq);
+    e.buf(7, sm); e.buf(8, v8nt_, nt_off);
+    e.buf(9, L.sd.w->buf); e.buf(10, L.sd.s->buf); e.buf(11, L.sd.b->buf); e.buf(12, v8sh_);
+    e.dispatch_indirect(v8args_, args_off + 12, 128);
+  };
+  if (emu && (small || split > small || shs)) {
+    moe8e(v8sm_, v8hsc_, v8hse_, 0, 24);
+  } else if (small) {
     kp::Moe8s sp{uint32_t(D), I, wstride, sstride, uint32_t(k), uint32_t(D)};
     e.use(pipe8("moe8s2_gu"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
@@ -584,6 +676,7 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
     e.buf(6, v8sm_); e.buf(7, v8nt_);
     e.dispatch_indirect(v8args_, 36, 32 * s_nsg);
   }
+  if (sep) moe8e(v8sm2_, v8hsc2_, v8hse2_, 4, 48);  // list B (its count in ntiles[2])
   // with the next norm: the combine also writes that norm's X8 table as x8_prep2 would (moe8_combine_x8: one
   // threadgroup per row, N / 4 threads; bitwise moe8_combine + x8_prep2)
   static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
@@ -607,6 +700,91 @@ bool Qwen35::enc_moe8(Encoder& e, const Layer& L, int R, int li, const Tensor* n
   e.val(4, cp);
   e.dispatch((D / 4 + 63) / 64, R, 1, 64);
   return false;
+}
+
+// dev (tools/bench_verify8 BENCH_REPLAY): the last verify's expert passes again (its plan: the last MoE layer's tiles
+// in list A,
+// the final input table) with layer li's weights; mask: 1 tile gate/up, 2 tile down, 4 small gate/up, 8 small down
+// (V8Knobs::emu 0: the moe8s2 passes, else the moe8e ones). Timing only.
+void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
+  const Layer& L = layers_[li];
+  const int D = cfg_.hidden, k = cfg_.top_k;
+  const uint32_t I = uint32_t(cfg_.moe_I);
+  const uint32_t U1 = v8nt_.as<uint32_t>()[0], S = std::max(1u, v8nt_.as<uint32_t>()[1]);
+  static bool said = false;
+  if (!said) said = true, logi("moe8_replay: %u MMA tiles (+ shared), %u small tiles", U1 - 1, v8nt_.as<uint32_t>()[1]);
+  const uint32_t wstride = uint32_t(size_t(I) * L.eg.row_bytes() / 4), sstride = I * (uint32_t(D) / L.eg.gs);
+  const uint32_t dw = uint32_t(size_t(D) * L.ed.row_bytes() / 4), ds = uint32_t(D) * (I / L.ed.gs);
+  const bool s2 = v8_knobs().emu == 0;
+  // BENCH_GROUPS with a grouped encoder: the tile and small passes of a phase as one group (run side by side)
+  const bool grp = e.grouped() && getenv("BENCH_GROUPS");
+  for (int phase = 0; phase < 2; ++phase) {
+    const int pm = mask & (phase ? 10 : 5);
+    if (grp) e.group_begin();
+    if (pm & 1) {
+      kp::Qmm8Gu gp{uint32_t(D), I, wstride, sstride, 1u, I * 8, I / 64 * 8};
+      e.use(pipe8(gu_kernel(uint32_t(D))));
+      e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+      e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+      e.buf(6, L.sg.w->buf); e.buf(7, L.sg.s->buf); e.buf(8, L.sg.b->buf);
+      e.buf(9, L.su.w->buf); e.buf(10, L.su.s->buf); e.buf(11, L.su.b->buf);
+      e.buf(12, v8t_); e.buf(13, v8s_); e.buf(14, v8h_); e.buf(15, v8hs_);
+      e.val(16, gp);
+      e.buf(17, v8tiles_); e.buf(18, v8nt_);
+      e.dispatch(I / 64, U1, 1, gu_threads());
+    }
+    if (pm & 2) {
+      kp::Moe8Down dp{I, uint32_t(D), dw, ds, I * 8, I / 64 * 8, uint32_t(k)};
+      e.use(pipe8("moe8_down_nf2"));
+      e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+      e.buf(3, L.sd.w->buf); e.buf(4, L.sd.s->buf); e.buf(5, L.sd.b->buf);
+      e.buf(6, v8h_); e.buf(7, v8hs_); e.buf(8, v8out_); e.buf(9, v8sh_);
+      e.val(10, dp);
+      e.buf(11, v8tiles_); e.buf(12, v8nt_); e.buf(13, v8slot_);
+      e.dispatch(uint32_t(D) / 64, U1, 1, 128);
+    }
+    if (pm & 4) {
+      e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
+      e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
+      if (s2) {
+        kp::Moe8s sp{uint32_t(D), I, wstride, sstride, uint32_t(k), uint32_t(D)};
+        e.use(pipe8("moe8s2_gu"));
+        e.buf(6, v8xn_); e.buf(7, v8hsc_);
+        e.val(8, sp);
+        e.buf(9, v8sm_); e.buf(10, v8nt_);
+        e.dispatch(I / 32, S, 1, 256);
+      } else {
+        kp::Moe8e ep{uint32_t(D), I, wstride, sstride, uint32_t(k)};
+        e.use(pipe8("moe8e_gu_r2"));
+        e.buf(6, v8t_); e.buf(7, v8s_); e.buf(8, v8hsc_); e.buf(9, v8hse_);
+        e.val(10, ep);
+        e.buf(11, v8sm_); e.buf(12, v8nt_);
+        e.buf(13, L.sg.w->buf); e.buf(14, L.sg.s->buf); e.buf(15, L.sg.b->buf);
+        e.buf(16, L.su.w->buf); e.buf(17, L.su.s->buf); e.buf(18, L.su.b->buf);
+        e.dispatch(I / 64, S, 1, 256);
+      }
+    }
+    if (pm & 8) {
+      e.buf(0, L.ed.w->buf); e.buf(1, L.ed.s->buf); e.buf(2, L.ed.b->buf);
+      if (s2) {
+        kp::Moe8s dq{I, uint32_t(D), dw, ds, uint32_t(k), I};
+        e.use(pipe8("moe8s2_down"));
+        e.buf(3, v8hsc_); e.buf(4, v8out_);
+        e.val(5, dq);
+        e.buf(6, v8sm_); e.buf(7, v8nt_);
+        e.dispatch(uint32_t(D) / 32, S, 1, 256);
+      } else {
+        kp::Moe8e dq{I, uint32_t(D), dw, ds, uint32_t(k)};
+        e.use(pipe8("moe8e_down_r2"));
+        e.buf(3, v8hsc_); e.buf(4, v8hse_); e.buf(5, v8out_);
+        e.val(6, dq);
+        e.buf(7, v8sm_); e.buf(8, v8nt_);
+        e.buf(9, L.sd.w->buf); e.buf(10, L.sd.s->buf); e.buf(11, L.sd.b->buf); e.buf(12, v8sh_);
+        e.dispatch(uint32_t(D) / 128, S, 1, 128);
+      }
+    }
+    if (grp) e.group_end();
+  }
 }
 
 void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {

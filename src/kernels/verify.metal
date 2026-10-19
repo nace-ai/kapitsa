@@ -345,11 +345,10 @@ NI_MOE_DOWN_ROWS(moe_down_rows_g64, 64, 4, 9 * 512)
 NI_MOE_DOWN_ROWS(moe_down_rows_g32_s8, 32, 8, 9 * 512)
 NI_MOE_DOWN_ROWS(moe_down_rows_g64_w, 64, 4, 7168)
 
-// Router top-k for R rows with E = 256 (one simdgroup per row).
-[[kernel]] void moe_topk256_rows(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
-                                 device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
-                                 constant TopkParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
-                                 uint lane [[thread_index_in_simdgroup]]) {
+// Router top-k of row r with E = 256 (one simdgroup): idx[r * k ..], wts[r * (k + 1) ..] (the shared expert's gate
+// last); ids (optional): the chosen experts again, for a caller in the same threadgroup (moe8_plan's fused top-k).
+NI_INLINE void topk256_row(const device float* logits, const device float* shared, device uint* idx, device float* wts,
+                           constant TopkParams& p, uint r, uint lane, threadgroup uint* ids) {
   constexpr uint PER = 8;
   const device float* lg = logits + r * 256;
   float4 a = ((const device float4*)lg)[lane * 2], b = ((const device float4*)lg)[lane * 2 + 1];
@@ -383,9 +382,18 @@ NI_MOE_DOWN_ROWS(moe_down_rows_g64_w, 64, 4, 7168)
     for (uint q = 0; q < p.k; ++q)
       if (q == lane) { w = wsel[q]; ii = isel[q]; }
     idx[r * p.k + lane] = ii;
+    if (ids) ids[r * p.k + lane] = ii;
     wts[r * (p.k + 1) + lane] = p.norm ? w / sel : w / sum;
   }
   if (lane == p.k) wts[r * (p.k + 1) + p.k] = sigmoid(shared[r]);
+}
+
+// Router top-k for R rows with E = 256 (one simdgroup per row).
+[[kernel]] void moe_topk256_rows(const device float* logits [[buffer(0)]], const device float* shared [[buffer(1)]],
+                                 device uint* idx [[buffer(2)]], device float* wts [[buffer(3)]],
+                                 constant TopkParams& p [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                                 uint lane [[thread_index_in_simdgroup]]) {
+  topk256_row(logits, shared, idx, wts, p, r, lane, nullptr);
 }
 
 // ---- Gated DeltaNet verify with a rollback tape ----

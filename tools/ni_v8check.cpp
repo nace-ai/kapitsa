@@ -1,5 +1,6 @@
 // Teacher-forced check of the multi-row verify against plain decoding, plus timing.
 //   ni_v8check <model_dir> @ids [n_tok=64] [R=8] [reps=1]
+// NI_V8CHECK_EXACT=1: verify with the sampled cycles' row-independent MoE numerics (Qwen35::set_verify_moe_exact).
 // NI_V8CHECK_DUMP=<file>: also writes every verify row's logits (fp32, rows in order) there, e.g. to check that
 // two kernel variants give bitwise the same verify (cmp the files).
 // 1. Prefill the prompt, then n_tok plain greedy decode steps (one command buffer each), keeping
@@ -58,6 +59,7 @@ int main(int argc, char** argv) {
   const int n_tok = argc > 3 ? atoi(argv[3]) : 64, R = argc > 4 ? atoi(argv[4]) : 8, reps = argc > 5 ? atoi(argv[5]) : 1;
   Gpu& g = Gpu::get();
   Qwen35 m(argv[1], 2048);
+  if (getenv("NI_V8CHECK_EXACT") && atoi(getenv("NI_V8CHECK_EXACT")) > 0) m.set_verify_moe_exact(true);
   const int V = m.config().vocab, n = int(ids.size());
   SamplingParams sp;  // greedy
   const int cap = n + n_tok + 64;
