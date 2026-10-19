@@ -153,7 +153,10 @@ int main(int argc, char** argv) {
     const double best = tv[tv.size() / 2];
     double cs = 0;
     for (int i = 0; i < 1000; ++i) cs += out.as<float>()[i * 37 % (T * Hq * D)];
-    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f\n", name.c_str(), T, L, Hq,
-           Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12, err / ref_max, cs);
+    uint64_t hash = 1469598103934665603ull;  // FNV-1a over every output bit: equal hashes = bitwise-equal outputs
+    const uint8_t* ob = (const uint8_t*)out.ptr();
+    for (size_t i = 0; i < size_t(T) * Hq * D * 4; ++i) hash = (hash ^ ob[i]) * 1099511628211ull;
+    printf("%-24s T=%u L=%u Hq=%u Hkv=%u  %8.3f ms  %5.2f TFLOP/s  err=%.2e  checksum=%.4f  bits=%016llx\n", name.c_str(),
+           T, L, Hq, Hkv, best, pairs * Hq * 1024 / (best * 1e-3) / 1e12, err / ref_max, cs, (unsigned long long)hash);
   }
 }

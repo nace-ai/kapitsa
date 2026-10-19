@@ -289,6 +289,7 @@ void Qwen35::prewarm_pipelines() {
   if (qmm8_on())
     for (const char* n : {"qmr8_k32_w14_m32_n128", "qmr8_k32_w14_m16_n64", "qmr8_gu_k32_w14_m32_n64", "qmr8_gu_k32_w14_m16_n64"})
       names.insert(n);
+  if (Gpu::get().apple_family() <= 7) names.insert("attn_prefill11_k16xr");  // the M1's prefill attention
   if (cfg_.moe && moe_qmr()) {
     names.insert("qrm_gu_k32_m" + std::to_string(moe_qmr()) + "_n64");
     names.insert("qrm_dn_k32_m" + std::to_string(moe_qmr()) + "_n128");
@@ -2500,12 +2501,19 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
       return;
     }
   }
+  // The M1 (Apple7) runs 16-key tiles (attn_prefill11_k16xr: 11r's skipped unit rescales over attn_prefill11_k16x's
+  // 16-key tiles, fewer registers and the exchange in its own buffer). bench_attn on the M1 Pro, a 2048-query chunk
+  // of Qwen3.5-4B/9B's heads (16 q, 4 kv, D 256) against 4K / 8K / 16K keys: 39.3 / 90.8 / 203.7 ms vs 60.2 / 140.1 /
+  // 309.2 for attn_prefill11r. The 16-key tiles' online softmax rounds differently: outputs are not bit-identical to
+  // 11r's, error against an fp64 reference the same (2.1-2.4e-4).
+  static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
+                                  : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
-  if (an.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
-  else if (an == "attn_prefill") th = 128;
-  else if (an == "attn_prefill2" || an == "attn_prefill3" || an == "attn_prefill4") qb = 8;
-  else if (an.find("_q8") != std::string::npos) { qb = 8; th = 512; }
-  e.use(pipe(an));
+  if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
+  else if (full == "attn_prefill") th = 128;
+  else if (full == "attn_prefill2" || full == "attn_prefill3" || full == "attn_prefill4") qb = 8;
+  else if (full.find("_q8") != std::string::npos) { qb = 8; th = 512; }
+  e.use(pipe(full));
   e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
   e.val(5, fp);
   e.dispatch((T + qb - 1) / qb, gy, 1, th);
