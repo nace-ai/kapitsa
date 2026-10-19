@@ -5,3 +5,24 @@
 [01:17:13] dory-kapitsa-perloop: ready after 6s (pid 24315, listener 24315)
 [01:17:16] dory-kapitsa-perloop:  warm-up prefill~2.9k+decode64: ok (3.26s)
 [01:17:17] dory-kapitsa-perloop:  warm-up tools: ok (0.63s)
+[01:18:19] dory-kapitsa-perloop: gpu busy (62s): com.apple.WebKit[3316] 6%
+[01:19:21] dory-kapitsa-perloop: gpu busy (124s): com.apple.WebKit[3316] 7%
+[01:20:23] dory-kapitsa-perloop: gpu busy (186s): com.apple.WebKit[3316] 6%
+[01:21:24] dory-kapitsa-perloop: gpu busy (248s): com.apple.WebKit[3316] 6%
+[01:22:18] dory-kapitsa-perloop: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== dory-kapitsa-perloop
+  decode T=0.6: 115.31 tok/s (e2e 114.24; 512 tok, finish=length, d4=0.9352)
+  decode T=0.6: 116.16 tok/s (e2e 115.98; 512 tok, finish=length, d4=0.6662)
+  decode T=0.6: 117.56 tok/s (e2e 116.76; 512 tok, finish=length, d4=0.5877)
+  decode T=0.6: 123.29 tok/s (e2e 121.56; 512 tok, finish=length, d4=0.9461)
+  decode T=0.6: 117.40 tok/s (e2e 115.82; 512 tok, finish=length, d4=0.6656)
+  decode median 117.4 (min 115.31, max 123.29) over 5/5 valid
+  decode T=0: median 129.55 (min 128.26, max 129.77) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 3.80s -> 1101 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4249, 4345, 4435])
+  prefill 16000: 16520 tok (ref 16517), TTFT 15.82s -> 1044 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [16552, 16589, 16631])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 4.17 GB, resident mapped files 0.62 GB, swap used 14343.12 MB
+  -> <run-root>/out-followup/results/dory-kapitsa-perloop-20261019-011706.json
+[01:23:43] dory-kapitsa-perloop: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[01:23:43] dory-kapitsa-perloop: -> <run-root>/out-followup/results/dory-kapitsa-perloop-20261019-011706.json  flags: 1

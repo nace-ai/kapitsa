@@ -43,7 +43,7 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Other apps used the GPU during both of Kapitsa's 27B runs (contention flagged: 102 and, first run, 115 tok/s; greedy
   113 and 110) and the MLX Flash-Next run. mlx-serve's DFlash2 draft tree on the 27B (blocks of 16) wrote 130 tok/s
   sampled, 143 greedy, unflagged.
-- Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`, build 36c2937; other apps used the GPU during it), llama.cpp
+- Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`, build 36c2937; its closing run, 117 tok/s, greedy 130; the first, 113, was flagged), llama.cpp
   NVIDIA's Dory fork (98a74c97) on its Q5_K_M, MLX mlx-lm's Dory pull request (208065f) on snsnc's 4-bit.
 - Super-VL: mlx-serve 26.10.2 loads neither NVIDIA's checkpoint nor the text-only MLX 4-bit conversion
   (`error: UnsupportedNemotronLatentMoe`). MTPLX 2.12.2 runs that conversion without MTP (it has no MTP head): 44 tok/s;
