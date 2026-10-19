@@ -1,0 +1,28 @@
+
+===== q35-4b-rapidmlx-mtp  [rapid-mlx] Rapid-MLX + MTP  version 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)
+[00:07:14] q35-4b-rapidmlx-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 68388 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/rapid-mlx.json configs/flash-next.json -
+[00:07:14] q35-4b-rapidmlx-mtp: starting ~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/qwen3.5-4b-4bit-mtp --host 127.0.0.1 --port 8291 --served-model-name qwen3.5-4b --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight --speculative-config '{"method":"mtp","model":"~/.cache/kapitsa/benchmark-models/drafters/Qwen3.5-4B-MTP-4bit/model.safetensors","num_speculative_tokens":3}'
+[00:07:20] q35-4b-rapidmlx-mtp: ready after 6s (pid 70797, listener 70797)
+[00:07:22] q35-4b-rapidmlx-mtp:  warm-up prefill~2.9k+decode64: ok (1.41s)
+[00:07:22] q35-4b-rapidmlx-mtp:  warm-up tools: ok (0.5s)
+[00:07:26] q35-4b-rapidmlx-mtp:  warm-up decode512#1: ok (3.67s)
+[00:07:29] q35-4b-rapidmlx-mtp:  warm-up decode512#2: ok (3.49s)
+[00:07:33] q35-4b-rapidmlx-mtp:  warm-up decode512#3: ok (3.5s)
+[00:08:35] q35-4b-rapidmlx-mtp: gpu busy (62s): com.apple.WebKit[3316] 6%
+[00:09:34] q35-4b-rapidmlx-mtp: GPU not quiet after 122s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== q35-4b-rapidmlx-mtp
+  decode T=0.6: 152.10 tok/s (e2e 151.81; 512 tok, finish=length, d4=0.4671) flags ['repetition loop (distinct-4-gram 0.4671)']
+  decode T=0.6: 186.72 tok/s (e2e 184.04; 512 tok, finish=length, d4=0.5625)
+  decode T=0.6: 190.41 tok/s (e2e 188.26; 512 tok, finish=length, d4=0.7158)
+  decode T=0.6: 186.12 tok/s (e2e 183.54; 512 tok, finish=length, d4=0.9762)
+  decode T=0.6: 195.64 tok/s (e2e 194.54; 512 tok, finish=length, d4=0.5155)
+  decode median 186.72 (min 152.1, max 195.64) over 5/5 valid
+  decode T=0: median 193.51 (min 189.09, max 203.43) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 0.93s -> 4431 tok/s, cold cached=None | cached TTFT median 0.10s over 3 turns (cached [4118, 4182, 4214])
+  prefill 16000: 16287 tok (ref 16286), TTFT 3.87s -> 4208 tok/s, cold cached=None | cached TTFT median 0.15s over 3 turns (cached [16256, 16345, 16462])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 7.88 GB, resident mapped files 0.01 GB, swap used 14372.94 MB
+  -> <run-root>/out-extra/results/q35-4b-rapidmlx-mtp-20261019-000714.json
+[00:10:29] q35-4b-rapidmlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:10:29] q35-4b-rapidmlx-mtp: -> <run-root>/out-extra/results/q35-4b-rapidmlx-mtp-20261019-000714.json  flags: 1

@@ -439,13 +439,49 @@ std::string StreamDecoder::push(int id) {
   }
   std::string out = pending_.substr(0, cut);
   pending_.erase(0, cut);
-  return out;
+  return utf8_valid(out);
 }
 
 std::string StreamDecoder::flush() {
   std::string out;
   out.swap(pending_);
-  return out;
+  return utf8_valid(out);
+}
+
+std::string utf8_valid(const std::string& s) {
+  const size_t n = s.size();
+  size_t i = 0;
+  std::string out;
+  bool fixed = false;
+  while (i < n) {
+    const unsigned char c = s[i];
+    if (c < 0x80) {
+      if (fixed) out += char(c);
+      ++i;
+      continue;
+    }
+    // continuation bytes after the lead byte, and the allowed range of the first one (no overlongs, surrogates
+    // or code points past U+10FFFF)
+    int need = 0;
+    unsigned char lo = 0x80, hi = 0xBF;
+    if (c >= 0xC2 && c <= 0xDF) need = 1;
+    else if (c >= 0xE0 && c <= 0xEF) need = 2, lo = c == 0xE0 ? 0xA0 : 0x80, hi = c == 0xED ? 0x9F : 0xBF;
+    else if (c >= 0xF0 && c <= 0xF4) need = 3, lo = c == 0xF0 ? 0x90 : 0x80, hi = c == 0xF4 ? 0x8F : 0xBF;
+    size_t j = i + 1;
+    int k = 0;
+    for (; k < need && j < n; ++k, ++j) {
+      const unsigned char d = s[j];
+      if (d < (k ? 0x80 : lo) || d > (k ? 0xBF : hi)) break;
+    }
+    if (need > 0 && k == need) {
+      if (fixed) out.append(s, i, j - i);
+    } else {  // s[i, j) is the maximal subpart: the lead byte and the continuation bytes that fit it
+      if (!fixed) out.assign(s, 0, i), fixed = true;
+      out += "\xEF\xBF\xBD";
+    }
+    i = j;
+  }
+  return fixed ? out : s;
 }
 
 } // namespace ni

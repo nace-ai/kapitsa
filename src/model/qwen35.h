@@ -115,7 +115,8 @@ struct AneLayerTimes {
 struct V8Knobs {
   int cm = 1;       // GEMM operands: 0 = codes as 1024 + q, 1 = codes as exact half subnormals q * 2^-24
   int pair = 1;     // 1: two 64-groups per inner step (scale / bias pairs in one load each)
-  int kplan = 2;    // 1: 8 k-slices x 1 column block per threadgroup when K >= 4096; 2: also 16 k-slices for K >= 16384
+  int kplan = 2;    // 1: 8 k-slices x 1 column block per threadgroup when K >= 4096; 2: also 16 k-slices for K >= 16384;
+                    // 3 (the default on the M1): k-slices of >= 16 groups, at most 16384 simdgroups (v8_plan)
   int gusplit = 1;  // 1: dense MLP gate / up as two segments of one GEMM (fp32) + swiglu_x8, instead of qmm8_gu1k2
   int gdnsplit = 256;  // GDN step over value-row blocks of this many threads + gdn_gnorm_x8 (0: one threadgroup per head)
   int prepu = 1;    // 1: x8_prep2's row norms with 4 independent load chains

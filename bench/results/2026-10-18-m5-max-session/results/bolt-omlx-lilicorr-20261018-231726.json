@@ -1,0 +1,1847 @@
+{
+ "schema": 2,
+ "label": "bolt-omlx-lilicorr",
+ "model": "nemotron-3.5-bolt-24gb",
+ "base_url": "http://127.0.0.1:8241/v1",
+ "when": "2026-10-18 23:22:42",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8241/v1",
+  "model": "nemotron-3.5-bolt-24gb",
+  "label": "bolt-omlx-lilicorr",
+  "pid": 58938,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4183,16000:16514",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "agent",
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<run-root>/out/results/bolt-omlx-lilicorr-20261018-231726.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "474b3e6a4d8a9f2c282d7077c0191bcd2ec3cede",
+  "dirty": true
+ },
+ "phases": {
+  "decode": [
+   1792390962.154,
+   1792390964.824
+  ],
+  "decode_greedy": [
+   1792390964.931,
+   1792390988.089
+  ],
+  "prefill_4000": [
+   1792390988.21,
+   1792390992.563
+  ],
+  "prefill_16000": [
+   1792390992.684,
+   1792391009.669
+  ],
+  "tools": [
+   1792391009.793,
+   1792391013.01
+  ]
+ },
+ "memory": {
+  "decode": {
+   "pids": [
+    {
+     "pid": 58938,
+     "name": "Python",
+     "phys_footprint": 15368624,
+     "phys_footprint_peak": 15368624,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 0,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58940,
+     "name": "Python",
+     "phys_footprint": 26566287880,
+     "phys_footprint_peak": 35230541568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 8667136,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58941,
+     "name": "sed",
+     "phys_footprint": 1310960,
+     "phys_footprint_peak": 1310960,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 16384,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 25351.5,
+   "phys_footprint_peak_mb": 33614.4,
+   "mapped_file_clean_mb": 8.3,
+   "swap_used_mb": 14508.94,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  },
+  "decode_greedy": {
+   "pids": [
+    {
+     "pid": 58938,
+     "name": "Python",
+     "phys_footprint": 15401392,
+     "phys_footprint_peak": 15450544,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 0,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58940,
+     "name": "Python",
+     "phys_footprint": 26646012616,
+     "phys_footprint_peak": 35230541568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9748480,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58941,
+     "name": "sed",
+     "phys_footprint": 1310960,
+     "phys_footprint_peak": 1310960,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 16384,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 25427.6,
+   "phys_footprint_peak_mb": 33614.4,
+   "mapped_file_clean_mb": 9.3,
+   "swap_used_mb": 14508.94,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  },
+  "prefill_4000": {
+   "pids": [
+    {
+     "pid": 58938,
+     "name": "Python",
+     "phys_footprint": 15434160,
+     "phys_footprint_peak": 15450544,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 0,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58940,
+     "name": "Python",
+     "phys_footprint": 26736878184,
+     "phys_footprint_peak": 35230541568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9781248,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58941,
+     "name": "sed",
+     "phys_footprint": 1310960,
+     "phys_footprint_peak": 1310960,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 16384,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 25514.2,
+   "phys_footprint_peak_mb": 33614.4,
+   "mapped_file_clean_mb": 9.3,
+   "swap_used_mb": 14508.94,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  },
+  "prefill_16000": {
+   "pids": [
+    {
+     "pid": 58938,
+     "name": "Python",
+     "phys_footprint": 15204784,
+     "phys_footprint_peak": 15450544,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 0,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58940,
+     "name": "Python",
+     "phys_footprint": 26843472512,
+     "phys_footprint_peak": 35230541568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9814016,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58941,
+     "name": "sed",
+     "phys_footprint": 1310960,
+     "phys_footprint_peak": 1310960,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 16384,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 25615.7,
+   "phys_footprint_peak_mb": 33614.4,
+   "mapped_file_clean_mb": 9.4,
+   "swap_used_mb": 14508.94,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  },
+  "tools": {
+   "pids": [
+    {
+     "pid": 58938,
+     "name": "Python",
+     "phys_footprint": 15221168,
+     "phys_footprint_peak": 15450544,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 0,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58940,
+     "name": "Python",
+     "phys_footprint": 26625434264,
+     "phys_footprint_peak": 35230541568,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9814016,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 58941,
+     "name": "sed",
+     "phys_footprint": 1310960,
+     "phys_footprint_peak": 1310960,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 16384,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 25407.8,
+   "phys_footprint_peak_mb": 33614.4,
+   "mapped_file_clean_mb": 9.4,
+   "swap_used_mb": 14508.94,
+   "memorystatus_level": 74,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 372.5,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 14508.94,
+  "swapouts": 81442009,
+  "swapins": 70622647,
+  "pageouts": 5984378,
+  "memorystatus_level": 93
+ },
+ "decode": [
+  {
+   "greedy": false,
+   "invalid": [
+    "usage.completion_tokens missing (no fallback to event counts)"
+   ],
+   "flags": [
+    "finish_reason=None (expected length)"
+   ],
+   "completion_tokens": null,
+   "chunks": 0,
+   "ttft_s": null,
+   "decode_tps": null,
+   "decode_tps_e2e": null,
+   "e2e_wall_tps": null,
+   "finish": null,
+   "usage_reported": false,
+   "rate": {
+    "events": 0
+   },
+   "timings": null,
+   "distinct4": null,
+   "text": "",
+   "reasoning": "",
+   "events_t_ms": [],
+   "events_chars": []
+  },
+  {
+   "greedy": false,
+   "invalid": [
+    "usage.completion_tokens missing (no fallback to event counts)"
+   ],
+   "flags": [
+    "finish_reason=None (expected length)"
+   ],
+   "completion_tokens": null,
+   "chunks": 0,
+   "ttft_s": null,
+   "decode_tps": null,
+   "decode_tps_e2e": null,
+   "e2e_wall_tps": null,
+   "finish": null,
+   "usage_reported": false,
+   "rate": {
+    "events": 0
+   },
+   "timings": null,
+   "distinct4": null,
+   "text": "",
+   "reasoning": "",
+   "events_t_ms": [],
+   "events_chars": []
+  },
+  {
+   "greedy": false,
+   "invalid": [
+    "usage.completion_tokens missing (no fallback to event counts)"
+   ],
+   "flags": [
+    "finish_reason=None (expected length)"
+   ],
+   "completion_tokens": null,
+   "chunks": 0,
+   "ttft_s": null,
+   "decode_tps": null,
+   "decode_tps_e2e": null,
+   "e2e_wall_tps": null,
+   "finish": null,
+   "usage_reported": false,
+   "rate": {
+    "events": 0
+   },
+   "timings": null,
+   "distinct4": null,
+   "text": "",
+   "reasoning": "",
+   "events_t_ms": [],
+   "events_chars": []
+  },
+  {
+   "greedy": false,
+   "invalid": [
+    "usage.completion_tokens missing (no fallback to event counts)"
+   ],
+   "flags": [
+    "finish_reason=None (expected length)"
+   ],
+   "completion_tokens": null,
+   "chunks": 0,
+   "ttft_s": null,
+   "decode_tps": null,
+   "decode_tps_e2e": null,
+   "e2e_wall_tps": null,
+   "finish": null,
+   "usage_reported": false,
+   "rate": {
+    "events": 0
+   },
+   "timings": null,
+   "distinct4": null,
+   "text": "",
+   "reasoning": "",
+   "events_t_ms": [],
+   "events_chars": []
+  },
+  {
+   "greedy": false,
+   "invalid": [
+    "usage.completion_tokens missing (no fallback to event counts)"
+   ],
+   "flags": [
+    "finish_reason=None (expected length)"
+   ],
+   "completion_tokens": null,
+   "chunks": 0,
+   "ttft_s": null,
+   "decode_tps": null,
+   "decode_tps_e2e": null,
+   "e2e_wall_tps": null,
+   "finish": null,
+   "usage_reported": false,
+   "rate": {
+    "events": 0
+   },
+   "timings": null,
+   "distinct4": null,
+   "text": "",
+   "reasoning": "",
+   "events_t_ms": [],
+   "events_chars": []
+  }
+ ],
+ "decode_summary": {
+  "runs": 5,
+  "valid_runs": 0,
+  "invalid": [
+   "usage.completion_tokens missing (no fallback to event counts)"
+  ],
+  "flags": [
+   "finish_reason=None (expected length)"
+  ]
+ },
+ "decode_greedy": [
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 39,
+   "ttft_s": 0.43184816697612405,
+   "decode_tps": 118.10601451184813,
+   "decode_tps_e2e": 117.64315746295566,
+   "e2e_wall_tps": 107.19913369976405,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 39,
+    "rate_method": "chars",
+    "tokens_per_event": 13.128,
+    "window_tokens": 481.4,
+    "window_s": 4.0758
+   },
+   "timings": null,
+   "distinct4": 0.9791,
+   "text": "```python\n\"\"\"\nlru_cache.py\n\nA comprehensive module implementing a Least Recently Used (LRU) cache with \nTime-To-Live (TTL) expiry, a thread-safe wrapper, and a pytest test suite.\n\nThis module provides:\n1. `LRUCache`: A core LRU cache implementation using `OrderedDict` for O(1) \n   access and eviction, with optional TTL-based expiration.\n2. `ThreadSafeLRUCache`: A wrapper that adds `threading.Lock` synchronization \n   to the core cache for safe concurrent access.\n3. `CacheManager`: A high-level facade that manages multiple named caches, \n   supports persistence via JSON, and provides statistics.\n4. `CacheEntry`: An internal dataclass representing a cached value with metadata.\n\nUsage:\n    from lru_cache import ThreadSafeLRUCache, CacheManager\n\n    # Create a thread-safe cache with TTL\n    cache = ThreadSafeLRUCache(max_size=100, default_ttl=60)\n    cache.set(\"key1\", \"value1\")\n    print(cache.get(\"key1\"))  # Output: value1\n\n    # Create a cache manager for multiple named caches\n    manager = CacheManager()\n    user_cache = manager.get_cache(\"users\", max_size=50, default_ttl=300)\n    user_cache.set(\"user_1\", {\"name\": \"Alice\"})\n\"\"\"\n\nimport time\nimport threading\nimport json\nimport os\nfrom collections import OrderedDict\nfrom dataclasses import dataclass, field\nfrom typing import Any, Optional, Dict, List, Union, Callable\nimport logging\n\n# Configure logging for the module\nlogging.basicConfig(\n    level=logging.INFO,\n    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'\n)\nlogger = logging.getLogger(__name__)\n\n\n@dataclass\nclass CacheEntry:\n    \"\"\"\n    Represents a single entry in the cache.\n    \n    Attributes:\n        value: The cached data.\n        created_at: Timestamp when the entry was created (seconds since epoch).\n        ttl: Time-To-Live in seconds. If None, the entry never expires.\n        access_count: Number of times the entry has been accessed.\n        last_accessed: Timestamp of the last access.\n    \"\"\"\n    value: Any\n    created_at: float = field(default_factory=time.time",
+   "reasoning": "",
+   "events_t_ms": [
+    431.85,
+    546.09,
+    643.53,
+    770.57,
+    927.62,
+    1060.01,
+    1166.78,
+    1272.91,
+    1377.87,
+    1484.03,
+    1590.04,
+    1732.44,
+    1861.86,
+    1988.01,
+    2115.37,
+    2272.11,
+    2374.15,
+    2480.5,
+    2586.85,
+    2692.28,
+    2802.12,
+    2944.15,
+    3070.32,
+    3175.39,
+    3281.9,
+    3387.81,
+    3493.64,
+    3600.3,
+    3742.07,
+    3848.93,
+    3953.84,
+    4060.42,
+    4190.58,
+    4294.09,
+    4400.52,
+    4507.58,
+    4613.68,
+    4719.32,
+    4775.49
+   ],
+   "events_chars": [
+    3,
+    26,
+    60,
+    20,
+    62,
+    92,
+    38,
+    17,
+    35,
+    38,
+    41,
+    53,
+    81,
+    64,
+    60,
+    67,
+    71,
+    25,
+    23,
+    39,
+    61,
+    57,
+    54,
+    37,
+    34,
+    74,
+    75,
+    19,
+    27,
+    89,
+    52,
+    82,
+    83,
+    48,
+    57,
+    59,
+    91,
+    77,
+    32
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 36,
+   "ttft_s": 0.44499824987724423,
+   "decode_tps": 133.0752660583232,
+   "decode_tps_e2e": 133.00597060578846,
+   "e2e_wall_tps": 119.42382436467175,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 36,
+    "rate_method": "chars",
+    "tokens_per_event": 14.222,
+    "window_tokens": 468.3,
+    "window_s": 3.5193
+   },
+   "timings": null,
+   "distinct4": 0.9795,
+   "text": "```python\n\"\"\"\nlru_cache.py\n\nA comprehensive, production-ready implementation of an LRU (Least Recently Used) \ncache with Time-To-Live (TTL) expiry and thread-safe operations.\n\nThis module provides:\n1. `LRUCache`: A core LRU cache implementation using an OrderedDict for O(1) \n   access and eviction.\n2. `TTLRUCache`: An extension of the LRU cache that supports TTL-based expiry.\n3. `ThreadSafeCache`: A wrapper that adds thread-safety via `threading.Lock`.\n4. `CacheManager`: A high-level facade to manage multiple named caches.\n\nUsage:\n    from lru_cache import ThreadSafeCache\n    \n    cache = ThreadSafeCache(max_size=100, ttl=60)\n    cache.set(\"key1\", \"value1\")\n    print(cache.get(\"key1\"))\n\"\"\"\n\nimport time\nimport threading\nfrom collections import OrderedDict\nfrom typing import Any, Optional, Generic, TypeVar\n\nT = TypeVar('T')\n\nclass LRUCache(Generic[T]):\n    \"\"\"\n    A basic Least Recently Used (LRU) cache.\n    \n    Uses an OrderedDict to maintain the order of access. When the cache reaches\n    its maximum capacity, the least recently used item is evicted.\n    \n    Time Complexity: O(1) for get, set, and delete operations.\n    Space Complexity: O(n) where n is the max_size.\n    \"\"\"\n    \n    def __init__(self, max_size: int = 128):\n        \"\"\"\n        Initialize the LRU cache.\n        \n        Args:\n            max_size: The maximum number of items the cache can hold.\n        \"\"\"\n        if max_size <= 0:\n            raise ValueError(\"max_size must be a positive integer.\")\n        \n        self.max_size = max_size\n        # OrderedDict maintains insertion order. We move items to the end \n        # on access to mark them as \"most recently used\".\n        self._cache: OrderedDict[str, T] = OrderedDict()\n\n    def get(self, key: str, default: Optional[T] = None) -> Optional[T]:\n        \"\"\"\n        Retrieve a value from the cache.\n        \n        Args:\n            key: The key to look up.\n            default: The value to return if the key is not found.\n            \n        Returns:\n            The cached value or the default.\n",
+   "reasoning": "",
+   "events_t_ms": [
+    445.0,
+    564.57,
+    680.38,
+    814.05,
+    920.36,
+    1025.85,
+    1131.97,
+    1238.48,
+    1378.91,
+    1491.54,
+    1632.88,
+    1738.18,
+    1843.16,
+    1947.86,
+    2051.02,
+    2153.95,
+    2257.83,
+    2361.68,
+    2465.57,
+    2568.2,
+    2668.21,
+    2780.32,
+    2884.67,
+    2989.12,
+    3095.31,
+    3201.54,
+    3308.05,
+    3413.67,
+    3520.59,
+    3663.7,
+    3770.65,
+    3878.23,
+    3985.01,
+    4092.96,
+    4199.71,
+    4286.93
+   ],
+   "events_chars": [
+    3,
+    26,
+    56,
+    35,
+    56,
+    43,
+    52,
+    37,
+    69,
+    38,
+    39,
+    21,
+    52,
+    46,
+    54,
+    28,
+    57,
+    86,
+    22,
+    62,
+    58,
+    52,
+    63,
+    56,
+    59,
+    57,
+    65,
+    119,
+    89,
+    81,
+    60,
+    63,
+    80,
+    75,
+    103,
+    90
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 38,
+   "ttft_s": 0.44495708402246237,
+   "decode_tps": 117.9574160535439,
+   "decode_tps_e2e": 118.3950954161153,
+   "e2e_wall_tps": 107.53347137410172,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 38,
+    "rate_method": "chars",
+    "tokens_per_event": 13.474,
+    "window_tokens": 465.9,
+    "window_s": 3.9499
+   },
+   "timings": null,
+   "distinct4": 0.97,
+   "text": "```python\n\"\"\"\nlru_cache.py\n\nA comprehensive module implementing a Least Recently Used (LRU) cache with \nTime-To-Live (TTL) expiry, a thread-safe wrapper, and a pytest test suite.\n\nThis module provides:\n1. `LRUCache`: A core LRU cache implementation using `OrderedDict` for O(1) \n   access and eviction, with optional TTL-based expiration.\n2. `ThreadSafeLRUCache`: A wrapper that adds `threading.Lock` synchronization \n   to the LRU cache for safe concurrent access.\n3. `CacheManager`: A high-level manager that allows multiple named caches \n   with different configurations.\n4. `CacheStats`: A dataclass for tracking cache performance metrics.\n5. `CacheDecorator`: A function decorator that caches results using the LRU cache.\n\nThe module is designed to be production-ready with proper error handling, \ntype hints, and comprehensive documentation.\n\"\"\"\n\nimport time\nimport threading\nfrom collections import OrderedDict\nfrom dataclasses import dataclass, field\nfrom functools import wraps\nfrom typing import Any, Callable, Dict, Optional, Tuple, Union\nimport logging\n\n# Configure module-level logger\nlogger = logging.getLogger(__name__)\nlogger.setLevel(logging.INFO)\nif not logger.handlers:\n    handler = logging.StreamHandler()\n    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))\n    logger.addHandler(handler)\n\n\n@dataclass\nclass CacheStats:\n    \"\"\"\n    Data class to track cache performance statistics.\n    \n    Attributes:\n        hits: Number of successful cache hits.\n        misses: Number of cache misses.\n        evictions: Number of items evicted due to size limit.\n        expirations: Number of items expired due to TTL.\n        current_size: Current number of items in cache.\n        max_size: Maximum number of items allowed in cache.\n    \"\"\"\n    hits: int = 0\n    misses: int = 0\n    evictions: int = 0\n    expirations: int = 0\n    current_size: int = 0\n    max_size: int = 0\n    \n    @property\n    def hit_rate(self) -> float:\n        \"\"\"Calculate the cache hit rate as a percentage.\"\"\"\n        total = self.hits + self.misses\n        if total == 0:\n",
+   "reasoning": "",
+   "events_t_ms": [
+    444.96,
+    563.5,
+    679.16,
+    811.38,
+    917.62,
+    1024.87,
+    1138.11,
+    1246.54,
+    1391.1,
+    1502.26,
+    1611.83,
+    1759.44,
+    1907.41,
+    2016.03,
+    2160.58,
+    2268.28,
+    2376.96,
+    2514.91,
+    2646.58,
+    2777.51,
+    2909.08,
+    3015.31,
+    3164.38,
+    3271.54,
+    3380.06,
+    3488.81,
+    3598.18,
+    3707.04,
+    3853.12,
+    3963.07,
+    4073.32,
+    4182.89,
+    4292.67,
+    4404.66,
+    4516.59,
+    4629.04,
+    4745.23,
+    4761.01
+   ],
+   "events_chars": [
+    3,
+    26,
+    68,
+    14,
+    28,
+    69,
+    66,
+    33,
+    32,
+    44,
+    47,
+    52,
+    57,
+    50,
+    53,
+    63,
+    33,
+    65,
+    102,
+    68,
+    63,
+    20,
+    42,
+    65,
+    79,
+    51,
+    73,
+    45,
+    73,
+    93,
+    63,
+    94,
+    81,
+    63,
+    58,
+    82,
+    80,
+    13
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 38,
+   "ttft_s": 0.46363850007764995,
+   "decode_tps": 119.3877947826237,
+   "decode_tps_e2e": 117.49086530432933,
+   "e2e_wall_tps": 106.37457241944753,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 38,
+    "rate_method": "chars",
+    "tokens_per_event": 13.474,
+    "window_tokens": 474.3,
+    "window_s": 3.973
+   },
+   "timings": null,
+   "distinct4": 0.9857,
+   "text": "```python\n\"\"\"\nlru_cache.py\n\nA comprehensive, production-ready implementation of an LRU (Least Recently Used) \ncache with Time-To-Live (TTL) expiry and thread-safe operations.\n\nThis module provides:\n1. `LRUCache`: A core LRU cache implementation using an OrderedDict for O(1) \n   access and eviction.\n2. `TTLRUCache`: A specialized LRU cache that supports automatic expiration of \n   items based on a TTL.\n3. `ThreadSafeCache`: A wrapper that adds `threading.RLock` protection to any \n   cache implementation to ensure thread safety.\n4. `CacheManager`: A high-level facade that combines TTL, LRU, and thread safety \n   into a single, easy-to-use interface.\n\nUsage:\n    from lru_cache import CacheManager\n    \n    # Create a cache with a max size of 100 items and a default TTL of 60 seconds\n    cache = CacheManager(max_size=100, default_ttl=60)\n    \n    cache.set(\"key1\", \"value1\")\n    print(cache.get(\"key1\")) # Output: value1\n\"\"\"\n\nimport time\nimport threading\nfrom collections import OrderedDict\nfrom typing import Any, Generic, TypeVar, Optional\n\n# Type variable for generic value support\nT = TypeVar('T')\n\nclass LRUCache(Generic[T]):\n    \"\"\"\n    A basic Least Recently Used (LRU) cache.\n    \n    Uses an OrderedDict to maintain the order of access. When the cache reaches\n    its capacity, the least recently used item is evicted.\n    \n    Time Complexity: O(1) for get and set operations.\n    Space Complexity: O(n) where n is the max_size.\n    \"\"\"\n    \n    def __init__(self, max_size: int = 128):\n        \"\"\"\n        Initialize the LRU cache.\n        \n        Args:\n            max_size: The maximum number of items the cache can hold.\n        \"\"\"\n        if max_size <= 0:\n            raise ValueError(\"max_size must be a positive integer.\")\n            \n        self.max_size = max_size\n        # OrderedDict maintains insertion order. We move items to the end \n        # on access to mark them as \"most recently used\".\n        self._cache: OrderedDict[str, T] = OrderedDict()\n        self",
+   "reasoning": "",
+   "events_t_ms": [
+    463.64,
+    584.16,
+    701.92,
+    837.23,
+    945.82,
+    1055.87,
+    1166.61,
+    1278.3,
+    1389.42,
+    1538.26,
+    1648.78,
+    1759.82,
+    1869.56,
+    1978.54,
+    2087.85,
+    2197.01,
+    2306.88,
+    2416.67,
+    2560.89,
+    2669.06,
+    2777.26,
+    2885.84,
+    2999.22,
+    3110.12,
+    3257.83,
+    3407.28,
+    3555.09,
+    3666.65,
+    3778.9,
+    3890.84,
+    4003.99,
+    4116.87,
+    4228.5,
+    4338.37,
+    4450.2,
+    4562.7,
+    4674.95,
+    4812.91
+   ],
+   "events_chars": [
+    3,
+    26,
+    56,
+    35,
+    37,
+    47,
+    57,
+    37,
+    35,
+    45,
+    48,
+    28,
+    28,
+    49,
+    45,
+    39,
+    57,
+    63,
+    38,
+    55,
+    37,
+    32,
+    65,
+    88,
+    41,
+    66,
+    84,
+    26,
+    64,
+    61,
+    52,
+    53,
+    101,
+    94,
+    92,
+    68,
+    84,
+    62
+   ]
+  },
+  {
+   "greedy": true,
+   "invalid": [],
+   "flags": [],
+   "completion_tokens": 512,
+   "chunks": 37,
+   "ttft_s": 0.46773920813575387,
+   "decode_tps": 126.65484484273813,
+   "decode_tps_e2e": 126.16955156054102,
+   "e2e_wall_tps": 113.32305642080884,
+   "finish": "length",
+   "usage_reported": true,
+   "rate": {
+    "events": 37,
+    "rate_method": "chars",
+    "tokens_per_event": 13.838,
+    "window_tokens": 465.3,
+    "window_s": 3.6736
+   },
+   "timings": null,
+   "distinct4": 0.9604,
+   "text": "```python\n\"\"\"\nlru_cache.py\n\nA comprehensive implementation of a Least Recently Used (LRU) Cache with \nTime-To-Live (TTL) expiry and thread-safe access.\n\nThis module provides:\n1. `LRUCache`: A core LRU cache implementation using an OrderedDict.\n2. `TTLRUCache`: An extension of the LRU cache that supports TTL expiry.\n3. `ThreadSafeCache`: A wrapper that adds thread-safety via a Lock.\n4. `CacheManager`: A high-level facade to manage multiple named caches.\n\nUsage:\n    cache = ThreadSafeCache(TTLRUCache(max_size=100, ttl=60))\n    cache.set(\"key\", \"value\")\n    print(cache.get(\"key\"))\n\"\"\"\n\nimport time\nimport threading\nfrom collections import OrderedDict\nfrom typing import Any, Optional, Generic, TypeVar\n\nT = TypeVar(\"T\")\n\n\nclass LRUCache(Generic[T]):\n    \"\"\"\n    A basic Least Recently Used (LRU) Cache.\n    \n    Uses an OrderedDict to maintain the order of access. \n    When the cache reaches its maximum capacity, the least recently \n    used item is evicted.\n    \"\"\"\n\n    def __init__(self, max_size: int = 128):\n        \"\"\"\n        Initialize the LRU Cache.\n\n        Args:\n            max_size: The maximum number of items the cache can hold.\n        \"\"\"\n        if max_size <= 0:\n            raise ValueError(\"max_size must be a positive integer.\")\n        \n        self.max_size = max_size\n        # OrderedDict maintains insertion order. \n        # We move items to the end on access to mark them as 'most recently used'.\n        self._cache: OrderedDict[str, T] = OrderedDict()\n\n    def get(self, key: str, default: Optional[T] = None) -> Optional[T]:\n        \"\"\"\n        Retrieve a value from the cache.\n\n        Args:\n            key: The key to look up.\n            default: The value to return if the key is not found.\n\n        Returns:\n            The cached value or the default.\n        \"\"\"\n        if key not in self._cache:\n            return default\n        \n        # Move to end to mark as most recently used\n        self._cache.move_to_end(key)\n        return self._cache[key]\n\n    def set(self, key: str, value: T) -> None:\n        \"\"\"\n        Insert or update a value",
+   "reasoning": "",
+   "events_t_ms": [
+    467.74,
+    590.33,
+    709.63,
+    845.54,
+    953.91,
+    1062.87,
+    1172.58,
+    1321.16,
+    1432.27,
+    1543.29,
+    1690.43,
+    1800.14,
+    1909.76,
+    2018.5,
+    2127.63,
+    2235.91,
+    2344.79,
+    2453.6,
+    2599.41,
+    2711.7,
+    2823.34,
+    2940.56,
+    3052.58,
+    3162.06,
+    3271.59,
+    3383.01,
+    3493.48,
+    3604.17,
+    3713.37,
+    3823.12,
+    3934.06,
+    4045.91,
+    4158.39,
+    4270.27,
+    4383.21,
+    4505.46,
+    4517.84
+   ],
+   "events_chars": [
+    3,
+    26,
+    71,
+    9,
+    44,
+    43,
+    56,
+    65,
+    41,
+    25,
+    20,
+    52,
+    21,
+    47,
+    62,
+    93,
+    32,
+    63,
+    62,
+    53,
+    51,
+    66,
+    61,
+    106,
+    73,
+    71,
+    77,
+    58,
+    65,
+    47,
+    61,
+    95,
+    85,
+    100,
+    98,
+    76,
+    15
+   ]
+  }
+ ],
+ "decode_greedy_summary": {
+  "runs": 5,
+  "valid_runs": 5,
+  "median_tps": 119.39,
+  "min_tps": 117.96,
+  "max_tps": 133.08,
+  "median_tps_e2e": 118.4,
+  "invalid": [],
+  "flags": []
+ },
+ "prefill": [
+  {
+   "target": 4000,
+   "invalid": [
+    "usage.prompt_tokens missing"
+   ],
+   "flags": [],
+   "prompt_tokens": null,
+   "expected_prompt_tokens": 4183,
+   "ttft_s": null,
+   "prefill_tps": null,
+   "cold_cached_tokens": null,
+   "first_event_chars": null,
+   "timings": null,
+   "finish": null,
+   "answer": "",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [],
+    "invalid": [
+     "turn 1 returned no content; not substituting text, cached test skipped"
+    ],
+    "flags": []
+   }
+  },
+  {
+   "target": 16000,
+   "invalid": [
+    "usage.prompt_tokens missing"
+   ],
+   "flags": [],
+   "prompt_tokens": null,
+   "expected_prompt_tokens": 16514,
+   "ttft_s": null,
+   "prefill_tps": null,
+   "cold_cached_tokens": null,
+   "first_event_chars": null,
+   "timings": null,
+   "finish": null,
+   "answer": "",
+   "reasoning_chars": 0,
+   "cached": {
+    "samples": [],
+    "invalid": [
+     "turn 1 returned no content; not substituting text, cached test skipped"
+    ],
+    "flags": []
+   }
+  }
+ ],
+ "tools": [
+  {
+   "thinking": false,
+   "stream": {
+    "ok": false,
+    "tool_calls": [],
+    "finish": null,
+    "ttft_s": null,
+    "total_s": 0.7382719579618424,
+    "content_leak": false,
+    "reasoning_chars": 0,
+    "content_head": ""
+   },
+   "nonstream": {
+    "ok": false,
+    "error": "RuntimeError('HTTP 500: {\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\",\"param\":null,\"code\":null}}')"
+   }
+  },
+  {
+   "thinking": true,
+   "stream": {
+    "ok": false,
+    "tool_calls": [],
+    "finish": null,
+    "ttft_s": null,
+    "total_s": 0.8190585419069976,
+    "content_leak": false,
+    "reasoning_chars": 0,
+    "content_head": ""
+   },
+   "nonstream": {
+    "ok": false,
+    "error": "RuntimeError('HTTP 500: {\"error\":{\"message\":\"Internal server error\",\"type\":\"server_error\",\"param\":null,\"code\":null}}')"
+   }
+  }
+ ],
+ "tools_pass": false,
+ "peak_rss_mb": 7212,
+ "peak_footprint_mb": 27194,
+ "invalid": [
+  "decode: usage.completion_tokens missing (no fallback to event counts)",
+  "prefill_4000: usage.prompt_tokens missing",
+  "cached_4000: turn 1 returned no content; not substituting text, cached test skipped",
+  "prefill_16000: usage.prompt_tokens missing",
+  "cached_16000: turn 1 returned no content; not substituting text, cached test skipped"
+ ],
+ "flags": [
+  "decode: finish_reason=None (expected length)",
+  "CONTENTION: sustained foreign GPU load > 5% in ['prefill_4000', 'prefill_16000', 'tools'] (mean 5.23%, top ['com.apple.WebKit'])"
+ ],
+ "peak_memory_mb": 33614.4,
+ "mapped_file_clean_mb": 9.4,
+ "vm_end": {
+  "swap_used_mb": 14508.94,
+  "swapouts": 81442009,
+  "swapins": 70622671,
+  "pageouts": 5984378,
+  "memorystatus_level": 74
+ },
+ "when_end": "2026-10-18 23:23:33",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 2.94,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "finish": null,
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.81,
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "finish": null,
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "contention": {
+  "overall": {
+   "samples": 24,
+   "mean_foreign_gpu_pct": 5.23,
+   "max_foreign_gpu_pct": 9.29,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 11,
+   "longest_busy_run": 11,
+   "top": [
+    "com.apple.WebKit"
+   ],
+   "flagged": true
+  },
+  "phases": {
+   "decode": {
+    "samples": 2,
+    "mean_foreign_gpu_pct": 3.96,
+    "max_foreign_gpu_pct": 4.18,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   },
+   "decode_greedy": {
+    "samples": 12,
+    "mean_foreign_gpu_pct": 3.16,
+    "max_foreign_gpu_pct": 3.78,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   },
+   "prefill_4000": {
+    "samples": 4,
+    "mean_foreign_gpu_pct": 6.7,
+    "max_foreign_gpu_pct": 9.29,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 3,
+    "longest_busy_run": 3,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   },
+   "prefill_16000": {
+    "samples": 10,
+    "mean_foreign_gpu_pct": 7.42,
+    "max_foreign_gpu_pct": 8.66,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 10,
+    "longest_busy_run": 10,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   },
+   "tools": {
+    "samples": 1,
+    "mean_foreign_gpu_pct": 5.52,
+    "max_foreign_gpu_pct": 5.52,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "com.apple.WebKit"
+    ],
+    "flagged": true
+   }
+  },
+  "samples": [
+   [
+    1792390964.109,
+    4.18,
+    "com.apple.WebKit",
+    4.18,
+    0.0
+   ],
+   [
+    1792390966.158,
+    3.73,
+    "com.apple.WebKit",
+    3.73,
+    0.0
+   ],
+   [
+    1792390968.204,
+    2.95,
+    "com.apple.WebKit",
+    2.95,
+    0.0
+   ],
+   [
+    1792390970.251,
+    3.04,
+    "com.apple.WebKit",
+    3.04,
+    0.0
+   ],
+   [
+    1792390972.293,
+    3.01,
+    "com.apple.WebKit",
+    3.01,
+    0.0
+   ],
+   [
+    1792390974.341,
+    2.95,
+    "com.apple.WebKit",
+    2.95,
+    0.0
+   ],
+   [
+    1792390976.388,
+    2.87,
+    "com.apple.WebKit",
+    2.87,
+    0.0
+   ],
+   [
+    1792390978.437,
+    3.03,
+    "com.apple.WebKit",
+    3.03,
+    0.0
+   ],
+   [
+    1792390980.485,
+    3.52,
+    "com.apple.WebKit",
+    3.52,
+    0.0
+   ],
+   [
+    1792390982.533,
+    3.05,
+    "com.apple.WebKit",
+    3.05,
+    0.0
+   ],
+   [
+    1792390984.581,
+    3.06,
+    "com.apple.WebKit",
+    3.06,
+    0.0
+   ],
+   [
+    1792390986.627,
+    2.91,
+    "com.apple.WebKit",
+    2.91,
+    0.0
+   ],
+   [
+    1792390988.674,
+    3.78,
+    "com.apple.WebKit",
+    3.78,
+    0.0
+   ],
+   [
+    1792390990.719,
+    9.29,
+    "com.apple.WebKit",
+    9.29,
+    0.0
+   ],
+   [
+    1792390992.766,
+    7.11,
+    "com.apple.WebKit",
+    7.11,
+    0.0
+   ],
+   [
+    1792390994.813,
+    6.62,
+    "com.apple.WebKit",
+    6.62,
+    0.0
+   ],
+   [
+    1792390996.859,
+    6.57,
+    "com.apple.WebKit",
+    6.57,
+    0.0
+   ],
+   [
+    1792390998.898,
+    7.63,
+    "com.apple.WebKit",
+    7.63,
+    0.0
+   ],
+   [
+    1792391000.947,
+    7.47,
+    "com.apple.WebKit",
+    7.47,
+    0.0
+   ],
+   [
+    1792391002.993,
+    8.66,
+    "com.apple.WebKit",
+    8.66,
+    0.0
+   ],
+   [
+    1792391005.041,
+    8.52,
+    "com.apple.WebKit",
+    8.52,
+    0.0
+   ],
+   [
+    1792391007.089,
+    8.45,
+    "com.apple.WebKit",
+    8.45,
+    0.0
+   ],
+   [
+    1792391009.136,
+    7.7,
+    "com.apple.WebKit",
+    7.7,
+    0.0
+   ],
+   [
+    1792391011.175,
+    5.52,
+    "com.apple.WebKit",
+    5.52,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "bolt-omlx-lilicorr",
+ "display": "oMLX + LiLiCorr drafter (the bundle's model file)",
+ "engine": "omlx",
+ "version": "unknown",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+ "model_path": "{models}/nemotron-3.5-bolt-24gb",
+ "note": "The checkpoint folder must also hold the MLX model file of NVIDIA's Bolt bundle for MLX (nemotron_bolt.py; Trust Remote Code). The launcher follows that bundle's README: load, unload, load again with DFlash, then open the harness port. In oMLX 0.7.1rc1 every T > 0 request with the drafter fails (its sampled DFlash selection), so this configuration measures only greedy; bolt-omlx-lilicorr-greedy sends temperature 0 in every phase.",
+ "config": {
+  "label": "bolt-omlx-lilicorr",
+  "display": "oMLX + LiLiCorr drafter (the bundle's model file)",
+  "engine": "omlx",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Bolt-74B-A9B-24GB",
+  "model_path": "{models}/nemotron-3.5-bolt-24gb",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/nemotron-3.5-bolt-24gb",
+     "dst": "{state}/omlx/bolt/models/nemotron-3.5-bolt-24gb"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/bolt/base-lilicorr/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "nemotron-3.5-bolt-24gb": {
+        "trust_remote_code": true,
+        "dflash_enabled": true
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/bolt/base-lilicorr/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{harness}/launchers/omlx_bolt_serve.sh",
+   "8241",
+   "18241",
+   "nemotron-3.5-bolt-24gb",
+   "--model-dir",
+   "{state}/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--base-path",
+   "{state}/omlx/bolt/base-lilicorr",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/bolt/base-lilicorr/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_clear_prefixes": [
+   "OMLX_"
+  ],
+  "base_url": "http://127.0.0.1:8241/v1",
+  "model": "nemotron-3.5-bolt-24gb",
+  "ready_timeout": 900,
+  "requires_paths": [
+   "{models}/nemotron-3.5-bolt-24gb/model.safetensors.index.json",
+   "{models}/nemotron-3.5-bolt-24gb/nemotron_bolt.py",
+   "{models}/nemotron-3.5-bolt-24gb/dflash/model.safetensors"
+  ],
+  "log_grep": [
+   "### |DFlash|drafter|LiLiCorr|dflash",
+   "memory|guard",
+   "[Ll]oaded model|Discovered model|remote code",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514"
+  ],
+  "note": "The checkpoint folder must also hold the MLX model file of NVIDIA's Bolt bundle for MLX (nemotron_bolt.py; Trust Remote Code). The launcher follows that bundle's README: load, unload, load again with DFlash, then open the harness port. In oMLX 0.7.1rc1 every T > 0 request with the drafter fails (its sampled DFlash selection), so this configuration measures only greedy; bolt-omlx-lilicorr-greedy sends temperature 0 in every phase."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 14508.94,
+    "swapouts": 81442009,
+    "swapins": 70622528,
+    "pageouts": 5984378,
+    "memorystatus_level": 93
+   },
+   "gpu_mem": {
+    "in_use": 1697447936,
+    "alloc": 8083570688,
+    "util_pct": 12
+   },
+   "disk_free_bytes": 186579890176,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/bench/harness/launchers/omlx_bolt_serve.sh",
+   "8241",
+   "18241",
+   "nemotron-3.5-bolt-24gb",
+   "--model-dir",
+   "<run-root>/out/state/omlx/bolt/models",
+   "--no-hf-cache",
+   "--headless",
+   "--base-path",
+   "<run-root>/out/state/omlx/bolt/base-lilicorr",
+   "--paged-ssd-cache-dir",
+   "<run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "cmd_shell": "<repo>/bench/harness/launchers/omlx_bolt_serve.sh 8241 18241 nemotron-3.5-bolt-24gb --model-dir <run-root>/out/state/omlx/bolt/models --no-hf-cache --headless --base-path <run-root>/out/state/omlx/bolt/base-lilicorr --paged-ssd-cache-dir <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [
+   "OMLX_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/nemotron-3.5-bolt-24gb",
+   "safetensors_bytes": 24083745496,
+   "safetensors_files": [
+    "model-00001-of-00090.safetensors",
+    "model-00002-of-00090.safetensors",
+    "model-00003-of-00090.safetensors",
+    "model-00004-of-00090.safetensors",
+    "model-00005-of-00090.safetensors",
+    "model-00006-of-00090.safetensors",
+    "model-00007-of-00090.safetensors",
+    "model-00008-of-00090.safetensors",
+    "model-00009-of-00090.safetensors",
+    "model-00010-of-00090.safetensors",
+    "model-00011-of-00090.safetensors",
+    "model-00012-of-00090.safetensors",
+    "model-00013-of-00090.safetensors",
+    "model-00014-of-00090.safetensors",
+    "model-00015-of-00090.safetensors",
+    "model-00016-of-00090.safetensors",
+    "model-00017-of-00090.safetensors",
+    "model-00018-of-00090.safetensors",
+    "model-00019-of-00090.safetensors",
+    "model-00020-of-00090.safetensors",
+    "model-00021-of-00090.safetensors",
+    "model-00022-of-00090.safetensors",
+    "model-00023-of-00090.safetensors",
+    "model-00024-of-00090.safetensors",
+    "model-00025-of-00090.safetensors",
+    "model-00026-of-00090.safetensors",
+    "model-00027-of-00090.safetensors",
+    "model-00028-of-00090.safetensors",
+    "model-00029-of-00090.safetensors",
+    "model-00030-of-00090.safetensors",
+    "model-00031-of-00090.safetensors",
+    "model-00032-of-00090.safetensors",
+    "model-00033-of-00090.safetensors",
+    "model-00034-of-00090.safetensors",
+    "model-00035-of-00090.safetensors",
+    "model-00036-of-00090.safetensors",
+    "model-00037-of-00090.safetensors",
+    "model-00038-of-00090.safetensors",
+    "model-00039-of-00090.safetensors",
+    "model-00040-of-00090.safetensors",
+    "model-00041-of-00090.safetensors",
+    "model-00042-of-00090.safetensors",
+    "model-00043-of-00090.safetensors",
+    "model-00044-of-00090.safetensors",
+    "model-00045-of-00090.safetensors",
+    "model-00046-of-00090.safetensors",
+    "model-00047-of-00090.safetensors",
+    "model-00048-of-00090.safetensors",
+    "model-00049-of-00090.safetensors",
+    "model-00050-of-00090.safetensors",
+    "model-00051-of-00090.safetensors",
+    "model-00052-of-00090.safetensors",
+    "model-00053-of-00090.safetensors",
+    "model-00054-of-00090.safetensors",
+    "model-00055-of-00090.safetensors",
+    "model-00056-of-00090.safetensors",
+    "model-00057-of-00090.safetensors",
+    "model-00058-of-00090.safetensors",
+    "model-00059-of-00090.safetensors",
+    "model-00060-of-00090.safetensors",
+    "model-00061-of-00090.safetensors",
+    "model-00062-of-00090.safetensors",
+    "model-00063-of-00090.safetensors",
+    "model-00064-of-00090.safetensors",
+    "model-00065-of-00090.safetensors",
+    "model-00066-of-00090.safetensors",
+    "model-00067-of-00090.safetensors",
+    "model-00068-of-00090.safetensors",
+    "model-00069-of-00090.safetensors",
+    "model-00070-of-00090.safetensors",
+    "model-00071-of-00090.safetensors",
+    "model-00072-of-00090.safetensors",
+    "model-00073-of-00090.safetensors",
+    "model-00074-of-00090.safetensors",
+    "model-00075-of-00090.safetensors",
+    "model-00076-of-00090.safetensors",
+    "model-00077-of-00090.safetensors",
+    "model-00078-of-00090.safetensors",
+    "model-00079-of-00090.safetensors",
+    "model-00080-of-00090.safetensors",
+    "model-00081-of-00090.safetensors",
+    "model-00082-of-00090.safetensors",
+    "model-00083-of-00090.safetensors",
+    "model-00084-of-00090.safetensors",
+    "model-00085-of-00090.safetensors",
+    "model-00086-of-00090.safetensors",
+    "model-00087-of-00090.safetensors",
+    "model-00088-of-00090.safetensors",
+    "model-00089-of-00090.safetensors",
+    "model-00090-of-00090.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "474b3e6a4d8a9f2c282d7077c0191bcd2ec3cede",
+   "dirty": true
+  },
+  "config_file": "configs/bolt.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "LLAMA_SERVER",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OMLX_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "symlink <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb -> ~/.cache/kapitsa/benchmark-models/nemotron-3.5-bolt-24gb",
+   "write <run-root>/out/state/omlx/bolt/base-lilicorr/model_settings.json: {\"version\": 1, \"models\": {\"nemotron-3.5-bolt-24gb\": {\"trust_remote_code\": true, \"dflash_enabled\": true}}}",
+   "empty <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "OLLAMA_BIN": "~/.local/opt/ollama-0.40.6/ollama",
+   "MLX_SERVE_BIN": "~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MTPLX_BIN": "~/.local/bin/mtplx",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "BENCH_OUT": "<run-root>/out",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 10.0,
+  "server_pid": 58938,
+  "listener_pid": 58938,
+  "gpu_quiet_wait_s": 301.3,
+  "gpu_not_quiet": [
+   "com.apple.WebKit[3316] 6%"
+  ],
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 1917812736,
+   "alloc": 8116797440,
+   "util_pct": 12
+  },
+  "vm_after": {
+   "swap_used_mb": 14508.94,
+   "swapouts": 81442009,
+   "swapins": 70622671,
+   "pageouts": 5984378,
+   "memorystatus_level": 93
+  },
+  "disk_free_bytes": 189823098880
+ },
+ "server_log": [
+  "[omlx] 2026-10-18 23:17:28,017 - omlx.model_discovery - INFO - Discovered model: nemotron-3.5-bolt-24gb (type: vlm, engine: vlm, size: 23.55GB, text-only: 22.27GB)",
+  "[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - Memory guard tier: aggressive (guard on)",
+  "[omlx] 2026-10-18 23:17:28,042 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_lim",
+  "[omlx] 2026-10-18 23:17:28,042 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.6GB, interval=1.0s)",
+  "### prime 1 (imports the model file; in 0.7.1rc1 the drafter already attaches late in this first load)",
+  "[omlx] 2026-10-18 23:17:28,085 - omlx.engine_pool - WARNING - DFlash is not supported for nemotron-3.5-bolt-24gb (model_type=nemotron_h_nano_omni, engine=vlm); loading without DFlash",
+  "[omlx] 2026-10-18 23:17:29,952 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)",
+  "[omlx] 2026-10-18 23:17:29,961 - omlx.memory_monitor - INFO - Model info set: 88 layers (8 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 512.00 KB",
+  "[omlx] 2026-10-18 23:17:29,962 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0",
+  "[omlx] 2026-10-18 23:17:30,027 - omlx.speculative.dflash - INFO - DFlash drafter loaded: path=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash kind=dflash2 block=8 adaptive=True ta",
+  "[omlx] 2026-10-18 23:17:30,028 - omlx.engine.vlm - INFO - DFlash drafter attached to engine: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb (kind=dflash2, block=8, layers=[1, 18, 35, 51",
+  "[omlx] 2026-10-18 23:17:30,063 - omlx.engine_pool - INFO - Loaded model: nemotron-3.5-bolt-24gb (actual: 28.29GB, local estimate: 23.55GB, full model: 23.55GB, total: 23.55GB)",
+  "### prime answer: '391'",
+  "### unload",
+  "[omlx] 2026-10-18 23:17:30,686 - omlx.engine_pool - WARNING - Queued unload for model 'nemotron-3.5-bolt-24gb' until active scheduler work drains",
+  "[omlx] 2026-10-18 23:17:31,092 - omlx.engine_pool - WARNING - Unloading pending model 'nemotron-3.5-bolt-24gb' after activity drained (manual unload)",
+  "[omlx] 2026-10-18 23:17:31,778 - omlx.engine_pool - INFO - Unloaded model: nemotron-3.5-bolt-24gb, freed=23.53GB (expected>=21.55GB), active_memory: 2.89KB (settled)",
+  "### prime 2 (reload with DFlash), try 1",
+  "[omlx] 2026-10-18 23:17:33,714 - omlx.engine_pool - INFO - DFlash enabled for nemotron-3.5-bolt-24gb as a batched drafter, draft=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash",
+  "[omlx] 2026-10-18 23:17:35,550 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)",
+  "[omlx] 2026-10-18 23:17:35,556 - omlx.memory_monitor - INFO - Model info set: 88 layers (8 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 512.00 KB",
+  "[omlx] 2026-10-18 23:17:35,557 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=1, indexed=1, errors=0, total_size=162.57 MB, gdn_sidecars=1, gdn_size=162.36 MB",
+  "[omlx] 2026-10-18 23:17:35,612 - omlx.speculative.dflash - INFO - DFlash drafter loaded: path=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash kind=dflash2 block=8 adaptive=True ta",
+  "[omlx] 2026-10-18 23:17:35,612 - omlx.engine.vlm - INFO - DFlash drafter attached to engine: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb (kind=dflash2, block=8, layers=[1, 18, 35, 51",
+  "[omlx] 2026-10-18 23:17:35,647 - omlx.engine_pool - INFO - Loaded model: nemotron-3.5-bolt-24gb (actual: 29.40GB, local estimate: 24.92GB, full model: 23.55GB, total: 24.92GB)",
+  "### prime answer: '391'",
+  "### forwarding 127.0.0.1:8241 -> 18241",
+  "[omlx] 2026-10-18 23:17:39,981 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:17:39,984 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:17:40,788 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:17:40,790 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:42,710 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:42,712 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:43,239 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:43,241 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:43,765 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:43,767 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:44,298 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:44,300 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:44,821 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:22:44,823 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:12,557 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:12,562 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:29,651 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:29,668 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:30,528 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:30,530 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:31,360 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:31,362 - omlx.server - ERROR - POST /v1/chat/completions \u2192 500 (unhandled): 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 164, in __call__",
+  "[omlx]     _raise_request_output_error(final_output)",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py\", line 191, in _raise_request_output_error",
+  "[omlx]     raise RuntimeError(output.error)",
+  "[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 186, in __call__",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 164, in __call__",
+  "[omlx]     _raise_request_output_error(final_output)",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py\", line 191, in _raise_request_output_error",
+  "[omlx]     raise RuntimeError(output.error)",
+  "[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:32,183 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:32,185 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:33,006 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 424, in draft",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 518, in _draft_batched",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py\", line 798, in _draft_batched",
+  "[omlx]   File \"<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py\", line 528, in _select_sampled",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py\", line 189, in select_sampled",
+  "[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] 2026-10-18 23:23:33,008 - omlx.server - ERROR - POST /v1/chat/completions \u2192 500 (unhandled): 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 164, in __call__",
+  "[omlx]     _raise_request_output_error(final_output)",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py\", line 191, in _raise_request_output_error",
+  "[omlx]     raise RuntimeError(output.error)",
+  "[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'",
+  "[omlx] Traceback (most recent call last):",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 186, in __call__",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py\", line 164, in __call__",
+  "[omlx]     _raise_request_output_error(final_output)",
+  "[omlx]   File \"~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py\", line 191, in _raise_request_output_error",
+  "[omlx]     raise RuntimeError(output.error)",
+  "[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'"
+ ],
+ "server_log_path": "logs/bolt-omlx-lilicorr-20261018-231726.log"
+}

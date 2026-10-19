@@ -1,0 +1,51 @@
+INFO:rapid_mlx.utils.mamba_cache:[MambaCache] Skipping _make_cache patch — mlx-lm ArraysCache has native batching support
+INFO:rapid_mlx.gdn_prefill:[gdn_prefill] blocked-seq GDN prefill kernel installed (prompt>=64 tokens, Dk=128)
+INFO:rapid_mlx.cli:Disk caches disabled by --disable-disk-caches: no prefix-cache snapshot, KV checkpoints or vision prefix-cache disk tier is written
+INFO:rapid_mlx.server:Host-header allowlist enabled (allowed_hosts=['localhost', '127.0.0.1', '[::1]', '*.localhost'])
+INFO:rapid_mlx.kv_cache_dtype:KV cache dtype: bf16 (model=~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit) — bf16 selected (no QuantizedKVCache wrap)
+INFO:rapid_mlx.cli:Non-trimmable model cache detected with --enable-prefix-cache: auto-setting --hybrid-cache-entries=8 (pass --hybrid-cache-entries 0 to disable)
+INFO:rapid_mlx.server:Model '~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit' auto-downgraded to the text-only lane because the requested speculative decoder is not honored by its vision lane. Pass --mllm to request the vision lane explicitly, or --no-mllm to select text-only serving explicitly.
+INFO:rapid_mlx.utils.generation_config:generation_config: loaded sampling defaults from ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit/generation_config.json: {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20}
+INFO:rapid_mlx.server:Loading model with BatchedEngine: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit
+INFO:rapid_mlx.server:Model loaded: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit
+INFO:rapid_mlx.server:Default max tokens: 32768
+INFO:rapid_mlx.runtime.model_registry:Registered model 'flash-next' (aliases=none, default=True)
+INFO:     Started server process [58745]
+INFO:     Waiting for application startup.
+INFO:rapid_mlx.server:GC control enabled: thresholds set to (100000, 50, 50)
+INFO:rapid_mlx.engine_core:MLX step thread initialized: stream=Stream(Device(gpu, 0), 2) (worker default = generation_stream)
+INFO:rapid_mlx.utils.tokenizer:Model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit uses a vendored architecture, skipping AutoConfig path and loading directly...
+INFO:rapid_mlx.utils.tokenizer:Loading with tokenizer fallback...
+  Cause: The checkpoint is missing 384 weights this model needs (for example language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.0.biases).
+  Next step: Re-download the complete checkpoint, or use the config.json that matches these weights.
+ERROR:    Application startup failed. Exiting.
+
+  🐆 Rapid-MLX
+  ─────────
+  Features: gc-control
+  Model: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit
+Mode: Continuous batching (for multiple concurrent users)
+MTP: enabled via --speculative-config, max_k=1
+Spec-decode: mtp (chain)
+Stream interval: 1 tokens
+Memory-aware cache: 20% of RAM (index=radix)
+
+  !! Memory pressure warning: this model is likely too large for your hardware.
+  Continuing may trigger a macOS kernel panic (see issue #324).
+
+    Model on disk:             98.6 GB
+    Est. working set:         147.9 GB  (model x 1.5 — short-chat workload; long-context serving will use more)
+    Currently used by OS:      16.3 GB
+    Total system RAM:         128.0 GB  (128% projected utilization)
+
+  Apple Silicon firmware can panic the whole system rather than
+  raise an OOM error when unified-memory pressure exceeds the
+  iBoot AMCC threshold. Recommended actions:
+
+    - Close other apps to free RAM, or
+    - Pick a smaller model:    rapid-mlx models
+    - Or lower memory headroom: rapid-mlx serve <model> --gpu-memory-utilization 0.75
+
+
+  Starting server on http://127.0.0.1:8291 (warming up — this can take a few seconds)
+

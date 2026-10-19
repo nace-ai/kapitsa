@@ -1,0 +1,595 @@
+INFO:rapid_mlx.utils.mamba_cache:[MambaCache] Skipping _make_cache patch — mlx-lm ArraysCache has native batching support
+INFO:rapid_mlx.gdn_prefill:[gdn_prefill] blocked-seq GDN prefill kernel installed (prompt>=64 tokens, Dk=128)
+INFO:rapid_mlx.cli:Disk caches disabled by --disable-disk-caches: no prefix-cache snapshot, KV checkpoints or vision prefix-cache disk tier is written
+INFO:rapid_mlx.model_auto_config:Auto-detected checkpoint metadata for '~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX' → tool_call_parser=qwen3_coder_xml, reasoning_parser=qwen3, is_hybrid=True
+INFO:rapid_mlx.cli:Auto-configured --tool-call-parser qwen3_coder_xml
+INFO:rapid_mlx.cli:Auto-configured --reasoning-parser qwen3
+INFO:rapid_mlx.server:Host-header allowlist enabled (allowed_hosts=['localhost', '127.0.0.1', '[::1]', '*.localhost'])
+INFO:rapid_mlx.cli:Reasoning parser enabled: qwen3
+INFO:rapid_mlx.kv_cache_dtype:KV cache dtype: bf16 (model=~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX) — bf16 selected (no QuantizedKVCache wrap)
+INFO:rapid_mlx.cli:Non-trimmable model cache detected with --enable-prefix-cache: auto-setting --hybrid-cache-entries=8 (pass --hybrid-cache-entries 0 to disable)
+INFO:rapid_mlx.server:Model '~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX' auto-downgraded to the text-only lane because the requested speculative decoder is not honored by its vision lane. Pass --mllm to request the vision lane explicitly, or --no-mllm to select text-only serving explicitly.
+INFO:rapid_mlx.utils.generation_config:generation_config: loaded sampling defaults from ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/generation_config.json: {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20}
+INFO:rapid_mlx.server:Loading model with BatchedEngine: ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX
+INFO:rapid_mlx.server:Model loaded: ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX
+INFO:rapid_mlx.server:Native tool format enabled for parser: qwen3_coder_xml
+INFO:rapid_mlx.server:Default max tokens: 32768
+INFO:rapid_mlx.runtime.model_registry:Registered model 'qwen3.8-27b' (aliases=none, default=True)
+INFO:     Started server process [28863]
+INFO:     Waiting for application startup.
+INFO:rapid_mlx.server:GC control enabled: thresholds set to (100000, 50, 50)
+INFO:rapid_mlx.engine_core:MLX step thread initialized: stream=Stream(Device(gpu, 0), 2) (worker default = generation_stream)
+INFO:rapid_mlx.utils.generation_config:generation_config: loaded extra EOS token ids from ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/generation_config.json: [248046, 248044]
+INFO:rapid_mlx.runtime.ubc_evict:ubc_evict: evicted 5095.7 MB from UBC for ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/model-00001-of-00003.safetensors
+INFO:rapid_mlx.runtime.ubc_evict:ubc_evict: evicted 5106.1 MB from UBC for ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/model-00002-of-00003.safetensors
+INFO:rapid_mlx.runtime.ubc_evict:ubc_evict: evicted 5108.9 MB from UBC for ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/model-00003-of-00003.safetensors
+INFO:rapid_mlx.runtime.ubc_evict:ubc_evict: pass complete total_mb=15310.8 elapsed_s=0.10
+INFO:rapid_mlx.spec_decode.mtp.qwen3_5_inject:[mtp.inject] Built MTP module (1 layer(s), hidden_size=5120).
+INFO:rapid_mlx.spec_decode.mtp.qwen3_5_inject:[mtp.inject] Quantized MTP: 4-bit, group_size=64 (from sidecar tensors)
+INFO:rapid_mlx.spec_decode.mtp.qwen3_5_inject:[mtp.inject] Loaded 31/31 expected MTP weight tensors from model.safetensors
+INFO:rapid_mlx.spec_decode.mtp.cache_patch:[mtp.cache_patch] Installed rollback_state slot on ArraysCache (vendored from mlx-lm PR #990).
+INFO:rapid_mlx.spec_decode.mtp.cache_patch:[mtp.cache_patch] Installed GatedDeltaNet chunk-split for MTP rollback (snapshot at cache.n_confirmed_for_mtp boundary).
+INFO:rapid_mlx.spec_decode.mtp.qwen3_5_inject:[mtp.inject] Patched TextModel with MTP surfaces (return_hidden, n_confirmed, mtp_forward, make_mtp_cache).
+INFO:rapid_mlx.engine.batched:[MTP-vendored] dispatch_mtp_inject succeeded for model_type='qwen3_5' sidecar='~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors'
+INFO:rapid_mlx.engine.batched:Metal memory limits set (auto): allocation_limit=103.9GB (90% of 115.4GB, weights=15.4GB), cache_limit=26.0GB
+INFO:rapid_mlx.memory_cache:MemoryAwarePrefixCache initialized: max_memory=19905.6MB, max_entries=1000, radix_index=on
+INFO:rapid_mlx.scheduler:Memory-aware cache enabled: limit=19905.6MB (agent-session floor 0.0MB), index=radix
+INFO:rapid_mlx.engine_core:Model profile: ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX → hybrid (linear-attention/Mamba), throttle ON, spec decode MTP (active), tool=qwen3_coder_xml, reasoning=qwen3
+INFO:rapid_mlx.engine_core:Engine started
+INFO:rapid_mlx.engine.batched:BatchedEngine loaded: ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX (mllm=False)
+INFO:rapid_mlx.server:Warming up (compiling Metal shaders)...
+INFO:rapid_mlx.server:Hybrid model: running full request warmup (compiling GatedDeltaNet kernels)
+INFO:rapid_mlx.output_router:[OutputRouter] Think tag format detected: think=248068/248069
+INFO:rapid_mlx.scheduler:[cache_fetch] request=7ebdf959-100 MISS prompt_tokens=53 time=0.000s entries=0
+INFO:rapid_mlx.engine_core:[stream_outputs] 7ebdf959-100 START waiting for tokens
+INFO:rapid_mlx.scheduler:[MTP-vendored] installed on GenerationBatch._step (single-request adaptive chain-of-K with request-local sampling; request state reaped on finish/remove).
+INFO:rapid_mlx.scheduler:[dense_sampler_fastpath] installed on BatchGenerator
+INFO:rapid_mlx.singleton_cache_fastpath:[singleton-fastpath] installed (B=1 keeps singleton KV caches)
+INFO:rapid_mlx.scheduler:[schedule] request=7ebdf959-100 uid=0 prompt_tokens=53 tokens_to_prefill=53 max_tokens=2 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=7ebdf959-100 saved 32 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.spec_decode.mtp.reproducible_depth:[MTP] greedy requests on '82:~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX+mtp:~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors': depth <= 3, default verify curve, round costs [1.0, 1.272, 1.544, 1.816]
+INFO:rapid_mlx.engine_core:[stream_outputs] 7ebdf959-100 first token after 1.8s
+INFO:rapid_mlx.spec_decode.mtp.draft_k_controller_v2:[MTP-controller] created DepthController for model_id='82:~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX+mtp:~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors' max_k=3 (provisional, observer-only)
+INFO:rapid_mlx.engine_core:[stream_outputs] 7ebdf959-100 finished normally, 2 tokens in 1.9s
+INFO:rapid_mlx.engine_core:[stream_outputs] 7ebdf959-100 cleanup done
+INFO:rapid_mlx.server:Warmup complete (1.9s)
+INFO:rapid_mlx.server:Tool-grammar warmup complete (LLTokenizer pre-built for parser 'qwen3_coder_xml')
+INFO:rapid_mlx.server:[lifespan] Prefix-cache auto-load skipped: disk caches disabled by --disable-disk-caches
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8291 (Press CTRL+C to quit)
+
+  🐆 Rapid-MLX
+  ─────────
+  Features: tools: qwen3_coder_xml, reasoning: qwen3, gc-control
+  Model: ~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX
+Mode: Continuous batching (for multiple concurrent users)
+MTP: enabled via --speculative-config, max_k=3
+Spec-decode: mtp (chain) +sidecar=~/.cache/kapitsa/benchmark-models/rapid-mlx/Qwen3.8-27B-4bit-MTP-MLX/mtp/model.safetensors
+Stream interval: 1 tokens
+Memory-aware cache: 20% of RAM (index=radix)
+
+  Starting server on http://127.0.0.1:8291 (warming up — this can take a few seconds)
+
+  Ready: http://127.0.0.1:8291
+
+  OpenAI:    http://127.0.0.1:8291/v1
+  Anthropic: http://127.0.0.1:8291
+  Model:     qwen3.8-27b
+  Images:    off. Speculative decoding (MTP) is on, and only the text lane runs it. Restart with --no-spec-decode (and without any --speculative-config / --spec-decode / --force-spec-decode flag) for image input.
+
+  Connect:
+    Claude Code  rapid-mlx agents claude-code --setup --base-url http://127.0.0.1:8291/v1
+    Continue     rapid-mlx agents continue --setup --base-url http://127.0.0.1:8291/v1
+    Python       rapid-mlx connect openai-python --base-url http://127.0.0.1:8291/v1
+INFO:     127.0.0.1:60011 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=64 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=11718 tools=0 response_format=None
+INFO:     127.0.0.1:60012 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=32 requested_len=2924 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-01c MISS prompt_tokens=2924 time=0.000s entries=1
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-01c START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-01ceb62836de4703bdc5cfcc86fffb4d","object":"chat.completion.chunk","created":1792395239,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[fused_top_p_sampler] engaged for temp=0.600 top_p=0.950 top_k=20
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-01c uid=1 prompt_tokens=2924 tokens_to_prefill=2924 max_tokens=64 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-01c saved 2909 tokens at message boundary store_time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-01c first token after 3.5s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-01c finished normally, 47 tokens in 4.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-01c cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 47 tokens in 4.36s (10.8 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 49 chunks (1 keepalives), elapsed=4.4s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 49 chunks total, elapsed=4.4s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=198 tools=2 response_format=None
+INFO:     127.0.0.1:60025 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=32 requested_len=574 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-f03 MISS prompt_tokens=574 time=0.000s entries=2
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f03 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-f033c00598ea474d80678dfac00647e5","object":"chat.completion.chunk","created":1792395244,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-f03 uid=2 prompt_tokens=574 tokens_to_prefill=574 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-f03 saved 544 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f03 first token after 0.9s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f03 finished normally, 27 tokens in 1.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f03 cleanup done
+INFO:rapid_mlx.routes.chat:[SSE-FALLBACK-TC-MERGED] merging 1 recovered tool_call(s) into terminal chunk
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 27 tokens in 1.29s (20.9 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 5 chunks (1 keepalives), elapsed=1.4s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 5 chunks total, elapsed=1.4s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60437 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=544 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-581 MISS prompt_tokens=85 time=0.000s entries=3
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-581 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-581a3704bd5a443e9c3aba56d76a54a2","object":"chat.completion.chunk","created":1792395367,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-581 uid=3 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-581 saved 64 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-581 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.3GB peak=17.5GB cache=0.0GB step=256 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.0GB peak=17.5GB cache=0.0GB step=512 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-581 finished normally, 512 tokens in 8.0s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-581 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 8.05s (63.6 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=8.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=8.1s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60456 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-6a6 MISS prompt_tokens=85 time=0.000s entries=4
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6a6 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-6a630ae5b2d341118f6c9366d75aa66a","object":"chat.completion.chunk","created":1792395375,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-6a6 uid=4 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-6a6 saved 64 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6a6 first token after 0.2s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.2GB peak=17.7GB cache=0.0GB step=768 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.5GB peak=17.7GB cache=0.0GB step=1024 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6a6 finished normally, 512 tokens in 8.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6a6 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 8.42s (60.8 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=8.5s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=8.5s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60484 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-ca5 MISS prompt_tokens=85 time=0.000s entries=5
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-ca5 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-ca5c98e6020a47c2b20dd2d1e9030b56","object":"chat.completion.chunk","created":1792395383,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-ca5 uid=5 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-ca5 saved 64 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-ca5 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.3GB peak=17.8GB cache=0.0GB step=1280 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.3GB peak=17.9GB cache=0.0GB step=1536 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-ca5 finished normally, 512 tokens in 8.8s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-ca5 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 8.77s (58.4 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 514 chunks (1 keepalives), elapsed=8.8s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 514 chunks total, elapsed=8.8s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60519 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-9d3 MISS prompt_tokens=85 time=0.000s entries=6
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-9d3 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-9d3d6c71a8c840d59cc763b20a98e51e","object":"chat.completion.chunk","created":1792395392,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-9d3 uid=6 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-9d3 saved 64 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-9d3 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.5GB peak=18.0GB cache=0.0GB step=1792 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.6GB peak=18.0GB cache=0.0GB step=2048 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-9d3 finished normally, 512 tokens in 9.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-9d3 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.45s (54.2 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.5s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.5s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60543 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-96c MISS prompt_tokens=85 time=0.000s entries=7
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-96c START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-96c394ca84b54c1f8c73ef2e0677471e","object":"chat.completion.chunk","created":1792395402,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-96c uid=7 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-96c saved 64 tokens at message boundary store_time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-96c first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.7GB peak=18.2GB cache=0.0GB step=2304 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.7GB peak=18.2GB cache=0.0GB step=2560 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-96c finished normally, 512 tokens in 9.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-96c cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.27s (55.2 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.3s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.3s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.0 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60570 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-c5f MISS prompt_tokens=85 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c5f START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-c5fd19f0e41741aba1d089949a45ec84","object":"chat.completion.chunk","created":1792395411,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-c5f uid=8 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-c5f saved 64 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c5f first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.6GB peak=18.2GB cache=0.0GB step=2816 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.9GB peak=18.2GB cache=0.0GB step=3072 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c5f finished normally, 512 tokens in 9.2s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c5f cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.20s (55.6 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.3s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.3s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.0 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60607 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=26 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-466 MISS prompt_tokens=85 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-466 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-466a39d8c9e649f49c4f0958f21b49e6","object":"chat.completion.chunk","created":1792395420,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-466 uid=9 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-466 saved 64 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-466 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.3GB peak=18.2GB cache=0.0GB step=3328 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.1GB peak=18.2GB cache=0.0GB step=3584 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-466 finished normally, 512 tokens in 9.0s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-466 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.00s (56.9 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.1s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.0 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60627 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=25 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-c32 MISS prompt_tokens=85 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c32 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-c3255aef8ebf4fd68461dec0f6ba711a","object":"chat.completion.chunk","created":1792395429,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-c32 uid=10 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-c32 saved 64 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c32 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=16.9GB peak=18.2GB cache=0.0GB step=3840 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.0GB peak=18.2GB cache=0.0GB step=4096 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c32 finished normally, 512 tokens in 9.1s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c32 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.06s (56.5 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.1s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.0 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60649 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=26 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-6e3 MISS prompt_tokens=85 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6e3 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-6e30e6a5ead243828c35db41dd83bca3","object":"chat.completion.chunk","created":1792395439,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-6e3 uid=11 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-6e3 saved 64 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6e3 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.1GB peak=18.2GB cache=0.0GB step=4352 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.0GB peak=18.2GB cache=0.0GB step=4608 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6e3 finished normally, 512 tokens in 9.1s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6e3 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.12s (56.1 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.2s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.2s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.0 msgs=2 roles=['system', 'user'] total_chars=258 tools=0 response_format=None
+INFO:     127.0.0.1:60692 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=27 entry_len=64 requested_len=85 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-a53 MISS prompt_tokens=85 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-a53 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-a5393a07a2f24aacaf1fb4196f1fa936","object":"chat.completion.chunk","created":1792395448,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-a53 uid=12 prompt_tokens=85 tokens_to_prefill=85 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-a53 saved 64 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-a53 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=16.9GB peak=18.2GB cache=0.0GB step=4864 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=17.0GB peak=18.2GB cache=0.0GB step=5120 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-a53 finished normally, 512 tokens in 9.9s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-a53 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 512 tokens in 9.87s (51.9 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 515 chunks (1 keepalives), elapsed=9.9s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 515 chunks total, elapsed=9.9s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=17265 tools=0 response_format=None
+INFO:     127.0.0.1:60724 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=64 requested_len=4134 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-7d0 MISS prompt_tokens=4134 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7d0 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-7d0a012089a24900a984312df25429b4","object":"chat.completion.chunk","created":1792395458,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-7d0 uid=13 prompt_tokens=4134 tokens_to_prefill=4134 max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-7d0 saved 4119 tokens at message boundary store_time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7d0 first token after 5.5s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7d0 finished normally, 77 tokens in 7.5s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7d0 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 77 tokens in 7.55s (10.2 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 80 chunks (1 keepalives), elapsed=7.6s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 80 chunks total, elapsed=7.6s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=4 roles=['system', 'user', 'assistant', 'user'] total_chars=17651 tools=0 response_format=None
+INFO:     127.0.0.1:60743 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-f2a HIT prompt_tokens=4233 cached=4119 remaining=114 time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f2a START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-f2a6cdf8de204034a5e3471967d808e9","object":"chat.completion.chunk","created":1792395466,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-f2a uid=14 prompt_tokens=4233 tokens_to_prefill=114, 4119 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-f2a saved 4215 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f2a first token after 0.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f2a finished normally, 13 tokens in 0.7s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-f2a cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 13 tokens in 0.66s (19.7 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 16 chunks (1 keepalives), elapsed=0.7s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 16 chunks total, elapsed=0.7s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=6 roles=['system', 'user', 'assistant', 'user', 'assistant', 'user'] total_chars=17767 tools=0 response_format=None
+INFO:     127.0.0.1:60748 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-047 HIT prompt_tokens=4273 cached=4215 remaining=58 time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-047 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-0477db859ead4dd3962cb45ffa98d01f","object":"chat.completion.chunk","created":1792395468,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-047 uid=15 prompt_tokens=4273 tokens_to_prefill=58, 4215 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-047 saved 4247 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-047 first token after 0.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-047 finished normally, 16 tokens in 0.6s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-047 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 16 tokens in 0.65s (24.5 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 19 chunks (1 keepalives), elapsed=0.7s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 19 chunks total, elapsed=0.7s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=8 roles=['system', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user'] total_chars=17863 tools=0 response_format=None
+INFO:     127.0.0.1:60756 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-6f5 HIT prompt_tokens=4309 cached=4247 remaining=62 time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6f5 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-6f51324f84004532bcf1a54d1c202a25","object":"chat.completion.chunk","created":1792395470,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-6f5 uid=16 prompt_tokens=4309 tokens_to_prefill=62, 4247 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-6f5 saved 4279 tokens at message boundary store_time=0.001s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6f5 first token after 0.3s
+INFO:rapid_mlx.scheduler:[Metal memory] active=18.6GB peak=19.0GB cache=0.0GB step=5376 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6f5 finished normally, 256 tokens in 4.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-6f5 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 256 tokens in 4.42s (57.9 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 259 chunks (1 keepalives), elapsed=4.5s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 259 chunks total, elapsed=4.5s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=68265 tools=0 response_format=None
+INFO:     127.0.0.1:60774 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=6 entry_len=4279 requested_len=16286 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-b8a MISS prompt_tokens=16286 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-b8a START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-b8a1306b10c84814b4851a2ef06d0005","object":"chat.completion.chunk","created":1792395474,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-b8a uid=17 prompt_tokens=16286 tokens_to_prefill=16286 max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #10 disconnected=False elapsed=5.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=18.9GB peak=20.0GB cache=0.0GB step=5632 running=1 waiting=0
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #20 disconnected=False elapsed=10.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #30 disconnected=False elapsed=15.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] poll #40 disconnected=False elapsed=20.1s
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-b8a saved 16256 tokens at message boundary store_time=0.005s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-b8a first token after 23.2s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-b8a finished normally, 57 tokens in 24.6s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-b8a cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 57 tokens in 24.58s (2.3 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 60 chunks (2 keepalives), elapsed=24.6s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 60 chunks total, elapsed=24.6s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=4 roles=['system', 'user', 'assistant', 'user'] total_chars=68579 tools=0 response_format=None
+INFO:     127.0.0.1:60848 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-c26 HIT prompt_tokens=16365 cached=16256 remaining=109 time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c26 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-c264ff9ce7cb41e8996f7ec995b70659","object":"chat.completion.chunk","created":1792395500,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-c26 uid=18 prompt_tokens=16365 tokens_to_prefill=109, 16256 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-c26 saved 16350 tokens at message boundary store_time=0.003s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c26 first token after 0.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c26 finished normally, 31 tokens in 1.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-c26 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 31 tokens in 1.27s (24.4 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 34 chunks (1 keepalives), elapsed=1.3s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 34 chunks total, elapsed=1.3s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=6 roles=['system', 'user', 'assistant', 'user', 'assistant', 'user'] total_chars=68749 tools=0 response_format=None
+INFO:     127.0.0.1:60858 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-1be HIT prompt_tokens=16423 cached=16350 remaining=73 time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-1be START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-1be9eb08919442ffbbc828391ab2b159","object":"chat.completion.chunk","created":1792395502,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-1be uid=19 prompt_tokens=16423 tokens_to_prefill=73, 16350 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-1be saved 16408 tokens at message boundary store_time=0.003s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-1be first token after 0.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-1be finished normally, 22 tokens in 0.9s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-1be cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 22 tokens in 0.94s (23.5 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 25 chunks (1 keepalives), elapsed=1.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 25 chunks total, elapsed=1.0s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=256 temp=0.6 msgs=8 roles=['system', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user'] total_chars=68859 tools=0 response_format=None
+INFO:     127.0.0.1:60868 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-e0a HIT prompt_tokens=16465 cached=16408 remaining=57 time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-e0a START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-e0ab0452b61440d08cd828fd4a748e3e","object":"chat.completion.chunk","created":1792395504,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-e0a uid=20 prompt_tokens=16465 tokens_to_prefill=57, 16408 cached max_tokens=256 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-e0a saved 16440 tokens at message boundary store_time=0.003s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-e0a first token after 0.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-e0a finished normally, 85 tokens in 2.0s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-e0a cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 85 tokens in 2.03s (42.0 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 88 chunks (1 keepalives), elapsed=2.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 88 chunks total, elapsed=2.1s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=198 tools=2 response_format=None
+INFO:     127.0.0.1:60876 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=4119 requested_len=574 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-8b4 MISS prompt_tokens=574 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-8b4 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-8b4a86bf42164f2f9103a793920bbe62","object":"chat.completion.chunk","created":1792395506,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-8b4 uid=21 prompt_tokens=574 tokens_to_prefill=574 max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-8b4 saved 544 tokens at message boundary store_time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-8b4 first token after 1.0s
+INFO:rapid_mlx.scheduler:[Metal memory] active=23.2GB peak=24.7GB cache=0.0GB step=5888 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-8b4 finished normally, 27 tokens in 1.4s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-8b4 cleanup done
+INFO:rapid_mlx.routes.chat:[SSE-FALLBACK-TC-MERGED] merging 1 recovered tool_call(s) into terminal chunk
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 27 tokens in 1.43s (18.9 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 5 chunks (1 keepalives), elapsed=1.5s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 5 chunks total, elapsed=1.5s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=False model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=198 tools=2 response_format=None
+INFO:rapid_mlx.scheduler:[cache_fetch] request=0ea1df8a-5c5 HIT prompt_tokens=574 cached=544 remaining=30 time=0.000s
+INFO:rapid_mlx.scheduler:[schedule] request=0ea1df8a-5c5 uid=22 prompt_tokens=574 tokens_to_prefill=30, 544 cached max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[prompt_cache_save] request=0ea1df8a-5c5 prompt_tokens=574 store_time=0.002s
+INFO:rapid_mlx.routes.chat:Chat completion: 27 tokens in 0.67s (40.2 tok/s)
+INFO:     127.0.0.1:60886 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=512 temp=0.6 msgs=4 roles=['system', 'user', 'assistant', 'tool'] total_chars=313 tools=2 response_format=None
+INFO:     127.0.0.1:60890 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-7cb HIT prompt_tokens=654 cached=574 remaining=80 time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7cb START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-7cbe681e1d1e4ffab46e48b0001e5493","object":"chat.completion.chunk","created":1792395509,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-7cb uid=23 prompt_tokens=654 tokens_to_prefill=80, 574 cached max_tokens=512 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-7cb saved 638 tokens at message boundary store_time=0.002s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7cb first token after 0.3s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7cb finished normally, 85 tokens in 2.2s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-7cb cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 85 tokens in 2.17s (39.2 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 88 chunks (1 keepalives), elapsed=2.2s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 88 chunks total, elapsed=2.2s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=4096 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=198 tools=2 response_format=None
+INFO:rapid_mlx.routes.chat:#448/#3043 reasoning_effort=low translated on /v1/chat/completions (template reasoning_effort=low, reasoning_max_tokens=None). Explicit client enable_thinking / chat_template_kwargs.reasoning_effort / reasoning_max_tokens always wins.
+INFO:     127.0.0.1:60899 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.memory_cache:[cache_fetch] LCP unavailable: shared=3 entry_len=16440 requested_len=598 non_trimmable=True
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-543 MISS prompt_tokens=598 time=0.000s entries=8
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-543 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-5436660c8703413ca0001674e9df3ca1","object":"chat.completion.chunk","created":1792395511,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-543 uid=24 prompt_tokens=598 tokens_to_prefill=598 max_tokens=4096 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-543 saved 576 tokens at message boundary store_time=0.003s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-543 first token after 1.1s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-543 finished normally, 47 tokens in 2.0s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-543 cleanup done
+INFO:rapid_mlx.routes.chat:[SSE-FALLBACK-TC-MERGED] merging 1 recovered tool_call(s) into terminal chunk
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 47 tokens in 2.05s (23.0 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 24 chunks (1 keepalives), elapsed=2.1s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 24 chunks total, elapsed=2.1s
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=False model='qwen3.8-27b' max_tokens=4096 temp=0.6 msgs=2 roles=['system', 'user'] total_chars=198 tools=2 response_format=None
+INFO:rapid_mlx.routes.chat:#448/#3043 reasoning_effort=low translated on /v1/chat/completions (template reasoning_effort=low, reasoning_max_tokens=None). Explicit client enable_thinking / chat_template_kwargs.reasoning_effort / reasoning_max_tokens always wins.
+INFO:rapid_mlx.scheduler:[cache_fetch] request=96cea99a-384 HIT prompt_tokens=598 cached=576 remaining=22 time=0.000s
+INFO:rapid_mlx.scheduler:[schedule] request=96cea99a-384 uid=25 prompt_tokens=598 tokens_to_prefill=22, 576 cached max_tokens=4096 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[prompt_cache_save] request=96cea99a-384 prompt_tokens=598 store_time=0.004s
+INFO:rapid_mlx.routes.chat:Chat completion: 47 tokens in 1.15s (40.9 tok/s)
+INFO:     127.0.0.1:60905 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.routes.chat:[REQUEST] POST /v1/chat/completions stream=True model='qwen3.8-27b' max_tokens=4096 temp=0.6 msgs=4 roles=['system', 'user', 'assistant', 'tool'] total_chars=313 tools=2 response_format=None
+INFO:rapid_mlx.routes.chat:#448/#3043 reasoning_effort=low translated on /v1/chat/completions (template reasoning_effort=low, reasoning_max_tokens=None). Explicit client enable_thinking / chat_template_kwargs.reasoning_effort / reasoning_max_tokens always wins.
+INFO:     127.0.0.1:60909 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:rapid_mlx.service.helpers:[disconnect_guard] START poll_interval=0.5s keepalive_seconds=20.0
+INFO:rapid_mlx.scheduler:[cache_fetch] request=chatcmpl-d31 HIT prompt_tokens=678 cached=576 remaining=102 time=0.000s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-d31 START waiting for tokens
+INFO:rapid_mlx.routes.chat:[SSE-ROLE] data: {"id":"chatcmpl-d31b51e281ea4898baa001d32997e338","object":"chat.completion.chunk","created":1792395514,"model":"qwen3.8-27b","choices":[{"index":0,"delta":{"role":"assistant"}}]}
+INFO:rapid_mlx.service.helpers:[disconnect_guard] first chunk arrived, elapsed=0.0s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] post-first-chunk keepalive (R15 #291), elapsed=0.0s
+INFO:rapid_mlx.scheduler:[schedule] request=chatcmpl-d31 uid=26 prompt_tokens=678 tokens_to_prefill=102, 576 cached max_tokens=4096 running=1 waiting=0
+INFO:rapid_mlx.scheduler:[boundary_snapshot] request=chatcmpl-d31 saved 665 tokens at message boundary store_time=0.004s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-d31 first token after 0.4s
+INFO:rapid_mlx.scheduler:[Metal memory] active=20.1GB peak=24.7GB cache=0.0GB step=6144 running=1 waiting=0
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-d31 finished normally, 108 tokens in 2.6s
+INFO:rapid_mlx.engine_core:[stream_outputs] chatcmpl-d31 cleanup done
+INFO:rapid_mlx.routes.chat:Chat completion (stream): 108 tokens in 2.59s (41.6 tok/s)
+INFO:rapid_mlx.service.helpers:[disconnect_guard] generator exhausted normally, 110 chunks (1 keepalives), elapsed=2.7s
+INFO:rapid_mlx.service.helpers:[disconnect_guard] CLEANUP done, 110 chunks total, elapsed=2.7s
+WARNING:rapid_mlx._signal_observability:rapid-mlx received signal SIGTERM; thread stacks follow (faulthandler)
+Thread 0x00000006733e3000 (most recent call first):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 90 in _worker
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1012 in run
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Thread 0x00000006760e3000 (most recent call first):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 90 in _worker
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1012 in run
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Thread 0x000000064801f000 (most recent call first):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 355 in wait
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/queue.py", line 171 in get
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/telemetry/inference.py", line 43 in _worker_main
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1012 in run
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Thread 0x000000016ec4f000 (most recent call first):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 90 in _worker
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1012 in run
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1075 in _bootstrap_inner
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/threading.py", line 1032 in _bootstrap
+
+Current thread 0x00000001f02318c0 (most recent call first):
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/_signal_observability.py", line 694 in _on_signal
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/selectors.py", line 566 in select
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 1961 in _run_once
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 645 in run_forever
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 678 in run_until_complete
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 118 in run
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 195 in run
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/uvicorn/server.py", line 86 in run
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/_uvicorn.py", line 185 in _run_server
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/_uvicorn.py", line 212 in run_uvicorn
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/cli.py", line 744 in _run_uvicorn
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/cli.py", line 7796 in serve_command
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/cli.py", line 15100 in main
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/cli.py", line 14519 in wrapped
+  File "~/venvs/rapid-mlx/lib/python3.12/site-packages/rapid_mlx/cli.py", line 15247 in cli_entrypoint
+  File "~/venvs/rapid-mlx/bin/rapid-mlx", line 10 in <module>
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:rapid_mlx.server:[lifespan] Prefix-cache auto-save skipped: disk caches disabled by --disable-disk-caches
+INFO:rapid_mlx.engine_core:Engine stopped
+INFO:rapid_mlx.scheduler:Deep reset completed - all caches cleared
+INFO:rapid_mlx.engine.batched:BatchedEngine stopped
+INFO:rapid_mlx.server:Engine stopped
+INFO:     Application shutdown complete.
+INFO:     Finished server process [28863]

@@ -104,6 +104,7 @@ struct Row {
   bool planned = false, dense = false, starts = false, all_fit = false;
   int layers = 0, slots = 0;
   size_t full = 0, start = 0, weights = 0, kv = 0, drafter = 0, tokens = 0, image_bytes = 0;
+  int default_ctx = 0, ctx_limit = 0;  // the context kapitsa serve takes by default here; the model's own limit
   double dec = 0, pf = 0;
 };
 // One catalog variant: fits (1), too big (0, `need`), not planned (-1); the one --model <name> takes
@@ -146,7 +147,7 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
 
   // the models: fits, memory at the full context, decoding; then a dim line of details
   {
-    const std::string title = "  " + bold("Models") + dim("  --ctx " + std::to_string(ctx) + "  --slots " +
+    const std::string title = "  " + bold("Models") + dim("  --context " + context(ctx) + "  --slots " +
                                                           (slots > 0 ? std::to_string(slots) : std::string("auto")));
     const std::string legend = accent(kOk) + dim(" fits  ") + warn("◐") + dim(" starts  ") + red(kFail) + dim(" too big");
     const int gap = std::min(W, 80) - width(title) - width(legend);
@@ -172,6 +173,8 @@ void print_tty(const nlohmann::ordered_json& J, size_t budget, const std::string
       snprintf(kv, sizeof kv, "KV %.0f KB/token", r.kv / 1024.0);
       d += sep + kv;
       if (r.starts) d += sep + "room for " + count(double(r.tokens)) + " tokens";
+      if (r.default_ctx > 0)
+        d += sep + "serve's context " + context(r.default_ctx) + (r.ctx_limit > r.default_ctx ? " (max " + context(r.ctx_limit) + ")" : "");
       if (r.image_bytes) d += sep + "images +" + gb(double(r.image_bytes));
       o.push_back("      " + dim(clip(d, std::max(W, std::min(columns(), 140)) - 8)));
       if (!r.note.empty()) o.push_back("      " + dim(clip(r.note, std::max(W, std::min(columns(), 140)) - 8)));
@@ -250,7 +253,16 @@ int run_doctor(int argc, char** argv) {
     auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
     if (a == "--model") models.push_back(next());
     else if (a == "--models-dir") roots.push_back(next());
-    else if (a == "--ctx") ctx = std::stoi(next());
+    else if (a == "--context" || a == "--ctx") {
+      std::string why;
+      ctx = parse_context(next(), &why);
+      if (ctx == kContextMax) why = "--context max has no one size here (every model is planned at one context): give it in tokens (--context 256k)";
+      if (ctx <= 0) {
+        if (term::fancy()) term::error(why, "kapitsa doctor --help shows how to use it.");
+        else fprintf(stderr, "kapitsa doctor: %s\n", why.c_str());
+        return 2;
+      }
+    }
     else if (a == "--slots") slots_opt = std::stoi(next());
     else if (a == "--prefill-chunk") chunk = std::stoi(next());
     else if (a == "--mem-budget") budget_gb = std::stod(next());
@@ -258,14 +270,14 @@ int run_doctor(int argc, char** argv) {
     else if (a == "--json") as_json = true;
     else {
       const char* usage =
-          "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots N] [--prefill-chunk 2048]\n"
+          "usage: kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--context 64k] [--slots N] [--prefill-chunk 2048]\n"
           "                      [--dflash auto|none|DIR] [--mem-budget GB] [--json]\n";
       if (!term::fancy()) fputs(usage, stderr);
       else if (a == "--help" || a == "-h")
-        term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--ctx 65536] [--slots N] [--prefill-chunk 2048] "
+        term::help("kapitsa doctor [--model MODEL]... [--models-dir DIR]... [--context 64k] [--slots N] [--prefill-chunk 2048] "
                    "[--dflash auto|none|DIR] [--mem-budget GB] [--json]: This Mac's GPU and memory, and which models fit "
                    "it at the context and slots given (what kapitsa serve would hold; without --slots, the slots each "
-                   "model would get).\n");
+                   "model would get), with the context kapitsa serve takes by default here.\n");
       else
         term::error("unknown option " + a, "kapitsa doctor --help shows how to use it.");
       return 2;
@@ -335,7 +347,7 @@ int run_doctor(int argc, char** argv) {
     printf("  GPU:     threadgroup memory %zu B, Metal 4 neural accelerators (Apple10): %s%s\n", g.max_threadgroup_memory(),
            yesno(g.apple10()), bw > 0 ? ("; memory bandwidth " + std::to_string(int(bw)) + " GB/s").c_str() : "");
     printf("  Neural Engine: %s\n", ane_why.empty() ? "available" : ("unavailable (" + ane_why + ")").c_str());
-    printf("\nModels (--ctx %d, --slots %s%s):\n", ctx,
+    printf("\nModels (--context %s, --slots %s%s):\n", term::context(ctx).c_str(),
            slots_opt > 0 ? std::to_string(slots_opt).c_str() : "as each model's memory allows",
            chunk ? (", --prefill-chunk " + std::to_string(chunk)).c_str() : "");
     if (models.empty()) printf("  none found (--model DIR)\n");
@@ -349,7 +361,13 @@ int run_doctor(int argc, char** argv) {
     const bool nemotron = NemotronH::is_model(dir);
     const bool dory = Dory::is_model(dir);
     int slots = slots_opt;  // as the engine would start it: the ones asked for, else auto_slots
+    int default_ctx = 0;    // what kapitsa serve takes here without --context
     try {
+      {
+        EngineOptions dco;
+        dco.slots = slots_opt, dco.prefill_chunk = chunk, dco.dflash = dflash;
+        default_ctx = default_context(dir, dco, budget);
+      }
       if (slots <= 0) {
         EngineOptions so;
         so.context = ctx, so.prefill_chunk = chunk, so.dflash = dflash;
@@ -424,6 +442,8 @@ int run_doctor(int argc, char** argv) {
     o["starts"] = start_need <= budget;
     o["fits_full_context"] = full_need <= budget;
     o["kv_tokens_in_budget"] = tokens;
+    o["context_limit"] = model_context_limit(dir);
+    o["default_context"] = default_ctx;
     o["dflash_drafter"] = dfl;
     o["dflash_used"] = !lp.dflash.empty();
     o["dflash_bytes"] = lp.dflash_found_bytes;
@@ -449,6 +469,7 @@ int run_doctor(int argc, char** argv) {
       r.image_bytes = enc ? enc->weight_bytes() : 0;
       r.dec = dec, r.pf = pf;
       r.note = dory_note;
+      r.default_ctx = default_ctx, r.ctx_limit = model_context_limit(dir);
       tty_rows.push_back(r);
       continue;
     }
@@ -469,6 +490,11 @@ int run_doctor(int argc, char** argv) {
       printf("    fits: yes; %d x %d tokens %s (%.1f GB); room for %zu tokens of KV cache in all%s\n", slots, ctx,
              full_need <= budget ? "fit" : "do not all fit at once", full_need / 1e9, tokens,
              full_need <= budget ? "" : " (the KV cache grows with each conversation; idle slots give theirs up)");
+    {
+      const int limit = model_context_limit(dir);
+      printf("    context: kapitsa serve takes %s here without --context%s\n", term::context(default_ctx).c_str(),
+             limit > 0 ? ("; the model's limit is " + term::context(limit)).c_str() : "");
+    }
     if (!lp.dflash.empty())
       printf("    decoding: %s %s (%.2f GB with %d slot%s, counted above)\n", drafter, lp.dflash.c_str(),
              lp.dflash_bytes / 1e9, slots, slots > 1 ? "s" : "");
@@ -497,7 +523,7 @@ int run_doctor(int argc, char** argv) {
   eo.context = ctx, eo.slots = slots_opt, eo.prefill_chunk = chunk, eo.dflash = dflash;
   const int slots = fit_slots(slots_opt);  // a variant fits with the slots asked for, else with two (auto's fewest)
   nlohmann::ordered_json cv = nlohmann::ordered_json::array();
-  if (!as_json && !tty) printf("\nCatalog variants on this Mac (--ctx %d, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", ctx, slots);
+  if (!as_json && !tty) printf("\nCatalog variants on this Mac (--context %s, --slots %d; `--model <name>` takes the first that fits of its default and fallbacks):\n", term::context(ctx).c_str(), slots);
   for (const auto& c : hub::catalog()) {
     bool fits = false;
     const hub::ModelRef pick = pick_variant(c, eo, budget, &fits);

@@ -1,0 +1,28 @@
+
+===== bolt-omlx  [omlx] oMLX (the bundle's model file, no drafter)  version omlx 0.7.1rc1 mlx_lm 0.31.4.dev132+g94cdcae13 mlx 0.32.4
+[22:39:30] bolt-omlx: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 78004 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[22:39:30] bolt-omlx: starting ~/venvs/omlx/bin/omlx serve --model-dir <run-root>/out/state/omlx/bolt/models --no-hf-cache --headless --host 127.0.0.1 --port 8242 --base-path <run-root>/out/state/omlx/bolt/base-plain --paged-ssd-cache-dir <run-root>/out/state/omlx/bolt/base-plain/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[22:39:32] bolt-omlx: ready after 2s (pid 78040, listener 78040)
+[22:39:43] bolt-omlx:  warm-up prefill~2.9k+decode64: ok (11.03s)
+[22:39:44] bolt-omlx:  warm-up tools: ok (1.12s)
+[22:40:46] bolt-omlx: gpu busy (62s): com.apple.WebKit[3316] 6%
+[22:41:48] bolt-omlx: gpu busy (124s): com.apple.WebKit[3316] 7%
+[22:42:50] bolt-omlx: gpu busy (186s): com.apple.WebKit[3316] 6%
+[22:43:52] bolt-omlx: gpu busy (248s): com.apple.WebKit[3316] 7%
+[22:44:46] bolt-omlx: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== bolt-omlx
+  decode T=0.6: 70.25 tok/s (e2e 70.02; 512 tok, finish=length, d4=0.9492)
+  decode T=0.6: 69.54 tok/s (e2e 69.57; 512 tok, finish=length, d4=0.9252)
+  decode T=0.6: 69.12 tok/s (e2e 69.45; 512 tok, finish=length, d4=0.8839)
+  decode T=0.6: 66.45 tok/s (e2e 68.22; 512 tok, finish=length, d4=0.6511)
+  decode T=0.6: 67.67 tok/s (e2e 67.62; 512 tok, finish=length, d4=0.9751)
+  decode median 69.12 (min 66.45, max 70.25) over 5/5 valid
+  decode T=0: median 67.49 (min 66.49, max 68.41) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4183), TTFT 4.58s -> 913 tok/s, cold cached=0 | cached TTFT median 0.38s over 3 turns (cached [4177, 4242, 4281])
+  prefill 16000: 16515 tok (ref 16514), TTFT 16.53s -> 999 tok/s, cold cached=0 | cached TTFT median 0.40s over 3 turns (cached [16509, 16567, 16606])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 30.30 GB, resident mapped files 0.01 GB, swap used 14532.94 MB
+  -> <run-root>/out/results/bolt-omlx-20261018-223930.json
+[22:46:59] bolt-omlx: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[22:46:59] bolt-omlx: -> <run-root>/out/results/bolt-omlx-20261018-223930.json  flags: 1

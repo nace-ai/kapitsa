@@ -1,0 +1,28 @@
+
+===== q36-35b-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11669, 620d2225c)
+[22:00:33] q36-35b-llamacpp-mtp2: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 95504 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[22:00:33] q36-35b-llamacpp-mtp2: starting ~/llama.cpp/llama-b11669/llama-server -m ~/.ollama/models/blobs/sha256-d372de8e934898a59e6ccfabc3368474711384d8f1fd4d22d87a3f0a45400cdc --host 127.0.0.1 --port 8083 -a qwen3.6-35b-a3b -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --chat-template-file ~/.cache/kapitsa/benchmark-models/qwen3.6-35b-a3b-4bit/chat_template.jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-n-max 2
+[22:00:37] q36-35b-llamacpp-mtp2: ready after 4s (pid 95541, listener 95541)
+[22:00:38] q36-35b-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (1.39s)
+[22:00:38] q36-35b-llamacpp-mtp2:  warm-up tools: ok (0.36s)
+[22:01:40] q36-35b-llamacpp-mtp2: gpu busy (62s): com.apple.WebKit[3316] 7%
+[22:02:42] q36-35b-llamacpp-mtp2: gpu busy (124s): com.apple.WebKit[3316] 7%
+[22:03:44] q36-35b-llamacpp-mtp2: gpu busy (186s): com.apple.WebKit[3316] 7%
+[22:04:46] q36-35b-llamacpp-mtp2: gpu busy (248s): com.apple.WebKit[3316] 7%
+[22:05:40] q36-35b-llamacpp-mtp2: GPU not quiet after 301s (['com.apple.WebKit[3316] 8%']); benchmarking anyway, contention will be flagged
+== q36-35b-llamacpp-mtp2
+  decode T=0.6: 171.52 tok/s (e2e 171.90; 512 tok, finish=length, d4=0.9376)
+  decode T=0.6: 176.37 tok/s (e2e 176.61; 512 tok, finish=length, d4=0.94)
+  decode T=0.6: 168.86 tok/s (e2e 169.27; 512 tok, finish=length, d4=0.9664)
+  decode T=0.6: 170.86 tok/s (e2e 171.26; 512 tok, finish=length, d4=0.974)
+  decode T=0.6: 167.27 tok/s (e2e 167.81; 512 tok, finish=length, d4=0.553)
+  decode median 170.86 (min 167.27, max 176.37) over 5/5 valid
+  decode T=0: median 170.13 (min 168.91, max 175.81) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 1.45s -> 2852 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [4176, 4223, 4266])
+  prefill 16000: 16285 tok (ref 16286), TTFT 5.95s -> 2739 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [16332, 16385, 16437])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.48 GB, resident mapped files 0.03 GB, swap used 14589.0 MB
+  -> <run-root>/out/results/q36-35b-llamacpp-mtp2-20261018-220032.json
+[22:06:38] q36-35b-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[22:06:38] q36-35b-llamacpp-mtp2: -> <run-root>/out/results/q36-35b-llamacpp-mtp2-20261018-220032.json  flags: 1

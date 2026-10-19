@@ -1,0 +1,28 @@
+
+===== bolt-omlx-lilicorr-greedy  [omlx] oMLX + LiLiCorr drafter, every request greedy  version unknown
+[23:10:30] bolt-omlx-lilicorr-greedy: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 26226 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[23:10:30] bolt-omlx-lilicorr-greedy: starting <repo>/bench/harness/launchers/omlx_bolt_serve.sh 8241 18241 nemotron-3.5-bolt-24gb --model-dir <run-root>/out/state/omlx/bolt/models --no-hf-cache --headless --base-path <run-root>/out/state/omlx/bolt/base-lilicorr --paged-ssd-cache-dir <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache --paged-ssd-cache-max-size 4GB --hot-cache-max-size 4GB --memory-guard aggressive
+[23:10:43] bolt-omlx-lilicorr-greedy: ready after 12s (pid 44167, listener 44167)
+[23:10:48] bolt-omlx-lilicorr-greedy:  warm-up prefill~2.9k+decode64: ok (5.84s)
+[23:10:49] bolt-omlx-lilicorr-greedy:  warm-up tools: ok (0.92s)
+[23:11:51] bolt-omlx-lilicorr-greedy: gpu busy (62s): com.apple.WebKit[3316] 7%
+[23:12:53] bolt-omlx-lilicorr-greedy: gpu busy (124s): com.apple.WebKit[3316] 6%
+[23:13:55] bolt-omlx-lilicorr-greedy: gpu busy (186s): com.apple.WebKit[3316] 6%
+[23:14:57] bolt-omlx-lilicorr-greedy: gpu busy (248s): com.apple.WebKit[3316] 6%
+[23:15:51] bolt-omlx-lilicorr-greedy: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== bolt-omlx-lilicorr-greedy
+  decode T=0.0: 116.65 tok/s (e2e 116.95; 512 tok, finish=length, d4=0.5597)
+  decode T=0.0: 127.25 tok/s (e2e 125.71; 512 tok, finish=length, d4=0.9507)
+  decode T=0.0: 120.69 tok/s (e2e 120.84; 512 tok, finish=length, d4=0.9181)
+  decode T=0.0: 116.66 tok/s (e2e 114.74; 512 tok, finish=length, d4=0.9777)
+  decode T=0.0: 121.82 tok/s (e2e 122.26; 512 tok, finish=length, d4=0.9815)
+  decode median 120.69 (min 116.65, max 127.25) over 5/5 valid
+  decode T=0: median 123.59 (min 119.44, max 126.6) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4183), TTFT 4.47s -> 935 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [4179, 4242, 4281])
+  prefill 16000: 16515 tok (ref 16514), TTFT 16.67s -> 991 tok/s, cold cached=0 | cached TTFT median 0.42s over 3 turns (cached [16509, 16572, 16611])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 32.51 GB, resident mapped files 0.01 GB, swap used 14508.94 MB
+  -> <run-root>/out/results/bolt-omlx-lilicorr-greedy-20261018-231030.json
+[23:17:26] bolt-omlx-lilicorr-greedy: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:17:26] bolt-omlx-lilicorr-greedy: -> <run-root>/out/results/bolt-omlx-lilicorr-greedy-20261018-231030.json  flags: 1
