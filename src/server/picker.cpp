@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
 #include <cstring>
 #include <fstream>
 #include <mutex>
@@ -57,6 +58,31 @@ ojson read_state() {
   return j.is_object() ? j : ojson::object();
 }
 
+// state.json written whole, then renamed over the old one; a home that can't be written keeps no choice
+void write_state(const ojson& j) {
+  mkdir(hub::home_dir().c_str(), 0755);
+  const std::string path = state_path(), tmp = path + ".tmp." + std::to_string(getpid());
+  {
+    std::ofstream f(tmp);
+    if (!f) return;
+    f << j.dump(2) << "\n";
+    if (!f) {
+      f.close();
+      unlink(tmp.c_str());
+      return;
+    }
+  }
+  if (rename(tmp.c_str(), path.c_str()) != 0) unlink(tmp.c_str());
+}
+
+// The context picked last, as --context takes it (0: the default)
+int remembered_context() {
+  const ojson j = read_state();
+  if (!j.contains("context") || !j["context"].is_number_integer()) return 0;
+  const long long c = j["context"].get<long long>();
+  return c == kContextMax || (c > 0 && c <= INT_MAX) ? int(c) : 0;
+}
+
 // The catalog model and precision chosen last, if any (one the catalog no longer has is forgotten)
 bool remembered(const hub::CatalogModel** m, const hub::Variant** v) {
   const ojson j = read_state();
@@ -82,6 +108,7 @@ struct Choice {
   bool have = false;     // downloaded
   bool present = false;  // its folder is there (a download to finish, or files to check)
   Fit fit = Fit::kUnknown;
+  int context = 0;  // the context it would run with (0: not planned yet)
 };
 
 struct ModelRow {
@@ -89,6 +116,7 @@ struct ModelRow {
   std::vector<Choice> choices;
   size_t def = 0;           // the default precision
   Fit fit = Fit::kUnknown;  // some precision fits / the smallest is too big
+  bool slow = false;        // none fits with its draft model, some without it
   bool best = false;
 };
 
@@ -133,11 +161,15 @@ std::vector<ModelRow> catalog_rows() {
 
 void model_fit(ModelRow& row) {
   row.fit = Fit::kUnknown;
+  bool drafter = false, without = false;
   const Choice* smallest = nullptr;
   for (const auto& c : row.choices) {
     if (c.fit == Fit::kFits || c.fit == Fit::kNoDrafter) row.fit = Fit::kFits;
+    drafter = drafter || c.fit == Fit::kFits;
+    without = without || c.fit == Fit::kNoDrafter;
     if (!smallest || c.v->download_gb < smallest->v->download_gb) smallest = &c;
   }
+  row.slow = !drafter && without;
   if (row.fit != Fit::kFits && smallest && smallest->fit == Fit::kTooBig) row.fit = Fit::kTooBig;
 }
 
@@ -162,19 +194,41 @@ const hub::CatalogModel* best_of(const std::vector<ModelRow>& rows, bool* unknow
   return nullptr;
 }
 
-// The engine's plan of a precision's headers (hub::set_offline: only plans already on this Mac)
-Fit fit_of(const hub::ModelRef& r, const EngineOptions& opt, size_t budget) {
-  if (r.kind != hub::ModelRef::kCatalog) return Fit::kUnknown;
-  const int f = variant_fits(r, opt, budget);
-  if (f == 1) return Fit::kFits;
-  if (f < 0) return Fit::kUnknown;
-  try {  // a conversation fits, but not beside the drafter, or not even that
+// A precision at a context mode (the picker's: 0 the default, kContextMax the model's limit, or tokens): the context it
+// would run with, and whether it fits with its drafter. The engine's plan of its headers (hub::set_offline: only plans
+// already on this Mac).
+struct Planned {
+  Fit fit = Fit::kUnknown;
+  int context = 0;
+};
+Planned plan_choice(const hub::ModelRef& r, EngineOptions opt, size_t budget, int mode) {
+  Planned p;
+  if (r.kind != hub::ModelRef::kCatalog) return p;
+  try {
     const std::string d = hub::plan_dir(r);
-    if (d.empty()) return Fit::kUnknown;
-    return conversation_fits(d, opt.context, opt.slots, budget) ? Fit::kNoDrafter : Fit::kTooBig;
+    if (d.empty()) return p;
+    const int limit = model_context_limit(d);
+    p.context = mode == 0             ? default_context(d, opt, budget)
+                : mode == kContextMax ? (limit > 0 ? limit : kDefaultContext)
+                                      : (limit > 0 ? std::min(mode, limit) : mode);
+    opt.context = p.context;
+    const int f = variant_fits(r, opt, budget);
+    if (f == 1) p.fit = Fit::kFits;
+    else if (f == 0)  // a conversation fits, but not beside the drafter, or not even that
+      p.fit = conversation_fits(d, p.context, opt.slots, budget) ? Fit::kNoDrafter : Fit::kTooBig;
   } catch (const std::exception&) {
-    return Fit::kUnknown;
+    p.fit = Fit::kUnknown;
   }
+  return p;
+}
+
+// A context mode as the picker names it, and as --context takes it ("" for the default)
+std::string mode_label(int mode) { return mode == 0 ? "default" : mode == kContextMax ? "max" : term::context(mode); }
+std::string mode_arg(int mode) {
+  if (mode == 0) return "";
+  if (mode == kContextMax) return "max";
+  if (mode % 1048576 == 0) return std::to_string(mode / 1048576) + "m";
+  return mode % 1024 == 0 ? std::to_string(mode / 1024) + "k" : std::to_string(mode);
 }
 
 // Whether the plans of every model's default precision are on this Mac (without them the best model needs the network)
@@ -193,15 +247,17 @@ bool plans_here(const std::vector<ModelRow>& rows) {
 }
 
 // Plans every choice offline on a thread of its own, so that the picker shows at once and its marks fill in (a model
-// with a large config.json takes most of a second): the row in focus first, then each model's default, then the rest.
-// Nothing else plans while it runs (hub::set_offline is process-wide); finish() waits for the plan under way.
+// with a large config.json takes most of a second): the row in focus first, then each model's default, then the rest;
+// all of them again at another context mode. Nothing else plans while it runs (hub::set_offline is process-wide);
+// finish() waits for the plan under way.
 class Planner {
  public:
-  Planner(const std::vector<ModelRow>& rows, const EngineOptions& opt, size_t budget) : opt_(opt), budget_(budget) {
+  Planner(const std::vector<ModelRow>& rows, const EngineOptions& opt, size_t budget, int mode)
+      : opt_(opt), budget_(budget), mode_(mode) {
     for (const auto& r : rows) {
       refs_.emplace_back();
       for (const auto& c : r.choices) refs_.back().push_back(c.ref);
-      fits_.emplace_back(r.choices.size(), Fit::kUnknown);
+      plans_.emplace_back(r.choices.size());
       planned_.emplace_back(r.choices.size(), false);
       defs_.push_back(r.def);
     }
@@ -210,13 +266,33 @@ class Planner {
   }
   ~Planner() { finish(); }
   void focus(size_t row) { focus_ = int(row); }
+  // Every choice planned again at another context mode (its marks blank until they are)
+  void set_mode(int mode) {
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      if (mode == mode_ || stop_) return;
+      mode_ = mode;
+      ++gen_;
+      for (auto& v : plans_) std::fill(v.begin(), v.end(), Planned{});
+      for (auto& v : planned_) std::fill(v.begin(), v.end(), false);
+      done_ = false;
+      ++version_;
+      if (running_) return;  // the thread under way takes them up
+      running_ = true;
+    }
+    if (th_.joinable()) th_.join();  // done: it has left its loop
+    th_ = std::thread([this] { run(); });
+  }
   // The fits planned since the last call, into `rows`; whether there were any
   bool collect(std::vector<ModelRow>& rows) {
     std::lock_guard<std::mutex> lk(mu_);
     if (version_ == seen_) return false;
     seen_ = version_;
     for (size_t i = 0; i < rows.size(); ++i) {
-      for (size_t k = 0; k < rows[i].choices.size(); ++k) rows[i].choices[k].fit = fits_[i][k];
+      for (size_t k = 0; k < rows[i].choices.size(); ++k) {
+        rows[i].choices[k].fit = plans_[i][k].fit;
+        rows[i].choices[k].context = plans_[i][k].context;
+      }
       model_fit(rows[i]);
     }
     return true;
@@ -234,9 +310,10 @@ class Planner {
   }
 
  private:
-  // The next choice to plan, or false when all are
-  bool next(size_t* i, size_t* k) {
+  // The next choice to plan (at the mode and generation it is planned for), or false when all are
+  bool next(size_t* i, size_t* k, int* mode, int* gen) {
     std::lock_guard<std::mutex> lk(mu_);
+    *mode = mode_, *gen = gen_;
     const size_t f = size_t(focus_.load());
     auto open = [&](size_t a, size_t b) { return a < planned_.size() && b < planned_[a].size() && !planned_[a][b]; };
     if (f < defs_.size() && open(f, defs_[f])) return *i = f, *k = defs_[f], true;
@@ -248,15 +325,18 @@ class Planner {
       for (size_t b = 0; b < planned_[a].size(); ++b)
         if (open(a, b)) return *i = a, *k = b, true;
     done_ = true;
+    running_ = false;
     ++version_;
     return false;
   }
   void run() {
     size_t i, k;
-    while (!stop_ && next(&i, &k)) {
-      const Fit f = fit_of(refs_[i][k], opt_, budget_);
+    int mode, gen;
+    while (!stop_ && next(&i, &k, &mode, &gen)) {
+      const Planned p = plan_choice(refs_[i][k], opt_, budget_, mode);
       std::lock_guard<std::mutex> lk(mu_);
-      fits_[i][k] = f;
+      if (gen != gen_) continue;  // the mode changed while it planned: the choice waits to be planned again
+      plans_[i][k] = p;
       planned_[i][k] = true;
       ++version_;
     }
@@ -267,10 +347,11 @@ class Planner {
   std::vector<std::vector<hub::ModelRef>> refs_;
   std::vector<size_t> defs_;
   std::mutex mu_;
-  std::vector<std::vector<Fit>> fits_;
+  std::vector<std::vector<Planned>> plans_;
   std::vector<std::vector<bool>> planned_;
+  int mode_ = 0, gen_ = 0;
   int version_ = 0, seen_ = 0;
-  bool done_ = false;
+  bool done_ = false, running_ = true;
   std::atomic<int> focus_{0};
   std::atomic<bool> stop_{false};
   std::thread th_;
@@ -329,7 +410,7 @@ class Raw {
   bool handlers_ = false;
 };
 
-enum class Key { kNone, kUp, kDown, kLeft, kRight, kEnter, kEsc, kCancel, kFirst, kLast, kDigit };
+enum class Key { kNone, kUp, kDown, kLeft, kRight, kEnter, kEsc, kCancel, kFirst, kLast, kDigit, kTab, kBackTab };
 struct Press {
   Key key = Key::kNone;
   int digit = 0;
@@ -373,6 +454,7 @@ Press read_key(int ms) {
           case 'D': return {Key::kLeft};
           case 'H': return {Key::kFirst};
           case 'F': return {Key::kLast};
+          case 'Z': return {Key::kBackTab};  // Shift+Tab
           case '~':
             if (params == "1" || params == "7" || params == "5") return {Key::kFirst};
             if (params == "4" || params == "8" || params == "6") return {Key::kLast};
@@ -385,6 +467,7 @@ Press read_key(int ms) {
     return {};
   }
   if (c == '\r' || c == '\n') return {Key::kEnter};
+  if (c == '\t') return {Key::kTab};
   if (c == 3 || c == 4 || c == 'q') return {Key::kCancel};  // Ctrl+C, Ctrl+D
   if (c == 'k' || c == 16) return {Key::kUp};                // Ctrl+P
   if (c == 'j' || c == 14) return {Key::kDown};              // Ctrl+N
@@ -398,9 +481,18 @@ Press read_key(int ms) {
 
 int layout_width() { return std::min(columns(), 100); }
 
+// Whether this picker offers a context (kapitsa bench's does not: it runs its own)
+bool g_contexts = true;
+
 std::string keys_line(const char* enter, const char* esc) {
   const std::string sep = dim("  " + std::string(kDot) + "  ");
-  return "  ↑↓" + dim(" move") + sep + "enter" + dim(std::string(" ") + enter) + sep + "esc" + dim(std::string(" ") + esc);
+  return "  ↑↓" + dim(" move") + sep + "enter" + dim(std::string(" ") + enter) +
+         (g_contexts ? sep + "tab" + dim(" context") : std::string()) + sep + "esc" + dim(std::string(" ") + esc);
+}
+
+// "  ·  context 128K": the context mode, for a screen's title
+std::string context_title(int mode) {
+  return g_contexts ? dim("  " + std::string(kDot) + "  context ") + mode_label(mode) : std::string();
 }
 
 // "! text", wrapped under itself
@@ -415,10 +507,11 @@ std::string title_line(const std::string& title, const std::string& legend, int 
   return legend.empty() || gap < 3 ? title : title + std::string(size_t(gap), ' ') + legend;
 }
 
-std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t cur, size_t budget) {
+std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t cur, size_t budget, int mode) {
   const int W = layout_width();
-  std::vector<std::string> sizes, marks;
+  std::vector<std::string> sizes, marks, ctxs;
   int nw = 0, sw = 0, mw = 3;  // the marks' column keeps room for "✓ ★": it does not move once the ★ is planned
+  int cw = g_contexts ? 4 : 0;  // the context's, room for "128K", as each model's is planned
   bool any_have = false, any_best = false;
   for (const auto& r : rows) {
     const Choice& d = r.choices[r.def];
@@ -434,11 +527,13 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
     if (r.best) mk += (mk.empty() ? "  " : " ") + accent(kStar), any_best = true;
     sizes.push_back(gb(d.v->download_gb));
     marks.push_back(mk);
+    ctxs.push_back(d.context > 0 && g_contexts ? term::context(d.context) : "");
     nw = std::max(nw, width(r.m->name));
     sw = std::max(sw, width(sizes.back()));
     mw = std::max(mw, width(mk));
+    cw = std::max(cw, width(ctxs.back()));
   }
-  const int pw = W - 1 - (4 + nw + 3 + sw + 2 + mw + 3);
+  const int pw = W - 1 - (4 + nw + 3 + sw + 2 + mw + 3 + (cw ? cw + 3 : 0));
   std::vector<std::string> o = {""};
   std::vector<std::string> table;
   int tw = 0;
@@ -447,10 +542,14 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
     const bool sel = i == cur, big = r.fit == Fit::kTooBig;
     const std::string name = sel ? accent(bold(r.m->name)) : big ? dim(r.m->name) : r.m->name;
     std::string l = "  " + (sel ? accent(kArrow) : std::string(" ")) + " " + left(name, nw) + "   " +
-                    right(dim(sizes[i]), sw) + "  " + left(marks[i], mw);
+                    right(dim(sizes[i]), sw) + "  " + left(marks[i], mw) +
+                    (cw ? "   " + right(sel ? ctxs[i] : dim(ctxs[i]), cw) : std::string());
     if (pw >= 12) {
-      const std::string what = big ? "too big for this Mac" : r.m->brief.empty() ? r.m->about : r.m->brief;
-      l += "   " + (sel ? (big ? warn(clip(what, pw)) : clip(what, pw)) : dim(clip(what, pw)));
+      const std::string what = big        ? (mode && g_contexts ? "too big for this Mac at this context" : "too big for this Mac")
+                               : r.slow   ? "no room for its draft model at this context (slower)"
+                               : r.m->brief.empty() ? r.m->about
+                                                    : r.m->brief;
+      l += "   " + (sel ? (big || r.slow ? warn(clip(what, pw)) : clip(what, pw)) : dim(clip(what, pw)));
     }
     while (!l.empty() && l.back() == ' ') l.pop_back();
     tw = std::max(tw, width(l));
@@ -459,11 +558,12 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
   std::string legend;
   if (any_have) legend += accent(kOk) + dim(" downloaded");
   if (any_best) legend += (legend.empty() ? "" : "   ") + accent(kStar) + dim(" best for this Mac");
-  o.push_back(title_line("  " + bold("Pick a model"), legend, std::min(std::max(tw, 60), W - 1)));
+  o.push_back(title_line("  " + bold("Pick a model") + context_title(mode), legend, std::min(std::max(tw, 60), W - 1)));
   for (auto& l : table) o.push_back(l);
   if (rows[cur].fit == Fit::kTooBig) {
-    char b[160];
-    snprintf(b, sizeof b, "no precision of it fits the %.1f GB of GPU memory on this Mac", budget / 1e9);
+    char b[200];
+    snprintf(b, sizeof b, "no precision of it fits the %.1f GB of GPU memory on this Mac%s", budget / 1e9,
+             mode && g_contexts ? " with a conversation of this context" : "");
     warning_lines(o, b, W);
   }
   o.push_back("");
@@ -471,25 +571,27 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
   return o;
 }
 
-std::vector<std::string> precisions_screen(const ModelRow& r, size_t cur, const std::string& command, size_t budget) {
+std::vector<std::string> precisions_screen(const ModelRow& r, size_t cur, const std::string& command, size_t budget,
+                                           int mode) {
   const int W = layout_width();
-  int lw = 0, sw = 0;
+  int lw = 0, sw = 0, cw = g_contexts ? 4 : 0;
   bool any_have = false;
   std::vector<std::string> fits;
   for (const auto& c : r.choices) {
     lw = std::max(lw, width(c.label));
     sw = std::max(sw, width(gb(c.v->download_gb)));
     any_have = any_have || c.have;
+    if (g_contexts) cw = std::max(cw, width(c.context > 0 ? term::context(c.context) : ""));
     fits.push_back(c.fit == Fit::kFits        ? "fits"
                    : c.fit == Fit::kNoDrafter ? "fits, without the drafter (slower)"
-                   : c.fit == Fit::kTooBig    ? "too big for this Mac"
+                   : c.fit == Fit::kTooBig    ? (mode && g_contexts ? "too big at this context" : "too big for this Mac")
                                               : "");
   }
   // the fit column as wide as its longest text, so that the notes beside it stay put as the fits are planned
   int fw = width("too big for this Mac");
   for (const auto& f : fits) fw = std::max(fw, width(f));
   // the notes ("the default", "full precision") where the line has room for them
-  const bool notes = 4 + lw + 3 + sw + 2 + 1 + 2 + fw + 3 + width("full precision") <= W - 1;
+  const bool notes = 4 + lw + 3 + sw + 2 + 1 + 2 + (cw ? cw + 3 : 0) + fw + 3 + width("full precision") <= W - 1;
   std::vector<std::string> o = {""};
   std::vector<std::string> table;
   int tw = 0;
@@ -499,14 +601,16 @@ std::vector<std::string> precisions_screen(const ModelRow& r, size_t cur, const 
     const std::string label = sel ? accent(bold(c.label)) : big ? dim(c.label) : c.label;
     std::string l = "  " + (sel ? accent(kArrow) : std::string(" ")) + " " + left(label, lw) + "   " +
                     right(dim(gb(c.v->download_gb)), sw) + "  " + (c.have ? accent(kOk) : std::string(" ")) + "  " +
-                    left(sel && big ? warn(fits[i]) : dim(fits[i]), fw);
+                    (cw ? right(c.context > 0 ? (sel ? term::context(c.context) : dim(term::context(c.context))) : "", cw) + "   "
+                        : std::string()) +
+                    left(sel && (big || c.fit == Fit::kNoDrafter) ? warn(fits[i]) : dim(fits[i]), fw);
     const std::string note = i == r.def ? "the default" : c.v->name == "bf16" ? "full precision" : "";
     if (notes && !note.empty()) l += "   " + dim(note);
     while (!l.empty() && l.back() == ' ') l.pop_back();
     tw = std::max(tw, width(l));
     table.push_back(clip(l, W - 1));
   }
-  o.push_back(title_line("  " + bold(r.m->name) + dim("  " + std::string(kDot) + "  precision"),
+  o.push_back(title_line("  " + bold(r.m->name) + dim("  " + std::string(kDot) + "  precision") + context_title(mode),
                          any_have ? accent(kOk) + dim(" downloaded") : "", std::min(std::max(tw, 60), W - 1)));
   for (auto& l : table) o.push_back(l);
   if (r.choices[cur].fit == Fit::kTooBig) {
@@ -516,7 +620,8 @@ std::vector<std::string> precisions_screen(const ModelRow& r, size_t cur, const 
   }
   o.push_back("");
   o.push_back(keys_line("start", "back"));
-  const std::string hint = command + " --model " + hub::short_name(*r.m, *r.choices[cur].v) + " starts it without asking";
+  const std::string hint = command + " --model " + hub::short_name(*r.m, *r.choices[cur].v) +
+                           (mode && g_contexts ? " --context " + mode_arg(mode) : "") + " starts it without asking";
   if (width(hint) + 2 <= W - 1) o.push_back("  " + dim(hint));
   return o;
 }
@@ -535,7 +640,9 @@ bool can_prompt(bool yes) {
   return columns() >= 40 && term_rows() >= 14;
 }
 
-std::optional<std::string> pick_model(const EngineOptions& opt, size_t budget, const std::string& command) {
+std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const std::string& command, int context,
+                               bool ask_context) {
+  g_contexts = ask_context;
   (void)accent(" ");  // the terminal's colors are asked for before the keys are read
   guard_signals();    // the status block's signal handlers, which ours pass the signal on to
   Raw raw;            // from now on, keys wait for the picker (unechoed), even those typed while it gets ready
@@ -562,7 +669,17 @@ std::optional<std::string> pick_model(const EngineOptions& opt, size_t budget, c
         if (rows[i].choices[k].v == last_v) vcur[i] = k;
     }
   }
-  Planner planner(rows, opt, budget);
+  // the context: the --context given, else the one picked last, else the default; Tab goes through these (a size of
+  // its own among them)
+  std::vector<int> modes = {0, kMinDefaultContext, kDefaultContext, 262144, kContextMax};
+  int mode = context != 0 ? context : remembered_context();
+  if (!ask_context) modes = {mode = opt.context};
+  if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
+    auto at = modes.begin() + 1;
+    while (at != modes.end() && *at != kContextMax && *at < mode) ++at;
+    modes.insert(at, mode);
+  }
+  Planner planner(rows, opt, budget, mode);
   planner.focus(cur);
   bool moved = has_last;  // the cursor no longer follows the best model
   int step = 1;
@@ -577,7 +694,8 @@ std::optional<std::string> pick_model(const EngineOptions& opt, size_t budget, c
     return true;
   };
   auto draw = [&] {
-    status(step == 1 ? models_screen(rows, cur, budget) : precisions_screen(rows[cur], vcur[cur], command, budget));
+    status(step == 1 ? models_screen(rows, cur, budget, mode)
+                     : precisions_screen(rows[cur], vcur[cur], command, budget, mode));
   };
   plan();
   draw();
@@ -604,6 +722,12 @@ std::optional<std::string> pick_model(const EngineOptions& opt, size_t budget, c
         else if (p.key == Key::kLast) at = n - 1, moved = true;
         else if (p.key == Key::kDigit && size_t(p.digit) <= n) at = size_t(p.digit) - 1, moved = true;
         else if ((p.key == Key::kEsc || p.key == Key::kLeft) && step == 2) step = 1;
+        else if (p.key == Key::kTab || p.key == Key::kBackTab) {
+          const size_t m = size_t(std::find(modes.begin(), modes.end(), mode) - modes.begin());
+          mode = modes[(m + (p.key == Key::kTab ? 1 : modes.size() - 1)) % modes.size()];
+          planner.set_mode(mode);
+          plan();
+        }
         else if (p.key == Key::kEnter || (p.key == Key::kRight && step == 1)) {
           moved = true;
           if (step == 1 && rows[cur].choices.size() > 1) {
@@ -620,15 +744,22 @@ std::optional<std::string> pick_model(const EngineOptions& opt, size_t budget, c
     status("");  // the picker off the screen, then the terminal's modes back
     raw.restore();
   }
-  std::optional<std::string> out;
+  std::optional<Pick> out;
   if (chosen) {
     const ModelRow& r = rows[cur];
     const Choice& c = r.choices[vcur[cur]];
-    std::string l = "  " + accent(kOk) + " " + bold(r.m->name) + (c.label.empty() ? "" : dim(" " + std::string(kDot) + " ") + c.label);
+    const std::string sep = dim(" " + std::string(kDot) + " ");
+    std::string l = "  " + accent(kOk) + " " + bold(r.m->name) + (c.label.empty() ? "" : sep + c.label);
+    if (c.context > 0 && ask_context) l += sep + term::context(c.context) + dim(" context");
     if (!c.have)
       l += dim("  " + std::string(kDot) + "  " + (c.present ? "completes its download" : "downloads " + gb(c.v->download_gb)));
     line(l, stderr);
-    out = r.m->name + ":" + c.v->name;
+    out = Pick{r.m->name + ":" + c.v->name, mode};
+    if (ask_context && at_terminal() && remembered_context() != mode) {  // the next picker starts at this context
+      ojson j = read_state();
+      j["context"] = mode;
+      write_state(j);
+    }
   }
   planner.finish();  // the plan under way, before anything else plans
   return out;
@@ -640,20 +771,7 @@ void remember(const hub::ModelRef& r) {
   const std::string name = hub::full_name(*r.model, *r.variant);
   if (j.contains("model") && j["model"] == name) return;
   j["model"] = name;
-  // written whole, then renamed over the old one; a home that can't be written keeps no choice
-  mkdir(hub::home_dir().c_str(), 0755);
-  const std::string path = state_path(), tmp = path + ".tmp." + std::to_string(getpid());
-  {
-    std::ofstream f(tmp);
-    if (!f) return;
-    f << j.dump(2) << "\n";
-    if (!f) {
-      f.close();
-      unlink(tmp.c_str());
-      return;
-    }
-  }
-  if (rename(tmp.c_str(), path.c_str()) != 0) unlink(tmp.c_str());
+  write_state(j);
 }
 
 std::string model_label(const std::string& id) {

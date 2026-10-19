@@ -37,15 +37,16 @@ using json = nlohmann::ordered_json;
 namespace {
 
 const char* kHelp =
-    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--ctx N] [--loops N] [--api-key K] [agent arguments]\n"
+    "kapitsa claude|codex|opencode|pi [--model M] [--port P] [--context N] [--loops N] [--api-key K] [agent arguments]\n"
     "                                 [-- agent arguments]\n\n"
     "Starts Claude Code, Codex, opencode or Pi on Kapitsa. If Kapitsa is already serving on 127.0.0.1:P (default\n"
-    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with the\n"
-    "largest context up to 128K tokens that this Mac's memory holds, and stopped when the agent exits. Its log is in\n"
+    "8000), the agent uses that server; otherwise one is started for it (downloading the model the first time) with a\n"
+    "128K context (less where this Mac's memory is tight), and stopped when the agent exits. Its log is in\n"
     "%s/logs/serve-P.log.\n\n"
     "  --model M     the model to start (35b, 27b, 4b ...; kapitsa --help). Default: the best for this Mac\n"
     "  --port P      the server's port (default 8000)\n"
-    "  --ctx N       its context (default: the largest up to 131072 that fits)\n"
+    "  --context N   its context: tokens, k or m of them (128k, 1m), or max, the model's limit (default: 128K, or\n"
+    "                the most that keeps the draft model where memory is tight; --ctx N works too)\n"
     "  --loops N     Dory: loops per token, 1-4, when the agent asks for none (default 2; 4 is slower and more\n"
     "                accurate on agentic tasks)\n"
     "  --api-key K   the server's API key, if it was started with one\n\n"
@@ -108,18 +109,6 @@ int probe(int port, const std::string& key, Running* out, std::string* why) {
   }
   *why = "Port " + std::to_string(port) + " is in use by another program. Pass --port with a free port.";
   return -1;
-}
-
-// The context to start an agent's server with: the largest, in 8K steps from 128K down to 32K, for which one
-// conversation fits beside the model within the memory budget (the engine's own plan). Claude Code's system prompt
-// and tools alone are about 20-25K tokens.
-int agent_context(const std::string& dir, int slots, size_t budget) {
-  try {
-    for (int c = 131072; c >= 32768; c -= 8192)
-      if (conversation_fits(dir, c, slots, budget)) return c;
-  } catch (const std::exception&) {
-  }
-  return 32768;
 }
 
 std::string last_log_line(const std::string& path) {
@@ -321,7 +310,11 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     if (a == "--yes") yes = true;
     else if (is("--model")) model = value("--model");
     else if (is("--port")) port = to_int("--port", value("--port"), help.c_str());
-    else if (is("--ctx")) ctx = to_int("--ctx", value("--ctx"), help.c_str());
+    else if (is("--context") || is("--ctx")) {
+      std::string why;
+      ctx = parse_context(value(is("--context") ? "--context" : "--ctx"), &why);
+      if (!ctx) usage_error(why, help.c_str());
+    }
     else if (is("--loops")) {
       loops = to_int("--loops", value("--loops"), help.c_str());
       if (loops < 1 || loops > 4) usage_error("--loops: 1 to 4", help.c_str());
@@ -365,12 +358,13 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
                     ". Stop it, or pass --port to start " + model + " on another port.");
       ui::remember(want);
     }
-    if (ctx > 0 && ctx != run.context && term::fancy())
+    const std::string asked = ctx == kContextMax ? "max" : term::context(ctx);
+    if (ctx != 0 && ctx != run.context && term::fancy())
       ui::warning("The server on port " + std::to_string(port) + " is already running with a " + term::context(run.context) +
-                  "-token context; --ctx " + std::to_string(ctx) + " applies to a server this command starts.");
-    else if (ctx > 0 && ctx != run.context)
-      fprintf(stderr, "kapitsa: the server on port %d is already running with a %d-token context; --ctx %d applies to a "
-              "server this command starts.\n", port, run.context, ctx);
+                  "-token context; --context " + asked + " applies to a server this command starts.");
+    else if (ctx != 0 && ctx != run.context)
+      fprintf(stderr, "kapitsa: the server on port %d is already running with a %s-token context; --context %s applies to "
+              "a server this command starts.\n", port, term::context(run.context).c_str(), asked.c_str());
     if (loops > 0)
       fprintf(stderr, "kapitsa: the server on port %d is already running; --loops %d applies to a server this command "
               "starts.\n", port, loops);
@@ -379,9 +373,10 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     EngineOptions opt;
     const size_t budget = default_mem_budget();
     if (ask) {
-      const auto pick = ui::pick_model(opt, budget, "kapitsa " + name);
+      const auto pick = ui::pick_model(opt, budget, "kapitsa " + name, ctx);
       if (!pick) return 130;
-      model = *pick;  // as if --model named it
+      model = pick->model;  // as if --model named it
+      ctx = pick->context;  // and --context
     }
     hub::ModelRef ref;
     std::string serve_model = model;
@@ -402,12 +397,27 @@ int launch_agent(const std::string& name, int argc, char** argv, int first) {
     } catch (const hub::Error& e) {
       return fail(e.what());
     }
-    if (ctx == 0) ctx = agent_context(ref.dir, fit_slots(opt.slots), budget);  // the context first; serve then picks the slots
+    // the context first (serve then picks the slots, and caps a context past the model's limit, saying so): as
+    // asked, max the model's limit, else serve's default for this Mac (default_context)
+    if (ctx == kContextMax) {
+      ctx = model_context_limit(ref.dir);
+      if (ctx <= 0)
+        return fail(serve_model + " does not state the context it was trained for (max_position_embeddings in its "
+                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+    } else if (ctx == 0) {
+      ctx = default_context(ref.dir, opt, budget);
+    } else if (const int limit = model_context_limit(ref.dir); limit > 0 && ctx > limit) {
+      const std::string say = "--context " + term::context(ctx) + " is more than " + serve_model +
+                              " was trained for: it runs with " + term::context(limit) + ".";
+      if (term::fancy()) ui::note(say);
+      else fprintf(stderr, "kapitsa: %s\n", say.c_str());
+      ctx = limit;
+    }
     if (const std::string p = port_problem("127.0.0.1", port); !p.empty()) return fail(p);
     mkdir(hub::home_dir().c_str(), 0755);
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);
     std::vector<std::string> sargv = {self_path(), "serve", "--model", serve_model, "--port", std::to_string(port),
-                                      "--ctx", std::to_string(ctx)};
+                                      "--context", std::to_string(ctx)};
     if (!key.empty()) sargv.insert(sargv.end(), {"--api-key", key});
     if (loops > 0) sargv.insert(sargv.end(), {"--loops", std::to_string(loops)});
     std::vector<std::string> senv;

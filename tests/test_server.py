@@ -262,6 +262,18 @@ def cli_checks(kapitsa):
     t0 = time.time()
     rc, _, err = run("serve", "--model", folder, "--port", str(busy))
     check("cli: a busy port fails at once, before loading", rc == 1 and "already in use" in err and time.time() - t0 < 10, err)
+    # --context: tokens, k or m of them, or max (--ctx too); anything else is refused before the model is looked at
+    for ok in ["131072", "128k", "256K", "1m", "max"]:
+        for flag in ["--context", "--ctx"]:
+            rc, _, err = run("serve", "--model", folder, "--port", str(busy), flag, ok)
+            check(f"cli: serve {flag} {ok} is taken", rc == 1 and "already in use" in err, err)
+    for bad in ["12q", "0", "-5", "128kb", "1.5m", "99999999999", ""]:
+        rc, _, err = run("serve", "--model", folder, "--context", bad)
+        check(f"cli: serve --context {bad!r} is refused", rc == 2 and "--context takes tokens" in err, err)
+        rc, _, err = run("claude", "--context", bad)
+        check(f"cli: claude --context {bad!r} is refused", rc == 2 and "--context takes tokens" in err, err)
+    rc, _, err = run("doctor", "--context", "max")
+    check("cli: doctor --context max asks for a size", rc == 2 and "--context 256k" in err, err)
     s.close()
     rc, _, err = run("serve", "--model", "nonsense")
     check("cli: serve with an unknown model", rc == 2 and "Unknown model" in err, err)

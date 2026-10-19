@@ -27,10 +27,13 @@ code; `kapitsa update --check` exits 100 when a newer release is out.
 Run in a terminal without `--model`, `kapitsa serve` and the coding-agent commands ask which model to start: the models
 with their download size, ✓ where downloaded and ★ on the best for this Mac, then the chosen model's precisions with
 their sizes and whether each fits this Mac's memory (the engine's own plan of its headers; a model or precision that
-does not fit is marked too big and can still be chosen, with a warning). ↑ and ↓ (or j and k) move, Enter chooses, Esc
-goes back or cancels, Ctrl+C cancels. A model not downloaded yet says how much it downloads, then downloads as usual.
+does not fit is marked too big and can still be chosen, with a warning). Each shows the context it would run with: Tab
+(Shift+Tab back) changes it on both screens, between the default ([Context](#context)), 32K, 128K, 256K and max, the
+model's own limit, and a model or precision that would run without its draft model at that context says so. ↑ and ↓
+(or j and k) move, Enter chooses, Esc goes back or cancels, Ctrl+C cancels. A model not downloaded yet says how much it
+downloads, then downloads as usual.
 
-The first choice is the last one, so Enter twice starts the same model again. It is kept in
+The first choice is the last one, with its context, so Enter twice starts the same model again. It is kept in
 `~/.cache/kapitsa/state.json` (`KAPITSA_HOME`), and a `--model` that names a catalog model, typed in a terminal, updates
 it too; with no last choice, the best model for this Mac comes first. A coding-agent command that finds a server
 already running on its port uses it and says so (stop it to pick another model).
@@ -68,8 +71,8 @@ see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./
 
 The first start of a model downloads it; later starts use the copy on disk, offline too. A catalog model that would not
 start on this Mac is refused before the download, naming one that fits. Without `--model`, `kapitsa serve` takes the
-first of `35b`, `27b` and `4b` that holds one conversation of `--ctx` tokens within this Mac's memory budget (a model
-not downloaded yet is planned from its file headers, a few hundred KB).
+first of `35b`, `27b` and `4b` that holds one conversation of 32K tokens (or of the `--context` given) within this
+Mac's memory budget (a model not downloaded yet is planned from its file headers, a few hundred KB).
 
 The API calls the model by its name (`qwen3.5-4b`), as `name:variant` for a variant other than the default
 (`qwen3.6-35b-a3b:6bit`), or by its repo id or folder name; `--model-id` sets another. The server runs one model, so a
@@ -176,9 +179,9 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--port PORT` | `8000` | Listen port. A port in use is an error. |
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
 | `--model-id ID` | the model's name | The model's name in the API. |
-| `--ctx TOKENS` | `32768` | Context per conversation. Its KV cache grows as the conversation fills. |
+| `--context N` | `128k`, less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
-| `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--ctx` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
+| `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--context` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
 | `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
@@ -187,6 +190,20 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
+
+### Context
+
+`--context` sets how long one conversation can get: its prompt, its history and the reply share it. Without it,
+`kapitsa serve` and the coding-agent commands take 128K tokens, or the model's own limit where that is less, or less
+where this Mac's memory is tight: the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K,
+with one full conversation beside it. The server says which context it took and why. A context costs no memory until a
+conversation fills it (the KV cache grows with it), so the default only sizes what memory is kept for.
+
+`--context max` takes the model's own limit (`max_position_embeddings` in its `config.json`): 256K for the Qwen models,
+Dory and Bolt, 1M for Lightning and Super-VL. A longer `--context` runs at that limit, and the server says so. Where a
+long context leaves no room for the draft model, the model runs without it (slower); the model picker
+([Which model](#which-model)) and `kapitsa doctor` show where. A longer context also lets a prompt grow longer before a
+coding agent compacts it, and a long prompt takes a while to read whenever it is not cached.
 
 ### Requests at once
 
@@ -211,7 +228,7 @@ each other), and sampled requests draw other random numbers, so their replies di
 a draft model (`--dflash none`) and with `NI_BATCH=0`, requests at once take turns on the GPU, each with the tokens it
 gets alone, and write about as many tokens per second in all as one alone.
 
-Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--ctx` conversation,
+Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--context` conversation,
 the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request
 waits for one (the log says so); a streamed chat completion whose client disconnects stops waiting.
 
@@ -320,8 +337,8 @@ kapitsa pi -p "list the TODOs in this repo"
 
 Each command checks that the agent is installed (else it says how to install it). If Kapitsa is serving on `127.0.0.1:P`
 (`--port P`, default 8000), the agent uses that server, its model and its context (a `--model` naming another model is
-an error). Otherwise the command downloads the model if needed, starts `kapitsa serve` with the largest context up to
-128K tokens that one conversation can hold beside the model in this Mac's memory (`--ctx N` sets it), logging to
+an error). Otherwise the command downloads the model if needed, starts `kapitsa serve` with serve's default context
+([Context](#context): 128K, less where memory is tight; `--context N` sets it), logging to
 `~/.cache/kapitsa/logs/serve-P.log`, and stops it when the agent exits or the command is killed.
 
 Without `--model` in a terminal, the command asks which model to start ([Which model](#which-model)); `--yes` skips
@@ -384,7 +401,7 @@ under pressure. When memory is short:
 - At start, the fixed part and an 8K-token KV cache must fit, else the server exits with `insufficient memory: ...`,
   what each part needs and what would help (fewer `--slots`, `--prefill-chunk 1024`, no draft model, a smaller model,
   `--mem-budget`). `kapitsa serve --model NAME` checks this before downloading.
-- Where the draft model or 2048-token prefill chunks would keep one `--ctx` conversation from fitting, the engine
+- Where the draft model or 2048-token prefill chunks would keep one `--context` conversation from fitting, the engine
   leaves the draft model out or uses 1024-token chunks.
 - A prompt that needs more room takes it from cached image embeddings, then from idle slots, least recently used first
   (their conversations are read again when they return), then from the Neural Engine split (prefill then runs on the
@@ -396,12 +413,13 @@ under pressure. When memory is short:
 `kapitsa doctor` shows this Mac (chip, GPU cores, RAM, macOS, the working set, Kapitsa's budget, the Neural Engine) and,
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
 or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which one
-`--model NAME` takes. It assumes `--ctx 65536` and, per model, the slots the server would start with (the catalog check:
-2; `--ctx`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change that); `--model M`, repeatable, checks
-other models, downloaded or not; `--json` prints the same for programs (`starts`, `fits_full_context`,
-`kv_tokens_in_budget`, `decoding`, ...).
+`--model NAME` takes. It assumes `--context 64k` and, per model, the slots the server would start with (the catalog
+check: 2; `--context`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change that), and shows the context
+`kapitsa serve` takes there by default; `--model M`, repeatable, checks other models, downloaded or not; `--json` prints
+the same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `default_context`, `context_limit`,
+`decoding`, ...).
 
-What fits, for the 4-bit variants at `--ctx 65536 --slots 2`, with the tokens of KV cache that fit in all. macOS sets
+What fits, for the 4-bit variants at `--context 64k --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:
 
 | Mac RAM | Budget | `4b` | `27b` | `35b` |
@@ -423,7 +441,7 @@ refused before the download (`... does not fit this Mac: its weights alone (70.1
 
 Lightning's weights are 18.2 GB (its MTP head is not loaded): on 16 GB Macs and on 24 GB at the smaller budget it is
 refused before the download, on 24 GB at 19.3 GB it starts without its draft model (79K tokens of KV cache in all at
-`--ctx 65536`), on 32 GB it runs with the draft model (0.7 GB at two slots) and 370K-970K tokens of KV cache, and from
+`--context 64k`), on 32 GB it runs with the draft model (0.7 GB at two slots) and 370K-970K tokens of KV cache, and from
 48 GB two conversations of its full 1M-token context fit.
 
 ## Benchmarking this Mac

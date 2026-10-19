@@ -604,9 +604,9 @@ int run(const Options& o) {
   }
   if (g_tui) term::line("\n  " + term::badge(" kapitsa ") + "  " + dim(std::string(KAPITSA_VERSION) + "  " + term::kDot + "  bench"));
   if (model.empty() && !o.json && ui::can_prompt(o.yes)) {
-    const auto pick = ui::pick_model(eo, budget, "kapitsa bench");
+    const auto pick = ui::pick_model(eo, budget, "kapitsa bench", 0, false);  // the benchmark runs its own context
     if (!pick) return 130;
-    model = *pick;
+    model = pick->model;
   }
   hub::ModelRef ref;
   try {

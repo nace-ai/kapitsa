@@ -195,11 +195,11 @@ static std::vector<const hub::CatalogModel*> by_preference() {
 }
 
 // The best catalog model for this Mac: the first in by_preference's order with a variant whose memory plan, the
-// engine's own, leaves room for one conversation of --ctx tokens within the budget and keeps its drafter (each model
-// takes its default variant, else the first of its fallbacks that fits: pick_variant), or failing that whose smallest
-// variant holds the conversation without the drafter (MTP decoding). A model not downloaded yet is
-// planned from its headers (hub::plan_dir: a few hundred KB, fetched once); one that cannot be planned (offline)
-// cannot be downloaded either and is skipped. False if none can be planned.
+// engine's own, leaves room for one conversation of opt.context tokens (at most the model's limit) within the budget
+// and keeps its drafter (each model takes its default variant, else the first of its fallbacks that fits:
+// pick_variant), or failing that whose smallest variant holds the conversation without the drafter (MTP decoding).
+// A model not downloaded yet is planned from its headers (hub::plan_dir: a few hundred KB, fetched once); one that
+// cannot be planned (offline) cannot be downloaded either and is skipped. False if none can be planned.
 bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out, std::string* why) {
   bool have = false;
   for (const hub::CatalogModel* mp : by_preference()) {
@@ -211,9 +211,10 @@ bool ni::best_model(const EngineOptions& opt, size_t budget, hub::ModelRef* out,
       return true;
     }
     if (variant_fits(r, opt, budget) != 0) continue;  // not plannable (offline)
-    // its smallest variant without the drafter: one --ctx conversation still fits (MTP decoding instead)
+    // its smallest variant without the drafter: one conversation still fits (MTP decoding instead)
     try {
-      if (conversation_fits(hub::plan_dir(r), opt.context, fit_slots(opt.slots), budget)) {
+      const std::string d = hub::plan_dir(r);
+      if (conversation_fits(d, context_within_limit(d, opt.context), fit_slots(opt.slots), budget)) {
         *out = r;
         return true;
       }
@@ -321,7 +322,9 @@ static void print_serve_help() {
          "  --api-key KEY          require \"Authorization: Bearer KEY\" or \"x-api-key: KEY\" (the chat page asks for\n"
          "                         it once)\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
-         "  --ctx TOKENS           context per conversation (default 32768)\n"
+         "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
+         "                         model's limit). Default: 128K, or less where this Mac's memory is tight (the\n"
+         "                         most that keeps the draft model). --ctx N works too\n"
          "  --slots N              requests that run at once, each keeping its conversation ready for instant\n"
          "                         follow-ups; more wait for a free slot (default: up to 4, as memory allows)\n"
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
@@ -505,6 +508,7 @@ static void exit_with_parent() {
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
   EngineOptions opt;
+  int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
   bool verbose = false, yes = false;
@@ -522,7 +526,11 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--model-id") opt.model_id = next();
     else if (a == "--host") host = next();
     else if (a == "--port") port = to_int(a, next(), help);
-    else if (a == "--ctx") opt.context = to_int(a, next(), help);
+    else if (a == "--context" || a == "--ctx") {
+      std::string why;
+      context_req = parse_context(next(), &why);
+      if (!context_req) usage_error(why, help);
+    }
     else if (a == "--slots") opt.slots = to_int(a, next(), help);
     else if (a == "--spec") opt.spec_depth = to_int(a, next(), help);
     else if (a == "--dflash") opt.dflash = next();
@@ -544,6 +552,9 @@ static int serve(int argc, char** argv, int first) {
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  // the model and its precision are picked for a conversation of the context asked for, else of 32K (the default
+  // context then grows from there where it costs nothing: default_context)
+  opt.context = context_req > 0 ? context_req : kMinDefaultContext;
   {  // looped models: the memory plans before the model loads count what it will run
     LoopKv kv = LoopKv::last_loop;
     if (!opt.loop_kv.empty()) parse_loop_kv(opt.loop_kv, &kv);
@@ -571,9 +582,11 @@ static int serve(int argc, char** argv, int first) {
     if (const std::string why = port_problem(host, port); !why.empty()) return fail(why);
     ui::serve_header(KAPITSA_VERSION);
     header = true;
-    const auto pick = ui::pick_model(opt, budget, "kapitsa serve");
+    const auto pick = ui::pick_model(opt, budget, "kapitsa serve", context_req);
     if (!pick) return 130;
-    model = *pick;
+    model = pick->model;
+    context_req = pick->context;
+    opt.context = context_req > 0 ? context_req : kMinDefaultContext;
   }
   const bool chosen = !model.empty();  // named or picked: kept for the next question
   hub::ModelRef ref;
@@ -610,9 +623,11 @@ static int serve(int argc, char** argv, int first) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
     // here is refused, with the one that fits
     if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
-      const int slots = opt.slots > 0 ? opt.slots : auto_slots(dir, opt, budget);
-      const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, opt.context, slots, budget, opt.prefill_chunk);
-      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, opt.context, slots);
+      EngineOptions po = opt;  // a context past the model's limit runs at the limit
+      po.context = context_within_limit(dir, opt.context);
+      const int slots = po.slots > 0 ? po.slots : auto_slots(dir, po, budget);
+      const LoadPlan lp = plan_load(dir, po.dflash, po.spec_depth == 0, po.context, slots, budget, po.prefill_chunk);
+      const StartNeed need = start_need(dir, lp, lp.prefill_chunk, po.context, slots);
       if (need.bytes > budget) {
         // a variant of the same model that fits, else the best model that does
         bool fits = false;
@@ -654,6 +669,41 @@ static int serve(int argc, char** argv, int first) {
     return stopped(e);
   } catch (const hub::Error& e) {
     return fail(e.what());
+  }
+  // the context: the one asked for, within what the model was trained for, else the default for this Mac
+  {
+    const int limit = model_context_limit(opt.model_dir);
+    std::string say;
+    if (context_req == kContextMax) {
+      if (limit <= 0)
+        return fail(ref.name + " does not state the context it was trained for (max_position_embeddings in its "
+                    "config.json), so --context max has no size here: give it in tokens (--context 128k).", 2);
+      opt.context = limit;
+    } else if (context_req > 0) {
+      opt.context = context_req;
+      if (limit > 0 && context_req > limit) {
+        opt.context = limit;
+        say = "--context " + term::context(context_req) + " is more than " + ref.name + " was trained for: it runs with " +
+              term::context(limit) + ".";
+      }
+    } else {
+      ContextWhy why = ContextWhy::kDefault;
+      opt.context = default_context(opt.model_dir, opt, budget, &why);
+      const std::string c = "Context: " + term::context(opt.context) + " tokens per conversation";
+      const std::string max = limit > opt.context ? " (--context max: " + term::context(limit) + ")" : "";
+      switch (why) {
+        case ContextWhy::kDefault: say = c + max + "."; break;
+        case ContextWhy::kModelLimit: say = c + ", all that " + ref.name + " takes."; break;
+        case ContextWhy::kMemoryWithDrafter:
+          say = c + ", the most this Mac holds with the draft model (a longer --context runs without it, slower).";
+          break;
+        case ContextWhy::kMemory: say = c + ", the most this Mac's memory holds."; break;
+      }
+    }
+    if (!say.empty()) {
+      if (tui) ui::note(say);
+      else fprintf(stderr, "%s\n", say.c_str());
+    }
   }
   if (opt.model_id.empty()) opt.model_id = ref.id;
   // the server compiles the Neural Engine program in the background (no 40 s start after the ANE
