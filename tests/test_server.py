@@ -228,6 +228,22 @@ def cli_checks(kapitsa):
               j.get("revision") == rev and j.get("companions") == [] and
               j.get("id") == (name if dv == "nvfp4" else name + ":" + dv) and
               j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
+    nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
+    for a, name, dv, default, repo, rev in [
+            ("nano-4b", nano4, "fp8", True, "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8", "3fe6dab75665a93884214ad4b1b95cf02717d081"),
+            ("nemotron-nano-4b", nano4, "fp8", True, "nvidia/NVIDIA-Nemotron-3-Nano-4B-FP8",
+             "3fe6dab75665a93884214ad4b1b95cf02717d081"),
+            ("nano-4b:bf16", nano4, "bf16", False, "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16", "dfaf35de3e30f1867dd8dbc38a7fc9fb52d3914f"),
+            ("nano-9b", nano9, "nvfp4", True, "nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4", "8556c9164ddb43fe1f4f4ad730593b3c5e3f7328"),
+            ("nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4", nano9, "nvfp4", True, "nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4",
+             "8556c9164ddb43fe1f4f4ad730593b3c5e3f7328")]:
+        j = plan(a)
+        check(f"cli: {a} -> {name}:{dv}, no drafter",
+              j.get("model") == name + ":" + dv and j.get("kind") == "catalog" and j.get("repo") == repo and
+              j.get("revision") == rev and j.get("companions") == [] and
+              j.get("id") == (name if default else name + ":" + dv) and
+              j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)
