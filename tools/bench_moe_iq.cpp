@@ -755,7 +755,7 @@ void case_pf(const Layer& l, uint32_t T) {
   for (const Cfg& c : cfgs)
     vs.push_back({"bucket3 + qrmi gu n" + std::to_string(c.gbn) + c.gk + " dn n" + std::to_string(c.dbn) + c.dk,
                   [&, c](Encoder& e, int) { enc(e, c, true); }});
-  time_variants(vs, std::max(1u, 8192u / T), 1, flop / 1e3, "GFLOP/s");
+  time_variants(vs, std::max(1u, 8192u / T), 1, flop / 1e3, "TFLOP/s");
 }
 
 }  // namespace
