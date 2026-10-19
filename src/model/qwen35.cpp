@@ -47,6 +47,17 @@ static int env_int(const char* n, int def) {
   return v && *v ? atoi(v) : def;
 }
 
+// The large prefill tiles of the formats other than bf16 with M tiles along grid x (enc_qrf), the M1's default
+// (NI_QRF_MF=0/1 overrides): the threadgroups running together share the weight tile through the cache. Each output
+// keeps its K order, so the results are the same bit for bit. M1 Pro, 2048 x 8192 x 2048 alone: 6-bit group 64 25.3 ->
+// 23.8 ms, 5-bit 24.9 -> 23.8, 3-bit 27.3 -> 25.8, 4-bit group 32 59.5 -> 21.4; a 40-layer stand-in of
+// Qwen3.6-35B-A3B UD-IQ2_XXS (6-bit projections from Q5_K) reads 4096 tokens in 8.28 instead of 9.02 s. The other chips
+// keep the N-fast order until measured there.
+static bool qrf_mf_low() {
+  static const bool v = env_int("NI_QRF_MF", Gpu::get().apple_family() <= 7 ? 1 : 0) != 0;
+  return v;
+}
+
 // GPU cores (Gpu::core_count; NI_GPU_CORES overrides). The dispatch heuristics below that size grids to fill the
 // GPU were tuned on the 20-core M4 Pro and scale with it, so they are unchanged there.
 static uint32_t gpu_cores() {
@@ -349,6 +360,8 @@ void Qwen35::prewarm_pipelines() {
       if (f == "f16") {
         names.insert("qrf_f16_m32_n128_mf");
         names.insert("qrf_gu_f16_m32_n64_mf");
+      } else if (qrf_mf_low()) {
+        names.insert("qrf_" + f + "_m32_n128_mf");
       }
       for (int t = 1; t <= 8; ++t) {
         names.insert("qmmsf_" + f + "_t" + std::to_string(t));
@@ -1897,6 +1910,7 @@ static bool qmm8_for(const QLinear& L) { return qmm8_mode() == 2 || (qmm8_mode()
 // Prefill GEMM for the formats of wfmt.metal (bf16, 3/5/6-bit, 4-bit group 32): qmr's tiles (m32 x n128 from 64
 // rows, m16 x n64 below, m8 x n64 up to 8). NI_QRF16_MF (read once; default on): bf16 large tiles with the M
 // tiles along grid x, so the threadgroups running together share the weight tile through the cache.
+// NI_QRF_MF (read once; default on for the M1 (Apple7) only): the other formats' large tiles too (qrf_mf_low).
 void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffer& y, int M, bool add) {
   static const bool mf = env_int("NI_QRF16_MF", 1) != 0;
   std::string n = "qrf_" + L.fmt();
@@ -1904,7 +1918,7 @@ void Qwen35::enc_qrf(Encoder& e, const QLinear& L, const Buffer& xh, const Buffe
   bool mfast = false;
   if (M <= 8) n += "_m8_n64", bm = 8, bn = 64, th = 64;
   else if (M < 64 || L.N <= 64) n += "_m16_n64", bm = 16, bn = 64;
-  else if (L.dense() && mf) n += "_m32_n128_mf", mfast = true;
+  else if (L.dense() ? mf : qrf_mf_low()) n += "_m32_n128_mf", mfast = true;
   else n += "_m32_n128";
   e.use(pipe(n));
   kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
