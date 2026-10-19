@@ -1,0 +1,108 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-19T12:25:03Z",
+  "kapitsa": {
+    "version": "0.1.37",
+    "commit": "9ad0175"
+  },
+  "mac": {
+    "identifier": "Mac15,7",
+    "name": "MacBook Pro (16-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Pro",
+    "cpu_cores": 12,
+    "gpu_cores": 18,
+    "memory_gb": 36,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "nemotron-3.5-lightning",
+    "title": "Nemotron 3.5 Lightning 30B-A3B",
+    "variant": "nvfp4",
+    "precision": "nvfp4",
+    "catalog": true,
+    "revision": "bee7596",
+    "decoding": "DSpark",
+    "decoding_detail": "DSpark speculative decoding (7-token blocks)",
+    "drafter": "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark@6d127b5"
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 73.23,
+      "runs_tps": [
+        73.02,
+        73.23,
+        64.58,
+        76.74,
+        75.36
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 72.3,
+      "runs_tps": [
+        72.3,
+        70.79,
+        76.22,
+        71.35,
+        77.86
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4185,
+        "ttft_s": 5.6115,
+        "tps": 745.8,
+        "followup_s": [
+          0.169,
+          0.1944,
+          0.1639
+        ],
+        "followup_median_s": 0.169
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16516,
+        "ttft_s": 24.4809,
+        "tps": 674.6,
+        "followup_s": [
+          0.1975,
+          0.2151,
+          0.1845
+        ],
+        "followup_median_s": 0.1975
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 18.62,
+    "mapped_gb": 0.67
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}

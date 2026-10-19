@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-19T12:18:12Z",
+  "kapitsa": {
+    "version": "0.1.37",
+    "commit": "9ad0175"
+  },
+  "mac": {
+    "identifier": "Mac15,7",
+    "name": "MacBook Pro (16-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Pro",
+    "cpu_cores": 12,
+    "gpu_cores": 18,
+    "memory_gb": 36,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "nemotron-3.5-bolt",
+    "title": "Nemotron 3.5 Bolt 74B-A9B",
+    "variant": "24gb",
+    "precision": "NVIDIA 24 GB",
+    "catalog": true,
+    "revision": "c6cc2e8",
+    "decoding": "LiLiCorr",
+    "decoding_detail": "LiLiCorr speculative decoding (7-token blocks)",
+    "drafter": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-LiLiCorr@abd4780"
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 43.41,
+      "runs_tps": [
+        42.12,
+        43.41,
+        48.4,
+        43.19,
+        43.9
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 48.07,
+      "runs_tps": [
+        47.6,
+        48.07,
+        47.72,
+        50.51,
+        51.25
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4182,
+        "ttft_s": 10.1245,
+        "tps": 413.1,
+        "followup_s": [
+          0.3217,
+          0.3521,
+          0.3092
+        ],
+        "followup_median_s": 0.3217
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16515,
+        "ttft_s": 40.5522,
+        "tps": 407.3,
+        "followup_s": [
+          0.34,
+          0.3916,
+          0.3518
+        ],
+        "followup_median_s": 0.3518
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.75,
+    "mapped_gb": 1.01
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4289)"
+  ],
+  "invalid": []
+}

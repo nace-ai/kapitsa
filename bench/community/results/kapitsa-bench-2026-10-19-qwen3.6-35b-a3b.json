@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-19T12:37:28Z",
+  "kapitsa": {
+    "version": "0.1.37",
+    "commit": "9ad0175"
+  },
+  "mac": {
+    "identifier": "Mac15,7",
+    "name": "MacBook Pro (16-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Pro",
+    "cpu_cores": 12,
+    "gpu_cores": 18,
+    "memory_gb": 36,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "qwen3.6-35b-a3b",
+    "title": "Qwen3.6-35B-A3B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "9546051",
+    "decoding": "DFlash2",
+    "decoding_detail": "DFlash2 speculative decoding (verify 7 of 7)",
+    "drafter": "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6"
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 105.95,
+      "runs_tps": [
+        112.29,
+        115.77,
+        93.22,
+        94.19,
+        105.95
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 116.25,
+      "runs_tps": [
+        118.08,
+        116.54,
+        114.65,
+        112.56,
+        116.25
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4132,
+        "ttft_s": 4.5555,
+        "tps": 907.0,
+        "followup_s": [
+          0.0748,
+          0.0882,
+          0.0694
+        ],
+        "followup_median_s": 0.0748
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16286,
+        "ttft_s": 21.1546,
+        "tps": 769.9,
+        "followup_s": [
+          0.0892,
+          0.1058,
+          0.0882
+        ],
+        "followup_median_s": 0.0892
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 20.84
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
