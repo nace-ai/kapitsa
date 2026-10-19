@@ -1,0 +1,31 @@
+
+===== q36-35b-mlxserve-mtp  [mlx-serve] mlx-serve + MTP (depth up to 2)  version 26.10.2
+[20:37:18] q36-35b-mlxserve-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 19094 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[20:37:18] q36-35b-mlxserve-mtp: starting ~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model ~/.cache/kapitsa/benchmark-models/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit --host 127.0.0.1 --port 8173 --ctx-size 32768 --no-drafter --mtp-max-depth 2
+[20:37:22] q36-35b-mlxserve-mtp: ready after 4s (pid 19121, listener 19121)
+[20:37:24] q36-35b-mlxserve-mtp:  warm-up prefill~2.9k+decode64: ok (1.67s)
+[20:37:24] q36-35b-mlxserve-mtp:  warm-up tools: ok (0.45s)
+[20:37:26] q36-35b-mlxserve-mtp:  warm-up decode512#1: ok (2.08s)
+[20:37:29] q36-35b-mlxserve-mtp:  warm-up decode512#2: ok (2.26s)
+[20:37:31] q36-35b-mlxserve-mtp:  warm-up decode512#3: ok (2.13s)
+[20:38:33] q36-35b-mlxserve-mtp: gpu busy (62s): com.apple.WebKit[3316] 7%
+[20:39:34] q36-35b-mlxserve-mtp: gpu busy (124s): com.apple.WebKit[3316] 6%
+[20:40:36] q36-35b-mlxserve-mtp: gpu busy (186s): com.apple.WebKit[3316] 7%
+[20:41:38] q36-35b-mlxserve-mtp: gpu busy (248s): com.apple.WebKit[3316] 6%
+[20:42:32] q36-35b-mlxserve-mtp: GPU not quiet after 301s (['com.apple.WebKit[3316] 7%']); benchmarking anyway, contention will be flagged
+== q36-35b-mlxserve-mtp
+  decode T=0.6: 274.66 tok/s (e2e 270.92; 512 tok, finish=length, d4=0.9719)
+  decode T=0.6: 267.04 tok/s (e2e 264.96; 512 tok, finish=length, d4=0.5603)
+  decode T=0.6: 253.70 tok/s (e2e 252.23; 512 tok, finish=length, d4=0.9842)
+  decode T=0.6: 261.81 tok/s (e2e 260.01; 512 tok, finish=length, d4=0.5682)
+  decode T=0.6: 264.06 tok/s (e2e 261.78; 512 tok, finish=length, d4=0.9607)
+  decode median 264.06 (min 253.7, max 274.66) over 5/5 valid
+  decode T=0: median 277.17 (min 268.96, max 279.09) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 1.08s -> 3818 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [4103, 4163, 4199])
+  prefill 16000: 16284 tok (ref 16286), TTFT 3.23s -> 5036 tok/s, cold cached=0 | cached TTFT median 0.16s over 3 turns (cached [16253, 16312, 16364])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.77 GB, resident mapped files 0.00 GB, swap used 14669.0 MB
+  -> <run-root>/out/results/q36-35b-mlxserve-mtp-20261018-203718.json
+[20:43:16] q36-35b-mlxserve-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[20:43:16] q36-35b-mlxserve-mtp: -> <run-root>/out/results/q36-35b-mlxserve-mtp-20261018-203718.json  flags: 1

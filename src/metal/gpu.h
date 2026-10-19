@@ -43,6 +43,7 @@ class Gpu {
   bool core_count_measured() const;  // read from the IORegistry (not the override or the name fallback)
   size_t max_threadgroup_memory() const;  // MTLDevice maxThreadgroupMemoryLength
   bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
+  int apple_family() const;               // the newest MTLGPUFamilyApple<n>: 7 on the M1, 8 M2, 9 M3 and M4, 10 M5
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
   static const char* thermal_state();  // NSProcessInfo thermalState: nominal, fair, serious, critical
 

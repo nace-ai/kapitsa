@@ -48,17 +48,18 @@ struct NhMat {
                           // operands being the E4M3 values x 2^-8)
   Buffer gse;             // NVFP4 expert stacks: each expert's weight_scale_2 (float [E]; gs is then 1)
   size_t q_row = 0, s_row = 0;  // bytes per row
+  bool l2 = false;              // NVFP4 codes in layout L2 (nh_x_fp4.metal), else L0
   size_t q_exp() const { return q_row * N; }
   size_t s_exp() const { return s_row * N; }
   explicit operator bool() const { return N != 0; }
 };
 
 // Repacking (CPU): bytes per repacked row (codes, scales) of K elements in format f; bytes per source row in the
-// checkpoint; source rows into the repacked layout (NVFP4: the codes only, nibbles reordered); fp32 rows quantized
-// to the Q8 layout (Q8_0's rounding: d = max|x| / 127).
+// checkpoint; source rows into the repacked layout (NVFP4: the codes only, nibbles reordered: layout L0, or with
+// fp4_l2 layout L2, nh_x_fp4.metal); fp32 rows quantized to the Q8 layout (Q8_0's rounding: d = max|x| / 127).
 void nh_row_bytes(NhFmt f, int64_t K, size_t& qb, size_t& sb);
 size_t nh_src_row_bytes(NhFmt f, int64_t K);
-void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s);
+void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s, bool fp4_l2 = false);
 void nh_quant_q8(const float* x, int64_t K, uint8_t* q, uint8_t* s);
 // The format and shape of a checkpoint matrix (scale: its weight_scale entry, NVFP4's block scales or FP8's tensor
 // scale, else null); false if unknown.

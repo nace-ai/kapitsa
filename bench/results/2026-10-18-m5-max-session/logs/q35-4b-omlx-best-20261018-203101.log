@@ -1,0 +1,262 @@
+2026-10-18 20:31:02,083 - omlx.settings - INFO - Saved settings to <run-root>/out/state/omlx/q35-4b-best/base/settings.json
+INFO:     Uvicorn running on http://127.0.0.1:8141 (Press CTRL+C to quit)
+2026-10-18 20:31:02,837 - omlx.scheduler - INFO - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-10-18 20:31:02,916 - omlx.server - INFO - Headless mode: serving the API without the web UI
+2026-10-18 20:31:02,922 - omlx.settings - INFO - Saved settings to <run-root>/out/state/omlx/q35-4b-best/base/settings.json
+2026-10-18 20:31:02,922 - omlx.server - INFO - Generated and saved new auth secret key
+2026-10-18 20:31:02,922 - omlx.server - INFO - CORS origins: ['*']
+2026-10-18 20:31:02,922 - omlx.model_settings - INFO - Loaded settings for 1 models
+2026-10-18 20:31:02,941 - omlx.model_discovery - INFO - Discovered model: qwen3.5-4b-4bit (type: vlm, engine: vlm, size: 3.05GB, text-only: 2.40GB)
+2026-10-18 20:31:02,941 - omlx.engine_pool - INFO - Discovered 1 models
+2026-10-18 20:31:02,945 - omlx.server - INFO - Server initialized with 1 models
+2026-10-18 20:31:02,945 - omlx.server - INFO - Default model: qwen3.5-4b-4bit
+2026-10-18 20:31:02,945 - omlx.server - INFO - Memory guard tier: aggressive (guard on)
+2026-10-18 20:31:02,945 - omlx.server - INFO - Default max tokens: 32768
+2026-10-18 20:31:02,945 - omlx.server - INFO - HF Downloader initialized
+2026-10-18 20:31:02,945 - omlx.server - INFO - ModelScope SDK not installed, MS downloader disabled
+2026-10-18 20:31:02,946 - omlx.server - INFO - oQ Quantizer initialized
+2026-10-18 20:31:02,948 - omlx.server - INFO - HF Uploader initialized
+INFO:     Started server process [6280]
+INFO:     Waiting for application startup.
+2026-10-18 20:31:02,963 - omlx.settings - INFO - Saved settings to <run-root>/out/state/omlx/q35-4b-best/base/settings.json
+2026-10-18 20:31:02,963 - omlx.server - INFO - Auto-detected server aliases: ['localhost', '127.0.0.1', 'Zhanibeks-MacBook-Pro-2.local', '192.168.1.64']
+2026-10-18 20:31:02,975 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=124518
+2026-10-18 20:31:02,975 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.6GB, interval=1.0s)
+INFO:     Application startup complete.
+2026-10-18 20:31:03,990 - omlx.engine_pool - INFO - Loading model: qwen3.5-4b-4bit
+2026-10-18 20:31:03,991 - omlx.utils.model_loading - INFO - M5 sorted gather_qmm reroute installed (issue #2267)
+2026-10-18 20:31:03,996 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)
+2026-10-18 20:31:03,997 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-10-18 20:31:03,997 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)
+2026-10-18 20:31:03,999 - omlx.utils.model_loading - INFO - Speculative backend selected for <run-root>/out/state/omlx/q35-4b-best/models/qwen3.5-4b-4bit: Lightning MTP (model_type=qwen3_5, active)
+2026-10-18 20:31:04,000 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5.Model.sanitize for MTP
+2026-10-18 20:31:04,001 - omlx.patches.mlx_vlm_mtp.qwen35_moe_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5_moe.Model.sanitize for MTP
+2026-10-18 20:31:04,004 - omlx.patches.mlx_vlm_inkling_compat - INFO - Inkling mlx-vlm compatibility patch applied
+2026-10-18 20:31:04,004 - omlx.utils.model_loading - INFO - mlx-vlm MTP sanitize patch applied for <run-root>/out/state/omlx/q35-4b-best/models/qwen3.5-4b-4bit
+2026-10-18 20:31:04,004 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_runtime - INFO - mlx-vlm Qwen3.5 (dense) runtime MTP patch applied
+2026-10-18 20:31:04,004 - omlx.utils.model_loading - INFO - mlx-vlm runtime MTP patch applied for <run-root>/out/state/omlx/q35-4b-best/models/qwen3.5-4b-4bit
+2026-10-18 20:31:04,005 - omlx.patches.qwen35_gdn_prework - INFO - mlx-vlm Qwen3.5 GDN q/k normalization follows mlx-lm normalize_qk
+2026-10-18 20:31:12,906 - omlx.patches.qwen35_packed_linear - INFO - Qwen packed projection kernels compiled in 7.9s
+2026-10-18 20:31:12,906 - omlx.engine.vlm - INFO - Qwen packed 4-bit projections: 200 layers
+2026-10-18 20:31:12,907 - omlx.engine.vlm - INFO - Vision feature cache enabled (SSD: <run-root>/out/state/omlx/q35-4b-best/base/kv-cache/vision_features)
+2026-10-18 20:31:13,922 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-10-18 20:31:13,925 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+2026-10-18 20:31:13,925 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-10-18 20:31:13,935 - omlx.memory_monitor - INFO - Model info set: 32 layers (8 KVCache), 4 KV heads, 16 Q heads, 256 head_dim. Estimated memory per 64-token block: 2.00 MB
+2026-10-18 20:31:13,935 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-10-18 20:31:13,936 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-10-18 20:31:13,936 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <run-root>/out/state/omlx/q35-4b-best/base/kv-cache
+2026-10-18 20:31:13,936 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0
+2026-10-18 20:31:13,937 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<run-root>/out/state/omlx/q35-4b-best/base/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=0, disk_free=183.94 GB, cache_used=0 B, incompatible_files=0
+2026-10-18 20:31:13,937 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+2026-10-18 20:31:13,937 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<run-root>/out/state/omlx/q35-4b-best/base/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+2026-10-18 20:31:13,937 - omlx.scheduler - INFO - paged SSD cache enabled: <run-root>/out/state/omlx/q35-4b-best/base/kv-cache, block_size=2048, max_blocks=100000
+2026-10-18 20:31:13,937 - omlx.engine_core - INFO - Engine started
+2026-10-18 20:31:13,938 - omlx.patches.sdpa256_attention - INFO - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, always force bounded for qualifying calls (#2025))
+2026-10-18 20:31:13,938 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 steel patch skipped: NAX GPU, MLX native fused SDPA is faster
+2026-10-18 20:31:13,939 - omlx.patches.qwen35_gdn_verify_fused - INFO - GDN verify replay commit patch applied
+2026-10-18 20:31:13,939 - omlx.patches.qwen35_gdn_prework - INFO - Qwen fused GDN prework patch applied
+2026-10-18 20:31:13,939 - omlx.patches.qwen35_verify_sdpa_split - INFO - Qwen3.5/3.6 verify-width causal vector attention patch applied
+2026-10-18 20:31:13,939 - omlx.patches.qwen35_gdn_chunked - INFO - Qwen3.5/3.6 GDN prefill kernel patch applied (Metal, impl=pipelined, min_t=64)
+2026-10-18 20:31:13,939 - omlx.patches.qwen35_q4_mlp - INFO - Qwen quantized MLP prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 20:31:13,942 - omlx.patches.qwen35_q4_mlp - INFO - Muse Glimmer quantized prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+2026-10-18 20:31:13,942 - omlx.patches.qwen35_moe_router - INFO - Qwen MoE fused router top-k patch applied
+2026-10-18 20:31:13,943 - omlx.patches.qwen35_moe_routed_decode - INFO - Qwen MoE fused routed-expert decode patch applied
+2026-10-18 20:31:13,944 - omlx.patches.qwen35_moe_weighted_sum - INFO - Qwen3.5/3.6 MoE weighted-sum patch applied (min_tokens=1024)
+2026-10-18 20:31:13,944 - omlx.patches.qwen35_ragged_decode - INFO - qwen3_5 ragged decode threadgroup fallback patch applied
+2026-10-18 20:31:13,945 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (32 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=gdn-qk-norm-2)
+2026-10-18 20:31:13,989 - omlx.engine.vlm - INFO - VLM tool calling enabled: parser=qwen3_coder
+2026-10-18 20:31:13,991 - omlx.engine.vlm - INFO - VLMBatchedEngine loaded: <run-root>/out/state/omlx/q35-4b-best/models/qwen3.5-4b-4bit
+2026-10-18 20:31:13,992 - omlx.engine_pool - INFO - Loaded model: qwen3.5-4b-4bit (actual: 3.46GB, local estimate: 3.05GB, full model: 3.05GB, total: 3.05GB)
+2026-10-18 20:31:13,993 - omlx.engine.vlm - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+2026-10-18 20:31:14,025 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-10-18 20:31:14,390 - omlx.scheduler - INFO - Reserved prefill capacity for 2923 tokens across 8 caches (+0.03GB)
+2026-10-18 20:31:14,596 - omlx.patches.qwen35_gdn_prework - INFO - Qwen B1/T1 fused GDN prework engaged
+2026-10-18 20:31:14,697 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=0 (model has mtp_forward, batch=1, primed=2923)
+2026-10-18 20:31:14,869 - omlx.patches.qwen35_gdn_prework - INFO - [gdn-prework] fused verify prework engaged (S=5, l2=False)
+2026-10-18 20:31:14,871 - omlx.patches.qwen35_verify_sdpa_split - INFO - [verify-split] hd-256 causal vector attention engaged (q_len=5)
+2026-10-18 20:31:15,163 - omlx.patches.qwen35_verify_sdpa_split - INFO - [verify-split] hd-256 causal vector attention engaged (q_len=4)
+2026-10-18 20:31:15,213 - omlx.patches.qwen35_verify_sdpa_split - INFO - [verify-split] hd-256 causal vector attention engaged (q_len=3)
+2026-10-18 20:31:15,260 - omlx.patches.qwen35_verify_sdpa_split - INFO - [verify-split] hd-256 causal vector attention engaged (q_len=2)
+2026-10-18 20:31:15,617 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[0] finish=length tokens=64 cycles=25 tok/cycle=2.56 accept=37/54 (68.5%) depth[d1=17/22,d2=9/16,d3=7/9,d4=4/7] d0=3 emits[init=2,draft=37,bonus=8,verify=17] timing[backbone=704.0ms mtp=31.6ms sample=0.9ms cache=4.5ms]
+2026-10-18 20:31:15,622 - omlx.scheduler - INFO - Using boundary cache snapshot for 16b60aab-e779-4996-bfd7-b62f6ebe3f9e: storing 2916/2987 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-18 20:31:15,622 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.6ms/1, prefix_cache_lookup=0.3ms/1, store_cache_main_boundary=2.3ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+2026-10-18 20:31:15,623 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 64 tokens in 1.61s (69.1 tok/s), prompt: 2923, finish_reason=length, max_tokens=64, request_max_tokens=64, stream_model_ttft=0.69s, stream_visible_ttft=0.86s
+2026-10-18 20:31:15,784 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=1 (model has mtp_forward, batch=1, primed=437)
+2026-10-18 20:31:15,918 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[1] finish=stop tokens=27 cycles=9 tok/cycle=3.00 accept=16/17 (94.1%) depth[d1=6/6,d2=5/5,d3=3/4,d4=2/2] d0=3 emits[init=2,draft=16,bonus=8,verify=1] timing[backbone=113.1ms mtp=6.6ms sample=0.3ms cache=1.5ms]
+2026-10-18 20:31:15,923 - omlx.scheduler - INFO - Using boundary cache snapshot for 8e2fb275-9b88-4f4c-bc07-ccfce5903a97: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:31:15,923 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=5.5ms/2, prefix_cache_lookup=0.3ms/2, store_cache_main_boundary=4.2ms/2, store_cache_main_collect=0.0ms/2, store_cache_main_dispatch=0.1ms/2, store_cache_worker_sync=0.2ms/1
+2026-10-18 20:31:15,924 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 26 tokens in 0.30s (185.0 tok/s), prompt: 437, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.16s, stream_visible_ttft=0.30s
+2026-10-18 20:31:16,012 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=2 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:31:18,757 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[2] finish=length tokens=512 cycles=188 tok/cycle=2.72 accept=322/445 (72.4%) depth[d1=154/185,d2=100/154,d3=41/65,d4=27/41] d0=3 emits[init=2,draft=322,bonus=65,verify=123] timing[backbone=2450.7ms mtp=178.2ms sample=6.4ms cache=33.8ms]
+2026-10-18 20:31:18,762 - omlx.scheduler - INFO - Using boundary cache snapshot for 89d9e1e9-3e7d-43a4-b061-646c87f24c35: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:31:18,762 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=8.2ms/3, prefix_cache_lookup=0.3ms/3, store_cache_main_boundary=6.2ms/3, store_cache_main_collect=0.0ms/3, store_cache_main_dispatch=0.2ms/3, store_cache_worker_sync=0.2ms/2
+2026-10-18 20:31:18,763 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.84s (186.2 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.09s, stream_visible_ttft=0.09s
+2026-10-18 20:31:18,856 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=3 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:31:21,652 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[3] finish=length tokens=512 cycles=188 tok/cycle=2.72 accept=322/452 (71.2%) depth[d1=150/185,d2=98/149,d3=65/97,d4=9/21] d0=3 emits[init=2,draft=322,bonus=58,verify=130] timing[backbone=2492.9ms mtp=184.6ms sample=6.4ms cache=35.1ms]
+2026-10-18 20:31:21,656 - omlx.scheduler - INFO - Using boundary cache snapshot for bef548c2-e61f-44b4-921a-a8a0db073485: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:31:21,657 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=10.1ms/4, prefix_cache_lookup=0.3ms/4, store_cache_main_boundary=8.1ms/4, store_cache_main_collect=0.0ms/4, store_cache_main_dispatch=0.3ms/4, store_cache_worker_sync=0.3ms/3
+2026-10-18 20:31:21,657 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.89s (182.8 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.09s, stream_visible_ttft=0.09s
+2026-10-18 20:31:21,751 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=4 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:31:24,546 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[4] finish=length tokens=512 cycles=176 tok/cycle=2.91 accept=334/462 (72.3%) depth[d1=134/173,d2=93/133,d3=66/92,d4=41/64] d0=3 emits[init=2,draft=334,bonus=48,verify=128] timing[backbone=2481.3ms mtp=199.5ms sample=6.5ms cache=33.6ms]
+2026-10-18 20:31:24,551 - omlx.scheduler - INFO - Using boundary cache snapshot for 5f985599-4745-4653-b8a2-36c61752581a: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:31:24,551 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=12.8ms/5, prefix_cache_lookup=0.4ms/5, store_cache_main_boundary=10.3ms/5, store_cache_main_collect=0.1ms/5, store_cache_main_dispatch=0.4ms/5, store_cache_worker_sync=0.4ms/4
+2026-10-18 20:31:24,552 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.89s (182.8 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.09s, stream_visible_ttft=0.09s
+2026-10-18 20:36:25,929 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=5 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:28,657 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[5] finish=length tokens=512 cycles=204 tok/cycle=2.51 accept=306/419 (73.0%) depth[d1=150/201,d2=107/149,d3=28/41,d4=21/28] d0=3 emits[init=2,draft=306,bonus=91,verify=113] timing[backbone=2437.2ms mtp=176.8ms sample=7.0ms cache=37.0ms]
+2026-10-18 20:36:28,660 - omlx.scheduler - INFO - Using boundary cache snapshot for afe55540-3a6e-437f-8b1f-28555f6327a6: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:28,660 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=13.9ms/6, prefix_cache_lookup=0.4ms/6, store_cache_main_boundary=12.2ms/6, store_cache_main_collect=0.1ms/6, store_cache_main_dispatch=0.5ms/6, store_cache_worker_sync=0.4ms/5
+2026-10-18 20:36:28,661 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.81s (187.4 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:28,748 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=6 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:31,455 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[6] finish=length tokens=512 cycles=210 tok/cycle=2.44 accept=300/413 (72.6%) depth[d1=166/207,d2=112/165,d3=15/26,d4=7/15] d0=3 emits[init=2,draft=300,bonus=97,verify=113] timing[backbone=2428.0ms mtp=157.9ms sample=7.1ms cache=36.8ms]
+2026-10-18 20:36:31,459 - omlx.scheduler - INFO - Using boundary cache snapshot for 3c1729e3-40f5-4ec5-948b-245a7aadcac6: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:31,459 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=14.9ms/7, prefix_cache_lookup=0.4ms/7, store_cache_main_boundary=14.1ms/7, store_cache_main_collect=0.1ms/7, store_cache_main_dispatch=0.5ms/7, store_cache_worker_sync=0.5ms/6
+2026-10-18 20:36:31,460 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.80s (188.9 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:31,545 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=7 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:32,809 - omlx.patches.qwen35_verify_sdpa_split - INFO - [verify-split] hd-256 causal vector attention engaged (q_len=8)
+2026-10-18 20:36:34,225 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[7] finish=length tokens=512 cycles=216 tok/cycle=2.37 accept=292/387 (75.5%) depth[d1=171/212,d2=118/170,d3=2/3,d4=1/2] d0=3 copy=2/7 in 1 emits[init=2,draft=294,bonus=120,verify=96] timing[backbone=2417.1ms mtp=140.2ms sample=7.2ms cache=37.0ms]
+2026-10-18 20:36:34,228 - omlx.scheduler - INFO - Using boundary cache snapshot for 23efcb62-a9f9-4761-8585-d1a42e47f18f: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:34,229 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=16.0ms/8, prefix_cache_lookup=0.5ms/8, store_cache_main_boundary=16.0ms/8, store_cache_main_collect=0.1ms/8, store_cache_main_dispatch=0.6ms/8, store_cache_worker_sync=0.6ms/7
+2026-10-18 20:36:34,229 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.77s (190.8 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:34,316 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=8 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:37,080 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[8] finish=length tokens=512 cycles=196 tok/cycle=2.61 accept=314/441 (71.2%) depth[d1=149/193,d2=88/137,d3=60/88,d4=17/23] d0=3 emits[init=2,draft=314,bonus=69,verify=127] timing[backbone=2459.7ms mtp=184.3ms sample=7.0ms cache=36.4ms]
+2026-10-18 20:36:37,084 - omlx.scheduler - INFO - Using boundary cache snapshot for c4792333-9800-4e3a-9e17-f7071836e136: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:37,085 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=17.7ms/9, prefix_cache_lookup=0.5ms/9, store_cache_main_boundary=18.0ms/9, store_cache_main_collect=0.1ms/9, store_cache_main_dispatch=0.7ms/9, store_cache_worker_sync=0.6ms/8
+2026-10-18 20:36:37,085 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.85s (184.9 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:37,173 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=9 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:40,042 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[9] finish=length tokens=512 cycles=209 tok/cycle=2.45 accept=301/461 (65.3%) depth[d1=163/206,d2=92/162,d3=45/92,d4=1/1] d0=3 emits[init=2,draft=301,bonus=49,verify=160] timing[backbone=2557.5ms mtp=184.6ms sample=7.3ms cache=39.3ms]
+2026-10-18 20:36:40,046 - omlx.scheduler - INFO - Using boundary cache snapshot for cef7b0e0-0876-4832-979c-9c1d15ff13c3: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:40,046 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=19.6ms/10, prefix_cache_lookup=0.5ms/10, store_cache_main_boundary=20.1ms/10, store_cache_main_collect=0.1ms/10, store_cache_main_dispatch=0.8ms/10, store_cache_worker_sync=0.7ms/9
+2026-10-18 20:36:40,047 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.96s (178.1 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.09s, stream_visible_ttft=0.09s
+2026-10-18 20:36:40,192 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=10 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:42,756 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[10] finish=length tokens=512 cycles=218 tok/cycle=2.35 accept=292/397 (73.6%) depth[d1=175/215,d2=113/174,d3=3/5,d4=1/3] d0=3 emits[init=2,draft=292,bonus=113,verify=105] timing[backbone=2350.9ms mtp=95.3ms sample=6.9ms cache=37.0ms]
+2026-10-18 20:36:42,759 - omlx.scheduler - INFO - Using boundary cache snapshot for 16b3e349-86c9-4485-b7b0-9e2891e28b81: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:42,760 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=20.6ms/11, prefix_cache_lookup=0.6ms/11, store_cache_main_boundary=22.0ms/11, store_cache_main_collect=0.1ms/11, store_cache_main_dispatch=0.8ms/11, store_cache_worker_sync=0.7ms/10
+2026-10-18 20:36:42,760 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.64s (199.3 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.07s, stream_visible_ttft=0.07s
+2026-10-18 20:36:42,848 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=11 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:45,571 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[11] finish=length tokens=512 cycles=184 tok/cycle=2.78 accept=326/469 (69.5%) depth[d1=141/181,d2=96/141,d3=56/91,d4=33/56] d0=3 emits[init=2,draft=326,bonus=41,verify=143] timing[backbone=2476.8ms mtp=128.8ms sample=6.3ms cache=35.0ms]
+2026-10-18 20:36:45,576 - omlx.scheduler - INFO - Using boundary cache snapshot for a8e6b4c7-8689-4faa-93e6-2d8e2a80578d: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:45,576 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=23.1ms/12, prefix_cache_lookup=0.6ms/12, store_cache_main_boundary=23.9ms/12, store_cache_main_collect=0.1ms/12, store_cache_main_dispatch=0.9ms/12, store_cache_worker_sync=0.8ms/11
+2026-10-18 20:36:45,577 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.81s (187.6 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.09s, stream_visible_ttft=0.09s
+2026-10-18 20:36:45,663 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=12 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:48,738 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[12] finish=length tokens=512 cycles=285 tok/cycle=1.80 accept=225/323 (69.7%) depth[d1=208/282,d2=12/26,d3=3/12,d4=2/3] d0=3 emits[init=2,draft=225,bonus=187,verify=98] timing[backbone=2857.2ms mtp=85.3ms sample=8.1ms cache=43.3ms]
+2026-10-18 20:36:48,740 - omlx.scheduler - INFO - Using boundary cache snapshot for 3c29b9a0-f416-4aa1-83b4-0072addb952b: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:48,741 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=23.4ms/13, prefix_cache_lookup=0.7ms/13, store_cache_main_boundary=25.8ms/13, store_cache_main_collect=0.1ms/13, store_cache_main_dispatch=1.0ms/13, store_cache_worker_sync=0.8ms/12
+2026-10-18 20:36:48,741 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 3.16s (166.3 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:48,825 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=13 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:51,446 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[13] finish=length tokens=512 cycles=223 tok/cycle=2.30 accept=287/401 (71.6%) depth[d1=173/220,d2=111/173,d3=2/6,d4=1/2] d0=3 emits[init=2,draft=287,bonus=109,verify=114] timing[backbone=2399.2ms mtp=98.0ms sample=7.0ms cache=38.3ms]
+2026-10-18 20:36:51,449 - omlx.scheduler - INFO - Using boundary cache snapshot for 22703729-94b5-4497-8a4a-fc6da3c55331: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:51,450 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=24.4ms/14, prefix_cache_lookup=0.7ms/14, store_cache_main_boundary=27.7ms/14, store_cache_main_collect=0.1ms/14, store_cache_main_dispatch=1.1ms/14, store_cache_worker_sync=0.9ms/13
+2026-10-18 20:36:51,450 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 2.71s (195.1 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.08s
+2026-10-18 20:36:51,537 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=14 (model has mtp_forward, batch=1, primed=85)
+2026-10-18 20:36:54,460 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[14] finish=length tokens=512 cycles=280 tok/cycle=1.83 accept=230/292 (78.8%) depth[d1=223/277,d2=3/10,d3=2/3,d4=2/2] d0=3 emits[init=2,draft=230,bonus=218,verify=62] timing[backbone=2717.2ms mtp=75.2ms sample=8.3ms cache=42.0ms]
+2026-10-18 20:36:54,463 - omlx.scheduler - INFO - Using boundary cache snapshot for 66b7b916-a674-4350-a453-3e29a1d938a4: storing 78/597 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:54,463 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=24.7ms/15, prefix_cache_lookup=0.8ms/15, store_cache_main_boundary=29.6ms/15, store_cache_main_collect=0.1ms/15, store_cache_main_dispatch=1.1ms/15, store_cache_worker_sync=1.0ms/14
+2026-10-18 20:36:54,464 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 512 tokens in 3.01s (175.0 tok/s), prompt: 85, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.08s, stream_visible_ttft=0.09s
+2026-10-18 20:36:54,906 - omlx.scheduler - INFO - Reserved prefill capacity for 4132 tokens across 8 caches (+0.07GB)
+2026-10-18 20:36:55,348 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=15 (model has mtp_forward, batch=1, primed=4132)
+2026-10-18 20:36:55,610 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[15] finish=stop tokens=50 cycles=20 tok/cycle=2.50 accept=28/35 (80.0%) depth[d1=14/17,d2=10/13,d3=2/3,d4=2/2] d0=3 emits[init=2,draft=28,bonus=13,verify=7] timing[backbone=231.7ms mtp=13.8ms sample=0.8ms cache=3.5ms]
+2026-10-18 20:36:55,614 - omlx.scheduler - INFO - Using boundary cache snapshot for 10187c64-28eb-48f4-ba78-7ebe916cab23: storing 4125/4181 tokens (tail terminal, 2 intermediate snapshots)
+2026-10-18 20:36:55,614 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=25.8ms/16, prefix_cache_lookup=1.1ms/16, store_cache_main_boundary=31.7ms/16, store_cache_main_collect=0.2ms/16, store_cache_main_dispatch=1.2ms/16, store_cache_worker_sync=1.0ms/15
+2026-10-18 20:36:55,615 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 49 tokens in 1.08s (183.5 tok/s), prompt: 4132, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.81s, stream_visible_ttft=0.81s
+2026-10-18 20:36:56,652 - omlx.scheduler - INFO - Prefix cache restore for 177ee9cd-663e-4fbe-bb4e-ebab03bb3f86: source=paged cached=4125 suffix=75 blocks=3 lookup=0.204ms reconstruct=10.785ms promote=True
+2026-10-18 20:36:56,665 - omlx.scheduler - INFO - Reserved prefill capacity for 4200 tokens across 8 caches (+0.01GB)
+2026-10-18 20:36:56,748 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=16 (model has mtp_forward, batch=1, primed=4200)
+2026-10-18 20:36:57,078 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[16] finish=stop tokens=67 cycles=25 tok/cycle=2.68 accept=33/39 (84.6%) depth[d1=18/20,d2=15/17,d3=0/2,d4=0/0] d0=3 copy=7/14 in 2 emits[init=2,draft=40,bonus=18,verify=7] timing[backbone=298.1ms mtp=19.1ms sample=0.8ms cache=4.3ms]
+2026-10-18 20:36:57,081 - omlx.scheduler - INFO - Using boundary cache snapshot for 177ee9cd-663e-4fbe-bb4e-ebab03bb3f86: storing 4193/4266 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:57,081 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=26.9ms/17, prefix_cache_lookup=1.3ms/17, prefix_cache_reconstruct=10.8ms/1, store_cache_main_boundary=33.5ms/17, store_cache_main_collect=0.2ms/17, store_cache_main_dispatch=1.3ms/17, store_cache_worker_sync=1.1ms/16
+2026-10-18 20:36:57,082 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 66 tokens in 0.45s (197.6 tok/s), prompt: 4200, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.11s, stream_visible_ttft=0.12s
+2026-10-18 20:36:58,127 - omlx.scheduler - INFO - Prefix cache restore for ee8f8b2a-f100-4b15-8cd8-6cb04787a25d: source=paged cached=4193 suffix=97 blocks=3 lookup=0.240ms reconstruct=12.344ms promote=True
+2026-10-18 20:36:58,141 - omlx.scheduler - INFO - Reserved prefill capacity for 4290 tokens across 8 caches (+0.00GB)
+2026-10-18 20:36:58,222 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=17 (model has mtp_forward, batch=1, primed=4290)
+2026-10-18 20:36:58,290 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[17] finish=stop tokens=16 cycles=4 tok/cycle=4.00 accept=10/12 (83.3%) depth[d1=3/4,d2=3/3,d3=2/3,d4=2/2] emits[init=2,draft=10,bonus=2,verify=2] timing[backbone=60.6ms mtp=4.4ms sample=0.2ms cache=0.8ms]
+2026-10-18 20:36:58,294 - omlx.scheduler - INFO - Using boundary cache snapshot for ee8f8b2a-f100-4b15-8cd8-6cb04787a25d: storing 4283/4305 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:36:58,294 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=28.3ms/18, prefix_cache_lookup=1.5ms/18, prefix_cache_reconstruct=23.1ms/2, store_cache_main_boundary=35.3ms/18, store_cache_main_collect=0.2ms/18, store_cache_main_dispatch=1.4ms/18, store_cache_worker_sync=1.2ms/17
+2026-10-18 20:36:58,295 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 15 tokens in 0.19s (208.1 tok/s), prompt: 4290, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.12s, stream_visible_ttft=0.12s
+2026-10-18 20:36:59,339 - omlx.scheduler - INFO - Prefix cache restore for 807201b6-4c26-4111-b1df-5bd97a8216aa: source=paged cached=4283 suffix=39 blocks=3 lookup=0.250ms reconstruct=12.735ms promote=True
+2026-10-18 20:36:59,354 - omlx.scheduler - INFO - Reserved prefill capacity for 4322 tokens across 8 caches (+0.00GB)
+2026-10-18 20:36:59,434 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=18 (model has mtp_forward, batch=1, primed=4322)
+2026-10-18 20:37:00,499 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[18] finish=length tokens=256 cycles=67 tok/cycle=3.82 accept=187/217 (86.2%) depth[d1=60/64,d2=54/59,d3=41/53,d4=32/41] d0=3 emits[init=2,draft=187,bonus=37,verify=30] timing[backbone=945.2ms mtp=77.4ms sample=2.6ms cache=12.7ms]
+2026-10-18 20:37:00,504 - omlx.scheduler - INFO - Using boundary cache snapshot for 807201b6-4c26-4111-b1df-5bd97a8216aa: storing 4315/4578 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:00,505 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=31.0ms/19, prefix_cache_lookup=1.8ms/19, prefix_cache_reconstruct=35.9ms/3, store_cache_main_boundary=37.3ms/19, store_cache_main_collect=0.2ms/19, store_cache_main_dispatch=1.4ms/19, store_cache_worker_sync=1.2ms/18
+2026-10-18 20:37:00,505 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 256 tokens in 1.19s (239.0 tok/s), prompt: 4322, finish_reason=length, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.12s, stream_visible_ttft=0.12s
+2026-10-18 20:37:00,988 - omlx.scheduler - INFO - Reserved prefill capacity for 16285 tokens across 8 caches (+0.44GB)
+2026-10-18 20:37:01,750 - omlx.patches.sdpa256_attention - INFO - sdpa256: head-dim-256 long-context prefill is using the memory-bounded path: bounded attention keeps execution consistent with prefill memory pricing.
+2026-10-18 20:37:04,017 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=19 (model has mtp_forward, batch=1, primed=16285)
+2026-10-18 20:37:04,338 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[19] finish=stop tokens=49 cycles=19 tok/cycle=2.58 accept=28/39 (71.8%) depth[d1=12/16,d2=7/11,d3=5/7,d4=4/5] d0=3 emits[init=2,draft=28,bonus=8,verify=11] timing[backbone=276.8ms mtp=20.2ms sample=0.6ms cache=3.5ms]
+2026-10-18 20:37:04,344 - omlx.scheduler - INFO - Using boundary cache snapshot for a33bd690-ff04-4e40-87cf-774ea7a2ae28: storing 16278/16333 tokens (tail terminal, 7 intermediate snapshots)
+2026-10-18 20:37:04,344 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=34.0ms/20, prefix_cache_lookup=2.5ms/20, prefix_cache_reconstruct=35.9ms/3, store_cache_main_boundary=39.2ms/20, store_cache_main_collect=0.2ms/20, store_cache_main_dispatch=1.5ms/20, store_cache_worker_sync=1.3ms/19
+2026-10-18 20:37:04,345 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 48 tokens in 3.74s (146.7 tok/s), prompt: 16285, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=3.42s, stream_visible_ttft=3.42s
+2026-10-18 20:37:05,438 - omlx.scheduler - INFO - Prefix cache restore for 4bba0ade-18a8-44d6-8cdd-f5e257645a66: source=paged cached=16278 suffix=74 blocks=8 lookup=0.668ms reconstruct=32.745ms promote=True
+2026-10-18 20:37:05,472 - omlx.scheduler - INFO - Reserved prefill capacity for 16352 tokens across 8 caches (+0.00GB)
+2026-10-18 20:37:05,570 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=20 (model has mtp_forward, batch=1, primed=16352)
+2026-10-18 20:37:05,714 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[20] finish=stop tokens=25 cycles=10 tok/cycle=2.50 accept=13/17 (76.5%) depth[d1=4/7,d2=4/4,d3=3/3,d4=2/3] d0=3 emits[init=2,draft=13,bonus=6,verify=4] timing[backbone=130.5ms mtp=8.5ms sample=0.4ms cache=1.6ms]
+2026-10-18 20:37:05,720 - omlx.scheduler - INFO - Using boundary cache snapshot for 4bba0ade-18a8-44d6-8cdd-f5e257645a66: storing 16345/16376 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:05,721 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=37.9ms/21, prefix_cache_lookup=3.2ms/21, prefix_cache_reconstruct=68.6ms/4, store_cache_main_boundary=41.0ms/21, store_cache_main_collect=0.2ms/21, store_cache_main_dispatch=1.6ms/21, store_cache_worker_sync=1.4ms/20
+2026-10-18 20:37:05,722 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 24 tokens in 0.34s (158.5 tok/s), prompt: 16352, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.19s, stream_visible_ttft=0.19s
+2026-10-18 20:37:06,821 - omlx.scheduler - INFO - Prefix cache restore for 0d81d47f-5ca9-4adb-be42-91fcc1efc58c: source=paged cached=16345 suffix=55 blocks=8 lookup=0.715ms reconstruct=33.182ms promote=True
+2026-10-18 20:37:06,854 - omlx.scheduler - INFO - Reserved prefill capacity for 16400 tokens across 8 caches (+0.01GB)
+2026-10-18 20:37:06,973 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=21 (model has mtp_forward, batch=1, primed=16400)
+2026-10-18 20:37:07,078 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[21] finish=stop tokens=24 cycles=6 tok/cycle=4.00 accept=13/15 (86.7%) depth[d1=4/5,d2=4/4,d3=3/3,d4=2/3] copy=3/7 in 1 emits[init=2,draft=16,bonus=3,verify=3] timing[backbone=96.0ms mtp=5.8ms sample=0.2ms cache=1.0ms]
+2026-10-18 20:37:07,081 - omlx.scheduler - INFO - Using boundary cache snapshot for 0d81d47f-5ca9-4adb-be42-91fcc1efc58c: storing 16393/16423 tokens (tail terminal, 1 intermediate snapshots)
+2026-10-18 20:37:07,082 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=38.6ms/22, prefix_cache_lookup=3.9ms/22, prefix_cache_reconstruct=101.8ms/5, store_cache_main_boundary=42.8ms/22, store_cache_main_collect=0.2ms/22, store_cache_main_dispatch=1.6ms/22, store_cache_worker_sync=1.6ms/21
+2026-10-18 20:37:07,083 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 23 tokens in 0.32s (210.1 tok/s), prompt: 16400, finish_reason=stop, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.21s, stream_visible_ttft=0.21s
+2026-10-18 20:37:08,184 - omlx.scheduler - INFO - Prefix cache restore for 82435f93-7d1c-41e5-967d-1056a698ea18: source=paged cached=16393 suffix=47 blocks=9 lookup=0.668ms reconstruct=33.569ms promote=True
+2026-10-18 20:37:08,220 - omlx.scheduler - INFO - Reserved prefill capacity for 16440 tokens across 8 caches (+0.01GB)
+2026-10-18 20:37:08,310 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=22 (model has mtp_forward, batch=1, primed=16440)
+2026-10-18 20:37:09,431 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[22] finish=length tokens=256 cycles=65 tok/cycle=3.94 accept=189/214 (88.3%) depth[d1=58/62,d2=50/57,d3=45/50,d4=36/45] d0=3 emits[init=2,draft=189,bonus=40,verify=25] timing[backbone=1003.6ms mtp=74.9ms sample=2.4ms cache=12.1ms]
+2026-10-18 20:37:09,437 - omlx.scheduler - INFO - Using boundary cache snapshot for 82435f93-7d1c-41e5-967d-1056a698ea18: storing 16433/16696 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:09,437 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=41.9ms/23, prefix_cache_lookup=4.6ms/23, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=44.8ms/23, store_cache_main_collect=0.2ms/23, store_cache_main_dispatch=1.7ms/23, store_cache_worker_sync=1.7ms/22
+2026-10-18 20:37:09,438 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 256 tokens in 1.32s (227.0 tok/s), prompt: 16440, finish_reason=length, max_tokens=256, request_max_tokens=256, stream_model_ttft=0.19s, stream_visible_ttft=0.19s
+2026-10-18 20:37:09,646 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=23 (model has mtp_forward, batch=1, primed=437)
+2026-10-18 20:37:09,755 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[23] finish=stop tokens=27 cycles=7 tok/cycle=3.86 accept=18/18 (100.0%) depth[d1=6/6,d2=5/5,d3=4/4,d4=3/3] d0=1 emits[init=2,draft=18,bonus=7,verify=0] timing[backbone=94.5ms mtp=5.0ms sample=0.2ms cache=1.1ms]
+2026-10-18 20:37:09,757 - omlx.scheduler - INFO - Using boundary cache snapshot for 1a50020c-8737-4e9e-9f0d-cbb27ca46253: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:09,757 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=42.0ms/24, prefix_cache_lookup=4.6ms/24, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=46.8ms/24, store_cache_main_collect=0.2ms/24, store_cache_main_dispatch=1.8ms/24, store_cache_worker_sync=1.7ms/23
+2026-10-18 20:37:09,758 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 26 tokens in 0.24s (232.3 tok/s), prompt: 437, finish_reason=tool_calls, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.13s, stream_visible_ttft=0.24s
+2026-10-18 20:37:09,889 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=24 (model has mtp_forward, batch=1, primed=437)
+2026-10-18 20:37:09,998 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[24] finish=stop tokens=27 cycles=7 tok/cycle=3.86 accept=18/18 (100.0%) depth[d1=6/6,d2=5/5,d3=4/4,d4=3/3] d0=1 emits[init=2,draft=18,bonus=7,verify=0] timing[backbone=95.0ms mtp=4.9ms sample=0.2ms cache=1.1ms]
+2026-10-18 20:37:10,000 - omlx.scheduler - INFO - Using boundary cache snapshot for cbfd4047-bdab-4890-ad01-b3288011ba11: storing 430/463 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:10,000 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=42.0ms/25, prefix_cache_lookup=4.7ms/25, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=48.6ms/25, store_cache_main_collect=0.2ms/25, store_cache_main_dispatch=1.9ms/25, store_cache_worker_sync=1.8ms/24
+2026-10-18 20:37:10,001 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 26 tokens in 0.24s (108.4 tok/s), prompt: 437, finish_reason=stop, max_tokens=512, request_max_tokens=512
+2026-10-18 20:37:10,115 - omlx.scheduler - INFO - Reserved prefill capacity for 517 tokens across 8 caches (+0.01GB)
+2026-10-18 20:37:10,147 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=25 (model has mtp_forward, batch=1, primed=517)
+2026-10-18 20:37:10,432 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[25] finish=stop tokens=57 cycles=19 tok/cycle=3.00 accept=36/46 (78.3%) depth[d1=12/16,d2=10/12,d3=9/10,d4=5/8] d0=3 emits[init=2,draft=36,bonus=9,verify=10] timing[backbone=250.8ms mtp=17.4ms sample=0.7ms cache=3.5ms]
+2026-10-18 20:37:10,437 - omlx.scheduler - INFO - Using boundary cache snapshot for d78be773-d19a-457f-a166-9b4d292b5304: storing 510/573 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:10,437 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=45.0ms/26, prefix_cache_lookup=4.8ms/26, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=50.7ms/26, store_cache_main_collect=0.2ms/26, store_cache_main_dispatch=2.0ms/26, store_cache_worker_sync=1.8ms/25
+2026-10-18 20:37:10,438 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 56 tokens in 0.43s (192.3 tok/s), prompt: 517, finish_reason=stop, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 20:37:10,580 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=26 (model has mtp_forward, batch=1, primed=435)
+2026-10-18 20:37:10,881 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[26] finish=stop tokens=64 cycles=20 tok/cycle=3.20 accept=42/50 (84.0%) depth[d1=15/17,d2=11/14,d3=9/11,d4=7/8] d0=3 emits[init=2,draft=42,bonus=12,verify=8] timing[backbone=262.4ms mtp=19.3ms sample=0.7ms cache=3.6ms]
+2026-10-18 20:37:10,886 - omlx.scheduler - INFO - Using boundary cache snapshot for c8f431b0-ea13-4877-a52a-ec5bce1c56e2: storing 430/498 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:10,886 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=47.5ms/27, prefix_cache_lookup=4.8ms/27, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=52.6ms/27, store_cache_main_collect=0.3ms/27, store_cache_main_dispatch=2.0ms/27, store_cache_worker_sync=1.9ms/26
+2026-10-18 20:37:10,887 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 63 tokens in 0.45s (205.4 tok/s), prompt: 435, finish_reason=tool_calls, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.14s, stream_visible_ttft=0.14s
+2026-10-18 20:37:11,019 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=27 (model has mtp_forward, batch=1, primed=435)
+2026-10-18 20:37:11,296 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[27] finish=stop tokens=57 cycles=18 tok/cycle=3.17 accept=37/43 (86.0%) depth[d1=13/15,d2=9/12,d3=8/9,d4=7/7] d0=3 emits[init=2,draft=37,bonus=12,verify=6] timing[backbone=240.3ms mtp=16.9ms sample=0.6ms cache=3.2ms]
+2026-10-18 20:37:11,302 - omlx.scheduler - INFO - Using boundary cache snapshot for 0ddd936e-7243-4b9e-8899-8070634adf58: storing 430/491 tokens (tail terminal, 0 intermediate snapshots)
+2026-10-18 20:37:11,302 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=50.6ms/28, prefix_cache_lookup=4.9ms/28, prefix_cache_reconstruct=135.3ms/6, store_cache_main_boundary=54.6ms/28, store_cache_main_collect=0.3ms/28, store_cache_main_dispatch=2.1ms/28, store_cache_worker_sync=2.0ms/27
+2026-10-18 20:37:11,302 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 56 tokens in 0.41s (135.6 tok/s), prompt: 435, finish_reason=stop, max_tokens=4096, request_max_tokens=4096
+2026-10-18 20:37:11,312 - omlx.scheduler - INFO - Prefix cache restore for 88ae646f-59fe-419a-8f78-5f2ee7ac572f: source=paged cached=510 suffix=5 blocks=1 lookup=0.043ms reconstruct=3.048ms promote=True
+2026-10-18 20:37:11,320 - omlx.scheduler - INFO - Reserved prefill capacity for 515 tokens across 8 caches (+0.01GB)
+2026-10-18 20:37:11,351 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=28 (model has mtp_forward, batch=1, primed=515)
+2026-10-18 20:37:12,408 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[28] finish=stop tokens=229 cycles=69 tok/cycle=3.32 accept=158/197 (80.2%) depth[d1=55/66,d2=43/54,d3=36/42,d4=24/35] d0=3 emits[init=2,draft=158,bonus=30,verify=39] timing[backbone=934.9ms mtp=75.0ms sample=2.3ms cache=13.2ms]
+2026-10-18 20:37:12,411 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=53.3ms/29, prefix_cache_lookup=4.9ms/29, prefix_cache_reconstruct=138.4ms/7, store_cache_main_boundary=54.6ms/29, store_cache_main_collect=0.3ms/28, store_cache_main_dispatch=2.1ms/28, store_cache_worker_sync=2.0ms/28
+2026-10-18 20:37:12,412 - omlx.server - INFO - Chat completion: model=qwen3.5-4b-4bit, 228 tokens in 1.11s (214.9 tok/s), prompt: 515, finish_reason=stop, max_tokens=4096, request_max_tokens=4096, stream_model_ttft=0.05s, stream_visible_ttft=0.05s
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-10-18 20:37:12,673 - omlx.process_memory_enforcer - INFO - Process memory enforcer stopped
+2026-10-18 20:37:12,673 - omlx.server - INFO - Process memory enforcer stopped
+2026-10-18 20:37:12,673 - omlx.admin.hf_downloader - INFO - HF Downloader shut down
+2026-10-18 20:37:12,673 - omlx.server - INFO - HF Downloader stopped
+2026-10-18 20:37:12,673 - omlx.engine_pool - INFO - Unloading model: qwen3.5-4b-4bit (immediate abort)
+2026-10-18 20:37:12,673 - omlx.engine_core - INFO - Engine stopped
+2026-10-18 20:37:12,680 - omlx.scheduler - INFO - Scheduler shutdown initiated...
+2026-10-18 20:37:12,682 - omlx.cache.paged_ssd_cache - INFO - Shutting down PagedSSDCacheManager...
+2026-10-18 20:37:12,683 - omlx.cache.paged_ssd_cache - INFO - Flushed 31 hot cache blocks to SSD
+2026-10-18 20:37:12,786 - omlx.scheduler - INFO - Scheduler shutdown completed
+2026-10-18 20:37:12,787 - omlx.cache.paged_cache - INFO - PagedCacheManager cleared (reset to 256 initial blocks)
+2026-10-18 20:37:12,831 - omlx.scheduler - INFO - Deep reset completed - all caches cleared
+2026-10-18 20:37:12,905 - omlx.engine.vlm - INFO - VLMBatchedEngine stopped
+2026-10-18 20:37:12,932 - omlx.engine_pool - INFO - Unloaded model: qwen3.5-4b-4bit, freed=3.04GB (expected>=1.05GB), active_memory: 1.02KB (settled)
+2026-10-18 20:37:12,975 - omlx.engine_pool - INFO - Engine pool shutdown complete
+2026-10-18 20:37:12,976 - omlx.server - INFO - Engine pool shutdown
+INFO:     Application shutdown complete.
+INFO:     Finished server process [6280]

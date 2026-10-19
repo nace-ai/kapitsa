@@ -1,0 +1,7 @@
+
+===== flash-rapidmlx-mtp  [rapid-mlx] Rapid-MLX + native MTP (depth 1)  version 0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)
+[00:47:09] flash-rapidmlx-mtp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 28842 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/rapid-mlx.json configs/flash-next.json -
+[00:47:09] flash-rapidmlx-mtp: starting ~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8291 --served-model-name flash-next --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight --speculative-config '{"method":"mtp","num_speculative_tokens":1}'
+[00:47:13] flash-rapidmlx-mtp: FAILED: server never became ready (4s); see <run-root>/out-extra/logs/flash-rapidmlx-mtp-20261019-004709.log
+[00:47:18] flash-rapidmlx-mtp: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:47:18] flash-rapidmlx-mtp: -> <run-root>/out-extra/results/flash-rapidmlx-mtp-20261019-004709.json  INVALID: ['harness: server never became ready (4s); see <run-root>/out-extra/logs/flash-rapidmlx-mtp-20261019-004709.log']

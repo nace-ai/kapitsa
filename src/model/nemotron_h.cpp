@@ -301,7 +301,7 @@ inline uint64_t spread_nibbles(uint32_t x) {
 }
 }  // namespace
 
-void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s) {
+void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_t* q, uint8_t* s, bool fp4_l2) {
   size_t qb, sb;
   nh_row_bytes(f, K, qb, sb);
   const size_t rb = nh_src_row_bytes(f, K);
@@ -323,11 +323,20 @@ void nh_repack_rows(NhFmt f, int64_t K, const uint8_t* src, int64_t rows, uint8_
         }
         break;
       case NhFmt::FP4:
-        // ModelOpt order (byte j of a 16-element group: elements 2j, 2j + 1) -> the kernels' (byte i: i, i + 8)
+        // ModelOpt order (byte j of a 16-element group: elements 2j, 2j + 1) -> L0, the kernels' (byte i: i, i + 8);
+        // or L2 (word h: nibble j = element 4h + j, nibble 4 + j = element 8 + 4h + j, codes as (m2 m1 m0 s)): read
+        // as one little-endian word, ModelOpt's nibble e is element e, so L2 swaps the nibble quads of elements 4-7
+        // and 8-11 and rotates each code's sign bit to the bottom
         for (int64_t i = 0; i < K / 16; ++i) {
           uint64_t v;
           memcpy(&v, b + i * 8, 8);
-          const uint64_t o = spread_nibbles(uint32_t(v)) | (spread_nibbles(uint32_t(v >> 32)) << 4);
+          uint64_t o;
+          if (fp4_l2) {
+            o = (v & 0xFFFF00000000FFFFull) | ((v >> 16) & 0x00000000FFFF0000ull) | ((v << 16) & 0x0000FFFF00000000ull);
+            o = ((o & 0x7777777777777777ull) << 1) | ((o >> 3) & 0x1111111111111111ull);
+          } else {
+            o = spread_nibbles(uint32_t(v)) | (spread_nibbles(uint32_t(v >> 32)) << 4);
+          }
           memcpy(qr + i * 8, &o, 8);
         }
         break;

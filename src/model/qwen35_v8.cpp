@@ -57,7 +57,7 @@ V8Knobs& v8_knobs() {
     V8Knobs d;
     d.cm = env_int("NI_V8_CM", d.cm);
     d.pair = env_int("NI_V8_PAIR", d.pair);
-    d.kplan = env_int("NI_V8_KPLAN", d.kplan);
+    d.kplan = env_int("NI_V8_KPLAN", Gpu::get().apple_family() <= 7 ? 3 : d.kplan);
     d.gusplit = env_int("NI_V8_GUSPLIT", d.gusplit);
     d.gdnsplit = env_int("NI_V8_GDNSPLIT", d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
@@ -193,7 +193,19 @@ static V8Plan v8_plan(uint32_t N, uint32_t K, int nf_def) {
     // runs, cs1/ks8 vs the cs2/ks4 plan): gate+up 427 vs 446 us, GDN in_proj 209 vs 223, o 84 vs 88, LM head
     // 3038 vs 3103; down 240 (ks8) / 232 (ks16) vs 256
     const int kplan = v8_knobs().kplan;
-    if (kplan >= 1 && !ks_env && gpr >= 64) {
+    if (kplan == 3 && nf_def == 2 && !ks_env) {
+      // kplan 3, the M1's (14-core M1 Pro, bench_v8 cmp of every cs x ks on the 4B's and 9B's shapes, CM 1 + pairs,
+      // median of 9 interleaved runs against kplan 2): k-slices of >= 16 groups (8 at most) with one column block
+      // per threadgroup; grids that would exceed 16384 simdgroups (the LM heads) without k-slices, 2 column blocks.
+      // 9B: gate+up 24576x4096 521 vs 565 us, GDN in_proj 268 vs 290, q|k|v 222 vs 240, o / GDN out 97 vs 104,
+      // LM head 4926 vs 5597, down (ks 8 either way) 284; 4B: gate+up 18432x2560 254 vs 270, GDN in_proj 174 vs 184,
+      // q|k|v 146 vs 154, o / GDN out 65 vs 68, LM head 3207 vs 3489, down 139 either way. On each of the 12 shapes
+      // this is the fastest of the 26 variants measured (nf 1 / 2, cs x ks, the other inner loops).
+      p.ks = 1;
+      while (p.ks < 8 && gpr / (p.ks * 2) >= 16) p.ks *= 2;
+      while (p.ks > 1 && blocks * p.ks > 16384) p.ks /= 2;
+      if (!cs_env) p.cs = p.ks == 1 ? 2 : 1;
+    } else if (kplan >= 1 && !ks_env && gpr >= 64) {
       p.ks = kplan >= 2 && gpr >= 256 ? 16 : 8;
       if (!cs_env) p.cs = 1;
     }

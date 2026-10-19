@@ -1,0 +1,476 @@
+[mem] MLX buffer-pool cap 8192 MB (was 124518 MB)
+Logging to <run-root>/out/state/mlx-serve/q38-27b-dflash2/.mlx-serve/logs/mlx-serve-8173.log (rotates at 32 MB)
+mlx-serve 26.10.2 (MLX 0.32.3)
+[args] model: ~/.cache/kapitsa/benchmark-models/mlx-serve/qwen3.8-27b-4bit-mlx-serve
+[args] drafter: ~/.cache/kapitsa/benchmark-models/mlx-serve/qwen3.8-27b-4bit-mlx-serve/drafter (block_size=4, auto)
+[args] serve: 127.0.0.1:8173, ctx-size=32768, pld=on, no-vision=false, prevent-sleep=true
+[args] kv-quant: off
+[args] kv-attn-mode: auto
+Metal GPU: true
+Model: qwen3_5_moe (64 layers, 5120-dim, head_dim=256, 24h/4kv, 4-bit affine quant)
+Loading tokenizer...
+  parsed tokenizer (19 MB) in 55ms
+  loaded 248044 vocab entries in 5ms
+  loaded 247587 merges in 6ms
+Tokenizer loaded: 248077 vocab, 247587 merges, 33 special tokens (byte-level BPE)
+[registry] max_resident_models=3, max_resident_mem=107.5 GB
+[preflight] weights ~14.95 GB, available 107.52 GB
+[preflight] drafter ~1.01 GB at ~/.cache/kapitsa/benchmark-models/mlx-serve/qwen3.8-27b-4bit-mlx-serve/drafter
+Loading model-00002-of-00003.safetensors...
+Loading model-00003-of-00003.safetensors...
+Loading model-00001-of-00003.safetensors...
+Loaded 2180 weights from 3 file(s)
+Precomputing MoE layer weights...
+[load] row-joined projection groups: 128
+Batch eval all weights: 182ms
+[suppress] 14 of 21 flagged specials masked from sampling (template + eos exempt); 243 padding rows past id 248077 of 248320
+[wired] mode=max limit=110100 MB
+MoE routing compiled (kernel fusion enabled)
+GDN gate compiled (kernel fusion enabled); recurrent state bfloat16, gate bfloat16
+[vision] qwen tower prefix: vision_tower.
+[vision] qwen patch_embed layout: channels_last
+Vision encoder: Qwen3-VL ViT (depth=27, hidden=1152, heads=16, merge=2, out_hidden=5120)
+Loading model.safetensors...
+Loaded 81 weights from 1 file(s)
+[dflash] loaded 5 layers, hidden=5120, block_size=8, targets={ 5, 19, 33, 47, 61 }, weights=4-bit/gs64
+[dflash] dflash2: selector rank=256 top_k=16, dyn-convs ksize=2 group=16
+[dflash] draft lm_head: trunk head (no requantization)
+DFlash drafter ready (block_size=16, wide_verify_lane=true, targets={ 5, 19, 33, 47, 61 }).
+[lane] trunk projections tiled in place (12.8 GB, no copy)
+[lane] drafter projections tiled in place (0.94 GB, no copy)
+[dtype-trace] moe: residual in = bfloat16, first weight = n/a
+[attn] joined q|k|v engaged: rows=1
+[attn] fused QK-norm+RoPE (hd-256) engaged: hq=24 hk=4 hv=0 S=1 rd=64
+[dtype-trace] moe: residual out = bfloat16
+[nax-sdpa] engaged: stock fused sdpa (force_fused) serves hd-256 causal prefill and verify blocks > 8 rows; msv_attn_p256 causal arm declined (MLX_SERVE_NAX_SDPA=0 restores)
+[nax-sdpa] force_fused dispatch engaged: qL=32 kL=32 Hq=24 Hkv=4 hd=256
+Warmup complete (2118 ms).
+[hot-cache] budget 2422 MB (one session at the working context: a sliding-ring or hybrid entry restores whole or at a checkpoint)
+Model ready (loaded on inference thread).
+Hot prefix cache: ENABLED (capacity=32, mem-cap=2422.1 MB)
+Concurrency: --max-concurrent=1, batched decode on
+Context size: 32768 tokens (manual)
+Request timeout: 300s
+Model context length: 262144 tokens
+Reasoning budget: unlimited
+PLD speculative decoding: ENABLED (draft_len=5, key_len=3; default for new requests)
+DFlash speculative decoding: ENABLED (block_size=16; default for new requests)
+
+Server listening on http://127.0.0.1:8173
+  GET  /
+  GET  /health
+  GET  /props
+  GET  /v1/models
+  POST /v1/chat/completions
+  POST /v1/completions
+  POST /v1/embeddings
+  POST /v1/decisions, /v1/systemone (Laya, Kev, D1, Clef)
+  POST /v1/messages (Anthropic)
+  POST /v1/responses (OpenAI Responses)
+  POST /v1/responses/compact
+  GET  /v1/responses/{id}
+  DEL  /v1/responses/{id}
+  POST /tokenize
+  POST /detokenize
+
+RSS: 15.5G  Mem: 31%  CPU: 13%  GPU: 69%
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=64, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=11667b, user=51b, tools=0b, tool_msgs=0) 
+  > "Summarize the first file in the repository context."
+[admission] needed=4416 MB available=89158 MB reclaimable=0 MB width=8192 verdict=admit
+  prompt=2922 tokens, max_gen=64, ctx=32768
+  spec-gate: ngram-score=0.208 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+[mlp] fused silu kernel engaged: n=50326528 tg=256
+[dflash] draft trees engaged: up to 15 nodes a round
+[gdn] fused norm-gate engaged: Hv=48 S=16 gate=swish
+[gdn] verify tree engaged: S=16 Hk=16 Hv=48
+  dflash=disabled (runtime yield 1.90 accepted/round < 2.00 after 10 attempts)
+[gdn] decode recur engaged: Hk=16 Hv=48 gate=swish
+  [spec-stats] mode=dflash attempts=10 accepts=19 avg_per_round=1.90 gate_min=2.00 per_draft_pct=12.7% block_size=16 partial_rounds=10 runtime_disabled=true table=2-4k:w0:34.06/33,w15:82.31/2 table_drops=t2/c0/b0/i0 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 2986 (2922 prompt + 64 generated)
+  [hot-cache] resident=341.63 / 2422.06 MB (1/32 entries)
+  <- 2922+64 tokens streamed [prefill: 418.1 tok/s, decode: 11.3 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=5 accepts=21 avg_per_round=4.20 gate_min=2.00 per_draft_pct=28.0% block_size=16 partial_rounds=5 runtime_disabled=false table=<2k: table_drops=t2/c0/b0/i0 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] resident=533.25 / 2422.06 MB (2/32 entries)
+  <- 430+26 tokens streamed [prefill: 838.4 tok/s, decode: 41.2 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.438831] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=80 accepts=432 avg_per_round=5.40 gate_min=2.00 per_draft_pct=36.0% block_size=16 partial_rounds=79 runtime_disabled=false table=<2k:w15:6.45/70 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=745.88 / 2422.06 MB (3/32 entries)
+  <- 85+512 tokens streamed [prefill: 519.8 tok/s, decode: 110.7 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.811001] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=90 accepts=422 avg_per_round=4.69 gate_min=2.00 per_draft_pct=31.3% block_size=16 partial_rounds=89 runtime_disabled=false table=<2k:w15:6.87/152 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=958.50 / 2422.06 MB (4/32 entries)
+  <- 85+512 tokens streamed [prefill: 513.9 tok/s, decode: 117.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.075487] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=81 accepts=431 avg_per_round=5.32 gate_min=2.00 per_draft_pct=35.5% block_size=16 partial_rounds=80 runtime_disabled=false table=<2k:w15:7.67/225 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=1171.13 / 2422.06 MB (5/32 entries)
+  <- 85+512 tokens streamed [prefill: 411.1 tok/s, decode: 121.4 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.939993] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=74 accepts=438 avg_per_round=5.92 gate_min=2.00 per_draft_pct=39.5% block_size=16 partial_rounds=68 runtime_disabled=false table=<2k:w15:4.67/291 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=1383.75 / 2422.06 MB (6/32 entries)
+  <- 85+512 tokens streamed [prefill: 315.1 tok/s, decode: 154.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.439564] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=89 accepts=423 avg_per_round=4.75 gate_min=2.00 per_draft_pct=31.7% block_size=16 partial_rounds=89 runtime_disabled=false table=<2k:w15:5.46/372 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=1596.38 / 2422.06 MB (7/32 entries)
+  <- 85+512 tokens streamed [prefill: 515.8 tok/s, decode: 127.6 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.319861] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=86 accepts=425 avg_per_round=4.94 gate_min=2.00 per_draft_pct=32.9% block_size=16 partial_rounds=85 runtime_disabled=false table=<2k:w15:8.49/450 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 596 (85 prompt + 511 generated)
+  [hot-cache] resident=1809.00 / 2422.06 MB (8/32 entries)
+  <- 85+512 tokens streamed [prefill: 511.3 tok/s, decode: 126.8 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.484627] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+[dflash] context copy verified as the round's chain (16 rows)
+  [spec-stats] mode=dflash attempts=85 accepts=426 avg_per_round=5.01 gate_min=2.00 per_draft_pct=33.4% block_size=16 partial_rounds=85 runtime_disabled=false table=<2k:w15:6.95/527 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 596 (85 prompt + 511 generated)
+  [hot-cache] resident=2021.63 / 2422.06 MB (9/32 entries)
+  <- 85+512 tokens streamed [prefill: 490.5 tok/s, decode: 127.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.542476] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=82 accepts=430 avg_per_round=5.24 gate_min=2.00 per_draft_pct=35.0% block_size=16 partial_rounds=80 runtime_disabled=false table=<2k:w15:5.66/601 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 476.7 tok/s, decode: 132.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.704084] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=76 accepts=436 avg_per_round=5.74 gate_min=2.00 per_draft_pct=38.2% block_size=16 partial_rounds=74 runtime_disabled=false table=<2k:w15:5.80/669 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 492.8 tok/s, decode: 143.8 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.006301] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=75 accepts=437 avg_per_round=5.83 gate_min=2.00 per_draft_pct=38.8% block_size=16 partial_rounds=73 runtime_disabled=false table=<2k:w15:5.81/736 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 469.6 tok/s, decode: 144.1 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.499807] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=76 accepts=436 avg_per_round=5.74 gate_min=2.00 per_draft_pct=38.2% block_size=16 partial_rounds=74 runtime_disabled=false table=<2k:w15:5.82/804 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 466.7 tok/s, decode: 142.7 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.411490] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=76 accepts=436 avg_per_round=5.74 gate_min=2.00 per_draft_pct=38.2% block_size=16 partial_rounds=74 runtime_disabled=false table=<2k:w15:5.81/872 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 468.4 tok/s, decode: 142.4 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.451829] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=76 accepts=436 avg_per_round=5.74 gate_min=2.00 per_draft_pct=38.2% block_size=16 partial_rounds=74 runtime_disabled=false table=<2k:w15:5.91/940 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2234.25 / 2422.06 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 457.7 tok/s, decode: 140.9 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=72b, tools=0b, tool_msgs=0) 
+  > "In one sentence, what is the first file in the repository context about?"
+  prompt=4133 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.231 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=15 accepts=53 avg_per_round=3.53 gate_min=2.00 per_draft_pct=23.6% block_size=16 partial_rounds=15 runtime_disabled=false table=4-8k:w15:11.63/7 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 4201 (4133 prompt + 68 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 596 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 596 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2315.63 / 2422.06 MB (9/32 entries)
+  <- 4133+68 tokens streamed [prefill: 690.7 tok/s, decode: 89.0 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (4 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=115b, tools=0b, tool_msgs=0) 
+  > "Now name one function defined in that file."
+  prompt=4224 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.234 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 4201/4224 tokens (matched 4201; entry 9/9)
+  [spec-stats] mode=dflash attempts=11 accepts=72 avg_per_round=6.55 gate_min=2.00 per_draft_pct=43.6% block_size=16 partial_rounds=11 runtime_disabled=false table=4-8k:w15:9.19/10 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 4307 (4224 prompt + 83 generated)
+  [hot-cache] resident=2390.44 / 2422.06 MB (9/32 entries)
+  <- 4224+83 tokens streamed [prefill: 347.5 tok/s (4201 cached / 4224 total), decode: 153.7 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (6 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=173b, tools=0b, tool_msgs=0) 
+  > "Name one class defined in that file, or say there is none."
+  prompt=4335 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.233 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 4307/4335 tokens (matched 4307; entry 9/9)
+  [spec-stats] mode=dflash attempts=3 accepts=18 avg_per_round=6.00 gate_min=2.00 per_draft_pct=40.0% block_size=16 partial_rounds=3 runtime_disabled=false table=4-8k:w15:9.19/10 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 4356 (4335 prompt + 21 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2357.63 / 2422.06 MB (8/32 entries)
+  <- 4335+21 tokens streamed [prefill: 238.6 tok/s (4307 cached / 4335 total), decode: 141.7 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (8 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=209b, tools=0b, tool_msgs=0) 
+  > "Which modules does that file import?"
+  prompt=4377 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.235 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 4356/4377 tokens (matched 4356; entry 3/8)
+  [spec-stats] mode=dflash attempts=35 accepts=221 avg_per_round=6.31 gate_min=2.00 per_draft_pct=42.1% block_size=16 partial_rounds=34 runtime_disabled=false table=4-8k:w15:7.34/37 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 4633 (4377 prompt + 256 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] resident=2219.81 / 2422.06 MB (7/32 entries)
+  <- 4377+256 tokens streamed [prefill: 283.4 tok/s (4356 cached / 4377 total), decode: 156.7 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=72b, tools=0b, tool_msgs=0) 
+  > "In one sentence, what is the first file in the repository context about?"
+  prompt=16288 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.355 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=17 accepts=48 avg_per_round=2.82 gate_min=2.00 per_draft_pct=18.8% block_size=16 partial_rounds=17 runtime_disabled=false table=8-16k:w15:17.11/9 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 16353 (16288 prompt + 65 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=2b9887445939fd91; was 2986 tokens, 341.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=a6ff0f31186bb047; was 456 tokens, 191.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=bef0c63031df8426; was 597 tokens, 212.63 MB; ssm 149.63 MB)
+  [hot-cache] evicted LRU entry (byte budget; key=659f303c833a230c; was 4633 tokens, 836.06 MB; ssm 374.06 MB)
+  [hot-cache] resident=2080.44 / 2422.06 MB (1/32 entries)
+  <- 16288+65 tokens streamed [prefill: 675.7 tok/s, decode: 66.3 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (4 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=115b, tools=0b, tool_msgs=0) 
+  > "Now name one function defined in that file."
+  prompt=16376 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.354 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 16353/16376 tokens (matched 16353; entry 1/1)
+  [spec-stats] mode=dflash attempts=10 accepts=36 avg_per_round=3.60 gate_min=2.00 per_draft_pct=24.0% block_size=16 partial_rounds=10 runtime_disabled=false table=16-32k:w15:21.82/2 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 16422 (16376 prompt + 46 generated)
+  [hot-cache] resident=2235.25 / 2422.06 MB (1/32 entries)
+  <- 16376+46 tokens streamed [prefill: 218.2 tok/s (16353 cached / 16376 total), decode: 84.6 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (6 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=173b, tools=0b, tool_msgs=0) 
+  > "Name one class defined in that file, or say there is none."
+  prompt=16450 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.353 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 16422/16450 tokens (matched 16422; entry 1/1)
+  [spec-stats] mode=dflash attempts=2 accepts=13 avg_per_round=6.50 gate_min=2.00 per_draft_pct=43.3% block_size=16 partial_rounds=2 runtime_disabled=false table=16-32k:w15:21.82/2 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 16465 (16450 prompt + 15 generated)
+  [hot-cache] resident=2310.06 / 2422.06 MB (1/32 entries)
+  <- 16450+15 tokens streamed [prefill: 269.7 tok/s (16422 cached / 16450 total), decode: 131.7 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (8 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=209b, tools=0b, tool_msgs=0) 
+  > "Which modules does that file import?"
+  prompt=16486 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.353 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 16465/16486 tokens (matched 16465; entry 1/1)
+  [spec-stats] mode=dflash attempts=33 accepts=223 avg_per_round=6.76 gate_min=2.00 per_draft_pct=45.1% block_size=16 partial_rounds=33 runtime_disabled=false table=16-32k:w15:7.36/27 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 16742 (16486 prompt + 256 generated)
+  [hot-cache] resident=2384.88 / 2422.06 MB (1/32 entries)
+  <- 16486+256 tokens streamed [prefill: 185.0 tok/s (16465 cached / 16486 total), decode: 152.1 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=5 accepts=21 avg_per_round=4.20 gate_min=2.00 per_draft_pct=28.0% block_size=16 partial_rounds=5 runtime_disabled=false table=<2k:w15:5.91/940 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] evicted LRU entry (byte budget; key=edff091730132af2; was 16742 tokens, 2384.88 MB; ssm 448.88 MB)
+  [hot-cache] resident=191.63 / 2422.06 MB (1/32 entries)
+  <- 430+26 tokens streamed [prefill: 786.0 tok/s, decode: 112.1 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=false, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  [hot-cache] reused 399/430 tokens (matched 430; entry 1/1)
+  [spec-stats] mode=dflash attempts=5 accepts=21 avg_per_round=4.20 gate_min=2.00 per_draft_pct=28.0% block_size=16 partial_rounds=5 runtime_disabled=false table=<2k:w15:5.91/940 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] resident=191.63 / 2422.06 MB (1/32 entries)
+  <- 430+26 tokens (309ms) [prefill: 489.5 tok/s (399 cached / 430 total), decode: 112.4 tok/s] [tool_calls: 1]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (4 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=1) 
+  > "import sys
+
+def main():
+    print('hello from nace')
+    return 0
+
+if __name__ =..."
+  prompt=510 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.145 (threshold=0.010)
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 456/510 tokens (matched 456; entry 1/1)
+  [spec-stats] mode=dflash attempts=16 accepts=75 avg_per_round=4.69 gate_min=2.00 per_draft_pct=31.3% block_size=16 partial_rounds=16 runtime_disabled=false table=<2k:w15:7.18/948 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 601 (510 prompt + 91 generated)
+  [hot-cache] resident=362.25 / 2422.06 MB (1/32 entries)
+  <- 510+91 tokens streamed [prefill: 450.1 tok/s (456 cached / 510 total), decode: 122.7 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=454 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.116 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  drafter=enabled (streaming, block_size=16)
+  [spec-stats] mode=dflash attempts=9 accepts=41 avg_per_round=4.56 gate_min=1.00 per_draft_pct=30.4% block_size=16 partial_rounds=9 runtime_disabled=false table=<2k:w15:7.82/949 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 504 (454 prompt + 50 generated)
+  [hot-cache] resident=574.88 / 2422.06 MB (2/32 entries)
+  <- 454+50 tokens streamed [prefill: 807.0 tok/s, decode: 120.2 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (2 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=false, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=454 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.116 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  [hot-cache] reused 423/454 tokens (matched 454; entry 2/2)
+  [spec-stats] mode=dflash attempts=10 accepts=36 avg_per_round=3.60 gate_min=1.00 per_draft_pct=24.0% block_size=16 partial_rounds=10 runtime_disabled=false table=<2k:w15:8.95/951 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 500 (454 prompt + 46 generated)
+  [hot-cache] inherited 2 checkpoints (<= 454 tokens) from a shared prefix
+  [hot-cache] resident=787.50 / 2422.06 MB (3/32 entries)
+  <- 454+46 tokens (531ms) [prefill: 504.5 tok/s (423 cached / 454 total), decode: 99.6 tok/s] [tool_calls: 1]
+  pld=enabled (draft_len=5, key_len=3)
+  pld=disabled (drafter takes priority for this request)
+  drafter=enabled (block_size=16)
+POST /v1/chat/completions (4 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=1) 
+  > "import sys
+
+def main():
+    print('hello from nace')
+    return 0
+
+if __name__ =..."
+  prompt=534 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.130 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  drafter=enabled (streaming, block_size=16)
+  [hot-cache] reused 423/534 tokens (matched 453; entry 2/3)
+  [spec-stats] mode=dflash attempts=32 accepts=135 avg_per_round=4.22 gate_min=1.00 per_draft_pct=28.1% block_size=16 partial_rounds=32 runtime_disabled=false table=<2k:w15:10.73/975 table_drops=t2/c0/b0/i2 block_avg=15.00 block_hist= chooser_trials=0 plain=0 skipped=0 probes=0 copies=0/0/0 acc_pos= rows_hist=
+  [hot-cache] decode-end checkpoint at 701 (534 prompt + 167 generated)
+  [hot-cache] inherited 3 checkpoints (<= 453 tokens) from a shared prefix
+  [hot-cache] resident=1074.94 / 2422.06 MB (4/32 entries)
+  <- 534+167 tokens streamed [prefill: 533.9 tok/s (423 cached / 534 total), decode: 106.6 tok/s] [stop]
+
+Shutting down gracefully...

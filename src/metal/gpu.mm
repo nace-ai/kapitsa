@@ -67,6 +67,14 @@ bool Gpu::apple10() const {
   // MTLGPUFamilyApple10 = 1010 (macOS 26 SDK); the raw value keeps older SDKs building
   return [dev(device_) supportsFamily:(MTLGPUFamily)1010];
 }
+int Gpu::apple_family() const {
+  static const int f = [this] {
+    for (int n = 10; n > 7; --n)  // MTLGPUFamilyApple<n> = 1000 + n, by value as above
+      if ([dev(device_) supportsFamily:(MTLGPUFamily)(1000 + n)]) return n;
+    return 7;  // every Mac GPU Kapitsa runs on (M1) is Apple7
+  }();
+  return f;
+}
 
 static int ioreg_core_count() {
   int cores = 0;

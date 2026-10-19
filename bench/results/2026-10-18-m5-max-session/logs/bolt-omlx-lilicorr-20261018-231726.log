@@ -1,0 +1,1131 @@
+[omlx] 2026-10-18 23:17:27,120 - omlx.settings - INFO - Saved settings to <run-root>/out/state/omlx/bolt/base-lilicorr/settings.json
+[omlx] INFO:     Uvicorn running on http://127.0.0.1:18241 (Press CTRL+C to quit)
+[omlx] 2026-10-18 23:17:27,891 - omlx.scheduler - INFO - ChunkedKVCache patch: methods already present upstream, skipped: size
+[omlx] 2026-10-18 23:17:27,976 - omlx.server - INFO - Headless mode: serving the API without the web UI
+[omlx] 2026-10-18 23:17:27,981 - omlx.server - INFO - CORS origins: ['*']
+[omlx] 2026-10-18 23:17:27,982 - omlx.model_settings - INFO - Loaded settings for 1 models
+[omlx] 2026-10-18 23:17:28,017 - omlx.model_discovery - INFO - Discovered model: nemotron-3.5-bolt-24gb (type: vlm, engine: vlm, size: 23.55GB, text-only: 22.27GB)
+[omlx] 2026-10-18 23:17:28,017 - omlx.engine_pool - INFO - Discovered 1 models
+[omlx] 2026-10-18 23:17:28,017 - omlx.server_metrics - INFO - Loaded all-time stats from <run-root>/out/state/omlx/bolt/base-lilicorr/stats.json
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - Server initialized with 1 models
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - Default model: nemotron-3.5-bolt-24gb
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - Memory guard tier: aggressive (guard on)
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - Default max tokens: 32768
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - HF Downloader initialized
+[omlx] 2026-10-18 23:17:28,020 - omlx.server - INFO - ModelScope SDK not installed, MS downloader disabled
+[omlx] 2026-10-18 23:17:28,021 - omlx.server - INFO - oQ Quantizer initialized
+[omlx] 2026-10-18 23:17:28,023 - omlx.server - INFO - HF Uploader initialized
+[omlx] INFO:     Started server process [58940]
+[omlx] INFO:     Waiting for application startup.
+[omlx] 2026-10-18 23:17:28,042 - omlx.process_memory_enforcer - WARNING - Metal cap (107.5GB, Apple max_recommended_working_set_size) is below the oMLX static ceiling (125.4GB); leaving Apple's default Metal cap active because iogpu.wired_limit_mb is unset. Raise it with: sudo sysctl iogpu.wired_limit_mb=124518
+[omlx] 2026-10-18 23:17:28,042 - omlx.process_memory_enforcer - INFO - Process memory enforcer started (tier=aggressive, ceiling=107.6GB, interval=1.0s)
+[omlx] INFO:     Application startup complete.
+### prime 1 (imports the model file; in 0.7.1rc1 the drafter already attaches late in this first load)
+[omlx] 2026-10-18 23:17:28,085 - omlx.engine_pool - INFO - Loading model: nemotron-3.5-bolt-24gb
+[omlx] 2026-10-18 23:17:28,085 - omlx.engine_pool - WARNING - DFlash is not supported for nemotron-3.5-bolt-24gb (model_type=nemotron_h_nano_omni, engine=vlm); loading without DFlash
+[omlx] 2026-10-18 23:17:28,086 - omlx.utils.model_loading - INFO - M5 sorted gather_qmm reroute installed (issue #2267)
+[omlx] 2026-10-18 23:17:28,176 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - Qwen3.5/3.6 MTP model patch applied (PR 990)
+[omlx] 2026-10-18 23:17:28,177 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+[omlx] 2026-10-18 23:17:28,177 - omlx.patches.qwen35_verify_qmm - INFO - MTP verify qmm patch applied (rows 2..6 split-K, 7..8 sg8, 9..24 mma)
+[omlx] 2026-10-18 23:17:29,637 - omlx.engine.vlm - INFO - Vision feature cache enabled (SSD: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache/vision_features)
+[omlx] 2026-10-18 23:17:29,951 - omlx.scheduler - INFO - Loaded 1 additional EOS token(s) from generation_config.json: {2}
+[omlx] 2026-10-18 23:17:29,951 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+[omlx] 2026-10-18 23:17:29,952 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+[omlx] 2026-10-18 23:17:29,952 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+[omlx] 2026-10-18 23:17:29,961 - omlx.memory_monitor - INFO - Model info set: 88 layers (8 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 512.00 KB
+[omlx] 2026-10-18 23:17:29,961 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+[omlx] 2026-10-18 23:17:29,961 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+[omlx] 2026-10-18 23:17:29,962 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache
+[omlx] 2026-10-18 23:17:29,962 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=0, indexed=0, errors=0, total_size=0 B, gdn_sidecars=0
+[omlx] 2026-10-18 23:17:29,962 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=0, disk_free=177.74 GB, cache_used=0 B, incompatible_files=0
+[omlx] 2026-10-18 23:17:29,962 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+[omlx] 2026-10-18 23:17:29,963 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+[omlx] 2026-10-18 23:17:29,963 - omlx.scheduler - INFO - paged SSD cache enabled: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, block_size=2048, max_blocks=100000
+[omlx] 2026-10-18 23:17:29,963 - omlx.engine_core - INFO - Engine started
+[omlx] 2026-10-18 23:17:29,963 - omlx.patches.sdpa256_attention - INFO - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, always force bounded for qualifying calls (#2025))
+[omlx] 2026-10-18 23:17:29,965 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 steel patch skipped: NAX GPU, MLX native fused SDPA is faster
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_gdn_prework - INFO - mlx-vlm Qwen3.5 GDN q/k normalization follows mlx-lm normalize_qk
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_gdn_verify_fused - INFO - GDN verify replay commit patch applied
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_gdn_prework - INFO - Qwen fused GDN prework patch applied
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_verify_sdpa_split - INFO - Qwen3.5/3.6 verify-width causal vector attention patch applied
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_gdn_chunked - INFO - Qwen3.5/3.6 GDN prefill kernel patch applied (Metal, impl=pipelined, min_t=64)
+[omlx] 2026-10-18 23:17:29,967 - omlx.patches.qwen35_q4_mlp - INFO - Qwen quantized MLP prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+[omlx] 2026-10-18 23:17:29,970 - omlx.patches.qwen35_q4_mlp - INFO - Muse Glimmer quantized prefill patch applied (variant=8, min_tokens=2048, q8_min_tokens=16384)
+[omlx] 2026-10-18 23:17:29,972 - omlx.patches.qwen35_moe_router - INFO - Qwen MoE fused router top-k patch applied
+[omlx] 2026-10-18 23:17:29,972 - omlx.patches.qwen35_moe_routed_decode - INFO - Qwen MoE fused routed-expert decode patch applied
+[omlx] 2026-10-18 23:17:29,973 - omlx.patches.qwen35_moe_weighted_sum - INFO - Qwen3.5/3.6 MoE weighted-sum patch applied (min_tokens=1024)
+[omlx] 2026-10-18 23:17:29,973 - omlx.patches.qwen35_ragged_decode - INFO - qwen3_5 ragged decode threadgroup fallback patch applied
+[omlx] 2026-10-18 23:17:29,975 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (48 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=None)
+[omlx] 2026-10-18 23:17:29,997 - omlx.engine.vlm - INFO - VLM tool calling enabled: parser=qwen3_coder
+[omlx] 2026-10-18 23:17:29,998 - omlx.engine.vlm - INFO - VLMBatchedEngine loaded: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb
+[omlx] 2026-10-18 23:17:30,027 - omlx.speculative.dflash - INFO - DFlash drafter loaded: path=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash kind=dflash2 block=8 adaptive=True target_layers=[1, 18, 35, 51, 68, 85]
+[omlx] 2026-10-18 23:17:30,028 - omlx.engine.vlm - INFO - DFlash drafter attached to engine: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb (kind=dflash2, block=8, layers=[1, 18, 35, 51, 68, 85])
+[omlx] 2026-10-18 23:17:30,063 - omlx.engine_pool - INFO - Loaded model: nemotron-3.5-bolt-24gb (actual: 28.29GB, local estimate: 23.55GB, full model: 23.55GB, total: 23.55GB)
+[omlx] 2026-10-18 23:17:30,064 - omlx.engine.vlm - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+[omlx] 2026-10-18 23:17:30,094 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+[omlx] 2026-10-18 23:17:30,493 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=0 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:17:30,665 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[0] finish=stop tokens=4 cycles=1 tok/cycle=4.00 accept=1/2 (50.0%) depth[d1=1/1,d2=0/1,d3=0/0,d4=0/0,d5=0/0,d6=0/0,d7=0/0] emits[init=2,draft=1,bonus=0,verify=1] timing[backbone=45.1ms mtp=23.6ms sample=0.1ms cache=0.4ms]
+[omlx] 2026-10-18 23:17:30,674 - omlx.scheduler - INFO - Using boundary cache snapshot for 7413196a-7035-4d22-bd34-7ab165f783ef: storing 26/35 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:17:30,675 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.2ms/1, prefix_cache_lookup=0.0ms/1, store_cache_main_boundary=6.6ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+[omlx] 2026-10-18 23:17:30,675 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 3 tokens in 0.59s (5.1 tok/s), prompt: 32, finish_reason=stop, max_tokens=8, request_max_tokens=8
+### prime answer: '391'
+### unload
+[omlx] 2026-10-18 23:17:30,686 - omlx.engine_pool - WARNING - Queued unload for model 'nemotron-3.5-bolt-24gb' until active scheduler work drains
+[omlx] 2026-10-18 23:17:30,686 - omlx.server - INFO - Queued manual unload for active model: nemotron-3.5-bolt-24gb
+{"status":"unloading","model_id":"nemotron-3.5-bolt-24gb","message":"Aborting active requests before unloading nemotron-3.5-bolt-24gb"}
+[omlx] 2026-10-18 23:17:31,092 - omlx.engine_pool - WARNING - Unloading pending model 'nemotron-3.5-bolt-24gb' after activity drained (manual unload)
+[omlx] 2026-10-18 23:17:31,092 - omlx.engine_pool - INFO - Unloading model: nemotron-3.5-bolt-24gb (immediate abort)
+[omlx] 2026-10-18 23:17:31,092 - omlx.engine_core - INFO - Engine stopped
+[omlx] 2026-10-18 23:17:31,095 - omlx.scheduler - INFO - Scheduler shutdown initiated...
+[omlx] 2026-10-18 23:17:31,097 - omlx.cache.paged_ssd_cache - INFO - Shutting down PagedSSDCacheManager...
+[omlx] 2026-10-18 23:17:31,097 - omlx.cache.paged_ssd_cache - INFO - Flushed 1 hot cache blocks to SSD
+[omlx] 2026-10-18 23:17:31,098 - omlx.scheduler - INFO - Scheduler shutdown completed
+[omlx] 2026-10-18 23:17:31,099 - omlx.cache.paged_cache - INFO - PagedCacheManager cleared (reset to 256 initial blocks)
+[omlx] 2026-10-18 23:17:31,133 - omlx.scheduler - INFO - Deep reset completed - all caches cleared
+[omlx] 2026-10-18 23:17:31,192 - omlx.engine.vlm - INFO - VLMBatchedEngine stopped
+[omlx] 2026-10-18 23:17:31,778 - omlx.engine_pool - INFO - Unloaded model: nemotron-3.5-bolt-24gb, freed=23.53GB (expected>=21.55GB), active_memory: 2.89KB (settled)
+### prime 2 (reload with DFlash), try 1
+[omlx] 2026-10-18 23:17:33,713 - omlx.engine_pool - INFO - Loading model: nemotron-3.5-bolt-24gb
+[omlx] 2026-10-18 23:17:33,714 - omlx.engine_pool - INFO - DFlash enabled for nemotron-3.5-bolt-24gb as a batched drafter, draft=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash
+[omlx] 2026-10-18 23:17:33,714 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+[omlx] 2026-10-18 23:17:33,728 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5.Model.sanitize for MTP
+[omlx] 2026-10-18 23:17:33,728 - omlx.patches.mlx_vlm_mtp.qwen35_moe_vlm_model - INFO - Patched mlx_vlm.models.qwen3_5_moe.Model.sanitize for MTP
+[omlx] 2026-10-18 23:17:33,731 - omlx.patches.mlx_vlm_inkling_compat - INFO - Inkling mlx-vlm compatibility patch applied
+[omlx] 2026-10-18 23:17:33,731 - omlx.patches.mlx_vlm_mtp.qwen35_moe_vlm_runtime - INFO - mlx-vlm Qwen3.5-MoE runtime MTP patch applied
+[omlx] 2026-10-18 23:17:33,732 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_runtime - INFO - mlx-vlm Qwen3.5 (dense) runtime MTP patch applied
+[omlx] 2026-10-18 23:17:33,735 - omlx.patches.gemma4_verify_attention - INFO - gemma4 small-L verify attention patch applied (kernel + per-token)
+[omlx] 2026-10-18 23:17:33,735 - omlx.patches.mlx_vlm_mtp.gemma4_vlm_runtime - INFO - mlx-vlm Gemma 4 runtime MTP patch applied
+[omlx] 2026-10-18 23:17:33,735 - omlx.patches.mlx_vlm_mtp.inkling_vlm_runtime - INFO - mlx-vlm inkling runtime MTP patch applied
+[omlx] 2026-10-18 23:17:33,762 - omlx.patches.deepseek_v4 - INFO - PoolingCache / BatchPoolingCache injected into mlx_lm.models.cache
+[omlx] 2026-10-18 23:17:33,763 - omlx.patches.deepseek_v4 - INFO - PoolingCacheHandler + BatchPoolingCacheHandler registered
+[omlx] 2026-10-18 23:17:33,772 - omlx.patches.mlx_vlm_glm5_next_compat - INFO - GLM-5.3 mlx-vlm compatibility patch applied
+[omlx] 2026-10-18 23:17:33,772 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - mlx-vlm GLM-5.3 (glm5_next) runtime MTP patch applied
+[omlx] 2026-10-18 23:17:33,772 - omlx.utils.model_loading - INFO - mlx-vlm runtime MTP patch applied for <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb (config declares mtp heads but checkpoint ships no mtp.* weights; MTPModule attachment skipped to keep strict load_weights happy)
+[omlx] 2026-10-18 23:17:33,820 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+[omlx] 2026-10-18 23:17:35,234 - omlx.engine.vlm - INFO - Vision feature cache enabled (SSD: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache/vision_features)
+[omlx] 2026-10-18 23:17:35,550 - omlx.scheduler - INFO - Loaded 1 additional EOS token(s) from generation_config.json: {2}
+[omlx] 2026-10-18 23:17:35,550 - omlx.scheduler - INFO - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+[omlx] 2026-10-18 23:17:35,550 - omlx.scheduler - INFO - Decode KV cache materialization interval set to 256 tokens
+[omlx] 2026-10-18 23:17:35,550 - omlx.memory_monitor - INFO - MemoryMonitor initialized (estimator-only, eviction disabled)
+[omlx] 2026-10-18 23:17:35,556 - omlx.memory_monitor - INFO - Model info set: 88 layers (8 KVCache), 2 KV heads, 32 Q heads, 128 head_dim. Estimated memory per 64-token block: 512.00 KB
+[omlx] 2026-10-18 23:17:35,556 - omlx.scheduler - INFO - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+[omlx] 2026-10-18 23:17:35,556 - omlx.cache.paged_cache - INFO - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+[omlx] 2026-10-18 23:17:35,557 - omlx.cache.paged_ssd_cache - INFO - Scanning SSD cache directory: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache
+[omlx] 2026-10-18 23:17:35,557 - omlx.cache.paged_ssd_cache - INFO - SSD cache scan complete: scanned=1, indexed=1, errors=0, total_size=162.57 MB, gdn_sidecars=1, gdn_size=162.36 MB
+[omlx] 2026-10-18 23:17:35,558 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager initialized: dir=<run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, max_size=4.00 GB, hot_cache=4.00 GB, auto_size=False, existing_files=1, disk_free=177.58 GB, cache_used=162.57 MB, incompatible_files=0
+[omlx] 2026-10-18 23:17:35,558 - omlx.cache.paged_cache - INFO - paged SSD cache manager connected to PagedCacheManager
+[omlx] 2026-10-18 23:17:35,558 - omlx.cache.prefix_cache - INFO - Indexed 1 tail blocks from SSD cache
+[omlx] 2026-10-18 23:17:35,558 - omlx.cache.prefix_cache - INFO - PagedSSDCacheManager connected to BlockAwarePrefixCache
+[omlx] 2026-10-18 23:17:35,558 - omlx.scheduler - INFO - paged SSD cache enabled: cache_dir=<run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, max_size=4.00 GB, block_size=2048 tokens
+[omlx] 2026-10-18 23:17:35,558 - omlx.scheduler - INFO - paged SSD cache enabled: <run-root>/out/state/omlx/bolt/base-lilicorr/kv-cache, block_size=2048, max_blocks=100000
+[omlx] 2026-10-18 23:17:35,558 - omlx.engine_core - INFO - Engine started
+[omlx] 2026-10-18 23:17:35,558 - omlx.patches.qwen35_fa256_attention - INFO - Qwen FA-256 steel patch skipped: NAX GPU, MLX native fused SDPA is faster
+[omlx] 2026-10-18 23:17:35,562 - omlx.cache.paged_ssd_cache - INFO - PagedSSDCacheManager updated layer cache signature (48 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=no, numerics=None)
+[omlx] 2026-10-18 23:17:35,583 - omlx.engine.vlm - INFO - VLM tool calling enabled: parser=qwen3_coder
+[omlx] 2026-10-18 23:17:35,584 - omlx.engine.vlm - INFO - VLMBatchedEngine loaded: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb
+[omlx] 2026-10-18 23:17:35,612 - omlx.speculative.dflash - INFO - DFlash drafter loaded: path=<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash kind=dflash2 block=8 adaptive=True target_layers=[1, 18, 35, 51, 68, 85]
+[omlx] 2026-10-18 23:17:35,612 - omlx.engine.vlm - INFO - DFlash drafter attached to engine: <run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb (kind=dflash2, block=8, layers=[1, 18, 35, 51, 68, 85])
+[omlx] 2026-10-18 23:17:35,647 - omlx.engine_pool - INFO - Loaded model: nemotron-3.5-bolt-24gb (actual: 29.40GB, local estimate: 24.92GB, full model: 23.55GB, total: 24.92GB)
+[omlx] 2026-10-18 23:17:35,648 - omlx.engine.vlm - INFO - Structured output requires xgrammar. Install with: pip install 'omlx[grammar]'
+[omlx] 2026-10-18 23:17:35,652 - omlx.scheduler - INFO - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+[omlx] 2026-10-18 23:17:35,755 - omlx.scheduler - INFO - Prefix cache restore for 395f9673-3b3f-4ced-8848-152e13ffe7d5: source=paged cached=26 suffix=6 blocks=1 lookup=0.061ms reconstruct=8.508ms promote=True
+[omlx] 2026-10-18 23:17:35,761 - omlx.scheduler - INFO - Reserved prefill capacity for 32 tokens across 8 caches (+0.00GB)
+[omlx] 2026-10-18 23:17:35,843 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=0 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:17:35,915 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[0] finish=stop tokens=4 cycles=1 tok/cycle=4.00 accept=1/2 (50.0%) depth[d1=1/1,d2=0/1,d3=0/0,d4=0/0,d5=0/0,d6=0/0,d7=0/0] emits[init=2,draft=1,bonus=0,verify=1] timing[backbone=36.0ms mtp=15.3ms sample=0.1ms cache=1.1ms]
+[omlx] 2026-10-18 23:17:35,918 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.6ms/1, prefix_cache_lookup=0.1ms/1, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=0.0ms/1
+[omlx] 2026-10-18 23:17:35,919 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 3 tokens in 0.27s (11.1 tok/s), prompt: 32, finish_reason=stop, max_tokens=8, request_max_tokens=8
+### prime answer: '391'
+### forwarding 127.0.0.1:8241 -> 18241
+[omlx] 2026-10-18 23:17:38,957 - omlx.scheduler - INFO - Reserved prefill capacity for 2931 tokens across 8 caches (+0.01GB)
+[omlx] 2026-10-18 23:17:39,981 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:17:39,984 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:17:40,788 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:17:40,790 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:42,710 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:22:42,712 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:43,239 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:22:43,241 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:43,765 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:22:43,767 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:44,298 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:22:44,300 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:44,821 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:22:44,823 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:22:45,358 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=0 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:22:49,692 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[0] finish=length tokens=512 cycles=127 tok/cycle=4.03 accept=383/474 (80.8%) depth[d1=109/124,d2=86/108,d3=71/85,d4=55/70,d5=28/39,d6=20/28,d7=14/20] d0=3 emits[init=2,draft=383,bonus=36,verify=91] timing[backbone=4221.1ms mtp=36.4ms sample=5.5ms cache=37.0ms]
+[omlx] 2026-10-18 23:22:49,705 - omlx.scheduler - INFO - Using boundary cache snapshot for 545ccd99-e8df-4a6f-9574-a0af358a53c6: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:22:49,706 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.6ms/2, prefix_cache_lookup=0.5ms/9, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=5.8ms/2, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1
+[omlx] 2026-10-18 23:22:49,707 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 4.77s (117.8 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.43s, stream_visible_ttft=0.43s
+[omlx] 2026-10-18 23:22:50,151 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=1 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:22:53,984 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[1] finish=length tokens=512 cycles=110 tok/cycle=4.65 accept=400/477 (83.9%) depth[d1=96/107,d2=87/95,d3=69/87,d4=55/69,d5=43/55,d6=35/43,d7=15/21] d0=3 emits[init=2,draft=400,bonus=33,verify=77] timing[backbone=3720.8ms mtp=17.6ms sample=4.8ms cache=31.3ms]
+[omlx] 2026-10-18 23:22:53,993 - omlx.scheduler - INFO - Using boundary cache snapshot for 4185f108-8c24-4283-998b-4240728d7cf0: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:22:53,993 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.6ms/3, prefix_cache_lookup=0.5ms/10, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=12.2ms/3, store_cache_main_collect=0.0ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.1ms/1
+[omlx] 2026-10-18 23:22:53,994 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 4.28s (133.2 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.44s, stream_visible_ttft=0.44s
+[omlx] 2026-10-18 23:22:54,439 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=2 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:22:58,742 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[2] finish=length tokens=512 cycles=121 tok/cycle=4.23 accept=389/473 (82.2%) depth[d1=102/118,d2=83/101,d3=71/82,d4=61/70,d5=37/52,d6=25/37,d7=10/13] d0=3 emits[init=2,draft=389,bonus=37,verify=84] timing[backbone=4183.6ms mtp=33.2ms sample=5.2ms cache=34.3ms]
+[omlx] 2026-10-18 23:22:58,755 - omlx.scheduler - INFO - Using boundary cache snapshot for 797cff58-30bf-475b-91d8-e29674f922f6: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:22:58,755 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.7ms/4, prefix_cache_lookup=0.6ms/11, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=18.1ms/4, store_cache_main_collect=0.0ms/3, store_cache_main_dispatch=0.2ms/3, store_cache_worker_sync=0.2ms/2
+[omlx] 2026-10-18 23:22:58,756 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 4.76s (118.6 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.44s, stream_visible_ttft=0.44s
+[omlx] 2026-10-18 23:22:59,219 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=3 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:23:03,558 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[3] finish=length tokens=512 cycles=119 tok/cycle=4.30 accept=391/483 (81.0%) depth[d1=99/116,d2=85/98,d3=68/85,d4=57/68,d5=40/57,d6=28/40,d7=14/19] d0=3 emits[init=2,draft=391,bonus=27,verify=92] timing[backbone=4212.6ms mtp=30.8ms sample=5.0ms cache=37.5ms]
+[omlx] 2026-10-18 23:23:03,568 - omlx.scheduler - INFO - Using boundary cache snapshot for 4500fc67-fdde-41bf-9f7f-aca8be08a8a3: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:23:03,569 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.7ms/5, prefix_cache_lookup=0.6ms/12, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=23.9ms/5, store_cache_main_collect=0.1ms/4, store_cache_main_dispatch=0.3ms/4, store_cache_worker_sync=0.3ms/3
+[omlx] 2026-10-18 23:23:03,569 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 4.81s (117.7 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.46s, stream_visible_ttft=0.46s
+[omlx] 2026-10-18 23:23:04,037 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP path activated for uid=4 (model has mtp_forward, batch=1, primed=0)
+[omlx] 2026-10-18 23:23:08,075 - omlx.patches.mlx_lm_mtp.batch_generator - INFO - MTP[4] finish=length tokens=512 cycles=111 tok/cycle=4.61 accept=399/472 (84.5%) depth[d1=93/108,d2=86/93,d3=72/86,d4=59/71,d5=45/58,d6=37/45,d7=7/11] d0=3 emits[init=2,draft=399,bonus=38,verify=73] timing[backbone=3923.1ms mtp=31.5ms sample=4.7ms cache=29.7ms]
+[omlx] 2026-10-18 23:23:08,087 - omlx.scheduler - INFO - Using boundary cache snapshot for 2a0c5c2e-4031-4d7d-9f68-7c25ae4c6081: storing 80/598 tokens (tail terminal, 0 intermediate snapshots)
+[omlx] 2026-10-18 23:23:08,087 - omlx.scheduler - INFO - Cache phase timings: cleanup_finished_sync=2.8ms/6, prefix_cache_lookup=0.6ms/13, prefix_cache_reconstruct=8.5ms/1, store_cache_main_boundary=29.8ms/6, store_cache_main_collect=0.1ms/5, store_cache_main_dispatch=0.4ms/5, store_cache_worker_sync=0.3ms/4
+[omlx] 2026-10-18 23:23:08,088 - omlx.server - INFO - Chat completion: model=nemotron-3.5-bolt-24gb, 512 tokens in 4.52s (126.4 tok/s), prompt: 86, finish_reason=length, max_tokens=512, request_max_tokens=512, stream_model_ttft=0.46s, stream_visible_ttft=0.47s
+[omlx] 2026-10-18 23:23:10,241 - omlx.scheduler - INFO - Reserved prefill capacity for 4183 tokens across 8 caches (+0.02GB)
+[omlx] 2026-10-18 23:23:12,557 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:12,562 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:23:14,706 - omlx.scheduler - INFO - Reserved prefill capacity for 16515 tokens across 8 caches (+0.11GB)
+[omlx] 2026-10-18 23:23:29,651 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:29,668 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:23:30,528 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:30,530 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:23:31,360 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:31,362 - omlx.server - ERROR - POST /v1/chat/completions → 500 (unhandled): 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+[omlx]     await self.app(scope, receive, _send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py", line 151, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 91, in __call__
+[omlx]     await self.simple_response(scope, receive, send, request_headers=headers)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 149, in simple_response
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/api/body_limit.py", line 106, in __call__
+[omlx]     await self.app(scope, counting_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1242, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1377, in __call__
+[omlx]     await self.app(scope, tracked_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+[omlx]     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 2809, in app
+[omlx]     await route.handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 1328, in handle
+[omlx]     await super().handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 282, in handle
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 166, in app
+[omlx]     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 152, in app
+[omlx]     response = await f(request)
+[omlx]                ^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 745, in app
+[omlx]     raw_response = await run_endpoint_function(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 372, in run_endpoint_function
+[omlx]     return await dependant.call(**values)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5216, in create_chat_completion
+[omlx]     return await _json_response_or_keepalive(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 3165, in _json_response_or_keepalive
+[omlx]     result = task.result()
+[omlx]              ^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5061, in _build_chat_completion
+[omlx]     output = await engine.chat(messages=messages, **chat_kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 5138, in chat
+[omlx]     return await self.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 4886, in generate
+[omlx]     output = await self._engine.generate(
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1501, in generate
+[omlx]     return await self.engine.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1156, in generate
+[omlx]     _raise_request_output_error(final_output)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 191, in _raise_request_output_error
+[omlx]     raise RuntimeError(output.error)
+[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] ERROR:    Exception in ASGI application
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/uvicorn/protocols/http/h11_impl.py", line 411, in run_asgi
+[omlx]     result = await app(  # type: ignore[func-returns-value]
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+[omlx]     return await self.app(scope, receive, send)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/applications.py", line 1216, in __call__
+[omlx]     await super().__call__(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/applications.py", line 96, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+[omlx]     await self.app(scope, receive, _send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py", line 151, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 91, in __call__
+[omlx]     await self.simple_response(scope, receive, send, request_headers=headers)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 149, in simple_response
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/api/body_limit.py", line 106, in __call__
+[omlx]     await self.app(scope, counting_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1242, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1377, in __call__
+[omlx]     await self.app(scope, tracked_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+[omlx]     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 2809, in app
+[omlx]     await route.handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 1328, in handle
+[omlx]     await super().handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 282, in handle
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 166, in app
+[omlx]     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 152, in app
+[omlx]     response = await f(request)
+[omlx]                ^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 745, in app
+[omlx]     raw_response = await run_endpoint_function(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 372, in run_endpoint_function
+[omlx]     return await dependant.call(**values)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5216, in create_chat_completion
+[omlx]     return await _json_response_or_keepalive(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 3165, in _json_response_or_keepalive
+[omlx]     result = task.result()
+[omlx]              ^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5061, in _build_chat_completion
+[omlx]     output = await engine.chat(messages=messages, **chat_kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 5138, in chat
+[omlx]     return await self.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 4886, in generate
+[omlx]     output = await self._engine.generate(
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1501, in generate
+[omlx]     return await self.engine.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1156, in generate
+[omlx]     _raise_request_output_error(final_output)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 191, in _raise_request_output_error
+[omlx]     raise RuntimeError(output.error)
+[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:23:32,183 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:32,185 - omlx.server - ERROR - Error during chat streaming: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 2026-10-18 23:23:33,006 - omlx.engine_core - ERROR - Engine loop error: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 516, in _engine_loop
+[omlx]     step_outputs = await loop.run_in_executor(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/thread.py", line 59, in run
+[omlx]     result = self.fn(*self.args, **self.kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 457, in _step_burst
+[omlx]     outputs = [self.scheduler.step()]
+[omlx]                ^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/scheduler.py", line 15064, in step
+[omlx]     responses = list(self.batch_generator.next_generated())
+[omlx]                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1881, in next_generated
+[omlx]     prompt_responses, generation_responses = self._next()
+[omlx]                                              ^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 334, in patched_bg_next
+[omlx]     result = original_bg_next(self, *args, **kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/mlx_lm/generate.py", line 1790, in _next
+[omlx]     generation_responses = self._generation_batch.next()
+[omlx]                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 274, in scoped_next
+[omlx]     return patched_next(self, *args, **kwargs)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 178, in patched_next
+[omlx]     state = _prepare_mtp_state_for_next(self)
+[omlx]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 1466, in _prepare_mtp_state_for_next
+[omlx]     _post_init_mtp(gen_batch)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/patches/mlx_lm_mtp/batch_generator.py", line 3275, in _post_init_mtp
+[omlx]     drafter.draft([(gen_batch, state, captured, state.next_main, prev_buf)])
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 424, in draft
+[omlx]     proposals = self._draft_batched(rows)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 518, in _draft_batched
+[omlx]     return draft_batched(self, rows, counts=counts, commit=commit)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/drafter.py", line 798, in _draft_batched
+[omlx]     proposals = selection.select_sampled(
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "<run-root>/out/state/omlx/bolt/models/nemotron-3.5-bolt-24gb/dflash/lilicorr_draft.py", line 528, in _select_sampled
+[omlx]     return select_sampled(selector, hidden, logits, anchors, samplers)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/speculative/dflash/selection.py", line 189, in select_sampled
+[omlx]     projected = selector.hidden_projection(hidden)
+[omlx]                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx] AttributeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] 
+[omlx] 2026-10-18 23:23:33,008 - omlx.server - ERROR - POST /v1/chat/completions → 500 (unhandled): 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+[omlx]     await self.app(scope, receive, _send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py", line 151, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 91, in __call__
+[omlx]     await self.simple_response(scope, receive, send, request_headers=headers)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 149, in simple_response
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/api/body_limit.py", line 106, in __call__
+[omlx]     await self.app(scope, counting_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1242, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1377, in __call__
+[omlx]     await self.app(scope, tracked_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+[omlx]     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 2809, in app
+[omlx]     await route.handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 1328, in handle
+[omlx]     await super().handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 282, in handle
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 166, in app
+[omlx]     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 152, in app
+[omlx]     response = await f(request)
+[omlx]                ^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 745, in app
+[omlx]     raw_response = await run_endpoint_function(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 372, in run_endpoint_function
+[omlx]     return await dependant.call(**values)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5216, in create_chat_completion
+[omlx]     return await _json_response_or_keepalive(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 3165, in _json_response_or_keepalive
+[omlx]     result = task.result()
+[omlx]              ^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5061, in _build_chat_completion
+[omlx]     output = await engine.chat(messages=messages, **chat_kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 5138, in chat
+[omlx]     return await self.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 4886, in generate
+[omlx]     output = await self._engine.generate(
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1501, in generate
+[omlx]     return await self.engine.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1156, in generate
+[omlx]     _raise_request_output_error(final_output)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 191, in _raise_request_output_error
+[omlx]     raise RuntimeError(output.error)
+[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'
+[omlx] ERROR:    Exception in ASGI application
+[omlx] Traceback (most recent call last):
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/uvicorn/protocols/http/h11_impl.py", line 411, in run_asgi
+[omlx]     result = await app(  # type: ignore[func-returns-value]
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+[omlx]     return await self.app(scope, receive, send)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/applications.py", line 1216, in __call__
+[omlx]     await super().__call__(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/applications.py", line 96, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 186, in __call__
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+[omlx]     await self.app(scope, receive, _send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/telemetry/_asgi.py", line 151, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 91, in __call__
+[omlx]     await self.simple_response(scope, receive, send, request_headers=headers)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/cors.py", line 149, in simple_response
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/api/body_limit.py", line 106, in __call__
+[omlx]     await self.app(scope, counting_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1242, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 1377, in __call__
+[omlx]     await self.app(scope, tracked_receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+[omlx]     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+[omlx]     await self.middleware_stack(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 2809, in app
+[omlx]     await route.handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 1328, in handle
+[omlx]     await super().handle(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/routing.py", line 282, in handle
+[omlx]     await self.app(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 166, in app
+[omlx]     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+[omlx]     raise exc
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+[omlx]     await app(scope, receive, sender)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 152, in app
+[omlx]     response = await f(request)
+[omlx]                ^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 745, in app
+[omlx]     raw_response = await run_endpoint_function(
+[omlx]                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/fastapi/routing.py", line 372, in run_endpoint_function
+[omlx]     return await dependant.call(**values)
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5216, in create_chat_completion
+[omlx]     return await _json_response_or_keepalive(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 3165, in _json_response_or_keepalive
+[omlx]     result = task.result()
+[omlx]              ^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/server.py", line 5061, in _build_chat_completion
+[omlx]     output = await engine.chat(messages=messages, **chat_kwargs)
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 5138, in chat
+[omlx]     return await self.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine/vlm.py", line 4886, in generate
+[omlx]     output = await self._engine.generate(
+[omlx]              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1501, in generate
+[omlx]     return await self.engine.generate(
+[omlx]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 1156, in generate
+[omlx]     _raise_request_output_error(final_output)
+[omlx]   File "~/venvs/omlx/lib/python3.12/site-packages/omlx/engine_core.py", line 191, in _raise_request_output_error
+[omlx]     raise RuntimeError(output.error)
+[omlx] RuntimeError: 'LiLiCorrSelector' object has no attribute 'hidden_projection'

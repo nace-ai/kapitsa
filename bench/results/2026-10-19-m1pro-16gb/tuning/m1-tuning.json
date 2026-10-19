@@ -1,0 +1,297 @@
+[
+ {
+  "label": "q35-4b-omlx-dflash-b4",
+  "display": "oMLX + DFlash (z-lab drafter 4-bit, block 4, adaptive verify)",
+  "extends": "q35-4b-omlx-best",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/qwen3.5-4b-4bit-mtp",
+     "dst": "{state}/omlx/q35-4b-omlx-dflash-b4/models/qwen3.5-4b-4bit"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/q35-4b-omlx-dflash-b4/base/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "qwen3.5-4b-4bit": {
+        "dflash_enabled": true,
+        "dflash_draft_model": "{models}/drafters/Qwen3.5-4B-DFlash",
+        "dflash_draft_quant_enabled": true,
+        "dflash_draft_quant_weight_bits": 4,
+        "dflash_draft_quant_group_size": 64,
+        "dflash_block_size": 4,
+        "dflash_verify_mode": "adaptive"
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/q35-4b-omlx-dflash-b4/base/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{env:OMLX_BIN=omlx}",
+   "serve",
+   "--model-dir",
+   "{state}/omlx/q35-4b-omlx-dflash-b4/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8141",
+   "--base-path",
+   "{state}/omlx/q35-4b-omlx-dflash-b4/base",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/q35-4b-omlx-dflash-b4/base/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/model.safetensors.index.json",
+   "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"
+  ],
+  "note": "M1 Pro tuning: oMLX's DFlash path with z-lab's 4B drafter on the 4-bit trunk."
+ },
+ {
+  "label": "q35-4b-omlx-dflash-b5",
+  "display": "oMLX + DFlash (z-lab drafter 4-bit, block 5, adaptive verify)",
+  "extends": "q35-4b-omlx-best",
+  "prepare": [
+   {
+    "symlink": {
+     "src": "{models}/qwen3.5-4b-4bit-mtp",
+     "dst": "{state}/omlx/q35-4b-omlx-dflash-b5/models/qwen3.5-4b-4bit"
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/omlx/q35-4b-omlx-dflash-b5/base/model_settings.json",
+     "data": {
+      "version": 1,
+      "models": {
+       "qwen3.5-4b-4bit": {
+        "dflash_enabled": true,
+        "dflash_draft_model": "{models}/drafters/Qwen3.5-4B-DFlash",
+        "dflash_draft_quant_enabled": true,
+        "dflash_draft_quant_weight_bits": 4,
+        "dflash_draft_quant_group_size": 64,
+        "dflash_block_size": 5,
+        "dflash_verify_mode": "adaptive"
+       }
+      }
+     }
+    }
+   },
+   {
+    "clean_dir": "{state}/omlx/q35-4b-omlx-dflash-b5/base/kv-cache"
+   }
+  ],
+  "cmd": [
+   "{env:OMLX_BIN=omlx}",
+   "serve",
+   "--model-dir",
+   "{state}/omlx/q35-4b-omlx-dflash-b5/models",
+   "--no-hf-cache",
+   "--headless",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8141",
+   "--base-path",
+   "{state}/omlx/q35-4b-omlx-dflash-b5/base",
+   "--paged-ssd-cache-dir",
+   "{state}/omlx/q35-4b-omlx-dflash-b5/base/kv-cache",
+   "--paged-ssd-cache-max-size",
+   "4GB",
+   "--hot-cache-max-size",
+   "4GB",
+   "--memory-guard",
+   "aggressive"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit-mtp/model.safetensors.index.json",
+   "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"
+  ],
+  "note": "M1 Pro tuning: oMLX's DFlash path with z-lab's 4B drafter on the 4-bit trunk."
+ },
+ {
+  "label": "q35-4b-mlxserve-mtp-d2",
+  "display": "mlx-serve + MTP (max depth 2)",
+  "extends": "q35-4b-mlxserve-mtp",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d2"
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d2"
+  },
+  "note": "M1 Pro tuning."
+ },
+ {
+  "label": "q35-4b-mlxserve-mtp-d4",
+  "display": "mlx-serve + MTP (max depth 4)",
+  "extends": "q35-4b-mlxserve-mtp",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d4"
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "4"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d4"
+  },
+  "note": "M1 Pro tuning."
+ },
+ {
+  "label": "q35-4b-mlxserve-dflash-b5",
+  "display": "mlx-serve + DFlash (z-lab drafter, block 5)",
+  "extends": "q35-4b-mlxserve-dflash",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-4b-mlxserve-dflash-b5"
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--drafter",
+   "{models}/drafters/Qwen3.5-4B-DFlash",
+   "--no-mtp",
+   "--draft-block-size",
+   "5"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-4b-mlxserve-dflash-b5"
+  },
+  "note": "M1 Pro tuning."
+ },
+ {
+  "label": "q35-4b-mtplx-d2",
+  "display": "MTPLX (sustained profile, depth 2)",
+  "extends": "q35-4b-mtplx",
+  "cmd": [
+   "{env:MTPLX_BIN=mtplx}",
+   "serve",
+   "--model",
+   "{models}/qwen3.5-4b-4bit-mtplx",
+   "--model-id",
+   "qwen3.5-4b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8082",
+   "--no-auth",
+   "--yes",
+   "--context-window",
+   "32768",
+   "--no-stats-footer",
+   "--mtp",
+   "--profile",
+   "sustained",
+   "--depth",
+   "2"
+  ],
+  "note": "M1 Pro tuning."
+ },
+ {
+  "label": "q35-4b-mlxvlm-mtp-b2",
+  "display": "mlx-vlm server + MTP (block 2)",
+  "extends": "q35-4b-mlxvlm-mtp",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8282",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/drafters/Qwen3.5-4B-MTP-4bit",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "2"
+  ],
+  "note": "M1 Pro tuning."
+ },
+ {
+  "label": "q35-4b-mlxvlm-mtp-b4",
+  "display": "mlx-vlm server + MTP (block 4)",
+  "extends": "q35-4b-mlxvlm-mtp",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON=python3}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/qwen3.5-4b-4bit-mtp",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8282",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/drafters/Qwen3.5-4B-MTP-4bit",
+   "--draft-kind",
+   "mtp",
+   "--draft-block-size",
+   "4"
+  ],
+  "note": "M1 Pro tuning."
+ }
+]

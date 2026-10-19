@@ -1,0 +1,28 @@
+
+===== bolt-mlxvlm  [mlx-lm] mlx-vlm server (the bundle's model file, no drafter)  version unknown
+[23:02:06] bolt-mlxvlm: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 94020 lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py configs/kapitsa.json configs/llama.cpp.json conf
+[23:02:06] bolt-mlxvlm: starting ~/venvs/mlx-vlm/bin/python -m mlx_vlm.server --model ~/.cache/kapitsa/benchmark-models/nemotron-3.5-bolt-24gb --trust-remote-code --host 127.0.0.1 --port 8243
+[23:02:11] bolt-mlxvlm: ready after 4s (pid 26243, listener 26243)
+[23:02:15] bolt-mlxvlm:  warm-up prefill~2.9k+decode64: ok (3.96s)
+[23:02:16] bolt-mlxvlm:  warm-up tools: ok (1.03s)
+[23:03:17] bolt-mlxvlm: gpu busy (62s): com.apple.WebKit[3316] 7%
+[23:04:19] bolt-mlxvlm: gpu busy (124s): com.apple.WebKit[3316] 7%
+[23:05:21] bolt-mlxvlm: gpu busy (186s): com.apple.WebKit[3316] 6%
+[23:06:23] bolt-mlxvlm: gpu busy (248s): com.apple.WebKit[3316] 7%
+[23:07:17] bolt-mlxvlm: GPU not quiet after 301s (['com.apple.WebKit[3316] 6%']); benchmarking anyway, contention will be flagged
+== bolt-mlxvlm
+  decode T=0.6: 69.35 tok/s (e2e 69.37; 512 tok, finish=length, d4=0.6242)
+  decode T=0.6: 69.15 tok/s (e2e 69.14; 512 tok, finish=length, d4=0.699)
+  decode T=0.6: 68.87 tok/s (e2e 68.88; 512 tok, finish=length, d4=0.6064)
+  decode T=0.6: 67.82 tok/s (e2e 67.77; 512 tok, finish=length, d4=0.4356) flags ['repetition loop (distinct-4-gram 0.4356)']
+  decode T=0.6: 66.91 tok/s (e2e 66.89; 512 tok, finish=length, d4=0.604)
+  decode median 68.87 (min 66.91, max 69.35) over 5/5 valid
+  decode T=0: median 66.87 (min 66.58, max 68.05) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 4.45s -> 941 tok/s, cold cached=0 | cached TTFT median 4.19s over 3 turns (cached [0, 0, 0]) flags ['follow-up reused only 0 of 4184 prefix tokens', 'follow-up reused only 0 of 4246 prefix tokens', 'follow-up reused only 0 of 4289 prefix tokens']
+  prefill 16000: 16512 tok (ref 16514), TTFT 15.98s -> 1033 tok/s, cold cached=0 | cached TTFT median 16.51s over 3 turns (cached [0, 0, 0]) flags ['follow-up reused only 0 of 16512 prefix tokens', 'follow-up reused only 0 of 16578 prefix tokens', 'follow-up reused only 0 of 16621 prefix tokens']
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 32.52 GB, resident mapped files 0.01 GB, swap used 14516.94 MB
+  -> <run-root>/out/results/bolt-mlxvlm-20261018-230206.json
+[23:10:30] bolt-mlxvlm: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[23:10:30] bolt-mlxvlm: -> <run-root>/out/results/bolt-mlxvlm-20261018-230206.json  flags: 8

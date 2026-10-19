@@ -1,0 +1,315 @@
+{
+ "label": "flash-rapidmlx-mtp",
+ "schema": 2,
+ "when": "2026-10-19 00:47:13",
+ "invalid": [
+  "harness: server never became ready (4s); see <run-root>/out-extra/logs/flash-rapidmlx-mtp-20261019-004709.log"
+ ],
+ "flags": [],
+ "config_label": "flash-rapidmlx-mtp",
+ "display": "Rapid-MLX + native MTP (depth 1)",
+ "engine": "rapid-mlx",
+ "version": "0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)",
+ "version_config": "0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)",
+ "model_name": "Qwen3.8-Flash-Next",
+ "model_path": "{models}/qwen3.8-flash-next-4bit",
+ "note": "As flash-rapidmlx with the model's own MTP head (in the pack) at 1 draft token, the depth its catalog gives this model (mtp_speculative_tokens 1).",
+ "config": {
+  "label": "flash-rapidmlx-mtp",
+  "display": "Rapid-MLX + native MTP (depth 1)",
+  "engine": "rapid-mlx",
+  "version": "0.16.3 (mlx 0.32.4, mlx-lm 0.31.3, mlx-vlm 0.7.2)",
+  "model_name": "Qwen3.8-Flash-Next",
+  "model_path": "{models}/qwen3.8-flash-next-4bit",
+  "prepare": [
+   {
+    "clean_dir": "{state}/rapid-mlx/flash-mtp"
+   },
+   {
+    "write_json": {
+     "path": "{state}/rapid-mlx/flash-mtp/harness.json",
+     "data": {
+      "home_of": "rapid-mlx, emptied before each run"
+     }
+    }
+   }
+  ],
+  "cmd": [
+   "{env:RAPID_MLX_BIN=rapid-mlx}",
+   "--no-telemetry",
+   "serve",
+   "{models}/qwen3.8-flash-next-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8291",
+   "--served-model-name",
+   "flash-next",
+   "--max-num-seqs",
+   "1",
+   "--context-length",
+   "32768",
+   "--prefill-step-size",
+   "512",
+   "--disable-disk-caches",
+   "--disable-model-downloads",
+   "--no-preflight",
+   "--speculative-config",
+   "{\"method\":\"mtp\",\"num_speculative_tokens\":1}"
+  ],
+  "env": {
+   "HOME": "{state}/rapid-mlx/flash-mtp",
+   "HF_HUB_OFFLINE": "1",
+   "RAPID_MLX_TELEMETRY": "0",
+   "DO_NOT_TRACK": "1",
+   "RAPID_MLX_DISABLE_VERSION_CHECK": "1"
+  },
+  "env_clear_prefixes": [
+   "RAPID_MLX_"
+  ],
+  "base_url": "http://127.0.0.1:8291/v1",
+  "model": "flash-next",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/qwen3.8-flash-next-4bit/config.json"
+  ],
+  "version_cmd": [
+   "{env:RAPID_MLX_PYTHON=python3}",
+   "-c",
+   "import importlib.metadata as m; print(*(n + ' ' + m.version(n) for n in ('rapid-mlx', 'mlx', 'mlx-lm', 'mlx-vlm')))"
+  ],
+  "log_grep": [
+   "[Ss]peculative|MTP|mtp|accept|draft",
+   "[Ll]oad|model|prefix|cache|[Pp]refill",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "note": "As flash-rapidmlx with the model's own MTP head (in the pack) at 1 draft token, the depth its catalog gives this model (mtp_speculative_tokens 1).",
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4133,16000:16286"
+  ],
+  "adaptive_warm": true
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.4",
+    "BuildVersion": "25E246"
+   },
+   "hw_model": "Mac17,6",
+   "cpu": "Apple M5 Max",
+   "memsize": "137438953472",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 14356.94,
+    "swapouts": 81442009,
+    "swapins": 70632380,
+    "pageouts": 5984381,
+    "memorystatus_level": 93
+   },
+   "gpu_mem": {
+    "in_use": 1780088832,
+    "alloc": 8105689088,
+    "util_pct": 10
+   },
+   "disk_free_bytes": 102158508032,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/venvs/rapid-mlx/bin/rapid-mlx",
+   "--no-telemetry",
+   "serve",
+   "~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8291",
+   "--served-model-name",
+   "flash-next",
+   "--max-num-seqs",
+   "1",
+   "--context-length",
+   "32768",
+   "--prefill-step-size",
+   "512",
+   "--disable-disk-caches",
+   "--disable-model-downloads",
+   "--no-preflight",
+   "--speculative-config",
+   "{\"method\":\"mtp\",\"num_speculative_tokens\":1}"
+  ],
+  "cmd_shell": "~/venvs/rapid-mlx/bin/rapid-mlx --no-telemetry serve ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit --host 127.0.0.1 --port 8291 --served-model-name flash-next --max-num-seqs 1 --context-length 32768 --prefill-step-size 512 --disable-disk-caches --disable-model-downloads --no-preflight --speculative-config '{\"method\":\"mtp\",\"num_speculative_tokens\":1}'",
+  "env": {
+   "HOME": "<run-root>/out-extra/state/rapid-mlx/flash-mtp",
+   "HF_HUB_OFFLINE": "1",
+   "RAPID_MLX_TELEMETRY": "0",
+   "DO_NOT_TRACK": "1",
+   "RAPID_MLX_DISABLE_VERSION_CHECK": "1"
+  },
+  "env_cleared": [
+   "RAPID_MLX_BIN",
+   "RAPID_MLX_PYTHON"
+  ],
+  "weights": {
+   "model_path": "{models}/qwen3.8-flash-next-4bit",
+   "safetensors_bytes": 105834937496,
+   "safetensors_files": [
+    "model-00001-of-00050.safetensors",
+    "model-00002-of-00050.safetensors",
+    "model-00003-of-00050.safetensors",
+    "model-00004-of-00050.safetensors",
+    "model-00005-of-00050.safetensors",
+    "model-00006-of-00050.safetensors",
+    "model-00007-of-00050.safetensors",
+    "model-00008-of-00050.safetensors",
+    "model-00009-of-00050.safetensors",
+    "model-00010-of-00050.safetensors",
+    "model-00011-of-00050.safetensors",
+    "model-00012-of-00050.safetensors",
+    "model-00013-of-00050.safetensors",
+    "model-00014-of-00050.safetensors",
+    "model-00015-of-00050.safetensors",
+    "model-00016-of-00050.safetensors",
+    "model-00017-of-00050.safetensors",
+    "model-00018-of-00050.safetensors",
+    "model-00019-of-00050.safetensors",
+    "model-00020-of-00050.safetensors",
+    "model-00021-of-00050.safetensors",
+    "model-00022-of-00050.safetensors",
+    "model-00023-of-00050.safetensors",
+    "model-00024-of-00050.safetensors",
+    "model-00025-of-00050.safetensors",
+    "model-00026-of-00050.safetensors",
+    "model-00027-of-00050.safetensors",
+    "model-00028-of-00050.safetensors",
+    "model-00029-of-00050.safetensors",
+    "model-00030-of-00050.safetensors",
+    "model-00031-of-00050.safetensors",
+    "model-00032-of-00050.safetensors",
+    "model-00033-of-00050.safetensors",
+    "model-00034-of-00050.safetensors",
+    "model-00035-of-00050.safetensors",
+    "model-00036-of-00050.safetensors",
+    "model-00037-of-00050.safetensors",
+    "model-00038-of-00050.safetensors",
+    "model-00039-of-00050.safetensors",
+    "model-00040-of-00050.safetensors",
+    "model-00041-of-00050.safetensors",
+    "model-00042-of-00050.safetensors",
+    "model-00043-of-00050.safetensors",
+    "model-00044-of-00050.safetensors",
+    "model-00045-of-00050.safetensors",
+    "model-00046-of-00050.safetensors",
+    "model-00047-of-00050.safetensors",
+    "model-00048-of-00050.safetensors",
+    "model-00049-of-00050.safetensors",
+    "model-00050-of-00050.safetensors",
+    "mtp.safetensors",
+    "ple.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "36c29376149a51b5891bc1548390f639a421b6b7",
+   "dirty": true
+  },
+  "config_file": "configs/rapid-mlx.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "LLAMA_SERVER",
+   "LLAMA_SERVER_DORY",
+   "LMS_BIN",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OMLX_BIN",
+   "RAPID_MLX_BIN",
+   "RAPID_MLX_PYTHON"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "version_cmd_output": "rapid-mlx 0.16.3 mlx 0.32.4 mlx-lm 0.31.3 mlx-vlm 0.7.2",
+  "prepare": [
+   "empty <run-root>/out-extra/state/rapid-mlx/flash-mtp (harness-owned cache dir)",
+   "write <run-root>/out-extra/state/rapid-mlx/flash-mtp/harness.json: {\"home_of\": \"rapid-mlx, emptied before each run\"}"
+  ],
+  "env_relevant": {
+   "LLAMA_CLOUD_API_KEY": "<redacted>",
+   "HF_TOKEN": "<redacted>",
+   "LLAMA_CLOUD_BASE_URL": "https://api.cloud.llamaindex.ai/api/v2",
+   "BENCH_MODELS": "~/.cache/kapitsa/benchmark-models",
+   "LLAMA_SERVER": "~/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "~/venvs/mlx-vlm/bin/python",
+   "OMLX_BIN": "~/venvs/omlx/bin/omlx",
+   "OLLAMA_BIN": "~/.local/opt/ollama-0.40.6/ollama",
+   "MLX_SERVE_BIN": "~/.local/opt/mlx-serve-26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MTPLX_BIN": "~/.local/bin/mtplx",
+   "LMS_BIN": "~/.lmstudio/bin/lms",
+   "LLAMA_SERVER_DORY": "~/llama.cpp/dory-98a74c97/build/bin/llama-server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "BENCH_OUT": "<run-root>/out-extra",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 4.0
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0,
+  "harness_held_s": 9.3,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 1783627776,
+   "alloc": 8130854912,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 14356.94,
+   "swapouts": 81442009,
+   "swapins": 70632388,
+   "pageouts": 5984381,
+   "memorystatus_level": 93
+  },
+  "disk_free_bytes": 102158274560
+ },
+ "version_detected": null,
+ "server_log": [
+  "INFO:rapid_mlx.utils.mamba_cache:[MambaCache] Skipping _make_cache patch \u2014 mlx-lm ArraysCache has native batching support",
+  "INFO:rapid_mlx.gdn_prefill:[gdn_prefill] blocked-seq GDN prefill kernel installed (prompt>=64 tokens, Dk=128)",
+  "INFO:rapid_mlx.cli:Disk caches disabled by --disable-disk-caches: no prefix-cache snapshot, KV checkpoints or vision prefix-cache disk tier is written",
+  "INFO:rapid_mlx.kv_cache_dtype:KV cache dtype: bf16 (model=~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit) \u2014 bf16 selected (no QuantizedKVCache wrap)",
+  "INFO:rapid_mlx.cli:Non-trimmable model cache detected with --enable-prefix-cache: auto-setting --hybrid-cache-entries=8 (pass --hybrid-cache-entries 0 to disable)",
+  "INFO:rapid_mlx.server:Model '~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit' auto-downgraded to the text-only lane because the requested speculative decoder is not honored by its vision lane. Pass --mllm to request the vision lane explicitly, or --no-mllm to select text-only",
+  "INFO:rapid_mlx.utils.generation_config:generation_config: loaded sampling defaults from ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit/generation_config.json: {'temperature': 1.0, 'top_p': 0.95, 'top_k': 20}",
+  "INFO:rapid_mlx.server:Loading model with BatchedEngine: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+  "INFO:rapid_mlx.server:Model loaded: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+  "INFO:rapid_mlx.runtime.model_registry:Registered model 'flash-next' (aliases=none, default=True)",
+  "INFO:rapid_mlx.utils.tokenizer:Model ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit uses a vendored architecture, skipping AutoConfig path and loading directly...",
+  "INFO:rapid_mlx.utils.tokenizer:Loading with tokenizer fallback...",
+  "  Cause: The checkpoint is missing 384 weights this model needs (for example language_model.model.layers.1.ple.ple_embedding.ngram_embedding.shards.0.biases).",
+  "  Next step: Re-download the complete checkpoint, or use the config.json that matches these weights.",
+  "  Model: ~/.cache/kapitsa/benchmark-models/qwen3.8-flash-next-4bit",
+  "MTP: enabled via --speculative-config, max_k=1",
+  "Spec-decode: mtp (chain)",
+  "Memory-aware cache: 20% of RAM (index=radix)",
+  "  !! Memory pressure warning: this model is likely too large for your hardware.",
+  "    Est. working set:         147.9 GB  (model x 1.5 \u2014 short-chat workload; long-context serving will use more)",
+  "  raise an OOM error when unified-memory pressure exceeds the",
+  "    - Pick a smaller model:    rapid-mlx models",
+  "    - Or lower memory headroom: rapid-mlx serve <model> --gpu-memory-utilization 0.75"
+ ],
+ "server_log_path": "logs/flash-rapidmlx-mtp-20261019-004709.log"
+}

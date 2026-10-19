@@ -6,6 +6,7 @@ the shared shards take no extra disk space.
   mlx_serve_pack.py qwen3.6-35b-a3b [--models DIR] [--shard FILE]
   mlx_serve_pack.py qwen3.8-27b     [--models DIR] [--shard FILE]
   mlx_serve_pack.py qwen3.5-4b      [--models DIR] [--head-src FILE]
+  mlx_serve_pack.py qwen3.5-9b      [--models DIR] [--head-src FILE]
 
 qwen3.6-35b-a3b -> <models>/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit, which is ddalcu/Qwen3.6-35B-A3B-MLX-Serve-4bit:
   its trunk is mlx-community/Qwen3.6-35B-A3B-4bit, byte-identical (sha256) to <models>/qwen3.6-35b-a3b-4bit's
@@ -24,6 +25,8 @@ qwen3.5-4b -> <models>/mlx-serve/qwen3.5-4b-4bit-mlx-serve: the vendor publishes
   mtp.fc.weight (the bytes unchanged), as the vendor's 35B pack does with mlx-community's 35B head. --head-src reads
   the head from a local file instead of downloading it (its tensor names, dtypes and shapes are checked against the
   pinned repo's header).
+qwen3.5-9b -> <models>/mlx-serve/qwen3.5-9b-4bit-mlx-serve: as the 4B, from <models>/qwen3.5-9b-4bit
+  (lmstudio-community/Qwen3.5-9B-MLX-4bit, two shards) and mlx-community/Qwen3.5-9B-MTP-4bit's head (137 MB).
 """
 import argparse, hashlib, json, os, shutil, struct, subprocess, sys, urllib.request
 
@@ -59,6 +62,15 @@ PACKS = {
                   "preprocessor_config.json", "processor_config.json", "tokenizer.json", "tokenizer_config.json",
                   "video_preprocessor_config.json", "vocab.json"],
         "head_repo": "mlx-community/Qwen3.5-4B-MTP-4bit", "head_rev": "ab6f59bc6627196c611ab8851638651078170485",
+        "head_file": "model.safetensors",
+    },
+    "qwen3.5-9b": {
+        "dir": "qwen3.5-9b-4bit-mlx-serve",
+        "trunk": "qwen3.5-9b-4bit",
+        "clone": ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors", "model.safetensors.index.json",
+                  "config.json", "chat_template.jinja", "preprocessor_config.json", "processor_config.json",
+                  "tokenizer.json", "tokenizer_config.json", "video_preprocessor_config.json", "vocab.json"],
+        "head_repo": "mlx-community/Qwen3.5-9B-MTP-4bit", "head_rev": "222dfd2c23fc9518d7b817e4f8e0cb0571787489",
         "head_file": "model.safetensors",
     },
 }
