@@ -160,7 +160,24 @@ The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's d
 
 In a mostly 4-bit-or-better file (unsloth's UD mixes, for example), the 1-3-bit tensors take the file's majority format.
 The experts of mixture-of-experts layers take 5-bit group 64 from 4-bit types, 4-bit group 64 from 3-bit and 3-bit group
-64 from 1-2-bit types. Refused: the ternary TQ1_0 and TQ2_0, Hadamard-rotated weights, Qwen3-Next, other architectures.
+64 from 1-2-bit types, except routed experts in IQ2_XXS, IQ2_S or IQ3_S: those stay in the file's own blocks, which
+Kapitsa's kernels read as they are. The folder's experts file is then an APFS clone of the GGUF (no second copy; on
+another volume, or with `KAPITSA_IMPORT_COPY=1`, a copy), and the model locks its weights in memory as it loads. Refused:
+the ternary TQ1_0 and TQ2_0, Hadamard-rotated weights, Qwen3-Next, other architectures.
+
+That is how Qwen3.6-35B-A3B runs on a 16 GB Mac: the UD-IQ2_XXS file of
+[unsloth/Qwen3.6-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF) (10.8 GB; IQ2_XXS gate and up experts,
+IQ2_S and IQ3_S down experts) imports in seconds into 11.0 GB of weights, inside a 16 GB Mac's 12.2 GB budget with room
+for 21K tokens of KV cache:
+
+```bash
+kapitsa import Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf
+```
+
+On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the same file: 38.0-38.8) and reads a
+4K-token prompt in 9.0 s (11.8 s). Against llama.cpp's Metal backend on the same file its next-token distributions are at
+KL 0.023 with the same top token 97.5% of the time (llama.cpp's own CPU backend: 0.012 and 97.5%); part of the gap is
+the conversion of the file's Q5_K tensors to 6-bit. It has no MTP head, so it decodes plainly.
 
 ### Where models are stored
 
