@@ -15,6 +15,41 @@ best settings, on the same 4-bit weights wherever it accepts them, through the s
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
 is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
+## The README's tables
+
+What each cell of the README's tables ran, Mac by Mac (the runs are in the sections below).
+
+**MacBook Pro M4 Pro 48 GB**
+- Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so the Nemotron table leaves them out.
+- MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
+  drafter on Bolt; mlx-serve the faster of MTP and DFlash2.
+- Qwen3.5 4B, 4-bit: Kapitsa's 179 tok/s was measured later, with its new drafter; the old build, rerun as a control, matched
+  its 122.
+- Other apps used the GPU during MLX's 4B run and llama.cpp's Dory run (contention flagged).
+- A real opencode session on the 35B: Kapitsa 49 s, mlx-serve 62 s, oMLX 66 s
+  ([details](#a-real-coding-agent-session-2026-10-18)).
+- Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV),
+  MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](#nemotron-dory10-4b-2026-10-19)).
+- Lightning: NVIDIA's NVFP4 with its DSpark drafter on Kapitsa and MLX (mlx-vlm); oMLX and llama.cpp not measured yet
+  ([details](#nemotron-35-lightning)).
+
+**MacBook Pro M5 Max 128 GB**
+- MLX on the 4B, 27B and 35B: mlx-lm. Other apps used the GPU during Kapitsa's 27B and 35B runs and the MLX
+  Flash-Next run.
+- Flash-Next: the same 4-bit weights and MTP head on Kapitsa, oMLX and MLX (mlx-vlm); mlx-serve runs its vendor's
+  4.7-bit pack, MTPLX its author's pack, Ollama its NVFP4 tag. Ollama fails every 4K and 16K prompt there (out of GPU
+  memory). LM Studio refuses to load its 119 GB GGUF on 128 GB. Kapitsa uses the least memory (70.5 GB; mlx-serve
+  78.8, oMLX 104).
+- Nemotron: NVIDIA's NVFP4 on Kapitsa, mlx-vlm and Ollama, MLX 4-bit on oMLX, mlx-lm, mlx-serve and MTPLX, Q4_0 on
+  llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).
+
+**MacBook Pro M1 Pro 16 GB**
+- Qwen: short runs (3 coding answers each; the full protocol follows). oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX
+  runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
+- Dory: 2 loops; Kapitsa last-loop KV, its default (per-loop speculation: 31 tok/s on this Mac), llama.cpp NVIDIA's
+  Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit
+  ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
+
 ## Summary
 
 On both models Kapitsa was the fastest engine measured on every speed metric: writing (decode, sampled and greedy),
