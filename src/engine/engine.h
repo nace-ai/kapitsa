@@ -185,6 +185,24 @@ struct ToolCall {
   std::string arguments; // JSON object text
 };
 
+// Tags the model writes as text (a tokenizer without <think> / tool-call tokens: Nemotron Nano 9B v2's), which the
+// output parser matches in the decoded text instead of by token id.
+struct TextTags {
+  bool think = false;             // <think> / </think>
+  std::string tc_open, tc_close;  // a tool call's tags, e.g. <TOOLCALL> / </TOOLCALL> (empty: none)
+  bool json_calls = false;        // the call's body: a JSON list of {"name": ..., "arguments": ...} (Nano 9B v2's)
+  bool any() const { return think || !tc_open.empty(); }
+};
+
+// Nemotron Nano 9B v2's chat conventions (CPU only; tools/nh_chat_check checks them): a template that switches
+// thinking with "/think" / "/no_think" in a message and reads no enable_thinking; the request with its enable_thinking
+// as that flag at the end of the last user message (else the first system message), or as it is without one; the tags
+// a tokenizer has no tokens for, found in the template (<think>, <TOOLCALL>), which the output parser then matches in
+// the text.
+bool think_flag_template(const std::string& template_source);
+ChatRequest think_flag_request(const ChatRequest& r);
+TextTags text_tags_for(const Tokenizer& tok, const std::string& template_source);
+
 struct ChatDelta {
   std::string reasoning;
   std::string content;
@@ -422,6 +440,10 @@ class Engine {
   uint64_t clock_ = 0;
   std::atomic<uint64_t> requests_{0};  // requests started (prefill_history waits for an idle server)
   int think_open_ = -1, think_close_ = -1, tc_open_ = -1, tc_close_ = -1;
+  TextTags text_tags_;        // the tags written as text (no such tokens; Nemotron Nano 9B v2)
+  bool think_flags_ = false;  // the template switches thinking by "/think" / "/no_think" in a message (Nano 9B v2)
+  bool think_ws_ = true;      // the whitespace before </think> stays in the reasoning (Nemotron-H, Dory)
+  int nh_ngram_ = 0;          // a dense Nemotron-H model without a block drafter: prompt-lookup drafts per cycle
   std::vector<int> stop_ids_;  // the config's eos ids plus the tokenizer's eos token (chat turn end)
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)

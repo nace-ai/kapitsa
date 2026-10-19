@@ -1,5 +1,7 @@
 // Streaming parser for Qwen3.5+ output: <think>...</think> reasoning, content, and tool calls in the
-// template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas.
+// template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas. With TextTags, tags that
+// are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls) are matched in the
+// decoded text.
 #pragma once
 #include "engine/engine.h"
 #include "tokenizer/tokenizer.h"
@@ -29,11 +31,13 @@ class OutputParser {
   // think_ws: the whitespace the model writes before </think> stays in the reasoning (Nemotron 3.5's template
   // renders a returned turn as "<think>\n" + reasoning + "</think>", so a reasoning that ended with the model's own
   // "\n" renders as generated and the next request reuses the cache through the reply; Qwen's templates add theirs)
+  // text_tags: the tags matched in the text (think_tools is then off: it holds tokens)
   OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
-               bool parse_tools, const ojson& tools, bool think_tools = false, bool think_ws = false)
-      : dec_(t), hdec_(t), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
-        tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools), think_tools_(think_tools && parse_tools),
-        think_ws_(think_ws), tools_(tools) {}
+               bool parse_tools, const ojson& tools, bool think_tools = false, bool think_ws = false,
+               const TextTags& text_tags = {})
+      : dec_(t), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
+        tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
+        think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), tools_(tools) {}
 
   // Returns the delta produced by this token.
   ChatDelta push(int id) {
@@ -60,9 +64,14 @@ class OutputParser {
       }
     }
     std::string s = dec_.flush();
+    if (tt_.any()) {  // the text held as a possible tag's start is text after all
+      text_push(d, s);
+      s = pend_;
+      pend_.clear();
+    }
     if (in_tool_) {
       // unterminated tool call: surface as text
-      emit(d, "<tool_call>" + tool_buf_ + s);
+      emit(d, (tt_.tc_open.empty() ? std::string("<tool_call>") : tt_.tc_open) + tool_buf_ + s);
       in_tool_ = false;
     } else {
       emit(d, s);
@@ -106,11 +115,99 @@ class OutputParser {
       return;
     }
     std::string s = dec_.push(id);
+    if (tt_.any()) {
+      text_push(d, s);
+      return;
+    }
     if (in_tool_) {
       tool_buf_ += s;
       return;
     }
     emit(d, s);
+  }
+
+  // TextTags: the decoded text s after the text held so far, split at the tags the parser's state looks for (the think
+  // tags anywhere outside a call, a call's open tag outside the reasoning, its close tag inside a call), with the same
+  // transitions as the tag tokens; a tail that may be a tag's start is held until the next text decides it.
+  void text_push(ChatDelta& d, const std::string& s) {
+    static const std::string topen = "<think>", tclose = "</think>";
+    pend_ += s;
+    while (!pend_.empty()) {
+      const std::string* tags[3];
+      int n = 0;
+      if (in_tool_) {
+        tags[n++] = &tt_.tc_close;
+      } else {
+        if (tt_.think) tags[n++] = &topen, tags[n++] = &tclose;
+        if (parse_tools_ && !in_think_ && !tt_.tc_open.empty()) tags[n++] = &tt_.tc_open;
+      }
+      size_t at = std::string::npos;
+      const std::string* tag = nullptr;
+      for (int i = 0; i < n; ++i)
+        if (size_t k = pend_.find(*tags[i]); k < at) at = k, tag = tags[i];
+      if (!tag) {
+        size_t keep = 0;  // the longest end of the text that begins a tag
+        for (int i = 0; i < n; ++i)
+          for (size_t m = std::min(pend_.size(), tags[i]->size() - 1); m > keep; --m)
+            if (pend_.compare(pend_.size() - m, m, *tags[i], 0, m) == 0) {
+              keep = m;
+              break;
+            }
+        text_out(d, pend_.substr(0, pend_.size() - keep));
+        pend_.erase(0, pend_.size() - keep);
+        return;
+      }
+      text_out(d, pend_.substr(0, at));
+      pend_.erase(0, at + tag->size());
+      if (tag == &topen) {
+        in_think_ = true;
+      } else if (tag == &tclose) {
+        if (think_ws_ && in_think_) d.reasoning += held_;
+        held_.clear();  // drop whitespace before </think> (think_ws: kept above)
+        in_think_ = false;
+        skip_leading_ws_ = true;
+      } else if (tag == &tt_.tc_open) {
+        held_.clear();
+        in_tool_ = true;
+        tool_buf_.clear();
+      } else {  // the call's close tag
+        in_tool_ = false;
+        std::vector<ToolCall> calls;
+        if (tt_.json_calls ? parse_json_calls(tool_buf_, calls) : parse_tool(tool_buf_, calls.emplace_back()))
+          for (auto& c : calls) d.tool_calls.push_back(std::move(c));
+        else
+          emit(d, tt_.tc_open + tool_buf_ + tt_.tc_close);
+        skip_leading_ws_ = true;
+      }
+    }
+  }
+  void text_out(ChatDelta& d, const std::string& t) {
+    if (in_tool_) tool_buf_ += t;
+    else emit(d, t);
+  }
+
+  // A JSON list of calls (or one call): [{"name": "f", "arguments": {...}}, ...]; arguments may be an object or the
+  // JSON text of one
+  bool parse_json_calls(const std::string& body, std::vector<ToolCall>& calls) const {
+    ojson j = ojson::parse(body, nullptr, false);
+    if (j.is_discarded()) return false;
+    if (j.is_object()) j = ojson::array({j});
+    if (!j.is_array() || j.empty()) return false;
+    for (const auto& c : j) {
+      if (!c.is_object() || !c.contains("name") || !c["name"].is_string()) return false;
+      ToolCall tc;
+      tc.name = c["name"].get<std::string>();
+      const ojson a = c.contains("arguments") ? c["arguments"] : ojson::object();
+      if (a.is_string()) {
+        const ojson pa = ojson::parse(a.get<std::string>(), nullptr, false);
+        tc.arguments = !pa.is_discarded() && pa.is_object() ? pa.dump() : a.get<std::string>();
+      } else {
+        tc.arguments = a.dump();
+      }
+      tc.id = random_id("call_");
+      calls.push_back(std::move(tc));
+    }
+    return true;
   }
 
   // think_tools: holds the tokens of a <tool_call> written inside the reasoning, and what follows it,
@@ -266,6 +363,8 @@ class OutputParser {
 
   StreamDecoder dec_;
   StreamDecoder hdec_;  // text of held tokens (think_tools)
+  TextTags tt_;
+  std::string pend_;    // TextTags: decoded text that may begin a tag
   int think_open_, think_close_, tc_open_, tc_close_;
   bool in_think_;
   bool parse_tools_, think_tools_, think_ws_;

@@ -386,6 +386,13 @@ int run_doctor(int argc, char** argv) {
     const char* drafter = nemotron ? (dspark ? "DSpark drafter" : "LiLiCorr drafter")
                           : !drafter_dir.empty() && dflash_v1(drafter_dir) ? "DFlash drafter" : "DFlash2 drafter";
     const int ch = lp.prefill_chunk;
+    // a dense Nemotron-H model (Nemotron Nano) without a drafter: prompt lookup, as the engine decides it (by default
+    // with BF16 weights, not NVFP4; NI_NH_NGRAM sets the drafts per cycle)
+    int lookup = 0;
+    if (nemotron && m.dense && lp.dflash.empty()) {
+      const char* v = getenv("NI_NH_NGRAM");
+      lookup = std::min(v && *v ? atoi(v) : m.formats.find("NVFP4") == std::string::npos ? 4 : 0, NemotronH::kMaxRows - 1);
+    }
     // Neural Engine split (dense FFN): calibration of this Mac or the chip's default share, as the engine decides
     const Qwen35::AnePlan ap = nemotron || dory ? Qwen35::AnePlan{0, 0, "not used for this architecture", 0}
                                                 : Qwen35::ane_plan(dir, m);
@@ -447,7 +454,10 @@ int run_doctor(int argc, char** argv) {
     o["dflash_drafter"] = dfl;
     o["dflash_used"] = !lp.dflash.empty();
     o["dflash_bytes"] = lp.dflash_found_bytes;
-    o["decoding"] = !lp.dflash.empty() ? (dspark ? "dspark" : nemotron ? "lilicorr" : "dflash2") : m.mtp ? "mtp" : "plain";
+    o["decoding"] = !lp.dflash.empty() ? (dspark ? "dspark" : nemotron ? "lilicorr" : "dflash2")
+                    : m.mtp            ? "mtp"
+                    : lookup > 0       ? "prompt_lookup"
+                                       : "plain";
     const auto enc = vision::open_encoder(dir);  // images: the encoder's weights load with the first image
     o["image_encoder_bytes"] = enc ? enc->weight_bytes() : 0;
     if (dory) o["dory"] = dory_j;
@@ -465,7 +475,7 @@ int run_doctor(int argc, char** argv) {
       r.drafter = lp.dflash_bytes;
       r.decoding = !lp.dflash.empty() ? std::string(drafter)
                    : !lp.dflash_left_out.empty() ? std::string(m.mtp ? "MTP" : "plain") + term::dim(" (drafter left out)")
-                   : m.mtp ? "MTP head" : "plain";
+                   : m.mtp ? "MTP head" : lookup > 0 ? "prompt lookup" : "plain";
       r.image_bytes = enc ? enc->weight_bytes() : 0;
       r.dec = dec, r.pf = pf;
       r.note = dory_note;
@@ -503,7 +513,9 @@ int run_doctor(int argc, char** argv) {
              "from fitting\n",
              m.mtp ? "MTP" : "plain", drafter, lp.dflash_left_out.c_str(), lp.dflash_found_bytes / 1e9, ctx);
     else
-      printf("    decoding: %s%s\n", m.mtp ? "MTP" : "plain", lp.dflash_off ? "" : (std::string(" (no ") + drafter + " found)").c_str());
+      printf("    decoding: %s%s\n",
+             m.mtp ? "MTP" : lookup > 0 ? ("prompt lookup, up to " + std::to_string(lookup) + " drafts per cycle").c_str() : "plain",
+             lp.dflash_off || (nemotron && m.dense) ? "" : (std::string(" (no ") + drafter + " found)").c_str());
     if (enc)
       printf("    images: %s, +%.2f GB when the first image arrives (not counted above)\n", enc->name().c_str(),
              enc->weight_bytes() / 1e9);
@@ -516,7 +528,9 @@ int run_doctor(int argc, char** argv) {
       printf("    rough speed: plain decode ~%.0f tok/s (%.2f GB read per token), GPU prefill ~%.0f tok/s; %s add their "
              "measured factors (docs/benchmarks.md)\n",
              dec, m.decode_bytes / 1e9, pf,
-             nemotron ? "the block drafter and the Neural Engine split" : dory ? "loops other than the default" : "MTP / Neural Engine");
+             nemotron ? (m.dense ? "prompt lookup's accepted drafts" : "the block drafter and the Neural Engine split")
+             : dory   ? "loops other than the default"
+                      : "MTP / Neural Engine");
   }
   // every catalog variant: fits (one --ctx conversation beside it, its drafter kept) or what it needs
   EngineOptions eo;

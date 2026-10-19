@@ -178,6 +178,26 @@ void Engine::yield_turn(ChatResult& res) {
   turn_.lock();
 }
 
+// Whether a chat template renders an assistant turn's reasoning with a newline of its own before </think> (Nemotron
+// Nano 4B's: "<think>\n" + reasoning + "\n</think>\n"): the model's own newline there then belongs to the markup, not
+// the reasoning, for the turn to render as it was generated (and the next request to reuse the cache through it)
+static bool newline_before_think_close(const minja::chat_template& tmpl) {
+  static const std::string needle = "\x01kapitsa-reasoning\x01";
+  try {
+    minja::chat_template_inputs in;
+    in.messages = ojson::array({{{"role", "user"}, {"content", "u"}},
+                                {{"role", "assistant"}, {"content", "c"}, {"reasoning_content", needle}}});
+    in.add_generation_prompt = false;
+    in.extra_context = {{"truncate_history_thinking", false}};
+    minja::chat_template_options opt;
+    const std::string out = tmpl.apply(in, opt);
+    const size_t at = out.find(needle);
+    return at != std::string::npos && out.compare(at + needle.size(), 9, "\n</think>") == 0;
+  } catch (...) {
+    return false;
+  }
+}
+
 Engine::Engine(const EngineOptions& o) : opts_(o) {
   if (opts_.model_id.empty()) {
     std::string d = opts_.model_dir;
@@ -265,6 +285,19 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
   tc_close_ = tok_.find("</tool_call>");
+  if (nh_) {
+    // Nemotron Nano 9B v2: its tokenizer has no <think> or tool-call tokens (the tags are text; its calls
+    // <TOOLCALL>[{"name": ..., "arguments": ...}]</TOOLCALL>), and its template switches thinking with "/think" /
+    // "/no_think" in a message instead of enable_thinking: the parser matches the tags in the text, render() turns
+    // enable_thinking into the flag
+    text_tags_ = text_tags_for(tok_, src);
+    think_flags_ = think_flag_template(src);
+    // the whitespace before </think> stays in the reasoning (OutputParser's think_ws) unless the template writes a
+    // newline of its own there (Nemotron Nano 4B: "<think>\n" + reasoning + "\n</think>\n"), checked for the dense
+    // models (the Nemotron 3.5 MoE models keep it as before)
+    const auto& kind = nh_->config().kind;
+    if (std::find(kind.begin(), kind.end(), 'E') == kind.end() && newline_before_think_close(*tmpl_)) think_ws_ = false;
+  }
   // A reply ends at the config's eos ids or at the tokenizer's eos token: the small Qwen3.5 checkpoints
   // (Qwen/Qwen3.5-4B and its MLX conversions) list only <|endoftext|> in config.json and keep the chat
   // turn's end, <|im_end|>, in tokenizer_config.json, so their replies never stopped.
@@ -289,6 +322,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     dory_spec_ = opts_.spec_depth < 0 ? 3 : std::min(opts_.spec_depth, Dory::kMaxRows - 1);
     dory_spec_auto_ = opts_.spec_depth < 0;
   }
+  const int spec_asked = opts_.spec_depth;  // (-1: the model's default)
   if (opts_.spec_depth < 0) opts_.spec_depth = q35_ ? q35_->default_spec_depth() : 0;
   spec_ = q35_ && opts_.spec_depth > 0 && q35_->has_mtp();
   if (opts_.spec_depth > Qwen35::kMaxMtpRows - 1) opts_.spec_depth = Qwen35::kMaxMtpRows - 1;
@@ -319,6 +353,21 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       logi("Nemotron-H: no block drafter found next to %s", opts_.model_dir.c_str());
     } else {
       lili_ = NhDrafter::open(*nh_, lp.dflash);
+    }
+  }
+  // A dense Nemotron-H model (Nemotron Nano) has no block drafter: prompt lookup drafts up to K tokens per cycle
+  // (--spec K, else NI_NH_NGRAM=K), verified in one pass; the reply is the one plain decoding writes. By default 4
+  // where the MLP layers are BF16 (the Nano 4B: a verify pass's 2-8 rows read each weight once, as one row does;
+  // decoding 4-8% faster on an M1 Pro) and off for NVFP4 (the Nano 9B v2: within 2% either way there, the M1's
+  // NVFP4 products of several rows being bound by their arithmetic, not by the weights' bytes).
+  if (nh_ && !lili_ && spec_asked != 0) {
+    const auto& kind = nh_->config().kind;
+    if (std::find(kind.begin(), kind.end(), 'E') == kind.end()) {
+      bool fp4 = false;
+      for (const NhLayer& L : nh_->layers()) fp4 = fp4 || (L.kind == 'D' && L.up_s.fmt == NhFmt::FP4);
+      const char* v = getenv("NI_NH_NGRAM");
+      const int k = spec_asked > 0 ? spec_asked : v && *v ? atoi(v) : fp4 ? 0 : 4;
+      if (k > 0) nh_ngram_ = std::min(k, NemotronH::kMaxRows - 1);
     }
   }
 
@@ -365,6 +414,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+                         : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
+                                               " drafts per cycle)"
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
@@ -1166,8 +1217,49 @@ std::string chat_template_source(const std::string& model_dir) {
   return src;
 }
 
+// (the template's own enable_thinking, ns.enable_thinking or namespace(enable_thinking=...), is not the kwarg)
+bool think_flag_template(const std::string& src) {
+  if (src.find("/no_think") == std::string::npos) return false;
+  for (size_t at = src.find("enable_thinking"); at != std::string::npos; at = src.find("enable_thinking", at + 1))
+    if (at == 0 || (src[at - 1] != '.' && src[at - 1] != '(')) return false;  // reads the kwarg
+  return true;
+}
+
+// Thinking is on unless a system or user message says "/no_think" (the last flag wins), and the template strips the
+// flags from the text it renders: enable_thinking becomes the flag after the last user message's text
+ChatRequest think_flag_request(const ChatRequest& r) {
+  const auto it = r.template_kwargs.find("enable_thinking");
+  if (it == r.template_kwargs.end() || !it->is_boolean()) return r;
+  ChatRequest q = r;
+  const std::string flag = it->get<bool>() ? "/think" : "/no_think";
+  ojson* target = nullptr;
+  for (auto& m : q.messages)
+    if (role_of(m) == "user") target = &m;
+  if (!target && !q.messages.empty() && role_of(q.messages[0]) == "system") target = &q.messages[0];
+  if (target) {
+    ojson& c = (*target)["content"];
+    if (c.is_array()) c.push_back({{"type", "text"}, {"text", flag}});
+    else c = (c.is_string() ? c.get<std::string>() : content_text(c)) + "\n" + flag;
+  }
+  return q;
+}
+
+TextTags text_tags_for(const Tokenizer& tok, const std::string& src) {
+  TextTags t;
+  if (tok.find("<think>") < 0 && tok.find("</think>") < 0 && src.find("<think>") != std::string::npos) t.think = true;
+  if (tok.find("<tool_call>") < 0 && src.find("<TOOLCALL>") != std::string::npos) {
+    t.tc_open = "<TOOLCALL>";
+    t.tc_close = "</TOOLCALL>";
+    t.json_calls = true;
+  }
+  return t;
+}
+
 std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) const {
   const bool images = vision_ != nullptr;  // image parts render as the model's placeholder, else as a note
+  // Nemotron Nano 9B v2's template: the request's enable_thinking (every API's switch) as its "/think" / "/no_think"
+  if (think_flags_ && r.template_kwargs.contains("enable_thinking"))
+    return render_chat(*tmpl_, think_flag_request(r), add_generation_prompt, images);
   if (nh_ || dory_) {
     // Nemotron 3.5's (and Dory's) template names two switches its own way: medium_effort (shorter reasoning) for the low and medium
     // reasoning efforts, and truncate_history_thinking = false for preserve_thinking (every turn's reasoning kept, as
@@ -1187,8 +1279,9 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
   return render_chat(*tmpl_, r, add_generation_prompt, images);
 }
 
-// Whether a chat template reads message content as a string only (Dory's: a content array would render as its repr):
-// a user message of one text part, rendered, must show the text and nothing of the part's markup. Cached per template.
+// Whether a chat template reads message content as a string only (Dory's: a content array would render as its repr;
+// Nemotron Nano 9B v2's calls string methods on it, which fail on an array): a user message of one text part, rendered,
+// must show the text and nothing of the part's markup. Cached per template.
 static bool string_content_template(const minja::chat_template& tmpl) {
   static std::mutex mu;
   static std::map<const void*, bool> known;
@@ -1206,6 +1299,7 @@ static bool string_content_template(const minja::chat_template& tmpl) {
     str_only = out.find(needle) == std::string::npos || out.find("'type'") != std::string::npos ||
                out.find("\"type\"") != std::string::npos;
   } catch (...) {
+    str_only = true;  // (a template that cannot render a content array at all)
   }
   known[&tmpl] = str_only;
   return str_only;
@@ -1797,9 +1891,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
-  // (Nemotron-H: the whitespace before </think> stays in the reasoning, as its template renders returned turns)
+  // (Nemotron-H and Dory: the whitespace before </think> stays in the reasoning, as their templates render returned
+  // turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, nh_ != nullptr || dory_ != nullptr);
+                      think_tools, (nh_ != nullptr || dory_ != nullptr) && think_ws_, text_tags_);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -2152,6 +2247,58 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       if (go && contended()) yield_turn(res);
     }
     fed_until = P;
+  } else if (nh_ngram_ > 0) {
+    // Nemotron-H without a block drafter (NI_NH_NGRAM): prompt lookup. When the last tokens occurred earlier in the
+    // conversation, the tokens that followed them (up to nh_ngram_) are drafts, verified with the pending token in one
+    // pass; otherwise the pass is the pending token's row alone. The samples taken at each row's position accept the
+    // drafts that agree with them, so the reply is the one plain decoding writes (up to near-ties: a pass of 2+ rows
+    // reads half rows). The accepted rows stay pending in the sequence until the next pass (or the flush) commits them.
+    int P = n;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    std::vector<int> nd;
+    while (go) {
+      constexpr int B = NemotronH::kMaxRows;
+      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
+        if (mtp_e) mtp_e->wait();
+        grow_kv(std::min(s.limit, P + 2 * B + 2), [] {});
+      }
+      if (P + B + 1 >= s.cap) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
+      ngram_drafts(s.tokens(), P, nh_ngram_, nd);
+      int* tw = s.tokens();
+      for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
+      const int R = int(nd.size()) + 1;
+      auto e2 = nh_->grouped_passes() ? g.begin_grouped() : g.begin();
+      nh_->encode_verify(*e2, s, P, R);
+      nh_->encode_accept(*e2, s, P, R, R - 1, sp);
+      e2->commit_and_wait();
+      const int a = nh_->accepted();
+      const int* tk = s.tokens();
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      cycle_done(m);
+      nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new pending token
+      P += m;
+      if (go && contended()) yield_turn(res);  // (the pending rows are the sequence's own)
+    }
+    auto e3 = g.begin();
+    nh_->encode_flush(*e3, s);
+    e3->commit_and_wait();
+    fed_until = P;
   } else if (depth > 0) {
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
     // with the pending token, accepted rows are committed through the DeltaNet tape.
@@ -2319,7 +2466,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
   char cyc[64] = "";
-  if ((dfl_ || lili_ || dory_spec_) && req_cycles > 0)
+  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
   char conc[256] = "";
