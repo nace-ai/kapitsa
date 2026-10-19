@@ -83,6 +83,30 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Dory: 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on
   snsnc's 4-bit.
 
+## Quality: Qwen3.6 35B-A3B against bf16 (2026-10-19)
+
+How far each precision's next-token distributions are from the bf16 model's, teacher-forced over the held-out sequences
+of [bench/quality](../bench/quality/README.md): C++, Python, English prose and a coding-agent chat, 4 x 1023 positions,
+with the `math` sequence reported apart. The bf16 checkpoint (mlx-community/Qwen3.6-35B-A3B-bf16 at 04bbe07) streamed
+from Hugging Face one layer at a time (`eval_stream.py --f32`: fp32 activations on both sides), and KL(bf16 || precision)
+is exact over the whole vocabulary.
+
+| Precision | KL mean | KL median | KL p95 | Same top token | Perplexity | KL on `math` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| bf16 | | | | | 5.570 | |
+| 8-bit | 0.0168 | 0.0012 | 0.025 | 96.7% | 5.571 | 0.0064 |
+| 6-bit | 0.0228 | 0.0033 | 0.056 | 95.9% | 5.602 | 0.0109 |
+| 4-bit, Kapitsa's default for `35b` | 0.1161 | 0.0272 | 0.341 | 89.1% | 5.783 | 0.0925 |
+
+- The 4-bit default is the speed choice; `--model 35b:6bit` is five times closer to bf16, with perplexity within 0.6%.
+- 8-bit matches bf16's perplexity (+0.02%); its mean KL is close to 6-bit's because of a few outlying positions (its
+  median is a third of 6-bit's).
+- The 4-bit row is the pack Kapitsa downloads (Youssofal/Qwen3.6-35B-A3B-MTPLX-Optimized-Speed at 9546051: 4-bit group
+  64, the router and shared-expert gates 8-bit). The 6-bit and 8-bit rows are round-to-nearest from the bf16 weights,
+  group 64, as `mlx_lm.convert` makes the mlx-community packs Kapitsa's `6bit` and `8bit` variants download.
+- Nemotron Dory1.0 4B's NVFP4 checkpoint is a KL of 0.020 from its BF16 checkpoint ([Precisions](usage.md#precisions)).
+- Result file: [bench/results/2026-10-19-quality](../bench/results/2026-10-19-quality/qwen3.6-35b-a3b-kl-vs-bf16.json).
+
 ## Summary
 
 On both models Kapitsa was the fastest engine measured on every speed metric: writing (decode, sampled and greedy),
