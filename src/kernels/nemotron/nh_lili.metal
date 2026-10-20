@@ -225,22 +225,34 @@ struct NhCandP {
   threadgroup float tv[64 * 32];
   threadgroup uint ti[64 * 32];
   const uint E = p.nchunks * p.K;
-  for (uint i = lane; i < E; i += 32) {
-    tv[i] = cv[size_t(s) * E + i];
-    ti[i] = ci[size_t(s) * E + i];
-  }
-  float lse = 0.0f;
-  if (lane == 0) {
-    float M = -INFINITY;
-    for (uint c = 0; c < p.nchunks; ++c) M = max(M, ms[s * p.nchunks + c].x);
-    float S = 0.0f;
-    for (uint c = 0; c < p.nchunks; ++c) {
-      const float2 v = ms[s * p.nchunks + c];
-      if (v.x > -INFINITY) S += v.y * metal::precise::exp(v.x - M);
+  for (uint i0 = 0; i0 < E; i0 += 32 * 8) {  // 8 loads in flight per lane before the stores
+    float v[8];
+    uint id[8];
+    for (uint u = 0; u < 8; ++u) {
+      const uint i = i0 + u * 32 + lane;
+      v[u] = i < E ? cv[size_t(s) * E + i] : 0.0f;
+      id[u] = i < E ? ci[size_t(s) * E + i] : 0u;
     }
-    lse = M + metal::precise::log(S);
+    for (uint u = 0; u < 8; ++u) {
+      const uint i = i0 + u * 32 + lane;
+      if (i < E) {
+        tv[i] = v[u];
+        ti[i] = id[u];
+      }
+    }
   }
-  lse = simd_broadcast(lse, 0);
+  // the log-sum-exp: the chunks' terms on their lanes, summed in chunk order on lane 0
+  const float2 m0 = lane < p.nchunks ? ms[s * p.nchunks + lane] : float2(-INFINITY, 0.0f);
+  const float2 m1 = lane + 32 < p.nchunks ? ms[s * p.nchunks + lane + 32] : float2(-INFINITY, 0.0f);
+  const float M = simd_max(max(m0.x, m1.x));
+  const float e0 = metal::precise::exp(m0.x - M), e1 = metal::precise::exp(m1.x - M);
+  float S = 0.0f;
+  for (uint c = 0; c < p.nchunks; ++c) {
+    const float vx = simd_shuffle(c < 32 ? m0.x : m1.x, c & 31), vy = simd_shuffle(c < 32 ? m0.y : m1.y, c & 31);
+    const float ec = simd_shuffle(c < 32 ? e0 : e1, c & 31);
+    if (vx > -INFINITY) S += vy * ec;
+  }
+  const float lse = M + metal::precise::log(S);
   threadgroup_barrier(mem_flags::mem_threadgroup);
   uint h0 = 0, h1 = 0;  // the heads of chunks lane, lane + 32
   for (uint r = 0; r < p.K; ++r) {
