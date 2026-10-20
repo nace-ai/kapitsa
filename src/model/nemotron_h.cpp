@@ -1553,6 +1553,18 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
                    : W.fmt == NhFmt::BF16 ? "bf16"
                    : W.fmt == NhFmt::FP8 ? "fp8"
                                           : "f32";
+  // BF16 for 2-8 rows on the M5 (the router in verify): nh_mv_bf16_rt, the same outputs to the bit, 2 weight rows x 2
+  // activation rows per simdgroup (Bolt's router 12.2 against 46 us per layer)
+  if (W.fmt == NhFmt::BF16 && R >= 2 && epi == 0 && W.K % 256 == 0 && Gpu::get().apple10()) {
+    const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
+    e.use(pipe("nh_mv_bf16_rt"));
+    e.buf(0, W.q);
+    e.buf(2, x);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 7) / 8, (uint32_t(R) + 1) / 2, 1, 128);
+    return;
+  }
   // (one BF16 row on the M5: 2 weight rows per simdgroup, the same sums)
   const bool n2 = R == 1 && W.fmt == NhFmt::BF16 && v8_n1_ && epi <= 1;
   const std::string name = std::string("nh_mv_") + fm + "_r" + std::to_string(rk) +

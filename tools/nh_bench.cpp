@@ -226,6 +226,47 @@ int main(int argc, char** argv) {
     g.release(x);
     g.release(y);
   }
+  // ---- the BF16 router for 2-8 token rows: nh_mv_bf16_r<n> against the M5's nh_mv_bf16_rt (bit for bit) ----
+  for (uint32_t N : {512u, 40u}) {
+    const uint32_t K = N == 512 ? 4096 : 512;
+    const std::string name = "router bf16 " + std::to_string(N) + "x" + std::to_string(K);
+    if (!want(name)) continue;
+    Buffer w = g.alloc(size_t(N) * K * 2, "w"), x = g.alloc(size_t(8) * K * 4, "x");
+    Buffer y0 = g.alloc(size_t(8) * N * 4, "y0"), y1 = g.alloc(size_t(8) * N * 4, "y1");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < size_t(N) * K; ++i) {
+      const float v = nd(rng) * 0.02f;
+      uint32_t b;
+      memcpy(&b, &v, 4);
+      w.as<uint16_t>()[i] = uint16_t(b >> 16);
+    }
+    for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
+    for (uint32_t R : {2u, 3u, 5u, 8u}) {
+      const uint32_t rk = R <= 2 ? 2 : R <= 4 ? 4 : 8, nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1;
+      struct {
+        uint32_t N, K, xs, ys;
+        float gs;
+        uint32_t R;
+      } p{N, K, K, N, 1.0f, R};
+      Pipeline p0 = g.pipeline("nh_mv_bf16_r" + std::to_string(rk)), p1 = g.pipeline("nh_mv_bf16_rt");
+      memset(y0.ptr(), 0, y0.size);
+      memset(y1.ptr(), 0, y1.size);
+      const double ms0 = time_kernel(5, [&](Encoder& e) {
+        e.use(p0);
+        e.buf(0, w); e.buf(1, w); e.buf(2, x); e.buf(3, y0); e.bytes(4, &p, sizeof p);
+        e.dispatch((N + nr * 4 - 1) / (nr * 4), 1, 1, 128);
+      });
+      const double ms1 = time_kernel(5, [&](Encoder& e) {
+        e.use(p1);
+        e.buf(0, w); e.buf(2, x); e.buf(3, y1); e.bytes(4, &p, sizeof p);
+        e.dispatch((N + 7) / 8, (R + 1) / 2, 1, 128);
+      });
+      const bool same = memcmp(y0.ptr(), y1.ptr(), size_t(8) * N * 4) == 0;
+      printf("%-30s R=%u nh_mv_bf16_r%u %7.4f ms, nh_mv_bf16_rt %7.4f ms, outputs %s\n", name.c_str(), R, rk, ms0, ms1,
+             same ? "bitwise identical" : "DIFFER");
+    }
+    for (Buffer* b : {&w, &x, &y0, &y1}) g.release(*b);
+  }
   // ---- routed experts: 9 of 368 experts (width 2304, latent 1024) per token row, nh_moe2 (one row: decode; 8
   // rows: a verify block, each row taking 4 of its experts from 12 popular ones: ~52 distinct of 72 pairs) ----
   if (want("moe")) {
