@@ -443,7 +443,7 @@ void Encoder::fit_threads(uint32_t threads) {
 
 namespace {
 struct ProfRec {
-  const char* name;
+  std::string name;
   id<MTLCommandBuffer> cb;
 };
 std::vector<ProfRec>& prof_recs() {
@@ -525,7 +525,12 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
     [E(enc_) endEncoding];
     id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
     [cb commit];
-    prof_recs().push_back({cur_name_, cb});
+    {
+      static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
+      std::string nm = cur_name_;
+      if (by_grid) nm += "/" + std::to_string(gx) + "x" + std::to_string(gy) + "x" + std::to_string(gz);
+      prof_recs().push_back({nm, cb});
+    }
     CFRelease(enc_);
     CFRelease(cb_);
     id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
@@ -546,7 +551,12 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
     [E(enc_) endEncoding];
     id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
     [cb commit];
-    prof_recs().push_back({cur_name_, cb});
+    {
+      static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
+      std::string nm = cur_name_;
+      if (by_grid) nm += "/ind";
+      prof_recs().push_back({nm, cb});
+    }
     CFRelease(enc_);
     CFRelease(cb_);
     id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
