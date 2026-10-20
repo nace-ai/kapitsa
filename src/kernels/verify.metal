@@ -577,6 +577,44 @@ struct SampleRowsParams {
   uint remap_base;
   uint table_from;  // 0 = none; indices >= table_from are table[i - table_from] (a draft head's gathered rows)
 };
+// A row's sample from its K best candidates (topv / topi, value desc, id asc): top-p on the untempered distribution,
+// then temperature, with RNG step (p.step + r); writes tokens[p.out_index + r]. (One thread.)
+NI_INLINE void sample_rows_pick(threadgroup const float* topv, threadgroup const uint* topi, uint K,
+                                constant SampleRowsParams& p, uint r, const device uint* table, device int* tokens) {
+  uint chosen = topi[0];
+  if (p.temp > 0.0f && K > 1) {
+    // top-p is taken on the untempered distribution (llama.cpp's and mlx-lm's order: top-k,
+    // top-p, then temperature), then the kept candidates are sampled at temperature p.temp.
+    float probs[64];
+    float tot = 0.0f;
+    for (uint q = 0; q < K; ++q) {
+      probs[q] = metal::precise::exp(topv[q] - topv[0]);
+      tot += probs[q];
+    }
+    uint keep = K;
+    float cum = 0.0f;
+    for (uint q = 0; q < K; ++q) {
+      cum += probs[q] / tot;
+      if (cum >= p.top_p) { keep = q + 1; break; }
+    }
+    float kt = 0.0f;
+    for (uint q = 0; q < keep; ++q) {
+      probs[q] = metal::precise::exp((topv[q] - topv[0]) / p.temp);
+      kt += probs[q];
+    }
+    float u = float(pcg_hash(p.seed ^ pcg_hash(p.step + r)) & 0xffffff) / 16777216.0f * kt;
+    chosen = topi[keep - 1];
+    float acc = 0.0f;
+    for (uint q = 0; q < keep; ++q) {
+      acc += probs[q];
+      if (u < acc) { chosen = topi[q]; break; }
+    }
+  }
+  if (p.table_from && chosen >= p.table_from) chosen = table[chosen - p.table_from];
+  else if (p.remap_from && chosen >= p.remap_from) chosen = p.remap_base + (chosen - p.remap_from);
+  tokens[p.out_index + r] = int(chosen);
+}
+
 [[kernel]] void sample_stage2_rows(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
                                    device int* tokens [[buffer(2)]], constant SampleRowsParams& p [[buffer(3)]],
                                    const device uint* table [[buffer(4)]],
@@ -609,40 +647,105 @@ struct SampleRowsParams {
     if (tid == 0) { topv[q] = wv; topi[q] = wi; }
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (tid == 0) {
-    uint chosen = topi[0];
-    if (p.temp > 0.0f && K > 1) {
-      // top-p is taken on the untempered distribution (llama.cpp's and mlx-lm's order: top-k,
-      // top-p, then temperature), then the kept candidates are sampled at temperature p.temp.
-      float probs[64];
-      float tot = 0.0f;
-      for (uint q = 0; q < K; ++q) {
-        probs[q] = metal::precise::exp(topv[q] - topv[0]);
-        tot += probs[q];
-      }
-      uint keep = K;
-      float cum = 0.0f;
-      for (uint q = 0; q < K; ++q) {
-        cum += probs[q] / tot;
-        if (cum >= p.top_p) { keep = q + 1; break; }
-      }
-      float kt = 0.0f;
-      for (uint q = 0; q < keep; ++q) {
-        probs[q] = metal::precise::exp((topv[q] - topv[0]) / p.temp);
-        kt += probs[q];
-      }
-      float u = float(pcg_hash(p.seed ^ pcg_hash(p.step + r)) & 0xffffff) / 16777216.0f * kt;
-      chosen = topi[keep - 1];
-      float acc = 0.0f;
-      for (uint q = 0; q < keep; ++q) {
-        acc += probs[q];
-        if (u < acc) { chosen = topi[q]; break; }
-      }
-    }
-    if (p.table_from && chosen >= p.table_from) chosen = table[chosen - p.table_from];
-    else if (p.remap_from && chosen >= p.remap_from) chosen = p.remap_base + (chosen - p.remap_from);
-    tokens[p.out_index + r] = int(chosen);
+  if (tid == 0) sample_rows_pick(topv, topi, K, p, r, table, tokens);
+}
+
+// The same two passes on simdgroup reductions (no threadgroup barrier per candidate): the same candidates in the same
+// order, so the same tokens. topk_stage1_rows_sg: each simdgroup's 256 logits give their K best (K rounds of a
+// simdgroup argmax, value desc, id asc), simdgroup 0 merges the 8 sorted lists. sample_stage2_rows_sg: one simdgroup
+// merges the ntgs <= 64 sorted lists of stage 1 (K <= 32 each; lane l: lists l and l + 32) into the row's K best, then
+// samples as sample_stage2_rows (the candidates loaded by all its threads first). grids as theirs.
+NI_INLINE void sg_argmax(thread float& v, thread uint& i) {
+  for (uint off = 16; off > 0; off >>= 1) {
+    const float ov = simd_shuffle_xor(v, off);
+    const uint oi = simd_shuffle_xor(i, off);
+    if (ov > v || (ov == v && oi < i)) { v = ov; i = oi; }
   }
+}
+[[kernel]] void topk_stage1_rows_sg(const device float* logits [[buffer(0)]], device float* cv [[buffer(1)]],
+                                    device uint* ci [[buffer(2)]], constant TopkStageParams& p [[buffer(3)]],
+                                    uint2 tg [[threadgroup_position_in_grid]], uint2 tid2 [[thread_position_in_threadgroup]],
+                                    uint2 ntg2 [[threads_per_threadgroup]]) {
+  threadgroup float lv[8][64];
+  threadgroup uint li[8][64];
+  const uint tid = tid2.x, sg = tid / 32, lane = tid % 32, nsg = ntg2.x / 32, r = tg.y;
+  const uint ntgs = (p.V + p.chunk - 1) / p.chunk, K = min(p.K, 64u);
+  const device float* lg = logits + size_t(r) * p.V;
+  float v[8];
+  const uint base = tg.x * p.chunk + tid * 8;
+  for (int j = 0; j < 8; ++j) v[j] = base + j < p.V ? lg[base + j] : -INFINITY;
+  float bv = -INFINITY;
+  uint bi = 0xffffffff;
+  for (int j = 0; j < 8; ++j)
+    if (v[j] > bv) { bv = v[j]; bi = base + j; }
+  for (uint q = 0; q < K; ++q) {
+    float wv = bv;
+    uint wi = bi;
+    sg_argmax(wv, wi);
+    if (lane == 0) { lv[sg][q] = wv; li[sg][q] = wi; }
+    if (bi == wi && wi >= base && wi < base + 8) {  // the winner's lane: the next of its 8
+      v[wi - base] = -INFINITY;
+      bv = -INFINITY;
+      bi = 0xffffffff;
+      for (int j = 0; j < 8; ++j)
+        if (v[j] > bv) { bv = v[j]; bi = base + j; }
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (sg) return;
+  uint pos = 0;
+  for (uint q = 0; q < K; ++q) {
+    float hv = lane < nsg && pos < K ? lv[lane][pos] : -INFINITY;
+    uint hi = lane < nsg && pos < K ? li[lane][pos] : 0xffffffff;
+    const float mv = hv;
+    const uint mi = hi;
+    sg_argmax(hv, hi);
+    if (lane == 0) {
+      cv[(r * ntgs + tg.x) * p.K + q] = hv;
+      ci[(r * ntgs + tg.x) * p.K + q] = hi;
+    }
+    if (lane < nsg && mi == hi && mv == hv) ++pos;
+  }
+}
+[[kernel]] void sample_stage2_rows_sg(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
+                                      device int* tokens [[buffer(2)]], constant SampleRowsParams& p [[buffer(3)]],
+                                      const device uint* table [[buffer(4)]],
+                                      uint r [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                                      uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float topv[64];
+  threadgroup uint topi[64];
+  threadgroup float lv[64 * 32];  // the row's candidates (p.n = lists x p.K <= 64 x 32)
+  threadgroup uint li[64 * 32];
+  uint K = max(1u, min(p.K, 64u));
+  if (p.temp <= 0.0f) K = 1;
+  const uint L = p.n / p.K;  // stage 1's lists, p.K candidates each, sorted
+  for (uint k = tid; k < p.n; k += ntg) {
+    lv[k] = cv[size_t(r) * p.n + k];
+    li[k] = ci[size_t(r) * p.n + k];
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (tid >= 32) return;
+  const uint lane = tid;
+  uint pa = 0, pb = 0;  // positions in lists lane, lane + 32
+  const uint la = lane, lb = lane + 32;
+  for (uint q = 0; q < K; ++q) {
+    const bool ha = la < L && pa < p.K, hb = lb < L && pb < p.K;
+    const float va = ha ? lv[la * p.K + pa] : -INFINITY, vb = hb ? lv[lb * p.K + pb] : -INFINITY;
+    const uint ia = ha ? li[la * p.K + pa] : 0xffffffff, ib = hb ? li[lb * p.K + pb] : 0xffffffff;
+    const bool a = va > vb || (va == vb && ia < ib);
+    float wv = a ? va : vb;
+    uint wi = a ? ia : ib;
+    const float mv = wv;
+    const uint mi = wi;
+    sg_argmax(wv, wi);
+    if (lane == 0) { topv[q] = wv; topi[q] = wi; }
+    if (mi == wi && mv == wv && (a ? ha : hb)) {
+      if (a) ++pa;
+      else ++pb;
+    }
+  }
+  simdgroup_barrier(mem_flags::mem_threadgroup);
+  if (lane == 0) sample_rows_pick(topv, topi, K, p, r, table, tokens);
 }
 
 // ---- qmvr v2: x rows staged in threadgroup memory (half), 4 weight rows per simdgroup ----

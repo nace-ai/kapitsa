@@ -2,7 +2,9 @@
 // attention (nh_dsp_attn, a ring that wraps), its mask rows (nh_dsp_mask_rows) and Markov walk over candidates
 // (nh_dsp_walk, NVFP4 W2), the MoE sums of layers without latent projections (nh_moe2_sum2_add,
 // nh_moe_combine_add, the fused one-token layer's nh_moe_ah / nh_moe_dh), and the 8-row BF16 product (nh_xb_v8:
-// Lightning's attention in verify) and the F32 router of verify rows (nh_mv_f32_sk). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
+// Lightning's attention in verify) and the F32 router of verify rows (nh_mv_f32_sk), the verify's sampling passes on
+// simdgroup reductions against the threadgroup ones. One dispatch per command buffer; run it under
+// MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
 //   nh_dsp_check
 #include "metal/gpu.h"
 #include "model/dspark.h"
@@ -817,6 +819,62 @@ void check_xq8() {
 
 }  // namespace
 
+// a verify's two sampling passes on simdgroup reductions (topk_stage1_rows_sg + sample_stage2_rows_sg) against
+// topk_stage1_rows + sample_stage2_rows: stage 1's candidates and the sampled tokens the same to the bit, logits with
+// many ties (a few distinct values) or distinct, V 5000 (a partial last chunk) and 131072, K 1 / 20 / 32, T 0 / 0.6
+void check_sample_sg() {
+  Gpu& g = Gpu::get();
+  struct TopkP {
+    uint32_t V, K, chunk;
+  };
+  struct SampleP {
+    uint32_t n, K;
+    float temp, top_p;
+    uint32_t seed, step, out_index, remap_from, remap_base, table_from;
+  };
+  const uint32_t R = 3;
+  for (uint32_t V : {5000u, 131072u})
+    for (int ties = 0; ties < 2; ++ties)
+      for (uint32_t K : {1u, 20u, 32u}) {
+        std::vector<float> lg(size_t(R) * V);
+        for (auto& v : lg) v = ties ? float(rnd() % 6) * 0.5f : nrand() * 3.0f;
+        const uint32_t ntg = (V + 2047) / 2048;
+        Buffer bl = up(lg, "logits");
+        Buffer cv[2] = {g.alloc(size_t(R) * ntg * K * 4, "cv"), g.alloc(size_t(R) * ntg * K * 4, "cv")};
+        Buffer ci[2] = {g.alloc(size_t(R) * ntg * K * 4, "ci"), g.alloc(size_t(R) * ntg * K * 4, "ci")};
+        Buffer tok[2] = {g.alloc(64 * 4, "tok"), g.alloc(64 * 4, "tok")};
+        bool same = true;
+        for (float temp : {0.0f, 0.6f})
+          for (uint32_t step = 0; step < 40 && same; ++step) {
+            for (int v = 0; v < 2; ++v) {
+              const TopkP tp{V, K, 2048};
+              const SampleP sp{ntg * K, K, temp, 0.95f, 1234u, step, 0, 0, 0, 0};
+              auto e = g.begin();
+              e->use(NemotronH::pipeline(v ? "topk_stage1_rows_sg" : "topk_stage1_rows"));
+              e->buf(0, bl);
+              e->buf(1, cv[v]);
+              e->buf(2, ci[v]);
+              e->bytes(3, &tp, sizeof tp);
+              e->dispatch(ntg, R, 1, 256);
+              e->use(NemotronH::pipeline(v ? "sample_stage2_rows_sg" : "sample_stage2_rows"));
+              e->buf(0, cv[v]);
+              e->buf(1, ci[v]);
+              e->buf(2, tok[v]);
+              e->bytes(3, &sp, sizeof sp);
+              e->buf(4, ci[v]);
+              e->dispatch(R, 1, 1, v ? 256 : 1024);
+              e->commit_and_wait();
+            }
+            same = memcmp(cv[0].ptr(), cv[1].ptr(), cv[0].size) == 0 && memcmp(ci[0].ptr(), ci[1].ptr(), ci[0].size) == 0 &&
+                   memcmp(tok[0].ptr(), tok[1].ptr(), R * 4) == 0;
+          }
+        char name[64];
+        snprintf(name, sizeof name, "sample_sg V%u K%u%s", V, K, ties ? " ties" : "");
+        report(name, same ? 0.0 : 1.0, 0.0);
+        for (Buffer* b : {&bl, &cv[0], &cv[1], &ci[0], &ci[1], &tok[0], &tok[1]}) g.release(*b);
+      }
+}
+
 int main() {
   Gpu& g = Gpu::get();
   g.compile_extra("Nemotron-H", kNhKernelSource);
@@ -832,6 +890,7 @@ int main() {
   check_cand();
   check_dsp_fused();
   check_xq8();
+  check_sample_sg();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }

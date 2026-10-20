@@ -239,6 +239,7 @@ class NemotronH : public Model {
   bool group_ = false;  // NI_NH_GROUP
   bool v8_n1_ = false;   // NI_NH_V8_N1
   bool rsu_ = false;     // NI_NH_RSU
+  bool sample_sg_ = false;  // NI_NH_SAMPLE_SG
   Buffer sdv_;           // the shared expert's down product of a verify's rows (rsu_)
   void init_ane();
   void ane_build();

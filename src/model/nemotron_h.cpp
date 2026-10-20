@@ -1150,6 +1150,8 @@ void NemotronH::alloc_buffers() {
   // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
   rsu_ = true;
   if (const char* v = getenv("NI_NH_RSU")) rsu_ = atoi(v) != 0;
+  sample_sg_ = g.apple10();
+  if (const char* v = getenv("NI_NH_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   sdv_ = g.alloc(size_t(kMaxRows) * cfg_.hidden * 4, "nh_shared_down_rows");
   // the M5: a verify's 8-row FP8 / BF16 products and the drafter's Q8 at 8 weight rows per threadgroup (nh_*_v8_n1),
   // twice the threadgroups of 16 (each row's sums as before)
@@ -2562,20 +2564,22 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
   const uint32_t Kc = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   const TopkStageP ts{uint32_t(cfg_.vocab), Kc, 2048};
   const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
-  e.use(pipe("topk_stage1_rows"));
+  // (the M5: on simdgroup reductions, the same candidates and samples: topk_stage1_rows_sg, sample_stage2_rows_sg)
+  const bool sg = sample_sg_ && ntg <= 64 && Kc <= 32;
+  e.use(pipe(sg ? "topk_stage1_rows_sg" : "topk_stage1_rows"));
   e.buf(0, logits_);
   e.buf(1, cand_v_);
   e.buf(2, cand_i_);
   e.val(3, ts);
   e.dispatch(ntg, uint32_t(R), 1, 256);
   const SampleRowsP p2{ntg * Kc, Kc, sp.temperature, sp.top_p, sp.seed, uint32_t(pos), 0, 0, 0, 0};
-  e.use(pipe("sample_stage2_rows"));
+  e.use(pipe(sg ? "sample_stage2_rows_sg" : "sample_stage2_rows"));
   e.buf(0, cand_v_);
   e.buf(1, cand_i_);
   e.buf(2, samp_);
   e.val(3, p2);
   e.buf(4, cand_i_);  // (no table)
-  e.dispatch(uint32_t(R), 1, 1, 1024);
+  e.dispatch(uint32_t(R), 1, 1, sg ? 256 : 1024);
   struct {
     uint32_t P, K;
   } ap{uint32_t(pos), uint32_t(K)};
