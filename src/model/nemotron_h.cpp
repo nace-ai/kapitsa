@@ -1289,6 +1289,7 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
     m.activations += (pout >= cvb ? 0 : cvb) + (pout >= (cvb + 255) / 256 * 256 + sbb ? 0 : sbb);
   }
   m.activations += size_t(4) * ((size_t(c.in_proj()) + 63) / 64) * 2048 * 4 + 4096;  // x4 split-K partials, counters
+  m.activations += size_t(kMaxRows) * c.hidden * 4;  // the shared expert's down rows of a verify (sdv_, every Mac)
   if (!m.head_row_bytes) m.head_row_bytes = size_t(c.hidden) + size_t(c.hidden / 32) * 2;
   m.dense = dense_model(c);  // (Nemotron Nano: MLP layers, no experts; the doctor's label)
   m.ffn_ane = false;
