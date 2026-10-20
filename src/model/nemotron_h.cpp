@@ -2446,7 +2446,7 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
   // taking K's 64-input groups in turn. tools/nh_v8t_bench (us per call, weights rotating out of the cache, against
   // nh_x4_v8_l0): LM head 131072x2688 379 vs 467, shared expert up 3712x2688 14.5 vs 18.6, down 2688x3712 15.6 vs
   // 19.0, the drafter's 6144x2688 21.4 vs 29.3 (4 simdgroups 401 / 15.2 / 16.4 / 23.3). NI_NH_V8T_KS (1-8) overrides.
-  if (W.fmt == NhFmt::FP4 && v8t_ && v8_ && M <= 8 && !W.l2 && W.K % 64 == 0) {
+  if (W.fmt == NhFmt::FP4 && v8t_ && v8_ && x4_ && M <= 8 && !W.l2 && W.K % 64 == 0) {
     static const int ks_env = getenv("NI_NH_V8T_KS") ? atoi(getenv("NI_NH_V8T_KS")) : 8;
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
     e.use(pipe("nh_x4t_v8_l0"));

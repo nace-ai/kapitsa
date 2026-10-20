@@ -151,6 +151,7 @@ int main(int argc, char** argv) {
     else if (a == "--gpr") gpr = true;
     else filt.push_back(a);
   }
+  if (reps < 1 || ks < 0 || ks > 8) fatal("nh_v8t_bench: --reps takes a positive count, --ks 1-8");
   Gpu& g = Gpu::get();
   if (!g.apple10()) fatal("nh_v8t_bench: needs the M5's matrix units (Apple10)");
   g.compile_extra("Nemotron-H", kNhKernelSource);
