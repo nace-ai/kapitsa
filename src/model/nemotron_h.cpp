@@ -109,6 +109,11 @@ struct SampleP {
   float temp, top_p;
   uint32_t seed, step, out_index;
 };
+struct SampleRowsP {  // verify.metal (base library)
+  uint32_t n, K;
+  float temp, top_p;
+  uint32_t seed, step, out_index, remap_from, remap_base, table_from;
+};
 
 Pipeline pipe(const std::string& n) {
   static std::mutex mu;
@@ -1114,8 +1119,8 @@ void NemotronH::alloc_buffers() {
   sh_ = g.alloc(R * size_t(std::max(1, cfg_.ffn_I())) * 4, "nh_sh");  // (the shared expert's or a dense MLP's)
   logits_ = g.alloc(R * size_t(cfg_.vocab) * 4, "nh_logits");
   const size_t nchunk1 = (size_t(cfg_.vocab) + 2047) / 2048;
-  cand_v_ = g.alloc(nchunk1 * 64 * 4, "nh_cand_v");
-  cand_i_ = g.alloc(nchunk1 * 64 * 4, "nh_cand_i");
+  cand_v_ = g.alloc(size_t(kMaxRows) * nchunk1 * 64 * 4, "nh_cand_v");  // (a verify's rows sample together)
+  cand_i_ = g.alloc(size_t(kMaxRows) * nchunk1 * 64 * 4, "nh_cand_i");
   sprob_ = g.alloc(64 * 4, "nh_sprob");
   samp_ = g.alloc(64 * 4, "nh_samples");
   xnh_ = g.alloc(R * std::max(H, size_t(cfg_.d_inner)) * 2, "nh_xnh");
@@ -2404,8 +2409,25 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
 }
 
 void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const SamplingParams& sp) {
-  for (int r = 0; r < R; ++r)
-    enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos + r));
+  // the R rows' samples in two passes (topk_stage1_rows, sample_stage2_rows: each row's candidates and RNG step pos + r
+  // as enc_sample's two passes per row give them)
+  const uint32_t Kc = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  const TopkStageP ts{uint32_t(cfg_.vocab), Kc, 2048};
+  const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
+  e.use(pipe("topk_stage1_rows"));
+  e.buf(0, logits_);
+  e.buf(1, cand_v_);
+  e.buf(2, cand_i_);
+  e.val(3, ts);
+  e.dispatch(ntg, uint32_t(R), 1, 256);
+  const SampleRowsP p2{ntg * Kc, Kc, sp.temperature, sp.top_p, sp.seed, uint32_t(pos), 0, 0, 0, 0};
+  e.use(pipe("sample_stage2_rows"));
+  e.buf(0, cand_v_);
+  e.buf(1, cand_i_);
+  e.buf(2, samp_);
+  e.val(3, p2);
+  e.buf(4, cand_i_);  // (no table)
+  e.dispatch(uint32_t(R), 1, 1, 1024);
   struct {
     uint32_t P, K;
   } ap{uint32_t(pos), uint32_t(K)};
