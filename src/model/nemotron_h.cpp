@@ -1150,10 +1150,11 @@ void NemotronH::alloc_buffers() {
   // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
   rsu_ = true;
   if (const char* v = getenv("NI_NH_RSU")) rsu_ = atoi(v) != 0;
-  // the routed experts' indirect grids of a dynamic verify (NVFP4 experts, no latent projections, one shape)
+  // the routed experts' indirect grids of a dynamic verify (NVFP4 experts, no latent projections, one shape); on the
+  // M5, where it was measured
   moe_args_ = g.alloc(32, "nh_moe_pair_args");
   memset(moe_args_.ptr(), 0, 32);
-  pair_ind_ = true;
+  pair_ind_ = g.apple10();
   if (const char* v = getenv("NI_NH_PAIR_IND")) pair_ind_ = atoi(v) != 0;
   moe_lightning_ = true;
   for (const NhLayer& L : layers_) {
