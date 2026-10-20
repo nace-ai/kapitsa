@@ -71,6 +71,14 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Dory: 2 loops; Kapitsa last-loop KV, its default, measured later with 0.1.37 (Dory's NVFP4 in layout L2 on the M1:
   40.5 tok/s, against 35.2 with 0.1.36 in the bracket; per-loop speculation 36.7), llama.cpp NVIDIA's Dory fork on its
   Q5_K_M, MLX mlx-lm's Dory pull request on snsnc's 4-bit ([details](#macbook-pro-m1-pro-16-gb-2026-10-19)).
+- Qwen3.5-9B: Kapitsa 0.1.37 with its DFlash drafter (the better of first and last, 50.7 tok/s), mlx-serve MTP depth 2,
+  MLX mlx-lm; the other engines' installs had been removed to make room for it ([details](#qwen35-9b-at-4-bit)).
+- Qwen3.6-35B-A3B with 2-bit experts: unsloth's UD-IQ2_XXS GGUF on Kapitsa (#134) and llama.cpp b11669, which swapped
+  on this Mac ([details](#qwen36-35b-a3b-with-2-bit-experts-gguf-ud-iq2_xxs)); the MLX engines don't read GGUF files,
+  and Ollama and LM Studio were not run on it.
+- Nemotron Nano: Kapitsa on NVIDIA's FP8 (the 4B, with #129's 8-bit head and #131's tail kernels) and NVFP4 (the 9B v2);
+  llama.cpp on Q4_K_M GGUFs, MLX mlx-lm on NVIDIA's BF16 (4B) and NVFP4 through its `nemotron_h` code (9B v2), from
+  #103's runs ([details](#nemotron-3-nano-4b-and-nemotron-nano-9b-v2)).
 
 **MacBook Pro M5 Pro 48 GB**
 - One session, model by model, closing with a control round on an idle machine; each cell is the engine's fastest
@@ -1148,10 +1156,12 @@ request; released mlx-lm and mlx-vlm have no Dory model.
 ## MacBook Pro M1 Pro, 16 GB (2026-10-19)
 
 The 16 GB Mac: a MacBook Pro (14-inch, 2021), `MacBookPro18,3`, M1 Pro with an 8-core CPU and a 14-core GPU, 16 GB,
-macOS 27.0.1, on AC power (Automatic power mode; this model has no High Power mode). Of the catalog, Qwen3.5-4B and
-Nemotron Dory1.0 4B fit it: `kapitsa doctor` gives Kapitsa a 12.2 GB GPU budget (Metal's recommended working set is
-12.7 GB), and `kapitsa serve` refuses the 27B, the 35B, Flash-Next, Lightning, Bolt and Super-VL before downloading
-anything, each because its weights alone exceed that budget. Without `--model` it starts the 4B at 4-bit; a 27,476-token
+macOS 27.0.1, on AC power (Automatic power mode; this model has no High Power mode). Of the catalog, Qwen3.5-4B,
+Qwen3.5-9B, Nemotron Dory1.0 4B, Nemotron 3 Nano 4B and Nemotron Nano 9B v2 fit it: `kapitsa doctor` gives Kapitsa a
+12.2 GB GPU budget (Metal's recommended working set is 12.7 GB), and `kapitsa serve` refuses the 27B, the 35B,
+Flash-Next, Lightning, Bolt and Super-VL before downloading anything, each because its weights alone exceed that
+budget. Qwen3.6-35B-A3B fits as a GGUF with 2-bit experts instead: unsloth's UD-IQ2_XXS file through `kapitsa import`
+([#134](https://github.com/nace-ai/kapitsa/pull/134), [below](#qwen36-35b-a3b-with-2-bit-experts-gguf-ud-iq2_xxs)). Without `--model` it starts the 4B at 4-bit; a 27,476-token
 conversation in its default 32K context ran without swapping (the server's footprint: 5.3 GB).
 
 It is also the first M1 that ran Kapitsa. 0.1.35 stopped at the first sampled request with the default DFlash drafter:
@@ -1289,7 +1299,11 @@ The engines with no Dory model were checked on this Mac: oMLX 0.7.1rc1 (no `mlx_
 1. One of the five answers echoed the prompt and closed a `</think>` block, which makes the harness mark the result
    invalid; the median is over the other four.
 
-### Qwen3.5-9B at 4-bit (not in the catalog)
+### Qwen3.5-9B at 4-bit
+
+In the catalog since [#105](https://github.com/nace-ai/kapitsa/pull/105) (`kapitsa serve 9b`, the default model on
+16-24 GB Macs), with these weights, its MTP head as a sidecar and this drafter.
+
 
 The largest Qwen3.5 that fits this Mac with a drafter: lmstudio-community/Qwen3.5-9B-MLX-4bit (`b455506`, 5.6 GB) and
 z-lab/Qwen3.5-9B-DFlash (`5fc3b3d`), served with `kapitsa serve --model <folder> --dflash <drafter folder>`. Kapitsa
@@ -1332,6 +1346,76 @@ Short runs before it (12:01-12:11), 3 decodes of the T = 0.6 coding answer each,
 Not run on the 9B: oMLX, MTPLX, Ollama, LM Studio and llama.cpp. Their installs had been removed to make room for the
 9B's 8 GB, and this Mac's disk has no room for them next to it. mlx-serve's MTP head is attached with
 `tools/mlx_serve_pack.py qwen3.5-9b` (the trunk cloned, the head's tensors renamed to `mtp.*`).
+
+### Qwen3.6-35B-A3B with 2-bit experts (GGUF UD-IQ2_XXS)
+
+The catalog's 35B starts at 22.1 GB (4-bit). unsloth's UD-IQ2_XXS GGUF of it (`unsloth/Qwen3.6-35B-A3B-GGUF` at
+`a483e9e`, 10.76 GB: IQ2_XXS gate and up experts, IQ2_S and IQ3_S down experts) runs with its routed experts in their
+own blocks ([#134](https://github.com/nace-ai/kapitsa/pull/134)): `kapitsa import` takes 7 s and writes 1.92 GB (the
+experts file is an APFS clone of the GGUF), and `kapitsa doctor` gives 10.99 GB of weights, room for 21,811 tokens of
+KV cache in the 12.2 GB budget. It has no MTP head and no drafter fits beside it, so both engines decode plainly.
+
+bench.py through each engine's server, the same file in both:
+
+| Engine | Decode, T = 0.6 / greedy (tok/s) | 4K prompt (s) | 16K prompt (s) | Cached follow-up 4K / 16K (s) | Peak memory (GB) | Tool calls |
+| --- | ---: | ---: | ---: | ---: | ---: | :---: |
+| **Kapitsa** | **52.6 / 53.2** | **9.0** | **39.7-41.2**<sup>1</sup> | **0.34 / 0.33** | **11.2** | pass |
+| llama.cpp b11669 | 38.0-38.7 / 38.8<sup>2</sup> | 11.8-12.4 | 52.0-53.2 | 0.38-0.40 / 0.41-0.80 | 11.65-16.1<sup>2</sup> | pass |
+
+Teacher-forced over 1,020 positions against llama.cpp's Metal backend: KL 0.023 (median 0.019), top-1 agreement
+97.5%, perplexity 2.442 against 2.450; llama.cpp's own CPU backend is at KL 0.012 (median 0.001), top-1 97.45%.
+Part of Kapitsa's gap is the existing conversion of the file's Q5_K tensors to 6-bit (an 8-bit import: 0.019); on a
+4-layer slice of the file the IQ experts alone match llama.cpp's CPU-against-Metal noise (median 0.0043 against
+0.0042). Greedy answers are identical in both engines on 7 of 8 prompts. `tests/test_server.py`: 45 of 47, the two
+others counting tests this file itself stops early on (llama.cpp's answers are the same).
+
+1. 39.7 s in a swap-free `ni_run` rep; the server's 41.2 s run swapped 11K pages.
+2. llama.cpp swapped in nearly every phase on this Mac: 10.7 GB with the harness's standard settings (16.1 GB peak),
+   still 5K-50K pages per phase with `--cache-ram 0 --ctx-checkpoints 4` and its weights locked (11.65 GB peak). Its
+   four runs agree within about 2%, but by the swap rule only its greedy 38.8 tok/s counts.
+
+### Nemotron 3 Nano 4B and Nemotron Nano 9B v2
+
+NVIDIA's two small dense Nemotron-H models (Mamba-2, attention and MLP layers, no experts), text only, with no drafter:
+Kapitsa decodes the 4B with prompt lookup ([#103](https://github.com/nace-ai/kapitsa/pull/103)). Both are in the
+catalog since [#127](https://github.com/nace-ai/kapitsa/pull/127): `nano-4b` downloads NVIDIA's FP8 checkpoint
+(ModelOpt W8A16, 5.3 GB; `nano-4b:bf16` the BF16 one, 8.0 GB), `nano-9b` its NVFP4 one (7.9 GB). An FP8 or NVFP4
+checkpoint's BF16 LM head loads as 8-bit rows ([#129](https://github.com/nace-ai/kapitsa/pull/129)).
+
+bench.py through each engine's server, one slot, the T = 0.6 and greedy coding answers (512 tokens, median of 3) and a
+cold 4K-token prompt. Kapitsa's rows are from the catalog's downloads (2026-10-19 and 10-20); the other engines' from
+#103's runs on this Mac (2026-10-19), as are their footnotes.
+
+| Model | Engine | Weights | Decode, T = 0.6 / greedy (tok/s) | Prefill 4K (tok/s) | Peak memory (GB) |
+| --- | --- | --- | ---: | ---: | ---: |
+| Nano 4B | **Kapitsa** (prompt lookup) | NVIDIA's FP8, 8-bit head | **37.3 / 37.2**<sup>4</sup> | **449** | **4.6** |
+| Nano 4B | Kapitsa (prompt lookup) | NVIDIA's BF16 | 24.4 / 23.8 | **449** | 8.0 |
+| Nano 4B | llama.cpp b11669 | NVIDIA's Q4_K_M GGUF | 28.2 / 28.4 | 262 | 6.8 |
+| Nano 4B | mlx-lm 0.32.2 | NVIDIA's BF16 | 21.0 / 20.5 | 379<sup>1</sup> | 10.7-12.4<sup>3</sup> |
+| Nano 9B v2 | **Kapitsa** | NVIDIA's NVFP4, 8-bit head | **25.1 / 25.0** | **187** | **7.3** |
+| Nano 9B v2 | llama.cpp b11669 | Q4_K_M GGUF | 14.2 / 14.2 | 118 | 10.8-11.1 |
+| Nano 9B v2 | mlx-lm 0.32.2 | NVIDIA's NVFP4<sup>2</sup> | 18.1 / 17.9 | 135<sup>1</sup> | 10.7-12.4<sup>3</sup> |
+
+On the 4B, FP8 decodes 1.5x BF16 in 3.4 GB less memory, and it is the catalog's default. llama.cpp on a 4-bit file reads
+fewer bytes per token (2.8 GB against FP8's 4.1 GB), and Kapitsa's FP8 still decodes 1.3x its rate. The 4B's prompt
+lookup gains most where a reply repeats its prompt (1.4-2.3x on a code rewrite, [#131](https://github.com/nace-ai/kapitsa/pull/131)),
+and it is 4-5% slower on free prose, where few drafts match.
+
+- FP8 against BF16 on the 4B, teacher-forced over 8,172 positions (prose, Python, C++, a chat and a math transcript):
+  KL(BF16 || FP8) 0.0014 on the decode and prefill paths, top-1 agreement 98.3%, perplexity 6.595 against 6.599. The
+  8-bit head adds 3.9e-5 (top-1 99.6% against FP8 with its BF16 head). NVIDIA's own evaluations of the two checkpoints
+  are within a point or two on most benchmarks and lower on Tau2's agent tasks.
+- `tests/test_server.py`: 47/47 on the 4B (FP8 and BF16), 43/47 on the 9B v2, whose own template drops past turns'
+  reasoning (two cache-reuse checks) and which ends a "count to 2000" reply after 86 tokens, as the reference does.
+- bench.py marks the prefill prompts as 1-1.5% longer than its Qwen-calibrated counts (Nemotron's template), so those
+  are each engine's own figures rather than the harness's cross-engine ones.
+
+1. mlx-lm's prefill ran out of memory at its default 2048-token step on both models; its figures are at step 512.
+2. mlx-lm can't load ModelOpt NVFP4: its `nemotron_h` code ran the NVFP4 weights on MLX's nvfp4 matmul (#103).
+3. #103 gives mlx-lm's peak as one range over both models' runs.
+4. With [#129](https://github.com/nace-ai/kapitsa/pull/129)'s 8-bit head and #131's FP8 tail kernels, 2026-10-20; two
+   rounds: T = 0.6 37.3 and 38.6, greedy 37.15 and 37.13. The prefill and memory columns are the catalog run's
+   (2026-10-19, BF16 head).
 
 ## MacBook Pro M5 Pro, 48 GB (2026-10-19)
 

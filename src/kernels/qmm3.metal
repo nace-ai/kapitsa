@@ -379,7 +379,9 @@ NI_INLINE void qr_acc8(const device half* X, const device uint32_t* const thread
   }
 }
 
-#define NI_QMR8(NAME, BM, BN, WM, WN, BK)                                                                 \
+// MFAST: grid x runs over the M tiles (the threadgroups running together share the weight tile through the cache)
+#define NI_QMR8(NAME, BM, BN, WM, WN, BK) NI_QMR8_G(NAME, BM, BN, WM, WN, BK, false)
+#define NI_QMR8_G(NAME, BM, BN, WM, WN, BK, MFAST)                                                        \
   [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void NAME(                                    \
       const device half* X [[buffer(0)]], const device uint32_t* Wd [[buffer(1)]],                         \
       const device bfloat* Sd [[buffer(2)]], const device bfloat* Bd [[buffer(3)]],                        \
@@ -391,7 +393,8 @@ NI_INLINE void qr_acc8(const device half* X, const device uint32_t* const thread
     const device uint32_t* W[1] = {Wd};                                                                    \
     const device bfloat* S[1] = {Sd};                                                                      \
     const device bfloat* B[1] = {Bd};                                                                      \
-    const uint sgm = sg / WN, sgn = sg % WN, m0 = tg.y * BM, n0 = tg.x * BN;                               \
+    const uint mt = MFAST ? tg.x : tg.y, nt = MFAST ? tg.y : tg.x;                                        \
+    const uint sgm = sg / WN, sgn = sg % WN, m0 = mt * BM, n0 = nt * BN;                                   \
     const uint2 rc = qr_rc(lane);                                                                          \
     simdgroup_float8x8 acc[TN / 8][TM / 8];                                                                \
     qr_acc8<BM, BN, WM, WN, BK, 1>(X, W, S, B, p.M, p.N, p.K, p.x_ld, m0, n0, (threadgroup half*)xs4, tid, \
@@ -449,6 +452,7 @@ NI_INLINE void qr_acc8(const device half* X, const device uint32_t* const thread
   }
 
 NI_QMR8(qmr8_k32_w14_m32_n128, 32, 128, 1, 4, 32)   // 8-bit, M >= 64
+NI_QMR8_G(qmr8_k32_w14_m32_n128_mf, 32, 128, 1, 4, 32, true)  // the M1's (enc_qmm_large)
 NI_QMR8(qmr8_k32_w14_m16_n64, 16, 64, 1, 4, 32)     // 8-bit, M < 64 or N <= 64
 NI_QMR8_GU(qmr8_gu_k32_w14_m32_n64, 32, 64, 1, 4, 32)
 NI_QMR8_GU(qmr8_gu_k32_w14_m16_n64, 16, 64, 1, 4, 32)

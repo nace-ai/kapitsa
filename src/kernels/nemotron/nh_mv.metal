@@ -168,6 +168,82 @@ NH_MV_FMT(iq2, 2)
 NH_MV_FMT(f32, 3)
 NH_MV_FMT(bf16, 4)
 NH_MV_FMT(fp8, 5)
+// one BF16 row at 2 weight rows per simdgroup (twice the threadgroups; each row's sums as nh_mv_bf16_r1's)
+NH_MV(nh_mv_bf16_r1_n2, 4, 2, 1, 0)
+NH_MV(nh_mv_bf16_r1_add_n2, 4, 2, 1, 1)
+
+// Attention's q, k and v (one input row, three BF16 matrices; k and v of one shape) in one dispatch: threadgroups
+// [0, tq) compute q, then tk of k, then tk of v, each row as nh_mv_bf16_r1_n2 computes it. grid: (tq + 2 tk) x 128
+[[kernel]] void nh_mv_bf16_qkv_n2(const device uchar* wq [[buffer(0)]], const device uchar* wk [[buffer(1)]],
+                                  const device float* x [[buffer(2)]], device float* yq [[buffer(3)]],
+                                  constant NhMvParams& pq [[buffer(4)]], const device uchar* wv [[buffer(5)]],
+                                  device float* yk [[buffer(6)]], device float* yv [[buffer(7)]],
+                                  constant NhMvParams& pk [[buffer(8)]], uint3 tgp [[threadgroup_position_in_grid]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                  uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int NR = 2;
+  const uint tq = (pq.N + NR * nsg - 1) / (NR * nsg), tk = (pk.N + NR * nsg - 1) / (NR * nsg);
+  const bool isq = tgp.x < tq, isk = !isq && tgp.x < tq + tk;
+  const uint t = isq ? tgp.x : isk ? tgp.x - tq : tgp.x - tq - tk;
+  const device uchar* w = isq ? wq : isk ? wk : wv;
+  device float* y = isq ? yq : isk ? yk : yv;
+  const uint N = isq ? pq.N : pk.N, K = isq ? pq.K : pk.K;
+  const uint row0 = (t * nsg + sg) * NR;
+  float acc[NR][1];
+  for (int j = 0; j < NR; ++j) acc[j][0] = 0.0f;
+  if (row0 < N) nh_mv_dot<4, NR, 1>(w, w, x, K, K, 1, row0, N, lane, nullptr, acc);
+  nh_mv_store<NR, 1, 0>(acc, y, N, N, 1, isq ? pq.gs : pk.gs, row0, lane);
+}
+
+// BF16 for 2-8 activation rows (the MoE router in verify) on the M5, the same outputs to the bit as nh_mv_bf16_r<n>
+// (and the one-row router's nh_mv_dot): per lane the same chain, acc += d_i over the steps i (k0 = 8 lane + 256 i,
+// d_i the step's 8 products summed from 0), then the sum over the lanes; but a simdgroup takes NR = 2 weight rows for
+// TG = 2 of the activation rows (each activation load serves 2 rows, each weight load 2 activation rows) instead of 1
+// weight row for all 8: Bolt's 512 x 4096 router in an 8-row verify 12.2 against 46 us per layer (NI_PROFILE; NR x TG
+// 3 x 2 12.1, 2 x 4 12.5, 1 x 4 13.2, 4 x 1 13.9, 1 x 2 14.0, 2 x 1 15.2, 8 x 1 15.5, 4 x 2 19.3, 4 x 4 21.8; a
+// split of the steps over the simdgroups through threadgroup memory 27-44).
+// grid: ceil(N / (4 NR)) x ceil(R / TG) threadgroups x 128 threads; K % 256 == 0.
+constant constexpr int kNhRtNR = 2, kNhRtTG = 2;
+[[kernel]] void nh_mv_bf16_rt(const device uchar* q [[buffer(0)]], const device float* x [[buffer(2)]],
+                              device float* y [[buffer(3)]], constant NhMvParams& p [[buffer(4)]],
+                              uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                              uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int NR = kNhRtNR, TG = kNhRtTG;
+  const uint K = p.K, n0 = (tgp.x * nsg + sg) * NR, r0 = tgp.y * TG;
+  if (n0 >= p.N || r0 >= p.R) return;
+  float acc[NR][TG];
+  for (int j = 0; j < NR; ++j)
+    for (int t = 0; t < TG; ++t) acc[j][t] = 0.0f;
+  const device ushort* qr[NR];
+  for (int j = 0; j < NR; ++j) qr[j] = (const device ushort*)q + size_t(min(n0 + j, p.N - 1)) * K;
+  for (uint k0 = lane * 8; k0 < K; k0 += 256) {
+    float xv[TG][8];
+    for (int t = 0; t < TG; ++t) {
+      const device float4* xp = (const device float4*)(x + min(r0 + t, p.R - 1) * p.x_stride + k0);
+      const float4 a = xp[0], b = xp[1];
+      xv[t][0] = a.x; xv[t][1] = a.y; xv[t][2] = a.z; xv[t][3] = a.w;
+      xv[t][4] = b.x; xv[t][5] = b.y; xv[t][6] = b.z; xv[t][7] = b.w;
+    }
+    for (int j = 0; j < NR; ++j) {
+      const uint4 v = *(const device uint4*)(qr[j] + k0);
+      float w[8];
+      for (int u = 0; u < 4; ++u) {
+        w[2 * u] = as_type<float>(v[u] << 16);
+        w[2 * u + 1] = as_type<float>(v[u] & 0xFFFF0000u);
+      }
+      for (int t = 0; t < TG; ++t) {
+        float d = 0.0f;
+        for (int u = 0; u < 8; ++u) d += w[u] * xv[t][u];
+        acc[j][t] += 1.0f * d;
+      }
+    }
+  }
+  for (int j = 0; j < NR; ++j)
+    for (int t = 0; t < TG; ++t) {
+      const float v = simd_sum(acc[j][t]) * p.gs;
+      if (lane == 0 && n0 + j < p.N && r0 + t < p.R) y[(r0 + t) * p.y_stride + n0 + j] = v;
+    }
+}
 
 // ---- Routed experts (IQ2) for R activation rows, each with its own k experts: the parameters of nh_moe2_* ----
 struct NhMoeParams {

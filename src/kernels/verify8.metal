@@ -1917,10 +1917,12 @@ struct KvTreeParams {
 struct SwigluX8Params {
   uint K;   // intermediate width (row length of g and u)
   uint R;   // live rows (t >= R are zeros)
+  uint write_t;  // 1: also the T table of qmm8t (buffer 5; x8_prep2's write_t layout, rows of K inputs)
 };
 [[kernel]] void swiglu_x8(const device float* g [[buffer(0)]], const device float* u [[buffer(1)]],
                           device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
-                          constant SwigluX8Params& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
+                          constant SwigluX8Params& p [[buffer(4)]], device half* table_t [[buffer(5)]],
+                          uint tg [[threadgroup_position_in_grid]],
                           uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                           uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half stg[8][256];
@@ -1961,6 +1963,14 @@ struct SwigluX8Params {
   device half* dst = table + ((tg * 4 + gi) * 32 + l2) * 16 + hf * 8;
   *(device uint4*)dst = uint4(as_type<uint>(half2(o[0], o[1])), as_type<uint>(half2(o[2], o[3])),
                               as_type<uint>(half2(o[4], o[5])), as_type<uint>(half2(o[6], o[7])));
+  if (p.write_t) {  // T table: thread = (row tid / 32, 8 slots of this threadgroup's 256)
+    const uint tt = tid / 32, s0 = (tid % 32) * 8, gb = s0 & ~63u;
+    half q[8];
+    for (int i = 0; i < 8; ++i) q[i] = stg[tt][gb + v8t_input_of_slot((s0 + i) & 63)];
+    *(device uint4*)(table_t + tt * p.K + tg * 256 + s0) =
+        uint4(as_type<uint>(half2(q[0], q[1])), as_type<uint>(half2(q[2], q[3])), as_type<uint>(half2(q[4], q[5])),
+              as_type<uint>(half2(q[6], q[7])));
+  }
 }
 
 // A value row's rank-1 update, st + k d, as one fused multiply-add on the decayed state (st already times g): the step,

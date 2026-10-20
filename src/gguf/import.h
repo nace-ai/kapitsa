@@ -23,6 +23,10 @@ struct ImportOptions {
   int threads = 0;           // 0: this Mac's performance cores, at most 8
   bool force = false;        // convert again over an existing folder of that name
   bool dry_run = false;      // print what would be written (formats per GGUF type, size, folder) and write nothing
+  // hub::plan_dir: write only what a memory plan reads into this folder (config.json, each safetensors file's header,
+  // no tensor data) and import.json ({"write": bytes the conversion writes, "disk": the folder's size once the GGUF is
+  // gone}); nothing in the models dir
+  std::string plan_dir;
   bool progress = true;
 };
 

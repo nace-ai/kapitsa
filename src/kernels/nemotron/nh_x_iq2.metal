@@ -22,44 +22,8 @@
 // t % T), so K = 5376 (shared down) or 1536 / 2304 / 2560 (routed down) keep every lane busy. K % 256 == 0 (the
 // IQ2_XXS block: one half scale per 256 weights), N >= 1.
 
-// the 8 weights of one grid point (G: its grid word pair; s7: its 7 stored sign bits) as 4 half2 words, x 2^-24:
-// (e0, e2), (e1, e3), (e4, e6), (e5, e7)
-NI_INLINE uint4 nh_x2_dec8(uint2 G, uint s7) {
-  // lo: e0 sign -> bit 15, e1 -> 23, e2 -> 31, e3 -> 7; hi: e4 -> 15, e5 -> 23, e6 -> 31, e7 (parity) -> 7
-  const uint lo_m = (s7 * 0x20408010u) & 0x80808080u;
-  const uint hi_m = ((s7 * 0x02040800u) | (popcount(s7) << 7)) & 0x80808080u;
-  const uint lo = G.x ^ lo_m, hi = G.y ^ hi_m;
-  const uint M = 0x807F807Fu;
-  return uint4(lo & M, rotate(lo, 24u) & M, hi & M, rotate(hi, 24u) & M);
-}
-
-// d + the decoded grid point w . (xa, xb) (elements 0..3, 4..7)
-NI_INLINE float nh_x2_fma8(uint4 w, float4 xa, float4 xb, float d) {
-  const half2 w0 = as_type<half2>(w.x), w1 = as_type<half2>(w.y), w2 = as_type<half2>(w.z), w3 = as_type<half2>(w.w);
-  d = fma(float(w0.x), xa.x, d);
-  d = fma(float(w1.x), xa.y, d);
-  d = fma(float(w0.y), xa.z, d);
-  d = fma(float(w1.y), xa.w, d);
-  d = fma(float(w2.x), xb.x, d);
-  d = fma(float(w3.x), xb.y, d);
-  d = fma(float(w2.y), xb.z, d);
-  d = fma(float(w3.y), xb.w, d);
-  return d;
-}
-
-// one 32-element sub-block (codes aux) . xv[0..7], x 2^-24 (one FMA chain)
-NI_INLINE float nh_x2_dot32(uint2 aux, thread const float4* xv) {
-  constant uint2* gt = (constant uint2*)nh_iq2xxs_grid;
-  float d = nh_x2_fma8(nh_x2_dec8(gt[aux.x & 0xFFu], extract_bits(aux.y, 0, 7)), xv[0], xv[1], 0.0f);
-  d = nh_x2_fma8(nh_x2_dec8(gt[extract_bits(aux.x, 8, 8)], extract_bits(aux.y, 7, 7)), xv[2], xv[3], d);
-  d = nh_x2_fma8(nh_x2_dec8(gt[extract_bits(aux.x, 16, 8)], extract_bits(aux.y, 14, 7)), xv[4], xv[5], d);
-  return nh_x2_fma8(nh_x2_dec8(gt[aux.x >> 24], extract_bits(aux.y, 21, 7)), xv[6], xv[7], d);
-}
-
-// the sub-block scale (0.5 + s4) / 4 as the subnormal half (2 s4 + 1) 2^-24 (= 2^-21 of the scale; with the weights'
-// 2^-24, results are scaled by 2^45 at the end)
-NI_INLINE float nh_x2_sub(uint auxy) { return float(as_type<half>(ushort((auxy >> 27) | 1u))); }
-constant constexpr float kNhX2Scale = 35184372088832.0f;  // 2^45
+// (The decode helpers nh_x2_dec8 / nh_x2_fma8 / nh_x2_dot32 / nh_x2_sub and the grid are in ../iq.h, shared with the
+// Qwen MoE kernels of GGUF imports.)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // One token row: y[n] = epi(gs * W[n, :] . x) for rows row0 .. row0 + NR - 1 (clamped to N; EPI 0 store, 1 add,
@@ -347,6 +311,67 @@ struct NhX2BucketP {
     for (uint j = 0; j * p.BM < c; ++j) tiles[toff[e] + j] = uint4(e, off[e] + j * p.BM, min(p.BM, c - j * p.BM), 0);
   }
   for (uint i = tid; i < P; i += ntg) sorted[off[uint(eid[i])] + rank[i]] = i;
+}
+
+// The verify's routing and bucketing in one dispatch (M5): nh_moe_route1's selection of each row's k experts (a
+// simdgroup per row, the same experts and weights), then nh_x2_bucket's tiles and dispatch arguments without atomics:
+// a pair's rank within its expert is its index order among the expert's pairs (nh_x2_bucket's atomic order was
+// arbitrary; a tile's pairs give the same outputs in either order), every pair's count, rank and offsets by a loop
+// over the pairs (P <= 256). One threadgroup of 256 threads, rows <= 8; NhX2BucketP as nh_x2_bucket's.
+[[kernel]] void nh_x2_route_bucket(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],
+                                   device int* eid [[buffer(2)]], device float* ew [[buffer(3)]],
+                                   constant NhRouteParams& rp [[buffer(4)]], const device uint* live [[buffer(5)]],
+                                   device uint* sorted [[buffer(6)]], device uint4* tiles [[buffer(7)]],
+                                   device uint* args [[buffer(8)]], constant NhX2BucketP& p [[buffer(9)]],
+                                   uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                                   uint sgi [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                   uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup int te[256];
+  threadgroup uint tc[256], tr[256];
+  const uint rows = min(rp.rows, live[0]);
+  for (uint r = sgi; r < rows; r += nsg) {
+    const uint ex = nh_route_row(logits + size_t(r) * rp.logit_stride, bias, rp.E, rp.k, rp.norm, rp.scale, lane,
+                                 eid + r * rp.k, ew + r * rp.k);
+    if (lane < rp.k) te[r * rp.k + lane] = int(ex);  // (the pairs' experts from the routing lanes, not from eid)
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint P = min(p.P, rows * p.k);
+  for (uint i = tid; i < P; i += ntg) {
+    const int e = te[i];
+    uint c = 0, rk = 0;
+    for (uint j = 0; j < P; ++j) {
+      const uint m = te[j] == e ? 1u : 0u;
+      c += m;
+      rk += j < i ? m : 0u;
+    }
+    tc[i] = c;
+    tr[i] = rk;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < P; i += ntg) {
+    const int e = te[i];
+    const uint c = tc[i], rk = tr[i];
+    uint off = 0, toff = 0;
+    for (uint j = 0; j < P; ++j) {
+      const bool lo = te[j] < e;
+      off += lo ? 1u : 0u;
+      toff += lo && tr[j] == 0 ? (tc[j] + p.BM - 1) / p.BM : 0u;
+    }
+    sorted[off + rk] = i;
+    if (rk % p.BM == 0) tiles[toff + rk / p.BM] = uint4(uint(e), off + rk, min(p.BM, c - rk), 0);
+  }
+  if (tid == 0) {
+    uint t = 0;
+    for (uint j = 0; j < P; ++j) t += tr[j] == 0 ? (tc[j] + p.BM - 1) / p.BM : 0u;
+    args[0] = p.up_x;
+    args[1] = t;
+    args[2] = 1;
+    args[3] = 0;
+    args[4] = p.dn_x;
+    args[5] = t;
+    args[6] = 1;
+    args[7] = 0;
+  }
 }
 
 // up over the tiles: h[pair] = relu(W_up[e] . lat[pair / k])^2. dispatch_indirect(args, 0) x 32 threads

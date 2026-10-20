@@ -39,7 +39,7 @@ add_custom_command(
   OUTPUT ${NI_NH_EMBED}
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_NH_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
-  DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/kflash.h
+  DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/iq.h ${CMAKE_SOURCE_DIR}/src/kernels/kflash.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
   COMMENT "Embedding the Nemotron-H Metal kernels")
 
@@ -60,7 +60,9 @@ add_custom_command(
   OUTPUT ${NI_TENSOR_EMBED}
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_TENSOR_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
-  DEPENDS ${NI_TENSOR_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
+  DEPENDS ${NI_TENSOR_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/nh_route.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h
+          ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   COMMENT "Embedding the Metal 4 tensor kernels")
 
 # kapitsa bench (src/bench/): the harness's frozen prompt corpus and Apple's names for the Mac models, embedded

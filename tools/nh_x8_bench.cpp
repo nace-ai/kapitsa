@@ -128,6 +128,7 @@ struct Timer {
 }  // namespace
 
 int main(int argc, char** argv) {
+  int rc = 0;  // 1: an _n1 kernel's outputs not the same to the bit as its 16-row twin's
   int reps = 9, limit = 240;
   bool small = false;
   std::vector<std::string> only;
@@ -158,8 +159,10 @@ int main(int argc, char** argv) {
     uint32_t N, K;
     float gs;
   };
-  const Shape big[] = {{"in", 18560, 4096, 0.0021f}, {"out", 4096, 8192, 0.0013f}, {"q", 4096, 4096, 0.0009f},
-                       {"kv", 256, 4096, 0.0011f},   {"head", 131072, 4096, 0.0007f}};
+  // (lin / lout: Nemotron 3.5 Lightning's Mamba in_proj and out_proj)
+  const Shape big[] = {{"lin", 10304, 2688, 0.0021f}, {"lout", 2688, 4096, 0.0013f}, {"in", 18560, 4096, 0.0021f},
+                       {"out", 4096, 8192, 0.0013f},  {"q", 4096, 4096, 0.0009f},    {"kv", 256, 4096, 0.0011f},
+                       {"head", 131072, 4096, 0.0007f}};
   const Shape tiny[] = {{"in", 200, 1024, 0.5f}, {"out", 72, 2048, 0.37f}, {"odd", 77, 1152, 1.0f}};
   struct Run {
     std::string name;
@@ -172,7 +175,8 @@ int main(int argc, char** argv) {
                              {"nh_x8_mv_relu2", 0, 8, 64, 1, 1, 2}, {"nh_x8_mv_n2", 0, 4, 64, 1, 1, 0},
                              {"nh_x8_mv_n8", 0, 16, 64, 1, 1, 0},   {"nh_x8_mv", 0, 16, 128, 1, 1, 0},
                              {"nh_mv_fp8_r1", 0, 16, 128, 1, 1, 0}, {"nh_x8_v8", 1, 16, 256, 8, 1, 0},
-                             {"nh_x8_v8", 1, 16, 256, 5, 1, 1},     {"nh_x8_v8", 1, 16, 256, 3, 1, 3},
+                             {"nh_x8_v8_n1", 1, 8, 256, 8, 1, 0},   {"nh_x8_v8", 1, 16, 256, 5, 1, 1},
+                             {"nh_x8_v8", 1, 16, 256, 3, 1, 3},
                              {"nh_gemm_fp8_m16", 2, 16, 128, 13, 1, 0}, {"nh_gemm_fp8_m64", 2, 64, 128, 100, 1, 0},
                              {"nh_gemm_fp8_m64", 2, 64, 128, 512, 1, 0}};
     for (uint32_t sk : {1u, 2u, 4u, 8u}) {
@@ -227,8 +231,8 @@ int main(int argc, char** argv) {
         e.buf(2, W, size_t(copy) * wb);
         e.buf(3, y);
         e.bytes(4, &p, sizeof p);
-        if (r.name == "nh_x8_v8") {
-          e.dispatch((sh.N + 15) / 16, 1, 1, 256);
+        if (r.name == "nh_x8_v8" || r.name == "nh_x8_v8_n1") {  // (rows_tg 16 / 8)
+          e.dispatch((sh.N + r.rows_tg - 1) / r.rows_tg, 1, 1, 256);
         } else {
           e.buf(5, part);
           e.buf(6, cnt);
@@ -248,7 +252,8 @@ int main(int argc, char** argv) {
       }
     };
     for (const Run& r : sel) {
-      if (r.kind == 1 && r.name != "nh_x8_v8" && size_t(r.sk) * ((sh.N + 63) / 64) * 2048 * 4 > part.size) continue;
+      const bool v8 = r.name == "nh_x8_v8" || r.name == "nh_x8_v8_n1";
+      if (r.kind == 1 && !v8 && size_t(r.sk) * ((sh.N + 63) / 64) * 2048 * 4 > part.size) continue;
       // check: y prefilled (add epilogue: random base; others: a sentinel that rows >= R must keep)
       std::vector<float> y0(size_t(MX) * sh.N);
       for (auto& v : y0) v = r.epi == 1 ? nrand() : -777.0f;
@@ -258,6 +263,12 @@ int main(int argc, char** argv) {
         enc(*e, r, 0, r.epi);
         e->commit_and_wait();
       }
+      // "bitwise = previous": the first 8 rows the same to the bit as the last 8-row store run's (nh_x8_v8_n1 against
+      // nh_x8_v8)
+      static std::vector<float> prev;
+      std::vector<float> cur(y.as<float>(), y.as<float>() + size_t(8) * sh.N);
+      const bool same = prev.size() == cur.size() && memcmp(prev.data(), cur.data(), cur.size() * 4) == 0;
+      if (r.R == 8 && r.epi == 0) prev = cur;
       double me = 0, mr = 0;
       bool pad = false;
       for (uint32_t t = 0; t < std::min(MX, std::max(r.R, 8u)); ++t)
@@ -294,7 +305,10 @@ int main(int argc, char** argv) {
       printf("fp8 %-4s %-16s R=%-3u sk=%u epi %d %8.4f ms %6.1f GB/s", sh.name, r.name.c_str(), r.R, r.sk, r.epi, ms,
              double(wb) / ms / 1e6);
       if (r.R > 1) printf(" %5.2f TF", 2.0 * double(wb) * r.R / ms / 1e9);
-      printf("  err %.1e%s\n", me / std::max(mr, 1e-30), pad ? " PAD-WRITTEN" : "");
+      const bool mism = r.name == "nh_x8_v8_n1" && r.epi == 0 && !same;
+      if (mism) rc = 1;
+      printf("  err %.1e%s%s\n", me / std::max(mr, 1e-30), pad ? " PAD-WRITTEN" : "",
+             same ? " (bitwise = previous)" : mism ? " NOT BITWISE = nh_x8_v8" : "");
       fflush(stdout);
     }
     for (Buffer* b : {&W, &xf, &xh, &y}) g.release(*b);
@@ -849,5 +863,5 @@ int main(int argc, char** argv) {
     printf("one-token MoE layer (H %u, E %u top-%u, I %u, latent %u, shared %u): fused %.4f ms, separate %.4f ms; "
            "experts %s, rel. diff %.1e\n", H, E, k, I, L, S, tf.med(), tsep.med(), same_e ? "same" : "DIFFER", me / mr);
   }
-  return 0;
+  return rc;
 }

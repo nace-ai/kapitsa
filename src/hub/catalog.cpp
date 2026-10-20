@@ -19,8 +19,11 @@
 //   embedding and output layer in any format). Nemotron 3.5 Bolt's and Super-VL's companion is NVIDIA's LiLiCorr
 //   drafter for each ("lilicorr", in dflash/ as oMLX lays it out), Lightning's NVIDIA's DSpark drafter ("dspark", in
 //   dflash/ too).
+// - A GGUF variant (`gguf`: one file of the repo, pinned by sha256 and size) downloads that file alone and converts it
+//   with `kapitsa import` into the variant's folder, which keeps the conversion, not the file. It has no companions
+//   (the import replaces the folder).
 // - download_gb is shown before a download (weights and companions). Memory needs no entry: the engine plans it
-//   from the variant's headers.
+//   from the variant's headers (a GGUF variant's: the import's plan of the file's header).
 // - The 4-bit variants' repos and revisions are the Nace Agent app's, so the app and the CLI download the same bytes.
 #include "hub/hub.h"
 
@@ -224,9 +227,9 @@ const std::vector<CatalogModel>& catalog() {
        .about = "MoE, 3B active per token: fast replies and fast reading",
        .brief = "MoE: fast replies, fast reading",
        // 4-bit: no other precision decodes within 10% of it with DFlash2 (6bit: KL 0.024 from bf16 against 0.114,
-       // decode -26%: the quality choice)
+       // decode -26%: the quality choice). Where it does not fit (16-24 GB Macs): the 2-bit experts of 16gb.
        .default_variant = "4bit",
-       .fallbacks = {},
+       .fallbacks = {"16gb"},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64",
@@ -260,6 +263,20 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "04bbe07c3ed2d93cbf832f523fea344bca1d0fcf",
             .companions = {mtp35(), dflash35()},
             .download_gb = 71.88},
+           // a 16 GB Mac's: unsloth's UD-IQ2_XXS GGUF imported (11.0 GB of weights in a 12.2 GB budget; M1 Pro 16 GB:
+           // 52.6 tok/s), its routed experts read in the file's own blocks. No MTP head in the file, and a drafter
+           // would not fit beside it: plain decoding. Text only (the file has no vision tower).
+           {.name = "16gb",
+            .quant = "IQ2_XXS / IQ2_S / IQ3_S routed experts (as stored), 6-bit attention and DeltaNet, 8-bit shared "
+                     "experts, 4-bit embedding / head",
+            .label = "2-bit experts (unsloth UD-IQ2_XXS GGUF)",
+            .repo = "unsloth/Qwen3.6-35B-A3B-GGUF",
+            .revision = "a483e9e6cbd595906af30beda3187c2663a1118c",
+            .gguf = {.path = "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
+                     .sha256 = "2e8f5f705355c56311432d0a8a5d14a696dbb7e4b197d05c75ba805fc1857bef",
+                     .size = 10756586464},
+            .companions = {},
+            .download_gb = 10.76},
        }},
       // a 128 GB Mac's model, not in by_preference (src/server/main.cpp): never picked without --model
       {.name = "qwen3.8-flash-next",

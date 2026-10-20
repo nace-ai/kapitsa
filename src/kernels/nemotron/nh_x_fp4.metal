@@ -191,41 +191,50 @@ NH_X4_MV(nh_x4_mv_l0_relu2, 0, 2)
 // unscaled products). up: h[pair] = relu(gse[e] W_up[e] . lat[row])^2, grid (ceil(I / (4 x simdgroups)), pairs);
 // down: part[pair] = ew[pair] gse[e] W_dn[e] . h[pair], grid (ceil(D / (4 x simdgroups)), pairs); then nh_moe2_sum2.
 // The engine runs 8 simdgroups (32 rows per threadgroup: the table fill is spread over more rows; one token's 22
-// pairs 538 against 312 GB/s with 2 simdgroups, tools/nh_x8_bench). Grouping a verify block's pairs by expert into
-// tiles of <= 2 tokens (each weight row decoded once for both, as nh_x2_moeb_*) measured slower: 0.97 against 0.83
-// ms for 8 rows.
+// pairs 538 against 312 GB/s with 2 simdgroups, tools/nh_x8_bench); a verify on the M5 4 (tools/nh_moe_bench: up +
+// down + sum 223 against 230 us per layer). Grouping a verify block's pairs by expert into tiles of <= 2 tokens (each
+// weight row decoded once for both, as nh_x2_moeb_*) measured slower: 0.97 against 0.83 ms for 8 rows; on the M5 too,
+// with each pair's sums kept bitwise (206 against 199 us per layer, recorded routings: a verify layer's 23.5 pairs
+// read 17.4 experts, and an expert's second read mostly hits the cache).
 // Pairs of rows >= live[0] return. ----
-[[kernel]] void nh_x4_moe_up(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
-                             const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
-                             const device int* eid [[buffer(4)]], constant NhMoeParams& p [[buffer(5)]],
-                             const device uint* live [[buffer(7)]], const device float* gse [[buffer(9)]],
-                             uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
-                             uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                             uint tid [[thread_index_in_threadgroup]]) {
-  threadgroup half2 tlh[256];
-  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
-  const uint pair = tgp.y, r = pair / p.k;
-  if (r >= live[0]) return;
-  const uint e = uint(eid[pair]);
-  nh_x4_mv_impl<0, 2>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D,
-                      h + size_t(pair) * p.h_stride, p.I, p.D, gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
-}
-
-[[kernel]] void nh_x4_moe_dn(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
-                             const device float* h [[buffer(2)]], device float* part [[buffer(3)]],
-                             const device int* eid [[buffer(4)]], const device float* ew [[buffer(5)]],
-                             constant NhMoeParams& p [[buffer(6)]], const device uint* live [[buffer(8)]],
-                             const device float* gse [[buffer(9)]], uint3 tgp [[threadgroup_position_in_grid]],
-                             uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-                             uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {
-  threadgroup half2 tlh[256];
-  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
-  const uint pair = tgp.y;
-  if (pair / p.k >= live[0]) return;
-  const uint e = uint(eid[pair]);
-  nh_x4_mv_impl<0, 0>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride, h + size_t(pair) * p.h_stride,
-                      part + size_t(pair) * p.D, p.D, p.I, ew[pair] * gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
-}
+// L: the experts' layout (L2: no table; the products are L0's to the bit, as nh_x4_mv_impl's)
+#define NH_X4_MOE_UP(NAME, L)                                                                                      \
+  [[kernel]] void NAME(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],                   \
+                       const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],                      \
+                       const device int* eid [[buffer(4)]], constant NhMoeParams& p [[buffer(5)]],                \
+                       const device uint* live [[buffer(7)]], const device float* gse [[buffer(9)]],              \
+                       uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],      \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       uint tid [[thread_index_in_threadgroup]]) {                                                 \
+    threadgroup half2 tlh[L == 0 ? 256 : 1];                                                                       \
+    if (L == 0) nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                               \
+    const uint pair = tgp.y, r = pair / p.k;                                                                       \
+    if (r >= live[0]) return;                                                                                      \
+    const uint e = uint(eid[pair]);                                                                                \
+    nh_x4_mv_impl<L, 2>(q + size_t(e) * p.up_q_stride, s + size_t(e) * p.up_s_stride, lat + r * p.D,               \
+                        h + size_t(pair) * p.h_stride, p.I, p.D, gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);       \
+  }
+#define NH_X4_MOE_DN(NAME, L)                                                                                      \
+  [[kernel]] void NAME(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],                   \
+                       const device float* h [[buffer(2)]], device float* part [[buffer(3)]],                     \
+                       const device int* eid [[buffer(4)]], const device float* ew [[buffer(5)]],                  \
+                       constant NhMoeParams& p [[buffer(6)]], const device uint* live [[buffer(8)]],              \
+                       const device float* gse [[buffer(9)]], uint3 tgp [[threadgroup_position_in_grid]],          \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],        \
+                       uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {        \
+    threadgroup half2 tlh[L == 0 ? 256 : 1];                                                                       \
+    if (L == 0) nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                               \
+    const uint pair = tgp.y;                                                                                       \
+    if (pair / p.k >= live[0]) return;                                                                             \
+    const uint e = uint(eid[pair]);                                                                                \
+    nh_x4_mv_impl<L, 0>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride,                              \
+                        h + size_t(pair) * p.h_stride, part + size_t(pair) * p.D, p.D, p.I, ew[pair] * gse[e],     \
+                        (tgp.x * nsg + sg) * 4, lane, tlh);                                                        \
+  }
+NH_X4_MOE_UP(nh_x4_moe_up, 0)
+NH_X4_MOE_UP(nh_x4_moe_up_l2, 2)
+NH_X4_MOE_DN(nh_x4_moe_dn, 0)
+NH_X4_MOE_DN(nh_x4_moe_dn_l2, 2)
 
 // ---- 8 rows (verify): Y^T[n, t] = W[n, :] . X^T[:, t] on 8x8x8 MMAs, W decoded into registers as A, the token rows
 // as B read straight from X ----
@@ -571,7 +580,7 @@ NH_X4_MM(nh_x4_mm32_l0_t, 4, 0, true)
 //   MODE 1 (up):   X row = sorted[m] / k (plat_, half [T][K]), Y row m (sorted order), half relu^2(gse[e] W x)
 //   MODE 2 (down): X row m (sorted order, half [P][K]), Y row = sorted[m] (the pair), fp32 gse[e] W x
 // grid: (ceil(N / 64), max tiles) x 128 threads; tiles past ntiles[0] return. K % 128 == 0.
-template <int TB, int MODE>
+template <int TB, int MODE, int L>
 NI_INLINE void nh_x4_moe_mm_impl(const device half* X, const device uchar* q, const device uchar* s, device void* Y,
                                  constant NhGemmP& p, const device uint4* tiles, const device uint* ntiles,
                                  const device uint* sorted, const device float* gse, uint ntile, uint tile, uint sg,
@@ -632,13 +641,13 @@ NI_INLINE void nh_x4_moe_mm_impl(const device half* X, const device uchar* q, co
     threadgroup_barrier(mem_flags::mem_threadgroup);
     half2 sc[NF];
     _Pragma("clang loop unroll(full)")
-    for (int f = 0; f < NF; ++f) sc[f] = nh_x4_sc2<0>(sw[f]);
+    for (int f = 0; f < NF; ++f) sc[f] = nh_x4_sc2<L>(sw[f]);
     _Pragma("clang loop unroll(full)")
     for (int fr = 0; fr < 16; ++fr) {
       simdgroup_half8x8 A[NF];
       _Pragma("clang loop unroll(full)")
       for (int f = 0; f < NF; ++f) {
-        const half2 av = nh_x4_pair<0>(cw[f][fr >> 2], uint(fr & 3), tlh) * sc[f][fr >> 3];
+        const half2 av = nh_x4_pair<L>(cw[f][fr >> 2], uint(fr & 3), tlh) * sc[f][fr >> 3];
         A[f].thread_elements()[0] = av.x;
         A[f].thread_elements()[1] = av.y;
       }
@@ -652,7 +661,7 @@ NI_INLINE void nh_x4_moe_mm_impl(const device half* X, const device uchar* q, co
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
-  const float post = gse[e] * nh_x4_post_l[0];
+  const float post = gse[e] * nh_x4_post_l[L];
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < NF; ++f) {
     const uint n = n0 + 8 * f + fm;
@@ -674,7 +683,7 @@ NI_INLINE void nh_x4_moe_mm_impl(const device half* X, const device uchar* q, co
   }
 }
 
-#define NH_X4_MOE_MM(NAME, TB, MODE)                                                                               \
+#define NH_X4_MOE_MM(NAME, TB, MODE, L)                                                                            \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
       const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]], \
       device void* Y [[buffer(3)]], constant NhGemmP& p [[buffer(4)]], const device uint4* tiles [[buffer(5)]],   \
@@ -683,13 +692,17 @@ NI_INLINE void nh_x4_moe_mm_impl(const device half* X, const device uchar* q, co
       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],                       \
       uint lane [[thread_index_in_simdgroup]], uint tid [[thread_index_in_threadgroup]]) {                       \
     threadgroup half xs[8 * TB * kX4Ld];                                                                           \
-    threadgroup half2 tlh[256];                                                                                    \
+    threadgroup half2 tlh[L == 0 ? 256 : 1];                                                                       \
     threadgroup uint xrow[8 * TB];                                                                                 \
-    nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                                           \
-    nh_x4_moe_mm_impl<TB, MODE>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg.x, tg.y, sg, nsg, lane, tid, xs,   \
-                                tlh, xrow);                                                                        \
+    if (L == 0) nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                               \
+    nh_x4_moe_mm_impl<TB, MODE, L>(X, Wq, Ws, Y, p, tiles, ntiles, sorted, gse, tg.x, tg.y, sg, nsg, lane, tid,    \
+                                   xs, tlh, xrow);                                                                 \
   }
-NH_X4_MOE_MM(nh_x4_moe_up_m16, 2, 1)
-NH_X4_MOE_MM(nh_x4_moe_up_m32, 4, 1)
-NH_X4_MOE_MM(nh_x4_moe_dn_m16, 2, 2)
-NH_X4_MOE_MM(nh_x4_moe_dn_m32, 4, 2)
+NH_X4_MOE_MM(nh_x4_moe_up_m16, 2, 1, 0)
+NH_X4_MOE_MM(nh_x4_moe_up_m32, 4, 1, 0)
+NH_X4_MOE_MM(nh_x4_moe_dn_m16, 2, 2, 0)
+NH_X4_MOE_MM(nh_x4_moe_dn_m32, 4, 2, 0)
+NH_X4_MOE_MM(nh_x4_moe_up_m16_l2, 2, 1, 2)  // experts in layout L2
+NH_X4_MOE_MM(nh_x4_moe_up_m32_l2, 4, 1, 2)
+NH_X4_MOE_MM(nh_x4_moe_dn_m16_l2, 2, 2, 2)
+NH_X4_MOE_MM(nh_x4_moe_dn_m32_l2, 4, 2, 2)

@@ -18,8 +18,8 @@ void home(const std::string& version);
 void help(const std::string& plain);
 // `kapitsa list`
 void list();
-// `kapitsa pull --dry-run MODEL` (not --json)
-void plan(const hub::ModelRef& r);
+// `kapitsa pull --dry-run MODEL` (not --json); a GGUF variant's import on disk (hub::import_size; 0: not planned)
+void plan(const hub::ModelRef& r, uint64_t imported_bytes = 0);
 
 // The engine's log lines are left out of a screen (they are for `kapitsa serve`'s log); fatal errors still show
 void quiet();

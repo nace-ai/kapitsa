@@ -5,6 +5,10 @@
 //                                                       format (tools/ni_eval.cpp; llama.cpp's logits through
 //                                                       bench/quality/llama_ref.cpp)
 //   nh_eval <dir> --dump-ref F @ids...             writes such a file from this model
+//   nh_eval <dir> --vcheck N F @ids                prefill of the first N ids, then the rest teacher-forced in verify
+//                                                       passes of 8 rows (the last one shorter) (all rows, no drafter); writes their logits (fp32
+//                                                       [rows][vocab]) to F, and with NH_VCHECK_STEP=1 the one-row
+//                                                       decode path's instead (tools/nh_vcheck.py compares two)
 //   nh_eval <dir> --gen N [--temp T] [--spec] @ids  prefill + N decoded tokens: ids, prefill and decode speed;
 //                                                       --spec decodes with the block drafter (LiLiCorr, DSpark)
 //                                                       found next to the model or named by --drafter DIR (tokens
@@ -13,6 +17,7 @@
 //   as the model's processor makes that image; its <img> / </img> marks already in the ids); --skip N[,N2,...]:
 //   statistics from position N on (e.g. an answer after an image prompt), per sequence or one for all
 #include "metal/gpu.h"
+#include "model/dspark.h"
 #include "model/lilicorr.h"
 #include "model/nh_drafter.h"
 #include "model/nemotron_h.h"
@@ -94,7 +99,8 @@ int main(int argc, char** argv) {
     return 1;
   }
   std::string model = argv[1], ref_file, dump_file, drafter;
-  int gen = -1, chunk = 512, topk = 64;
+  int gen = -1, chunk = 512, topk = 64, vcheck = -1;
+  std::string vcheck_file;
   std::vector<int> skips;
   std::vector<std::string> image_files;
   bool spec = false;
@@ -109,6 +115,7 @@ int main(int argc, char** argv) {
     if (a == "--ref") ref_file = next();
     else if (a == "--dump-ref") dump_file = next();
     else if (a == "--gen") gen = std::stoi(next());
+    else if (a == "--vcheck") vcheck = std::stoi(next()), vcheck_file = next();
     else if (a == "--temp") temp = std::stof(next());
     else if (a == "--spec") spec = true;
     else if (a == "--drafter") drafter = next(), spec = true;
@@ -162,6 +169,52 @@ int main(int argc, char** argv) {
     s.embeds = runs.empty() ? nullptr : &runs;
   };
 
+  if (vcheck >= 0) {
+    const std::vector<int>& p = ids[0];
+    const int n = vcheck, L = int(p.size());
+    if (n < 1 || n >= L) fatal("--vcheck %d: the sequence has %d ids", n, L);
+    auto s = m.new_seq(L + 64);
+    memcpy(s->tokens(), p.data(), p.size() * 4);
+    std::vector<vision::EmbedRun> runs;
+    set_images(*s, p, runs);
+    SamplingParams sp;
+    for (int p0 = 0; p0 < n; p0 += m.prefill_chunk()) {
+      const int T = std::min(m.prefill_chunk(), n - p0);
+      auto e = g.begin();
+      m.encode_prefill(*e, *s, p0, T, sp, 0, p0 + T == n);
+      e->commit_and_wait();
+      if (!m.ane_finish_chunk()) fatal("the Neural Engine split failed on a chunk (rerun with NI_ANE=0)");
+    }
+    memcpy(s->tokens(), p.data(), p.size() * 4);  // (the prefill sampled tokens[n]: the given one goes back)
+    const bool step = getenv("NH_VCHECK_STEP") && atoi(getenv("NH_VCHECK_STEP"));
+    FILE* f = fopen(vcheck_file.c_str(), "wb");
+    if (!f) fatal("cannot write %s", vcheck_file.c_str());
+    Buffer out = g.alloc(size_t(8) * V * 4, "vcheck_logits");
+    int rows = 0;
+    for (int P = n; P < L; P += 8) {
+      const int R = std::min(8, L - P);
+      if (step) {
+        for (int r = 0; r < R; ++r) {
+          auto e = g.begin();
+          m.encode_logits_rows(*e, *s, P + r, 1, out.view(size_t(r) * V * 4, size_t(V) * 4));
+          e->commit_and_wait();
+        }
+        fwrite(out.as<float>(), 4, size_t(R) * V, f);
+      } else {
+        auto e = g.begin();
+        m.encode_verify(*e, *s, P, R);
+        e->commit_and_wait();
+        fwrite(m.logits(), 4, size_t(R) * V, f);
+        m.commit_rows(*s, R);
+      }
+      rows += R;
+    }
+    fclose(f);
+    printf("vcheck: %d rows of %d logits from position %d (%s) -> %s\n", rows, V, n, step ? "one-row decode" : "8-row verify",
+           vcheck_file.c_str());
+    return 0;
+  }
+
   if (gen >= 0) {
     const std::vector<int>& p = ids[0];
     const int n = int(p.size());
@@ -171,7 +224,7 @@ int main(int argc, char** argv) {
     sp.temperature = temp;
     sp.top_p = 0.95f;
     sp.top_k = 20;
-    sp.seed = 1234;
+    sp.seed = getenv("NI_SEED") ? uint32_t(strtoul(getenv("NI_SEED"), nullptr, 10)) : 1234;
     std::unique_ptr<NhDrafter> lili;
     std::unique_ptr<LiliSeq> d;
     if (spec) {
@@ -236,11 +289,29 @@ int main(int argc, char** argv) {
       constexpr int B = NhDrafter::kB;
       int P = n, m_prev = 0;
       double gpu_ms = 0;  // GPU time of the drafting and verify command buffers (the rest of the wall time: host gaps)
+      // as the engine: a drafter that chains() commits the next cycle's drafting half right behind each verify (it
+      // reads the acceptance on the GPU), so the GPU does not wait for the host between cycles; otherwise the drafting
+      // half is encoded once the host has read the acceptance
+      // NH_SPEC_LOG=<file>: per cycle a JSON line of the DSpark pass (candidates, their log-probs, the Markov head's
+      // corrected log-probs and picks), the verified rows and the accepted count (the drafting halves unchained, so
+      // the pass's buffers still hold the cycle's)
+      FILE* slog = getenv("NH_SPEC_LOG") ? fopen(getenv("NH_SPEC_LOG"), "w") : nullptr;
+      if (getenv("NH_SPEC_LOG") && !slog) fatal("NH_SPEC_LOG: cannot write %s", getenv("NH_SPEC_LOG"));
+      DSpark* dsp = dynamic_cast<DSpark*>(lili.get());
+      if (slog && !dsp) fatal("NH_SPEC_LOG: not a DSpark drafter");
+      const bool chain = lili->chains() && !slog;
+      std::unique_ptr<Encoder> next;  // the coming cycle's committed drafting half
       while (produced < gen) {
-        auto e1 = g.begin();
-        if (m_prev > 0) lili->encode_commit(*e1, *d, m_prev);
-        lili->encode_draft(*e1, *s, *d, P);
-        e1->commit();
+        if (!next) {
+          next = g.begin();
+          Encoder::profile_tag("d:");  // (NI_PROFILE: the drafting half's kernels apart)
+          if (m_prev > 0) lili->encode_commit(*next, *d, m_prev);
+          m_prev = 0;
+          lili->encode_draft(*next, *s, *d, P);
+          Encoder::profile_tag(nullptr);
+          next->commit();
+        }
+        const std::unique_ptr<Encoder> e1 = std::move(next);
         auto e2 = m.grouped_passes() ? g.begin_grouped() : g.begin();
         lili->arm_verify(P);
         m.set_dynamic_rows(true);
@@ -248,19 +319,85 @@ int main(int argc, char** argv) {
         lili->disarm();
         m.encode_accept(*e2, *s, P, B, B - 1, sp);
         m.set_dynamic_rows(false);
-        e2->commit_and_wait();
+        e2->commit();
+        if (chain && produced + 1 < gen) {
+          next = g.begin();
+          Encoder::profile_tag("d:");
+          lili->encode_draft_chained(*next, *s, *d, P);
+          Encoder::profile_tag(nullptr);
+          next->commit();
+        }
+        e2->wait();
         gpu_ms += e1->gpu_ms() + e2->gpu_ms();
         draft_gpu_ms += e1->gpu_ms();
         const int a = m.accepted();
+        if (slog) {
+          std::vector<int> cand, picks;
+          std::vector<float> clp, qlp;
+          dsp->debug_read(cand, clp, qlp, picks);
+          auto arr = [&](const auto& v) {
+            std::string o = "[";
+            for (size_t i = 0; i < v.size(); ++i) o += (i ? "," : "") + std::to_string(v[i]);
+            return o + "]";
+          };
+          // (T > 0) the target's distribution of rows 0..6 as its sampler draws from it: top-k by logit, top-p on the
+          // untempered probabilities, then the temperature (in double: a candidate right at the top-p boundary can
+          // differ from the GPU sampler's float sums); null for the rows the cycle did not verify (past "live")
+          std::string tp = "[";
+          if (sp.temperature > 0) {
+            const int V = m.vocab(), live = std::min(int(m.live_rows().as<uint32_t>()[0]), B);
+            for (int r = 0; r < B - 1; ++r) {
+              if (r >= live) {
+                tp += r ? ",null" : "null";
+                continue;
+              }
+              const float* l = m.logits() + size_t(r) * V;
+              std::vector<int> idx{}; idx.resize(size_t(V));
+              for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
+              const int kk = std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32);
+              std::partial_sort(idx.begin(), idx.begin() + kk, idx.end(),
+                                [&](int x, int y) { return l[x] > l[y] || (l[x] == l[y] && x < y); });
+              std::vector<double> pr{}; pr.resize(size_t(kk));
+              double tot = 0;
+              for (int q = 0; q < kk; ++q) tot += pr[size_t(q)] = std::exp(double(l[idx[size_t(q)]]) - l[idx[0]]);
+              int keep = kk;
+              double cum = 0;
+              for (int q = 0; q < kk; ++q)
+                if ((cum += pr[size_t(q)] / tot) >= sp.top_p) {
+                  keep = q + 1;
+                  break;
+                }
+              double kt = 0;
+              for (int q = 0; q < keep; ++q) kt += pr[size_t(q)] = std::exp((double(l[idx[size_t(q)]]) - l[idx[0]]) / sp.temperature);
+              tp += r ? ",[" : "[";
+              for (int q = 0; q < keep; ++q)
+                tp += (q ? "," : "") + std::to_string(idx[size_t(q)]) + "," + std::to_string(pr[size_t(q)] / kt);
+              tp += "]";
+            }
+          }
+          tp += "]";
+          std::vector<int> drafts(s->tokens() + P + 1, s->tokens() + P + B);
+          fprintf(slog, "{\"P\":%d,\"a\":%d,\"live\":%d,\"K\":%d,\"cand\":%s,\"clp\":%s,\"qlp\":%s,\"picks\":%s,\"tp\":%s}\n", P,
+                  a, int(m.live_rows().as<uint32_t>()[0]), dsp->cand_k(), arr(cand).c_str(), arr(clp).c_str(),
+                  arr(qlp).c_str(), arr(picks).c_str(), tp.c_str());
+        }
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
         ++cycles;
         m.commit_rows(*s, mm);
-        m_prev = mm;
+        if (next) {  // (the chained half committed the a + 1 rows to the ring)
+          d->ctx = P + mm;
+          d->hi = std::max(d->hi, P + a + 1);
+        } else {
+          m_prev = mm;
+        }
         P += mm;
       }
+      if (slog && (ferror(slog) | fclose(slog))) fatal("NH_SPEC_LOG: writing %s failed", getenv("NH_SPEC_LOG"));
       auto e3 = g.begin();
-      lili->encode_commit(*e3, *d, m_prev);
+      Encoder::profile_tag("d:");  // (the last cycle's rows into the drafter's ring: drafting work too)
+      if (m_prev > 0) lili->encode_commit(*e3, *d, m_prev);
+      Encoder::profile_tag(nullptr);
       m.encode_flush(*e3, *s);
       e3->commit_and_wait();
       spec_gpu_ms = gpu_ms;

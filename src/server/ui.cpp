@@ -416,7 +416,7 @@ void list() {
   print(o);
 }
 
-void plan(const hub::ModelRef& r) {
+void plan(const hub::ModelRef& r, uint64_t imported_bytes) {
   const int W = layout_width();
   const bool local = r.kind == hub::ModelRef::kLocal;
   const bool current = !local && hub::is_current(r);
@@ -434,6 +434,10 @@ void plan(const hub::ModelRef& r) {
   std::vector<std::pair<std::string, std::string>> rows;
   rows.push_back({"folder", hub::tilde(r.dir)});
   if (!local) rows.push_back({"weights", r.repo + dim(" @ " + short_rev(r.revision))});
+  if (r.variant && !r.variant->gguf.path.empty())  // a GGUF variant: its file, then the import
+    rows.push_back({"file", r.variant->gguf.path + dim("  " + std::string(kDot) + "  " + hub::fmt_bytes(r.variant->gguf.size) +
+                                                       (current ? ", imported" : " to download, then imported") +
+                                                       (imported_bytes ? ": " + hub::fmt_bytes(imported_bytes) + " on disk" : ""))});
   if (r.variant)
     rows.push_back({"precision", r.variant->name + dim("  " + std::string(kDot) + "  " + r.variant->quant +
                                                         (r.variant->name == r.model->default_variant ? "  " + std::string(kDot) + "  the default" : ""))});

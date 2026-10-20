@@ -5,6 +5,7 @@
 // the verify pass ("v8": NB row blocks of 8 per threadgroup), the prefill GEMMs ("gemm").
 // Variants that measured slower were removed.
 #include "metal/gpu.h"
+#include "model/dspark.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
 
@@ -225,6 +226,47 @@ int main(int argc, char** argv) {
     g.release(x);
     g.release(y);
   }
+  // ---- the BF16 router for 2-8 token rows: nh_mv_bf16_r<n> against the M5's nh_mv_bf16_rt (bit for bit) ----
+  for (uint32_t N : {512u, 40u}) {
+    const uint32_t K = N == 512 ? 4096 : 512;
+    const std::string name = "router bf16 " + std::to_string(N) + "x" + std::to_string(K);
+    if (!want(name)) continue;
+    Buffer w = g.alloc(size_t(N) * K * 2, "w"), x = g.alloc(size_t(8) * K * 4, "x");
+    Buffer y0 = g.alloc(size_t(8) * N * 4, "y0"), y1 = g.alloc(size_t(8) * N * 4, "y1");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < size_t(N) * K; ++i) {
+      const float v = nd(rng) * 0.02f;
+      uint32_t b;
+      memcpy(&b, &v, 4);
+      w.as<uint16_t>()[i] = uint16_t(b >> 16);
+    }
+    for (size_t i = 0; i < size_t(8) * K; ++i) x.as<float>()[i] = nd(rng);
+    for (uint32_t R : {2u, 3u, 5u, 8u}) {
+      const uint32_t rk = R <= 2 ? 2 : R <= 4 ? 4 : 8, nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1;
+      struct {
+        uint32_t N, K, xs, ys;
+        float gs;
+        uint32_t R;
+      } p{N, K, K, N, 1.0f, R};
+      Pipeline p0 = g.pipeline("nh_mv_bf16_r" + std::to_string(rk)), p1 = g.pipeline("nh_mv_bf16_rt");
+      memset(y0.ptr(), 0, y0.size);
+      memset(y1.ptr(), 0, y1.size);
+      const double ms0 = time_kernel(5, [&](Encoder& e) {
+        e.use(p0);
+        e.buf(0, w); e.buf(1, w); e.buf(2, x); e.buf(3, y0); e.bytes(4, &p, sizeof p);
+        e.dispatch((N + nr * 4 - 1) / (nr * 4), 1, 1, 128);
+      });
+      const double ms1 = time_kernel(5, [&](Encoder& e) {
+        e.use(p1);
+        e.buf(0, w); e.buf(2, x); e.buf(3, y1); e.bytes(4, &p, sizeof p);
+        e.dispatch((N + 7) / 8, (R + 1) / 2, 1, 128);
+      });
+      const bool same = memcmp(y0.ptr(), y1.ptr(), size_t(8) * N * 4) == 0;
+      printf("%-30s R=%u nh_mv_bf16_r%u %7.4f ms, nh_mv_bf16_rt %7.4f ms, outputs %s\n", name.c_str(), R, rk, ms0, ms1,
+             same ? "bitwise identical" : "DIFFER");
+    }
+    for (Buffer* b : {&w, &x, &y0, &y1}) g.release(*b);
+  }
   // ---- routed experts: 9 of 368 experts (width 2304, latent 1024) per token row, nh_moe2 (one row: decode; 8
   // rows: a verify block, each row taking 4 of its experts from 12 popular ones: ~52 distinct of 72 pairs) ----
   if (want("moe")) {
@@ -301,6 +343,69 @@ int main(int argc, char** argv) {
              bytes_up / ms_up / 1e6, ms_dn, bytes_dn / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30));
       for (Buffer* b : {&lat, &h, &o, &eid, &ew, &part}) g.release(*b);
     }
+  }
+  // ---- the DSpark drafter's Q8 products (8 rows): nh_v8_q8_s<NB> against nh_xq8_v8 (repacked codes), each call on
+  // another copy of the weights (~300 MB in all, so the calls read DRAM) ----
+  const Case dcases[] = {{"dsp q8 qkv 4608x2688", NhFmt::Q8, 4608, 2688},
+                         {"dsp q8 o 2688x4096", NhFmt::Q8, 2688, 4096},
+                         {"dsp q8 kv 512x2688", NhFmt::Q8, 512, 2688}};
+  for (const Case& c : dcases) {
+    if (!want(c.name)) continue;
+    Mat m = make(c.f, c.N, c.K, grid);
+    const uint32_t R = 8;
+    const size_t qb = m.m.q.size, sb = m.m.s.size;
+    const int copies = int(std::max<size_t>(2, (size_t(300) << 20) / (qb + sb)));
+    std::vector<Buffer> cq, cs, rq;
+    for (int i = 0; i < copies; ++i) {
+      cq.push_back(g.alloc(qb, "cq", false));
+      cs.push_back(g.alloc(sb, "cs", false));
+      rq.push_back(g.alloc(qb, "rq", false));
+      memcpy(cq.back().ptr(), m.m.q.ptr(), qb);
+      memcpy(cs.back().ptr(), m.m.s.ptr(), sb);
+      memcpy(rq.back().ptr(), m.m.q.ptr(), qb);
+      DSpark::repack_xq8(rq.back().as<uint8_t>(), c.N, c.K);
+    }
+    Buffer x = g.alloc(size_t(R) * c.K * 2, "xh"), y = g.alloc(size_t(R) * c.N * 4, "y");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < size_t(R) * c.K; ++i) x.as<__fp16>()[i] = __fp16(nd(rng));
+    struct {
+      uint32_t N, K, x_ld, y_ld, R;
+      float gs;
+      uint32_t epi;
+    } p{c.N, c.K, c.K, c.N, R, 1.0f, 0};
+    for (const char* kn : {"nh_v8_q8_s2", "nh_v8_q8_s4", "nh_xq8_v8"}) {
+      const bool xq = std::string(kn) == "nh_xq8_v8";
+      const uint32_t nb = std::string(kn) == "nh_v8_q8_s4" ? 4 : 2;
+      Pipeline pl = g.pipeline(kn);
+      int it = 0;
+      const double ms = time_kernel(5, [&](Encoder& e) {
+        const int i = it++ % copies;
+        e.use(pl);
+        e.buf(0, x);
+        e.buf(1, xq ? rq[size_t(i)] : cq[size_t(i)]);
+        e.buf(2, cs[size_t(i)]);
+        e.buf(3, y);
+        e.bytes(4, &p, sizeof p);
+        e.buf(8, gtab);
+        if (xq) e.dispatch((c.N + 15) / 16, 1, 1, 256);
+        else e.dispatch((c.N + 8 * nb - 1) / (8 * nb), 1, 1, 128);
+      });
+      double maxerr = 0, maxref = 0;
+      for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64))
+        for (uint32_t r = 0; r < R; ++r) {
+          double ref = 0;
+          for (uint32_t k = 0; k < c.K; ++k)
+            ref += double(m.w[size_t(n) * c.K + k]) * double(float(x.as<__fp16>()[size_t(r) * c.K + k]));
+          maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[size_t(r) * c.N + n]));
+          maxref = std::max(maxref, std::fabs(ref));
+        }
+      printf("%-30s %-16s %8.4f ms  %6.1f GB/s  rel.err %.2e\n", c.name, kn, ms, double(qb + sb) / ms / 1e6,
+             maxerr / std::max(maxref, 1e-30));
+    }
+    for (auto* v : {&cq, &cs, &rq})
+      for (Buffer& b : *v) g.release(b);
+    g.release(x);
+    g.release(y);
   }
   // ---- 8-row MMA products (nh_v8_*_s<NB>): Y[t][n] for 8 token rows, X half ----
   const Case vcases[] = {

@@ -1,7 +1,8 @@
-# Concatenates src/kernels/common.h + every *.metal into one C++ string literal.
+# Concatenates src/kernels/common.h, quant.h, iq.h + every *.metal into one C++ string literal.
 file(READ ${SRC_DIR}/common.h COMMON)
 file(READ ${SRC_DIR}/quant.h QUANT)
-string(APPEND COMMON "\n${QUANT}")
+file(READ ${SRC_DIR}/iq.h IQ)
+string(APPEND COMMON "\n${QUANT}\n${IQ}")
 file(READ ${SRC_DIR}/kflash.h KFLASH)
 string(APPEND COMMON "\n// ---- kflash.h ----\n${KFLASH}")
 file(GLOB METALS ${SRC_DIR}/*.metal)

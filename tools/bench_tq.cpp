@@ -126,6 +126,22 @@ inline void tq_probe_body(device int* out, uint lane) {
 [[kernel]] void tq_probe_w16(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_body<8, true, half, 16, uint8_t>(out, lane); }
 [[kernel]] void tq_probe_c16(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_body<16, true, half, 16, uint8_t, 32>(out, lane); }
 [[kernel]] void tq_probe_c32(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_body<16, true, half, 32, uint8_t, 32>(out, lane); }
+template <int NT, typename LT>
+inline void tq_probe_wl(device int* out, uint lane) {
+  constexpr auto desc = matmul2d_descriptor(NT, 8, 64, false, true, false, matmul2d_descriptor::mode::multiply);
+  matmul2d<desc, execution_simdgroup> op;
+  auto L = op.template get_left_input_cooperative_tensor<LT, half, float>();
+  auto R = op.template get_right_input_cooperative_tensor<LT, half, float>();
+  auto D = op.template get_destination_cooperative_tensor<decltype(L), decltype(R), float>();
+  device int* o = out + lane * 1024;
+  o[0] = L.get_capacity(); o[1] = R.get_capacity(); o[2] = D.get_capacity();
+  for (uint16_t i = 0; i < L.get_capacity(); ++i) { auto ix = L.get_multidimensional_index(i); o[8 + i * 3] = L.is_valid_element(i); o[9 + i * 3] = ix[0]; o[10 + i * 3] = ix[1]; }
+  for (uint16_t i = 0; i < R.get_capacity(); ++i) { auto ix = R.get_multidimensional_index(i); o[400 + i * 3] = R.is_valid_element(i); o[401 + i * 3] = ix[0]; o[402 + i * 3] = ix[1]; }
+  for (uint16_t i = 0; i < D.get_capacity(); ++i) { auto ix = D.get_multidimensional_index(i); o[800 + i * 3] = D.is_valid_element(i); o[801 + i * 3] = ix[0]; o[802 + i * 3] = ix[1]; }
+}
+[[kernel]] void tq_probe_wl16_h(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_wl<16, half>(out, lane); }
+[[kernel]] void tq_probe_wl16_u8(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_wl<16, uint8_t>(out, lane); }
+[[kernel]] void tq_probe_wl32_h(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_wl<32, half>(out, lane); }
 [[kernel]] void tq_probe_64t_h(device int* out [[buffer(0)]], uint lane [[thread_index_in_simdgroup]]) { tq_probe_body<64, true, half>(out, lane); }
 
 // tw: weights as the LEFT cooperative operand (uint8 codes, M = NT weight rows), the 8 rows as the right operand

@@ -27,10 +27,9 @@ NI_INLINE void nh_xb_v8_frags(uint4 a0, uint4 a1, uint4 b0, uint4 b1, thread con
   }
 }
 
-template <bool TAIL>
+template <bool TAIL, int NF = 2>
 NI_INLINE void nh_xb_v8_impl(const device half* X, const device uchar* q, device void* Y, constant NhV8P& p, uint tg,
                              uint sg, uint nsg, uint lane, threadgroup float2* red) {
-  constexpr int NF = 2;
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
   const uint ks = sg, KS = nsg;
@@ -109,4 +108,43 @@ NI_INLINE void nh_xb_v8_impl(const device half* X, const device uchar* q, device
     uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float2 red[8 * 2 * 32];
   nh_xb_v8_impl<true>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
+}
+
+// Attention's q, k and v (one input, three BF16 matrices) in one dispatch: threadgroups [0, ceil(Nq / 16)) compute q,
+// then k, then v (k and v of one shape, pk), each row as nh_xb_v8 computes it. grid: (ceil(Nq / 16) + 2 ceil(Nk / 16))
+// x 256: k and v's few threadgroups run beside q's instead of in two small passes of their own
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xb_v8_qkv(
+    const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Wk [[buffer(2)]],
+    device void* Yq [[buffer(3)]], constant NhV8P& pq [[buffer(4)]], const device uchar* Wv [[buffer(5)]],
+    device void* Yk [[buffer(6)]], device void* Yv [[buffer(7)]], constant NhV8P& pk [[buffer(8)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 2 * 32];
+  const uint tq = (pq.N + 15) / 16, tk = (pk.N + 15) / 16;
+  if (tg.x < tq) nh_xb_v8_impl<false>(X, Wq, Yq, pq, tg.x, sg, nsg, lane, red);
+  else if (tg.x < tq + tk) nh_xb_v8_impl<false>(X, Wk, Yk, pk, tg.x - tq, sg, nsg, lane, red);
+  else nh_xb_v8_impl<false>(X, Wv, Yv, pk, tg.x - tq - tk, sg, nsg, lane, red);
+}
+
+// NF = 1 (8 weight rows per threadgroup, twice the threadgroups; each output as above, bit for bit). grid:
+// ceil(N / 8) x 256, the qkv kernel's ranges ceil(Nq / 8), ceil(Nk / 8)
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xb_v8_n1(
+    const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 32];
+  nh_xb_v8_impl<false, 1>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
+}
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xb_v8_qkv_n1(
+    const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Wk [[buffer(2)]],
+    device void* Yq [[buffer(3)]], constant NhV8P& pq [[buffer(4)]], const device uchar* Wv [[buffer(5)]],
+    device void* Yk [[buffer(6)]], device void* Yv [[buffer(7)]], constant NhV8P& pk [[buffer(8)]],
+    uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 32];
+  const uint tq = (pq.N + 7) / 8, tk = (pk.N + 7) / 8;
+  if (tg.x < tq) nh_xb_v8_impl<false, 1>(X, Wq, Yq, pq, tg.x, sg, nsg, lane, red);
+  else if (tg.x < tq + tk) nh_xb_v8_impl<false, 1>(X, Wk, Yk, pk, tg.x - tq, sg, nsg, lane, red);
+  else nh_xb_v8_impl<false, 1>(X, Wv, Yv, pk, tg.x - tq - tk, sg, nsg, lane, red);
 }
