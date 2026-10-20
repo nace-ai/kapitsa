@@ -88,16 +88,16 @@ jobs:
       # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
       - name: test_server --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
-        run: "$RUNNER_TEMP/venv/bin/python" tests/test_server.py --cli build/kapitsa
+        run: $RUNNER_TEMP/venv/bin/python tests/test_server.py --cli build/kapitsa
       - name: test_sidecar
         if: steps.changes.outputs.code == 'true' && !cancelled()
-        run: "$RUNNER_TEMP/venv/bin/python" tests/test_sidecar.py build/kapitsa
+        run: $RUNNER_TEMP/venv/bin/python tests/test_sidecar.py build/kapitsa
       - name: test_update
         if: steps.changes.outputs.code == 'true' && !cancelled()
-        run: "$RUNNER_TEMP/venv/bin/python" tests/test_update.py build
+        run: $RUNNER_TEMP/venv/bin/python tests/test_update.py build
       - name: test_community
         if: steps.changes.outputs.code == 'true' && !cancelled()
-        run: "$RUNNER_TEMP/venv/bin/python" tests/test_community.py build
+        run: $RUNNER_TEMP/venv/bin/python tests/test_community.py build
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
-        run: "$RUNNER_TEMP/venv/bin/python" tests/test_reasoning.py
+        run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
