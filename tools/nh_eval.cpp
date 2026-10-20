@@ -296,6 +296,7 @@ int main(int argc, char** argv) {
       // corrected log-probs and picks), the verified rows and the accepted count (the drafting halves unchained, so
       // the pass's buffers still hold the cycle's)
       FILE* slog = getenv("NH_SPEC_LOG") ? fopen(getenv("NH_SPEC_LOG"), "w") : nullptr;
+      if (getenv("NH_SPEC_LOG") && !slog) fatal("NH_SPEC_LOG: cannot write %s", getenv("NH_SPEC_LOG"));
       DSpark* dsp = dynamic_cast<DSpark*>(lili.get());
       if (slog && !dsp) fatal("NH_SPEC_LOG: not a DSpark drafter");
       const bool chain = lili->chains() && !slog;
@@ -355,7 +356,7 @@ int main(int argc, char** argv) {
         }
         P += mm;
       }
-      if (slog) fclose(slog);
+      if (slog && (ferror(slog) | fclose(slog))) fatal("NH_SPEC_LOG: writing %s failed", getenv("NH_SPEC_LOG"));
       auto e3 = g.begin();
       Encoder::profile_tag("d:");  // (the last cycle's rows into the drafter's ring: drafting work too)
       if (m_prev > 0) lili->encode_commit(*e3, *d, m_prev);
