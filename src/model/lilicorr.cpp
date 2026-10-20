@@ -1,4 +1,5 @@
 #include "model/lilicorr.h"
+#include "model/dspark.h"
 #include "util/bf16.h"
 #include "util/log.h"
 
@@ -139,7 +140,9 @@ size_t LiliCorr::plan_bytes(const std::string& dir, size_t* per_slot) {
   // prompt capture (window rows of every target layer) and its half copy, commit buffers (window rows), pass buffers
   const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + size_t(W) * (size_t(H) * 6 + size_t(hkv) * size_t(hd) * 8) +
                       (size_t(96) << 20);
-  return w + bufs;
+  // the M5's repacked copies of the layers' k / v codes (make_xq8), counted on every Mac
+  const size_t kv = size_t(NL) * 2 * size_t(hkv) * size_t(hd) * size_t(H) * 34 / 32;
+  return w + bufs + kv;
 }
 
 // ---- loading ----
@@ -214,6 +217,61 @@ Buffer LiliCorr::upload(const std::vector<float>& v, const char* label) {
 
 Buffer LiliCorr::vec(const std::string& name) { return upload(host(name), name.c_str()); }
 
+// The drafting pass's Q8 matrices of 8 rows on the M5: nh_xq8_v8 (nh_x_q8.metal, DSpark's attention projections:
+// the weights x their block's scale rounded to half, a relative 2^-12; drafts only propose) instead of nh_v8_q8,
+// whose 8- / 16-row threadgroups leave Bolt's small matrices short of parallelism (tools/nh_bench "lili q8", us per
+// call on fresh weights: k 256x4096 29 vs 83, the conv kernels' 1024x4096 44 vs 88, q / o 4096x4096 110 vs 151).
+// q, o and the conv kernel projections serve the drafting pass only: repacked in place; k / v also the commits,
+// whose prompt GEMMs (> 8 rows) read the Q8 layout: copies.
+void LiliCorr::make_xq8() {
+  Gpu& g = Gpu::get();
+  auto repack = [](NhMat& m) { DSpark::repack_xq8(m.q.as<uint8_t>(), m.N, m.K); };
+  for (DLayer& L : dl_) {
+    for (NhMat* m : {&L.q, &L.o, &L.ac_proj, &L.fc_proj})
+      if (m->fmt == NhFmt::Q8 && m->K % 128 == 0) {
+        repack(*m);
+        xq8_mats_.push_back(m->q.mtl);
+      }
+    for (int w = 0; w < 2; ++w) {
+      const NhMat& src = w ? L.v : L.k;
+      NhMat c = src;
+      if (src.fmt == NhFmt::Q8 && src.K % 128 == 0) {
+        c.q = g.alloc(src.q.size, "lili_kv_xq8", false);
+        memcpy(c.q.ptr(), src.q.ptr(), src.q.size);
+        repack(c);
+        owned_.push_back(c.q);
+        weight_bytes_ += c.q.size;
+        xq8_mats_.push_back(c.q.mtl);
+      }
+      (w ? vx_ : kx_).push_back(c);
+    }
+  }
+}
+
+bool LiliCorr::is_xq8(const NhMat& W) const {
+  return std::find(xq8_mats_.begin(), xq8_mats_.end(), W.q.mtl) != xq8_mats_.end();
+}
+
+void LiliCorr::gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi) {
+  if (M > 8 || !is_xq8(W)) {
+    if (is_xq8(W)) fatal("LiliCorr: %d rows on an nh_xq8_v8 matrix", M);
+    tg_.enc_gemm(e, W, xh, y, M, epi);
+    return;
+  }
+  const struct {
+    uint32_t N, K, x_ld, y_ld, R;
+    float gs;
+    uint32_t epi;
+  } p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
+  e.use(pipe("nh_xq8_v8"));
+  e.buf(0, xh);
+  e.buf(1, W.q);
+  e.buf(2, W.s);
+  e.buf(3, y);
+  e.val(4, p);
+  e.dispatch((W.N + 15) / 16, 1, 1, 256);
+}
+
 LiliCorr::LiliCorr(NemotronH& target, const std::string& dir) : tg_(target), path_(dir) {
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
   const NhConfig& tc = tg_.config();
@@ -261,6 +319,9 @@ LiliCorr::LiliCorr(NemotronH& target, const std::string& dir) : tg_(target), pat
     fatal("%s: a draft vocabulary other than the target's is not supported", dir.c_str());
   load();
   st_.reset();
+  xq8_ = Gpu::get().apple10() && c.H % 128 == 0;
+  if (const char* v = getenv("NI_LILI_XQ8")) xq8_ = xq8_ && atoi(v) != 0;
+  if (xq8_) make_xq8();
   alloc_buffers();
   logi("LiLiCorr drafter: %d layers, window %d, %d KV heads, %.2f GB (NVFP4 as stored, BF16 matrices as Q8), draft head "
        "%d of %d rows (%s), loaded in %.1f s",
@@ -488,7 +549,7 @@ void LiliCorr::enc_bias(Encoder& e, const Buffer& x, const Buffer& b, int rows, 
 }
 
 void LiliCorr::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled) {
-  if (M == 1 || W.fmt == NhFmt::F32) {
+  if ((M == 1 && !is_xq8(W)) || W.fmt == NhFmt::F32) {
     tg_.enc_mv_rows(e, W, x, y, M, epi);
     return;
   }
@@ -501,7 +562,7 @@ void LiliCorr::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y,
     e.buf(2, rscale_);
     e.bytes(3, pk, sizeof pk);
     e.dispatch(uint32_t(M), 1, 1, 1024);
-    tg_.enc_gemm(e, W, xh, y, M, epi);
+    gemm(e, W, xh, y, M, epi);
     const uint32_t pn[1] = {W.N};
     e.use(pipe("nh_rows_scale"));
     e.buf(0, y);
@@ -510,7 +571,7 @@ void LiliCorr::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y,
     e.dispatch(uint32_t(M), (W.N + 255) / 256, 1, 256);
   } else {
     tg_.enc_rows_half(e, x, xh, M, int(W.K));
-    tg_.enc_gemm(e, W, xh, y, M, epi);
+    gemm(e, W, xh, y, M, epi);
   }
 }
 
@@ -526,11 +587,15 @@ void LiliCorr::enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R
   e.buf(1, d.anchor);
   e.val(2, ap);
   e.dispatch(uint32_t(R), (H + 255) / 256, 1, 256);
-  if (R > 1) tg_.enc_rows_half(e, cg_, cgh_, R, int(H));
+  const bool x8 = xq8_ && R <= 8;  // (the k / v copies for nh_xq8_v8, one row too)
+  if (R > 1 || x8) tg_.enc_rows_half(e, cg_, cgh_, R, int(H));
   const size_t ring_layer = size_t(cfg_.hkv) * cfg_.window * 128 * 2;
   for (int l = 0; l < cfg_.NL; ++l) {
     const DLayer& L = dl_[size_t(l)];
-    if (R == 1) {
+    if (x8) {
+      gemm(e, kx_[size_t(l)], cgh_, ck_, R, 0);
+      gemm(e, vx_[size_t(l)], cgh_, cv2_, R, 0);
+    } else if (R == 1) {
       tg_.enc_mv(e, L.k, cg_, ck_, R, 0);
       tg_.enc_mv(e, L.v, cg_, cv2_, R, 0);
     } else {
@@ -625,9 +690,9 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
     lin(e, L.ac_proj, n_, dyn_, R, 0);
     dconv(n_, L.ac_base, 0, t1_);
     tg_.enc_rows_half(e, t1_, xh_, R, int(H));  // shared by q, k, v
-    tg_.enc_gemm(e, L.q, xh_, q_, R, 0);
-    tg_.enc_gemm(e, L.k, xh_, k_, R, 0);
-    tg_.enc_gemm(e, L.v, xh_, v_, R, 0);
+    gemm(e, L.q, xh_, q_, R, 0);
+    gemm(e, xq8_ ? kx_[size_t(l)] : L.k, xh_, k_, R, 0);
+    gemm(e, xq8_ ? vx_[size_t(l)] : L.v, xh_, v_, R, 0);
     {
       const QkP qp{uint32_t(cfg_.hq), 128, uint32_t(P), 1, cfg_.eps, cfg_.theta};
       e.use(pipe("nh_qk_norm_rope"));

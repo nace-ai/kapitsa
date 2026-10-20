@@ -103,6 +103,11 @@ class LiliCorr : public NhDrafter {
   // y = W x for M fp32 rows: one row on the matvec, more on the GEMM (x converted to half; scaled: per-row scale
   // for inputs that may leave half's range)
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
+  // y = W xh for M <= 8 half rows: nh_xq8_v8 for a matrix repacked for it (xq8_), else enc_gemm
+  void gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi);
+  bool is_xq8(const NhMat& W) const;
+  void make_xq8();  // the drafting pass's Q8 matrices repacked for nh_xq8_v8 (k / v: copies, the commit's GEMMs
+                    // of a prompt read the Q8 layout)
 
   NemotronH& tg_;
   std::string path_;
@@ -119,6 +124,11 @@ class LiliCorr : public NhDrafter {
   std::unique_ptr<SafetensorsIndex> st_;  // while loading
   LiliConfig cfg_;
   std::vector<DLayer> dl_;
+  // the M5: the drafting pass's Q8 products of <= 8 rows on nh_xq8_v8 (NI_LILI_XQ8=0: nh_v8_q8); kx_ / vx_ the
+  // repacked copies of the layers' k / v
+  bool xq8_ = false;
+  std::vector<NhMat> kx_, vx_;
+  std::vector<const void*> xq8_mats_;
   std::vector<HLayer> hl_;
   NhMat fc_, tok_proj_, pass_proj_, ctx_proj_, mlp3_, factor_in_, out_head_, in_head_, anchor_head_;
   Buffer enc_norm_, out_norm_, tok_b_, pass_b_, ctx_b_, feat_ln_w_, feat_ln_b_, mlp1_w_, mlp1_b_, mlp3_b_, slot_emb_,

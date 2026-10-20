@@ -348,7 +348,12 @@ int main(int argc, char** argv) {
   // another copy of the weights (~300 MB in all, so the calls read DRAM) ----
   const Case dcases[] = {{"dsp q8 qkv 4608x2688", NhFmt::Q8, 4608, 2688},
                          {"dsp q8 o 2688x4096", NhFmt::Q8, 2688, 4096},
-                         {"dsp q8 kv 512x2688", NhFmt::Q8, 512, 2688}};
+                         {"dsp q8 kv 512x2688", NhFmt::Q8, 512, 2688},
+                         // Bolt's LiLiCorr drafter: q / o, the conv kernel projections, k or v
+                         {"lili q8 q 4096x4096", NhFmt::Q8, 4096, 4096},
+                         {"lili q8 conv 1024x4096", NhFmt::Q8, 1024, 4096},
+                         {"lili q8 k 256x4096", NhFmt::Q8, 256, 4096},
+                         {"lili q8 kv 512x4096", NhFmt::Q8, 512, 4096}};
   for (const Case& c : dcases) {
     if (!want(c.name)) continue;
     Mat m = make(c.f, c.N, c.K, grid);
