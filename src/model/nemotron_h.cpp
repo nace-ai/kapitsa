@@ -23,6 +23,7 @@
 namespace ni {
 
 extern const char* const kNhKernelSource;
+extern const char* const kTensorKernelSource;
 
 namespace {
 
@@ -464,6 +465,12 @@ NemotronH::NemotronH(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   dense_ = dense_model(cfg_);
   Gpu::get().compile_extra("Nemotron-H", kNhKernelSource);
+  // the M5's matrix units (Apple10, Metal 4 on macOS 26) for the 8-row NVFP4 GEMMs
+  if (Gpu::get().apple_family() >= 10 && !(getenv("NI_NH_V8T") && atoi(getenv("NI_NH_V8T")) == 0))
+    if (__builtin_available(macOS 26.0, *)) {
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+      v8t_ = true;
+    }
   load(prefill_chunk);
   prewarm_pipelines();
   init_ane();
@@ -480,7 +487,8 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_rows", "nh_gnorm", "nh_conv_ring", "nh_accept", "nh_capture", "nh_gemm_",
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
-                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_"};
+                                   "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
+                                   "nh_x4t"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode): not created for the MoE models, whose prewarm stays as it was
   auto dense_only = [](const std::string& n) {
@@ -2433,6 +2441,22 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
       }
       return;
     }
+  }
+  // NVFP4 up to 8 rows on the M5's matrix units (v8t_): nh_x4t_v8_l0, 16 weight rows per threadgroup of 8 simdgroups
+  // taking K's 64-input groups in turn. tools/nh_v8t_bench (us per call, weights rotating out of the cache, against
+  // nh_x4_v8_l0): LM head 131072x2688 379 vs 467, shared expert up 3712x2688 14.5 vs 18.6, down 2688x3712 15.6 vs
+  // 19.0, the drafter's 6144x2688 21.4 vs 29.3 (4 simdgroups 401 / 15.2 / 16.4 / 23.3). NI_NH_V8T_KS (1-8) overrides.
+  if (W.fmt == NhFmt::FP4 && v8t_ && v8_ && M <= 8 && !W.l2 && W.K % 64 == 0) {
+    static const int ks_env = getenv("NI_NH_V8T_KS") ? atoi(getenv("NI_NH_V8T_KS")) : 8;
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe("nh_x4t_v8_l0"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.s);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 15) / 16, 1, 1, 32 * uint32_t(std::clamp(ks_env, 1, 8)));
+    return;
   }
   // NVFP4 up to 32 rows: the x4 kernels; up to 8 rows 8 simdgroups split K (in_proj 0.207 vs 0.260 ms, out_proj
   // 0.097 vs 0.141), 9-32 rows SK parts of K summed in a fixed order by the last part to arrive (in_proj 32 rows

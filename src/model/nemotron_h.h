@@ -257,6 +257,9 @@ class NemotronH : public Model {
   bool v8_ = true;                // NI_NH_V8: GEMMs of <= 8 rows on the 8-row MMA kernels (nh_v8.metal)
   bool x4_ = true;  // NVFP4 x4 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X4=0: the older ones
   bool x8_ = true;  // FP8 x8 kernels (one row, 8-row verify, 9-32-row split-K); NI_NH_X8=0: the generic ones
+  // The M5's matrix units (Metal 4 tensor_ops, src/kernels/tensor/nh_v8t.metal) for the NVFP4 GEMMs of <= 8 rows:
+  // Apple10 on macOS 26; NI_NH_V8T=0 keeps them on nh_x4_v8
+  bool v8t_ = false;
   Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
   // A dense model (no MoE layers: Nemotron Nano 4B / 9B v2). Its products of K % 128 != 0 (hidden 3136, the 9B's MLP
   // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t, nh_x8_*_t), which the MoE
