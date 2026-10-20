@@ -5,6 +5,7 @@
 // the verify pass ("v8": NB row blocks of 8 per threadgroup), the prefill GEMMs ("gemm").
 // Variants that measured slower were removed.
 #include "metal/gpu.h"
+#include "model/dspark.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
 
@@ -301,6 +302,69 @@ int main(int argc, char** argv) {
              bytes_up / ms_up / 1e6, ms_dn, bytes_dn / ms_dn / 1e6, maxerr / std::max(maxref, 1e-30));
       for (Buffer* b : {&lat, &h, &o, &eid, &ew, &part}) g.release(*b);
     }
+  }
+  // ---- the DSpark drafter's Q8 products (8 rows): nh_v8_q8_s<NB> against nh_xq8_v8 (repacked codes), each call on
+  // another copy of the weights (~300 MB in all, so the calls read DRAM) ----
+  const Case dcases[] = {{"dsp q8 qkv 4608x2688", NhFmt::Q8, 4608, 2688},
+                         {"dsp q8 o 2688x4096", NhFmt::Q8, 2688, 4096},
+                         {"dsp q8 kv 512x2688", NhFmt::Q8, 512, 2688}};
+  for (const Case& c : dcases) {
+    if (!want(c.name)) continue;
+    Mat m = make(c.f, c.N, c.K, grid);
+    const uint32_t R = 8;
+    const size_t qb = m.m.q.size, sb = m.m.s.size;
+    const int copies = int(std::max<size_t>(2, (size_t(300) << 20) / (qb + sb)));
+    std::vector<Buffer> cq, cs, rq;
+    for (int i = 0; i < copies; ++i) {
+      cq.push_back(g.alloc(qb, "cq", false));
+      cs.push_back(g.alloc(sb, "cs", false));
+      rq.push_back(g.alloc(qb, "rq", false));
+      memcpy(cq.back().ptr(), m.m.q.ptr(), qb);
+      memcpy(cs.back().ptr(), m.m.s.ptr(), sb);
+      memcpy(rq.back().ptr(), m.m.q.ptr(), qb);
+      DSpark::repack_xq8(rq.back().as<uint8_t>(), c.N, c.K);
+    }
+    Buffer x = g.alloc(size_t(R) * c.K * 2, "xh"), y = g.alloc(size_t(R) * c.N * 4, "y");
+    std::normal_distribution<float> nd(0.0f, 1.0f);
+    for (size_t i = 0; i < size_t(R) * c.K; ++i) x.as<__fp16>()[i] = __fp16(nd(rng));
+    struct {
+      uint32_t N, K, x_ld, y_ld, R;
+      float gs;
+      uint32_t epi;
+    } p{c.N, c.K, c.K, c.N, R, 1.0f, 0};
+    for (const char* kn : {"nh_v8_q8_s2", "nh_v8_q8_s4", "nh_xq8_v8"}) {
+      const bool xq = std::string(kn) == "nh_xq8_v8";
+      const uint32_t nb = std::string(kn) == "nh_v8_q8_s4" ? 4 : 2;
+      Pipeline pl = g.pipeline(kn);
+      int it = 0;
+      const double ms = time_kernel(5, [&](Encoder& e) {
+        const int i = it++ % copies;
+        e.use(pl);
+        e.buf(0, x);
+        e.buf(1, xq ? rq[size_t(i)] : cq[size_t(i)]);
+        e.buf(2, cs[size_t(i)]);
+        e.buf(3, y);
+        e.bytes(4, &p, sizeof p);
+        e.buf(8, gtab);
+        if (xq) e.dispatch((c.N + 15) / 16, 1, 1, 256);
+        else e.dispatch((c.N + 8 * nb - 1) / (8 * nb), 1, 1, 128);
+      });
+      double maxerr = 0, maxref = 0;
+      for (uint32_t n = 0; n < c.N; n += std::max<uint32_t>(1, c.N / 64))
+        for (uint32_t r = 0; r < R; ++r) {
+          double ref = 0;
+          for (uint32_t k = 0; k < c.K; ++k)
+            ref += double(m.w[size_t(n) * c.K + k]) * double(float(x.as<__fp16>()[size_t(r) * c.K + k]));
+          maxerr = std::max(maxerr, std::fabs(ref - y.as<float>()[size_t(r) * c.N + n]));
+          maxref = std::max(maxref, std::fabs(ref));
+        }
+      printf("%-30s %-16s %8.4f ms  %6.1f GB/s  rel.err %.2e\n", c.name, kn, ms, double(qb + sb) / ms / 1e6,
+             maxerr / std::max(maxref, 1e-30));
+    }
+    for (auto* v : {&cq, &cs, &rq})
+      for (Buffer& b : *v) g.release(b);
+    g.release(x);
+    g.release(y);
   }
   // ---- 8-row MMA products (nh_v8_*_s<NB>): Y[t][n] for 8 token rows, X half ----
   const Case vcases[] = {

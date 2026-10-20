@@ -179,6 +179,20 @@ NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>&
   return m;
 }
 
+void DSpark::repack_xq8(uint8_t* q, size_t rows, uint32_t K) {
+  for (size_t g = 0; g < rows * (K / 16); ++g) {
+    uint8_t* b = q + g * 16;
+    uint8_t t[16];
+    for (int m = 0; m < 4; ++m) {
+      t[4 * m + 0] = b[2 * m];
+      t[4 * m + 1] = b[2 * m + 1];
+      t[4 * m + 2] = b[2 * m + 8];
+      t[4 * m + 3] = b[2 * m + 9];
+    }
+    memcpy(b, t, 16);
+  }
+}
+
 NhMat DSpark::rows(const NhMat& m, uint32_t r0, uint32_t n) {
   NhMat v = m;
   v.N = n;
@@ -255,6 +269,9 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
   if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_DSPARK_CHAIN")) chain_ = atoi(v) != 0;
+  xq8_ = Gpu::get().apple10();
+  if (const char* v = getenv("NI_DSPARK_XQ8")) xq8_ = atoi(v) != 0;
+  if (H_ % 128) xq8_ = false;  // (nh_xq8_v8: K % 128 == 0; o's K, heads x 128, always is)
   if (const char* v = getenv("NI_DSPARK_DEPTH")) fixed_depth_ = std::clamp(atoi(v), 0, kB - 1);
   const double t0 = now_ms();
   st_ = std::make_unique<SafetensorsIndex>(path_);
@@ -299,6 +316,16 @@ void DSpark::load() {
       fatal("%s: q, k and v projections with different NVFP4 tensor scales are not supported", path_.c_str());
     L.kv = rows(L.qkv, nq, 2 * nk);
     L.o = mat(b + "self_attn.o_proj.weight");
+    if (xq8_) {
+      // k|v's rows in the Q8 layout as well (one-row and prompt commits), then q|k|v's and o's codes repacked
+      L.kv_std = L.kv;
+      L.kv_std.q = upload(L.kv.q.ptr(), L.kv.q.size, "dspark_kv_std");
+      L.kv_std.s = L.kv.s;
+      repack_xq8(L.qkv.q.as<uint8_t>(), L.qkv.N, L.qkv.K);
+      repack_xq8(L.o.q.as<uint8_t>(), L.o.N, L.o.K);
+    } else {
+      L.kv_std = L.kv;
+    }
     L.gu = mat_cat({b + "mlp.gate_proj.weight", b + "mlp.up_proj.weight"}, gs);
     L.gs_g = gs[0];
     L.gs_u = gs[1];
@@ -451,6 +478,25 @@ void DSpark::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, i
   }
 }
 
+void DSpark::gemm_q8(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi) {
+  if (!xq8_ || M > 8) {
+    tg_.enc_gemm(e, W, xh, y, M, epi);
+    return;
+  }
+  const struct {
+    uint32_t N, K, x_ld, y_ld, R;
+    float gs;
+    uint32_t epi;
+  } p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
+  e.use(pipe("nh_xq8_v8"));
+  e.buf(0, xh);
+  e.buf(1, W.q);
+  e.buf(2, W.s);
+  e.buf(3, y);
+  e.val(4, p);
+  e.dispatch((W.N + 15) / 16, 1, 1, 256);
+}
+
 void DSpark::norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R) {
   // nh_rows_half normalizing: the values of nh_rmsnorm then nh_rows_half in one pass
   const struct {
@@ -480,8 +526,9 @@ void DSpark::enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int p
   for (int l = 0; l < NL_; ++l) {
     const DLayer& L = dl_[size_t(l)];
     // k|v in one product, then k's norm + RoPE and both into the ring in one pass
-    if (R == 1) tg_.enc_mv(e, L.kv, cg_, ck_, R, 0);
-    else tg_.enc_gemm(e, L.kv, cgh_, ck_, R, 0);
+    if (R == 1) tg_.enc_mv(e, L.kv_std, cg_, ck_, R, 0);
+    else if (R <= 8) gemm_q8(e, L.kv, cgh_, ck_, R, 0);
+    else tg_.enc_gemm(e, L.kv_std, cgh_, ck_, R, 0);
     const struct {
       uint32_t pos0, W, Hkv, HD, ld;
       float eps, theta;
@@ -545,7 +592,7 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   for (int l = 0; l < NL_; ++l) {
     const DLayer& L = dl_[size_t(l)];
     norm_half(e, x_, L.attn_norm, xh_, R);
-    tg_.enc_gemm(e, L.qkv, xh_, q_, R, 0);  // q|k|v [R][(Hq + 2 Hkv) 128]
+    gemm_q8(e, L.qkv, xh_, q_, R, 0);  // q|k|v [R][(Hq + 2 Hkv) 128]
     // the block attention (q / k norm + RoPE inside): the context in kAttnSplit pieces, then the pieces with the
     // block's keys and the sinks, into half rows for o
     const AttnP ap{uint32_t(P), uint32_t(std::max({0, P - window_, d.hi - window_})), uint32_t(window_), uint32_t(hq_),
@@ -578,7 +625,7 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
     else e.val(6, ap);
     e.buf(7, rope_);
     e.dispatch(uint32_t(hkv_), B, 1, uint32_t(32 * (hq_ / hkv_)));
-    tg_.enc_gemm(e, L.o, xh_, x_, R, 1);  // the residual add in the GEMM's epilogue
+    gemm_q8(e, L.o, xh_, x_, R, 1);  // the residual add in the GEMM's epilogue
     norm_half(e, x_, L.ffn_norm, xh_, R);
     tg_.enc_gemm(e, L.gu, xh_, gt_, R, 0);  // gate|up [R][2 I]
     // silu(gate) * up to half with a per-row scale (it may leave half's range), the down product, scaled back

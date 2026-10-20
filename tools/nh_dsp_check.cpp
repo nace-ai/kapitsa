@@ -5,6 +5,7 @@
 // Lightning's attention in verify) and the F32 router of verify rows (nh_mv_f32_sk). One dispatch per command buffer; run it under MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1.
 //   nh_dsp_check
 #include "metal/gpu.h"
+#include "model/dspark.h"
 #include "model/nemotron_h.h"
 #include "util/log.h"
 
@@ -724,6 +725,60 @@ void check_dsp_fused() {
   }
 }
 
+// nh_xq8_v8 (Q8, repacked codes) at small odd sizes against a double product of the Q8 values (epilogues store, add)
+void check_xq8() {
+  Gpu& g = Gpu::get();
+  for (const uint32_t R : {1u, 5u, 8u}) {
+    const uint32_t N = 40, K = 384;
+    std::vector<uint8_t> q(size_t(N) * K);
+    std::vector<__fp16> sc(size_t(N) * K / 32);
+    std::vector<float> w(size_t(N) * K);
+    for (uint32_t n = 0; n < N; ++n)
+      for (uint32_t b = 0; b < K / 32; ++b) {
+        sc[n * (K / 32) + b] = __fp16(0.01f + 0.02f * std::fabs(nrand()));
+        for (uint32_t i = 0; i < 32; ++i) {
+          const int8_t v = int8_t(int(rnd() % 256) - 128);
+          q[size_t(n) * K + b * 32 + i] = uint8_t(v);
+          w[size_t(n) * K + b * 32 + i] = float(sc[n * (K / 32) + b]) * float(v);
+        }
+      }
+    std::vector<uint8_t> rq = q;
+    DSpark::repack_xq8(rq.data(), N, K);
+    std::vector<__fp16> x(size_t(R) * K);
+    for (auto& v : x) v = __fp16(nrand());
+    std::vector<float> y0(size_t(R) * N);
+    for (auto& v : y0) v = nrand();
+    for (const uint32_t epi : {0u, 1u}) {
+      Buffer bq = up(rq, "q"), bs = up(sc, "s"), bx = up(x, "x"), by = up(y0, "y");
+      const struct {
+        uint32_t N, K, x_ld, y_ld, R;
+        float gs;
+        uint32_t epi;
+      } p{N, K, K, N, R, 1.0f, epi};
+      auto e = g.begin();
+      e->use(NemotronH::pipeline("nh_xq8_v8"));
+      e->buf(0, bx);
+      e->buf(1, bq);
+      e->buf(2, bs);
+      e->buf(3, by);
+      e->bytes(4, &p, sizeof p);
+      e->dispatch((N + 15) / 16, 1, 1, 256);
+      e->commit_and_wait();
+      double err = 0, mx = 0;
+      for (uint32_t r = 0; r < R; ++r)
+        for (uint32_t n = 0; n < N; ++n) {
+          double ref = epi ? y0[r * N + n] : 0.0;
+          for (uint32_t k = 0; k < K; ++k) ref += double(w[size_t(n) * K + k]) * double(float(x[size_t(r) * K + k]));
+          err = std::max(err, std::fabs(ref - by.as<float>()[r * N + n]));
+          mx = std::max(mx, std::fabs(ref));
+        }
+      char name[64];
+      snprintf(name, sizeof name, "nh_xq8_v8 R%u epi%u", R, epi);
+      report(name, err / mx, 2e-3);
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -738,6 +793,7 @@ int main() {
   check_f32_sk();
   check_cand();
   check_dsp_fused();
+  check_xq8();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }

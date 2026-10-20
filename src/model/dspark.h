@@ -24,6 +24,8 @@ class DSpark : public NhDrafter {
   // a DSpark drafter folder for a target of this hidden size (config.json dspark_fixup_head_type markov, model.safetensors)
   static bool is_dspark(const std::string& dir, int hidden);
   static size_t plan_bytes(const std::string& dir, size_t* per_slot);
+  // Q8 codes [rows][K] in place into nh_xq8_v8's order (each 16-element group: elements 0, 1, 8, 9, 2, 3, 10, 11, ...)
+  static void repack_xq8(uint8_t* q, size_t rows, uint32_t K);
   const char* name() const override { return "DSpark"; }
   int window() const override { return window_; }
 
@@ -48,7 +50,8 @@ class DSpark : public NhDrafter {
     Buffer attn_norm, ffn_norm, qn, kn, sinks;
     // qkv: q|k|v's rows in one matrix (Q8), kv (k|v, the commit's) a view of it; gu: gate|up's rows (NVFP4, the
     // tensor scales gs_g, gs_u applied by nh_dsp_swiglu_half)
-    NhMat qkv, kv, o, gu, down;
+    // (xq8_: qkv and o's codes repacked for nh_xq8_v8, kv_std k|v's in the Q8 layout for the other row counts)
+    NhMat qkv, kv, kv_std, o, gu, down;
     float gs_g = 1.0f, gs_u = 1.0f;
   };
   NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8
@@ -68,6 +71,8 @@ class DSpark : public NhDrafter {
   void enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0, bool chained);
   void enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained);
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
+  // y = W x for M rows of half X: a repacked Q8 matrix (xq8_) on nh_xq8_v8 (M <= 8), else enc_gemm
+  void gemm_q8(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi);
   void norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R);  // RMSNorm rows into half
 
   NemotronH& tg_;
@@ -84,6 +89,8 @@ class DSpark : public NhDrafter {
   // essay (512 tokens, greedy: 207 / 154 tok/s against 155 / 119 verifying every draft)
   float dyn_ratio_ = 0.2f;
   int fixed_depth_ = -1;  // NI_DSPARK_DEPTH=d: verify d drafts every cycle (measurements)
+  // the attention projections on nh_xq8_v8 (default on the M5, where it was measured; NI_DSPARK_XQ8=0/1)
+  bool xq8_ = false;
   bool chain_ = true;  // double-buffered decode (NI_DSPARK_CHAIN=0: the drafting half after the host reads each verify)
   std::vector<Buffer> owned_;
   size_t weight_bytes_ = 0;
