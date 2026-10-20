@@ -340,9 +340,41 @@ int main(int argc, char** argv) {
             for (size_t i = 0; i < v.size(); ++i) o += (i ? "," : "") + std::to_string(v[i]);
             return o + "]";
           };
-          fprintf(slog, "{\"P\":%d,\"a\":%d,\"live\":%d,\"K\":%d,\"cand\":%s,\"clp\":%s,\"qlp\":%s,\"picks\":%s}\n", P,
+          // (T > 0) the target's distribution of rows 0..6 as its sampler draws from it: top-k by logit, top-p on the
+          // untempered probabilities, then the temperature
+          std::string tp = "[";
+          if (sp.temperature > 0) {
+            const int V = m.vocab();
+            for (int r = 0; r < B - 1; ++r) {
+              const float* l = m.logits() + size_t(r) * V;
+              std::vector<int> idx{}; idx.resize(size_t(V));
+              for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
+              const int kk = std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32);
+              std::partial_sort(idx.begin(), idx.begin() + kk, idx.end(),
+                                [&](int x, int y) { return l[x] > l[y] || (l[x] == l[y] && x < y); });
+              std::vector<double> pr{}; pr.resize(size_t(kk));
+              double tot = 0;
+              for (int q = 0; q < kk; ++q) tot += pr[size_t(q)] = std::exp(double(l[idx[size_t(q)]]) - l[idx[0]]);
+              int keep = kk;
+              double cum = 0;
+              for (int q = 0; q < kk; ++q)
+                if ((cum += pr[size_t(q)] / tot) >= sp.top_p) {
+                  keep = q + 1;
+                  break;
+                }
+              double kt = 0;
+              for (int q = 0; q < keep; ++q) kt += pr[size_t(q)] = std::exp((double(l[idx[size_t(q)]]) - l[idx[0]]) / sp.temperature);
+              tp += r ? ",[" : "[";
+              for (int q = 0; q < keep; ++q)
+                tp += (q ? "," : "") + std::to_string(idx[size_t(q)]) + "," + std::to_string(pr[size_t(q)] / kt);
+              tp += "]";
+            }
+          }
+          tp += "]";
+          std::vector<int> drafts(s->tokens() + P + 1, s->tokens() + P + B);
+          fprintf(slog, "{\"P\":%d,\"a\":%d,\"live\":%d,\"K\":%d,\"cand\":%s,\"clp\":%s,\"qlp\":%s,\"picks\":%s,\"tp\":%s}\n", P,
                   a, int(m.live_rows().as<uint32_t>()[0]), dsp->cand_k(), arr(cand).c_str(), arr(clp).c_str(),
-                  arr(qlp).c_str(), arr(picks).c_str());
+                  arr(qlp).c_str(), arr(picks).c_str(), tp.c_str());
         }
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
