@@ -450,7 +450,13 @@ std::vector<ProfRec>& prof_recs() {
   static std::vector<ProfRec> v;
   return v;
 }
+std::string& prof_tag() {
+  static std::string t;
+  return t;
+}
 } // namespace
+
+void Encoder::profile_tag(const char* tag) { prof_tag() = tag ? tag : ""; }
 
 bool Encoder::profiling() {
   static bool on = getenv("NI_PROFILE") && atoi(getenv("NI_PROFILE")) > 0;
@@ -527,7 +533,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
     [cb commit];
     {
       static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
-      std::string nm = cur_name_;
+      std::string nm = prof_tag() + cur_name_;
       if (by_grid) nm += "/" + std::to_string(gx) + "x" + std::to_string(gy) + "x" + std::to_string(gz);
       prof_recs().push_back({nm, cb});
     }
@@ -553,7 +559,7 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
     [cb commit];
     {
       static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
-      std::string nm = cur_name_;
+      std::string nm = prof_tag() + cur_name_;
       if (by_grid) nm += "/ind";  // (an indirect grid is read on the GPU: all of a kernel's indirect dispatches in one row)
       prof_recs().push_back({nm, cb});
     }

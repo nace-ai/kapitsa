@@ -155,6 +155,9 @@ class Encoder {
   // be attributed to the kernel. Much slower; for analysis only.
   static bool profiling();
   static void profile_report(int steps);
+  // NI_PROFILE: a prefix for the names of the dispatches recorded from here on (one phase's kernels apart from
+  // another's, e.g. a drafting pass's "d:"); nullptr or "" for none
+  static void profile_tag(const char* tag);
 
  private:
   friend class Gpu;

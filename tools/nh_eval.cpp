@@ -290,8 +290,10 @@ int main(int argc, char** argv) {
       double gpu_ms = 0;  // GPU time of the drafting and verify command buffers (the rest of the wall time: host gaps)
       while (produced < gen) {
         auto e1 = g.begin();
+        Encoder::profile_tag("d:");  // (NI_PROFILE: the drafting half's kernels apart)
         if (m_prev > 0) lili->encode_commit(*e1, *d, m_prev);
         lili->encode_draft(*e1, *s, *d, P);
+        Encoder::profile_tag(nullptr);
         e1->commit();
         auto e2 = m.grouped_passes() ? g.begin_grouped() : g.begin();
         lili->arm_verify(P);
