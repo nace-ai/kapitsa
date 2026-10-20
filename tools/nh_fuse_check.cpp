@@ -33,7 +33,12 @@ struct AttnP {
   uint32_t R, pos0, cap, Hq, Hkv, chunk, nchunks;
   float scale;
 };
-bool same(const Buffer& a, const Buffer& b, size_t bytes) { return memcmp(a.ptr(), b.ptr(), bytes) == 0; }
+bool any_different = false;  // the exit status: 1 when a fused kernel's output differs
+bool same(const Buffer& a, const Buffer& b, size_t bytes) {
+  const bool eq = memcmp(a.ptr(), b.ptr(), bytes) == 0;
+  any_different |= !eq;
+  return eq;
+}
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -112,5 +117,5 @@ int main(int argc, char** argv) {
     e->commit_and_wait();
   }
   printf("nh_attn_reduce_h       vs nh_attn_reduce + nh_rows_half: %s\n", same(a1, a2, size_t(R) * QW * 2) ? "identical" : "DIFFERENT");
-  return 0;
+  return any_different ? 1 : 0;
 }
