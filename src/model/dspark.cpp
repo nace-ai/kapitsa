@@ -396,6 +396,7 @@ void DSpark::alloc_buffers() {
   xh_ = al(std::max<size_t>(64 * 12288, B * nl * H) * 2, "dspark_xh");
   cyc_ = al(2048, "dspark_cycle");
   rope_ = al(B * 64 * 8, "dspark_rope");
+  walk_d_ = al(S * K * K * 4, "dspark_walk_dots");
   // capture hooks: the taps' inputs (the last one: the trunk's output, slot `layers`), in fc's column order
   for (NhCapture* h : {&hook_pf_, &hook_v_}) {
     h->slot.assign(size_t(tg_.config().layers) + 1, -1);
@@ -674,18 +675,27 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   e.dispatch(S, 1, 1, 32);
   // the Markov head's walk from the anchor: tokens[P + 1 .. P + 7]
   const WalkP wp{S, K, uint32_t(rank_), uint32_t(P), w2_.gs};
-  e.use(pipe("nh_dsp_walk"));
+  // (two passes: every candidate pair's Markov dot at once, then the walk on one simdgroup)
+  e.use(pipe("nh_dsp_walk_dots"));
+  e.buf(0, cand_);
+  e.buf(1, w1_);
+  e.buf(2, w2_.q);
+  e.buf(3, w2_.s);
+  e.buf(4, s.tok);
+  e.buf(5, walk_d_);
+  if (chained) e.buf(6, cyc_, kCycWalk);
+  else e.val(6, wp);
+  e.dispatch(S, 1, 1, 32 * K);
+  e.use(pipe("nh_dsp_walk_pick"));
   e.buf(0, cand_);
   e.buf(1, clp_);
-  e.buf(2, w1_);
-  e.buf(3, w2_.q);
-  e.buf(4, w2_.s);
-  e.buf(5, s.tok);
-  e.buf(6, picks_);
-  e.buf(7, qlp_);
-  if (chained) e.buf(8, cyc_, kCycWalk);
-  else e.val(8, wp);
-  e.dispatch(1, 1, 1, 32 * K);
+  e.buf(2, walk_d_);
+  e.buf(3, s.tok);
+  e.buf(4, picks_);
+  e.buf(5, qlp_);
+  if (chained) e.buf(6, cyc_, kCycWalk);
+  else e.val(6, wp);
+  e.dispatch(1, 1, 1, 32);
   // the coming verify's depth from the corrected probabilities of the picks (NI_DSPARK_DYN; 0 verifies every draft)
   if (fixed_depth_ >= 0) {
     const uint32_t fd = uint32_t(fixed_depth_);

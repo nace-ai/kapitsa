@@ -102,6 +102,7 @@ class DSpark : public NhDrafter {
   Buffer cg_, cgh_, ck_, rscale_, xh_;
   Buffer cyc_;   // a chained drafting half's parameters (nh_dsp_cycle)
   Buffer rope_;  // the block's RoPE table (nh_dsp_rope_tab)
+  Buffer walk_d_;  // the Markov walk's dots [7][K][K] (nh_dsp_walk_dots)
 };
 
 }  // namespace ni

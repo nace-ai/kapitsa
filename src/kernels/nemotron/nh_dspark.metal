@@ -318,3 +318,64 @@ struct NhDspKvP {
 
 // ---- a fixed verify depth (NI_DSPARK_DEPTH, measurements): live[0] = d + 1. One thread ----
 [[kernel]] void nh_dsp_fixed_depth(device uint* live [[buffer(0)]], constant uint& d [[buffer(1)]]) { live[0] = d + 1; }
+
+// ---- the Markov walk in two passes (nh_dsp_walk's values): nh_dsp_walk_dots computes every dot the walk can need,
+// D[s][j][c] = W2[cand[s][c]] . W1[prev] for prev = the anchor (s = 0, j = 0) or slot s - 1's candidate j, all at
+// once (grid S x 32 K: simdgroup c of threadgroup s, each lane one 16-element block of W2's row, as nh_dsp_walk);
+// nh_dsp_walk_pick then walks the slots on one simdgroup (lane c: candidate c), the sums over candidates in their
+// order on lane 0. (nh_dsp_walk: one threadgroup, 7 slots of loads and reductions in series, 30 us isolated.) ----
+[[kernel]] void nh_dsp_walk_dots(const device int* cand [[buffer(0)]], const device ushort* w1 [[buffer(1)]],
+                                 const device uchar* w2q [[buffer(2)]], const device uchar* w2s [[buffer(3)]],
+                                 const device int* tokens [[buffer(4)]], device float* D [[buffer(5)]],
+                                 constant NhDspWalkP& p [[buffer(6)]], uint s [[threadgroup_position_in_grid]],
+                                 uint c [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  if (c >= p.K) return;
+  const uint id = uint(cand[s * p.K + c]);
+  const uint nj = s == 0 ? 1u : p.K;
+  for (uint j = 0; j < nj; ++j) {
+    const uint prev = s == 0 ? uint(tokens[p.P]) : uint(cand[(s - 1) * p.K + j]);
+    const device ushort* e = w1 + size_t(prev) * p.R;
+    float d = 0.0f;
+    for (uint b = lane; b < p.R / 16; b += 32) {
+      const uint2 q2 = *(const device uint2*)(w2q + size_t(id) * (p.R / 2) + b * 8);
+      const float bs = nh_ue4m3(w2s[size_t(id) * (p.R / 16) + b]);
+      float acc = 0.0f;
+      for (uint jj = 0; jj < 8; ++jj) {
+        const uint byte = ((jj < 4 ? q2.x : q2.y) >> (8 * (jj & 3))) & 0xFFu;
+        acc += nh_fp4_lut[byte & 15u] * as_type<float>(uint(e[b * 16 + jj]) << 16) +
+               nh_fp4_lut[byte >> 4] * as_type<float>(uint(e[b * 16 + jj + 8]) << 16);
+      }
+      d += acc * bs;
+    }
+    d = simd_sum(d);
+    if (lane == 0) D[(s * p.K + j) * p.K + c] = d;
+  }
+}
+
+[[kernel]] void nh_dsp_walk_pick(const device int* cand [[buffer(0)]], const device float* clp [[buffer(1)]],
+                                 const device float* D [[buffer(2)]], device int* tokens [[buffer(3)]],
+                                 device uint* picks [[buffer(4)]], device float* qlp [[buffer(5)]],
+                                 constant NhDspWalkP& p [[buffer(6)]], uint lane [[thread_index_in_simdgroup]]) {
+  uint j = 0;  // the previous slot's pick (the anchor's row for slot 0)
+  for (uint s = 0; s < p.S; ++s) {
+    const bool on = lane < p.K;
+    const float cl = on ? clp[s * p.K + lane] : 0.0f;
+    const float sc = on ? cl + D[(s * p.K + j) * p.K + lane] * p.gs : -INFINITY;
+    const float mx = simd_max(sc);
+    const uint best = simd_min(on && sc == mx ? lane : 0xffffffffu);  // the first maximum
+    const float ex = metal::precise::exp(sc - mx), eb = metal::precise::exp(cl);
+    float den = 0.0f, base = 0.0f;
+    for (uint k = 0; k < p.K; ++k) {
+      den += simd_shuffle(ex, k);
+      base += simd_shuffle(eb, k);
+    }
+    den += max(0.0f, 1.0f - base) * metal::precise::exp(-mx);
+    const float lden = mx + metal::precise::log(den);
+    if (on) qlp[s * p.K + lane] = sc - lden;
+    if (lane == 0) {
+      picks[s] = best;
+      tokens[p.P + 1 + s] = cand[s * p.K + best];
+    }
+    j = best;
+  }
+}

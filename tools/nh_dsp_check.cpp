@@ -278,6 +278,36 @@ void check_walk() {
     for (int c = 0; c < K; ++c) err = std::max(err, std::fabs(ref_q[size_t(s) * K + c] - bql.as<float>()[s * K + c]));
   }
   report("nh_dsp_walk tokens", double(bad), 0);
+  // the two-pass walk (nh_dsp_walk_dots + nh_dsp_walk_pick): bitwise the one-pass kernel's tokens, picks, log-probs
+  {
+    Buffer bt2 = up(tok, "tok2"), bp2 = g.alloc(64, "picks2"), bq2 = g.alloc(size_t(S) * K * 4, "qlp2"),
+           bd = g.alloc(size_t(S) * K * K * 4, "dots");
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_dsp_walk_dots"));
+    e2->buf(0, bc);
+    e2->buf(1, b1);
+    e2->buf(2, bq);
+    e2->buf(3, bsc);
+    e2->buf(4, bt2);
+    e2->buf(5, bd);
+    e2->bytes(6, &p, sizeof p);
+    e2->dispatch(uint32_t(S), 1, 1, uint32_t(32 * K));
+    e2->commit_and_wait();
+    auto e3 = g.begin();
+    e3->use(NemotronH::pipeline("nh_dsp_walk_pick"));
+    e3->buf(0, bc);
+    e3->buf(1, bl);
+    e3->buf(2, bd);
+    e3->buf(3, bt2);
+    e3->buf(4, bp2);
+    e3->buf(5, bq2);
+    e3->bytes(6, &p, sizeof p);
+    e3->dispatch(1, 1, 1, 32);
+    e3->commit_and_wait();
+    const bool same = !memcmp(bt.ptr(), bt2.ptr(), 64) && !memcmp(bp.ptr(), bp2.ptr(), size_t(S) * 4) &&
+                      !memcmp(bql.ptr(), bq2.ptr(), size_t(S) * K * 4);
+    report("nh_dsp_walk two-pass", same ? 0.0 : 1.0, 0);
+  }
   report("nh_dsp_walk log-probs", err, 1e-4);
 }
 
