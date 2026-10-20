@@ -98,7 +98,9 @@ size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
                       size_t(kB) * size_t(hq) * kAttnSplit * (size_t(hd) + 2) * 4 +
                       size_t(kB) * (size_t(V) * 4 + size_t(I) * 8 + size_t(H) * 24 + size_t(nl) * size_t(H) * 4) +
                       std::max<size_t>(64 * 12288, size_t(kB) * size_t(nl) * size_t(H)) * 2 + (size_t(4) << 20);
-  return w + bufs;
+  // the M5's nh_xq8_v8 path keeps a copy of each layer's k|v codes in the Q8 layout (counted on every Mac)
+  const size_t kv_std = size_t(NL) * 2 * size_t(hkv) * size_t(hd) * size_t(H);
+  return w + bufs + kv_std;
 }
 
 // ---- loading ----
@@ -316,16 +318,14 @@ void DSpark::load() {
       fatal("%s: q, k and v projections with different NVFP4 tensor scales are not supported", path_.c_str());
     L.kv = rows(L.qkv, nq, 2 * nk);
     L.o = mat(b + "self_attn.o_proj.weight");
-    if (xq8_) {
-      // k|v's rows in the Q8 layout as well (one-row and prompt commits), then q|k|v's and o's codes repacked
-      L.kv_std = L.kv;
+    // (xq8_: the Q8 matrices only, BF16 checkpoints' attention; gemm_q8 sends NVFP4 ones to enc_gemm)
+    L.kv_std = L.kv;
+    if (xq8_ && L.qkv.fmt == NhFmt::Q8) {
+      // k|v's rows in the Q8 layout as well (one-row and prompt commits), then q|k|v's codes repacked
       L.kv_std.q = upload(L.kv.q.ptr(), L.kv.q.size, "dspark_kv_std");
-      L.kv_std.s = L.kv.s;
       repack_xq8(L.qkv.q.as<uint8_t>(), L.qkv.N, L.qkv.K);
-      repack_xq8(L.o.q.as<uint8_t>(), L.o.N, L.o.K);
-    } else {
-      L.kv_std = L.kv;
     }
+    if (xq8_ && L.o.fmt == NhFmt::Q8) repack_xq8(L.o.q.as<uint8_t>(), L.o.N, L.o.K);
     L.gu = mat_cat({b + "mlp.gate_proj.weight", b + "mlp.up_proj.weight"}, gs);
     L.gs_g = gs[0];
     L.gs_u = gs[1];
@@ -479,7 +479,7 @@ void DSpark::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, i
 }
 
 void DSpark::gemm_q8(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi) {
-  if (!xq8_ || M > 8) {
+  if (!xq8_ || M > 8 || W.fmt != NhFmt::Q8) {
     tg_.enc_gemm(e, W, xh, y, M, epi);
     return;
   }
