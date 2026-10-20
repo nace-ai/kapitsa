@@ -490,10 +490,13 @@ void NemotronH::prewarm_pipelines() {
                                    "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
                                    "nh_x4t"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
-  // relu^2 decode): not created for the MoE models, whose prewarm stays as it was
-  auto dense_only = [](const std::string& n) {
+  // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
+  // models, whose prewarm stays as it was
+  const bool m5 = g.apple10();
+  auto dense_only = [m5](const std::string& n) {
     return (n.size() > 2 && n.compare(n.size() - 2, 2, "_t") == 0) || n == "nh_ssm_h80" ||
-           n == "nh_attn_pf2_q1_h5_k32" || n == "nh_x4_mv_relu2" || n.rfind("nh_ssm1r", 0) == 0;
+           n == "nh_attn_pf2_q1_h5_k32" || n == "nh_x4_mv_relu2" ||
+           (n.rfind("nh_ssm1r", 0) == 0 && !(m5 && n == "nh_ssm1r4"));
   };
   // (the routed experts' layout L2 twins: only when a loaded layer's experts are in L2)
   const bool any_l2 =
@@ -1570,12 +1573,18 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   // a dense model's short passes (head dim 80): nh_ssm1r5, 5 rows per simdgroup, so the group's B / C conv is staged
   // once per 40 state rows instead of 8, the same outputs to the bit (one decode row on an M1 Pro: the Nano 4B's 96
   // heads 62 against 110 us, the 9B v2's 128 heads 79 against 144; decoding 1.5% / 4% faster; 10 rows per simdgroup
-  // 79 / 103 us). NI_NH_SSM1R=0 / 5 / 10 picks nh_ssm1 / nh_ssm1r5 / nh_ssm1r10.
-  static const int rps_env = getenv("NI_NH_SSM1R") ? atoi(getenv("NI_NH_SSM1R")) : 5;
-  const int rps = short_pass && dense_ && (rps_env == 5 || rps_env == 10) && cfg_.head_dim % (8 * rps_env) == 0 ? rps_env : 0;
+  // 79 / 103 us). On the M5 the MoE models' too, at 4 rows per simdgroup (head dim 64: 32 rows, half a head, per
+  // threadgroup): Lightning's 8-row verify 22.7 against 35.3 us per layer (NI_PROFILE; 2 rows 27.8, 8 rows 24.8).
+  // NI_NH_SSM1R=0 / 2 / 4 / 5 / 8 / 10 picks nh_ssm1 / nh_ssm1r<n>.
+  static const int rps_env = getenv("NI_NH_SSM1R") ? atoi(getenv("NI_NH_SSM1R")) : -1;
+  const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : Gpu::get().apple10() ? 4 : 0;
+  const int rps = short_pass && (rps_want == 2 || rps_want == 4 || rps_want == 5 || rps_want == 8 || rps_want == 10) &&
+                          cfg_.head_dim % (8 * rps_want) == 0
+                      ? rps_want
+                      : 0;
   if (parts & 1) {
   // (the long passes: a head per threadgroup of 4 x head_dim threads; nh_ssm_h80 for the Nano models' head dim 80)
-  e.use(pipe(rps ? (rps == 5 ? "nh_ssm1r5" : "nh_ssm1r10") : short_pass ? "nh_ssm1" : cfg_.head_dim == 80 ? "nh_ssm_h80" : "nh_ssm"));
+  e.use(pipe(rps ? "nh_ssm1r" + std::to_string(rps) : short_pass ? "nh_ssm1" : cfg_.head_dim == 80 ? "nh_ssm_h80" : "nh_ssm"));
   e.buf(0, zx);
   e.buf(1, s.conv[size_t(li)]);
   e.buf(2, s.rec[size_t(li)]);

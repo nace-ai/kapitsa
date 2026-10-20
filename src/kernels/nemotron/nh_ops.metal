@@ -409,6 +409,9 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
     nh_ssm1r_impl<RPS>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, tgi, tid, sg, lane,  \
                        sbc, sx, sdt);                                                                              \
   }
+NH_SSM1R(nh_ssm1r2, 2)    // 16 rows per threadgroup
+NH_SSM1R(nh_ssm1r4, 4)    // 32 rows
+NH_SSM1R(nh_ssm1r8, 8)    // 64 rows: a head per threadgroup at head dim 64
 NH_SSM1R(nh_ssm1r5, 5)    // 40 rows per threadgroup
 NH_SSM1R(nh_ssm1r10, 10)  // 80 rows: a head per threadgroup at head dim 80
 
