@@ -1143,6 +1143,11 @@ void NemotronH::alloc_buffers() {
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_ROUTE_BUCKET")) route_bucket_ = atoi(v) != 0;
+  // a verify's IQ2 routed experts' down projection: 4 simdgroups per threadgroup on the M5 (16 rows of a tile; tools/
+  // nh_x2moe_bench, a 5-row harness verify's 29 experts: 52.0 against 59.1 us with 1, 52.8 with 2, 52.0 with 8; the
+  // up projection 46.4-46.6 with 1-4: left at 1), the same outputs to the bit. NI_NH_X2_SGD (1-8) overrides.
+  x2_sgd_ = g.apple10() ? 4u : 1u;
+  if (const char* v = getenv("NI_NH_X2_SGD")) x2_sgd_ = uint32_t(std::clamp(atoi(v), 1, 8));
   // a verify's NVFP4 routed experts without latent projections (Lightning): 4 simdgroups per threadgroup on the M5
   // (tools/nh_moe_bench: up + down + sum 223 against 230 us per layer with 8; the same outputs to the bit)
   moe_thr_ = g.apple10() ? 128u : 256u;
@@ -2091,7 +2096,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   const bool up8 = cfg_.latent <= 1024;
   const struct {
     uint32_t P, E, BM, k, up_x, dn_x;
-  } bp{uint32_t(R) * k, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4), (uint32_t(cfg_.latent) + 3) / 4};
+  } bp{uint32_t(R) * k, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4),
+       (uint32_t(cfg_.latent) + 4 * x2_sgd_ - 1) / (4 * x2_sgd_)};
   const bool fused_bucket = x2e && R >= 2 && route1 && Gpu::get().apple10() && route_bucket_;
   if (fused_bucket) {
     e.use(pipe("nh_x2_route_bucket"));
@@ -2201,7 +2207,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.buf(5, x2sorted_);
       e.buf(6, ew_);
       e.val(7, mp);
-      e.dispatch_indirect(x2args_, 16, 32, 1, 1);
+      e.dispatch_indirect(x2args_, 16, 32 * x2_sgd_, 1, 1);
     } else {
       e.use(pipe(x2 ? "nh_x2_moe_up4" : "nh_moe2_up_iq2"));
       e.buf(0, L.up_e.q);

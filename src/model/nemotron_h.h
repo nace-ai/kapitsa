@@ -300,6 +300,7 @@ class NemotronH : public Model {
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows
   bool fuse_dec_ = true;          // NI_NH_FUSE: a token's MoE layer in 4 dispatches (nh_zdec.metal)
   bool route_bucket_ = true;      // NI_NH_ROUTE_BUCKET: an M5 verify's IQ2 routing and bucketing in one dispatch
+  uint32_t x2_sgd_ = 1;           // NI_NH_X2_SGD: simdgroups per threadgroup of a verify's IQ2 experts' down projection
   uint32_t moe_thr_ = 256;        // NI_NH_MOE_THR: threads per threadgroup of a verify's NVFP4 routed experts
   Buffer route_ctr_, sd_;         // fused MoE: the router threadgroups' arrival counter, the shared expert's output
   Buffer moecnt_;                 // NVFP4 experts: arrival counters per (row, 32-row block) of nh_x4_moe_dn_sum
