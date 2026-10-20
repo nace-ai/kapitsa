@@ -341,11 +341,16 @@ int main(int argc, char** argv) {
             return o + "]";
           };
           // (T > 0) the target's distribution of rows 0..6 as its sampler draws from it: top-k by logit, top-p on the
-          // untempered probabilities, then the temperature
+          // untempered probabilities, then the temperature (in double: a candidate right at the top-p boundary can
+          // differ from the GPU sampler's float sums); null for the rows the cycle did not verify (past "live")
           std::string tp = "[";
           if (sp.temperature > 0) {
-            const int V = m.vocab();
+            const int V = m.vocab(), live = std::min(int(m.live_rows().as<uint32_t>()[0]), B);
             for (int r = 0; r < B - 1; ++r) {
+              if (r >= live) {
+                tp += r ? ",null" : "null";
+                continue;
+              }
               const float* l = m.logits() + size_t(r) * V;
               std::vector<int> idx{}; idx.resize(size_t(V));
               for (int i = 0; i < V; ++i) idx[size_t(i)] = i;
