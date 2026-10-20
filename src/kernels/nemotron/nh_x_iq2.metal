@@ -313,6 +313,67 @@ struct NhX2BucketP {
   for (uint i = tid; i < P; i += ntg) sorted[off[uint(eid[i])] + rank[i]] = i;
 }
 
+// The verify's routing and bucketing in one dispatch (M5): nh_moe_route1's selection of each row's k experts (a
+// simdgroup per row, the same experts and weights), then nh_x2_bucket's tiles and dispatch arguments without atomics:
+// a pair's rank within its expert is its index order among the expert's pairs (nh_x2_bucket's atomic order was
+// arbitrary; a tile's pairs give the same outputs in either order), every pair's count, rank and offsets by a loop
+// over the pairs (P <= 256). One threadgroup of 256 threads, rows <= 8; NhX2BucketP as nh_x2_bucket's.
+[[kernel]] void nh_x2_route_bucket(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],
+                                   device int* eid [[buffer(2)]], device float* ew [[buffer(3)]],
+                                   constant NhRouteParams& rp [[buffer(4)]], const device uint* live [[buffer(5)]],
+                                   device uint* sorted [[buffer(6)]], device uint4* tiles [[buffer(7)]],
+                                   device uint* args [[buffer(8)]], constant NhX2BucketP& p [[buffer(9)]],
+                                   uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]],
+                                   uint sgi [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                   uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup int te[256];
+  threadgroup uint tc[256], tr[256];
+  const uint rows = min(rp.rows, live[0]);
+  for (uint r = sgi; r < rows; r += nsg) {
+    const uint ex = nh_route_row(logits + size_t(r) * rp.logit_stride, bias, rp.E, rp.k, rp.norm, rp.scale, lane,
+                                 eid + r * rp.k, ew + r * rp.k);
+    if (lane < rp.k) te[r * rp.k + lane] = int(ex);  // (the pairs' experts from the routing lanes, not from eid)
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  const uint P = min(p.P, rows * p.k);
+  for (uint i = tid; i < P; i += ntg) {
+    const int e = te[i];
+    uint c = 0, rk = 0;
+    for (uint j = 0; j < P; ++j) {
+      const uint m = te[j] == e ? 1u : 0u;
+      c += m;
+      rk += j < i ? m : 0u;
+    }
+    tc[i] = c;
+    tr[i] = rk;
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  for (uint i = tid; i < P; i += ntg) {
+    const int e = te[i];
+    const uint c = tc[i], rk = tr[i];
+    uint off = 0, toff = 0;
+    for (uint j = 0; j < P; ++j) {
+      const bool lo = te[j] < e;
+      off += lo ? 1u : 0u;
+      toff += lo && tr[j] == 0 ? (tc[j] + p.BM - 1) / p.BM : 0u;
+    }
+    sorted[off + rk] = i;
+    if (rk % p.BM == 0) tiles[toff + rk / p.BM] = uint4(uint(e), off + rk, min(p.BM, c - rk), 0);
+  }
+  if (tid == 0) {
+    uint t = 0;
+    for (uint j = 0; j < P; ++j) t += tr[j] == 0 ? (tc[j] + p.BM - 1) / p.BM : 0u;
+    args[0] = p.up_x;
+    args[1] = t;
+    args[2] = 1;
+    args[3] = 0;
+    args[4] = p.dn_x;
+    args[5] = t;
+    args[6] = 1;
+    args[7] = 0;
+  }
+}
+
 // up over the tiles: h[pair] = relu(W_up[e] . lat[pair / k])^2. dispatch_indirect(args, 0) x 32 threads
 [[kernel]] void nh_x2_moeb_up(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
                               const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],

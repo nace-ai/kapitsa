@@ -5,8 +5,9 @@
 // times scale. The per-lane arrays are only indexed with constants (a dynamic index would move them to memory). Any V
 // with E <= 32 V selects the same experts with the same weights (the extra slots are -inf, never selected): V 4 for
 // E <= 128 (Lightning) takes a verify's routing from 8.1 to 4.8 us per layer (M5 Max, 23 layers in one command buffer)
+// (returns lane j < K's selected expert, eid[j])
 template <uint V>
-NI_INLINE void nh_route_row_v(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
+NI_INLINE uint nh_route_row_v(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
                               uint lane, device int* eid, device float* ew) {
   float prob[V], sel[V];
   for (uint j = 0; j < V; ++j) {
@@ -43,12 +44,13 @@ NI_INLINE void nh_route_row_v(const device float* lg, const device float* bias, 
     eid[lane] = int(mine_i);
     ew[lane] = (norm ? mine / sum : mine) * scale;
   }
+  return mine_i;
 }
 
-NI_INLINE void nh_route_row(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
+NI_INLINE uint nh_route_row(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
                             uint lane, device int* eid, device float* ew) {
-  if (E <= 128) nh_route_row_v<4>(lg, bias, E, K, norm, scale, lane, eid, ew);
-  else nh_route_row_v<16>(lg, bias, E, K, norm, scale, lane, eid, ew);
+  if (E <= 128) return nh_route_row_v<4>(lg, bias, E, K, norm, scale, lane, eid, ew);
+  return nh_route_row_v<16>(lg, bias, E, K, norm, scale, lane, eid, ew);
 }
 
 // One output row n of an F32 matrix (Lightning's router [128][2688]) for up to 8 rows: the threadgroup's threads over

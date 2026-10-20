@@ -1142,6 +1142,7 @@ void NemotronH::alloc_buffers() {
   memset(moecnt_.ptr(), 0, moecnt_.size);
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
+  if (const char* v = getenv("NI_NH_ROUTE_BUCKET")) route_bucket_ = atoi(v) != 0;
   // a verify's NVFP4 routed experts without latent projections (Lightning): 4 simdgroups per threadgroup on the M5
   // (tools/nh_moe_bench: up + down + sum 223 against 230 us per layer with 8; the same outputs to the bit)
   moe_thr_ = g.apple10() ? 128u : 256u;
@@ -2084,7 +2085,28 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   }
   const RouteP rp{uint32_t(L.E), k, cfg_.w_norm ? 1u : 0u, cfg_.w_scale, uint32_t(cfg_.max_E), uint32_t(R)};
   const bool route1 = L.E <= 512 && L.k_used <= 32;
-  if (!rsu) {
+  // IQ2 experts for 2-8 rows (Bolt's verify) on the M5: the routing and nh_x2_bucket's tiles in one dispatch
+  // (nh_x2_route_bucket: the same experts, weights and tiles)
+  const bool x2e = L.up_e.fmt != NhFmt::FP4 && x2_ && L.E <= 1024 && L.I % 256 == 0 && cfg_.latent % 256 == 0;
+  const bool up8 = cfg_.latent <= 1024;
+  const struct {
+    uint32_t P, E, BM, k, up_x, dn_x;
+  } bp{uint32_t(R) * k, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4), (uint32_t(cfg_.latent) + 3) / 4};
+  const bool fused_bucket = x2e && R >= 2 && route1 && Gpu::get().apple10() && route_bucket_;
+  if (fused_bucket) {
+    e.use(pipe("nh_x2_route_bucket"));
+    e.buf(0, rl_);
+    e.buf(1, L.exp_bias);
+    e.buf(2, eid_);
+    e.buf(3, ew_);
+    e.val(4, rp);
+    e.buf(5, live());
+    e.buf(6, x2sorted_);
+    e.buf(7, x2tiles_);
+    e.buf(8, x2args_);
+    e.bytes(9, &bp, sizeof bp);
+    e.dispatch(1, 1, 1, 256);
+  } else if (!rsu) {
     e.use(pipe(route1 ? "nh_moe_route1" : "nh_moe_route"));
     e.buf(0, rl_);
     e.buf(1, L.exp_bias);
@@ -2108,7 +2130,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   const uint32_t npairs = uint32_t(R) * k, nrows = uint32_t(R);
   {
     const bool fp4 = L.up_e.fmt == NhFmt::FP4;
-    const bool x2 = !fp4 && x2_ && L.E <= 1024 && L.I % 256 == 0 && cfg_.latent % 256 == 0;
+    const bool x2 = x2e;
     if (fp4) {
       // NVFP4 experts: per (row, expert) pair, each expert's tensor scale applied before relu^2 (nh_x4_moe_*)
       // (nh_x4_moe_dn_sum's counters assume 8 simdgroups: the latent path keeps them)
@@ -2149,19 +2171,17 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
       // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms; up with 8 rows per
       // simdgroup when the latent fits in registers (K <= 1024: 3-5 % per layer)
-      const bool up8 = cfg_.latent <= 1024;
-      const struct {
-        uint32_t P, E, BM, k, up_x, dn_x;
-      } bp{npairs, uint32_t(L.E), 2, k, (uint32_t(L.I) + (up8 ? 7 : 3)) / (up8 ? 8 : 4), (uint32_t(cfg_.latent) + 3) / 4};
-      e.use(pipe("nh_x2_bucket"));
-      e.buf(0, eid_);
-      e.buf(1, x2sorted_);
-      e.buf(2, x2tiles_);
-      e.buf(3, x2args_);
-      e.buf(4, x2rank_);
-      e.bytes(5, &bp, sizeof bp);
-      e.buf(6, live());
-      e.dispatch(1, 1, 1, 1024);
+      if (!fused_bucket) {
+        e.use(pipe("nh_x2_bucket"));
+        e.buf(0, eid_);
+        e.buf(1, x2sorted_);
+        e.buf(2, x2tiles_);
+        e.buf(3, x2args_);
+        e.buf(4, x2rank_);
+        e.bytes(5, &bp, sizeof bp);
+        e.buf(6, live());
+        e.dispatch(1, 1, 1, 1024);
+      }
       e.use(pipe(up8 ? "nh_x2_moeb_up8" : "nh_x2_moeb_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
