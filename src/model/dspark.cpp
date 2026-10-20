@@ -18,17 +18,14 @@ namespace {
 Pipeline pipe(const std::string& n) { return NemotronH::pipeline(n); }
 
 // host mirrors of the kernel parameter structs (nh_lili.metal, nh_dspark.metal)
-struct QkP {
-  uint32_t H, HD, pos0, rope;
-  float eps, theta;
-};
 struct RingKvP {
   uint32_t pos0, W, Hkv, HD;
 };
 struct AttnP {
-  uint32_t P, lo, W, Hq, Hkv, B;
-  float scale;
+  uint32_t P, lo, W, Hq, Hkv, B, NS, ld;
+  float scale, eps, theta;
 };
+constexpr uint32_t kAttnSplit = 16;  // pieces of the context in the block attention (nh_dsp_attn_part)
 struct CandP {
   uint32_t V, K, nchunks, row0, ld;
 };
@@ -42,11 +39,11 @@ struct DepthP {
   uint32_t mode;
 };
 struct CycP {
-  uint32_t P, hi, W, D, Hq, Hkv, B, S, K, R;
+  uint32_t P, hi, W, D, Hq, Hkv, B, S, K, R, NS, ld;
   float eps, theta, scale, gs;
 };
 // byte offsets of nh_dsp_cycle's blocks in cyc_
-constexpr size_t kCycEmbed = 0, kCycQ = 256, kCycK = 512, kCycAttn = 768, kCycWalk = 1024, kCycRing = 1280;
+constexpr size_t kCycEmbed = 0, kCycAttn = 256, kCycWalk = 512, kCycRing = 768;
 
 nlohmann::json read_json(const std::string& path) {
   std::ifstream f(path);
@@ -95,7 +92,10 @@ size_t DSpark::plan_bytes(const std::string& dir, size_t* per_slot) {
   const int64_t nl = d.contains("target_layer_ids") ? int64_t(d["target_layer_ids"].size()) : 6;
   // prompt capture (window rows of every tap) and its half copy, commit buffers (window rows), the pass (8 rows:
   // activations, the slots' logits, candidates)
+  const int64_t hq = c.value("num_attention_heads", 32);
+  // (+ the block attention's pieces)
   const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + size_t(W) * (size_t(H) * 6 + size_t(hkv) * size_t(hd) * 8 + 4) +
+                      size_t(kB) * size_t(hq) * kAttnSplit * (size_t(hd) + 2) * 4 +
                       size_t(kB) * (size_t(V) * 4 + size_t(I) * 8 + size_t(H) * 24 + size_t(nl) * size_t(H) * 4) +
                       std::max<size_t>(64 * 12288, size_t(kB) * size_t(nl) * size_t(H)) * 2 + (size_t(4) << 20);
   return w + bufs;
@@ -296,9 +296,6 @@ void DSpark::load() {
     if (L.qkv.N != nq + 2 * nk) fatal("%s: attention projections of an unexpected shape", path_.c_str());
     if (gs[0] != gs[1] || gs[1] != gs[2])  // (q|k|v run as one product with one tensor scale)
       fatal("%s: q, k and v projections with different NVFP4 tensor scales are not supported", path_.c_str());
-    L.q = rows(L.qkv, 0, nq);
-    L.k = rows(L.qkv, nq, nk);
-    L.v = rows(L.qkv, nq + nk, nk);
     L.kv = rows(L.qkv, nq, 2 * nk);
     L.o = mat(b + "self_attn.o_proj.weight");
     L.gu = mat_cat({b + "mlp.gate_proj.weight", b + "mlp.up_proj.weight"}, gs);
@@ -352,10 +349,8 @@ void DSpark::alloc_buffers() {
   vfeat_ = al(B * nl * H * 4, "dspark_vfeat");
   x_ = al(B * H * 4, "dspark_x");
   t2_ = al(B * H * 4, "dspark_t2");
-  q_ = al(B * size_t(hq_) * 128 * 4, "dspark_q");
-  k_ = al(B * size_t(hkv_) * 128 * 4, "dspark_k");
-  v_ = al(B * size_t(hkv_) * 128 * 4, "dspark_v");
-  ao_ = al(B * size_t(hq_) * 128 * 4, "dspark_ao");
+  q_ = al(B * size_t(hq_ + 2 * hkv_) * 128 * 4, "dspark_qkv");
+  ao_ = al(B * size_t(hq_) * kAttnSplit * (128 + 2) * 4, "dspark_attn_part");
   gt_ = al(B * size_t(I_) * 2 * 4, "dspark_gate_up");
   logits_ = al(S * V * 4, "dspark_logits");
   const size_t nch = (V + 2047) / 2048;
@@ -372,6 +367,7 @@ void DSpark::alloc_buffers() {
   rscale_ = al(W * 4, "dspark_rscale");
   xh_ = al(std::max<size_t>(64 * 12288, B * nl * H) * 2, "dspark_xh");
   cyc_ = al(2048, "dspark_cycle");
+  rope_ = al(B * 64 * 8, "dspark_rope");
   // capture hooks: the taps' inputs (the last one: the trunk's output, slot `layers`), in fc's column order
   for (NhCapture* h : {&hook_pf_, &hook_v_}) {
     h->slot.assign(size_t(tg_.config().layers) + 1, -1);
@@ -522,8 +518,9 @@ void DSpark::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
 // rows' K/V (the GEMMs' rows are independent; the ring takes the accepted ones), the drafting pass from the anchor.
 void DSpark::encode_draft_chained(Encoder& e, Seq& s, LiliSeq& d, int P) {
   if (d.ctx != P) fatal("DSpark: chained drafting behind a verify at %d with context %d", P, d.ctx);
-  const CycP cp{uint32_t(P), uint32_t(d.hi), uint32_t(window_), uint32_t(H_), uint32_t(hq_), uint32_t(hkv_), kB,
-                kB - 1, uint32_t(K_), uint32_t(rank_), eps_, theta_, 1.0f / std::sqrt(128.0f), w2_.gs};
+  const CycP cp{uint32_t(P),     uint32_t(d.hi),  uint32_t(window_),  uint32_t(H_), uint32_t(hq_), uint32_t(hkv_),
+                kB,              kB - 1,          uint32_t(K_),       uint32_t(rank_), kAttnSplit, dl_[0].qkv.N,
+                eps_,            theta_,          1.0f / std::sqrt(128.0f), w2_.gs};
   e.use(pipe("nh_dsp_cycle"));
   e.buf(0, tg_.accepted_buf());
   e.buf(1, cyc_);
@@ -546,38 +543,41 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   const size_t ring_layer = size_t(hkv_) * window_ * 128 * 2;
   for (int l = 0; l < NL_; ++l) {
     const DLayer& L = dl_[size_t(l)];
-    norm_half(e, x_, L.attn_norm, xh_, R);  // shared by q, k, v
-    tg_.enc_gemm(e, L.q, xh_, q_, R, 0);
-    tg_.enc_gemm(e, L.k, xh_, k_, R, 0);
-    tg_.enc_gemm(e, L.v, xh_, v_, R, 0);
-    const QkP qp{uint32_t(hq_), 128, uint32_t(P), 1, eps_, theta_};
-    e.use(pipe("nh_qk_norm_rope"));
+    norm_half(e, x_, L.attn_norm, xh_, R);
+    tg_.enc_gemm(e, L.qkv, xh_, q_, R, 0);  // q|k|v [R][(Hq + 2 Hkv) 128]
+    // the block attention (q / k norm + RoPE inside): the context in kAttnSplit pieces, then the pieces with the
+    // block's keys and the sinks, into half rows for o
+    const AttnP ap{uint32_t(P), uint32_t(std::max({0, P - window_, d.hi - window_})), uint32_t(window_), uint32_t(hq_),
+                   uint32_t(hkv_), B, kAttnSplit, L.qkv.N, 1.0f / std::sqrt(128.0f), eps_, theta_};
+    if (l == 0) {  // the block's RoPE table (positions P..P+7), for every layer
+      e.use(pipe("nh_dsp_rope_tab"));
+      e.buf(0, rope_);
+      if (chained) e.buf(1, cyc_, kCycAttn);
+      else e.val(1, ap);
+      e.dispatch(1, 1, 1, B * 64);
+    }
+    e.use(pipe("nh_dsp_attn_part"));
     e.buf(0, q_);
     e.buf(1, L.qn);
-    if (chained) e.buf(2, cyc_, kCycQ);
-    else e.val(2, qp);
-    e.dispatch(B, uint32_t(hq_), 1, 128);
-    const QkP kp{uint32_t(hkv_), 128, uint32_t(P), 1, eps_, theta_};
-    e.use(pipe("nh_qk_norm_rope"));
-    e.buf(0, k_);
-    e.buf(1, L.kn);
-    if (chained) e.buf(2, cyc_, kCycK);
-    else e.val(2, kp);
-    e.dispatch(B, uint32_t(hkv_), 1, 128);
-    const AttnP ap{uint32_t(P), uint32_t(std::max({0, P - window_, d.hi - window_})), uint32_t(window_), uint32_t(hq_),
-                   uint32_t(hkv_), B, 1.0f / std::sqrt(128.0f)};
-    e.use(pipe("nh_dsp_attn"));
+    e.buf(2, d.ring_k, size_t(l) * ring_layer);
+    e.buf(3, d.ring_v, size_t(l) * ring_layer);
+    e.buf(4, ao_);
+    if (chained) e.buf(5, cyc_, kCycAttn);
+    else e.val(5, ap);
+    e.buf(6, rope_);
+    e.dispatch(uint32_t(hkv_), B, kAttnSplit, uint32_t(32 * (hq_ / hkv_)));
+    e.use(pipe("nh_dsp_attn_fin"));
     e.buf(0, q_);
-    e.buf(1, k_);
-    e.buf(2, v_);
-    e.buf(3, d.ring_k, size_t(l) * ring_layer);
-    e.buf(4, d.ring_v, size_t(l) * ring_layer);
-    e.buf(5, L.sinks);
-    e.buf(6, ao_);
-    if (chained) e.buf(7, cyc_, kCycAttn);
-    else e.val(7, ap);
+    e.buf(1, L.qn);
+    e.buf(2, L.kn);
+    e.buf(3, L.sinks);
+    e.buf(4, ao_);
+    e.buf(5, xh_);
+    if (chained) e.buf(6, cyc_, kCycAttn);
+    else e.val(6, ap);
+    e.buf(7, rope_);
     e.dispatch(uint32_t(hkv_), B, 1, uint32_t(32 * (hq_ / hkv_)));
-    lin(e, L.o, ao_, x_, R, 1);  // the residual add in the GEMM's epilogue
+    tg_.enc_gemm(e, L.o, xh_, x_, R, 1);  // the residual add in the GEMM's epilogue
     norm_half(e, x_, L.ffn_norm, xh_, R);
     tg_.enc_gemm(e, L.gu, xh_, gt_, R, 0);  // gate|up [R][2 I]
     // silu(gate) * up to half with a per-row scale (it may leave half's range), the down product, scaled back

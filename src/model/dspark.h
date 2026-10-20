@@ -42,9 +42,9 @@ class DSpark : public NhDrafter {
  private:
   struct DLayer {
     Buffer attn_norm, ffn_norm, qn, kn, sinks;
-    // qkv: q|k|v's rows in one matrix (Q8), q, k, v and kv (k|v, the commit's) views of it; gu: gate|up's rows (NVFP4,
-    // the tensor scales gs_g, gs_u applied by nh_dsp_swiglu_half)
-    NhMat qkv, q, k, v, kv, o, gu, down;
+    // qkv: q|k|v's rows in one matrix (Q8), kv (k|v, the commit's) a view of it; gu: gate|up's rows (NVFP4, the
+    // tensor scales gs_g, gs_u applied by nh_dsp_swiglu_half)
+    NhMat qkv, kv, o, gu, down;
     float gs_g = 1.0f, gs_u = 1.0f;
   };
   NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8
@@ -86,9 +86,10 @@ class DSpark : public NhDrafter {
   NhCapture hook_pf_, hook_v_;
   int pf_n_ = 0, pf_lo_ = 0;
   Buffer pfeat_, pfeat_h_, vfeat_;
-  Buffer x_, t2_, q_, k_, v_, ao_, gt_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
+  Buffer x_, t2_, q_, ao_, gt_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
   Buffer cg_, cgh_, ck_, rscale_, xh_;
-  Buffer cyc_;  // a chained drafting half's parameters (nh_dsp_cycle)
+  Buffer cyc_;   // a chained drafting half's parameters (nh_dsp_cycle)
+  Buffer rope_;  // the block's RoPE table (nh_dsp_rope_tab)
 };
 
 }  // namespace ni

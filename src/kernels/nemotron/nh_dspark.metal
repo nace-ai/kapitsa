@@ -1,66 +1,144 @@
 // DSpark block drafter (Nemotron 3.5 Lightning): the block attention, causal within the block; the mask rows of the
-// block; the Markov head's greedy walk over each slot's candidates. The rest of the pass runs on LiLiCorr's kernels
-// (nh_lili.metal: capture, q/k norm + RoPE, ring, candidates, dynamic depth, acceptance).
+// block; the Markov head's greedy walk over each slot's candidates; the fused passes of its MLP and commit. The rest of
+// the pass runs on LiLiCorr's kernels (nh_lili.metal: capture, candidates, dynamic depth, acceptance).
 
 // ---- block attention: 8 query rows at positions P..P+7 over the ring's context [lo, P) and the block's rows up to
-// their own (causal), sliding window W, per-head sink logits. As nh_lili_attn: one threadgroup per (kv head, row),
-// G = Hq / Hkv simdgroups (one per query head), lanes hold HD / 32 = 4 dims. ----
-struct NhDspAttnP {  // (nh_lili_attn's parameters)
-  uint P, lo, W, Hq, Hkv, B;
-  float scale;
+// their own (causal), sliding window W, per-head sink logits. q, k, v are the block's raw q|k|v product rows (qkv
+// [B][ld]: q heads at column 0, k heads at Hq HD, v heads at (Hq + Hkv) HD); q and the block's k get their per-head
+// RMSNorm (qn, kn) and NeoX RoPE here. The context is split in NS pieces (one threadgroup each per (kv head, row):
+// nh_dsp_attn_part writes each piece's softmax state), nh_dsp_attn_fin combines them with the block's keys and the
+// sink and writes the rows in half (the o product's input). One simdgroup per query head (G = Hq / Hkv per
+// threadgroup), lanes hold HD / 32 = 4 dims. (One threadgroup per (kv head, row) over the whole context before: 16
+// threadgroups, ~37 us per layer in the pipeline on Lightning, M5 Max.) ----
+struct NhDspAttnP {
+  uint P, lo, W, Hq, Hkv, B, NS, ld;
+  float scale, eps, theta;
 };
-[[kernel]] void nh_dsp_attn(const device float* q [[buffer(0)]], const device float* kb [[buffer(1)]],
-                            const device float* vb [[buffer(2)]], const device half* rk [[buffer(3)]],
-                            const device half* rv [[buffer(4)]], const device float* sinks [[buffer(5)]],
-                            device float* out [[buffer(6)]], constant NhDspAttnP& p [[buffer(7)]],
-                            uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                            uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                            uint2 ntg2 [[threads_per_threadgroup]]) {
+// the block's RoPE table: tab[r][i] = (cos, sin) of (P + r) theta^(-2i / HD), i < HD / 2 (the values nh_qk_norm_rope
+// computes per element). grid: 1 x (B HD / 2) threads
+[[kernel]] void nh_dsp_rope_tab(device float2* tab [[buffer(0)]], constant NhDspAttnP& p [[buffer(1)]],
+                                uint t [[thread_position_in_grid]]) {
+  constexpr uint HD = 128;
+  if (t >= p.B * HD / 2) return;
+  const uint r = t / (HD / 2), i = t % (HD / 2);
+  const float inv = metal::precise::pow(p.theta, -2.0f * float(i) / float(HD));
+  const float ang = float(p.P + r) * inv;
+  tab[t] = float2(metal::precise::cos(ang), metal::precise::sin(ang));
+}
+// a head's 4 dims of lane: RMSNorm over the head (w: the norm weight), NeoX RoPE with the row's table cs (dims d and
+// d + 64 are lanes l and l ^ 16)
+NI_INLINE float4 nh_dsp_norm_rope(float4 x, const device float* w, const device float2* cs, float eps, uint lane) {
+  constexpr uint HD = 128;
+  const float ss = simd_sum(dot(x, x));
+  x = x * (1.0f / metal::precise::sqrt(ss / float(HD) + eps)) * ((const device float4*)w)[lane];
+  const float4 o = simd_shuffle_xor(x, 16);
+  float4 y;
+  for (uint c = 0; c < 4; ++c) {
+    const uint d = lane * 4 + c;
+    const float2 t = cs[d % (HD / 2)];
+    y[c] = d < HD / 2 ? x[c] * t.x - o[c] * t.y : x[c] * t.x + o[c] * t.y;
+  }
+  return y;
+}
+// the online-softmax state of one query head over a piece: m, l, acc (4 dims per lane)
+struct NhDspSm {
+  float m, l;
+  float4 acc;
+};
+NI_INLINE void nh_dsp_sm_add(thread NhDspSm& st, float s, float4 v) {
+  const float mn = max(st.m, s);
+  const float corr = metal::fast::exp(st.m - mn), e = metal::fast::exp(s - mn);
+  st.l = st.l * corr + e;
+  st.acc = st.acc * corr + e * v;
+  st.m = mn;
+}
+
+// grid (Hkv, B, NS) x 32 G; part: [B][Hq][NS][HD + 2] (acc, m, l)
+[[kernel]] void nh_dsp_attn_part(const device float* qkv [[buffer(0)]], const device float* qn [[buffer(1)]],
+                                 const device half* rk [[buffer(2)]], const device half* rv [[buffer(3)]],
+                                 device float* part [[buffer(4)]], constant NhDspAttnP& p [[buffer(5)]],
+                                 const device float2* tab [[buffer(6)]],
+                                 uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                 uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                 uint3 ntg3 [[threads_per_threadgroup]]) {
   constexpr uint HD = 128, KT = 32;
   threadgroup half4 kt[KT * HD / 4];
   threadgroup half4 vt[KT * HD / 4];
-  const uint kvh = tg.x, r = tg.y, G = p.Hq / p.Hkv, h = kvh * G + sg;
+  const uint kvh = tg.x, r = tg.y, sp = tg.z, G = p.Hq / p.Hkv, h = kvh * G + sg;
   const uint qpos = p.P + r;
-  const uint klo = max(p.lo, qpos + 1 > p.W ? qpos + 1 - p.W : 0u);  // first context key in the window
-  const float4 qv = ((const device float4*)(q + (size_t(r) * p.Hq + h) * HD))[lane] * p.scale;
-  float4 acc = 0.0f;
-  float m = -INFINITY, l = 0.0f;
+  const uint n = p.P - p.lo, per = (n + p.NS - 1) / p.NS;
+  const uint c1 = min(p.P, p.lo + (sp + 1) * per);
+  const uint c0 = max(p.lo + sp * per, qpos + 1 > p.W ? qpos + 1 - p.W : 0u);  // (the window's first key)
+  const float4 qr = ((const device float4*)(qkv + size_t(r) * p.ld + h * HD))[lane];
+  const float4 qv = nh_dsp_norm_rope(qr, qn, tab + r * (HD / 2), p.eps, lane) * p.scale;
+  NhDspSm st{-INFINITY, 0.0f, float4(0.0f)};
   const device half4* rkb = (const device half4*)(rk + size_t(kvh) * p.W * HD);
   const device half4* rvb = (const device half4*)(rv + size_t(kvh) * p.W * HD);
-  for (uint t0 = klo; t0 < p.P; t0 += KT) {
-    const uint n = min(KT, p.P - t0);
-    for (uint i = tid; i < n * HD / 4; i += ntg2.x) {
+  for (uint t0 = c0; t0 < c1; t0 += KT) {
+    const uint nt = min(KT, c1 - t0);
+    for (uint i = tid; i < nt * HD / 4; i += ntg3.x) {
       const uint kk = i / (HD / 4), c = i % (HD / 4);
       const uint slot = (t0 + kk) % p.W;
       kt[i] = rkb[slot * HD / 4 + c];
       vt[i] = rvb[slot * HD / 4 + c];
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    for (uint j = 0; j < n; ++j) {
+    // the tile's scores (lane j holds key j's), one rescale per tile, then the values weighted
+    float sj = -INFINITY;
+    for (uint j = 0; j < nt; ++j) {
       const float s = simd_sum(dot(qv, float4(kt[j * HD / 4 + lane])));
-      const float mn = max(m, s);
-      const float corr = metal::fast::exp(m - mn), e = metal::fast::exp(s - mn);
-      l = l * corr + e;
-      acc = acc * corr + e * float4(vt[j * HD / 4 + lane]);
-      m = mn;
+      if (lane == j) sj = s;
     }
+    const float mn = max(st.m, simd_max(sj));
+    const float corr = metal::fast::exp(st.m - mn), ej = lane < nt ? metal::fast::exp(sj - mn) : 0.0f;
+    st.l = st.l * corr + simd_sum(ej);
+    st.acc *= corr;
+    for (uint j = 0; j < nt; ++j) st.acc += simd_shuffle(ej, j) * float4(vt[j * HD / 4 + lane]);
+    st.m = mn;
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
-  for (uint j = 0; j <= r && j < p.B; ++j) {  // the block's rows up to this one (fp32, not in the ring)
-    const float4 kv4 = ((const device float4*)(kb + (size_t(j) * p.Hkv + kvh) * HD))[lane];
-    const float s = simd_sum(dot(qv, kv4));
-    const float mn = max(m, s);
-    const float corr = metal::fast::exp(m - mn), e = metal::fast::exp(s - mn);
-    l = l * corr + e;
-    acc = acc * corr + e * ((const device float4*)(vb + (size_t(j) * p.Hkv + kvh) * HD))[lane];
-    m = mn;
+  device float* o = part + ((size_t(r) * p.Hq + h) * p.NS + sp) * (HD + 2);
+  ((device float4*)o)[lane] = st.acc;
+  if (lane == 0) {
+    o[HD] = st.m;
+    o[HD + 1] = st.l;
+  }
+}
+
+// grid (Hkv, B) x 32 G; out half [B][Hq HD]. NS <= 32
+[[kernel]] void nh_dsp_attn_fin(const device float* qkv [[buffer(0)]], const device float* qn [[buffer(1)]],
+                                const device float* kn [[buffer(2)]], const device float* sinks [[buffer(3)]],
+                                const device float* part [[buffer(4)]], device half* out [[buffer(5)]],
+                                constant NhDspAttnP& p [[buffer(6)]], const device float2* tab [[buffer(7)]],
+                                uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  constexpr uint HD = 128;
+  const uint kvh = tg.x, r = tg.y, G = p.Hq / p.Hkv, h = kvh * G + sg;
+  const float4 qr = ((const device float4*)(qkv + size_t(r) * p.ld + h * HD))[lane];
+  const float4 qv = nh_dsp_norm_rope(qr, qn, tab + r * (HD / 2), p.eps, lane) * p.scale;
+  // the context pieces: lane s holds piece s's (m, l)
+  const device float* pp = part + (size_t(r) * p.Hq + h) * p.NS * (HD + 2);
+  const float ms = lane < p.NS ? pp[lane * (HD + 2) + HD] : -INFINITY;
+  const float M = simd_max(ms);
+  const float c = ms > -INFINITY ? metal::fast::exp(ms - M) : 0.0f;
+  NhDspSm st{M, simd_sum(c > 0.0f ? pp[lane * (HD + 2) + HD + 1] * c : 0.0f), float4(0.0f)};
+  for (uint s = 0; s < p.NS; ++s) {
+    const float cs = simd_shuffle(c, s);
+    if (cs > 0.0f) st.acc += ((const device float4*)(pp + s * (HD + 2)))[lane] * cs;
+  }
+  // the block's rows up to this one (their k normalized and rotated here)
+  for (uint j = 0; j <= r && j < p.B; ++j) {
+    const device float* row = qkv + size_t(j) * p.ld;
+    const float4 kr = ((const device float4*)(row + (p.Hq + kvh) * HD))[lane];
+    const float4 k4 = nh_dsp_norm_rope(kr, kn, tab + j * (HD / 2), p.eps, lane);
+    nh_dsp_sm_add(st, simd_sum(dot(qv, k4)), ((const device float4*)(row + (p.Hq + p.Hkv + kvh) * HD))[lane]);
   }
   const float sk = sinks[h];
-  const float mn = max(m, sk);
-  const float corr = metal::fast::exp(m - mn);
-  l = l * corr + metal::fast::exp(sk - mn);
-  acc *= corr;
-  ((device float4*)(out + (size_t(r) * p.Hq + h) * HD))[lane] = acc / l;
+  const float mn = max(st.m, sk);
+  const float corr = metal::fast::exp(st.m - mn);
+  st.l = st.l * corr + metal::fast::exp(sk - mn);
+  st.acc *= corr;
+  ((device half4*)(out + (size_t(r) * p.Hq + h) * HD))[lane] = half4(st.acc / st.l);
 }
 
 // ---- rows 1..n of x = the mask token's embedding (the drafter's own row; the anchor row 0 comes from the target's
@@ -136,12 +214,12 @@ struct NhDspWalkP {
 // ---- double-buffered decode: the parameters of a drafting half encoded before the host knows the verify's outcome.
 // From the acceptance a (acc[0]) of the verify at P: m = a + 1 rows committed (positions P .. P + a), the anchor
 // P' = P + m. out: one 256-byte block each (bound as the kernels' constant parameters): [0] the anchor's embedding
-// (NhEmbedParams {D, tok_off P'}), [64] q norm + RoPE (NhQkP {Hq, 128, P', 1, eps, theta}), [128] k (the same, Hkv),
-// [192] nh_dsp_attn (NhDspAttnP {P', lo, W, Hq, Hkv, B, scale}), [256] nh_dsp_walk (NhDspWalkP {S, K, R, P', gs}),
-// [320] the commit's ring-write grid (m, 2 Hkv, 1). lo = max(0, P' - W, hi - W) as the host computes it (hi: one
-// past the highest position the ring held before the commit). One thread. ----
+// (NhEmbedParams {D, tok_off P'}), [64] the block attention (NhDspAttnP {P', lo, W, Hq, Hkv, B, NS, ld, scale, eps,
+// theta}), [128] nh_dsp_walk (NhDspWalkP {S, K, R, P', gs}), [192] the commit's ring-write grid (m, 2 Hkv, 1).
+// lo = max(0, P' - W, hi - W) as the host computes it (hi: one past the highest position the ring held before the
+// commit). One thread. ----
 struct NhDspCycP {
-  uint P, hi, W, D, Hq, Hkv, B, S, K, R;
+  uint P, hi, W, D, Hq, Hkv, B, S, K, R, NS, ld;
   float eps, theta, scale, gs;
 };
 [[kernel]] void nh_dsp_cycle(const device int* acc [[buffer(0)]], device uint* out [[buffer(1)]],
@@ -151,30 +229,25 @@ struct NhDspCycP {
   device uint* e = out;
   e[0] = p.D;
   e[1] = P;
-  for (uint i = 0; i < 2; ++i) {
-    device uint* q = out + 64 * (1 + i);
-    q[0] = i == 0 ? p.Hq : p.Hkv;
-    q[1] = 128u;
-    q[2] = P;
-    q[3] = 1u;
-    q[4] = as_type<uint>(p.eps);
-    q[5] = as_type<uint>(p.theta);
-  }
-  device uint* a = out + 192;
+  device uint* a = out + 64;
   a[0] = P;
   a[1] = lo;
   a[2] = p.W;
   a[3] = p.Hq;
   a[4] = p.Hkv;
   a[5] = p.B;
-  a[6] = as_type<uint>(p.scale);
-  device uint* w = out + 256;
+  a[6] = p.NS;
+  a[7] = p.ld;
+  a[8] = as_type<uint>(p.scale);
+  a[9] = as_type<uint>(p.eps);
+  a[10] = as_type<uint>(p.theta);
+  device uint* w = out + 128;
   w[0] = p.S;
   w[1] = p.K;
   w[2] = p.R;
   w[3] = P;
   w[4] = as_type<uint>(p.gs);
-  device uint* g = out + 320;
+  device uint* g = out + 192;
   g[0] = m;
   g[1] = 2u * p.Hkv;
   g[2] = 1u;

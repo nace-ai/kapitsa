@@ -54,79 +54,127 @@ double e4m3(uint8_t x) {
 }
 const double kE2M1[16] = {0, 0.5, 1, 1.5, 2, 3, 4, 6, -0.0, -0.5, -1, -1.5, -2, -3, -4, -6};
 
+// the block attention (nh_dsp_attn_part + nh_dsp_attn_fin): raw q|k|v rows, q / k norm + RoPE, a ring that wraps,
+// context pieces (some empty), per-row window starts, against a double reference
 void check_attn() {
-  // P context positions in a ring of W slots (the ring holds [P - W, P)), B = 8 block rows, causal within the block
-  const int HD = 128, Hq = 4, Hkv = 2, W = 24, B = 8, P = 37, G = Hq / Hkv;
-  std::vector<float> q(size_t(B) * Hq * HD), kb(size_t(B) * Hkv * HD), vb(kb.size()), sinks(Hq);
-  std::vector<__fp16> rk(size_t(Hkv) * W * HD), rv(rk.size());
-  for (auto& x : q) x = nrand();
-  for (auto& x : kb) x = nrand();
-  for (auto& x : vb) x = nrand();
-  for (auto& x : rk) x = __fp16(nrand());
-  for (auto& x : rv) x = __fp16(nrand());
-  for (auto& x : sinks) x = nrand();
-  const float scale = 1.0f / std::sqrt(float(HD));
-  struct {
-    uint32_t P, lo, W, Hq, Hkv, B;
-    float scale;
-  } p{uint32_t(P), uint32_t(P - W), uint32_t(W), uint32_t(Hq), uint32_t(Hkv), uint32_t(B), scale};
-  Gpu& g = Gpu::get();
-  Buffer bq = up(q, "q"), bk = up(kb, "k"), bv = up(vb, "v"), brk = up(rk, "rk"), brv = up(rv, "rv"), bs = up(sinks, "s");
-  Buffer out = g.alloc(q.size() * 4, "out");
-  auto e = g.begin();
-  e->use(NemotronH::pipeline("nh_dsp_attn"));
-  e->buf(0, bq);
-  e->buf(1, bk);
-  e->buf(2, bv);
-  e->buf(3, brk);
-  e->buf(4, brv);
-  e->buf(5, bs);
-  e->buf(6, out);
-  e->bytes(7, &p, sizeof p);
-  e->dispatch(uint32_t(Hkv), uint32_t(B), 1, uint32_t(32 * G));
-  e->commit_and_wait();
-  double err = 0, mx = 0;
-  for (int r = 0; r < B; ++r)
-    for (int h = 0; h < Hq; ++h) {
-      const int kvh = h / G, qpos = P + r;
-      std::vector<double> s;
-      std::vector<const float*> vs;
-      std::vector<std::vector<float>> vtmp;
-      auto qd = [&](const float* k) {
-        double d = 0;
-        for (int i = 0; i < HD; ++i) d += double(q[(size_t(r) * Hq + h) * HD + i]) * scale * k[i];
-        return d;
-      };
-      std::vector<std::vector<float>> keys, vals;
-      for (int t = std::max(P - W, qpos + 1 - W); t < P; ++t) {
-        std::vector<float> k(HD), v(HD);
-        for (int i = 0; i < HD; ++i) {
-          k[size_t(i)] = float(rk[(size_t(kvh) * W + size_t(t % W)) * HD + size_t(i)]);
-          v[size_t(i)] = float(rv[(size_t(kvh) * W + size_t(t % W)) * HD + size_t(i)]);
+  struct Case {
+    int P, lo, W, NS;
+  };
+  for (const Case cs : {Case{37, 13, 24, 16}, Case{5, 0, 24, 16}, Case{200, 177, 24, 4}, Case{0, 0, 24, 16}, Case{700, 400, 300, 4}, Case{1100, 76, 1024, 16}}) {
+    const int HD = 128, Hq = 4, Hkv = 2, B = 8, G = Hq / Hkv, P = cs.P, W = cs.W, NS = cs.NS;
+    const int ld = (Hq + 2 * Hkv) * HD;
+    std::vector<float> qkv(size_t(B) * ld), qn(HD), kn(HD), sinks(Hq);
+    std::vector<__fp16> rk(size_t(Hkv) * W * HD), rv(rk.size());
+    for (auto& x : qkv) x = nrand() * 2.0f;
+    for (auto& x : qn) x = 1.0f + 0.5f * nrand();
+    for (auto& x : kn) x = 1.0f + 0.5f * nrand();
+    for (auto& x : rk) x = __fp16(nrand());
+    for (auto& x : rv) x = __fp16(nrand());
+    for (auto& x : sinks) x = nrand();
+    const float scale = 1.0f / std::sqrt(float(HD)), eps = 1e-6f, theta = 10000.0f;
+    struct {
+      uint32_t P, lo, W, Hq, Hkv, B, NS, ld;
+      float scale, eps, theta;
+    } p{uint32_t(P), uint32_t(cs.lo), uint32_t(W), uint32_t(Hq), uint32_t(Hkv), uint32_t(B), uint32_t(NS), uint32_t(ld),
+        scale, eps, theta};
+    Gpu& g = Gpu::get();
+    Buffer bq = up(qkv, "qkv"), bqn = up(qn, "qn"), bkn = up(kn, "kn"), brk = up(rk, "rk"), brv = up(rv, "rv"),
+           bs = up(sinks, "s");
+    Buffer part = g.alloc(size_t(B) * Hq * NS * (HD + 2) * 4, "part"), out = g.alloc(size_t(B) * Hq * HD * 2, "out"),
+           tab = g.alloc(size_t(B) * HD / 2 * 8, "rope");
+    auto e0 = g.begin();
+    e0->use(NemotronH::pipeline("nh_dsp_rope_tab"));
+    e0->buf(0, tab);
+    e0->bytes(1, &p, sizeof p);
+    e0->dispatch(1, 1, 1, uint32_t(B * HD / 2));
+    e0->commit_and_wait();
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_dsp_attn_part"));
+    e->buf(0, bq);
+    e->buf(1, bqn);
+    e->buf(2, brk);
+    e->buf(3, brv);
+    e->buf(4, part);
+    e->bytes(5, &p, sizeof p);
+    e->buf(6, tab);
+    e->dispatch(uint32_t(Hkv), uint32_t(B), uint32_t(NS), uint32_t(32 * G));
+    e->commit_and_wait();
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_dsp_attn_fin"));
+    e2->buf(0, bq);
+    e2->buf(1, bqn);
+    e2->buf(2, bkn);
+    e2->buf(3, bs);
+    e2->buf(4, part);
+    e2->buf(5, out);
+    e2->bytes(6, &p, sizeof p);
+    e2->buf(7, tab);
+    e2->dispatch(uint32_t(Hkv), uint32_t(B), 1, uint32_t(32 * G));
+    e2->commit_and_wait();
+    // reference: per-head RMSNorm, NeoX RoPE
+    auto norm_rope = [&](const float* x, const std::vector<float>& w, int pos) {
+      double ss = 0;
+      for (int i = 0; i < HD; ++i) ss += double(x[i]) * x[i];
+      const double inv = 1.0 / std::sqrt(ss / HD + eps);
+      std::vector<double> n(HD), o(HD);
+      for (int i = 0; i < HD; ++i) n[size_t(i)] = x[i] * inv * w[size_t(i)];
+      for (int d = 0; d < HD; ++d) {
+        const int i = d % (HD / 2);
+        const double ang = double(pos) * std::pow(double(theta), -2.0 * i / HD);
+        o[size_t(d)] = d < HD / 2 ? n[size_t(d)] * std::cos(ang) - n[size_t(d + HD / 2)] * std::sin(ang)
+                                  : n[size_t(d)] * std::cos(ang) + n[size_t(d - HD / 2)] * std::sin(ang);
+      }
+      return o;
+    };
+    double err = 0, mx = 0;
+    for (int r = 0; r < B; ++r)
+      for (int h = 0; h < Hq; ++h) {
+        const int kvh = h / G, qpos = P + r;
+        std::vector<double> q = norm_rope(&qkv[size_t(r) * ld + size_t(h) * HD], qn, qpos);
+        std::vector<std::vector<double>> keys, vals;
+        for (int t = std::max(cs.lo, qpos + 1 - W); t < P; ++t) {
+          std::vector<double> k(HD), v(HD);
+          for (int i = 0; i < HD; ++i) {
+            k[size_t(i)] = float(rk[(size_t(kvh) * W + size_t(t % W)) * HD + size_t(i)]);
+            v[size_t(i)] = float(rv[(size_t(kvh) * W + size_t(t % W)) * HD + size_t(i)]);
+          }
+          keys.push_back(k);
+          vals.push_back(v);
         }
-        keys.push_back(k);
-        vals.push_back(v);
+        for (int j = 0; j <= r; ++j) {
+          keys.push_back(norm_rope(&qkv[size_t(j) * ld + size_t(Hq + kvh) * HD], kn, P + j));
+          std::vector<double> v(HD);
+          for (int i = 0; i < HD; ++i) v[size_t(i)] = qkv[size_t(j) * ld + size_t(Hq + Hkv + kvh) * HD + size_t(i)];
+          vals.push_back(v);
+        }
+        std::vector<double> sc;
+        double m = sinks[size_t(h)];
+        for (auto& k : keys) {
+          double d = 0;
+          for (int i = 0; i < HD; ++i) d += q[size_t(i)] * scale * k[size_t(i)];
+          sc.push_back(d);
+          m = std::max(m, d);
+        }
+        double den = std::exp(double(sinks[size_t(h)]) - m);
+        std::vector<double> o(HD, 0.0);
+        for (size_t j = 0; j < keys.size(); ++j) {
+          const double w = std::exp(sc[j] - m);
+          den += w;
+          for (int i = 0; i < HD; ++i) o[size_t(i)] += w * vals[j][size_t(i)];
+        }
+        for (int i = 0; i < HD; ++i) {
+          const double ref = o[size_t(i)] / den;
+          err = std::max(err, std::fabs(ref - double(out.as<__fp16>()[(size_t(r) * Hq + h) * HD + size_t(i)])));
+          mx = std::max(mx, std::fabs(ref));
+        }
       }
-      for (int j = 0; j <= r; ++j) {
-        keys.push_back(std::vector<float>(&kb[(size_t(j) * Hkv + kvh) * HD], &kb[(size_t(j) * Hkv + kvh) * HD] + HD));
-        vals.push_back(std::vector<float>(&vb[(size_t(j) * Hkv + kvh) * HD], &vb[(size_t(j) * Hkv + kvh) * HD] + HD));
-      }
-      double m = sinks[size_t(h)];
-      for (auto& k : keys) m = std::max(m, qd(k.data()));
-      double den = std::exp(double(sinks[size_t(h)]) - m);
-      std::vector<double> o(HD, 0.0);
-      for (size_t j = 0; j < keys.size(); ++j) {
-        const double w = std::exp(qd(keys[j].data()) - m);
-        den += w;
-        for (int i = 0; i < HD; ++i) o[size_t(i)] += w * vals[j][size_t(i)];
-      }
-      for (int i = 0; i < HD; ++i) {
-        const double ref = o[size_t(i)] / den;
-        err = std::max(err, std::fabs(ref - out.as<float>()[(size_t(r) * Hq + h) * HD + i]));
-        mx = std::max(mx, std::fabs(ref));
-      }
-    }
-  report("nh_dsp_attn", err / mx, 1e-4);
+    char name[64];
+    snprintf(name, sizeof name, "nh_dsp_attn P%d NS%d", P, NS);
+    report(name, err / mx, 2e-3);
+    g.release(part);
+    g.release(out);
+    g.release(tab);
+  }
 }
 
 void check_mask_rows() {
