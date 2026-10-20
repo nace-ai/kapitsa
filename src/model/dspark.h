@@ -36,6 +36,8 @@ class DSpark : public NhDrafter {
   void disarm() override;
   void encode_commit(Encoder& e, LiliSeq& d, int m) override;
   void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) override;
+  bool chains() const override { return chain_; }
+  void encode_draft_chained(Encoder& e, Seq& s, LiliSeq& d, int P) override;
 
  private:
   struct DLayer {
@@ -50,6 +52,10 @@ class DSpark : public NhDrafter {
   void alloc_buffers();
   const NhCapture& verify_hook() const override { return hook_v_; }
   void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) override;
+  // the commit (chained: the ring takes the first m rows, m from cyc_) and the drafting pass (chained: the positions
+  // from cyc_, written on the GPU by nh_dsp_cycle)
+  void enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0, bool chained);
+  void enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained);
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
 
   NemotronH& tg_;
@@ -65,6 +71,7 @@ class DSpark : public NhDrafter {
   // Lightning ~6 of 128 experts more per layer: 0.2 measured best with 0.1-0.3 on the harness's coding prompt and an
   // essay (512 tokens, greedy: 207 / 154 tok/s against 155 / 119 verifying every draft)
   float dyn_ratio_ = 0.2f;
+  bool chain_ = true;  // double-buffered decode (NI_DSPARK_CHAIN=0: the drafting half after the host reads each verify)
   std::vector<Buffer> owned_;
   size_t weight_bytes_ = 0;
 
@@ -73,6 +80,7 @@ class DSpark : public NhDrafter {
   Buffer pfeat_, pfeat_h_, vfeat_;
   Buffer x_, n_, t2_, q_, k_, v_, ao_, gt_, upb_, hfin_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
   Buffer cg_, cgh_, ck_, cv2_, rscale_, xh_;
+  Buffer cyc_;  // a chained drafting half's parameters (nh_dsp_cycle)
 };
 
 }  // namespace ni

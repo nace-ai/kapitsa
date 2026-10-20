@@ -2000,13 +2000,21 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return done;
   };
   if (lili_) {
-    // LiLiCorr: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass (7
-    // proposals after the anchor tokens[P]), then the target's verify of the 8 rows (capturing the drafter's
+    // LiLiCorr / DSpark: per cycle the drafter's context commit of the previous cycle's kept rows and the drafting pass
+    // (7 proposals after the anchor tokens[P]), then the target's verify of the 8 rows (capturing the drafter's
     // features), per-row sampling and the acceptance on the GPU; the host reads the accepted count.
+    // A drafter that chains() (DSpark) is double-buffered as DFlash2 below: the next cycle's drafting half (the commit
+    // of the rows the acceptance keeps, the drafting pass from the anchor it wrote; both read the acceptance on the
+    // GPU) is committed right behind each verify, so the GPU does not wait for the host between cycles (Lightning,
+    // M5 Max, nh_eval: 14.4-14.5 -> 14.1-14.2 ms per cycle, the wall time down to the GPU time). It is left out when
+    // the request parks after the verify (another request waits for the GPU, or the batch wants it) or the KV cache
+    // must grow first: the next cycle then drafts from the host's P as without chaining (LiLiCorr always does).
     LiliSeq& d = *slot.lseq;
     constexpr int B = NhDrafter::kB;
+    const bool chain = lili_->chains();
     int P = n, m_prev = 0;
     req_cycles = 0;
+    std::unique_ptr<Encoder> next;  // the coming cycle's committed drafting half
     // parked: the rows the last cycle kept go into the ring now (the verify's captured features are shared)
     auto park = [&] {
       if (m_prev > 0) {
@@ -2018,19 +2026,23 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     };
     bool go = handle(s.tokens()[n]);
     while (go) {
-      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
-        if (mtp_e) mtp_e->wait();
-        grow_kv(std::min(s.limit, P + 2 * B + 2), park);
+      if (!next) {  // the drafting half from the host's P (nothing of this request in flight)
+        if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
+          if (mtp_e) mtp_e->wait();
+          grow_kv(std::min(s.limit, P + 2 * B + 2), park);
+        }
+        if (P + B + 1 >= s.cap) {
+          finish = "length";
+          break;
+        }
+        next = g.begin();
+        if (m_prev > 0) lili_->encode_commit(*next, d, m_prev);
+        m_prev = 0;
+        lili_->encode_draft(*next, s, d, P);
+        next->commit();
       }
-      if (P + B + 1 >= s.cap) {
-        finish = "length";
-        break;
-      }
-      // two command buffers: the drafting half starts on the GPU while the host encodes the verify half
-      auto e1 = g.begin();
-      if (m_prev > 0) lili_->encode_commit(*e1, d, m_prev);
-      lili_->encode_draft(*e1, s, d, P);
-      e1->commit();
+      // the drafting half starts on the GPU while the host encodes the verify half
+      next.reset();
       auto e2 = nh_->grouped_passes() ? g.begin_grouped() : g.begin();
       lili_->arm_verify(P);
       nh_->set_dynamic_rows(true);  // the drafter's pass chose how many of the block's rows to verify
@@ -2038,7 +2050,16 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       lili_->disarm();
       nh_->encode_accept(*e2, s, P, B, B - 1, sp);
       nh_->set_dynamic_rows(false);
-      e2->commit_and_wait();
+      e2->commit();
+      // parks after this verify (no chained drafting half): another request waits for the GPU or the batch wants this
+      // one; the next anchor is at most P + 8, whose cycle must fit without growing the KV cache
+      const bool join = batch_wanted(), turn = !join && contended();
+      if (chain && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
+        next = g.begin();
+        lili_->encode_draft_chained(*next, s, d, P);
+        next->commit();
+      }
+      e2->wait();
       const int a = nh_->accepted();
       const int* tk = s.tokens();
       int m = 0;
@@ -2055,16 +2076,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       cycle_done(m);
       if (trace_path) trace_fn(nh_->logits(), m, tk + P + 1);
       nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
-      m_prev = m;
+      if (next) {  // the chained half commits all a + 1 rows to the ring (m < a + 1: a stop inside them, the end)
+        d.ctx = P + m;
+        d.hi = std::max(d.hi, P + a + 1);
+      } else {
+        m_prev = m;
+      }
       P += m;
-      const bool join = go && batch_wanted();
-      if (go && (join || contended())) {
+      if (go && !next && (join || turn)) {
         park();
         if (!join) yield_turn(res);
         else if (batch(P)) go = false;
       }
     }
-    auto e3 = g.begin();
+    auto e3 = g.begin();  // (behind a chained drafting half the loop ended with, if any)
     if (m_prev > 0) lili_->encode_commit(*e3, d, m_prev);
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();

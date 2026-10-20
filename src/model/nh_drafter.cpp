@@ -1,6 +1,7 @@
 #include "model/nh_drafter.h"
 #include "model/dspark.h"
 #include "model/lilicorr.h"
+#include "util/log.h"
 
 #include <nlohmann/json.hpp>
 
@@ -54,6 +55,8 @@ std::unique_ptr<NhDrafter> NhDrafter::open(NemotronH& target, const std::string&
   if (kind(dir) == "dspark") return std::make_unique<DSpark>(target, dir);
   return std::make_unique<LiliCorr>(target, dir);
 }
+
+void NhDrafter::encode_draft_chained(Encoder&, Seq&, LiliSeq&, int) { fatal("%s: no chained drafting", name()); }
 
 void NhDrafter::reset(LiliSeq& d) { d.ctx = d.hi = 0; }
 

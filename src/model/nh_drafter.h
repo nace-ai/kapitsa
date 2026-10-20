@@ -57,6 +57,14 @@ class NhDrafter {
   // coming verify's depth in the target's live rows ----
   virtual void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) = 0;
 
+  // ---- double-buffered decode (a drafter that chains()): the next cycle's drafting half, encoded and committed right
+  // behind the verify at P (+ its acceptance), before the host knows the outcome. It commits the verify's rows
+  // 0..a (a: the acceptance's count, read on the GPU) and drafts from the anchor P + a + 1 the acceptance wrote. Needs
+  // d.ctx == P; once the host has read a, it keeps m <= a + 1 rows: d.ctx = P + m, d.hi = max(d.hi, P + a + 1) (the
+  // ring holds all a + 1). Nothing else may use the drafter or the target's live rows in between. ----
+  virtual bool chains() const { return false; }
+  virtual void encode_draft_chained(Encoder& e, Seq& s, LiliSeq& d, int P);
+
   // ---- batched decode: one verify pass over several sequences' rows writes each one's captures into its own stage
   // (LiliSeq::stage, by row) instead of the shared verify capture. stage_init: d's stage and its hook (once);
   // encode_commit_staged: its staged rows into the ring (d.ctx += d.staged, d.staged = 0) ----

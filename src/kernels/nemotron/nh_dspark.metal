@@ -132,3 +132,50 @@ struct NhDspWalkP {
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
+
+// ---- double-buffered decode: the parameters of a drafting half encoded before the host knows the verify's outcome.
+// From the acceptance a (acc[0]) of the verify at P: m = a + 1 rows committed (positions P .. P + a), the anchor
+// P' = P + m. out: one 256-byte block each (bound as the kernels' constant parameters): [0] the anchor's embedding
+// (NhEmbedParams {D, tok_off P'}), [64] q norm + RoPE (NhQkP {Hq, 128, P', 1, eps, theta}), [128] k (the same, Hkv),
+// [192] nh_dsp_attn (NhDspAttnP {P', lo, W, Hq, Hkv, B, scale}), [256] nh_dsp_walk (NhDspWalkP {S, K, R, P', gs}),
+// [320] the commit's ring-write grid (m, 2 Hkv, 1). lo = max(0, P' - W, hi - W) as the host computes it (hi: one
+// past the highest position the ring held before the commit). One thread. ----
+struct NhDspCycP {
+  uint P, hi, W, D, Hq, Hkv, B, S, K, R;
+  float eps, theta, scale, gs;
+};
+[[kernel]] void nh_dsp_cycle(const device int* acc [[buffer(0)]], device uint* out [[buffer(1)]],
+                             constant NhDspCycP& p [[buffer(2)]]) {
+  const uint m = uint(acc[0]) + 1u, P = p.P + m;
+  const uint lo = max(P > p.W ? P - p.W : 0u, p.hi > p.W ? p.hi - p.W : 0u);
+  device uint* e = out;
+  e[0] = p.D;
+  e[1] = P;
+  for (uint i = 0; i < 2; ++i) {
+    device uint* q = out + 64 * (1 + i);
+    q[0] = i == 0 ? p.Hq : p.Hkv;
+    q[1] = 128u;
+    q[2] = P;
+    q[3] = 1u;
+    q[4] = as_type<uint>(p.eps);
+    q[5] = as_type<uint>(p.theta);
+  }
+  device uint* a = out + 192;
+  a[0] = P;
+  a[1] = lo;
+  a[2] = p.W;
+  a[3] = p.Hq;
+  a[4] = p.Hkv;
+  a[5] = p.B;
+  a[6] = as_type<uint>(p.scale);
+  device uint* w = out + 256;
+  w[0] = p.S;
+  w[1] = p.K;
+  w[2] = p.R;
+  w[3] = P;
+  w[4] = as_type<uint>(p.gs);
+  device uint* g = out + 320;
+  g[0] = m;
+  g[1] = 2u * p.Hkv;
+  g[2] = 1u;
+}

@@ -184,6 +184,7 @@ class NemotronH : public Model {
   Buffer live_rows() const { return live_; }
   const int* samples() const { return samp_.as<int>(); }
   int accepted() const { return acc_.as<int>()[0]; }
+  const Buffer& accepted_buf() const { return acc_; }  // (accepted() on the GPU: int [0])
 
   // ---- for the drafter ----
   void set_capture(const NhCapture* c) { cap_ = c; }
@@ -204,7 +205,9 @@ class NemotronH : public Model {
   void enc_norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& yh, int R, int D);
   void enc_norm2(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, const Buffer& yh, int R, int D);
   bool enc_qkv(Encoder& e, const NhLayer& L, int R);
-  void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out);
+  // (params: the kernel's {D, tok_off} read from that buffer instead, e.g. written on the GPU by a chained drafting half)
+  void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out, const Buffer* params = nullptr,
+                 size_t params_off = 0);
   static Pipeline pipeline(const std::string& name);
 
  private:

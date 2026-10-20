@@ -288,13 +288,22 @@ int main(int argc, char** argv) {
       constexpr int B = NhDrafter::kB;
       int P = n, m_prev = 0;
       double gpu_ms = 0;  // GPU time of the drafting and verify command buffers (the rest of the wall time: host gaps)
+      // as the engine: a drafter that chains() commits the next cycle's drafting half right behind each verify (it
+      // reads the acceptance on the GPU), so the GPU does not wait for the host between cycles; otherwise the drafting
+      // half is encoded once the host has read the acceptance
+      const bool chain = lili->chains();
+      std::unique_ptr<Encoder> next;  // the coming cycle's committed drafting half
       while (produced < gen) {
-        auto e1 = g.begin();
-        Encoder::profile_tag("d:");  // (NI_PROFILE: the drafting half's kernels apart)
-        if (m_prev > 0) lili->encode_commit(*e1, *d, m_prev);
-        lili->encode_draft(*e1, *s, *d, P);
-        Encoder::profile_tag(nullptr);
-        e1->commit();
+        if (!next) {
+          next = g.begin();
+          Encoder::profile_tag("d:");  // (NI_PROFILE: the drafting half's kernels apart)
+          if (m_prev > 0) lili->encode_commit(*next, *d, m_prev);
+          m_prev = 0;
+          lili->encode_draft(*next, *s, *d, P);
+          Encoder::profile_tag(nullptr);
+          next->commit();
+        }
+        const std::unique_ptr<Encoder> e1 = std::move(next);
         auto e2 = m.grouped_passes() ? g.begin_grouped() : g.begin();
         lili->arm_verify(P);
         m.set_dynamic_rows(true);
@@ -302,7 +311,15 @@ int main(int argc, char** argv) {
         lili->disarm();
         m.encode_accept(*e2, *s, P, B, B - 1, sp);
         m.set_dynamic_rows(false);
-        e2->commit_and_wait();
+        e2->commit();
+        if (chain && produced + 1 < gen) {
+          next = g.begin();
+          Encoder::profile_tag("d:");
+          lili->encode_draft_chained(*next, *s, *d, P);
+          Encoder::profile_tag(nullptr);
+          next->commit();
+        }
+        e2->wait();
         gpu_ms += e1->gpu_ms() + e2->gpu_ms();
         draft_gpu_ms += e1->gpu_ms();
         const int a = m.accepted();
@@ -310,12 +327,17 @@ int main(int argc, char** argv) {
         produced += mm;
         ++cycles;
         m.commit_rows(*s, mm);
-        m_prev = mm;
+        if (next) {  // (the chained half committed the a + 1 rows to the ring)
+          d->ctx = P + mm;
+          d->hi = std::max(d->hi, P + a + 1);
+        } else {
+          m_prev = mm;
+        }
         P += mm;
       }
       auto e3 = g.begin();
       Encoder::profile_tag("d:");  // (the last cycle's rows into the drafter's ring: drafting work too)
-      lili->encode_commit(*e3, *d, m_prev);
+      if (m_prev > 0) lili->encode_commit(*e3, *d, m_prev);
       Encoder::profile_tag(nullptr);
       m.encode_flush(*e3, *s);
       e3->commit_and_wait();

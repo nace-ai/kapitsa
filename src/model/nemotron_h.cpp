@@ -1575,14 +1575,16 @@ void NemotronH::enc_norm2(Encoder& e, const Buffer& x, const Buffer& w, const Bu
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
-void NemotronH::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out) {
+void NemotronH::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out, const Buffer* params,
+                          size_t params_off) {
   const EmbedP ep{uint32_t(cfg_.hidden), uint32_t(tok_off)};
   e.use(pipe(embed_.fmt == NhFmt::BF16 ? "nh_embed_bf16" : "nh_embed_q8"));
   e.buf(0, embed_.q);
   e.buf(1, embed_.s);
   e.buf(2, tokens);
   e.buf(3, out);
-  e.val(4, ep);
+  if (params) e.buf(4, *params, params_off);
+  else e.val(4, ep);
   e.dispatch(uint32_t(R), 1, 1, 256);
 }
 
