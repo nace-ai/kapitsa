@@ -140,8 +140,9 @@ size_t LiliCorr::plan_bytes(const std::string& dir, size_t* per_slot) {
   // prompt capture (window rows of every target layer) and its half copy, commit buffers (window rows), pass buffers
   const size_t bufs = size_t(W) * size_t(nl) * size_t(H) * 6 + size_t(W) * (size_t(H) * 6 + size_t(hkv) * size_t(hd) * 8) +
                       (size_t(96) << 20);
-  // the M5's repacked copies of the layers' k / v codes (make_xq8), counted on every Mac
-  const size_t kv = size_t(NL) * 2 * size_t(hkv) * size_t(hd) * size_t(H) * 34 / 32;
+  // the M5's repacked copies of the layers' Q8 k / v codes (make_xq8; the scales are shared, not copied), counted on
+  // every Mac and for any format (an NVFP4 drafter's are not copied: an overcount)
+  const size_t kv = size_t(NL) * 2 * size_t(hkv) * size_t(hd) * size_t(H);
   return w + bufs + kv;
 }
 
