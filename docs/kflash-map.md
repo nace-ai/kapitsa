@@ -125,14 +125,27 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
      arm on 4K and 16K-token prompts): 0.2 to 0.3 ms more GPU time per cycle (16.5 to 16.7 ms -> 16.8 to 16.9 ms, 22.7 -> 23.0 ms at
      16K), which is about 1% in tok/s on the short prompts (code 205.1 -> 203.0, prose 165.8 -> 163.4, 4K 229.7 -> 232.1 (noise: 2 runs per arm),
      16K 189.3 -> 187.3). Tokens per cycle are the same.
-   - Not covered: the 35B at temperature > 0 (the sampled exactness check), other MoE targets, and other machines than
-     the M5 Pro. `tools/moe_tree_check` and `kflash_invariance.py` are the tests to run after touching the verify
+   - Also checked on the M4 Pro, 2026-10-21:
+     - `moe_tree_check`: 0 of 55 pairs differ, on two prompts (96 and 64 positions);
+     - `kflash_invariance.py` (sizes 1,0,3,5,8,-1,auto, 384 tokens): 0 of 21 pairs differ, on two prompts;
+     - the 35B server suite: all pass;
+     - `dflash_accept_test`: all pass;
+     - 4B and 27B greedy: identical to plain decoding.
+   - Not covered: the 35B at temperature > 0 (the sampled exactness check), other MoE targets, and Macs other than
+     the M5 Pro and M4 Pro. `tools/moe_tree_check` and `kflash_invariance.py` are the tests to run after touching the verify
      attention or the GDN step.
-3. Nemotron speed: tree vs chain on Lightning. This needs the 23 GB model; the user said not to download it for now.
-4. 16/32-row verifies: the interleaved A/B is deferred; decide whether they join `kflash-trees`.
-5. Merging to `main` waits for the user. `main` has moved on, so bring the branch up to date first, then rerun the
+3. **`nh_tree_check` fails its planted-branch acceptance cases since `6cd6a11`** (the merge of `main`: chained DSpark
+   drafting alongside tree drafting).
+   - On the M4 Pro, greedy: 86 of 115 cycles accepted other than the planted branch; sampled: 83 of 112.
+   - Everything else in it passes, including the real loops: chain and tree, greedy and sampled, 0 tokens differ from
+     plain decoding.
+   - Most likely the test's planted-branch harness disagrees with the new chained DSpark drafting, but it needs
+     checking before Nemotron trees are trusted. It passed at `50a41f5`.
+4. Nemotron speed: tree vs chain on Lightning. This needs the 23 GB model; the user said not to download it for now.
+5. 16/32-row verifies: the interleaved A/B is deferred; decide whether they join `kflash-trees`.
+6. Merging to `main` waits for the user. `main` has moved on, so bring the branch up to date first, then rerun the
    checks and a short A/B.
-6. Parked:
+7. Parked:
    - the decoder's measured on/off switch;
    - the online-tuned selector;
    - the 4-bit verify on the M5's matrix units, which needs an M5 in the fleet.
