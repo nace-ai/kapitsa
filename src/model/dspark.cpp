@@ -269,6 +269,7 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   if (const char* v = getenv("NI_DSPARK_K")) K_ = std::clamp(atoi(v), 1, kMaxCand);
   head_rows_ = tg_.vocab();
   if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
+  if (Gpu::get().apple10()) dyn_ratio_ = 0.3f;
   if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_DSPARK_CHAIN")) chain_ = atoi(v) != 0;
   xq8_ = Gpu::get().apple10();

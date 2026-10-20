@@ -86,7 +86,10 @@ class DSpark : public NhDrafter {
   Buffer enc_norm_, out_norm_, mask_row_, w1_;  // w1_: the Markov head's embedding, BF16 [V][rank]
   // dynamic verify depth (NI_DSPARK_DYN; 0 = every draft): per-row cost over a cycle's fixed cost. A verify row costs
   // Lightning ~6 of 128 experts more per layer: 0.2 measured best with 0.1-0.3 on the harness's coding prompt and an
-  // essay (512 tokens, greedy: 207 / 154 tok/s against 155 / 119 verifying every draft)
+  // essay (512 tokens, greedy: 207 / 154 tok/s against 155 / 119 verifying every draft). On the M5 0.3: replaying
+  // 4,227 full-depth T = 0.6 cycles (4 prompts x 6 seeds) with the verify's measured cost per depth (7.35 ms for the
+  // anchor's row + ~1.0 per draft) puts 0.3 0.7% above 0.2 (greedy 1.2%), better on each prompt; the head's own
+  // probabilities are overconfident, which a larger ratio offsets (calibrating them per slot gained < 0.5% held out)
   float dyn_ratio_ = 0.2f;
   int fixed_depth_ = -1;  // NI_DSPARK_DEPTH=d: verify d drafts every cycle (measurements)
   // the attention projections on nh_xq8_v8 (default on the M5, where it was measured; NI_DSPARK_XQ8=0/1)
