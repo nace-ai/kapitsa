@@ -487,15 +487,17 @@ void NemotronH::prewarm_pipelines() {
     return (n.size() > 2 && n.compare(n.size() - 2, 2, "_t") == 0) || n == "nh_ssm_h80" ||
            n == "nh_attn_pf2_q1_h5_k32" || n == "nh_x4_mv_relu2" || n.rfind("nh_ssm1r", 0) == 0;
   };
+  // (the routed experts' layout L2 twins: only when a loaded layer's experts are in L2)
+  const bool any_l2 =
+      std::any_of(layers_.begin(), layers_.end(), [](const NhLayer& L) { return L.up_e.l2 || L.down_e.l2; });
   std::vector<std::string> v;
   for (const std::string& n : g.function_names())
     for (const char* pre : prefixes)
       if (n.rfind(pre, 0) == 0) {
-        // (the routed experts' layout L2 twins: only when the experts are in L2)
         const bool el2 = n.find("fp4l2_moe") != std::string::npos ||
                          (n.rfind("nh_x4_moe", 0) == 0 && n.size() > 3 && n.compare(n.size() - 3, 3, "_l2") == 0) ||
                          n == "nh_moe_b4_l2";
-        if ((dense_ || !dense_only(n)) && (experts_l2_ || !el2)) v.push_back(n);
+        if ((dense_ || !dense_only(n)) && (any_l2 || !el2)) v.push_back(n);
         break;
       }
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
