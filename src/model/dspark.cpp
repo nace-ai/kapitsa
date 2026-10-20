@@ -143,7 +143,7 @@ NhMat DSpark::mat(const std::string& name) {
   return m;
 }
 
-NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>& gs) {
+NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>& gs, bool shared) {
   std::vector<NhMat> parts;
   for (const std::string& n : names) parts.push_back(mat(n));
   NhMat m = parts[0];
@@ -155,7 +155,9 @@ NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>&
     m.N += p.N;
     gs.push_back(p.gs);
   }
-  m.gs = 1.0f;
+  // shared: the parts' common tensor scale on the whole (q|k|v: its products and views apply m.gs); else 1, the
+  // caller applying each part's own (gate|up: gs_g / gs_u in the SwiGLU)
+  m.gs = shared ? gs[0] : 1.0f;
   Gpu& g = Gpu::get();
   m.q = g.alloc(m.q_row * m.N, names[0].c_str(), false);
   m.s = g.alloc(m.s_row * m.N, "scales", false);
@@ -288,9 +290,12 @@ void DSpark::load() {
       L.sinks = upload(none.data(), none.size() * 4, "dspark_no_sinks");
     }
     std::vector<float> gs;
-    L.qkv = mat_cat({b + "self_attn.q_proj.weight", b + "self_attn.k_proj.weight", b + "self_attn.v_proj.weight"}, gs);
+    L.qkv = mat_cat({b + "self_attn.q_proj.weight", b + "self_attn.k_proj.weight", b + "self_attn.v_proj.weight"}, gs,
+                    true);
     const uint32_t nq = uint32_t(hq_) * 128, nk = uint32_t(hkv_) * 128;
     if (L.qkv.N != nq + 2 * nk) fatal("%s: attention projections of an unexpected shape", path_.c_str());
+    if (gs[0] != gs[1] || gs[1] != gs[2])  // (q|k|v run as one product with one tensor scale)
+      fatal("%s: q, k and v projections with different NVFP4 tensor scales are not supported", path_.c_str());
     L.q = rows(L.qkv, 0, nq);
     L.k = rows(L.qkv, nq, nk);
     L.v = rows(L.qkv, nq + nk, nk);

@@ -48,8 +48,8 @@ class DSpark : public NhDrafter {
     float gs_g = 1.0f, gs_u = 1.0f;
   };
   NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8
-  // the matrices' rows in one (the same format and K); each one's tensor scale into gs (the result's: 1)
-  NhMat mat_cat(const std::vector<std::string>& names, std::vector<float>& gs);
+  // the matrices' rows in one (the same format and K); each one's tensor scale into gs (the result's: gs[0] if shared, else 1)
+  NhMat mat_cat(const std::vector<std::string>& names, std::vector<float>& gs, bool shared = false);
   static NhMat rows(const NhMat& m, uint32_t r0, uint32_t n);  // rows [r0, r0 + n) of m, a view
   std::vector<float> host(const std::string& name);  // a BF16 / F32 tensor as fp32 on the CPU
   Buffer upload(const void* p, size_t bytes, const char* label);
