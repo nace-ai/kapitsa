@@ -1,0 +1,29 @@
+# The same hooks run in CI (.github/workflows/ci.yml, job "lint": `prek run --all-files`), so a commit that
+# passes here passes there. Install once: `uv tool install prek && prek install` (or pre-commit instead of prek).
+exclude: ^(third_party/|bench/results/|build/|internal/)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-case-conflict
+      # Prompts, corpora, token ids and results under bench/ are frozen bytes: never reformat them. This
+      # hook therefore only sees code, build files, workflows and docs prose.
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        files: ^(src|tools|tests|cmake|packaging|\.github)/|^(CMakeLists\.txt|install\.sh|[A-Z]+\.md)$|^docs/.*\.md$|\.(py|sh)$
+        exclude: ^bench/
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.21
+    hooks:
+      - id: ruff-check
+  - repo: local
+    hooks:
+      - id: shell-syntax
+        name: shell scripts parse (bash -n)
+        language: system
+        entry: bash -n
+        types: [shell]

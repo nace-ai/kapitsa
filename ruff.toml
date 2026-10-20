@@ -1,0 +1,12 @@
+# Python in this repo is tools, benchmarks and tests (stdlib-first scripts in a dense style), so ruff is
+# a correctness gate, not a formatter: it catches syntax errors and undefined names, nothing about style.
+# Widen `select` only together with a clean-up of what it newly flags.
+extend-exclude = ["third_party", "build", "internal", "venv"]
+
+[lint]
+select = [
+  "E9",   # syntax errors and unreadable files
+  "F63",  # invalid comparisons and assert on a tuple
+  "F7",   # misplaced return/yield/break/continue
+  "F82",  # undefined names, including in __all__
+]

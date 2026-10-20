@@ -1,0 +1,41 @@
+# PR size: one change per PR (CONTRIBUTING.md). Counts the lines a reviewer reads (.github/scripts/pr_size.py) and fails
+# above LIMIT. Not a required check until an admin makes it one. The override is for a reviewer to give: the
+# `size/override` label (needs triage rights) and a `Size override: <why>` line in the PR description.
+#
+# pull_request_target, so the script that counts is the base branch's and a PR cannot change its own check. It never
+# runs the PR's code: the PR's commits are fetched as git objects and only `git diff --numstat` reads them. The
+# PR description goes in through an environment variable, never into a run: line.
+name: PR size
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  size:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5  # the base branch: the script is trusted
+        with:
+          fetch-depth: 0  # a shallow checkout miscounts
+      - name: Fetch the PR's commits (as data)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "refs/pull/${PR_NUMBER}/head"
+      - name: Count
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LIMIT: "1000"
+          HAS_OVERRIDE_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'size/override') }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python3 .github/scripts/pr_size.py
