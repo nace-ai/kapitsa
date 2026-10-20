@@ -176,6 +176,9 @@ NI_INLINE void nh_ssd_scan_impl(const device float* zx, device float* state, dev
         const float xv = xt[i * RW + 8 * sg + fr], z = zx[size_t(t) * p.zx_stride + pp];
         y[size_t(t) * DI + pp] = (v + Dh * xv) * silu(z);
       }
+    // (every simdgroup's reads of xt above before the next chunk overwrites it: without this barrier a simdgroup
+    // ahead staged the next chunk's x under a slower one's output loop, and a prefill's y differed from run to run)
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
   if (p.write)
     _Pragma("clang loop unroll(full)")
