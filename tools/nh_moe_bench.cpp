@@ -67,6 +67,8 @@ int main(int argc, char** argv) {
     else if (a == "--small") small = true;
     else only.push_back(a);
   }
+  if (reps < 1 || calls < 1 || NL < 1 || calls > 4096 || NL > 64)
+    fatal("--reps, --calls (<= 4096) and --layers (<= 64) take positive counts");
   if (small) {
     NL = 2;
     calls = 4;
@@ -82,6 +84,11 @@ int main(int argc, char** argv) {
     while (fread(&r, sizeof r, 1, f) == 1) recs.push_back(r);
     fclose(f);
     if (recs.empty()) fatal("%s: no routings", routes.c_str());
+    for (const Rec& q : recs) {
+      if (q.R != R || q.live < 1 || q.live > R) fatal("%s: a routing of %u rows (%u live); this bench takes %u", routes.c_str(), q.R, q.live, R);
+      for (uint32_t i = 0; i < q.live * k; ++i)
+        if (q.eid[i] < 0 || q.eid[i] >= int(E)) fatal("%s: expert %d out of range", routes.c_str(), q.eid[i]);
+    }
   } else {
     const int hist[9] = {0, 0, 230, 529, 575, 506, 368, 414, 575};  // live rows of 3197 recorded layer verifies
     for (int n = 0; n < 4096; ++n) {
@@ -154,7 +161,7 @@ int main(int argc, char** argv) {
   double sum_pairs = 0, sum_dist = 0;
   for (int c = 0; c < ncall; ++c) {
     Call& C = cs[size_t(c)];
-    const Rec& r = recs[size_t(c * 37 + 11) % recs.size()];
+    const Rec& r = recs[size_t(c) % recs.size()];
     C.eid = g.alloc(R * k * 4, "eid");
     C.ew = g.alloc(R * k * 4, "ew");
     C.live = g.alloc(16, "live");
@@ -258,6 +265,7 @@ int main(int argc, char** argv) {
       }
   }
   printf("%s up vs fp64: max |err| / (sum |w x|)^2 %.2e\n", vs[0]->name.c_str(), worst);
+  bool differs = false;
   for (size_t vi = 1; vi < vs.size(); ++vi) {
     run_all(*vs[vi]);
     size_t bh = 0, bx = 0;
@@ -268,6 +276,7 @@ int main(int argc, char** argv) {
     }
     printf("%-7s vs %s: h %s, out %s (%d calls)\n", vs[vi]->name.c_str(), vs[0]->name.c_str(),
            bh ? "DIFFERS" : "bitwise the same", bx ? "DIFFERS" : "bitwise the same", ncall);
+    differs |= bh || bx;
   }
   const double eb = double(qb + sb);  // one expert's projection
   for (int st = 0; st < 2; ++st) {
@@ -286,5 +295,5 @@ int main(int argc, char** argv) {
              st ? "up + down + sum" : "up", us, t[vi][0], sum_dist / ncall * eb * (st ? 2 : 1) / us / 1e3);
     }
   }
-  return 0;
+  return differs ? 1 : 0;  // a variant whose outputs differ fails the run
 }
