@@ -24,6 +24,20 @@ float from_f16(uint16_t h);
 // n codes of `bits` bits -> MLX's packing: value j at bits [bits*j, bits*j + bits) of a little-endian stream of
 // uint32 words (n * bits must be a multiple of 32).
 void pack_codes(const uint8_t* codes, size_t n, int bits, uint32_t* words);
+// llama.cpp's IQ2_XXS / IQ2_S / IQ3_S blocks in the GPU layout of src/kernels/wfmt_iq.metal (routed experts kept as
+// the GGUF stores them): a matrix of `rows` rows of K values (K % 256 == 0) as sections Q (a uint2 per 32 values),
+// X1-X3 (the types' other bits) and D (llama.cpp's half d per 256 values), the GGUF's bytes per 256 values. The bits
+// are moved, not changed.
+struct IqLayout {
+  size_t x1 = 0, x2 = 0, x3 = 0, d = 0;  // byte offsets of the sections X1, X2, X3, D (Q at 0)
+  size_t bytes = 0;                      // the whole matrix
+};
+bool iq_gpu_type(uint32_t type);  // a type with that layout: IQ2_XXS, IQ2_S, IQ3_S
+IqLayout iq_layout(uint32_t type, size_t rows, size_t K);
+// Rows [r0, r1) of the matrix from their GGUF blocks (src: the bytes of row r0 onwards) into dst (the matrix's buffer,
+// iq_layout(type, rows, K).bytes long).
+void iq_repack(uint32_t type, const uint8_t* src, size_t rows, size_t K, size_t r0, size_t r1, uint8_t* dst);
+
 // Affine quantization of n values (n a multiple of gs) to `bits` bits per group of gs: codes, bf16 scale and bias.
 // Per group the best (least squared error, after rounding scale and bias to bf16) of the min-max grid, a symmetric
 // grid and least-squares refits of the min-max grid.

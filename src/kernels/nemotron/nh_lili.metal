@@ -150,7 +150,7 @@ struct NhLiliAttnP {
 
 // ---- candidates: per slot row (logits rows 1..S of the pass), the top-K tokens in descending order with their
 // log-probabilities (log-softmax over the full row). Stage 1: per (row, chunk of 2048) the chunk's top K and
-// (max, sum exp); grid (nchunks, S) x 256. Stage 2: per row; grid S x 256. ----
+// (max, sum exp); grid (nchunks, S) x 256. Stage 2: per row; grid S x 32. ----
 struct NhCandP {
   uint V, K, nchunks, row0, ld;
 };
@@ -212,34 +212,88 @@ struct NhCandP {
   if (tid == 0) ms[size_t(s) * p.nchunks + c] = float2(cmax, se);
 }
 
-// stage 2: one thread per row (nchunks * K candidates); writes cand ids (as ints) and log-probs [S][K]
+// stage 2: one simdgroup per row merges its nchunks <= 64 sorted chunk lists (value descending, lowest id first on
+// ties): lane l holds the heads of chunks l and l + 32, and each of the K rounds takes the best head by (value
+// descending, id ascending, chunk ascending) with a simdgroup reduction, as a sequential merge takes them; the
+// log-sum-exp over the chunks' (max, sum exp) in chunk order on lane 0. Writes cand ids (as ints) and log-probs
+// [S][K]. (One thread per row merging the lists: 117 us isolated / ~90 us in the pipeline on Lightning's DSpark pass,
+// 7 rows x 64 chunks x 16; the same output.) grid: S x 32 ----
 [[kernel]] void nh_cand2(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
                          const device float2* ms [[buffer(2)]], device int* cand [[buffer(3)]],
                          device float* clp [[buffer(4)]], constant NhCandP& p [[buffer(5)]],
-                         uint s [[thread_position_in_grid]]) {
-  float M = -INFINITY;
-  for (uint c = 0; c < p.nchunks; ++c) M = max(M, ms[s * p.nchunks + c].x);
+                         uint s [[threadgroup_position_in_grid]], uint lane [[thread_position_in_threadgroup]]) {
+  threadgroup float tv[64 * 32];
+  threadgroup uint ti[64 * 32];
+  const uint E = p.nchunks * p.K;
+  for (uint i0 = 0; i0 < E; i0 += 32 * 8) {  // 8 loads in flight per lane before the stores
+    float v[8];
+    uint id[8];
+    for (uint u = 0; u < 8; ++u) {
+      const uint i = i0 + u * 32 + lane;
+      v[u] = i < E ? cv[size_t(s) * E + i] : 0.0f;
+      id[u] = i < E ? ci[size_t(s) * E + i] : 0u;
+    }
+    for (uint u = 0; u < 8; ++u) {
+      const uint i = i0 + u * 32 + lane;
+      if (i < E) {
+        tv[i] = v[u];
+        ti[i] = id[u];
+      }
+    }
+  }
+  // the log-sum-exp: the chunks' terms on their lanes, summed in chunk order on lane 0
+  const float2 m0 = lane < p.nchunks ? ms[s * p.nchunks + lane] : float2(-INFINITY, 0.0f);
+  const float2 m1 = lane + 32 < p.nchunks ? ms[s * p.nchunks + lane + 32] : float2(-INFINITY, 0.0f);
+  const float M = simd_max(max(m0.x, m1.x));
+  const float e0 = metal::precise::exp(m0.x - M), e1 = metal::precise::exp(m1.x - M);
   float S = 0.0f;
   for (uint c = 0; c < p.nchunks; ++c) {
-    const float2 v = ms[s * p.nchunks + c];
-    if (v.x > -INFINITY) S += v.y * metal::precise::exp(v.x - M);
+    const float vx = simd_shuffle(c < 32 ? m0.x : m1.x, c & 31), vy = simd_shuffle(c < 32 ? m0.y : m1.y, c & 31);
+    const float ec = simd_shuffle(c < 32 ? e0 : e1, c & 31);
+    if (vx > -INFINITY) S += vy * ec;
   }
   const float lse = M + metal::precise::log(S);
-  // merge: repeatedly take the best remaining head of the per-chunk sorted lists
-  uint head[64];
-  for (uint c = 0; c < p.nchunks; ++c) head[c] = 0;
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  uint h0 = 0, h1 = 0;  // the heads of chunks lane, lane + 32
   for (uint r = 0; r < p.K; ++r) {
+    // this lane's best head (an exhausted or missing chunk: none)
     float bv = -INFINITY;
-    uint bi = 0xffffffffu, bc = 0;
-    for (uint c = 0; c < p.nchunks; ++c) {
-      if (head[c] >= p.K) continue;
-      const float v = cv[(size_t(s) * p.nchunks + c) * p.K + head[c]];
-      const uint id = ci[(size_t(s) * p.nchunks + c) * p.K + head[c]];
-      if (v > bv || (v == bv && id < bi)) { bv = v; bi = id; bc = c; }
+    uint bi = 0xffffffffu, bc = 0xffffffffu;
+    if (lane < p.nchunks && h0 < p.K) {
+      bv = tv[lane * p.K + h0];
+      bi = ti[lane * p.K + h0];
+      bc = lane;
     }
-    head[bc]++;
-    cand[s * p.K + r] = int(bi);
-    clp[s * p.K + r] = bv - lse;
+    if (lane + 32 < p.nchunks && h1 < p.K) {
+      const float v = tv[(lane + 32) * p.K + h1];
+      const uint id = ti[(lane + 32) * p.K + h1];
+      if (bc == 0xffffffffu || v > bv || (v == bv && id < bi)) {
+        bv = v;
+        bi = id;
+        bc = lane + 32;
+      }
+    }
+    for (uint off = 16; off > 0; off >>= 1) {
+      const float ov = simd_shuffle_xor(bv, off);
+      const uint oi = simd_shuffle_xor(bi, off), oc = simd_shuffle_xor(bc, off);
+      if (oc != 0xffffffffu && (bc == 0xffffffffu || ov > bv || (ov == bv && (oi < bi || (oi == bi && oc < bc))))) {
+        bv = ov;
+        bi = oi;
+        bc = oc;
+      }
+    }
+    if (bc == 0xffffffffu) {  // every chunk exhausted (K > the candidates there are): as the merge, nothing found
+      bv = -INFINITY;
+      bi = 0xffffffffu;
+    } else if (bc == lane) {
+      ++h0;
+    } else if (bc == lane + 32) {
+      ++h1;
+    }
+    if (lane == 0) {
+      cand[s * p.K + r] = int(bi);
+      clp[s * p.K + r] = bv - lse;
+    }
   }
 }
 

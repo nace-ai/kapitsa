@@ -169,27 +169,31 @@ struct NhMoeDecP {
 }
 
 // grid: tg_u = k * ceil(I / rows) + ceil(H / rows) threadgroups. gse: the routed experts' up scales.
-[[kernel]] void nh_moe_b4(const device uchar* eq [[buffer(0)]], const device uchar* es [[buffer(1)]],
-                          const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],
-                          const device int* eid [[buffer(4)]], const device uchar* dq [[buffer(5)]],
-                          const device uchar* ds [[buffer(6)]], const device float* sh [[buffer(7)]],
-                          device float* sd [[buffer(8)]], constant NhMoeDecP& p [[buffer(9)]],
-                          const device float* gse [[buffer(10)]], constant float& gs_dn [[buffer(11)]],
-                          uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
-                          uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                          uint tid [[thread_index_in_threadgroup]]) {
-  threadgroup half2 tlh[256];
-  nh_x4_lut_to_tg(tlh, tid, nsg * 32);
-  const uint tg = tgp.x;
-  if (tg < p.tg_u) {  // routed up: pair j = tg / tiles per expert
-    const uint per = (p.I + 4 * nsg - 1) / (4 * nsg), j = tg / per, e = uint(eid[j]);
-    nh_x4_mv_impl<0, 2>(eq + size_t(e) * p.up_q_stride, es + size_t(e) * p.up_s_stride, lat, h + size_t(j) * p.I, p.I,
-                        p.L, gse[e], ((tg % per) * nsg + sg) * 4, lane, tlh);
-    return;
+// LE: the routed experts' layout (L0, or L2: nh_moe_b4_l2; the shared down stays L0)
+#define NH_MOE_B4(NAME, LE)                                                                                        \
+  [[kernel]] void NAME(const device uchar* eq [[buffer(0)]], const device uchar* es [[buffer(1)]],                 \
+                       const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],                      \
+                       const device int* eid [[buffer(4)]], const device uchar* dq [[buffer(5)]],                  \
+                       const device uchar* ds [[buffer(6)]], const device float* sh [[buffer(7)]],                 \
+                       device float* sd [[buffer(8)]], constant NhMoeDecP& p [[buffer(9)]],                       \
+                       const device float* gse [[buffer(10)]], constant float& gs_dn [[buffer(11)]],               \
+                       uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],      \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       uint tid [[thread_index_in_threadgroup]]) {                                                 \
+    threadgroup half2 tlh[256];                                                                                    \
+    nh_x4_lut_to_tg(tlh, tid, nsg * 32);                                                                           \
+    const uint tg = tgp.x;                                                                                         \
+    if (tg < p.tg_u) { /* routed up: pair j = tg / tiles per expert */                                             \
+      const uint per = (p.I + 4 * nsg - 1) / (4 * nsg), j = tg / per, e = uint(eid[j]);                            \
+      nh_x4_mv_impl<LE, 2>(eq + size_t(e) * p.up_q_stride, es + size_t(e) * p.up_s_stride, lat,                    \
+                           h + size_t(j) * p.I, p.I, p.L, gse[e], ((tg % per) * nsg + sg) * 4, lane, tlh);         \
+      return;                                                                                                      \
+    }                                                                                                              \
+    /* shared down rows (NVFP4) into sd */                                                                         \
+    nh_x4_mv_impl<0, 0>(dq, ds, sh, sd, p.H, p.S, gs_dn, ((tg - p.tg_u) * nsg + sg) * 4, lane, tlh);               \
   }
-  // shared down rows (NVFP4) into sd
-  nh_x4_mv_impl<0, 0>(dq, ds, sh, sd, p.H, p.S, gs_dn, ((tg - p.tg_u) * nsg + sg) * 4, lane, tlh);
-}
+NH_MOE_B4(nh_moe_b4, 0)
+NH_MOE_B4(nh_moe_b4_l2, 2)
 
 // x[n] += W_up[n, :] . lo + sd[n] (lo: the summed partials, nh_x4_moe_dn_sum). grid: ceil(H / rows) threadgroups
 [[kernel]] void nh_moe_d2(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],

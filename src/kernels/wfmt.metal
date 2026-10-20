@@ -1486,6 +1486,9 @@ NI_WF_MOE(NI_WF_MOE_PREFILL)
 // bf16 large-M tiles with M tiles along grid x (weights shared through the cache; qrf_f16_m32_n128_mf: base library)
 NI_QRF(qrf_f16_m64_n64_mf, 16, 64, 64, 64, 1, 4, true)
 NI_QRF_GU(qrf_gu_f16_m32_n64_mf, 16, 64, 32, 64, 1, 4, true)
+// The other formats' large tiles with M tiles along grid x too: the M1's (Apple7) default (enc_qrf)
+#define NI_WF_PREFILL_MF(SFX, F, GS) NI_QRF(qrf_##SFX##_m32_n128_mf, F, GS, 32, 128, 1, 4, true)
+NI_WF_LOW(NI_WF_PREFILL_MF)
 
 #define NI_WF_SHORT(SFX, F, GS)                                                                             \
   NI_QMMSF(qmmsf_##SFX##_t1, F, GS, 1) NI_QMMSF(qmmsf_##SFX##_t2, F, GS, 2) NI_QMMSF(qmmsf_##SFX##_t3, F, GS, 3) \

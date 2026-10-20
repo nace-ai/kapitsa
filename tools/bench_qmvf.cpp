@@ -6,7 +6,9 @@
 //       qmv2_b4_g64_r2[_norm|_add]   (qmv.metal, R = 1, x staged per threadgroup; also qmv3_b4_r2[_add|_norm])
 //       qmvht_t2_r4 | qmvht_t3_r4    (half inner products, x staged as half)
 //       mlp_gate_up                  (qmv.metal: norm + gate + up + SwiGLU, R = 1; two matrices)
-// Weights (4-bit, or 8-bit when every spec is a _b8 kernel) rotate over copies (~1 GB) so each dispatch reads DRAM. Prints the median and range of us per matrix (or
+//       qmvg_multi_f6g64[+norm]      (wfmt.metal: the generic multi-matrix form, one 6-bit matrix, R = 1)
+// Weights (4-bit; 8-bit when every spec is a _b8 kernel, 6-bit group 64 when every spec is a _b6 / _f6g64 one) rotate
+// over copies (~1 GB) so each dispatch reads DRAM. Prints the median and range of us per matrix (or
 // gate + up pair) and GB/s per kernel, and the max relative error of 16 sampled outputs per token row against a
 // double-precision CPU reference.
 #include "metal/gpu.h"
@@ -29,6 +31,12 @@ struct QmvfParams {
   float eps;
   uint32_t N[4], y_ld[4], add[4], tg_begin[5];
   uint32_t write_xn;
+};
+struct QmvMulti2Params {
+  uint32_t K, nseg;
+  float eps;
+  uint32_t norm, write_xn;
+  uint32_t N[4], tg_begin[5], bits[4];
 };
 
 struct Mat { Buffer w, s, b; };
@@ -62,16 +70,23 @@ int main(int argc, char** argv) {
     if (c != std::string::npos) sscanf(a.c_str() + c + 1, "%u:%u:%u", &s.nt, &s.rows, &s.nsg);
     s.gu = starts(s.name, "qmvf_gu") || s.name == "mlp_gate_up";
     s.norm = s.name.find("_norm") != std::string::npos || s.name == "mlp_gate_up";
+    if (s.name.size() > 5 && s.name.compare(s.name.size() - 5, 5, "+norm") == 0) {  // qmvg_multi_*: norm by parameter
+      s.name.resize(s.name.size() - 5);
+      s.norm = true;
+    }
     s.add = s.name.find("_add") != std::string::npos;
     s.p = Gpu::get().pipeline(s.name);
     specs.push_back(s);
   }
   Gpu& g = Gpu::get();
   std::mt19937 rng(7);
-  // weight width: 8-bit when every spec names a _b8 kernel, else 4-bit
-  bool all8 = !specs.empty();
-  for (auto& sp : specs) all8 = all8 && sp.name.find("_b8") != std::string::npos;
-  const int bits = all8 ? 8 : 4;
+  // weight width: 8-bit when every spec names a _b8 kernel, 6-bit when every one a _b6 / _f6g64 kernel, else 4-bit
+  bool all8 = !specs.empty(), all6 = !specs.empty();
+  for (auto& sp : specs) {
+    all8 = all8 && sp.name.find("_b8") != std::string::npos;
+    all6 = all6 && (sp.name.find("_b6") != std::string::npos || sp.name.find("_f6g64") != std::string::npos);
+  }
+  const int bits = all8 ? 8 : all6 ? 6 : 4;
   const size_t wbytes = size_t(N) * K * bits / 8, gbytes = size_t(N) * K / 64 * 2;
   const size_t mat_bytes = wbytes + 2 * gbytes;
   int copies = std::clamp(int(1.2e9 / mat_bytes), 2, 400);
@@ -108,10 +123,13 @@ int main(int argc, char** argv) {
   };
   auto ref_row = [&](const Mat& m, const std::vector<double>& xr, uint32_t t, uint32_t n) {
     double acc = 0;
-    const uint32_t per = 32 / bits, mask = (1u << bits) - 1;
-    const uint32_t* w = m.w.as<uint32_t>() + size_t(n) * K / per;
-    for (uint32_t k = 0; k < K; ++k) {
-      const uint32_t q = (w[k / per] >> (bits * (k % per))) & mask;
+    const uint32_t mask = (1u << bits) - 1;
+    const uint32_t* w = m.w.as<uint32_t>() + size_t(n) * K * bits / 32;
+    for (uint32_t k = 0; k < K; ++k) {  // value k at bits [bits * k, bits * k + bits) of the row's stream
+      const uint32_t b = bits * k, sh = b % 32;
+      uint32_t q = w[b / 32] >> sh;
+      if (sh + bits > 32) q |= w[b / 32 + 1] << (32 - sh);
+      q &= mask;
       const double wr = double(bf16_to_f32(m.s.as<uint16_t>()[size_t(n) * K / 64 + k / 64])) * q +
                         bf16_to_f32(m.b.as<uint16_t>()[size_t(n) * K / 64 + k / 64]);
       acc += wr * xr[size_t(t) * K + k];
@@ -133,6 +151,15 @@ int main(int argc, char** argv) {
       }
       e.buf(16, x); e.val(17, p); e.buf(18, nw); e.buf(19, y2);
       e.dispatch((R + s.nt - 1) / s.nt, tgs, 1, 32 * s.nsg);
+    } else if (starts(s.name, "qmvg_multi")) {  // 8 simdgroups x 2 rows, as Qwen35::enc_qmv_multi
+      QmvMulti2Params p{};
+      p.K = K; p.nseg = 1; p.eps = eps; p.norm = s.norm; p.N[0] = N; p.bits[0] = uint32_t(bits);
+      p.tg_begin[1] = (N + 15) / 16;
+      for (int i = 0; i < 4; ++i) {
+        e.buf(i * 4 + 0, m.w); e.buf(i * 4 + 1, m.s); e.buf(i * 4 + 2, m.b); e.buf(i * 4 + 3, y);
+      }
+      e.buf(16, x); e.val(17, p); e.buf(18, nw); e.buf(19, y2);
+      e.dispatch((N + 15) / 16, 1, 1, 256);
     } else if (starts(s.name, "qmvrc1")) {
       QmvrParams p{N, K, R, K, N, s.add ? 1u : 0u};
       e.buf(0, m.w); e.buf(1, m.s); e.buf(2, m.b); e.buf(3, x); e.buf(4, y); e.val(5, p);
@@ -167,7 +194,8 @@ int main(int argc, char** argv) {
         const Mat& m = mats[copies - step];
         const Mat& m2 = mats[copies - 1];
         const auto xr = ref_x(s.norm);
-        const uint32_t TR = (starts(s.name, "qmv2") || starts(s.name, "qmv3") || s.name == "mlp_gate_up") ? 1 : R;
+        const uint32_t TR =
+            (starts(s.name, "qmv2") || starts(s.name, "qmv3") || starts(s.name, "qmvg") || s.name == "mlp_gate_up") ? 1 : R;
         double mx = 0;
         for (uint32_t t = 0; t < TR; ++t)
           for (int i = 0; i < 16; ++i) {

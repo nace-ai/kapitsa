@@ -102,7 +102,7 @@ NI_INLINE void nh_gemm_impl(const device half* X, const device uchar* Wq, const 
     s += size_t(t.x) * p.s_estride;
     m0 = t.y;
     M = t.y + t.z;  // rows [t.y, t.y + t.z) of the sorted pair list
-    if (FMT == 1) gs *= gse[t.x];
+    if (FMT == 1 || FMT == 6) gs *= gse[t.x];
   }
   const uint sm = sg / 2, sn = sg % 2;
   simdgroup_float8x8 acc[FM][4];
@@ -224,6 +224,12 @@ NH_GEMM_GS(nh_gemm_fp4_moe_up_m16, 1, 1, 16)
 NH_GEMM_GS(nh_gemm_fp4_moe_dn_m64, 1, 2, 64)
 NH_GEMM_GS(nh_gemm_fp4_moe_dn_m32, 1, 2, 32)
 NH_GEMM_GS(nh_gemm_fp4_moe_dn_m16, 1, 2, 16)
+NH_GEMM_GS(nh_gemm_fp4l2_moe_up_m64, 6, 1, 64)  // expert stacks in layout L2
+NH_GEMM_GS(nh_gemm_fp4l2_moe_up_m32, 6, 1, 32)
+NH_GEMM_GS(nh_gemm_fp4l2_moe_up_m16, 6, 1, 16)
+NH_GEMM_GS(nh_gemm_fp4l2_moe_dn_m64, 6, 2, 64)
+NH_GEMM_GS(nh_gemm_fp4l2_moe_dn_m32, 6, 2, 32)
+NH_GEMM_GS(nh_gemm_fp4l2_moe_dn_m16, 6, 2, 16)
 
 // ---- F32 GEMM (the router: Y[M, N] = X[M, K] W[N, K]^T, X fp32, W fp32 or bf16, fp32 products) ----
 // grid: (ceil(N / 32), ceil(M / 32)) x 128 threads; 4 simdgroups of 16 x 16 (2 x 2 fragments)

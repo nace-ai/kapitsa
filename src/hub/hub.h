@@ -37,13 +37,23 @@ struct Companion {
   bool drafter() const { return kind == "dflash2" || kind == "dflash" || kind == "lilicorr" || kind == "dspark"; }
 };
 
+// A GGUF file of a repo, pinned: a variant's weights as llama.cpp's format ships them, converted after the download by
+// `kapitsa import` (src/gguf/import.h) into the variant's folder, which then holds the conversion and not the file
+// (its routed experts kept in the file's blocks are an APFS clone of it).
+struct GgufFile {
+  std::string path;    // in the repo: "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf"
+  std::string sha256;
+  uint64_t size = 0;
+};
+
 // One way to run a model: its weights at one precision, with the companions that speed them up. `--model
 // <model>:<variant>` picks one, `--model <model>` the model's default.
 struct Variant {
   std::string name;                   // "4bit", "8bit", "6bit", "bf16" (lower case): what follows the ':'
   std::string quant;                  // what the weights are: "MLX affine 4-bit, group 64"
   std::string label;                  // how the home screen names it ("": from the name, 4bit -> 4-bit)
-  std::string repo, revision;         // the weights (every file but .gitattributes)
+  std::string repo, revision;         // the weights (every file but .gitattributes; with `gguf`, that file alone)
+  GgufFile gguf;                      // path "": the repo's own files (MLX); else that file, imported (no companions)
   std::vector<Companion> companions;
   double download_gb = 0;             // weights + companions
 };
@@ -114,7 +124,10 @@ struct PullOptions {
 // files, and in a folder Kapitsa did not download only those that match the pinned checksums; the Hugging Face cache;
 // `from` folders; checksums verified, APFS clones so no extra disk), check the free disk space, download the rest in
 // parallel ranges (resumable: run again after an interruption), build the MTP
-// sidecar if the model has one, verify sizes and sha256, and write the manifest. Throws Error.
+// sidecar if the model has one, verify sizes and sha256, and write the manifest. A GGUF variant (Variant::gguf) takes
+// its one pinned file the same way (no listing: offline once the file is here), then imports it over the folder (the
+// file goes, its blocks stay in the experts' clone; a stopped import starts again from the downloaded file) before the
+// manifest. Throws Error.
 std::string ensure(const ModelRef& ref, const PullOptions& opt);
 // Every file the manifest lists is there (a finished download).
 bool is_complete(const std::string& dir);
@@ -124,9 +137,17 @@ bool is_current(const ModelRef& ref);
 // What a memory plan reads for a model, without its weights: config.json and each safetensors file's header (the
 // 8-byte length and the JSON, no tensor data), the companions' too (the MTP head's, the drafter's in dflash2/). For a
 // downloaded model, a local folder: the model's own folder. For a catalog model not downloaded yet: fetched once into
-// ~/.cache/kapitsa/plans/<name> (a few hundred KB; pinned revisions, so it never changes). "" when that fails
-// (offline) or for a repo outside the catalog.
+// ~/.cache/kapitsa/plans/<name> (a few hundred KB; pinned revisions, so it never changes). A GGUF variant's: what its
+// import would write, planned by `kapitsa import` from the file's header (the file's first 16 MB, fetched by a range
+// request, or the file itself once its download is complete; planned again by another Kapitsa version). "" when that
+// fails (offline) or for a repo outside the catalog.
 std::string plan_dir(const ModelRef& ref);
+// A GGUF variant's import as its plan sizes it: the bytes it writes beside the downloaded file, and the folder's size
+// once done (the file's blocks then belong to the experts' clone). False when it cannot be planned (offline).
+struct ImportSize {
+  uint64_t write = 0, disk = 0;
+};
+bool import_size(const ModelRef& ref, ImportSize* out);
 // While set, plan_dir() fetches nothing: a plan not already on this Mac is "" (and counted). For answers that must
 // be instant and offline, like the help screen's best model for this Mac: exact when offline_misses() stays 0.
 void set_offline(bool on);
