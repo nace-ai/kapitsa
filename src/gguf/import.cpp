@@ -1460,6 +1460,22 @@ std::string import_model(const ImportOptions& opt) {
                        : "MoE experts kept as stored (IQ2_XXS / IQ2_S / IQ3_S), copied into experts.safetensors");
   }
   total += tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size() + (1u << 20);
+  if (!opt.plan_dir.empty()) {  // hub::plan_dir: the headers a memory plan reads, and the sizes
+    std::error_code ec;
+    std::filesystem::create_directories(opt.plan_dir, ec);
+    write_text(opt.plan_dir + "/config.json", make_config(P, tok, f).dump(2, ' ', false, json::error_handler_t::replace) + "\n");
+    uint64_t disk = total;  // a clone holds all of its GGUF part once the GGUF is gone
+    for (size_t i = 0; i < P.files.size(); ++i) {
+      const uint64_t hl = headers[i].size();
+      write_text(opt.plan_dir + "/" + P.files[i], std::string(reinterpret_cast<const char*>(&hl), 8) + headers[i]);
+      const size_t xi = i - size_t(shards);
+      struct stat st;
+      if (int(i) >= shards && int(i) < shards + nx && xclone[xi] && stat(f.parts()[size_t(xparts[xi])].c_str(), &st) == 0)
+        disk += uint64_t(st.st_size) - xdata0[xi];
+    }
+    write_text(opt.plan_dir + "/import.json", json{{"write", total}, {"disk", disk}}.dump() + "\n");
+    return opt.plan_dir;
+  }
 
   // what will be written, and whether it fits
   if (opt.progress && term::fancy()) {

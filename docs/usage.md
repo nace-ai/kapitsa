@@ -49,7 +49,7 @@ Those start the best model for this Mac, with the same output as before.
 | `qwen3.5-4b` | `4b` | Qwen3.5, dense and small: for 16-24 GB Macs and simple tasks | 4.6 GB | `4bit` (default), `6bit`, `8bit`, `bf16` |
 | `qwen3.5-9b` | `9b` | Qwen3.5, dense: the 4B's bigger sibling, the most capable model for a 16 GB Mac | 9.0 GB | `4bit` (default) |
 | `qwen3.8-27b` | `27b` | Qwen3.8, dense: the strongest coder of the three Qwen models, slower to write | 20.2 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
-| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16` |
+| `qwen3.6-35b-a3b` | `35b`, `qwen3.6-35b`, `35b-a3b` | Qwen3.6, mixture of experts with 3B parameters active per token: quick to reply and to read | 22.1 GB | `4bit` (default), `5bit`, `6bit`, `8bit`, `bf16`, `16gb` (where `4bit` does not fit: 2-bit experts, 10.8 GB; [GGUF files](#gguf-files)) |
 | `qwen3.8-flash-next` | `flash-next`, `flash` | Qwen3.8-Flash-Next 180B-A7B: mixture of 512 experts with 4-stream hyper-connections, an n-gram embedding and sparse attention past 2K tokens; for 128 GB Macs | 105.9 GB | `4bit` |
 | `nemotron-labs-dory1.0-4b` | `dory`, `dory-4b`, `dory1.0-4b` | NVIDIA Nemotron Dory1.0 4B: a looped model, its shared block run 1-4 times per token ([thinking depth](#dory-thinking-depth)); text only | 3.2 GB | `nvfp4` (default), `bf16` |
 | `nemotron-3-nano-4b` | `nano-4b`, `nemotron-nano-4b` | NVIDIA Nemotron 3 Nano 4B: hybrid Mamba-2, dense, FP8; text only | 5.3 GB | `fp8` (default), `bf16` |
@@ -60,7 +60,8 @@ Those start the best model for this Mac, with the same output as before.
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
-its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory has none: it decodes without one.
+its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory has none: it decodes without one, as
+does the 35B's `16gb` (its GGUF has no MTP head, and a draft model would not fit beside it).
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
 ([nace-ai/Qwen3.8-Flash-Next-MLX-4bit](https://huggingface.co/nace-ai/Qwen3.8-Flash-Next-MLX-4bit), its precision per
@@ -72,10 +73,13 @@ bits and the router, indexer and n-gram gates at 8 (71.4 GB of weights, 4.1 GB r
 see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./` or `../`), a `.gguf` file
 ([GGUF files](#gguf-files)) or the name of a folder in the store.
 
-The first start of a model downloads it; later starts use the copy on disk, offline too. A catalog model that would not
-start on this Mac is refused before the download, naming one that fits. Without `--model`, `kapitsa serve` takes the
-first of `35b`, `27b`, `9b` and `4b` that holds one conversation of 32K tokens (or of the `--context` given) within this
-Mac's memory budget (a model not downloaded yet is planned from its file headers, a few hundred KB).
+The first start of a model downloads it; later starts use the copy on disk, offline too. A name without a variant takes
+the default where it holds one conversation of 32K tokens (or of the `--context` given) with its draft model, else the
+first of the model's smaller variants that does, else the smallest: `35b` on a 16 or 24 GB Mac is `35b:16gb`. A catalog
+model that would not start on this Mac is refused before the download, naming one that fits. Without `--model`,
+`kapitsa serve` takes the first of `35b`, `27b`, `9b` and `4b` that holds one conversation of 32K tokens (or of the
+`--context` given) within this Mac's memory budget (a model not downloaded yet is planned from its file headers, a few
+hundred KB).
 
 The API calls the model by its name (`qwen3.5-4b`), as `name:variant` for a variant other than the default
 (`qwen3.6-35b-a3b:6bit`), or by its repo id or folder name; `--model-id` sets another. The server runs one model, so a
@@ -92,12 +96,13 @@ Each Qwen model comes in several precisions, its variants. Download sizes, compa
 | `6bit` | MLX affine 6-bit, group 64: the quality choice | 5.6 GB | - | 26.9 GB | 30.7 GB |
 | `8bit` | MLX affine 8-bit, group 64 | 6.7 GB | - | 33.6 GB | 39.4 GB |
 | `bf16` | unquantized, where it fits | 10.6 GB | - | 58.8 GB | 71.9 GB |
+| `16gb` | 2-bit experts: unsloth's UD-IQ2_XXS GGUF, imported ([GGUF files](#gguf-files)); `35b` takes it where `4bit` does not fit (16 and 24 GB Macs) | - | - | - | 10.8 GB |
 
 Each step up stays closer to the original weights, decodes slower and needs more memory; `kapitsa doctor` shows which
-variants fit this Mac. Every variant keeps the model's MTP head and draft model, and pins its repo to a revision, so a
-download is always the same bytes. After a Kapitsa update that pins newer revisions, the next start fetches only the
-files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's own
-mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
+variants fit this Mac. Every variant but `16gb` keeps the model's MTP head and draft model; each pins its repo to a
+revision, so a download is always the same bytes. After a Kapitsa update that pins newer revisions, the next start
+fetches only the files that changed (offline, it keeps using the copy it has). Bolt has one variant, `24gb`: NVIDIA's
+own mixed-precision checkpoint (IQ2_XXS experts, NVFP4 Mamba layers, Q8_0 attention, latent and head, BF16 embedding).
 Super-VL has one variant, `nvfp4`: NVIDIA's own checkpoint as stored (NVFP4 routed and shared experts, FP8 Mamba
 projections, attention and head, BF16 latent projections, which load as 8-bit, router and embedding). Dory has two,
 NVIDIA's own checkpoints as stored: `nvfp4` (the default: NVFP4 linears, the format most of its pre-training ran in,
@@ -168,22 +173,36 @@ the ternary TQ1_0 and TQ2_0, Hadamard-rotated weights, Qwen3-Next, other archite
 That is how Qwen3.6-35B-A3B runs on a 16 GB Mac: the UD-IQ2_XXS file of
 [unsloth/Qwen3.6-35B-A3B-GGUF](https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF) (10.8 GB; IQ2_XXS gate and up experts,
 IQ2_S and IQ3_S down experts) imports in seconds into 11.0 GB of weights, inside a 16 GB Mac's 12.2 GB budget with room
-for 21K tokens of KV cache:
+for 21K tokens of KV cache. The catalog has it as the 35B's `16gb` variant, which `35b` takes where the 4-bit default
+does not fit (16 and 24 GB Macs):
 
 ```bash
-kapitsa import Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf
+kapitsa serve 35b          # on a 16 GB Mac: 35b:16gb, downloaded and imported the first time
+kapitsa pull 35b:16gb      # the same, without starting it
 ```
+
+It downloads that one file, pinned to a revision and checked against its sha256 like every catalog file (resumed after
+Ctrl+C; taken from the Hugging Face cache or a `--from` folder when it is already on this Mac), then imports it into
+`qwen3.6-35b-a3b-16gb` in the store. The folder then holds the conversion, not the file: its experts file is an APFS
+clone of the file, 12.7 GB on disk in all with the file's 10.8 GB. The pull needs that much free disk, and 6 GB more
+that the import keeps free; a stopped import starts again from the downloaded file. Before the download, its memory
+plan is the import's plan of the file's header (16 MB, fetched once). `kapitsa pull --dry-run 35b:16gb` shows the file,
+its size and the folder's size after the import. A copy of the file you already have works too: `kapitsa pull
+35b:16gb --from DIR` (a clone, no download), or `kapitsa import Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` (a folder outside the
+catalog, named after the file).
 
 On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the same file: 38.0-38.8) and reads a
 4K-token prompt in 9.0 s (11.8 s). Against llama.cpp's Metal backend on the same file its next-token distributions are at
 KL 0.023 with the same top token 97.5% of the time (llama.cpp's own CPU backend: 0.012 and 97.5%); part of the gap is
-the conversion of the file's Q5_K tensors to 6-bit. It has no MTP head, so it decodes plainly.
+the conversion of the file's Q5_K tensors to 6-bit. It has no MTP head, so it decodes plainly, and no vision tower: it
+reads text only.
 
 ### Where models are stored
 
 Models live in `~/.cache/kapitsa/models`; `KAPITSA_HOME` moves `~/.cache/kapitsa`. Folders are named `<name>-<variant>`
 for catalog models (`qwen3.6-35b-a3b-4bit`), `org--name` or `org--name@revision` for repos, and by `--name` for GGUF
-conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and the manifest, written last.
+conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and the manifest, written last (`35b:16gb`'s
+folder holds its GGUF file until the import replaces the folder with the conversion).
 
 - Every file is checked after download against its sha256, or its git blob id for small files; a mismatch deletes it
   and says so. Ctrl+C keeps what has arrived (a second one quits at once) and the same command continues. A download
@@ -201,10 +220,10 @@ conversions. Inside, `.kapitsa/` holds the parts of files being downloaded and t
 (`kapitsa rm 35b`: the default one, or the only one downloaded). It says how much space it gave back: a model that is an APFS clone of
 another copy (Nace Agent's, a `--from` folder, the Hugging Face cache) frees nothing.
 
-When a download does not fit the disk (Kapitsa keeps 1 GB spare), `kapitsa serve`, `kapitsa pull`, `kapitsa bench`
-and the coding-agent commands, run in a terminal, list the other downloaded models with what deleting each would free:
-space selects, Enter deletes them and the download goes on once they free enough, Esc cancels. Elsewhere (the app,
-scripts) the error names the `kapitsa rm` commands that would make room.
+When a download does not fit the disk (Kapitsa keeps 1 GB spare, 6 GB for `35b:16gb`'s import), `kapitsa serve`,
+`kapitsa pull`, `kapitsa bench` and the coding-agent commands, run in a terminal, list the other downloaded models with
+what deleting each would free: space selects, Enter deletes them and the download goes on once they free enough, Esc
+cancels. Elsewhere (the app, scripts) the error names the `kapitsa rm` commands that would make room.
 
 ## Server options
 
@@ -469,8 +488,8 @@ the working set at about 2/3 to 78% of the RAM, depending on its version, hence 
 
 | Mac RAM | Budget | `4b` | `9b` | `27b` | `35b` |
 | --- | --- | --- | --- | --- | --- |
-| 16 GB | 11.0-12.9 GB | yes (174K-225K) | yes (89K-140K) | no | no |
-| 24 GB | 16.5-19.3 GB | yes (323K-399K) | yes (238K-314K) | only at the larger budget (23K) | no |
+| 16 GB | 11.0-12.9 GB | yes (174K-225K) | yes (89K-140K) | no | no (`16gb`: from a 12 GB budget, 23K-57K) |
+| 24 GB | 16.5-19.3 GB | yes (323K-399K) | yes (238K-314K) | only at the larger budget (23K) | no (`16gb`: yes, 219K-356K) |
 | 32 GB | 22.0-25.7 GB | yes (472K-572K) | yes (387K-487K) | yes (62K-80K) | yes (50K-153K) |
 | 48 GB | 33.0-38.6 GB | yes (770K-922K) | yes (685K-837K) | yes (184K-265K) | yes (475K-724K) |
 

@@ -147,13 +147,16 @@ PINNED = {
                    [("mtp-sidecar", "Qwen/Qwen3.5-9B", "c202236235762e1c871ad0ccb60c8ee5ba337b9a", "."),
                     ("dflash", "z-lab/Qwen3.5-9B-DFlash", "5fc3b3d474760f18c516db87d84c37edbfd3ede6", "dflash2")]),
 }
+# the 35B's 16gb variant: repo, revision, file, sha256, size
+GGUF16 = ("unsloth/Qwen3.6-35B-A3B-GGUF", "a483e9e6cbd595906af30beda3187c2663a1118c", "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
+          "2e8f5f705355c56311432d0a8a5d14a696dbb7e4b197d05c75ba805fc1857bef", 10756586464)
 
 def cli_checks(kapitsa):
     home = tempfile.mkdtemp(prefix="kapitsa-test-")
     # a closed port as the Hub: any network access in these checks fails loudly
     env = dict(os.environ, KAPITSA_HOME=home, HF_ENDPOINT="http://127.0.0.1:9", NI_LOG="0")
-    def run(*a):
-        p = subprocess.run([kapitsa, *a], env=env, capture_output=True, text=True, timeout=120)
+    def run(*a, env_add=None):
+        p = subprocess.run([kapitsa, *a], env=dict(env, **(env_add or {})), capture_output=True, text=True, timeout=120)
         return p.returncode, p.stdout, p.stderr
     def plan(name):
         rc, out, err = run("pull", "--dry-run", "--json", name)
@@ -244,6 +247,66 @@ def cli_checks(kapitsa):
               j.get("revision") == rev and j.get("companions") == [] and
               j.get("id") == (name if default else name + ":" + dv) and
               j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # the 35B's 16gb: one pinned file of unsloth's GGUF repo, imported after its download; no drafter (offline here,
+    # so the import is not planned: its size on disk is unknown)
+    for a in ["35b:16gb", "QWEN3.6-35B-A3B:16GB", "unsloth/Qwen3.6-35B-A3B-GGUF"]:
+        j = plan(a)
+        check(f"cli: {a} -> qwen3.6-35b-a3b:16gb, one pinned GGUF file to import, no drafter",
+              j.get("model") == "qwen3.6-35b-a3b:16gb" and j.get("id") == "qwen3.6-35b-a3b:16gb" and
+              j.get("kind") == "catalog" and j.get("variant") == "16gb" and
+              (j.get("repo"), j.get("revision"), j.get("file"), j.get("sha256"), j.get("download_bytes")) == GGUF16 and
+              j.get("imported_bytes") is None and j.get("companions") == [] and j.get("downloaded") is False and
+              j.get("dir") == os.path.join(models, "qwen3.6-35b-a3b-16gb"), json.dumps(j))
+    # no file list to fetch: the disk is checked first, with 6 GB kept for the import, and nothing is left behind
+    rc, _, err = run("pull", "35b:16gb", env_add={"KAPITSA_TEST_DISK_TAKEN": str(1 << 60)})
+    check("cli: 35b:16gb checks the disk before its download, keeping 6 GB for the import",
+          rc == 1 and "Not enough disk space for qwen3.6-35b-a3b:16gb: it needs 10.76 GB more" in err and
+          "keeping 6 GB spare" in err and not os.path.exists(os.path.join(models, "qwen3.6-35b-a3b-16gb")), err)
+    # `35b` takes 16gb where the 4-bit default does not fit. Both "downloaded" here, as far as a memory plan reads them:
+    # the 35B's config and one safetensors header each, of their weights' sizes (19.5 and 11.0 GB); NI_MEM_BUDGET is a
+    # 16 GB Mac's budget, then a 48 GB one's
+    cfg35 = {"model_type": "qwen3_5_moe", "text_config": {
+        "hidden_size": 2048, "num_hidden_layers": 40, "vocab_size": 248320, "linear_num_key_heads": 16,
+        "linear_num_value_heads": 32, "linear_key_head_dim": 128, "linear_value_head_dim": 128, "num_attention_heads": 16,
+        "num_key_value_heads": 2, "head_dim": 256, "num_experts": 256, "num_experts_per_tok": 8,
+        "moe_intermediate_size": 512, "shared_expert_intermediate_size": 512, "max_position_embeddings": 262144,
+        "eos_token_id": 248046}}
+    def fake_download(variant, weights, manifest):
+        d = os.path.join(models, "qwen3.6-35b-a3b-" + variant)
+        os.makedirs(os.path.join(d, ".kapitsa"))
+        hdr = json.dumps({"model.language_model.layers.0.mlp.switch_mlp.gate_proj.weight":
+                          {"dtype": "U8", "shape": [weights], "data_offsets": [0, weights]}}).encode()
+        files = {"config.json": json.dumps(cfg35).encode(), "model.safetensors": len(hdr).to_bytes(8, "little") + hdr}
+        for n, b in files.items():
+            with open(os.path.join(d, n), "wb") as f:
+                f.write(b)
+        manifest.update(name="qwen3.6-35b-a3b:" + variant, variant=variant, commit=manifest["revision"],
+                        files=[{"path": n, "size": len(b)} for n, b in files.items()],
+                        total_bytes=sum(len(b) for b in files.values()))
+        with open(os.path.join(d, ".kapitsa", "manifest.json"), "w") as f:
+            json.dump(manifest, f)
+    repo, rev, comps = PINNED["qwen3.6-35b-a3b"]
+    fake_download("4bit", 19_500_000_000, {"repo": repo, "revision": rev, "companions": [
+        {"kind": k, "repo": r, "revision": v, "files": []} for k, r, v, _ in comps]})
+    fake_download("16gb", 10_990_000_000, {"repo": GGUF16[0], "revision": GGUF16[1], "companions": [],
+                                           "gguf": {"path": GGUF16[2], "sha256": GGUF16[3], "size": GGUF16[4]}})
+    for budget, want in [("12.2", "16gb"), ("48", "4bit")]:
+        rc, out, err = run("pull", "--dry-run", "--json", "35b", env_add={"NI_MEM_BUDGET": budget})
+        j = json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+        check(f"cli: 35b on a {budget} GB budget -> 35b:{want}",
+              j.get("model") == "qwen3.6-35b-a3b:" + want and j.get("downloaded") is True, json.dumps(j))
+    j = plan("35b:16gb")
+    check("cli: a downloaded 16gb says its size on disk", j.get("imported_bytes", 0) > 0 and j.get("downloaded") is True,
+          json.dumps(j))
+    rc, out, err = run("pull", "35b:16gb")
+    check("cli: a finished 16gb is reused offline", rc == 0 and "already downloaded" in out, out + err)
+    rc, out, _ = run("list", "--json")
+    lst = {m["name"]: m for m in json.loads(out)} if rc == 0 else {}
+    check("cli: list shows 16gb complete, with its variant",
+          lst.get("qwen3.6-35b-a3b:16gb", {}).get("complete") is True and lst["qwen3.6-35b-a3b:16gb"]["variant"] == "16gb", out)
+    for a in ["35b:16gb", "35b:4bit"]:
+        rc, out, err = run("rm", a)
+        check(f"cli: rm {a} deletes it", rc == 0 and "Deleted qwen3.6-35b-a3b:" + a.split(":")[1] in out, out + err)
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)

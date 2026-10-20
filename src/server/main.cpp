@@ -610,6 +610,7 @@ static int serve(int argc, char** argv, int first) {
   }
   const bool chosen = !model.empty();  // named or picked: kept for the next question
   hub::ModelRef ref;
+  bool last_fallback = false;
   try {
     if (model.empty()) {
       std::string why;
@@ -634,6 +635,8 @@ static int serve(int argc, char** argv, int first) {
           fprintf(stderr, "%s on this Mac (%.0f GB): %s, the largest of its variants that fits (the default, %s, does "
                   "not). --model %s:<variant> picks another.\n", model.c_str(), ram_gb(), ref.name.c_str(),
                   named.variant->name.c_str(), hub::short_name(*ref.model).c_str());
+        // none holds a whole conversation here: the last fallback, said below if it starts
+        last_fallback = !fits && ref.variant != named.variant;
       }
     }
   } catch (const hub::Error& e) {
@@ -669,6 +672,15 @@ static int serve(int argc, char** argv, int first) {
       }
     }
   }
+  if (last_fallback && tui)
+    notes.push_back(bold_name(ref.name) + ", the smallest variant of " + model + " (the default, " +
+                    ref.model->default_variant + ", does not fit this Mac's " + strf("%.0f GB", ram_gb()) +
+                    "; this one starts, with less room for a conversation). --model " + hub::short_name(*ref.model) +
+                    ":<variant> picks another.");
+  else if (last_fallback)
+    fprintf(stderr, "%s on this Mac (%.0f GB): %s, the smallest of its variants (the default, %s, does not fit; this "
+            "one starts, with less room for a conversation). --model %s:<variant> picks another.\n", model.c_str(),
+            ram_gb(), ref.name.c_str(), ref.model->default_variant.c_str(), hub::short_name(*ref.model).c_str());
   if (ref.kind == hub::ModelRef::kLocal) {
     struct stat st;
     if (stat((ref.dir + "/config.json").c_str(), &st) != 0)
@@ -996,9 +1008,19 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     j["downloaded"] = hub::is_current(r);
   }
   json comp = json::array();
+  // a GGUF variant: its file, then the import's size on disk (its plan, null when it cannot be planned: offline)
+  const bool gguf = r.variant && !r.variant->gguf.path.empty();
+  hub::ImportSize imp;
+  const bool sized = gguf && hub::import_size(r, &imp);
   if (r.variant) {
     j["variant"] = r.variant->name;
     j["quant"] = r.variant->quant;
+    if (gguf) {
+      j["file"] = r.variant->gguf.path;
+      j["sha256"] = r.variant->gguf.sha256;
+      j["download_bytes"] = r.variant->gguf.size;
+      j["imported_bytes"] = sized ? json(imp.disk) : json(nullptr);
+    }
     for (const auto& c : r.variant->companions)
       comp.push_back(json{{"kind", c.kind}, {"repo", c.repo}, {"revision", c.revision}, {"into", c.subdir.empty() ? "." : c.subdir}});
   }
@@ -1007,7 +1029,7 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
     printf("%s\n", j.dump().c_str());
     return;
   }
-  if (term::fancy()) return ui::plan(r);
+  if (term::fancy()) return ui::plan(r, sized ? imp.disk : 0);
   printf("%s\n", r.name.c_str());
   struct stat st {};
   const bool here = !local && !hub::is_current(r) && stat((r.dir + "/config.json").c_str(), &st) == 0;
@@ -1018,6 +1040,12 @@ static void print_plan(const hub::ModelRef& r, bool as_json) {
                   "only what differs)"
                 : " (not downloaded yet)");
   if (!local) printf("  weights:    %s @ %s\n", r.repo.c_str(), r.revision.empty() ? "main" : r.revision.c_str());
+  if (gguf) {
+    const std::string size = hub::fmt_bytes(r.variant->gguf.size);
+    printf("  file:       %s%s%s\n", r.variant->gguf.path.c_str(),
+           (hub::is_current(r) ? " (" + size + "), imported" : ", " + size + " to download, then imported (kapitsa import)").c_str(),
+           sized ? (": " + hub::fmt_bytes(imp.disk) + " on disk").c_str() : "");
+  }
   if (r.variant) printf("  variant:    %s (%s)%s\n", r.variant->name.c_str(), r.variant->quant.c_str(),
                         r.variant->name == r.model->default_variant ? ", the default" : "");
   if (r.variant)

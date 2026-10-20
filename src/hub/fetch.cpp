@@ -1,11 +1,15 @@
 // Model downloads: Hugging Face listing, reuse of files already on the Mac, parallel resumable range downloads,
-// size + checksum verification, the MTP sidecar builder, the manifest and the store listing (see hub.h).
+// size + checksum verification, the MTP sidecar builder, GGUF variants' import, the manifest and the store listing
+// (see hub.h).
 //
 // On disk, per model folder:
 //   <dir>/<file>                           finished, verified files (companions in <dir>/<subdir>/)
 //   <dir>/.kapitsa/parts/<file>.part       a file being downloaded, written at its byte offsets
 //   <dir>/.kapitsa/parts/<file>.part.json  which byte ranges of the part are written (resume)
 //   <dir>/.kapitsa/manifest.json           written last: the model is complete
+// A GGUF variant's folder holds its .gguf file until the import replaces the folder with the conversion.
+#include "gguf/gguf.h"
+#include "gguf/import.h"
 #include "hub/hub.h"
 #include "hub/http.h"
 #include "util/term.h"
@@ -34,6 +38,7 @@
 #include <cstring>
 #include <ctime>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -375,6 +380,16 @@ Listing list_repo(HttpClient& c, const std::string& repo, const std::string& rev
   } catch (const std::exception&) {
     throw Error("Unexpected answer from Hugging Face for " + repo + " (its file list). Try again later.");
   }
+  return L;
+}
+
+// A GGUF variant's one file, as list_repo would give it: pinned, so no request (a revision is a commit in the catalog)
+Listing gguf_listing(const ModelRef& ref) {
+  const GgufFile& g = ref.variant->gguf;
+  Listing L;
+  L.repo = ref.repo;
+  L.revision = L.commit = ref.revision;
+  L.files.push_back(RemoteFile{g.path, g.size, g.sha256, ""});
   return L;
 }
 
@@ -1159,6 +1174,9 @@ bool is_current(const ModelRef& ref) {
     for (const auto& c : ref.variant->companions) want.push_back(c.kind + " " + c.repo + "@" + c.revision);
     std::sort(have.begin(), have.end());
     std::sort(want.begin(), want.end());
+    // a GGUF variant: the conversion of the pinned file
+    const std::string& gguf = ref.variant->gguf.sha256;
+    if (!gguf.empty() && (!m.contains("gguf") || m["gguf"].value("sha256", "") != gguf)) return false;
     return m.at("revision").get<std::string>() == ref.revision && have == want;
   } catch (...) {
     return false;
@@ -1207,13 +1225,17 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   FolderLock lock(ref.dir);
   if (is_current(ref)) return ref.dir;  // another kapitsa just finished it
   HttpClient api(30);
+  // a GGUF variant: its pinned file, then the import (no file list to fetch)
+  const bool gguf = ref.kind == ModelRef::kCatalog && !ref.variant->gguf.path.empty();
+  if (gguf && !ref.variant->companions.empty()) throw Error("internal: " + ref.name + " is a GGUF variant with companions");
   // in a terminal: a spinner while the file lists come and files already here are checked
   std::unique_ptr<term::Spinner> spin;
   if (opt.progress && term::fancy())
-    spin = std::make_unique<term::Spinner>("Fetching the file list of " + term::bold(ref.name) + term::dim(" from " + endpoint_host()));
-  else if (opt.progress) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
+    spin = std::make_unique<term::Spinner>(gguf ? "Preparing " + term::bold(ref.name) + term::dim(" (" + ref.variant->gguf.path + ")")
+                                                : "Fetching the file list of " + term::bold(ref.name) + term::dim(" from " + endpoint_host()));
+  else if (opt.progress && !gguf) fprintf(stderr, "Fetching the file list of %s from %s...\n", ref.name.c_str(), endpoint_host().c_str());
 
-  const Listing main = list_repo(api, ref.repo, ref.revision);
+  const Listing main = gguf ? gguf_listing(ref) : list_repo(api, ref.repo, ref.revision);
   if (ref.kind == ModelRef::kRepo) check_supported(api, main);
 
   std::vector<std::unique_ptr<Target>> targets;
@@ -1388,7 +1410,15 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     need += t->size - part;
     todo.push_back(t.get());
   }
-  const uint64_t margin = 1ull << 30;
+  // a GGUF variant: its import then writes the trunk beside the file (the experts are an APFS clone of it) and, as
+  // `kapitsa import` does, leaves 6 GB free
+  uint64_t margin = 1ull << 30;
+  if (gguf) {
+    if (spin) spin->label("Planning the import of " + term::bold(ref.variant->gguf.path) + term::dim(" (its header)"));
+    ImportSize is;
+    if (import_size(ref, &is)) need += is.write;
+    margin = 6ull << 30;
+  }
   uint64_t free = free_bytes(ref.dir);
   if (need + margin > free && opt.make_room) {  // a person at a terminal: which models to delete, asked
     if (spin) spin->done();
@@ -1406,7 +1436,8 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     for (size_t i = 0; i < rm.size() && i < 3; ++i)
       hint += std::string(i ? ", " : "") + "kapitsa rm " + rm[i].second + " (" + fmt_bytes(rm[i].first) + ")";
     throw Error("Not enough disk space for " + ref.name + ": it needs " + fmt_bytes(need) + " more and " +
-                fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping 1 GB spare) on the disk of " +
+                fmt_bytes(free > margin ? free - margin : 0) + " is free (keeping " + (gguf ? "6" : "1") +
+                " GB spare) on the disk of " +
                 tilde(models_dir()) + "." + (hint.empty() ? " Free some space," : " Deleting a model frees space: " + hint + ";") +
                 " or set KAPITSA_HOME to a folder on a bigger disk.");
   }
@@ -1434,7 +1465,7 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
     Progress prog;  // its total is set by download(): what is fetched now
     prog.show = opt.progress;
     prog.tty = isatty(2);
-    std::string what = "weights " + fmt_bytes(weights_bytes);
+    std::string what = (gguf ? ref.variant->gguf.path + " " : "weights ") + fmt_bytes(weights_bytes);
     if (tui) {
       for (const auto& e : extras) what += std::string(" ") + term::kDot + " " + e;
       term::line("  " + term::accent("↓") + " Downloading " + term::bold(ref.name) + "  " + term::dim(what), stderr);
@@ -1460,6 +1491,37 @@ std::string ensure_impl(const ModelRef& ref, const PullOptions& opt) {
   if (ref.variant) {
     m["variant"] = ref.variant->name;
     m["quant"] = ref.variant->quant;
+  }
+  if (gguf) {
+    // `kapitsa import` over the folder (--force): the conversion replaces it, the downloaded file and the parts
+    // folder with it (the experts' clone keeps the file's blocks); its manifest lists the files, ours replaces it
+    const GgufFile& g = ref.variant->gguf;
+    gguf::ImportOptions io;
+    io.file = ref.dir + "/" + g.path;
+    io.name = ref.dir.substr(ref.dir.find_last_of('/') + 1);
+    io.force = true;
+    io.progress = opt.progress;
+    if (models_dir() + "/" + io.name != ref.dir) throw Error("internal: " + tilde(ref.dir) + " is not in " + tilde(models_dir()));
+    try {
+      gguf::import_model(io);
+    } catch (const gguf::Error& e) {
+      // Ctrl+C: the downloaded file stays, and the same command imports it again
+      if (strncmp(e.what(), "Stopped", 7) == 0)
+        throw Stopped("Import stopped. The download is kept: run the same command again to import it.");
+      throw Error(e.what());
+    } catch (const std::exception& e) {
+      throw Error("The import of " + g.path + " failed: " + e.what());
+    }
+    ojson conv = ojson::object();
+    try {
+      const ojson im = ojson::parse(read_text(manifest_path(ref.dir)));
+      mfiles = im.at("files");
+      total = im.at("total_bytes").get<uint64_t>();
+      if (im.contains("gguf") && im["gguf"].contains("conversions")) conv = im["gguf"]["conversions"];
+    } catch (const std::exception&) {
+      throw Error("The import of " + g.path + " left no manifest in " + tilde(ref.dir) + ". Please report this.");
+    }
+    m["gguf"] = ojson{{"path", g.path}, {"sha256", g.sha256}, {"size", g.size}, {"conversions", conv}};
   }
   m["files"] = mfiles;
   m["companions"] = mcomp;
@@ -1554,12 +1616,99 @@ void set_offline(bool on) {
 
 int offline_misses() { return g_offline_misses; }
 
+// A GGUF variant's plan (plan_dir): `kapitsa import` plans the conversion from the file's header into `dir`, with
+// `mark` last. The header is read from the downloaded file when that is complete, else fetched: the file's first 16 MB
+// (64 MB if its header is longer) by a range request, written into a sparse file of the file's size, which the import
+// reads as the file (it reads no tensor data to plan). That file sits in the plan's folder, on the models' disk where
+// it is APFS (so that the import plans the clone it will make there), else in the temporary folder; it goes after.
+// The plan is written beside `dir` and renamed into place.
+static bool plan_gguf(const ModelRef& ref, const std::string& dir, const std::string& mark_text) {
+  const GgufFile& g = ref.variant->gguf;
+  const std::string out = dir + ".planning-" + std::to_string(getpid());
+  std::error_code ec;
+  std::filesystem::remove_all(out, ec);
+  try {
+    mkdirs(out);
+  } catch (const Error&) {
+    return false;
+  }
+  std::string src = ref.dir + "/" + g.path, tmp, tmp_dir;
+  uint64_t sz = 0;
+  if (!file_size(src, sz) || sz != g.size) {
+    struct statfs s;
+    std::string where = out;
+    if (statfs(where.c_str(), &s) != 0 || strcmp(s.f_fstypename, "apfs") != 0) {
+      std::string t = std::filesystem::temp_directory_path(ec).string() + "/kapitsa-plan-XXXXXX";
+      if (ec || !mkdtemp(t.data()) || statfs(t.c_str(), &s) != 0 || strcmp(s.f_fstypename, "apfs") != 0) {
+        if (!ec) rmdir(t.c_str());
+        std::filesystem::remove_all(out, ec);
+        return false;  // no sparse files there: not planned
+      }
+      where = tmp_dir = t;
+    }
+    tmp = src = where + "/" + g.path.substr(g.path.find_last_of('/') + 1);
+    HttpClient http(30);
+    const std::string url = file_url(ref.repo, ref.revision, g.path);
+    std::string head;
+    bool whole = false;  // the header, all of it
+    for (uint64_t n = 16ull << 20; !whole; n *= 4) {
+      n = std::min(n, g.size);
+      HttpResult r = get_retry(http, url, head.size(), n);
+      if (!r.ok() || r.status != 206) break;
+      head += r.body;
+      const int fd = open(tmp.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+      if (fd < 0) break;
+      const bool wrote = ftruncate(fd, off_t(g.size)) == 0 && pwrite_all(fd, head.data(), head.size(), 0);
+      close(fd);
+      if (!wrote) break;
+      try {  // a header cut short reads as zeros past its end, which the parser refuses, or as tensor data after it
+        const gguf::File f(tmp);
+        uint64_t data0 = UINT64_MAX;
+        for (const auto& t : f.tensors()) data0 = std::min(data0, t.offset);
+        whole = data0 <= head.size();
+      } catch (const gguf::Error&) {
+      }
+      if (n >= g.size || n >= (64ull << 20)) break;
+    }
+    if (!whole) src.clear();
+  }
+  bool planned = false;
+  if (!src.empty()) {
+    try {
+      gguf::ImportOptions io;
+      io.file = src;
+      io.name = ref.dir.substr(ref.dir.find_last_of('/') + 1);
+      io.force = true;  // (it writes nothing in the models dir)
+      io.progress = false;
+      io.plan_dir = out;
+      gguf::import_model(io);
+      planned = true;
+    } catch (const std::exception&) {
+    }
+  }
+  if (!tmp.empty()) unlink(tmp.c_str());
+  if (!tmp_dir.empty()) rmdir(tmp_dir.c_str());
+  bool ok = false;
+  if (planned) {
+    try {
+      write_atomic(out + "/.complete", mark_text);
+      std::filesystem::remove_all(dir, ec);
+      ok = rename(out.c_str(), dir.c_str()) == 0;
+    } catch (const Error&) {
+    }
+  }
+  if (!ok) std::filesystem::remove_all(out, ec);
+  return ok;
+}
+
 std::string plan_dir(const ModelRef& ref) {
   if (ref.kind == ModelRef::kLocal || is_current(ref)) return ref.dir;
   if (ref.kind != ModelRef::kCatalog) return "";
   const Variant& m = *ref.variant;
   const std::string dir = home_dir() + "/plans/" + ref.model->name + "-" + m.name, mark = dir + "/.complete";
   std::string want = m.repo + "@" + m.revision;
+  // a GGUF variant's plan is the import's: planned again by another Kapitsa, whose conversion may differ
+  if (!m.gguf.path.empty()) want += "\ngguf " + m.gguf.path + " " + m.gguf.sha256 + "\nkapitsa " KAPITSA_VERSION;
   for (const auto& c : m.companions) want += "\n" + c.kind + " " + c.repo + "@" + c.revision;
   if (read_text(mark) == want) return dir;
   if (g_offline) {
@@ -1567,6 +1716,7 @@ std::string plan_dir(const ModelRef& ref) {
     return "";
   }
   unlink(mark.c_str());
+  if (!m.gguf.path.empty()) return plan_gguf(ref, dir, want) ? dir : "";
   // the repos' file lists, then config.json whole and each safetensors file's header, all in parallel (a few hundred
   // small requests' worth of latency otherwise)
   struct Repo {
@@ -1645,6 +1795,23 @@ std::string plan_dir(const ModelRef& ref) {
     return "";
   }
   return dir;
+}
+
+bool import_size(const ModelRef& ref, ImportSize* out) {
+  if (ref.kind != ModelRef::kCatalog || ref.variant->gguf.path.empty()) return false;
+  const std::string d = plan_dir(ref);
+  if (d.empty()) return false;
+  try {
+    if (d == ref.dir) {  // imported already: the folder as its manifest counts it
+      *out = ImportSize{0, json::parse(read_text(manifest_path(d))).at("total_bytes").get<uint64_t>()};
+      return true;
+    }
+    const json j = json::parse(read_text(d + "/import.json"));
+    *out = ImportSize{j.at("write").get<uint64_t>(), j.at("disk").get<uint64_t>()};
+    return true;
+  } catch (...) {
+    return false;
+  }
 }
 
 uint64_t freeable_bytes(const std::string& dir) {
