@@ -1,10 +1,11 @@
-// Nemotron-H prefill GEMMs at Lightning's shapes (a 2048-row chunk): the simdgroup-MMA tile kernels (nh_gemm_*,
-// nh_x4_moe_*) against the matrix-unit ones (nh_gemm_t_*, src/kernels/tensor/nh_gemm_t.metal) on synthetic weights:
-// GPU time per call (5 back-to-back calls per command buffer, median of 5), TFLOP/s, and the largest difference of
-// the outputs relative to the largest output.
-//   nh_pf_bench [case-substring ...]   M=<rows> (2048) PFT_SRC=<file.metal> (the tensor kernels from a file instead
-//                                      of the built-in library: common.h is prepended) ACC=1 (the dense cases' rms
-//                                      error against fp64 sums, both kernels)
+// Nemotron-H prefill GEMMs and attention at Lightning's shapes (a 2048-row chunk): the simdgroup-MMA kernels
+// (nh_gemm_*, nh_x4_moe_*, nh_attn_pf2) against the matrix-unit ones (src/kernels/tensor: nh_gemm_t_*, nh_attn_t_*)
+// on synthetic weights: GPU time per call (5 back-to-back calls per command buffer, median of 5; attention 2, of 3),
+// TFLOP/s, and the largest difference of the outputs relative to the largest output. Case "attn_pf": ATT_POS0=<cached
+// positions before the rows> (0).
+//   nh_pf_bench [case-substring ...]   M=<rows> (2048) PFT_SRC=<src/kernels> (the tensor kernels from that folder's
+//                                      common.h + tensor/*.metal instead of the built-in library) ACC=1 (the dense
+//                                      cases' rms error against fp64 sums, both kernels)
 #include "metal/gpu.h"
 #include "util/log.h"
 
@@ -13,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -139,18 +141,34 @@ int main(int argc, char** argv) {
   Gpu& g = Gpu::get();
   g.compile_extra("Nemotron-H", kNhKernelSource);
   if (const char* src = getenv("PFT_SRC")) {
+    // common.h and tensor/*.metal of the kernel folder <src> (as cmake/embed_kernels_tensor.cmake joins them)
     auto rd = [](const std::string& p) {
       std::ifstream in(p);
       if (!in) fatal("cannot read %s", p.c_str());
       return std::string((std::istreambuf_iterator<char>(in)), {});
     };
-    std::string s = rd(src), common = rd(std::string(src).substr(0, std::string(src).rfind("/tensor/")) + "/common.h");
-    const size_t inc = s.find("#include \"common.h\"");
-    if (inc != std::string::npos) s.erase(inc, strlen("#include \"common.h\""));
-    static std::string all = common + "\n" + s;
+    std::vector<std::string> files;
+    for (const auto& f : std::filesystem::directory_iterator(std::string(src) + "/tensor"))
+      if (f.path().extension() == ".metal") files.push_back(f.path().string());
+    std::sort(files.begin(), files.end());
+    static std::string all = rd(std::string(src) + "/common.h");
+    for (const std::string& f : files) {
+      std::string b = rd(f);
+      const size_t inc = b.find("#include \"common.h\"");
+      if (inc != std::string::npos) b.erase(inc, strlen("#include \"common.h\""));
+      all += "\n" + b;
+    }
     g.compile_extra("tensor", all.c_str(), true);
   } else {
     g.compile_extra("tensor", kTensorKernelSource, true);
+  }
+  if (getenv("TGMEM")) {  // TGMEM=1: each tensor kernel's static threadgroup memory and thread limit
+    for (const std::string& n : g.function_names())
+      if (n.rfind("nh_gemm_t", 0) == 0 || n.rfind("nh_attn_t", 0) == 0) {
+        Pipeline pl = g.pipeline(n, false);
+        printf("%-32s tg mem %6u  max threads %u\n", n.c_str(), pl.tg_mem, pl.max_threads);
+      }
+    return 0;
   }
   const uint32_t M = getenv("M") ? uint32_t(atoi(getenv("M"))) : 2048;
   std::vector<std::string> filt(argv + 1, argv + argc);
@@ -205,7 +223,7 @@ int main(int argc, char** argv) {
       const double a = half_out ? double(((__fp16*)Y0.ptr())[i]) : double(((float*)Y0.ptr())[i]);
       const double b = half_out ? double(((__fp16*)Y1.ptr())[i]) : double(((float*)Y1.ptr())[i]);
       mx = std::max(mx, std::fabs(a));
-      md = std::max(md, std::fabs(a - b));
+      md = std::isfinite(b) ? std::max(md, std::fabs(a - b)) : INFINITY;
     }
     if (!(mx > 0) || !std::isfinite(mx)) fatal("reference output max %g", mx);
     return md / mx;
@@ -267,6 +285,71 @@ int main(int argc, char** argv) {
     }
   }
 
+  // prefill attention: T rows after pos0 cached positions (ATT_POS0, default 0), 32 query heads over 2 KV heads, head
+  // dim 128; nh_attn_pf2_q1_h4_k32 against nh_attn_t_*
+  if (want("attn_pf")) {
+    const uint32_t T = M, pos0 = getenv("ATT_POS0") ? uint32_t(atoi(getenv("ATT_POS0"))) : 0, Hq = 32, Hkv = 2, D = 128;
+    const uint32_t cap = pos0 + T + 64;
+    Buffer q = g.alloc(size_t(T) * Hq * D * 4), kc = g.alloc(size_t(Hkv) * cap * D * 2),
+           vc = g.alloc(size_t(Hkv) * cap * D * 2);
+    for (size_t i = 0; i < size_t(T) * Hq * D; ++i) ((float*)q.ptr())[i] = (urand() * 2 - 1) * 2.0f;
+    for (size_t i = 0; i < size_t(Hkv) * cap * D; ++i) {
+      ((__fp16*)kc.ptr())[i] = __fp16(urand() * 2 - 1);
+      ((__fp16*)vc.ptr())[i] = __fp16(urand() * 2 - 1);
+    }
+    // rows past pos0 + T: NaN (no kernel may read them)
+    for (uint32_t h = 0; h < Hkv; ++h)
+      for (size_t i = size_t(h) * cap * D + size_t(pos0 + T) * D; i < size_t(h + 1) * cap * D; ++i)
+        ((uint16_t*)kc.ptr())[i] = ((uint16_t*)vc.ptr())[i] = 0x7E00;
+    struct AP {
+      uint32_t T, pos0, cap, Hq, Hkv;
+      float scale;
+      uint32_t qb0;
+    } ap{T, pos0, cap, Hq, Hkv, 1.0f / std::sqrt(float(D)), 0};
+    const double flop = 4.0 * D * Hq * (double(T) * pos0 + double(T) * (T + 1) / 2);
+    auto arun = [&](const char* name, uint32_t rows_tg, uint32_t gy, uint32_t threads, const Buffer& y, int calls) {
+      Pipeline pl = g.pipeline(name, false);
+      if (!pl.pso) return -1.0;
+      auto e = g.begin();
+      for (int c = 0; c < calls; ++c) {
+        e->use(pl);
+        e->buf(0, q);
+        e->buf(1, kc);
+        e->buf(2, vc);
+        e->buf(3, y);
+        e->bytes(4, &ap, sizeof ap);
+        e->dispatch((T + rows_tg - 1) / rows_tg, gy, 1, threads);
+      }
+      e->commit_and_wait();
+      return e->gpu_ms() / calls;
+    };
+    struct AV {
+      const char* name;
+      uint32_t rows_tg, gy, threads;
+    };
+    const AV av[] = {{"nh_attn_pf2_q1_h4_k32", 8, Hq / 4, 128},
+                     {"nh_attn_t_s4", 4, Hkv, 128}};
+    double t0 = 0;
+    for (const AV& a : av) {
+      // (nh_attn_pf2 uses 34 KB of threadgroup memory, which the debug layer refuses)
+      if (getenv("MTL_DEBUG_LAYER") && !strncmp(a.name, "nh_attn_pf2", 11)) continue;
+      Buffer& y = t0 == 0 ? Y0 : Y1;
+      if (arun(a.name, a.rows_tg, a.gy, a.threads, y, 1) < 0) continue;
+      std::vector<double> tn;
+      for (int r = 0; r < 3; ++r) tn.push_back(arun(a.name, a.rows_tg, a.gy, a.threads, y, 2));
+      const double t1 = median(tn);
+      memset(y.ptr(), 0, size_t(T) * Hq * D * 2);
+      arun(a.name, a.rows_tg, a.gy, a.threads, y, 1);
+      if (t0 == 0) {
+        t0 = t1;
+        printf("attn_pf T %u pos0 %u %-22s %8.3f ms %6.2f TFLOP/s\n", T, pos0, a.name, t1, flop / t1 / 1e9);
+      } else {
+        printf("attn_pf T %u pos0 %u %-22s %8.3f ms %6.2f TFLOP/s  x%.2f  rel diff %.2e\n", T, pos0, a.name, t1,
+               flop / t1 / 1e9, t0 / t1, compare(T, Hq * D, true));
+      }
+    }
+  }
+
   // routed experts: 128 NVFP4 experts, top-6 per row (uniformly random), up 1856 x 2688 (relu^2 -> half), down
   // 2688 x 1856 (fp32 rows in pair order)
   if (want("moe")) {
@@ -314,10 +397,12 @@ int main(int argc, char** argv) {
       bool up;
       uint32_t bm, bn;
     };
-    const MoeV mv[] = {{"nh_x4_moe_up_m32", true, 32, 64},          {"nh_gemm_fp4_moe_up_m32", true, 32, 64},
-                       {"nh_gemm_t_fp4_moe_up_m32", true, 32, 64},  {"nh_gemm_t_fp4_moe_up_m64", true, 64, 64},
-                       {"nh_gemm_fp4_moe_dn_m32", false, 32, 64},   {"nh_gemm_t_fp4_moe_dn_m32", false, 32, 64},
-                       {"nh_gemm_t_fp4_moe_dn_m64", false, 64, 64}};
+    const MoeV mv[] = {{"nh_x4_moe_up_m32", true, 32, 64},         {"nh_gemm_fp4_moe_up_m32", true, 32, 64},
+                       {"nh_x4_moe_up_m16", true, 16, 64},         {"nh_gemm_t_fp4_moe_up_m16", true, 16, 64},
+                       {"nh_gemm_t_fp4_moe_up_m32", true, 32, 64}, {"nh_gemm_t_fp4_moe_up_m64", true, 64, 64},
+                       {"nh_gemm_fp4_moe_dn_m32", false, 32, 64},  {"nh_gemm_fp4_moe_dn_m16", false, 16, 64},
+                       {"nh_gemm_t_fp4_moe_dn_m16", false, 16, 64}, {"nh_gemm_t_fp4_moe_dn_m32", false, 32, 64},
+                       {"nh_gemm_t_fp4_moe_dn_m64", false, 64, 64}, {"nh_gemm_t_fp4_moe_dn_m64n128", false, 64, 128}};
     double base[2] = {0, 0};
     for (const MoeV& m : mv) {
       const uint32_t nt = set_tiles(m.bm);

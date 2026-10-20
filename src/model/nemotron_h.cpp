@@ -2717,22 +2717,27 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       e.dispatch(uint32_t(T), uint32_t(2 * cfg_.hkv), 1, uint32_t(cfg_.hd));
       // heads per threadgroup of nh_attn_pf2: 4, or 5 (the Nano models' 40 query heads over 8 KV heads)
       const uint32_t pf_nsg = (cfg_.hq / cfg_.hkv) % 4 == 0 ? 4 : (cfg_.hq / cfg_.hkv) % 5 == 0 ? 5 : 0;
-      if (pf_nsg) {
+      // M5 (tg_), 16 query heads per KV head of 128 dims (Lightning): nh_attn_t_s4 on the matrix units, a token's 16
+      // heads per simdgroup, 4 tokens per threadgroup (2048 rows after 14336 positions: 12.8 against nh_attn_pf2's
+      // 37.1 ms, tools/nh_pf_bench)
+      const bool att_t = tg_ && cfg_.hq == 16 * cfg_.hkv && cfg_.hd == 128;
+      if (att_t || pf_nsg) {
         // 4 heads per threadgroup (nh_attn_pf2: the same values as nh_attn_prefill); a pass longer than ~25 ms (2048
-        // rows after 14336 positions: ~330 ms on the M5 Max's 40 cores) in pieces of equal work over the row blocks,
-        // each in a command buffer of its own (outside a Neural Engine split chunk)
-        const uint32_t nb = (uint32_t(T) + 7) / 8;
+        // rows after 14336 positions: ~330 ms on the M5 Max's 40 cores by nh_attn_pf2's estimate, nh_attn_t's from
+        // its measured 12.8 ms) in pieces of equal work over the row blocks, each in a command buffer of its own
+        // (outside a Neural Engine split chunk)
+        const uint32_t bq = att_t ? 4 : 8, nb = (uint32_t(T) + bq - 1) / bq;
         const double work = double(T) * (double(pos0) + T / 2.0) * cfg_.hq;  // row x key x head
-        const double est_ms = work * 3.3e-7 * 40.0 / std::max(1, Gpu::get().core_count());
+        const double est_ms = work * (att_t ? 1.25e-8 : 3.3e-7) * 40.0 / std::max(1, Gpu::get().core_count());
         const int pieces = split ? 1 : std::clamp(int(std::ceil(est_ms / 25.0)), 1, int(nb));
         uint32_t b0 = 0;
         for (int pc = 0; pc < pieces; ++pc) {
-          // row blocks [b0, b1): the work of rows [0, 8 b) grows as 8 b (pos0 + 4 b)
+          // row blocks [b0, b1): the work of rows [0, bq b) grows as bq b (pos0 + bq b / 2)
           uint32_t b1 = nb;
           if (pc + 1 < pieces) {
             const double target = (pc + 1) * (double(T) * (double(pos0) + T / 2.0)) / pieces;
             b1 = b0;
-            while (b1 < nb && 8.0 * b1 * (double(pos0) + 4.0 * b1) < target) ++b1;
+            while (b1 < nb && double(bq) * b1 * (double(pos0) + bq * b1 / 2.0) < target) ++b1;
             b1 = std::max(b1, b0 + 1);
           }
           if (b1 > nb) b1 = nb;
@@ -2744,13 +2749,14 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
           } ap{uint32_t(T), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
                1.0f / std::sqrt(float(cfg_.hd)), b0};
           if (pc > 0) e.split();
-          e.use(pipe(pf_nsg == 4 ? "nh_attn_pf2_q1_h4_k32" : "nh_attn_pf2_q1_h5_k32"));
+          e.use(pipe(att_t ? "nh_attn_t_s4" : pf_nsg == 4 ? "nh_attn_pf2_q1_h4_k32" : "nh_attn_pf2_q1_h5_k32"));
           e.buf(0, pq_);
           e.buf(1, s.kc[size_t(i)]);
           e.buf(2, s.vc[size_t(i)]);
           e.buf(3, poh_);
           e.bytes(4, &ap, sizeof ap);
-          e.dispatch(b1 - b0, uint32_t(cfg_.hq) / pf_nsg, 1, 32 * pf_nsg);
+          if (att_t) e.dispatch(b1 - b0, uint32_t(cfg_.hkv), 1, 128);
+          else e.dispatch(b1 - b0, uint32_t(cfg_.hq) / pf_nsg, 1, 32 * pf_nsg);
           b0 = b1;
         }
       } else {
