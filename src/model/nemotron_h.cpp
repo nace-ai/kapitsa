@@ -493,7 +493,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
                                    "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
-                                   "nh_x4t", "nh_ssd", "nh_xq8_"};
+                                   "nh_x4t", "nh_x2t", "nh_ssd", "nh_xq8_"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
@@ -2782,6 +2782,22 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
       }
       return;
     }
+  }
+  // IQ2 up to 8 rows on the M5's matrix units (v8t_; Bolt's shared expert in verify): nh_x2t_v8, nh_x4t_v8_l0's design
+  // with the IQ2_XXS decode. tools/nh_x2t_bench (us per call, weights rotating out of the cache, against nh_x2_v8):
+  // up 5376x4096 24.8 vs 35.4, down 4096x5376 26.6 vs 41.6 (4 simdgroups; 2: 25.2 / 28.5, 8: 31.5 / 29.8); Bolt's
+  // greedy harness decode 29.5 -> 27.8 ms per cycle at the same 4.48 tokens per cycle. NI_NH_X2T_KS (1-8) overrides.
+  if (W.fmt == NhFmt::IQ2 && v8t_ && v8_ && x2_ && M <= 8 && W.K % 256 == 0) {
+    static const int ks_env = getenv("NI_NH_X2T_KS") ? atoi(getenv("NI_NH_X2T_KS")) : 4;
+    const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
+    e.use(pipe("nh_x2t_v8"));
+    e.buf(0, xh);
+    e.buf(1, W.q);
+    e.buf(2, W.s);
+    e.buf(3, y);
+    e.val(4, p);
+    e.dispatch((W.N + 15) / 16, 1, 1, 32 * uint32_t(std::clamp(ks_env, 1, 8)));
+    return;
   }
   // IQ2 up to 32 rows (the shared expert in verify): the x2 kernels, one simdgroup per 8 rows on 8x8 MMAs with the
   // weights as fp16 subnormals (8 rows: up 0.083 vs 0.107 ms, down 0.090 vs 0.111; 32 rows 0.25 vs 0.35)

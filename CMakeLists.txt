@@ -60,6 +60,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_TENSOR_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   DEPENDS ${NI_TENSOR_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/nemotron/nh_route.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/iq.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_tensor.cmake
   COMMENT "Embedding the Metal 4 tensor kernels")
 
