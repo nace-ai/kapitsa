@@ -179,3 +179,66 @@ struct NhDspCycP {
   g[1] = 2u * p.Hkv;
   g[2] = 1u;
 }
+
+// ---- the MLP's middle: x [R][ld] holds gate (columns 0..I-1) and up (I..2I-1) as the fused gate|up product left them
+// (tensor scales not applied: gs_g, gs_u here), h = silu(gate) * up, then h to half with a per-row scale that keeps
+// it in half's range (as nh_rows_half_scaled: s = max(1, max|h| / 16384), y = half(h / s), scale[r] = s) for the down
+// product. The same values as the products with their scales, nh_swiglu and nh_rows_half_scaled. grid: R x 1024 ----
+struct NhDspSwiP {
+  uint I, ld;
+  float gs_g, gs_u;
+};
+[[kernel]] void nh_dsp_swiglu_half(const device float* x [[buffer(0)]], device half* y [[buffer(1)]],
+                                   device float* scale [[buffer(2)]], constant NhDspSwiP& p [[buffer(3)]],
+                                   uint r [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                                   uint ntg [[threads_per_threadgroup]]) {
+#pragma clang fp contract(off)
+  threadgroup float scratch[32];
+  const device float* xr = x + size_t(r) * p.ld;
+  float m = 0.0f;
+  for (uint k = tid; k < p.I; k += ntg) m = max(m, fabs(silu(xr[k] * p.gs_g) * (xr[p.I + k] * p.gs_u)));
+  m = tg_max(m, scratch, tid, ntg);
+  const float s = max(1.0f, m / 16384.0f), inv = 1.0f / s;
+  for (uint k = tid; k < p.I; k += ntg) y[size_t(r) * p.I + k] = half(silu(xr[k] * p.gs_g) * (xr[p.I + k] * p.gs_u) * inv);
+  if (tid == 0) scale[r] = s;
+}
+
+// ---- the residual add of the down product scaled back: x[r] += t[r] * scale[r]. grid: (R, ceil(D / 256)) x 256 ----
+[[kernel]] void nh_dsp_scale_add(device float* x [[buffer(0)]], const device float* t [[buffer(1)]],
+                                 const device float* scale [[buffer(2)]], constant uint& D [[buffer(3)]],
+                                 uint2 tg [[threadgroup_position_in_grid]], uint2 t2 [[thread_position_in_threadgroup]]) {
+#pragma clang fp contract(off)  // (the product rounded before the add, as the two kernels did)
+  const uint r = tg.x, d = tg.y * 256 + t2.x;
+  if (d < D) x[size_t(r) * D + d] += t[size_t(r) * D + d] * scale[r];
+}
+
+// ---- a commit's context K/V into the ring: kv [R][ld] fp32 (k heads at columns 0.., v heads at Hkv * HD..), k
+// per-head RMSNorm (weight w) and NeoX RoPE at position pos0 + row, both to half at slot = position % W (as
+// nh_qk_norm_rope and nh_lili_ring_write, the same values). grid: (R, 2 Hkv) x HD (HD = 128) ----
+struct NhDspKvP {
+  uint pos0, W, Hkv, HD, ld;
+  float eps, theta;
+};
+[[kernel]] void nh_dsp_commit_kv(const device float* kv [[buffer(0)]], const device float* w [[buffer(1)]],
+                                 device half* rk [[buffer(2)]], device half* rv [[buffer(3)]],
+                                 constant NhDspKvP& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                 uint2 t2 [[thread_position_in_threadgroup]]) {
+  threadgroup float scratch[32];
+  threadgroup float row[256];
+  const uint r = tg.x, hh = tg.y % p.Hkv, d = t2.x;
+  const bool isv = tg.y >= p.Hkv;
+  const uint slot = (p.pos0 + r) % p.W;
+  float v = kv[size_t(r) * p.ld + (isv ? p.Hkv * p.HD : 0u) + hh * p.HD + d];
+  if (!isv) {
+    const float ss = tg_sum(v * v, scratch, d, p.HD);
+    v = v * (1.0f / metal::precise::sqrt(ss / float(p.HD) + p.eps)) * w[d];
+    row[d] = v;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    const uint half_d = p.HD / 2, i = d % half_d;
+    const float inv = metal::precise::pow(p.theta, -2.0f * float(i) / float(p.HD));
+    const float ang = float(p.pos0 + r) * inv;
+    const float cs = metal::precise::cos(ang), sn = metal::precise::sin(ang);
+    v = d < half_d ? row[d] * cs - row[d + half_d] * sn : row[d] * cs + row[d - half_d] * sn;
+  }
+  (isv ? rv : rk)[(size_t(hh) * p.W + slot) * p.HD + d] = half(v);
+}

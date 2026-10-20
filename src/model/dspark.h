@@ -42,9 +42,15 @@ class DSpark : public NhDrafter {
  private:
   struct DLayer {
     Buffer attn_norm, ffn_norm, qn, kn, sinks;
-    NhMat q, k, v, o, gate, up, down;
+    // qkv: q|k|v's rows in one matrix (Q8), q, k, v and kv (k|v, the commit's) views of it; gu: gate|up's rows (NVFP4,
+    // the tensor scales gs_g, gs_u applied by nh_dsp_swiglu_half)
+    NhMat qkv, q, k, v, kv, o, gu, down;
+    float gs_g = 1.0f, gs_u = 1.0f;
   };
   NhMat mat(const std::string& name);                // NVFP4 as stored, BF16 as Q8
+  // the matrices' rows in one (the same format and K); each one's tensor scale into gs (the result's: 1)
+  NhMat mat_cat(const std::vector<std::string>& names, std::vector<float>& gs);
+  static NhMat rows(const NhMat& m, uint32_t r0, uint32_t n);  // rows [r0, r0 + n) of m, a view
   std::vector<float> host(const std::string& name);  // a BF16 / F32 tensor as fp32 on the CPU
   Buffer upload(const void* p, size_t bytes, const char* label);
   Buffer vec(const std::string& name);
@@ -57,6 +63,7 @@ class DSpark : public NhDrafter {
   void enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0, bool chained);
   void enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained);
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
+  void norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R);  // RMSNorm rows into half
 
   NemotronH& tg_;
   std::string path_;
@@ -78,8 +85,8 @@ class DSpark : public NhDrafter {
   NhCapture hook_pf_, hook_v_;
   int pf_n_ = 0, pf_lo_ = 0;
   Buffer pfeat_, pfeat_h_, vfeat_;
-  Buffer x_, n_, t2_, q_, k_, v_, ao_, gt_, upb_, hfin_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
-  Buffer cg_, cgh_, ck_, cv2_, rscale_, xh_;
+  Buffer x_, t2_, q_, k_, v_, ao_, gt_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
+  Buffer cg_, cgh_, ck_, rscale_, xh_;
   Buffer cyc_;  // a chained drafting half's parameters (nh_dsp_cycle)
 };
 

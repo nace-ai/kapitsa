@@ -143,6 +143,48 @@ NhMat DSpark::mat(const std::string& name) {
   return m;
 }
 
+NhMat DSpark::mat_cat(const std::vector<std::string>& names, std::vector<float>& gs) {
+  std::vector<NhMat> parts;
+  for (const std::string& n : names) parts.push_back(mat(n));
+  NhMat m = parts[0];
+  m.N = 0;
+  gs.clear();
+  for (const NhMat& p : parts) {
+    if (p.fmt != m.fmt || p.K != m.K || p.q_row != m.q_row || p.s_row != m.s_row)
+      fatal("%s: %s and %s do not share a format", path_.c_str(), names[0].c_str(), names[1].c_str());
+    m.N += p.N;
+    gs.push_back(p.gs);
+  }
+  m.gs = 1.0f;
+  Gpu& g = Gpu::get();
+  m.q = g.alloc(m.q_row * m.N, names[0].c_str(), false);
+  m.s = g.alloc(m.s_row * m.N, "scales", false);
+  size_t oq = 0, os = 0;
+  for (NhMat& p : parts) {
+    memcpy(m.q.as<uint8_t>() + oq, p.q.ptr(), p.q_row * p.N);
+    memcpy(m.s.as<uint8_t>() + os, p.s.ptr(), p.s_row * p.N);
+    oq += p.q_row * p.N;
+    os += p.s_row * p.N;
+    for (Buffer* b : {&p.q, &p.s}) {
+      owned_.erase(std::find_if(owned_.begin(), owned_.end(), [&](const Buffer& o) { return o.mtl == b->mtl; }));
+      weight_bytes_ -= b->size;
+      g.release(*b);
+    }
+  }
+  owned_.push_back(m.q);
+  owned_.push_back(m.s);
+  weight_bytes_ += m.q.size + m.s.size;
+  return m;
+}
+
+NhMat DSpark::rows(const NhMat& m, uint32_t r0, uint32_t n) {
+  NhMat v = m;
+  v.N = n;
+  v.q = m.q.view(size_t(r0) * m.q_row, size_t(n) * m.q_row);
+  v.s = m.s.view(size_t(r0) * m.s_row, size_t(n) * m.s_row);
+  return v;
+}
+
 std::vector<float> DSpark::host(const std::string& name) {
   const SafetensorsIndex::Entry& t = st_->get(name);
   if (t.dtype != DType::BF16 && t.dtype != DType::F32) fatal("%s: %s is neither BF16 nor F32", path_.c_str(), name.c_str());
@@ -245,12 +287,19 @@ void DSpark::load() {
       const std::vector<float> none(size_t(hq_), -1e30f);  // no sinks: a logit that adds nothing
       L.sinks = upload(none.data(), none.size() * 4, "dspark_no_sinks");
     }
-    L.q = mat(b + "self_attn.q_proj.weight");
-    L.k = mat(b + "self_attn.k_proj.weight");
-    L.v = mat(b + "self_attn.v_proj.weight");
+    std::vector<float> gs;
+    L.qkv = mat_cat({b + "self_attn.q_proj.weight", b + "self_attn.k_proj.weight", b + "self_attn.v_proj.weight"}, gs);
+    const uint32_t nq = uint32_t(hq_) * 128, nk = uint32_t(hkv_) * 128;
+    if (L.qkv.N != nq + 2 * nk) fatal("%s: attention projections of an unexpected shape", path_.c_str());
+    L.q = rows(L.qkv, 0, nq);
+    L.k = rows(L.qkv, nq, nk);
+    L.v = rows(L.qkv, nq + nk, nk);
+    L.kv = rows(L.qkv, nq, 2 * nk);
     L.o = mat(b + "self_attn.o_proj.weight");
-    L.gate = mat(b + "mlp.gate_proj.weight");
-    L.up = mat(b + "mlp.up_proj.weight");
+    L.gu = mat_cat({b + "mlp.gate_proj.weight", b + "mlp.up_proj.weight"}, gs);
+    L.gs_g = gs[0];
+    L.gs_u = gs[1];
+    if (int(L.gu.N) != 2 * I_) fatal("%s: gate / up of an unexpected shape", path_.c_str());
     L.down = mat(b + "mlp.down_proj.weight");
   }
   // the embedding: the drafter's table equals the target's except the mask token's (trained) row
@@ -297,15 +346,12 @@ void DSpark::alloc_buffers() {
   pfeat_h_ = al(W * nl * H * 2, "dspark_pfeat_h");
   vfeat_ = al(B * nl * H * 4, "dspark_vfeat");
   x_ = al(B * H * 4, "dspark_x");
-  n_ = al(B * H * 4, "dspark_n");
   t2_ = al(B * H * 4, "dspark_t2");
   q_ = al(B * size_t(hq_) * 128 * 4, "dspark_q");
   k_ = al(B * size_t(hkv_) * 128 * 4, "dspark_k");
   v_ = al(B * size_t(hkv_) * 128 * 4, "dspark_v");
   ao_ = al(B * size_t(hq_) * 128 * 4, "dspark_ao");
-  gt_ = al(B * size_t(I_) * 4, "dspark_gate");
-  upb_ = al(B * size_t(I_) * 4, "dspark_up");
-  hfin_ = al(B * H * 4, "dspark_hfin");
+  gt_ = al(B * size_t(I_) * 2 * 4, "dspark_gate_up");
   logits_ = al(S * V * 4, "dspark_logits");
   const size_t nch = (V + 2047) / 2048;
   cv_ = al(S * nch * K * 4, "dspark_cv");
@@ -317,8 +363,7 @@ void DSpark::alloc_buffers() {
   picks_ = al(S * 4, "dspark_picks");
   cg_ = al(W * H * 4, "dspark_cg");
   cgh_ = al(W * H * 2, "dspark_cgh");
-  ck_ = al(W * size_t(hkv_) * 128 * 4, "dspark_ck");
-  cv2_ = al(W * size_t(hkv_) * 128 * 4, "dspark_cv2");
+  ck_ = al(W * 2 * size_t(hkv_) * 128 * 4, "dspark_ckv");  // a commit's k|v rows
   rscale_ = al(W * 4, "dspark_rscale");
   xh_ = al(std::max<size_t>(64 * 12288, B * nl * H) * 2, "dspark_xh");
   cyc_ = al(2048, "dspark_cycle");
@@ -404,6 +449,21 @@ void DSpark::lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, i
   }
 }
 
+void DSpark::norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R) {
+  // nh_rows_half normalizing: the values of nh_rmsnorm then nh_rows_half in one pass
+  const struct {
+    uint32_t D, norm;
+    float eps;
+    uint32_t x_ld;
+  } hp{uint32_t(H_), 1u, eps_, uint32_t(H_)};
+  e.use(pipe("nh_rows_half"));
+  e.buf(0, x);
+  e.buf(1, w);
+  e.buf(2, y);
+  e.val(3, hp);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
 void DSpark::enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) {
   enc_commit(e, d, feat, R, pos0, false);
 }
@@ -417,26 +477,19 @@ void DSpark::enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int p
   const size_t ring_layer = size_t(hkv_) * window_ * 128 * 2;
   for (int l = 0; l < NL_; ++l) {
     const DLayer& L = dl_[size_t(l)];
-    if (R == 1) {
-      tg_.enc_mv(e, L.k, cg_, ck_, R, 0);
-      tg_.enc_mv(e, L.v, cg_, cv2_, R, 0);
-    } else {
-      tg_.enc_gemm(e, L.k, cgh_, ck_, R, 0);
-      tg_.enc_gemm(e, L.v, cgh_, cv2_, R, 0);
-    }
-    const QkP qp{uint32_t(hkv_), 128, uint32_t(pos0), 1, eps_, theta_};
-    e.use(pipe("nh_qk_norm_rope"));
+    // k|v in one product, then k's norm + RoPE and both into the ring in one pass
+    if (R == 1) tg_.enc_mv(e, L.kv, cg_, ck_, R, 0);
+    else tg_.enc_gemm(e, L.kv, cgh_, ck_, R, 0);
+    const struct {
+      uint32_t pos0, W, Hkv, HD, ld;
+      float eps, theta;
+    } kp{uint32_t(pos0), uint32_t(window_), uint32_t(hkv_), 128, L.kv.N, eps_, theta_};
+    e.use(pipe("nh_dsp_commit_kv"));
     e.buf(0, ck_);
     e.buf(1, L.kn);
-    e.val(2, qp);
-    e.dispatch(uint32_t(R), uint32_t(hkv_), 1, 128);
-    const RingKvP rp{uint32_t(pos0), uint32_t(window_), uint32_t(hkv_), 128};
-    e.use(pipe("nh_lili_ring_write"));
-    e.buf(0, ck_);
-    e.buf(1, cv2_);
     e.buf(2, d.ring_k, size_t(l) * ring_layer);
     e.buf(3, d.ring_v, size_t(l) * ring_layer);
-    e.val(4, rp);
+    e.val(4, kp);
     if (chained) e.dispatch_indirect(cyc_, kCycRing, 128);  // the accepted rows only
     else e.dispatch(uint32_t(R), uint32_t(2 * hkv_), 1, 128);
   }
@@ -488,8 +541,7 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   const size_t ring_layer = size_t(hkv_) * window_ * 128 * 2;
   for (int l = 0; l < NL_; ++l) {
     const DLayer& L = dl_[size_t(l)];
-    tg_.enc_norm(e, x_, L.attn_norm, n_, R, int(H), eps_);
-    tg_.enc_rows_half(e, n_, xh_, R, int(H));  // shared by q, k, v
+    norm_half(e, x_, L.attn_norm, xh_, R);  // shared by q, k, v
     tg_.enc_gemm(e, L.q, xh_, q_, R, 0);
     tg_.enc_gemm(e, L.k, xh_, k_, R, 0);
     tg_.enc_gemm(e, L.v, xh_, v_, R, 0);
@@ -521,32 +573,35 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
     else e.val(7, ap);
     e.dispatch(uint32_t(hkv_), B, 1, uint32_t(32 * (hq_ / hkv_)));
     lin(e, L.o, ao_, x_, R, 1);  // the residual add in the GEMM's epilogue
-    tg_.enc_norm(e, x_, L.ffn_norm, n_, R, int(H), eps_);
-    tg_.enc_rows_half(e, n_, xh_, R, int(H));  // shared by gate, up
-    tg_.enc_gemm(e, L.gate, xh_, gt_, R, 0);
-    tg_.enc_gemm(e, L.up, xh_, upb_, R, 0);
-    const uint32_t n = B * uint32_t(I_);
-    e.use(pipe("nh_swiglu"));
+    norm_half(e, x_, L.ffn_norm, xh_, R);
+    tg_.enc_gemm(e, L.gu, xh_, gt_, R, 0);  // gate|up [R][2 I]
+    // silu(gate) * up to half with a per-row scale (it may leave half's range), the down product, scaled back
+    // into the residual
+    const struct {
+      uint32_t I, ld;
+      float gs_g, gs_u;
+    } sw{uint32_t(I_), L.gu.N, L.gs_g, L.gs_u};
+    e.use(pipe("nh_dsp_swiglu_half"));
     e.buf(0, gt_);
-    e.buf(1, upb_);
-    e.buf(2, gt_);
-    e.val(3, n);
-    e.dispatch((n + 255) / 256, 1, 1, 256);
-    lin(e, L.down, gt_, t2_, R, 0, true);  // (silu(gate) * up may leave half's range)
-    const uint32_t nx = B * H;
-    e.use(pipe("nh_add"));
+    e.buf(1, xh_);
+    e.buf(2, rscale_);
+    e.val(3, sw);
+    e.dispatch(B, 1, 1, 1024);
+    tg_.enc_gemm(e, L.down, xh_, t2_, R, 0);
+    e.use(pipe("nh_dsp_scale_add"));
     e.buf(0, x_);
     e.buf(1, t2_);
-    e.buf(2, x_);
-    e.val(3, nx);
-    e.dispatch((nx + 255) / 256, 1, 1, 256);
+    e.buf(2, rscale_);
+    e.val(3, H);
+    e.dispatch(B, (H + 255) / 256, 1, 256);
   }
-  tg_.enc_norm(e, x_, out_norm_, hfin_, R, int(H), eps_);
-  // slot logits (rows 1..7) with the target's LM head (rows [0, head_rows_): NI_DSPARK_HEAD), their top-K candidates
+  // slot logits (rows 1..7, normalized into half) with the target's LM head (rows [0, head_rows_): NI_DSPARK_HEAD),
+  // their top-K candidates
+  norm_half(e, x_.view(size_t(H) * 4, size_t(S) * H * 4), out_norm_, xh_, int(S));
   NhMat head = tg_.lm_head();
   head.N = uint32_t(head_rows_);
   const uint32_t V = head.N;
-  lin(e, head, hfin_.view(size_t(H) * 4, size_t(S) * H * 4), logits_, int(S), 0);
+  tg_.enc_gemm(e, head, xh_, logits_, int(S), 0);
   const uint32_t nch = (V + 2047) / 2048;
   const CandP cp{V, K, nch, 0, V};
   e.use(pipe("nh_cand1"));

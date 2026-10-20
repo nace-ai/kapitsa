@@ -534,6 +534,148 @@ void check_cand() {
   }
 }
 
+// DSpark's fused kernels against the kernels they replace (bitwise): nh_dsp_swiglu_half = the scaled products,
+// nh_swiglu, nh_rows_half_scaled; nh_dsp_scale_add = nh_rows_scale, nh_add; nh_dsp_commit_kv = nh_qk_norm_rope (k),
+// nh_lili_ring_write
+void check_dsp_fused() {
+  Gpu& g = Gpu::get();
+  const uint32_t R = 5, I = 300, D = 200;
+  {
+    std::vector<float> x(size_t(R) * 2 * I);
+    for (auto& v : x) v = nrand() * 300.0f;  // some rows past half's range after the product
+    const float gs_g = 0.37f, gs_u = 1.9f;
+    std::vector<float> a(size_t(R) * I), b(size_t(R) * I);
+    for (uint32_t r = 0; r < R; ++r)
+      for (uint32_t k = 0; k < I; ++k) {
+        a[r * I + k] = x[r * 2 * I + k] * gs_g;
+        b[r * I + k] = x[r * 2 * I + I + k] * gs_u;
+      }
+    Buffer bx = up(x, "x"), ba = up(a, "a"), bb = up(b, "b");
+    Buffer y1 = g.alloc(size_t(R) * I * 2, "y1"), y2 = g.alloc(size_t(R) * I * 2, "y2"), s1 = g.alloc(R * 4, "s1"),
+           s2 = g.alloc(R * 4, "s2");
+    const struct {
+      uint32_t I, ld;
+      float gs_g, gs_u;
+    } sw{I, 2 * I, gs_g, gs_u};
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_dsp_swiglu_half"));
+    e->buf(0, bx);
+    e->buf(1, y1);
+    e->buf(2, s1);
+    e->bytes(3, &sw, sizeof sw);
+    e->dispatch(R, 1, 1, 1024);
+    e->commit_and_wait();
+    const uint32_t n = R * I;
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_swiglu"));
+    e2->buf(0, ba);
+    e2->buf(1, bb);
+    e2->buf(2, ba);
+    e2->bytes(3, &n, 4);
+    e2->dispatch((n + 255) / 256, 1, 1, 256);
+    e2->commit_and_wait();
+    auto e3 = g.begin();
+    e3->use(NemotronH::pipeline("nh_rows_half_scaled"));
+    e3->buf(0, ba);
+    e3->buf(1, y2);
+    e3->buf(2, s2);
+    e3->bytes(3, &I, 4);
+    e3->dispatch(R, 1, 1, 1024);
+    e3->commit_and_wait();
+    // (a, b computed on the CPU: the GEMM's stores of acc x gs are the same fp32 products)
+    const bool same = !memcmp(y1.ptr(), y2.ptr(), size_t(R) * I * 2) && !memcmp(s1.ptr(), s2.ptr(), R * 4);
+    int big = 0;
+    for (uint32_t r = 0; r < R; ++r) big += s1.as<float>()[r] > 1.0f;
+    report(big ? "nh_dsp_swiglu_half" : "nh_dsp_swiglu_half (no scaled row)", same ? 0.0 : 1.0, 0);
+  }
+  {
+    std::vector<float> x(size_t(R) * D), t(size_t(R) * D), sc(R);
+    for (auto& v : x) v = nrand();
+    for (auto& v : t) v = nrand();
+    for (auto& v : sc) v = 1.0f + std::fabs(nrand()) * 7.0f;
+    Buffer x1 = up(x, "x1"), x2 = up(x, "x2"), t1 = up(t, "t1"), t2 = up(t, "t2"), bs = up(sc, "sc");
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_dsp_scale_add"));
+    e->buf(0, x1);
+    e->buf(1, t1);
+    e->buf(2, bs);
+    e->bytes(3, &D, 4);
+    e->dispatch(R, (D + 255) / 256, 1, 256);
+    e->commit_and_wait();
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_rows_scale"));
+    e2->buf(0, t2);
+    e2->buf(1, bs);
+    e2->bytes(2, &D, 4);
+    e2->dispatch(R, (D + 255) / 256, 1, 256);
+    e2->commit_and_wait();
+    const uint32_t n = R * D;
+    auto e3 = g.begin();
+    e3->use(NemotronH::pipeline("nh_add"));
+    e3->buf(0, x2);
+    e3->buf(1, t2);
+    e3->buf(2, x2);
+    e3->bytes(3, &n, 4);
+    e3->dispatch((n + 255) / 256, 1, 1, 256);
+    e3->commit_and_wait();
+    report("nh_dsp_scale_add", memcmp(x1.ptr(), x2.ptr(), size_t(n) * 4) ? 1.0 : 0.0, 0);
+  }
+  {
+    const uint32_t Hkv = 2, HD = 128, W = 7, pos0 = 11, Rk = 4;
+    std::vector<float> kv(size_t(Rk) * 2 * Hkv * HD), w(HD);
+    for (auto& v : kv) v = nrand() * 3.0f;
+    for (auto& v : w) v = nrand();
+    std::vector<float> k(size_t(Rk) * Hkv * HD), v(k.size());
+    for (uint32_t r = 0; r < Rk; ++r)
+      for (uint32_t i = 0; i < Hkv * HD; ++i) {
+        k[r * Hkv * HD + i] = kv[r * 2 * Hkv * HD + i];
+        v[r * Hkv * HD + i] = kv[r * 2 * Hkv * HD + Hkv * HD + i];
+      }
+    Buffer bkv = up(kv, "kv"), bw = up(w, "w"), bk = up(k, "k"), bv = up(v, "v");
+    std::vector<uint16_t> zero(size_t(Hkv) * W * HD, 0x7e00);
+    Buffer rk1 = up(zero, "rk1"), rv1 = up(zero, "rv1"), rk2 = up(zero, "rk2"), rv2 = up(zero, "rv2");
+    const float eps = 1e-6f, theta = 10000.0f;
+    const struct {
+      uint32_t pos0, W, Hkv, HD, ld;
+      float eps, theta;
+    } kp{pos0, W, Hkv, HD, 2 * Hkv * HD, eps, theta};
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_dsp_commit_kv"));
+    e->buf(0, bkv);
+    e->buf(1, bw);
+    e->buf(2, rk1);
+    e->buf(3, rv1);
+    e->bytes(4, &kp, sizeof kp);
+    e->dispatch(Rk, 2 * Hkv, 1, HD);
+    e->commit_and_wait();
+    const struct {
+      uint32_t H, HD, pos0, rope;
+      float eps, theta;
+    } qp{Hkv, HD, pos0, 1, eps, theta};
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_qk_norm_rope"));
+    e2->buf(0, bk);
+    e2->buf(1, bw);
+    e2->bytes(2, &qp, sizeof qp);
+    e2->dispatch(Rk, Hkv, 1, HD);
+    e2->commit_and_wait();
+    const struct {
+      uint32_t pos0, W, Hkv, HD;
+    } rp{pos0, W, Hkv, HD};
+    auto e3 = g.begin();
+    e3->use(NemotronH::pipeline("nh_lili_ring_write"));
+    e3->buf(0, bk);
+    e3->buf(1, bv);
+    e3->buf(2, rk2);
+    e3->buf(3, rv2);
+    e3->bytes(4, &rp, sizeof rp);
+    e3->dispatch(Rk, 2 * Hkv, 1, HD);
+    e3->commit_and_wait();
+    const bool same = !memcmp(rk1.ptr(), rk2.ptr(), zero.size() * 2) && !memcmp(rv1.ptr(), rv2.ptr(), zero.size() * 2);
+    report("nh_dsp_commit_kv", same ? 0.0 : 1.0, 0);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -547,6 +689,7 @@ int main() {
   check_moe_ah();
   check_f32_sk();
   check_cand();
+  check_dsp_fused();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }
