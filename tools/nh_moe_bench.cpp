@@ -1,7 +1,7 @@
 // A verify's routed experts on Lightning's shapes (NVFP4, 128 experts, I 1856, hidden 2688, top-6) on synthetic
-// weights: nh_x4_moe_up + nh_x4_moe_dn + nh_moe2_sum2_add per (row, expert) pair at 8 or 4 simdgroups per
-// threadgroup, every variant's h and output compared to the bit with the first (8 simdgroups) and the up products
-// spot-checked against fp64. One call is one layer of one verify (its live
+// weights: nh_x4_moe_up + nh_x4_moe_dn + nh_moe2_sum2_add per (row, expert) pair, the experts in layout L0 or L2
+// (_l2) and at 8 or 4 simdgroups per threadgroup, every variant's h and output compared to the bit with the first
+// (L0, 8 simdgroups) and the L0 up products spot-checked against fp64. One call is one layer of one verify (its live
 // rows, its pairs); calls rotate over --layers copies of the experts (~5.6 MB per expert and projection) so they
 // read DRAM, --calls calls per command buffer (serial, as the engine's verify), median of --reps; the variants
 // interleave.
@@ -113,15 +113,17 @@ int main(int argc, char** argv) {
   }
   Gpu& g = Gpu::get();
   g.compile_extra("Nemotron-H", kNhKernelSource);
-  // the experts: ModelOpt bytes repacked (L0), block scales, tensor scales
+  // the experts: ModelOpt bytes repacked to L0 (q0) and to L2 (q2), block scales, tensor scales
   const size_t qb = size_t(I) * D / 2, sb = size_t(I) * D / 16;
   struct Layer {
-    Buffer uq0, us, dq0, ds, gu, gd;
+    Buffer uq0, uq2, us, dq0, dq2, ds, gu, gd;
   };
   std::vector<Layer> ly(static_cast<size_t>(NL));
   for (Layer& l : ly) {
     l.uq0 = g.alloc(qb * E, "upq0", false);
+    l.uq2 = g.alloc(qb * E, "upq2", false);
     l.dq0 = g.alloc(qb * E, "dnq0", false);
+    l.dq2 = g.alloc(qb * E, "dnq2", false);
     l.us = g.alloc(sb * E, "ups", false);
     l.ds = g.alloc(sb * E, "dns", false);
     l.gu = g.alloc(E * 4, "gsu");
@@ -147,6 +149,7 @@ int main(int argc, char** argv) {
             }
             const uint32_t N = dn ? D : I, K = dn ? I : D;
             nh_repack_rows(NhFmt::FP4, K, raw.data(), N, (dn ? l.dq0 : l.uq0).as<uint8_t>() + e * qb, nullptr, false);
+            nh_repack_rows(NhFmt::FP4, K, raw.data(), N, (dn ? l.dq2 : l.uq2).as<uint8_t>() + e * qb, nullptr, true);
           }
       });
     for (auto& t : th) t.join();
@@ -181,7 +184,7 @@ int main(int argc, char** argv) {
     sum_pairs += C.pairs;
     sum_dist += C.distinct;
   }
-  printf("%d calls: %.2f pairs, %.2f distinct experts per call (%s); %d layer copies (%.1f GB)\n", ncall,
+  printf("%d calls: %.2f pairs, %.2f distinct experts per call (%s); %d layer copies (%.1f GB per layout)\n", ncall,
          sum_pairs / ncall, sum_dist / ncall, routes.empty() ? "synthetic routings" : routes.c_str(), NL,
          double(NL) * E * (qb + sb) * 2 / 1e9);
   const struct {
@@ -189,9 +192,10 @@ int main(int argc, char** argv) {
   } mp{I, D, k, uint32_t(qb), uint32_t(sb), uint32_t(qb), uint32_t(sb), I};
   struct Var {
     std::string name;
+    bool l2;
     uint32_t thr;
   };
-  const std::vector<Var> all = {{"8sg", 256}, {"4sg", 128}};
+  const std::vector<Var> all = {{"l0_8sg", false, 256}, {"l0_4sg", false, 128}, {"l2_8sg", true, 256}, {"l2_4sg", true, 128}};
   std::vector<const Var*> vs;
   for (const Var& v : all)
     if (only.empty() || std::find(only.begin(), only.end(), v.name) != only.end() || &v == &all[0]) vs.push_back(&v);
@@ -200,8 +204,8 @@ int main(int argc, char** argv) {
     Call& C = cs[size_t(c)];
     const Layer& l = ly[size_t(c % NL)];
     const uint32_t rows_tg = v.thr / 8;
-    e.use(NemotronH::pipeline("nh_x4_moe_up"));
-    e.buf(0, l.uq0);
+    e.use(NemotronH::pipeline(v.l2 ? "nh_x4_moe_up_l2" : "nh_x4_moe_up"));
+    e.buf(0, v.l2 ? l.uq2 : l.uq0);
     e.buf(1, l.us);
     e.buf(2, C.lat);
     e.buf(3, C.h);
@@ -211,8 +215,8 @@ int main(int argc, char** argv) {
     e.buf(9, l.gu);
     e.dispatch((I + rows_tg - 1) / rows_tg, R * k, 1, v.thr);
     if (stage == 0) return;
-    e.use(NemotronH::pipeline("nh_x4_moe_dn"));
-    e.buf(0, l.dq0);
+    e.use(NemotronH::pipeline(v.l2 ? "nh_x4_moe_dn_l2" : "nh_x4_moe_dn"));
+    e.buf(0, v.l2 ? l.dq2 : l.dq0);
     e.buf(1, l.ds);
     e.buf(2, C.h);
     e.buf(3, C.part);
@@ -238,7 +242,7 @@ int main(int argc, char** argv) {
     for (int c = 0; c < ncall; ++c) enc(*e, c, v, 1);
     e->commit_and_wait();
   };
-  // the reference (the first variant), spot-checked against fp64 of the dequantized weights
+  // the reference (the first variant), spot-checked against fp64 of the dequantized L0 weights
   std::vector<std::vector<float>> ref_h(cs.size()), ref_x(cs.size());
   run_all(*vs[0]);
   double worst = 0;

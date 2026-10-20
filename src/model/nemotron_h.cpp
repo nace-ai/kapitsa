@@ -491,7 +491,11 @@ void NemotronH::prewarm_pipelines() {
   for (const std::string& n : g.function_names())
     for (const char* pre : prefixes)
       if (n.rfind(pre, 0) == 0) {
-        if (dense_ || !dense_only(n)) v.push_back(n);
+        // (the routed experts' layout L2 twins: only when the experts are in L2)
+        const bool el2 = n.find("fp4l2_moe") != std::string::npos ||
+                         (n.rfind("nh_x4_moe", 0) == 0 && n.size() > 3 && n.compare(n.size() - 3, 3, "_l2") == 0) ||
+                         n == "nh_moe_b4_l2";
+        if ((dense_ || !dense_only(n)) && (experts_l2_ || !el2)) v.push_back(n);
         break;
       }
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
@@ -709,6 +713,14 @@ void NemotronH::load(int prefill_chunk) {
     };
     fp4_l2_ = dense_model(cfg_) && on("NI_NH_X4") && on("NI_NH_V8") && on("NI_NH_ROWS_GEMM") &&
               (fv && *fv ? !strcmp(fv, "l2") : g.apple_family() <= 7);
+    // NVFP4 routed experts without latent projections (Lightning): L2 on the M5, where a verify's expert products
+    // (per pair, nh_x4_moe_up / _dn) were bound by L0's table decode, not by memory: up + down + sum 196.4 against
+    // 223.0 us per layer (548 / 483 GB/s of distinct experts, tools/nh_moe_bench; a read-only pass of the same
+    // bytes measured as fast as L2); NI_NH_FP4_EXPERTS=l0 / l2 overrides. Their kernels (decode, verify, prefill) have
+    // L2 twins with the same outputs to the bit; the latent models' (nh_x4_moe_dn_sum) do not, nor the IQ2 ones
+    const char* ev = getenv("NI_NH_FP4_EXPERTS");
+    if (ev && *ev && strcmp(ev, "l0") && strcmp(ev, "l2")) fatal("NI_NH_FP4_EXPERTS=%s: expected l0 or l2", ev);
+    experts_l2_ = ev && *ev ? !strcmp(ev, "l2") : g.apple10();
   }
   // 1. what goes where: every tensor's converted size, placed in 1 GB weight buffers (bigger tensors get their own)
   struct Want {
@@ -845,6 +857,7 @@ void NemotronH::load(int prefill_chunk) {
       }
       experts(L.up_e, mx + "experts.", L.E, "up_proj");
       experts(L.down_e, mx + "experts.", L.E, "down_proj");
+      for (NhMat* m : {&L.up_e, &L.down_e}) m->l2 = experts_l2_ && m->fmt == NhFmt::FP4 && !L.lat_down;
       mat(L.up_s, mx + "shared_experts.up_proj.weight");
       mat(L.down_s, mx + "shared_experts.down_proj.weight");
       // (NVFP4 experts run on K % 32 designs: per-pair matvecs and the prefill GEMMs; Lightning's down K is 1856)
@@ -994,10 +1007,12 @@ void NemotronH::load(int prefill_chunk) {
   const bool any_l2 = std::any_of(layers_.begin(), layers_.end(), [](const NhLayer& L) {
     return L.in.l2 || L.out.l2 || L.q.l2 || L.k.l2 || L.v.l2 || L.o.l2 || L.up_s.l2 || L.down_s.l2;
   });
+  const bool experts_l2 = std::any_of(layers_.begin(), layers_.end(), [](const NhLayer& L) { return L.up_e.l2; });
   logi("Nemotron-H: %d layers (%d Mamba-2, %d attention, %d %s), %.2f GB of weights read in %.1f s (%s)%s", cfg_.layers,
        int(std::count(cfg_.kind.begin(), cfg_.kind.end(), 'M')), int(std::count(cfg_.kind.begin(), cfg_.kind.end(), 'A')),
        n_d ? n_d : int(std::count(cfg_.kind.begin(), cfg_.kind.end(), 'E')), n_d ? "MLP" : "MoE", src_bytes / 1e9,
-       (now_ms() - t0) / 1000, formats_summary().c_str(), any_l2 ? "; NVFP4 codes in layout L2" : "");
+       (now_ms() - t0) / 1000, formats_summary().c_str(),
+       any_l2 ? "; NVFP4 codes in layout L2" : experts_l2 ? "; NVFP4 experts in layout L2" : "");
 }
 
 namespace {
@@ -1767,7 +1782,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.val(13, dp);
     e.val(14, L.up_s.gs);
     e.dispatch(tg_r + (S + 15) / 16, 1, 1, 128);
-    e.use(pipe("nh_moe_b4"));
+    e.use(pipe(L.up_e.l2 ? "nh_moe_b4_l2" : "nh_moe_b4"));
     e.buf(0, L.up_e.q);
     e.buf(1, L.up_e.s);
     e.buf(2, xn_);
@@ -1783,7 +1798,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     e.dispatch(tg_u + (H + 15) / 16, 1, 1, 128);
     const MoeP mp{I, H, k, uint32_t(L.up_e.q_exp()), uint32_t(L.up_e.s_exp()), uint32_t(L.down_e.q_exp()),
                   uint32_t(L.down_e.s_exp()), I};
-    e.use(pipe("nh_x4_moe_dn"));
+    e.use(pipe(L.down_e.l2 ? "nh_x4_moe_dn_l2" : "nh_x4_moe_dn"));
     e.buf(0, L.down_e.q);
     e.buf(1, L.down_e.s);
     e.buf(2, h_);
@@ -1850,7 +1865,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       // NVFP4 experts: per (row, expert) pair, each expert's tensor scale applied before relu^2 (nh_x4_moe_*)
       // (nh_x4_moe_dn_sum's counters assume 8 simdgroups: the latent path keeps them)
       const uint32_t thr = lat ? 256u : moe_thr_, rows_tg = thr / 8;
-      e.use(pipe("nh_x4_moe_up"));
+      e.use(pipe(L.up_e.l2 ? "nh_x4_moe_up_l2" : "nh_x4_moe_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
       e.buf(2, lin);
@@ -1863,7 +1878,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       if (grouped) e.group_begin();
       // (the rows' sums into lo_: no nh_moe2_sum2 below; without latent projections the partials, then their sums
       // added into the residual by nh_moe2_sum2_add)
-      e.use(pipe(lat ? "nh_x4_moe_dn_sum" : "nh_x4_moe_dn"));
+      e.use(pipe(lat ? "nh_x4_moe_dn_sum" : L.down_e.l2 ? "nh_x4_moe_dn_l2" : "nh_x4_moe_dn"));
       e.buf(0, L.down_e.q);
       e.buf(1, L.down_e.s);
       e.buf(2, h_);
@@ -2680,7 +2695,8 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         const bool fp4 = L.up_e.fmt == NhFmt::FP4;
         // (nh_x4_moe_* need K % 128: Lightning's down projection, K 1856, stays on nh_gemm_fp4_moe_dn)
         const bool x4m = fp4 && x4_ && L.up_e.K % 128 == 0;
-        e.use(pipe((x4m ? "nh_x4_moe_up" : fp4 ? "nh_gemm_fp4_moe_up" : "nh_gemm_iq2_moe_up") + ms));
+        e.use(pipe(x4m ? "nh_x4_moe_up" + ms + (L.up_e.l2 ? "_l2" : "")
+                        : (fp4 ? (L.up_e.l2 ? "nh_gemm_fp4l2_moe_up" : "nh_gemm_fp4_moe_up") : "nh_gemm_iq2_moe_up") + ms));
         e.buf(0, lat ? plat_ : pxh_);
         e.buf(1, L.up_e.q);
         e.buf(2, L.up_e.s);
@@ -2698,7 +2714,8 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
                        uint32_t(L.down_e.q_exp()), uint32_t(L.down_e.s_exp()), k};
         const bool fp4 = L.down_e.fmt == NhFmt::FP4;
         const bool x4m = fp4 && x4_ && L.down_e.K % 128 == 0;
-        e.use(pipe((x4m ? "nh_x4_moe_dn" : fp4 ? "nh_gemm_fp4_moe_dn" : "nh_gemm_iq2_moe_dn") + ms));
+        e.use(pipe(x4m ? "nh_x4_moe_dn" + ms + (L.down_e.l2 ? "_l2" : "")
+                        : (fp4 ? (L.down_e.l2 ? "nh_gemm_fp4l2_moe_dn" : "nh_gemm_fp4_moe_dn") : "nh_gemm_iq2_moe_dn") + ms));
         e.buf(0, ph_);
         e.buf(1, L.down_e.q);
         e.buf(2, L.down_e.s);

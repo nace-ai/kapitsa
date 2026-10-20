@@ -265,6 +265,7 @@ class NemotronH : public Model {
   // NVFP4 codes in layout L2 (nh_x_fp4.metal): the dense models on the M1's GPU family, as Dory (NI_NH_FP4=l0 / l2
   // overrides); every NVFP4 product then runs on the x4 kernels or nh_gemm_fp4l2_*
   bool fp4_l2_ = false;
+  bool experts_l2_ = false;  // NVFP4 routed experts in layout L2 (NI_NH_FP4_EXPERTS); see NemotronH::load
   bool x2_ = true;  // IQ2_XXS x2 kernels (subnormal-half weights); NI_NH_X2=0: the older ones (fused decode excepted)
   Buffer x2sorted_, x2tiles_, x2args_, x2rank_;  // verify routed experts grouped by expert (nh_x2_bucket)
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows
