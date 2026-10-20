@@ -554,7 +554,7 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
     {
       static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
       std::string nm = cur_name_;
-      if (by_grid) nm += "/ind";
+      if (by_grid) nm += "/ind";  // (an indirect grid is read on the GPU: all of a kernel's indirect dispatches in one row)
       prof_recs().push_back({nm, cb});
     }
     CFRelease(enc_);
