@@ -315,3 +315,6 @@ struct NhDspKvP {
   }
   (isv ? rv : rk)[(size_t(hh) * p.W + slot) * p.HD + d] = half(v);
 }
+
+// ---- a fixed verify depth (NI_DSPARK_DEPTH, measurements): live[0] = d + 1. One thread ----
+[[kernel]] void nh_dsp_fixed_depth(device uint* live [[buffer(0)]], constant uint& d [[buffer(1)]]) { live[0] = d + 1; }

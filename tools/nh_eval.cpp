@@ -17,6 +17,7 @@
 //   as the model's processor makes that image; its <img> / </img> marks already in the ids); --skip N[,N2,...]:
 //   statistics from position N on (e.g. an answer after an image prompt), per sequence or one for all
 #include "metal/gpu.h"
+#include "model/dspark.h"
 #include "model/lilicorr.h"
 #include "model/nh_drafter.h"
 #include "model/nemotron_h.h"
@@ -291,7 +292,13 @@ int main(int argc, char** argv) {
       // as the engine: a drafter that chains() commits the next cycle's drafting half right behind each verify (it
       // reads the acceptance on the GPU), so the GPU does not wait for the host between cycles; otherwise the drafting
       // half is encoded once the host has read the acceptance
-      const bool chain = lili->chains();
+      // NH_SPEC_LOG=<file>: per cycle a JSON line of the DSpark pass (candidates, their log-probs, the Markov head's
+      // corrected log-probs and picks), the verified rows and the accepted count (the drafting halves unchained, so
+      // the pass's buffers still hold the cycle's)
+      FILE* slog = getenv("NH_SPEC_LOG") ? fopen(getenv("NH_SPEC_LOG"), "w") : nullptr;
+      DSpark* dsp = dynamic_cast<DSpark*>(lili.get());
+      if (slog && !dsp) fatal("NH_SPEC_LOG: not a DSpark drafter");
+      const bool chain = lili->chains() && !slog;
       std::unique_ptr<Encoder> next;  // the coming cycle's committed drafting half
       while (produced < gen) {
         if (!next) {
@@ -323,6 +330,19 @@ int main(int argc, char** argv) {
         gpu_ms += e1->gpu_ms() + e2->gpu_ms();
         draft_gpu_ms += e1->gpu_ms();
         const int a = m.accepted();
+        if (slog) {
+          std::vector<int> cand, picks;
+          std::vector<float> clp, qlp;
+          dsp->debug_read(cand, clp, qlp, picks);
+          auto arr = [&](const auto& v) {
+            std::string o = "[";
+            for (size_t i = 0; i < v.size(); ++i) o += (i ? "," : "") + std::to_string(v[i]);
+            return o + "]";
+          };
+          fprintf(slog, "{\"P\":%d,\"a\":%d,\"live\":%d,\"K\":%d,\"cand\":%s,\"clp\":%s,\"qlp\":%s,\"picks\":%s}\n", P,
+                  a, int(m.live_rows().as<uint32_t>()[0]), dsp->cand_k(), arr(cand).c_str(), arr(clp).c_str(),
+                  arr(qlp).c_str(), arr(picks).c_str());
+        }
         const int mm = std::min(a + 1, gen - produced);
         produced += mm;
         ++cycles;
@@ -335,6 +355,7 @@ int main(int argc, char** argv) {
         }
         P += mm;
       }
+      if (slog) fclose(slog);
       auto e3 = g.begin();
       Encoder::profile_tag("d:");  // (the last cycle's rows into the drafter's ring: drafting work too)
       if (m_prev > 0) lili->encode_commit(*e3, *d, m_prev);

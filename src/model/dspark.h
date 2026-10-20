@@ -37,6 +37,10 @@ class DSpark : public NhDrafter {
   void encode_commit(Encoder& e, LiliSeq& d, int m) override;
   void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) override;
   bool chains() const override { return chain_; }
+  // the last drafting pass's candidates [7][K] (ids, log-probs), the Markov head's corrected log-probs [7][K] and
+  // picks [7] (measurements; once its command buffer completed)
+  int cand_k() const { return K_; }
+  void debug_read(std::vector<int>& cand, std::vector<float>& clp, std::vector<float>& qlp, std::vector<int>& picks) const;
   void encode_draft_chained(Encoder& e, Seq& s, LiliSeq& d, int P) override;
 
  private:
@@ -79,6 +83,7 @@ class DSpark : public NhDrafter {
   // Lightning ~6 of 128 experts more per layer: 0.2 measured best with 0.1-0.3 on the harness's coding prompt and an
   // essay (512 tokens, greedy: 207 / 154 tok/s against 155 / 119 verifying every draft)
   float dyn_ratio_ = 0.2f;
+  int fixed_depth_ = -1;  // NI_DSPARK_DEPTH=d: verify d drafts every cycle (measurements)
   bool chain_ = true;  // double-buffered decode (NI_DSPARK_CHAIN=0: the drafting half after the host reads each verify)
   std::vector<Buffer> owned_;
   size_t weight_bytes_ = 0;

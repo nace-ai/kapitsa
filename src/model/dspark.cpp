@@ -255,6 +255,7 @@ DSpark::DSpark(NemotronH& target, const std::string& dir) : tg_(target), path_(d
   if (const char* v = getenv("NI_DSPARK_HEAD"); v && atoi(v) > 0) head_rows_ = std::min(tg_.vocab(), atoi(v));
   if (const char* v = getenv("NI_DSPARK_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_DSPARK_CHAIN")) chain_ = atoi(v) != 0;
+  if (const char* v = getenv("NI_DSPARK_DEPTH")) fixed_depth_ = std::clamp(atoi(v), 0, kB - 1);
   const double t0 = now_ms();
   st_ = std::make_unique<SafetensorsIndex>(path_);
   load();
@@ -639,6 +640,14 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   else e.val(8, wp);
   e.dispatch(1, 1, 1, 32 * K);
   // the coming verify's depth from the corrected probabilities of the picks (NI_DSPARK_DYN; 0 verifies every draft)
+  if (fixed_depth_ >= 0) {
+    const uint32_t fd = uint32_t(fixed_depth_);
+    e.use(pipe("nh_dsp_fixed_depth"));
+    e.buf(0, tg_.live_rows());
+    e.val(1, fd);
+    e.dispatch(1, 1, 1, 1);
+    return;
+  }
   const DepthP dp{S, K, dyn_ratio_, 0};
   e.use(pipe("nh_lili_depth"));
   e.buf(0, qlp_);
@@ -647,6 +656,15 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   e.val(3, dp);
   e.buf(4, qlp_);
   e.dispatch(1, 1, 1, 1);
+}
+
+void DSpark::debug_read(std::vector<int>& cand, std::vector<float>& clp, std::vector<float>& qlp,
+                        std::vector<int>& picks) const {
+  const size_t n = size_t(kB - 1) * size_t(K_);
+  cand.assign(cand_.as<int>(), cand_.as<int>() + n);
+  clp.assign(clp_.as<float>(), clp_.as<float>() + n);
+  qlp.assign(qlp_.as<float>(), qlp_.as<float>() + n);
+  picks.assign(picks_.as<int>(), picks_.as<int>() + (kB - 1));
 }
 
 }  // namespace ni
