@@ -353,12 +353,13 @@ NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const d
 // rows instead of 8 (nh_ssm1 at head dim 80: ten threadgroups per head each stage the group's 256 B / C channels, ~70
 // GB/s of state traffic on an M1 Pro). Each row's update is nh_ssm1's, in the same order: the same outputs to the bit.
 // grid: NH * HD / (8 RPS) threadgroups x 256 threads; HD % (8 RPS) == 0.
-template <int RPS>
+template <int RPS, bool SZ = false>
 NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device float* state, device float* y,
                              const device float* conv_w, const device float* conv_b, const device float* A,
                              const device float* Dsk, const device float* dt_bias, constant NhSsmParams& p,
                              const device uint* live, const device float* zp, uint np, uint tgi, uint tid, uint sg,
-                             uint lane, threadgroup float4 (*sbc)[64], threadgroup float* sx, threadgroup float (*sdt)[2]) {
+                             uint lane, threadgroup float4 (*sbc)[64], threadgroup float* sx, threadgroup float (*sdt)[2],
+                             threadgroup float* sz = nullptr) {
   constexpr uint RT = 8 * RPS;  // state rows per threadgroup
   const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
   const uint tg_per_head = p.HD / RT;
@@ -371,6 +372,8 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
   for (uint c = 0; c < n; ++c) {
     ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc);
     if (tid < RT) sx[c * RT + tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid);
+    // SZ: the gate z of the pass's rows staged too (the steps below then wait on no device load)
+    if (SZ && tid < RT && c >= np) sz[(c - np) * RT + tid] = zx[size_t(c - np) * p.zx_stride + h * p.HD + row0 + tid];
     if (tid == RT) {
       const float zdt = c < np ? zp[size_t(c) * p.zx_stride + DI + CH + h] : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
       const float dt = softplus(zdt + dtb);
@@ -386,6 +389,35 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
     sp[i] = (device float4*)(state + (size_t(h) * p.HD + row0 + sg * RPS + uint(i)) * p.DS) + lane;
     st[i] = *sp[i];
   }
+  if (SZ) {
+    // per step the RPS rows' updates, then their sums together (RPS independent shuffle chains), then their outputs
+    // (z from threadgroup memory): each value as below. Lightning, NI_PROFILE us per layer: verify at depth 7 33.3 ->
+    // 24.8, depth 3 21.4 -> 18.9, decode 12.6 -> 11.6; the same outputs to the bit
+    for (uint c = 0; c < n; ++c) {
+      const float dt = sdt[c][0], dA = sdt[c][1];
+      const float4 bv = sbc[c][lane], cv = sbc[c][32 + lane];
+      float xv[RPS], acc[RPS];
+      _Pragma("clang loop unroll(full)")
+      for (int i = 0; i < RPS; ++i) {
+        xv[i] = sx[c * RT + sg * RPS + uint(i)];
+        st[i] = st[i] * dA + bv * (xv[i] * dt);
+      }
+      if (c + 1 == np)
+        _Pragma("clang loop unroll(full)")
+        for (int i = 0; i < RPS; ++i) *sp[i] = st[i];  // the pending rows committed
+      if (c < np) continue;
+      _Pragma("clang loop unroll(full)")
+      for (int i = 0; i < RPS; ++i) acc[i] = dot(st[i], cv);
+      _Pragma("clang loop unroll(full)")
+      for (int i = 0; i < RPS; ++i) acc[i] = simd_sum(acc[i]);
+      if (lane == 0)
+        _Pragma("clang loop unroll(full)")
+        for (int i = 0; i < RPS; ++i) {
+          const uint r = sg * RPS + uint(i), t = c - np, cx = h * p.HD + row0 + r;
+          y[size_t(t) * DI + cx] = (acc[i] + Dh * xv[i]) * silu(sz[t * RT + r]);
+        }
+    }
+  } else
   for (uint c = 0; c < n; ++c) {
     const float dt = sdt[c][0], dA = sdt[c][1];
     _Pragma("clang loop unroll(full)")
@@ -432,10 +464,26 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
                        sbc, sx, sdt);                                                                              \
   }
 NH_SSM1R(nh_ssm1r2, 2)    // 16 rows per threadgroup
-NH_SSM1R(nh_ssm1r4, 4)    // 32 rows
 NH_SSM1R(nh_ssm1r8, 8)    // 64 rows: a head per threadgroup at head dim 64
 NH_SSM1R(nh_ssm1r5, 5)    // 40 rows per threadgroup
 NH_SSM1R(nh_ssm1r10, 10)  // 80 rows: a head per threadgroup at head dim 80
+// 32 rows (the M5's MoE models), z staged (SZ)
+[[kernel]] void nh_ssm1r4(const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]],
+                          device float* state [[buffer(2)]], device float* y [[buffer(3)]],
+                          const device float* conv_w [[buffer(4)]], const device float* conv_b [[buffer(5)]],
+                          const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],
+                          const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
+                          const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],
+                          constant NhSsm1P& q [[buffer(12)]], uint tgi [[threadgroup_position_in_grid]],
+                          uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                          uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float4 sbc[2 * kSsmNB][64];
+  threadgroup float sx[2 * kSsmNB * 8 * 4];
+  threadgroup float sdt[2 * kSsmNB][2];
+  threadgroup float sz[kSsmNB * 8 * 4];
+  nh_ssm1r_impl<4, true>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, tgi, tid, sg, lane,
+                         sbc, sx, sdt, sz);
+}
 
 // The conv ring after a pass of T rows at pos0: the raw xBC of its last min(T, 3) rows into their slots.
 // grid: ceil(CH * min(T, 3) / 256) x 256 threads
