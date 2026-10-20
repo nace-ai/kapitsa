@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
   bool small = false, same = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
-    if (a == "--reps" && i + 1 < argc) reps = atoi(argv[++i]);
+    if (a == "--reps" && i + 1 < argc) reps = std::max(1, atoi(argv[++i]));
     else if (a == "--small") small = true;
     else if (a == "--same") same = true;
   }
