@@ -1150,6 +1150,21 @@ void NemotronH::alloc_buffers() {
   // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
   rsu_ = true;
   if (const char* v = getenv("NI_NH_RSU")) rsu_ = atoi(v) != 0;
+  // the routed experts' indirect grids of a dynamic verify (NVFP4 experts, no latent projections, one shape)
+  moe_args_ = g.alloc(32, "nh_moe_pair_args");
+  memset(moe_args_.ptr(), 0, 32);
+  pair_ind_ = true;
+  if (const char* v = getenv("NI_NH_PAIR_IND")) pair_ind_ = atoi(v) != 0;
+  moe_lightning_ = true;
+  for (const NhLayer& L : layers_) {
+    if (L.kind != 'E') continue;
+    if (L.lat_up || L.up_e.fmt != NhFmt::FP4 || L.k_used <= 0 ||
+        (moe_I_ && (uint32_t(L.I) != moe_I_ || uint32_t(L.k_used) != moe_k_)))
+      moe_lightning_ = false;
+    moe_I_ = uint32_t(L.I);
+    moe_k_ = uint32_t(L.k_used);
+  }
+  if (!moe_I_) moe_lightning_ = false;
   sample_sg_ = g.apple10();
   if (const char* v = getenv("NI_NH_SAMPLE_SG")) sample_sg_ = atoi(v) != 0;
   sdv_ = g.alloc(size_t(kMaxRows) * cfg_.hidden * 4, "nh_shared_down_rows");
@@ -2094,7 +2109,12 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.val(5, mp);
       e.buf(7, live());
       e.buf(9, L.up_e.gse);
-      e.dispatch((uint32_t(L.I) + rows_tg - 1) / rows_tg, npairs, 1, thr);
+      // (dynamic rows: the live rows' pairs only, nh_moe_pair_args' grid)
+      const bool ind = pair_args_ && pair_thr_ == thr && uint32_t(R) == pair_rows_ && k == pair_k_ &&
+                       (uint32_t(L.I) + rows_tg - 1) / rows_tg == pair_gx_up_ &&
+                       (uint32_t(cfg_.latent) + rows_tg - 1) / rows_tg == pair_gx_dn_;
+      if (ind) e.dispatch_indirect(moe_args_, 0, thr);
+      else e.dispatch((uint32_t(L.I) + rows_tg - 1) / rows_tg, npairs, 1, thr);
       if (grouped) e.group_begin();
       // (the rows' sums into lo_: no nh_moe2_sum2 below; without latent projections the partials, then their sums
       // added into the residual by nh_moe2_sum2_add)
@@ -2110,7 +2130,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.buf(9, L.down_e.gse);
       e.buf(10, lo_);
       e.buf(11, moecnt_);
-      e.dispatch((uint32_t(cfg_.latent) + rows_tg - 1) / rows_tg, npairs, 1, thr);
+      if (ind) e.dispatch_indirect(moe_args_, 16, thr);
+      else e.dispatch((uint32_t(cfg_.latent) + rows_tg - 1) / rows_tg, npairs, 1, thr);
     } else if (x2 && R >= 2) {
       // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
       // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms; up with 8 rows per
@@ -2237,6 +2258,25 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
   if (pos0 + R >= s.cap) fatal("context full (%d)", s.cap);
   enc_embed(e, s.tok, pos0, R, x_);
   if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, R, x_, cfg_.hidden);  // image rows (a prompt's prefill)
+  // a dynamic verify (rows past live[0] dropped): the routed experts' grids of the live rows' pairs (nh_moe_pair_args)
+  pair_args_ = false;
+  if (pair_ind_ && dyn_rows_ && !commit && gemm_rows_ && R >= 2 && moe_lightning_) {
+    const uint32_t thr = moe_thr_, rows_tg = thr / 8;
+    pair_thr_ = thr;
+    pair_rows_ = uint32_t(R);
+    pair_k_ = moe_k_;
+    pair_gx_up_ = (moe_I_ + rows_tg - 1) / rows_tg;
+    pair_gx_dn_ = (uint32_t(cfg_.latent) + rows_tg - 1) / rows_tg;
+    const struct {
+      uint32_t gx_up, gx_dn, k, R;
+    } pp{pair_gx_up_, pair_gx_dn_, pair_k_, uint32_t(R)};
+    e.use(pipe("nh_moe_pair_args"));
+    e.buf(0, live());
+    e.buf(1, moe_args_);
+    e.val(2, pp);
+    e.dispatch(1, 1, 1, 1);
+    pair_args_ = true;
+  }
   for (int i = 0; i < cfg_.layers; ++i) {
     const NhLayer& L = layers_[size_t(i)];
     if (cap_) enc_capture(e, i, x_, pos0, R);
@@ -2282,6 +2322,7 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       enc_moe(e, L, R);
     }
   }
+  pair_args_ = false;
   if (cap_) enc_capture(e, cfg_.layers, x_, pos0, R);  // (a drafter reading the trunk's output: slot `layers`)
   if (!commit) {
     s.n_pend = R;  // until commit_rows() says how many were accepted

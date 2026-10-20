@@ -240,6 +240,11 @@ class NemotronH : public Model {
   bool v8_n1_ = false;   // NI_NH_V8_N1
   bool rsu_ = false;     // NI_NH_RSU
   bool sample_sg_ = false;  // NI_NH_SAMPLE_SG
+  // a dynamic verify's routed-expert grids (nh_moe_pair_args into moe_args_; NI_NH_PAIR_IND): set by enc_rows for
+  // its pass, the shapes they were made for
+  Buffer moe_args_;
+  bool pair_ind_ = false, pair_args_ = false, moe_lightning_ = false;
+  uint32_t moe_I_ = 0, moe_k_ = 0, pair_thr_ = 0, pair_rows_ = 0, pair_k_ = 0, pair_gx_up_ = 0, pair_gx_dn_ = 0;
   Buffer sdv_;           // the shared expert's down product of a verify's rows (rsu_)
   void init_ane();
   void ane_build();

@@ -633,6 +633,23 @@ struct NhRouteParams {
 
 // (nh_route_row: nh_route.h)
 
+// A verify's routed-expert grids from its live rows (dynamic rows: the drafter wrote live[0]): the up and down
+// products' indirect arguments {gx, min(live, R) k, 1} at args[0] and args[4], so the pairs of rows past live get no
+// threadgroups at all. grid: 1 x 1
+struct NhPairArgsP {
+  uint gx_up, gx_dn, k, R;
+};
+[[kernel]] void nh_moe_pair_args(const device uint* live [[buffer(0)]], device uint* args [[buffer(1)]],
+                                 constant NhPairArgsP& p [[buffer(2)]]) {
+  const uint n = max(1u, min(live[0], p.R)) * p.k;
+  args[0] = p.gx_up;
+  args[1] = n;
+  args[2] = 1;
+  args[4] = p.gx_dn;
+  args[5] = n;
+  args[6] = 1;
+}
+
 // One simdgroup per row, 8 rows per threadgroup. Same selection and weights as nh_moe_route.
 // grid: ceil(rows / 8) threadgroups x 256 threads.
 [[kernel]] void nh_moe_route1(const device float* logits [[buffer(0)]], const device float* bias [[buffer(1)]],
