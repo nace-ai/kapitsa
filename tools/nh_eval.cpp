@@ -314,7 +314,9 @@ int main(int argc, char** argv) {
         P += mm;
       }
       auto e3 = g.begin();
+      Encoder::profile_tag("d:");  // (the last cycle's rows into the drafter's ring: drafting work too)
       lili->encode_commit(*e3, *d, m_prev);
+      Encoder::profile_tag(nullptr);
       m.encode_flush(*e3, *s);
       e3->commit_and_wait();
       spec_gpu_ms = gpu_ms;
