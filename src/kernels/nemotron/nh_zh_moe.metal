@@ -15,6 +15,20 @@
   x[r * p.D + d] += v;
 }
 
+// x[r, d] = (x[r, d] + sum_j part[r * k + j, d]) + sd[r, d]: nh_moe2_sum2_add, then the shared expert's down product
+// sd (stored, not added, by its product) added as that product's add epilogue adds it. grid as nh_moe2_sum2_add
+[[kernel]] void nh_moe2_sum2_add_sd(const device float* part [[buffer(0)]], device float* x [[buffer(1)]],
+                                    constant NhMoeParams& p [[buffer(2)]], const device uint* live [[buffer(3)]],
+                                    const device float* sd [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+                                    uint2 tid [[thread_position_in_threadgroup]], uint2 ntg [[threads_per_threadgroup]]) {
+  const uint r = tg.y, d = tg.x * ntg.x + tid.x;
+  if (r >= live[0] || d >= p.D) return;
+  float v = 0.0f;
+  for (uint j = 0; j < p.k; ++j) v += part[(size_t(r) * p.k + j) * p.D + d];
+  const float t = x[r * p.D + d] + v;
+  x[r * p.D + d] = t + sd[r * p.D + d];
+}
+
 // x[t, d] += sum_j w[t, j] * out[t * k + j, d] (prefill; nh_moe_combine's sums, kept in fp32).
 // grid: T threadgroups x 256 threads
 [[kernel]] void nh_moe_combine_add(const device float* out [[buffer(0)]], const device float* ew [[buffer(1)]],
@@ -91,25 +105,5 @@
                              uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
                              uint ntg [[threads_per_threadgroup]]) {
   threadgroup float red[8][8];
-  float acc[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-  const device float4* w4 = (const device float4*)(W + size_t(n) * p.K);
-  for (uint c = tid; c < p.K / 4; c += ntg) {
-    const float4 w = w4[c];
-    float4 xv[8];
-    _Pragma("clang loop unroll(full)")
-    for (uint r = 0; r < 8; ++r) xv[r] = ((const device float4*)(x + size_t(min(r, p.R - 1)) * p.x_stride))[c];
-    _Pragma("clang loop unroll(full)")
-    for (uint r = 0; r < 8; ++r)
-      if (r < p.R) acc[r] += dot(w, xv[r]);
-  }
-  for (uint r = 0; r < 8; ++r) {
-    const float v = simd_sum(acc[r]);
-    if (lane == 0) red[sg][r] = v;
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (tid < p.R) {
-    float v = 0.0f;
-    for (uint j = 0; j < ntg / 32; ++j) v += red[j][tid];
-    y[size_t(tid) * p.y_stride + n] = v * p.gs;
-  }
+  nh_mv_f32_rows(W, x, y, p.K, p.x_stride, p.y_stride, p.gs, p.R, n, tid, sg, lane, ntg, red);
 }

@@ -45,13 +45,9 @@ NI_INLINE void nh_v8t_store(device void* Y, constant NhV8tP& p, uint n, uint t, 
   else ((device half*)Y)[o] = half(v);
 }
 
-[[kernel, max_total_threads_per_threadgroup(256)]] void nh_x4t_v8_l0(
-    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device uchar* s [[buffer(2)]],
-    device void* Y [[buffer(3)]], constant NhV8tP& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
-    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-    uint lane [[thread_index_in_simdgroup]]) {
+NI_INLINE void nh_x4t_v8_l0_impl(const device half* X, const device uchar* q, const device uchar* s, device void* Y,
+                                 constant NhV8tP& p, uint tg, uint sg, uint nsg, uint lane, threadgroup float* red) {
   constexpr int NT = 16, NJ = NT / 8;
-  threadgroup float red[7 * (NT / 2) * 32];
   const uint N = p.N, K = p.K, gpr = K / 64, n0 = tg * NT;
   const uint c = (lane & 1) | (((lane >> 3) & 1) << 1), r = ((lane >> 1) & 3) | (((lane >> 4) & 1) << 2);
   constexpr auto desc =
@@ -130,4 +126,57 @@ NI_INLINE void nh_v8t_store(device void* Y, constant NhV8tP& p, uint n, uint t, 
     for (int kk = 0; kk < 4; ++kk)
       if (t0 + kk < p.R) nh_v8t_store(Y, p, n, t0 + kk, acc[j * 4 + kk] * post);
   }
+}
+
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_x4t_v8_l0(
+    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device uchar* s [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8tP& p [[buffer(4)]], uint tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[7 * 8 * 32];
+  nh_x4t_v8_l0_impl(X, q, s, Y, p, tg, sg, nsg, lane, red);
+}
+
+// ---- a verify's MoE router and routing beside the shared expert (Lightning: F32 router, no latent) ----
+// nh_moe_ru_v8t: threadgroups [0, E) the router's output row tg for the R rows (nh_mv_f32_sk's sums), the rest the
+// shared expert's up product (nh_x4t_v8_l0, p.epi). nh_moe_rd_v8t: threadgroup 0 routes the live rows, one simdgroup
+// per row (nh_moe_route1's selection), the rest the shared expert's down product (nh_x4t_v8_l0, p.epi). The router's
+// and the routing's latency so runs beside the shared expert's weight reads, and no pass waits for another's
+// threadgroups. grids: E + ceil(p.N / 16) (ru), 1 + ceil(p.N / 16) (rd) threadgroups x 256 threads (8 simdgroups, as
+// enc_gemm's nh_x4t_v8_l0 by default); R <= 8 rows
+struct NhRsuP {
+  uint E, K;        // experts (router rows), hidden
+  uint x_stride;    // floats between xn rows
+  uint lg_stride;   // floats between logit rows
+  uint R, k, norm;  // rows of the pass, experts per row, renormalize
+  float scale, gs;  // routed scale, router tensor scale
+};
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_moe_ru_v8t(
+    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device uchar* s [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8tP& p [[buffer(4)]], const device float* rw [[buffer(5)]],
+    const device float* xn [[buffer(6)]], device float* logits [[buffer(7)]], constant NhRsuP& rp [[buffer(13)]],
+    uint tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float red[7 * 8 * 32];
+  threadgroup float rred[8][8];
+  if (tg >= rp.E) nh_x4t_v8_l0_impl(X, q, s, Y, p, tg - rp.E, sg, nsg, lane, red);
+  else nh_mv_f32_rows(rw, xn, logits, rp.K, rp.x_stride, rp.lg_stride, rp.gs, rp.R, tg, tid, sg, lane, ntg, rred);
+}
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_moe_rd_v8t(
+    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device uchar* s [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8tP& p [[buffer(4)]], const device float* logits [[buffer(7)]],
+    const device float* bias [[buffer(8)]], device int* eid [[buffer(9)]], device float* ew [[buffer(10)]],
+    const device uint* live [[buffer(12)]], constant NhRsuP& rp [[buffer(13)]],
+    uint tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],
+    uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float red[7 * 8 * 32];
+  if (tg > 0) {
+    nh_x4t_v8_l0_impl(X, q, s, Y, p, tg - 1, sg, nsg, lane, red);
+    return;
+  }
+  const uint r = sg;
+  if (r < rp.R && r < live[0])
+    nh_route_row(logits + size_t(r) * rp.lg_stride, bias, rp.E, rp.k, rp.norm, rp.scale, lane, eid + r * rp.k,
+                 ew + r * rp.k);
 }

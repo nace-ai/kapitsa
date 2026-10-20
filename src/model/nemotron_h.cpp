@@ -1147,6 +1147,10 @@ void NemotronH::alloc_buffers() {
   moe_thr_ = g.apple10() ? 128u : 256u;
   if (const char* v = getenv("NI_NH_MOE_THR")) moe_thr_ = std::clamp(uint32_t(atoi(v)) / 32u * 32u, 32u, 1024u);
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
+  // the M5's verify (Lightning): router and routing beside the shared expert (enc_moe)
+  rsu_ = true;
+  if (const char* v = getenv("NI_NH_RSU")) rsu_ = atoi(v) != 0;
+  sdv_ = g.alloc(size_t(kMaxRows) * cfg_.hidden * 4, "nh_shared_down_rows");
   // the M5: a verify's 8-row FP8 / BF16 products and the drafter's Q8 at 8 weight rows per threadgroup (nh_*_v8_n1),
   // twice the threadgroups of 16 (each row's sums as before)
   v8_n1_ = g.apple10();
@@ -1997,9 +2001,49 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   // serial order unless NI_NH_GROUP is on, as a single request's passes do: the shared expert's sum then comes after
   // the routed experts', so a batched pass's rows round as their single passes do.)
   const bool grouped = e.grouped() && group_;
+  // The M5's verify (Lightning): the router beside the shared expert's up product (nh_moe_ru_v8t), the routing beside
+  // its down product (nh_moe_rd_v8t), stored into sdv_ and added after the routed experts' sum (nh_moe2_sum2_add_sd):
+  // each value and each addition as the separate passes below make them
+  const bool rsu = rsu_ && gm && !grouped && !lat && R <= kMaxRows && L.router.fmt == NhFmt::F32 && L.E <= 512 &&
+                   L.k_used <= 32 && L.up_e.fmt == NhFmt::FP4 && v8t_ && v8_ && x4_ && L.up_s.fmt == NhFmt::FP4 &&
+                   !L.up_s.l2 && L.up_s.K % 64 == 0 && L.down_s.fmt == NhFmt::FP4 && !L.down_s.l2 &&
+                   L.down_s.K % 64 == 0 && L.router.K % 4 == 0 && cfg_.hidden % 4 == 0 && !getenv("NI_NH_V8T_KS");
+  if (rsu) {
+    const V8P pu{L.up_s.N, L.up_s.K, L.up_s.K, L.up_s.N, uint32_t(R), L.up_s.gs, 2},
+        pd{L.down_s.N, L.down_s.K, L.down_s.K, L.down_s.N, uint32_t(R), L.down_s.gs, 0};
+    const struct {
+      uint32_t E, K, x_stride, lg_stride, R, k, norm;
+      float scale, gs;
+    } rp{uint32_t(L.E), L.router.K, uint32_t(cfg_.hidden), uint32_t(cfg_.max_E), uint32_t(R), k, cfg_.w_norm ? 1u : 0u,
+         cfg_.w_scale, L.router.gs};
+    e.use(pipe("nh_moe_ru_v8t"));
+    e.buf(0, xnh_);
+    e.buf(1, L.up_s.q);
+    e.buf(2, L.up_s.s);
+    e.buf(3, shh_);
+    e.val(4, pu);
+    e.buf(5, L.router.q);
+    e.buf(6, xn_);
+    e.buf(7, rl_);
+    e.bytes(13, &rp, sizeof rp);
+    e.dispatch(uint32_t(L.E) + (L.up_s.N + 15) / 16, 1, 1, 256);
+    e.use(pipe("nh_moe_rd_v8t"));
+    e.buf(0, shh_);
+    e.buf(1, L.down_s.q);
+    e.buf(2, L.down_s.s);
+    e.buf(3, sdv_);
+    e.val(4, pd);
+    e.buf(7, rl_);
+    e.buf(8, L.exp_bias);
+    e.buf(9, eid_);
+    e.buf(10, ew_);
+    e.buf(12, live());
+    e.bytes(13, &rp, sizeof rp);
+    e.dispatch(1 + (L.down_s.N + 15) / 16, 1, 1, 256);
+  }
   // router: logits (BF16 weights, fp32 products), sigmoid + selection bias, top-k
   if (grouped) e.group_begin();
-  enc_mv(e, L.router, xn_, rl_, R, 0, uint32_t(cfg_.hidden), uint32_t(cfg_.max_E));
+  if (!rsu) enc_mv(e, L.router, xn_, rl_, R, 0, uint32_t(cfg_.hidden), uint32_t(cfg_.max_E));
   if (grouped) {
     if (lat && gm) enc_gemm(e, L.lat_down, xnh_, lat_, R, 0);
     else if (lat) enc_mv(e, L.lat_down, xn_, lat_, R, 0);
@@ -2009,15 +2053,17 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
   }
   const RouteP rp{uint32_t(L.E), k, cfg_.w_norm ? 1u : 0u, cfg_.w_scale, uint32_t(cfg_.max_E), uint32_t(R)};
   const bool route1 = L.E <= 512 && L.k_used <= 32;
-  e.use(pipe(route1 ? "nh_moe_route1" : "nh_moe_route"));
-  e.buf(0, rl_);
-  e.buf(1, L.exp_bias);
-  e.buf(2, eid_);
-  e.buf(3, ew_);
-  e.val(4, rp);
-  e.buf(5, live());
-  if (route1) e.dispatch((uint32_t(R) + 7) / 8, 1, 1, 256);
-  else e.dispatch(uint32_t(R), 1, 1, 512);
+  if (!rsu) {
+    e.use(pipe(route1 ? "nh_moe_route1" : "nh_moe_route"));
+    e.buf(0, rl_);
+    e.buf(1, L.exp_bias);
+    e.buf(2, eid_);
+    e.buf(3, ew_);
+    e.val(4, rp);
+    e.buf(5, live());
+    if (route1) e.dispatch((uint32_t(R) + 7) / 8, 1, 1, 256);
+    else e.dispatch(uint32_t(R), 1, 1, 512);
+  }
   // latent projection; routed experts: per (row, expert) pair matvecs (a verify block's 72 pairs average ~1.4 rows per expert, so
   // grouping the pairs by expert into 8-row MMA tiles (1.02 ms per layer) or 16-row GEMM tiles (~1.8) measured slower
   // than 0.82 ms per layer for the pairs; so did decoding each expert row once for all of its pairs, which spills)
@@ -2131,11 +2177,12 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     // the experts' weighted sum: into lo_ for the latent up projection (NVFP4: summed by nh_x4_moe_dn_sum above),
     // else added into the residual
     if (!lat) {
-      e.use(pipe("nh_moe2_sum2_add"));
+      e.use(pipe(rsu ? "nh_moe2_sum2_add_sd" : "nh_moe2_sum2_add"));
       e.buf(0, part_);
       e.buf(1, x_);
       e.val(2, mp);
       e.buf(3, live());
+      e.buf(4, sdv_);
       e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
     } else if (!fp4) {
       e.use(pipe("nh_moe2_sum"));
@@ -2147,7 +2194,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     }
   }
   // shared expert on the full hidden state; both branches add into the residual stream
-  if (grouped) {  // (the shared expert ran above)
+  if (rsu) {  // (the shared expert ran above)
+  } else if (grouped) {  // (the shared expert ran above)
     if (lat && gm) {
       enc_rows_half(e, lo_, loh_, R, cfg_.latent);
       enc_gemm(e, L.lat_up, loh_, x_, R, 1);

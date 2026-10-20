@@ -631,56 +631,7 @@ struct NhRouteParams {
   uint rows;  // rows of the pass (nh_moe_route1)
 };
 
-// Sigmoid router selection of one row by one simdgroup (E <= 32 V: V experts per lane in registers): k argmax rounds
-// over prob + bias (lowest index on ties), weights = the selected probs (normalized by their sum + 1e-20 if norm),
-// times scale. The per-lane arrays are only indexed with constants (a dynamic index would move them to memory). Any V
-// with E <= 32 V selects the same experts with the same weights (the extra slots are -inf, never selected): V 4 for
-// E <= 128 (Lightning) takes a verify's routing from 8.1 to 4.8 us per layer (M5 Max, 23 layers in one command buffer)
-template <uint V>
-NI_INLINE void nh_route_row_v(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
-                              uint lane, device int* eid, device float* ew) {
-  float prob[V], sel[V];
-  for (uint j = 0; j < V; ++j) {
-    const uint e = lane + 32 * j;
-    const bool live = e < E;
-    prob[j] = live ? 1.0f / (1.0f + metal::precise::exp(-lg[e])) : 0.0f;
-    sel[j] = live ? prob[j] + bias[e] : -INFINITY;
-  }
-  float sum = 1e-20f, mine = 0.0f;
-  uint mine_i = 0;
-  for (uint k = 0; k < K; ++k) {
-    float v = -INFINITY;
-    uint i = 0xffffffffu;
-    for (uint j = 0; j < V; ++j)
-      if (sel[j] > v) { v = sel[j]; i = lane + 32 * j; }  // ascending index: the lowest wins ties
-    for (uint off = 16; off > 0; off >>= 1) {
-      const float ov = simd_shuffle_xor(v, off);
-      const uint oi = simd_shuffle_xor(i, off);
-      if (ov > v || (ov == v && oi < i)) { v = ov; i = oi; }
-    }
-    float w = 0.0f;
-    const bool own = i % 32 == lane;
-    const uint jj = i / 32;
-    for (uint j = 0; j < V; ++j)
-      if (own && j == jj) {
-        w = prob[j];
-        sel[j] = -INFINITY;
-      }
-    w = simd_shuffle(w, ushort(i % 32));
-    sum += w;
-    if (lane == k) { mine = w; mine_i = i; }
-  }
-  if (lane < K) {
-    eid[lane] = int(mine_i);
-    ew[lane] = (norm ? mine / sum : mine) * scale;
-  }
-}
-
-NI_INLINE void nh_route_row(const device float* lg, const device float* bias, uint E, uint K, uint norm, float scale,
-                            uint lane, device int* eid, device float* ew) {
-  if (E <= 128) nh_route_row_v<4>(lg, bias, E, K, norm, scale, lane, eid, ew);
-  else nh_route_row_v<16>(lg, bias, E, K, norm, scale, lane, eid, ew);
-}
+// (nh_route_row: nh_route.h)
 
 // One simdgroup per row, 8 rows per threadgroup. Same selection and weights as nh_moe_route.
 // grid: ceil(rows / 8) threadgroups x 256 threads.
