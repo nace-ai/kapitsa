@@ -1577,6 +1577,14 @@ NI_INLINE half v8e_b(uint i, uint mm, uint r, uint c) {
 // and tiles follow the rows' slots: the same path inside two trees rounds a bit differently). TREE 2 = the history
 // alone (keys < pos0, every row sees all of them: its tiles follow pos0 only); the block's keys come from
 // attn8_tree_block, in an order that follows the path alone, as one more chunk.
+// KFlash tree verifies, TREE 3 (NI_V8_TREE_ATTN=2): a row's keys at logical positions below tree_zone(q) go through the
+// MMA tiles, whose chunks are the sequence's own absolute ones (a fixed size, tiles aligned at multiples of 32), the
+// keys from tree_zone(q) to q through attn8_tree_zone, one by one in position order; both depend on q alone, so a row's
+// numbers do not depend on the tree it sits in or on the anchor that splits history from block (zone keys are cache
+// rows below the anchor, block rows from it; a row's block keys are its path's rows). The zone starts 7 + 1 keys
+// behind q at least, so every MMA key is in the cache whatever the tree.
+NI_INLINE uint tree_zone(uint q) { return q >= 7u ? (q - 7u) / 32u * 32u : 0u; }
+
 template <uint TREE>
 NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc, const device half* vc,
                                    device float* part_o, device float* part_ml, constant AttnRowsParams& p, uint R,
@@ -1594,9 +1602,12 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
   const uint t = frow;                              // this lane's row
   const uint qpos = p.pos0 + t;
-  const uint anc = TREE == 1 && t < R ? uint(tree[kKfMask + t]) : 0u;  // tree: the block rows this row sees
+  const uint anc = (TREE == 1 || TREE == 3) && t < R ? uint(tree[kKfMask + t]) : 0u;  // tree: the block rows this row sees
+  // TREE 3: row t's MMA keys are those below tree_zone(its logical position pos0 + depth) -- the position alone, not the
+  // tree or the anchor; the keys from there to the row itself are attn8_tree_zone's
+  const uint lim = TREE == 3 ? (t < R ? tree_zone(p.pos0 + (anc ? uint(popcount(anc)) - 1u : 0u)) : 0u) : 0u;
   const uint start = chunk * p.chunk;
-  const uint kend = min(start + p.chunk, TREE == 2 ? p.pos0 : p.pos0 + R);
+  const uint kend = min(start + p.chunk, TREE == 2 ? p.pos0 : TREE == 3 ? tree_zone(p.pos0 + 7u) : p.pos0 + R);
   const uint ntiles = kend > start ? (kend - start + BK - 1) / BK : 0u;
   simdgroup_half8x8 qf[kDH / 8];
   {
@@ -1647,13 +1658,17 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
       attn11_fetch_v<BK>(r, vb, k0, kend, tid);
       attn11_store_v<BK>(kv, r, tid);
     }
-    const bool diag = TREE == 2 ? k0 + BK > p.pos0 : k0 + BK - 1 > p.pos0;  // tile reaches past row 0's position
+    const bool diag = TREE == 3   ? k0 + BK > tree_zone(p.pos0)
+                      : TREE == 2 ? k0 + BK > p.pos0
+                                  : k0 + BK - 1 > p.pos0;  // tile reaches past row 0's position
     float mx = kNeg11;
     NI_UNROLL for (uint c = 0; c < NC; ++c)
       NI_UNROLL for (uint i = 0; i < 2; ++i) {
         float v = s[c].thread_elements()[i] * M_LOG2E_F;
         const uint key = k0 + c * 8 + fcol + i;
-        if (TREE == 2) {
+        if (TREE == 3) {
+          if (diag && key >= lim) v = kNeg11;
+        } else if (TREE == 2) {
           if (diag && key >= p.pos0) v = kNeg11;  // (the tile's keys past the history)
         } else if (TREE == 1) {
           const uint j = key - p.pos0;  // block row (key > pos0 here)
@@ -1697,7 +1712,8 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   if (t < R) {
     const uint base = (t * p.Hq + hq) * p.nchunks + chunk;
     // the chunk holds at least one key this row sees (tree: a chunk past pos0 holds every block row after its start)
-    const bool any = TREE == 2   ? start < p.pos0
+    const bool any = TREE == 3   ? start < lim
+                     : TREE == 2 ? start < p.pos0
                      : TREE == 1 ? start <= p.pos0 || (start - p.pos0 < 8 && (anc >> (start - p.pos0)) != 0u)
                                  : start <= qpos;
     device float* dst = part_o + base * kHD + dh * kDH + fcol;
@@ -1727,6 +1743,15 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
                                     uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup uint4 kvm[attn11_kv<32>() / 8];
   attn8m_partial_impl<1>(q, kc, vc, part_o, part_ml, p, R, tree, kvm, tg, tid, sg, lane);
+}
+[[kernel]] void attn8m_partial_zone(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                    const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                    device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
+                                    constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]],
+                                    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup uint4 kvm[attn11_kv<32>() / 8];
+  attn8m_partial_impl<3>(q, kc, vc, part_o, part_ml, p, R, tree, kvm, tg, tid, sg, lane);
 }
 [[kernel]] void attn8m_partial_hist(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
                                     const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
@@ -1773,6 +1798,53 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
       l += e;
       for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(vb[j * kHD + i]), acc[i]);
     }
+  }
+  const uint base = (t * p.Hq + hq) * p.nchunks + (p.nchunks - 1);
+  for (uint i = 0; i < 8; ++i) part_o[base * kHD + lane * 8 + i] = acc[i];
+  if (lane == 0) {
+    part_ml[base * 2 + 0] = m;
+    part_ml[base * 2 + 1] = l;
+  }
+}
+
+// The keys of attn8m_partial_zone's rows from tree_zone(q) up to q (q = pos0 + the row's depth), as the last partial chunk
+// (index p.nchunks - 1): the keys below pos0 are cache rows, the ones from pos0 on the row's ancestors' and its own (slot
+// order = depth order), taken one by one in position order with an fp32 online softmax, so the result is a function of the
+// row's position and its path alone. grid (Hq, R) x one simdgroup.
+[[kernel]] void attn8_tree_zone(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
+                                const device int* tree [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  const uint hq = tg.x, t = tg.y;
+  const uint kvh = hq / (p.Hq / p.Hkv);
+  const uint anc = uint(tree[kKfMask + t]);
+  const uint dep = anc ? uint(popcount(anc)) - 1u : 0u;
+  uint arow[8];
+  {
+    uint n = 0;
+    for (uint j = 0; j < 8; ++j)
+      if ((anc >> j) & 1u) arow[n++] = j;
+    for (; n < 8; ++n) arow[n] = 0;
+  }
+  float qv[8];
+  for (uint i = 0; i < 8; ++i) qv[i] = float(half(q[(t * p.Hq + hq) * kHD + lane * 8 + i] * p.scale));
+  const device half* kb = kc + kvh * p.max_seq * kHD + lane * 8;
+  const device half* vb = vc + kvh * p.max_seq * kHD + lane * 8;
+  const uint qp = p.pos0 + dep;
+  float m = -INFINITY, l = 0.0f, acc[8];
+  for (uint i = 0; i < 8; ++i) acc[i] = 0.0f;
+  for (uint k = tree_zone(qp); k <= qp; ++k) {
+    const uint row = k < p.pos0 ? k : p.pos0 + arow[k - p.pos0];
+    float a = 0.0f;
+    for (uint i = 0; i < 8; ++i) a = fma(qv[i], float(kb[row * kHD + i]), a);
+    const float sc = simd_sum(a);
+    const float m_new = max(m, sc);
+    const float corr = m == -INFINITY ? 0.0f : metal::precise::exp(m - m_new);
+    const float e = metal::precise::exp(sc - m_new);
+    l = l * corr + e;
+    for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(vb[row * kHD + i]), acc[i] * corr);
+    m = m_new;
   }
   const uint base = (t * p.Hq + hq) * p.nchunks + (p.nchunks - 1);
   for (uint i = 0; i < 8; ++i) part_o[base * kHD + lane * 8 + i] = acc[i];

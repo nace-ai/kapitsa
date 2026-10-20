@@ -438,26 +438,37 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   static const int tg_target = env_int("NI_V8_ATTN_TGS", 160);
   // NI_V8_TREE_ATTN=0: the tree block's keys inside the MMA tiles (attn8m_partial_tree), whose rounding follows the
   // rows' slots; else the MMA tiles take the history alone and attn8_tree_block the block, one more chunk
-  static const bool tree_block = env_int("NI_V8_TREE_ATTN", 1) != 0;
-  const bool block = tree && tree_block;
-  const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = block ? 1u : 0u;
+  // NI_V8_TREE_ATTN=2 (default): tree_zone -- the MMA tiles take each row's keys below a point that follows its logical
+  // position alone, in chunks of one fixed size, and attn8_tree_zone the keys from there to the row (kernels/verify8.metal)
+  static const int tree_attn = env_int("NI_V8_TREE_ATTN", 2);
+  const bool zone = tree && tree_attn >= 2;
+  const bool block = tree && tree_attn == 1;
+  const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = (block || zone) ? 1u : 0u;
   const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
   uint32_t chunk = std::max<uint32_t>(64, (Lmax + want - 1) / want);
+  if (zone) {
+    // a fixed size: it follows the sequence's capacity, never the anchor, so a position's chunk is the same in every
+    // tree and cycle
+    static const uint32_t zc = uint32_t(env_int("NI_V8_TREE_CHUNK", 128));
+    chunk = std::max<uint32_t>(zc, 32);
+    while (((uint32_t(cap) + chunk - 1) / chunk + extra) * uint32_t(R) > 1024) chunk += 32;
+  }
   chunk = (chunk + gran - 1) / gran * gran;
-  while (((Lmax + chunk - 1) / chunk + extra) * uint32_t(R) > 1024) chunk += gran;
-  const uint32_t nch = (Lmax + chunk - 1) / chunk;
+  while (!zone && ((Lmax + chunk - 1) / chunk + extra) * uint32_t(R) > 1024) chunk += gran;
+  // the zone's MMA keys end at or before pos: no chunk past it holds one
+  const uint32_t nch = zone ? std::max<uint32_t>(1, (uint32_t(pos) + chunk - 1) / chunk) : (Lmax + chunk - 1) / chunk;
   kp::AttnRows rp{uint32_t(cfg_.hq), uint32_t(cfg_.hkv), uint32_t(pos), chunk, uint32_t(cap),
                   1.0f / std::sqrt(float(cfg_.head_dim)), nch + extra};
   const uint32_t Ru = uint32_t(R);
   if (mma) {
-    e.use(pipe8(block ? "attn8m_partial_hist" : tree ? "attn8m_partial_tree" : "attn8m_partial"));
+    e.use(pipe8(zone ? "attn8m_partial_zone" : block ? "attn8m_partial_hist" : tree ? "attn8m_partial_tree" : "attn8m_partial"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
     e.val(5, rp);
     e.val(6, Ru);
-    if (tree && !block) e.buf(7, *v8_tree_);
+    if (zone || (tree && !block)) e.buf(7, *v8_tree_);
     e.dispatch(nch, cfg_.hkv, 1, 64 * G);
-    if (block) {
-      e.use(pipe8("attn8_tree_block"));
+    if (block || zone) {
+      e.use(pipe8(zone ? "attn8_tree_zone" : "attn8_tree_block"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
       e.val(5, rp);
       e.buf(6, *v8_tree_);

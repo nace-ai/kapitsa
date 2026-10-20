@@ -87,42 +87,47 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
 
 ## Open items
 
-1. Dynamic MoE trees: done (`4fc87d0`). Optional: the 35B's sampled exactness check and more sampled seeds.
-2. **Greedy replies on MoE with dynamic trees: two fixes verified on the M4 Pro, one residual gap open.**
+1. Dynamic MoE trees: done (`4fc87d0`; their greedy invariance is item 2). Optional: the 35B's sampled exactness check and more sampled seeds.
+2. **Greedy replies on MoE with dynamic trees: fixed in the attention (`NI_V8_TREE_ATTN=2`, tree zone); checked on the M5 Pro.**
    - The bug: on the Qwen3.6-35B, `kapitsa serve` failed `tests/test_server.py` "a request alone gives the same reply
      every time (greedy)" with dynamic trees and passed with `NI_KFLASH=0`. The tree's size and shape follow the
      budget's learned state, and the 35B's router flips its top-8 on a last-bit difference between two rows of
      the same path.
-   - The fixes (`fd9b6a9`):
-     - attention takes the tree block's keys in path order, as their own chunk (`attn8_tree_block`);
-     - the GDN tree step ends in one explicit fused update (`gdn_update`);
-     - plus row-independent expert numerics at every temperature (`0b52781`).
-   - Verified on the M4 Pro, 2026-10-20:
-     - server suite on the 35B: all pass, including "same reply every time (greedy)";
-     - `dflash_accept_test`: all pass;
-     - `nh_tree_check`: all pass;
-     - 4B and 27B greedy: identical to plain decoding;
-     - cost: about +1% GPU time per cycle (4B 16.85 -> 17.03 ms, 35B 21.0 -> 21.3 ms), within noise in tok/s.
-   - **Residual gap: it's the cycle boundary, not the tree size.**
-     - Sweep of forced sizes 1-8 on the 35B (`kflash_invariance.py --sizes 1,...,8`, 192 tokens): sizes 4, 5, 7 match
-       size 1 and sizes 2, 3, 6, 8 differ at generated token 177. A previous run gave a different split, so it
-       doesn't follow the size.
-     - `--ref` at that token: plain decoding has 5460 ahead of 1851 by 0.23, a one-pass prefill of the prefix by
-       0.12, and the force-8 run's verify row (row 2 of the cycle anchored at P = 259) has 1851 ahead by 0.08. That
-       is a router flip (different experts), not a last-bit tie.
-     - Cause: a position is verified inside cycles anchored at different P in different runs, because acceptance
-       lengths follow the tree and the budget's learned state. The verify splits attention into history keys (< P,
-       MMA tiles) and the tree block's keys (`attn8_tree_block`). Where that split falls changes the reduction order,
-       hence the last bits, and the 35B's router flips its top-8 on them. The GDN state at P (committed fold) against
-       an in-block step is the other place to check. Chains don't show it, because their cycle boundaries don't
-       depend on learned state.
-     - Fix: make the verify invariant to the boundary. Reduce attention keys in chunks aligned to absolute positions
-       (history and block alike), combined in a fixed order, and make the committed GDN fold give the same bits as
-       an in-block step. A test: decode one prompt with different forced anchors and compare the rows at the same
-       absolute position.
-     - Until then the server suite passes (the fixes above shrank the effect), but a rare greedy flip on the 35B
-       between identical requests remains possible.
-   - Fallback if it can't be closed: default MoE targets to the chain (`NI_KFLASH=1` keeps the dynamic trees).
+   - Earlier fixes (`fd9b6a9`, `0b52781`: the GDN step's fused update, row-independent expert numerics, the tree
+     block as its own attention chunk). They were reported as verified on the M4 Pro (server suite passing, 4B and
+     27B identical to plain), but they did not make the 35B invariant: on the M5 Pro the suite failed that test on some
+     runs, 3 of 5 prompts gave different replies across 6 cold runs, and `kflash_invariance.py` found 4 of 5
+     prompts whose replies depend on the forced tree size. The GDN fused update (`NI_V8_TREE_PIN`) had no effect on
+     any output we measured.
+   - The root cause, found by hashing the logits and each layer's hidden state of the same teacher-forced
+     tokens verified under different tree schedules (`tools/moe_tree_check.cpp`): the first row that differs is
+     always in layer 3, the first full-attention layer (GDN layers 0-2 are bitwise equal). The attention split a row's
+     keys into history chunks whose size and boundaries followed the cycle's anchor (`Lmax = pos + rows`), plus the
+     tree block, so the same row summed the same keys in a different order whenever the anchor or the tree
+     shape differed. The router then flips on the last bits. It isn't visible as an argmax difference for many tokens,
+     which is why the old checks missed it.
+   - The fix (`NI_V8_TREE_ATTN=2`, the default; `1` = the previous attention, `0` = the block inside the MMA tiles):
+     a row at position `q` takes the keys below `tree_zone(q) = (q - 7) / 32 * 32` through the MMA tiles, in chunks of
+     one fixed size (`NI_V8_TREE_CHUNK`, 128; independent of the anchor and the position), and the keys from there to
+     `q` (8 to 39 of them: the cache rows below the anchor, then the row's ancestors) through a serial fp32
+     online softmax in position order (`attn8_tree_zone`). A row's bits depend on its position and its path only.
+   - Checks, Qwen3.6-35B-A3B 4-bit on the M5 Pro, 2026-10-20:
+     - `moe_tree_check` (new; bitwise logits and per-layer hidden state of 11 tree schedules, chains, tails, jumps,
+       random and mixed trees, 64 teacher-forced positions of one prompt, 96 of another): 52 of 55 schedule pairs differ before, 0 of 55 after;
+     - `kflash_invariance.py` (now every pair, plus the budget's own `auto` trees; 5 prompts, 384 tokens, sizes
+       1,0,3,5,8,-1,auto): 4 of 5 prompts differ before (6, 17, 6, 17 of 21 pairs), 0 of 21 pairs differ on all
+       5 after;
+     - 6 cold-prefill repeats of 5 server prompts: 0 of 5 prompts differ;
+     - server suite, twice: 47/47 both times;
+     - plain decoding (35B, 5 prompts), the 4B's greedy replies (plain and trees of every size), and the 27B's (one 192-token
+       prompt, plain and trees): identical to before.
+   - Cost, 35B greedy, interleaved A/B against `NI_V8_TREE_ATTN=1` (6 runs per arm on the two 512-token prompts, 2 per
+     arm on 4K and 16K-token prompts): 0.2 to 0.3 ms more GPU time per cycle (16.5 to 16.7 ms -> 16.8 to 16.9 ms, 22.7 -> 23.0 ms at
+     16K), which is about 1% in tok/s on the short prompts (code 205.1 -> 203.0, prose 165.8 -> 163.4, 4K 229.7 -> 232.1 (noise: 2 runs per arm),
+     16K 189.3 -> 187.3). Tokens per cycle are the same.
+   - Not covered: the 35B at temperature > 0 (the sampled exactness check), other MoE targets, and other machines than
+     the M5 Pro. `tools/moe_tree_check` and `kflash_invariance.py` are the tests to run after touching the verify
+     attention or the GDN step.
 3. Nemotron speed: tree vs chain on Lightning. This needs the 23 GB model; the user said not to download it for now.
 4. 16/32-row verifies: the interleaved A/B is deferred; decide whether they join `kflash-trees`.
 5. Merging to `main` waits for the user. `main` has moved on, so bring the branch up to date first, then rerun the
