@@ -199,19 +199,21 @@ int main(int argc, char** argv) {
       printf("  %-20s rel.err %.3e  rows independent %s%s\n", v.label.c_str(), err / rmax, indep ? "yes" : "NO",
              tail_clean ? "" : " (WROTE ROWS >= R)");
     }
-    if (small) continue;
-    std::vector<std::vector<double>> ts(vars.size());
-    for (int rd = 0; rd < reps + 2; ++rd)
+    if (!small) {
+      std::vector<std::vector<double>> ts(vars.size());
+      for (int rd = 0; rd < reps + 2; ++rd)
+        for (size_t i = 0; i < vars.size(); ++i) {
+          const double ms = run(vars[i], x, y, 8, int(rnd() % copies), 10);
+          if (rd >= 2) ts[i].push_back(ms / 10);
+        }
       for (size_t i = 0; i < vars.size(); ++i) {
-        const double ms = run(vars[i], x, y, 8, int(rnd() % copies), 10);
-        if (rd >= 2) ts[i].push_back(ms / 10);
+        std::sort(ts[i].begin(), ts[i].end());
+        const double ms = ts[i][ts[i].size() / 2];
+        printf("  %-20s %8.1f us  %6.1f GB/s (min %.1f us)\n", vars[i].label.c_str(), ms * 1000,
+               double(qb + sb) / ms / 1e6, ts[i][0] * 1000);
       }
-    for (size_t i = 0; i < vars.size(); ++i) {
-      std::sort(ts[i].begin(), ts[i].end());
-      const double ms = ts[i][ts[i].size() / 2];
-      printf("  %-20s %8.1f us  %6.1f GB/s (min %.1f us)\n", vars[i].label.c_str(), ms * 1000,
-             double(qb + sb) / ms / 1e6, ts[i][0] * 1000);
     }
+    for (Buffer* b : {&q, &s, &x, &x2, &y, &yb}) g.release(*b);  // (each shape's ~1 GB of copies)
   }
   return 0;
 }
