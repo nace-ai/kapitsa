@@ -74,6 +74,7 @@ V8Knobs& v8_knobs() {
     d.gdnsplit = env_int("NI_V8_GDNSPLIT", d.gdnsplit);
     d.prepu = env_int("NI_V8_PREPU", d.prepu);
     d.tw = env_int("NI_V8_TW", tw_supported() ? d.tw : 0);
+    d.twm = env_int("NI_V8_TWM", d.twm);
     d.fuse = env_int("NI_V8_FUSE", d.fuse);
     return d;
   }();
@@ -100,6 +101,7 @@ V8Knobs v8_knobs_parse(const char* spec, V8Knobs k) {
     else if (key == "skip") k.skip = v;
     else if (key == "pad") k.pad = v;
     else if (key == "tw") k.tw = v;
+    else if (key == "twm") k.twm = v;
     else if (key == "fuse") k.fuse = v;
     else if (key == "emu") k.emu = v;
     else if (key == "split") k.split = v;
@@ -465,8 +467,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   if (!(skip & 64)) enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
 }
 
-void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-                     const Buffer& h, const Buffer& hs) {
+bool Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
+                     const Buffer& h, const Buffer& hs, const Buffer* tt, const Buffer* ht) {
   v8_alloc();  // the split path's scratch (a drafter may encode before the first verify)
   const uint32_t I = gate.N, K = gate.K;
   const bool q4 = gate.q4() && up.q4();  // the fused qmm8_gu kernels read 4-bit group 64
@@ -474,13 +476,15 @@ void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
   if ((v8_knobs().gusplit || !q4) && v8g_ && I <= uint32_t(cfg_.dense_I) && I % 256 == 0) {
     // gate and up as two segments of one GEMM (v8_plan's tiling, fp32 rows) + SwiGLU into the down GEMM's table:
     // the fused qmm8_gu1k2 kernel (8 column slices x 2 k-slices of one 64-column group) streamed ~10% slower
-    enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, 8, table, sums);
-    kp::SwigluX8 sp{I, 8u};
+    enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, 8, table, sums, false, tt);
+    const bool wt = ht && v8_tw() && size_t(I) * 16 <= ht->size;
+    kp::SwigluX8 sp{I, 8u, wt ? 1u : 0u};
     e.use(pipe8("swiglu_x8"));
     e.buf(0, v8g_); e.buf(1, v8u_); e.buf(2, h); e.buf(3, hs);
     e.val(4, sp);
+    e.buf(5, wt ? *ht : h);  // (unused unless write_t)
     e.dispatch(I / 256, 1, 1, 256);
-    return;
+    return wt;
   }
   if (!q4) fatal("gu8: %s gate/up need the split path (an intermediate size multiple of 256)", gate.fmt().c_str());
   kp::Qmm8Gu p{K, I, 0, 0, 0, 0, 0};
@@ -493,6 +497,7 @@ void Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const B
   e.val(16, p);
   e.buf(17, sums); e.buf(18, sums);
   e.dispatch(I / 64, 1, 1, gu_threads());
+  return false;
 }
 
 // Dense SwiGLU MLP for R rows: x_ += down(silu(gate(n)) * up(n)), n = norm(x_).
@@ -500,10 +505,14 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   const int D = cfg_.hidden;
   const uint32_t I = L.mg.N;
   if (I % 64 || L.mu.N != I || L.mg.K != uint32_t(D)) fatal("mlp8: shapes");
-  enc_x8(e, x_, R, D, L.post_norm);
+  // V8Knobs::twm (with tw): gate|up and down on qmm8t too; the T tables share v8tt_ (gate|up reads it before
+  // swiglu_x8 overwrites it with h)
+  const bool tm = v8_knobs().twm != 0;
+  const bool tx = enc_x8(e, x_, R, D, L.post_norm, false, 0, nullptr, tm);
   const int skip = v8_knobs().skip;
-  if (!(skip & 16)) enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_);
-  if (!(skip & 8)) enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_);
+  bool th = false;
+  if (!(skip & 16)) th = enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_, tx ? &v8tt_ : nullptr, tm ? &v8tt_ : nullptr);
+  if (!(skip & 8)) enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_, false, th ? &v8tt_ : nullptr);
 }
 
 // The moe8e passes (MMA-exact small experts) rely on the MMA adding its products one at a time in k order with an fp32

@@ -293,7 +293,7 @@ struct Qmm8Gu {
 };
 
 struct SwigluX8 {
-  uint32_t K, R;
+  uint32_t K, R, write_t;
 };
 
 struct Moe8Plan {
