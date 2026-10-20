@@ -589,7 +589,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
 | `NI_NH_NGRAM` | `4` with BF16 or FP8, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
 | `NI_NH_FP4` | `l2` on M1 Macs, else `l0` | Dense Nemotron-H models: how NVFP4 codes are laid out for the GPU, as `NI_DORY_FP4`; both give the same outputs to the bit. |
-| `NI_DSPARK_DYN` | `0.2` | Nemotron Lightning's DSpark draft model: how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
+| `NI_DSPARK_DYN` | `0.3` on M5 Macs, else `0.2` | Nemotron Lightning's DSpark draft model: how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
 | `NI_DSPARK_K` | `16` | Nemotron Lightning's DSpark draft model: the candidates per draft position its Markov head rescores (1-32). |
 | `NI_LILI_DYN` | `0.04` | Nemotron's LiLiCorr draft model: how many of its 7 drafts are verified is chosen per cycle, weighing their expected acceptance against each extra row's cost (this value, relative to a cycle's fixed cost); `0` verifies all 7. |
 | `NI_DORY_HEAD` | `q8` with `nvfp4` | Dory: `bf16` keeps the `nvfp4` checkpoint's LM head BF16 (about 7% slower writing; next-token KL 7e-6 from the 8-bit rows it runs as by default); `q8` also runs the `bf16` checkpoint's head as 8-bit rows. |
