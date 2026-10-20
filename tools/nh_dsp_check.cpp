@@ -477,10 +477,11 @@ void check_f32_sk() {
 
 // the candidates (nh_cand1 + nh_cand2, LiLiCorr's and DSpark's): S rows of V logits with many ties (a few distinct
 // values) and a partial last chunk, against a CPU top-K by (value descending, id ascending); log-probs against a
-// double log-softmax
+// double log-softmax; V 5000 (3 chunks) and 131000 (64 chunks, two per lane of the merge, as Lightning's vocabulary)
 void check_cand() {
+  for (const uint32_t V : {5000u, 131000u})
   for (const uint32_t K : {16u, 32u}) {
-    const uint32_t V = 5000, S = 3, nch = (V + 2047) / 2048;
+    const uint32_t S = 3, nch = (V + 2047) / 2048;
     std::vector<float> lg(size_t(S) * V);
     for (auto& x : lg) x = float(int(rnd() % 40)) * 0.25f - 5.0f;
     Gpu& g = Gpu::get();
@@ -525,8 +526,11 @@ void check_cand() {
         err = std::max(err, std::fabs(double(l[idx[r]]) - m - std::log(den) - clp.as<float>()[s * K + r]));
       }
     }
-    report(K == 16 ? "nh_cand K16 ids" : "nh_cand K32 ids", double(bad), 0);
-    report(K == 16 ? "nh_cand K16 log-probs" : "nh_cand K32 log-probs", err, 1e-5);
+    char name[64];
+    snprintf(name, sizeof name, "nh_cand V%u K%u ids", V, K);
+    report(name, double(bad), 0);
+    snprintf(name, sizeof name, "nh_cand V%u K%u log-probs", V, K);
+    report(name, err, 1e-5);
   }
 }
 
