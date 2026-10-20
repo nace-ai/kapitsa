@@ -82,7 +82,9 @@
 
 // ---- F32 matrix (Lightning's router [128][2688]) x up to 8 rows (verify): one threadgroup per output row, its 256
 // threads over K in float4 steps, fp32 sums reduced over the threadgroup (nh_mv_f32_r8 ran 128 simdgroups in all:
-// 31 us per layer). NhMvParams [[4]] (x_stride / y_stride in floats; R <= 8). grid: N threadgroups x 256 threads ----
+// 31 us per layer). A step's 8 input loads are issued before its products (rows past R load row R - 1, unused): 23
+// layers' logits in one command buffer 6.9 -> 4.9 us per layer (M5 Max), the same sums in the same order.
+// NhMvParams [[4]] (x_stride / y_stride in floats; 1 <= R <= 8). grid: N threadgroups x 256 threads ----
 [[kernel]] void nh_mv_f32_sk(const device float* W [[buffer(0)]], const device float* x [[buffer(2)]],
                              device float* y [[buffer(3)]], constant NhMvParams& p [[buffer(4)]],
                              uint n [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
@@ -93,8 +95,12 @@
   const device float4* w4 = (const device float4*)(W + size_t(n) * p.K);
   for (uint c = tid; c < p.K / 4; c += ntg) {
     const float4 w = w4[c];
+    float4 xv[8];
+    _Pragma("clang loop unroll(full)")
+    for (uint r = 0; r < 8; ++r) xv[r] = ((const device float4*)(x + size_t(min(r, p.R - 1)) * p.x_stride))[c];
+    _Pragma("clang loop unroll(full)")
     for (uint r = 0; r < 8; ++r)
-      if (r < p.R) acc[r] += dot(w, ((const device float4*)(x + size_t(r) * p.x_stride))[c]);
+      if (r < p.R) acc[r] += dot(w, xv[r]);
   }
   for (uint r = 0; r < 8; ++r) {
     const float v = simd_sum(acc[r]);
