@@ -168,6 +168,28 @@ NI_INLINE float nh_conv(const device float* zx, const device float* ring, const 
   }
 }
 
+// A long pass's conv (nh_conv of every channel and row) and dt (softplus, exp(dt A)) up front, in parallel: cv[t][c]
+// for the CH conv channels, then dta[t][h] = (dt, exp(dt A)) after T x CH floats, the values nh_ssm stages itself
+// (each B / C channel once per head of its group); nh_ssd.metal scans them.
+// grid: (T, ceil((CH + NH) / 256)) x 256 threads
+[[kernel]] void nh_ssm_conv(const device float* zx [[buffer(0)]], const device float* ring [[buffer(1)]],
+                            device float* cv [[buffer(3)]], const device float* conv_w [[buffer(4)]],
+                            const device float* conv_b [[buffer(5)]], const device float* A [[buffer(6)]],
+                            const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
+                            uint2 tg [[threadgroup_position_in_grid]], uint2 tid [[thread_position_in_threadgroup]]) {
+  const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
+  const uint t = tg.x, c = tg.y * 256 + tid.x;
+  if (c < CH) {
+    cv[size_t(t) * CH + c] = nh_conv(zx, ring, conv_w, conv_b, p, DI, CH, int(t), c);
+  } else if (c < CH + p.NH) {
+    const uint h = c - CH;
+    const float dt = softplus(zx[size_t(t) * p.zx_stride + DI + CH + h] + dt_bias[h]);
+    device float* d = cv + size_t(p.T) * CH + (size_t(t) * p.NH + h) * 2;
+    d[0] = dt;
+    d[1] = metal::precise::exp(dt * A[h]);
+  }
+}
+
 // The same scan for another head dim HD (Nemotron Nano 4B / 9B v2: 80): a threadgroup of 4 x HD threads per head
 // (HD state rows x 4 lanes of 32 columns), the head group's 256 B / C channels staged by the first 256 threads, the
 // head's x channels by the first HD, dt by thread HD; the same update and sums as nh_ssm.

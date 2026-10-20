@@ -1600,7 +1600,46 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
                           cfg_.head_dim % (8 * rps_want) == 0
                       ? rps_want
                       : 0;
-  if (parts & 1) {
+  // M5 (tg_), head dim 64, state 128, a pass of 33+ rows: the scan in chunks of 32 rows as fp32 matrix products
+  // (nh_ssd.metal) on the conv and dt of every row computed first (nh_ssm_conv). Per 2048-row Lightning chunk
+  // (NI_PROFILE): 0.99 ms (conv 0.15, nh_ssd_m 0.07, nh_ssd_scan 0.77) against nh_ssm's 1.70. NI_NH_SSD=0: nh_ssm.
+  static const bool ssd = !getenv("NI_NH_SSD") || atoi(getenv("NI_NH_SSD")) != 0;
+  const uint32_t nch = (uint32_t(T) + 31) / 32;
+  const bool pc = ssd && tg_ && !short_pass && cfg_.head_dim == 64 && cfg_.d_state == 128 && nch >= 2 && np == 0 &&
+                  (parts & 1) && cfg_.n_head % cfg_.n_group == 0 &&
+                  pcv_.size >= (size_t(T) * cfg_.conv_ch() + size_t(T) * cfg_.n_head * 2) * 4 &&
+                  psb_.size >= size_t(cfg_.n_head) * nch * (32 * 32 + 64) * 4;
+  if (pc) {
+    const uint32_t CH = uint32_t(cfg_.conv_ch()), sp[1] = {nch};
+    e.use(pipe("nh_ssm_conv"));
+    e.buf(0, zx);
+    e.buf(1, s.conv[size_t(li)]);
+    e.buf(3, pcv_);
+    e.buf(4, L.conv_w);
+    e.buf(5, L.conv_b);
+    e.buf(6, L.A);
+    e.buf(8, L.dt_bias);
+    e.val(9, p);
+    e.dispatch(uint32_t(T), (CH + uint32_t(cfg_.n_head) + 255) / 256, 1, 256);
+    e.use(pipe("nh_ssd_m"));
+    e.buf(6, L.A);
+    e.val(9, p);
+    e.buf(11, pcv_);
+    e.buf(12, psb_);
+    e.bytes(13, sp, sizeof sp);
+    e.dispatch(uint32_t(cfg_.n_group) * nch, 1, 1, 128);
+    e.use(pipe("nh_ssd_scan"));
+    e.buf(0, zx);
+    e.buf(2, s.rec[size_t(li)]);
+    e.buf(3, y);
+    e.buf(7, L.D);
+    e.val(9, p);
+    e.buf(11, pcv_);
+    e.buf(12, psb_);
+    e.bytes(13, sp, sizeof sp);
+    e.dispatch(uint32_t(cfg_.n_head), 1, 1, 256);  // (a threadgroup per head, a simdgroup per 8 state rows)
+  }
+  if ((parts & 1) && !pc) {
   // (the long passes: a head per threadgroup of 4 x head_dim threads; nh_ssm_h80 for the Nano models' head dim 80)
   e.use(pipe(rps ? "nh_ssm1r" + std::to_string(rps) : short_pass ? "nh_ssm1" : cfg_.head_dim == 80 ? "nh_ssm_h80" : "nh_ssm"));
   e.buf(0, zx);
@@ -2477,6 +2516,9 @@ void NemotronH::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Bu
 void NemotronH::alloc_prefill(int T) {
   if (pf_rows_ >= T) return;
   Gpu& g = Gpu::get();
+  if (pcv_ && pcv_.mtl != pout_.mtl) g.release(pcv_);
+  if (psb_ && psb_.mtl != pout_.mtl) g.release(psb_);
+  pcv_ = psb_ = Buffer{};
   for (Buffer* b : {&px_, &pxn_, &pxh_, &pzx_, &py_, &pyh_, &pq_, &pk_, &pv_, &poh_, &prl_, &peid_, &pew_, &plat_, &ph_,
                     &pout_, &plo_, &psh_, &psorted_, &ptiles_, &pntiles_, &prank_})
     g.release(*b);
@@ -2503,6 +2545,15 @@ void NemotronH::alloc_prefill(int T) {
   psorted_ = g.alloc(P * 4, "nh_pf_sorted");
   prank_ = g.alloc(P * 4, "nh_pf_rank");
   ptiles_ = g.alloc((P / 16 + size_t(cfg_.max_E) + 2) * 16, "nh_pf_tiles");
+  // nh_ssm_conv's rows (M5): in pout_ when it is large enough (the experts' outputs, free during a Mamba layer)
+  if (tg_) {
+    const size_t cvb = R * (size_t(cfg_.conv_ch()) + 2 * size_t(cfg_.n_head)) * 4;
+    pcv_ = pout_.size >= cvb ? pout_ : g.alloc(cvb, "nh_pf_conv");
+    // nh_ssd's per-chunk M and decays: the rest of pout_ if it is large enough
+    const size_t nch = (R + 31) / 32, sbb = size_t(cfg_.n_head) * nch * (32 * 32 + 64) * 4;
+    const size_t off = (cvb + 255) / 256 * 256;
+    psb_ = pout_.size >= off + sbb ? pout_.view(off, sbb) : g.alloc(sbb, "nh_pf_ssd_states");
+  }
   pntiles_ = g.alloc(16, "nh_pf_ntiles");
   pf_rows_ = tmax_;
 }

@@ -2,7 +2,8 @@
 // (nh_gemm_*, nh_x4_moe_*, nh_attn_pf2) against the matrix-unit ones (src/kernels/tensor: nh_gemm_t_*, nh_attn_t_*)
 // on synthetic weights: GPU time per call (5 back-to-back calls per command buffer, median of 5; attention 2, of 3),
 // TFLOP/s, and the largest difference of the outputs relative to the largest output. Case "attn_pf": ATT_POS0=<cached
-// positions before the rows> (0).
+// positions before the rows> (0). Case "ssm": the Mamba-2 scan of M rows, nh_ssm against nh_ssm_conv + nh_ssd, both
+// against fp64 (SSM_POS0 rows before them, SSM_A: A in [-SSM_A, -SSM_A / 16] (8), SSM_ZS: in_proj rows in +-SSM_ZS).
 //   nh_pf_bench [case-substring ...]   M=<rows> (2048) PFT_SRC=<src/kernels> (the tensor kernels from that folder's
 //                                      common.h + tensor/*.metal instead of the built-in library) ACC=1 (the dense
 //                                      cases' rms error against fp64 sums, both kernels)
@@ -348,6 +349,104 @@ int main(int argc, char** argv) {
                flop / t1 / 1e9, t0 / t1, compare(T, Hq * D, true));
       }
     }
+  }
+
+  // Mamba-2 scan of a pass of M rows (SSM_POS0 positions before it, default 0; random rows and state) at Lightning's
+  // sizes: nh_ssm against nh_ssm_conv + nh_ssd_m + nh_ssd_scan, both against fp64 (heads 0 and 37: y and the state)
+  if (want("ssm")) {
+    const uint32_t NH = 64, HD = 64, DS = 128, NG = 8, DI = NH * HD, CH = DI + 2 * NG * DS, ZS = DI + CH + NH, T = M;
+    const uint32_t pos0 = getenv("SSM_POS0") ? uint32_t(atoi(getenv("SSM_POS0"))) : 0, nch = (T + 31) / 32;
+    auto fill = [&](Buffer& b, size_t n, float lo, float hi) {
+      b = g.alloc(n * 4 + 16);
+      for (size_t i = 0; i < n; ++i) ((float*)b.ptr())[i] = lo + (hi - lo) * urand();
+    };
+    Buffer zx, ring, st0, cw, cb, A, D, dtb;
+    const float zs = getenv("SSM_ZS") ? float(atof(getenv("SSM_ZS"))) : 1.0f,
+                al = getenv("SSM_A") ? float(atof(getenv("SSM_A"))) : 8.0f;
+    fill(zx, size_t(T) * ZS, -zs, zs);
+    fill(ring, size_t(4) * CH, pos0 ? -1.0f : 0.0f, pos0 ? 1.0f : 0.0f);
+    fill(st0, size_t(NH) * HD * DS, pos0 ? -0.5f : 0.0f, pos0 ? 0.5f : 0.0f);
+    fill(cw, size_t(CH) * 4, -0.5f, 0.5f);
+    fill(cb, CH, -0.2f, 0.2f);
+    fill(A, NH, -al, -al / 16);
+    fill(D, NH, 0.5f, 1.5f);
+    fill(dtb, NH, -3.0f, 0.5f);
+    Buffer st1 = g.alloc(st0.size), st2 = g.alloc(st0.size), y1 = g.alloc(size_t(T) * DI * 4), y2 = g.alloc(size_t(T) * DI * 4);
+    Buffer live = g.alloc(16), cv = g.alloc((size_t(T) * (CH + 2 * NH)) * 4 + 16), sb = g.alloc(size_t(NH) * nch * (32 * 32 + 64) * 4);
+    *(uint32_t*)live.ptr() = 0xffffffffu;
+    const struct {
+      uint32_t T, pos0, write, zx_stride, NH, HD, DS, NG;
+    } sp{T, pos0, 1, ZS, NH, HD, DS, NG};
+    const uint32_t zero = 0, nchv[1] = {nch};
+    auto run_old = [&]() {
+      memcpy(st1.ptr(), st0.ptr(), st0.size);
+      auto e = g.begin();
+      e->use(g.pipeline("nh_ssm"));
+      e->buf(0, zx), e->buf(1, ring), e->buf(2, st1), e->buf(3, y1), e->buf(4, cw), e->buf(5, cb), e->buf(6, A);
+      e->buf(7, D), e->buf(8, dtb), e->val(9, sp), e->buf(10, live), e->buf(11, zx), e->val(12, zero);
+      e->dispatch(NH, 1, 1, 4 * HD);
+      e->commit_and_wait();
+      return e->gpu_ms();
+    };
+    auto run_new = [&]() {
+      memcpy(st2.ptr(), st0.ptr(), st0.size);
+      auto e = g.begin();
+      e->use(g.pipeline("nh_ssm_conv"));
+      e->buf(0, zx), e->buf(1, ring), e->buf(3, cv), e->buf(4, cw), e->buf(5, cb), e->buf(6, A), e->buf(8, dtb);
+      e->val(9, sp);
+      e->dispatch(T, (CH + NH + 255) / 256, 1, 256);
+      e->use(g.pipeline("nh_ssd_m"));
+      e->buf(6, A), e->val(9, sp), e->buf(11, cv), e->buf(12, sb), e->bytes(13, nchv, 4);
+      e->dispatch(NG * nch, 1, 1, 128);
+      e->use(g.pipeline("nh_ssd_scan"));
+      e->buf(0, zx), e->buf(2, st2), e->buf(3, y2), e->buf(7, D), e->val(9, sp), e->buf(11, cv), e->buf(12, sb);
+      e->bytes(13, nchv, 4);
+      e->dispatch(NH, 1, 1, 256);
+      e->commit_and_wait();
+      return e->gpu_ms();
+    };
+    double to = 1e9, tn = 1e9;
+    for (int r = 0; r < 3; ++r) to = std::min(to, run_old()), tn = std::min(tn, run_new());
+    // fp64 reference for two heads
+    const float* z = (const float*)zx.ptr();
+    auto raw = [&](int t, uint32_t c) {
+      return t >= 0 ? double(z[size_t(t) * ZS + DI + c]) : double(((float*)ring.ptr())[((pos0 + uint32_t(t + 4)) & 3u) * CH + c]);
+    };
+    auto conv = [&](int t, uint32_t c) {
+      const float* w = (const float*)cw.ptr() + c * 4;
+      const double v = ((float*)cb.ptr())[c] + w[0] * raw(t - 3, c) + w[1] * raw(t - 2, c) + w[2] * raw(t - 1, c) + w[3] * raw(t, c);
+      return v / (1 + std::exp(-v));
+    };
+    double ey[2] = {0, 0}, es[2] = {0, 0}, ry = 0, rs = 0;
+    for (uint32_t h : {0u, 37u}) {
+      const uint32_t gi = h / (NH / NG);
+      std::vector<double> S(size_t(HD) * DS);
+      for (size_t i = 0; i < S.size(); ++i) S[i] = ((float*)st0.ptr())[size_t(h) * HD * DS + i];
+      const double Ah = ((float*)A.ptr())[h], Dh = ((float*)D.ptr())[h], db = ((float*)dtb.ptr())[h];
+      for (uint32_t t = 0; t < T; ++t) {
+        const double u = z[size_t(t) * ZS + DI + CH + h] + db, dt = u > 20 ? u : std::log1p(std::exp(u)), dA = std::exp(dt * Ah);
+        std::vector<double> Bv(DS), Cv(DS);
+        for (uint32_t n = 0; n < DS; ++n) Bv[n] = conv(int(t), DI + gi * DS + n), Cv[n] = conv(int(t), DI + NG * DS + gi * DS + n);
+        for (uint32_t pp = 0; pp < HD; ++pp) {
+          const double x = conv(int(t), h * HD + pp);
+          double acc = 0;
+          for (uint32_t n = 0; n < DS; ++n) {
+            double& sv = S[size_t(pp) * DS + n];
+            sv = sv * dA + dt * x * Bv[n];
+            acc += sv * Cv[n];
+          }
+          const double zz = z[size_t(t) * ZS + h * HD + pp], yv = (acc + Dh * x) * zz / (1 + std::exp(-zz));
+          const size_t o = size_t(t) * DI + h * HD + pp;
+          ey[0] += std::pow(((float*)y1.ptr())[o] - yv, 2), ey[1] += std::pow(((float*)y2.ptr())[o] - yv, 2), ry += yv * yv;
+        }
+      }
+      for (size_t i = 0; i < S.size(); ++i) {
+        const size_t o = size_t(h) * HD * DS + i;
+        es[0] += std::pow(((float*)st1.ptr())[o] - S[i], 2), es[1] += std::pow(((float*)st2.ptr())[o] - S[i], 2), rs += S[i] * S[i];
+      }
+    }
+    printf("ssm T %u pos0 %u: nh_ssm %.3f ms, conv + nh_ssd %.3f ms | rms err vs fp64: y %.3e / %.3e, state %.3e / %.3e\n", T,
+           pos0, to, tn, std::sqrt(ey[0] / ry), std::sqrt(ey[1] / ry), std::sqrt(es[0] / rs), std::sqrt(es[1] / rs));
   }
 
   // routed experts: 128 NVFP4 experts, top-6 per row (uniformly random), up 1856 x 2688 (relu^2 -> half), down

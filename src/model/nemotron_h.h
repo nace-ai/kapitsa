@@ -268,6 +268,8 @@ class NemotronH : public Model {
   // M5 (Apple10, macOS 26): the prefill's tile GEMMs (> 32 rows) on the GPU's matrix units (nh_gemm_t_*, Metal 4
   // tensor_ops); NI_NH_TG=0: the simdgroup-MMA ones (nh_gemm_*)
   bool tg_ = false;
+  Buffer pcv_;  // nh_ssm_conv's conv'd rows and dt of a prefill chunk (M5; pout_ when it is large enough)
+  Buffer psb_;  // nh_ssd's per-chunk M and decays (M5; the rest of pout_ when it is large enough)
   Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
   // A dense model (no MoE layers: Nemotron Nano 4B / 9B v2). Its products of K % 128 != 0 (hidden 3136, the 9B's MLP
   // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t, nh_x8_*_t), which the MoE
