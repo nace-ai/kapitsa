@@ -94,6 +94,7 @@ NH_X8_MV(nh_x8_mv_add, 4, 1)
 NH_X8_MV(nh_x8_mv_relu2, 4, 2)
 NH_X8_MV(nh_x8_mv_n2, 2, 0)
 NH_X8_MV(nh_x8_mv_n8, 8, 0)
+NH_X8_MV(nh_x8_mv_add_n2, 2, 1)
 
 // ---- 8 rows (verify): nh_x4_v8's design; the lane of column pair c reads 32 code bytes per row and step (elements
 // 32 c .. 32 c + 31 of the 128-element step: groups 2c, 2c + 1) ----

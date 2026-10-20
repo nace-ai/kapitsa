@@ -1447,13 +1447,17 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
   // one FP8 row: the x8 kernel (4 rows per simdgroup, 2 simdgroups)
   if (R == 1 && W.fmt == NhFmt::FP8 && x8_ && W.K % 32 == 0 && (xs == 0 || xs == W.K) && (ys == 0 || ys == W.N)) {
     const MvP p{W.N, W.K, W.K, W.N, W.gs, 1};
-    e.use(pipe(epi == 2 ? "nh_x8_mv_relu2" : epi == 1 ? "nh_x8_mv_add" : "nh_x8_mv"));
+    // (the M5: 2 rows per simdgroup, twice the threadgroups, each row's sums as before)
+    const bool n2 = v8_n1_ && epi <= 1;
+    e.use(pipe(epi == 2   ? "nh_x8_mv_relu2"
+               : epi == 1 ? (n2 ? "nh_x8_mv_add_n2" : "nh_x8_mv_add")
+                          : (n2 ? "nh_x8_mv_n2" : "nh_x8_mv")));
     e.buf(0, W.q);
     e.buf(1, W.q);
     e.buf(2, x);
     e.buf(3, y);
     e.val(4, p);
-    e.dispatch((W.N + 7) / 8, 1, 1, 64);
+    e.dispatch(n2 ? (W.N + 3) / 4 : (W.N + 7) / 8, 1, 1, 64);
     return;
   }
   // one FP4 row: the x4 kernel (8 rows per 64-thread threadgroup; in_proj 248, out_proj 228 GB/s on fresh weights), in
@@ -1526,9 +1530,11 @@ void NemotronH::enc_mv(Encoder& e, const NhMat& W, const Buffer& x, const Buffer
                    : W.fmt == NhFmt::BF16 ? "bf16"
                    : W.fmt == NhFmt::FP8 ? "fp8"
                                           : "f32";
+  // (one BF16 row on the M5: 2 weight rows per simdgroup, the same sums)
+  const bool n2 = R == 1 && W.fmt == NhFmt::BF16 && v8_n1_ && epi <= 1;
   const std::string name = std::string("nh_mv_") + fm + "_r" + std::to_string(rk) +
-                           (epi == 1 ? "_add" : epi == 2 ? "_relu2" : "");
-  const uint32_t nr = rk <= 2 ? 4 : rk == 4 ? 2 : 1, nsg = 4;
+                           (epi == 1 ? "_add" : epi == 2 ? "_relu2" : "") + (n2 ? "_n2" : "");
+  const uint32_t nr = n2 ? 2 : rk <= 2 ? 4 : rk == 4 ? 2 : 1, nsg = 4;
   const MvP p{W.N, W.K, xs ? xs : W.K, ys ? ys : W.N, W.gs, uint32_t(R)};
   e.use(pipe(name));
   e.buf(0, W.q);
@@ -1741,6 +1747,22 @@ void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
     enc_gemm(e, L.q, xnh_, q_, R, 0);
     enc_gemm(e, L.k, xnh_, k_, R, 0);
     enc_gemm(e, L.v, xnh_, v_, R, 0);
+  } else if (R == 1 && v8_n1_ && L.q.fmt == NhFmt::BF16 && L.k.fmt == NhFmt::BF16 && L.v.fmt == NhFmt::BF16 &&
+             L.k.N == L.v.N && L.k.K == L.q.K && L.v.K == L.q.K && L.q.K % 8 == 0 && L.q.E == 1 && L.k.E == 1 &&
+             L.v.E == 1) {
+    // one row on the M5: the three projections in one dispatch (nh_mv_bf16_qkv_n2, each row as nh_mv_bf16_r1_n2)
+    const MvP pq{L.q.N, L.q.K, L.q.K, L.q.N, L.q.gs, 1}, pk{L.k.N, L.k.K, L.k.K, L.k.N, L.k.gs, 1};
+    e.use(pipe("nh_mv_bf16_qkv_n2"));
+    e.buf(0, L.q.q);
+    e.buf(1, L.k.q);
+    e.buf(2, xn_);
+    e.buf(3, q_);
+    e.val(4, pq);
+    e.buf(5, L.v.q);
+    e.buf(6, k_);
+    e.buf(7, v_);
+    e.val(8, pk);
+    e.dispatch((L.q.N + 7) / 8 + 2 * ((L.k.N + 7) / 8), 1, 1, 128);
   } else {
     enc_mv(e, L.q, xn_, q_, R, 0);
     enc_mv(e, L.k, xn_, k_, R, 0);

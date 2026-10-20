@@ -168,6 +168,32 @@ NH_MV_FMT(iq2, 2)
 NH_MV_FMT(f32, 3)
 NH_MV_FMT(bf16, 4)
 NH_MV_FMT(fp8, 5)
+// one BF16 row at 2 weight rows per simdgroup (twice the threadgroups; each row's sums as nh_mv_bf16_r1's)
+NH_MV(nh_mv_bf16_r1_n2, 4, 2, 1, 0)
+NH_MV(nh_mv_bf16_r1_add_n2, 4, 2, 1, 1)
+
+// Attention's q, k and v (one input row, three BF16 matrices; k and v of one shape) in one dispatch: threadgroups
+// [0, tq) compute q, then tk of k, then tk of v, each row as nh_mv_bf16_r1_n2 computes it. grid: (tq + 2 tk) x 128
+[[kernel]] void nh_mv_bf16_qkv_n2(const device uchar* wq [[buffer(0)]], const device uchar* wk [[buffer(1)]],
+                                  const device float* x [[buffer(2)]], device float* yq [[buffer(3)]],
+                                  constant NhMvParams& pq [[buffer(4)]], const device uchar* wv [[buffer(5)]],
+                                  device float* yk [[buffer(6)]], device float* yv [[buffer(7)]],
+                                  constant NhMvParams& pk [[buffer(8)]], uint3 tgp [[threadgroup_position_in_grid]],
+                                  uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+                                  uint lane [[thread_index_in_simdgroup]]) {
+  constexpr int NR = 2;
+  const uint tq = (pq.N + NR * nsg - 1) / (NR * nsg), tk = (pk.N + NR * nsg - 1) / (NR * nsg);
+  const bool isq = tgp.x < tq, isk = !isq && tgp.x < tq + tk;
+  const uint t = isq ? tgp.x : isk ? tgp.x - tq : tgp.x - tq - tk;
+  const device uchar* w = isq ? wq : isk ? wk : wv;
+  device float* y = isq ? yq : isk ? yk : yv;
+  const uint N = isq ? pq.N : pk.N, K = isq ? pq.K : pk.K;
+  const uint row0 = (t * nsg + sg) * NR;
+  float acc[NR][1];
+  for (int j = 0; j < NR; ++j) acc[j][0] = 0.0f;
+  if (row0 < N) nh_mv_dot<4, NR, 1>(w, w, x, K, K, 1, row0, N, lane, nullptr, acc);
+  nh_mv_store<NR, 1, 0>(acc, y, N, N, 1, isq ? pq.gs : pk.gs, row0, lane);
+}
 
 // ---- Routed experts (IQ2) for R activation rows, each with its own k experts: the parameters of nh_moe2_* ----
 struct NhMoeParams {
