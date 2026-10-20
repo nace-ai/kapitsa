@@ -191,9 +191,11 @@ NH_X4_MV(nh_x4_mv_l0_relu2, 0, 2)
 // unscaled products). up: h[pair] = relu(gse[e] W_up[e] . lat[row])^2, grid (ceil(I / (4 x simdgroups)), pairs);
 // down: part[pair] = ew[pair] gse[e] W_dn[e] . h[pair], grid (ceil(D / (4 x simdgroups)), pairs); then nh_moe2_sum2.
 // The engine runs 8 simdgroups (32 rows per threadgroup: the table fill is spread over more rows; one token's 22
-// pairs 538 against 312 GB/s with 2 simdgroups, tools/nh_x8_bench). Grouping a verify block's pairs by expert into
-// tiles of <= 2 tokens (each weight row decoded once for both, as nh_x2_moeb_*) measured slower: 0.97 against 0.83
-// ms for 8 rows.
+// pairs 538 against 312 GB/s with 2 simdgroups, tools/nh_x8_bench); a verify on the M5 4 (tools/nh_moe_bench: up +
+// down + sum 223 against 230 us per layer). Grouping a verify block's pairs by expert into tiles of <= 2 tokens (each
+// weight row decoded once for both, as nh_x2_moeb_*) measured slower: 0.97 against 0.83 ms for 8 rows; on the M5 too,
+// with each pair's sums kept bitwise (206 against 199 us per layer, recorded routings: a verify layer's 23.5 pairs
+// read 17.4 experts, and an expert's second read mostly hits the cache).
 // Pairs of rows >= live[0] return. ----
 [[kernel]] void nh_x4_moe_up(const device uchar* q [[buffer(0)]], const device uchar* s [[buffer(1)]],
                              const device float* lat [[buffer(2)]], device float* h [[buffer(3)]],

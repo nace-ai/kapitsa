@@ -1104,6 +1104,10 @@ void NemotronH::alloc_buffers() {
   memset(moecnt_.ptr(), 0, moecnt_.size);
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
+  // a verify's NVFP4 routed experts without latent projections (Lightning): 4 simdgroups per threadgroup on the M5
+  // (tools/nh_moe_bench: up + down + sum 223 against 230 us per layer with 8; the same outputs to the bit)
+  moe_thr_ = g.apple10() ? 128u : 256u;
+  if (const char* v = getenv("NI_NH_MOE_THR")) moe_thr_ = std::clamp(uint32_t(atoi(v)) / 32u * 32u, 32u, 1024u);
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
   live_ = g.alloc(16, "nh_live_rows");
   live_all_ = g.alloc(16, "nh_live_all");
@@ -1844,6 +1848,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
     const bool x2 = !fp4 && x2_ && L.E <= 1024 && L.I % 256 == 0 && cfg_.latent % 256 == 0;
     if (fp4) {
       // NVFP4 experts: per (row, expert) pair, each expert's tensor scale applied before relu^2 (nh_x4_moe_*)
+      // (nh_x4_moe_dn_sum's counters assume 8 simdgroups: the latent path keeps them)
+      const uint32_t thr = lat ? 256u : moe_thr_, rows_tg = thr / 8;
       e.use(pipe("nh_x4_moe_up"));
       e.buf(0, L.up_e.q);
       e.buf(1, L.up_e.s);
@@ -1853,7 +1859,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.val(5, mp);
       e.buf(7, live());
       e.buf(9, L.up_e.gse);
-      e.dispatch((uint32_t(L.I) + 31) / 32, npairs, 1, 256);
+      e.dispatch((uint32_t(L.I) + rows_tg - 1) / rows_tg, npairs, 1, thr);
       if (grouped) e.group_begin();
       // (the rows' sums into lo_: no nh_moe2_sum2 below; without latent projections the partials, then their sums
       // added into the residual by nh_moe2_sum2_add)
@@ -1869,7 +1875,7 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.buf(9, L.down_e.gse);
       e.buf(10, lo_);
       e.buf(11, moecnt_);
-      e.dispatch((uint32_t(cfg_.latent) + 31) / 32, npairs, 1, 256);
+      e.dispatch((uint32_t(cfg_.latent) + rows_tg - 1) / rows_tg, npairs, 1, thr);
     } else if (x2 && R >= 2) {
       // the pairs grouped by expert into tiles of <= 2 (each expert row decoded once for both tokens), the up and down
       // dispatches sized by the bucketing (indirect): a verify layer 0.36-0.52 vs 0.55-0.88 ms; up with 8 rows per
