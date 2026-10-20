@@ -265,6 +265,9 @@ class NemotronH : public Model {
   // The M5's matrix units (Metal 4 tensor_ops, src/kernels/tensor/nh_v8t.metal) for the NVFP4 GEMMs of <= 8 rows:
   // Apple10 on macOS 26; NI_NH_V8T=0 keeps them on nh_x4_v8
   bool v8t_ = false;
+  // M5 (Apple10, macOS 26): the prefill's tile GEMMs (> 32 rows) on the GPU's matrix units (nh_gemm_t_*, Metal 4
+  // tensor_ops); NI_NH_TG=0: the simdgroup-MMA ones (nh_gemm_*)
+  bool tg_ = false;
   Buffer x4part_, x4cnt_;  // split-K partials / arrival counters of the 9-32-row x4 / x8 kernels (serial calls share them)
   // A dense model (no MoE layers: Nemotron Nano 4B / 9B v2). Its products of K % 128 != 0 (hidden 3136, the 9B's MLP
   // width 15680) run on the tail variants of the 2-32-row kernels (nh_xb_v8_t, nh_x4_*_t, nh_x8_*_t), which the MoE

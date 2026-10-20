@@ -1158,6 +1158,15 @@ void NemotronH::alloc_buffers() {
   x4cnt_ = g.alloc(4096, "nh_x4_counters");
   memset(x4cnt_.ptr(), 0, 4096);
   if (const char* v = getenv("NI_NH_X2")) x2_ = atoi(v) != 0;
+  tg_ = [] {
+    if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return false;
+    if (Gpu::get().apple_family() < 10) return false;
+    if (__builtin_available(macOS 26.0, *)) {
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+      return Gpu::get().pipeline("nh_gemm_t_fp8_m64", false).pso != nullptr;
+    }
+    return false;
+  }();
   {
     const size_t P = size_t(kMaxRows) * size_t(std::max(1, cfg_.max_k));  // (row, expert) pairs of a verify block
     x2sorted_ = g.alloc(P * 4, "nh_x2_sorted");
@@ -2620,14 +2629,19 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
     e.dispatch((W.N + rows_tg - 1) / rows_tg, 1, 1, 128);
     return;
   }
-  // rows per tile: 16 / 32 for short inputs (less padding), else 64
+  // rows per tile: 16 / 32 for short inputs (less padding), else 64. Over 32 rows on the M5 (tg_): the same tiles on
+  // the matrix units (nh_gemm_t_*: a 2048-row chunk's Mamba in_proj 1.90-1.95 against 7.48 ms, out_proj 0.76-0.77 /
+  // 3.07, the shared expert's up 0.78-0.80 / 2.82-2.83, attention q 0.76-0.82 / 3.13-3.26; tools/nh_pf_bench)
   const int bm = M <= 16 ? 16 : M <= 32 ? 32 : 64;
-  const std::string name = std::string(W.fmt == NhFmt::Q8    ? "nh_gemm_q8"
+  const bool tg = tg_ && M > 32 && (W.fmt == NhFmt::FP8 || W.fmt == NhFmt::BF16 || W.fmt == NhFmt::FP4) &&
+                  W.K % 32 == 0 && (x_ld ? x_ld : W.K) % 8 == 0;
+  std::string name = std::string(W.fmt == NhFmt::Q8    ? "nh_gemm_q8"
                                        : W.fmt == NhFmt::FP4 ? (W.l2 ? "nh_gemm_fp4l2" : "nh_gemm_fp4")
                                        : W.fmt == NhFmt::FP8 ? "nh_gemm_fp8"
                                        : W.fmt == NhFmt::BF16 ? "nh_gemm_bf16w"
                                                               : "nh_gemm_iq2") +
                            "_m" + std::to_string(bm);
+  if (tg) name.insert(8, "t_");  // nh_gemm_t_<fmt>_m64
   const GemmP p{uint32_t(M), W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, W.gs, uint32_t(epi), 0, 0, 1};
   e.use(pipe(name));
   e.buf(0, xh);
@@ -2783,8 +2797,11 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
       if (lat) enc_gemm(e, L.lat_down, pxh_, plat_, T, 3);
       // rows per expert tile: as many as the pairs per expert make worth it
       // (NVFP4 experts: nh_x4_moe_*, tiles of 32 or 16 rows)
+      // (on the M5's matrix units, tge: NVFP4 experts in tiles of 16, 32 or 64 rows on nh_gemm_t_fp4_moe_*)
       const bool fp4e = L.up_e.fmt == NhFmt::FP4 && x4_;
-      const uint32_t per = P / uint32_t(L.E), bm = per >= 40 && !fp4e ? 64 : per >= 12 ? 32 : 16;
+      const bool tge = tg_ && L.up_e.fmt == NhFmt::FP4 && L.up_e.l2 == L.down_e.l2 && L.up_e.K % 32 == 0 &&
+                       L.down_e.K % 32 == 0;
+      const uint32_t per = P / uint32_t(L.E), bm = per >= 40 && (!fp4e || tge) ? 64 : per >= 12 ? 32 : 16;
       const std::string ms = "_m" + std::to_string(bm);
       const BucketP bp{P, uint32_t(L.E), bm, 0};
       e.use(pipe("nh_moe_bucket"));
@@ -2807,8 +2824,9 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         const bool fp4 = L.up_e.fmt == NhFmt::FP4;
         // (nh_x4_moe_* need K % 128: Lightning's down projection, K 1856, stays on nh_gemm_fp4_moe_dn)
         const bool x4m = fp4 && x4_ && L.up_e.K % 128 == 0;
-        e.use(pipe(x4m ? "nh_x4_moe_up" + ms + (L.up_e.l2 ? "_l2" : "")
-                        : (fp4 ? (L.up_e.l2 ? "nh_gemm_fp4l2_moe_up" : "nh_gemm_fp4_moe_up") : "nh_gemm_iq2_moe_up") + ms));
+        e.use(pipe(tge   ? (L.up_e.l2 ? "nh_gemm_t_fp4l2_moe_up" : "nh_gemm_t_fp4_moe_up") + ms
+                   : x4m ? "nh_x4_moe_up" + ms + (L.up_e.l2 ? "_l2" : "")
+                         : (fp4 ? (L.up_e.l2 ? "nh_gemm_fp4l2_moe_up" : "nh_gemm_fp4_moe_up") : "nh_gemm_iq2_moe_up") + ms));
         e.buf(0, lat ? plat_ : pxh_);
         e.buf(1, L.up_e.q);
         e.buf(2, L.up_e.s);
@@ -2826,8 +2844,12 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
                        uint32_t(L.down_e.q_exp()), uint32_t(L.down_e.s_exp()), k};
         const bool fp4 = L.down_e.fmt == NhFmt::FP4;
         const bool x4m = fp4 && x4_ && L.down_e.K % 128 == 0;
-        e.use(pipe(x4m ? "nh_x4_moe_dn" + ms + (L.down_e.l2 ? "_l2" : "")
-                        : (fp4 ? (L.down_e.l2 ? "nh_gemm_fp4l2_moe_dn" : "nh_gemm_fp4_moe_dn") : "nh_gemm_iq2_moe_dn") + ms));
+        // (64-row tiles on the matrix units: 128 columns per threadgroup, 2048 rows 3.54-3.66 against 3.94-3.97 ms
+        // with 64, tools/nh_pf_bench; the up projection's 64 columns are faster there, 3.09 against 3.57-3.63)
+        const bool n128 = tge && bm == 64;
+        e.use(pipe(tge   ? (L.down_e.l2 ? "nh_gemm_t_fp4l2_moe_dn" : "nh_gemm_t_fp4_moe_dn") + ms + (n128 ? "n128" : "")
+                   : x4m ? "nh_x4_moe_dn" + ms + (L.down_e.l2 ? "_l2" : "")
+                         : (fp4 ? (L.down_e.l2 ? "nh_gemm_fp4l2_moe_dn" : "nh_gemm_fp4_moe_dn") : "nh_gemm_iq2_moe_dn") + ms));
         e.buf(0, ph_);
         e.buf(1, L.down_e.q);
         e.buf(2, L.down_e.s);
@@ -2838,7 +2860,7 @@ void NemotronH::enc_prefill_gemm(Encoder& e, Seq& s, int pos0, int T) {
         e.buf(7, psorted_);
         e.buf(8, iq2tab_);
         if (fp4) e.buf(9, L.down_e.gse);
-        e.dispatch((uint32_t(cfg_.latent) + 63) / 64, max_tiles, 1, 128);
+        e.dispatch((uint32_t(cfg_.latent) + (n128 ? 127 : 63)) / (n128 ? 128 : 64), max_tiles, 1, 128);
       }
       const CombineP cp{uint32_t(cfg_.latent), k};
       e.use(pipe(lat ? "nh_moe_combine" : "nh_moe_combine_add"));
