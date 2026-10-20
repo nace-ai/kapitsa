@@ -563,7 +563,7 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   e.buf(3, cand_);
   e.buf(4, clp_);
   e.val(5, cp);
-  e.dispatch(1, 1, 1, S);
+  e.dispatch(S, 1, 1, 32);
   // the Markov head's walk from the anchor: tokens[P + 1 .. P + 7]
   const WalkP wp{S, K, uint32_t(rank_), uint32_t(P), w2_.gs};
   e.use(pipe("nh_dsp_walk"));

@@ -703,7 +703,7 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
   e.buf(3, cand_);
   e.buf(4, clp_);
   e.val(5, cp);
-  e.dispatch(1, 1, 1, S);
+  e.dispatch(S, 1, 1, 32);
   // LiLiCorr head: node states
   tg_.enc_embed(e, cand_, 0, int(N), ce_);
   lin(e, tok_proj_, ce_, ts_, int(N), 0);

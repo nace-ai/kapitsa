@@ -475,6 +475,61 @@ void check_f32_sk() {
   }
 }
 
+// the candidates (nh_cand1 + nh_cand2, LiLiCorr's and DSpark's): S rows of V logits with many ties (a few distinct
+// values) and a partial last chunk, against a CPU top-K by (value descending, id ascending); log-probs against a
+// double log-softmax
+void check_cand() {
+  for (const uint32_t K : {16u, 32u}) {
+    const uint32_t V = 5000, S = 3, nch = (V + 2047) / 2048;
+    std::vector<float> lg(size_t(S) * V);
+    for (auto& x : lg) x = float(int(rnd() % 40)) * 0.25f - 5.0f;
+    Gpu& g = Gpu::get();
+    Buffer bl = up(lg, "logits");
+    Buffer cv = g.alloc(size_t(S) * nch * K * 4, "cv"), ci = g.alloc(size_t(S) * nch * K * 4, "ci"),
+           ms = g.alloc(size_t(S) * nch * 8, "ms"), cand = g.alloc(size_t(S) * K * 4, "cand"),
+           clp = g.alloc(size_t(S) * K * 4, "clp");
+    const struct {
+      uint32_t V, K, nchunks, row0, ld;
+    } p{V, K, nch, 0, V};
+    auto e = g.begin();
+    e->use(NemotronH::pipeline("nh_cand1"));
+    e->buf(0, bl);
+    e->buf(1, cv);
+    e->buf(2, ci);
+    e->buf(3, ms);
+    e->bytes(4, &p, sizeof p);
+    e->dispatch(nch, S, 1, 256);
+    e->commit_and_wait();
+    auto e2 = g.begin();
+    e2->use(NemotronH::pipeline("nh_cand2"));
+    e2->buf(0, cv);
+    e2->buf(1, ci);
+    e2->buf(2, ms);
+    e2->buf(3, cand);
+    e2->buf(4, clp);
+    e2->bytes(5, &p, sizeof p);
+    e2->dispatch(S, 1, 1, 32);
+    e2->commit_and_wait();
+    int bad = 0;
+    double err = 0;
+    for (uint32_t s = 0; s < S; ++s) {
+      const float* l = &lg[size_t(s) * V];
+      std::vector<uint32_t> idx(V);
+      for (uint32_t i = 0; i < V; ++i) idx[i] = i;
+      std::stable_sort(idx.begin(), idx.end(), [&](uint32_t a, uint32_t b) { return l[a] > l[b]; });
+      double m = -1e30, den = 0;
+      for (uint32_t i = 0; i < V; ++i) m = std::max(m, double(l[i]));
+      for (uint32_t i = 0; i < V; ++i) den += std::exp(double(l[i]) - m);
+      for (uint32_t r = 0; r < K; ++r) {
+        if (uint32_t(cand.as<int>()[s * K + r]) != idx[r]) ++bad;
+        err = std::max(err, std::fabs(double(l[idx[r]]) - m - std::log(den) - clp.as<float>()[s * K + r]));
+      }
+    }
+    report(K == 16 ? "nh_cand K16 ids" : "nh_cand K32 ids", double(bad), 0);
+    report(K == 16 ? "nh_cand K16 log-probs" : "nh_cand K32 log-probs", err, 1e-5);
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -487,6 +542,7 @@ int main() {
   check_xb_v8();
   check_moe_ah();
   check_f32_sk();
+  check_cand();
   printf("%s\n", g_fail ? "FAILED" : "all ok");
   return g_fail ? 1 : 0;
 }
