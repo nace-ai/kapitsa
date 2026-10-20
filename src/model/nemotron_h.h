@@ -110,8 +110,9 @@ class NemotronH : public Model {
   // checkpoint's llm_config)
   static bool is_model(const std::string& dir);
   static MemPlan plan(const std::string& path, int prefill_chunk = 2048);
-  // the prefill chunk the engine tries before 2048 rows when it fits (0: none): 4096 for the MoE models on the M5,
-  // whose prefill runs on the matrix units (NI_NH_TG) and streams every routed expert once per chunk and layer
+  // the prefill chunk the engine tries before 2048 rows when it fits (0: none): 4096 for the MoE models on the M5
+  // without the Neural Engine split (Lightning), whose prefill runs on the matrix units (NI_NH_TG) and streams every
+  // routed expert once per chunk and layer
   static int wide_chunk(const std::string& path);
   static size_t ane_plan_bytes(const NhConfig& c, size_t state);
 
