@@ -493,7 +493,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
                                    "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
-                                   "nh_x4t"};
+                                   "nh_x4t", "nh_ssd"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
@@ -513,7 +513,8 @@ void NemotronH::prewarm_pipelines() {
         const bool el2 = n.find("fp4l2_moe") != std::string::npos ||
                          (n.rfind("nh_x4_moe", 0) == 0 && n.size() > 3 && n.compare(n.size() - 3, 3, "_l2") == 0) ||
                          n == "nh_moe_b4_l2";
-        if ((dense_ || !dense_only(n)) && (any_l2 || !el2)) v.push_back(n);
+        // (the prefill's chunked scan nh_ssd_*: only with the M5's tile GEMMs, the switch that selects it)
+        if ((dense_ || !dense_only(n)) && (any_l2 || !el2) && (tg_ || n.rfind("nh_ssd", 0) != 0)) v.push_back(n);
         break;
       }
   const unsigned nt = std::max(1u, std::min(8u, std::thread::hardware_concurrency()));
@@ -1258,6 +1259,13 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   m.activations += R * (2 * H * 4 + std::max(H, DI) * 2 + size_t(c.in_proj()) * 4 + DI * 6 + QD * 6 + KD * 8 +
                         size_t(c.max_E) * 4 + size_t(c.latent) * 4 + size_t(c.ffn_I()) * 2) +
                    P * (16 + size_t(c.max_I) * 2 + size_t(c.latent) * 4) + (P / 16 + size_t(c.max_E) + 2) * 16;
+  // the M5's chunked scan (nh_ssd, head dim 64, state 128): its conv rows and per-chunk states in nh_pf_out when they
+  // fit, else in buffers of their own (alloc_prefill); counted on every Mac
+  if (c.head_dim == 64 && c.d_state == 128) {
+    const size_t cvb = R * (size_t(c.conv_ch()) + 2 * size_t(c.n_head)) * 4, nch = (R + 31) / 32;
+    const size_t sbb = size_t(c.n_head) * nch * (32 * 32 + 64) * 4, pout = P * size_t(std::max(1, c.latent)) * 4;
+    m.activations += (pout >= cvb ? 0 : cvb) + (pout >= (cvb + 255) / 256 * 256 + sbb ? 0 : sbb);
+  }
   m.activations += size_t(4) * ((size_t(c.in_proj()) + 63) / 64) * 2048 * 4 + 4096;  // x4 split-K partials, counters
   if (!m.head_row_bytes) m.head_row_bytes = size_t(c.hidden) + size_t(c.hidden / 32) * 2;
   m.dense = dense_model(c);  // (Nemotron Nano: MLP layers, no experts; the doctor's label)
