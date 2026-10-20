@@ -41,6 +41,25 @@ struct NhNormParams {
   for (uint k = tid; k < p.D; k += ntg) y[size_t(r) * p.y_stride + k] = xr[k] * inv * w[k];
 }
 
+// nh_rmsnorm that also writes the rows as half (yh, row stride D): the verify's MoE layers, whose router reads the fp32
+// rows and whose expert GEMMs the half ones; each value as nh_rmsnorm + nh_rows_half write it, in one pass
+[[kernel]] void nh_rmsnorm_h(const device float* x [[buffer(0)]], const device float* w [[buffer(1)]],
+                             device float* y [[buffer(2)]], constant NhNormParams& p [[buffer(3)]],
+                             device half* yh [[buffer(4)]], uint r [[threadgroup_position_in_grid]],
+                             uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float scratch[32];
+  const device float* xr = x + size_t(r) * p.x_stride;
+  float ss = 0.0f;
+  for (uint k = tid; k < p.D; k += ntg) ss += xr[k] * xr[k];
+  ss = tg_sum(ss, scratch, tid, ntg);
+  const float inv = 1.0f / metal::precise::sqrt(ss / float(p.D) + p.eps);
+  for (uint k = tid; k < p.D; k += ntg) {
+    const float v = xr[k] * inv * w[k];
+    y[size_t(r) * p.y_stride + k] = v;
+    yh[size_t(r) * p.D + k] = half(v);
+  }
+}
+
 // Grouped RMSNorm of the Mamba output: groups of G channels each normalized on their own, times w.
 // grid: (R * ngroups) threadgroups x 256 threads
 [[kernel]] void nh_gnorm(const device float* x [[buffer(0)]], const device float* w [[buffer(1)]],
@@ -476,13 +495,11 @@ constant constexpr uint kAttnKT = 32;  // keys per tile
   }
 }
 
-// grid: (Hq, R) threadgroups x HD threads. out[r, h * HD + d]
-[[kernel]] void nh_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
-                               device float* out [[buffer(2)]], constant NhAttnParams& p [[buffer(3)]],
-                               uint2 tg [[threadgroup_position_in_grid]], uint2 d2 [[thread_position_in_threadgroup]]) {
+// grid: (Hq, R) threadgroups x HD threads. out[r, h * HD + d]; nh_attn_reduce_h: as half (the verify's o_proj input,
+// what nh_rows_half made of the fp32 rows)
+NI_INLINE float nh_attn_reduce_v(const device float* part_o, const device float* part_ml, constant NhAttnParams& p,
+                                 uint h, uint r, uint d) {
   constexpr uint HD = 128;
-  const uint d = d2.x;
-  const uint h = tg.x, r = tg.y;
   const size_t base = (size_t(r) * p.Hq + h) * p.nchunks;
   const uint L = p.pos0 + r + 1, nc = min(p.nchunks, (L + p.chunk - 1) / p.chunk);
   float M = -INFINITY;
@@ -495,7 +512,17 @@ constant constexpr uint kAttnKT = 32;  // keys per tile
     num += w * part_o[(base + c) * HD + d];
     den += w * part_ml[(base + c) * 2 + 1];
   }
-  out[(size_t(r) * p.Hq + h) * HD + d] = num / den;
+  return num / den;
+}
+[[kernel]] void nh_attn_reduce(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                               device float* out [[buffer(2)]], constant NhAttnParams& p [[buffer(3)]],
+                               uint2 tg [[threadgroup_position_in_grid]], uint2 d2 [[thread_position_in_threadgroup]]) {
+  out[(size_t(tg.y) * p.Hq + tg.x) * 128 + d2.x] = nh_attn_reduce_v(part_o, part_ml, p, tg.x, tg.y, d2.x);
+}
+[[kernel]] void nh_attn_reduce_h(const device float* part_o [[buffer(0)]], const device float* part_ml [[buffer(1)]],
+                                 device half* out [[buffer(2)]], constant NhAttnParams& p [[buffer(3)]],
+                                 uint2 tg [[threadgroup_position_in_grid]], uint2 d2 [[thread_position_in_threadgroup]]) {
+  out[(size_t(tg.y) * p.Hq + tg.x) * 128 + d2.x] = half(nh_attn_reduce_v(part_o, part_ml, p, tg.x, tg.y, d2.x));
 }
 
 // ---- MoE routing: sigmoid scores, + selection bias, top-k, the k scores renormalized and scaled ----

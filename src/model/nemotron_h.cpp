@@ -1510,6 +1510,28 @@ void NemotronH::enc_rows_half(Encoder& e, const Buffer& x, const Buffer& y, int 
   e.dispatch(uint32_t(R), 1, 1, 1024);
 }
 
+void NemotronH::enc_norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& yh, int R, int D) {
+  const HalfP hp{uint32_t(D), 1u, cfg_.eps, uint32_t(D)};
+  e.use(pipe("nh_rows_half"));
+  e.buf(0, x);
+  e.buf(1, w);
+  e.buf(2, yh);
+  e.val(3, hp);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
+void NemotronH::enc_norm2(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, const Buffer& yh, int R,
+                          int D) {
+  const NormP p{uint32_t(D), cfg_.eps, uint32_t(D), uint32_t(D)};
+  e.use(pipe("nh_rmsnorm_h"));
+  e.buf(0, x);
+  e.buf(1, w);
+  e.buf(2, y);
+  e.val(3, p);
+  e.buf(4, yh);
+  e.dispatch(uint32_t(R), 1, 1, 1024);
+}
+
 void NemotronH::enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out) {
   const EmbedP ep{uint32_t(cfg_.hidden), uint32_t(tok_off)};
   e.use(pipe(embed_.fmt == NhFmt::BF16 ? "nh_embed_bf16" : "nh_embed_q8"));
@@ -1630,14 +1652,14 @@ void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
   e.buf(4, part_ml_);
   e.val(5, ap);
   e.dispatch(nchunks, uint32_t(cfg_.hkv), uint32_t(R), uint32_t(32 * (cfg_.hq / cfg_.hkv)));
-  e.use(pipe("nh_attn_reduce"));
+  // 2+ rows: the heads' outputs straight to half (o_proj's GEMM input)
+  e.use(pipe(gm ? "nh_attn_reduce_h" : "nh_attn_reduce"));
   e.buf(0, part_o_);
   e.buf(1, part_ml_);
-  e.buf(2, ao_);
+  e.buf(2, gm ? aoh_ : ao_);
   e.val(3, ap);
   e.dispatch(uint32_t(cfg_.hq), uint32_t(R), 1, uint32_t(cfg_.hd));
   if (gm) {
-    enc_rows_half(e, ao_, aoh_, R, cfg_.hq * cfg_.hd);
     enc_gemm(e, L.o, aoh_, x_, R, 1);
   } else {
     enc_mv(e, L.o, ao_, x_, R, 1);
@@ -2029,9 +2051,10 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
     const NhLayer& L = layers_[size_t(i)];
     if (cap_) enc_capture(e, i, x_, pos0, R);
     const bool gm = gemm_rows_ && R >= 2;
-    enc_norm(e, x_, L.norm, xn_, R, cfg_.hidden);
-    if (gm && L.kind != 'E') enc_rows_half(e, xn_, xnh_, R, cfg_.hidden);
-    if (gm && L.kind == 'E') enc_rows_half(e, xn_, xnh_, R, cfg_.hidden);
+    // 2+ rows: the normed rows as half in one pass (the MoE layers' router also reads them in fp32)
+    if (!gm) enc_norm(e, x_, L.norm, xn_, R, cfg_.hidden);
+    else if (L.kind == 'E') enc_norm2(e, x_, L.norm, xn_, xnh_, R, cfg_.hidden);
+    else enc_norm_half(e, x_, L.norm, xnh_, R, cfg_.hidden);
     if (L.kind == 'M') {
       // a verify block's rows go to the half of the pending buffer the pending rows (if any) do not use; the scan
       // commits those first (merged flush)
@@ -2084,11 +2107,11 @@ void NemotronH::encode_flush(Encoder& e, Seq& s) {
 }
 
 void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_stride) {
-  enc_norm(e, x_, out_norm_, xn_, R, cfg_.hidden);
   if (gemm_rows_ && R >= 2) {
-    enc_rows_half(e, xn_, xnh_, R, cfg_.hidden);
+    enc_norm_half(e, x_, out_norm_, xnh_, R, cfg_.hidden);
     enc_gemm(e, head_, xnh_, out, R, 0, uint32_t(out_row_stride));
   } else {
+    enc_norm(e, x_, out_norm_, xn_, R, cfg_.hidden);
     enc_mv(e, head_, xn_, out, R, 0, uint32_t(cfg_.hidden), uint32_t(out_row_stride));
   }
 }
@@ -2211,8 +2234,9 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
   for (int i = 0; i < cfg_.layers; ++i) {
     const NhLayer& L = layers_[size_t(i)];
     capture(i);
-    enc_norm(e, x_, L.norm, xn_, R, cfg_.hidden);
-    if (gm) enc_rows_half(e, xn_, xnh_, R, cfg_.hidden);
+    if (!gm) enc_norm(e, x_, L.norm, xn_, R, cfg_.hidden);
+    else if (L.kind == 'E') enc_norm2(e, x_, L.norm, xn_, xnh_, R, cfg_.hidden);
+    else enc_norm_half(e, x_, L.norm, xnh_, R, cfg_.hidden);
     if (L.kind == 'M') {
       if (gm) enc_gemm(e, L.in, xnh_, zx_, R, 0);
       else enc_mv(e, L.in, xn_, zx_, R, 0);
@@ -2299,16 +2323,15 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
       e.group_end();
       e.group_begin();
       for (size_t g = 0; g < groups.size(); ++g) {
-        e.use(pipe("nh_attn_reduce"));
+        e.use(pipe(gm ? "nh_attn_reduce_h" : "nh_attn_reduce"));
         e.buf(0, part(part_o_, g, size_t(cfg_.hd)));
         e.buf(1, part(part_ml_, g, 2));
-        e.buf(2, rows(ao_, g, QW));
+        e.buf(2, gm ? aoh_.view(r0[g] * QW * 2, size_t(groups[g].R) * QW * 2) : rows(ao_, g, QW));
         e.val(3, ap[g]);
         e.dispatch(uint32_t(cfg_.hq), uint32_t(groups[g].R), 1, uint32_t(cfg_.hd));
       }
       e.group_end();
       if (gm) {
-        enc_rows_half(e, ao_, aoh_, R, cfg_.hq * cfg_.hd);
         enc_gemm(e, L.o, aoh_, x_, R, 1);
       } else {
         enc_mv(e, L.o, ao_, x_, R, 1);

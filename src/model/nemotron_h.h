@@ -195,6 +195,10 @@ class NemotronH : public Model {
   void enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi, uint32_t y_ld = 0,
                 uint32_t x_ld = 0);
   void enc_rows_half(Encoder& e, const Buffer& x, const Buffer& y, int R, int D);
+  // RMSNorm of fp32 rows straight into half rows (nh_rows_half's norm), and into both (nh_rmsnorm_h): one pass where
+  // enc_norm + enc_rows_half took two, with the same values
+  void enc_norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& yh, int R, int D);
+  void enc_norm2(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, const Buffer& yh, int R, int D);
   void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out);
   static Pipeline pipeline(const std::string& name);
 
