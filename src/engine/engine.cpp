@@ -470,6 +470,11 @@ static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
   // 1024-row buffers need ~45% less than 2048-row ones (35B: 0.75 -> 0.38 GB, 27B: 0.94 -> 0.52) for a few % of
   // prefill speed
+  if (NemotronH::is_model(model_dir))
+    if (const int w = NemotronH::wide_chunk(model_dir)) {
+      const MemPlan pw = model_plan(model_dir, w);
+      if (pw.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, pw) + pw.kv_per_pos * size_t(context) <= budget) return w;
+    }
   const MemPlan p = model_plan(model_dir, 2048);
   const size_t ane = model_ane_bytes(model_dir, p);
   return p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) <= budget ? 2048 : 1024;

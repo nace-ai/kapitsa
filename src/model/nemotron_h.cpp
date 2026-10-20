@@ -1186,6 +1186,16 @@ void NemotronH::alloc_buffers() {
   }
 }
 
+int NemotronH::wide_chunk(const std::string& path) {
+  // Lightning (nh_eval, 4K / 16K-token prompts, M5 Max): 752 / 3048 against 790 / 3198 ms with 2048-row chunks, 8192
+  // rows 3113 at 16K; NI_NH_WIDE_CHUNK=0: 2048
+  if (const char* v = getenv("NI_NH_WIDE_CHUNK"); v && !atoi(v)) return 0;
+  if (const char* v = getenv("NI_NH_TG"); v && !atoi(v)) return 0;
+  if (Gpu::get().apple_family() < 10) return 0;
+  if (__builtin_available(macOS 26.0, *)) return dense_model(read_config(path)) ? 0 : 4096;
+  return 0;
+}
+
 MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
   MemPlan m;
   if (!is_model(path)) return m;
@@ -1267,6 +1277,11 @@ MemPlan NemotronH::plan(const std::string& path, int prefill_chunk) {
     m.activations += (pout >= cvb ? 0 : cvb) + (pout >= (cvb + 255) / 256 * 256 + sbb ? 0 : sbb);
   }
   m.activations += size_t(4) * ((size_t(c.in_proj()) + 63) / 64) * 2048 * 4 + 4096;  // x4 split-K partials, counters
+  if (Gpu::get().apple_family() >= 10) {  // the M5's scan buffers (alloc_prefill: in pout_ when it is large enough)
+    const size_t cvb = R * (size_t(c.conv_ch()) + 2 * size_t(c.n_head)) * 4,
+                 sbb = size_t(c.n_head) * ((R + 31) / 32) * (32 * 32 + 64) * 4, pout = P * size_t(std::max(1, c.latent)) * 4;
+    if ((cvb + 255) / 256 * 256 + sbb > pout) m.activations += cvb + sbb;
+  }
   if (!m.head_row_bytes) m.head_row_bytes = size_t(c.hidden) + size_t(c.hidden / 32) * 2;
   m.dense = dense_model(c);  // (Nemotron Nano: MLP layers, no experts; the doctor's label)
   m.ffn_ane = false;
