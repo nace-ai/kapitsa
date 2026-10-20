@@ -5,8 +5,8 @@
 //                                                       format (tools/ni_eval.cpp; llama.cpp's logits through
 //                                                       bench/quality/llama_ref.cpp)
 //   nh_eval <dir> --dump-ref F @ids...             writes such a file from this model
-//   nh_eval <dir> --vcheck N F @ids                prefill of the first N ids, then the rest teacher-forced in 8-row
-//                                                       verify passes (all rows, no drafter); writes their logits (fp32
+//   nh_eval <dir> --vcheck N F @ids                prefill of the first N ids, then the rest teacher-forced in verify
+//                                                       passes of 8 rows (the last one shorter) (all rows, no drafter); writes their logits (fp32
 //                                                       [rows][vocab]) to F, and with NH_VCHECK_STEP=1 the one-row
 //                                                       decode path's instead (tools/nh_vcheck.py compares two)
 //   nh_eval <dir> --gen N [--temp T] [--spec] @ids  prefill + N decoded tokens: ids, prefill and decode speed;
@@ -171,9 +171,11 @@ int main(int argc, char** argv) {
   if (vcheck >= 0) {
     const std::vector<int>& p = ids[0];
     const int n = vcheck, L = int(p.size());
-    if (n < 1 || n + 8 > L) fatal("--vcheck %d: the sequence has %d ids", n, L);
+    if (n < 1 || n >= L) fatal("--vcheck %d: the sequence has %d ids", n, L);
     auto s = m.new_seq(L + 64);
     memcpy(s->tokens(), p.data(), p.size() * 4);
+    std::vector<vision::EmbedRun> runs;
+    set_images(*s, p, runs);
     SamplingParams sp;
     for (int p0 = 0; p0 < n; p0 += m.prefill_chunk()) {
       const int T = std::min(m.prefill_chunk(), n - p0);
@@ -188,22 +190,23 @@ int main(int argc, char** argv) {
     if (!f) fatal("cannot write %s", vcheck_file.c_str());
     Buffer out = g.alloc(size_t(8) * V * 4, "vcheck_logits");
     int rows = 0;
-    for (int P = n; P + 8 <= L; P += 8) {
+    for (int P = n; P < L; P += 8) {
+      const int R = std::min(8, L - P);
       if (step) {
-        for (int r = 0; r < 8; ++r) {
+        for (int r = 0; r < R; ++r) {
           auto e = g.begin();
           m.encode_logits_rows(*e, *s, P + r, 1, out.view(size_t(r) * V * 4, size_t(V) * 4));
           e->commit_and_wait();
         }
-        fwrite(out.as<float>(), 4, size_t(8) * V, f);
+        fwrite(out.as<float>(), 4, size_t(R) * V, f);
       } else {
         auto e = g.begin();
-        m.encode_verify(*e, *s, P, 8);
+        m.encode_verify(*e, *s, P, R);
         e->commit_and_wait();
-        fwrite(m.logits(), 4, size_t(8) * V, f);
-        m.commit_rows(*s, 8);
+        fwrite(m.logits(), 4, size_t(R) * V, f);
+        m.commit_rows(*s, R);
       }
-      rows += 8;
+      rows += R;
     }
     fclose(f);
     printf("vcheck: %d rows of %d logits from position %d (%s) -> %s\n", rows, V, n, step ? "one-row decode" : "8-row verify",
@@ -220,7 +223,7 @@ int main(int argc, char** argv) {
     sp.temperature = temp;
     sp.top_p = 0.95f;
     sp.top_k = 20;
-    sp.seed = getenv("NI_SEED") ? uint32_t(atoi(getenv("NI_SEED"))) : 1234;
+    sp.seed = getenv("NI_SEED") ? uint32_t(strtoul(getenv("NI_SEED"), nullptr, 10)) : 1234;
     std::unique_ptr<NhDrafter> lili;
     std::unique_ptr<LiliSeq> d;
     if (spec) {
