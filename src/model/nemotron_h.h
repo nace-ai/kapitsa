@@ -282,6 +282,7 @@ class NemotronH : public Model {
   Buffer route_ctr_, sd_;         // fused MoE: the router threadgroups' arrival counter, the shared expert's output
   Buffer moecnt_;                 // NVFP4 experts: arrival counters per (row, 32-row block) of nh_x4_moe_dn_sum
   int attn_max_chunks_ = 64;
+  uint32_t attn_chunk_ = 256;  // keys per attention chunk (NI_NH_ATTN_CHUNK; M5: 64)
   const NhCapture* cap_ = nullptr;
   // prefill activations (tmax_ rows; allocated on first use)
   int pf_rows_ = 0;

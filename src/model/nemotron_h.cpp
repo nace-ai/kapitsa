@@ -1124,6 +1124,10 @@ void NemotronH::alloc_buffers() {
   shh_ = g.alloc(R * size_t(std::max(1, cfg_.ffn_I())) * 2, "nh_shh");
   if (const char* v = getenv("NI_NH_ROWS_GEMM")) gemm_rows_ = atoi(v) != 0;
   if (const char* v = getenv("NI_NH_V8")) v8_ = atoi(v) != 0;
+  // attention's keys per chunk (threadgroup) before the 64-chunk cap doubles it: on the M5 64 (Lightning's verify at
+  // ~600 positions: partial + reduce 27.0 against 36.8 us per layer with 256, NI_PROFILE; 32: 26.9)
+  attn_chunk_ = Gpu::get().apple10() ? 64 : 256;
+  if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
   if (const char* v = getenv("NI_NH_MERGE_FLUSH")) merge_flush_ = atoi(v) != 0;
   acc_ = g.alloc(64, "nh_accepted");
   route_ctr_ = g.alloc(16, "nh_route_counter");
@@ -1670,7 +1674,7 @@ void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
   e.val(4, kp);
   e.dispatch(uint32_t(R), uint32_t(2 * cfg_.hkv), 1, uint32_t(cfg_.hd));
   const int L_max = pos0 + R;
-  uint32_t chunk = 256;
+  uint32_t chunk = attn_chunk_;
   while ((uint32_t(L_max) + chunk - 1) / chunk > uint32_t(attn_max_chunks_)) chunk *= 2;
   const uint32_t nchunks = (uint32_t(L_max) + chunk - 1) / chunk;
   const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), chunk, nchunks,
@@ -2320,7 +2324,7 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
       for (size_t g = 0, base = 0; g < groups.size(); ++g) {
         const int pos0 = groups[g].pos, Rg = groups[g].R;
         const int L_max = pos0 + Rg;
-        uint32_t chunk = 256;
+        uint32_t chunk = attn_chunk_;
         while ((uint32_t(L_max) + chunk - 1) / chunk > uint32_t(attn_max_chunks_)) chunk *= 2;
         const uint32_t nchunks = (uint32_t(L_max) + chunk - 1) / chunk;
         ap[g] = AttnP{uint32_t(Rg), uint32_t(pos0), uint32_t(groups[g].s->cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv),
