@@ -3,6 +3,8 @@
 //   nh_rows_half with its norm         = nh_rmsnorm, then nh_rows_half
 //   nh_rmsnorm_h (fp32 and half rows)   = nh_rmsnorm, then nh_rows_half
 //   nh_attn_reduce_h                    = nh_attn_reduce, then nh_rows_half
+//   nh_gnorm_half_ring                  = nh_gnorm_half, then nh_conv_ring
+//   nh_xb_v8_qkv                        = nh_xb_v8 for q, k and v
 //   nh_fuse_check [D] [R]   (default D 2688, R 8)
 #include "metal/gpu.h"
 #include "util/log.h"
@@ -32,6 +34,18 @@ struct HalfP {
 struct AttnP {
   uint32_t R, pos0, cap, Hq, Hkv, chunk, nchunks;
   float scale;
+};
+struct GnormP {
+  uint32_t D, G;
+  float eps;
+};
+struct RingP {
+  uint32_t T, pos0, zx_stride, DI, CH;
+};
+struct V8P {
+  uint32_t N, K, x_ld, y_ld, R;
+  float gs;
+  uint32_t epi;
 };
 bool any_different = false;  // the exit status: 1 when a fused kernel's output differs
 bool same(const Buffer& a, const Buffer& b, size_t bytes) {
@@ -117,5 +131,90 @@ int main(int argc, char** argv) {
     e->commit_and_wait();
   }
   printf("nh_attn_reduce_h       vs nh_attn_reduce + nh_rows_half: %s\n", same(a1, a2, size_t(R) * QW * 2) ? "identical" : "DIFFERENT");
+  // grouped norm of R rows of DI = 4 groups x 128 channels, with the ring writes of np = 3 pending rows (CH = DI + 256)
+  {
+    const uint32_t DI = 512, G = 128, CH = DI + 256, IP = 2 * DI + 256 + 16, np = 3, pos0 = 41;
+    Buffer y = g.alloc(size_t(R) * DI * 4), gw = g.alloc(DI * 4), zp = g.alloc(size_t(np) * IP * 4),
+           ring1 = g.alloc(size_t(4) * CH * 4), ring2 = g.alloc(size_t(4) * CH * 4), o1 = g.alloc(size_t(R) * DI * 2),
+           o2 = g.alloc(size_t(R) * DI * 2);
+    for (size_t i = 0; i < size_t(R) * DI; ++i) y.as<float>()[i] = nd(rng);
+    for (uint32_t i = 0; i < DI; ++i) gw.as<float>()[i] = 1.0f + 0.1f * nd(rng);
+    for (size_t i = 0; i < size_t(np) * IP; ++i) zp.as<float>()[i] = nd(rng);
+    for (size_t i = 0; i < size_t(4) * CH; ++i) ring1.as<float>()[i] = ring2.as<float>()[i] = nd(rng);
+    const GnormP gp{DI, G, eps};
+    const RingP rp{np, pos0 - np, IP, DI, CH};
+    auto e = g.begin();
+    e->use(g.pipeline("nh_gnorm_half"));
+    e->buf(0, y);
+    e->buf(1, gw);
+    e->buf(2, o1);
+    e->val(3, gp);
+    e->dispatch(R * (DI / G), 1, 1, 256);
+    e->use(g.pipeline("nh_conv_ring"));
+    e->buf(0, zp);
+    e->buf(1, ring1);
+    e->val(2, rp);
+    e->dispatch((CH * 3 + 255) / 256, 1, 1, 256);
+    e->use(g.pipeline("nh_gnorm_half_ring"));
+    e->buf(0, y);
+    e->buf(1, gw);
+    e->buf(2, o2);
+    e->val(3, gp);
+    e->buf(4, zp);
+    e->buf(5, ring2);
+    e->val(6, rp);
+    e->dispatch(R * (DI / G), 1, 1, 256);
+    e->commit_and_wait();
+    printf("nh_gnorm_half_ring     vs nh_gnorm_half + nh_conv_ring:  %s\n",
+           same(o1, o2, size_t(R) * DI * 2) && same(ring1, ring2, size_t(4) * CH * 4) ? "identical" : "DIFFERENT");
+  }
+  // q [96][K], k / v [32][K] in BF16, K = 256
+  {
+    const uint32_t K = 256, NQ = 96, NK = 32;
+    Buffer xh = g.alloc(size_t(R) * K * 2), wq = g.alloc(size_t(NQ) * K * 2), wk = g.alloc(size_t(NK) * K * 2),
+           wv = g.alloc(size_t(NK) * K * 2);
+    for (size_t i = 0; i < size_t(R) * K; ++i) xh.as<__fp16>()[i] = __fp16(nd(rng));
+    for (Buffer* b : {&wq, &wk, &wv})
+      for (size_t i = 0; i < b->size / 2; ++i) {
+        const float f = 0.05f * nd(rng);
+        uint32_t u;
+        memcpy(&u, &f, 4);
+        b->as<uint16_t>()[i] = uint16_t(u >> 16);
+      }
+    Buffer y1[3], y2[3];
+    for (int i = 0; i < 3; ++i) {
+      y1[i] = g.alloc(size_t(R) * NQ * 4);
+      y2[i] = g.alloc(size_t(R) * NQ * 4);
+    }
+    const V8P pq{NQ, K, K, NQ, R, 1.0f, 0}, pk{NK, K, K, NK, R, 1.0f, 0};
+    auto e = g.begin();
+    const Buffer* w3[3] = {&wq, &wk, &wv};
+    for (int i = 0; i < 3; ++i) {
+      e->use(g.pipeline("nh_xb_v8"));
+      e->buf(0, xh);
+      e->buf(1, *w3[i]);
+      e->buf(2, *w3[i]);
+      e->buf(3, y1[i]);
+      e->val(4, i ? pk : pq);
+      e->dispatch(((i ? NK : NQ) + 15) / 16, 1, 1, 256);
+    }
+    e->use(g.pipeline("nh_xb_v8_qkv"));
+    e->buf(0, xh);
+    e->buf(1, wq);
+    e->buf(2, wk);
+    e->buf(3, y2[0]);
+    e->val(4, pq);
+    e->buf(5, wv);
+    e->buf(6, y2[1]);
+    e->buf(7, y2[2]);
+    e->val(8, pk);
+    e->dispatch((NQ + 15) / 16 + 2 * ((NK + 15) / 16), 1, 1, 256);
+    e->commit_and_wait();
+    printf("nh_xb_v8_qkv           vs nh_xb_v8 x 3:                  %s\n",
+           same(y1[0], y2[0], size_t(R) * NQ * 4) && same(y1[1], y2[1], size_t(R) * NK * 4) &&
+                   same(y1[2], y2[2], size_t(R) * NK * 4)
+               ? "identical"
+               : "DIFFERENT");
+  }
   return any_different ? 1 : 0;
 }

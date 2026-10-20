@@ -1625,11 +1625,33 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   }
 }
 
+// 2-8 rows of BF16 q, k, v (Lightning's verify): one nh_xb_v8_qkv pass for the three, each output as nh_xb_v8's;
+// false where the three do not fit it (enc_gemm's three passes then)
+bool NemotronH::enc_qkv(Encoder& e, const NhLayer& L, int R) {
+  if (!v8_ || R > 8 || L.q.fmt != NhFmt::BF16 || L.k.fmt != NhFmt::BF16 || L.v.fmt != NhFmt::BF16 ||
+      L.q.K % 128 != 0 || L.k.K != L.q.K || L.v.K != L.q.K || L.k.N != L.v.N || L.q.E != 1 || L.k.E != 1 || L.v.E != 1)
+    return false;
+  const V8P pq{L.q.N, L.q.K, L.q.K, L.q.N, uint32_t(R), L.q.gs, 0}, pk{L.k.N, L.k.K, L.k.K, L.k.N, uint32_t(R), L.k.gs, 0};
+  e.use(pipe("nh_xb_v8_qkv"));
+  e.buf(0, xnh_);
+  e.buf(1, L.q.q);
+  e.buf(2, L.k.q);
+  e.buf(3, q_);
+  e.val(4, pq);
+  e.buf(5, L.v.q);
+  e.buf(6, k_);
+  e.buf(7, v_);
+  e.val(8, pk);
+  e.dispatch((L.q.N + 15) / 16 + 2 * ((L.k.N + 15) / 16), 1, 1, 256);
+  return true;
+}
+
 void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
   const NhLayer& L = layers_[size_t(li)];
   const bool gm = gemm_rows_ && R >= 2;  // xnh_ holds the normed rows in half
   e.group_begin();  // (a grouped encoder runs the three projections together)
-  if (gm) {
+  if (gm && enc_qkv(e, L, R)) {
+  } else if (gm) {
     enc_gemm(e, L.q, xnh_, q_, R, 0);
     enc_gemm(e, L.k, xnh_, k_, R, 0);
     enc_gemm(e, L.v, xnh_, v_, R, 0);
@@ -2072,18 +2094,24 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
       const Buffer zx = commit ? zx_ : pb.view(size_t(1 - s.pend_half) * half, half);
       if (gm) enc_gemm(e, L.in, xnh_, zx, R, 0);
       else enc_mv(e, L.in, xn_, zx, R, 0);
-      if (!commit && s.n_pend > 0 && merge_flush_) {
-        const Buffer zp = pb.view(size_t(s.pend_half) * half, half);
-        enc_ssm(e, s, i, zx, R, pos0, false, y_, &zp, s.n_pend);
-      } else {
-        enc_ssm(e, s, i, zx, R, pos0, commit, y_);
-      }
+      // a verify committing pending rows: their ring writes go with the grouped norm (nh_gnorm_half_ring)
+      const bool merged = !commit && s.n_pend > 0 && merge_flush_, ring_gn = merged && gm;
+      const Buffer zp = pb.view(size_t(s.pend_half) * half, half);
+      if (merged) enc_ssm(e, s, i, zx, R, pos0, false, y_, &zp, s.n_pend, ring_gn ? 1 : 3);
+      else enc_ssm(e, s, i, zx, R, pos0, commit, y_);
       const GnormP gp{uint32_t(cfg_.d_inner), uint32_t(cfg_.d_inner / cfg_.n_group), cfg_.eps};
-      e.use(pipe(gm ? "nh_gnorm_half" : "nh_gnorm"));
+      e.use(pipe(ring_gn ? "nh_gnorm_half_ring" : gm ? "nh_gnorm_half" : "nh_gnorm"));
       e.buf(0, y_);
       e.buf(1, L.gnorm);
       e.buf(2, gm ? xnh_ : yn_);
       e.val(3, gp);
+      if (ring_gn) {
+        const RingP rp{uint32_t(s.n_pend), uint32_t(pos0 - s.n_pend), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner),
+                       uint32_t(cfg_.conv_ch())};
+        e.buf(4, zp);
+        e.buf(5, s.conv[size_t(i)]);
+        e.val(6, rp);
+      }
       e.dispatch(uint32_t(R * cfg_.n_group), 1, 1, 256);
       if (gm) enc_gemm(e, L.out, xnh_, x_, R, 1);
       else enc_mv(e, L.out, yn_, x_, R, 1);

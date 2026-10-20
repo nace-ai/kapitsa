@@ -199,6 +199,7 @@ class NemotronH : public Model {
   // enc_norm + enc_rows_half took two, with the same values
   void enc_norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& yh, int R, int D);
   void enc_norm2(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, const Buffer& yh, int R, int D);
+  bool enc_qkv(Encoder& e, const NhLayer& L, int R);
   void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out);
   static Pipeline pipeline(const std::string& name);
 

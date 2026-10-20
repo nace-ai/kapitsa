@@ -428,6 +428,30 @@ struct NhRingParams {
   ring[((p.pos0 + t) & 3u) * p.CH + c] = zx[size_t(t) * p.zx_stride + p.DI + c];
 }
 
+// nh_gnorm_half (nemotron/nh_gemm.metal) that also does a verify's nh_conv_ring of the pending rows it committed
+// (zp [[4]], ring [[5]], NhRingParams [[6]]: the scan before it has read the ring), spread over the grid's threads:
+// one pass less per Mamba layer. Each output as the two passes write it. grid: (R * groups) x 256 threads
+[[kernel]] void nh_gnorm_half_ring(const device float* x [[buffer(0)]], const device float* w [[buffer(1)]],
+                                   device half* y [[buffer(2)]], constant NhGnormParams& p [[buffer(3)]],
+                                   const device float* zp [[buffer(4)]], device float* ring [[buffer(5)]],
+                                   constant NhRingParams& rp [[buffer(6)]], uint tg [[threadgroup_position_in_grid]],
+                                   uint ngrid [[threadgroups_per_grid]], uint tid [[thread_position_in_threadgroup]],
+                                   uint ntg [[threads_per_threadgroup]]) {
+  const uint nr = min(rp.T, 3u);
+  for (uint i = tg * ntg + tid; i < nr * rp.CH; i += ngrid * ntg) {
+    const uint t = rp.T - nr + i / rp.CH, c = i % rp.CH;
+    ring[((rp.pos0 + t) & 3u) * rp.CH + c] = zp[size_t(t) * rp.zx_stride + rp.DI + c];
+  }
+  threadgroup float scratch[32];
+  const uint ng = p.D / p.G, r = tg / ng, g = tg % ng;
+  const device float* xr = x + size_t(r) * p.D + g * p.G;
+  float ss = 0.0f;
+  for (uint k = tid; k < p.G; k += ntg) ss += xr[k] * xr[k];
+  ss = tg_sum(ss, scratch, tid, ntg);
+  const float inv = 1.0f / metal::precise::sqrt(ss / float(p.G) + p.eps);
+  for (uint k = tid; k < p.G; k += ntg) y[size_t(r) * p.D + g * p.G + k] = half(xr[k] * inv * w[g * p.G + k]);
+}
+
 // ---- attention (no RoPE: Nemotron-H's attention layers carry no positional encoding) ----
 // K/V caches: half [Hkv][cap][HD]. Rows r of a pass sit at positions pos0 + r.
 struct NhKvParams {
