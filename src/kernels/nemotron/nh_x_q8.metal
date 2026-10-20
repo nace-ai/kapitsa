@@ -34,13 +34,9 @@ NI_INLINE void nh_xq8_v8_frags(uint4 a0, uint4 a1, uint4 b0, uint4 b1, thread co
   }
 }
 
-[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xq8_v8(
-    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device half* s [[buffer(2)]],
-    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
-    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
-    uint lane [[thread_index_in_simdgroup]]) {
-  threadgroup float2 red[8 * 2 * 32];
-  constexpr int NF = 2;
+template <int NF>
+NI_INLINE void nh_xq8_v8_impl(const device half* X, const device uchar* q, const device half* s, device void* Y,
+                              constant NhV8P& p, uint2 tg, uint sg, uint nsg, uint lane, threadgroup float2* red) {
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
   const uint ks = sg, KS = nsg;
@@ -90,4 +86,22 @@ NI_INLINE void nh_xq8_v8_frags(uint4 a0, uint4 a1, uint4 b0, uint4 b1, thread co
     if (l0) nh_x4_store(Y, p, n, fn, acc[f].x * p.gs);
     if (l1) nh_x4_store(Y, p, n, fn + 1, acc[f].y * p.gs);
   }
+}
+
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xq8_v8(
+    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device half* s [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 2 * 32];
+  nh_xq8_v8_impl<2>(X, q, s, Y, p, tg, sg, nsg, lane, red);
+}
+// 8 weight rows per threadgroup (twice the threadgroups; each output as nh_xq8_v8's, bit for bit). grid ceil(N / 8)
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_xq8_v8_n1(
+    const device half* X [[buffer(0)]], const device uchar* q [[buffer(1)]], const device half* s [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 32];
+  nh_xq8_v8_impl<1>(X, q, s, Y, p, tg, sg, nsg, lane, red);
 }

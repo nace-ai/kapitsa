@@ -14,6 +14,10 @@
 //   nh_x8_mv[_add|_relu2]  R = 1, NhMvParams [[4]] (x fp32 [K], y fp32 [N]); buffer 1 (scales) unused. grid
 //                          ceil(N / (NR x simdgroups)) x 32 x simdgroups (the engine: NR 4, 2 simdgroups)
 //   nh_x8_v8               R <= 8, NhV8P [[4]] (X half [R][x_ld], Y per p.epi). grid ceil(N / 16) x 256
+//   nh_x8_v8_n1            the same at 8 weight rows per threadgroup (one fragment per simdgroup: twice the
+//                          threadgroups, each output to the bit as nh_x8_v8's). grid ceil(N / 8) x 256. The M5:
+//                          tools/nh_x8_bench, Lightning's out_proj 2688x4096 24.6-24.7 vs 34.2-42.1 us, in_proj
+//                          10304x2688 52.5-52.6 vs 54.1-59.1
 //   nh_x8_mm16/24/32       R <= 16 / 24 / 32, NhV8P [[4]], part [[5]], cnt [[6]] as nh_x4_mm16/24/32
 //   nh_x8_v8_t, nh_x8_mm16/24/32_t   the same for K % 128 != 0 (K % 32 == 0: the Nano 4B's hidden 3136): the last
 //                          K % 128 inputs as one more step, its 32-element groups past K zero (read nothing); the full
@@ -107,10 +111,9 @@ NI_INLINE void nh_x8_v8_frags(uint4 a0, uint4 a1, uint4 b0, uint4 b1, thread con
   }
 }
 
-template <bool TAIL>
+template <bool TAIL, int NF = 2>
 NI_INLINE void nh_x8_v8_impl(const device half* X, const device uchar* q, device void* Y, constant NhV8P& p, uint tg,
                              uint sg, uint nsg, uint lane, threadgroup float2* red) {
-  constexpr int NF = 2;
   const uint3 lc = nh_x4_lane(lane);
   const uint fm = lc.x, fn = lc.y, c = lc.z;
   const uint ks = sg, KS = nsg;
@@ -183,6 +186,14 @@ NI_INLINE void nh_x8_v8_impl(const device half* X, const device uchar* q, device
     uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float2 red[8 * 2 * 32];
   nh_x8_v8_impl<false>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
+}
+[[kernel, max_total_threads_per_threadgroup(256)]] void nh_x8_v8_n1(
+    const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],
+    device void* Y [[buffer(3)]], constant NhV8P& p [[buffer(4)]], uint2 tg [[threadgroup_position_in_grid]],
+    uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],
+    uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float2 red[8 * 32];
+  nh_x8_v8_impl<false, 1>(X, Wq, Y, p, tg.x, sg, nsg, lane, red);
 }
 [[kernel, max_total_threads_per_threadgroup(256)]] void nh_x8_v8_t(
     const device half* X [[buffer(0)]], const device uchar* Wq [[buffer(1)]], const device uchar* Ws [[buffer(2)]],

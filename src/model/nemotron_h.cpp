@@ -1147,6 +1147,10 @@ void NemotronH::alloc_buffers() {
   moe_thr_ = g.apple10() ? 128u : 256u;
   if (const char* v = getenv("NI_NH_MOE_THR")) moe_thr_ = std::clamp(uint32_t(atoi(v)) / 32u * 32u, 32u, 1024u);
   if (const char* v = getenv("NI_NH_GROUP")) group_ = atoi(v) != 0;
+  // the M5: a verify's 8-row FP8 / BF16 products and the drafter's Q8 at 8 weight rows per threadgroup (nh_*_v8_n1),
+  // twice the threadgroups of 16 (each row's sums as before)
+  v8_n1_ = g.apple10();
+  if (const char* v = getenv("NI_NH_V8_N1")) v8_n1_ = atoi(v) != 0;
   live_ = g.alloc(16, "nh_live_rows");
   live_all_ = g.alloc(16, "nh_live_all");
   live_.as<uint32_t>()[0] = 0xffffffffu;
@@ -1713,7 +1717,7 @@ bool NemotronH::enc_qkv(Encoder& e, const NhLayer& L, int R) {
       L.q.K % 128 != 0 || L.k.K != L.q.K || L.v.K != L.q.K || L.k.N != L.v.N || L.q.E != 1 || L.k.E != 1 || L.v.E != 1)
     return false;
   const V8P pq{L.q.N, L.q.K, L.q.K, L.q.N, uint32_t(R), L.q.gs, 0}, pk{L.k.N, L.k.K, L.k.K, L.k.N, uint32_t(R), L.k.gs, 0};
-  e.use(pipe("nh_xb_v8_qkv"));
+  e.use(pipe(v8_n1_ ? "nh_xb_v8_qkv_n1" : "nh_xb_v8_qkv"));
   e.buf(0, xnh_);
   e.buf(1, L.q.q);
   e.buf(2, L.k.q);
@@ -1723,7 +1727,8 @@ bool NemotronH::enc_qkv(Encoder& e, const NhLayer& L, int R) {
   e.buf(6, k_);
   e.buf(7, v_);
   e.val(8, pk);
-  e.dispatch((L.q.N + 15) / 16 + 2 * ((L.k.N + 15) / 16), 1, 1, 256);
+  if (v8_n1_) e.dispatch((L.q.N + 7) / 8 + 2 * ((L.k.N + 7) / 8), 1, 1, 256);
+  else e.dispatch((L.q.N + 15) / 16 + 2 * ((L.k.N + 15) / 16), 1, 1, 256);
   return true;
 }
 
@@ -2594,7 +2599,11 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
     const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
-      std::string name = tb == 1 ? "nh_x8_v8" : tb == 2 ? "nh_x8_mm16" : tb == 3 ? "nh_x8_mm24" : "nh_x8_mm32";
+      const bool n1 = tb == 1 && v8_n1_ && W.K % 128 == 0;
+      std::string name = tb == 1   ? (n1 ? "nh_x8_v8_n1" : "nh_x8_v8")
+                         : tb == 2 ? "nh_x8_mm16"
+                         : tb == 3 ? "nh_x8_mm24"
+                                   : "nh_x8_mm32";
       if (W.K % 128) name += "_t";
       e.use(pipe(name));
       e.buf(0, xh);
@@ -2603,7 +2612,7 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
       e.buf(3, y);
       e.val(4, p);
       if (tb == 1) {
-        e.dispatch((W.N + 15) / 16, 1, 1, 256);
+        e.dispatch(n1 ? (W.N + 7) / 8 : (W.N + 15) / 16, 1, 1, 256);
       } else {
         e.buf(5, x4part_);
         e.buf(6, x4cnt_);
@@ -2676,13 +2685,14 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
   if (W.fmt == NhFmt::BF16 && v8_ && M <= 8 && (W.K % 128 == 0 || (dense_ && W.K % 32 == 0)) &&
       (x_ld ? x_ld : W.K) % 8 == 0) {
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
-    e.use(pipe(W.K % 128 ? "nh_xb_v8_t" : "nh_xb_v8"));
+    const bool n1 = v8_n1_ && W.K % 128 == 0;
+    e.use(pipe(W.K % 128 ? "nh_xb_v8_t" : n1 ? "nh_xb_v8_n1" : "nh_xb_v8"));
     e.buf(0, xh);
     e.buf(1, W.q);
     e.buf(2, W.q);
     e.buf(3, y);
     e.val(4, p);
-    e.dispatch((W.N + 15) / 16, 1, 1, 256);
+    e.dispatch(n1 ? (W.N + 7) / 8 : (W.N + 15) / 16, 1, 1, 256);
     return;
   }
   // up to 8 rows (verify, the drafter's block): the 8-row MMA kernels (weights decoded into registers; NVFP4 in

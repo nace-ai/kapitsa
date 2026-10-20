@@ -237,6 +237,7 @@ class NemotronH : public Model {
   bool ane_chunk_ = false;  // the chunk being encoded runs the split
   AneStats ane_stats_;
   bool group_ = false;  // NI_NH_GROUP
+  bool v8_n1_ = false;   // NI_NH_V8_N1
   void init_ane();
   void ane_build();
   void prewarm_pipelines();

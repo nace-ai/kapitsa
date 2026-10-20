@@ -490,13 +490,15 @@ void DSpark::gemm_q8(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer&
     float gs;
     uint32_t epi;
   } p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
-  e.use(pipe("nh_xq8_v8"));
+  // (nh_xq8_v8_n1: 8 weight rows per threadgroup, the same outputs; NI_NH_V8_N1=0 as for the target's products)
+  static const bool n1 = getenv("NI_NH_V8_N1") ? atoi(getenv("NI_NH_V8_N1")) != 0 : true;
+  e.use(pipe(n1 ? "nh_xq8_v8_n1" : "nh_xq8_v8"));
   e.buf(0, xh);
   e.buf(1, W.q);
   e.buf(2, W.s);
   e.buf(3, y);
   e.val(4, p);
-  e.dispatch((W.N + 15) / 16, 1, 1, 256);
+  e.dispatch(n1 ? (W.N + 7) / 8 : (W.N + 15) / 16, 1, 1, 256);
 }
 
 void DSpark::norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R) {
