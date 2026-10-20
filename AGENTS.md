@@ -35,7 +35,7 @@ CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update
 build/api_test
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
-python3 tests/test_bench.py build            # needs: jsonschema (a venv is fine)
+python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
 python3 tests/test_update.py build
 python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
