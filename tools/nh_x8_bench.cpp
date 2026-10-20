@@ -128,6 +128,7 @@ struct Timer {
 }  // namespace
 
 int main(int argc, char** argv) {
+  int rc = 0;  // 1: an _n1 kernel's outputs not the same to the bit as its 16-row twin's
   int reps = 9, limit = 240;
   bool small = false;
   std::vector<std::string> only;
@@ -304,8 +305,10 @@ int main(int argc, char** argv) {
       printf("fp8 %-4s %-16s R=%-3u sk=%u epi %d %8.4f ms %6.1f GB/s", sh.name, r.name.c_str(), r.R, r.sk, r.epi, ms,
              double(wb) / ms / 1e6);
       if (r.R > 1) printf(" %5.2f TF", 2.0 * double(wb) * r.R / ms / 1e9);
+      const bool mism = r.name == "nh_x8_v8_n1" && r.epi == 0 && !same;
+      if (mism) rc = 1;
       printf("  err %.1e%s%s\n", me / std::max(mr, 1e-30), pad ? " PAD-WRITTEN" : "",
-             same ? " (bitwise = previous)" : "");
+             same ? " (bitwise = previous)" : mism ? " NOT BITWISE = nh_x8_v8" : "");
       fflush(stdout);
     }
     for (Buffer* b : {&W, &xf, &xh, &y}) g.release(*b);
@@ -860,5 +863,5 @@ int main(int argc, char** argv) {
     printf("one-token MoE layer (H %u, E %u top-%u, I %u, latent %u, shared %u): fused %.4f ms, separate %.4f ms; "
            "experts %s, rel. diff %.1e\n", H, E, k, I, L, S, tf.med(), tsep.med(), same_e ? "same" : "DIFFER", me / mr);
   }
-  return 0;
+  return rc;
 }

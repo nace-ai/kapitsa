@@ -493,7 +493,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
                                    "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
-                                   "nh_x4t", "nh_ssd"};
+                                   "nh_x4t", "nh_ssd", "nh_xq8_"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
