@@ -8,7 +8,7 @@
 //   nh_eval <dir> --vcheck N F @ids                prefill of the first N ids, then the rest teacher-forced in verify
 //                                                       passes of 8 rows (the last one shorter) (all rows, no drafter); writes their logits (fp32
 //                                                       [rows][vocab]) to F, and with NH_VCHECK_STEP=1 the one-row
-//                                                       decode path's instead (tools/nh_vcheck.py compares two)
+//                                                       decode path's instead (tools/logit_compare.py --vocab V compares two)
 //   nh_eval <dir> --gen N [--temp T] [--spec] @ids  prefill + N decoded tokens: ids, prefill and decode speed;
 //                                                       --spec decodes with the block drafter (LiLiCorr, DSpark)
 //                                                       found next to the model or named by --drafter DIR (tokens

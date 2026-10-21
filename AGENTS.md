@@ -40,6 +40,7 @@ python3 tests/test_update.py build
 python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_pr_size.py
+python3 tests/test_logit_compare.py
 ```
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `nh_eval --vcheck`,
@@ -62,8 +63,9 @@ by `cmake/embed_*.cmake`; a new `.metal` file is picked up by the glob.
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
 interleaved A/B *and* an output check: greedy tokens and logits against the old path, with differences only at
-near-ties (`tools/nh_vcheck.py` reports the near-tie gap; `batch_check`, `ni_v8check` and `nh_eval --vcheck` are the
-usual comparisons). Put the numbers in the PR. "The same outputs to the bit" is a claim with evidence or it is not made.
+near-ties (`tools/logit_compare.py` reports the flips and their margins; `batch_check`, `ni_v8check` and
+`nh_eval --vcheck` are the usual comparisons). Put the numbers in the PR. "The same outputs to the bit" is a claim with
+evidence or it is not made.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 

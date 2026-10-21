@@ -101,3 +101,7 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_logit_compare
+        # the venv has no numpy: the standard library's path, which numpy's must match (the test compares them)
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_logit_compare.py
