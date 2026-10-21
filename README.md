@@ -10,11 +10,13 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 
 ## 🔥 What's new
 
-- **[2026-10-21]** **KFlash** ([#187](https://github.com/nace-ai/kapitsa/pull/187)), our speculative decoding engine: the drafter's best-first tree is checked in one 8-row pass. On the Qwen dense models the greedy output is plain decoding's; the 35B can differ at near-ties, as the chain did. M4 Pro, greedy, against the build before it: 27B +6.0% over three prompts (code +6%, prose +16%, a long agent turn −3%). [Runs](bench/results/2026-10-21-kflash-trees/README.md). **[How it works →](docs/kflash.md)**
-- **[2026-10-21]** KFlash batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207)): the verify rows of requests decoding together are chosen every cycle. M4 Pro, 3 requests at once, against the build before it: 35B +16-20%, 27B +15-23%. Measurements are in the PR.
-- **[2026-10-21]** M5 prefill on Metal 4 tensor ops: GEMMs ([#205](https://github.com/nace-ai/kapitsa/pull/205)), M5 Pro, Qwen3.5-4B, 1.3-1.5x prefill against the same build with `NI_QMT=0`, two runs each, not from a quiet GPU; attention ([#215](https://github.com/nace-ai/kapitsa/pull/215)), +13% more at 16K. Neither is bit-identical: one greedy completion in 6 diverged on #205, one in 4 on #215. Measurements are in the PRs.
-- **[2026-10-21]** SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)): M4 Pro, Qwen3.6-35B-A3B, a 16K follow-up after a server restart reaches its first token in 0.16-0.18 s, against 17-18 s cold. Measurements are in the PR.
-- **[2026-10-21]** `kapitsa bench compare` ([#197](https://github.com/nace-ai/kapitsa/pull/197), [#219](https://github.com/nace-ai/kapitsa/pull/219)): the same test against the engines already installed on your Mac.
+- **[KFlash](docs/kflash.md)**: verify a tree of the drafter's guesses, not a chain. M4 Pro, 27B: +6.0% over three prompts (+16% prose, −3% a long agent turn; [runs](bench/results/2026-10-21-kflash-trees/README.md), [#187](https://github.com/nace-ai/kapitsa/pull/187)).
+- **KFlash budget**: three requests at once share one 8-row pass. M4 Pro: 35B +16-20%, 27B +15-23% ([#207](https://github.com/nace-ai/kapitsa/pull/207)).
+- **QMT prefill**: the M5's Metal 4 matrix units read the prompt. M5 Pro, 4B: 1.3-1.5x, +13% more at 16K ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215); not bit-identical).
+- **SSD prefix cache**: restart the server, keep the conversation. 16K follow-up on the 35B, M4 Pro: first token in 0.16-0.18 s, 17-18 s cold ([#212](https://github.com/nace-ai/kapitsa/pull/212), `--disk-cache`).
+- **Prefix reuse**: a new question over the shared system prompt starts warm. M5 Pro, 4B: 1.91 s to 0.06 s at 4K ([#198](https://github.com/nace-ai/kapitsa/pull/198), [#202](https://github.com/nace-ai/kapitsa/pull/202)).
+- **Output check**: no default changes until logits stay within twice the model's noise floor ([#208](https://github.com/nace-ai/kapitsa/pull/208), [#210](https://github.com/nace-ai/kapitsa/pull/210), [how](CONTRIBUTING.md#output-check)).
+- **`kapitsa bench compare`**: your Mac against every engine installed on it, in one command ([#197](https://github.com/nace-ai/kapitsa/pull/197), [#219](https://github.com/nace-ai/kapitsa/pull/219)).
 
 ## Quickstart
 

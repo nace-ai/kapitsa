@@ -98,10 +98,14 @@ new architecture requires more than implementing `Model` if it needs a new draft
 * **Shape-specific Metal kernels.** Quantized matrix operations, fused projections, attention, recurrent scans and
   grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
   backends have separate kernel sets for their shapes and stored weight formats.
+* **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs and the prefill attention of the
+  Qwen3.5 backend run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
+  Its greedy output is not bit-identical to the simdgroup path.
 * **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
   are accepted. Throughput depends on the model, prompt, sampling settings and acceptance rate.
 * **Requests at once share passes.** While several requests decode, one target pass verifies all of their rows and
-  reads each weight once for all of them.
+  reads each weight once for all of them. The KFlash budget
+  (`src/model/kflash_budget.*`) picks how many rows each request gets, every cycle.
 * **Prefix reuse.** KV caches and recurrent-state checkpoints avoid rereading an entire conversation for each turn.
   Image embeddings have their own content-aware cache, so a changed image cannot reuse another image's prompt state.
   The SSD prefix cache (`src/engine/prefix_cache.h`, `engine_disk.cpp`) keeps those states as files too, so evicted
