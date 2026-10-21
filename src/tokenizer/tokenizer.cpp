@@ -266,6 +266,7 @@ void Tokenizer::load(const std::string& path) {
   for (auto& a : j["added_tokens"]) max_id = std::max(max_id, a["id"].get<int>());
   id_to_bytes_.assign(max_id + 1, "");
   special_.assign(max_id + 1, false);
+  added_id_.assign(max_id + 1, false);
   for (auto& [tok, idj] : model["vocab"].items()) {
     int id = idj.get<int>();
     vocab_[tok] = id;
@@ -305,6 +306,7 @@ void Tokenizer::load(const std::string& path) {
     added_.push_back({content, id});
     id_to_bytes_[id] = content;
     special_[id] = a.value("special", false);
+    added_id_[id] = true;
   }
   std::sort(added_.begin(), added_.end(), [](auto& x, auto& y) { return x.first.size() > y.first.size(); });
   logi("tokenizer: %zu tokens, %zu merges, %zu added (%.0f ms)", vocab_.size(), merges_.size(), added_.size(),
@@ -412,6 +414,7 @@ const std::string& Tokenizer::token_bytes(int id) const {
 }
 
 bool Tokenizer::is_special(int id) const { return id >= 0 && id < int(special_.size()) && special_[id]; }
+bool Tokenizer::is_added(int id) const { return id >= 0 && id < int(added_id_.size()) && added_id_[id]; }
 
 int Tokenizer::find(const std::string& token) const {
   for (auto& [c, id] : added_)
