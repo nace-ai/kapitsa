@@ -210,11 +210,16 @@ takes the 27B's verify cycle on a coding answer from 16.70 ms at 8 rows to 17.92
 against 1.55× and ~2.7× before it (the author's cycle timings on an M5-class Mac, not re-run by the reviewers).
 
 What is checked: `kflash_wide_check` (a wide verify against plain decoding on random trees of 9 to 32 live rows) passes on
-the 4B and the 27B, with every live row's argmax equal to plain decoding's and a max logit difference of 0.008 (0.0003 of a
-row's range) on an M5 Pro; the default path (8 rows) is bitwise identical to main on the 4B (`logit_compare`). What is not
-checked: a whole-reply comparison of a wide run, and the throughput gain. Earlier runs on the harness corpus showed more
-tokens per cycle with the wider tiles, but the 27B's decode over repetitions at T=0.6 spread by 5 to 6 tok/s, so no tok/s
-gain over the 8-row default or against mlx-serve is claimed here; that needs a paired A/B.
+the 4B and the 27B, with every live row's argmax equal to plain decoding's and max logit differences of 0.019 on the 4B and
+0.274 on the 27B's 32-row chain trees (0.0005 and 0.0095 of a row's range) on an M5 Pro; the default path (8 rows) is bitwise identical to main on the 4B (`logit_compare`). What is not
+checked: a whole-reply comparison of a wide run over a corpus, and its effect on the other engines' comparison.
+
+A paired A/B on the 27B over a 256-token coding prompt (greedy, three interleaved runs each, `NI_ANE=0`, all under the GPU
+lock: MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2, the code of #245 and #246 at `ac82451`) measures it: the default 8-row pass runs
+70.6/70.5/68.8 tok/s at 4.76 tokens per cycle with verify cycles of 68.7-69.7 ms, and `NI_KFLASH_ROWS=8,16,32` runs
+69.3/74.7/72.9 tok/s at 5.20/5.44/5.33 tokens per cycle, its 16-row verify cycles costing 74.4 ms and 32-row ones 115.4
+(median +4% throughput at +12% tokens per cycle; one run also paid to measure 32-row verifies, which do not pay). All six
+runs generated the same greedy ids as plain decoding. The 8-row default is unchanged against `main`'s binary to the bit.
 
 So the tiles are opt-in: one tile is the setting the default's cost table is tuned for, and a Mac where the budget's
 measurements say a wider verify pays (the 27B and the 4B at 4-bit do, on prose and coding answers) can have it without
