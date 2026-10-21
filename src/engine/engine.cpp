@@ -362,7 +362,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       logi("DFlash2: %s does not fit this model's embedding / LM head format; not used", dir.c_str());
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
-      dfl_ = std::make_unique<DFlash2>(*q35_, dir);
+      // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take (with more
+      // slots a 16-row block has no batched cycle at all, Engine::batch_rows, and requests take turns instead)
+      dfl_ = std::make_unique<DFlash2>(*q35_, dir, 0, opts_.slots == 1);
       dfl_dir_ = dir;
       DFlash2::prewarm_pipelines();
       spec_ = false;

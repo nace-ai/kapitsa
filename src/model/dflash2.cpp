@@ -353,7 +353,37 @@ QLinear DFlash2::row_view(const QLinear& src, uint32_t r0, uint32_t n) {
 
 static bool dfl_tw_supported();  // below: the drafter's GEMMs through Metal 4 tensor_ops
 
-DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target), dir_(dir) {
+// The block every drafter in this process drafts with (one per process: it is fixed at the first load, and
+// alloc_buffers() sizes everything from it).
+static int& dfl_block() {
+  static int b = -1;
+  return b;
+}
+
+bool DFlash2::rows16_tensor_ok() const {
+  const char* av = getenv("NI_DFLASH_ATTN");
+  const bool fused_attn = !(av && std::string(av) == "scalar") && !(v8_knobs().dfl & 1);
+  bool tw = !cfg_.v1 && fused_attn && dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (32 | 128));
+  for (const DLayer& L : layers_)
+    for (const QLinear* q : {&L.q, &L.kv, &L.o, &L.gate, &L.up, &L.down})
+      tw = tw && q->q4() && q->gs == 64 && q->K % 64 == 0;
+  return tw;
+}
+
+bool DFlash2::rows16_auto_ok() const {
+  // the same conditions the load-time gate below refuses NI_DFLASH_BLOCK=16 under, read from the environment here
+  // because set_tree() runs after the block must be known: trees on, and a walk deep enough to use all 16 rows (a
+  // 15-row lattice is what the block drafts; set_tree keeps the tree only where verify_depth() == block() - 1)
+  if (!tg_.block_drafter_ok() || !tg_.verify_tree_ok() || !tg_.verify_wide_ok()) return false;
+  const char* kf = getenv("NI_KFLASH");
+  const char* tv = getenv("NI_DFLASH_TREE");
+  if (!(tv && *tv ? atoi(tv) != 0 : (!(kf && *kf) || atoi(kf) != 0))) return false;
+  const char* vv = getenv("NI_DFLASH_VERIFY");
+  if (vv && *vv && atoi(vv) < 15) return false;
+  return rows16_tensor_ok();
+}
+
+DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) : tg_(target), dir_(dir) {
   const double t0 = now_ms(), fp0 = footprint_gb();
   bits_ = bits ? bits : (getenv("NI_DFLASH_BITS") ? atoi(getenv("NI_DFLASH_BITS")) : 4);
   if (bits_ != 4 && bits_ != 8) fatal("DFlash2: bits must be 4 or 8 (got %d)", bits_);
@@ -436,6 +466,15 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     for (size_t i = 0; i < cfg_.target_layers.size(); ++i) hk->slot[cfg_.target_layers[i]] = int(i);
     hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
   }
+  // The 16-row block, before anything is sized: Engine asks for it on a single-slot engine, where the wider block's
+  // cost is paid back by the deeper lattice it drafts (one weight read drafts 15 guesses instead of 7) and there is no
+  // batched cycle to lose. NI_DFLASH_BLOCK still decides where it is set; a target, a drafter or a knob that takes the
+  // drafting pass off the tensor path keeps 8 rows.
+  if (rows16 && !getenv("NI_DFLASH_BLOCK") && rows16_auto_ok()) {
+    dfl_block() = 16;
+    logi("DFlash2: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
+         "runs 16 rows; NI_DFLASH_BLOCK=8 keeps 8)");
+  }
   alloc_buffers();
   {  // reduced draft head (default on): NI_DFLASH_HEAD=n rows (0 = the full vocabulary)
     const char* v = getenv("NI_DFLASH_HEAD");
@@ -513,13 +552,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
       // Said here, while the model loads, not on the first request. The knobs that take the drafting pass or the
       // attention off that path (V8Knobs::dfl bit 1, the old attention; bit 128, the MLP's own qmm8_gu; and
       // NI_DFLASH_ATTN=scalar) count as missing too, so they are refused here rather than on the first cycle.
-      const char* av = getenv("NI_DFLASH_ATTN");
-      const bool fused_attn = !(av && std::string(av) == "scalar") && !(v8_knobs().dfl & 1);
-      bool tw = !cfg_.v1 && fused_attn && dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (32 | 128));
-      for (auto& L : layers_)
-        for (const QLinear* q : {&L.q, &L.kv, &L.o, &L.gate, &L.up, &L.down})
-          tw = tw && q->q4() && q->gs == 64 && q->K % 64 == 0;
-      if (!tw)
+      if (!rows16_tensor_ok())
         fatal("NI_DFLASH_BLOCK=%d: the drafting pass on a 16-row block needs the tensor path and the fused attention "
               "(not the v1 drafter, the matrix units on, 4-bit group-64 projections, no NI_DFLASH_ATTN=scalar or "
               "V8Knobs::dfl 1 / 128)", block());
@@ -1201,12 +1234,12 @@ void DFlash2::set_prompt_captures(const uint16_t* rows_bf16, int rows) {
 }
 
 int DFlash2::block() {
-  static const int b = [] {
+  int& b = dfl_block();
+  if (b < 0) {  // set here, or by a drafter that loads with rows16 (the ctor)
     const char* v = getenv("NI_DFLASH_BLOCK");
-    const int n = v && *v ? atoi(v) : kB;
-    if (n != 8 && n != 16) fatal("NI_DFLASH_BLOCK=%s: 8 or 16", v);
-    return n;
-  }();
+    b = v && *v ? atoi(v) : kB;
+    if (b != 8 && b != 16) fatal("NI_DFLASH_BLOCK=%s: 8 or 16", v);
+  }
   return b;
 }
 

@@ -82,14 +82,18 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
-  // The drafting block's rows: kB (8, the tile and the default), or 16 (NI_DFLASH_BLOCK=16: the anchor + 15 mask
-  // rows, two 8-row tiles; opt-in, KFlash tree cycles only). Everything the default path runs stays at 8.
+  // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
+  // only). NI_DFLASH_BLOCK picks it; where that says nothing it is 8, and Engine asks for 16 on a single-slot engine
+  // that takes the 16-row paths (the ctor's block16).
   static int block();
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
   // default reduced draft head rows: from a ranked id list (NI_DFLASH_HEAD_IDS), and in id order (the default)
   static constexpr int kHeadRows = 65536, kHeadRowsIdOrder = 98304;
-  // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4).
-  DFlash2(Qwen35& target, const std::string& dir, int bits = 0);
+  // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4). rows16: draft a 16-row block where this target, the drafter's
+  // projections and the knobs allow it and NI_DFLASH_BLOCK says nothing (Engine passes slots == 1: a 16-row block has
+  // no batched cycle to lose, Engine::batch_rows). Decided here, while it loads, because alloc_buffers() and the
+  // reduced head size the rows from block().
+  DFlash2(Qwen35& target, const std::string& dir, int bits = 0, bool rows16 = false);
   const DFlash2Config& config() const { return cfg_; }
   int bits() const { return bits_; }
   size_t resident_bytes() const { return resident_; }
@@ -271,6 +275,12 @@ class DFlash2 {
   QLinear quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm = {});
   QLinear row_view(const QLinear& src, uint32_t r0, uint32_t n);
   void alloc_buffers();
+  // a 16-row block's drafting pass on the tensor path: not the v1 drafter, the matrix units on, 4-bit group-64
+  // projections, the fused attention (the load-time gate below refuses NI_DFLASH_BLOCK=16 without it)
+  bool rows16_tensor_ok() const;
+  // and whether this target and these knobs allow the block at all: trees on, a depth-15 walk (NI_DFLASH_VERIFY >= 15),
+  // the target's wide tree verify, and rows16_tensor_ok
+  bool rows16_auto_ok() const;
 
   // dfl_qmm8, or the target's tensor-op GEMM qmm8t (src/kernels/tensor/verify8t.metal) on the X8 table's T table
   // when the target has it on (Qwen35::v8_tw) and every segment is 4-bit group 64 with oscale 1
