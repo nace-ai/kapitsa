@@ -23,6 +23,7 @@ set(CMAKE_OBJCXX_FLAGS "${CMAKE_OBJCXX_FLAGS} -fobjc-arc")
 # Metal kernel sources are embedded as strings and compiled at runtime (no offline
 # `metal` compiler needed; works with Command Line Tools only).
 file(GLOB NI_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/*.metal ${CMAKE_SOURCE_DIR}/src/kernels/*.h)
+# (src/kernels/kflash.h is in NI_KERNELS: both embedded libraries read it)
 set(NI_EMBED ${CMAKE_BINARY_DIR}/generated/kernels_embed.cpp)
 add_custom_command(
   OUTPUT ${NI_EMBED}
@@ -38,7 +39,7 @@ add_custom_command(
   OUTPUT ${NI_NH_EMBED}
   COMMAND ${CMAKE_COMMAND} -DOUT=${NI_NH_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
           -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
-  DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/iq.h
+  DEPENDS ${NI_NH_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/iq.h ${CMAKE_SOURCE_DIR}/src/kernels/kflash.h
           ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_nh.cmake
   COMMENT "Embedding the Nemotron-H Metal kernels")
 

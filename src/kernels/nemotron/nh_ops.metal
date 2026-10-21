@@ -270,23 +270,28 @@ NI_INLINE void nh_ssm_hd(const device float* zx, device float* ring, device floa
 // verify block's accepted rows): their update is written to the state, then the T rows run on in registers
 // (written only with p.write). The conv reads raw xBC of positions < pos0 - np from the ring, the pending rows from zp.
 // grid: NH * HD / 8 threadgroups x 256 threads.
+// The pending rows are rows 0 .. np - 1 of zp, or with ptree (a KFlash tree verify's accepted path) rows ppath[0 .. np).
 struct NhSsm1P {
-  uint np;  // pending rows (zp)
+  uint np;     // pending rows (zp)
+  uint ptree;  // pending row c is zp row ppath[c]
 };
+NI_INLINE uint nh_prow(const device int* ppath, uint ptree, int c) { return ptree ? uint(ppath[c]) : uint(c); }
 NI_INLINE float nh_raw1(const device float* zx, const device float* zp, const device float* ring,
-                        constant NhSsmParams& p, uint np, uint DI, uint CH, int c, uint ch) {
+                        constant NhSsmParams& p, uint np, uint DI, uint CH, int c, uint ch, const device int* ppath,
+                        uint ptree) {
   // c: combined row (pending rows 0 .. np - 1, then the pass's rows); c < 0: the ring
   if (c >= int(np)) return zx[size_t(c - int(np)) * p.zx_stride + DI + ch];
-  if (c >= 0) return zp[size_t(c) * p.zx_stride + DI + ch];
+  if (c >= 0) return zp[size_t(nh_prow(ppath, ptree, c)) * p.zx_stride + DI + ch];
   return ring[((p.pos0 - np + uint(c + 4)) & 3u) * CH + ch];
 }
 NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const device float* ring,
                          const device float* conv_w, const device float* conv_b, constant NhSsmParams& p, uint np,
-                         uint DI, uint CH, int c, uint ch) {
+                         uint DI, uint CH, int c, uint ch, const device int* ppath, uint ptree) {
   const float4 w = *(const device float4*)(conv_w + ch * 4);
-  const float v = conv_b[ch] + w.x * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 3, ch) +
-                  w.y * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 2, ch) +
-                  w.z * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 1, ch) + w.w * nh_raw1(zx, zp, ring, p, np, DI, CH, c, ch);
+  const float v = conv_b[ch] + w.x * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 3, ch, ppath, ptree) +
+                  w.y * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 2, ch, ppath, ptree) +
+                  w.z * nh_raw1(zx, zp, ring, p, np, DI, CH, c - 1, ch, ppath, ptree) +
+                  w.w * nh_raw1(zx, zp, ring, p, np, DI, CH, c, ch, ppath, ptree);
   return silu(v);
 }
 [[kernel]] void nh_ssm1(const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]],
@@ -295,7 +300,7 @@ NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const d
                         const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],
                         const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
                         const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],
-                        constant NhSsm1P& q [[buffer(12)]],
+                        constant NhSsm1P& q [[buffer(12)]], const device int* ppath [[buffer(13)]],
                         uint tgi [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
                         uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float4 sbc[2 * kSsmNB][64];  // conv'd B (0..31) and C (32..63) of the head's group, as float4
@@ -312,11 +317,14 @@ NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const d
   const uint np = q.np;
   const uint T = p.write ? p.T : min(p.T, live[0]);  // a verify block's rows past the drafter's depth are not needed
   const uint n = np + T;
+  const uint ptree = q.ptree;
   for (uint c = 0; c < n; ++c) {
-    ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc);
-    if (tid < 8) sx[c][tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid);
+    ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc, ppath, ptree);
+    if (tid < 8)
+      sx[c][tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid, ppath, ptree);
     if (tid == 8) {
-      const float zdt = c < np ? zp[size_t(c) * p.zx_stride + DI + CH + h] : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
+      const float zdt = c < np ? zp[size_t(nh_prow(ppath, ptree, int(c))) * p.zx_stride + DI + CH + h]
+                               : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
       const float dt = softplus(zdt + dtb);
       sdt[c][0] = dt;
       sdt[c][1] = metal::precise::exp(dt * Ah);
@@ -348,6 +356,90 @@ NI_INLINE float nh_conv1(const device float* zx, const device float* zp, const d
   }
 }
 
+// KFlash tree verify: nh_ssm1's short pass over a verify block whose T rows form a tree (the KFlash tree buffer: row
+// 0 the root, every row's parent before it). A row's state is its parent's (the root's: the state after the pending
+// rows), so each row's output is what plain decoding of its root path gives; its conv window is its own raw input and
+// its three nearest ancestors' (past the root: the pending rows, then the ring). The pending rows commit as in
+// nh_ssm1; the tree rows' states are not written (the accepted path becomes the next pass's pending rows).
+// grid: NH * HD / 8 threadgroups x 256 threads.
+NI_INLINE int nh_tpred(const device int* tree, uint np, int c) {
+  // combined row c's predecessor: a tree row's parent (the root's: the last pending row), else the row before
+  return c > int(np) ? int(np) + tree[kKfPar + uint(c) - np] : c - 1;
+}
+NI_INLINE float nh_tconv(const device float* zx, const device float* zp, const device float* ring,
+                         const device float* conv_w, const device float* conv_b, constant NhSsmParams& p, uint np,
+                         uint DI, uint CH, int c, uint ch, const device int* ppath, uint ptree, const device int* tree) {
+  const int c1 = nh_tpred(tree, np, c), c2 = nh_tpred(tree, np, c1), c3 = nh_tpred(tree, np, c2);
+  const float4 w = *(const device float4*)(conv_w + ch * 4);
+  const float v = conv_b[ch] + w.x * nh_raw1(zx, zp, ring, p, np, DI, CH, c3, ch, ppath, ptree) +
+                  w.y * nh_raw1(zx, zp, ring, p, np, DI, CH, c2, ch, ppath, ptree) +
+                  w.z * nh_raw1(zx, zp, ring, p, np, DI, CH, c1, ch, ppath, ptree) +
+                  w.w * nh_raw1(zx, zp, ring, p, np, DI, CH, c, ch, ppath, ptree);
+  return silu(v);
+}
+[[kernel]] void nh_ssm1_tree(const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]],
+                             device float* state [[buffer(2)]], device float* y [[buffer(3)]],
+                             const device float* conv_w [[buffer(4)]], const device float* conv_b [[buffer(5)]],
+                             const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],
+                             const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
+                             const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],
+                             constant NhSsm1P& q [[buffer(12)]], const device int* ppath [[buffer(13)]],
+                             const device int* tree [[buffer(14)]],
+                             uint tgi [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                             uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float4 sbc[2 * kSsmNB][64];  // conv'd B (0..31) and C (32..63) of the head's group, as float4
+  threadgroup float sx[2 * kSsmNB][8];     // conv'd x of the 8 rows
+  threadgroup float sdt[2 * kSsmNB][2];    // softplus(dt), exp(dt * A)
+  const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
+  const uint tg_per_head = p.HD / 8;
+  const uint h = tgi / tg_per_head, row0 = (tgi % tg_per_head) * 8, row = row0 + sg;
+  const uint g = h / (p.NH / p.NG);
+  const uint cx = h * p.HD + row;
+  const uint cbc = DI + (tid < 128 ? g * p.DS + tid : p.NG * p.DS + g * p.DS + (tid - 128));
+  const float Ah = A[h], Dh = Dsk[h], dtb = dt_bias[h];
+  const uint np = q.np, ptree = q.ptree;
+  const uint T = min(min(p.T, live[0]), uint(tree[kKfN]));
+  const uint n = np + T;
+  for (uint c = 0; c < n; ++c) {
+    ((threadgroup float*)sbc[c])[tid] = nh_tconv(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc, ppath, ptree, tree);
+    if (tid < 8)
+      sx[c][tid] = nh_tconv(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid, ppath, ptree, tree);
+    if (tid == 8) {
+      const float zdt = c < np ? zp[size_t(nh_prow(ppath, ptree, int(c))) * p.zx_stride + DI + CH + h]
+                               : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
+      const float dt = softplus(zdt + dtb);
+      sdt[c][0] = dt;
+      sdt[c][1] = metal::precise::exp(dt * Ah);
+    }
+  }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  device float4* sp = (device float4*)(state + (size_t(h) * p.HD + row) * p.DS) + lane;
+  float4 st = *sp;
+  for (uint c = 0; c < np; ++c) {  // the pending rows (a chain) are committed
+    st = st * sdt[c][1] + sbc[c][lane] * (sx[c][sg] * sdt[c][0]);
+    if (c + 1 == np) *sp = st;
+  }
+  float4 ts[8];
+  _Pragma("clang loop unroll(full)")
+  for (uint t = 0; t < 8; ++t) {
+    if (t < T) {
+      const int par = t == 0 ? -1 : tree[kKfPar + t];
+      float4 base = st;
+      _Pragma("clang loop unroll(full)")
+      for (uint j = 0; j < 8; ++j)
+        if (j < t && int(j) == par) base = ts[j];
+      const uint c = np + t;
+      const float xv = sx[c][sg];
+      ts[t] = base * sdt[c][1] + sbc[c][lane] * (xv * sdt[c][0]);
+      const float acc = simd_sum(dot(ts[t], sbc[c][32 + lane]));
+      if (lane == 0) {
+        const float z = zx[size_t(t) * p.zx_stride + cx];
+        y[size_t(t) * DI + cx] = (acc + Dh * xv) * silu(z);
+      }
+    }
+  }
+}
+
 // The same short-pass scan with RPS state rows per simdgroup: 8 RPS rows of a head per threadgroup (the dense Nemotron
 // Nano models: head dim 80, 40 or 80 rows), so the head group's B / C conv, the rows' x and dt are staged once for 8 RPS
 // rows instead of 8 (nh_ssm1 at head dim 80: ten threadgroups per head each stage the group's 256 B / C channels, ~70
@@ -357,9 +449,9 @@ template <int RPS, bool SZ = false>
 NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device float* state, device float* y,
                              const device float* conv_w, const device float* conv_b, const device float* A,
                              const device float* Dsk, const device float* dt_bias, constant NhSsmParams& p,
-                             const device uint* live, const device float* zp, uint np, uint tgi, uint tid, uint sg,
-                             uint lane, threadgroup float4 (*sbc)[64], threadgroup float* sx, threadgroup float (*sdt)[2],
-                             threadgroup float* sz = nullptr) {
+                             const device uint* live, const device float* zp, uint np, const device int* ppath,
+                             uint ptree, uint tgi, uint tid, uint sg, uint lane, threadgroup float4 (*sbc)[64],
+                             threadgroup float* sx, threadgroup float (*sdt)[2], threadgroup float* sz = nullptr) {
   constexpr uint RT = 8 * RPS;  // state rows per threadgroup
   const uint DI = p.NH * p.HD, CH = DI + 2 * p.NG * p.DS;
   const uint tg_per_head = p.HD / RT;
@@ -370,12 +462,15 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
   const uint T = p.write ? p.T : min(p.T, live[0]);
   const uint n = np + T;
   for (uint c = 0; c < n; ++c) {
-    ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc);
-    if (tid < RT) sx[c * RT + tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid);
+    ((threadgroup float*)sbc[c])[tid] = nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), cbc, ppath, ptree);
+    if (tid < RT)
+      sx[c * RT + tid] =
+          nh_conv1(zx, zp, ring, conv_w, conv_b, p, np, DI, CH, int(c), h * p.HD + row0 + tid, ppath, ptree);
     // SZ: the gate z of the pass's rows staged too (the steps below then wait on no device load)
     if (SZ && tid < RT && c >= np) sz[(c - np) * RT + tid] = zx[size_t(c - np) * p.zx_stride + h * p.HD + row0 + tid];
     if (tid == RT) {
-      const float zdt = c < np ? zp[size_t(c) * p.zx_stride + DI + CH + h] : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
+      const float zdt = c < np ? zp[size_t(nh_prow(ppath, ptree, int(c))) * p.zx_stride + DI + CH + h]
+                               : zx[size_t(c - np) * p.zx_stride + DI + CH + h];
       const float dt = softplus(zdt + dtb);
       sdt[c][0] = dt;
       sdt[c][1] = metal::precise::exp(dt * Ah);
@@ -454,14 +549,14 @@ NI_INLINE void nh_ssm1r_impl(const device float* zx, device float* ring, device 
                        const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],                \
                        const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],          \
                        const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],             \
-                       constant NhSsm1P& q [[buffer(12)]], uint tgi [[threadgroup_position_in_grid]],             \
-                       uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],   \
-                       uint lane [[thread_index_in_simdgroup]]) {                                                 \
+                       constant NhSsm1P& q [[buffer(12)]], const device int* ppath [[buffer(13)]],             \
+                       uint tgi [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],    \
+                       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {     \
     threadgroup float4 sbc[2 * kSsmNB][64];                                                                        \
     threadgroup float sx[2 * kSsmNB * 8 * RPS];                                                                    \
     threadgroup float sdt[2 * kSsmNB][2];                                                                          \
-    nh_ssm1r_impl<RPS>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, tgi, tid, sg, lane,  \
-                       sbc, sx, sdt);                                                                              \
+    nh_ssm1r_impl<RPS>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, ppath, q.ptree, tgi,  \
+                       tid, sg, lane, sbc, sx, sdt);                                                               \
   }
 NH_SSM1R(nh_ssm1r2, 2)    // 16 rows per threadgroup
 NH_SSM1R(nh_ssm1r8, 8)    // 64 rows: a head per threadgroup at head dim 64
@@ -474,28 +569,31 @@ NH_SSM1R(nh_ssm1r10, 10)  // 80 rows: a head per threadgroup at head dim 80
                           const device float* A [[buffer(6)]], const device float* Dsk [[buffer(7)]],
                           const device float* dt_bias [[buffer(8)]], constant NhSsmParams& p [[buffer(9)]],
                           const device uint* live [[buffer(10)]], const device float* zp [[buffer(11)]],
-                          constant NhSsm1P& q [[buffer(12)]], uint tgi [[threadgroup_position_in_grid]],
-                          uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
-                          uint lane [[thread_index_in_simdgroup]]) {
+                          constant NhSsm1P& q [[buffer(12)]], const device int* ppath [[buffer(13)]],
+                          uint tgi [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float4 sbc[2 * kSsmNB][64];
   threadgroup float sx[2 * kSsmNB * 8 * 4];
   threadgroup float sdt[2 * kSsmNB][2];
   threadgroup float sz[kSsmNB * 8 * 4];
-  nh_ssm1r_impl<4, true>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, tgi, tid, sg, lane,
-                         sbc, sx, sdt, sz);
+  nh_ssm1r_impl<4, true>(zx, ring, state, y, conv_w, conv_b, A, Dsk, dt_bias, p, live, zp, q.np, ppath, q.ptree, tgi,
+                         tid, sg, lane, sbc, sx, sdt, sz);
 }
 
 // The conv ring after a pass of T rows at pos0: the raw xBC of its last min(T, 3) rows into their slots.
 // grid: ceil(CH * min(T, 3) / 256) x 256 threads
+// With ptree the rows are zx rows ppath[0 .. T) (a KFlash tree verify's accepted path committed as pending rows).
 struct NhRingParams {
-  uint T, pos0, zx_stride, DI, CH;
+  uint T, pos0, zx_stride, DI, CH, ptree;
 };
 [[kernel]] void nh_conv_ring(const device float* zx [[buffer(0)]], device float* ring [[buffer(1)]],
-                             constant NhRingParams& p [[buffer(2)]], uint i [[thread_position_in_grid]]) {
+                             constant NhRingParams& p [[buffer(2)]], const device int* ppath [[buffer(3)]],
+                             uint i [[thread_position_in_grid]]) {
   const uint nr = min(p.T, 3u);
   if (i >= nr * p.CH) return;
   const uint t = p.T - nr + i / p.CH, c = i % p.CH;
-  ring[((p.pos0 + t) & 3u) * p.CH + c] = zx[size_t(t) * p.zx_stride + p.DI + c];
+  const uint row = p.ptree ? uint(ppath[t]) : t;
+  ring[((p.pos0 + t) & 3u) * p.CH + c] = zx[size_t(row) * p.zx_stride + p.DI + c];
 }
 
 // nh_gnorm_half (nemotron/nh_gemm.metal) that also does a verify's nh_conv_ring of the pending rows it committed
@@ -548,20 +646,19 @@ struct NhAttnParams {
 };
 constant constexpr uint kAttnKT = 32;  // keys per tile
 
-[[kernel]] void nh_attn_partial(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
-                                const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
-                                device float* part_ml [[buffer(4)]], constant NhAttnParams& p [[buffer(5)]],
-                                uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                                uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
-                                uint3 ntg3 [[threads_per_threadgroup]]) {
+// KFlash tree verify (nh_attn_partial_tree): the block's rows form a tree (the KFlash tree buffer), so row r sees
+// the history [0, pos0) and, of the block, only itself and its ancestors (its mask's bits).
+template <bool TREE>
+NI_INLINE void nh_attn_partial_impl(const device float* q, const device half* kc, const device half* vc,
+                                    device float* part_o, device float* part_ml, constant NhAttnParams& p,
+                                    const device int* tree, uint3 tg, uint tid, uint sg, uint lane, uint ntg,
+                                    threadgroup half4* kt, threadgroup half4* vt) {
   constexpr uint HD = 128;
-  const uint ntg = ntg3.x;
-  threadgroup half4 kt[kAttnKT * HD / 4];
-  threadgroup half4 vt[kAttnKT * HD / 4];
   const uint chunk = tg.x, kvh = tg.y, r = tg.z;
   const uint G = p.Hq / p.Hkv, hq = kvh * G + sg;
   const uint L = p.pos0 + r + 1;  // keys visible to this row
   const uint start = chunk * p.chunk, end = min(start + p.chunk, L);
+  const uint mrow = TREE ? uint(tree[kKfMask + r]) : 0u;
   const float4 qv = ((const device float4*)(q + (size_t(r) * p.Hq + hq) * HD))[lane] * p.scale;
   float4 acc = 0.0f;
   float m = -INFINITY, l = 0.0f;
@@ -575,6 +672,7 @@ constant constexpr uint kAttnKT = 32;  // keys per tile
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
     for (uint j = 0; j < n; ++j) {
+      if (TREE && t0 + j >= p.pos0 && !((mrow >> (t0 + j - p.pos0)) & 1u)) continue;
       const float s = simd_sum(dot(qv, float4(kt[j * HD / 4 + lane])));
       const float mn = max(m, s);
       const float corr = metal::fast::exp(m - mn), e = metal::fast::exp(s - mn);
@@ -589,6 +687,44 @@ constant constexpr uint kAttnKT = 32;  // keys per tile
   if (lane == 0) {
     part_ml[base * 2 + 0] = m;
     part_ml[base * 2 + 1] = l;
+  }
+}
+
+[[kernel]] void nh_attn_partial(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                device float* part_ml [[buffer(4)]], constant NhAttnParams& p [[buffer(5)]],
+                                uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                uint3 ntg3 [[threads_per_threadgroup]]) {
+  threadgroup half4 kt[kAttnKT * 128 / 4];
+  threadgroup half4 vt[kAttnKT * 128 / 4];
+  nh_attn_partial_impl<false>(q, kc, vc, part_o, part_ml, p, nullptr, tg, tid, sg, lane, ntg3.x, kt, vt);
+}
+
+[[kernel]] void nh_attn_partial_tree(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                     const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                     device float* part_ml [[buffer(4)]], constant NhAttnParams& p [[buffer(5)]],
+                                     const device int* tree [[buffer(6)]],
+                                     uint3 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                                     uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                     uint3 ntg3 [[threads_per_threadgroup]]) {
+  threadgroup half4 kt[kAttnKT * 128 / 4];
+  threadgroup half4 vt[kAttnKT * 128 / 4];
+  nh_attn_partial_impl<true>(q, kc, vc, part_o, part_ml, p, tree, tg, tid, sg, lane, ntg3.x, kt, vt);
+}
+
+// KFlash: after a tree verify's acceptance, the accepted path's K/V (verify rows path[1 .. a], written at pos0 +
+// path[i]) move to pos0 + i, where plain decoding puts them. Each thread copies one element of one head in path order
+// (a destination pos0 + i never holds a later row's source: path[j] >= j). grid: 2 * Hkv threadgroups x HD threads.
+[[kernel]] void nh_kv_tree_compact(device half* kc [[buffer(0)]], device half* vc [[buffer(1)]],
+                                   const device int* tree [[buffer(2)]], constant NhKvParams& p [[buffer(3)]],
+                                   uint tg [[threadgroup_position_in_grid]], uint d [[thread_position_in_threadgroup]]) {
+  const uint hh = tg % p.Hkv;
+  device half* c = (tg >= p.Hkv ? vc : kc) + size_t(hh) * p.cap * p.HD;
+  const uint a = uint(tree[kKfA]);
+  for (uint i = 1; i <= a; ++i) {
+    const uint src = uint(tree[kKfPath + i]);
+    if (src != i) c[size_t(p.pos0 + i) * p.HD + d] = c[size_t(p.pos0 + src) * p.HD + d];
   }
 }
 

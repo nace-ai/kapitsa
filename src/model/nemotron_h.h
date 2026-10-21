@@ -103,6 +103,7 @@ class NemotronH : public Model {
   ~NemotronH() override;
   const NhConfig& config() const { return cfg_; }
   const std::string& dir() const { return path_; }
+  bool dense() const { return dense_; }  // no MoE layers (Nano 4B / 9B v2)
   int vocab() const override { return cfg_.vocab; }
   const std::vector<int>& eos_ids() const override { return cfg_.eos; }
 
@@ -167,6 +168,19 @@ class NemotronH : public Model {
   };
   void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
+  // KFlash tree verify (src/model/kflash_budget.h): while on, the verify block's rows form a tree (tree_buf(), written
+  // on the GPU by the drafter's tree builder: rows, parents, depths, ancestor masks; the nodes' tokens in tokens[pos +
+  // r]): row r attends to the history and its ancestors, and its Mamba-2 state is its root path's. encode_accept_tree
+  // then samples row r at position pos + depth(r), accepts the longest root path whose tokens are the rows' own samples
+  // (accepted() = a; tokens[pos + 1 ..] = the path's tokens and the last row's sample; the path's K/V moved into place)
+  // and commit_rows_tree(s, n) makes the path's first n rows pending.
+  void set_tree(bool on) { tree_on_ = on; }
+  Buffer tree_buf() const { return tree_; }
+  void encode_accept_tree(Encoder& e, Seq& s, int pos, const SamplingParams& sp);
+  void commit_rows_tree(Seq& s, int n) {
+    s.n_pend = n;
+    s.pend_tree = n > 0;
+  }
   void encode_flush(Encoder& e, Seq& s);
   // Logits of rows [0, T) of the last pass (fp32 [T][vocab], T <= kMaxRows) / of the last prefill chunk.
   float* logits() { return logits_.as<float>(); }
@@ -217,8 +231,9 @@ class NemotronH : public Model {
   // commit: the Mamba state and conv ring advance (prefill, decode); else the rows become pending (verify).
   void enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit);
   void enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_stride);
+  // the draw's RNG step: step, plus (*dstep)[out_index] (int32 at byte offset dstep_off) when dstep is given
   void enc_sample(Encoder& e, const Buffer& logits_row, const Buffer& tokens, int out_index, const SamplingParams& sp,
-                  uint32_t step);
+                  uint32_t step, const Buffer* dstep = nullptr, size_t dstep_off = 0);
   void enc_capture(Encoder& e, int layer, const Buffer& x, int pos0, int R);
   // np pending rows zp (a verify block's accepted rows, at pos0 - np) are committed first when given
   // parts: 1 the scan, 2 the conv ring updates after it (a batched pass runs every sequence's scans, then their rings)
@@ -268,6 +283,8 @@ class NemotronH : public Model {
   // activations (kMaxRows rows)
   Buffer x_, xn_, zx_, y_, yn_, q_, k_, v_, ao_, part_o_, part_ml_, rl_, eid_, ew_, lat_, h_, lo_, sh_;
   Buffer logits_, cand_v_, cand_i_, sprob_, samp_, acc_;
+  Buffer tree_;            // KFlash: the verify block's tree and its acceptance (layout kKf*, nh_common.h)
+  bool tree_on_ = false;
   Buffer xnh_, aoh_, loh_, shh_;  // half inputs of the multi-row GEMMs (passes of 2+ rows)
   Buffer part_;                   // routed experts' weighted partial outputs [rows * k][latent]
   Buffer iq2tab_;                 // IQ2_XXS lookup tables (constant address space in the kernels)

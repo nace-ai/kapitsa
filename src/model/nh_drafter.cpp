@@ -1,4 +1,5 @@
 #include "model/nh_drafter.h"
+#include "model/kflash_budget.h"
 #include "model/dspark.h"
 #include "model/lilicorr.h"
 #include "util/log.h"
@@ -72,6 +73,58 @@ void NhDrafter::stage_init(LiliSeq& d) {
   d.stage_hook.slot = v.slot;
   d.stage_hook.pos_base = 0;
   d.stage_hook.rows = kB;
+}
+
+void NhDrafter::encode_commit_path(Encoder& e, LiliSeq& d, int m, const Buffer& path) {
+  if (m <= 0) return;
+  const NhCapture& v = verify_hook();
+  if (!kfeat_) kfeat_ = Gpu::get().alloc(size_t(kB) * v.ld * 4, "nh_kf_feat");
+  const uint32_t ld = v.ld;
+  e.use(NemotronH::pipeline("nh_kf_gather"));
+  e.buf(0, v.feat);
+  e.buf(1, kfeat_);
+  e.buf(2, path);
+  e.val(3, ld);
+  e.dispatch(uint32_t(m), (ld + 255) / 256, 1, 256);
+  enc_commit_rows(e, d, kfeat_, m, d.ctx);
+  d.ctx += m;
+  d.hi = std::max(d.hi, d.ctx);
+}
+
+void NhDrafter::enc_kf_build(Encoder& e, NemotronH& tg, Seq& s, int P, const Buffer& cand, const Buffer& tlq, int K,
+                             const Buffer& kfp) {
+  const int S = kB - 1;
+  if (kf_K_ != K) {  // the lattice's tables: tokens per children-row (rewritten per pass), constant successors
+    Gpu& g = Gpu::get();
+    if (kf_tok_) g.release(kf_tok_);
+    if (kf_next_) g.release(kf_next_);
+    kf_tok_ = g.alloc(size_t(S) * K * K * 4, "nh_kf_tok");
+    kf_next_ = g.alloc(size_t(S) * K * K * 4, "nh_kf_next");
+    const std::vector<int32_t> nx = kf::lattice_next(S, K);
+    memcpy(kf_next_.ptr(), nx.data(), nx.size() * 4);
+    kf_K_ = K;
+  }
+  const struct {
+    uint32_t S, K;
+  } lp{uint32_t(S), uint32_t(K)};
+  e.use(NemotronH::pipeline("kf_lattice_tokens"));
+  e.buf(0, cand);
+  e.buf(1, kf_tok_);
+  e.bytes(2, &lp, sizeof lp);
+  e.dispatch((uint32_t(S * K * K) + 255) / 256, 1, 1, 256);
+  const struct {
+    uint32_t K, P, root, pad;
+  } bp{uint32_t(K), uint32_t(P), 0u, 0u};
+  e.use(NemotronH::pipeline("kf_build"));
+  e.buf(0, tlq);
+  e.buf(1, kf_tok_);
+  e.buf(2, kf_next_);
+  e.buf(3, kfp);
+  e.buf(4, tg.tree_buf());
+  e.buf(5, s.tok);
+  e.buf(6, tg.live_rows());
+  e.bytes(7, &bp, sizeof bp);
+  e.dispatch(1, 1, 1, 32);
 }
 
 void NhDrafter::encode_commit_staged(Encoder& e, LiliSeq& d) {

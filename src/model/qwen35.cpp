@@ -1187,6 +1187,7 @@ void Qwen35::enc_mrope_args(Encoder& e, const Seq& s) {
 
 void Qwen35::reset(Seq& s) {
   s.n_pend = 0;
+  s.pend_tree = false;
   for (auto& b : s.conv)
     if (b) memset(b.ptr(), 0, b.size);
   for (auto& b : s.rec)

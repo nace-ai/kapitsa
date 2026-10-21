@@ -71,7 +71,11 @@ int main(int argc, char** argv) {
     const uint32_t ntg = argc > 2 ? uint32_t(atoi(argv[2])) : 320;
     id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
     MTLCompileOptions* o = [MTLCompileOptions new];
+#if defined(__MAC_26_0) && __MAC_OS_X_VERSION_MAX_ALLOWED >= __MAC_26_0
     o.languageVersion = MTLLanguageVersion4_0;
+#else
+    o.languageVersion = MTLLanguageVersion(4 << 16);  // Metal 4.0: SDKs before macOS 26 do not declare the name
+#endif
     NSError* err = nil;
     id<MTLLibrary> lib = [dev newLibraryWithSource:[NSString stringWithUTF8String:kSrc] options:o error:&err];
     if (!lib) {

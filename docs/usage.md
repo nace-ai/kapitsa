@@ -563,7 +563,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops. |
 | `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
@@ -578,6 +578,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
+| `NI_DFLASH_TREE` | on | KFlash on the Qwen draft models: the draft model's guesses are checked as a best-first tree per pass (several continuations at once) instead of one chain; `0` checks a chain (overrides `NI_KFLASH` on these models). Greedy replies are the same either way; sampled ones follow the same distribution. The tree's shape follows the draft model's probabilities as calibrated against this Mac's own acceptances, and its size this Mac's measured cost per verified rows: one 8-row tile on the 27B and the 4B, 1 to 8 rows per pass on the 35B (its pass routes experts for those rows alone). |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
 | `NI_BATCH` | on where measured | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too (not measured yet); `0`: they take turns instead, each with the tokens it gets alone. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
@@ -589,9 +590,10 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
 | `NI_NH_NGRAM` | `4` with BF16 or FP8, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
 | `NI_NH_FP4` | `l2` on M1 Macs, else `l0` | Dense Nemotron-H models: how NVFP4 codes are laid out for the GPU, as `NI_DORY_FP4`; both give the same outputs to the bit. |
-| `NI_DSPARK_DYN` | `0.3` on M5 Macs, else `0.2` | Nemotron Lightning's DSpark draft model: how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
+| `NI_DSPARK_DYN` | `0.3` on M5 Macs, else `0.2` | Nemotron Lightning's DSpark draft model with chains (`NI_KFLASH=0`): how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
 | `NI_DSPARK_K` | `16` | Nemotron Lightning's DSpark draft model: the candidates per draft position its Markov head rescores (1-32). |
-| `NI_LILI_DYN` | `0.04` | Nemotron's LiLiCorr draft model: how many of its 7 drafts are verified is chosen per cycle, weighing their expected acceptance against each extra row's cost (this value, relative to a cycle's fixed cost); `0` verifies all 7. |
+| `NI_LILI_DYN` | `0.04` | Nemotron's LiLiCorr draft model with chains (`NI_KFLASH=0`): how many of its 7 drafts are verified is chosen per cycle, weighing their expected acceptance against each extra row's cost (this value, relative to a cycle's fixed cost); `0` verifies all 7. |
+| `NI_KFLASH` | on | KFlash on every draft model (the Qwen 27B, 4B and 35B, Nemotron's LiLiCorr and DSpark models): the draft model's guesses are checked as a best-first tree per pass instead of one chain; the tree's size comes from this Mac's measured cost per verified row count, its shape from the draft model's probabilities as calibrated against its own acceptances. On MoE targets (the Qwen 35B, Nemotron's), where every verified row costs experts, each pass verifies 1 to 8 rows, as many as their expected tokens are worth; the dense Qwen models verify whole 8-row tiles. `0` checks a chain on every model. Replies are plain decoding's (greedy token for token; sampled by the same law). |
 | `NI_DORY_HEAD` | `q8` with `nvfp4` | Dory: `bf16` keeps the `nvfp4` checkpoint's LM head BF16 (about 7% slower writing; next-token KL 7e-6 from the 8-bit rows it runs as by default); `q8` also runs the `bf16` checkpoint's head as 8-bit rows. |
 | `NI_DORY_FP4` | `l2` on M1 Macs, else `l0` | Dory: how the `nvfp4` checkpoint's codes are laid out for the GPU. `l2` decodes 12-16% faster on the M1's GPU; both give the same outputs to the bit. |
 | `NI_DORY_SPEC` | `both` | Dory with `--loop-kv per-loop`: the drafts of speculative decoding, `both` (prompt lookup, else the model itself at one loop), `ngram` (prompt lookup only) or `self`; `--spec 0` decodes plainly. |

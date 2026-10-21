@@ -54,6 +54,10 @@ struct WalkP {
   uint32_t S, K, D, P;
   float ls;
 };
+struct LiliTableP {
+  uint32_t S, K, D;
+  float ls;
+};
 struct BlockTokP {
   uint32_t P, mask, B;
 };
@@ -474,6 +478,7 @@ void LiliCorr::alloc_buffers() {
   inv_ = al(N * Hh * 4, "lili_in");
   aout_ = al(Hh * 4, "lili_aout");
   scores_ = al(S * K * 4, "lili_scores");
+  tlq_ = al(S * K * K * 4, "lili_kf_lattice");
   picks_ = al(S * 4, "lili_picks");
   if (const char* v = getenv("NI_LILI_DYN")) dyn_ratio_ = float(atof(v));
   if (const char* v = getenv("NI_LILI_DYN_P")) dyn_mode_ = uint32_t(atoi(v));
@@ -651,7 +656,7 @@ void LiliCorr::encode_commit(Encoder& e, LiliSeq& d, int m) {
 }
 
 // ---- drafting pass ----
-void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
+void LiliCorr::encode_pass(Encoder& e, Seq& s, LiliSeq& d, int P) {
   if (d.ctx != P) fatal("LiliCorr: drafting at %d with context %d", P, d.ctx);
   const uint32_t H = uint32_t(cfg_.H), B = kB, S = B - 1, K = uint32_t(cfg_.topk), N = S * K, Hh = uint32_t(cfg_.lh);
   const int R = int(B);
@@ -861,6 +866,11 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
     e.val(2, lp);
     e.dispatch(w == 2 ? 1 : N, 1, 1, 256);
   }
+}
+
+void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
+  encode_pass(e, s, d, P);
+  const uint32_t S = kB - 1, K = uint32_t(cfg_.topk), Hh = uint32_t(cfg_.lh);
   const WalkP wp{S, K, Hh, uint32_t(P), cfg_.logit_scale};
   e.use(pipe("nh_lili_walk"));
   e.buf(0, inv_);
@@ -881,6 +891,23 @@ void LiliCorr::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
   e.val(3, dp);
   e.buf(4, scores_);
   e.dispatch(1, 1, 1, 1);
+}
+
+// KFlash: the LiLiCorr head's transition probabilities between every pair of candidates of consecutive slots
+// (nh_lili_table), then the best-first tree under the budget (nh_kf_build)
+void LiliCorr::encode_draft_tree(Encoder& e, Seq& s, LiliSeq& d, int P, const Buffer& kfp) {
+  encode_pass(e, s, d, P);
+  const uint32_t S = kB - 1, K = uint32_t(cfg_.topk), Hh = uint32_t(cfg_.lh);
+  const LiliTableP tp{S, K, Hh, cfg_.logit_scale};
+  e.use(pipe("nh_lili_table"));
+  e.buf(0, inv_);
+  e.buf(1, outv_);
+  e.buf(2, aout_);
+  e.buf(3, clp_);
+  e.buf(4, tlq_);
+  e.val(5, tp);
+  e.dispatch(1 + (S - 1) * K, 1, 1, 32 * K);
+  enc_kf_build(e, tg_, s, P, cand_, tlq_, int(K), kfp);
 }
 
 }  // namespace ni

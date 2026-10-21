@@ -76,15 +76,12 @@ NI_INLINE uint pcg_hash(uint v) {
   return (word >> 22u) ^ word;
 }
 
-// One threadgroup of 1024 threads.
-[[kernel]] void sample_stage2(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
-                              device int* tokens [[buffer(2)]], device float* out_probs [[buffer(3)]],
-                              constant SampleParams& p [[buffer(4)]], uint tid [[thread_position_in_threadgroup]],
-                              uint ntg [[threads_per_threadgroup]]) {
-  threadgroup float sv[32];
-  threadgroup uint si[32];
-  threadgroup float topv[64];
-  threadgroup uint topi[64];
+// One threadgroup of 1024 threads. The RNG step of the draw: p.step, plus dstep[p.out_index] for sample_stage2_dstep
+// (a KFlash tree verify: row r draws at position P + depth(r), so the draw is the plain sampler's for that position).
+NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci, device int* tokens,
+                                  device float* out_probs, constant SampleParams& p, uint step, uint tid, uint ntg,
+                                  threadgroup float* sv, threadgroup uint* si, threadgroup float* topv,
+                                  threadgroup uint* topi) {
   constexpr int PER = 4;
   float v[PER];
   uint id[PER];
@@ -131,7 +128,7 @@ NI_INLINE uint pcg_hash(uint v) {
         probs[r] = metal::precise::exp((topv[r] - topv[0]) / p.temp);
         kt += probs[r];
       }
-      float u = float(pcg_hash(p.seed ^ pcg_hash(p.step)) & 0xffffff) / 16777216.0f * kt;
+      float u = float(pcg_hash(p.seed ^ pcg_hash(step)) & 0xffffff) / 16777216.0f * kt;
       chosen = topi[keep - 1];
       float acc = 0.0f;
       for (uint r = 0; r < keep; ++r) {
@@ -142,4 +139,26 @@ NI_INLINE uint pcg_hash(uint v) {
     tokens[p.out_index] = int(chosen);
     out_probs[0] = topv[0];
   }
+}
+
+[[kernel]] void sample_stage2(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
+                              device int* tokens [[buffer(2)]], device float* out_probs [[buffer(3)]],
+                              constant SampleParams& p [[buffer(4)]], uint tid [[thread_position_in_threadgroup]],
+                              uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float sv[32];
+  threadgroup uint si[32];
+  threadgroup float topv[64];
+  threadgroup uint topi[64];
+  sample_stage2_impl(cv, ci, tokens, out_probs, p, p.step, tid, ntg, sv, si, topv, topi);
+}
+
+[[kernel]] void sample_stage2_dstep(const device float* cv [[buffer(0)]], const device uint* ci [[buffer(1)]],
+                                    device int* tokens [[buffer(2)]], device float* out_probs [[buffer(3)]],
+                                    constant SampleParams& p [[buffer(4)]], const device int* dstep [[buffer(5)]],
+                                    uint tid [[thread_position_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
+  threadgroup float sv[32];
+  threadgroup uint si[32];
+  threadgroup float topv[64];
+  threadgroup uint topi[64];
+  sample_stage2_impl(cv, ci, tokens, out_probs, p, p.step + uint(dstep[p.out_index]), tid, ntg, sv, si, topv, topi);
 }

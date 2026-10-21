@@ -1,0 +1,103 @@
+# Pull request checks that need no GPU and no model: the build, the CPU tests and the lint hooks.
+#
+# What this cannot check, and nothing on a GitHub-hosted runner can: the Metal kernels (they are embedded as source
+# and compiled by the GPU driver at run time, so a build passes with a broken kernel), their speed, and whether the
+# outputs are still the same. That evidence comes from the author's runs on a Mac, written in the PR (AGENTS.md,
+# "Changing speed or numerics"), and from review. A green run here means the CPU side is intact, not that the change is right.
+#
+# Runs on `pull_request`: the PR's code runs here with a read-only token and no secrets. Do not switch this to
+# pull_request_target (see community-bench.yml for the posture that event needs).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # The same hooks as .pre-commit-config.yaml, run locally by `prek install`.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install prek==0.5.2
+      - run: prek run --all-files --show-diff-on-failure
+
+  pr-size-script:
+    # The check itself (.github/scripts/pr_size.py) is tested here; it runs on PRs in pr-size.yml.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_pr_size.py
+
+  build-and-test:
+    # Changes that can affect the build or the tests only (the filter below). Not a required check, so a skipped run never blocks a docs-only PR.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tools/**'
+              - 'tests/**'
+              - 'cmake/**'
+              - 'third_party/**'
+              - 'packaging/**'
+              - 'bench/harness/**'
+              - 'bench/reasoning/**'
+              - 'bench/community/**'
+              - 'CMakeLists.txt'
+              - 'install.sh'
+              - '.github/workflows/ci.yml'
+      - name: Xcode
+        if: steps.changes.outputs.code == 'true'
+        run: xcodebuild -version && cmake --version
+      - name: Build
+        # The CLI and the test programs that need no model folder. Not `all`: tools such as tensor_probe need a newer SDK than the runner has.
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test
+      - name: Python environment
+        if: steps.changes.outputs.code == 'true'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet jsonschema
+      - name: C++ tests
+        if: steps.changes.outputs.code == 'true'
+        run: build/api_test
+      # One step per suite, so one failure does not hide the others.
+      # tests/test_bench.py is not run here: on a hosted runner (a VM, "Apple M1 (Virtual)") `kapitsa bench` aborts on a
+      # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
+      - name: test_server --cli
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_server.py --cli build/kapitsa
+      - name: test_sidecar
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_sidecar.py build/kapitsa
+      - name: test_update
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_update.py build
+      - name: test_community
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_community.py build
+      - name: test_reasoning
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py

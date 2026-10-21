@@ -57,6 +57,13 @@ class NhDrafter {
   // coming verify's depth in the target's live rows ----
   virtual void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) = 0;
 
+  // ---- KFlash (src/model/kflash_budget.h): the drafting pass builds a best-first tree of its candidate lattice into
+  // the target's tree buffer (tokens[P + 1 ..] = the nodes' tokens, the target's live rows = the tree's rows) under the
+  // budget's parameters kfp (KfParams), for a verify with NemotronH::set_tree; encode_commit_path then commits the
+  // accepted path's m rows of that verify (path: Seq::pend_path) into d's ring ----
+  virtual void encode_draft_tree(Encoder& e, Seq& s, LiliSeq& d, int P, const Buffer& kfp) = 0;
+  void encode_commit_path(Encoder& e, LiliSeq& d, int m, const Buffer& path);
+
   // ---- double-buffered decode (a drafter that chains()): the next cycle's drafting half, encoded and committed right
   // behind the verify at P (+ its acceptance), before the host knows the outcome. It commits the verify's rows
   // 0..a (a: the acceptance's count, read on the GPU) and drafts from the anchor P + a + 1 the acceptance wrote. Needs
@@ -76,6 +83,13 @@ class NhDrafter {
   // positions pos0.. into d's ring
   virtual const NhCapture& verify_hook() const = 0;
   virtual void enc_commit_rows(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0) = 0;
+  // KFlash: the shared tree builder (kf_build, src/kernels/kflash.h) over a lattice tlq [S][K][K] of candidates
+  // cand [S][K]: the children tokens and the rows' constant successors are this drafter's tables
+  void enc_kf_build(Encoder& e, NemotronH& tg, Seq& s, int P, const Buffer& cand, const Buffer& tlq, int K,
+                    const Buffer& kfp);
+  Buffer kfeat_;  // the accepted path's verify features, in path order
+  Buffer kf_tok_, kf_next_;  // the lattice's children tokens [S][K][K] and successors (kf::lattice_next)
+  int kf_K_ = 0;
 };
 
 }  // namespace ni

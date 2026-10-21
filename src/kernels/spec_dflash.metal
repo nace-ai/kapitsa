@@ -824,6 +824,7 @@ struct DflCommitParams {
 struct DflX8Params {
   uint K, m, src_ld;
   float scale;
+  uint gather;  // 1: row r is source row gst[4 + r] (a tree cycle's accepted path, kf_accept)
 };
 // grid (8 rows, column blocks) x 256: block y converts groups y * 8 + sg, then every 8 * blocks.
 [[kernel]] void dfl_x8_from_bf16(const device bfloat* src [[buffer(0)]], device half* xh [[buffer(1)]],
@@ -834,10 +835,11 @@ struct DflX8Params {
                                  uint lane [[thread_index_in_simdgroup]]) {
   const uint m = p.m == kDflGpu ? gst[1] : p.m;
   const uint r = tg.x;
+  const uint rs = p.gather && r < m ? gst[4 + r] : r;
   for (uint g = tg.y * nsg + sg; g < p.K / 64; g += nsg * ntgs.y) {
     const uint c = g * 64 + 2 * lane;
     float2 v = float2(0.0f);
-    if (r < m) v = float2(*(const device bfloat2*)(src + size_t(r) * p.src_ld + c)) * p.scale;
+    if (r < m) v = float2(*(const device bfloat2*)(src + size_t(rs) * p.src_ld + c)) * p.scale;
     dfl_put2(xh, xs, r, p.K, g, lane, v.x, v.y);
   }
 }
@@ -1541,6 +1543,46 @@ struct DflSelectParams {
     jp = kb;
     tokens[out_index + pp] = cand_i[pp * 16 + kb];
   }
+}
+
+// ---- KFlash: the DFlash2 lattice as the shared tree builder's children tables (kflash.h, kf_build) ----
+// Children-row (s * 16 + p) = the 16 candidates of position s after candidate p of position s - 1 (s = 0: after the
+// anchor, p = 0): clq = log softmax_k(U_s[k] + E[s][p][k]) (the walk's scores; E row 0 under the anchor; DFlash v1
+// drafters have E = 0), ctok = the candidates' ids. The rows' successors (kf::lattice_next) are constant.
+// grid: 7 * 16 threadgroups x 32.
+[[kernel]] void dfl_kf_table(const device int* cand_i [[buffer(0)]], const device float* cand_v [[buffer(1)]],
+                             const device float* E [[buffer(2)]], device float* clq [[buffer(3)]],
+                             device int* ctok [[buffer(4)]], uint g [[threadgroup_position_in_grid]],
+                             uint lane [[thread_index_in_simdgroup]]) {
+  const uint s = g / 16, pp = g % 16;
+  const bool on = lane < 16;
+  float v = -INFINITY;
+  if (on) {
+    const float e = E[s * 256 + (s == 0 ? 0u : pp) * 16 + lane];
+    v = cand_v[s * 16 + lane] + (isnan(e) ? 0.0f : e);
+  }
+  const float mx = simd_max(v);
+  const float z = simd_sum(on ? metal::precise::exp(v - mx) : 0.0f);
+  if (on) {
+    clq[g * 16 + lane] = v - mx - metal::precise::log(z);
+    ctok[g * 16 + lane] = cand_i[s * 16 + lane];
+  }
+}
+
+// The shared builder for a GPU-driven drafting pass: the anchor comes from the drafter state (kDflGpu), so the nodes'
+// tokens go to tokens[gst[0] + r]. grid: 1 x 32.
+[[kernel]] void kf_build_gpu(const device float* clq [[buffer(0)]], const device int* ctok [[buffer(1)]],
+                             const device int* cnext [[buffer(2)]], constant KfParams& kp [[buffer(3)]],
+                             device int* tree [[buffer(4)]], device int* tokens [[buffer(5)]],
+                             device uint* live [[buffer(6)]], constant KfBuildP& p [[buffer(7)]],
+                             const device uint* gst [[buffer(8)]], uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float fs[kKfMaxRows * 32], fq[kKfMaxRows * 32];
+  threadgroup uint fe[kKfMaxRows * 32];
+  threadgroup float ns[kKfMaxRows];
+  threadgroup uint tdep[kKfMaxRows];
+  threadgroup uint nf, nodes;
+  kf_build_impl(clq, ctok, cnext, kp, tree, tokens, live, p.K, dfl_pos(p.P, gst), p.root, fs, fq, fe, ns, tdep, nf,
+                nodes, lane);
 }
 
 // ---- acceptance (SPEC §8): verify rows -> accepted length a and the bonus / correction token ----

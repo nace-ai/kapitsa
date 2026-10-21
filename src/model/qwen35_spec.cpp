@@ -956,6 +956,8 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
     return;
   }
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  if (v8_tree_) fatal("encode_verify: a verify tree needs the 8-row path");
+  if (s.pend_tree) encode_flush(e, s);  // a tree cycle's accepted rows (DFlash2 tree drafting) fold on their own
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
@@ -1007,27 +1009,38 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
 }
 
 void Qwen35::encode_flush(Encoder& e, Seq& s) {
-  if (s.n_pend == 0) return;
+  if (s.n_pend == 0) {
+    s.pend_tree = false;
+    return;
+  }
+  // a tree cycle's accepted rows (DFlash2 tree drafting): tape rows pend_path[0 .. n_pend)
+  const bool pt = s.pend_tree;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
-  kp::GdnVerify gv{0, uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps};
+  kp::GdnVerify gv{0, uint32_t(s.n_pend), uint32_t(cfg_.lin_hk), uint32_t(cfg_.lin_hv), C, cfg_.eps, 0u, pt ? 1u : 0u};
   for (int i = 0; i < cfg_.layers; ++i) {
     if (!cfg_.is_linear[i]) continue;
     const Layer& L = layers_[i];
-    e.use(pipe2("gdn_prep_verify"));
+    e.use(pipe2(pt ? "gdn_prep_verify_tree" : "gdn_prep_verify"));
     e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
     e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
     e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
     e.buf(12, s.pend_qkv[i]);
     e.val(13, gv);
+    if (pt) {
+      e.buf(14, s.pend_path);
+      e.buf(15, s.pend_path);
+    }
     e.dispatch(C / 128, 1, 1, 128);
-    e.use(pipe2("gdn_step_verify"));
+    e.use(pipe2(pt ? "gdn_step_verify_pidx" : "gdn_step_verify"));
     e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
     e.buf(5, s.rec[i]); e.buf(6, zb_); e.buf(7, L.gnorm->buf); e.buf(8, gout_);
     e.buf(9, s.pend_k[i]); e.buf(10, s.pend_g[i]); e.buf(11, s.pend_d[i]);
     e.val(12, gv);
+    if (pt) e.buf(13, s.pend_path);
     e.dispatch(cfg_.lin_hv, 1, 1, 1024);
   }
   s.n_pend = 0;
+  s.pend_tree = false;
 }
 
 } // namespace ni

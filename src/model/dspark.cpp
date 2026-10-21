@@ -38,6 +38,10 @@ struct DepthP {
   float ratio;
   uint32_t mode;
 };
+struct DspTableP {
+  uint32_t S, K, R, P;
+  float gs;
+};
 struct CycP {
   uint32_t P, hi, W, D, Hq, Hkv, B, S, K, R, NS, ld;
   float eps, theta, scale, gs;
@@ -389,6 +393,7 @@ void DSpark::alloc_buffers() {
   cand_ = al(S * K * 4, "dspark_cand");
   clp_ = al(S * K * 4, "dspark_clp");
   qlp_ = al(S * K * 4, "dspark_qlp");
+  tlq_ = al(S * K * K * 4, "dspark_kf_lattice");
   picks_ = al(S * 4, "dspark_picks");
   cg_ = al(W * H * 4, "dspark_cg");
   cgh_ = al(W * H * 2, "dspark_cgh");
@@ -561,9 +566,14 @@ void DSpark::encode_commit(Encoder& e, LiliSeq& d, int m) {
 }
 
 // ---- drafting pass ----
+void DSpark::encode_pass(Encoder& e, Seq& s, LiliSeq& d, int P) {
+  if (d.ctx != P) fatal("DSpark: drafting at %d with context %d", P, d.ctx);
+  enc_draft(e, s, d, P, false, false);
+}
+
 void DSpark::encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) {
   if (d.ctx != P) fatal("DSpark: drafting at %d with context %d", P, d.ctx);
-  enc_draft(e, s, d, P, false);
+  enc_draft(e, s, d, P, false, true);
 }
 
 // Chained behind the verify at P: the parameters from its acceptance (nh_dsp_cycle), the commit of all 8 verify
@@ -579,10 +589,10 @@ void DSpark::encode_draft_chained(Encoder& e, Seq& s, LiliSeq& d, int P) {
   e.val(2, cp);
   e.dispatch(1, 1, 1, 1);
   enc_commit(e, d, vfeat_, kB, P, true);
-  enc_draft(e, s, d, P, true);
+  enc_draft(e, s, d, P, true, true);
 }
 
-void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
+void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained, bool walk) {
   const uint32_t H = uint32_t(H_), B = kB, S = B - 1, K = uint32_t(K_);
   const int R = int(B);
   // the block: the anchor's embedding (the target's table), the mask token's row below it
@@ -676,6 +686,7 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   e.buf(4, clp_);
   e.val(5, cp);
   e.dispatch(S, 1, 1, 32);
+  if (!walk) return;  // KFlash: the candidates alone (encode_pass)
   // the Markov head's walk from the anchor: tokens[P + 1 .. P + 7]
   const WalkP wp{S, K, uint32_t(rank_), uint32_t(P), w2_.gs};
   // (two passes: every candidate pair's Markov dot at once, then the walk on one simdgroup)
@@ -716,6 +727,25 @@ void DSpark::enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained) {
   e.val(3, dp);
   e.buf(4, qlp_);
   e.dispatch(1, 1, 1, 1);
+}
+
+// KFlash: the Markov head's corrected probabilities of every candidate after every candidate of the slot before
+// (nh_dsp_table), then the best-first tree under the budget (nh_kf_build)
+void DSpark::encode_draft_tree(Encoder& e, Seq& s, LiliSeq& d, int P, const Buffer& kfp) {
+  encode_pass(e, s, d, P);
+  const uint32_t S = kB - 1, K = uint32_t(K_);
+  const DspTableP tp{S, K, uint32_t(rank_), uint32_t(P), w2_.gs};
+  e.use(pipe("nh_dsp_table"));
+  e.buf(0, cand_);
+  e.buf(1, clp_);
+  e.buf(2, w1_);
+  e.buf(3, w2_.q);
+  e.buf(4, w2_.s);
+  e.buf(5, s.tok);
+  e.buf(6, tlq_);
+  e.val(7, tp);
+  e.dispatch(1 + (S - 1) * K, 1, 1, 32 * K);
+  enc_kf_build(e, tg_, s, P, cand_, tlq_, int(K), kfp);
 }
 
 void DSpark::debug_read(std::vector<int>& cand, std::vector<float>& clp, std::vector<float>& qlp,

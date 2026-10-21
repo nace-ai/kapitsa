@@ -400,6 +400,19 @@ int main(int argc, char** argv) {
     // NI_DFLASH_CONF=<file>: per cycle "a c_0 .. c_6", c_p = softmax over the 16 candidates of the walk's
     // scores S_p at the chosen candidate (the drafter's confidence; calibration data for a dynamic depth)
     FILE* conf = getenv("NI_DFLASH_CONF") ? fopen(getenv("NI_DFLASH_CONF"), "a") : nullptr;
+    // NI_DFLASH_LAT=<file>: per cycle the drafter's whole lattice and the verify's rows (binary; tools/tree_sim.py
+    // reads it, layout there): anchor P, accepted a, the verify's sampled ids, candidates / scores / edges / walk, and
+    // per verify row the target's top-16 logits, its log-sum-exp and its logits of the 16 candidates of that position.
+    // NI_DFLASH_STEP1=1: every cycle emits only its first token (the verify's row-0 sample = plain decoding), so the
+    // lattice is recorded at every position of the plain output (a tree simulator can then replay any policy).
+    FILE* lat = getenv("NI_DFLASH_LAT") ? fopen(getenv("NI_DFLASH_LAT"), "wb") : nullptr;
+    const bool step1 = env_on("NI_DFLASH_STEP1");
+    if (lat || step1) dfl->set_tree(false);  // the recording is the walk's chain and its lattice
+    if (lat) {
+      const int32_t hdr[8] = {0x3154414c /* "LAT1" */, 1, n, int32_t(std::lround(sp.temperature * 1000)), K,
+                              dfl->config().v1 ? 1 : 0, step1 ? 1 : 0, m.config().vocab};
+      fwrite(hdr, 4, 8, lat);
+    }
     double ts = now_ms();
     int P = n, m_prev = 0, cycles = 0, emitted = 0;
     int div_at = -1, div_tok[2] = {0, 0}, div_row = 0, div_P = 0;
@@ -418,7 +431,7 @@ int main(int argc, char** argv) {
     // NI_TRACE / NI_DFLASH_CONF read drafter buffers after each cycle, so they run mode 2; NI_PROFILE
     // (one command buffer per dispatch) runs mode 1.
     int mode = getenv("NI_DFLASH_CB") && *getenv("NI_DFLASH_CB") ? atoi(getenv("NI_DFLASH_CB")) : 3;
-    if ((trace || conf) && mode == 3) mode = 2;
+    if ((trace || conf || lat || step1) && mode == 3) mode = 2;
     if (Encoder::profiling()) mode = 1;
     // NI_AB=key=value,... (V8Knobs keys): odd cycles run with those verify-kernel knobs, even cycles with the
     // defaults, so two kernel variants are timed under the same GPU conditions (GPU ms per cycle by parity;
@@ -491,7 +504,52 @@ int main(int argc, char** argv) {
         gap_sum += e->gpu_start_host_ms() - e1->gpu_end_host_ms();  // GPU idle between the drafting pass and the verify
       }
       if (cycles > 0) ab_ms[cycles & 1].push_back(gms);  // the first cycle includes the first drafting half
-      const int a = dfl->accepted();
+      dfl->observe(gms);  // KFlash: the budget reads the cycle's outcome and GPU time (drafting half + verify)
+      const int a_cycle = dfl->accepted();
+      if (lat) {
+        const int V = m.config().vocab;
+        const int* tkl = s.tokens();
+        const int32_t head[4] = {P, a_cycle, dfl->verified(K), tkl[P]};
+        fwrite(head, 4, 4, lat);
+        fwrite(m.samples(), 4, 8, lat);
+        fwrite(dfl->cand_ids(), 4, 7 * 16, lat);
+        fwrite(dfl->cand_vals(), 4, 7 * 16, lat);
+        fwrite(dfl->edges(), 4, 7 * 16 * 16, lat);
+        fwrite(dfl->walk_scores(), 4, 7 * 16, lat);
+        fwrite(dfl->walk_k(), 4, 7, lat);
+        fwrite(dfl->qprob(), 4, 7 * 16, lat);
+        for (int r = 0; r < 8; ++r) {  // the target's row r: top-16 (ids, logits), log-sum-exp, the candidates' logits
+          const float* l = m.logits() + size_t(r) * V;
+          float mx = l[0];
+          for (int v = 1; v < V; ++v) mx = std::max(mx, l[v]);
+          double z = 0;
+          for (int v = 0; v < V; ++v) z += std::exp(double(l[v] - mx));
+          std::vector<std::pair<float, int>> top;
+          top.reserve(17);
+          for (int v = 0; v < V; ++v) {
+            if (top.size() == 16 && l[v] <= top.back().first) continue;
+            auto it = std::find_if(top.begin(), top.end(), [&](const auto& x) { return l[v] > x.first; });
+            top.insert(it, {l[v], v});
+            if (top.size() > 16) top.pop_back();
+          }
+          int32_t ti[16];
+          float tv[16], cl[16];
+          for (int k = 0; k < 16; ++k) {
+            ti[k] = top[k].second;
+            tv[k] = top[k].first;
+            cl[k] = r < 7 ? l[dfl->cand_ids()[r * 16 + k]] : 0.0f;
+          }
+          const float lse = float(mx + std::log(z));
+          fwrite(ti, 4, 16, lat);
+          fwrite(tv, 4, 16, lat);
+          fwrite(&lse, 4, 1, lat);
+          fwrite(cl, 4, 16, lat);
+        }
+      }
+      // NI_DFLASH_STEP1: keep only the first token, the verify's row-0 sample (the accepted d_0 at T > 0 is a
+      // speculative-sampling draw, not the plain sampler's)
+      if (step1) s.tokens()[P + 1] = m.samples()[0];
+      const int a = step1 ? 0 : a_cycle;
       const int* tk = s.tokens();
       if (trace)
         fprintf(stderr, "P=%d a=%d chain=%d,%d,%d,%d,%d,%d,%d next=%d wall=%.2fms gpu=%.2fms\n", P, a, tk[P + 1],
@@ -531,10 +589,11 @@ int main(int argc, char** argv) {
           div_tok[0] = ref[out.size()];
           div_tok[1] = tk[P + i];
           const int V = m.config().vocab;
-          const float* row = m.logits() + size_t(i - 1) * V;  // verify row i-1 predicts position P+i
+          // verify row i-1 predicts position P+i (a tree: the row of the accepted path's (i-1)-th node)
+          div_row = dfl->tree() ? s.pend_path.as<int>()[i - 1] : i - 1;
+          const float* row = m.logits() + size_t(div_row) * V;
           div_logit[0] = row[div_tok[0]];
           div_logit[1] = row[div_tok[1]];
-          div_row = i - 1;
           div_P = P;
         }
         out.push_back(tk[P + i]);
@@ -563,6 +622,7 @@ int main(int argc, char** argv) {
     if (next_draft) next_draft->wait();
     double td = now_ms() - ts;
     if (conf) fclose(conf);
+    if (lat) fclose(lat);
     if (Encoder::profiling()) Encoder::profile_report(cycles);
     printf("ids:");
     for (int t : out) printf(" %d", t);
@@ -577,6 +637,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "; %.2f proposals verified per cycle; acceptance by position", double(verified_sum) / std::max(cycles, 1));
     for (int i = 0; i < K; ++i) fprintf(stderr, " %.2f", reached[i] ? double(acc_pos[i]) / reached[i] : 0.0);
     fprintf(stderr, "\n");
+    if (dfl->tree() && dfl->budget()) fprintf(stderr, "%s\n", dfl->budget()->summary().c_str());
     if (getenv("NI_CYCLE_TRACE") && ntr)
       fprintf(stderr, "cycle trace (ms, mean of %d): host encodes the verify %.3f | GPU idle verify->draft %.3f, draft %.3f, "
               "idle draft->verify %.3f, verify %.3f | verify commit->start %.3f, host wake-up %.3f\n", ntr, tr[0] / ntr,

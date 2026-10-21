@@ -136,6 +136,7 @@ struct V8Knobs {
   int skip = 0;
   int pad = 0;  // timing only: this many empty dispatches after every verify GEMM (the per-dispatch cost, with NI_AB)
   int tw = 1;   // the dense 4-bit verify GEMMs on the GPU's matrix units (qmm8t; Apple10 = M5 and macOS 26, else off)
+  int twm = 1;  // with tw: the dense MLP's gate|up and down GEMMs on qmm8t as well (NI_V8_TWM; 0 = the MMA kernels)
   // fused verify passes (verify8_fuse.metal, bitwise the passes they replace): 1 = MoE combine + the next norm's X8
   // table (and qmm8t's T table with tw), 4 = GDN prep with the rows' norms reduced together (the MoE top-k + plan
   // fusion is moe8_plan's own: tkp)
@@ -147,7 +148,7 @@ struct V8Knobs {
   int dfl = 0;  // drafter experiments (DFlash2::encode_draft_impl): variant bits, A/B'd per cycle with NI_AB
 };
 V8Knobs& v8_knobs();
-// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw, fuse, emu, shs,
+// "key=value,..." over a copy of `base` (keys: cm, pair, kplan, gusplit, gdnsplit, prepu, skip, pad, tw, twm, fuse, emu, shs,
 // split, tkp, dfl); unknown keys are fatal
 V8Knobs v8_knobs_parse(const char* spec, V8Knobs base);
 
@@ -320,6 +321,7 @@ class Qwen35 : public Model {
   // its rows again, so the hook must stay armed until the chunk has completed or been rerun.
   void set_capture(const CaptureHook* h) { cap_ = h; }
   const QLinear& embed_table() const { return embed_; }
+  const std::string& model_dir() const { return dir_; }
   const QLinear& lm_head() const { return lm_head_; }
   // Drafter's dynamic verify depth (DFlash2, MoE only): while set, the 8-row verify routes experts only
   // for rows < min(R, rows[0]) (uint read by the GPU); later rows' outputs are garbage and must not be used.
@@ -328,6 +330,18 @@ class Qwen35 : public Model {
   // passes for 1-2-row experts): a row's logits then depend only on the rows before it, not on how the
   // other rows route. A speculative sampler that needs p(. | prefix) exactly sets it (~3% slower verify).
   void set_verify_moe_exact(bool on) { v8_moe_exact_ = on; }
+  // KFlash tree verifies: while set, the 8-row verify's rows are a tree (tree = the KFlash tree descriptor,
+  // src/kernels/kflash.h: parents, depths, ancestor-or-self masks): row t's token takes position pos + depth(t) (RoPE,
+  // its sample's uniform), its attention sees the history and its ancestors' rows, its GDN conv window and recurrent
+  // state are its ancestors' fold. The rows' K/V stay in cache rows pos + t and their tape in rows t until the
+  // acceptance (kf_accept) writes the accepted path to s.pend_path, moves its K/V (encode_kv_tree_compact) and sets
+  // s.pend_tree: the next pass (or encode_flush) folds tape rows pend_path[0 .. n_pend).
+  void set_verify_tree(const Buffer* tree) { v8_tree_ = tree; }
+  // the 8-row verify can run a tree (its attention on attn8m, the split GDN step)
+  bool verify_tree_ok() const;
+  // After a tree verify at pos: the K/V rows of the accepted path (the descriptor's, kf_accept) move to positions
+  // pos + i (every attention layer)
+  void encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& tree);
   // dev (tools/bench_verify8): the last verify's MoE expert passes again with layer li's weights (timing only)
   void moe8_replay(Encoder& e, int li, int mask);
   // The 8-row verify GEMMs, for other 8-row passes (the DFlash2 drafter). Inputs are X8 tables
@@ -343,8 +357,10 @@ class Qwen35 : public Model {
   void enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
                 bool x2 = false, const Buffer* tt = nullptr);
   // h = half(silu(X Wg^T) * (X Wu^T)) written as the down projection's X8 table h + sums hs (4-bit, N % 64 == 0)
-  void enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-               const Buffer& h, const Buffer& hs);
+  // tt: the inputs' T table (qmm8t for gate|up); ht: also write h as a T table there (split path only). Returns
+  // whether ht was written.
+  bool enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
+               const Buffer& h, const Buffer& hs, const Buffer* tt = nullptr, const Buffer* ht = nullptr);
   // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
   // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
   Buffer verify_cand_vals() const { return cand_v_; }
@@ -549,6 +565,7 @@ class Qwen35 : public Model {
   const CaptureHook* cap_ = nullptr;
   const Buffer* v8_rlim_ = nullptr;
   bool v8_moe_exact_ = false;
+  const Buffer* v8_tree_ = nullptr;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 

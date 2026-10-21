@@ -38,6 +38,7 @@ class DSpark : public NhDrafter {
   void disarm() override;
   void encode_commit(Encoder& e, LiliSeq& d, int m) override;
   void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) override;
+  void encode_draft_tree(Encoder& e, Seq& s, LiliSeq& d, int P, const Buffer& kfp) override;
   bool chains() const override { return chain_; }
   // the last drafting pass's candidates [7][K] (ids, log-probs), the Markov head's corrected log-probs [7][K] and
   // picks [7] (measurements; once its command buffer completed)
@@ -69,8 +70,10 @@ class DSpark : public NhDrafter {
   // the commit (chained: the ring takes the first m rows, m from cyc_) and the drafting pass (chained: the positions
   // from cyc_, written on the GPU by nh_dsp_cycle)
   void enc_commit(Encoder& e, LiliSeq& d, const Buffer& feat, int R, int pos0, bool chained);
-  void enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained);
+  void enc_draft(Encoder& e, Seq& s, LiliSeq& d, int P, bool chained, bool walk);
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
+  // the drafting pass up to each slot's top-K candidates (cand_, clp_)
+  void encode_pass(Encoder& e, Seq& s, LiliSeq& d, int P);
   // y = W x for M rows of half X: a repacked Q8 matrix (xq8_) on nh_xq8_v8 (M <= 8), else enc_gemm
   void gemm_q8(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi);
   void norm_half(Encoder& e, const Buffer& x, const Buffer& w, const Buffer& y, int R);  // RMSNorm rows into half
@@ -102,6 +105,7 @@ class DSpark : public NhDrafter {
   int pf_n_ = 0, pf_lo_ = 0;
   Buffer pfeat_, pfeat_h_, vfeat_;
   Buffer x_, t2_, q_, ao_, gt_, logits_, cv_, ci_, ms_, cand_, clp_, qlp_, picks_;
+  Buffer tlq_;  // KFlash: [S][K][K] log q of each candidate after each candidate of the slot before (nh_dsp_table)
   Buffer cg_, cgh_, ck_, rscale_, xh_;
   Buffer cyc_;   // a chained drafting half's parameters (nh_dsp_cycle)
   Buffer rope_;  // the block's RoPE table (nh_dsp_rope_tab)

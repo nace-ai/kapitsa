@@ -2,3 +2,5 @@ build/
 *.bin
 .DS_Store
 internal/
+__pycache__/
+.ruff_cache/

@@ -27,7 +27,14 @@ they decode.
 4. **Draft and verify.** Qwen uses its block drafter when available (DFlash2 on the 35B and 27B, DFlash on the 4B),
    otherwise its MTP head where supported. Nemotron uses a block drafter: LiLiCorr (Bolt, Super-VL) or DSpark
    (Lightning). The target verifies proposed tokens; accepted tokens advance the sequence, and rejected proposals do
-   not become committed recurrent history. Plain generation is available with `--spec 0`.
+   not become committed recurrent history. KFlash (every drafter by default; `NI_KFLASH=0` keeps chains): the
+   drafter's candidates are verified as a best-first tree instead of one chain: each verify row attends to its
+   ancestors only, the recurrent layers run from its own branch's state, and the longest branch that agrees with the
+   target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
+   count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
+   models (27B, 4B); on MoE targets (the Qwen 35B-A3B, the Nemotron drafters), whose verify pays per row for its
+   experts, 1 to 8 rows per pass, the GPU routing experts (and running the recurrent step and the sampler) for those
+   rows alone. Plain generation is available with `--spec 0`.
 5. **Stream and retain state.** The output parser separates content, reasoning and complete tool calls. The engine
    retains the slot for follow-ups and can prefill the rendered assistant history while idle.
 
@@ -120,7 +127,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h) |
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal) |
-| Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h) |
+| Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |

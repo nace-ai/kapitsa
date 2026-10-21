@@ -353,6 +353,19 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       logi("Nemotron-H: no block drafter found next to %s", opts_.model_dir.c_str());
     } else {
       lili_ = NhDrafter::open(*nh_, lp.dflash);
+      // KFlash's one rule, as on the Qwen draft models: trees on every target (the budget picks 1 .. 8 live rows per
+      // cycle; the verify runs those alone); NI_KFLASH=0 keeps the drafter's chains
+      const char* kfv = getenv("NI_KFLASH");
+      if (!(kfv && *kfv) || atoi(kfv) != 0) {
+        // the budget's cache: this model, drafter and chip
+        std::string key = opts_.model_dir.substr(opts_.model_dir.find_last_of('/') + 1) + "-" + lili_->name() + "-" +
+                          Gpu::get().name();
+        for (char& c : key)
+          if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '.') c = '_';
+        kf_budget_ = std::make_unique<KfBudget>(key);
+        kf_params_ = Gpu::get().alloc(sizeof(KfParams), "kf_params");
+        logi("KFlash: tree drafting on %s (budget cache %s)", lili_->name(), key.c_str());
+      }
     }
   }
   // A dense Nemotron-H model (Nemotron Nano) has no block drafter: prompt lookup drafts up to K tokens per cycle
@@ -418,6 +431,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
                                                " drafts per cycle)"
+                         : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
                          : dfl_ ? "DFlash2 speculative decoding (verify " + std::to_string(DFlash2::verify_depth()) + " of 7)"
                          : spec_ ? "MTP speculative decoding depth " + std::to_string(opts_.spec_depth)
                          : dory_spec_ > 0 ? "speculative decoding (" +
@@ -436,6 +450,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
 }
 
 Engine::~Engine() = default;
+
+void Engine::save_kflash() {
+  if (kf_budget_) kf_budget_->save();
+  if (dfl_ && dfl_->budget()) dfl_->budget()->save();
+}
 
 size_t default_mem_budget() {
   if (const char* v = getenv("NI_MEM_BUDGET"); v && *v) return size_t(atof(v) * 1e9);
@@ -2014,12 +2033,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const bool chain = lili_->chains();
     int P = n, m_prev = 0;
     req_cycles = 0;
+    // KFlash: the drafting pass builds a tree under the budget, the verify checks it as a tree and the acceptance keeps
+    // the longest root path agreeing with the rows' own samples; the kept rows are that path's (Seq::pend_path)
+    const bool kft = kf_budget_ != nullptr;
+    auto commit_kept = [&](Encoder& e) {
+      if (m_prev <= 0) return;
+      if (kft) lili_->encode_commit_path(e, d, m_prev, s.pend_path);
+      else lili_->encode_commit(e, d, m_prev);
+    };
     std::unique_ptr<Encoder> next;  // the coming cycle's committed drafting half
     // parked: the rows the last cycle kept go into the ring now (the verify's captured features are shared)
     auto park = [&] {
       if (m_prev > 0) {
         auto ep = g.begin();
-        lili_->encode_commit(*ep, d, m_prev);
+        commit_kept(*ep);
         ep->commit_and_wait();
         m_prev = 0;
       }
@@ -2036,30 +2063,43 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
           break;
         }
         next = g.begin();
-        if (m_prev > 0) lili_->encode_commit(*next, d, m_prev);
+        commit_kept(*next);
         m_prev = 0;
-        lili_->encode_draft(*next, s, d, P);
+        if (kft) {
+          kf_budget_->write(*kf_params_.as<KfParams>());  // (the GPU is done with it: the last cycle completed)
+          lili_->encode_draft_tree(*next, s, d, P, kf_params_);
+        } else {
+          lili_->encode_draft(*next, s, d, P);
+        }
         next->commit();
       }
-      // the drafting half starts on the GPU while the host encodes the verify half
-      next.reset();
+      // the drafting half starts on the GPU while the host encodes the verify half (a KFlash cycle's: no chaining, so
+      // the budget reads its GPU time with the verify's)
+      const auto draft = std::move(next);
       auto e2 = nh_->grouped_passes() ? g.begin_grouped() : g.begin();
       lili_->arm_verify(P);
       nh_->set_dynamic_rows(true);  // the drafter's pass chose how many of the block's rows to verify
+      nh_->set_tree(kft);
       nh_->encode_verify(*e2, s, P, B);
       lili_->disarm();
-      nh_->encode_accept(*e2, s, P, B, B - 1, sp);
+      if (kft) nh_->encode_accept_tree(*e2, s, P, sp);
+      else nh_->encode_accept(*e2, s, P, B, B - 1, sp);
+      nh_->set_tree(false);
       nh_->set_dynamic_rows(false);
       e2->commit();
       // parks after this verify (no chained drafting half): another request waits for the GPU or the batch wants this
-      // one; the next anchor is at most P + 8, whose cycle must fit without growing the KV cache
+      // one; the next anchor is at most P + 8, whose cycle must fit without growing the KV cache. (KFlash trees: the
+      // drafting pass builds the next cycle's tree from the host's accepted path, so they never chain.)
       const bool join = batch_wanted(), turn = !join && contended();
-      if (chain && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
+      if (chain && !kft && !join && !turn && P + 8 + 2 * B + 2 <= s.cap) {
         next = g.begin();
         lili_->encode_draft_chained(*next, s, d, P);
         next->commit();
       }
       e2->wait();
+      // KFlash: the budget reads the cycle's outcome and its GPU time, the drafting half's and the verify's (as every
+      // backend and tool measures it)
+      if (kft) kf_budget_->observe(nh_->tree_buf().as<int32_t>(), draft->gpu_ms() + e2->gpu_ms());
       const int a = nh_->accepted();
       const int* tk = s.tokens();
       int m = 0;
@@ -2074,8 +2114,18 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++req_cycles;
       spec_accepted_ += m;
       cycle_done(m);
-      if (trace_path) trace_fn(nh_->logits(), m, tk + P + 1);
-      nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
+      if (trace_path && kft) {  // (a tree's rows: the accepted path's, in order)
+        const int V = nh_->vocab();
+        const int32_t* t = nh_->tree_buf().as<int32_t>();
+        std::vector<float> rows(size_t(m) * size_t(V));
+        for (int j = 0; j < m; ++j)
+          memcpy(rows.data() + size_t(j) * V, nh_->logits() + size_t(t[kf::kPath + j]) * V, size_t(V) * 4);
+        trace_fn(rows.data(), m, tk + P + 1);
+      } else if (trace_path) {
+        trace_fn(nh_->logits(), m, tk + P + 1);
+      }
+      if (kft) nh_->commit_rows_tree(s, m);  // the accepted path's first m rows are fed
+      else nh_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       if (next) {  // the chained half commits all a + 1 rows to the ring (m < a + 1: a stop inside them, the end)
         d.ctx = P + m;
         d.hi = std::max(d.hi, P + a + 1);
@@ -2090,10 +2140,14 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       }
     }
     auto e3 = g.begin();  // (behind a chained drafting half the loop ended with, if any)
-    if (m_prev > 0) lili_->encode_commit(*e3, d, m_prev);
+    commit_kept(*e3);
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
+    if (kft && req_cycles > 0) {
+      logi("%s", kf_budget_->summary().c_str());
+      kf_budget_->save(KfBudget::kSaveEvery);
+    }
   } else if (dfl_) {
     // DFlash2, double-buffered: each cycle's verify (8-row target forward with captures + on-GPU
     // acceptance) is committed, then right behind it the NEXT cycle's drafting half (ring commit of the
@@ -2138,7 +2192,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         res.context_full = true;
         break;
       }
-      next_draft.reset();
+      const auto draft = std::move(next_draft);  // this cycle's drafting half (the budget reads its GPU time)
       auto e2 = g.begin();
       dfl_->encode_cycle_verify(*e2, s, P, K, sp);
       e2->commit();
@@ -2162,6 +2216,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
         next_draft->commit();
       }
       e2->wait();
+      // KFlash: the budget reads the cycle's outcome and its GPU time, the drafting half's (done before the verify
+      // started) and the verify's, as ni_run measures it
+      dfl_->observe(draft->gpu_ms() + e2->gpu_ms());
       const int a = dfl_->accepted();
       a_last = a;
       const int* tk = s.tokens();
@@ -2177,7 +2234,15 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       ++req_cycles;
       spec_accepted_ += m;
       cycle_done(m);
-      if (trace_path) trace_fn(q35_->logits(), m, tk + P + 1);
+      if (trace_path && dfl_->tree()) {  // the accepted path's verify rows (tree slots), in order
+        const size_t V = size_t(model_->vocab());
+        std::vector<float> rows(size_t(m) * V);
+        for (int j = 0; j < m; ++j)
+          memcpy(rows.data() + size_t(j) * V, q35_->logits() + size_t(s.pend_path.as<int>()[j]) * V, V * 4);
+        trace_fn(rows.data(), m, tk + P + 1);
+      } else if (trace_path) {
+        trace_fn(q35_->logits(), m, tk + P + 1);
+      }
       q35_->commit_rows(s, m);  // rows P .. P+m-1 are fed; tk[P+m] is the new anchor
       P += m;
       d.ctx = P;  // the committed drafting half (if any) puts these rows into the ring
@@ -2219,6 +2284,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     q35_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
+    if (dfl_->tree() && dfl_->budget() && req_cycles > 0) {
+      logi("%s", dfl_->budget()->summary().c_str());
+      dfl_->budget()->save(KfBudget::kSaveEvery);
+    }
   } else if (dory_spec_ > 0) {
     // Dory speculative decoding (per-loop KV). Prompt lookup: when the last tokens occurred earlier in the
     // conversation, the tokens that followed them are the drafts, and one pass of the full loop count verifies them

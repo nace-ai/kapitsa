@@ -1,4 +1,5 @@
 #include "model/nemotron_h.h"
+#include "model/kflash_budget.h"
 #include "ane/ffn_split.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -52,7 +53,10 @@ struct SsmP {
   uint32_t T, pos0, write, zx_stride, NH, HD, DS, NG;
 };
 struct RingP {
-  uint32_t T, pos0, zx_stride, DI, CH;
+  uint32_t T, pos0, zx_stride, DI, CH, ptree;
+};
+struct Ssm1P {
+  uint32_t np, ptree;
 };
 struct KvP {
   uint32_t R, pos0, cap, Hkv, HD;
@@ -493,7 +497,7 @@ void NemotronH::prewarm_pipelines() {
                                    "nh_lili", "nh_cand", "nh_dconv", "nh_qk_norm", "nh_swiglu", "nh_add", "nh_bias",
                                    "nh_block_tok", "nh_anchor", "nh_iq2_fill_tables2", "topk_stage1", "sample_stage2",
                                    "copy_u32", "kv_regrow", "nh_x4_", "nh_x2_", "nh_x8_", "nh_xb_", "nh_dsp_",
-                                   "nh_x4t", "nh_x2t", "nh_ssd", "nh_xq8_"};
+                                   "nh_kv_tree", "nh_kf_", "nh_x4t", "nh_x2t", "nh_ssd", "nh_xq8_"};
   // the kernels only a dense model runs (the tail variants, head dim 80's scan, 5-head prefill attention, layout L2's
   // relu^2 decode, the short scans of several rows per simdgroup but the M5's nh_ssm1r4): not created for the MoE
   // models, whose prewarm stays as it was
@@ -1136,6 +1140,8 @@ void NemotronH::alloc_buffers() {
   if (const char* v = getenv("NI_NH_ATTN_CHUNK")) attn_chunk_ = std::max(32, atoi(v));
   if (const char* v = getenv("NI_NH_MERGE_FLUSH")) merge_flush_ = atoi(v) != 0;
   acc_ = g.alloc(64, "nh_accepted");
+  tree_ = g.alloc(kf::kWords * 4, "nh_kf_tree");
+  memset(tree_.ptr(), 0, tree_.size);
   route_ctr_ = g.alloc(16, "nh_route_counter");
   memset(route_ctr_.ptr(), 0, 16);
   moecnt_ = g.alloc(size_t(kMaxRows) * ((size_t(std::max(1, cfg_.latent)) + 31) / 32) * 4 + 16, "nh_moe_counters");
@@ -1354,6 +1360,7 @@ std::unique_ptr<Seq> NemotronH::new_seq(int limit, int initial) {
       s->pend_qkv.push_back(Buffer{});
     }
   }
+  s->pend_path = g.alloc(size_t(kf::kPathWords) * 4, "nh_pend_path");  // (KFlash tree verifies: the accepted path)
   const int cap = initial < 0 ? limit : std::min(initial, limit);
   if (cap > 0 && !reserve(*s, cap)) fatal("insufficient memory for a %d-token KV cache", cap);
   reset(*s);
@@ -1412,6 +1419,7 @@ void NemotronH::drop_kv(Seq& s) {
 
 void NemotronH::reset(Seq& s) {
   s.n_pend = 0;
+  s.pend_tree = false;
   for (auto& b : s.conv)
     if (b) memset(b.ptr(), 0, b.size);
   for (auto& b : s.rec)
@@ -1450,6 +1458,7 @@ void NemotronH::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
 
 void NemotronH::restore(Encoder& e, Seq& s, const Checkpoint& c) {
   s.n_pend = 0;
+  s.pend_tree = false;
   for (int i = 0; i < cfg_.layers; ++i)
     if (cfg_.kind[size_t(i)] == 'M') {
       enc_copy(e, c.conv[size_t(i)], s.conv[size_t(i)]);
@@ -1660,9 +1669,14 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   const NhLayer& L = layers_[size_t(li)];
   const SsmP p{uint32_t(T), uint32_t(pos0), write ? 1u : 0u, uint32_t(cfg_.in_proj()), uint32_t(cfg_.n_head),
                uint32_t(cfg_.head_dim), uint32_t(cfg_.d_state), uint32_t(cfg_.n_group)};
+  // KFlash: a tree verify's rows (each row's state its parent's: nh_ssm1_tree), and pending rows that are the last tree
+  // verify's accepted path (zp rows s.pend_path[0 .. np))
+  const bool tree = tree_on_ && !write && T > 0;
+  const uint32_t ptree = s.pend_tree && np > 0 ? 1u : 0u;
   // short passes (decode, verify, flush): one simdgroup per state row (NI_NH_SSM1=0: the head-per-threadgroup kernel)
   static const bool ssm1 = !getenv("NI_NH_SSM1") || atoi(getenv("NI_NH_SSM1")) != 0;
-  const bool short_pass = (ssm1 || np > 0) && T <= kMaxRows && cfg_.head_dim % 8 == 0 && cfg_.d_state == 128;
+  const bool short_pass = (ssm1 || np > 0 || tree) && T <= kMaxRows && cfg_.head_dim % 8 == 0 && cfg_.d_state == 128;
+  if (tree && !short_pass) fatal("NemotronH: a tree verify of %d rows needs the short-pass scan", T);
   // a dense model's short passes (head dim 80): nh_ssm1r5, 5 rows per simdgroup, so the group's B / C conv is staged
   // once per 40 state rows instead of 8, the same outputs to the bit (one decode row on an M1 Pro: the Nano 4B's 96
   // heads 62 against 110 us, the 9B v2's 128 heads 79 against 144; decoding 1.5% / 4% faster; 10 rows per simdgroup
@@ -1671,7 +1685,7 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   // NI_NH_SSM1R=0 / 2 / 4 / 5 / 8 / 10 picks nh_ssm1 / nh_ssm1r<n>.
   static const int rps_env = getenv("NI_NH_SSM1R") ? atoi(getenv("NI_NH_SSM1R")) : -1;
   const int rps_want = rps_env >= 0 ? rps_env : dense_ ? 5 : Gpu::get().apple10() ? 4 : 0;
-  const int rps = short_pass && (rps_want == 2 || rps_want == 4 || rps_want == 5 || rps_want == 8 || rps_want == 10) &&
+  const int rps = short_pass && !tree && (rps_want == 2 || rps_want == 4 || rps_want == 5 || rps_want == 8 || rps_want == 10) &&
                           cfg_.head_dim % (8 * rps_want) == 0
                       ? rps_want
                       : 0;
@@ -1716,7 +1730,9 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   }
   if ((parts & 1) && !pc) {
   // (the long passes: a head per threadgroup of 4 x head_dim threads; nh_ssm_h80 for the Nano models' head dim 80)
-  e.use(pipe(rps ? "nh_ssm1r" + std::to_string(rps) : short_pass ? "nh_ssm1" : cfg_.head_dim == 80 ? "nh_ssm_h80" : "nh_ssm"));
+  e.use(pipe(tree ? "nh_ssm1_tree"
+                  : rps ? "nh_ssm1r" + std::to_string(rps)
+                        : short_pass ? "nh_ssm1" : cfg_.head_dim == 80 ? "nh_ssm_h80" : "nh_ssm"));
   e.buf(0, zx);
   e.buf(1, s.conv[size_t(li)]);
   e.buf(2, s.rec[size_t(li)]);
@@ -1728,31 +1744,35 @@ void NemotronH::enc_ssm(Encoder& e, Seq& s, int li, const Buffer& zx, int T, int
   e.buf(8, L.dt_bias);
   e.val(9, p);
   e.buf(10, write ? live_all_ : live());
-  const uint32_t npu = uint32_t(np);
+  const Ssm1P q{uint32_t(np), ptree};
   e.buf(11, zp ? *zp : zx);
-  e.val(12, npu);
+  e.val(12, q);
+  e.buf(13, s.pend_path);
+  if (tree) e.buf(14, tree_);
   if (short_pass) e.dispatch(uint32_t(cfg_.n_head * cfg_.head_dim / (8 * (rps ? rps : 1))), 1, 1, 256);
   else e.dispatch(uint32_t(cfg_.n_head), 1, 1, uint32_t(4 * cfg_.head_dim));
   }
   if (!(parts & 2)) return;
   if (np > 0) {  // the committed pending rows' raw xBC into the ring (after every head has read it)
     const uint32_t CH = uint32_t(cfg_.conv_ch());
-    const RingP rp{uint32_t(np), uint32_t(pos0 - np), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner), CH};
+    const RingP rp{uint32_t(np), uint32_t(pos0 - np), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner), CH, ptree};
     const uint32_t nn = CH * uint32_t(std::min(np, 3));
     e.use(pipe("nh_conv_ring"));
     e.buf(0, *zp);
     e.buf(1, s.conv[size_t(li)]);
     e.val(2, rp);
+    e.buf(3, s.pend_path);
     e.dispatch((nn + 255) / 256, 1, 1, 256);
   }
   if (write && T > 1) {  // (one row: nh_ssm writes its ring slot itself)
     const uint32_t CH = uint32_t(cfg_.conv_ch());
-    const RingP rp{uint32_t(T), uint32_t(pos0), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner), CH};
+    const RingP rp{uint32_t(T), uint32_t(pos0), uint32_t(cfg_.in_proj()), uint32_t(cfg_.d_inner), CH, 0u};
     const uint32_t n = CH * uint32_t(std::min(T, 3));
     e.use(pipe("nh_conv_ring"));
     e.buf(0, zx);
     e.buf(1, s.conv[size_t(li)]);
     e.val(2, rp);
+    e.buf(3, s.pend_path);
     e.dispatch((n + 255) / 256, 1, 1, 256);
   }
 }
@@ -1824,13 +1844,14 @@ void NemotronH::enc_attn(Encoder& e, Seq& s, int li, int pos0, int R) {
   const uint32_t nchunks = (uint32_t(L_max) + chunk - 1) / chunk;
   const AttnP ap{uint32_t(R), uint32_t(pos0), uint32_t(s.cap), uint32_t(cfg_.hq), uint32_t(cfg_.hkv), chunk, nchunks,
                  1.0f / std::sqrt(float(cfg_.hd))};
-  e.use(pipe("nh_attn_partial"));
+  e.use(pipe(tree_on_ ? "nh_attn_partial_tree" : "nh_attn_partial"));  // (a KFlash tree: rows see their ancestors)
   e.buf(0, q_);
   e.buf(1, s.kc[size_t(li)]);
   e.buf(2, s.vc[size_t(li)]);
   e.buf(3, part_o_);
   e.buf(4, part_ml_);
   e.val(5, ap);
+  if (tree_on_) e.buf(6, tree_);
   e.dispatch(nchunks, uint32_t(cfg_.hkv), uint32_t(R), uint32_t(32 * (cfg_.hq / cfg_.hkv)));
   // 2+ rows: the heads' outputs straight to half (o_proj's GEMM input)
   e.use(pipe(gm ? "nh_attn_reduce_h" : "nh_attn_reduce"));
@@ -2364,7 +2385,8 @@ void NemotronH::enc_rows(Encoder& e, Seq& s, int pos0, int R, bool commit) {
   pair_args_ = false;
   if (cap_) enc_capture(e, cfg_.layers, x_, pos0, R);  // (a drafter reading the trunk's output: slot `layers`)
   if (!commit) {
-    s.n_pend = R;  // until commit_rows() says how many were accepted
+    s.n_pend = R;  // until commit_rows() / commit_rows_tree() says which were accepted
+    s.pend_tree = false;
     s.pend_pos = pos0;
     s.pend_half = 1 - s.pend_half;
   }
@@ -2376,10 +2398,15 @@ void NemotronH::encode_flush(Encoder& e, Seq& s) {
     return;
   }
   const size_t half = size_t(kMaxRows) * cfg_.in_proj() * 4;
-  for (int i = 0; i < cfg_.layers; ++i)
-    if (cfg_.kind[size_t(i)] == 'M')
-      enc_ssm(e, s, i, s.pend_qkv[size_t(i)].view(size_t(s.pend_half) * half, half), s.n_pend, s.pend_pos, true, y_);
+  for (int i = 0; i < cfg_.layers; ++i) {
+    if (cfg_.kind[size_t(i)] != 'M') continue;
+    const Buffer zp = s.pend_qkv[size_t(i)].view(size_t(s.pend_half) * half, half);
+    // a tree verify's accepted path: committed as pending rows of an empty pass (the scan reads them by path)
+    if (s.pend_tree) enc_ssm(e, s, i, zp, 0, s.pend_pos + s.n_pend, false, y_, &zp, s.n_pend);
+    else enc_ssm(e, s, i, zp, s.n_pend, s.pend_pos, true, y_);
+  }
   s.n_pend = 0;
+  s.pend_tree = false;
 }
 
 void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_stride) {
@@ -2393,7 +2420,7 @@ void NemotronH::enc_head(Encoder& e, int R, const Buffer& out, size_t out_row_st
 }
 
 void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
-                           uint32_t step) {
+                           uint32_t step, const Buffer* dstep, size_t dstep_off) {
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   const TopkStageP ts{uint32_t(cfg_.vocab), K, 2048};
   const uint32_t ntg = (uint32_t(cfg_.vocab) + 2047) / 2048;
@@ -2404,12 +2431,13 @@ void NemotronH::enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens,
   e.val(3, ts);
   e.dispatch(ntg, 1, 1, 256);
   const SampleP p2{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, uint32_t(out_index)};
-  e.use(pipe("sample_stage2"));
+  e.use(pipe(dstep ? "sample_stage2_dstep" : "sample_stage2"));
   e.buf(0, cand_v_);
   e.buf(1, cand_i_);
   e.buf(2, tokens);
   e.buf(3, sprob_);
   e.val(4, p2);
+  if (dstep) e.buf(5, *dstep, dstep_off);
   e.dispatch(1, 1, 1, 1024);
 }
 
@@ -2621,6 +2649,7 @@ void NemotronH::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& 
   capture(cfg_.layers);  // (a drafter reading the trunk's output: DSpark)
   for (const VerifyGroup& gr : groups) {
     gr.s->n_pend = gr.R;  // until commit_rows() says how many were accepted
+    gr.s->pend_tree = false;
     gr.s->pend_pos = gr.pos;
     gr.s->pend_half = 1 - gr.s->pend_half;
   }
@@ -2670,6 +2699,37 @@ void NemotronH::encode_accept(Encoder& e, Seq& s, int pos, int R, int K, const S
   e.bytes(3, &ap, sizeof ap);
   e.buf(4, live());
   e.dispatch(1, 1, 1, 1);
+}
+
+void NemotronH::encode_accept_tree(Encoder& e, Seq& s, int pos, const SamplingParams& sp) {
+  // row r draws at position pos + depth(r): the tree buffer's depths
+  for (int r = 0; r < kMaxRows; ++r)
+    enc_sample(e, logits_.view(size_t(r) * cfg_.vocab * 4, size_t(cfg_.vocab) * 4), samp_, r, sp, uint32_t(pos), &tree_,
+               size_t(kf::kDep) * 4);
+  const struct {
+    uint32_t P, R, gst, pad;
+  } ap{uint32_t(pos), uint32_t(kMaxRows), 0u, 0u};
+  e.use(pipe("kf_accept"));  // (shared: src/kernels/kflash.h)
+  e.buf(0, samp_);
+  e.buf(1, s.tok);
+  e.buf(2, tree_);
+  e.buf(3, acc_);
+  e.bytes(4, &ap, sizeof ap);
+  e.buf(5, live());
+  e.buf(6, s.pend_path);
+  e.buf(7, live_all_);  // (no drafter state written: gst 0)
+  e.dispatch(1, 1, 1, 32);
+  // the accepted path's K/V into place (positions pos + 1 .. pos + a)
+  const KvP kp{uint32_t(kMaxRows), uint32_t(pos), uint32_t(s.cap), uint32_t(cfg_.hkv), uint32_t(cfg_.hd)};
+  for (int i = 0; i < cfg_.layers; ++i) {
+    if (cfg_.kind[size_t(i)] != 'A') continue;
+    e.use(pipe("nh_kv_tree_compact"));
+    e.buf(0, s.kc[size_t(i)]);
+    e.buf(1, s.vc[size_t(i)]);
+    e.buf(2, tree_);
+    e.val(3, kp);
+    e.dispatch(uint32_t(2 * cfg_.hkv), 1, 1, uint32_t(cfg_.hd));
+  }
 }
 
 void NemotronH::encode_logits_rows(Encoder& e, Seq& s, int pos0, int T, const Buffer& out) {

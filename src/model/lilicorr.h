@@ -78,6 +78,7 @@ class LiliCorr : public NhDrafter {
 
   // ---- drafting: block [tokens[P], mask x 7] at positions P..P+7 (d.ctx == P) -> tokens[P+1 .. P+7] ----
   void encode_draft(Encoder& e, Seq& s, LiliSeq& d, int P) override;
+  void encode_draft_tree(Encoder& e, Seq& s, LiliSeq& d, int P, const Buffer& kfp) override;
   const int* cand_ids() const { return cand_.as<int>(); }  // [7][8] of the last pass (tests)
   void debug_feature_stats() const;                        // magnitudes of the last prompt's captured features
 
@@ -103,6 +104,8 @@ class LiliCorr : public NhDrafter {
   // y = W x for M fp32 rows: one row on the matvec, more on the GEMM (x converted to half; scaled: per-row scale
   // for inputs that may leave half's range)
   void lin(Encoder& e, const NhMat& W, const Buffer& x, const Buffer& y, int M, int epi, bool scaled = false);
+  // the drafting pass up to the LiLiCorr head's vectors (cand_, clp_, inv_, outv_, aout_)
+  void encode_pass(Encoder& e, Seq& s, LiliSeq& d, int P);
   // y = W xh for M <= 8 half rows: nh_xq8_v8 for a matrix repacked for it (xq8_), else enc_gemm
   void gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& y, int M, int epi);
   bool is_xq8(const NhMat& W) const;
@@ -121,6 +124,7 @@ class LiliCorr : public NhDrafter {
   float dyn_ratio_ = 0.04f;
   uint32_t dyn_mode_ = 0;   // its acceptance estimate (NI_LILI_DYN_P): 0 drafter marginal, 1 LiLiCorr walk, 2 both
   Buffer picks_;            // the walk's chosen candidate per slot
+  Buffer tlq_;              // KFlash: [S][K][K] log q of each candidate after each candidate of the slot before
   std::unique_ptr<SafetensorsIndex> st_;  // while loading
   LiliConfig cfg_;
   std::vector<DLayer> dl_;

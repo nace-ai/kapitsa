@@ -34,6 +34,7 @@
 
 #include <httplib/httplib.h>
 
+#include <fcntl.h>
 #include <netdb.h>
 #include <sys/event.h>
 #include <sys/socket.h>
@@ -46,6 +47,7 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <mutex>
 #include <thread>
 #include <csignal>
 #include <ctime>
@@ -506,6 +508,81 @@ static void stream_reply(Engine& engine, const ChatRequest& r, std::shared_ptr<a
   });
 }
 
+// What the server keeps when it ends: the KFlash budgets' measurements (Engine::save_kflash: this Mac's cost per verify
+// row count, the drafter's calibration), which only the engine's destructor would write, and a server never ends by
+// returning: a signal stops it (Ctrl+C, SIGTERM from `kapitsa claude` or a service manager, SIGHUP), or its launcher's
+// exit (exit_with_parent). The engine also saves them between requests (KfBudget::kSaveEvery), for kill -9.
+static std::mutex g_stop_mu;
+static Engine* g_stop_engine = nullptr;  // while serve() serves (SaveOnStop)
+
+static void save_before_exit() {
+  std::lock_guard<std::mutex> lk(g_stop_mu);
+  if (g_stop_engine) g_stop_engine->save_kflash();
+}
+
+// A stop signal wakes a thread that saves, then takes its course as before: the terminal UI's handler (the status
+// block off the screen, term::guard_signals), else the default (the process ends as killed by the signal). A second
+// one while it saves ends the process at once. Signals ignored when the server started (nohup) stay ignored.
+static const int kStopSignals[] = {SIGINT, SIGTERM, SIGHUP};
+static struct sigaction g_stop_prev[3];
+static int g_stop_pipe[2] = {-1, -1};
+static volatile sig_atomic_t g_stopping = 0;
+
+static void pass_signal_on(int sig) {
+  for (int i = 0; i < 3; ++i)
+    if (kStopSignals[i] == sig) sigaction(sig, &g_stop_prev[i], nullptr);
+  raise(sig);  // from a handler: delivered when it returns, to the previous one
+}
+
+static void on_stop_signal(int sig) {
+  const char c = char(sig);
+  const bool again = g_stopping;
+  g_stopping = 1;
+  if (again || write(g_stop_pipe[1], &c, 1) != 1) pass_signal_on(sig);
+}
+
+// The stop handlers while it lives (serve(), from the engine's start); the previous ones come back after
+struct SaveOnStop {
+  explicit SaveOnStop(Engine& engine) {
+    {
+      std::lock_guard<std::mutex> lk(g_stop_mu);
+      g_stop_engine = &engine;
+    }
+    if (pipe(g_stop_pipe) != 0) return;
+    for (int fd : g_stop_pipe) fcntl(fd, F_SETFD, FD_CLOEXEC);
+    std::thread([] {
+      char c = 0;
+      ssize_t r;
+      while ((r = read(g_stop_pipe[0], &c, 1)) < 0 && errno == EINTR) {
+      }
+      if (r != 1) return;
+      save_before_exit();
+      pass_signal_on(c);  // on this thread: the previous handler runs here, or the default ends the process
+    }).detach();
+    struct sigaction sa {};
+    sa.sa_handler = on_stop_signal;
+    sa.sa_flags = SA_RESTART;
+    sigemptyset(&sa.sa_mask);
+    for (int i = 0; i < 3; ++i) {
+      sigaction(kStopSignals[i], nullptr, &g_stop_prev[i]);
+      if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &sa, nullptr);
+    }
+    handlers_ = true;
+  }
+  ~SaveOnStop() {
+    if (handlers_)
+      for (int i = 0; i < 3; ++i)
+        if (g_stop_prev[i].sa_handler != SIG_IGN) sigaction(kStopSignals[i], &g_stop_prev[i], nullptr);
+    std::lock_guard<std::mutex> lk(g_stop_mu);
+    g_stop_engine = nullptr;
+  }
+  SaveOnStop(const SaveOnStop&) = delete;
+  SaveOnStop& operator=(const SaveOnStop&) = delete;
+
+ private:
+  bool handlers_ = false;
+};
+
 // Started by `kapitsa claude|codex|opencode` (KAPITSA_PARENT_PID): exits when the launcher does, however it ends (kill -9
 // included), instead of holding the model's memory with nobody left to stop it.
 static void exit_with_parent() {
@@ -521,6 +598,7 @@ static void exit_with_parent() {
       return;
     }
     kevent(kq, nullptr, 0, &ev, 1, nullptr);
+    save_before_exit();
     _exit(0);
   }).detach();
 }
@@ -746,6 +824,8 @@ static int serve(int argc, char** argv, int first) {
   if (tui) ui::loading_begin(ref.name);
   Engine engine(opt);
   if (tui) ui::loading_end(ref.name);
+  if (tui) term::guard_signals();  // the status block's signal handlers, which the stop handlers pass the signal on to
+  SaveOnStop save_on_stop(engine);
 
   const time_t started = std::time(nullptr);
   char started_at[32];
