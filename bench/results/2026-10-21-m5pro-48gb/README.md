@@ -5,6 +5,9 @@ GEMMs, [#215](https://github.com/nace-ai/kapitsa/pull/215) attention, the Nemotr
 [bench/harness](../../harness/README.md): `compare_engines.py configs/kapitsa.json configs/lightning.json --skip agent`, the full
 protocol minus the agent session, one config at a time under the GPU lock. MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro, 48 GB, macOS 26.5.2, on AC power.
 Kapitsa 0.2.2: the first set (19:56-20:12 local, UTC+5) is b50f1fc (main after #239); the second set (22:00-22:30) records `git_head` a13f8fd, a commit on the #241 branch that differs from b50f1fc only in README, docs, poster and stored results (no source or build files), so it is the same engine.
+A third set (23:54) is current main at `3a5bbf0`, after [#243](https://github.com/nace-ai/kapitsa/pull/243) (ANE keepalive)
+and [#245](https://github.com/nace-ai/kapitsa/pull/245) (KFlash wide tree verify), a single 4B re-run because the 20:00 4B
+run above predates both.
 
 The README poster's M5 Pro cells for Kapitsa on the 27B, 35B-A3B and Lightning are the second set of runs below (22:00-22:30), prefill and
 decode from the same run; the 4B is not on the poster's M5 Pro panel any more. The first set (19:56-20:12) predates them and is kept. The
@@ -29,3 +32,10 @@ Second set (22:00-22:30, the poster):
 | `lightning-kapitsa-20261021-221051.json` | Lightning 30B, DSpark | 3,141 / 2,982 | 159.3 / 170.8 | none |
 | `q38-27b-mlxserve-dflash2-20261021-222511.json` | Qwen3.8 27B, mlx-serve 26.10.2, DFlash2 | 428 / 454 | 79.9 / 89.4 | none |
 | `q38-27b-kapitsa-20261021-220229.json` | Qwen3.8 27B, DFlash2 | 440 / 432 | 67.4 / 70.7 | contention: a browser used 14% of the GPU; not used, re-run as the 27B line above |
+
+Third set (23:54, current main `3a5bbf0`, on AC power in High Power mode, 0% foreign GPU): the 4B again, the same
+command and settings as the first set. The 20:00 run above is kept for the record.
+
+| Result file | Model | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Flags |
+| --- | --- | ---: | ---: | --- |
+| `q35-4b-kapitsa-20261021-235433.json` | Qwen3.5 4B, DFlash | 3,269 / 2,735 | 226.7 / 238.8 | none |

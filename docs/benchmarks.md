@@ -1455,6 +1455,14 @@ does. The Mac held about 6 GB in swap throughout. Result files, every run listed
 | llama.cpp b11669 (MTP, n-max 3; Q4_K_M) | 93.0 (90.2-97.1) | 103.4 (101.4-107.4) | 1,799 / 1,642 | 0.19 / 0.22 | 11.1 | pass |
 | LM Studio (MLX runtime 1.13.1) | 88.7 (87.8-90.5) | 92.0 (90.8-93.9) | 861 / 777 | 0.40 / 0.67 | 9.0 | pass |
 
+Kapitsa's row above is the 2026-10-19 session, and that build predates the M5 prefill kernels ([#205](https://github.com/nace-ai/kapitsa/pull/205),
+[#215](https://github.com/nace-ai/kapitsa/pull/215)). On current main (0.2.2, `3a5bbf0`, after [#243](https://github.com/nace-ai/kapitsa/pull/243)
+and [#245](https://github.com/nace-ai/kapitsa/pull/245)) the 4B reads **3,269 / 2,735 tok/s** at 4K / 16K and decodes **226.7 / 238.8 tok/s**
+(T = 0.6 / greedy), with cached follow-ups at 0.05 / 0.06 s and a peak footprint of 5.4 GB: flag-free, 0% foreign GPU, on AC power in High
+Power mode, [`q35-4b-kapitsa-20261021-235433.json`](../bench/results/2026-10-21-m5pro-48gb/README.md). The other engines' rows are still their
+2026-10-19 runs, so the columns are not side-by-side measurements and are read as stored: Kapitsa reads 1.15x oMLX's 2,842 at 4K and 1.03x its
+2,650 at 16K, ahead of every other engine's decode, and behind only mlx-vlm's 2,755 at 16K (0.7%).
+
 ### Qwen3.8-27B at 4-bit
 
 | Engine (setting) | Decode, T = 0.6 (tok/s) | Decode, greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak memory (GB) | Tool calls |
