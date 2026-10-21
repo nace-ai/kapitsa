@@ -11,6 +11,7 @@ R.RH_MIN = 88  # the grid has no prefill line, so its rows are shorter than the 
 
 out = Path(sys.argv[1])
 out.mkdir(parents=True, exist_ok=True)
+# The numbers below are a second copy of readme_images.json's: when the poster data changes, re-check this file.
 base = json.load(open(D / "readme_images.json"))
 by = {e["name"]: copy.deepcopy(e) for e in base["engines"]}
 ORDER = ["Kapitsa", "Splash", "mlx-serve", "oMLX", "Ollama", "MTPLX", "MLX", "llama.cpp", "LM Studio"]
@@ -45,7 +46,7 @@ data = {
         "subtitle": ["Decode tok/s of a 512-token coding answer, T 0.6, median of 5 · 4-bit weights · each engine in its fastest setup",
                      "Qwen3.8 27B · Qwen3.6 35B-A3B · Qwen3.5 4B · the newest releases, one harness, two MacBook Pros"],
         "footer": ["× can't run it (Splash: only the 27B and 35B, on an M3 or newer) · no spec: no speculative decoding · grey: share of the row's fastest",
-                   "Kapitsa 0.2 and Splash 1.4.0 measured 2026-10-21, the others' latest releases 2026-10-17 to 10-19 · github.com/nace-ai/kapitsa · kapitsa bench"],
+                   "Kapitsa 0.2 and Splash 1.4.0 measured 2026-10-21, the others' latest releases at that time · github.com/nace-ai/kapitsa · kapitsa bench"],
         "macs": [
             {"name": "MacBook Pro M4 Pro (2024) 48 GB", "rows": [
                 row("Qwen3.8 27B", [(63, K), (53, D2), (54, D2), (45, D2), (32, M), (36, M), (28, M), (18, M), (15, NS)]),
