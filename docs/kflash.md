@@ -225,8 +225,8 @@ ids as plain decoding. Separately, on the 4B, `logit_compare` of `logit_dump` fr
 found every row bitwise identical; that was not repeated on the 27B.
 
 So the tiles are opt-in: one tile is the setting the default's cost table is tuned for, and a Mac where the budget's
-measurements say a wider verify pays (the 27B and the 4B at 4-bit do, on prose and coding answers) can have it without
-paying the narrow cost elsewhere. With bf16 weights the verify is bound by memory instead: 16 rows cost 1.05× an 8-row
+cost table says a wider verify pays can have it without paying the narrow cost elsewhere. The cycle-time ratios are
+measured; the 27B's tok/s gain is within noise (the A/B above), so it is not claimed. With bf16 weights the verify is bound by memory instead: 16 rows cost 1.05× an 8-row
 verify, and the 4B ran 11-16% faster with the sizes forced.
 
 ### The drafters as published
