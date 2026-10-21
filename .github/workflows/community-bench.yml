@@ -85,7 +85,8 @@ jobs:
             --body "Rewritten by tools/community_table.py from bench/community/results after ${GITHUB_SHA::12}."; then
             # the repository's "Allow GitHub Actions to create and approve pull requests" is off: no branch left behind
             git push origin --delete "$branch"
-            echo "::error::GitHub Actions may not open pull requests here (Settings, Actions, General: Allow GitHub Actions to create and approve pull requests). Until then run python3 tools/community_table.py and land RESULTS.md in a pull request."
-            exit 1
+            # a warning, not a failure: the merge already happened and a red main hides real breakage; the review sweep lands RESULTS.md
+            echo "::warning::GitHub Actions may not open pull requests here (Settings, Actions, General: Allow GitHub Actions to create and approve pull requests). Until then run python3 tools/community_table.py and land RESULTS.md in a pull request."
+            exit 0
           fi
           gh pr merge "$branch" --squash --delete-branch
