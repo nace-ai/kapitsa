@@ -6,6 +6,7 @@
 // each row's top-8, group the (row, expert) pairs by distinct expert (moe8_plan) and read every
 // touched expert once for all its rows; the shared expert is one more 8-row tile.
 // Taken by encode_verify for R >= 5 (NI_V8=1: R >= 2); MTP verifies with R <= 4 keep their kernels.
+#include "kernels/kflash.h"
 #include "model/kparams.h"
 #include "model/qwen35.h"
 #include "util/log.h"
@@ -19,7 +20,8 @@ namespace ni {
 
 extern const char* const kTensorKernelSource;
 
-// The GPU's matrix units through Metal 4 tensor_ops (qmm8t): Apple10 (M5) on macOS 26
+// The GPU's matrix units through Metal 4 tensor_ops (qmm8t): Apple10 (M5) on macOS 26. (An M4 Pro runs tensor_ops too,
+// but qmm8t's operand layout, probed on the M5, gives it wrong logits: an M4 cannot stand in for an M5 in its tests.)
 static bool tw_supported() {
   static const bool ok = [] {
     if (Gpu::get().apple_family() < 10) return false;
@@ -134,15 +136,17 @@ void Qwen35::v8_alloc() {
   const int D = cfg_.hidden, VD = cfg_.lin_hv * cfg_.lin_dv;
   const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim, cfg_.dense_I, cfg_.moe_I, cfg_.shared_I, 64});
   if (W % 64) fatal("8-row verify: widths must be multiples of 64");
-  v8t_ = g.alloc(size_t(W) * 8 * 2, "x8_table");
-  v8s_ = g.alloc(size_t(W) / 64 * 8 * 4, "x8_sums");
-  v8tl_ = g.alloc(size_t(W) * 8 * 2, "x8_table_lo");
+  // row tiles: a wide tree verify's tables follow each other (set_tree_rows; MoE targets stay at one tile)
+  const size_t rt = cfg_.moe ? 1 : size_t(std::max(1, tree_rows_ / 8));
+  v8t_ = g.alloc(size_t(W) * 8 * 2 * rt, "x8_table");
+  v8s_ = g.alloc(size_t(W) / 64 * 8 * 4 * rt, "x8_sums");
+  v8tl_ = g.alloc(size_t(W) * 8 * 2 * rt, "x8_table_lo");
   if (tw_supported()) {
-    v8tt_ = g.alloc(size_t(W) * 8 * 2, "x8_table_t");
+    v8tt_ = g.alloc(size_t(W) * 8 * 2 * rt, "x8_table_t");
     g.compile_extra("tensor", kTensorKernelSource, true);
   }
-  v8sl_ = g.alloc(size_t(W) / 64 * 8 * 4, "x8_sums_lo");
-  const int tiles = cfg_.moe ? kMaxVerify * cfg_.top_k + 1 : 1;
+  v8sl_ = g.alloc(size_t(W) / 64 * 8 * 4 * rt, "x8_sums_lo");
+  const int tiles = cfg_.moe ? kMaxVerify * cfg_.top_k + 1 : int(rt);
   const int Ih = cfg_.moe ? std::max(cfg_.moe_I, cfg_.shared_I) : std::max(cfg_.dense_I, 64);
   v8h_ = g.alloc(size_t(tiles) * Ih * 8 * 2, "x8_h_tables");
   // per-head arrival counters of gdn_step_verify8s, one set per sequence of a batched pass (encode_verify_multi runs
@@ -150,8 +154,8 @@ void Qwen35::v8_alloc() {
   v8cnt_ = g.alloc((size_t(std::max(cfg_.lin_hv, 1)) * 4 + 16) * 8, "gdn8_counters");
   memset(v8cnt_.ptr(), 0, v8cnt_.size);
   if (!cfg_.moe) {
-    v8g_ = g.alloc(size_t(8) * cfg_.dense_I * 4, "x8_gate_rows");
-    v8u_ = g.alloc(size_t(8) * cfg_.dense_I * 4, "x8_up_rows");
+    v8g_ = g.alloc(size_t(8) * rt * cfg_.dense_I * 4, "x8_gate_rows");
+    v8u_ = g.alloc(size_t(8) * rt * cfg_.dense_I * 4, "x8_up_rows");
   }
   v8hs_ = g.alloc(size_t(tiles) * Ih / 64 * 8 * 4, "x8_h_sums");
   if (cfg_.moe) {
@@ -175,12 +179,148 @@ void Qwen35::v8_alloc() {
 
 bool Qwen35::v8_tw() const { return v8_knobs().tw && tw_supported() && v8tt_.size; }
 
+// ---- KFlash tree verifies wider than 8 rows (16 / 32 rows) ----
+bool Qwen35::verify_wide_ok() const {
+  if (cfg_.moe || !verify_tree_ok() || cfg_.dense_I % 256 || !v8_knobs().gusplit) return false;
+  // every X8 table of the pass on x8_prep2 (or the gated norm's), i.e. widths multiple of 256
+  for (const int K : {cfg_.hidden, cfg_.hq * cfg_.head_dim})
+    if (K % 256) return false;
+  return env_int("NI_V8_PREP", 2) != 1;
+}
+
+void Qwen35::set_tree_rows(int rows) {
+  rows = std::clamp((rows + 7) / 8 * 8, 8, kMaxTreeRows);
+  if (rows <= tree_rows_) return;
+  tree_rows_ = rows;
+  Gpu& g = Gpu::get();
+  auto regrow = [&](Buffer& b, size_t bytes, const char* label) {
+    if (b.size >= bytes) return;
+    g.release(b);
+    b = g.alloc(bytes, label);
+  };
+  const size_t V = size_t(cfg_.vocab), R = size_t(rows);
+  regrow(logits_, V * R * 4, "logits");
+  regrow(cand_v_, R * (V / 2048 + 2) * 64 * 4, "cand_v");
+  regrow(cand_i_, R * (V / 2048 + 2) * 64 * 4, "cand_i");
+  regrow(samp_, std::max<size_t>(64, R * 4), "samples");
+  if (v8_ready_) {  // the 8-row verify's buffers again, sized for the tiles
+    for (Buffer* b : {&v8g_, &v8u_, &v8cnt_, &v8tt_, &v8t_, &v8s_, &v8tl_, &v8sl_, &v8h_, &v8hs_, &v8tiles_, &v8nt_,
+                      &v8slot_, &v8args_, &v8out_, &v8sh_, &v8ustat_, &v8sm_, &v8hsc_, &v8xn_, &v8hse_, &v8sm2_,
+                      &v8hsc2_, &v8hse2_})
+      if (*b) g.release(*b);
+    v8_ready_ = false;
+    v8_alloc();
+  }
+}
+
+// a ring of descriptor regions (one per wide verify in flight): word 0 the count, then {x, y, z, flags} per grid
+static constexpr int kV8wRegions = 4, kV8wDesc = 64;
+
+void Qwen35::grow_tape(Encoder& e, Seq& s, int rows) {
+  Gpu& g = Gpu::get();
+  const size_t C = 2 * size_t(cfg_.lin_hk) * cfg_.lin_dk + size_t(cfg_.lin_hv) * cfg_.lin_dv;
+  const size_t Hv = size_t(cfg_.lin_hv);
+  auto grow = [&](Buffer& b, size_t per_row, const char* label) {
+    const size_t bytes = size_t(rows) * per_row;
+    if (b.size >= bytes) return;
+    Buffer nb = g.alloc(bytes, label);
+    enc_copy(e, b, nb);  // the pending rows the next pass folds (in order with the work before it)
+    e.on_completed([old = b]() mutable { Gpu::get().release(old); });  // passes encoded before it may still read it
+    b = nb;
+  };
+  for (int i = 0; i < cfg_.layers; ++i) {
+    if (!cfg_.is_linear[i]) continue;
+    grow(s.pend_qkv[i], C * 4, "pend_qkv");
+    grow(s.pend_k[i], Hv * cfg_.lin_dk * 4, "pend_k");
+    grow(s.pend_g[i], Hv * 4, "pend_g");
+    grow(s.pend_d[i], Hv * cfg_.lin_dv * 4, "pend_d");
+  }
+}
+
+void Qwen35::v8_wide_begin(Encoder& e, Seq& s, int R) {
+  if (!verify_wide_ok()) fatal("tree verify of %d rows: this model's verify runs 8 rows (verify_wide_ok)", R);
+  if (R > tree_rows_) fatal("tree verify of %d rows: the verify buffers hold %d (set_tree_rows)", R, tree_rows_);
+  Gpu& g = Gpu::get();
+  if (!v8w_desc_) {
+    v8w_desc_ = g.alloc(size_t(kV8wRegions) * kV8wDesc * 16, "v8w_desc");
+    v8w_args_ = g.alloc(size_t(kV8wRegions) * kV8wDesc * 16, "v8w_args");
+    memset(v8w_desc_.ptr(), 0, v8w_desc_.size);
+  }
+  for (int i = 0; i < cfg_.layers; ++i)  // the sequence's tape: kMaxTreeRows rows (once)
+    if (cfg_.is_linear[i]) {
+      if (s.pend_g[i].size < size_t(kMaxTreeRows) * cfg_.lin_hv * 4) grow_tape(e, s, kMaxTreeRows);
+      break;
+    }
+  v8w_R_ = R;
+  // NI_V8W_DIRECT=<tiles> (timing only, wrong unless the tree has that many live tiles): direct grids of that many
+  // tiles, the indirect dispatches' own cost
+  static const int direct = env_int("NI_V8W_DIRECT", 0);
+  if (direct > 0) {
+    v8w_host_nt_ = std::min(direct, R / 8);
+    return;
+  }
+  if (Encoder::profiling()) {
+    // NI_PROFILE commits every dispatch on its own: the tree is final once the work before this verify is done, so the
+    // host reads its live rows and the grids go out directly
+    g.begin()->commit_and_wait();
+    const int n = std::max(1, v8_tree_->as<int32_t>()[kf::kN]);
+    v8w_host_nt_ = std::min(R, (n + 7) / 8 * 8) / 8;
+    return;
+  }
+  v8w_host_nt_ = -1;
+  v8w_region_ = (v8w_region_ + 1) % kV8wRegions;
+  v8w_n_ = 0;
+  const uint32_t Ru = uint32_t(R);
+  e.use(pipe8("v8_tree_plan"));
+  e.buf(0, *v8_tree_);
+  e.buf(1, v8w_desc_, size_t(v8w_region_) * kV8wDesc * 16);
+  e.buf(2, v8w_args_, size_t(v8w_region_) * kV8wDesc * 16);
+  e.val(3, Ru);
+  e.dispatch(1, 1, 1, 64);
+}
+
+void Qwen35::v8_wide_end() {
+  if (v8w_R_ && v8w_host_nt_ < 0) v8w_desc_.as<uint32_t>()[size_t(v8w_region_) * kV8wDesc * 4] = uint32_t(v8w_n_);
+  v8w_R_ = 0;
+  v8w_host_nt_ = -1;
+}
+
+void Qwen35::v8_disp(Encoder& e, uint32_t x, uint32_t y, uint32_t z, uint32_t flags, uint32_t tx) {
+  if (!v8w_R_ || v8w_host_nt_ >= 0) {  // the grid itself (one tile, or the live tiles NI_PROFILE read)
+    const uint32_t nt = v8w_R_ ? uint32_t(v8w_host_nt_) : 1u, rows = v8w_R_ ? 8 * nt : 8u;
+    if (flags & kV8wX) x *= nt;
+    if (flags & kV8wXpair) x *= (nt + 1) / 2;
+    if (flags & kV8wY) y *= nt;
+    if (flags & kV8wYrows) y = rows;
+    if (flags & kV8wXrows) x = rows;
+    e.dispatch(x, y, z, tx);
+    return;
+  }
+  uint32_t* d = v8w_desc_.as<uint32_t>() + size_t(v8w_region_) * kV8wDesc * 4;
+  int idx = -1;
+  for (int i = 0; i < v8w_n_ && idx < 0; ++i) {
+    const uint32_t* q = d + 4 * (1 + i);
+    if (q[0] == x && q[1] == y && q[2] == z && q[3] == flags) idx = i;
+  }
+  if (idx < 0) {
+    if (v8w_n_ + 1 >= kV8wDesc) fatal("wide tree verify: more than %d grid shapes", kV8wDesc - 1);
+    idx = v8w_n_++;
+    uint32_t* q = d + 4 * (1 + idx);
+    q[0] = x;
+    q[1] = y;
+    q[2] = z;
+    q[3] = flags;
+  }
+  e.dispatch_indirect(v8w_args_, (size_t(v8w_region_) * kV8wDesc + size_t(idx)) * 16, tx);
+}
+
 bool Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* norm, bool lo, int x_ld,
                     const Buffer* xn_out, bool tw) {
-  if (K % 64 || R < 1 || R > 8) fatal("x8_prep: K=%d R=%d", K, R);
+  if (K % 64 || R < 1 || R > (v8w_R_ ? v8w_R_ : 8)) fatal("x8_prep: K=%d R=%d", K, R);
   // x8_prep2 (default): K/256 threadgroups, coalesced table stores; NI_V8_PREP=1: x8_prep (8 threadgroups)
   static const bool prep1 = env_int("NI_V8_PREP", 2) == 1;
   const bool v2 = !prep1 && K % 256 == 0;
+  if (v8w_R_ && !v2) fatal("x8_prep: a wide tree verify needs x8_prep2 (K=%d)", K);
   const bool wt = tw && v2 && v8_tw() && size_t(K) * 16 <= v8tt_.size;
   if (norm && (v8_knobs().skip & 256)) return wt;
   kp::X8Prep p{uint32_t(K), uint32_t(R), uint32_t(x_ld ? x_ld : K), norm ? 1u : 0u, xn_out ? 1u : 0u, cfg_.eps,
@@ -195,7 +335,8 @@ bool Qwen35::enc_x8(Encoder& e, const Buffer& x, int R, int K, const Tensor* nor
   e.buf(6, v8tl_);
   e.buf(7, v8sl_);
   e.buf(8, wt ? v8tt_ : v8tl_);  // (unused unless write_t)
-  e.dispatch(v2 ? uint32_t(K / 256) : 8u, 1, 1, 256);
+  if (v8w_R_) v8_disp(e, uint32_t(K / 256), 1, 1, kV8wY, 256);  // a wide tree verify: the live row tiles
+  else e.dispatch(v2 ? uint32_t(K / 256) : 8u, 1, 1, 256);
   return wt;
 }
 
@@ -274,6 +415,7 @@ static V8tPlan v8t_plan(uint32_t Ntot, uint32_t K) {
 void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Buffer& table, const Buffer& sums,
                       bool x2, const Buffer* tt) {
   if (segs.empty() || segs.size() > 4) fatal("qmm8: %zu segments", segs.size());
+  if (R < 1 || R > (v8w_R_ ? v8w_R_ : 8)) fatal("qmm8: R=%d", R);
   const uint32_t K = segs[0].L->K;
   const int bits = segs[0].L->bits;
   // segments of different formats: one GEMM per format
@@ -320,7 +462,8 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     e.buf(16, table);
     e.buf(17, sums);
     e.val(18, p);
-    e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
+    if (v8w_R_) v8_disp(e, tg, 1, 1, kV8wX, 32 * pl.cs * pl.ks);  // a wide tree verify: x the live row tiles
+    else e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
     return;
   }
   if (tt && !x2 && bits == 4 && segs[0].L->q4() && segs[0].L->gs == 64 && K % 64 == 0 && v8_tw() &&
@@ -332,7 +475,10 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     p.nseg = uint32_t(segs.size());
     p.ks = uint32_t(pl.ks);
     uint32_t tg = 0;
-    e.use(pipe8(std::string(pl.pf ? "qmm8tp" : "qmm8t") + "_b4_nt" + std::to_string(pl.nt)));
+    // a wide tree verify: the tile-pair kernel (one 16-row matmul per weight load) unless NI_V8T_PAIR=0
+    static const bool pair_env = env_int("NI_V8T_PAIR", 1) != 0;
+    const bool pair = v8w_R_ && pair_env;
+    e.use(pipe8(std::string(pl.pf ? (pair ? "qmm8t2p" : "qmm8tp") : (pair ? "qmm8t2" : "qmm8t")) + "_b4_nt" + std::to_string(pl.nt)));
     for (size_t i = 0; i < 4; ++i) {
       const Seg8& sg = segs[std::min(i, segs.size() - 1)];
       if (i < segs.size()) {
@@ -351,7 +497,8 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
     e.buf(16, *tt);
     e.buf(17, sums);
     e.val(18, p);
-    e.dispatch(tg, 1, 1, 32 * pl.ks);
+    if (v8w_R_) v8_disp(e, tg, 1, 1, pair ? kV8wXpair : kV8wX, 32 * pl.ks);
+    else e.dispatch(tg, 1, 1, 32 * pl.ks);
     return;
   }
   if (segs[0].L->gs != 64) fatal("qmm8: group %d", segs[0].L->gs);
@@ -398,7 +545,9 @@ void Qwen35::enc_qmm8(Encoder& e, const std::vector<Seg8>& segs, int R, const Bu
   e.val(18, p);
   e.buf(19, x2 ? v8tl_ : table);
   e.buf(20, x2 ? v8sl_ : sums);
-  e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
+  if (v8w_R_ && x2) fatal("qmm8: a wide tree verify has no two-term GEMM");
+  if (v8w_R_) v8_disp(e, tg, 1, 1, kV8wX, 32 * pl.cs * pl.ks);
+  else e.dispatch(tg, 1, 1, 32 * pl.cs * pl.ks);
   for (int i = 0; i < kn.pad; ++i) {  // timing only (V8Knobs::pad): empty dispatches
     const uint32_t zero = 0;
     e.use(pipe8("copy_u32"));
@@ -428,7 +577,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   e.val(8, ap);
   if (mrope(s) || tree) enc_mrope_args(e, s);
   if (tree) e.buf(11, *v8_tree_);
-  e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
+  if (v8w_R_) v8_disp(e, uint32_t(cfg_.hq + 2 * cfg_.hkv), 1, 1, kV8wYrows, uint32_t(cfg_.head_dim));  // the live rows
+  else e.dispatch(cfg_.hq + 2 * cfg_.hkv, R, 1, cfg_.head_dim);
   // NI_V8_ATTN: 1 = attn8m_partial (MMA, all rows and heads of a kv head per threadgroup),
   // 0 = attn8_partial (scalar, RB rows per threadgroup)
   static const int attn_mma = env_int("NI_V8_ATTN", 1);
@@ -443,8 +593,10 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // NI_V8_TREE_ATTN=2 (default): tree_zone -- the MMA tiles take each row's keys below a point that follows its logical
   // position alone, in chunks of one fixed size, and attn8_tree_zone the keys from there to the row (kernels/verify8.metal)
   static const int tree_attn = env_int("NI_V8_TREE_ATTN", 2);
-  const bool zone = tree && tree_attn >= 2;
-  const bool block = tree && tree_attn == 1;
+  // A wide tree verify (v8w_R_: 16 / 32 rows, dense targets) always takes the first: its row tiles run attn8m_partial_tree
+  // with the tree block's keys inside the MMA tiles; the zone and block kernels are 8-row kernels
+  const bool zone = tree && tree_attn >= 2 && !v8w_R_;
+  const bool block = tree && tree_attn == 1 && !v8w_R_;
   const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = (block || zone) ? 1u : 0u;
   const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
   uint32_t chunk = std::max<uint32_t>(64, (Lmax + want - 1) / want);
@@ -468,7 +620,9 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
     e.val(5, rp);
     e.val(6, Ru);
     if (zone || (tree && !block)) e.buf(7, *v8_tree_);
-    e.dispatch(nch, cfg_.hkv, 1, 64 * G);
+    // a wide tree verify: the chunks x the live row tiles along x (a chunk's tiles side by side)
+    if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, 64 * G);
+    else e.dispatch(nch, cfg_.hkv, 1, 64 * G);
     if (block || zone) {
       e.use(pipe8(zone ? "attn8_tree_zone" : "attn8_tree_block"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
@@ -488,30 +642,35 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   e.use(pipe8("attn_rows_reduce"));
   e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
   e.val(4, rp);
-  e.dispatch(cfg_.hq, R, 1, cfg_.head_dim);
+  if (v8w_R_) v8_disp(e, uint32_t(cfg_.hq), 1, 1, kV8wYrows, uint32_t(cfg_.head_dim));
+  else e.dispatch(cfg_.hq, R, 1, cfg_.head_dim);
   const bool to = enc_x8(e, attn_out_, R, HD, nullptr, false, 0, nullptr, true);
   if (!(skip & 64)) enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
 }
 
 bool Qwen35::enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-                     const Buffer& h, const Buffer& hs, const Buffer* tt, const Buffer* ht) {
+                     const Buffer& h, const Buffer& hs, const Buffer* tt, const Buffer* ht, int R) {
   v8_alloc();  // the split path's scratch (a drafter may encode before the first verify)
   const uint32_t I = gate.N, K = gate.K;
   const bool q4 = gate.q4() && up.q4();  // the fused qmm8_gu kernels read 4-bit group 64
   if (I % 64 || up.N != I || up.K != K || !gate.same_format(up)) fatal("gu8: shapes");
   if ((v8_knobs().gusplit || !q4) && v8g_ && I <= uint32_t(cfg_.dense_I) && I % 256 == 0) {
     // gate and up as two segments of one GEMM (v8_plan's tiling, fp32 rows) + SwiGLU into the down GEMM's table:
-    // the fused qmm8_gu1k2 kernel (8 column slices x 2 k-slices of one 64-column group) streamed ~10% slower
-    enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, 8, table, sums, false, tt);
+    // the fused qmm8_gu1k2 kernel (8 column slices x 2 k-slices of one 64-column group) streamed ~10% slower.
+    // A wide tree verify: R rows (its capacity), the live row tiles' tables (v8_disp)
+    const uint32_t Rg = v8w_R_ ? uint32_t(R) : 8u;
+    enc_qmm8(e, {{&gate, v8g_, I}, {&up, v8u_, I}}, int(Rg), table, sums, false, tt);
     const bool wt = ht && v8_tw() && size_t(I) * 16 <= ht->size;
-    kp::SwigluX8 sp{I, 8u, wt ? 1u : 0u};
+    kp::SwigluX8 sp{I, Rg, wt ? 1u : 0u};
     e.use(pipe8("swiglu_x8"));
     e.buf(0, v8g_); e.buf(1, v8u_); e.buf(2, h); e.buf(3, hs);
     e.val(4, sp);
     e.buf(5, wt ? *ht : h);  // (unused unless write_t)
-    e.dispatch(I / 256, 1, 1, 256);
+    if (v8w_R_) v8_disp(e, I / 256, 1, 1, kV8wY, 256);
+    else e.dispatch(I / 256, 1, 1, 256);
     return wt;
   }
+  if (v8w_R_) fatal("gu8: a wide tree verify needs the split gate / up path");
   if (!q4) fatal("gu8: %s gate/up need the split path (an intermediate size multiple of 256)", gate.fmt().c_str());
   kp::Qmm8Gu p{K, I, 0, 0, 0, 0, 0};
   e.use(pipe8(gu_kernel(K)));
@@ -537,7 +696,8 @@ void Qwen35::enc_mlp8(Encoder& e, const Layer& L, int R) {
   const bool tx = enc_x8(e, x_, R, D, L.post_norm, false, 0, nullptr, tm);
   const int skip = v8_knobs().skip;
   bool th = false;
-  if (!(skip & 16)) th = enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_, tx ? &v8tt_ : nullptr, tm ? &v8tt_ : nullptr);
+  if (!(skip & 16))
+    th = enc_gu8(e, L.mg, L.mu, v8t_, v8s_, v8h_, v8hs_, tx ? &v8tt_ : nullptr, tm ? &v8tt_ : nullptr, R);
   if (!(skip & 8)) enc_qmm8(e, {{&L.md, x_, uint32_t(D), true}}, R, v8h_, v8hs_, false, th ? &v8tt_ : nullptr);
 }
 
@@ -828,13 +988,25 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
 }
 
 void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
-  if (R < 1 || R > 8) fatal("encode_verify8: R=%d", R);
+  // a tree of more than 8 rows: a wide tree verify (16 or 32 rows: GPU-driven row tiles, v8_wide_begin)
+  const bool wide = v8_tree_ != nullptr && R > 8;
+  if (R < 1 || R > (wide ? kMaxTreeRows : 8) || (wide && R % 8)) fatal("encode_verify8: R=%d", R);
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   v8_alloc();
   const int D = cfg_.hidden;
   const uint32_t C = 2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv;
   const int VD = cfg_.lin_hv * cfg_.lin_dv;
-  enc_embed(e, s.tok, pos, R, x_);
+  if (wide) v8_wide_begin(e, s, R);
+  if (wide) {  // the live rows' embeddings
+    const QLinear& E = embed_;
+    kp::Embed ep{uint32_t(D), uint32_t(E.gs), uint32_t(pos)};
+    e.use(pipe8(E.q4() ? std::string("embed_q4") : "embed_" + E.fmt()));
+    e.buf(0, E.w->buf); e.buf(1, E.s->buf); e.buf(2, E.b->buf); e.buf(3, s.tok); e.buf(4, x_);
+    e.val(5, ep);
+    v8_disp(e, uint32_t((D / 8 + 63) / 64), 1, 1, kV8wYrows, 64);
+  } else {
+    enc_embed(e, s.tok, pos, R, x_);
+  }
   // DFlash2 tree drafting: the rows are a tree (v8_tree_) and / or the pending rows a tree cycle's accepted path
   // (s.pend_tree): the *_tree kernels (the KFlash tree descriptor, the path in s.pend_path)
   const bool tree = v8_tree_ != nullptr, ptree = s.pend_tree && s.n_pend > 0;
@@ -853,9 +1025,12 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
       if (!(skip & 32))
         enc_qmm8(e, {{&L.qkv, qkv_}, {&L.z, zb_}, {&L.b, bb_}, {&L.a, ab_}}, R, v8t_, v8s_, false, ti ? &v8tt_ : nullptr);
       if (!(skip & 4)) {
-        // fuse & 4: gdn_prep_verify8 (the rows' q / k norms reduced together; bitwise gdn_prep_verify)
+        // fuse & 4: gdn_prep_verify8 (the rows' q / k norms reduced together; bitwise gdn_prep_verify); a wide tree
+        // verify: gdn_prep_verify8w_tree (its live rows, windows from the ancestors)
         const bool fused = R <= 8 && cfg_.lin_dk == 128 && (v8_knobs().fuse & 4);
-        e.use(pipe8(std::string(fused ? "gdn_prep_verify8" : "gdn_prep_verify") + (tree || ptree ? "_tree" : "")));
+        if (wide && cfg_.lin_dk != 128) fatal("wide tree verify: GDN key heads of 128");
+        e.use(pipe8(wide ? std::string("gdn_prep_verify8w_tree")
+                         : std::string(fused ? "gdn_prep_verify8" : "gdn_prep_verify") + (tree || ptree ? "_tree" : "")));
         e.buf(0, qkv_); e.buf(1, ab_); e.buf(2, bb_); e.buf(3, s.conv[i]);
         e.buf(4, L.conv_w->buf); e.buf(5, L.A_log->buf); e.buf(6, L.dt_bias->buf);
         e.buf(7, gq_); e.buf(8, gk_); e.buf(9, gv_); e.buf(10, gg_); e.buf(11, gbeta_);
@@ -893,7 +1068,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
         e.buf(0, gout_); e.buf(1, zb_); e.buf(2, L.gnorm->buf); e.buf(3, v8t_); e.buf(4, v8s_);
         e.val(5, gv);
         if (tgn) e.buf(6, v8tt_);
-        e.dispatch(cfg_.lin_hv, 1, 1, 256);
+        if (wide) v8_disp(e, uint32_t(cfg_.lin_hv), 1, 1, kV8wY, 256);  // the live row tiles
+        else e.dispatch(cfg_.lin_hv, 1, 1, 256);
       } else if (!(skip & 1)) {
         e.use(pipe8(gdn8 ? "gdn_step_verify8" : "gdn_step_verify"));
         e.buf(0, gq_); e.buf(1, gk_); e.buf(2, gv_); e.buf(3, gg_); e.buf(4, gbeta_);
@@ -917,7 +1093,10 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   s.n_pend = 0;  // folded by this verify; commit_rows() sets the new count
   s.pend_tree = false;
   const bool tl = table_ready ? v8_tw() : enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);
-  if (v8_knobs().skip & 128) return;
+  if (v8_knobs().skip & 128) {
+    if (wide) v8_wide_end();
+    return;
+  }
   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
@@ -929,7 +1108,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);
   e.val(3, ts);
   if (tree) e.buf(4, *v8_tree_);
-  e.dispatch(ntg, R, 1, 256);
+  if (wide) v8_disp(e, ntg, 1, 1, kV8wYrows, 256);
+  else e.dispatch(ntg, R, 1, 256);
   kp::SampleRows sr{ntg * K, K, sp.temperature, sp.top_p, sp.seed, step, 0, 0, 0};
   // a tree's row r draws with the uniform of its token's position, step + depth(r)
   e.use(pipe8(tree ? "sample_stage2_rows_tree" : "sample_stage2_rows"));
@@ -937,7 +1117,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   e.val(3, sr);
   e.buf(4, cand_i_);  // (no remap table)
   if (tree) e.buf(5, *v8_tree_);
-  e.dispatch(R, 1, 1, 1024);
+  if (wide) v8_disp(e, 1, 1, 1, kV8wXrows, 1024);
+  else e.dispatch(R, 1, 1, 1024);
+  if (wide) v8_wide_end();
 }
 
 bool Qwen35::verify_tree_ok() const {

@@ -970,7 +970,8 @@ uint32_t Qwen35::verify_candidates(const SamplingParams& sp) const {
 }
 
 void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step, bool v8) {
-  if (R < 1 || R > kMaxVerify) fatal("encode_verify: R=%d", R);
+  // a tree verify may be wider (16 / 32 rows: verify_wide_ok, set_tree_rows)
+  if (R < 1 || R > (v8_tree_ ? kMaxTreeRows : kMaxVerify)) fatal("encode_verify: R=%d", R);
   // The 8-row MMA path: R >= 5; dense models also R = 3-4 (it reads the weights once for up to 8 rows at ~1.1-1.25x a
   // decode step, where the FMA kernels cost 1.2-1.9x from 3 rows on: 4B MTP depth 2 117.7 -> 138.3 tok/s). MoE
   // models keep the small-batch kernels below 5 rows (their verify unions the rows' experts). NI_V8=1: any R >= 2;

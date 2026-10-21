@@ -156,18 +156,29 @@ NI_INLINE uint v8t_input_of_slot(uint s) {
 // x8_prep2: same outputs as x8_prep, 4 groups (256 inputs) x 8 rows per threadgroup, so the grid
 // covers the GPU and the table goes out as coalesced 16-byte stores (staged through threadgroup
 // memory). With norm, every threadgroup computes the 8 row norms itself (each reads the rows once).
-// grid: K / 256 threadgroups x 256 threads (K a multiple of 256).
+// grid: K / 256 threadgroups x 256 threads (K a multiple of 256); x row tiles (grid y, v8_tiles: rows 8 y ..
+// 8 y + 7 into tile y's tables, K * 8 halfs / K / 64 * 8 sums apart; the T table's rows 8 y ..).
 [[kernel]] void x8_prep2(const device float* x [[buffer(0)]], const device bfloat* w [[buffer(1)]],
                          device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
                          device float* xn [[buffer(4)]], constant X8PrepParams& p [[buffer(5)]],
                          device half* table_lo [[buffer(6)]], device float* sums_lo [[buffer(7)]],
                          device half* table_t [[buffer(8)]],
-                         uint tg [[threadgroup_position_in_grid]], uint tid [[thread_position_in_threadgroup]],
+                         uint2 tg2 [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                          uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half stg[2][8][256];
   threadgroup float inv_s[8];
+  const uint tg = tg2.x, tile = tg2.y;
+  if (tile) {  // a row tile past the first: its rows and tables
+    x += 8 * tile * p.x_ld;
+    xn += 8 * tile * p.xn_ld;
+    table += tile * p.K * 8;
+    table_lo += tile * p.K * 8;
+    sums += tile * (p.K / 64) * kV8;
+    sums_lo += tile * (p.K / 64) * kV8;
+    table_t += 8 * tile * p.K;
+  }
   const uint t = sg;  // simdgroup = token row
-  const bool live = t < p.R;
+  const bool live = 8 * tile + t < p.R;
   const device float* xr = x + t * p.x_ld;
   if (p.norm) {
     float ss = 0.0f;
@@ -540,6 +551,20 @@ struct Qmm8Params {
   uint tg_begin[5];
 };
 
+// Row tiles (KFlash tree verifies wider than 8 rows: 16 / 32 rows as 2 / 4 tiles of 8 rows): a GEMM's grid then holds
+// tg_begin[nseg] threadgroups per tile with the tiles fastest (threadgroup x = column block * nt + tile), so the tiles
+// of a column block run side by side and its weights come from DRAM once (the other tiles read them from the caches).
+// Tile t reads its own X8 table (the tables of the tiles follow each other: K * 8 halfs and K / 64 * 8 sums apart) and
+// writes rows 8 t .. 8 t + 7. A grid of tg_begin[nseg] threadgroups is the one-tile GEMM, unchanged.
+NI_INLINE uint v8_tiles(uint ntgs, uint per_tile) { return ntgs > per_tile ? ntgs / per_tile : 1u; }
+// The rows a tree verify of capacity R computes: up to 8, the tree's live rows (kf_live); a wider verify (16 / 32 rows) runs the
+// tiles of its tree's live rows (the size rule's n = tree[kKfN], whole 8-row tiles: 8 ceil(n / 8), at most R).
+NI_INLINE uint kf_live_rows(const device int* tree, uint R) {
+  if (R <= 8) return kf_live(tree, R);
+  const uint n = uint(max(tree[kKfN], 1));
+  return min(R, (n + 7) / 8 * 8);
+}
+
 // Dense projections, up to 4 segments sharing the input (e.g. GDN qkv|z|b|a): segment i's
 // threadgroups [tg_begin[i], tg_begin[i+1]) each cover cs column blocks of 8 * NF rows.
 // V: 0 = v8_run, 1 = prefetching (v8_run_pf), 2 = v8_run_lc + split chains, 3 = prefetching + split chains
@@ -549,7 +574,18 @@ NI_INLINE void qmm8_impl(const device uint32_t* const thread* Wv, const device u
                          const device half* table, const device float* sums, const device half* table_lo,
                          const device float* sums_lo, constant Qmm8Params& p, threadgroup float2* red, uint tg,
                          uint sg, uint nsg, uint lane, threadgroup uint4* tt = nullptr,
-                         threadgroup float2* ts = nullptr) {
+                         threadgroup float2* ts = nullptr, uint ntgs = 0) {
+  // row tiles (v8_tiles): this threadgroup's tile and its tables
+  const uint nt = v8_tiles(ntgs, p.tg_begin[p.nseg]);
+  const uint tile = nt > 1 ? tg % nt : 0u;
+  if (nt > 1) {
+    tg /= nt;
+    const uint tw = tile * (p.K / 64);
+    table += tw * 512;
+    sums += tw * kV8;
+    table_lo += tw * 512;
+    sums_lo += tw * kV8;
+  }
   uint si = 0;
   while (si + 1 < p.nseg && tg >= p.tg_begin[si + 1]) ++si;
   const uint cs = nsg / p.ks, kslice = sg % p.ks;
@@ -594,7 +630,7 @@ NI_INLINE void qmm8_impl(const device uint32_t* const thread* Wv, const device u
     if (n >= N) continue;
     _Pragma("clang loop unroll(full)")
     for (int e = 0; e < 2; ++e) {
-      const uint t = fn + e;
+      const uint t = 8 * tile + fn + e;
       if (t < p.R) {
         device float* d = Y + t * y_ld + n;
         *d = add ? *d + acc[f][e] : acc[f][e];
@@ -619,8 +655,8 @@ NI_INLINE void qmm8_impl(const device uint32_t* const thread* Wv, const device u
                        const device half* table [[buffer(16)]], const device float* sums [[buffer(17)]],     \
                        constant Qmm8Params& p [[buffer(18)]], const device half* table_lo [[buffer(19)]],     \
                        const device float* sums_lo [[buffer(20)]], uint tg [[threadgroup_position_in_grid]], \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],  \
-                       uint lane [[thread_index_in_simdgroup]]) {                                            \
+                       uint ntgs [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],      \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {   \
     threadgroup float2 red[MAXSG * NF * 32];                                                                 \
     threadgroup uint4 tt[(V8_STAGED(__VA_ARGS__)) ? 8 * 64 : 1];                                              \
     threadgroup float2 ts[(V8_STAGED(__VA_ARGS__)) ? 8 * 4 : 1];                                              \
@@ -629,7 +665,7 @@ NI_INLINE void qmm8_impl(const device uint32_t* const thread* Wv, const device u
     const device ushort* Bv[4] = {B0, B1, B2, B3};                                                            \
     device float* Yv[4] = {Y0, Y1, Y2, Y3};                                                                   \
     qmm8_impl<BITS, NF, X2, ##__VA_ARGS__>(Wv, Sv, Bv, Yv, table, sums, table_lo, sums_lo, p, red, tg, sg, nsg, lane, \
-                                           tt, ts);                                                            \
+                                           tt, ts, ntgs);                                                      \
   }
 
 NI_QMM8(qmm8_b4_nf1, 4, 1, false)
@@ -1574,7 +1610,10 @@ NI_INLINE half v8e_b(uint i, uint mm, uint r, uint c) {
 // TREE (attn8m_partial_tree, KFlash tree verifies): the rows are a tree whose node t sits in cache row pos0 + t;
 // row t sees the history (< pos0) and the rows of its ancestors and itself (tree[kKfMask + t], the KFlash tree
 // ancestor-or-self mask), not the rows before it. TREE 1 = that, the block rows as keys of the MMA tiles (their sums
-// and tiles follow the rows' slots: the same path inside two trees rounds a bit differently). TREE 2 = the history
+// and tiles follow the rows' slots: the same path inside two trees rounds a bit differently). A tree of more than 8 rows
+// (a wide verify, TREE 1 only) runs as 8-row tiles: the grid holds nchunks * nt threadgroups along x, tiles fastest (x =
+// chunk * nt + tile: a chunk's K / V tiles are read by its row tiles side by side), and only the live tiles' rows
+// (8 nt <= R; every live row's ancestors are live) are keys. TREE 2 = the history
 // alone (keys < pos0, every row sees all of them: its tiles follow pos0 only); the block's keys come from
 // attn8_tree_block, in an order that follows the path alone, as one more chunk.
 // KFlash tree verifies, TREE 3 (NI_V8_TREE_ATTN=2): a row's keys at logical positions below tree_zone(q) go through the
@@ -1589,18 +1628,20 @@ template <uint TREE>
 NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc, const device half* vc,
                                    device float* part_o, device float* part_ml, constant AttnRowsParams& p, uint R,
                                    const device int* tree, threadgroup uint4* kvm, uint2 tg, uint tid, uint sg,
-                                   uint lane) {
+                                   uint lane, uint ntgx = 0) {
   constexpr uint BK = 32, NC = BK / 8;
   constexpr uint KLD = attn11_kld<BK>();
   threadgroup half* kv = (threadgroup half*)kvm;
   threadgroup float2* xw = (threadgroup float2*)kvm;  // score exchange reuses the K tile
-  const uint chunk = tg.x, kvh = tg.y;
+  const uint nt = TREE && ntgx > p.nchunks ? ntgx / p.nchunks : 1u;
+  const uint chunk = nt > 1 ? tg.x / nt : tg.x, tile = nt > 1 ? tg.x % nt : 0u, kvh = tg.y;
+  if (TREE && R > 8) R = min(R, 8 * nt);  // a wide verify (R = its capacity): the live tiles' rows
   const uint G = p.Hq / p.Hkv;
   const uint h = sg / 2, dh = sg % 2, hq = kvh * G + h;
   const uint qd = lane / 4;
   const uint frow = (qd & 4) + (lane / 2) % 4;
   const uint fcol = (qd & 2) * 2 + (lane % 2) * 2;
-  const uint t = frow;                              // this lane's row
+  const uint t = 8 * tile + frow;                   // this lane's row
   const uint qpos = p.pos0 + t;
   const uint anc = (TREE == 1 || TREE == 3) && t < R ? uint(tree[kKfMask + t]) : 0u;  // tree: the block rows this row sees
   // TREE 3: row t's MMA keys are those below tree_zone(its logical position pos0 + depth) -- the position alone, not the
@@ -1672,7 +1713,7 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
           if (diag && key >= p.pos0) v = kNeg11;  // (the tile's keys past the history)
         } else if (TREE == 1) {
           const uint j = key - p.pos0;  // block row (key > pos0 here)
-          if (diag && key > p.pos0 && !(j < 8 && ((anc >> j) & 1u))) v = kNeg11;
+          if (diag && key > p.pos0 && !(j < kKfMaxRows && ((anc >> j) & 1u))) v = kNeg11;
         } else if (diag && key > qpos) {
           v = kNeg11;
         }
@@ -1714,7 +1755,7 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
     // the chunk holds at least one key this row sees (tree: a chunk past pos0 holds every block row after its start)
     const bool any = TREE == 3   ? start < lim
                      : TREE == 2 ? start < p.pos0
-                     : TREE == 1 ? start <= p.pos0 || (start - p.pos0 < 8 && (anc >> (start - p.pos0)) != 0u)
+                     : TREE == 1 ? start <= p.pos0 || (start - p.pos0 < kKfMaxRows && (anc >> (start - p.pos0)) != 0u)
                                  : start <= qpos;
     device float* dst = part_o + base * kHD + dh * kDH + fcol;
     NI_UNROLL for (uint j = 0; j < kDH / 8; ++j)
@@ -1739,10 +1780,11 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
                                     const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
                                     device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
                                     constant uint& R [[buffer(6)]], const device int* tree [[buffer(7)]],
-                                    uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                                    uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
+                                    uint2 tg [[threadgroup_position_in_grid]], uint2 ntg [[threadgroups_per_grid]],
+                                    uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                                    uint lane [[thread_index_in_simdgroup]]) {
   threadgroup uint4 kvm[attn11_kv<32>() / 8];
-  attn8m_partial_impl<1>(q, kc, vc, part_o, part_ml, p, R, tree, kvm, tg, tid, sg, lane);
+  attn8m_partial_impl<1>(q, kc, vc, part_o, part_ml, p, R, tree, kvm, tg, tid, sg, lane, ntg.x);
 }
 [[kernel]] void attn8m_partial_zone(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
                                     const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
@@ -1904,6 +1946,29 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   else kc[((h - p.Hq) * p.max_seq + pos) * D + tid] = half(x);
 }
 
+// ---- KFlash tree verifies wider than 8 rows: this cycle's row tiles, on the GPU ----
+// The host encodes a wide tree verify (16 / 32 rows, Qwen35::kMaxTreeRows) before the drafting pass has chosen the
+// tree's live rows (the size rule runs in kf_build), so every dispatch whose grid scales with the rows takes its
+// threadgroup counts from args (dispatchThreadgroups indirect), and this kernel, the verify's first, writes them from
+// the tree's live rows (kf_live_rows: rows = 8 nt, nt live 8-row tiles). desc[0].x: the grid count; desc[1 + j] =
+// {x, y, z, flags}, flags 16: x *= ceil(nt / 2) (the tile-pair qmm8t2), 1: x *= nt (GEMMs, the tree attention: tiles fastest along x), 2: y *= nt (row-tile grids:
+// X8 tables, SwiGLU, gated norm), 4: y = rows (per-row grids), 8: x = rows. args: 4 words per grid. grid: 1 x 64.
+[[kernel]] void v8_tree_plan(const device int* tree [[buffer(0)]], const device uint4* desc [[buffer(1)]],
+                             device uint4* args [[buffer(2)]], constant uint& R [[buffer(3)]],
+                             uint i [[thread_position_in_grid]]) {
+  const uint n = desc[0].x, rows = kf_live_rows(tree, R), nt = max(rows / 8, 1u);
+  for (uint j = i; j < n; j += 64) {
+    const uint4 d = desc[1 + j];
+    uint x = d.x, y = d.y;
+    if (d.w & 1u) x *= nt;
+    if (d.w & 16u) x *= (nt + 1) / 2;
+    if (d.w & 2u) y *= nt;
+    if (d.w & 4u) y = rows;
+    if (d.w & 8u) x = rows;
+    args[j] = uint4(x, y, d.z, 0u);
+  }
+}
+
 // After a tree verify's acceptance: the accepted path's K / V rows (tree[kKfPath + i] = its i-th row's cache row -
 // pos, a = tree[kKfA] drafts; kf_accept) move to the rows of their positions pos + i, in order (a row's destination
 // is below every later row's source). grid (1, 2 Hkv) x D: K heads, then V heads.
@@ -1985,7 +2050,8 @@ struct KvTreeParams {
 
 // SwiGLU of the 8 rows' fp32 gate / up projections into the down GEMM's X8 table (x8_prep2's layout and order:
 // table entries half(silu(g) * u), sums of the halfs per 64 inputs): the split MLP path, where gate and up run
-// as two segments of one qmm8 dispatch. grid: K / 256 threadgroups x 256 threads (K = intermediate width).
+// as two segments of one qmm8 dispatch. grid: K / 256 threadgroups x 256 threads (K = intermediate width); x row
+// tiles (grid y: rows 8 y .. 8 y + 7 into tile y's table, as x8_prep2).
 struct SwigluX8Params {
   uint K;   // intermediate width (row length of g and u)
   uint R;   // live rows (t >= R are zeros)
@@ -1994,12 +2060,20 @@ struct SwigluX8Params {
 [[kernel]] void swiglu_x8(const device float* g [[buffer(0)]], const device float* u [[buffer(1)]],
                           device half* table [[buffer(2)]], device float* sums [[buffer(3)]],
                           constant SwigluX8Params& p [[buffer(4)]], device half* table_t [[buffer(5)]],
-                          uint tg [[threadgroup_position_in_grid]],
-                          uint tid [[thread_position_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
+                          uint2 tg2 [[threadgroup_position_in_grid]],
+                          uint tid [[thread_index_in_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],
                           uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half stg[8][256];
+  const uint tg = tg2.x, tile = tg2.y;
+  if (tile) {
+    g += 8 * tile * p.K;
+    u += 8 * tile * p.K;
+    table += tile * p.K * 8;
+    sums += tile * (p.K / 64) * kV8;
+    table_t += 8 * tile * p.K;
+  }
   const uint t = sg;
-  const bool live = t < p.R;
+  const bool live = 8 * tile + t < p.R;
   const uint k0 = tg * 256 + lane * 8;
   float v[8];
   if (live) {
@@ -2095,7 +2169,8 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
   threadgroup_barrier(mem_flags::mem_threadgroup);
   const bool writer = last != 0;  // every block of the head has read the old k / g tape
   const uint rebuild = TREE && p.tree ? uint(tree[kKfJump]) : 0u;  // tree: rows whose parent is not the row before them
-  const uint R = TREE && p.tree ? kf_live(tree, p.R) : p.R;          // a tree: its live rows
+  // a wide tree verify (R = its capacity, > 8 rows): the live tiles' rows (kf_live_rows); else the tree's live rows
+  const uint R = TREE && p.tree ? kf_live_rows(tree, p.R) : p.R;
   float4 st0[4];  // tree: the base state
   if (TREE)
     for (int r = 0; r < 4; ++r) st0[r] = st[r];
@@ -2175,15 +2250,24 @@ NI_INLINE void gdn_step_verify8s_impl(const device float* q, const device float*
 // neighbour's 4; then lanes 2, 4, 8 apart = x8_prep2's 1, 2, 4), i.e. bitwise the table x8_prep2 would build from
 // gdn_step_verify8's fp32 rows. grid Hv x 256 (simdgroup = row).
 // TW (gdn_gnorm_x8t): threads 128-255 also write the T table of qmm8t (buffer 6, rows of Hv * 128 inputs)
+// Row tiles (grid y, v8_tiles): rows 8 y .. 8 y + 7 into tile y's tables.
 template <bool TW>
 NI_INLINE void gdn_gnorm_x8_impl(const device float* o_raw, const device float* z, const device bfloat* norm_w,
                                  device half* table, device float* sums, constant GdnVerifyParams& p,
                                  device half* table_t, threadgroup half (*hs)[128], uint h, uint tid, uint sg,
-                                 uint lane) {
+                                 uint lane, uint tile = 0) {
   constexpr uint D = 128;
+  if (tile) {
+    const uint K = p.Hv * D;
+    o_raw += 8 * tile * K;
+    z += 8 * tile * K;
+    table += tile * K * 8;
+    sums += tile * (K / 64) * kV8;
+    table_t += 8 * tile * K;
+  }
   const uint t = sg;
   float4 r = float4(0.0f);
-  if (t < p.R) {
+  if (8 * tile + t < p.R) {
     const float4 ov = *(const device float4*)(o_raw + (t * p.Hv + h) * D + lane * 4);
     const float tot = simd_sum(dot(ov, ov));
     const float inv = metal::precise::rsqrt(tot / float(D) + p.eps);
@@ -2227,17 +2311,17 @@ NI_INLINE void gdn_gnorm_x8_impl(const device float* o_raw, const device float* 
 [[kernel]] void gdn_gnorm_x8(const device float* o_raw [[buffer(0)]], const device float* z [[buffer(1)]],
                              const device bfloat* norm_w [[buffer(2)]], device half* table [[buffer(3)]],
                              device float* sums [[buffer(4)]], constant GdnVerifyParams& p [[buffer(5)]],
-                             uint h [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                             uint2 hg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                              uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half hs[8][128];
-  gdn_gnorm_x8_impl<false>(o_raw, z, norm_w, table, sums, p, table, hs, h, tid, sg, lane);
+  gdn_gnorm_x8_impl<false>(o_raw, z, norm_w, table, sums, p, table, hs, hg.x, tid, sg, lane, hg.y);
 }
 [[kernel]] void gdn_gnorm_x8t(const device float* o_raw [[buffer(0)]], const device float* z [[buffer(1)]],
                               const device bfloat* norm_w [[buffer(2)]], device half* table [[buffer(3)]],
                               device float* sums [[buffer(4)]], constant GdnVerifyParams& p [[buffer(5)]],
                               device half* table_t [[buffer(6)]],
-                              uint h [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
+                              uint2 hg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
                               uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup half hs[8][128];
-  gdn_gnorm_x8_impl<true>(o_raw, z, norm_w, table, sums, p, table_t, hs, h, tid, sg, lane);
+  gdn_gnorm_x8_impl<true>(o_raw, z, norm_w, table, sums, p, table_t, hs, hg.x, tid, sg, lane, hg.y);
 }

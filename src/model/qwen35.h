@@ -278,6 +278,8 @@ class Qwen35 : public Model {
   // Rows per verify (pending token + up to 7 drafts). R <= 2 (and R <= 4 on MoE models) runs the small-batch
   // kernels; more rows (NI_V8=1: from 2; NI_V8=0: from 5) the 8-row MMA path (qwen35_v8.cpp).
   static constexpr int kMaxVerify = 8;
+  // KFlash tree verifies: up to 32 rows (whole 8-row tiles; verify_wide_ok, set_tree_rows)
+  static constexpr int kMaxTreeRows = 32;
   static constexpr int kMaxMtpRows = 8;  // MTP rows per encode_mtp (history rows of a cycle: depth + 1); depth <= 7
   // MTP rows: pairs (hidden row h_row0 + r of `h`, token tokens[tok0 + r]) at MTP positions
   // mpos0 + r; they extend the MTP cache. The last row's post-norm hidden is left in mtp_post()
@@ -350,8 +352,9 @@ class Qwen35 : public Model {
   // passes for 1-2-row experts): a row's logits then depend only on the rows before it, not on how the
   // other rows route. A speculative sampler that needs p(. | prefix) exactly sets it (~3% slower verify).
   void set_verify_moe_exact(bool on) { v8_moe_exact_ = on; }
-  // KFlash tree verifies: while set, the 8-row verify's rows are a tree (tree = the KFlash tree descriptor,
-  // src/kernels/kflash.h: parents, depths, ancestor-or-self masks): row t's token takes position pos + depth(t) (RoPE,
+  // KFlash tree verifies: while set, the 8-row verify's (or a wide one's: verify_wide_ok) rows are a tree (tree = the
+  // KFlash tree descriptor, src/kernels/kflash.h: parents, depths, ancestor-or-self masks): row t's token takes position
+  // pos + depth(t) (RoPE,
   // its sample's uniform), its attention sees the history and its ancestors' rows, its GDN conv window and recurrent
   // state are its ancestors' fold. The rows' K/V stay in cache rows pos + t and their tape in rows t until the
   // acceptance (kf_accept) writes the accepted path to s.pend_path, moves its K/V (encode_kv_tree_compact) and sets
@@ -359,6 +362,19 @@ class Qwen35 : public Model {
   void set_verify_tree(const Buffer* tree) { v8_tree_ = tree; }
   // the 8-row verify can run a tree (its attention on attn8m, the split GDN step)
   bool verify_tree_ok() const;
+  // Tree verifies wider than 8 rows (16 or 32: 2 or 4 tiles of 8 rows; KFlash's size rule picks the rows per cycle):
+  // encode_verify with a tree set and R = 16 or 32 encodes that capacity, and the GPU runs the tiles of the tree's live
+  // rows (8 ceil(n / 8), n = the descriptor's kKfN, chosen by the drafting pass after the host encoded the verify):
+  // every grid that scales with the rows is dispatched indirectly from args the verify's first kernel writes
+  // (v8_tree_plan), the GEMMs run a column block's tiles side by side (one weight read from DRAM), the rows' attention,
+  // GDN conv windows and recurrent state are their ancestors' as in the 8-row tree. Dense targets whose verify runs the
+  // tree (verify_tree_ok), the split MLP and the X8 preps of x8_prep2 (widths multiple of 256); MoE targets keep 8.
+  bool verify_wide_ok() const;
+  // The widest tree verify to prepare for (8, 16 or 32 rows): the verify's model-wide buffers (X8 tables, logits,
+  // candidates, samples) are sized for it here; a sequence's tape grows on its first wide verify. Call while nothing
+  // is in flight (the drafter's construction).
+  void set_tree_rows(int rows);
+  int tree_rows() const { return tree_rows_; }
   // After a tree verify at pos: the K/V rows of the accepted path (the descriptor's, kf_accept) move to positions
   // pos + i (every attention layer)
   void encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& tree);
@@ -378,9 +394,9 @@ class Qwen35 : public Model {
                 bool x2 = false, const Buffer* tt = nullptr);
   // h = half(silu(X Wg^T) * (X Wu^T)) written as the down projection's X8 table h + sums hs (4-bit, N % 64 == 0)
   // tt: the inputs' T table (qmm8t for gate|up); ht: also write h as a T table there (split path only). Returns
-  // whether ht was written.
+  // whether ht was written. R: the rows (a wide tree verify's capacity: its row tiles' tables)
   bool enc_gu8(Encoder& e, const QLinear& gate, const QLinear& up, const Buffer& table, const Buffer& sums,
-               const Buffer& h, const Buffer& hs, const Buffer* tt = nullptr, const Buffer* ht = nullptr);
+               const Buffer& h, const Buffer& hs, const Buffer* tt = nullptr, const Buffer* ht = nullptr, int R = 8);
   // The last verify's sampler inputs and outputs, as GPU buffers (for an on-GPU acceptance step):
   // stage-1 top-k candidates per row (values / ids, verify_candidates() per row) and the sampled ids.
   Buffer verify_cand_vals() const { return cand_v_; }
@@ -553,6 +569,15 @@ class Qwen35 : public Model {
               const Buffer* xn_out = nullptr, bool tw = false);
   // the 8-row GEMMs on the matrix units (qmm8t, src/kernels/tensor/verify8t.metal): an M5 and V8Knobs::tw
   bool v8_tw() const;
+  // wide tree verifies (verify_wide_ok): the descriptor region and the plan kernel at the start of one, the growth of
+  // a sequence's tape to kMaxTreeRows rows; v8_disp dispatches a grid that scales with the rows: flags kV8wX (x times
+  // the live tiles), kV8wY (y times the tiles), kV8wYrows (y = the live rows), kV8wXrows (x = the live rows); outside a
+  // wide verify (or under NI_PROFILE, from the tree the host read) the grid directly
+  static constexpr uint32_t kV8wX = 1, kV8wY = 2, kV8wYrows = 4, kV8wXrows = 8, kV8wXpair = 16;
+  void v8_wide_begin(Encoder& e, Seq& s, int R);
+  void v8_wide_end();
+  void v8_disp(Encoder& e, uint32_t x, uint32_t y, uint32_t z, uint32_t flags, uint32_t tx);
+  void grow_tape(Encoder& e, Seq& s, int rows);
   // table_ready: the layer's input-norm table is already written (by the previous layer's enc_moe8)
   void enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& kc, const Buffer& vc, int cap, int pos, int R,
                  bool table_ready = false);
@@ -600,6 +625,12 @@ class Qwen35 : public Model {
   const Buffer* v8_rlim_ = nullptr;
   bool v8_moe_exact_ = false;
   const Buffer* v8_tree_ = nullptr;
+  // wide tree verifies (qwen35_v8.cpp): the capacity the buffers hold, the one being encoded (0: none), its descriptor
+  // region (a ring of kV8wRegions, so a verify still on the GPU keeps its own), descriptors so far; under NI_PROFILE the
+  // live tiles the host read from the tree (-1: GPU-driven)
+  int tree_rows_ = 8;
+  int v8w_R_ = 0, v8w_region_ = 0, v8w_n_ = 0, v8w_host_nt_ = -1;
+  Buffer v8w_desc_, v8w_args_;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 

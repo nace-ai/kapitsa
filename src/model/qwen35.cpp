@@ -2887,7 +2887,12 @@ void Qwen35::enc_capture(Encoder& e, int layer, int pos0, int T, const Buffer* x
   e.buf(0, x ? *x : x_, size_t(lo - pos0) * D * 4);
   e.buf(1, cap_->dst);
   e.val(2, p);
-  e.dispatch((D / 4 + 255) / 256, uint32_t(hi - lo), 1, 256);
+  if (v8w_R_) {  // a wide tree verify: its live rows (the hook covers all its rows)
+    if (lo != pos0 || hi != pos0 + T) fatal("capture: a wide tree verify's hook must cover its %d rows", T);
+    v8_disp(e, (D / 4 + 255) / 256, 1, 1, kV8wYrows, 256);
+  } else {
+    e.dispatch((D / 4 + 255) / 256, uint32_t(hi - lo), 1, 256);
+  }
 }
 
 Buffer Qwen35::debug_buf(const std::string& n) {

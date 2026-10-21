@@ -115,6 +115,7 @@ NI_INLINE float gdn_pick8(thread const float* a, uint i) {
 // TREE (gdn_prep_verify8_tree): the rows are a tree (p.tree, parents tree[t]; its live rows alone): a row's window is
 // its parent's shifted by the parent's input; pending rows on a tree cycle's path (p.pidx, path[t]) as
 // gdn_prep_verify_tree.
+// R: the rows (p.R; a tree's live rows alone: kf_live; a wide tree verify with one live tile: 8)
 template <bool TREE>
 NI_INLINE void gdn_prep_verify8_impl(const device float* qkv, const device float* a, const device float* bb,
                                      device float* conv_state, const device bfloat* conv_w,
@@ -122,13 +123,12 @@ NI_INLINE void gdn_prep_verify8_impl(const device float* qkv, const device float
                                      device float* k_out, device float* v_out, device float* g_out,
                                      device float* beta_out, device float* pend_qkv, constant GdnVerifyParams& p,
                                      const device int* tree, const device int* path, threadgroup float (*scratch)[4],
-                                     uint tg, uint tid, uint sg, uint lane) {
+                                     uint tg, uint tid, uint sg, uint lane, uint R) {
   constexpr uint D = 128;
   const uint c = tg * D + tid;
   const uint C = p.C;
   const uint qk = p.Hk * D;
   const bool is_q = c < qk, is_k = c >= qk && c < 2 * qk;
-  const uint R = TREE && p.tree ? kf_live(tree, p.R) : p.R;  // a tree: its live rows
   float in[8];
   for (uint t = 0; t < 8; ++t) in[t] = t < R ? qkv[t * C + c] : 0.0f;
   // fold pending rows into the committed window
@@ -202,7 +202,7 @@ NI_INLINE void gdn_prep_verify8_impl(const device float* qkv, const device float
                                  uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float scratch[8][4];
   gdn_prep_verify8_impl<false>(qkv, a, bb, conv_state, conv_w, A_log, dt_bias, q_out, k_out, v_out, g_out, beta_out,
-                               pend_qkv, p, nullptr, nullptr, scratch, tg, tid, sg, lane);
+                               pend_qkv, p, nullptr, nullptr, scratch, tg, tid, sg, lane, p.R);
 }
 [[kernel]] void gdn_prep_verify8_tree(const device float* qkv [[buffer(0)]], const device float* a [[buffer(1)]],
                                       const device float* bb [[buffer(2)]], device float* conv_state [[buffer(3)]],
@@ -219,5 +219,95 @@ NI_INLINE void gdn_prep_verify8_impl(const device float* qkv, const device float
                                       uint lane [[thread_index_in_simdgroup]]) {
   threadgroup float scratch[8][4];
   gdn_prep_verify8_impl<true>(qkv, a, bb, conv_state, conv_w, A_log, dt_bias, q_out, k_out, v_out, g_out, beta_out,
-                              pend_qkv, p, tree, path, scratch, tg, tid, sg, lane);
+                              pend_qkv, p, tree, path, scratch, tg, tid, sg, lane, p.tree ? kf_live(tree, p.R) : p.R);
+}
+
+// gdn_prep_verify8_tree for a KFlash tree verify wider than 8 rows (16 / 32 rows; its live rows kf_live_rows): the
+// same per-row arithmetic, each row's window from its ancestors' inputs (parent, grandparent, great-grandparent; above
+// the root the committed window: row t's window is its parent's shifted by the parent's input) read back from the
+// projection rows instead of registers, and the rows' q / k norms reduced together as gdn_prep_verify8. Pending rows
+// on a tree cycle's path (p.pidx) as gdn_prep_verify_tree. grid: C/128 threadgroups x 128 threads.
+[[kernel]] void gdn_prep_verify8w_tree(const device float* qkv [[buffer(0)]], const device float* a [[buffer(1)]],
+                                       const device float* bb [[buffer(2)]], device float* conv_state [[buffer(3)]],
+                                       const device bfloat* conv_w [[buffer(4)]],
+                                       const device bfloat* A_log [[buffer(5)]],
+                                       const device bfloat* dt_bias [[buffer(6)]], device float* q_out [[buffer(7)]],
+                                       device float* k_out [[buffer(8)]], device float* v_out [[buffer(9)]],
+                                       device float* g_out [[buffer(10)]], device float* beta_out [[buffer(11)]],
+                                       device float* pend_qkv [[buffer(12)]],
+                                       constant GdnVerifyParams& p [[buffer(13)]], const device int* tree [[buffer(14)]],
+                                       const device int* path [[buffer(15)]], uint tg [[threadgroup_position_in_grid]],
+                                       uint tid [[thread_position_in_threadgroup]],
+                                       uint sg [[simdgroup_index_in_threadgroup]],
+                                       uint lane [[thread_index_in_simdgroup]]) {
+  threadgroup float scratch[kKfMaxRows][4];
+  constexpr uint D = 128;
+  const uint c = tg * D + tid;
+  const uint C = p.C;
+  const uint qk = p.Hk * D;
+  const bool is_q = c < qk, is_k = c >= qk && c < 2 * qk;
+  const uint R = kf_live_rows(tree, p.R);
+  if (R <= 8) {  // one live tile: the 8-row tree prep itself
+    gdn_prep_verify8_impl<true>(qkv, a, bb, conv_state, conv_w, A_log, dt_bias, q_out, k_out, v_out, g_out, beta_out,
+                                pend_qkv, p, tree, path, scratch, tg, tid, sg, lane, R);
+    return;
+  }
+  // fold pending rows into the committed window
+  float w3[3] = {conv_state[0 * C + c], conv_state[1 * C + c], conv_state[2 * C + c]};
+  for (uint t = 0; t < p.n_pend; ++t) {
+    w3[0] = w3[1];
+    w3[1] = w3[2];
+    w3[2] = pend_qkv[(p.pidx ? uint(path[t]) : t) * C + c];
+  }
+  for (uint r = 0; r < 3; ++r) conv_state[r * C + c] = w3[r];
+  const float w0 = conv_w[c * 4 + 0], w1 = conv_w[c * 4 + 1], w2 = conv_w[c * 4 + 2], wq = conv_w[c * 4 + 3];
+  float o[kKfMaxRows];
+  NI_UNROLL for (uint t = 0; t < kKfMaxRows; ++t) {
+    if (t >= R) break;
+    const float in3 = qkv[t * C + c];
+    pend_qkv[t * C + c] = in3;
+    float h0 = w3[0], h1 = w3[1], h2 = w3[2];
+    if (t > 0) {
+      const uint a1 = uint(tree[kKfPar + t]);
+      h2 = qkv[a1 * C + c];
+      if (a1 == 0) {
+        h0 = w3[1];
+        h1 = w3[2];
+      } else {
+        const uint a2 = uint(tree[kKfPar + a1]);
+        h1 = qkv[a2 * C + c];
+        h0 = a2 == 0 ? w3[2] : qkv[uint(tree[kKfPar + a2]) * C + c];
+      }
+    }
+    o[t] = silu(w0 * h0 + w1 * h1 + w2 * h2 + wq * in3);
+  }
+  if (is_q || is_k) {  // (uniform per threadgroup: 128 channels = one head)
+    NI_UNROLL for (uint t = 0; t < kKfMaxRows; ++t) {
+      if (t >= R) break;
+      const float v = simd_sum(o[t] * o[t]);
+      if (lane == 0) scratch[t][sg] = v;
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    NI_UNROLL for (uint t = 0; t < kKfMaxRows; ++t) {
+      if (t >= R) break;
+      float r = lane < D / 32 ? scratch[t][lane] : 0.0f;
+      r = simd_sum(r);
+      const float ot = o[t] * metal::precise::rsqrt(r + 1e-6f);
+      if (is_q) q_out[t * qk + c] = ot * metal::precise::rsqrt(float(D));
+      else k_out[t * qk + (c - qk)] = ot;
+    }
+  } else {
+    NI_UNROLL for (uint t = 0; t < kKfMaxRows; ++t) {
+      if (t >= R) break;
+      v_out[t * (C - 2 * qk) + (c - 2 * qk)] = o[t];
+    }
+  }
+  if (tg == 0 && tid < p.Hv) {
+    float A = metal::precise::exp(float(A_log[tid]));
+    float dtb = float(dt_bias[tid]);
+    for (uint t = 0; t < R; ++t) {
+      g_out[t * p.Hv + tid] = metal::precise::exp(-A * softplus(a[t * p.Hv + tid] + dtb));
+      beta_out[t * p.Hv + tid] = sigmoid(bb[t * p.Hv + tid]);
+    }
+  }
 }

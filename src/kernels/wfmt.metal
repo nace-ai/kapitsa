@@ -551,7 +551,15 @@ template <int F, int GS, int NF>
 NI_INLINE void qmm8g_impl(const device uint32_t* const thread* Wv, const device ushort* const thread* Sv,
                           const device ushort* const thread* Bv, device float* const thread* Yv,
                           const device half* table, const device float* sums, constant Qmm8Params& p,
-                          threadgroup float2* red, uint tg, uint sg, uint nsg, uint lane) {
+                          threadgroup float2* red, uint tg, uint sg, uint nsg, uint lane, uint ntgs) {
+  // row tiles as qmm8 (verify8.metal v8_tiles): this threadgroup's tile and its tables
+  const uint nt = v8_tiles(ntgs, p.tg_begin[p.nseg]);
+  const uint tile = nt > 1 ? tg % nt : 0u;
+  if (nt > 1) {
+    tg /= nt;
+    table += tile * (p.K / 64) * 512;
+    sums += tile * (p.K / 64) * kV8;
+  }
   uint si = 0;
   while (si + 1 < p.nseg && tg >= p.tg_begin[si + 1]) ++si;
   const uint cs = nsg / p.ks, kslice = sg % p.ks;
@@ -586,7 +594,7 @@ NI_INLINE void qmm8g_impl(const device uint32_t* const thread* Wv, const device 
     if (n >= N) continue;
     _Pragma("clang loop unroll(full)")
     for (int e = 0; e < 2; ++e) {
-      const uint t = fn + e;
+      const uint t = 8 * tile + fn + e;
       if (t < p.R) {
         device float* d = Y + t * y_ld + n;
         *d = add ? *d + acc[f][e] : acc[f][e];
@@ -606,14 +614,14 @@ NI_INLINE void qmm8g_impl(const device uint32_t* const thread* Wv, const device 
                        const device ushort* B3 [[buffer(14)]], device float* Y3 [[buffer(15)]],              \
                        const device half* table [[buffer(16)]], const device float* sums [[buffer(17)]],     \
                        constant Qmm8Params& p [[buffer(18)]], uint tg [[threadgroup_position_in_grid]],      \
-                       uint sg [[simdgroup_index_in_threadgroup]], uint nsg [[simdgroups_per_threadgroup]],  \
-                       uint lane [[thread_index_in_simdgroup]]) {                                            \
+                       uint ntgs [[threadgroups_per_grid]], uint sg [[simdgroup_index_in_threadgroup]],      \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {   \
     threadgroup float2 red[8 * NF * 32];                                                                     \
     const device uint32_t* Wv[4] = {W0, W1, W2, W3};                                                          \
     const device ushort* Sv[4] = {S0, S1, S2, S3};                                                            \
     const device ushort* Bv[4] = {B0, B1, B2, B3};                                                            \
     device float* Yv[4] = {Y0, Y1, Y2, Y3};                                                                   \
-    qmm8g_impl<F, GS, NF>(Wv, Sv, Bv, Yv, table, sums, p, red, tg, sg, nsg, lane);                           \
+    qmm8g_impl<F, GS, NF>(Wv, Sv, Bv, Yv, table, sums, p, red, tg, sg, nsg, lane, ntgs);                     \
   }
 
 // ---- 8-row MoE verify (verify8.metal's moe8_* passes: experts de-duplicated over the 8 rows) for any formats ----
