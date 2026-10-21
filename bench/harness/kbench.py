@@ -1,22 +1,11 @@
 #!/usr/bin/env python3
 """kapitsa bench compare: Kapitsa against the other engines installed on this Mac, on one model, one table.
 
-The `kapitsa bench compare` command runs this file (src/server/bench_cmd.cpp finds it and python3). It adds no
-protocol of its own: every engine goes through compare_engines.py and bench.py, the published harness (README.md in
-this folder), one engine at a time under the GPU lock, with the same corpus, sampler and thinking settings.
-This file only chooses which of the harness's configs each engine can run here, runs them, and prints the result:
-
-    kapitsa bench compare                    pick a model, measure every engine found
-    kapitsa bench compare --model 4b         the same without the question
-    kapitsa bench compare --list             what was found and what is missing; starts nothing
-    kapitsa bench compare --json | --report  machine-readable result | the Markdown block for an issue or PR
-
-An engine is measured with the best of its harness configs for the model that this Mac has the files for (MTP,
-DFlash and so on), and the table says which one ran. An engine that is not installed, or whose weights are not in
-BENCH_MODELS, is listed with how to get it. Nothing is downloaded or installed, and nothing is sent anywhere.
-
-Python 3.9 and the standard library only (the Python that macOS ships); colour and the progress line only on a
-terminal (NO_COLOR is honoured), plain text otherwise.
+`kapitsa bench compare` runs this file. It adds no protocol: every engine goes through compare_engines.py and bench.py
+(README.md in this folder), one at a time under the GPU lock, with the same corpus, sampler and thinking settings. This
+file only picks the harness config each engine can run here, runs it and prints the result (--list, --json, --report).
+An engine that is not installed, or whose weights are missing, is listed with how to get it. Nothing is downloaded,
+installed or sent. Python 3.9 and the standard library only; colour only on a terminal (NO_COLOR is honoured).
 """
 import argparse, copy, datetime, glob, json, os, platform, re, shutil, signal, subprocess, sys, tempfile, textwrap, time
 
@@ -60,7 +49,6 @@ PROFILES = {
 }
 
 
-# ------------------------------------------------------------------ terminal
 class Term:
     def __init__(self, stream, color=None):
         self.tty = stream.isatty()
@@ -88,7 +76,6 @@ def clip(s, n):
     return s if len(s) <= n else s[: max(0, n - 1)] + "…"
 
 
-# ------------------------------------------------------------------ harness
 def load_harness():
     """compare_engines.py as a module (it only starts something in main()); BENCH_MODELS etc. are read at use."""
     import compare_engines as ce
@@ -181,7 +168,6 @@ def skip_hint(engine, why, tried, model):
     return clip(first, 150) + "  (the files this config reads are listed in bench/harness/README.md)"
 
 
-# ------------------------------------------------------------------ run
 class Args:  # what compare_engines.plan()/run_config() read from argparse
     def __init__(self, prof, quiet_timeout, lock_timeout, quiet_s):
         self.sizes, self.skip, self.bench_args = prof["sizes"], prof["skip"], prof["bench_args"]
@@ -273,7 +259,6 @@ def entry_of(engine, cfg, res):
     return e
 
 
-# ------------------------------------------------------------------ output
 def f1(x, nd=1):
     return "-" if x is None else f"{x:.{nd}f}"
 
@@ -439,7 +424,6 @@ def report(doc):
     return scrub("\n".join(L) + "\n", doc)
 
 
-# ------------------------------------------------------------------ main
 def choose_model(args):
     if args.model:
         key = args.model.lower()
@@ -538,7 +522,6 @@ def main(argv=None):
         else:
             skipped.append({"engine": key, "name": name, "reason": reason, "hint": skip_hint(key, reason, tried, model),
                             "tried": tried})
-    # Kapitsa first (the others are measured against it), then the rest in a fixed order
     doc = {"schema": SCHEMA, "when": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), "profile": prof_name,
            "model": dict(MODELS[model], key=model), "sizes": prof["sizes"], "machine": machine(),
            "kapitsa": {"version": kapitsa_version()}, "harness": harness_commit(ce), "out_dir": out_dir,

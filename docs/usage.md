@@ -580,10 +580,9 @@ The table ranks engines by decode tok/s, with prefill tok/s, the time to the fir
 and peak memory. The files are in `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`,
 `report.md` and the per-engine logs. `--report FILE` writes the report there too.
 
-The report has a "Who beats Kapitsa here, and why" part. The reasons come only from what the configurations say
-(speculative decoding, quantization, weights folder, versions) and memory, and the report says plainly that they are
-leads for a look, not findings. **Run it on a quiet Mac, plugged in**: a run waits up to 5 minutes per engine for other apps to leave the GPU
-and marks a number it could not get quiet. If another engine beats Kapitsa on your Mac, open the
+The report has a "Who beats Kapitsa here, and why" part; its reasons come only from the configurations (speculative
+decoding, weights folder, versions) and are leads, not findings. **Run it on a quiet Mac, plugged in**: a run waits up
+to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. If another engine beats Kapitsa on your Mac, open the
 "Engine comparison" issue with the report: that is how we find out.
 
 It needs the repository's `bench/harness` folder (`KAPITSA_HARNESS` names another copy) and macOS Python 3.
