@@ -50,9 +50,10 @@ double median(std::vector<double> v) {
 
 bool Qwen35::ane_splits(int T) const { return ane_ && ane_on_ && !cfg_.moe && ane_->splits(T); }
 
-void Qwen35::ane_begin_chunk(int T) {
-  ane_->begin_chunk(T);
+bool Qwen35::ane_begin_chunk(int T) {
+  if (!ane_->begin_chunk(T)) return false;
   ++ane_stats_.chunks;
+  return true;
 }
 
 bool Qwen35::ane_finish_chunk() {
@@ -425,7 +426,7 @@ double Qwen35::ane_verify(int n_layers, const std::vector<int>& rows) {
   auto split = [&](Buffer& o, int T, bool ane) {
     memset(o.ptr(), 0, o.size);
     ane_->fill_partial(ane ? 0x7e00 : 0);  // NaN where the ANE leaves the output unwritten
-    ane_->begin_chunk(T);
+    if (!ane_->begin_chunk(T)) throw std::runtime_error("ANE keepalive: an evaluation never returned");
     auto e = g.begin();
     const uint32_t gc = ane_->gpu_channels();
     for (int l = 0; l < n_layers; ++l) {
@@ -484,7 +485,7 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
       if (rep) go.push_back(e->gpu_ms() / n);
     }
     {
-      ane_->begin_chunk(T);
+      if (!ane_->begin_chunk(T)) throw std::runtime_error("ANE keepalive: an evaluation never returned");
       auto e = g.begin();
       for (int l = l0; l < l0 + n; ++l) {
         const Layer& L = layers_[l];
@@ -495,14 +496,14 @@ AneLayerTimes Qwen35::ane_bench(int l0, int n, int T, int reps, bool stage) {
       if (rep) gp.push_back(e->gpu_ms() / n);
     }
     {
-      ane_->begin_chunk(T);
+      if (!ane_->begin_chunk(T)) throw std::runtime_error("ANE keepalive: an evaluation never returned");
       double t = 0;
       for (int l = 0; l < n; ++l) t += ane_->eval_sync(l & 1);
       if (rep) an.push_back(t / n);
       ane_->finish_chunk();
     }
     {
-      ane_->begin_chunk(T);
+      if (!ane_->begin_chunk(T)) throw std::runtime_error("ANE keepalive: an evaluation never returned");
       auto e = g.begin();
       const double w0 = now_ms();
       for (int l = l0; l < l0 + n; ++l) {

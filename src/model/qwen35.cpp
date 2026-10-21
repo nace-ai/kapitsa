@@ -785,6 +785,10 @@ bool Qwen35::moe_wide() const { return cfg_.moe && (cfg_.top_k + 1) * std::max(c
 Qwen35::~Qwen35() {
   // a background ANE compile only touches its own copies (no Metal objects): let it finish on its own
   if (ane_thread_.joinable()) ane_thread_.detach();
+  // An ANE keepalive evaluation that never returned leaves a detached thread inside FfnSplit: freeing its surfaces
+  // under it would crash, and ~FfnSplit cannot wait for it. The split already falls back to the GPU, so leak the object
+  // (a few hundred MB until the process exits) instead.
+  if (ane_ && ane_->wedged()) (void)ane_.release();
 }
 
 // NI_QMM_GU without its log line (enc_qmm_gu logs it): the dense gate/up/SwiGLU fused on qmr
@@ -2860,7 +2864,8 @@ void Qwen35::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingP
   // NI_ANE: dense FFN split with the Neural Engine. A chunk carrying an in-pass checkpoint stays on the
   // GPU (the engine cuts such chunks at the boundary instead when the split would apply).
   ane_chunk_ = !snap && ane_splits(T);
-  if (ane_chunk_) ane_begin_chunk(T);
+  // A wedged keepalive makes begin_chunk fail: the chunk then takes the GPU-only FFN path below.
+  if (ane_chunk_ && !ane_begin_chunk(T)) ane_chunk_ = false;
   if (ane_chunk_ && ane_wave_rows(T)) {
     enc_prefill_wave(e, s, pos0, T, ane_wave_rows(T));
   } else {

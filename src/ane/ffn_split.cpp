@@ -237,6 +237,13 @@ void FfnSplit::init_resources() {
 }
 
 FfnSplit::~FfnSplit() {
+  if (keep_wedged_) {
+    // An evaluation never returned, so keep_mu_ may still be held, the thread may still touch the surfaces and join()
+    // would hang. Leave the thread detached and the buffers allocated (the model's owner leaks this object, see
+    // ~Qwen35) and let the process keep serving prefill on the GPU alone.
+    keep_.detach();
+    return;
+  }
   {
     std::lock_guard lk(keep_mu_);
     keep_stop_ = true;
@@ -251,14 +258,18 @@ void FfnSplit::keep_loop() {
   while (!keep_stop_) {
     keep_cv_.wait_for(lk, std::chrono::duration<double, std::milli>(keep_period_ms_), [&] { return keep_stop_; });
     if (keep_stop_) break;
-    if (h_->retired()) break;  // the Neural Engine misbehaved: leave it alone
+    // A chunk that failed or timed out, or a retired program: the Neural Engine has nothing left to keep warm and its
+    // evaluation could block, so the keepalive stops for good (splits() is false from here on).
+    if (!keep_ok_ || h_->retired()) break;
     if (in_chunk_ || fn_ >= 0) continue;
     const double idle_ms = now_ms() - last_use_;
     if (idle_ms < keep_period_ms_ || idle_ms > keep_window_s_ * 1000) continue;  // between chunks of a request, or asleep for good
+    keep_busy_ = true;
     try {
       prog_->evaluate(*bind_[0][0][0]);
     } catch (...) {
     }
+    keep_busy_ = false;
   }
 }
 
@@ -500,7 +511,11 @@ void FfnSplit::compute_row_scales() {
   }
 }
 
-bool FfnSplit::splits(int T) const { return T >= int(min_rows_) && T <= int(kMaxRows) && !h_->retired(); }
+bool FfnSplit::splits(int T) const {
+  // A keepalive evaluation in flight means no: this chunk takes the GPU path instead of waiting on the Neural Engine,
+  // which would be unbounded if that evaluation hung (a chunk that fails on its own leaves the split usable).
+  return T >= int(min_rows_) && T <= int(kMaxRows) && !h_->retired() && !keep_busy_;
+}
 
 int FfnSplit::fn_for(int T) const {
   for (size_t i = 0; i < fn_rows_.size(); ++i)
@@ -508,20 +523,39 @@ int FfnSplit::fn_for(int T) const {
   throw std::logic_error("ANE split: no function of " + std::to_string(T) + " rows");
 }
 
-void FfnSplit::begin_chunk(int T) {
+bool FfnSplit::begin_chunk(int T) {
   if (T < 1 || T > int(kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
   in_chunk_ = true;
+  bool free_lane = false;
   {
-    // Waits out a keepalive evaluation in flight (about 8 ms). Program::evaluate has no timeout, so the wait is bounded:
-    // if the Neural Engine is wedged in it, retire the split and the chunk falls back to the GPU alone.
-    std::unique_lock lk(keep_mu_, std::defer_lock);
-    if (!lk.try_lock_for(std::chrono::seconds(2))) h_->retire("the keepalive evaluation did not return");
+    // Waits out a keepalive evaluation in flight (about 8 ms), but not forever: an evaluation that never returns
+    // would otherwise block the engine thread for good.
+    const double t0 = now_ms();
+    while (true) {
+      std::unique_lock lk(keep_mu_, std::defer_lock);
+      if (lk.try_lock()) {
+        free_lane = true;
+        break;
+      }
+      if (now_ms() - t0 >= kKeepWaitMs) break;
+      std::this_thread::sleep_for(std::chrono::microseconds(500));
+    }
+  }
+  if (!free_lane) {
+    keep_wedged_ = true;
+    keep_ok_ = false;
+    in_chunk_ = false;
+    h_->retire("the keepalive evaluation did not return");
+    logi("ANE keepalive: an evaluation did not return within %d ms; the Neural Engine split is off (the GPU alone runs "
+         "prefill from here)", kKeepWaitMs);
+    return false;
   }
   fn_ = fn_for(T);
   T_ = T;
   jobs_ = 0;
   lane_[0].done = lane_[1].done = 0;
   *status_.as<uint32_t>() = 0;
+  return true;
 }
 
 void FfnSplit::stage_layer(Encoder& e, int li, int set) {
@@ -633,6 +667,7 @@ bool FfnSplit::finish_chunk(double* ane_ms) {
   in_chunk_ = false;
   last_jobs_ = jobs_;
   if (jobs_ && wired_run_ == 0) wired_run_ = wired_mb() - wired0_;
+  if (!ok) keep_ok_ = false;  // a failed or timed-out chunk: no more keepalive evaluations on this program
   return ok;
 }
 
