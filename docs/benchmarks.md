@@ -97,6 +97,12 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
 - Dory: 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on
   snsnc's 4-bit.
 
+## How the README poster was measured
+
+Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
+
+Prefill is the reading speed on a 4K-token prompt. Kapitsa's comes from the newest run without a contention or invalid flag: 2026-10-21 on the M5 Pro (Kapitsa 0.2.2, b50f1fc, macOS 26.5.2, [results](../bench/results/2026-10-21-m5pro-48gb/README.md)), 2026-10-19 on the M4 Pro (4B: 06:20 run) and M1 Pro, 2026-10-18 on the M5 Max, where every stored run is flagged for GPU contention, so read its prefill as a lower bound. Prefill on the M5 Max predates the M5 prefill kernels ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215), Nemotron-H's) and is likely higher now. The other engines' prefill is from their own stored run closest to the decode value shown, in the same session as that decode (2026-10-18 to 10-21), flagged or not: several of those runs carry contention flags, LM Studio's every one, and all of the M5 Max's. Where another engine reads faster, the poster shows it: the headline, the blue outlines and the orange bars rank decode only. Ollama on Flash-Next (M5 Max) and Splash (no prefill run) show a dash. The M5 Pro's Kapitsa decode cells are still the 2026-10-19 runs, measured in the same session as the other engines. KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](#kflash-trees-m4-pro-2026-10-21)); the DFlash, DFlash2, DSpark and LiLiCorr cells come from earlier runs. Every run is listed in [bench/README.md](../bench/README.md).
+
 ## Quality: Qwen3.6 35B-A3B against bf16 (2026-10-19)
 
 How far each precision's next-token distributions are from the bf16 model's, teacher-forced over the held-out sequences
