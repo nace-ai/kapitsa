@@ -307,7 +307,7 @@ void Qwen35::prewarm_pipelines() {
   if (getenv("NI_PREWARM") && !strcmp(getenv("NI_PREWARM"), "0")) return;
   const double t0 = now_ms();
   std::set<std::string> names = {"embed_q4", "rows_to_half", "attn_prep", "attn_prefill11", "attn_prefill11r", "swiglu_half",
-                                 "moe_topk_rows", "moe_topk_rows8", "moe_bucket", "moe_bucket2", "moe_bucket3", "moe_combine", "copy_u32",
+                                 "moe_topk_rows", "moe_topk_rows8", "moe_bucket", "moe_bucket2", "moe_bucket3", "moe_combine", "copy_u32", "kv_copy_prefix",
                                  "gdn_prep_par", "gdn_step_par_l16", "gdn_step_parr4_l16", "gdn_gnorm", "topk_stage1",
                                  "sample_stage2",
                                  "qmr_k32_w14_m32_n128", "qmr_k64_w14_m16_n64", "qmr_k64_w12_m8_n64",
@@ -1260,6 +1260,29 @@ void Qwen35::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& 
   for (int i = 0; i < cfg_.layers; ++i)
     if (cfg_.is_linear[i])
       out.push_back(c ? c->conv[size_t(i)] : s.conv[size_t(i)]), out.push_back(c ? c->rec[size_t(i)] : s.rec[size_t(i)]);
+}
+
+bool Qwen35::copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) {
+  if (n <= 0 || n > src.cap || n > dst.cap) return false;
+  const uint32_t n16 = uint32_t(cfg_.head_dim) * 2 / 16;  // 16-byte words per position
+  const uint32_t p[4] = {uint32_t(n) * n16, uint32_t(src.cap) * n16, uint32_t(dst.cap) * n16, 0};  // uint3: 16 bytes
+  auto copy = [&](const Buffer& a, const Buffer& b) {
+    e.use(pipe("kv_copy_prefix"));
+    e.buf(0, a);
+    e.buf(1, b);
+    e.bytes(2, p, sizeof p);
+    e.dispatch((p[0] + 255) / 256, uint32_t(cfg_.hkv), 1, 256);
+  };
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (!cfg_.is_linear[i]) {
+      copy(src.kc[i], dst.kc[i]);
+      copy(src.vc[i], dst.vc[i]);
+    }
+  if (mtp_loaded_) {
+    copy(src.mtp_kc, dst.mtp_kc);
+    copy(src.mtp_vc, dst.mtp_vc);
+  }
+  return true;
 }
 
 // ---- weight formats ----

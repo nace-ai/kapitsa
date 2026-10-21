@@ -113,6 +113,13 @@ class Model {
   virtual Checkpoint new_checkpoint() = 0;
   virtual void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) = 0;
   virtual void restore(Encoder& e, Seq& s, const Checkpoint& c) = 0;
+  // Copies the attention cache of positions [0, n) of `src` into `dst` (encoded into e; both caches hold at least n
+  // positions): with a recurrent-state checkpoint at n, another conversation's state at that row. False: the model
+  // cannot (nothing encoded).
+  virtual bool copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) {
+    (void)e, (void)src, (void)dst, (void)n;
+    return false;
+  }
 
   // ---- passes ----
   virtual void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) = 0;

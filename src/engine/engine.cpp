@@ -392,6 +392,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   {
     const char* v = getenv("NI_PREFIX_CKPT");
     prefix_ckpt_ = !(v && v[0] == '0' && v[1] == 0) && !lili_;
+    { const char* c = getenv("NI_PREFIX_COPY"); prefix_copy_ = !(c && c[0] == '0' && c[1] == 0); }
   }
   auto add_slot = [&](int limit) {
     Slot s;
@@ -1801,13 +1802,39 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }
   int start = 0;
   auto e = g.begin();
-  if (common == slot.tokens.size() && int(common) < n) {
-    start = int(common);  // live state continues
+  if (common > 0 && common == slot.tokens.size() && int(common) < n) {
+    start = int(common);  // live state continues (an empty slot has none: it may copy a prefix checkpoint below)
   } else {
     const TurnCheckpoint* best = nullptr;
     for (auto& c : slot.ckpts)
       if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
-    if (best) {
+    // A prefix checkpoint another idle slot holds beyond what this slot can restore: its attention cache rows
+    // [0, pos) are copied here and its recurrent state restored, then saved as this slot's own prefix checkpoint
+    // (a new conversation takes an empty slot, but the shared system prompt need not be read again).
+    TurnCheckpoint* donor_ck = nullptr;
+    Slot* donor = nullptr;
+    if (prefix_ckpt_ && prefix_copy_ && !mmp)
+      for (auto& o : slots_) {
+        if (&o == &slot || o.busy || o.seq->cap == 0) continue;
+        const size_t l = common_rows(o, keys, nullptr);
+        for (auto& c : o.ckpts)
+          if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < n && c.pos <= o.seq->cap && c.pos <= s.cap &&
+              c.pos > (best ? best->pos : 0) && (!donor_ck || c.pos > donor_ck->pos))
+            donor_ck = &c, donor = &o;
+      }
+    if (donor_ck && model_->copy_prefix(*e, *donor->seq, s, donor_ck->pos)) {
+      model_->restore(*e, s, *donor_ck);
+      for (auto& c : slot.ckpts) {
+        c.pos = -1;
+        c.query = false;
+      }
+      for (auto& c : slot.ckpts)
+        if (c.prefix) model_->save(*e, s, c, donor_ck->pos);
+      start = donor_ck->pos;
+      if (dfl_) DFlash2::reset(*slot.dseq);
+      logd("checkpoints: copied the prefix checkpoint at %d from slot %d to slot %d", start,
+           int(donor - slots_.data()), int(&slot - slots_.data()));
+    } else if (best) {
       model_->restore(*e, s, *best);
       start = best->pos;
       // the drafter ring as it was at that checkpoint (the live ring may have overwritten its window since); the
@@ -1819,7 +1846,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       model_->reset(s);
     }
     logd("checkpoints: prompt diverges at %zu of %d, %s", common, n,
-         best ? (std::string("restored ") + (best->prefix ? "prefix" : best->query ? "query" : "tool") + " checkpoint at " +
+         start > 0 && (!best || start != best->pos) ? "copied from another slot"
+         : best ? (std::string("restored ") + (best->prefix ? "prefix" : best->query ? "query" : "tool") + " checkpoint at " +
                  std::to_string(best->pos)).c_str()
               : "none usable, prefill from 0");
   }

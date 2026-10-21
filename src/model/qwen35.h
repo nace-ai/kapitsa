@@ -241,6 +241,7 @@ class Qwen35 : public Model {
   // the same rows gathered again into another sequence (empty: none), as a restored state needs them for the same drafts
   std::vector<uint32_t> draft_vocab_ids(const Seq& s, int* scanned) const;
   void draft_vocab_restore(Seq& s, const std::vector<uint32_t>& ids, int scanned);
+  bool copy_prefix(Encoder& e, const Seq& src, Seq& dst, int n) override;
 
   // Encodes one decode step for the token at tokens[pos]. With `sample`, computes logits and
   // writes the sampled id to tokens[pos+1]; without, only advances the state (prompt tokens).
