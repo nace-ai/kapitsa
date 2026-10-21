@@ -165,11 +165,11 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
    [#246](https://github.com/nace-ai/kapitsa/pull/246) (the budget chooses 8, 16 or 32 rows), opt-in:**
    - `NI_KFLASH_ROWS` defaults to `8`, one 8-row tile; naming `8,16,32` lets the budget measure and pick wider tiles
      per cycle. With the tile-pair MLP a 16-row verify cycle costs 1.07× and a 32-row one 1.49× the 8-row cycle on the
-     27B's coding answer; the tok/s gain from asking for `8,16,32` is not claimed: the 27B's T=0.6 decode spread over
-     repetitions is larger than the effect we could separate, and a paired A/B is still to do.
+     27B's coding answer; on a paired A/B (27B, greedy, n=3) asking for `8,16,32` gave a median +3% tok/s
+     (72.9 vs 70.5) at +12% tokens per cycle, ranges overlapping, so not claimed as a gain.
    - A wide verify's attention is the 8-row tree attention (`attn8m_partial_tree`: each row's ancestors by mask), not
      the 8-row path's tree-zone split (`NI_V8_TREE_ATTN=2`), which is a kernel of one tile. The rows' logits therefore
-     round differently from the 8-row path's: measured on the 4B, max |logit diff| 0.039 (0.0016 of the row's range),
+     round differently from the 8-row path's: measured on the 4B, max |logit diff| 0.019 (0.0005 of the row's range),
      every live row's argmax equal to plain decoding, and greedy replies identical. Making the zone split work on more
      than one tile is open work, not a correctness item.
 6. Merging to `main` waits for the user. `main` has moved on, so bring the branch up to date first, then rerun the

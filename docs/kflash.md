@@ -218,8 +218,11 @@ A paired A/B on the 27B over a 256-token coding prompt (greedy, three interleave
 lock: MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2, the code of #245 and #246 at `ac82451`) measures it: the default 8-row pass runs
 70.6/70.5/68.8 tok/s at 4.76 tokens per cycle with verify cycles of 68.7-69.7 ms, and `NI_KFLASH_ROWS=8,16,32` runs
 69.3/74.7/72.9 tok/s at 5.20/5.44/5.33 tokens per cycle, its 16-row verify cycles costing 74.4 ms and 32-row ones 115.4
-(median +4% throughput at +12% tokens per cycle; one run also paid to measure 32-row verifies, which do not pay). All six
-runs generated the same greedy ids as plain decoding. The 8-row default is unchanged against `main`'s binary to the bit.
+(median 72.9 vs 70.5 tok/s, +3% at +12% tokens per cycle; n=3 and the ranges overlap, 68.8-70.6 against 69.3-74.7, so the gain is
+suggestive, not settled; the wide runs' own 8-row cycles cost 73.3-73.6 ms against the default's 68.7-69.7, a ~5% overhead the
+gain has to clear; one run also paid to measure 32-row verifies, which do not pay). All six runs generated the same greedy
+ids as plain decoding. Separately, on the 4B, `logit_compare` of `logit_dump` from `main` and from `ac82451` (default 8 rows)
+found every row bitwise identical; that was not repeated on the 27B.
 
 So the tiles are opt-in: one tile is the setting the default's cost table is tuned for, and a Mac where the budget's
 measurements say a wider verify pays (the 27B and the 4B at 4-bit do, on prose and coding answers) can have it without
