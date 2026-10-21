@@ -1,8 +1,8 @@
 # Results, 2026-10-22: MacBook Pro M5 Pro, 48 GB (Dory, current main)
 
 The Nemotron Dory1.0 4B row of [docs/benchmarks.md](../../../docs/benchmarks.md#nemotron-dory10-4b) is a 2026-10-19
-session on 0.1.36, before the M5 prefill kernels. These two runs re-measure the two KV settings on current main
-(`fd01fe9`, the docs branch over 180a650), written by
+session on 0.1.36, before the M5 prefill kernels. These two runs re-measure the two KV settings on current main (engine
+`180a650`, built from the docs branch `fd01fe9`, which differs from it only in docs, harness and tests), written by
 [bench/harness](../../harness/README.md): `compare_engines.py configs/dory.json --only dory-kapitsa[-perloop] --skip
 tools,agent,sustain`, one config at a time under the GPU lock.
 
