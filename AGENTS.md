@@ -29,8 +29,8 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test fn_store_test`
-and `fn_dflash_test`:
+CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
+structured_check fn_store_test fn_dflash_test`:
 
 ```bash
 build/api_test
@@ -45,10 +45,12 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_pr_size.py
 python3 tests/test_logit_compare.py
+python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 
-Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `nh_eval --vcheck`,
-`batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`): run it only when allowed, and report it as run.
+Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
+`batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_structured.py URL`,
+`logit_mask_check`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
@@ -66,10 +68,11 @@ by `cmake/embed_*.cmake`; a new `.metal` file is picked up by the glob.
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
-interleaved A/B *and* an output check: greedy tokens and logits against the old path, with differences only at
-near-ties (`tools/logit_compare.py` reports the flips and their margins; `batch_check`, `ni_v8check` and
-`nh_eval --vcheck` are the usual comparisons). Put the numbers in the PR. "The same outputs to the bit" is a claim with
-evidence or it is not made.
+interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new
+build, `tools/logit_compare.py` between them, gated at twice the model's noise floor on this Mac
+(`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
+("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
+Never re-measure or edit a floor to let a change pass: `tools/logit_floor.py` re-measures one, in a PR of its own.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 

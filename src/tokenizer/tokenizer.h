@@ -25,6 +25,8 @@ class Tokenizer {
   int find(const std::string& token) const; // -1 if absent
   int vocab_size() const { return int(id_to_bytes_.size()); }
   bool is_special(int id) const;
+  // An added token (tokenizer.json's added_tokens: <|im_end|>, <think>, <tool_call> ...): matched whole, never text
+  bool is_added(int id) const;
 
  private:
   void bpe(const std::string& word, std::vector<int>& out) const;
@@ -35,6 +37,7 @@ class Tokenizer {
   std::unordered_map<uint64_t, std::pair<int, int>> merges_; // (a,b) -> (rank, merged id)
   std::vector<std::pair<std::string, int>> added_;    // content -> id, longest first
   std::vector<bool> special_;
+  std::vector<bool> added_id_;
   int byte_id_[256];
   bool tekken_ = false;         // Tekken pre-tokenizer (else Qwen's)
   bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken has no normalizer)

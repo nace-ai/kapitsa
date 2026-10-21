@@ -285,6 +285,59 @@ ResponsesRequest responses_request(const ojson& body, const ResponseStore& store
     }
   if (body.contains("tool_choice") && body["tool_choice"].is_string() && body["tool_choice"] == "none")
     r.tools = ojson::array();
+  // Structured output (src/engine/grammar.h): text.format, tool_choice required, a named function or custom tool, or
+  // allowed_tools, parallel_tool_calls, and strict function tools ("strict": true; one that leaves it out is not strict,
+  // where OpenAI defaults it to true: coding agents send their tools without it and stay unconstrained)
+  {
+    OutputSpec spec;
+    const ojson text = body.contains("text") && body["text"].is_object() ? body["text"] : ojson::object();
+    if (text.contains("format") && !text["format"].is_null()) {
+      const ojson& f = text["format"];
+      if (!f.is_object()) bad("text.format must be an object", "text.format");
+      const std::string type = str(f, "type");
+      if (type == "json_object") spec.format = OutputSpec::Format::kJsonObject;
+      else if (type == "json_schema") schema_format(f, spec, "text.format");
+      else if (type != "text") bad("text.format.type must be \"text\", \"json_object\" or \"json_schema\"", "text.format.type");
+    }
+    // a function's name as the prompt declares it (a namespace's functions go by namespace__name)
+    auto prompt_name = [&](const ojson& c) {
+      return str(c, "namespace").empty() ? str(c, "name") : alias(str(c, "namespace"), str(c, "name"));
+    };
+    if (body.contains("tool_choice") && !body["tool_choice"].is_null()) {
+      const ojson& tc = body["tool_choice"];
+      const std::string type = tc.is_string() ? tc.get<std::string>() : str(tc, "type");
+      if (tc.is_string()) {
+        if (type == "required") spec.tools = OutputSpec::Tools::kRequired;
+        else if (type != "auto" && type != "none") bad("tool_choice must be \"none\", \"auto\", \"required\" or a tool", "tool_choice");
+      } else if ((type == "function" || type == "custom") && !str(tc, "name").empty()) {
+        spec.tools = OutputSpec::Tools::kNamed;
+        spec.tool = prompt_name(tc);
+      } else if (type == "allowed_tools") {
+        if (!tc.contains("tools") || !tc["tools"].is_array() || tc["tools"].empty())
+          bad("tool_choice.tools must list the allowed tools", "tool_choice.tools");
+        for (const ojson& c : tc["tools"])
+          if (!str(c, "name").empty()) spec.allowed.push_back(prompt_name(c));
+        const std::string mode = str(tc, "mode");
+        if (mode == "required") spec.tools = OutputSpec::Tools::kRequired;
+        else if (!mode.empty() && mode != "auto") bad("tool_choice.mode must be \"auto\" or \"required\"", "tool_choice.mode");
+      } else if (tc.is_object() && !type.empty()) {
+        bad("tool_choice \"" + type + "\": a built-in tool this server does not run", "tool_choice");
+      } else {
+        bad("tool_choice must be \"none\", \"auto\", \"required\" or a tool", "tool_choice");
+      }
+    }
+    if (body.contains("parallel_tool_calls") && body["parallel_tool_calls"].is_boolean())
+      spec.parallel = body["parallel_tool_calls"].get<bool>();
+    if (!r.tools.empty() && body.contains("tools") && body["tools"].is_array())
+      for (const auto& t : body["tools"]) {
+        auto strict = [](const ojson& x) { return x.contains("strict") && x["strict"].is_boolean() && x["strict"].get<bool>(); };
+        if (str(t, "type") == "function" && strict(t)) spec.strict_tools.push_back(str(t, "name"));
+        if (str(t, "type") == "namespace" && t.contains("tools") && t["tools"].is_array())
+          for (const auto& c : t["tools"])
+            if (str(c, "type") == "function" && strict(c)) spec.strict_tools.push_back(alias(str(t, "name"), str(c, "name")));
+      }
+    r.grammar = request_grammar(spec, r.tools, "text.format");
+  }
 
   r.max_tokens = 32768;
   if (body.contains("max_output_tokens") && !body["max_output_tokens"].is_null()) {

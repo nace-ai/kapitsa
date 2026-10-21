@@ -1019,6 +1019,7 @@ void Qwen35::encode_verify(Encoder& e, Seq& s, int pos, int R, const SamplingPar
   }
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  enc_logit_mask(e, s, logits_, R, int(V), int(V));  // structured output (nothing without masks)
   kp::TopkStage ts{V, K, chunk};
   e.use(pipe2("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);

@@ -26,9 +26,14 @@ not ask for abstractions, interfaces or configuration the change does not need.
 
 - A PR that says faster must show interleaved A/B numbers (old and new builds alternating, on an otherwise idle GPU) with
   the Mac, macOS version and commit. One run, or only the new build, is not evidence.
-- A PR that says "same outputs", "bit for bit" or "lossless" must show an output check (greedy tokens and logits against
-  the old path, differences only at near-ties). If the diff changes the order of floating-point operations, a quantization,
-  a rounding, a tile shape or a sampling path, treat the claim as unproven and say what changed.
+- A PR that says "same outputs", "bit for bit" or "lossless" must show an output check: `tools/logit_compare.py`'s
+  report on whole `logit_dump` dumps of the old and the new build (every path: the prefill path decides whether the
+  stricter decode gate applies), "every row bitwise identical" for a bitwise claim, or PASS against the model's noise
+  floor in `tools/logit_floors/` for differences only at near-ties. If the diff changes the order of floating-point
+  operations, a quantization, a rounding, a tile shape or a sampling path, treat the claim as unproven and say what
+  changed. A report that FAILs the gate means the change moves outputs: the PR must say so.
+- `tools/logit_floors/*.json` change only through `tools/logit_floor.py` (the file records its build, Mac and date), in
+  a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or
   numerics change that is presented as verified without evidence.
 - More than one unrelated change in a PR (speed change plus refactor plus docs rewrite): say it should be split.

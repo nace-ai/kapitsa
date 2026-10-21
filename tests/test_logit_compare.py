@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tools/logit_compare.py on synthetic dumps: the numbers (KL, flips and their
+"""tools/logit_compare.py and tools/logit_floor.py's gate on synthetic dumps: the numbers (KL, flips and their
 margins, the NLL change, percentiles) against a direct computation, records matched by their prefix tokens in any
 order, the gate's verdicts and exit status, refusals of dumps that cannot be compared, and the standard library and
 numpy giving the same numbers. CPU only, stdlib only (numpy too when it is installed).
@@ -13,6 +13,7 @@ TOOLS = os.path.join(HERE, "..", "tools")
 SCRIPT = os.path.join(TOOLS, "logit_compare.py")
 sys.path.insert(0, TOOLS)
 import logit_compare as lc  # noqa: E402
+import logit_floor as lf  # noqa: E402
 
 FAILED = []
 V = 300  # vocabulary
@@ -258,6 +259,27 @@ with tempfile.TemporaryDirectory() as tmp:
     check(rc == 0 and "decode passes' gate" not in out, "another prefill: the whole floor's gate", out)
     rc, out = run(os.path.join(tmp, "P"), os.path.join(tmp, "Q"), "--floor", floor_json, "--max-mean-kl", "1")
     check(rc == 0, "a flag overrides the decode gate's bound too", out)
+
+    # ---- logit_floor.py: the floor is the worst source in it, the gate twice that ----
+    sources = {
+        "repeat": {"in_floor": True, "paths": {"verify": src(bitwise=192, kl_mean=0, kl_p99=0, kl_max=0,
+                                                             margin_change_max=0, tie_margin=0)}},
+        "batch": dict(src(kl_mean=2e-5, flips=1, top1=1 - 1 / 192), in_floor=True),
+        "chunk": dict(src(kl_p99=3e-4, margin_change_max=0.04, tie_margin=0.04), in_floor=True),
+        "step": dict(src(kl_mean=1.0, kl_p99=1.0, flips=50), in_floor=False),
+    }
+    fl, gate = lf.floor_and_gate(sources)
+    check(fl["kl_mean"] == 2e-5 and fl["set_by"]["kl_mean"] == "batch" and fl["kl_p99"] == 3e-4
+          and fl["set_by"]["kl_p99"] == "chunk" and fl["flips"] == 1, "the floor: the worst source in it", fl)
+    check(gate == {"min_top1": 0.989583, "max_mean_kl": 4e-5, "max_p99_kl": 6e-4, "near_tie": 0.04, "max_far_flips": 0},
+          "the gate: twice the floor", gate)
+    sources["batch"]["flips"] = 0
+    check(lf.floor_and_gate(sources)[1]["min_top1"] == 0.989583, "a floor without flips still allows two in 192")
+    sources["repeat"]["paths"]["prefill"] = src(records=8, flips=8, kl_mean=9.0)  # (a check, not a measure)
+    check(lf.floor_and_gate(sources)[0]["kl_mean"] == 2e-5, "the prefill path's rows are not in the floor")
+    sources["batch"]["decode"] = sources["repeat"]["decode"] = True
+    dfl, dgate = lf.floor_and_gate(sources, "decode")
+    check(dfl["kl_p99"] == 1e-4 and dgate["max_p99_kl"] == 2e-4, "the decode floor: its own sources alone", dfl)
 
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)

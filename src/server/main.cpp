@@ -113,6 +113,8 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
   r.loops = api::request_loops_field(b);
+  // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
+  r.grammar = api::chat_grammar(b, r.tools);
   return r;
 }
 
@@ -912,6 +914,10 @@ static int serve(int argc, char** argv, int first) {
     try {
       body = json::parse(req.body);
       r = parse_request(body, engine.request_defaults());
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(api::dump(api::chat_error(e.what(), e.type, e.code, e.param)), "application/json");
+      return;
     } catch (const std::exception& ex) {
       res.status = 400;
       res.set_content(api::dump(api::chat_error(std::string("bad request: ") + ex.what())), "application/json");

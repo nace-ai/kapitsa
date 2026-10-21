@@ -391,6 +391,56 @@ Effort levels: `none` and `minimal` turn thinking off; `low` and `medium` go to 
 them; `high`, `xhigh` and `max` keep the template's default, Qwen3.8's highest level. The other models think the same at
 every level. In Messages, `"thinking": {..., "display": "omitted"}` returns thinking blocks without their text.
 
+### Structured output
+
+A request can hold the reply to a JSON Schema, to any JSON object, or to tool calls. Each token is then sampled under a
+mask of the tokens that keep the reply valid, so it cannot leave the format: greedy picks the best allowed token,
+sampling draws from the allowed tokens' renormalized distribution (after `top_k` and `top_p`, as without a format).
+The reasoning stays free; with thinking on, the format holds from `</think>` on. The prompt is not changed: say in the
+messages what the reply should contain.
+
+| API | JSON Schema | Any JSON object | A tool call |
+| --- | --- | --- | --- |
+| Chat Completions | `"response_format": {"type": "json_schema", "json_schema": {"name": ..., "schema": {...}, "strict": true}}` | `"response_format": {"type": "json_object"}` | `"tool_choice": "required"` or `{"type": "function", "function": {"name": ...}}` |
+| Responses | `"text": {"format": {"type": "json_schema", "name": ..., "schema": {...}, "strict": true}}` | `"text": {"format": {"type": "json_object"}}` | `"tool_choice": "required"`, `{"type": "function", "name": ...}` (or `"custom"`), or `{"type": "allowed_tools", "mode": "required", "tools": [...]}` |
+| Messages | `"output_format": {"type": "json_schema", "schema": {...}}` (or `output_config.format`) | | `"tool_choice": {"type": "any"}` or `{"type": "tool", "name": ...}` |
+
+- **Tool calls:** a forced call is written in the model's own format (Qwen's `<tool_call>` XML), names one of the
+  request's tools (the named one) and has arguments that follow the tool's `parameters` schema: the required ones, each
+  at most once, no others where the schema closes the object, values of the declared types (an argument declared
+  `"type": "string"` is written as raw text, as the template writes it: one of its `enum` values if it has them, its
+  length, `pattern` and `format` not held; others as JSON following their schema). One call or more, or one
+  with `"parallel_tool_calls": false` (Messages: `"disable_parallel_tool_use": true`). A tool marked `"strict": true`
+  has its arguments held to its schema whenever the model calls it, with `tool_choice` `auto` too (the model may still
+  answer in text). In Responses a function without `strict` is not strict (OpenAI's API makes it strict by default:
+  coding agents send their tools without it and stay unconstrained).
+- **A format beside tools** (`tool_choice` `auto`): the reply is the JSON or tool calls.
+- **`strict`:** objects take no keys their schema does not declare, unless it says `additionalProperties`; without
+  `strict` they take any (JSON Schema's rule). Messages formats are strict.
+- **The JSON Schema subset held:** `type` (one or a list), `properties`, `required`, `additionalProperties` (a boolean or
+  a schema), `enum`, `const`, `items` and `prefixItems` with `minItems` and `maxItems`, `anyOf`, `oneOf` (as `anyOf`: a
+  value matching two alternatives is not refused), `allOf` (merged), `$ref` within the schema (`#/$defs/...`, recursion
+  included), `nullable`, a string's `minLength` and `maxLength` (an escape counts as one character), and an integer's
+  `minimum`, `maximum`, `exclusiveMinimum` and `exclusiveMaximum`. Not held (the reply may break them): a string's
+  `pattern` and `format`, a number's bounds (but a `minimum` of 0 or more, which rules out a minus sign), `multipleOf`,
+  `uniqueItems`, `not` and `if`/`then`; `patternProperties` is read as allowing no other keys. A remote `$ref`, an
+  unknown type, a schema no value satisfies or one nested deeper than 64 levels is a 400 naming the field.
+- **Layout:** between two JSON tokens at most 48 bytes of whitespace with at most 2 line breaks, nothing after the
+  value, at most 20 digits before a number's point (19 for integers), 24 after it and 3 in its exponent: a model that
+  starts repeating spaces or digits is held to a short run instead of writing to `max_tokens`. A reply cut by
+  `max_tokens` or a stop sequence is cut JSON, as with OpenAI.
+- **Speed:** a mask over Qwen's 248K-token vocabulary costs about 3 µs at the median and under 50 µs in 99 cases of
+  100 on an M4 Pro (the first time a server meets a kind of text, it builds a cache entry for it: a few ms, once),
+  computed while the GPU runs the layers of the pass that samples under it. With a DFlash2 draft model (the Qwen
+  models) drafts still verify, each verify row under its own mask (`NI_GRAMMAR_SPEC=0` decodes one token per pass
+  instead), and requests at once still share batched passes, each member's rows under its own masks. Qwen3.5 4B on
+  the M4 Pro: a reply the format does not change decodes as fast as without it (168 tok/s with KFlash, 90 without);
+  five JSON replies under schemas, 177 tok/s with KFlash cycles under masks against 88 tok/s one token per pass, the
+  same greedy replies. A format that changes what the model writes changes how many drafts are accepted, and so the
+  speed.
+  With the other drafters (MTP, LiLiCorr, DSpark, prompt lookup, Dory's own) the formatted part decodes one token per
+  pass and takes turns on the GPU.
+
 ### Dory: thinking depth
 
 NVIDIA's Nemotron Dory1.0 4B is a looped model: 16 input layers, a shared block of 40 layers, 16 output layers,
@@ -695,6 +745,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_BATCH_KF` | on | Requests decoding at once with the Qwen draft models (2 to 4 of them): KFlash chooses each shared pass's rows, how many in all and which request gets them, from the draft model's calibrated probabilities and this Mac's measured cost of a shared pass (cached with the KFlash budget). `0`: a fixed number per request, as measured before (two requests 4 rows each, three or four 2 each; the 27B's three take turns). |
 | `NI_BATCH_KF_FLOOR` | `0` | With `NI_BATCH_KF`: `1` gives every request in a shared pass at least one draft row. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
+| `NI_GRAMMAR_SPEC` | on | [Structured output](#structured-output) with a DFlash2 draft model (the Qwen models): drafts are still verified, each verify row under its own mask; `0` decodes the formatted part one token per pass. |
 | `NI_DISK_CACHE` | | As `--disk-cache` when the option is absent; tools that start an engine without `kapitsa serve` keep no SSD prefix cache unless it is set. |
 | `NI_DISK_CACHE_IDLE_MS` | `10000` | SSD prefix cache: how long the server is idle after a turn before it writes the conversation, in ms. |
 | `NI_DISK_CACHE_MIN` | `1024` | SSD prefix cache: the shallowest state kept, in tokens. |

@@ -921,6 +921,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   enc_qmm8(e, {{&lm_head_, logits_}}, R, v8t_, v8s_, false, tl ? &v8tt_ : nullptr);
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
   const uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
+  // structured output: each row's mask (a tree's row r: node r's, after its path), nothing without masks
+  enc_logit_mask(e, s, logits_, R, int(V), int(V));
   kp::TopkStage ts{V, K, chunk};
   // a tree: its live rows alone (tree[kKfN])
   e.use(pipe8(tree ? "topk_stage1_rows_tree" : "topk_stage1_rows"));
@@ -1166,6 +1168,23 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
   for (const VerifyGroup& gr : groups)
     if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
   const uint32_t V = uint32_t(cfg_.vocab), chunk = 2048, ntg = (V + chunk - 1) / chunk;
+  // structured output: the masked members' rows, after one GPU wait for the host's masks (it signals every member's at
+  // once: the latest value covers them all); nothing without masks
+  {
+    void* ev = nullptr;
+    uint64_t val = 0;
+    for (const VerifyGroup& gr : groups)
+      if (gr.s->mask_rows > 0 && gr.s->mask_event) ev = gr.s->mask_event, val = std::max(val, gr.s->mask_value);
+    if (ev) e.wait_event(ev, val);
+    for (size_t g = 0; g < groups.size(); ++g) {
+      Seq& sq = *groups[g].s;
+      if (sq.mask_rows <= 0) continue;
+      void* const keep = sq.mask_event;
+      sq.mask_event = nullptr;  // (waited for above)
+      enc_logit_mask(e, sq, rows(logits_, g, V), groups[g].R, int(V), int(V));
+      sq.mask_event = keep;
+    }
+  }
   const kp::TopkStage ts{V, Kmax, chunk};
   e.use(pipe8("topk_stage1_rows"));
   e.buf(0, logits_); e.buf(1, cand_v_); e.buf(2, cand_i_);

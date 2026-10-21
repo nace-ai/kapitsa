@@ -59,6 +59,15 @@ struct AttnPrepParams {
   dst[gid.y * p.y + gid.x] = src[gid.y * p.x + gid.x];
 }
 
+// ---- KV prefix copy between two conversations' caches (Model::copy_prefix): positions [0, n) of every kv head of a
+// [H, src_cap, D] cache into a [H, dst_cap, D] one, in 16-byte words. p = (n, src_cap, dst_cap) in words per head.
+// grid: x = ceil(p.x / 256) threadgroups of 256 threads, y = H.
+[[kernel]] void kv_copy_prefix(const device uint4* src [[buffer(0)]], device uint4* dst [[buffer(1)]],
+                               constant uint3& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  if (gid.x >= p.x) return;
+  dst[gid.y * p.z + gid.x] = src[gid.y * p.y + gid.x];
+}
+
 // ---- Decode attention, split-K over the cache ("flash decoding") ----
 // One threadgroup per (chunk, kv head); its G = Hq/Hkv simdgroups are the query heads sharing that
 // kv head, so K/V tiles are read from memory once and reused from threadgroup memory.
