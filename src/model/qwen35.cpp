@@ -2012,7 +2012,7 @@ static Pipeline pipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
   if (it == cache.end()) {
-    if (n.rfind("qmt", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+    if (n.rfind("qmt", 0) == 0 || n.rfind("qattn_t", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
     it = cache.emplace(n, Gpu::get().pipeline(n)).first;
   }
   return it->second;
@@ -2714,6 +2714,15 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
                                   : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
+  // NI_QATTN (default on, 0 = off): D 256, 4 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5
+  static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
+  if (qattn && cfg_.head_dim == 256 && cfg_.hq == 4 * cfg_.hkv) {
+    e.use(pipe("qattn_t_s8k16"));
+    e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
+    e.val(5, fp);
+    e.dispatch((T + 31) / 32, cfg_.hkv, 1, 256);
+    return;
+  }
   if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head
   else if (full == "attn_prefill") th = 128;
   else if (full == "attn_prefill2" || full == "attn_prefill3" || full == "attn_prefill4") qb = 8;

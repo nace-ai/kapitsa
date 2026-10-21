@@ -19,6 +19,8 @@ struct AttnPrefParams {
   uint32_t T, Hq, Hkv, pos0, max_seq;
   float scale;
 };
+namespace ni { extern const char* const kTensorKernelSource; }
+using ni::kTensorKernelSource;
 int main(int argc, char** argv) {
   uint32_t T = argc > 1 ? atoi(argv[1]) : 2048, L = argc > 2 ? atoi(argv[2]) : 16384;
   Gpu& g = Gpu::get();
@@ -99,6 +101,7 @@ int main(int argc, char** argv) {
       }
       if (ns * T > max_rows) fatal("nsplit %u x T %u > %u", ns, T, max_rows);
     }
+    if (name.rfind("qattn_t", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
     Pipeline pl = g.pipeline(name);
     static Pipeline red = g.pipeline("attn11_reduce");
     uint32_t qb = (name == "attn_prefill" || name == "attn_prefill5" || name == "attn_prefill6" || name.rfind("attn_prefill7", 0) == 0) ? 4 : 8;
@@ -107,6 +110,7 @@ int main(int argc, char** argv) {
     if (name.rfind("attn_prefill10_q", 0) == 0) { qb = atoi(name.c_str() + 16); th = qb * 64; }
     if (name.rfind("attn_prefill10u_q", 0) == 0) { qb = atoi(name.c_str() + 17); th = qb * 64; }
     if (name.rfind("attn_prefill11", 0) == 0) { qb = 32; th = 256; gy = Hq; }  // 32 queries of one q head  // 32 queries of one q head
+    if (name.rfind("qattn_t", 0) == 0) { const uint32_t nsg = name.find("s16") != std::string::npos ? 16 : name.find("s2k") != std::string::npos ? 2 : name.find("s8") != std::string::npos ? 8 : 4; qb = 4 * nsg; th = 32 * nsg; gy = Hkv; }
     const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
     if (gq) gy = Hkv;
     auto run = [&](int n = 1) {  // n back-to-back calls in one command buffer, ms per call
