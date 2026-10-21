@@ -1252,6 +1252,7 @@ void Dory::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, ui
   enc_rows(e, s, pos, 1);
   if (!sample) return;
   enc_head(e, x_, 1, logits_, size_t(cfg_.vocab));
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
   enc_sample(e, logits_, s.tok, pos + 1, sp, step);
 }
 
@@ -1271,6 +1272,7 @@ void Dory::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingPar
   }
   if (!sample) return;
   enc_head(e, last, 1, logits_, size_t(cfg_.vocab));
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
   enc_sample(e, logits_, s.tok, pos0 + T, sp, step);
 }
 

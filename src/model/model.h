@@ -47,7 +47,21 @@ struct Seq {
   const std::vector<vision::EmbedRun>* embeds = nullptr;
   Buffer rope_pos;
   int rope_n = 0, rope_delta = 0;
+  // Structured output (src/engine/grammar.h): token masks for the rows this sequence samples in its next pass (uint32
+  // words, mask_words per row; bit t set: token t allowed), applied to its logits before its sampler (enc_logit_mask),
+  // so that the sample and any speculative acceptance read the masked distribution. mask_rows 0: none, and no pass
+  // changes. mask_event: the GPU waits for the host to signal mask_value before applying them (the host computes them
+  // while the pass's layers run); null: they are in place when the pass is committed.
+  Buffer mask;
+  int mask_rows = 0, mask_words = 0;
+  void* mask_event = nullptr;
+  uint64_t mask_value = 0;
 };
+
+// Structured output: logits rows [0, rows) of `logits` (ld floats apart, vocab of them tokens) take s's mask rows
+// [mask_row0, mask_row0 + rows), after a GPU wait for the host's signal when s.mask_event is set. Nothing is encoded for
+// a sequence without masks (s.mask_rows 0).
+void enc_logit_mask(Encoder& e, Seq& s, const Buffer& logits, int rows, int vocab, int ld, int mask_row0 = 0);
 
 // Snapshot of a Seq's recurrent state at a position (attention KV needs no copy: entries
 // before `pos` stay valid as long as the token prefix matches).

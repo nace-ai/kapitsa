@@ -1938,6 +1938,7 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
   static Pipeline st1 = Gpu::get().pipeline("topk_stage1");
   static Pipeline st2 = Gpu::get().pipeline("sample_stage2");
   enc_qmv(e, lm_head_, xrow, logits_, nullptr, final_norm_);
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
   // stage 2 holds 4 candidates per thread (4096): 122 threadgroups x 32 fits
   uint32_t K = sp.temperature > 0 ? uint32_t(std::clamp(sp.top_k <= 0 ? 32 : sp.top_k, 1, 32)) : 1u;
   kp::TopkStage ts{uint32_t(cfg_.vocab), K, 2048};

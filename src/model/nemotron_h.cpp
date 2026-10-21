@@ -2446,6 +2446,7 @@ void NemotronH::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& s
   enc_rows(e, s, pos, 1, true);
   if (!sample) return;
   enc_head(e, 1, logits_, size_t(cfg_.vocab));
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
   enc_sample(e, logits_, s.tok, pos + 1, sp, step);
 }
 
@@ -2471,6 +2472,7 @@ void NemotronH::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Sampli
   if (!sample) return;
   enc_norm(e, last, out_norm_, xn_, 1, cfg_.hidden);
   enc_mv(e, head_, xn_, logits_, 1, 0);
+  enc_logit_mask(e, s, logits_, 1, cfg_.vocab, cfg_.vocab);  // structured output (nothing without masks)
   enc_sample(e, logits_, s.tok, pos0 + T, sp, step);
 }
 
