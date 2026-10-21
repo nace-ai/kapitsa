@@ -74,7 +74,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -83,6 +83,9 @@ jobs:
       - name: C++ tests
         if: steps.changes.outputs.code == 'true'
         run: build/api_test
+      - name: prefix cache store
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/prefix_cache_test
       # One step per suite, so one failure does not hide the others.
       # tests/test_bench.py is not run here: on a hosted runner (a VM, "Apple M1 (Virtual)") `kapitsa bench` aborts on a
       # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
