@@ -7,15 +7,22 @@
 //    Before any records, alpha 0 and beta 1: p = q.
 //  - cost: a cycle's GPU time with n verify rows, measured on the Mac it runs on: its drafting half's command buffer
 //    and its verify's, in ms, whichever tool runs the cycles (ni_run, the server), so the cache means one thing
-//    whoever wrote it. The first cycles try every allowed n three times (unless the cache already holds a table for
+//    whoever wrote it. The first cycles try every allowed n a few times (unless the cache already holds a table for
 //    this model, drafter and chip). A cost is a base that every cycle moves (the context's length: the 35B's cycles
 //    cost ~7 ms more at 21k tokens than at 100, whatever n) plus n's own offset, a running mean of what its cycles
-//    cost above the base; each process sets the base by its first cycle (a count the cache holds).
+//    cost above the base; each process sets the base by its first cycle (a count the cache holds). Wide verifies
+//    (below) model the drift as a ratio: log cost(n) = log base + log ratio(n), the base an 8-row verify's cost now
+//    and the ratios each count's own, fitted online.
 // The builder takes the allowed n that maximizes E(n) - rate cost[n], E(n) the tokens a verify of n rows is expected
 // to emit (1 + the summed calibrated path probabilities of the first n - 1 nodes) and rate the tokens per ms the
 // recent cycles gave (their long-run rate, which a row must beat to pay: the base cancels); before 16 cycles of this
 // process, E(n) / cost[n]. Which n a backend allows is what its verify kernels run at a cost of their own: whole
-// 8-row tiles on the dense Qwen models (one tile today), every row count on MoE targets, whose rows cost experts.
+// 8-row tiles on the dense Qwen models (8 | 16 | 32 rows), every row count on MoE targets, whose rows cost experts.
+// Wide verifies (set_wide: Qwen's 16 / 32 rows, one verify of capacity max_rows whose live tiles the GPU picks): the
+// capacity is a choice too. A wide verify of 8 live rows costs a little more than the 8-row verify (its grids are
+// GPU-driven), so each cycle verifies at capacity 8 (the rule then has 8 rows only) unless the recent cycles' trees
+// (the builder still builds max_rows nodes and records E(8), E(16), E(32)) say the per-cycle choice among all counts
+// gives more tokens per ms than 8 rows at the 8-row verify's cost; both costs are measured, like every count's.
 // The cache file (KAPITSA_HOME/kflash/<key>.json) keeps the table and the calibration: written when the budget ends
 // and on save() (the engine saves between requests, the server when it is stopped).
 // KfBatch (below) is the same budget for batched decode: the rows one verify pass gives the members of a batch.
@@ -62,11 +69,13 @@ class KfBudget {
   ~KfBudget();  // save()
   // the row counts the backend's verify runs (bit n - 1) and its capacity; default: 1 .. 8 rows, 8
   void set_rows(uint32_t allowed, int max_rows);
+  // the counts past 8 run as one wide verify of capacity max_rows (see above): the capacity is chosen per cycle
+  void set_wide(bool on);
   // after a cycle: the tree descriptor as its acceptance left it (rows, records) and the cycle's GPU time (ms): its
   // drafting half's command buffer and its verify's, Encoder::gpu_ms() of each
   void observe(const int32_t* tree, double ms);
-  // before the next cycle's drafting pass
-  void write(KfParams& p) const;
+  // before the next cycle's drafting pass (p.cap: the capacity the verify must be encoded with)
+  void write(KfParams& p);
   // the table and the calibration to the cache file, once 32 cycles were observed here and `fresh` of them since the
   // last save. From any thread (the server saves on its stop signal while a request may be in its cycles).
   void save(int fresh = 1);
@@ -75,8 +84,9 @@ class KfBudget {
   std::string summary() const;
   int cycles() const { return cycles_; }
   // n rows' cost now (ms; 0: not measured)
-  double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? c_.at(n) : 0.0; }
-  static constexpr int kExplore = 3;  // cycles per allowed count before the rule decides
+  double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? cur_cost(n) : 0.0; }
+  static constexpr int kExplore = 3;  // cycles per allowed count before the rule decides (wide verifies: 2)
+  double cost_narrow() const { return cost8n_; }  // an 8-row cycle at capacity 8 (wide verifies)
   float alpha(int d) const { return alpha_[d]; }
   float beta(int d) const { return beta_[d]; }
   // Calibration records from outside a tree cycle (batched decode's greedy chains: a chain's node is a tree's node of
@@ -107,6 +117,24 @@ class KfBudget {
   int ncycles_[kD] = {};  // cycles by rows (the summary)
   double epred_ = 0, etok_ = 0;  // the summary: E(n) the builder expected, the tokens the cycles gave (cycles with E)
   int ne_ = 0;
+  // wide verifies: log cost(n) = lb_ + lq_[n] (lb_: the 8-row verify's log cost now, set by this process's first
+  // narrow cycle and moved by every cycle; lq_[n]: count n's log ratio to it, c_.ncost[n] its measurements) and the
+  // narrow 8 rows' (count, last measured, measurements this process); cost_[n] / cost8n_ are their current values;
+  // the capacity decision, the recent trees' E(8), E(16), E(32) (a ring), cycles run narrow
+  double cost_[kD] = {};  // the counts' costs now (exp(lb_ + lq_[n]))
+  double cur_cost(int n) const { return wide_ && max_rows_ > 8 ? cost_[n] : c_.at(n); }
+  int last_[kD] = {};  // the cycle that last measured each row count
+  int refresh_ = 0;    // a row count the next cycles verify to re-measure it (0: none; -1: the narrow 8 rows)
+  bool wide_ = false, wide_pays_ = true, wide_saved_ = false;  // wide_saved_: a wide run wrote the cache
+  double cost8n_ = 0, lb_ = 0, lq_[kD] = {};
+  int ncost8n_ = 0, last8n_ = 0, nb_ = 0, narrow_cycles_ = 0, since_eval_ = 0, narrow_writes_ = 0;
+  static constexpr int kStatsEvery = 8;  // capacity 8: one cycle in this many builds max_rows nodes (the E statistics)
+  void wide_costs();  // cost_[n], cost8n_ from lb_, lq_
+  static constexpr int kEWin = 256;
+  static constexpr int kRefresh = 2048;  // cycles between re-measurements of the stalest allowed row count
+  std::vector<float> ehist_;  // 3 per cycle
+  size_t ehead_ = 0;
+  void eval_wide();
   uint32_t allowed_ = 0xffu;
   int max_rows_ = 8;
   int cycles_ = 0, since_fit_ = 0, force_ = 0, saved_ = 0;  // saved_: cycles_ at the last save

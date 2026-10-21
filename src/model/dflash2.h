@@ -140,7 +140,7 @@ class DFlash2 {
   void set_prompt_captures(const uint16_t* bf16_rows, int rows);
   // Decode: arm_verify(P) before the target's encode_verify at P captures its rows into capt();
   // encode_commit(e, d, m) adds verify rows 0..m-1 at positions d.ctx .. d.ctx + m - 1.
-  void arm_verify(int P);
+  void arm_verify(int P, int rows = kB);  // rows: the verify's (a wide tree verify: its capacity)
   void disarm();
   void encode_commit(Encoder& e, DFlashSeq& d, int m);
   // Batched decode: d's staging buffer and its capture hook (once; allocated on first use), and the commit of its
@@ -155,7 +155,7 @@ class DFlash2 {
   // Batched decode under the batch budget: d keeps the walk's scores of its draft (d.scores(), the budget's input; right
   // after its encode_draft)
   void encode_save_scores(Encoder& e, DFlashSeq& d);
-  Buffer capt() const { return capt_; }  // bf16 [8][n_slots * H]
+  Buffer capt() const { return capt_; }  // bf16 [32][n_slots * H] (rows of the last verify)
 
   // ---- drafting pass (SPEC §4, §5, §7) ----
   // Block [tokens[P], M x 7] at positions P..P+7 (requires d.ctx == P); writes the proposals to
@@ -205,11 +205,13 @@ class DFlash2 {
   // dfl_kf_table) instead of the walk's chain, under the shared budget (KfBudget: the lattice's probabilities
   // calibrated against the verify's own acceptances, a cycle's GPU time per row count measured on this Mac), and
   // accept it with the shared kf_accept: greedy and sampled alike the emitted tokens are plain decoding's (at T > 0 its
-  // sampler's draws with each position's uniform). The verify's rows: whole 8-row tiles on dense targets (one today),
-  // 1 .. 8 live rows on MoE targets (the experts route the live rows alone). encode_draft (the batched path) keeps the
-  // walk: there the batch budget (batch_budget(), KfBatch) chooses each member's rows from its chain under the same
-  // calibration and a cost measured the same way.
+  // sampler's draws with each position's uniform). The verify's rows: whole 8-row tiles on dense targets (8, 16 or 32
+  // per cycle by the size rule where the target runs wide tree verifies, Qwen35::verify_wide_ok; NI_KFLASH_ROWS
+  // restricts them; else 8), 1 .. 8 live rows on MoE targets (the experts route the live rows alone). encode_draft (the
+  // batched path) keeps the walk: there the batch budget (batch_budget(), KfBatch) chooses each member's rows from its
+  // chain under the same calibration and a cost measured the same way.
   bool tree() const { return tree_; }
+  int tree_rows() const { return tree_rows_; }  // the widest tree verify (8, 16 or 32)
   void set_tree(bool on);
   const int* tree_desc() const { return tree_buf_.as<int>(); }  // the tree descriptor (kflash.h) of the last cycle
   KfBudget* budget() const { return kf_budget_.get(); }
@@ -312,6 +314,9 @@ class DFlash2 {
   // [7][16][16], ctok int, the constant successors), the builder's live-row word, the budget
   bool tree_ = false;
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
+  int tree_rows_ = kB;     // the widest allowed verify (the budget's max rows)
+  int tree_cap_ = kB;      // the verify capacity of the cycle being drafted (tree_rows_ unless the context is short)
+  static std::string r_list(uint32_t allowed);
   Buffer tree_buf_, kf_clq_, kf_tok_, kf_next_, kf_live_;
   std::unique_ptr<KfBudget> kf_budget_;
   std::unique_ptr<KfBatch> kf_batch_;  // batched decode's rows (the same key + "-batch")

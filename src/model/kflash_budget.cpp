@@ -106,6 +106,30 @@ KfBudget::KfBudget(std::string key) : key_(std::move(key)) {
 
 KfBudget::~KfBudget() { save(); }
 
+void KfBudget::set_wide(bool on) {
+  std::lock_guard<std::mutex> lk(mu_);
+  wide_ = on;
+  if (!on) return;
+  for (int n = 1; n < kD; ++n)  // the cache's costs (loaded as offsets above base 0), or the cost table of an earlier call
+    if (!c_.based && c_.ncost[n] > 0 && c_.off[n] > 0 && cost_[n] <= 0) cost_[n] = c_.off[n];
+  if (!wide_saved_ && cost_[8] > 0 && ncost8n_ == 0) {  // a cache of 8-row verifies only: that is the base's cost
+    cost8n_ = cost_[8];
+    ncost8n_ = 2;
+    cost_[8] = 0;
+    c_.ncost[8] = 0;
+  }
+  // the log model from the cached costs (ratios to the 8-row verify's); this process's narrow cycles set the base
+  if (cost8n_ > 0) {
+    lb_ = std::log(cost8n_);
+    for (int n = 1; n < kD; ++n) lq_[n] = cost_[n] > 0 ? std::log(cost_[n]) - lb_ : 0.0;
+  }
+}
+
+void KfBudget::wide_costs() {
+  cost8n_ = std::exp(lb_);
+  for (int n = 1; n < kD; ++n) cost_[n] = c_.ncost[n] > 0 ? std::exp(lb_ + lq_[n]) : 0.0;
+}
+
 void KfBudget::set_rows(uint32_t allowed, int max_rows) {
   max_rows_ = std::clamp(max_rows, 1, kf::kMaxRows);
   allowed_ = allowed & ((max_rows_ == 32 ? 0u : 1u << max_rows_) - 1u);
@@ -144,15 +168,46 @@ void KfBudget::fit(const std::vector<float>& x, const std::vector<uint8_t>& y, f
   beta = float(b);
 }
 
+// Wide verifies: the expected tokens per ms of the per-cycle choice among the allowed counts at their (wide) costs
+// against 8 rows at the narrow verify's cost, over the recent cycles' trees.
+void KfBudget::eval_wide() {
+  const size_t nc = ehist_.size() / 3;
+  if (!nc || cost8n_ <= 0) {
+    wide_pays_ = true;
+    return;
+  }
+  double e8 = 0, ew = 0, tw = 0;
+  for (size_t c = 0; c < nc; ++c) {
+    const float* e = &ehist_[3 * c];
+    e8 += e[0];
+    double best = -1, be = 0, bt = 1;
+    const int counts[3] = {8, 16, 32};
+    for (int i = 0; i < 3; ++i) {
+      const int n = counts[i];
+      if (n > max_rows_ || !((allowed_ >> (n - 1)) & 1u) || cost_[n] <= 0 || e[i] <= 0) continue;
+      if (e[i] / cost_[n] > best) best = e[i] / cost_[n], be = e[i], bt = cost_[n];
+    }
+    if (best < 0) be = e[0], bt = cost8n_;
+    ew += be;
+    tw += bt;
+  }
+  wide_pays_ = ew / tw > e8 / (double(nc) * cost8n_);
+}
+
 void KfBudget::observe(const int32_t* t, double ms) {
   std::lock_guard<std::mutex> lk(mu_);
-  // the rows the acceptance walked (kObs: kN may already be the next cycle's choice), else kN (a descriptor no
-  // acceptance wrote)
-  const int n = std::clamp(int(t[kf::kObs] > 0 ? t[kf::kObs] : t[kf::kN]), 1, kf::kMaxRows);
+  // kf_accept's copies (kObs: the next cycle's builder may already have rewritten the descriptor's own words); a
+  // descriptor no kf_accept wrote (tests): its own words
+  const bool obs = t[kf::kObs] > 0;
+  const int n = std::clamp(int(obs ? t[kf::kObs] : t[kf::kN]), 1, kf::kMaxRows);
+  const int cap0 = obs ? t[kf::kObs + 2] : t[kf::kCap], cap = cap0 > 0 ? cap0 : max_rows_;
+  const int nodes = obs ? t[kf::kObs + 3] : t[kf::kNodes];
+  const bool wide = wide_ && max_rows_ > 8;
+  const bool narrow = wide && cap <= 8;  // a wide build verified by the 8-row verify
   ++cycles_;
   ++ncycles_[n];
   rows_sum_ += n;
-  if (t[kf::kObs] > 0) {  // the tokens the builder expected (E(n)) against the cycle's: its accepted drafts + 1
+  if (obs) {  // the tokens the builder expected (E(n)) against the cycle's: its accepted drafts + 1
     float e;
     memcpy(&e, &t[kf::kObs + 1], 4);
     if (e >= 1.0f && e <= float(kf::kMaxRows) + 1.0f) {
@@ -161,12 +216,64 @@ void KfBudget::observe(const int32_t* t, double ms) {
       ++ne_;
     }
   }
-  // the costs (KfCosts::observe)
-  c_.observe(n, ms);
+  if (wide) {
+    // wide verifies, log cost = lb_ + lq_[n]: a narrow cycle moves the base (this process's first one sets it); a
+    // wide one fits its count's ratio (its first measurement exactly) and nudges the base by a quarter of that step,
+    // so the base follows the context in wide stretches too
+    const double y = std::log(std::max(ms, 1e-3));
+    if (narrow) {
+      lb_ += (y - lb_) / double(std::min(nb_ + 1, 16));
+      ++nb_;
+      ++ncost8n_;
+      last8n_ = cycles_;
+      ++narrow_cycles_;
+      if (refresh_ < 0) refresh_ = 0;
+    } else {
+      if (c_.ncost[n] == 0 || (nb_ == 0 && ncost8n_ == 0)) {
+        if (ncost8n_ == 0 && nb_ == 0 && n == 8) lb_ = y, lq_[n] = 0.0;  // no 8-row verify yet: the base is wide 8 rows
+        else lq_[n] = y - lb_;
+      } else {
+        const double e = y - (lb_ + lq_[n]), eta = 1.0 / double(std::min(c_.ncost[n] + 1, 16));
+        lq_[n] += eta * e;
+        lb_ += 0.25 * eta * e;
+      }
+      ++c_.ncost[n];
+      last_[n] = cycles_;
+      if (n == refresh_) refresh_ = 0;
+    }
+    wide_costs();
+  } else {
+    c_.observe(n, ms);  // the costs (KfCosts::observe)
+  }
   // the rate: the recent cycles' tokens per ms (sums decaying by 1/64 a cycle)
   rtok_ = rtok_ * (63.0 / 64.0) + double(std::clamp(int(t[kf::kA]), 0, kf::kMaxRows) + 1);
   rms_ = rms_ * (63.0 / 64.0) + ms;
   ++nrate_;
+  if (wide && cycles_ % kRefresh == 0) {  // the count measured longest ago
+    int stale = 0, at = cycles_;
+    for (int m = 1; m <= max_rows_; ++m)
+      if (((allowed_ >> (m - 1)) & 1u) && last_[m] < at) stale = m, at = last_[m];
+    if (last8n_ < at) stale = -1, at = last8n_;
+    if (stale && cycles_ - at >= kRefresh) refresh_ = stale;
+  }
+  // wide verifies: the tree's E(8), E(16), E(32) (a build of max_rows nodes), the capacity decision every 32 cycles
+  if (wide && nodes >= std::min(max_rows_, 32)) {  // a whole build (capacity 8 builds 8 nodes mostly)
+    float e[3] = {0, 0, 0};
+    const int counts[3] = {8, 16, 32};
+    for (int i = 0; i < 3; ++i)
+      if (obs) memcpy(&e[i], &t[kf::kObs + 4 + i], 4);
+      else if (counts[i] <= nodes) memcpy(&e[i], &t[kf::kE + counts[i]], 4);
+    if (ehist_.size() < size_t(3 * kEWin)) {
+      ehist_.insert(ehist_.end(), e, e + 3);
+    } else {
+      memcpy(&ehist_[3 * ehead_], e, sizeof e);
+      ehead_ = (ehead_ + 1) % size_t(kEWin);
+    }
+    if (++since_eval_ >= 32) {
+      since_eval_ = 0;
+      eval_wide();
+    }
+  }
   const int nrec = std::clamp(int(t[kf::kNrec]), 0, kf::kMaxRows);
   for (int i = 0; i < nrec; ++i) {
     const int d = t[kf::kRecDep + i];
@@ -214,7 +321,7 @@ void KfBudget::calibration(float* alpha, float* beta, int n) const {
   }
 }
 
-void KfBudget::write(KfParams& p) const {
+void KfBudget::write(KfParams& p) {
   std::lock_guard<std::mutex> lk(mu_);
   for (int d = 0; d < kD; ++d) {
     p.alpha[d] = alpha_[d];
@@ -228,30 +335,66 @@ void KfBudget::write(KfParams& p) const {
       const int n = 1 + (cycles_ + i) % max_rows_;
       if ((allowed_ >> (n - 1)) & 1u) force = n;
     }
-  // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set the
-  // base); then every allowed count kExplore times (KfCosts::force)
-  if (!force) force = c_.force(allowed_, max_rows_, kExplore);
+  const bool wide = wide_ && max_rows_ > 8;
+  bool narrow = false;
+  if (!forced) {
+    if (wide) {
+      // exploration: every allowed row count measured twice before the table decides, the narrow 8 rows too (the
+      // base first: this process's 8-row verify cost), and the refreshes
+      narrow = nb_ == 0;
+      if (!narrow)
+        for (int n = 1; n <= max_rows_; ++n)
+          if (((allowed_ >> (n - 1)) & 1u) && c_.ncost[n] < 2) {
+            force = n;
+            break;
+          }
+      if (!force && ncost8n_ < 2) narrow = true;
+      if (!force && !narrow) {
+        if (refresh_ > 0) force = refresh_;
+        else if (refresh_ < 0) narrow = true;
+      }
+      // capacity 8 unless the per-cycle choice among the wider counts pays (eval_wide)
+      if (!force && !narrow && !wide_pays_) narrow = true;
+    } else {
+      // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set
+      // the base); then every allowed count kExplore times (KfCosts::force)
+      if (!force) force = c_.force(allowed_, max_rows_, kExplore);
+    }
+  }
   p.force_n = force;
   p.allowed = allowed_;
   p.max_rows = max_rows_;
+  p.cap = 0;
   p.rate = nrate_ >= 16 && rms_ > 0 ? float(rtok_ / rms_) : 0.0f;
+  if (narrow) {  // the verify runs 8 rows; one cycle in kStatsEvery still builds max_rows nodes (their E(n) feed
+                 // eval_wide), the others 8 (a 32-node build costs the 4B's drafting pass ~0.04 ms)
+    p.cap = 8;
+    p.allowed = allowed_ & 0xffu ? allowed_ & 0xffu : 1u << 7;
+    p.force_n = 0;
+    if (narrow_writes_++ % kStatsEvery) p.max_rows = 8;
+  }
   p.cost[0] = 1.0f;
-  for (int n = 1; n < kD; ++n) p.cost[n] = c_.ncost[n] > 0 ? float(std::max(c_.base + c_.off[n], 0.01)) : 1.0f;
+  for (int n = 1; n < kD; ++n) {
+    const double c = cur_cost(n);
+    p.cost[n] = c > 0 ? float(std::max(c, 0.01)) : 1.0f;
+  }
 }
 
 std::string KfBudget::summary() const {
   std::lock_guard<std::mutex> lk(mu_);
   char b[1024];
+  const bool wide = wide_ && max_rows_ > 8;
   int o = snprintf(b, sizeof b, "KFlash: %d cycles, %.2f rows per cycle; cycles by rows", cycles_,
                    cycles_ ? rows_sum_ / cycles_ : 0.0);
   for (int n = 1; n < kD && o < int(sizeof b) - 16; ++n)
     if (ncycles_[n]) o += snprintf(b + o, sizeof b - o, " %d:%d", n, ncycles_[n]);
+  if (wide) o += snprintf(b + o, sizeof b - o, "; %d at capacity 8", narrow_cycles_);
   if (ne_) o += snprintf(b + o, sizeof b - o, "; tokens per cycle expected %.3f, got %.3f", epred_ / ne_, etok_ / ne_);
   if (rms_ > 0) o += snprintf(b + o, sizeof b - o, "; rate %.4f tok/ms", rtok_ / rms_);
   o += snprintf(b + o, sizeof b - o, "; cost ms by rows");
   for (int n = 1; n <= max_rows_ && o < int(sizeof b) - 16; ++n)
-    if ((allowed_ >> (n - 1)) & 1u)
-      o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, c_.at(n));
+    if ((allowed_ >> (n - 1)) & 1u) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, cur_cost(n));
+  if (wide) o += snprintf(b + o, sizeof b - o, " (8 at capacity 8: %.2f)", cost8n_);
   o += snprintf(b + o, sizeof b - o, "; calibration (alpha, beta) by depth");
   for (int d = 1; d <= std::min(max_rows_, 8) && o < int(sizeof b) - 24; ++d)
     o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
@@ -267,7 +410,15 @@ void KfBudget::load() {
     const auto& c = j.at("cost");
     const auto& a = j.at("alpha");
     const auto& bb = j.at("beta");
-    if (j.value("cost_of", "") == kCostOf) c_.load(c.get<std::vector<double>>(), kExplore);
+    if (j.value("cost_of", "") == kCostOf) {
+      c_.load(c.get<std::vector<double>>(), kExplore);
+      // wide verifies' extras (a cache a run without them wrote: its 8 rows are the 8-row verify's cost, set_wide)
+      wide_saved_ = j.value("wide", false);
+      if (wide_saved_) {
+        if (j.value("cost_narrow8", 0.0) > 0) cost8n_ = j["cost_narrow8"].get<double>(), ncost8n_ = 2;
+        wide_pays_ = j.value("wide_pays", true);  // the last decision, until this process's trees decide again
+      }
+    }
     for (int d = 1; d < kD && d < int(a.size()) && d < int(bb.size()); ++d) {
       alpha_[d] = a[size_t(d)].get<float>();
       beta_[d] = bb[size_t(d)].get<float>();
@@ -284,7 +435,18 @@ void KfBudget::save(int fresh) {
   mkdir(dir.c_str(), 0755);
   nlohmann::json j;
   j["cost_of"] = kCostOf;
-  j["cost"] = c_.table();  // the costs now
+  const bool wide = wide_ && max_rows_ > 8;
+  if (wide) {
+    std::vector<double> cost(kD, 0.0);  // the costs now
+    for (int n = 1; n < kD; ++n)
+      if (cost_[n] > 0) cost[size_t(n)] = std::max(cost_[n], 0.01);
+    j["cost"] = cost;
+    j["wide"] = true;
+    j["cost_narrow8"] = cost8n_;
+    j["wide_pays"] = wide_pays_;
+  } else {
+    j["cost"] = c_.table();  // the costs now
+  }
   j["alpha"] = std::vector<float>(alpha_, alpha_ + kD);
   j["beta"] = std::vector<float>(beta_, beta_ + kD);
   const std::string path = dir + "/" + key_ + ".json";
