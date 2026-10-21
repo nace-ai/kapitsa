@@ -507,7 +507,7 @@ class Qwen35 : public Model {
   } ane_init_;
   std::thread ane_thread_;                           // NI_ANE_ASYNC: background compile of the program
   std::shared_ptr<std::atomic<int>> ane_async_st_;   // 1 compiling, 2 compiled, 3 failed
-  bool ane_begin_chunk(int T);  // false: the split is wedged, run this chunk on the GPU alone
+  void ane_begin_chunk(int T);
   void enc_mixer_prefill(Encoder& e, Seq& s, int i, const Layer& L, int pos0, int T, const Buffer& x,
                          Checkpoint* snap = nullptr, int snap_row = 0);
   // NI_ANE wavefront: the first half's rows (0 = not used for a chunk of T rows)

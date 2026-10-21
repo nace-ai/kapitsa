@@ -738,6 +738,8 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_LOG` | `1` | `0` quiet, `1` a line per request with its timings, `2` debug. |
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
+| `NI_ANE_KEEP_S` | `300` | Seconds after the last prefill chunk (or model load) during which a background evaluation keeps the Neural Engine awake, so a short prompt after a pause skips its 70–120 ms wake. `0` turns it off. |
+| `NI_ANE_KEEP_MS` | `2000` | Period of that keepalive evaluation in milliseconds (floor 100). |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
 | `NI_DFLASH_TREE` | on | KFlash on the Qwen draft models: the draft model's guesses are checked as a best-first tree per pass (several continuations at once) instead of one chain; `0` checks a chain (overrides `NI_KFLASH` on these models). Greedy replies are the same either way; sampled ones follow the same distribution. The tree's shape follows the draft model's probabilities as calibrated against this Mac's own acceptances, and its size this Mac's measured cost per verified rows: one 8-row tile on the 27B and the 4B, 1 to 8 rows per pass on the 35B (its pass routes experts for those rows alone). |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |

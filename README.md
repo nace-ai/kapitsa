@@ -43,16 +43,14 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured against eight engines. mlx-serve is ahead on Qwen3.8 27B (M5 Max, M5 Pro) and on Flash-Next (M5 Max).
+Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured against eight engines.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
   <img alt="Poster of prefill / decode speed for Kapitsa and eight other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the poster" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the [details](docs/benchmarks.md#the-readmes-tables) and [bench/README.md](bench/README.md) have every cell.</sub>
-
-<sub>Prefill is the reading speed on a 4K-token prompt. Kapitsa's comes from the newest run without a contention or invalid flag: 2026-10-21 on the M5 Pro (Kapitsa 0.2.2, b50f1fc, macOS 26.5.2, [results](bench/results/2026-10-21-m5pro-48gb/README.md)), 2026-10-19 on the M4 Pro (4B: 06:20 run) and M1 Pro, 2026-10-18 on the M5 Max, where every stored run is flagged for GPU contention, so read its prefill as a lower bound. Prefill on the M5 Max predates the M5 prefill kernels ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215), Nemotron-H's) and is likely higher now. The other engines' prefill is from their own stored run closest to the decode value shown, in the same session as that decode (2026-10-18 to 10-21), flagged or not: several of those runs carry contention flags, LM Studio's every one, and all of the M5 Max's. Where another engine reads faster, the poster shows it: the headline, the blue outlines and the orange bars rank decode only. Ollama on Flash-Next (M5 Max) and Splash (no prefill run) show a dash. The M5 Pro's Kapitsa decode cells are still the 2026-10-19 runs, measured in the same session as the other engines. KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](docs/benchmarks.md#kflash-trees-m4-pro-2026-10-21)); the DFlash, DFlash2, DSpark and LiLiCorr cells come from earlier runs. Every run is listed in [bench/README.md](bench/README.md).</sub>
+<sub>Each cell is prefill on a 4K-token prompt / decode of a 512-token answer, in tokens per second. × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
 <details>
 <summary>Models not on the poster (decode tok/s)</summary>
@@ -100,12 +98,6 @@ Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured agai
 
 Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
-## Get release notices
-
-<p align="center"><img src="docs/assets/watch-releases.gif" alt="On the Kapitsa repository page: Watch, then Custom, tick Releases, Apply" width="720"></p>
-
-<sub>Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications. A drawn illustration of the steps, not a screen recording; the page source is in [tools/readme_images](tools/readme_images/README.md).</sub>
-
 ## Models
 
 <details>
@@ -139,6 +131,12 @@ for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL, 128 GB for Flash-Next.
 </picture>
 
 Kapitsa decodes with **KFlash**. A draft model such as DFlash2 guesses the next seven tokens, with a few candidates for each one. Engines that run it as published (Splash, oMLX, mlx-serve) check one chain of guesses and stop at the first wrong one. KFlash checks a best-first tree of the drafter's candidates in the same pass, so where the drafter hesitates, its runner-ups are checked too and more tokens survive each pass. The tree's size comes from what a verify row costs on your Mac, measured there, and it changes no output: the big model checks every token. It runs on the published drafters as they are: z-lab's DFlash, DFlash2, and NVIDIA's DSpark and LiLiCorr. [How KFlash works](docs/kflash.md)
+
+## Get release notices
+
+<p align="center"><img src="docs/assets/watch-releases.gif" alt="On the Kapitsa repository page: Watch, then Custom, tick Releases, Apply" width="720"></p>
+
+<sub>Watch → Custom → Releases on [nace-ai/kapitsa](https://github.com/nace-ai/kapitsa) puts every new version in your notifications. A drawn illustration of the steps, not a screen recording; the page source is in [tools/readme_images](tools/readme_images/README.md).</sub>
 
 <sub>[How KFlash works](docs/kflash.md) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Press kit](docs/assets/brand/README.md) ·
 Apache 2.0, © 2026 [Nace AI](https://nace.ai) · [Third-party notices](THIRD_PARTY_NOTICES)</sub>

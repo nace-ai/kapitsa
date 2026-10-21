@@ -69,12 +69,8 @@ class FfnSplit {
 
   bool splits(int T) const;
   int lanes() const { return int(cfg_.lanes); }
-  // Starts a chunk of T rows; every layer must then be encoded in order. False: the keepalive's evaluation did not
-  // return within kKeepWaitMs (a wedged Neural Engine), so the split is retired and this chunk has to run on the GPU
-  // alone. Callers must then not encode any split layer.
-  bool begin_chunk(int T);
-  // An evaluation never returned: the keep thread and the surfaces it may still touch must not be freed.
-  bool wedged() const { return keep_wedged_; }
+  // Starts a chunk of T rows; every layer must then be encoded in order.
+  void begin_chunk(int T);
   // Encodes layer li of the chunk (the simple schedule). xh: half [T][hidden] post-norm input;
   // x: fp32 residual [T][hidden], to which the FFN is added. gpu_part encodes the GPU's channels
   // (adding into x). ane=false: no ANE job (the join adds whatever the partial surface holds;
@@ -142,16 +138,19 @@ class FfnSplit {
   // Keepalive: the Neural Engine sleeps after about a second idle and its first evaluation then blocks for
   // 70-120 ms. For keep_window_s_ seconds after the last chunk a side thread runs one 512-row evaluation every
   // keep_period_ms_ (about 7 ms of ANE time, ~0.4% duty; nothing after the window), so a request after a pause finds it awake. Zero window: off.
-  void keep_loop();
+  // The thread's state is shared with it, so a thread wedged in a Neural Engine evaluation can be detached (and
+  // what it uses leaked) by the destructor instead of hanging it.
+  struct KeepState {
+    std::mutex m;  // stop / cv
+    std::condition_variable cv;
+    bool stop = false;
+    std::atomic<bool> done{false};
+    std::timed_mutex eval_mu;  // held by the keepalive evaluation (it uses lane 0 / set 0) and briefly by begin_chunk
+  };
+  void keep_loop(std::shared_ptr<KeepState> st, Program* prog, std::shared_ptr<Program::Binding> bind);
   double keep_window_s_ = 0, keep_period_ms_ = 2000;
   std::thread keep_;
-  std::mutex keep_mu_;  // held by the keepalive evaluation (it uses lane 0 / set 0) and briefly by begin_chunk
-  std::condition_variable keep_cv_;
-  static constexpr int kKeepWaitMs = 1000;  // how long begin_chunk waits out an evaluation in flight
-  std::atomic<bool> keep_busy_{false};   // an evaluation is in flight: splits() says no rather than waiting for it
-  std::atomic<bool> keep_ok_{true};      // false after a failed chunk or a wedged evaluation: no more evaluations
-  std::atomic<bool> keep_wedged_{false};  // an evaluation never returned (the thread is left detached)
-  bool keep_stop_ = false;
+  std::shared_ptr<KeepState> keep_st_ = std::make_shared<KeepState>();
   std::atomic<bool> in_chunk_{false};
   std::atomic<double> last_use_{0};
   double wired0_ = 0, wired_load_ = 0, wired_run_ = 0;
