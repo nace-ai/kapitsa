@@ -1446,7 +1446,7 @@ M5 prefill kernels and the KFlash-tree default; the other engines' rows are the 
 Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.4,
 18.6 → 18.9 GB). The SSD prefix cache is new since 0.1.36 and on by default in `serve`. On the 4B it accounts for
 about 0.33 GB of the roughly 0.7 GB growth: a 16K prefill peaks at 5,204 MB with it (two runs, 5,203.6 and 5,204.1) and
-4,868 MB with `NI_DISK_CACHE=0`. That is a 16K-prefill figure, not the peak of the whole agentic run the table
+4,868 MB with `NI_DISK_CACHE=0` (these peak readings are not stored in the repo). That is a 16K-prefill figure, not the peak of the whole agentic run the table
 reports, and the other three models were not split. The doctor's memory plan is identical at 0.1.36 and current main,
 so none of the growth is weights or KV; the rest is runtime state the plan does not cover and is not attributed yet.
 
