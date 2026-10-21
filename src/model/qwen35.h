@@ -370,9 +370,15 @@ class Qwen35 : public Model {
   // GDN conv windows and recurrent state are their ancestors' as in the 8-row tree. Dense targets whose verify runs the
   // tree (verify_tree_ok), the split MLP and the X8 preps of x8_prep2 (widths multiple of 256); MoE targets keep 8.
   bool verify_wide_ok() const;
+  // The KFlash tree row counts a dense target's verifies may pick, bit n-1 set for n = 8, 16, 32: 8 alone, or 8 with 16
+  // and 32 where the target runs wide verifies (verify_wide_ok) and the drafting pass's knobs (NI_KFLASH,
+  // NI_DFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
+  // the sizes agree; a bad NI_KFLASH_ROWS is fatal here (before either).
+  static uint32_t kf_dense_rows(const Qwen35Config& c);
   // The widest tree verify to prepare for (8, 16 or 32 rows): the verify's model-wide buffers (X8 tables, logits,
-  // candidates, samples) are sized for it here; a sequence's tape grows on its first wide verify. Call while nothing
-  // is in flight (the drafter's construction).
+  // candidates, samples) are sized for it here, and a sequence's verify tape is allocated at it in new_seq (the tape of
+  // one created before this call grows on its first wide verify). Call while nothing is in flight (the drafter's
+  // construction).
   void set_tree_rows(int rows);
   int tree_rows() const { return tree_rows_; }
   // After a tree verify at pos: the K/V rows of the accepted path (the descriptor's, kf_accept) move to positions

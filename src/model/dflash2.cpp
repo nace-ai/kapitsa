@@ -475,25 +475,24 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     // expert and the GDN step over the live rows alone: the experts of n rows are most of its cost).
     // NI_KFLASH_ROWS=<list of 8, 16, 32> restricts the dense counts (e.g. "8" = M1's single tile, "16" = always 16 rows)
     const bool moe = tg_.config().moe;
-    uint32_t allowed = moe ? (1u << kB) - 1 : 1u << (kB - 1);
+    // the row counts: one 8-row tile on the dense targets that cannot run wide verifies, 8 | 16 | 32 where they can and
+    // the knobs (NI_KFLASH, NI_DFLASH_TREE, NI_KFLASH_ROWS) allow them (Qwen35::kf_dense_rows, which plan() reads too,
+    // and which rejects a bad NI_KFLASH_ROWS)
+    uint32_t allowed = moe ? (1u << kB) - 1 : Qwen35::kf_dense_rows(tg_.config());
     // One rule on every target (here and on Nemotron-H): trees. NI_KFLASH=0 keeps the chains everywhere;
     // NI_DFLASH_TREE=0/1 overrides it here.
     const char* kf = getenv("NI_KFLASH");
     const char* v = getenv("NI_DFLASH_TREE");
-    const bool tree = !(kf && *kf) || atoi(kf) != 0;
-    set_tree(v && *v ? atoi(v) != 0 : tree);
-    if (!moe && tree_ && tg_.verify_wide_ok()) allowed |= (1u << 15) | (1u << 31);
+    set_tree(v && *v ? atoi(v) != 0 : (!(kf && *kf) || atoi(kf) != 0));
     if (const char* r = getenv("NI_KFLASH_ROWS"); r && *r && !moe) {
       uint32_t want = 0;
       for (const char* c = r; *c;) {
         const int n = atoi(c);
         if (n == 8 || n == 16 || n == 32) want |= 1u << (n - 1);
-        else fatal("NI_KFLASH_ROWS=%s: row counts 8, 16 or 32", r);
         while (*c && *c != ',') ++c;
         if (*c == ',') ++c;
       }
       if (want & ~allowed) logi("KFlash: NI_KFLASH_ROWS=%s: this target's tree verify runs 8 rows", r);
-      allowed = (want & allowed) ? want & allowed : allowed & (1u << (kB - 1));
     }
     tree_rows_ = 32 - __builtin_clz(allowed);  // the widest allowed count
     kf_budget_->set_rows(allowed, tree_rows_);
@@ -786,8 +785,9 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   if (per_slot) *per_slot = NL * 8 * kWin * 128 * 2 * 2;
   // KFlash's wide tree verifies on dense targets (32 rows): the captures, the target's logits, candidates and X8
   // tables of 32 rows (Qwen35::set_tree_rows), and per slot the verify tape's 24 more rows (Qwen35::grow_tape)
-  const char* tv = getenv("NI_DFLASH_TREE");
-  if (!target.moe && !(tv && *tv && !atoi(tv))) {
+  // only where the wide verifies run: kf_dense_rows reads the same knobs the drafting pass picks its rows from, so a
+  // target that opted out (NI_KFLASH=0, NI_KFLASH_ROWS=8, or one that cannot run them) reserves nothing here
+  if (Qwen35::kf_dense_rows(target) > (1u << (Qwen35::kMaxVerify - 1))) {
     b += 24 * nH * 2 + 24 * V * 4 + 2 * 24 * (V / 2048 + 2) * 64 * 4 + (size_t(12) << 20);
     size_t lin = 0;
     for (const bool l : target.is_linear) lin += l ? 1 : 0;

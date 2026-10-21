@@ -180,17 +180,52 @@ void Qwen35::v8_alloc() {
 bool Qwen35::v8_tw() const { return v8_knobs().tw && tw_supported() && v8tt_.size; }
 
 // ---- KFlash tree verifies wider than 8 rows (16 / 32 rows) ----
-bool Qwen35::verify_wide_ok() const {
-  if (cfg_.moe || !verify_tree_ok() || cfg_.dense_I % 256 || !v8_knobs().gusplit) return false;
+// verify_tree_ok / verify_wide_ok on a config alone (the memory plan has no model: it reads the same knobs)
+static bool v8_tree_ok_c(const Qwen35Config& c) {
+  static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;
+  static const int attn_mma = env_int("NI_V8_ATTN", 1);
+  const int split_thr = v8_knobs().gdnsplit;
+  const bool split = gdn8 && c.lin_dv == 128 && c.lin_dk == 128 && split_thr >= 32 && split_thr <= 1024 &&
+                     split_thr % 32 == 0 && 128 % (split_thr / 8) == 0;
+  return split && attn_mma && c.hq / c.hkv <= 16 && c.head_dim == 256;
+}
+
+static bool v8_wide_ok_c(const Qwen35Config& c) {
+  if (c.moe || !v8_tree_ok_c(c) || c.dense_I % 256 || !v8_knobs().gusplit) return false;
   // every X8 table of the pass on x8_prep2 (or the gated norm's), i.e. widths multiple of 256
-  for (const int K : {cfg_.hidden, cfg_.hq * cfg_.head_dim})
+  for (const int K : {c.hidden, c.hq * c.head_dim})
     if (K % 256) return false;
   return env_int("NI_V8_PREP", 2) != 1;
 }
 
+bool Qwen35::verify_wide_ok() const { return v8_wide_ok_c(cfg_); }
+
+uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
+  // one 8-row tile: the default, and all a MoE target or a target without the wide kernels can run
+  const uint32_t one = 1u << (kMaxVerify - 1);
+  const char* kf = getenv("NI_KFLASH");
+  const char* v = getenv("NI_DFLASH_TREE");
+  const bool tree = v && *v ? atoi(v) != 0 : (!(kf && *kf) || atoi(kf) != 0);
+  const char* r = getenv("NI_KFLASH_ROWS");
+  // wider rows are asked for (NI_KFLASH_ROWS names 16 or 32) on a target that runs them: the default stays one tile
+  // until a Mac's A/B says a wider count pays there (docs/kflash.md, docs/usage.md)
+  if (!tree || !v8_wide_ok_c(c) || !r || !*r) return one;
+  uint32_t allowed = one | (1u << 15) | (1u << 31);
+  uint32_t want = 0;
+  for (const char* p = r; *p;) {
+    const int n = atoi(p);
+    if (n == 8 || n == 16 || n == 32) want |= 1u << (n - 1);
+    else fatal("NI_KFLASH_ROWS=%s: row counts 8, 16 or 32", r);
+    while (*p && *p != ',') ++p;
+    if (*p == ',') ++p;
+  }
+  const uint32_t w = want & allowed;
+  return w ? w : one;  // nothing allowed left: the 8-row tile
+}
+
 void Qwen35::set_tree_rows(int rows) {
-  // 8, 16 or 32 rows, a power of two: the tables hold whole 8-row tiles and a tile pair's GEMM reads its second tile, so
-  // a capacity of three tiles (24 rows) would read past them (a live verify of up to 24 rows still fits in 32)
+  // 8, 16 or 32 rows, a power of two: the tables hold whole 8-row tiles and the tile-pair MLP reads two at a time, so a
+  // capacity of three tiles (24 rows) would read past them (a live verify of up to 24 rows still fits in 32)
   rows = rows <= 8 ? 8 : rows <= 16 ? 16 : kMaxTreeRows;
   if (rows <= tree_rows_) return;
   tree_rows_ = rows;
@@ -992,7 +1027,9 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
 void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
   // a tree of more than 8 rows: a wide tree verify (16 or 32 rows: GPU-driven row tiles, v8_wide_begin)
   const bool wide = v8_tree_ != nullptr && R > 8;
-  if (R < 1 || R > (wide ? tree_rows_ : 8) || (wide && R % 8))  // (the tables hold tree_rows_ rows)
+  // R whole 8-row tiles of the capacity set_tree_rows sized (8, 16 or 32 rows): the tile-pair MLP reads two tiles per
+  // pair, so an odd tile count's last pair reaches one tile past R but stays inside the capacity's tables
+  if (R < 1 || R > (wide ? tree_rows_ : 8) || (wide && R % 8))
     fatal("encode_verify8: R=%d: the verify tables hold %d rows (set_tree_rows)", R, wide ? tree_rows_ : 8);
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   v8_alloc();
@@ -1125,14 +1162,7 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   if (wide) v8_wide_end();
 }
 
-bool Qwen35::verify_tree_ok() const {
-  static const bool gdn8 = env_int("NI_V8_GDN", 1) != 0;
-  static const int attn_mma = env_int("NI_V8_ATTN", 1);
-  const int split_thr = v8_knobs().gdnsplit;
-  const bool split = gdn8 && cfg_.lin_dv == 128 && cfg_.lin_dk == 128 && split_thr >= 32 && split_thr <= 1024 &&
-                     split_thr % 32 == 0 && 128 % (split_thr / 8) == 0;
-  return split && attn_mma && cfg_.hq / cfg_.hkv <= 16 && cfg_.head_dim == 256;
-}
+bool Qwen35::verify_tree_ok() const { return v8_tree_ok_c(cfg_); }
 
 void Qwen35::encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& tree) {
   const kp::KvTree p{uint32_t(pos), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim), uint32_t(s.cap)};

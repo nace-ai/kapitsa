@@ -838,6 +838,61 @@ int cost_check() {
     check(p.force_n == 0 && std::fabs(p.cost[1] - cost(1, 28.0)) < 0.6, "loaded, +7 ms: 1 row's cost from the base",
           p.cost[1], cost(1, 28.0));
   }
+  // Wide verifies (Qwen's 16 and 32 rows, KfBudget::set_wide): a cache of 8-row verifies read by a budget whose verify may
+  // also run 16 and 32 rows (the wide run's first cycle verifies capacity 8, which sets its base; then every allowed count
+  // twice), the capacity back to 8 when the wider counts don't pay, and a wide cache read by an NI_KFLASH_ROWS=8 run,
+  // which keeps 8 rows.
+  auto wcost = [](int n, double base) { return base + 0.9 * (n - 1) + (n > 8 ? 2.0 : 0.0); };
+  auto wtok = [](int) { return 1.0f; };  // (a flat expected yield: rows past 8 don't pay)
+  auto wcycle = [&](KfBudget& b, int n, int cap, double ms, int a) {
+    tree[kf::kObs] = n;
+    const float e = wtok(n);
+    memcpy(&tree[kf::kObs + 1], &e, 4);
+    tree[kf::kObs + 2] = cap;  // the capacity the verify ran at (8: the 8-row verify; 0: max_rows)
+    tree[kf::kObs + 3] = 32;   // (a whole build: the E(n) of 8, 16 and 32 rows feed the capacity decision)
+    for (int n = 0; n < 3; ++n) {
+      const float en = wtok(n ? (n == 1 ? 16 : 32) : 8);
+      memcpy(&tree[kf::kObs + 4 + n], &en, 4);
+    }
+    tree[kf::kN] = 8;
+    tree[kf::kA] = a;
+    b.observe(tree.data(), ms);
+  };
+  {
+    KfBudget b("c");  // the table the block above saved: 8-row verifies
+    b.set_rows((1u << 7) | (1u << 15) | (1u << 31), 32);
+    b.set_wide(true);
+    KfParams p{};
+    b.write(p);
+    check(p.cap == 8 && p.force_n == 0, "wide, a cache of 8-row verifies: the first cycle verifies capacity 8", p.cap, 8);
+    check(p.allowed == 0x80u, "wide: capacity 8 offers the 8-row verify only", p.allowed, 0x80);
+    wcycle(b, 8, p.cap, wcost(8, 28.0), 0);
+    b.write(p);
+    check(p.cap == 0 && p.force_n == 8, "wide: then a wide 8-row verify sets the base", p.force_n, 8);
+    wcycle(b, 8, p.cap, wcost(8, 28.0) + 0.3, 0);
+    int seen16 = 0, seen32 = 0;
+    for (int i = 0; i < 12 && !(seen16 && seen32); ++i) {
+      b.write(p);
+      const int n = p.force_n ? p.force_n : 8;
+      seen16 += n == 16, seen32 += n == 32;
+      wcycle(b, n, p.cap, wcost(n, 28.0), 0);
+    }
+    check(seen16 > 0 && seen32 > 0 && p.cap == 0, "wide: every allowed count measured twice, 16 and 32", seen32, 1);
+    for (int i = 0; i < 40; ++i) {  // (32 cycles on, the destructor saves the wide table)
+      b.write(p);
+      wcycle(b, p.cap ? 8 : (p.force_n ? p.force_n : 8), p.cap, wcost(8, 28.0), 0);
+    }
+    b.write(p);
+    check(p.cap == 8, "wide: the wider counts don't pay, the capacity stays 8", p.cap, 8);
+  }
+  {
+    KfBudget b("c");         // now a wide table
+    b.set_rows(1u << 7, 8);  // NI_KFLASH_ROWS=8 on the same model
+    KfParams p{};
+    b.write(p);
+    check(p.max_rows == 8 && p.allowed == 0x80u && p.cap == 0, "the wide cache read by an 8-row run: 8 rows only",
+          p.max_rows, 8);
+  }
   log_level() = lvl;
   const std::string kdir = dir + "/kflash";
   unlink((kdir + "/c.json").c_str());

@@ -161,7 +161,17 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
    - Most likely the test's planted-branch harness disagrees with the new chained DSpark drafting, but it needs
      checking before Nemotron trees are trusted. It passed at `50a41f5`.
 4. Nemotron speed: tree vs chain on Lightning. This needs the 23 GB model; the user said not to download it for now.
-5. 16/32-row verifies: the interleaved A/B is deferred; decide whether they join `kflash-trees`.
+5. 16/32-row verifies: **in PRs [#245](https://github.com/nace-ai/kapitsa/pull/245) (the kernels) and
+   [#246](https://github.com/nace-ai/kapitsa/pull/246) (the budget chooses 8, 16 or 32 rows), opt-in:**
+   - `NI_KFLASH_ROWS` defaults to `8`, one 8-row tile; naming `8,16,32` lets the budget measure and pick wider tiles
+     per cycle. With the tile-pair MLP a 16-row verify cycle costs 1.07× and a 32-row one 1.49× the 8-row cycle on the
+     27B's coding answer; asking for `8,16,32` took the harness corpus from 63.7 to 78.0 tok/s at T=0.6 (+22.6%) and
+     74.3 to 86.4 greedy (+16.3%), still 2% / 6% behind mlx-serve.
+   - A wide verify's attention is the 8-row tree attention (`attn8m_partial_tree`: each row's ancestors by mask), not
+     the 8-row path's tree-zone split (`NI_V8_TREE_ATTN=2`), which is a kernel of one tile. The rows' logits therefore
+     round differently from the 8-row path's: measured on the 4B, max |logit diff| 0.039 (0.0016 of the row's range),
+     every live row's argmax equal to plain decoding, and greedy replies identical. Making the zone split work on more
+     than one tile is open work, not a correctness item.
 6. Merging to `main` waits for the user. `main` has moved on, so bring the branch up to date first, then rerun the
    checks and a short A/B.
 7. Parked:

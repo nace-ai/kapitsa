@@ -1041,13 +1041,16 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
   // gate/up on large prefills while NI_QMM_GU is on; 8-bit ones through qmr8, unless NI_QMM8=0)
   const json q = r.contains("quantization") ? r["quantization"] : json::object();
   const bool fused = qmm_gu_enabled() && (q.value("bits", 4) != 8 || qmm8_on());
-  for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, has_mtp, fused ? size_t(kMaxVerify) : size_t(chunk)))
+  // the verify rows the plan reserves: 8, or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows),
+  // whose buffers and tape are that tall (set_tree_rows, new_seq); the drafting pass picks its rows from the same call
+  const size_t vrows = kf_dense_rows(c) > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
+  for (const ActBuf& a : act_layout(c, chunk, int(vrows), has_mtp, fused ? vrows : size_t(chunk)))
     m.activations += a.bytes;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
   for (int i = 0; i < c.layers; ++i) (c.is_linear[i] ? lin : att) += 1;
   const size_t state = size_t(lin) * (3 * C * 4 + size_t(c.lin_hv) * c.lin_dv * c.lin_dk * 4);
-  const size_t tape = size_t(lin) * kMaxVerify * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
+  const size_t tape = size_t(lin) * vrows * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
   m.slot_state = 3 * state + tape;  // live state + the engine's two checkpoints + the verify tape
   m.kv_per_pos = size_t(att + (has_mtp ? 1 : 0)) * 2 * c.hkv * c.head_dim * 2;
   return m;
@@ -1084,10 +1087,12 @@ std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
       s->conv.push_back(g.alloc(size_t(3) * C * 4, "conv_state"));
       s->rec.push_back(g.alloc(size_t(cfg_.lin_hv) * cfg_.lin_dv * cfg_.lin_dk * 4, "gdn_state"));
       bytes += s->conv.back().size + s->rec.back().size;
-      s->pend_qkv.push_back(g.alloc(size_t(kMaxVerify) * C * 4, "pend_qkv"));
-      s->pend_k.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dk * 4, "pend_k"));
-      s->pend_g.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * 4, "pend_g"));
-      s->pend_d.push_back(g.alloc(size_t(kMaxVerify) * cfg_.lin_hv * cfg_.lin_dv * 4, "pend_d"));
+      // the verify tape at the rows this model's verifies run (plan() reserves the same): no growth on a request
+      const size_t vr = size_t(std::max(kMaxVerify, tree_rows_));
+      s->pend_qkv.push_back(g.alloc(vr * C * 4, "pend_qkv"));
+      s->pend_k.push_back(g.alloc(vr * cfg_.lin_hv * cfg_.lin_dk * 4, "pend_k"));
+      s->pend_g.push_back(g.alloc(vr * cfg_.lin_hv * 4, "pend_g"));
+      s->pend_d.push_back(g.alloc(vr * cfg_.lin_hv * cfg_.lin_dv * 4, "pend_d"));
     } else {
       s->conv.push_back(Buffer{});
       s->rec.push_back(Buffer{});
