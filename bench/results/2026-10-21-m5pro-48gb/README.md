@@ -14,5 +14,5 @@ same session as the other engines. The decode medians here are higher than those
 | `q35-4b-kapitsa-20261021-200057.json` | Qwen3.5 4B, DFlash | 3,032 / 2,736 | 217.6 / 231.5 | none |
 | `q38-27b-kapitsa-20261021-195748.json` | Qwen3.8 27B, DFlash2 | 465 / 451 | 68.0 / 77.2 | none |
 | `q36-35b-kapitsa-20261021-195622.json` | Qwen3.6 35B-A3B, DFlash2 | 1,823 / 1,468 | 208.1 / 233.9 | decode: repetition loop in one of five runs (prefill valid) |
-| `q36-35b-kapitsa-20261021-2*.json` (second run) | Qwen3.6 35B-A3B, DFlash2 | 1,824 / 1,469 | 198.6 | none |
+| `q36-35b-kapitsa-20261021-200652.json` (second run) | Qwen3.6 35B-A3B, DFlash2 | 1,824 / 1,469 | 198.6 | none |
 | `lightning-kapitsa-20261021-200211.json` | Lightning 30B, DSpark | 3,048 / 2,989 | 167.8 / 165.7 | none |

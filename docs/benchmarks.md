@@ -17,7 +17,7 @@ is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
 ## The README's tables
 
-What each cell of the README's poster and its collapsed Nemotron table ran, Mac by Mac (the runs are in the sections below). The poster's prefill / decode cells pair each engine's decode with the 4K-prompt prefill of the same stored run in `bench/results`.
+What each cell of the README's poster and its collapsed Nemotron table ran, Mac by Mac (the runs are in the sections below). The poster's prefill / decode cells read the 4K-prompt prefill from `bench/results`: Kapitsa's prefill is from its newest run without a contention or invalid flag, and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's prefill is the 2026-10-21 re-run, its decode the 2026-10-19 run). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not.
 
 **MacBook Pro M4 Pro 48 GB**
 - Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so the Nemotron table leaves them out.

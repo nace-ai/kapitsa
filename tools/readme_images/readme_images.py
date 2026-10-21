@@ -222,7 +222,7 @@ def poster(data, theme):
     rows = [r for m in P["macs"] for r in m["rows"]]
     beaten = any(is_num(cell(r, "Kapitsa")[0]) and any(is_num(cell(r, e)[0]) and cell(r, e)[0] > cell(r, "Kapitsa")[0]
                                                          for e in names[1:]) for r in rows)
-    footer = list(P["footer"]) + (["Blue outline: faster than Kapitsa · orange bar: rows where Kapitsa isn't fastest"]
+    footer = list(P["footer"]) + (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't the fastest decode"]
                                   if beaten else [])
     foot_h = FOOT_GAP + len(footer) * FOOT_LINE + FOOT_PAD
     chrome = PANELS_Y + len(P["macs"]) * (HEAD + PAD) + (len(P["macs"]) - 1) * GAP + foot_h

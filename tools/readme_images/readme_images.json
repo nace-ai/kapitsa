@@ -3,7 +3,7 @@
   "Data for tools/readme_images.py: the README's benchmark poster (docs/assets/benchmarks-*.webp) and header (docs/assets/header-*.svg).",
   "A cell is {\"value\": tok/s, \"method\": speculative decoding method}, null (renders as a dash: not measured or not supported) or \"x\" (renders as ×: can't run that model on a Mac).",
   "An engine whose numbers all share one method shows it under its name; otherwise each number shows its own. \"todo\" and \"note\" are never rendered; the script prints the todos.",
-  "Numbers: decode tok/s at T = 0.6 (docs/benchmarks.md, The README's tables), Kapitsa's KFlash runs on the M4 Pro as noted; \"prefill\" on a cell is that engine's own 4K-prompt reading speed from the stored run closest to its decode value (bench/results)."
+  "Numbers: decode tok/s at T = 0.6 (docs/benchmarks.md, The README's tables), Kapitsa's KFlash runs on the M4 Pro as noted; \"prefill\" on a cell is the 4K-prompt reading speed from bench/results. Kapitsa's prefill is from its newest run without a contention or invalid flag, and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's prefill is the 2026-10-21 re-run, its decode the 2026-10-19 run). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not."
  ],
  "engines": [
   {"name": "Kapitsa", "logo": "kapitsa"},
@@ -24,7 +24,7 @@
    "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints"
   ],
   "footer": [
-   "Grey: share of the fastest engine in that row · small type: the decoding method (no spec: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
+   "Grey: share of the fastest decode in that row · small type: the decoding method (no spec: no speculative decoding) · the first number is prefill, the second decode (same size: both matter)",
    "× can't run that model on that Mac (Splash: only the 27B and 35B, on an M3 or newer) · — not measured (before the slash: no prefill run for that engine) · the numbers come from bench/results"
   ],
   "macs": [
