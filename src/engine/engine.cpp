@@ -386,6 +386,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   }
 
+  // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
+  // empty ring).
+  {
+    const char* v = getenv("NI_PREFIX_CKPT");
+    prefix_ckpt_ = !(v && v[0] == '0' && v[1] == 0) && !lili_;
+  }
   auto add_slot = [&](int limit) {
     Slot s;
     s.seq = model_->new_seq(limit, 0);  // KV cache on first use, growing with the conversation
@@ -393,10 +399,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     if (lili_) s.lseq = lili_->new_seq();
     s.ckpts.push_back({model_->new_checkpoint()});
     s.ckpts.push_back({model_->new_checkpoint()});
-    if (dfl_)
-      for (size_t i = 0; i < s.ckpts.size(); ++i) s.dckpts.push_back(dfl_->new_seq());
-    if (lili_)
-      for (size_t i = 0; i < s.ckpts.size(); ++i) s.lckpts.push_back(lili_->new_seq());
+    if (prefix_ckpt_) s.ckpts.push_back({model_->new_checkpoint(), false, true});
+    for (size_t i = 0; i < s.ckpts.size(); ++i) {  // (the prefix checkpoint has no drafter snapshot: null)
+      if (dfl_) s.dckpts.push_back(s.ckpts[i].prefix ? nullptr : dfl_->new_seq());
+      if (lili_) s.lckpts.push_back(s.ckpts[i].prefix ? nullptr : lili_->new_seq());
+    }
     slots_.push_back(std::move(s));
   };
   for (int i = 0; i < std::max(1, opts_.slots); ++i) add_slot(opts_.context);
@@ -1416,8 +1423,16 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     if (l == s.tokens.size() && l < prompt.size()) return int(l);
     int u = 0;
     for (auto& c : s.ckpts)
-      if (c.pos > u && c.pos <= int(l) && c.pos < int(prompt.size())) u = c.pos;
+      if (!c.prefix && c.pos > u && c.pos <= int(l) && c.pos < int(prompt.size())) u = c.pos;
     return u;
+  };
+  // A shared system prompt's checkpoint is no reason to take a slot from its conversation (the main agent's, while a
+  // subagent starts): it only breaks ties among the slots a new conversation may take anyway.
+  auto has_prefix = [&](const Slot& s) {
+    size_t l = lcp(s);
+    for (auto& c : s.ckpts)
+      if (c.prefix && c.pos >= 64 && c.pos <= int(l) && c.pos < int(prompt.size())) return true;
+    return false;
   };
   Slot* best = nullptr;
   int best_lcp = 0;
@@ -1446,7 +1461,12 @@ Engine::Slot* Engine::pick_slot(const std::vector<int>& prompt, uint64_t arrival
     Slot* pick = nullptr;
     for (auto& s : slots_) {
       if (s.busy || int(prompt.size()) + 64 > s.seq->limit) continue;
-      if (!pick || rank(s) < rank(*pick) || (rank(s) == rank(*pick) && s.last_used < pick->last_used)) pick = &s;
+      if (!pick || rank(s) < rank(*pick)) {
+        pick = &s;
+      } else if (rank(s) == rank(*pick)) {
+        const bool hp = has_prefix(s), pp = has_prefix(*pick);
+        if (hp != pp ? hp : s.last_used < pick->last_used) pick = &s;
+      }
     }
     if (pick) {
       pick->turns = 1;
@@ -1519,6 +1539,19 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   const std::vector<int>& keys = mmp ? mm.keys : prompt;
   const int n = int(prompt.size());
   res.prompt_tokens = n;
+  // The prefix checkpoint's row: the end of the system block (where the first user turn starts) when it is at least 64
+  // rows in and a strict prefix of the prompt. A new question after the same system prompt and tools (a subagent's
+  // task, an agent's next conversation) then reuses the block however early it diverges.
+  int pbound = -1;
+  if (prefix_ckpt_ && images.empty()) {
+    const size_t off = text.find("<|im_start|>user");
+    if (off != std::string::npos && off > 0) {
+      const std::vector<int> pt = tok_.encode(text.substr(0, off));
+      if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
+          std::equal(pt.begin(), pt.end(), prompt.begin()))
+        pbound = int(pt.size());
+    }
+  }
   const int loops = request_loops(r);  // looped models (0 otherwise)
   res.loops = loops;
   if (n + 1 >= opts_.context) {  // every slot holds opts_.context positions
@@ -1683,14 +1716,16 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     if (best) {
       model_->restore(*e, s, *best);
       start = best->pos;
-      // the drafter ring as it was at that checkpoint (the live ring may have overwritten its window since)
-      if (dfl_) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
+      // the drafter ring as it was at that checkpoint (the live ring may have overwritten its window since); the
+      // prefix checkpoint has none: the ring starts empty (rewind below marks [0, start) unusable)
+      if (dfl_ && best->prefix) DFlash2::reset(*slot.dseq);
+      else if (dfl_) dfl_->encode_ring_copy(*e, *slot.dckpts[size_t(best - slot.ckpts.data())], *slot.dseq);
       if (lili_) lili_->encode_copy(*e, *slot.lckpts[size_t(best - slot.ckpts.data())], *slot.lseq);
     } else {
       model_->reset(s);
     }
     logd("checkpoints: prompt diverges at %zu of %d, %s", common, n,
-         best ? (std::string("restored ") + (best->query ? "query" : "tool") + " checkpoint at " +
+         best ? (std::string("restored ") + (best->prefix ? "prefix" : best->query ? "query" : "tool") + " checkpoint at " +
                  std::to_string(best->pos)).c_str()
               : "none usable, prefill from 0");
   }
@@ -1752,11 +1787,20 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return !(v && v[0] == '0' && v[1] == 0);
   }();
   const bool query = ends_with_query(r.messages);
+  // the prefix checkpoint, saved while this prompt is read through pbound (not when the prefill starts at or past
+  // it: the checkpoint then holds it already, or the state at pbound is gone)
+  auto prefix_slot = [&]() {
+    TurnCheckpoint* c = nullptr;
+    for (auto& k : slot.ckpts)
+      if (k.prefix) c = &k;
+    logd("checkpoints: prefix boundary at %d", pbound);
+    return c;
+  };
   auto victim = [&]() {
     auto rank = [&](const TurnCheckpoint& k) { return k.pos < 0 ? 0 : keep_query && k.query ? 2 : 1; };
-    TurnCheckpoint* c = &slot.ckpts[0];
+    TurnCheckpoint* c = nullptr;
     for (auto& k : slot.ckpts)
-      if (rank(k) < rank(*c) || (rank(k) == rank(*c) && k.pos < c->pos)) c = &k;
+      if (!k.prefix && (!c || rank(k) < rank(*c) || (rank(k) == rank(*c) && k.pos < c->pos))) c = &k;
     logd("checkpoints: %s boundary at %d overwrites %s", query ? "query" : "tool", boundary,
          c->pos < 0 ? "an empty one" : (std::string(c->query ? "query" : "tool") + " at " + std::to_string(c->pos)).c_str());
     c->query = query;
@@ -1806,7 +1850,16 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     int T = std::min(C, n - p);
     Checkpoint* snap = nullptr;
-    if (boundary > p && boundary < p + T) {
+    int snap_at = boundary;
+    if (pbound > p && pbound < p + T) {
+      // the prefix checkpoint comes first; a chunk that holds the turn boundary too is cut at it (one snapshot per pass)
+      if (in_pass && !model_->ane_splits(T) && !(boundary > p && boundary < p + T)) {
+        snap = prefix_slot();
+        snap_at = pbound;
+      } else {
+        T = pbound - p;
+      }
+    } else if (boundary > p && boundary < p + T) {
       // NI_SHORTPF captures the checkpoint inside the pass; a chunk the NI_ANE split would run is cut at
       // the boundary instead (the split's two-half wavefront does not capture mid-chunk state).
       if (in_pass && !model_->ane_splits(T)) snap = victim();
@@ -1819,7 +1872,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
       model_->save(*e, s, *ane_ck_, p);
     }
-    model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? boundary - p : 0);
+    model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? snap_at - p : 0);
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
     const bool defer = spec_ && mtp_defer && !split && p + T == n;
     if (spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
@@ -1841,6 +1894,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     last_chunk_row = n - 1 - p;
     p += T;
+    if (p == pbound) model_->save(*e, s, *prefix_slot(), pbound);
     if (p == boundary) model_->save(*e, s, *victim(), boundary);
     // DFlash2: once every prompt row is captured (a rerun included), disarm the hook and project the rows into
     // the drafter's ring: behind the trunk's command buffer, encoded while the GPU runs it (the first token
@@ -2684,7 +2738,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
-    if (c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
+    if (!c.prefix && c.pos > 0 && c.pos <= int(common) && c.pos < n && (!best || c.pos > best->pos)) best = &c;
   Seq& s = *slot.seq;
   if (!best || n + 64 >= s.limit) return;
   for (const vision::ImageSpan& sp : mm.spans)  // an image to encode: left to the next request

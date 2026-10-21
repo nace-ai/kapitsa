@@ -313,6 +313,10 @@ class Engine {
   // query (not a tool response); those are kept through tool loops (see Engine::chat).
   struct TurnCheckpoint : Checkpoint {
     bool query = false;
+    // The slot's prefix checkpoint (the last one of ckpts): the state at the end of the system block, saved while a
+    // prompt is read through it and never overwritten by a turn boundary, so a new question that shares the system
+    // prompt and tools restores it however early it diverges. It has no drafter snapshot (the ring starts empty).
+    bool prefix = false;
   };
   struct Slot {
     std::unique_ptr<Seq> seq;
@@ -457,6 +461,7 @@ class Engine {
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)
   int context_fit_ = 0;  // see context_fit()
+  bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
