@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-21T19:43:56Z",
+  "kapitsa": {
+    "version": "0.2.3",
+    "commit": "27811f1"
+  },
+  "mac": {
+    "identifier": "Mac16,10",
+    "name": "Mac mini (2024)",
+    "year": 2024,
+    "chip": "Apple M4",
+    "cpu_cores": 10,
+    "gpu_cores": 10,
+    "memory_gb": 24,
+    "macos": "15.5",
+    "macos_build": "24F74"
+  },
+  "model": {
+    "name": "qwen3.5-9b",
+    "title": "Qwen3.5-9B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "b455506",
+    "decoding": "unknown",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 53.15,
+      "runs_tps": [
+        53.15,
+        58.33,
+        53.11,
+        52.14,
+        55.6
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 56.84,
+      "runs_tps": [
+        60.36,
+        55.1,
+        60.71,
+        52.94,
+        56.84
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4135,
+        "ttft_s": 17.9314,
+        "tps": 230.6,
+        "followup_s": [
+          0.1327,
+          0.1696,
+          0.1346
+        ],
+        "followup_median_s": 0.1346
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16284,
+        "ttft_s": 75.1754,
+        "tps": 216.6,
+        "followup_s": [
+          0.1525,
+          0.1968,
+          0.155
+        ],
+        "followup_median_s": 0.155
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 7.95
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.04,
+    "gpu_other_max_pct": 4.11,
+    "gpu_ambient_mean_pct": 3.24,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4633)"
+  ],
+  "invalid": []
+}
