@@ -1,6 +1,7 @@
 // S1: exactness of the on-GPU acceptance on synthetic inputs,
 // no model needed. (Cases are numbered in order: the chain's, then the tree's.)
 //   dflash_accept_test [trials=40000] [K=3]
+//   dflash_accept_test --cpu   (the budgets' checks alone, no GPU: KfBudget's fit, cache and costs, KfBatch)
 // 1. dfl_dist_rows against a CPU transcription of the plain sampler's distribution (sample_stage2_rows:
 //    top-k ordered (value desc, id asc), top-p on the untempered probabilities, tempered on the kept
 //    prefix) on random candidate lists, including ties.
@@ -36,6 +37,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <random>
 #include <thread>
@@ -825,9 +827,199 @@ int cost_check() {
   return bad ? 1 : 0;
 }
 
+// KFlash's batch budget (KfBatch). The rule (KfBatch::allocate) on random batches of 2-4 members (falling survivals
+// with exact ties, caps, convex costs; the rate rule, the ratio rule, a floor of one draft, forced counts): bounds (rows
+// <= 8, caps, floors, forced counts); optimal under the rate rule (brute force over every allocation); causal (a
+// member's draft p is in or out whatever its survivals past p are: a sampled member's draw at p moves only those, so
+// its speculative sampling stays exact). The cost line (an outlier, a falling table). The budget: the exploration, its
+// costs, the refresh of a count measured while busy, the cache, greedy records to KfBudget and sampled ones to its own
+// calibration, a floor.
+int batch_check(uint64_t salt) {
+  constexpr int D = KfBatch::kDrafts, R = KfBatch::kRows;
+  std::mt19937_64 r(4242 + salt);
+  std::uniform_real_distribution<double> u01(0.0, 1.0);
+  long bounds_bad = 0, opt_bad = 0, causal_bad = 0, opt_n = 0, causal_n = 0;
+  auto chain = [&](float* sv, int g, int from) {  // survivals of member g from position `from` on (1: an exact tie)
+    for (int p = from; p < D; ++p)
+      sv[g * D + p] = float((p ? double(sv[g * D + p - 1]) : 1.0) * (r() % 6 == 0 ? 1.0 : u01(r)));
+  };
+  for (int t = 0; t < 20000; ++t) {
+    const int M = 2 + int(r() % 3), floor = t % 5 == 0, force = t % 7 == 0 ? M + int(r() % (R - M + 1)) : 0;
+    float sv[R * D];
+    int kmax[R], k[R], fl = 0, room = 0;
+    for (int g = 0; g < M; ++g) {
+      chain(sv, g, 0);
+      kmax[g] = r() % 4 == 0 ? int(r() % (D + 1)) : D;
+      fl += std::min(floor, kmax[g]);
+      room += kmax[g];
+    }
+    double cost[R + 1];
+    const double base = 10.0 + 60.0 * u01(r), slope = 2.0 * u01(r), curv = 0.3 * u01(r);
+    for (int n = 0; n <= R; ++n) cost[n] = base + slope * n + curv * n * n;
+    const double rate = t % 3 == 0 ? 0.0 : 0.02 + 0.6 * u01(r);
+    const int n = KfBatch::allocate(sv, M, kmax, cost, rate, floor, force, k);
+    auto value = [&](const int* kk) {  // expected tokens - rate x cost (-inf past 8 rows)
+      double e = 0;
+      int nn = M;
+      for (int g = 0; g < M; ++g) {
+        for (int p = 0; p < kk[g]; ++p) e += sv[g * D + p];
+        nn += kk[g];
+      }
+      return nn > R ? -1e30 : e - rate * cost[nn];
+    };
+    int sum = 0;
+    bool ok = true;
+    for (int g = 0; g < M; ++g) sum += k[g], ok = ok && k[g] <= kmax[g] && k[g] >= std::min(floor, kmax[g]);
+    bounds_bad += !(ok && n == M + sum && n <= R && (!force || n == std::max(std::min(force, M + room), M + fl)));
+    if (rate > 0 && !force) {  // brute force: every allocation within the caps and the floors
+      double best = -1e30;
+      int kk[R] = {};
+      std::function<void(int)> rec = [&](int g) {
+        if (g == M) return void(best = std::max(best, value(kk)));
+        for (kk[g] = std::min(floor, kmax[g]); kk[g] <= kmax[g]; ++kk[g]) rec(g + 1);
+      };
+      rec(0);
+      ++opt_n;
+      opt_bad += value(k) < best - 1e-6;
+    }
+    for (int g = 0; g < M; ++g)  // member g's survivals past p redrawn (still falling): draft p in or out as before
+      for (int p = 0; p < kmax[g]; ++p) {
+        float s2[R * D];
+        memcpy(s2, sv, sizeof s2);
+        chain(s2, g, p + 1);
+        int k2[R];
+        KfBatch::allocate(s2, M, kmax, cost, rate, floor, force, k2);
+        ++causal_n;
+        causal_bad += (k2[g] > p) != (k[g] > p);
+      }
+  }
+  int bad = 0;
+  auto check = [&](bool ok, const std::string& what) {
+    printf("[batch] %s: %s\n", what.c_str(), ok ? "PASS" : "FAIL");
+    bad += !ok;
+  };
+  check(bounds_bad == 0, "rule on 20000 random batches: bounds and forced counts (" + std::to_string(bounds_bad) + " broken)");
+  check(opt_bad == 0 && opt_n > 1000, "rate rule optimal against every allocation: " + std::to_string(opt_bad) +
+                                          " of " + std::to_string(opt_n) + " not");
+  check(causal_bad == 0 && causal_n > 10000, "a draft's place independent of its member's later survivals: " +
+                                                 std::to_string(causal_bad) + " of " + std::to_string(causal_n) + " moved");
+  {
+    double c[R + 1] = {}, out[R + 1] = {}, f[R + 1] = {}, fo[R + 1] = {}, one[R + 1] = {}, oo[R + 1] = {};
+    for (int n = 2; n <= R; ++n) c[n] = 20.0 + 1.2 * n, f[n] = 30.0 - 0.5 * n;
+    c[3] += 10.0;  // an outlier
+    one[5] = 25.0;
+    KfBatch::cost_line(c, 2, R, out);
+    KfBatch::cost_line(f, 2, R, fo);
+    KfBatch::cost_line(one, 2, R, oo);
+    bool ok = true;
+    for (int n = 2; n <= R; ++n) ok = ok && std::fabs(out[n] - (20.0 + 1.2 * n)) < 0.05 && fo[n] == fo[2] && oo[n] == 25.0;
+    check(ok, "cost line: an outlier at 3 rows leaves 20 + 1.2 n; a falling table is flat; one count: flat");
+  }
+  const char* tmp = getenv("TMPDIR");
+  std::string dir = std::string(tmp && *tmp ? tmp : "/tmp") + "/kf_batch_XXXXXX";
+  if (!mkdtemp(dir.data())) return printf("[batch] no temporary folder: FAIL\n"), 1;
+  const char* h = getenv("KAPITSA_HOME");
+  const std::string old_home = h ? h : "";
+  setenv("KAPITSA_HOME", dir.c_str(), 1);
+  const int lvl = log_level();
+  log_level() = 0;
+  auto ms_of = [](int M, int n) { return 20.0 + 3.0 * M + 1.2 * n; };
+  // cycles of M members with drafts of confidence c (random below 0: 0.3 .. 0.99), accepting a = k * acc of k
+  auto run = [&](KfBatch& kb, KfBudget& gr, int M, int cycles, bool sampled, double c, double acc, double extra,
+                 int* seen) {
+    for (int i = 0; i < cycles; ++i) {
+      KfBatch::Member m[R];
+      int k[R], a[R];
+      for (int g = 0; g < M; ++g) {
+        for (int p = 0; p < D; ++p) m[g].lc[p] = float(std::log(c > 0 ? c : 0.3 + 0.69 * u01(r)));
+        m[g].sampled = sampled;
+      }
+      const int n = kb.plan(m, M, &gr, k);
+      if (seen && n >= 1 && n <= R) ++seen[n];
+      for (int g = 0; g < M; ++g) a[g] = int(k[g] * acc);
+      kb.observe(m, M, k, a, ms_of(M, n) + (n == 3 ? extra : 0.0), &gr);
+    }
+  };
+  float ga[D + 1], gb[D + 1];
+  {
+    KfBatch kb("bt");
+    KfBudget greedy("");
+    int seen[R + 1] = {};
+    run(kb, greedy, 2, 7 * KfBatch::kExplore, false, -1, 0.5, 0, seen);
+    bool all = true;
+    for (int n = 2; n <= R; ++n) all = all && seen[n] == KfBatch::kExplore;
+    check(all, "2 members: rows 2 .. 8 explored 3 times each");
+    run(kb, greedy, 2, 64, false, -1, 0.0, 0, nullptr);  // every draft missed: the greedy calibration learns it
+    check(std::fabs(kb.cost(2, 8) - ms_of(2, 8)) < 0.05 && std::fabs(kb.cost(2, 3) - ms_of(2, 3)) < 0.05,
+          "2 members: the costs of 3 and 8 rows as measured");
+    greedy.calibration(ga, gb, D + 1);
+    check(ga[1] < -1.0f && kb.summary().find("by depth (0.00, 1.00)") != std::string::npos,
+          "greedy members' records reach the drafter's budget (alpha < -1 at depth 1), not the sampled calibration");
+  }  // saved
+  {
+    bool whole = false;
+    try {
+      const nlohmann::json j = nlohmann::json::parse(std::ifstream(dir + "/kflash/bt.json"));
+      whole = j.value("cost_of", "") == "batched cycle GPU ms" && j.at("cost").at(2).at(8).get<double>() > 0;
+    } catch (...) {
+    }
+    KfBatch kb("bt");
+    KfBudget greedy("");
+    int seen[R + 1] = {};
+    run(kb, greedy, 2, 1, true, -1, 0.0, 0, seen);
+    check(whole && seen[R] == 1, "the cache: written whole; read back, the first cycle verifies 8 rows (a count it holds)");
+    run(kb, greedy, 2, 64, true, -1, 0.0, 0.0, nullptr);
+    greedy.calibration(ga, gb, D + 1);
+    check(ga[1] == 0.0f && kb.summary().find("by depth (0.00, 1.00)") == std::string::npos,
+          "sampled members' records reach the batch's own calibration, not the drafter's");
+  }
+  {
+    KfBatch kb("");
+    KfBudget greedy("");
+    run(kb, greedy, 2, 7 * KfBatch::kExplore, false, 0.95, 1.0, 30.0, nullptr);  // 3 rows measured 30 ms too dear
+    const double busy = kb.cost(2, 3);
+    int seen[R + 1] = {};
+    run(kb, greedy, 2, 7 * KfBatch::kRefresh + 64, false, 0.95, 1.0, 0.0, seen);
+    bool spread = true;
+    for (int n = 2; n <= R; ++n) spread = spread && seen[n] > 0;
+    check(busy > ms_of(2, 3) + 20.0 && std::fabs(kb.cost(2, 3) - ms_of(2, 3)) < 6.0 && spread &&
+              seen[R] * 10 > 9 * (7 * KfBatch::kRefresh + 64),
+          "refresh: every count measured again, 3 rows' cost back from +30 ms; 8 rows in 9 cycles of 10 meanwhile");
+  }
+  {
+    KfBatch kb("", 1);
+    KfBudget greedy("");
+    bool floor_ok = true;
+    for (int i = 0; i < 40; ++i) {
+      KfBatch::Member m[4];
+      int k[4];
+      const int a[4] = {0, 1, 0, 1};
+      for (auto& x : m)
+        for (float& l : x.lc) l = float(std::log(0.3 + 0.69 * u01(r)));
+      const int n = kb.plan(m, 4, &greedy, k);
+      for (int g = 0; g < 4; ++g) floor_ok = floor_ok && k[g] >= 1;
+      kb.observe(m, 4, k, a, ms_of(4, n), &greedy);
+    }
+    check(floor_ok, "a floor of one draft: 4 members verify one draft each at least");
+  }
+  log_level() = lvl;
+  unlink((dir + "/kflash/bt.json").c_str());
+  rmdir((dir + "/kflash").c_str());
+  rmdir(dir.c_str());
+  if (h) setenv("KAPITSA_HOME", old_home.c_str(), 1);
+  else unsetenv("KAPITSA_HOME");
+  return bad ? 1 : 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+  // --cpu: the budgets' checks alone (no GPU): the calibration fit, the cache, the costs, the batch budget
+  if (argc > 1 && !strcmp(argv[1], "--cpu")) {
+    int fails = fit_check(0) + cache_check() + cost_check() + batch_check(0);
+    printf(fails ? "FAILED: %d\n" : "ALL PASSED\n", fails);
+    return fails ? 1 : 0;
+  }
   const long trials = argc > 1 ? atol(argv[1]) : 40000;
   const int Kmain = argc > 2 ? atoi(argv[2]) : 3;
   const uint64_t salt = argc > 3 ? uint64_t(atoll(argv[3])) : 0;  // seed stream offset (repeat with others)
@@ -1034,6 +1226,7 @@ int main(int argc, char** argv) {
   if (only < 0) fails += fit_check(salt);
   if (only < 0) fails += cache_check();
   if (only < 0) fails += cost_check();
+  if (only < 0) fails += batch_check(salt);
   printf(fails ? "FAILED: %d\n" : "ALL PASSED\n", fails);
   return fails ? 1 : 0;
 }

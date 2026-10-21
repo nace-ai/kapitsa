@@ -2,6 +2,7 @@
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
 // included) and Nemotron-H models (NVIDIA's safetensors).
 #pragma once
+#include "engine/prefix_cache.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/dory.h"
@@ -56,6 +57,10 @@ struct EngineOptions {
   // Dory 1.0; requests choose 1-4 with "loops" or a reasoning effort), and the recurrent layers' KV ("": last-loop)
   int loops = 0;
   std::string loop_kv;
+  // SSD prefix cache (src/engine/engine_disk.cpp): conversations' states kept on the SSD across restarts. "auto" (`kapitsa
+  // serve`'s default: a quarter of the free space beyond 10 GiB, at most 32 GiB), "0" off, or a size ("16G"). "" =
+  // NI_DISK_CACHE if set, else off (tools that construct an engine write nothing unless asked).
+  std::string disk_cache;
 };
 
 // The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next,
@@ -307,6 +312,9 @@ class Engine {
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no
   // destructor, so it calls this. From any thread, with requests running.
   void save_kflash();
+  // SSD prefix cache: the conversations of idle slots that are not on the SSD yet, written now (the newest first, for
+  // at most budget_ms), as the server stops; the cache's files are then closed. From any thread; once.
+  void save_disk_cache(double budget_ms = 8000);
 
  private:
   // Recurrent-state snapshot at a turn boundary. `query`: the request that saved it ended with a user
@@ -337,6 +345,13 @@ class Engine {
     enum class MemWait : uint8_t { none, before_prefill, growth } mem_wait = MemWait::none;
     bool decoding = false;            // that request is in its decode loop
     Buffer park_h;                    // MTP decoding: the hidden rows the next cycle reads, while other requests run
+    // SSD prefix cache (engine_disk.cpp). fills: which computation wrote the KV rows, rows [previous end, end) by the
+    // request (or history prefill) `id`, so that what the SSD has of a conversation is found again by its key;
+    // version: bumped by every change of the state; disk_version: the version the SSD has (or nothing worth saving);
+    // live_ok: a follow-up continues the live state as it is (after tool calls, or once the history is prefilled)
+    std::vector<std::pair<int32_t, uint64_t>> fills;
+    uint64_t version = 0, disk_version = 0;
+    bool live_ok = false;
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
   // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
@@ -371,6 +386,35 @@ class Engine {
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
 
+  // ---- SSD prefix cache (engine_disk.cpp) ----
+  struct Disk;      // the store, its writer thread and what it was handed
+  struct DiskPlan;  // what saving one slot writes
+  struct DiskFree {
+    void operator()(Disk* d) const;
+  };
+  std::unique_ptr<Disk, DiskFree> disk_;  // null: off (or the model's states are not cached on the SSD)
+  void disk_start();
+  // The rows [0, start) of slot's state a request reuses from the slot itself (live state or checkpoint), as chat()
+  // decides it below the lookup
+  static int reuse_start(const Slot& slot, size_t common, int n);
+  // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
+  // what it would lose and the SSD lacks is copied now and written in the background
+  void disk_leaving(Slot& slot, int start);
+  // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
+  // state must match (Dory: the request's loop count); mm: the prompt's images (null for text), the same as stored
+  pcache::Hit disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm);
+  // Reads a stored state into slot (KV rows, recurrent state, drafter ring) and makes it the slot's live state; false
+  // (the slot then holds nothing) when it cannot. With the GPU turn held (given up while reading).
+  bool disk_restore(Slot& slot, const pcache::Hit& hit);
+  // rows [start, end) of slot were computed now (by a request or a history prefill, which is done)
+  void disk_filled(Slot& slot, int start, int end);
+  std::unique_ptr<DiskPlan> disk_plan(const Slot& slot) const;
+  // Writes slot i's state if it changed since it was last saved. held: the caller holds the GPU turn throughout;
+  // otherwise each chunk is copied under a turn taken while the engine is idle, and the save stops when a request
+  // arrives (what it wrote stays for the next save to reuse). False: given up.
+  bool disk_save_slot(int i, bool held);
+  void disk_loop();
+
   // ---- batched decode: the decode cycles of several requests in one forward pass ----
   // A decoding request (DFlash2 or LiLiCorr) joins the batch at a cycle boundary, parked, when another request decodes
   // and batch_rows() says a pass over their rows pays; one member's thread (the runner, holding the GPU turn) runs the
@@ -394,8 +438,11 @@ class Engine {
     int cycles = 0, tokens = 0;
   };
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
-  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched).
-  // NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides the table.
+  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched);
+  // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
+  // drafts. NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides
+  // the table and the budget; NI_BATCH_KF=0 keeps the table where the budget would choose.
+  static constexpr int kBatchBudget = 9;
   int batch_rows(int n) const;
   // at a decode cycle boundary: join the batch (one is running, or another request decodes and batching pays)
   bool batch_wanted() const;
@@ -403,6 +450,8 @@ class Engine {
   // with the turn once the job is done (true: the request stopped) or returned (false: back to its own loop at job.P)
   bool join_batch(BatchJob& job);
   void run_batch(BatchJob& me);
+  // one cycle of every member: rows per member, or kBatchBudget (each member drafts its chain, the budget then gives the
+  // members their rows: the verify is encoded once the drafting passes are done)
   void batch_cycle(int rows);
   // plain rows, pipelined: up to 8 passes, each encoded and committed before the host reads the one before it
   void batch_plain_run();
@@ -420,6 +469,7 @@ class Engine {
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
+  std::string dfl_dir_;              // its folder
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   // KFlash on the Nemotron-H block drafters (on dense targets; MoE targets keep the chain unless NI_KFLASH=1; src/model/kflash_budget.h): best-first trees of the drafter's
   // lattice under a measured budget instead of its walk's chain
@@ -440,9 +490,10 @@ class Engine {
   bool batch_runner_ = false;     // a member's thread runs the batch
   bool batch_measured_ = false;   // batched decode measured with this model's drafter (batch_rows' default)
   double batch_backoff_ = 0;      // now_ms() before which no batch forms (the last one's members did not all come)
-  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles
-  long bstat_cycles_ = 0, bstat_rows_ = 0;
-  double bstat_wall_ = 0, bstat_gpu_ = 0;
+  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles, the GPU's idle time between
+  // the drafting passes and the verify (cycles with drafting passes)
+  long bstat_cycles_ = 0, bstat_rows_ = 0, bstat_drafted_ = 0;
+  double bstat_wall_ = 0, bstat_gpu_ = 0, bstat_gap_ = 0;
   std::mutex bmu_;                // a waiting member's job state / runner flag
   std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)

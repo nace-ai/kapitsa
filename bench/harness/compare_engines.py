@@ -939,6 +939,8 @@ def plan(c, args, stamp):
         bargs += ["--sampling-overrides", json.dumps(c["sampling_overrides"])]
     if args.skip:
         bargs += ["--skip", args.skip]
+    if args.agentic:
+        bargs += ["--agentic"]
     trace, mode = agent_session_of(c, args)
     bargs += ["--agent-trace", trace or "none"]
     if trace and mode:
@@ -1081,6 +1083,16 @@ def run_config(c, args, stamp):
         log(f"{label}: ready after {waited:.0f}s (pid {srv_pid}, listener {lp})")
         # warm-up before the GPU-quiet wait, with the benchmark's own sampling/thinking settings
         ba = bench.parse_args(p["bench_args"])
+        cold = None
+        if args.agentic:  # first requests right after ready, before any warm-up (agentic.py cold_start)
+            import agentic
+            bench.load_corpus()
+            cold = agentic.cold_start(ba)
+            cold["spawn_to_ready_s"] = prov["ready_s"] if proc else None  # external server: not ours to time
+            cold["spawn_to_first_token_s"] = (round(prov["ready_s"] + cold["first"]["ttft_s"], 2)
+                                              if proc and cold["first"].get("ttft_s") is not None else None)
+            log(f"{label}: cold start: ready {cold['spawn_to_ready_s']}s, first TTFT {cold['first'].get('ttft_s')}s, "
+                f"repeat median {cold['repeat_median_ttft_s']}s")
         result["warmup"] = bench.warmup(ba, adaptive=bool(c.get("adaptive_warm")), log=lambda m: log(f"{label}:{m}"))
         if not any(s["ok"] for s in result["warmup"]["steps"]):
             raise ResolveError(f"warm-up failed: {result['warmup']['steps'][0].get('error')}")
@@ -1111,6 +1123,9 @@ def run_config(c, args, stamp):
         prov["bench_rc"] = rc
         try:
             result = dict(json.load(open(p["out"])), warmup=result["warmup"])
+            if cold:
+                result["cold_start"] = cold
+                result["invalid"] = list(result.get("invalid") or []) + cold.get("invalid", [])
         except Exception as e:
             result.update({"schema": bench.SCHEMA, "when": time.strftime("%Y-%m-%d %H:%M:%S"),
                            "invalid": [f"bench produced no result (rc={rc}): {e!r}"[:300]], "flags": []})
@@ -1253,6 +1268,8 @@ def main():
                     "(e.g. --skip decode,greedy,prefill,tools runs only the agent session)")
     ap.add_argument("--agent-trace", default="", help="agent session to replay for every config (default: the "
                     "model's entry in agent-traces/index.json; none = no agent phase)")
+    ap.add_argument("--agentic", action="store_true", help="also measure the agent-harness metrics (agentic.py): cold start, "
+                    "context sweep, cache behaviour, sustained decode/thermal; tune with --bench-args '--sustain-s 60 --sweep-sizes 1000,16000'")
     ap.add_argument("--dry-run", action="store_true", help="print the resolved plan per config; start nothing")
     ap.add_argument("--check-flags", action="store_true", help="with --dry-run: run `llama-server --help` and check flags")
     ap.add_argument("--reverse", action="store_true", help="run configs in reverse order (interleave across sessions)")

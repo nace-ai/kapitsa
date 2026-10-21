@@ -336,6 +336,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
       dfl_ = std::make_unique<DFlash2>(*q35_, dir);
+      dfl_dir_ = dir;
       DFlash2::prewarm_pipelines();
       spec_ = false;
       // the plan against what loading took (rings and the first prefill's buffers come later)
@@ -447,13 +448,15 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                    : std::string();
   logi("engine ready: %s, context %d, %d slots, %s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
        mode.c_str(), looped.c_str(), vision_ ? ", images on" : "");
+  disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 
-Engine::~Engine() = default;
+Engine::~Engine() { save_disk_cache(); }
 
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
   if (dfl_ && dfl_->budget()) dfl_->budget()->save();
+  if (dfl_ && dfl_->batch_budget()) dfl_->batch_budget()->save();
 }
 
 size_t default_mem_budget() {
@@ -725,6 +728,9 @@ void Engine::drop_slot(Slot& slot) {
     c.query = false;
   }
   ++slot.gen;  // an idle history prefill for it gives up
+  slot.fills.clear();
+  slot.live_ok = false;
+  slot.disk_version = ++slot.version;  // (nothing left to save)
 }
 
 bool Engine::reserve_kv(Slot& slot, int need, bool started) {
@@ -744,6 +750,7 @@ bool Engine::reserve_kv(Slot& slot, int need, bool started) {
   for (Slot* o : idle) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for a %d-token context in slot %d",
          int(o - slots_.data()), int(o->tokens.size()), need, int(&slot - slots_.data()));
+    if (!started) disk_leaving(*o, 0);  // to the SSD first (not between decode cycles: the write-behind has it there)
     drop_slot(*o);
     if (model_->reserve(s, need)) return true;
   }
@@ -824,6 +831,16 @@ int Engine::batch_rows(int n) const {
     return t;
   }();
   int rows = env[size_t(n)];
+  // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
+  // of one verify pass in all and which member gets them, from the members' calibrated drafts and this Mac's measured
+  // cost of a batched cycle (KfBatch). Against the table on the M4 Pro (same streams, interleaved): 3 at once 35B
+  // +16-20%, 27B +14-22% (it batched them instead of taking turns: 8 rows in all instead of 2 each); 2 and 4 at once
+  // within -2 .. +4%
+  static const bool kf = [] {
+    const char* v = getenv("NI_BATCH_KF");
+    return !(v && *v) || atoi(v) != 0;
+  }();
+  if (rows < 0 && kf && dfl_ && dfl_->batch_budget() && n <= KfBatch::kMembers) return kBatchBudget;
   if (rows < 0) {
     // As measured on the M4 Pro (MacBook Pro, 48 GB), 512-token greedy replies to code prompts, tok/s in all against
     // the requests taking turns (bench/batch/concurrency.py streams):
@@ -942,7 +959,13 @@ void Engine::run_batch(BatchJob& me) {
     }
   }
   // this member left: another one runs the batch, or the last one goes back to its own loop
-  if (batch_.size() < 2) batch_stats();
+  if (batch_.size() < 2) {
+    batch_stats();
+    if (dfl_ && dfl_->batch_budget() && dfl_->batch_budget()->cycles() > 0) {
+      logi("%s", dfl_->batch_budget()->summary().c_str());
+      dfl_->batch_budget()->save(KfBatch::kSaveEvery);
+    }
+  }
   batch_runner_ = false;
   if (batch_.size() >= 2) {
     BatchJob* next = batch_.front();
@@ -960,11 +983,16 @@ void Engine::run_batch(BatchJob& me) {
 void Engine::batch_cycle(int rows) {
   Gpu& g = Gpu::get();
   const double t_cycle = now_ms();
-  const int k = rows - 1;  // drafted tokens per member
+  // KFlash's batch budget (DFlash2): every member drafts its chain, then the budget chooses the rows each verifies
+  const bool kfb = rows == kBatchBudget && dfl_ && dfl_->batch_budget();
+  if (rows == kBatchBudget && !kfb) rows = std::max(1, 8 / int(batch_.size()));  // (not reached: the budget is DFlash2's)
+  const int k = kfb ? DFlash2::kB - 1 : rows - 1;  // drafted tokens per member
   const std::vector<BatchJob*> jobs = batch_;
+  const size_t nj = jobs.size();
+  std::vector<int> kv(nj, k);  // drafts each member verifies (its rows: kv + 1)
   // Two command buffers, as a single request's cycle: the first (each member's staged rows into its drafter's ring
   // before its draft or when its stage is full, then its draft) starts on the GPU while the host encodes the second,
-  // one pass over every row
+  // one pass over every row (under the budget the second is encoded once the first is done: its rows follow the drafts)
   const SamplingParams greedy;
   auto e1 = g.begin();
   bool e1_work = false;
@@ -976,8 +1004,8 @@ void Engine::batch_cycle(int rows) {
     const char* v = getenv("NI_BATCH_EXACT");
     return !(v && v[0] == '0');
   }();
+  std::vector<KfBatch::Member> mem(kfb ? nj : 0);
   if (dfl_) {
-    std::vector<Qwen35::VerifyGroup> groups;
     for (BatchJob* j : jobs) {
       Slot& sl = *j->slot;
       DFlashSeq& d = *sl.dseq;
@@ -987,22 +1015,50 @@ void Engine::batch_cycle(int rows) {
         const bool sampled = exact && j->sp.temperature > 0;
         dfl_->encode_draft(*e1, *sl.seq, d, j->P, sampled ? j->sp : greedy);
         if (sampled) dfl_->encode_save_walk(*e1, d);
+        if (kfb) dfl_->encode_save_scores(*e1, d);
         e1_work = true;
       }
-      groups.push_back(Qwen35::VerifyGroup{sl.seq.get(), j->P, rows, j->sp, &d.stage_hook, k > 0 ? 0 : d.staged});
     }
-    if (e1_work) e1->commit();
-    q35_->encode_verify_multi(*e2, groups);
+    if (kfb) {
+      // the budget's input, once the drafting passes are done: per member and draft position the largest of the 16
+      // candidates' probabilities under the walk's scores (a greedy walk's own draft; a sampled member's does not move
+      // it), and which calibration it takes (exact speculative sampling: the budget's own)
+      e1->commit();
+      e1->wait();
+      for (size_t i = 0; i < nj; ++i) {
+        const float* S = jobs[i]->slot->dseq->scores();
+        for (int p = 0; p < KfBatch::kDrafts; ++p) {
+          float mx = -INFINITY;
+          for (int c = 0; c < DFlash2::kTopK; ++c) mx = std::max(mx, S[p * DFlash2::kTopK + c]);
+          double z = 0;
+          for (int c = 0; c < DFlash2::kTopK; ++c) z += std::exp(double(S[p * DFlash2::kTopK + c] - mx));
+          mem[i].lc[p] = std::isfinite(mx) && z >= 1.0 ? float(-std::log(z)) : -30.0f;
+        }
+        mem[i].sampled = exact && jobs[i]->sp.temperature > 0;
+      }
+      dfl_->batch_budget()->plan(mem.data(), int(nj), dfl_->budget(), kv.data());
+    } else if (e1_work) {
+      e1->commit();
+    }
+    std::vector<Qwen35::VerifyGroup> groups;
+    for (size_t i = 0; i < nj; ++i) {
+      Slot& sl = *jobs[i]->slot;
+      groups.push_back(Qwen35::VerifyGroup{sl.seq.get(), jobs[i]->P, kv[i] + 1, jobs[i]->sp, &sl.dseq->stage_hook,
+                                           k > 0 ? 0 : sl.dseq->staged});
+    }
+    // (under the budget the GPU is idle until the pass's first layer is committed: it goes at once)
+    q35_->encode_verify_multi(*e2, groups, kfb ? 1 : 0);
     if (k > 0 && exact) {  // the sampled members' acceptance (stage-1 candidates per row: as the pass made them)
       uint32_t Kmax = 1;
       for (const auto& gr : groups)
         if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
       const uint32_t n = (uint32_t(model_->vocab()) + 2047) / 2048 * Kmax;
       int r0 = 0;
-      for (BatchJob* j : jobs) {
-        if (j->sp.temperature > 0)
-          dfl_->encode_accept_rows(*e2, *j->slot->seq, *j->slot->dseq, j->P, k, j->sp, r0, n);
-        r0 += rows;
+      for (size_t i = 0; i < nj; ++i) {
+        BatchJob* j = jobs[i];
+        if (j->sp.temperature > 0 && kv[i] > 0)
+          dfl_->encode_accept_rows(*e2, *j->slot->seq, *j->slot->dseq, j->P, kv[i], j->sp, r0, n);
+        r0 += kv[i] + 1;
       }
     }
   } else {
@@ -1020,18 +1076,26 @@ void Engine::batch_cycle(int rows) {
   }
   e2->commit_and_wait();
   bstat_gpu_ += e2->gpu_ms() + (e1_work ? e1->gpu_ms() : 0.0);
+  if (e1_work && k > 0) {  // the GPU's idle time between the drafting passes and the verify
+    bstat_gap_ += std::max(0.0, e2->gpu_start_host_ms() - e1->gpu_end_host_ms());
+    ++bstat_drafted_;
+  }
   const int* samp = dfl_ ? q35_->samples() : nh_->samples();
+  std::vector<int> acc(nj, 0);
   int r0 = 0;
-  for (BatchJob* j : jobs) {
+  for (size_t i = 0; i < nj; ++i) {
+    BatchJob* j = jobs[i];
     Seq& s = *j->slot->seq;
     int* tk = s.tokens();
+    const int kj = kv[i];
     int a = 0;  // drafts kept: while each equals the sample of the row before it
-    if (dfl_ && k > 0 && exact && j->sp.temperature > 0) {
+    if (dfl_ && kj > 0 && exact && j->sp.temperature > 0) {
       a = j->slot->dseq->accepted();  // (the acceptance wrote the token after them)
     } else {
-      while (a < k && samp[r0 + a] == tk[j->P + 1 + a]) ++a;
+      while (a < kj && samp[r0 + a] == tk[j->P + 1 + a]) ++a;
       tk[j->P + 1 + a] = samp[r0 + a];  // the sample after them
     }
+    acc[i] = a;
     int m = 0;  // rows fed: the anchor and the kept drafts, up to where the request stops
     bool go = true;
     while (m < a + 1) {
@@ -1063,10 +1127,14 @@ void Engine::batch_cycle(int rows) {
       (*j->trace)(lg + size_t(r0) * size_t(model_->vocab()), m, tk + j->P - m + 1);
     }
     if (!go) j->stopped = true;
-    r0 += rows;
+    r0 += kj + 1;
+    bstat_rows_ += kj + 1;
   }
+  // the budget reads the cycle's outcome (each member's verified and accepted drafts) and its GPU time: the drafting
+  // passes' command buffer and the verify's, as a single request's KFlash cycle is measured
+  if (kfb) dfl_->batch_budget()->observe(mem.data(), int(nj), kv.data(), acc.data(), e1->gpu_ms() + e2->gpu_ms(),
+                                         dfl_->budget());
   ++bstat_cycles_;
-  bstat_rows_ += long(rows) * long(jobs.size());
   bstat_wall_ += now_ms() - t_cycle;
   if (bstat_cycles_ >= 200) batch_stats();
 }
@@ -1165,10 +1233,11 @@ void Engine::batch_plain_run() {
 
 void Engine::batch_stats() {  // (debug log) how the batch's time splits
   if (bstat_cycles_ <= 0) return;
-  logd("batch: %ld cycles, %.1f rows each, %.2f ms per cycle (GPU %.2f)", bstat_cycles_,
-       double(bstat_rows_) / double(bstat_cycles_), bstat_wall_ / double(bstat_cycles_), bstat_gpu_ / double(bstat_cycles_));
-  bstat_cycles_ = bstat_rows_ = 0;
-  bstat_wall_ = bstat_gpu_ = 0;
+  logd("batch: %ld cycles, %.1f rows each, %.2f ms per cycle (GPU %.2f; idle before the verify %.3f)", bstat_cycles_,
+       double(bstat_rows_) / double(bstat_cycles_), bstat_wall_ / double(bstat_cycles_), bstat_gpu_ / double(bstat_cycles_),
+       bstat_drafted_ ? bstat_gap_ / double(bstat_drafted_) : 0.0);
+  bstat_cycles_ = bstat_rows_ = bstat_drafted_ = 0;
+  bstat_wall_ = bstat_gpu_ = bstat_gap_ = 0;
 }
 
 bool Engine::make_room(Slot& keep, size_t bytes) {
@@ -1182,6 +1251,7 @@ bool Engine::make_room(Slot& keep, size_t bytes) {
   for (Slot* o : others) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for an image", int(o - slots_.data()),
          int(o->tokens.size()));
+    disk_leaving(*o, 0);
     drop_slot(*o);
     if (fits()) return true;
   }
@@ -1597,10 +1667,26 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- prefix reuse ----
   // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
-  const size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
+  size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
   if (dory_ && slot.loops != loops && !slot.tokens.empty())
     logi("chat: %d loops on slot %d, whose cache holds %d-loop KV: the prompt is read from the start", loops,
          int(&slot - slots_.data()), slot.loops);
+  // SSD prefix cache (engine_disk.cpp): a stored state deeper than the slot's own is read into it once its KV cache is
+  // reserved (below); the conversation the slot held goes to the SSD first, if the SSD lacks it and this request
+  // leaves it behind (another conversation; with the loop count it was computed with)
+  pcache::Hit disk_hit;
+  if (disk_) {
+    const int ram = reuse_start(slot, common, n);
+    disk_hit = disk_lookup(keys, n, ram, dory_ ? uint32_t(loops) : 0, mmp);
+    disk_leaving(slot, disk_hit ? 0 : ram);
+    if (disk_hit) {  // the slot's own state is not reused
+      common = 0;
+      slot.tokens.clear();
+      slot.fills.clear();
+      for (auto& c : slot.ckpts) c.pos = -1;
+    }
+  }
+  ++slot.version;
   if (dory_) slot.loops = s.loops = loops;
 
   // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
@@ -1631,7 +1717,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   };
   if (mmp) {
     int from = 0;
-    if (common == slot.tokens.size() && int(common) < n) from = int(common);
+    if (disk_hit) from = disk_hit.pos;  // (the images before it come with the state read from the SSD)
+    else if (common == slot.tokens.size() && int(common) < n) from = int(common);
     else
       for (auto& c : slot.ckpts)
         if (c.pos > 0 && c.pos <= int(common) && c.pos < n) from = std::max(from, c.pos);
@@ -1671,6 +1758,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
                 "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
     res.prompt_limit = std::max(0, int(fit) - 32);
     return res;
+  }
+  double disk_ms = 0;  // (the SSD read: its own log line, not the template's time)
+  if (disk_hit) {
+    const double t_disk = now_ms();
+    if (disk_restore(slot, disk_hit)) common = slot.tokens.size();  // it is the live state now
+    else model_->reset(s);                                         // (no tokens: the prefill starts at 0)
+    disk_ms = now_ms() - t_disk;
   }
   int start = 0;
   auto e = g.begin();
@@ -1726,8 +1820,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   s.embeds = runs.empty() ? nullptr : &runs;
 
   // ---- prefill ----
-  // template + tokenizer (before the turn) + slot pick (image encoding: logged apart)
-  const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms;
+  // template + tokenizer (before the turn) + slot pick (image encoding and an SSD read: logged apart)
+  const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms - disk_ms;
   const AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
@@ -2566,6 +2660,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
+  // rows [start, fed_until) are this request's; after tool calls the next request continues the live state as it is
+  // (after a final answer the history prefill makes it so)
+  disk_filled(slot, start, fed_until);
+  slot.live_ok = finish == "tool_calls";
+  ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[64] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
@@ -2681,6 +2780,10 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   const int n = int(t2.size()) - 1;
   const size_t common = common_rows(slot, k2, mmp);
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
+  if (n > 0 && common == slot.tokens.size() && !slot.live_ok) {
+    slot.live_ok = true;  // (the SSD prefix cache saves the live state too)
+    ++slot.version;
+  }
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
@@ -2750,6 +2853,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   slot.tokens.assign(k2.begin(), k2.begin() + n);
   slot.img_spans = mm.spans;
   slot.img_digests = mm.digests;
+  disk_filled(slot, start, n);
+  slot.live_ok = true;  // the follow-up continues this state
+  ++slot.version;
   logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
 }
 

@@ -20,6 +20,11 @@ latest run that has one (clean: no INVALID reason in the phase and no contention
   writing tok/s  all answers' tokens after their first streamed event over the time from first to last event
   TTFT           first request (cold), and the median / p90 of the follow-up requests
 
+A third table per model covers the agent-harness metrics of runs made with --agentic (agentic.py): cold start
+(spawn to first token; the first request's penalty over later ones), cold TTFT and decode tok/s at 1K / 16K / the
+largest context, decode retention (largest over smallest), warm-prefix TTFT, whether a prefix survives another
+conversation, the agent replay's cache hit rate, sustained-decode falloff, idle and peak memory.
+
 usage: compare_table.py [results dir ...] [--out FILE_WITHOUT_EXT] [--include-legacy]
        writes <out>.md and <out>.csv, prints the markdown (default: the first results dir/compare_table)
 """
@@ -151,7 +156,7 @@ def has_main_phases(d):
 
 def load(res_dirs, include_legacy):
     """(best run per (model, config) for the main table, best run per (model, config) with an agent session)"""
-    best, best_agent = {}, {}
+    best, best_agent, best_ax = {}, {}, {}
     for res_dir in res_dirs:
         for f in sorted(glob.glob(os.path.join(res_dir, "*.json"))):
             try:
@@ -170,11 +175,116 @@ def load(res_dirs, include_legacy):
                 r["rank"] = (not r["invalid"] and not r["contended"], not r["invalid"], r["when"])
                 if k not in best or r["rank"] >= best[k]["rank"]:
                     best[k] = r
+            ax = extract_agentic(d, f, r)
+            if ax:
+                if k not in best_ax or ax["rank"] >= best_ax[k]["rank"]:
+                    best_ax[k] = ax
             ag = extract_agent(d, f, r)
             if ag:
                 if k not in best_agent or ag["rank"] >= best_agent[k]["rank"]:
                     best_agent[k] = ag
-    return best, best_agent
+    return best, best_agent, best_ax
+
+
+def sweep_point(sw, which):
+    """(ttft_s, decode_tps, prompt_tokens) of the smallest / largest / 16000-target sweep point, or Nones."""
+    pts = [p for p in (sw or {}).get("points", []) if not p.get("error")]
+    if not pts:
+        return None, None, None
+    if which == "16k":
+        pts = [p for p in pts if p.get("target") == 16000]
+        if not pts:
+            return None, None, None
+        p = pts[0]
+    else:
+        p = pts[0] if which == "min" else pts[-1]
+    return p.get("ttft_s"), p.get("decode_tps"), p.get("prompt_tokens")
+
+
+def extract_agentic(d, path, base):
+    """The --agentic row of a result (cold_start / sweep / cache / sustain / agent cache hit rate), or None."""
+    cs, sw, ca, su = d.get("cold_start"), d.get("sweep"), d.get("cache"), d.get("sustain")
+    hit = (d.get("agent") or {}).get("cache_hit_rate")
+    if not (cs or sw or ca or su or hit is not None):
+        return None
+    cont_ph = (d.get("contention") or {}).get("phases") or {}
+    contended = any((cont_ph.get(k) or {}).get("flagged") for k in ("sweep", "cache", "sustain"))
+    invalid = [x for x in d.get("invalid", []) if x.split(":")[0] in ("sweep", "cache", "sustain", "cold start")]
+    r = {k: base[k] for k in ("model", "key", "label", "display", "engine", "version", "when", "file", "hardware", "ours")}
+    t1, d1, _ = sweep_point(sw, "min")
+    t16, d16, _ = sweep_point(sw, "16k")
+    tm, dm, ptm = sweep_point(sw, "max")
+    idle = d.get("idle_footprint_mb")
+    peak = (d.get("memory") or {}).get("sweep", {}).get("phys_footprint_peak_mb") or d.get("peak_memory_mb")
+    r.update({"start_s": (cs or {}).get("spawn_to_first_token_s"), "penalty_s": (cs or {}).get("first_request_penalty_s"),
+              "ttft_1k": t1, "ttft_16k": t16, "ttft_max": tm, "dec_1k": d1, "dec_max": dm, "max_tokens": ptm,
+              "retention": (sw or {}).get("decode_retention"), "warm_ttft": (ca or {}).get("warm_ttft_s"), "followup_ttft": (ca or {}).get("followup_ttft_s"),
+              "followup_hit_rate": (ca or {}).get("followup_hit_rate"),
+              "warm_speedup": (ca or {}).get("warm_vs_cold_speedup"),
+              "kept": (ca or {}).get("interleave_prefix_kept"), "interleave": (ca or {}).get("interleave_vs_cold"),
+              "hit_rate": hit, "warm_hit_rate": (ca or {}).get("warm_hit_rate"),
+              "falloff": (su or {}).get("thermal_falloff_pct"), "sustain_s": (su or {}).get("duration_s"),
+              "idle_mb": idle, "peak_mb": peak,
+              "invalid": invalid, "flags": [f for f in d.get("flags", []) if f.split(":")[0] in ("sweep", "cache", "sustain", "POWER")],
+              "contended": contended, "foreign_max": None})
+    r["rank"] = (not invalid and not contended, not invalid, r["when"])
+    return r
+
+
+AGENTIC_COLS = [  # key, header, fmt, better
+    ("start_s", "spawn to first token s", "%.1f", "min"),
+    ("penalty_s", "first-request penalty s", "%.2f", "min"),
+    ("ttft_1k", "TTFT 1K s", "%.2f", "min"),
+    ("ttft_16k", "TTFT 16K s", "%.2f", "min"),
+    ("ttft_max", "TTFT max s", "%.2f", "min"),
+    ("dec_1k", "decode 1K tok/s", "%.1f", "max"),
+    ("dec_max", "decode max tok/s", "%.1f", "max"),
+    ("retention", "decode retention", "%.2f", "max"),
+    ("warm_ttft", "new-question TTFT s", "%.2f", "min"),
+    ("followup_ttft", "follow-up TTFT s", "%.2f", "min"),
+    ("hit_rate", "agent cache hit rate", "%.0f%%", "max"),
+    ("falloff", "sustained falloff %", "%.1f", "min"),
+]
+
+
+def agentic_table(model, rows):
+    rows = sorted(rows, key=lambda r: r["display"])
+    best = {}
+    for key, _, _, how in AGENTIC_COLS:
+        vals = [r[key] for r in rows if r.get(key) is not None and not r["invalid"] and not r["contended"]]
+        best[key] = (max(vals) if how == "max" else min(vals)) if vals else None
+    hw = collections.Counter(r["hardware"] for r in rows if r.get("hardware")).most_common(1)
+    lines = [f"\n### {model}: agent-harness metrics" + (f" ({hw[0][0]})" if hw else "") + "\n",
+             "| engine | " + " | ".join(h for _, h, _, _ in AGENTIC_COLS) + " | prefix kept after other chat | idle / peak GB | flags |",
+             "|---|" + "---|" * (len(AGENTIC_COLS) + 3)]
+    for r in rows:
+        name = r["display"] + (" (ours)" if r["ours"] and "ours" not in r["display"] else "")
+        cells = []
+        for k, _, f, _ in AGENTIC_COLS:
+            v = r.get(k)
+            if v is not None and k == "hit_rate":
+                v = v * 100
+            c = "-" if v is None else f % v
+            if v is not None and r.get(k) == best[k]:
+                c = f"**{c}**"
+            cells.append(c)
+        kept = "-" if r.get("kept") is None else ("yes" if r["kept"] else "no")
+        if r.get("interleave") is not None:
+            kept += f" ({r['interleave']:.2f}x cold)"
+        mem = "-" if not r.get("peak_mb") else (f"{(r.get('idle_mb') or 0) / 1024:.1f} / {r['peak_mb'] / 1024:.1f}")
+        lines.append(f"| {name} | " + " | ".join(cells) + f" | {kept} | {mem} | {short_flags(r)} |")
+    lines.append("")
+    lines.append("Runs: " + "; ".join(f"{r['display']} = `{r['file']}`" for r in rows))
+    lines.append("")
+    lines.append("`-` = not measured or not reported by the engine (a hit rate of 0% means it reported 0 cached tokens). "
+                 "Max = the largest context that fits the server's window (`max tokens` in the CSV). Retention = decode at "
+                 "the largest context over the smallest. Falloff = decode of the last third of the sustain run vs the first.")
+    return "\n".join(lines)
+
+
+AGENTIC_CSV_COLS = ["model", "display", "key", "engine", "version", "when"] + [k for k, *_ in AGENTIC_COLS] + [
+    "max_tokens", "warm_speedup", "followup_hit_rate", "kept", "interleave", "warm_hit_rate", "sustain_s", "idle_mb", "peak_mb", "invalid",
+    "flags", "contended", "ours", "file"]
 
 
 def extract_agent(d, path, base):
@@ -337,11 +447,11 @@ def main():
     ap.add_argument("--include-legacy", action="store_true", help="also use schema-1 results (old harness)")
     a = ap.parse_args()
     dirs = a.results or [os.path.join(bench.out_dir(), "results")]
-    best, best_agent = load(dirs, a.include_legacy)
+    best, best_agent, best_ax = load(dirs, a.include_legacy)
     out = a.out or os.path.join(dirs[0], "compare_table")
-    models = sorted({m for m, _ in list(best) + list(best_agent)},
+    models = sorted({m for m, _ in list(best) + list(best_agent) + list(best_ax)},
                     key=lambda m: (MODEL_ORDER.index(m) if m in MODEL_ORDER else len(MODEL_ORDER), m))
-    md, csv_rows, agent_rows = [], [], []
+    md, csv_rows, agent_rows, ax_rows = [], [], [], []
     for m in models:
         rows = [r for (mm, _), r in best.items() if mm == m]
         if rows:
@@ -351,6 +461,10 @@ def main():
         if arows:
             md.append(agent_table(m, arows))
             agent_rows += arows
+        xrows = [r for (mm, _), r in best_ax.items() if mm == m]
+        if xrows:
+            md.append(agentic_table(m, xrows))
+            ax_rows += xrows
     text = "\n".join(md) if md else "(no results)"
     print(text)
     with open(out + ".md", "w") as fh:
@@ -366,7 +480,14 @@ def main():
             w.writerow(AGENT_CSV_COLS)
             for r in agent_rows:
                 w.writerow([csv_val(r.get(c)) for c in AGENT_CSV_COLS])
-    print(f"\n-> {out}.md, {out}.csv" + (f", {out}_agent.csv" if agent_rows else ""))
+    if ax_rows:
+        with open(out + "_agentic.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(AGENTIC_CSV_COLS)
+            for r in ax_rows:
+                w.writerow([csv_val(r.get(c)) for c in AGENTIC_CSV_COLS])
+    print(f"\n-> {out}.md, {out}.csv" + (f", {out}_agent.csv" if agent_rows else "")
+          + (f", {out}_agentic.csv" if ax_rows else ""))
 
 
 if __name__ == "__main__":

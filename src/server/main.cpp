@@ -318,6 +318,9 @@ static void print_serve_help() {
          "  --mem-budget GB        GPU memory Kapitsa may hold (default: what macOS recommends for this GPU, a\n"
          "                         little less; kapitsa doctor shows it)\n"
          "  --prefill-chunk N      prompt tokens per prefill pass (default 2048, 1024 when memory is short)\n"
+         "  --disk-cache SIZE      SSD prefix cache: conversations kept on the SSD, also across restarts, in\n"
+         "                         %s/prefix-cache. auto (default): a quarter of the free space beyond\n"
+         "                         10 GiB, at most 32 GiB; a size (16G) caps it; 0 turns it off\n"
          "  --loops N              Dory: the shared block's loops per token, 1-4 (default 2, NVIDIA's recommendation;\n"
          "                         more is latent thinking: slower, more accurate). Requests choose their own with\n"
          "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
@@ -331,7 +334,7 @@ static void print_serve_help() {
          "POST /v1/messages and /v1/messages/count_tokens (Anthropic), GET /v1/models, GET /health.\n"
          "Images (every catalog model reads them): OpenAI image_url parts, Anthropic image blocks and Responses\n"
          "input_image, as data: (base64) or http(s) URLs. Video is not supported.\n"
-         "Tuning switches (NI_* variables): docs/usage.md.\n");
+         "Tuning switches (NI_* variables): docs/usage.md.\n", hub::tilde(hub::home_dir()).c_str());
   if (term::fancy()) {  // in a terminal the engine's log goes to a file, unless --verbose; without --model it asks
     h.insert(h.find("\n\nEndpoints:"), "\n  --verbose              the engine's log on screen too (in a terminal it goes to " +
                                             hub::tilde(hub::home_dir()) + "/logs/serve-PORT.log)");
@@ -518,6 +521,7 @@ static Engine* g_stop_engine = nullptr;  // while serve() serves (SaveOnStop)
 static void save_before_exit() {
   std::lock_guard<std::mutex> lk(g_stop_mu);
   if (g_stop_engine) g_stop_engine->save_kflash();
+  if (g_stop_engine) g_stop_engine->save_disk_cache();  // the conversations the SSD prefix cache lacks (at most 8 s)
 }
 
 // A stop signal wakes a thread that saves, then takes its course as before: the terminal UI's handler (the status
@@ -636,6 +640,12 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--api-key") api_key = next();
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--disk-cache") {
+      opt.disk_cache = next();
+      uint64_t bytes = 0;
+      if (!pcache::parse_size(opt.disk_cache, &bytes))
+        usage_error("--disk-cache takes auto, 0 (off) or a size such as 16G, not \"" + opt.disk_cache + "\"", help);
+    }
     else if (a == "--loops") {
       opt.loops = to_int(a, next(), help);
       if (opt.loops < 1 || opt.loops > Dory::kMaxLoops) usage_error("--loops: 1 to 4", help);
@@ -650,6 +660,10 @@ static int serve(int argc, char** argv, int first) {
     else usage_error("unknown option " + a, help);
   }
   if (port < 1 || port > 65535) usage_error("--port must be 1-65535", help);
+  if (opt.disk_cache.empty()) {  // the SSD prefix cache: on by default for the server (NI_DISK_CACHE as the option)
+    const char* v = getenv("NI_DISK_CACHE");
+    opt.disk_cache = v && *v ? v : "auto";
+  }
   // the model and its precision are picked for a conversation of the context asked for, else of 32K (the default
   // context then grows from there where it costs nothing: default_context)
   opt.context = context_req > 0 ? context_req : kMinDefaultContext;

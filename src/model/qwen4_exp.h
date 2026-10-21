@@ -63,6 +63,8 @@ class Qwen4Exp : public Qwen35 {
   Checkpoint new_checkpoint() override;
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  // not on the SSD prefix cache yet: its indexer keys and n-gram window are state Qwen35's layout does not name
+  std::string disk_format() const override { return ""; }
 
   // ---- passes ----
   void encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample = true) override;

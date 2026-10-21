@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 
+#include <sys/sysctl.h>
 #include <unistd.h>
 #include "metal/gpu.h"
 #include <IOKit/IOKitLib.h>
@@ -8,6 +9,8 @@
 #include "util/log.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cstring>
 #include <map>
 #include <mutex>
 #include <string>
@@ -39,9 +42,193 @@ struct Gpu::Impl {
   std::mutex wf_mu;
   // compile_extra's libraries, in the order compiled
   std::vector<std::pair<std::string, id<MTLLibrary>>> extra;
+  std::mutex rs_mu;  // every call on the residency set (make_resident, release, the heartbeat)
 };
 
 static inline id<MTLDevice> dev(void* p) { return (__bridge id<MTLDevice>)p; }
+
+// ---- Residency ----
+// make_resident() puts what the GPU reads on every pass (weights, converted tensors, the drafter's) in one
+// MTLResidencySet. Metal lets a set go about 2 s after the process's last command buffer, requested or not (M4 Pro,
+// macOS 27: a requested 8 GB set was unwired 2-3 s after one command buffer that did not even bind it), and a command
+// buffer of a queue that holds the set waits until all of it is wired again: with the set on the queue, the 35B's
+// first prefill pass of a request sent 10 s after the one before started 0.39-0.50 s after its commit.
+// NI_RESIDENCY (read once) says how the set is used:
+//   wired (default): the set is not on the command queue. A heartbeat requests it every 500 ms while command buffers
+//     are committed and for NI_RESIDENCY_KEEP_S seconds after the last one (default 600; 0 = for good), so it stays
+//     wired between requests; the first commit after that restarts the heartbeat. Under memory pressure (macOS's
+//     warning or critical level) there is no heartbeat, so macOS can take the memory of an idle model back, as before;
+//     the first commit once the pressure is back to normal restarts it. Metal makes resident what each command buffer
+//     binds, which is everything a kernel reads: Kapitsa binds every buffer to its dispatches (Encoder::buf,
+//     dispatch_indirect's arguments), with no GPU addresses, argument buffers or useResource.
+//   queue: the set on the command queue, requested only at make_resident() (Kapitsa before).
+//   0: no residency set.
+namespace {
+enum class Residency { Wired, Queue, Off };
+
+Residency residency_mode() {
+  static const Residency m = [] {
+    const char* v = getenv("NI_RESIDENCY");
+    if (!v || !*v || !strcmp(v, "wired")) return Residency::Wired;
+    if (!strcmp(v, "queue")) return Residency::Queue;
+    if (!strcmp(v, "0") || !strcmp(v, "off")) return Residency::Off;
+    fatal("NI_RESIDENCY=%s: wired, queue or 0", v);
+  }();
+  return m;
+}
+
+constexpr uint64_t kBeatNs = 500 * NSEC_PER_MSEC;
+
+// NI_RESIDENCY=wired's heartbeat (made once, at the first make_resident; never freed, as the Gpu)
+struct Keeper {
+  void* set = nullptr;       // id<MTLResidencySet> (Gpu::residency_)
+  std::mutex* mu = nullptr;  // Gpu::Impl::rs_mu
+  dispatch_queue_t queue = nil;
+  dispatch_source_t beat = nil;
+  dispatch_source_t pressure = nil;  // macOS's memory pressure level changes
+  void* device = nullptr;            // id<MTLDevice>, for kick()
+  id<MTLCommandQueue> kick_queue = nil;
+  id<MTLBuffer> kick_buf = nil;
+  uint64_t keep = 0;  // mach ticks after the last commit that the heartbeat goes on (0: for good)
+  std::atomic<uint64_t> last{0};  // mach time of the last commit
+  std::atomic<bool> beating{false};
+  unsigned long level = DISPATCH_MEMORYPRESSURE_NORMAL;  // (on `queue`) the last level seen
+
+  // macOS's memory pressure level now (kern.memorystatus_vm_pressure_level: 1 normal, 2 warning, 4 critical).
+  // NI_RESIDENCY_PRESSURE_TEST=<file> (diagnostic, read once): the level that file names instead, "warn", "critical"
+  // or "normal" (anything else), for testing the warning path without real pressure; it is read at each beat and at a
+  // commit while the heartbeat is off, the source's events are ignored.
+  static const char* test_file() {
+    static const char* f = getenv("NI_RESIDENCY_PRESSURE_TEST") && *getenv("NI_RESIDENCY_PRESSURE_TEST")
+                               ? getenv("NI_RESIDENCY_PRESSURE_TEST")
+                               : nullptr;
+    return f;
+  }
+  static unsigned long level_now() {
+    if (const char* path = test_file()) {
+      char s[16] = {0};
+      if (FILE* f = fopen(path, "r")) {
+        fread(s, 1, sizeof s - 1, f);
+        fclose(f);
+      }
+      return !strncmp(s, "critical", 8) ? DISPATCH_MEMORYPRESSURE_CRITICAL
+             : !strncmp(s, "warn", 4)   ? DISPATCH_MEMORYPRESSURE_WARN
+                                        : DISPATCH_MEMORYPRESSURE_NORMAL;
+    }
+    int lv = 1;
+    size_t len = sizeof lv;
+    if (sysctlbyname("kern.memorystatus_vm_pressure_level", &lv, &len, nullptr, 0)) lv = 1;
+    return lv >= 4  ? DISPATCH_MEMORYPRESSURE_CRITICAL
+           : lv > 1 ? DISPATCH_MEMORYPRESSURE_WARN
+                    : DISPATCH_MEMORYPRESSURE_NORMAL;
+  }
+  static bool pressed() { return level_now() != DISPATCH_MEMORYPRESSURE_NORMAL; }
+  // (on `queue`) the heartbeat off; it starts again only at a commit that sees no pressure
+  void stop() {
+    beating.store(false);
+    dispatch_source_set_timer(beat, DISPATCH_TIME_FOREVER, 0, 0);
+  }
+  // One small blit on a queue of its own: Metal lets the set go about 2 s after a GPU operation that no request
+  // follows, while a requested set with no GPU work after it stays wired (an idle server's last command buffer is long
+  // gone).
+  void kick() {
+    @autoreleasepool {
+      if (!kick_queue) {
+        kick_queue = [(__bridge id<MTLDevice>)device newCommandQueue];
+        kick_buf = [(__bridge id<MTLDevice>)device newBufferWithLength:16 options:MTLResourceStorageModePrivate];
+      }
+      id<MTLCommandBuffer> cb = [kick_queue commandBuffer];
+      id<MTLBlitCommandEncoder> b = [cb blitCommandEncoder];
+      [b fillBuffer:kick_buf range:NSMakeRange(0, 16) value:0];
+      [b endEncoding];
+      [cb commit];
+    }
+  }
+  // (on `queue`) macOS's memory pressure level, from the source's events or read at a beat or a commit (so a change
+  // the source does not report is not missed). A change is logged; under pressure the heartbeat stops at once and the
+  // set is let go; back to normal, the next commit restarts it.
+  void on_pressure(unsigned long now) {
+    if (now == level) return;
+    level = now;
+    const bool p = now & (DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL);
+    if (p) {
+      stop();
+      kick();
+    }
+    logi("memory pressure %s: %s", now & DISPATCH_MEMORYPRESSURE_CRITICAL ? "critical" : p ? "warning" : "normal",
+         p ? "the weights are no longer kept wired while idle" : "the weights are kept wired again");
+  }
+
+  void request() {
+#if NI_SDK_MACOS15
+    if (@available(macOS 15.0, *)) {
+      std::lock_guard<std::mutex> lk(*mu);
+      [(__bridge id<MTLResidencySet>)set requestResidency];
+    }
+#endif
+  }
+  bool idle() const {
+    const uint64_t l = last.load();  // (before the clock: a commit in between cannot make it later than `now`)
+    return mach_absolute_time() > l + keep;
+  }
+  // (on `queue`) a beat: the set again, or the heartbeat stops under pressure or once `keep` has passed since the last
+  // commit
+  void tick() {
+    on_pressure(level_now());
+    if (level != DISPATCH_MEMORYPRESSURE_NORMAL) return stop();
+    if (keep && idle()) {
+      beating.store(false);
+      // a commit that stored `last` before that store and still read `beating` as true is seen here
+      bool f = false;
+      if (idle() || !beating.compare_exchange_strong(f, true)) return stop();
+    }
+    request();
+  }
+  // every commit: marks the use; a stopped heartbeat starts again, the set requested at once (off the caller's
+  // thread), unless memory is under pressure
+  void use() {
+    last.store(mach_absolute_time());
+    if (beating.load() || pressed()) return;
+    bool f = false;
+    if (!beating.compare_exchange_strong(f, true)) return;
+    dispatch_async(queue, ^{
+      on_pressure(level_now());
+      if (level != DISPATCH_MEMORYPRESSURE_NORMAL) return stop();
+      request();
+      dispatch_source_set_timer(beat, dispatch_time(DISPATCH_TIME_NOW, kBeatNs), kBeatNs, kBeatNs / 10);
+    });
+  }
+};
+std::atomic<Keeper*> g_keeper{nullptr};
+
+// NI_CB_LAT=<file> (diagnostic, read once): a line per command buffer as it completes, "n commit start end": its
+// number in commit order and the times in ms on the host clock (mach time, Encoder::host_ms). start - commit is its
+// wait from the commit; start minus the later of its commit and the end of the one committed before it is the time it
+// waited with nothing in front of it on the queue (for residency, another process's GPU work, ...).
+FILE* cb_lat_file() {
+  static FILE* f = [] {
+    const char* p = getenv("NI_CB_LAT");
+    FILE* r = p && *p ? fopen(p, "a") : nullptr;
+    if (r) setvbuf(r, nullptr, _IOLBF, 0);
+    return r;
+  }();
+  return f;
+}
+} // namespace
+
+// Every command buffer is committed here.
+static void commit_cb(id<MTLCommandBuffer> cb) {
+  if (Keeper* k = g_keeper.load(std::memory_order_acquire)) k->use();
+  if (FILE* f = cb_lat_file()) {
+    static std::atomic<uint64_t> seq{0};
+    const unsigned long long n = seq.fetch_add(1);
+    const double t = Encoder::host_ms();
+    [cb addCompletedHandler:^(id<MTLCommandBuffer> b) {
+      fprintf(f, "%llu %.4f %.4f %.4f\n", n, t, b.GPUStartTime * 1e3, b.GPUEndTime * 1e3);
+    }];
+  }
+  [cb commit];
+}
 
 Gpu& Gpu::get() {
   static Gpu* g = new Gpu();
@@ -183,6 +370,7 @@ void Gpu::release(Buffer& b) {
 #if NI_SDK_MACOS15
   if (residency_) {
     if (@available(macOS 15.0, *)) {
+      std::lock_guard<std::mutex> rl(impl_->rs_mu);
       id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
       id<MTLBuffer> mb = (__bridge id<MTLBuffer>)b.mtl;
       if ([rs containsAllocation:mb]) {
@@ -398,8 +586,11 @@ void Gpu::make_resident(const std::vector<Buffer>& bufs) {
 #if !NI_SDK_MACOS15
   (void)bufs;
 #else
+  if (residency_mode() == Residency::Off) return;
   if (@available(macOS 15.0, *)) {
+    Keeper* started = nullptr;
     @autoreleasepool {
+      std::lock_guard<std::mutex> lk(impl_->rs_mu);
       if (!residency_) {
         MTLResidencySetDescriptor* d = [MTLResidencySetDescriptor new];
         d.label = @"kapitsa";
@@ -407,13 +598,43 @@ void Gpu::make_resident(const std::vector<Buffer>& bufs) {
         id<MTLResidencySet> rs = [dev(device_) newResidencySetWithDescriptor:d error:&err];
         if (!rs) return;
         residency_ = (__bridge_retained void*)rs;
-        [(__bridge id<MTLCommandQueue>)queue_ addResidencySet:rs];
+        if (residency_mode() == Residency::Queue) {
+          [(__bridge id<MTLCommandQueue>)queue_ addResidencySet:rs];
+        } else {
+          Keeper* k = new Keeper();
+          k->set = residency_;
+          k->mu = &impl_->rs_mu;
+          const char* ks = getenv("NI_RESIDENCY_KEEP_S");
+          const double keep_s = ks && *ks ? atof(ks) : 600.0;
+          mach_timebase_info_data_t tb;
+          mach_timebase_info(&tb);
+          k->keep = keep_s > 0 ? uint64_t(keep_s * 1e9 * tb.denom / tb.numer) : 0;
+          k->queue = dispatch_queue_create("kapitsa.residency", DISPATCH_QUEUE_SERIAL);
+          k->beat = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, k->queue);
+          dispatch_source_set_event_handler(k->beat, ^{ k->tick(); });
+          dispatch_source_set_timer(k->beat, DISPATCH_TIME_FOREVER, 0, 0);
+          dispatch_activate(k->beat);
+          k->device = device_;
+          k->pressure = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+                                               DISPATCH_MEMORYPRESSURE_NORMAL | DISPATCH_MEMORYPRESSURE_WARN |
+                                                   DISPATCH_MEMORYPRESSURE_CRITICAL,
+                                               k->queue);
+          dispatch_source_set_event_handler(k->pressure, ^{
+            if (!Keeper::test_file()) k->on_pressure(dispatch_source_get_data(k->pressure));
+          });
+          dispatch_activate(k->pressure);
+          started = k;
+        }
       }
       id<MTLResidencySet> rs = (__bridge id<MTLResidencySet>)residency_;
       for (auto& b : bufs)
         if (b.mtl) [rs addAllocation:(__bridge id<MTLBuffer>)b.mtl];
       [rs commit];
       [rs requestResidency];
+    }
+    if (started) {
+      g_keeper.store(started, std::memory_order_release);
+      started->use();  // the heartbeat from now on
     }
   }
 #endif
@@ -530,7 +751,7 @@ void Encoder::dispatch(uint32_t gx, uint32_t gy, uint32_t gz, uint32_t tx, uint3
     // close this dispatch into its own command buffer and continue in a fresh one
     [E(enc_) endEncoding];
     id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
-    [cb commit];
+    commit_cb(cb);
     {
       static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
       std::string nm = prof_tag() + cur_name_;
@@ -556,7 +777,7 @@ void Encoder::dispatch_indirect(const Buffer& args, size_t off, uint32_t tx, uin
   if (profiling()) {
     [E(enc_) endEncoding];
     id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
-    [cb commit];
+    commit_cb(cb);
     {
       static const bool by_grid = atoi(getenv("NI_PROFILE")) > 1;  // NI_PROFILE=2: per kernel and grid
       std::string nm = prof_tag() + cur_name_;
@@ -586,7 +807,7 @@ void Encoder::commit() {
     CFRelease(enc_);
     enc_ = nullptr;
   }
-  [(__bridge id<MTLCommandBuffer>)cb_ commit];
+  commit_cb((__bridge id<MTLCommandBuffer>)cb_);
 }
 void Encoder::wait() {
   id<MTLCommandBuffer> cb = (__bridge id<MTLCommandBuffer>)cb_;
@@ -671,7 +892,7 @@ void Encoder::signal_event(void* event, uint64_t value) {
   [cb addCompletedHandler:^(id<MTLCommandBuffer> ended) {
     if (ended.status == MTLCommandBufferStatusError && ev.signaledValue < value) ev.signaledValue = value;
   }];
-  [cb commit];
+  commit_cb(cb);
   prev_.push_back(cb_);
   id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
   cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];
@@ -684,7 +905,7 @@ void Encoder::split() {
     CFRelease(enc_);
     enc_ = nullptr;
   }
-  [(__bridge id<MTLCommandBuffer>)cb_ commit];
+  commit_cb((__bridge id<MTLCommandBuffer>)cb_);
   prev_.push_back(cb_);
   id<MTLCommandQueue> q = (__bridge id<MTLCommandQueue>)Gpu::get().queue();
   cb_ = (__bridge_retained void*)[q commandBufferWithUnretainedReferences];

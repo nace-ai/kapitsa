@@ -18,6 +18,7 @@
 // 8-row tiles on the dense Qwen models (one tile today), every row count on MoE targets, whose rows cost experts.
 // The cache file (KAPITSA_HOME/kflash/<key>.json) keeps the table and the calibration: written when the budget ends
 // and on save() (the engine saves between requests, the server when it is stopped).
+// KfBatch (below) is the same budget for batched decode: the rows one verify pass gives the members of a batch.
 #pragma once
 #include "kernels/kflash.h"
 
@@ -27,6 +28,32 @@
 #include <vector>
 
 namespace ni {
+
+// A cycle's cost by the rows it verifies (KfBudget's and KfBatch's tables): a base that every cycle moves (the
+// context's length) plus each count's offset above it, a running mean of what its cycles cost above the base. A
+// process sets the base by its first cycle; with a table loaded from the cache, by its first cycle of a count the cache
+// holds (until then the counts it measures keep absolute offsets, `pre`).
+struct KfCosts {
+  static constexpr int kD = kf::kMaxRows + 1;  // row counts: index 1 .. 32
+  double base = 0;
+  double off[kD] = {};
+  bool based = false, loaded = false;
+  uint64_t pre = 0;
+  int ncost[kD] = {};  // cycles that measured n (loaded: the exploration's count)
+  void observe(int n, double ms);
+  // n rows' cost now (0: not measured)
+  double at(int n) const { return n >= 1 && n < kD && ncost[n] ? base + off[n] : 0.0; }
+  // the count the next cycle must verify (0: none): with a loaded table and a choice of counts, before this process's
+  // base, a count the table holds (the largest); then every allowed count (bit n - 1) `explore` times
+  int force(uint32_t allowed, int max_rows, int explore) const;
+  // the cache's table (n: the cost now; 0: not measured, or not since this process's base), and one read back
+  std::vector<double> table() const;
+  void load(const std::vector<double>& c, int explore);
+  // n's cost forgotten (after the base: its next cycle sets it afresh)
+  void forget(int n) {
+    if (based && n >= 1 && n < kD) ncost[n] = 0;
+  }
+};
 
 class KfBudget {
  public:
@@ -48,10 +75,15 @@ class KfBudget {
   std::string summary() const;
   int cycles() const { return cycles_; }
   // n rows' cost now (ms; 0: not measured)
-  double cost(int n) const { return n >= 1 && n <= kf::kMaxRows && ncost_[n] ? base_ + off_[n] : 0.0; }
+  double cost(int n) const { return n >= 1 && n <= kf::kMaxRows ? c_.at(n) : 0.0; }
   static constexpr int kExplore = 3;  // cycles per allowed count before the rule decides
   float alpha(int d) const { return alpha_[d]; }
   float beta(int d) const { return beta_[d]; }
+  // Calibration records from outside a tree cycle (batched decode's greedy chains: a chain's node is a tree's node of
+  // the same lattice, its q the same): depth, the path model's log q, accepted; counted toward the refits as a cycle's
+  // records are. And the calibration of depths 1 .. n - 1 as it stands (index d).
+  void records(const int* dep, const float* lq, const uint8_t* hit, int n);
+  void calibration(float* alpha, float* beta, int n) const;
 
   // (tests) the calibration fit on given records
   static void fit(const std::vector<float>& x, const std::vector<uint8_t>& y, float& alpha, float& beta, int iters);
@@ -59,6 +91,8 @@ class KfBudget {
 
  private:
   void load();
+  void add_record(int d, float lq, bool hit);  // (under mu_)
+  void refit_tick();                           // (under mu_) every 16 cycles' records: the calibration's Newton steps
   std::string key_;
   mutable std::mutex mu_;  // observe, write, summary and save (the cycles' thread and a server's stop)
   static constexpr int kD = kf::kMaxRows + 1;  // depths and row counts: index 1 .. 32
@@ -67,12 +101,7 @@ class KfBudget {
   std::vector<uint8_t> y_[kD];
   size_t head_[kD] = {};
   float alpha_[kD], beta_[kD];
-  double base_ = 0;        // the costs' base (ms) and the counts' offsets above it: cost(n) = base_ + off_[n]
-  double off_[kD] = {};    // (loaded: the cache's costs, base 0 at its save)
-  bool based_ = false;     // this process set the base (its first cycle; with a cached table: a count it holds)
-  bool loaded_ = false;    // the cache held a cost table
-  uint64_t pre_ = 0;       // counts this process measured before its base (offsets absolute until then)
-  int ncost_[kD] = {};     // cycles that measured n (loaded: kExplore)
+  KfCosts c_;  // the cost table (loaded: the cache's costs, base 0 at its save)
   double rtok_ = 0, rms_ = 0;  // the recent cycles' tokens and ms (decaying sums): the rate
   int nrate_ = 0;
   int ncycles_[kD] = {};  // cycles by rows (the summary)
@@ -82,6 +111,81 @@ class KfBudget {
   int max_rows_ = 8;
   int cycles_ = 0, since_fit_ = 0, force_ = 0, saved_ = 0;  // saved_: cycles_ at the last save
   double rows_sum_ = 0;
+};
+
+// KFlash's budget for batched decode (Engine::batch_cycle, DFlash2): after the members' drafting passes, how many rows
+// the batched verify checks in all and which member gets them, by KfBudget's rule (decided on the host: the batched
+// verify's per-member dispatches take their rows when encoded).
+//  - survival of a member's draft p: the product over j <= p of sigmoid(alpha_d + beta_d logit(c_j)), d = j + 1, c_j the
+//    largest of the 16 candidates' probabilities under the walk's scores at j. A greedy walk drafts that candidate (c_j
+//    is its node's q, as in a tree: KfBudget's calibration, fed these chains' records too); a sampled member keeps its
+//    draws by exact speculative sampling, another event: this budget's own calibration. c_j does not move with the draw
+//    at j, and each draft is decided from the drafts ranked before it alone, so the sampling stays exact.
+//  - cost: a batched cycle's GPU time (drafting passes and verify) by members M and rows N (KfCosts per M; every N
+//    explored kExplore times, cached; every kRefresh-th cycle verifies the count measured longest ago, which then takes
+//    its new cost afresh), read as a line in N (cost_line) so that a count measured while the GPU was busy elsewhere
+//    does not stop the rows above it.
+//  - rule (allocate): every member verifies its anchor (and `floor` drafts), then drafts in decreasing survival (ties:
+//    the earlier position, then the earlier member, so a member's drafts are a prefix of its chain), each while its
+//    survival >= rate x (cost(N + 1) - cost(N)) (rate: the recent cycles' tokens per ms at M; before 16 of them, while
+//    the tokens per ms grow), up to kRows rows. With a convex cost that is the best allocation of them all.
+// Cache: KAPITSA_HOME/kflash/<key>.json (the costs by M, the sampled calibration).
+class KfBatch {
+ public:
+  static constexpr int kMembers = 4;  // members it allocates rows for (2 .. kMembers)
+  static constexpr int kRows = 8;     // rows the batched verify runs (Qwen35::encode_verify_multi)
+  static constexpr int kDrafts = 7;   // a member's drafts per cycle (the walk's chain)
+  static constexpr int kExplore = 3;  // cycles per allowed N and M before the rule decides
+  static constexpr int kRefresh = 64; // every kRefresh-th cycle of M members verifies the count measured longest ago
+  static constexpr int kSaveEvery = 256;
+  // key: the cache file's name; "" keeps nothing. floor: drafts every member verifies (within the 8 rows)
+  explicit KfBatch(std::string key = "", int floor = 0);
+  ~KfBatch();  // save()
+  struct Member {
+    float lc[kDrafts] = {};    // log c_p, p = 0 .. 6
+    bool sampled = false;      // T > 0: exact speculative sampling (this budget's calibration)
+    int kmax = kDrafts;        // drafts it may verify
+    float surv[kDrafts] = {};  // (plan) its survivals
+  };
+  // The drafts each of M members verifies this cycle (k[g] in 0 .. kmax; its rows k[g] + 1); greedy members' survivals
+  // from `greedy`'s calibration (the drafter's KfBudget; null: the identity). Returns the rows in all.
+  int plan(Member* m, int M, const KfBudget* greedy, int* k);
+  // After the cycle: each member's verified drafts k[g] and accepted drafts a[g] (<= k[g]), the cycle's GPU ms (its
+  // drafting passes' command buffer and the verify's). The greedy members' records go to `greedy`.
+  void observe(const Member* m, int M, const int* k, const int* a, double ms, KfBudget* greedy);
+  void save(int fresh = 1);
+  // for logs: cycles by members and rows, tokens per cycle expected and got, rates, costs, the sampled calibration
+  std::string summary() const;
+  int cycles() const { return cycles_; }
+  double cost(int M, int N) const;
+  // The rule (see above), for M members' survivals surv[g * kDrafts + p] (non-increasing in p) with caps kmax[g], the
+  // costs of N rows cost[N] (N = 0 .. kRows; only M .. kRows read), rate (0: the ratio rule), force_n (> 0: exactly that
+  // many rows, the drafts in the same order, as many as there are). Writes k[g]; returns the rows in all.
+  static int allocate(const float* surv, int M, const int* kmax, const double* cost, double rate, int floor,
+                      int force_n, int* k);
+  // The costs as a line in N over [lo, hi] (out[N]; N outside it untouched): through the measured counts (cost[N] > 0),
+  // the slope the median of their pairwise slopes (not below 0), the intercept the median of what each count leaves.
+  // Fewer than two counts measured: their cost, flat.
+  static void cost_line(const double* cost, int lo, int hi, double* out);
+
+ private:
+  void load();
+  std::string key_;
+  int floor_ = 0;
+  mutable std::mutex mu_;
+  static constexpr int kWin = 2048;  // records kept per depth
+  KfCosts c_[kMembers + 1];          // by M
+  double rtok_[kMembers + 1] = {}, rms_[kMembers + 1] = {};  // the recent cycles' tokens and ms by M (decaying sums)
+  int nrate_[kMembers + 1] = {};
+  std::vector<float> x_[kDrafts + 1];  // the sampled members' records: logit(c) by depth (ring), accepted
+  std::vector<uint8_t> y_[kDrafts + 1];
+  size_t head_[kDrafts + 1] = {};
+  float alpha_[kDrafts + 1], beta_[kDrafts + 1];
+  int cycles_ = 0, saved_ = 0, since_fit_ = 0;
+  long mcyc_[kMembers + 1] = {};             // cycles by M (this process)
+  long seen_[kMembers + 1][kRows + 1] = {};  // mcyc_ when N was last measured at M (the refresh's choice)
+  long ncyc_[kMembers + 1][kRows + 1] = {};  // the summary: cycles by M and N
+  double epred_[kMembers + 1] = {}, etok_[kMembers + 1] = {};  // expected and got tokens by M
 };
 
 }  // namespace ni

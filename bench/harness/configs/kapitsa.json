@@ -10,11 +10,14 @@
           "--model", "{models}/qwen3.6-35b-a3b-4bit", "--model-id", "qwen3.6-35b-a3b",
           "--dflash", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2",
           "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "env": {"NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"},
+  "prepare": [{"clean_dir": "{state}/kapitsa/prefix-cache"}],
+  "cleanup": [{"clean_dir": "{state}/kapitsa/prefix-cache"}],
   "env_clear_prefixes": ["NI_", "KAPITSA_"],
   "base_url": "http://127.0.0.1:8091/v1",
   "model": "qwen3.6-35b-a3b",
   "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/config.json", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
-  "note": "Kapitsa's default settings. --dflash names the drafter that the default (--dflash auto) finds next to the model, so a missing drafter fails the run instead of silently falling back to MTP. --slots 1 for parity with llama.cpp -np 1 (the default, 2, only keeps a second conversation warm). Inherited NI_*/KAPITSA_* experiment variables are cleared."
+  "note": "Kapitsa's default settings. --dflash names the drafter that the default (--dflash auto) finds next to the model, so a missing drafter fails the run instead of silently falling back to MTP. --slots 1 for parity with llama.cpp -np 1 (the default, 2, only keeps a second conversation warm). Inherited NI_*/KAPITSA_* experiment variables are cleared. The SSD prefix cache (on by default) is a folder in the harness state, emptied before and after each run as oMLX's SSD KV cache is: no run reads what an earlier one left there."
  },
  {
   "label": "q38-27b-kapitsa",

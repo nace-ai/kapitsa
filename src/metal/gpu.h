@@ -89,7 +89,8 @@ class Gpu {
   // A concurrent encoder that keeps serial order on its own: a barrier before every dispatch, except inside a
   // group (Encoder::group_begin / group_end), whose dispatches may run together.
   std::unique_ptr<Encoder> begin_grouped();
-  // Keeps every resource resident (avoids per-dispatch residency checks).
+  // Keeps these buffers resident (wired) between command buffers too: they join the residency set, which a heartbeat
+  // keeps requested while the GPU is in use and memory is not under pressure (NI_RESIDENCY; gpu.mm).
   void make_resident(const std::vector<Buffer>& bufs);
 
   void* device() const { return device_; }
