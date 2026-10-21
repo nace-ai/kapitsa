@@ -56,6 +56,7 @@ void enc_down(Encoder& e, const Experts& x, const Shared& s, const Shape& sh, in
   e.buf(6, h); e.buf(7, idx); e.buf(8, wts); e.buf(9, y);
   e.val(10, mp);
   e.val(11, L);
+  e.tgmem(0, size_t(sh.k + 1) * std::max(sh.I, sh.SI) * 4);  // h of the k + 1 slots (shapes_ok: <= 7168 floats)
   e.dispatch(uint32_t(R), (sh.D + 8 * kRows - 1) / (8 * kRows), 1, 256);
 }
 
@@ -66,13 +67,22 @@ SlotLayout slot_layout(uint32_t D, uint32_t I) {
   const uint32_t cb = I * D / 4, db = I * D / 32;
   SlotLayout L;
   L.gc = 0;
-  L.gd = cb;
-  L.uc = cb + db;
-  L.ud = 2 * cb + db;
-  L.dc = 2 * cb + 2 * db;
+  L.uc = cb;
+  L.dc = 2 * cb;
+  L.gd = 3 * cb;
+  L.ud = 3 * cb + db;
   L.dd = 3 * cb + 2 * db;
   L.bytes = (3 * (cb + db) + 16383) / 16384 * 16384;
   return L;
+}
+
+std::vector<std::string> kernel_names(bool slot) {
+  std::vector<std::string> v;
+  for (const char* n : {"moe_q20_gate_up", "moe_q20_down", "moe_q20v_gate_up", "qmms_moe_gu_q20", "qmms_moe_dn_q20",
+                        "qrm_gu_q20_m32_n64", "qrm_dn_q20_m32_n128"})
+    v.push_back(slot ? std::string(n) + "_slot" : std::string(n));
+  v.push_back("moe_q20_unique");
+  return v;
 }
 
 bool shapes_ok(const Shape& sh, std::string* why) {

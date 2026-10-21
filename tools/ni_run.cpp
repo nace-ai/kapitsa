@@ -371,6 +371,24 @@ int main(int argc, char** argv) {
     e->commit_and_wait();
   }
   double t_prompt = now_ms() - t0;
+  // streamed experts (Qwen3.8-Flash-Next Q2_0 packs, src/model/expert_store.h): the store's turns of the prompt, then
+  // (store_stats at the end) of the decode
+  q20::ExpertStore* store = nullptr;
+  if (auto* q4 = dynamic_cast<Qwen4Exp*>(&m)) store = q4->expert_store();
+  auto store_stats = [&](const char* what) {
+    if (!store || store->complete()) return;
+    const q20::StoreStats st = store->stats();
+    const double t = double(std::max<uint64_t>(st.handshakes, 1));
+    fprintf(stderr, "expert store, %s: %llu turns, %llu experts looked up: %.1f%% in memory, %.1f%% read ahead and "
+            "waited for, %.1f%% read at the turn; %llu read ahead (%llu routed), %.2f GB read; GPU stalled %.3f ms a "
+            "turn (%.3f waiting for reads)\n",
+            what, (unsigned long long)st.handshakes, (unsigned long long)st.lookups,
+            100.0 * st.hits / std::max<double>(1, st.lookups), 100.0 * st.late / std::max<double>(1, st.lookups),
+            100.0 * st.misses / std::max<double>(1, st.lookups), (unsigned long long)st.prefetches,
+            (unsigned long long)st.prefetch_used, st.bytes / 1e9, st.stall_ms / t, st.read_wait_ms / t);
+    store->reset_stats();
+  };
+  store_stats("prompt");
   FILE* fall = dump_all ? fopen(dump_all, "wb") : nullptr;
   if (fall) fwrite(m.logits(), 4, m.config().vocab, fall);
   if (m.ane_split())
@@ -812,6 +830,7 @@ int main(int argc, char** argv) {
             td / std::max(cycles, 1));
     for (int a = 0; a <= D; ++a) fprintf(stderr, " %d", acc_hist[a]);
     fprintf(stderr, "\n");
+    store_stats("decode");
     return 0;
   }
 
@@ -860,5 +879,6 @@ int main(int argc, char** argv) {
   printf("\n");
   fprintf(stderr, "prompt %d tok in %.0f ms (%.1f tok/s); decode %zu tok in %.0f ms (%.1f tok/s)\n", n, t_prompt,
           n / (t_prompt / 1000), out.size() - 1, t_dec, (out.size() - 1) / (t_dec / 1000));
+  store_stats("decode");
   return 0;
 }

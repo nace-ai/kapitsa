@@ -16,7 +16,11 @@
 //                       next to the library's: GPU time and agreement with the default kernels
 //   fn_q2_bench pack DIR [--layer L]   the checks of `check` on layer L of a pack converted by tools/qwen4_exp_q20.py,
 //                       its tensors read through Kapitsa's loader with qlin's format checks (shapes and top-k from it)
-//   --seed N   --rounds N (default 7)
+//   fn_q2_bench store [--layers N] [--passes N]   the streamed-expert store (src/model/expert_store.h) under the kernels
+//                       at the small shapes: every layer's output through the store's arena, read from a temporary pack
+//                       file mid-pass, against the stacked planes' bit for bit (see run_store)
+//   --seed N   --rounds N (default 7)   --small: hidden 256, 64 experts of 128, top-8 (with check: for shader validation,
+//   MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1)
 // Run it under the GPU lock: lockf -k -t 600 ~/.cache/nace-gpu.lock build/fn_q2_bench check
 #include "metal/gpu.h"
 #include "model/kparams.h"
@@ -25,6 +29,7 @@
 #include "loader/safetensors.h"
 #include "nlohmann/json.hpp"
 #if __has_include("model/moe_q20.h")
+#include "model/expert_store.h"
 #include "model/moe_q20.h"
 #define FN_Q20 1
 #endif
@@ -41,6 +46,9 @@
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 using namespace ni;
 
@@ -786,6 +794,7 @@ void run_tune(const Model& m) {
     e.buf(6, h); e.buf(7, ib[size_t(c) % NROUT]); e.buf(8, wb[size_t(c) % NROUT]); e.buf(9, y);
     e.val(10, mp);
     e.val(11, L);
+    e.tgmem(0, size_t(TOPK + 1) * std::max(I, SI) * 4);
     e.dispatch(1, (D + 8 * rows - 1) / (8 * rows), 1, 256);
   };
   auto time = [&](const std::function<void(Encoder&, int)>& call) {
@@ -931,6 +940,175 @@ void run_pack(const std::string& dir, int layer) {
   const Arena A = make_arena(m);
   run_check(m, A);
 }
+
+// ---- store: the streamed-expert store (src/model/expert_store.h) under the kernels ----
+// Small shapes (the --small ones). The routed experts of `layers` layers are written to a temporary pack file (stacked
+// planes, some at odd offsets) and served by an ExpertStore whose arena holds 3 E of the layers * E experts, so turns
+// read and evict. Each pass (decode rows, verify windows of 3 and 8 rows, prefill chunks on 8- and 32-row tiles) runs
+// every layer in one command buffer twice: on the stacked planes, then through the store, its routing copied on the GPU
+// into one ids buffer just before each layer's handshake (as the router's top-k writes it), with next-layer predictions
+// (decode / verify: the true ids with two of them wrong; prefill chunks of 64+ rows: every expert of the next layer).
+// Every layer's output must be the stacked one's bit for bit.
+void run_store(int layers, int passes) {
+  Gpu& g = Gpu::get();
+  const q20::Shape shape{D, I, SI, TOPK, E};
+  std::string why;
+  if (!q20::shapes_ok(shape, &why)) fatal("shapes: %s", why.c_str());
+  Model m;
+  make_shared(m);
+  const q20::Shared sh = shared_of(m);
+  std::vector<Model> lm(static_cast<size_t>(layers));
+  for (Model& x : lm) {
+    x.g2 = make2(I, D, 0.004f, 0.012f);
+    x.u2 = make2(I, D, 0.004f, 0.012f);
+    x.d2 = make2(D, I, 0.008f, 0.024f);
+  }
+  // the pack file: layer by layer, the six planes; odd layers' planes at odd offsets (widened or unaligned reads)
+  const char* td = getenv("TMPDIR");
+  std::string path = std::string(td && *td ? td : "/tmp") + "/fn_q2_store.XXXXXX";
+  std::vector<char> pb(path.begin(), path.end());
+  pb.push_back('\0');
+  const int fd = mkstemp(pb.data());
+  if (fd < 0) fatal("mkstemp failed");
+  path = pb.data();
+  std::vector<q20::LayerSrc> src(static_cast<size_t>(layers));
+  uint64_t off = 16384;
+  for (int l = 0; l < layers; ++l) {
+    const Plane2* P[3] = {&lm[size_t(l)].g2, &lm[size_t(l)].u2, &lm[size_t(l)].d2};
+    for (int j = 0; j < 6; ++j) {
+      const Plane2& pl = *P[j / 2];
+      const Buffer& b = j % 2 ? pl.d : pl.c;
+      const size_t per = j % 2 ? pl.d_bytes() : pl.code_bytes();
+      off = l % 2 ? off + 37 : (off + 16383) / 16384 * 16384;
+      q20::PlaneSrc& ps = src[size_t(l)].p[j];
+      ps.file = 0;
+      ps.off = off;
+      ps.stride = per;
+      ps.len = uint32_t(per);
+      if (pwrite(fd, b.ptr(), per * E, off_t(off)) != ssize_t(per * E)) fatal("writing %s failed", path.c_str());
+      off += per * E;
+    }
+  }
+  close(fd);
+  const q20::SlotLayout lay = q20::slot_layout(D, I);
+  q20::ExpertStore::Options o;
+  o.bytes = size_t(3) * E * lay.bytes;
+  o.cache.readers = 8;
+  q20::ExpertStore store({path}, src, E, lay, o);
+  std::printf("store: %d layers of %u experts [%u, %u] Q2_0 (top-%u), %u slots in the arena\n", layers, E, I, D, TOPK,
+              store.slots());
+  Scratch s(112);
+  const Buffer ids = abuf(size_t(128) * TOPK * 4, "ids"), pids = abuf(size_t(8) * TOPK * 4, "pred_ids");
+  auto gpu_copy = [&](Encoder& e, const Buffer& from, const Buffer& to, size_t bytes) {
+    static Pipeline cp = g.pipeline("copy_u32");
+    const uint32_t n = uint32_t((bytes + 15) / 16);
+    e.use(cp);
+    e.buf(0, from);
+    e.buf(1, to);
+    e.val(2, n);
+    e.dispatch((n + 255) / 256, 1, 1, 256);
+  };
+  auto padded = [&](const std::vector<uint32_t>& v, const char* label) {
+    std::vector<uint32_t> p(v);
+    p.resize((p.size() + 3) / 4 * 4, 0u);
+    return upload(p.data(), p.size() * 4, label);
+  };
+  int bad = 0, cases = 0;
+  for (int pass = 0; pass < passes; ++pass) {
+    // decode and verify windows: rows R through every layer, then prefill chunks of T rows
+    for (int R : {1, 3, 8}) {
+      std::vector<Buffer> xb, ib, wb, ybs, ybr, pidb;
+      std::vector<std::vector<uint32_t>> idx(static_cast<size_t>(layers));
+      for (int l = 0; l < layers; ++l) idx[size_t(l)] = route_rows(R, R > 1);
+      for (int l = 0; l < layers; ++l) {
+        const std::vector<float> x = rand_vec(size_t(R) * D, 1.0f), base = rand_vec(size_t(R) * D, 0.5f);
+        const std::vector<float> wts = rand_wts(R);
+        xb.push_back(upload(x.data(), x.size() * 4, "x"));
+        ib.push_back(padded(idx[size_t(l)], "idx"));
+        wb.push_back(upload(wts.data(), wts.size() * 4, "wts"));
+        ybs.push_back(upload(base.data(), base.size() * 4, "y_stacked"));
+        ybr.push_back(upload(base.data(), base.size() * 4, "y_store"));
+        std::vector<uint32_t> pred = l + 1 < layers ? idx[size_t(l + 1)] : std::vector<uint32_t>(size_t(R) * TOPK, 0u);
+        for (int j = 0; j < 2; ++j) pred[size_t(rand_u32() % pred.size())] = rand_u32() % E;
+        pidb.push_back(padded(pred, "pred"));
+      }
+      for (int a = 0; a < 2; ++a) {
+        auto e = g.begin();
+        for (int l = 0; l < layers; ++l) {
+          const bool st = a == 1;
+          q20::Experts x = stacked(lm[size_t(l)]);
+          const Buffer& rid = st ? ids : ib[size_t(l)];
+          if (st) {
+            gpu_copy(*e, ib[size_t(l)], ids, size_t(R) * TOPK * 4);
+            gpu_copy(*e, pidb[size_t(l)], pids, size_t(R) * TOPK * 4);
+            store.begin(*e, l, ids, uint32_t(R) * TOPK, &pids, uint32_t(R) * TOPK, l + 1 < layers ? l + 1 : -1, false,
+                        false);
+            store.end(*e);
+            x = store.experts(l);
+          }
+          const Buffer& yb = st ? ybr[size_t(l)] : ybs[size_t(l)];
+          if (R == 1 && pass % 2 == 0) q20::enc_decode(*e, x, sh, shape, xb[size_t(l)], rid, wb[size_t(l)], s.h, yb);
+          else q20::enc_verify(*e, x, sh, shape, R, xb[size_t(l)], rid, wb[size_t(l)], s.h, yb, s.ue, s.umask, s.uslot, s.un);
+        }
+        e->commit();
+        e->wait();
+      }
+      for (int l = 0; l < layers; ++l) {
+        ++cases;
+        if (std::memcmp(ybs[size_t(l)].ptr(), ybr[size_t(l)].ptr(), size_t(R) * D * 4)) ++bad;
+      }
+    }
+    for (auto [T, bm] : {std::pair<int, uint32_t>{5, 8}, {40, 8}, {100, 32}}) {
+      const uint32_t P = uint32_t(T) * TOPK;
+      std::vector<Buffer> xh, ys, yr;
+      std::vector<std::vector<uint32_t>> idx;
+      for (int l = 0; l < layers; ++l) {
+        std::vector<_Float16> X(size_t(T) * D);
+        for (auto& v : X) v = _Float16(urand(-1.0f, 1.0f));
+        xh.push_back(upload(X.data(), X.size() * 2, "xh"));
+        idx.push_back(route_tokens(T, true));
+        ys.push_back(abuf(size_t(P) * D * 4, "Y_stacked"));
+        yr.push_back(abuf(size_t(P) * D * 4, "Y_store"));
+      }
+      for (int a = 0; a < 2; ++a) {
+        auto e = g.begin();
+        for (int l = 0; l < layers; ++l) {
+          const bool st = a == 1;
+          const Tiles t = bucket(*e, idx[size_t(l)], T, bm);  // t.idx: the routing the GPU reads
+          q20::Experts x = stacked(lm[size_t(l)]);
+          if (st) {
+            gpu_copy(*e, t.idx, ids, size_t(P) * 4);
+            const bool all = T >= 64 && l + 1 < layers;
+            store.begin(*e, l, ids, P, nullptr, 0, all ? l + 1 : -1, all, T > 16);
+            store.end(*e);
+            x = store.experts(l);
+          }
+          q20::enc_prefill(*e, x, shape, int(bm), t.max_tiles, xh[size_t(l)], s.H, st ? yr[size_t(l)] : ys[size_t(l)],
+                           t.tiles, t.ntiles, t.xrows, t.yrows);
+        }
+        e->commit();
+        e->wait();
+      }
+      for (int l = 0; l < layers; ++l) {
+        ++cases;
+        if (std::memcmp(ys[size_t(l)].ptr(), yr[size_t(l)].ptr(), size_t(P) * D * 4)) ++bad;
+      }
+    }
+  }
+  const q20::StoreStats st = store.stats();
+  unlink(path.c_str());
+  std::printf("  %d layer outputs through the store (decode, verify 3 / 8 rows, prefill T = 5 / 40 / 100): %d differ "
+              "from the stacked planes'\n",
+              cases, bad);
+  std::printf("  %llu turns: %llu lookups, %llu hits, %llu read ahead and waited for, %llu misses; %llu read ahead (%llu "
+              "routed), %llu evictions, %.1f MB read; stall %.3f ms a turn (reads %.3f)\n",
+              (unsigned long long)st.handshakes, (unsigned long long)st.lookups, (unsigned long long)st.hits,
+              (unsigned long long)st.late, (unsigned long long)st.misses, (unsigned long long)st.prefetches,
+              (unsigned long long)st.prefetch_used, (unsigned long long)st.evictions, st.bytes / 1e6,
+              st.stall_ms / double(std::max<uint64_t>(st.handshakes, 1)),
+              st.read_wait_ms / double(std::max<uint64_t>(st.handshakes, 1)));
+  if (bad || st.evictions == 0 || st.misses == 0) ++g_fail;
+}
 #endif
 
 // ---- hash4 ----
@@ -990,12 +1168,16 @@ void run_hash4(const Model& m) {
 
 int main(int argc, char** argv) {
   std::string mode = "check", pack_dir;
-  int pack_layer = 0;
+  int pack_layer = 0, store_layers = 4, store_passes = 6;
+  bool small = false;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--seed" && i + 1 < argc) rng.seed(uint32_t(std::atoi(argv[++i])));
     else if (a == "--rounds" && i + 1 < argc) g_rounds = std::max(1, std::atoi(argv[++i]));
-    else if (a == "check" || a == "bench" || a == "hash4" || a == "tune" || a == "all") mode = a;
+    else if (a == "--small") small = true;
+    else if (a == "--layers" && i + 1 < argc) store_layers = std::max(2, std::atoi(argv[++i]));
+    else if (a == "--passes" && i + 1 < argc) store_passes = std::max(1, std::atoi(argv[++i]));
+    else if (a == "check" || a == "bench" || a == "hash4" || a == "tune" || a == "all" || a == "store") mode = a;
     else if (a == "pack" && i + 1 < argc) {
       mode = a;
       pack_dir = argv[++i];
@@ -1017,6 +1199,17 @@ int main(int argc, char** argv) {
 #ifdef FN_Q20
   if (mode == "pack") {
     run_pack(pack_dir, pack_layer);
+    std::printf("%s\n", g_fail ? "FAILED" : "all checks passed");
+    return g_fail ? 1 : 0;
+  }
+#endif
+  if (small || mode == "store") {  // kernel-legal small shapes (shader-validation runs)
+    D = 256, I = 128, SI = 128, E = 64, TOPK = 8;
+    std::printf("small shapes: hidden %u, %u experts of %u, shared expert %u, top-%u\n", D, E, I, SI, TOPK);
+  }
+#ifdef FN_Q20
+  if (mode == "store") {
+    run_store(store_layers, store_passes);
     std::printf("%s\n", g_fail ? "FAILED" : "all checks passed");
     return g_fail ? 1 : 0;
   }

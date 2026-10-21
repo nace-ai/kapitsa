@@ -180,6 +180,15 @@ void WeightStore::read_deferred(const std::string& name, void* dst) const {
   if (failed) fatal("reading %s failed", name.c_str());
 }
 
+bool WeightStore::deferred_place(const std::string& name, std::string* path, size_t* off, size_t* len) const {
+  auto it = deferred_.find(name);
+  if (it == deferred_.end()) return false;
+  if (path) *path = it->second.path;
+  if (off) *off = it->second.off;
+  if (len) *len = it->second.len;
+  return true;
+}
+
 const Tensor* WeightStore::find(const std::string& name) const {
   auto it = tensors_.find(name);
   return it == tensors_.end() ? nullptr : &it->second;

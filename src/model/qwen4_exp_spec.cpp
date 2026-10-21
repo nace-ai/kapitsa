@@ -105,16 +105,27 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
     enc_moe_rows(e, L, R, yb_, mtp_layer, &xrn_);
     return;
   }
-  enc_rows(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, xrn_, R);
+  // streamed experts: the next layer's router on the same rows too (its top-k is read ahead during this layer)
+  const int li = layer_index(L);
+  const bool pred = L.eg.q20 && store_ && !store_->complete() && li >= 0 && li + 1 < cfg_.layers;
+  std::vector<RowSeg> segs = {{&L.router, rlog_}, {&L.shared_gate, slog_}};
+  if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
+  enc_rows(e, segs, xrn_, R);
   kp::Topk tp{uint32_t(cfg_.experts), uint32_t(k), cfg_.norm_topk ? 1u : 0u};
   e.use(pipe4("moe_topk512"));
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
+  if (pred) {
+    e.use(pipe4("moe_topk512"));
+    e.buf(0, plog_); e.buf(1, slog_); e.buf(2, pidx_); e.buf(3, pwts_);
+    e.val(4, tp);
+    e.dispatch(uint32_t(R), 1, 1, 32);
+  }
   if (L.eg.q20) {
     // Q2_0 experts (check_formats: a 4-bit shared expert): unique experts, gate/up, down for R <= kMaxVerify rows
-    q20::enc_verify(e, q20_experts(L), q20_shared(L), q20_shape(), R, xrn_, ridx_, rwts_, eh_, yb_, ue_,
-                    uw_.view(0, 512), uw_.view(1024, 1024), un_);
+    q20::enc_verify(e, q20_rows_fetch(e, L, R, ridx_, pred), q20_shared(L), q20_shape(), R, xrn_, ridx_, rwts_, eh_,
+                    yb_, ue_, uw_.view(0, 512), uw_.view(1024, 1024), un_);
     return;
   }
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};

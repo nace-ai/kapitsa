@@ -10,6 +10,7 @@
 #include "vision/embed.h"
 
 #include <deque>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -405,6 +406,14 @@ class Qwen35 : public Model {
   q20::Experts q20_experts(const Layer& L) const;
   q20::Shared q20_shared(const Layer& L) const;
   q20::Shape q20_shape() const;
+  // A layer's Q2_0 experts for a prefill chunk's MoE (T rows), once the dispatches writing its routing are encoded (ids:
+  // n expert ids, the rows' top-k): resident experts are the stacked planes; Qwen4Exp's streamed ones encode the expert
+  // store's handshake around `between` (work that does not need the experts, overlapping the store's turn) and come
+  // through the arena's slot table. `between` is encoded either way.
+  virtual q20::Experts q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
+                                 const std::function<void()>& between);
+  // the Q2_0 kernels' slot-table twins run (prewarm list)
+  virtual bool q20_arena() const { return false; }
   std::string tname(const std::string& canonical) const;
   const Tensor* bf16_copy(const Tensor* t, float offset = 0.0f);
   void check_formats() const;

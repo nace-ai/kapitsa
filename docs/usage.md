@@ -498,6 +498,16 @@ Flash-Next needs a 128 GB Mac: on 48 and 64 GB its weights alone exceed the budg
 part with an 8K cache (74.7 GB) does not fit, so it is refused before the download. For Bolt and the other variants,
 run `kapitsa doctor`.
 
+A Flash-Next folder whose routed experts are in Q2_0 (2.25 bits a weight; `tools/qwen4_exp_q20.py` builds one from
+ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table) does not
+need them all in memory: it keeps as many as the budget leaves after its other weights, its buffers, the slots'
+state and one conversation's KV cache of up to 32K tokens, and reads the others from the SSD when a token routes them
+(`src/model/expert_store.h`).
+`kapitsa doctor` counts the smallest such store (2.1 GB) in its weights and lists the rest as streamed.
+`NI_EXPERT_STORE=<GB>` sets the store's size, `all` keeps every expert, `off` loads them as stacked tensors (the whole
+pack must then fit); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. No such folder has been run on a
+48 GB Mac yet: its speed there is not measured.
+
 Super-VL's weights alone are 70.1 GB, so it needs a 96 GB+ Mac: on 128 GB (a 110.8 GB budget) it runs with its draft
 model (3.5 GB at two slots) and room for millions of tokens of KV cache; on 96 GB it starts without the draft model
 (about 29K tokens of KV cache in all at a 72 GB budget) or with it from an 80 GB budget; on 48 and 64 GB Macs it is

@@ -63,6 +63,7 @@ std::string Gpu::name() const { return [[dev(device_) name] UTF8String]; }
 size_t Gpu::recommended_working_set() const { return dev(device_).recommendedMaxWorkingSetSize; }
 size_t Gpu::allocated_bytes() const { return dev(device_).currentAllocatedSize; }
 size_t Gpu::max_threadgroup_memory() const { return dev(device_).maxThreadgroupMemoryLength; }
+size_t Gpu::max_buffer_length() const { return dev(device_).maxBufferLength; }
 bool Gpu::apple10() const {
   // MTLGPUFamilyApple10 = 1010 (macOS 26 SDK); the raw value keeps older SDKs building
   return [dev(device_) supportsFamily:(MTLGPUFamily)1010];
@@ -691,6 +692,17 @@ void Encoder::split() {
   open_encoder();
 }
 void Gpu::signal_event_cpu(void* event, uint64_t value) { ((__bridge id<MTLSharedEvent>)event).signaledValue = value; }
+uint64_t Gpu::event_value(void* event) { return ((__bridge id<MTLSharedEvent>)event).signaledValue; }
+
+void Encoder::signal_event_inline(void* event, uint64_t value) {
+  if (enc_) {
+    [E(enc_) endEncoding];
+    CFRelease(enc_);
+    enc_ = nullptr;
+  }
+  [(__bridge id<MTLCommandBuffer>)cb_ encodeSignalEvent:(__bridge id<MTLSharedEvent>)event value:value];
+  open_encoder();
+}
 
 void Encoder::wait_event(void* event, uint64_t value) {
   if (enc_) {

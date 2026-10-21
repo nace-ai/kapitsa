@@ -208,9 +208,11 @@ NI_Q20V_GU(moe_q20v_gate_up, false, 16, 4)
 NI_Q20V_GU(moe_q20v_gate_up_slot, true, 16, 4)
 
 // Down of R <= 8 rows (decode: R = 1), moe_down2_w's arithmetic per row: grid (R, D / (8 ROWS)), 256 threads; row r's h
-// ((k + 1) * max(I, SI) <= 7168 floats) staged; y[r, d] += sum_slot wts[r, slot] * (down_slot[d] . h[r, slot]), slot k
-// the shared expert. Buffers: 0-2 the routed experts' down (see the top), 3-5 the shared expert's down (w, scales,
-// biases), 6 h, 7 idx [R, k], 8 wts [R, k + 1], 9 y [R, D], 10 MoeParams, 11 Q20Slot.
+// ((k + 1) * max(I, SI) <= 7168 floats) staged in threadgroup memory 0, sized by the host to what the shapes stage
+// (Flash-Next: 7040 floats; small test shapes stay inside the shader validator's limit, which counts it twice);
+// y[r, d] += sum_slot wts[r, slot] * (down_slot[d] . h[r, slot]), slot k the shared expert. Buffers: 0-2 the routed
+// experts' down (see the top), 3-5 the shared expert's down (w, scales, biases), 6 h, 7 idx [R, k], 8 wts [R, k + 1],
+// 9 y [R, D], 10 MoeParams, 11 Q20Slot.
 #define NI_Q20_DN(NAME, SLOT, VPL, ROWS)                                                                               \
   [[kernel]] void NAME(const device uchar* w0 [[buffer(0)]], const device uchar* w1 [[buffer(1)]],                 \
                        const device uchar* w2 [[buffer(2)]], const device uint32_t* sdw [[buffer(3)]],             \
@@ -220,8 +222,8 @@ NI_Q20V_GU(moe_q20v_gate_up_slot, true, 16, 4)
                        constant MoeParams& p [[buffer(10)]], constant Q20Slot& L [[buffer(11)]],                   \
                        uint2 tgp [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],       \
                        uint2 ntg2 [[threads_per_threadgroup]], uint sg [[simdgroup_index_in_threadgroup]],         \
-                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {         \
-    threadgroup float hs[7168];                                                                                    \
+                       uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],           \
+                       threadgroup float* hs [[threadgroup(0)]]) {                                                 \
     const uint r = tgp.x, hstride = max(p.I, p.SI);                                                                \
     const device float* hr = h + r * (p.k + 1) * hstride;                                                          \
     for (uint i = tid; i < (p.k + 1) * hstride / 4; i += ntg2.x)                                                   \

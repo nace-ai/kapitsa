@@ -42,6 +42,7 @@ class Gpu {
   int core_count() const;
   bool core_count_measured() const;  // read from the IORegistry (not the override or the name fallback)
   size_t max_threadgroup_memory() const;  // MTLDevice maxThreadgroupMemoryLength
+  size_t max_buffer_length() const;       // MTLDevice maxBufferLength
   bool apple10() const;                   // MTLGPUFamilyApple10 (M5: Metal 4 neural accelerators)
   int apple_family() const;               // the newest MTLGPUFamilyApple<n>: 7 on the M1, 8 M2, 9 M3 and M4, 10 M5
   size_t allocated_bytes() const;  // MTLDevice currentAllocatedSize
@@ -58,6 +59,8 @@ class Gpu {
   void* new_shared_event();
   // Sets the event's value from the CPU (a GPU wait_event on it proceeds once it reaches the waited value)
   static void signal_event_cpu(void* event, uint64_t value);
+  // The event's value as the CPU sees it now (MTLSharedEvent signaledValue; a few ns, for spinning on)
+  static uint64_t event_value(void* event);
   void release(Buffer& b);
 
   // Compiles the embedded kernel library on first use. Extra source can be appended (tests).
@@ -139,6 +142,9 @@ class Encoder {
   // `value` before the work encoded after it. `event` is an id<MTLSharedEvent> from new_shared_event().
   void signal_event(void* event, uint64_t value);
   void wait_event(void* event, uint64_t value);
+  // A signal of `value` once the work encoded so far has completed, inside this command buffer (no commit): for a
+  // handshake with a CPU thread within one pass (the CPU spins on event_value, then lets a later wait_event go on)
+  void signal_event_inline(void* event, uint64_t value);
   // Commits the work so far and continues in a new command buffer (same queue, so in order): long passes are split
   // into short command buffers, which keeps the GPU responsive to the desktop's own work.
   void split();

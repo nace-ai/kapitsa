@@ -353,9 +353,7 @@ void Qwen35::prewarm_pipelines() {
         see(*q);
       if (L.mg && L.mg.q8()) names.insert("mlp_gate_up_f8g64");
       if (L.eg.q20) {  // Q2_0 routed experts (src/model/moe_q20.cpp)
-        for (const char* n : {"moe_q20_gate_up", "moe_q20_down", "moe_q20_unique", "moe_q20v_gate_up", "qmms_moe_gu_q20",
-                              "qmms_moe_dn_q20", "qrm_gu_q20_m32_n64", "qrm_dn_q20_m32_n128"})
-          names.insert(n);
+        for (const std::string& n : q20::kernel_names(q20_arena())) names.insert(n);
       } else if (L.eg.iq) {  // llama.cpp's IQ blocks (qwen35_iq.cpp)
         const bool t16 = cfg_.moe_I == 512 && cfg_.shared_I == 512;
         for (const std::string& n : {"moei_gu_rows_" + L.eg.fmt() + "_r2", "moe8i_gu_" + L.eg.fmt(),
@@ -617,6 +615,13 @@ q20::Shared Qwen35::q20_shared(const Layer& L) const {
 q20::Shape Qwen35::q20_shape() const {
   return q20::Shape{uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(cfg_.top_k),
                     uint32_t(cfg_.experts)};
+}
+
+q20::Experts Qwen35::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
+                               const std::function<void()>& between) {
+  (void)e, (void)ids, (void)n, (void)T;
+  if (between) between();
+  return q20_experts(L);
 }
 
 Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(prefill_chunk) {
@@ -2283,8 +2288,22 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   e.dispatch(1, 1, 1, 1024);
   const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E + (S + bm - 1) / bm);
   const uint32_t shared_e = fold ? uint32_t(E) : uint32_t(E) + 1;
+  // shared expert on all rows: half h in hh_ (row stride shared_I), down into ys_
+  auto enc_shared = [&] {
+    if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
+      enc_qmm(e, L.sg, xh_, sgb_, T, false);
+      enc_qmm(e, L.su, xh_, sub_, T, false);
+      uint32_t ns = uint32_t(T * cfg_.shared_I);
+      e.use(pipe("swiglu_half"));
+      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+      e.dispatch((ns + 255) / 256, 1, 1, 256);
+    }
+    enc_qmm(e, L.sd, hh_, ys_, T, false);
+  };
   if (q20) {
-    q20::enc_prefill(e, q20_experts(L), q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
+    // Q2_0 (never folded): the shared expert first, while a streamed-expert store loads the routed ones
+    const q20::Experts X = q20_fetch(e, L, ridx_, uint32_t(P), T, enc_shared);
+    q20::enc_prefill(e, X, q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
   } else {
     // expert strides in words / scale groups (generic formats: N rows of row_bytes; bf16 has no groups)
     const uint32_t gws = uint32_t(size_t(G.N) * G.row_bytes() / 4), gss = G.dense() ? 0u : G.N * (G.K / G.gs);
@@ -2315,18 +2334,7 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
       e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
       e.dispatch(Dn.N / (8 * nsg), max_tiles, 1, 32 * nsg);
     }
-  }
-  if (!fold) {
-    // shared expert on all rows: half h in hh_ (row stride shared_I), down into ys_
-    if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
-      enc_qmm(e, L.sg, xh_, sgb_, T, false);
-      enc_qmm(e, L.su, xh_, sub_, T, false);
-      uint32_t ns = uint32_t(T * cfg_.shared_I);
-      e.use(pipe("swiglu_half"));
-      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
-      e.dispatch((ns + 255) / 256, 1, 1, 256);
-    }
-    enc_qmm(e, L.sd, hh_, ys_, T, false);
+    if (!fold) enc_shared();
   }
   kp::Combine cp{uint32_t(D), uint32_t(k)};
   e.use(pipe("moe_combine"));
@@ -2513,7 +2521,23 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   const uint32_t max_tiles = uint32_t((P + bm - 1) / bm + E + (S + bm - 1) / bm);
   const std::string m = "_b4_m" + std::to_string(bm);
   const std::string qm = "_k32_m" + std::to_string(bm);
-  if (q20) q20::enc_prefill(e, q20_experts(L), q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
+  // shared expert on all rows (as in enc_moe_prefill)
+  auto enc_shared = [&] {
+    if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
+      enc_qmm(e, L.sg, xh_, sgb_, T, false);
+      enc_qmm(e, L.su, xh_, sub_, T, false);
+      uint32_t ns = uint32_t(T * cfg_.shared_I);
+      e.use(pipe("swiglu_half"));
+      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
+      e.dispatch((ns + 255) / 256, 1, 1, 256);
+    }
+    enc_qmm(e, L.sd, hh_, ys_, T, false);
+  };
+  if (q20) {
+    // Q2_0 (never folded): the shared expert first, while a streamed-expert store loads the routed ones
+    const q20::Experts X = q20_fetch(e, L, ridx_, uint32_t(P), T, enc_shared);
+    q20::enc_prefill(e, X, q20_shape(), bm, max_tiles, xh_, hhalf_, yd_, tiles_, ntiles_, stok_, spair_);
+  }
   // gate + up + SwiGLU: hhalf_ row r = sorted row r (pairs grouped by expert, then shared rows)
   if (!q20) {
     // expert matrices are stacked [E, N, K]: strides in words / groups
@@ -2547,18 +2571,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     e.buf(9, SD.w->buf); e.buf(10, SD.s->buf); e.buf(11, SD.b->buf);
     e.dispatch(Dn.N / kBnDn, max_tiles, 1, 128);
   }
-  if (!fold) {
-    // shared expert on all rows (as in enc_moe_prefill)
-    if (!enc_qmm_gu(e, L.sg, L.su, xh_, hh_, T)) {
-      enc_qmm(e, L.sg, xh_, sgb_, T, false);
-      enc_qmm(e, L.su, xh_, sub_, T, false);
-      uint32_t ns = uint32_t(T * cfg_.shared_I);
-      e.use(pipe("swiglu_half"));
-      e.buf(0, sgb_); e.buf(1, sub_); e.buf(2, hh_); e.val(3, ns);
-      e.dispatch((ns + 255) / 256, 1, 1, 256);
-    }
-    enc_qmm(e, L.sd, hh_, ys_, T, false);
-  }
+  if (!fold && !q20) enc_shared();
   kp::Combine cp{uint32_t(D), uint32_t(k)};
   e.use(pipe("moe_combine"));
   e.buf(0, yd_);

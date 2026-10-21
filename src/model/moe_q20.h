@@ -9,16 +9,22 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace ni::q20 {
 
-// Byte offsets of an expert's planes inside an arena slot (gate, up, down; codes then d), and the slot's size rounded
-// up to the arena's 16 KiB pages.
+// Byte offsets of an expert's planes inside an arena slot, and the slot's size rounded up to the arena's 16 KiB pages.
+// The three code planes come first (gate, up, down), then the three d planes: Flash-Next's code planes are 25 pages
+// each, so a slot's code planes start on page boundaries and an aligned piece of a pack file can be read into them
+// directly (src/model/expert_store.cpp).
 struct SlotLayout {
   uint32_t gc = 0, gd = 0, uc = 0, ud = 0, dc = 0, dd = 0;
   uint32_t bytes = 0;
 };
 SlotLayout slot_layout(uint32_t D, uint32_t I);
+
+// The kernels of these paths (prewarm lists): stacked planes, or with slot = true the slot-table twins
+std::vector<std::string> kernel_names(bool slot);
 
 // One layer's routed experts. Stacked: the planes, gate / up codes [E][I][D/16] and d [E][I][D/64], down codes
 // [E][D][I/16] and d [E][D][I/64]. Arena: chunks a0 and a1 (a1 = a0 for one chunk) and the layer's slot table: E words

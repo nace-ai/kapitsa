@@ -12,6 +12,7 @@
 // The class reuses Qwen35's kernels and encoders (projections, DeltaNet, attention, MoE, sampling, KV growth,
 // checkpoints, the verify tape) and replaces its layer loops.
 #pragma once
+#include "model/expert_store.h"
 #include "model/ngram.h"
 #include "model/qwen35.h"
 
@@ -48,7 +49,10 @@ struct Qwen4Layer {
 
 class Qwen4Exp : public Qwen35 {
  public:
-  explicit Qwen4Exp(const std::string& model_dir, int prefill_chunk = 2048);
+  // mem_budget: the GPU memory the model may hold, its KV caches and slots' state set apart (0: the default budget as
+  // default_mem_budget(), less a 16K-token cache); a pack with Q2_0 routed experts keeps as many of them in memory
+  // as that leaves room for and streams the rest (NI_EXPERT_STORE=<GB>|all|off sets it)
+  explicit Qwen4Exp(const std::string& model_dir, int prefill_chunk = 2048, size_t mem_budget = 0);
   ~Qwen4Exp() override;
   // config.json's (text_config's) model_type is qwen4_exp_text / qwen4_exp
   static bool is_model(const std::string& model_dir);
@@ -92,6 +96,8 @@ class Qwen4Exp : public Qwen35 {
   // the n-gram table, for tools
   const NgramTable& ngram_table() const { return table_; }
   const NgramHash& ngram_hash() const { return hash_; }
+  // Q2_0 routed experts through the expert store (src/model/expert_store.h), nullptr when they are stacked planes
+  q20::ExpertStore* expert_store() { return store_.get(); }
 
  protected:
   void grow_kv(Seq& s, int cap) override;
@@ -124,6 +130,16 @@ class Qwen4Exp : public Qwen35 {
   void enc_rows(Encoder& e, const std::vector<RowSeg>& segs, const Buffer& x, int R, uint32_t x_ld = 0);
   // the MoE of R rows of xrn_ into yb_ (router on the row kernels, the 512-expert top-k per row, the experts)
   void enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer);
+  // streamed Q2_0 experts (src/model/expert_store.h)
+  q20::Experts q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
+                         const std::function<void()>& between) override;
+  bool q20_arena() const override { return store_ != nullptr; }
+  int layer_index(const Layer& L) const;  // its index in layers_, -1 for the MTP head's
+  // the Q2_0 experts of decode / verify rows (routing in idx: R * k ids), through the store when there is one; with a
+  // next layer to predict, its router ran on the same rows into pidx_
+  q20::Experts q20_rows_fetch(Encoder& e, const Layer& L, int R, const Buffer& idx, bool pred);
+  void init_store(const std::string& dir);
+  size_t mem_budget_arg_ = 0;
   void enc_moe4_down(Encoder& e, const Layer& L, int R, const Buffer& idx, const Buffer& wts);
   // R rows (verify / MTP) of the token mixers on the row GEMVs; u in xrn_, output to yb_
   void enc_gdn4_rows(Encoder& e, Seq& s, int li, const Layer& L, int R);
@@ -163,6 +179,11 @@ class Qwen4Exp : public Qwen35 {
 
   Qwen4ExpConfig c4_;
   int dbg_layers_ = -1;
+  // streamed experts: the store, and the next layer's predicted routing (router logits, top-k ids and weights of up
+  // to kMaxVerify rows)
+  bool q20_pack_ = false, stream_ = false;
+  std::unique_ptr<q20::ExpertStore> store_;
+  Buffer plog_, pidx_, pwts_;
   std::vector<Qwen4Layer> l4_;
   GatedRes mix_;              // the final mix (no injection)
   // PLE

@@ -68,6 +68,9 @@ struct SamplingParams {
 // doctor`. Bytes.
 struct MemPlan {
   size_t weights = 0;      // trunk (vision tower and MTP excluded), as loaded
+  // routed experts the model streams from its files instead (Qwen3.8-Flash-Next Q2_0 packs, src/model/expert_store.h):
+  // not in `weights`, which holds the smallest store of them instead; the store takes what the budget leaves
+  size_t streamed = 0;
   size_t mtp = 0;          // MTP head as loaded (bf16 linears become 4-bit), 0 without mtp.safetensors
   size_t activations = 0;  // prefill-chunk buffers (scale with the chunk)
   size_t slot_state = 0;   // per slot: recurrent state, its two checkpoints and the verify tape

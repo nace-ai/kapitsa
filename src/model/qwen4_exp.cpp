@@ -75,6 +75,21 @@ void parse4(const json& root, Qwen4ExpConfig& c) {
   c.eos = eos.is_array() ? eos[0].get<int>() : eos.get<int>();
 }
 
+// a trunk layer's routed experts (the MTP head's, mtp.layers.*, stay with the head)
+bool is_trunk_expert(const std::string& n) {
+  return n.find(".mlp.switch_mlp.") != std::string::npos && n.rfind("mtp.", 0) != 0;
+}
+
+// config.json's quantization gives the trunk's routed experts Q2_0 (tools/qwen4_exp_q20.py)
+bool q20_experts_in(const json& root) {
+  for (const char* key : {"quantization", "quantization_config"}) {
+    if (!root.contains(key) || !root[key].is_object()) continue;
+    for (auto& [k, v] : root[key].items())
+      if (v.is_object() && is_trunk_expert(k) && v.value("mode", std::string()) == "q2_0") return true;
+  }
+  return false;
+}
+
 }  // namespace
 
 bool Qwen4Exp::is_model(const std::string& dir) {
@@ -91,7 +106,10 @@ bool Qwen4Exp::is_model(const std::string& dir) {
          r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
 }
 
-Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk) : Qwen35(dir, prefill_chunk, NoLoad{}) { load(dir); }
+Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget)
+    : Qwen35(dir, prefill_chunk, NoLoad{}), mem_budget_arg_(mem_budget) {
+  load(dir);
+}
 
 std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk) {
   if (Qwen4Exp::is_model(dir)) return std::make_unique<Qwen4Exp>(dir, prefill_chunk);
@@ -158,6 +176,16 @@ void Qwen4Exp::load(const std::string& dir) {
   // the trunk and the MTP head (mtp.safetensors, read by load_mtp4): every tensor but the vision tower and the n-gram
   // table (mapped below); with NI_NO_MTP the head is left out too, as plan() leaves it out
   const bool no_mtp = getenv("NI_NO_MTP") != nullptr;
+  // Q2_0 routed experts go to the expert store (init_store): left unread here (deferred: listed, their bytes in the
+  // files), unless NI_EXPERT_STORE=off keeps them as stacked planes
+  q20_pack_ = q20_experts_in(root);
+  {
+    const char* es = getenv("NI_EXPERT_STORE");
+    stream_ = q20_pack_ && !(es && (!strcmp(es, "off") || !strcmp(es, "0")));
+  }
+  WeightStore::Filter defer = transform_defer();
+  if (stream_)
+    defer = [td = defer](const std::string& n) { return is_trunk_expert(n) || (td && td(n)); };
   ws_.open_dir(
       dir,
       [no_mtp](const std::string& n) {
@@ -165,7 +193,7 @@ void Qwen4Exp::load(const std::string& dir) {
                n.find(".ngram_embedding.") == std::string::npos && !(no_mtp && n.rfind("mtp.", 0) == 0);
       },
       [no_mtp](const std::string& f) { return f != "ple.safetensors" && !(no_mtp && f == "mtp.safetensors"); },
-      transform_defer());
+      defer);
   if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
   else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
   else fatal("%s: unrecognized weight naming (expected the MLX qwen4_exp layout)", dir.c_str());
@@ -273,6 +301,7 @@ void Qwen4Exp::load(const std::string& dir) {
   Gpu::get().make_resident(owned_bufs_);
   alloc_state();
   alloc4();
+  if (stream_) init_store(dir);
   prewarm_pipelines();
   {
     std::vector<std::string> v = {"hc_pre", "hc_pre_h", "hc_act", "hc_act_h", "hc_mix", "hc_mix_h", "hc_expand", "hc_inject",
@@ -282,9 +311,10 @@ void Qwen4Exp::load(const std::string& dir) {
     for (const std::string& n : v) Gpu::get().pipeline(n, false);
   }
   ple_ev_ = Gpu::get().new_shared_event();
-  logi("loaded %s: Qwen3.8-Flash-Next, %d layers (%d attention), %.1f GB of weights in %.0f ms; %s; n-gram table %s",
+  logi("loaded %s: Qwen3.8-Flash-Next, %d layers (%d attention), %.1f GB of weights in %.0f ms; %s; n-gram table %s%s%s",
        dir.c_str(), cfg_.layers, attn_layers(), ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str(),
-       table_.ok() ? table_.describe().c_str() : "none");
+       table_.ok() ? table_.describe().c_str() : "none", store_ ? "; routed experts: " : "",
+       store_ ? store_->describe().c_str() : "");
 }
 
 void Qwen4Exp::load_mtp4(const std::string& dir) {
@@ -555,6 +585,100 @@ void Qwen4Exp::ple_after_sample(Encoder& e, Seq& s, int pos) {
     gather_rows(const_cast<Seq*>(sp)->tokens(), pos, 1, dst.ptr(), false);
     Gpu::signal_event_cpu(ev, t);
   });
+}
+
+// ---- streamed experts (src/model/expert_store.h) ----
+
+int Qwen4Exp::layer_index(const Layer& L) const {
+  const Layer* b = layers_.data();
+  return &L >= b && &L < b + layers_.size() ? int(&L - b) : -1;
+}
+
+// The store over the deferred Q2_0 planes. Its size: NI_EXPERT_STORE=<GB> or all; by default what the budget leaves
+// after the weights and buffers allocated so far (and the room set apart below).
+void Qwen4Exp::init_store(const std::string& dir) {
+  (void)dir;
+  const uint32_t E = uint32_t(cfg_.experts);
+  std::vector<std::string> files;
+  std::map<std::string, int> fidx;
+  std::vector<q20::LayerSrc> src(size_t(cfg_.layers));
+  static const char* const kMat[3] = {"gate", "up", "down"};
+  for (int i = 0; i < cfg_.layers; ++i)
+    for (int m = 0; m < 3; ++m)
+      for (int part = 0; part < 2; ++part) {
+        const std::string n = tname("model.layers." + std::to_string(i) + ".mlp.switch_mlp." + kMat[m] + "_proj") +
+                              (part ? ".scales" : ".weight");
+        std::string path;
+        size_t off = 0, len = 0;
+        if (!ws_.deferred_place(n, &path, &off, &len) || len % E) fatal("expert store: %s is not a stacked plane", n.c_str());
+        auto it = fidx.find(path);
+        const int f = it != fidx.end() ? it->second : int(files.size());
+        if (it == fidx.end()) {
+          fidx[path] = f;
+          files.push_back(path);
+        }
+        q20::PlaneSrc& p = src[size_t(i)].p[m * 2 + part];
+        p.file = f;
+        p.off = off;
+        p.stride = len / E;
+        p.len = uint32_t(len / E);
+      }
+  const q20::SlotLayout lay = q20::slot_layout(uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I));
+  const size_t all = size_t(cfg_.layers) * E * lay.bytes;
+  q20::ExpertStore::Options o;
+  const char* es = getenv("NI_EXPERT_STORE");
+  if (es && !strcmp(es, "all")) {
+    o.bytes = all;
+  } else if (es && *es && strcmp(es, "auto")) {
+    o.bytes = size_t(atof(es) * 1e9);
+  } else {
+    // what the budget leaves: the engine's (mem_budget, its conversations' KV caches and slots' state already set
+    // apart) less 0.5 GB, or the default budget less a 16K-token KV cache and 1.5 GB (tools)
+    size_t budget = mem_budget_arg_, keep = size_t(1) << 29;
+    if (!budget) {
+      const char* v = getenv("NI_MEM_BUDGET");
+      const size_t rws = Gpu::get().recommended_working_set();
+      budget = v && *v ? size_t(atof(v) * 1e9) : rws - std::max<size_t>(size_t(512) << 20, rws / 25);
+      keep = kv_bytes_per_pos() * 16384 + (size_t(3) << 29);
+    }
+    const size_t used = Gpu::get().allocated_bytes();
+    o.bytes = budget > used + keep ? budget - used - keep : 0;
+  }
+  o.bytes = std::min(o.bytes, all);
+  if (const char* r = getenv("NI_EXPERT_READERS"); r && *r) o.cache.readers = atoi(r);
+  if (const char* io = getenv("NI_EXPERT_IO"); io && !strcmp(io, "direct")) o.cache.direct = true;
+  if (const char* fl = getenv("NI_EXPERT_FILL"); fl && !strcmp(fl, "0")) o.cache.fill = false;
+  store_ = std::make_unique<q20::ExpertStore>(files, src, E, lay, o);
+  Gpu::get().make_resident(store_->buffers());
+  if (!store_->complete()) {
+    Gpu& g = Gpu::get();
+    plog_ = g.alloc(size_t(kMaxVerify) * E * 4, "pred_logits");
+    pidx_ = g.alloc(size_t(kMaxVerify) * cfg_.top_k * 4, "pred_idx");
+    pwts_ = g.alloc(size_t(kMaxVerify) * (cfg_.top_k + 1) * 4, "pred_wts");
+  }
+}
+
+// a prefill chunk's MoE: a chunk of 64+ rows routes most of the next layer's experts, so every one of them not in
+// memory is read during this layer; shorter ones only read what they route
+q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, uint32_t n, int T,
+                                 const std::function<void()>& between) {
+  const int li = layer_index(L);
+  if (!store_ || li < 0) return Qwen35::q20_fetch(e, L, ids, n, T, between);
+  const int nl = li + 1 < cfg_.layers ? li + 1 : -1;
+  const bool all = T >= 64 && nl >= 0;
+  store_->begin(e, li, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > 16);
+  if (between) between();
+  store_->end(e);
+  return store_->experts(li);
+}
+
+q20::Experts Qwen4Exp::q20_rows_fetch(Encoder& e, const Layer& L, int R, const Buffer& idx, bool pred) {
+  const int li = layer_index(L);
+  if (!store_ || li < 0) return q20_experts(L);
+  const uint32_t n = uint32_t(R * cfg_.top_k);
+  store_->begin(e, li, idx, n, pred ? &pidx_ : nullptr, n, pred ? li + 1 : -1, false, false);
+  store_->end(e);
+  return store_->experts(li);
 }
 
 // ---- encoders ----
@@ -887,18 +1011,30 @@ void Qwen4Exp::enc_moe4(Encoder& e, const Layer& L, const Buffer& u) {
     return;
   }
   constexpr uint32_t nsg = 8, gu_rows = 2, rows = 2;
-  enc_qmv_multi(e, {{&L.router, rlog_}, {&L.shared_gate, slog_}}, u, nullptr);
+  // streamed experts: the next layer's router on this input too (its top-k is read ahead during this layer)
+  const int li = layer_index(L);
+  const bool pred = q20 && store_ && !store_->complete() && li >= 0 && li + 1 < cfg_.layers;
+  std::vector<Seg> segs = {{&L.router, rlog_}, {&L.shared_gate, slog_}};
+  if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
+  enc_qmv_multi(e, segs, u, nullptr);
   const uint32_t E = uint32_t(cfg_.experts);
   kp::Moe mp{uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(cfg_.top_k), cfg_.eps};
   kp::Topk tp{E, uint32_t(cfg_.top_k), cfg_.norm_topk ? 1u : 0u};
   // 512 experts: moe_topk512 (selects on the logits; NI_TOPK512=0: moe_topk)
   static const bool t512 = !(getenv("NI_TOPK512") && !strcmp(getenv("NI_TOPK512"), "0"));
-  e.use(pipe(t512 && E == 512 && cfg_.top_k <= 16 ? "moe_topk512" : E == 256 && cfg_.top_k <= 8 ? "moe_topk256" : "moe_topk"));
+  const Pipeline topk = pipe(t512 && E == 512 && cfg_.top_k <= 16 ? "moe_topk512" : E == 256 && cfg_.top_k <= 8 ? "moe_topk256" : "moe_topk");
+  e.use(topk);
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, eidx_); e.buf(3, ewts_);
   e.val(4, tp);
   e.dispatch(1, 1, 1, 32);
+  if (pred) {
+    e.use(topk);
+    e.buf(0, plog_); e.buf(1, slog_); e.buf(2, pidx_); e.buf(3, pwts_);
+    e.val(4, tp);
+    e.dispatch(1, 1, 1, 32);
+  }
   if (q20) {
-    q20::enc_decode(e, q20_experts(L), q20_shared(L), q20_shape(), u, eidx_, ewts_, eh_, yb_);
+    q20::enc_decode(e, q20_rows_fetch(e, L, 1, eidx_, pred), q20_shared(L), q20_shape(), u, eidx_, ewts_, eh_, yb_);
     return;
   }
   e.use(pipe("moe_gate_up3_r2"));
@@ -1092,7 +1228,8 @@ void Qwen4Exp::encode_logits_rows(Encoder& e, int T, const Buffer& out) {
 std::string Qwen4Exp::formats_summary() const {
   std::map<std::string, size_t> bytes;
   auto add = [&](const QLinear& q) {
-    if (q && q.q20) bytes["Q2_0"] += q.w->buf.size + q.s->buf.size;
+    if (q && q.q20)  // (streamed: deferred tensors, no buffers; their size as stored)
+      bytes["Q2_0"] += size_t(q.w->numel()) * dtype_size(q.w->dtype) + size_t(q.s->numel()) * dtype_size(q.s->dtype);
     else if (q) bytes[format_name(q.bits, q.gs)] += q.w->buf.size + (q.dense() ? 0 : q.s->buf.size + q.b->buf.size);
   };
   add(embed_);
@@ -1143,6 +1280,10 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
     closedir(d);
   }
   const double share = c.experts ? double(c.top_k) / c.experts : 1.0;
+  // Q2_0 routed experts are streamed (Qwen4Exp::init_store; NI_EXPERT_STORE=off keeps them resident): counted apart,
+  // the weights holding the smallest store (3 layers' experts) in their place
+  const char* es = getenv("NI_EXPERT_STORE");
+  const bool stream = q20_experts_in(root) && !(es && (!strcmp(es, "off") || !strcmp(es, "0")));
   size_t lm_head = 0, table = 0;
   for (const std::string& f : files) {
     std::ifstream in(dir + "/" + f, std::ios::binary);
@@ -1169,13 +1310,16 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
         if (!getenv("NI_NO_MTP")) m.mtp += al;
         continue;
       }
-      m.weights += al;
+      if (stream && is_trunk_expert(name)) m.streamed += b;
+      else m.weights += al;
       if (name.find("lm_head.") != std::string::npos) lm_head += b;
       if (name.find("embed_tokens") == std::string::npos)
         m.decode_bytes += name.find("switch_mlp") != std::string::npos ? size_t(double(b) * share) : b;
     }
   }
   (void)table;
+  if (m.streamed)
+    m.weights += size_t(3) * c.experts * q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;
   m.dense = false;
   m.hidden = c.hidden;
   m.layers = c.layers;

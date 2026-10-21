@@ -254,7 +254,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   };
   if (Qwen4Exp::is_model(opts_.model_dir)) {
-    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk);  // Qwen3.8-Flash-Next
+    // Qwen3.8-Flash-Next; a Q2_0 pack's expert store takes what the budget leaves after the slots' state and one
+    // conversation's KV cache (up to 32K tokens)
+    const MemPlan mp = model_plan(opts_.model_dir, opts_.prefill_chunk);
+    const int slots = std::max(1, opts_.slots);
+    const size_t keep = size_t(slots) * mp.slot_state + mp.kv_per_pos * size_t(std::min(opts_.context, 32768));
+    auto m = std::make_unique<Qwen4Exp>(opts_.model_dir, opts_.prefill_chunk, budget_ > keep ? budget_ - keep : 1);
     q35_ = m.get();
     model_ = std::move(m);
   } else if (Dory::is_model(opts_.model_dir)) {

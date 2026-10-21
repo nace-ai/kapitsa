@@ -41,6 +41,8 @@ class WeightStore {
   bool deferred(const std::string& name) const { return deferred_.count(name) != 0; }
   // the deferred tensor's bytes into dst (its byte size: dtype size x numel)
   void read_deferred(const std::string& name, void* dst) const;
+  // where a deferred tensor's bytes are: its file, absolute offset and byte count (false if not deferred)
+  bool deferred_place(const std::string& name, std::string* path, size_t* off, size_t* len) const;
   bool has(const std::string& name) const { return tensors_.count(name) != 0; }
   const Tensor& get(const std::string& name) const;
   const Tensor* find(const std::string& name) const;

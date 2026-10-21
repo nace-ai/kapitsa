@@ -75,7 +75,11 @@ two candidates are within the batched pass's rounding of each other, and sampled
 
 Qwen3.8-Flash-Next (`Qwen4Exp`) is a subclass of `Qwen35` that reuses its projections, DeltaNet, attention, experts,
 sampler and KV handling, and adds the 4-stream hyper-connection residual, the per-layer n-gram embedding (hashed and
-gathered on the CPU from a mapped table) and the sparse-attention indexer.
+gathered on the CPU from a mapped table) and the sparse-attention indexer. A pack with Q2_0 routed experts
+([`moe_q20.h`](../src/model/moe_q20.h)) can keep only part of them in memory: an expert store
+([`expert_store.h`](../src/model/expert_store.h)) holds them in slots the expert kernels read through a slot table,
+and a handshake between each layer's routing and its expert kernels lets a CPU thread read the missing ones from the
+SSD before the GPU goes on.
 
 All three implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
 Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
@@ -126,7 +130,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Request lifecycle, slots, turns, batched decoding and generation | [`src/engine/engine.cpp`](../src/engine/engine.cpp) |
 | Shared model contract and sequence state | [`src/model/model.h`](../src/model/model.h) |
 | Qwen backend and drafters | [`qwen35.h`](../src/model/qwen35.h), [`dflash2.h`](../src/model/dflash2.h) |
-| Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal) |
+| Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
