@@ -17,7 +17,7 @@
   {"name": "LM Studio", "logo": "logos/lmstudio.png", "version": "MLX runtime\n1.13.1"}
  ],
  "poster": {
-  "size": [1600, 1834],
+  "size": [1600, 2480],
   "title": "Kapitsa: the Apple silicon engine for Qwen and Nemotron",
   "subtitle": [
    "Kapitsa: prefill / decode tok/s (a 4K prompt, then a 512-token coding answer) · the others: decode tok/s · T 0.6, median of 5 · each engine in its fastest setup",
