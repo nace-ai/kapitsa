@@ -24,5 +24,3 @@ body:
     attributes:
       label: Notes
       description: How you installed the other engine, other apps open, a custom build, a setting we should have used.
-    validations:
-      required: false

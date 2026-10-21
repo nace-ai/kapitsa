@@ -68,8 +68,7 @@ def vlen(s):
 
 
 def pad(s, n, right=False):
-    d = n - vlen(s)
-    return s if d <= 0 else (" " * d + s if right else s + " " * d)
+    return " " * (n - vlen(s)) + s if right else s + " " * (n - vlen(s))
 
 
 def clip(s, n):
@@ -77,8 +76,7 @@ def clip(s, n):
 
 
 def load_harness():
-    """compare_engines.py as a module (it only starts something in main()); BENCH_MODELS etc. are read at use."""
-    import compare_engines as ce
+    import compare_engines as ce  # starts nothing until main()
     return ce
 
 
@@ -97,12 +95,9 @@ def machine():
 def kapitsa_home():
     return os.path.expanduser(os.environ.get("KAPITSA_HOME") or "~/.cache/kapitsa")
 
-
 def rank_key(label):
     """Which of an engine's configs to try first: the tuned ones (best > MTP > DFlash), then the plain one."""
-    s = label
-    k = 0 if "best" in s else 1 if "mtp" in s else 2 if "dflash" in s else 3
-    return (k, s)
+    return (0 if "best" in label else 1 if "mtp" in label else 2 if "dflash" in label else 3, label)
 
 
 def candidates(ce, cfgs, engine, model):
@@ -126,9 +121,7 @@ def kapitsa_synth(cfgs, model):
     c.update({"label": m["prefix"] + "-kapitsa-pulled", "display": "Kapitsa (as pulled)", "model_path": folder,
               "requires_paths": [folder + "/config.json"],
               "note": "Kapitsa with the companions that `kapitsa serve` fetched next to the weights (it finds them itself)."})
-    c["cmd"] = [x for x in c["cmd"]]
-    i = c["cmd"].index("--model")
-    c["cmd"][i + 1] = folder
+    c["cmd"][c["cmd"].index("--model") + 1] = folder
     if "--dflash" in c["cmd"]:  # the harness names the drafter; here serve finds what was pulled
         j = c["cmd"].index("--dflash")
         del c["cmd"][j:j + 2]
@@ -145,7 +138,7 @@ def plan_engine(ce, cfgs, engine, model, args):
         cands = cands + [x for x in [kapitsa_synth(cfgs, model)] if x]
     if not cands:
         return None, "no harness config for this model", []
-    tried, binary_missing = [], 0
+    tried, missing = [], 0
     for c in cands:
         p, _ = ce.plan(c, args, "plan")
         errs = ([p["skip"]] if p["skip"] else []) + p["errors"]
@@ -153,8 +146,8 @@ def plan_engine(ce, cfgs, engine, model, args):
             return c, None, tried
         tried.append({"label": c["label"], "why": "; ".join(errs)})
         if any(NOT_INSTALLED.search(e) for e in errs):
-            binary_missing += 1
-    if binary_missing == len(cands):
+            missing += 1
+    if missing == len(cands):
         return None, "not installed", tried
     return None, "weights not here", tried
 
@@ -212,19 +205,14 @@ def run_engine(cfg, out_dir, prof, a, log_path, status):
 
 
 def tail_status(path):
-    """The last harness log line, shortened to what the engine is doing."""
+    """The last harness log line: what the engine is doing."""
     try:
         with open(path, "rb") as f:
-            f.seek(0, 2)
-            f.seek(max(0, f.tell() - 4000))
-            lines = [l for l in f.read().decode("utf-8", "replace").splitlines() if l.strip()]
+            f.seek(max(0, os.path.getsize(path) - 4000))
+            lines = [re.sub(r"^\[?\d\d:\d\d:\d\d\]?\s*", "", l).strip() for l in f.read().decode("utf-8", "replace").splitlines()]
     except OSError:
         return ""
-    for l in reversed(lines):
-        l = re.sub(r"^\[?\d\d:\d\d:\d\d\]?\s*", "", l).strip()
-        if l:
-            return l
-    return ""
+    return next((l for l in reversed(lines) if l), "")
 
 
 def metrics_of(res):
@@ -274,9 +262,7 @@ def ranked(entries):
 
 def table_rows(doc):
     ok = ranked(doc["engines"])
-    top = ok[0]["decode_tps"] if ok else 0
-    kap = next((e for e in ok if e["engine"] == KAPITSA), None)
-    return ok, top, kap
+    return ok, (ok[0]["decode_tps"] if ok else 0), next((e for e in ok if e["engine"] == KAPITSA), None)
 
 
 def skipped_line(s, t):
@@ -297,9 +283,7 @@ def render(doc, t):
     rows = []
     for i, e in enumerate(ok, 1):
         vs = "" if e is kap or not kap or not kap["decode_tps"] else f"{e['decode_tps'] / kap['decode_tps']:.2f}x"
-        bar_w = 18
-        n = int(round(bar_w * (e["decode_tps"] or 0) / top)) if top else 0
-        bar = ("█" * n).ljust(bar_w)
+        bar = ("█" * (int(round(18 * (e["decode_tps"] or 0) / top)) if top else 0)).ljust(18)
         name = e["name"] + (" ←" if e is kap else "")
         r = [str(i), name, f1(e["decode_tps"]), bar, f1(e["prefill_short_tps"], 0)]
         if two:
@@ -388,9 +372,7 @@ def report(doc):
         L.append("Kapitsa did not produce a number in this run, so nothing is compared.")
     else:
         beat = []
-        for e in ok:
-            if e is kap:
-                continue
+        for e in (x for x in ok if x is not kap):
             wins = []
             for key, lab, low in (("decode_tps", "decode", False), ("prefill_short_tps", f"prefill {sl}", False),
                                   ("prefill_long_tps", f"prefill {ll}", False), ("ttft_cold_s", "cold TTFT", True),
@@ -401,23 +383,20 @@ def report(doc):
                     wins.append(f"{lab} {r:.2f}x")
             if wins:
                 beat.append((e, wins))
-        if not beat:
-            L.append("No engine measured here is more than 3% ahead of Kapitsa on any column.")
+        L += [] if beat else ["No engine measured here is more than 3% ahead of Kapitsa on any column."]
         for e, wins in beat:
             w = why(e, kap, any(x.startswith("decode") for x in wins))
             L.append(f"- **{e['name']}** is ahead on " + ", ".join(wins) + "." + (f" From the configs: {w}." if w else ""))
         if beat:
             L += ["", "The reasons above are read from the two configs, not measured. A gap is a place to look, "
                   "not a finding."]
-    notes = [(e, f) for e in doc["engines"] for f in e.get("flags") or []]
+    notes = [f"- {e['name']}: {f}" for e in doc["engines"] for f in e.get("flags") or []]
     if notes:
-        L += ["", "#### Caveats from the run", ""]
-        L += [f"- {e['name']}: {f}" for e, f in notes]
+        L += ["", "#### Caveats from the run", ""] + notes
     if doc["skipped"]:
         L += ["", "Not measured: " + "; ".join(f"{s['name']} ({s['reason']})" for s in doc["skipped"]) + "."]
     L += ["", "<details><summary>Commands that ran</summary>", ""]
-    for e in doc["engines"]:
-        L.append(f"- {e['name']} `{e['variant']}`: `{e.get('command') or 'external server'}`")
+    L += [f"- {e['name']} `{e['variant']}`: `{e.get('command') or 'external server'}`" for e in doc["engines"]]
     L += ["", "</details>", "",
           "Kapitsa's maintainers wrote this benchmark; every config it ran is in `bench/harness/configs/` and is "
           "open to challenge. Re-run with `kapitsa bench compare --model " + doc["model"]["key"] + "`."]
@@ -425,19 +404,14 @@ def report(doc):
 
 
 def choose_model(args):
-    if args.model:
-        key = args.model.lower()
-        if key not in MODELS:
-            raise SystemExit(f"kapitsa bench compare: --model {args.model}: the harness has engine configs for "
-                             f"{', '.join(MODELS)}")
-        return key
-    if not (sys.stdin.isatty() and sys.stderr.isatty()) or args.json or args.yes:
-        return DEFAULT_MODEL
-    sys.stderr.write(f"Which model? {', '.join(MODELS)} [Enter = {DEFAULT_MODEL}]: ")
-    sys.stderr.flush()
-    ans = sys.stdin.readline().strip().lower() or DEFAULT_MODEL
+    ans = (args.model or "").lower()
+    if not ans and sys.stdin.isatty() and sys.stderr.isatty() and not (args.json or args.yes):
+        sys.stderr.write(f"Which model? {', '.join(MODELS)} [Enter = {DEFAULT_MODEL}]: ")
+        sys.stderr.flush()
+        ans = sys.stdin.readline().strip().lower()
+    ans = ans or DEFAULT_MODEL
     if ans not in MODELS:
-        raise SystemExit(f"kapitsa bench compare: no model {ans!r} (have {', '.join(MODELS)})")
+        raise SystemExit(f"kapitsa bench compare: no model {ans!r} (the harness has configs for {', '.join(MODELS)})")
     return ans
 
 
@@ -455,12 +429,31 @@ def parse(argv):
     ap.add_argument("--report", nargs="?", const="-", metavar="FILE",
                     help="print a Markdown block for an issue or PR (and write it to FILE)")
     ap.add_argument("--out", help="folder for results and logs (default ~/.cache/kapitsa/bench/compare/<time>)")
+    ap.add_argument("--ignore-running", action="store_true", help="measure even when other engines are running")
     ap.add_argument("--yes", "-y", action="store_true", help="do not ask before measuring")
     ap.add_argument("--quiet-timeout", type=float, default=300, help="seconds to wait for a quiet GPU per engine")
     ap.add_argument("--lock-timeout", type=float, default=None, help="seconds to wait for the GPU lock per engine")
     ap.add_argument("--quiet-s", type=float, default=15, help=argparse.SUPPRESS)
     ap.add_argument("--configs", default=os.path.join(HERE, "configs"), help=argparse.SUPPRESS)
     return ap.parse_args(argv)
+
+
+SERVERS = {"omlx", "mlx-serve", "llama-server", "llmster", "mtplx", "rapid-mlx", "mlx_lm.server", "mlx_vlm.server"}
+
+
+def others_running():
+    """Engine or model servers already running: they share the GPU and memory, so a number beside them is not the engine's."""
+    found = []
+    for line in subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout.splitlines():
+        pid, _, cmd = line.strip().partition(" ")
+        t = cmd.split()
+        if not t:
+            continue
+        names = [os.path.basename(x) for x in t[:4]]
+        if names[0] in SERVERS or (names[0].startswith("python") and SERVERS & set(names[1:])) or \
+                (names[0] == "kapitsa" and t[1:2] == ["serve"]) or (names[0] == "ollama" and t[1:2] in (["serve"], ["runner"])):
+            found.append(f"{pid} {clip(cmd, 90)}")
+    return found
 
 
 def models_overlay(out_dir, model):
@@ -540,6 +533,13 @@ def main(argv=None):
     if not todo:
         show(info.red("No engine can run here.") + " Run `kapitsa bench compare --list` to see what is missing.")
         return 1
+    busy = [] if args.ignore_running else others_running()
+    if busy:
+        show(info.red("Other engines or model servers are running, which would skew every number:"))
+        for b in busy:
+            show("  " + b)
+        show("Quit them and run again, or pass --ignore-running to measure anyway.")
+        return 1
     show(info.bold(f"Measuring {len(todo)} engine{'s' if len(todo) != 1 else ''} on {MODELS[model]['name']}")
          + info.dim(f": {', '.join(ENGINE_NAME[k] for k, _, _ in todo)}; about {prof['minutes']} minutes each ({prof_name})."))
     show(info.dim("The GPU is taken for the whole run (lock " + ce.gpu_hogs.LOCK_PATH + "); close other GPU work first."))
@@ -587,7 +587,6 @@ def main(argv=None):
         mark = err_t.green("✓") if e["status"] == "ok" else err_t.red("✗")
         sys.stderr.write(f"{mark} {name}: " + (f"{e['decode_tps']:.1f} tok/s decode" if e["status"] == "ok"
                                                 else clip("; ".join(e["invalid"]), 120)) + "\n")
-    # a Kapitsa row that failed or is absent leaves the others unranked against it, which the table shows
     doc["interrupted"] = interrupted
     json.dump(doc, open(os.path.join(out_dir, "compare.json"), "w"), indent=1)
     md = report(doc)
@@ -608,13 +607,11 @@ def main(argv=None):
 
 def kapitsa_version():
     exe = os.environ.get("KAPITSA_BIN") or shutil.which("kapitsa")
-    if exe and os.path.isfile(exe):
-        try:
-            out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15).stdout.strip()
-            return out.splitlines()[0] if out else "unknown"
-        except Exception:
-            pass
-    return "unknown"
+    try:
+        out = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=15).stdout.strip()
+        return out.splitlines()[0] if out else "unknown"
+    except Exception:
+        return "unknown"
 
 
 def harness_commit(ce):

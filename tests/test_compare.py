@@ -150,8 +150,14 @@ json.dump([cfg("q35-4b-omlx-fake", "oMLX plain", p_slow, "omlx"),
 json.dump([cfg("q35-4b-mlx-lm-fake", "mlx-lm", closed_port(), "mlx-lm")], open(os.path.join(cdir, "mlx-lm.json"), "w"))
 json.dump([cfg("q35-4b-llamacpp-fake", "llama.cpp", p_slow, "llama.cpp",
                cmd=["{first:/nonexistent/llama-server-for-test|llama-server-for-test-nope}"], requires_paths=[])], open(os.path.join(cdir, "llama.cpp.json"), "w"))
-common = ["--configs", cdir, "--quiet-s", "0", "--quiet-timeout", "2", "--model", "4b", "--yes"]
+common = ["--configs", cdir, "--quiet-s", "0", "--quiet-timeout", "2", "--model", "4b", "--yes", "--ignore-running"]
 
+os.symlink("/bin/sleep", os.path.join(tmp, "omlx"))
+rival = subprocess.Popen([os.path.join(tmp, "omlx"), "60"])
+r = run([sys.executable, os.path.join(HARNESS, "kbench.py")] + [c for c in common if c != "--ignore-running"], env=env0)
+check(r.returncode == 1 and "skew" in r.stdout + r.stderr and str(rival.pid) in r.stdout + r.stderr,
+      "another engine already running: refuses, names it, measures nothing", r.stdout + r.stderr)
+rival.kill()
 r = run([sys.executable, os.path.join(HARNESS, "kbench.py"), "--list"] + common, env=env0)
 check(r.returncode == 0 and "oMLX" in r.stdout and "q35-4b-omlx-fake-best" in r.stdout,
       "--list picks the tuned variant (best) of an engine", r.stdout + r.stderr)

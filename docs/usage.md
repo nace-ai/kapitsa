@@ -576,16 +576,15 @@ thinking off and the same sampler, prompts and corpus for everyone. An engine th
 are not on this Mac, is listed under "skipped" with the reason and how to get it. One engine failing does not stop the
 others.
 
-The table ranks engines by decode tok/s, with prefill tok/s, the time to the first token (cold and with the prompt cached)
-and peak memory. The files are in `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`,
-`report.md` and the per-engine logs. `--report FILE` writes the report there too.
+The table ranks engines by decode tok/s, with prefill tok/s, time to first token (cold and cached) and peak memory.
+Files go to `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`, `report.md` and logs.
 
 The report has a "Who beats Kapitsa here, and why" part; its reasons come only from the configurations (speculative
 decoding, weights folder, versions) and are leads, not findings. **Run it on a quiet Mac, plugged in**: a run waits up
-to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. If another engine beats Kapitsa on your Mac, open the
-"Engine comparison" issue with the report: that is how we find out.
-
-It needs the repository's `bench/harness` folder (`KAPITSA_HARNESS` names another copy) and macOS Python 3.
+to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. It refuses to start
+while another engine or model server is running (`--ignore-running` overrides). If another engine beats Kapitsa on your
+Mac, open the "Engine comparison" issue with the report. It needs the repository's `bench/harness` folder
+(`KAPITSA_HARNESS` names another copy) and macOS Python 3.
 
 ## Running in the background
 
