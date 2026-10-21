@@ -207,13 +207,14 @@ them per cycle.
 Their first version cost 1.73× and 3.32× an 8-row verify, because the verify's GEMMs ran one 8-row tile per weight
 read, so 16 rows streamed every weight twice. The tile-pair MLP (`qmm8t2`) multiplies two tiles per weight load, which
 takes the 27B's verify cycle on a coding answer from 16.70 ms at 8 rows to 17.92 at 16 (1.07×) and 24.96 at 32 (1.49×),
-against 1.55× and ~2.7× before it. Tokens per cycle are unchanged by the width (the extra rows are accepted or not, they
-don't cost acceptance): on the harness corpus at the 27B, asking for `8,16,32` raised tokens per cycle from 4.78 to 6.01
-at T=0.6 and 5.32 to 6.72 greedy, and throughput with them, T=0.6 63.7 → 78.0 tok/s (+22.6%) and greedy 74.3 → 86.4
-(+16.3%); mlx-serve on the same corpus runs 79.9 and 91.8, so the wide drafter is still 2% (T=0.6) and 6% (greedy)
-behind it. Greedy replies are unchanged: the same ids as plain decoding on every run, and a wide verify's logits differ
-from the 8-row path's only by fp rounding (the 4B check: max |diff| 0.039, 0.0016 of a row's logit range, every live
-row's argmax equal).
+against 1.55× and ~2.7× before it (the author's cycle timings on an M5-class Mac, not re-run by the reviewers).
+
+What is checked: `kflash_wide_check` (a wide verify against plain decoding on random trees of 9 to 32 live rows) passes on
+the 4B and the 27B, with every live row's argmax equal to plain decoding's and a max logit difference of 0.008 (0.0003 of a
+row's range) on an M5 Pro; the default path (8 rows) is bitwise identical to main on the 4B (`logit_compare`). What is not
+checked: a whole-reply comparison of a wide run, and the throughput gain. Earlier runs on the harness corpus showed more
+tokens per cycle with the wider tiles, but the 27B's decode over repetitions at T=0.6 spread by 5 to 6 tok/s, so no tok/s
+gain over the 8-row default or against mlx-serve is claimed here; that needs a paired A/B.
 
 So the tiles are opt-in: one tile is the setting the default's cost table is tuned for, and a Mac where the budget's
 measurements say a wider verify pays (the 27B and the 4B at 4-bit do, on prose and coding answers) can have it without

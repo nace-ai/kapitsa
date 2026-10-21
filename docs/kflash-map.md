@@ -165,8 +165,8 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
    [#246](https://github.com/nace-ai/kapitsa/pull/246) (the budget chooses 8, 16 or 32 rows), opt-in:**
    - `NI_KFLASH_ROWS` defaults to `8`, one 8-row tile; naming `8,16,32` lets the budget measure and pick wider tiles
      per cycle. With the tile-pair MLP a 16-row verify cycle costs 1.07× and a 32-row one 1.49× the 8-row cycle on the
-     27B's coding answer; asking for `8,16,32` took the harness corpus from 63.7 to 78.0 tok/s at T=0.6 (+22.6%) and
-     74.3 to 86.4 greedy (+16.3%), still 2% / 6% behind mlx-serve.
+     27B's coding answer; the tok/s gain from asking for `8,16,32` is not claimed: the 27B's T=0.6 decode spread over
+     repetitions is larger than the effect we could separate, and a paired A/B is still to do.
    - A wide verify's attention is the 8-row tree attention (`attn8m_partial_tree`: each row's ancestors by mask), not
      the 8-row path's tree-zone split (`NI_V8_TREE_ATTN=2`), which is a kernel of one tile. The rows' logits therefore
      round differently from the 8-row path's: measured on the 4B, max |logit diff| 0.039 (0.0016 of the row's range),
