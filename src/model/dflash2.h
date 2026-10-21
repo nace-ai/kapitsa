@@ -40,9 +40,11 @@ struct DFlashSeq {
   int staged = 0;
   CaptureHook stage_hook;
   // sampled requests in a batch: the walk of its last draft (candidate ids [7][16], q [7][16], choices [8]) and its
-  // acceptance's result {a, token}, kept per sequence (bytes 0, 448, 896, 928; 944: a drafter state it may write)
+  // acceptance's result {a, token}, kept per sequence (bytes 0, 448, 896, 928; 944: a drafter state it may write);
+  // every member under the batch budget (KfBatch): the walk's scores [7][16] (byte 960, encode_save_scores)
   Buffer walk;
   int accepted() const { return walk.as<int>()[232]; }
+  const float* scores() const { return walk.as<float>() + 240; }
 };
 
 // 8-row affine-quantized GEMM (dfl_qmm8): Y_i[8, N_i] = oscale_i * X[8, K] . W_i^T for up to 4
@@ -142,6 +144,9 @@ class DFlash2 {
   // does for a single verify: tokens[P + 1 + a] = the next token, d.accepted() = a once the command buffer completed
   void encode_save_walk(Encoder& e, DFlashSeq& d);
   void encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K, const SamplingParams& sp, int r0, uint32_t n);
+  // Batched decode under the batch budget: d keeps the walk's scores of its draft (d.scores(), the budget's input; right
+  // after its encode_draft)
+  void encode_save_scores(Encoder& e, DFlashSeq& d);
   Buffer capt() const { return capt_; }  // bf16 [8][n_slots * H]
 
   // ---- drafting pass (SPEC §4, §5, §7) ----
@@ -194,11 +199,13 @@ class DFlash2 {
   // accept it with the shared kf_accept: greedy and sampled alike the emitted tokens are plain decoding's (at T > 0 its
   // sampler's draws with each position's uniform). The verify's rows: whole 8-row tiles on dense targets (one today),
   // 1 .. 8 live rows on MoE targets (the experts route the live rows alone). encode_draft (the batched path) keeps the
-  // walk.
+  // walk: there the batch budget (batch_budget(), KfBatch) chooses each member's rows from its chain under the same
+  // calibration and a cost measured the same way.
   bool tree() const { return tree_; }
   void set_tree(bool on);
   const int* tree_desc() const { return tree_buf_.as<int>(); }  // the tree descriptor (kflash.h) of the last cycle
   KfBudget* budget() const { return kf_budget_.get(); }
+  KfBatch* batch_budget() const { return kf_batch_.get(); }
   // after each tree cycle completed: the cycle's GPU ms for the budget, its drafting half's command buffer and its
   // verify's (the loop calls it after its wait)
   void observe(double ms);
@@ -299,6 +306,7 @@ class DFlash2 {
   bool gst_tree_ = false;  // the drafter state's rows are a tree acceptance's path (gst[4 ..]): commits gather them
   Buffer tree_buf_, kf_clq_, kf_tok_, kf_next_, kf_live_;
   std::unique_ptr<KfBudget> kf_budget_;
+  std::unique_ptr<KfBatch> kf_batch_;  // batched decode's rows (the same key + "-batch")
   // T > 0: the walk samples its chain at T_q = walk_tf_ * T (NI_DFLASH_QT; 0 = argmax chain with one-hot q)
   float walk_tf_ = 1.0f;
   // MLP and LM head on the target's 8-row verify GEMMs (Qwen35::enc_gu8 / enc_qmm8 with the verify's V8Knobs;

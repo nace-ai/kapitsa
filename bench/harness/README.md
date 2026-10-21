@@ -227,7 +227,9 @@ brackets are the ones in [docs/benchmarks.md](../../docs/benchmarks.md); `versio
 Build this checkout (`cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j`); the config uses
 `build/kapitsa`, else `kapitsa` on PATH, or `KAPITSA_BIN`. Default settings, with the DFlash2 drafter named
 explicitly so a missing drafter fails the run instead of falling back to MTP; `--slots 1` for parity with the other
-engines' single slot. The version is the checkout's git revision.
+engines' single slot. The version is the checkout's git revision. The SSD prefix cache (on by default) keeps its
+states in the harness's state directory, emptied before and after each run as oMLX's SSD KV cache is: the agent
+session replays a trace's own messages, so a later run would otherwise read what an earlier one left.
 
 ### llama.cpp (`configs/llama.cpp.json`) [0.7.0, build b11669]
 

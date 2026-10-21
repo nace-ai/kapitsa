@@ -445,6 +445,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits) : tg_(target)
     for (char& c : key)
       if (!isalnum(static_cast<unsigned char>(c)) && c != '-' && c != '.') c = '_';
     kf_budget_ = std::make_unique<KfBudget>(key);
+    // batched decode (Engine::batch_cycle): the rows of a batch's verify by the same rule; NI_BATCH_KF_FLOOR=1: every
+    // member verifies at least one draft
+    const char* fl = getenv("NI_BATCH_KF_FLOOR");
+    kf_batch_ = std::make_unique<KfBatch>(key + "-batch", fl && *fl ? atoi(fl) : 0);
     // The row counts the verify runs at a cost of their own: on dense targets whole 8-row tiles (one today: every
     // weight is read once whatever the rows); on MoE targets every count 1 .. 8, a cycle's tree as large as its
     // expected tokens per ms make it (the verify routes experts, the shared expert and the GDN step over the live rows
@@ -1167,7 +1171,7 @@ void DFlash2::observe(double ms) {
 
 void DFlash2::stage_init(DFlashSeq& d) {
   if (d.stage) return;
-  d.walk = Gpu::get().alloc(960, "dfl_walk");
+  d.walk = Gpu::get().alloc(1408, "dfl_walk");
   d.stage = Gpu::get().alloc(size_t(kB) * hook_vf_.ld * 2, "dfl_stage");
   d.staged = 0;
   d.stage_hook.dst = d.stage;
@@ -1189,6 +1193,14 @@ void DFlash2::encode_save_walk(Encoder& e, DFlashSeq& d) {
   copy(cand_i_, d.walk.view(0, 448));
   copy(qprob_, d.walk.view(448, 448));
   copy(walk_k_, d.walk.view(896, 32));
+}
+
+void DFlash2::encode_save_scores(Encoder& e, DFlashSeq& d) {
+  e.use(dpipe("copy_u32"));
+  e.buf(0, walk_s_);
+  e.buf(1, d.walk.view(960, 448));
+  e.val(2, uint32_t(448 / 16));
+  e.dispatch(1, 1, 1, 256);
 }
 
 void DFlash2::encode_accept_rows(Encoder& e, Seq& s, DFlashSeq& d, int P, int K, const SamplingParams& sp, int r0,

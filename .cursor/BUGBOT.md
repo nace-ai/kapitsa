@@ -62,6 +62,9 @@ not ask for abstractions, interfaces or configuration the change does not need.
 - Lifetime and threading: a GPU command buffer, encoder or buffer released while still in flight; state shared between
   the request threads and the batch loop without the lock the neighbouring code uses; a request that can leave the batch
   loop waiting forever.
+- SSD prefix cache: a change to a model's KV caches, recurrent state, checkpoints or drafter ring (their order, precision,
+  layout or meaning) must change that model's `disk_format()` or bump `kStateFormat` in `src/engine/engine_disk.cpp`;
+  otherwise a new binary restores states an old one wrote with the wrong meaning.
 - `kapitsa update` and `install.sh`: a download is used only after its sha256 and signature are verified, and the swap stays
   a single rename with the old binary kept for `--rollback`.
 - New dependencies: Kapitsa builds with Xcode Command Line Tools and CMake alone. Flag any new library, package manager

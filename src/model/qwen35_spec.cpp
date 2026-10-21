@@ -427,34 +427,58 @@ Qwen35::DraftVocab* Qwen35::draft_vocab_update(Seq& s, int upto) {
   }
   DraftVocab& v = *static_cast<DraftVocab*>(s.draft_vocab.get());
   if (upto < v.scanned) v.scanned = 0;  // rewound below what was scanned: look again
-  const QLinear& H = lm_head_;
-  const size_t wrow = H.row_bytes(), srow = H.group_row_bytes();
   const int* t = s.tokens();
-  std::vector<uint16_t> row(draft_q4_ ? H.K : 0);
   for (int i = v.scanned; i < upto; ++i) {
     const int id = t[i];
     if (id < int(draft_split_) || id >= int(draft_special0_) || v.in[size_t(id)]) continue;
-    if (v.ids.size() >= v.cap) break;
-    const size_t r = v.ids.size();
-    if (draft_q4_) {  // the draft head's 4-bit copy of this row
-      dfl_row_bf16(H, uint32_t(id), row.data());
-      const uint32_t gpr = H.K / 64;
-      dfl_quantize_cpu({row.data()}, H.K, 4, false, v.w.as<uint32_t>() + r * (H.K / 8), v.sc.as<uint16_t>() + r * gpr,
-                       v.bi.as<uint16_t>() + r * gpr);
-    } else {
-      memcpy(v.w.as<uint8_t>() + r * wrow, H.w->buf.as<uint8_t>() + size_t(id) * wrow, wrow);
-      if (!H.dense()) {
-        memcpy(v.sc.as<uint8_t>() + r * srow, H.s->buf.as<uint8_t>() + size_t(id) * srow, srow);
-        memcpy(v.bi.as<uint8_t>() + r * srow, H.b->buf.as<uint8_t>() + size_t(id) * srow, srow);
-      }
-    }
-    v.table.as<uint32_t>()[r] = uint32_t(id);
-    v.in[size_t(id)] = 1;
-    v.ids.push_back(uint32_t(id));
+    if (!draft_vocab_add(v, id)) break;
   }
   v.scanned = std::max(v.scanned, upto);
   v.L.N = uint32_t(v.ids.size());
   return &v;
+}
+
+bool Qwen35::draft_vocab_add(DraftVocab& v, int id) {
+  if (v.ids.size() >= v.cap) return false;
+  const QLinear& H = lm_head_;
+  const size_t wrow = H.row_bytes(), srow = H.group_row_bytes();
+  const size_t r = v.ids.size();
+  if (draft_q4_) {  // the draft head's 4-bit copy of this row
+    std::vector<uint16_t> row(H.K);
+    dfl_row_bf16(H, uint32_t(id), row.data());
+    const uint32_t gpr = H.K / 64;
+    dfl_quantize_cpu({row.data()}, H.K, 4, false, v.w.as<uint32_t>() + r * (H.K / 8), v.sc.as<uint16_t>() + r * gpr,
+                     v.bi.as<uint16_t>() + r * gpr);
+  } else {
+    memcpy(v.w.as<uint8_t>() + r * wrow, H.w->buf.as<uint8_t>() + size_t(id) * wrow, wrow);
+    if (!H.dense()) {
+      memcpy(v.sc.as<uint8_t>() + r * srow, H.s->buf.as<uint8_t>() + size_t(id) * srow, srow);
+      memcpy(v.bi.as<uint8_t>() + r * srow, H.b->buf.as<uint8_t>() + size_t(id) * srow, srow);
+    }
+  }
+  v.table.as<uint32_t>()[r] = uint32_t(id);
+  v.in[size_t(id)] = 1;
+  v.ids.push_back(uint32_t(id));
+  return true;
+}
+
+std::vector<uint32_t> Qwen35::draft_vocab_ids(const Seq& s, int* scanned) const {
+  *scanned = 0;
+  if (!s.draft_vocab) return {};
+  const DraftVocab& v = *static_cast<const DraftVocab*>(s.draft_vocab.get());
+  *scanned = v.scanned;
+  return v.ids;
+}
+
+void Qwen35::draft_vocab_restore(Seq& s, const std::vector<uint32_t>& ids, int scanned) {
+  draft_vocab_rewind(s, 0);  // (the set starts over)
+  if (ids.empty() && !s.draft_vocab) return;
+  DraftVocab* v = draft_vocab_update(s, 0);
+  if (!v) return;
+  for (uint32_t id : ids)
+    if (id < uint32_t(cfg_.vocab) && !v->in[id] && !draft_vocab_add(*v, int(id))) break;
+  v->scanned = std::max(0, scanned);
+  v->L.N = uint32_t(v->ids.size());
 }
 
 // A prefill at pos0 may replace the tokens from pos0 on: the next scan starts there (pos0 == 0: a new conversation in

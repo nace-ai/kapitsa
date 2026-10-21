@@ -1233,6 +1233,35 @@ void Qwen35::restore(Encoder& e, Seq& s, const Checkpoint& c) {
     }
 }
 
+std::string Qwen35::disk_format() const {
+  std::string kinds;
+  for (int i = 0; i < cfg_.layers; ++i) kinds += cfg_.is_linear[i] ? 'G' : 'A';
+  char b[256];
+  snprintf(b, sizeof b, "qwen35 %s; attention: K, V f16 [%d][cap][%d]%s; GDN: conv f32 [3][%d], state f32 [%d][%d][%d]",
+           kinds.c_str(), cfg_.hkv, cfg_.head_dim, mtp_loaded_ ? " (MTP head too)" : "",
+           2 * cfg_.lin_hk * cfg_.lin_dk + cfg_.lin_hv * cfg_.lin_dv, cfg_.lin_hv, cfg_.lin_dv, cfg_.lin_dk);
+  return b;
+}
+
+void Qwen35::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
+  const size_t row = size_t(cfg_.head_dim) * 2;
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (!cfg_.is_linear[i]) {
+      out.push_back({s.kc[size_t(i)], cfg_.hkv, row});
+      out.push_back({s.vc[size_t(i)], cfg_.hkv, row});
+    }
+  if (mtp && mtp_loaded_) {
+    out.push_back({s.mtp_kc, cfg_.hkv, row});
+    out.push_back({s.mtp_vc, cfg_.hkv, row});
+  }
+}
+
+void Qwen35::disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
+  for (int i = 0; i < cfg_.layers; ++i)
+    if (cfg_.is_linear[i])
+      out.push_back(c ? c->conv[size_t(i)] : s.conv[size_t(i)]), out.push_back(c ? c->rec[size_t(i)] : s.rec[size_t(i)]);
+}
+
 // ---- weight formats ----
 // Per-row MoE kernels (decode, verify, MTP rows) for routed experts e and shared expert s: the specialized
 // 4-bit ones, else the generic instantiation of wfmt.metal for the pair, or "" if there is none.

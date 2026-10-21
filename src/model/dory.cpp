@@ -748,6 +748,31 @@ void Dory::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
   c.pos = pos;
 }
 
+std::string Dory::disk_format() const {
+  char b[256];
+  snprintf(b, sizeof b, "dory %s; %d input, %d recurrent, %d output layers; K, V f16 [%d][cap][%d]; %s KV; rings of %d",
+           std::string(cfg_.kind.begin(), cfg_.kind.end()).c_str(), cfg_.n_in, cfg_.n_rec, cfg_.n_out, cfg_.hkv, cfg_.hd,
+           loop_kv_name(kv_), ring_rows_);
+  return b;
+}
+
+void Dory::disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const {
+  (void)mtp;
+  const int loops = loops_of(s);
+  for (int c = 0; c < n_caches_; ++c)
+    if (!is_ring(c) && cache_loop_[size_t(c)] < loops)
+      for (const Buffer* b : {&s.kc[size_t(c)], &s.vc[size_t(c)]}) out.push_back({*b, cfg_.hkv, size_t(cfg_.hd) * 2});
+}
+
+void Dory::disk_state(const Seq& s, const Checkpoint* ck, std::vector<Buffer>& out) const {
+  const int loops = loops_of(s);
+  for (int c = 0; c < n_caches_; ++c)
+    if (is_ring(c) && cache_loop_[size_t(c)] < loops)
+      for (size_t kv = 0; kv < 2; ++kv)
+        out.push_back(!ck ? (kv ? s.vc[size_t(c)] : s.kc[size_t(c)])
+                          : 2 * size_t(c) + kv < ck->rec.size() ? ck->rec[2 * size_t(c) + kv] : Buffer{});
+}
+
 void Dory::restore(Encoder& e, Seq& s, const Checkpoint& c) {
   for (size_t i = 0; i < size_t(n_caches_) && 2 * i + 1 < c.rec.size(); ++i)
     for (int kv = 0; kv < 2; ++kv) {

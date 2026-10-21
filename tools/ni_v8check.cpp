@@ -2,7 +2,7 @@
 //   ni_v8check <model_dir> @ids [n_tok=64] [R=8] [reps=1]
 // NI_V8CHECK_EXACT=1: verify with the sampled cycles' row-independent MoE numerics (Qwen35::set_verify_moe_exact).
 // NI_V8CHECK_DUMP=<file>: also writes every verify row's logits (fp32, rows in order) there, e.g. to check that
-// two kernel variants give bitwise the same verify (cmp the files).
+// two kernel variants give bitwise the same verify (tools/logit_compare.py --vocab V compares two).
 // 1. Prefill the prompt, then n_tok plain greedy decode steps (one command buffer each), keeping
 //    every step's logits and GPU time.
 // 2. Fresh sequence, same prefill; then verify the SAME tokens R rows at a time (encode_verify,
