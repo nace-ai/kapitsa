@@ -43,7 +43,7 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured against eight engines. mlx-serve is ahead on Qwen3.8 27B (M5 Max, M5 Pro) and on Flash-Next (M5 Max).
+Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured against eight engines.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
