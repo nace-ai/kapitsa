@@ -189,7 +189,9 @@ bool Qwen35::verify_wide_ok() const {
 }
 
 void Qwen35::set_tree_rows(int rows) {
-  rows = std::clamp((rows + 7) / 8 * 8, 8, kMaxTreeRows);
+  // 8, 16 or 32 rows, a power of two: the tables hold whole 8-row tiles and a tile pair's GEMM reads its second tile, so
+  // a capacity of three tiles (24 rows) would read past them (a live verify of up to 24 rows still fits in 32)
+  rows = rows <= 8 ? 8 : rows <= 16 ? 16 : kMaxTreeRows;
   if (rows <= tree_rows_) return;
   tree_rows_ = rows;
   Gpu& g = Gpu::get();
@@ -990,7 +992,8 @@ void Qwen35::moe8_replay(Encoder& e, int li, int mask) {
 void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp, uint32_t step) {
   // a tree of more than 8 rows: a wide tree verify (16 or 32 rows: GPU-driven row tiles, v8_wide_begin)
   const bool wide = v8_tree_ != nullptr && R > 8;
-  if (R < 1 || R > (wide ? kMaxTreeRows : 8) || (wide && R % 8)) fatal("encode_verify8: R=%d", R);
+  if (R < 1 || R > (wide ? tree_rows_ : 8) || (wide && R % 8))  // (the tables hold tree_rows_ rows)
+    fatal("encode_verify8: R=%d: the verify tables hold %d rows (set_tree_rows)", R, wide ? tree_rows_ : 8);
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   v8_alloc();
   const int D = cfg_.hidden;
