@@ -1,7 +1,7 @@
 # README images for Kapitsa
 
 Renders the README's benchmark poster (`docs/assets/benchmarks-{light,dark}.webp`) and header
-(`docs/assets/header-{light,dark,narrow}.svg`) from one data file.
+(`docs/assets/header-{light,dark,narrow}.svg`) from one data file, plus a 16:9 benchmark grid for posts.
 
 ## Needs
 
@@ -16,6 +16,7 @@ Renders the README's benchmark poster (`docs/assets/benchmarks-{light,dark}.webp
 python3 tools/readme_images/readme_images.py             # all five files, into docs/assets
 python3 tools/readme_images/readme_images.py --poster    # only the poster (webp)
 python3 tools/readme_images/readme_images.py --headers   # only the header (svg, no Chrome needed)
+python3 tools/readme_images/reddit_grid.py ~/Downloads   # the 16:9 grid (1920x1080 and 2x)
 ```
 
 It prints the README alt texts for the poster and header; paste them into README.md if they changed.
@@ -33,7 +34,7 @@ Everything is in `readme_images.json`:
   - `"x"`, drawn as ×: can't run on that Mac.
 - **`header`:** which Mac and model row the header's bars show, and which engines, in order (sorted by speed).
 
-The README's tables are written by hand in README.md; keep them in sync with the poster.
+The README's tables are written by hand in README.md; keep them in sync with the poster. The 16:9 grid keeps its data inline in `reddit_grid.py`.
 
 ## Assets
 
