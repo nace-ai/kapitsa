@@ -716,8 +716,10 @@ int run(const Options& o) {
     mkdir((hub::home_dir() + "/logs").c_str(), 0755);
     srv.log = hub::home_dir() + "/logs/bench-" + std::to_string(srv.port) + ".log";
     srv.gpu_mem_before = gpu_memory_in_use();
+    // (no SSD prefix cache: a benchmark writes nothing to the disk, and no run reads what an earlier one left there)
     std::vector<std::string> sargv = {self_path(), "serve", "--model", ref.dir, "--model-id", s.model, "--host", "127.0.0.1",
-                                      "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1"};
+                                      "--port", std::to_string(srv.port), "--ctx", "32768", "--slots", "1",
+                                      "--disk-cache", "0"};
     std::vector<std::string> senv, cleared;
     for (char** e = environ; *e; ++e) {
       const std::string kv = *e;

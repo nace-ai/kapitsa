@@ -57,6 +57,14 @@ struct Checkpoint {
   Buffer pconv;  // Qwen3.8-Flash-Next: the n-gram embedding's conv window
 };
 
+// An attention cache as the SSD prefix cache keeps it (src/engine/prefix_cache.h): [heads][s.cap][row_bytes], of which a
+// state at pos keeps positions [0, pos)
+struct KvRows {
+  Buffer buf;
+  int heads = 0;
+  size_t row_bytes = 0;
+};
+
 struct SamplingParams {
   float temperature = 0.0f;
   float top_p = 1.0f;
@@ -126,6 +134,18 @@ class Model {
   virtual const AneStats& ane_stats() const {
     static const AneStats none;
     return none;
+  }
+
+  // ---- SSD prefix cache (src/engine/engine_disk.cpp) ----
+  // What this model's states are (layers, heads, formats), for the cache's namespace; "" when its states are not cached
+  // on the SSD
+  virtual std::string disk_format() const { return ""; }
+  // s's attention caches in a fixed order (mtp: the MTP head's too)
+  virtual void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const { (void)s, (void)mtp, (void)out; }
+  // The state saved whole (recurrent state; Dory: its sliding-window caches), of s itself (c null: its live state) or
+  // of checkpoint c of s: the same order and sizes for both
+  virtual void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const {
+    (void)s, (void)c, (void)out;
   }
 
   // ---- images ----

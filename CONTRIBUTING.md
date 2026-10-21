@@ -37,6 +37,7 @@ the full build.
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
 | `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
 | `python3 tests/test_reasoning.py` | `bench/reasoning`: the grader's equivalences and near misses, the frozen problem sets, a run against a scripted server (the requests, grading, resuming, the GPU lock on a test file) and the report; with the problems downloaded, `reasoning.py check` and the sets' draw | nothing (`python3 bench/reasoning/reasoning.py fetch` for the last two) |
+| `build/prefix_cache_test` | The SSD prefix cache's store: pieces and entries written and read back byte for byte and taken back after a restart, CRCs, torn writes, the quota and its eviction order, the volume filling up, threads writing and reading at once, other models' caches, the namespace's lock | nothing |
 | `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive and errors; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
 | `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids | a Qwen model folder |
@@ -51,11 +52,16 @@ python3 tests/test_server.py http://127.0.0.1:8090   # --api-key KEY for a serve
 kill %1
 ```
 
+The SSD prefix cache across restarts (starts its own servers, takes the GPU lock; a temporary `KAPITSA_HOME`, a 2 GiB
+cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
+(`--ttft` also times the follow-up cold, from the SSD and from memory).
+
 ## Layout
 
 - `src/server/`: the command line, the HTTP server, the coding-agent launchers and the chat page.
 - `src/api/`: the Anthropic Messages and OpenAI Responses translations, and each coding agent's settings.
-- `src/engine/`: chat templates, conversation slots and prefix reuse, the output parser, `kapitsa doctor`.
+- `src/engine/`: chat templates, conversation slots and prefix reuse, the SSD prefix cache (`prefix_cache.*`: the
+  store; `engine_disk.cpp`: what a slot saves and restores), the output parser, `kapitsa doctor`.
 - `src/model/`: the Qwen3.5-family and Nemotron-H backends and their drafters; `src/kernels/` and `src/metal/`: the
   Metal kernels and runtime.
 - `src/ane/`: the Neural Engine bridge; `src/vision/`: image decoding, processors and vision towers.

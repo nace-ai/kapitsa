@@ -2,6 +2,7 @@
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
 // included) and Nemotron-H models (NVIDIA's safetensors).
 #pragma once
+#include "engine/prefix_cache.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/dory.h"
@@ -56,6 +57,10 @@ struct EngineOptions {
   // Dory 1.0; requests choose 1-4 with "loops" or a reasoning effort), and the recurrent layers' KV ("": last-loop)
   int loops = 0;
   std::string loop_kv;
+  // SSD prefix cache (src/engine/engine_disk.cpp): conversations' states kept on the SSD across restarts. "auto" (`kapitsa
+  // serve`'s default: a quarter of the free space beyond 10 GiB, at most 32 GiB), "0" off, or a size ("16G"). "" =
+  // NI_DISK_CACHE if set, else off (tools that construct an engine write nothing unless asked).
+  std::string disk_cache;
 };
 
 // The model's memory plan from its headers (config.json and the safetensors headers): Qwen3.5 family, Qwen3.8-Flash-Next,
@@ -307,6 +312,9 @@ class Engine {
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no
   // destructor, so it calls this. From any thread, with requests running.
   void save_kflash();
+  // SSD prefix cache: the conversations of idle slots that are not on the SSD yet, written now (the newest first, for
+  // at most budget_ms), as the server stops; the cache's files are then closed. From any thread; once.
+  void save_disk_cache(double budget_ms = 8000);
 
  private:
   // Recurrent-state snapshot at a turn boundary. `query`: the request that saved it ended with a user
@@ -337,6 +345,13 @@ class Engine {
     enum class MemWait : uint8_t { none, before_prefill, growth } mem_wait = MemWait::none;
     bool decoding = false;            // that request is in its decode loop
     Buffer park_h;                    // MTP decoding: the hidden rows the next cycle reads, while other requests run
+    // SSD prefix cache (engine_disk.cpp). fills: which computation wrote the KV rows, rows [previous end, end) by the
+    // request (or history prefill) `id`, so that what the SSD has of a conversation is found again by its key;
+    // version: bumped by every change of the state; disk_version: the version the SSD has (or nothing worth saving);
+    // live_ok: a follow-up continues the live state as it is (after tool calls, or once the history is prefilled)
+    std::vector<std::pair<int32_t, uint64_t>> fills;
+    uint64_t version = 0, disk_version = 0;
+    bool live_ok = false;
   };
   // A free slot for a request (nullptr: every slot is busy). `arrival`: the request's number (requests_ when it
   // arrived); mm: the prompt's images (null for text), when `prompt` holds its prefix-reuse keys
@@ -370,6 +385,35 @@ class Engine {
   // gives up a slot's conversation and its KV cache: the recurrent state back to zero (a later prompt on the slot
   // starts at position 0 from the live state), no tokens, no checkpoints
   void drop_slot(Slot& slot);
+
+  // ---- SSD prefix cache (engine_disk.cpp) ----
+  struct Disk;      // the store, its writer thread and what it was handed
+  struct DiskPlan;  // what saving one slot writes
+  struct DiskFree {
+    void operator()(Disk* d) const;
+  };
+  std::unique_ptr<Disk, DiskFree> disk_;  // null: off (or the model's states are not cached on the SSD)
+  void disk_start();
+  // The rows [0, start) of slot's state a request reuses from the slot itself (live state or checkpoint), as chat()
+  // decides it below the lookup
+  static int reuse_start(const Slot& slot, size_t common, int n);
+  // A request is about to replace the slot's state from row `start` (another conversation, or memory for another):
+  // what it would lose and the SSD lacks is copied now and written in the background
+  void disk_leaving(Slot& slot, int start);
+  // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
+  // state must match (Dory: the request's loop count); mm: the prompt's images (null for text), the same as stored
+  pcache::Hit disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm);
+  // Reads a stored state into slot (KV rows, recurrent state, drafter ring) and makes it the slot's live state; false
+  // (the slot then holds nothing) when it cannot. With the GPU turn held (given up while reading).
+  bool disk_restore(Slot& slot, const pcache::Hit& hit);
+  // rows [start, end) of slot were computed now (by a request or a history prefill, which is done)
+  void disk_filled(Slot& slot, int start, int end);
+  std::unique_ptr<DiskPlan> disk_plan(const Slot& slot) const;
+  // Writes slot i's state if it changed since it was last saved. held: the caller holds the GPU turn throughout;
+  // otherwise each chunk is copied under a turn taken while the engine is idle, and the save stops when a request
+  // arrives (what it wrote stays for the next save to reuse). False: given up.
+  bool disk_save_slot(int i, bool held);
+  void disk_loop();
 
   // ---- batched decode: the decode cycles of several requests in one forward pass ----
   // A decoding request (DFlash2 or LiLiCorr) joins the batch at a cycle boundary, parked, when another request decodes
@@ -420,6 +464,7 @@ class Engine {
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)
   std::unique_ptr<DFlash2> dfl_;
+  std::string dfl_dir_;              // its folder
   std::unique_ptr<NhDrafter> lili_;  // Nemotron-H: the block drafter (LiLiCorr, DSpark)
   // KFlash on the Nemotron-H block drafters (on dense targets; MoE targets keep the chain unless NI_KFLASH=1; src/model/kflash_budget.h): best-first trees of the drafter's
   // lattice under a measured budget instead of its walk's chain

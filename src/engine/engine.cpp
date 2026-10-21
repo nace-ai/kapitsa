@@ -336,6 +336,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     } else {
       const size_t a0 = Gpu::get().allocated_bytes();
       dfl_ = std::make_unique<DFlash2>(*q35_, dir);
+      dfl_dir_ = dir;
       DFlash2::prewarm_pipelines();
       spec_ = false;
       // the plan against what loading took (rings and the first prefill's buffers come later)
@@ -447,9 +448,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
                                    : std::string();
   logi("engine ready: %s, context %d, %d slots, %s%s%s", opts_.model_id.c_str(), opts_.context, std::max(1, opts_.slots),
        mode.c_str(), looped.c_str(), vision_ ? ", images on" : "");
+  disk_start();  // the SSD prefix cache (engine_disk.cpp): its files open in the background
 }
 
-Engine::~Engine() = default;
+Engine::~Engine() { save_disk_cache(); }
 
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
@@ -725,6 +727,9 @@ void Engine::drop_slot(Slot& slot) {
     c.query = false;
   }
   ++slot.gen;  // an idle history prefill for it gives up
+  slot.fills.clear();
+  slot.live_ok = false;
+  slot.disk_version = ++slot.version;  // (nothing left to save)
 }
 
 bool Engine::reserve_kv(Slot& slot, int need, bool started) {
@@ -744,6 +749,7 @@ bool Engine::reserve_kv(Slot& slot, int need, bool started) {
   for (Slot* o : idle) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for a %d-token context in slot %d",
          int(o - slots_.data()), int(o->tokens.size()), need, int(&slot - slots_.data()));
+    if (!started) disk_leaving(*o, 0);  // to the SSD first (not between decode cycles: the write-behind has it there)
     drop_slot(*o);
     if (model_->reserve(s, need)) return true;
   }
@@ -1182,6 +1188,7 @@ bool Engine::make_room(Slot& keep, size_t bytes) {
   for (Slot* o : others) {
     logi("memory: dropping the KV cache of slot %d (%d tokens cached) for an image", int(o - slots_.data()),
          int(o->tokens.size()));
+    disk_leaving(*o, 0);
     drop_slot(*o);
     if (fits()) return true;
   }
@@ -1597,10 +1604,26 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
 
   // ---- prefix reuse ----
   // (a looped model's KV holds the loop count that computed it: another count reads the prompt from the start)
-  const size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
+  size_t common = dory_ && slot.loops != loops ? 0 : common_rows(slot, keys, mmp);
   if (dory_ && slot.loops != loops && !slot.tokens.empty())
     logi("chat: %d loops on slot %d, whose cache holds %d-loop KV: the prompt is read from the start", loops,
          int(&slot - slots_.data()), slot.loops);
+  // SSD prefix cache (engine_disk.cpp): a stored state deeper than the slot's own is read into it once its KV cache is
+  // reserved (below); the conversation the slot held goes to the SSD first, if the SSD lacks it and this request
+  // leaves it behind (another conversation; with the loop count it was computed with)
+  pcache::Hit disk_hit;
+  if (disk_) {
+    const int ram = reuse_start(slot, common, n);
+    disk_hit = disk_lookup(keys, n, ram, dory_ ? uint32_t(loops) : 0, mmp);
+    disk_leaving(slot, disk_hit ? 0 : ram);
+    if (disk_hit) {  // the slot's own state is not reused
+      common = 0;
+      slot.tokens.clear();
+      slot.fills.clear();
+      for (auto& c : slot.ckpts) c.pos = -1;
+    }
+  }
+  ++slot.version;
   if (dory_) slot.loops = s.loops = loops;
 
   // ---- images: the embeddings of those in the rows to prefill (from the live state's end or the newest usable
@@ -1631,7 +1654,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   };
   if (mmp) {
     int from = 0;
-    if (common == slot.tokens.size() && int(common) < n) from = int(common);
+    if (disk_hit) from = disk_hit.pos;  // (the images before it come with the state read from the SSD)
+    else if (common == slot.tokens.size() && int(common) < n) from = int(common);
     else
       for (auto& c : slot.ckpts)
         if (c.pos > 0 && c.pos <= int(common) && c.pos < n) from = std::max(from, c.pos);
@@ -1671,6 +1695,13 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
                 "memory budget for Kapitsa holds with this model (" + std::to_string(fit) + " tokens)";
     res.prompt_limit = std::max(0, int(fit) - 32);
     return res;
+  }
+  double disk_ms = 0;  // (the SSD read: its own log line, not the template's time)
+  if (disk_hit) {
+    const double t_disk = now_ms();
+    if (disk_restore(slot, disk_hit)) common = slot.tokens.size();  // it is the live state now
+    else model_->reset(s);                                         // (no tokens: the prefill starts at 0)
+    disk_ms = now_ms() - t_disk;
   }
   int start = 0;
   auto e = g.begin();
@@ -1726,8 +1757,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   s.embeds = runs.empty() ? nullptr : &runs;
 
   // ---- prefill ----
-  // template + tokenizer (before the turn) + slot pick (image encoding: logged apart)
-  const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms;
+  // template + tokenizer (before the turn) + slot pick (image encoding and an SSD read: logged apart)
+  const double tok_ms = tok_wall + (now_ms() - t_turn) - img_ms - disk_ms;
   const AneStats ane0 = model_->ane_stats();  // the Neural Engine's busy time during this prefill (log)
   SamplingParams sp;
   sp.temperature = r.temperature;
@@ -2566,6 +2597,11 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   }
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
+  // rows [start, fed_until) are this request's; after tool calls the next request continues the live state as it is
+  // (after a final answer the history prefill makes it so)
+  disk_filled(slot, start, fed_until);
+  slot.live_ok = finish == "tool_calls";
+  ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[64] = "";
   if ((dfl_ || lili_ || dory_spec_ || nh_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
@@ -2681,6 +2717,10 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   const int n = int(t2.size()) - 1;
   const size_t common = common_rows(slot, k2, mmp);
   // nothing to add, or the live state matches it as far as it goes (the follow-up continues it)
+  if (n > 0 && common == slot.tokens.size() && !slot.live_ok) {
+    slot.live_ok = true;  // (the SSD prefix cache saves the live state too)
+    ++slot.version;
+  }
   if (n <= 0 || int(common) >= n || common == slot.tokens.size()) return;
   const TurnCheckpoint* best = nullptr;
   for (auto& c : slot.ckpts)
@@ -2750,6 +2790,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   slot.tokens.assign(k2.begin(), k2.begin() + n);
   slot.img_spans = mm.spans;
   slot.img_digests = mm.digests;
+  disk_filled(slot, start, n);
+  slot.live_ok = true;  // the follow-up continues this state
+  ++slot.version;
   logi("history: prefilled %d tokens of the rendered reply (from %d) in %.0f ms", n - start, start, now_ms() - t0);
 }
 

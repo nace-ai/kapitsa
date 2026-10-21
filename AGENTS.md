@@ -29,10 +29,11 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test`:
+CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test`:
 
 ```bash
 build/api_test
+build/prefix_cache_test
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)
@@ -43,7 +44,7 @@ python3 tests/test_pr_size.py
 ```
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `nh_eval --vcheck`,
-`batch_check`, `ni_v8check`, `tests/test_server.py URL`): run it only when allowed, and report it as run.
+`batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 
@@ -66,6 +67,11 @@ near-ties (`tools/nh_vcheck.py` reports the near-tie gap; `batch_check`, `ni_v8c
 usual comparisons). Put the numbers in the PR. "The same outputs to the bit" is a claim with evidence or it is not made.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
+
+**SSD prefix cache.** Conversations' states stay on users' disks across updates (`src/engine/engine_disk.cpp`). A change
+to what a state's bytes mean (KV row order or precision, the recurrent state's layout, the drafter's ring, what a
+snapshot holds) that the model's `disk_format()` does not show must bump `kStateFormat` there, or new binaries read old
+states wrongly.
 
 **Dependencies.** None without a strong reason: Kapitsa builds with Xcode CLT and CMake alone. `third_party/` is
 vendored; do not edit it.
