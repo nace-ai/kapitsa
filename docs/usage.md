@@ -244,6 +244,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. |
+| `--disk-cache SIZE` | `auto` | The SSD prefix cache: conversations kept on the SSD, also across restarts ([SSD prefix cache](#ssd-prefix-cache)). `auto`: a quarter of the free space beyond 10 GiB, at most 32 GiB; a size (`16G`, `512M`) caps it within that; `0` turns it off. |
 | `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
 | `--loop-kv MODE` | `last-loop` | Dory: the shared block's KV cache, `last-loop` (one per layer) or `per-loop` (one per loop, more memory). |
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
@@ -275,12 +276,14 @@ per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro w
 
 | Requests at once | 1 | 2 | 3 | 4 |
 | --- | ---: | ---: | ---: | ---: |
-| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 56 (56) | 67 (58) |
-| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 184 (149) | 202 (161) |
+| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 66 (56) | 67 (58) |
+| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 206 (149) | 202 (161) |
 | Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
 
-In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The 27B's three requests take turns:
-their drafts cost more than the shared pass saves. A request alone gets the tokens it always gets. Requests decoded
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. With the Qwen models KFlash chooses
+each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's
+drafts and what a row costs on this Mac; three requests now share 8 rows instead of 2 each (or, on the 27B, taking
+turns). A request alone gets the tokens it always gets. Requests decoded
 together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
 each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
 4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (not measured batched yet; `NI_BATCH=1` batches them), without
@@ -290,6 +293,60 @@ gets alone, and write about as many tokens per second in all as one alone.
 Without `--slots` the server takes 4 slots where they fit as well as 2 would (room for one full `--context` conversation,
 the same draft model and prefill chunk), else 3, else 2; `GET /v1/models` reports them. With every slot busy a request
 waits for one (the log says so); a streamed chat completion whose client disconnects stops waiting.
+
+### SSD prefix cache
+
+A slot keeps its conversation's state in memory until another conversation needs the slot, and the server keeps
+nothing when it stops. The SSD prefix cache keeps conversations on the SSD as well: a request whose prompt starts with
+a stored conversation (its next turn, a tool result, the same agent session after `kapitsa claude` or the server
+restarted) reads that state back and prefills only what follows it. `usage.prompt_tokens_details.cached_tokens`
+(Anthropic: `cache_read_input_tokens`) counts the tokens read back, as for a slot's own cache.
+
+- **What is kept.** The state a follow-up resumes from: the KV cache up to it, the recurrent state, the tokens, and the
+  draft model's context (the DFlash drafters' context ring; with the MTP head, its KV rows and the draft rows it
+  gathered). A slot's state is kept as it is, byte for byte, so a request resumed from the SSD writes what it would
+  from the slot. A conversation's next turns add only their new KV rows and states: the earlier ones are shared.
+  Images in a conversation are kept with it by their content: a prompt reuses a stored state only through the same
+  images. States nearer the start than 1024 tokens are not kept (quick to prefill again).
+- **When it is written.** After a turn, once the server has been idle for 10 s, in the background (a request that
+  arrives stops it, and nothing is written while requests run); when a request is about to replace a conversation the
+  SSD does not have yet (another conversation takes its slot, or memory for one), what is missing is copied first and
+  written in the background; and when the server stops (Ctrl+C, SIGTERM, a `kapitsa claude` session ending), for up to
+  8 s. A conversation is read back only when it is deeper than anything a slot holds.
+- **Where.** `~/.cache/kapitsa/prefix-cache` (`KAPITSA_HOME`), kept out of Time Machine and readable by your user only
+  (it holds the conversations' tokens). One folder per model and draft model (a digest of their files and of the state
+  formats), so no model reads another's states; one server uses a folder at a time (another waits up to 30 s for it,
+  then runs without the cache). Every file has a CRC-32C and is written to a temporary name, then renamed: a damaged
+  or partial file is a miss, never a wrong state.
+- **How much.** `--disk-cache auto` (the default) takes at most a quarter of what the volume has free beyond 10 GiB
+  (5% of a volume smaller than 200 GiB), its own files counted, and at most 32 GiB: on a disk with 28 GiB free, 4.5
+  GiB. It follows the free space as the disk fills or empties, giving up the least recently used conversations first.
+  `--disk-cache 16G` caps it at 16 GiB within the same rule; `--disk-cache 0` turns it off. Other models' caches that
+  no server uses count against the limit too and go first; one no server has used for 14 days is removed when a server
+  starts.
+- **Models.** The Qwen3.5-family models (Qwen3.5 4B, Qwen3.6 35B-A3B, Qwen3.8 27B), with their draft models or the
+  MTP head, and Dory (a state is read back only for the loop count that computed it). Nemotron-H models and
+  Qwen3.8-Flash-Next run without it (the log says so).
+
+The server says at start where the cache is, its limit and how many conversations it took back; each read and write
+has a log line (`SSD cache: ...`).
+
+Measured on a MacBook Pro 16-inch (M4 Pro, 20-core GPU, 48 GB), macOS 27.0.1, by `tests/test_disk_cache.py --ttft`
+(greedy, thinking off, the DFlash2 drafters, two runs each): the time to the first token of a conversation's second
+turn (the first turn's prompt and answer, then a short question) with nothing cached, from the SSD after the server
+restarted, and from the slot that answered the first turn, each sent right after a short request (with the GPU
+awake). From the SSD the second turn writes the slot's text, token for token.
+
+| Model | Second turn | Nothing cached | From the SSD, after a restart | From the slot | Read | Written: turn 1, turn 2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Qwen3.6 35B-A3B | 4,359 tokens | 3.81-3.83 s | 0.12 s | 0.06 s | 205 MB in 54 ms | 321 MB, 239 MB |
+| Qwen3.6 35B-A3B | 16,322 tokens | 17.2-18.0 s | 0.16-0.18 s | 0.08-0.09 s | 450 MB in 81-82 ms | 566 MB, 242 MB |
+| Qwen3.8 27B | 4,365 tokens | 12.2 s | 0.40-0.41 s | 0.27 s | 483 MB in 107-128 ms | 682 MB, 418 MB |
+| Qwen3.8 27B | 16,325 tokens | 46.7-48.0 s | 0.65-0.70 s | 0.32-0.33 s | 1,267 MB in 286-291 ms | 1,466 MB, 432 MB |
+
+A save writes the KV rows the SSD lacks and the states of its new restore points (the recurrent state and the draft
+model's context: about 110 MB each on the 35B, 200 MB on the 27B), so each turn the server idles after writes a few
+hundred MB (the table's turn 2).
 
 ## APIs
 
@@ -574,6 +631,39 @@ newest by default), and `--submit --dry-run` prints exactly what it would send, 
 address, without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
 [bench/community](../bench/community/README.md).
 
+### Comparing engines on this Mac
+
+`kapitsa bench compare` runs the same protocol against the other local engines that are installed here, one at a time,
+and ranks them. Nothing is installed or downloaded for you, nothing is sent anywhere, and nothing is shared unless you
+paste the report yourself.
+
+```bash
+kapitsa bench compare                 # asks which model (4b, 27b, 35b) in a terminal; 4b elsewhere
+kapitsa bench compare --list          # which engines it found, which are missing and how to get them; measures nothing
+kapitsa bench compare --model 4b --engines kapitsa,omlx,mlx-serve
+kapitsa bench compare --quick         # 4K prompt only, 2 decode runs: about 3 minutes per engine
+kapitsa bench compare --json          # JSON on stdout (progress goes to stderr)
+kapitsa bench compare --report        # a Markdown report to paste into an issue or a PR
+```
+
+It looks for oMLX, mlx-serve, mlx-lm, llama.cpp, Ollama, LM Studio, MTPLX, Rapid-MLX and mlx-vlm on your `PATH` and at
+the usual `OMLX_BIN`, `MLX_SERVE_BIN`, `MLX_LM_SERVER`, `LLAMA_SERVER`, `OLLAMA_BIN`, `LMS_BIN` and so on. For each one
+it runs the best configuration the [harness](../bench/harness/README.md) has for the model (its speculative decoding on,
+when it has one, the way that engine is meant to be run) through `bench/harness/compare_engines.py`, under the GPU lock, with
+thinking off and the same sampler, prompts and corpus for everyone. An engine that is not installed, or whose weights
+are not on this Mac, is listed under "skipped" with the reason and how to get it. One engine failing does not stop the
+others.
+
+The table ranks engines by decode tok/s, with prefill tok/s, time to first token (cold and cached) and peak memory.
+Files go to `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`, `report.md` and logs.
+
+The report has a "Who beats Kapitsa here, and why" part; its reasons come only from the configurations (speculative
+decoding, weights folder, versions) and are leads, not findings. **Run it on a quiet Mac, plugged in**: a run waits up
+to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. It refuses to start
+while another engine or model server is running (`--ignore-running` overrides). If another engine beats Kapitsa on your
+Mac, open the "Engine comparison" issue with the report. It needs the repository's `bench/harness` folder
+(`KAPITSA_HARNESS` names another copy) and macOS Python 3.
+
 ## Running in the background
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for
@@ -584,7 +674,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops. |
+| `KAPITSA_HOME` | `~/.cache/kapitsa` | Kapitsa's folder: models in `models/`, the coding-agent servers' logs in `logs/`, `kapitsa bench`'s results in `bench/`, the last model chosen in `state.json`, the automatic update's state in `update.json`, KFlash's measurements (this Mac's cost per verified row count and the draft model's calibration, per model, draft model and chip) in `kflash/`, saved as the server runs and when it stops, the [SSD prefix cache](#ssd-prefix-cache) in `prefix-cache/`. |
 | `KAPITSA_NO_AUTO_UPDATE` | | `1`: no automatic update and no check in the background ([Updating](#updating)); `kapitsa update` still works. |
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
@@ -602,7 +692,13 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_DFLASH_TREE` | on | KFlash on the Qwen draft models: the draft model's guesses are checked as a best-first tree per pass (several continuations at once) instead of one chain; `0` checks a chain (overrides `NI_KFLASH` on these models). Greedy replies are the same either way; sampled ones follow the same distribution. The tree's shape follows the draft model's probabilities as calibrated against this Mac's own acceptances, and its size this Mac's measured cost per verified rows: one 8-row tile on the 27B and the 4B, 1 to 8 rows per pass on the 35B (its pass routes experts for those rows alone). |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
 | `NI_BATCH` | on where measured | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too (not measured yet); `0`: they take turns instead, each with the tokens it gets alone. |
+| `NI_BATCH_KF` | on | Requests decoding at once with the Qwen draft models (2 to 4 of them): KFlash chooses each shared pass's rows, how many in all and which request gets them, from the draft model's calibrated probabilities and this Mac's measured cost of a shared pass (cached with the KFlash budget). `0`: a fixed number per request, as measured before (two requests 4 rows each, three or four 2 each; the 27B's three take turns). |
+| `NI_BATCH_KF_FLOOR` | `0` | With `NI_BATCH_KF`: `1` gives every request in a shared pass at least one draft row. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
+| `NI_DISK_CACHE` | | As `--disk-cache` when the option is absent; tools that start an engine without `kapitsa serve` keep no SSD prefix cache unless it is set. |
+| `NI_DISK_CACHE_IDLE_MS` | `10000` | SSD prefix cache: how long the server is idle after a turn before it writes the conversation, in ms. |
+| `NI_DISK_CACHE_MIN` | `1024` | SSD prefix cache: the shallowest state kept, in tokens. |
+| `NI_DISK_CACHE_DIR` | `$KAPITSA_HOME/prefix-cache` | SSD prefix cache: the folder of its namespaces. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
 | `NI_IMAGE_CACHE_MB` | `256` | GPU memory kept for the embeddings of recent images. |
@@ -678,4 +774,4 @@ again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/instal
 `brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binary
 `install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
 folder (the license files, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
-removes the models, logs and update state.
+removes the models, logs, update state and the SSD prefix cache (`prefix-cache/` alone: the cache).

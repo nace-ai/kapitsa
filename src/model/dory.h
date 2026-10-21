@@ -110,6 +110,11 @@ class Dory : public Model {
                       Checkpoint* snap = nullptr, int snap_row = 0) override;
   int prefill_chunk() const override { return tmax_; }
   bool can_snapshot() const override { return false; }
+  // SSD prefix cache: the full-attention caches of the loops s runs as rows, its sliding-window rings whole (a
+  // checkpoint's: their copies); the engine keys the states by the loop count too
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const override;
 
   // ---- speculative decoding (exact with per-loop KV, up to half-row rounding: the engine runs it only then) ----
   // Rows [pos, pos + R) (R <= kMaxRows) through the whole model as one step: with per-loop KV each row sees the

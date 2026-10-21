@@ -10,11 +10,14 @@
           "--model", "{models}/qwen3.6-35b-a3b-4bit", "--model-id", "qwen3.6-35b-a3b",
           "--dflash", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2",
           "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768", "--slots", "1"],
+  "env": {"NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"},
+  "prepare": [{"clean_dir": "{state}/kapitsa/prefix-cache"}],
+  "cleanup": [{"clean_dir": "{state}/kapitsa/prefix-cache"}],
   "env_clear_prefixes": ["NI_", "KAPITSA_"],
   "base_url": "http://127.0.0.1:8091/v1",
   "model": "qwen3.6-35b-a3b",
   "requires_paths": ["{models}/qwen3.6-35b-a3b-4bit/config.json", "{models}/drafters/Qwen3.6-35B-A3B-DFlash2/model.safetensors"],
-  "note": "Kapitsa's default settings. --dflash names the drafter that the default (--dflash auto) finds next to the model, so a missing drafter fails the run instead of silently falling back to MTP. --slots 1 for parity with llama.cpp -np 1 (the default, 2, only keeps a second conversation warm). Inherited NI_*/KAPITSA_* experiment variables are cleared."
+  "note": "Kapitsa's default settings. --dflash names the drafter that the default (--dflash auto) finds next to the model, so a missing drafter fails the run instead of silently falling back to MTP. --slots 1 for parity with llama.cpp -np 1 (the default, 2, only keeps a second conversation warm). Inherited NI_*/KAPITSA_* experiment variables are cleared. The SSD prefix cache (on by default) is a folder in the harness state, emptied before and after each run as oMLX's SSD KV cache is: no run reads what an earlier one left there."
  },
  {
   "label": "q38-27b-kapitsa",
@@ -43,6 +46,17 @@
   "requires_paths": ["{models}/qwen3.5-4b-4bit-mtp/config.json", "{models}/qwen3.5-4b-4bit-mtp/mtp.safetensors",
                      "{models}/drafters/Qwen3.5-4B-DFlash/model.safetensors"],
   "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, and z-lab's DFlash drafter z-lab/Qwen3.5-4B-DFlash, the companion the default --dflash auto finds in the model's dflash2/ folder). --dflash names the drafter so a missing one fails the run instead of falling back to the MTP head; dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
+ },
+ {
+  "label": "q35-4b-kapitsa-4slots",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa (DFlash drafter, default slots)",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-4bit-mtp", "--model-id", "qwen3.5-4b",
+          "--dflash", "{models}/drafters/Qwen3.5-4B-DFlash",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768"],
+  "env": {"NI_PREFIX_CKPT": "{env:NI_PREFIX_CKPT=1}"},
+  "note": "The 4B the way an agent harness runs it: no --slots, so Kapitsa's default (4 slots where memory allows; a main agent, its subagents and side requests each keep a conversation). The other Kapitsa configs pass --slots 1 for parity with llama.cpp -np 1, which cannot show whether a prefix survives another conversation."
  },
  {
   "label": "q35-4b-bf16-kapitsa",

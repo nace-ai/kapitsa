@@ -239,6 +239,15 @@ class Qwen35 : public Model {
   // GPU copies, ordered with the surrounding work in `e`.
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  // SSD prefix cache: the attention layers' K and V caches (then the MTP head's), the GDN layers' conv and recurrent
+  // states
+  std::string disk_format() const override;
+  void disk_rows(const Seq& s, bool mtp, std::vector<KvRows>& out) const override;
+  void disk_state(const Seq& s, const Checkpoint* c, std::vector<Buffer>& out) const override;
+  // The ids the MTP draft head gathered for s (NI_DRAFT_CTX), in their order, and how far it scanned s's tokens; and
+  // the same rows gathered again into another sequence (empty: none), as a restored state needs them for the same drafts
+  std::vector<uint32_t> draft_vocab_ids(const Seq& s, int* scanned) const;
+  void draft_vocab_restore(Seq& s, const std::vector<uint32_t>& ids, int scanned);
 
   // Encodes one decode step for the token at tokens[pos]. With `sample`, computes logits and
   // writes the sampled id to tokens[pos+1]; without, only advances the state (prompt tokens).
@@ -288,6 +297,9 @@ class Qwen35 : public Model {
   // groups before it), each sampled with its group's parameters (RNG step: the row's position). With `cap`, the
   // drafter's target layer outputs of the group's rows go to cap->dst rows [cap_row0, cap_row0 + R) (cap->ld,
   // cap->slot; its positions are not used). Afterwards commit_rows() per sequence, as after encode_verify.
+  // split_after > 0: the pass's first split_after layers are committed as a command buffer of their own (Encoder::split)
+  // as soon as they are encoded, so the GPU starts on them while the host encodes the rest (a pass encoded only once the
+  // GPU is idle: the batch budget's, whose rows follow the drafting passes).
   struct VerifyGroup {
     Seq* s = nullptr;
     int pos = 0, R = 1;
@@ -298,7 +310,7 @@ class Qwen35 : public Model {
     // next pass can read them before the host has (pipelined plain rows)
     bool tok_out = false;
   };
-  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups);
+  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups, int split_after = 0);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   virtual void encode_flush(Encoder& e, Seq& s);
@@ -580,6 +592,7 @@ class Qwen35 : public Model {
   struct DraftVocab;
   DraftVocab* draft_vocab_update(Seq& s, int upto);
   void draft_vocab_rewind(Seq& s, int pos0);
+  bool draft_vocab_add(DraftVocab& v, int id);  // gathers id's row (false: the set is full)
   uint32_t draft_split_ = 0, draft_special0_ = 0;
   bool full_draft_ = false;  // draft over the whole vocabulary (see load_mtp; NI_FULL_DRAFT=0/1 overrides)
   const CaptureHook* cap_ = nullptr;

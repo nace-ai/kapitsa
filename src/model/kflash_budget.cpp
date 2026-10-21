@@ -20,7 +20,81 @@ namespace {
 // What the cache's cost table holds, saved with it: a table measured as anything else (the verify alone, or the
 // host's clock, as the server and the Nemotron loop measured before) is measured again; the calibration is kept.
 constexpr const char* kCostOf = "cycle GPU ms";
+constexpr const char* kBatchCostOf = "batched cycle GPU ms";  // KfBatch's: the members' drafting passes and the verify
+
+// A cache file written whole beside its place, then renamed over it: a process ended mid-write (kill -9 after a stop
+// signal), or another tool saving the same key at once, leaves one whole file
+bool write_whole(const std::string& path, const nlohmann::json& j) {
+  const std::string tmp = path + "." + std::to_string(getpid()) + ".tmp";
+  {
+    std::ofstream f(tmp);
+    f << j.dump() << "\n";
+    f.close();
+    if (!f) {
+      unlink(tmp.c_str());
+      logi("KFlash: could not write the budget's cache %s", tmp.c_str());
+      return false;
+    }
+  }
+  if (rename(tmp.c_str(), path.c_str()) != 0) {
+    unlink(tmp.c_str());
+    logi("KFlash: could not write the budget's cache %s", path.c_str());
+    return false;
+  }
+  return true;
+}
 }  // namespace
+
+// The costs: this process's first cycle sets the base (with a cached table, from a count it holds: force() asks for one
+// first; until then the counts measured keep absolute offsets); a count's first cycle sets its offset; later cycles move
+// the base by half of what they cost above the table and their count's offset by a running mean's step (its last ~32
+// cycles), so a change of every count's cost (the context's length) goes to the base (all but ~6%)
+void KfCosts::observe(int n, double ms) {
+  if (!based && (!loaded || (ncost[n] > 0 && !((pre >> n) & 1u)))) {
+    base = ncost[n] > 0 ? ms - off[n] : ms;
+    if (ncost[n] == 0) off[n] = 0.0, ncost[n] = 1;
+    for (int m = 1; m < kD; ++m)
+      if ((pre >> m) & 1u) off[m] -= base;
+    pre = 0;
+    based = true;
+  } else if (!based) {  // a count the cache does not hold, before the base: its offset absolute for now
+    off[n] = ncost[n] == 0 ? ms : off[n] + (ms - off[n]) / double(std::min(ncost[n] + 1, 32));
+    ++ncost[n];
+    pre |= uint64_t(1) << n;
+  } else if (ncost[n] == 0) {
+    off[n] = ms - base;
+    ncost[n] = 1;
+  } else {
+    const double e = ms - (base + off[n]);
+    base += 0.5 * e;
+    off[n] += e / double(std::min(ncost[n] + 1, 32));
+    ++ncost[n];
+  }
+}
+
+int KfCosts::force(uint32_t allowed, int max_rows, int explore) const {
+  int f = 0;
+  // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set the
+  // base); then every allowed count `explore` times
+  if (!based && loaded && __builtin_popcount(allowed) > 1)
+    for (int n = max_rows; n >= 1 && !f; --n)
+      if (((allowed >> (n - 1)) & 1u) && ncost[n] > 0 && !((pre >> n) & 1u)) f = n;
+  for (int n = 1; n <= max_rows && !f; ++n)
+    if (((allowed >> (n - 1)) & 1u) && ncost[n] < explore) f = n;
+  return f;
+}
+
+std::vector<double> KfCosts::table() const {
+  std::vector<double> cost(kD, 0.0);  // the costs now
+  for (int n = 1; n < kD; ++n)
+    if (ncost[n] && !((pre >> n) & 1u)) cost[size_t(n)] = std::max(base + off[n], 0.01);
+  return cost;
+}
+
+void KfCosts::load(const std::vector<double>& c, int explore) {  // (offsets above base 0: the costs at the save)
+  for (int n = 1; n < kD && n < int(c.size()); ++n)
+    if (c[size_t(n)] > 0) off[n] = c[size_t(n)], ncost[n] = explore, loaded = true;
+}
 
 KfBudget::KfBudget(std::string key) : key_(std::move(key)) {
   for (int d = 0; d < kD; ++d) {
@@ -87,30 +161,8 @@ void KfBudget::observe(const int32_t* t, double ms) {
       ++ne_;
     }
   }
-  // the costs: this process's first cycle sets the base (with a cached table, from a count it holds: write forces one
-  // first; until then the counts measured keep absolute offsets); a count's first cycle sets its offset; later cycles
-  // move the base by half of what they cost above the table and their count's offset by a running mean's step (its
-  // last ~32 cycles), so a change of every count's cost (the context's length) goes to the base (all but ~6%)
-  if (!based_ && (!loaded_ || (ncost_[n] > 0 && !((pre_ >> n) & 1u)))) {
-    base_ = ncost_[n] > 0 ? ms - off_[n] : ms;
-    if (ncost_[n] == 0) off_[n] = 0.0, ncost_[n] = 1;
-    for (int m = 1; m < kD; ++m)
-      if ((pre_ >> m) & 1u) off_[m] -= base_;
-    pre_ = 0;
-    based_ = true;
-  } else if (!based_) {  // a count the cache does not hold, before the base: its offset absolute for now
-    off_[n] = ncost_[n] == 0 ? ms : off_[n] + (ms - off_[n]) / double(std::min(ncost_[n] + 1, 32));
-    ++ncost_[n];
-    pre_ |= uint64_t(1) << n;
-  } else if (ncost_[n] == 0) {
-    off_[n] = ms - base_;
-    ncost_[n] = 1;
-  } else {
-    const double e = ms - (base_ + off_[n]);
-    base_ += 0.5 * e;
-    off_[n] += e / double(std::min(ncost_[n] + 1, 32));
-    ++ncost_[n];
-  }
+  // the costs (KfCosts::observe)
+  c_.observe(n, ms);
   // the rate: the recent cycles' tokens per ms (sums decaying by 1/64 a cycle)
   rtok_ = rtok_ * (63.0 / 64.0) + double(std::clamp(int(t[kf::kA]), 0, kf::kMaxRows) + 1);
   rms_ = rms_ * (63.0 / 64.0) + ms;
@@ -121,21 +173,44 @@ void KfBudget::observe(const int32_t* t, double ms) {
     if (d < 1 || d > kf::kMaxRows) continue;
     float lq;
     memcpy(&lq, &t[kf::kRecLq + i], 4);
-    const float x = logit_q(lq);
-    const uint8_t y = t[kf::kRecHit + i] != 0;
-    if (x_[d].size() < size_t(kWin)) {
-      x_[d].push_back(x);
-      y_[d].push_back(y);
-    } else {
-      x_[d][head_[d]] = x;
-      y_[d][head_[d]] = y;
-      head_[d] = (head_[d] + 1) % size_t(kWin);
-    }
+    add_record(d, lq, t[kf::kRecHit + i] != 0);
   }
+  refit_tick();
+}
+
+void KfBudget::add_record(int d, float lq, bool hit) {
+  const float x = logit_q(lq);
+  const uint8_t y = hit ? 1 : 0;
+  if (x_[d].size() < size_t(kWin)) {
+    x_[d].push_back(x);
+    y_[d].push_back(y);
+  } else {
+    x_[d][head_[d]] = x;
+    y_[d][head_[d]] = y;
+    head_[d] = (head_[d] + 1) % size_t(kWin);
+  }
+}
+
+void KfBudget::refit_tick() {
   if (++since_fit_ >= 16) {
     since_fit_ = 0;
     for (int d = 1; d < kD; ++d)
       if (x_[d].size() >= 32) fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
+  }
+}
+
+void KfBudget::records(const int* dep, const float* lq, const uint8_t* hit, int n) {
+  std::lock_guard<std::mutex> lk(mu_);
+  for (int i = 0; i < n; ++i)
+    if (dep[i] >= 1 && dep[i] <= kf::kMaxRows) add_record(dep[i], lq[i], hit[i] != 0);
+  refit_tick();
+}
+
+void KfBudget::calibration(float* alpha, float* beta, int n) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  for (int d = 0; d < n && d < kD; ++d) {
+    alpha[d] = alpha_[d];
+    beta[d] = beta_[d];
   }
 }
 
@@ -154,18 +229,14 @@ void KfBudget::write(KfParams& p) const {
       if ((allowed_ >> (n - 1)) & 1u) force = n;
     }
   // with a cached table and a choice of counts, this process's first cycles verify a count it holds (they set the
-  // base); then every allowed count kExplore times
-  if (!force && !based_ && loaded_ && __builtin_popcount(allowed_) > 1)
-    for (int n = max_rows_; n >= 1 && !force; --n)
-      if (((allowed_ >> (n - 1)) & 1u) && ncost_[n] > 0 && !((pre_ >> n) & 1u)) force = n;
-  for (int n = 1; n <= max_rows_ && !force; ++n)
-    if (((allowed_ >> (n - 1)) & 1u) && ncost_[n] < kExplore) force = n;
+  // base); then every allowed count kExplore times (KfCosts::force)
+  if (!force) force = c_.force(allowed_, max_rows_, kExplore);
   p.force_n = force;
   p.allowed = allowed_;
   p.max_rows = max_rows_;
   p.rate = nrate_ >= 16 && rms_ > 0 ? float(rtok_ / rms_) : 0.0f;
   p.cost[0] = 1.0f;
-  for (int n = 1; n < kD; ++n) p.cost[n] = ncost_[n] > 0 ? float(std::max(base_ + off_[n], 0.01)) : 1.0f;
+  for (int n = 1; n < kD; ++n) p.cost[n] = c_.ncost[n] > 0 ? float(std::max(c_.base + c_.off[n], 0.01)) : 1.0f;
 }
 
 std::string KfBudget::summary() const {
@@ -180,7 +251,7 @@ std::string KfBudget::summary() const {
   o += snprintf(b + o, sizeof b - o, "; cost ms by rows");
   for (int n = 1; n <= max_rows_ && o < int(sizeof b) - 16; ++n)
     if ((allowed_ >> (n - 1)) & 1u)
-      o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, ncost_[n] ? base_ + off_[n] : 0.0);
+      o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, c_.at(n));
   o += snprintf(b + o, sizeof b - o, "; calibration (alpha, beta) by depth");
   for (int d = 1; d <= std::min(max_rows_, 8) && o < int(sizeof b) - 24; ++d)
     o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
@@ -196,9 +267,7 @@ void KfBudget::load() {
     const auto& c = j.at("cost");
     const auto& a = j.at("alpha");
     const auto& bb = j.at("beta");
-    if (j.value("cost_of", "") == kCostOf)  // (offsets above base 0: the costs at the save)
-      for (int n = 1; n < kD && n < int(c.size()); ++n)
-        if (c[size_t(n)].get<double>() > 0) off_[n] = c[size_t(n)].get<double>(), ncost_[n] = kExplore, loaded_ = true;
+    if (j.value("cost_of", "") == kCostOf) c_.load(c.get<std::vector<double>>(), kExplore);
     for (int d = 1; d < kD && d < int(a.size()) && d < int(bb.size()); ++d) {
       alpha_[d] = a[size_t(d)].get<float>();
       beta_[d] = bb[size_t(d)].get<float>();
@@ -215,32 +284,262 @@ void KfBudget::save(int fresh) {
   mkdir(dir.c_str(), 0755);
   nlohmann::json j;
   j["cost_of"] = kCostOf;
-  std::vector<double> cost(kD, 0.0);  // the costs now
-  for (int n = 1; n < kD; ++n)
-    if (ncost_[n] && !((pre_ >> n) & 1u)) cost[size_t(n)] = std::max(base_ + off_[n], 0.01);
-  j["cost"] = cost;
+  j["cost"] = c_.table();  // the costs now
   j["alpha"] = std::vector<float>(alpha_, alpha_ + kD);
   j["beta"] = std::vector<float>(beta_, beta_ + kD);
-  // written whole beside it, then renamed over it: a process ended mid-write (kill -9 after a stop signal), or another
-  // tool saving the same key at once, leaves one whole file
-  const std::string path = dir + "/" + key_ + ".json", tmp = path + "." + std::to_string(getpid()) + ".tmp";
-  {
-    std::ofstream f(tmp);
-    f << j.dump() << "\n";
-    f.close();
-    if (!f) {
-      unlink(tmp.c_str());
-      logi("KFlash: could not write the budget's cache %s", tmp.c_str());
-      return;
-    }
-  }
-  if (rename(tmp.c_str(), path.c_str()) != 0) {
-    unlink(tmp.c_str());
-    logi("KFlash: could not write the budget's cache %s", path.c_str());
-    return;
-  }
+  const std::string path = dir + "/" + key_ + ".json";
+  if (!write_whole(path, j)) return;
   saved_ = cycles_;
   logi("KFlash: budget saved (%d cycles) to %s", cycles_, path.c_str());
+}
+
+// ---- KfBatch ----
+
+KfBatch::KfBatch(std::string key, int floor) : key_(std::move(key)), floor_(std::clamp(floor, 0, kDrafts)) {
+  for (int d = 0; d <= kDrafts; ++d) {
+    alpha_[d] = 0.0f;
+    beta_[d] = 1.0f;
+  }
+  load();
+}
+
+KfBatch::~KfBatch() { save(); }
+
+int KfBatch::allocate(const float* surv, int M, const int* kmax, const double* cost, double rate, int floor,
+                      int force_n, int* k) {
+  M = std::clamp(M, 1, kRows);
+  int n = M;
+  double E = M;  // the expected tokens of the rows taken: each member's anchor emits one, each draft its survival
+  // the floor: as many drafts as every member can have within the rows (and its cap)
+  const int fl = std::clamp(std::min(floor, (kRows - M) / M), 0, kDrafts);
+  for (int g = 0; g < M; ++g) {
+    k[g] = std::min(fl, std::clamp(kmax[g], 0, kDrafts));
+    n += k[g];
+    for (int p = 0; p < k[g]; ++p) E += surv[g * kDrafts + p];
+  }
+  struct Cand {
+    float s;
+    int p, g;
+  };
+  Cand c[kRows * kDrafts];
+  int nc = 0;
+  for (int g = 0; g < M; ++g)
+    for (int p = k[g]; p < std::clamp(kmax[g], 0, kDrafts); ++p) {
+      const float v = surv[g * kDrafts + p];
+      c[nc++] = {v >= 0.0f ? v : 0.0f, p, g};  // (NaN: worth nothing)
+    }
+  std::sort(c, c + nc, [](const Cand& a, const Cand& b) {
+    return a.s > b.s || (a.s == b.s && (a.p < b.p || (a.p == b.p && a.g < b.g)));
+  });
+  for (int i = 0; i < nc && n < kRows; ++i) {
+    const Cand& e = c[i];
+    if (e.p != k[e.g]) continue;  // (never: a member's survivals do not rise along its chain)
+    if (force_n > 0) {
+      if (n >= force_n) break;
+    } else {
+      // the row pays at the long-run rate (rate 0: the expected tokens per ms grow with it)
+      const bool pays = rate > 0 ? double(e.s) >= rate * (cost[n + 1] - cost[n])
+                                 : (E + double(e.s)) * cost[n] > E * cost[n + 1];
+      if (!pays) break;
+    }
+    ++k[e.g];
+    ++n;
+    E += double(e.s);
+  }
+  return n;
+}
+
+void KfBatch::cost_line(const double* cost, int lo, int hi, double* out) {
+  int ns = 0, xs[kRows + 1];
+  for (int n = lo; n <= hi; ++n)
+    if (cost[n] > 0) xs[ns++] = n;
+  if (ns == 0) return;
+  double b = 0.0;
+  if (ns >= 2) {
+    std::vector<double> sl;
+    for (int i = 0; i < ns; ++i)
+      for (int j = i + 1; j < ns; ++j) sl.push_back((cost[xs[j]] - cost[xs[i]]) / double(xs[j] - xs[i]));
+    std::sort(sl.begin(), sl.end());
+    const size_t h = sl.size() / 2;
+    b = std::max(0.0, sl.size() % 2 ? sl[h] : 0.5 * (sl[h - 1] + sl[h]));
+  }
+  std::vector<double> ic;
+  for (int i = 0; i < ns; ++i) ic.push_back(cost[xs[i]] - b * xs[i]);
+  std::sort(ic.begin(), ic.end());
+  const size_t h = ic.size() / 2;
+  const double a = ic.size() % 2 ? ic[h] : 0.5 * (ic[h - 1] + ic[h]);
+  for (int n = lo; n <= hi; ++n) out[n] = std::max(a + b * n, 0.01);
+}
+
+int KfBatch::plan(Member* m, int M, const KfBudget* greedy, int* k) {
+  if (M < 1 || M > kMembers) {  // (not the budget's: plain rows)
+    for (int g = 0; g < M; ++g) k[g] = 0;
+    return M;
+  }
+  float ga[kDrafts + 1], gb[kDrafts + 1];
+  for (int d = 0; d <= kDrafts; ++d) ga[d] = 0.0f, gb[d] = 1.0f;
+  if (greedy) greedy->calibration(ga, gb, kDrafts + 1);
+  std::lock_guard<std::mutex> lk(mu_);
+  float surv[kMembers * kDrafts];
+  int kmax[kMembers];
+  for (int g = 0; g < M; ++g) {
+    double sv = 1.0;
+    for (int p = 0; p < kDrafts; ++p) {
+      const int d = p + 1;
+      const float a = m[g].sampled ? alpha_[d] : ga[d], b = m[g].sampled ? beta_[d] : gb[d];
+      const double z = double(a) + double(b) * double(KfBudget::logit_q(std::min(m[g].lc[p], 0.0f)));
+      sv *= 1.0 / (1.0 + std::exp(-z));
+      m[g].surv[p] = surv[g * kDrafts + p] = float(sv);
+    }
+    kmax[g] = std::clamp(m[g].kmax, 0, kDrafts);
+  }
+  // the counts it may choose: from every member's anchor and floor up to the verify's rows
+  const int nmin = M + M * std::clamp(std::min(floor_, (kRows - M) / M), 0, kDrafts);
+  uint32_t allowed = 0;
+  for (int n = nmin; n <= kRows; ++n) allowed |= 1u << (n - 1);
+  // NI_BATCH_KF_FORCE=n (tests): every cycle n rows in all (-1: the allowed counts in turn, cycle by cycle)
+  static const int forced = getenv("NI_BATCH_KF_FORCE") ? std::clamp(atoi(getenv("NI_BATCH_KF_FORCE")), -1, kRows) : 0;
+  int force = forced > 0 ? std::max(forced, nmin) : 0;
+  if (forced < 0) force = nmin + cycles_ % (kRows - nmin + 1);
+  if (!force) force = c_[M].force(allowed, kRows, kExplore);
+  if (!force && mcyc_[M] > 0 && mcyc_[M] % kRefresh == 0)  // the count measured longest ago
+    for (int n = nmin; n <= kRows; ++n)
+      if (!force || seen_[M][n] < seen_[M][force]) force = n;
+  double meas[kRows + 1], cost[kRows + 1];
+  for (int n = 0; n <= kRows; ++n) meas[n] = n >= nmin ? c_[M].at(n) : 0.0, cost[n] = std::max(meas[n], 0.01);
+  cost_line(meas, nmin, kRows, cost);
+  const double rate = nrate_[M] >= 16 && rms_[M] > 0 ? rtok_[M] / rms_[M] : 0.0;
+  return allocate(surv, M, kmax, cost, rate, floor_, force, k);
+}
+
+void KfBatch::observe(const Member* m, int M, const int* k, const int* a, double ms, KfBudget* greedy) {
+  if (M < 1 || M > kMembers) return;
+  int gd[kMembers * kDrafts];
+  float glq[kMembers * kDrafts];
+  uint8_t gh[kMembers * kDrafts];
+  int ng = 0;
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    int n = M, tok = 0;
+    double e = M;
+    bool srec = false;
+    for (int g = 0; g < M; ++g) {
+      const int kg = std::clamp(k[g], 0, kDrafts), ag = std::clamp(a[g], 0, kg);
+      n += kg;
+      tok += ag + 1;
+      for (int p = 0; p < kg; ++p) e += m[g].surv[p];
+      // the records: every verified draft whose drafts before it were accepted, and whether it was
+      for (int p = 0; p < std::min(ag + 1, kg); ++p) {
+        const int d = p + 1;
+        const bool hit = p < ag;
+        if (m[g].sampled) {
+          const float x = KfBudget::logit_q(std::min(m[g].lc[p], 0.0f));
+          if (x_[d].size() < size_t(kWin)) {
+            x_[d].push_back(x);
+            y_[d].push_back(hit);
+          } else {
+            x_[d][head_[d]] = x;
+            y_[d][head_[d]] = hit;
+            head_[d] = (head_[d] + 1) % size_t(kWin);
+          }
+          srec = true;
+        } else {
+          gd[ng] = d;
+          glq[ng] = m[g].lc[p];
+          gh[ng] = hit;
+          ++ng;
+        }
+      }
+    }
+    n = std::min(n, kRows);
+    ++cycles_;
+    ++ncyc_[M][n];
+    // a count not measured in the last kRefresh cycles of M members (the refresh's, or one the rule left for long): its
+    // old cost is stale (measured while the GPU did other work, or by another process), this cycle's sets it afresh
+    if (mcyc_[M] - seen_[M][n] >= kRefresh) c_[M].forget(n);
+    seen_[M][n] = ++mcyc_[M];
+    epred_[M] += e;
+    etok_[M] += tok;
+    c_[M].observe(n, ms);
+    // the rate: the recent cycles' tokens per ms at M members (sums decaying by 1/64 a cycle)
+    rtok_[M] = rtok_[M] * (63.0 / 64.0) + double(tok);
+    rms_[M] = rms_[M] * (63.0 / 64.0) + ms;
+    ++nrate_[M];
+    if (srec && ++since_fit_ >= 16) {
+      since_fit_ = 0;
+      for (int d = 1; d <= kDrafts; ++d)
+        if (x_[d].size() >= 32) KfBudget::fit(x_[d], y_[d], alpha_[d], beta_[d], 4);
+    }
+  }
+  if (greedy && ng) greedy->records(gd, glq, gh, ng);
+}
+
+double KfBatch::cost(int M, int N) const {
+  std::lock_guard<std::mutex> lk(mu_);
+  return M >= 1 && M <= kMembers ? c_[M].at(N) : 0.0;
+}
+
+std::string KfBatch::summary() const {
+  std::lock_guard<std::mutex> lk(mu_);
+  char b[2048];
+  int o = snprintf(b, sizeof b, "KFlash batch: %d cycles", cycles_);
+  for (int M = 2; M <= kMembers && o < int(sizeof b) - 160; ++M) {
+    long cyc = 0, rows = 0;
+    for (int n = 1; n <= kRows; ++n) cyc += ncyc_[M][n], rows += ncyc_[M][n] * n;
+    if (!cyc) continue;
+    o += snprintf(b + o, sizeof b - o, "; %d members: %.2f rows per cycle (by rows", M, double(rows) / double(cyc));
+    for (int n = 1; n <= kRows; ++n)
+      if (ncyc_[M][n]) o += snprintf(b + o, sizeof b - o, " %d:%ld", n, ncyc_[M][n]);
+    o += snprintf(b + o, sizeof b - o, "), tokens per cycle expected %.3f, got %.3f", epred_[M] / double(cyc),
+                  etok_[M] / double(cyc));
+    if (rms_[M] > 0) o += snprintf(b + o, sizeof b - o, ", rate %.4f tok/ms", rtok_[M] / rms_[M]);
+    o += snprintf(b + o, sizeof b - o, ", cost ms by rows");
+    for (int n = M; n <= kRows && o < int(sizeof b) - 16; ++n)
+      if (c_[M].ncost[n]) o += snprintf(b + o, sizeof b - o, " %d:%.2f", n, c_[M].at(n));
+  }
+  o += snprintf(b + o, sizeof b - o, "; sampled calibration (alpha, beta) by depth");
+  for (int d = 1; d <= kDrafts && o < int(sizeof b) - 24; ++d)
+    o += snprintf(b + o, sizeof b - o, " (%.2f, %.2f)", alpha_[d], beta_[d]);
+  return b;
+}
+
+void KfBatch::load() {
+  if (key_.empty()) return;
+  std::ifstream f(hub::home_dir() + "/kflash/" + key_ + ".json");
+  if (!f) return;
+  try {
+    const nlohmann::json j = nlohmann::json::parse(f);
+    if (j.value("cost_of", "") == kBatchCostOf) {
+      const auto& c = j.at("cost");
+      for (int M = 2; M <= kMembers && M < int(c.size()); ++M) c_[M].load(c[size_t(M)].get<std::vector<double>>(), kExplore);
+    }
+    const auto& a = j.at("alpha");
+    const auto& bb = j.at("beta");
+    for (int d = 1; d <= kDrafts && d < int(a.size()) && d < int(bb.size()); ++d) {
+      alpha_[d] = a[size_t(d)].get<float>();
+      beta_[d] = bb[size_t(d)].get<float>();
+    }
+  } catch (...) {
+    logi("KFlash: ignoring an unreadable cache %s", key_.c_str());
+  }
+}
+
+void KfBatch::save(int fresh) {
+  std::lock_guard<std::mutex> lk(mu_);
+  if (key_.empty() || cycles_ < 32 || cycles_ - saved_ < std::max(fresh, 1)) return;
+  const std::string dir = hub::home_dir() + "/kflash";
+  mkdir(dir.c_str(), 0755);
+  nlohmann::json j;
+  j["cost_of"] = kBatchCostOf;
+  std::vector<std::vector<double>> cost(kMembers + 1);  // by members (2 .. kMembers), each by rows
+  for (int M = 2; M <= kMembers; ++M) cost[size_t(M)] = c_[M].table();
+  j["cost"] = cost;
+  j["alpha"] = std::vector<float>(alpha_, alpha_ + kDrafts + 1);
+  j["beta"] = std::vector<float>(beta_, beta_ + kDrafts + 1);
+  const std::string path = dir + "/" + key_ + ".json";
+  if (!write_whole(path, j)) return;
+  saved_ = cycles_;
+  logi("KFlash: batch budget saved (%d cycles) to %s", cycles_, path.c_str());
 }
 
 }  // namespace ni

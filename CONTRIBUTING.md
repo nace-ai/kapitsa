@@ -36,7 +36,9 @@ the full build.
 | `python3 tests/test_bench.py build` | `kapitsa bench` against the harness: the same requests as `bench.py` (both run against a scripted server), its rates on the published runs' data, the result file, submitting (dry runs, a stand-in gh), the GPU lock; `build/bench_test self` checks the Mac table and formats | `pip install jsonschema` for the schema check |
 | `python3 tests/test_update.py build` | `kapitsa update` and the automatic update against a release server in the test (`KAPITSA_UPDATE_URL`; nothing from GitHub), on temporary installs made by `install.sh`: real signed releases, the checks that refuse bad ones, the switch, the rollback, Homebrew, app and source installs, the background check (throttle, off switches, time limit, `kapitsa bench`), what the requests carry; `build/update_test` checks version order and kinds of install | nothing (the full build, for `build/update_test`) |
 | `python3 tests/test_community.py build` | The community results: `tools/community_check.py`'s checks and labels, `tools/community_table.py`, the pull request check against a stand-in API | `pip install jsonschema` |
+| `python3 tests/test_logit_compare.py` | `tools/logit_compare.py` on synthetic dumps: its numbers against a direct computation, records matched in any order, the gate's verdicts and refusals, numpy against the standard library | nothing |
 | `python3 tests/test_reasoning.py` | `bench/reasoning`: the grader's equivalences and near misses, the frozen problem sets, a run against a scripted server (the requests, grading, resuming, the GPU lock on a test file) and the report; with the problems downloaded, `reasoning.py check` and the sets' draw | nothing (`python3 bench/reasoning/reasoning.py fetch` for the last two) |
+| `build/prefix_cache_test` | The SSD prefix cache's store: pieces and entries written and read back byte for byte and taken back after a restart, CRCs, torn writes, the quota and its eviction order, the volume filling up, threads writing and reading at once, other models' caches, the namespace's lock | nothing |
 | `build/fn_store_test` | The streamed-expert cache (`src/model/expert_store.h`) on a synthetic pack in a temporary folder, a thread playing the GPU: every routed expert in its slot at each handshake and still there at the next, read-ahead (right and wrong), verify windows, prefill sweeps, a hot set kept through a sweep (ARC), direct and widened 16 KiB reads | nothing |
 | `build/fn_dflash_test [--gpu]` | Qwen3.8-Flash-Next's DFlash2 plumbing: the target's streams from `hc_count`, the drafts' `target_hidden_reduction` checks; `--gpu`: the `stream_mean` capture kernel against the CPU (GPU lock) | nothing |
 | `python3 tools/qwen4_exp_q20_test.py` | The Q2_0 Flash-Next converter on a tiny synthetic GGUF and pack: planes, dequantization, config, index, sparse table | numpy |
@@ -55,11 +57,16 @@ python3 tests/test_server.py http://127.0.0.1:8090   # --api-key KEY for a serve
 kill %1
 ```
 
+The SSD prefix cache across restarts (starts its own servers, takes the GPU lock; a temporary `KAPITSA_HOME`, a 2 GiB
+cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.cache/kapitsa/models/qwen3.5-4b-4bit`
+(`--ttft` also times the follow-up cold, from the SSD and from memory).
+
 ## Layout
 
 - `src/server/`: the command line, the HTTP server, the coding-agent launchers and the chat page.
 - `src/api/`: the Anthropic Messages and OpenAI Responses translations, and each coding agent's settings.
-- `src/engine/`: chat templates, conversation slots and prefix reuse, the output parser, `kapitsa doctor`.
+- `src/engine/`: chat templates, conversation slots and prefix reuse, the SSD prefix cache (`prefix_cache.*`: the
+  store; `engine_disk.cpp`: what a slot saves and restores), the output parser, `kapitsa doctor`.
 - `src/model/`: the Qwen3.5-family and Nemotron-H backends and their drafters; `src/kernels/` and `src/metal/`: the
   Metal kernels and runtime.
 - `src/ane/`: the Neural Engine bridge; `src/vision/`: image decoding, processors and vision towers.

@@ -745,7 +745,14 @@ def parse_args(argv=None):
                     help="light: one tiny request; full: the compare_engines warm-up; none: caller warmed up")
     ap.add_argument("--adaptive-warm", action="store_true", help="with --warmup full: 3 extra full decodes")
     ap.add_argument("--no-gpu-lock", action="store_true", help=f"do not take the GPU lock {gpu_hogs.LOCK_PATH} (NACE_GPU_LOCK_HELD=1 also skips it)")
-    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent")
+    ap.add_argument("--skip", default="", help="comma list of: decode,greedy,prefill,tools,agent,sweep,sustain,cache")
+    ap.add_argument("--agentic", action="store_true",
+                    help="also run the agent-harness phases (agentic.py): sweep, cache, sustain (last); --skip drops any")
+    ap.add_argument("--sweep-sizes", default="1000,2000,4000,8000,16000,max", help="agentic sweep: token targets; max = the largest that fits --max-ctx")
+    ap.add_argument("--sweep-repeats", type=int, default=2, help="agentic sweep: cold requests per size (median)")
+    ap.add_argument("--max-ctx", type=int, default=32768, help="context the server runs with (agentic sweep 'max' fits it)")
+    ap.add_argument("--cache-tokens", type=int, default=8000, help="agentic cache phase: shared prefix size")
+    ap.add_argument("--sustain-s", type=float, default=300, help="agentic sustain phase: seconds of back-to-back decodes")
     ap.add_argument("--agent-trace", default=None,
                     help="agent session to replay (default agent-traces/opencode-ledger.json; 'none' = no agent phase)")
     ap.add_argument("--agent-tool-mode", default="rendered", choices=["rendered", "api"],
@@ -791,6 +798,11 @@ def main():
     print(f"== {a.label}", flush=True)
     vm0 = vm_snapshot()
     res["vm_start"] = vm0
+    if a.agentic:
+        import agentic
+        res["thermal_start"] = agentic.thermal_state()
+        if a.pid:  # weights-only baseline: KV cost at the largest context = peak - idle
+            res["idle_footprint_mb"] = footprint_snapshot(_tree(a.pid)).get("phys_footprint_mb")
 
     def phase(name, fn):
         v0 = vm_snapshot()
@@ -858,6 +870,17 @@ def main():
                 print("  agent session: " + agent_replay.line(ag["summary"])
                       + (f" INVALID {ag['invalid']}" if ag["invalid"] else "")
                       + (f" flags {ag['flags']}" if ag["flags"] else ""), flush=True)
+        if a.agentic:
+            import agentic
+            if res.get("agent"):
+                res["agent"]["cache_hit_rate"] = agentic.hit_rate(res["agent"].get("turns"))
+            if "sweep" not in skip:
+                res["sweep"] = phase("sweep", lambda: agentic.t_sweep(a, log=lambda m: print(m, flush=True)))
+            if "cache" not in skip:
+                res["cache"] = phase("cache", lambda: agentic.t_cache(a, log=lambda m: print(m, flush=True)))
+            if "sustain" not in skip and a.sustain_s > 0:  # last: it heats the machine
+                res["sustain"] = phase("sustain", lambda: agentic.t_sustain(a, log=lambda m: print(m, flush=True)))
+            res["thermal_end"] = agentic.thermal_state()
     finally:
         if mem:
             mem.stop_ev.set(); mem.join(timeout=5)
@@ -878,6 +901,13 @@ def main():
     if res.get("agent"):
         inv += [f"agent: {x}" for x in res["agent"].get("invalid", [])]
         fl += [f"agent: {x}" for x in res["agent"].get("flags", [])]
+    for name in ("sweep", "cache", "sustain"):
+        if res.get(name):
+            inv += [f"{name}: {x}" for x in res[name].get("invalid", [])]
+            fl += [f"{name}: {x}" for x in res[name].get("flags", [])]
+    th = res.get("thermal_start") or {}
+    if th.get("battery") or th.get("low_power"):
+        fl.append("POWER: run started on battery or in Low Power Mode (numbers are not comparable with plugged-in runs)")
     for name, m in res["memory"].items():
         if (m.get("swapouts_delta") or 0) > 1000:
             fl.append(f"{name}: {m['swapouts_delta']} pages swapped out during the phase")
