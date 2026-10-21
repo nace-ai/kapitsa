@@ -16,9 +16,13 @@
 #include "ane/ane.h"
 #include "metal/gpu.h"
 
+#include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace ni::ane {
@@ -131,6 +135,17 @@ class FfnSplit {
   std::unique_ptr<Handoff> h_;
   FfnConfig cfg_;
   int fn_ = -1, T_ = 0, jobs_ = 0, last_jobs_ = 0;
+  // Keepalive: the Neural Engine sleeps after about a second idle and its first evaluation then blocks for
+  // 70-120 ms. For keep_window_s_ seconds after the last chunk a side thread runs one 512-row evaluation every
+  // keep_period_ms_ (about 7 ms of ANE time, ~0.4% duty; nothing after the window), so a request after a pause finds it awake. Zero window: off.
+  void keep_loop();
+  double keep_window_s_ = 0, keep_period_ms_ = 2000;
+  std::thread keep_;
+  std::mutex keep_mu_;  // held by the keepalive evaluation (it uses lane 0 / set 0) and briefly by begin_chunk
+  std::condition_variable keep_cv_;
+  bool keep_stop_ = false;
+  std::atomic<bool> in_chunk_{false};
+  std::atomic<double> last_use_{0};
   double wired0_ = 0, wired_load_ = 0, wired_run_ = 0;
   bool fault_used_ = false;
   size_t bytes_ = 0;

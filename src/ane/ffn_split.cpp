@@ -121,6 +121,11 @@ FfnSplit::FfnSplit(const FfnConfig& c, std::vector<FfnLayer> layers) : layers_(s
     throw;
   }
   startup_ms_ = now_ms() - t0;
+  // NI_ANE_KEEP_S (default 300): see keep_loop. 0 turns the keepalive off; NI_ANE_KEEP_MS sets its period.
+  keep_window_s_ = getenv("NI_ANE_KEEP_S") ? atof(getenv("NI_ANE_KEEP_S")) : 300;
+  if (getenv("NI_ANE_KEEP_MS")) keep_period_ms_ = std::max(100.0, atof(getenv("NI_ANE_KEEP_MS")));
+  last_use_ = now_ms();
+  if (keep_window_s_ > 0) keep_ = std::thread([this] { keep_loop(); });
 }
 
 void FfnSplit::init_resources() {
@@ -231,7 +236,30 @@ void FfnSplit::init_resources() {
   (void)prog_ms;
 }
 
-FfnSplit::~FfnSplit() { free_all(); }
+FfnSplit::~FfnSplit() {
+  {
+    std::lock_guard lk(keep_mu_);
+    keep_stop_ = true;
+  }
+  keep_cv_.notify_all();
+  if (keep_.joinable()) keep_.join();
+  free_all();
+}
+
+void FfnSplit::keep_loop() {
+  std::unique_lock lk(keep_mu_);
+  while (!keep_stop_) {
+    keep_cv_.wait_for(lk, std::chrono::duration<double, std::milli>(keep_period_ms_), [&] { return keep_stop_; });
+    if (keep_stop_) break;
+    if (in_chunk_ || fn_ >= 0) continue;
+    const double idle_ms = now_ms() - last_use_;
+    if (idle_ms < keep_period_ms_ || idle_ms > keep_window_s_ * 1000) continue;  // between chunks of a request, or asleep for good
+    try {
+      prog_->evaluate(*bind_[0][0][0]);
+    } catch (...) {
+    }
+  }
+}
 
 uint32_t FfnSplit::rotate_simdgroups(uint32_t hidden) {
   if (hidden % kSeg) return 0;
@@ -481,6 +509,10 @@ int FfnSplit::fn_for(int T) const {
 
 void FfnSplit::begin_chunk(int T) {
   if (T < 1 || T > int(kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
+  in_chunk_ = true;
+  {
+    std::lock_guard lk(keep_mu_);  // waits out a keepalive evaluation in flight (about 8 ms at most)
+  }
   fn_ = fn_for(T);
   T_ = T;
   jobs_ = 0;
@@ -593,6 +625,8 @@ bool FfnSplit::finish_chunk(double* ane_ms) {
   }
   if (ane_ms) *ane_ms = ms;
   fn_ = -1;
+  last_use_ = now_ms();
+  in_chunk_ = false;
   last_jobs_ = jobs_;
   if (jobs_ && wired_run_ == 0) wired_run_ = wired_mb() - wired0_;
   return ok;
