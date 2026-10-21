@@ -14,6 +14,8 @@ compiles in the background, and a prefill's numbers depend on whether it was rea
      and written); killed; a new one: the third's turn 2 is cached
   5. models that read images: a conversation that starts with an image, across a restart as from RAM, without encoding
      the image again
+  6. a DFlash drafter (when the server loads one): a long system block, then the server stops (SIGTERM): it must save
+     without crashing (the prefix checkpoint has no drafter ring), and the follow-up is cached after a restart
 usage: test_disk_cache.py <kapitsa> <model dir> [--tokens 4000] [--port 8197] [--server-args "--dflash none"] [--keep]
        test_disk_cache.py <kapitsa> <model dir> --ttft [--tokens N] [--rounds 2]
   --ttft: measures instead, per round: a server (cache on) writes turn 1 and stops; the next one answers turn 2 from the
@@ -315,11 +317,14 @@ def functional(tmp, log):
               "... without encoding the image again (its rows come from the SSD)", s.text()[m:][-500:])
         s.stop()
 
-    # 6. a DFlash drafter (--server-args "--dflash <drafter>"): the prompt's prefix checkpoint has no drafter ring, and the
-    #    save at stop used to dereference its null ring (a segfault: the server died at SIGTERM, the request after it too)
-    di = SERVER_ARGS.index("--dflash") if "--dflash" in SERVER_ARGS else -1
-    if di >= 0 and di + 1 < len(SERVER_ARGS) and SERVER_ARGS[di + 1] != "none":
-        s = Server(os.path.join(tmp, "home-dflash"), log)
+    # 6. a DFlash drafter (the server's own choice, or --server-args "--dflash <drafter>"): the prompt's prefix checkpoint
+    #    has no drafter ring, and the save at stop used to dereference its null ring (a segfault: the server died at
+    #    SIGTERM). Runs when the server's log says it loads a DFlash2 drafter.
+    s = Server(os.path.join(tmp, "home-dflash"), log)
+    if "DFlash2 drafter" not in s.text()[s.start_at:]:
+        print("SKIP the drafter step: this server loads no DFlash2 drafter", flush=True)
+        s.stop()
+    else:
         # (a long system block, a short user turn: the prefix checkpoint sits at the end of the system block)
         c7 = [{"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]},
               {"role": "user", "content": "Summarize the notes in one sentence."}]
