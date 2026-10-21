@@ -17,7 +17,7 @@ is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
 ## The README's tables
 
-What each cell of the README's tables ran, Mac by Mac (the runs are in the sections below).
+What each cell of the README's poster and its collapsed Nemotron table ran, Mac by Mac (the runs are in the sections below). The poster's prefill / decode cells pair each engine's decode with the 4K-prompt prefill of the same stored run in `bench/results`.
 
 **MacBook Pro M4 Pro 48 GB**
 - Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so the Nemotron table leaves them out.

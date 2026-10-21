@@ -1,0 +1,9 @@
+file f0.png
+duration 1.6
+file f1.png
+duration 1.4
+file f2.png
+duration 1.4
+file f3.png
+duration 2.4
+file f3.png

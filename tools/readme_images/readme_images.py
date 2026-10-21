@@ -119,6 +119,7 @@ PANELS_Y, HEAD, PAD, GAP = 372, 74, 14, 30
 FOOT_GAP, FOOT_LINE, FOOT_PAD = 44, 32, 30
 RH_MIN, RH_MAX = 88, 150
 F_MODEL, F_VAL, F_KVAL, F_UNIT, F_METH, F_KMETH, F_DASH = 32, 42, 44, 25, 20, 21, 28
+F_CCOMB = 25                        # the other engines' 'prefill / decode'
 F_COMB = 40                         # 'prefill / decode', both at one size and weight
 M_GAP = 14                          # a number's baseline to the top of its method label
 CAP = 0.705                         # cap height of SF Pro and SF Mono, per em
@@ -298,8 +299,14 @@ def poster(data, theme):
                     continue
                 best = v == top
                 o.append(rect(cx + 3, ry + 5, cw - 6, rh - 10, 10, t["greys"][lvl]))
-                o.append(text(mid, vb, fmt(v), "mono-b" if best else "mono", F_VAL,
-                              t["ink"] if best else (t["ink2"] if theme == "light" else t["muted"]), "middle"))
+                ink = t["ink"] if best else (t["ink2"] if theme == "light" else t["muted"])
+                if combined:                  # the same 'prefill / decode', the prefill from the engine's own run
+                    cr = cell(row, e)[2]
+                    pre = cr.get("prefill") if isinstance(cr, dict) else None
+                    o.append(text(mid, vb, f"{fmt(pre) if pre else DASH} / {fmt(v)}", "mono-b" if best else "mono",
+                                  F_CCOMB, ink, "middle"))
+                else:
+                    o.append(text(mid, vb, fmt(v), "mono-b" if best else "mono", F_VAL, ink, "middle"))
                 if meth:
                     o += method_label(mid, mb, meth, "sans-m", F_METH, t["method"])
                 if k is not None and v > k:
@@ -533,10 +540,10 @@ def main():
     print("README header alt text:", data["header"]["title"] + ". " + header_desc(data, rows[::-1]))
     words = "zero one two three four five six seven eight nine ten eleven twelve".split()
     others = len(data["engines"]) - 1
-    print("README poster alt text: Prefill and decode speed (a 4K prompt, then a 512-token coding answer) for Kapitsa, and decode speed for "
+    print("README poster alt text: Prefill and decode speed (a 4K prompt, then a 512-token coding answer) for Kapitsa and "
           f"{words[others] if others < len(words) else others} other engines on "
           + " and ".join("a " + m["name"] for m in data["poster"]["macs"])
-          + ", each engine in its fastest setup and its speculative decoding method; the numbers are in the tables below")
+          + ", each engine in its fastest setup and its speculative decoding method; the numbers are in the poster; Nemotron models not on it are in the collapsed table below")
 
 
 if __name__ == "__main__":

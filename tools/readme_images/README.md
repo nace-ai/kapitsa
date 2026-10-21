@@ -28,13 +28,19 @@ Everything is in `readme_images.json`:
 - **`engines`:** column order (Kapitsa first), logo, tile color, and the version shown under the name. A `\n`
   splits a version onto two lines.
 - **`poster.macs[].rows[].cells`:** one cell per engine. It is one of:
-  - `{"value": tok/s, "method": "KFlash" | "DFlash2" | "MTP" | "no spec" | ...}`; Kapitsa's cell can add
-    `"prefill": tok/s` (a 4K prompt); when any Kapitsa cell has it, the column is wider and every Kapitsa cell reads `prefill / decode`, in one size;
+  - `{"value": tok/s, "method": "KFlash" | "DFlash2" | "MTP" | "no spec" | ...}`; a cell can add
+    `"prefill": tok/s` (a 4K prompt, the same engine's stored run); when any cell has it, every cell reads `prefill / decode` in one size
+    (Kapitsa's column is wider), and a cell without it shows a dash before the slash;
   - `null`, drawn as a dash: not measured;
   - `"x"`, drawn as ×: can't run on that Mac.
 - **`header`:** which Mac and model row the header's bars show, and which engines, in order (sorted by speed).
 
-The README's tables are written by hand in README.md; keep them in sync with the poster. The 16:9 grid keeps its data inline in `reddit_grid.py`.
+The poster is the README's only source of speed numbers (the collapsed table under it holds the Nemotron models the poster leaves out, written by hand). The 16:9 grid keeps its data inline in `reddit_grid.py`.
+
+## The Watch → Custom → Releases GIF
+
+`watch_releases.html?N` draws step N (0 to 3) of the walkthrough; `watch_releases.txt` is the ffmpeg concat list (frames `f0.png` to `f3.png`, from headless Chrome at 880x480).
+`ffmpeg -f concat -i watch_releases.txt -vf "scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=48[p];[b][p]paletteuse=dither=none" docs/assets/watch-releases.gif` gives the 47 KB file.
 
 ## Assets
 
