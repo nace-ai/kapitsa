@@ -1597,6 +1597,17 @@ All at 2 loops. Kapitsa's last-loop KV, its default, wrote 67.8 tok/s at T = 0.6
 shows per-loop KV with speculative decoding. The "no support" cells are those found on the M4 Pro, at the same
 versions ([Bolt](#nemotron-35-bolt), [Dory](#nemotron-dory10-4b-2026-10-19)).
 
+Kapitsa's row above is the 2026-10-19 session, before the M5 prefill kernels
+([#205](https://github.com/nace-ai/kapitsa/pull/205)). On 2026-10-22 03:26 (main at `fd01fe9`, per-loop KV, the row's
+setting) it read **618 / 543 tok/s** at 4K / 16K and decoded **72.4 / 80.5 tok/s** (T = 0.6 / greedy), with cached
+follow-ups at 0.10 / 0.15 s and a peak footprint of 5.1 GB plus 0.65 GB of mapped clean pages; its last-loop KV
+default wrote 71.7 (one of the five runs looped, flagged) / 72.5 at 4.3 GB,
+[`dory-kapitsa-perloop-20261022-032657.json`](../bench/results/2026-10-22-m5pro-dory/README.md); the 5.1 GB peak is
+1.0 GB above the row's 4.1, more than the 0.3-0.8 GB rise of the four models above, and is not attributed here. That is
+1.04x the row's decode at T = 0.6 and 1.06x greedy, but only 1.04x / 1.03x on prefill: the QMT prefill kernels cover
+the Qwen3.5 backend and Dory's own kernels are unchanged. Another app used 7% of the GPU through both prefill phases of
+the run (flagged), so those two cells are lower bounds; the decode phases ran quiet.
+
 ## KFlash trees (M4 Pro, 2026-10-21)
 
 [#187](https://github.com/nace-ai/kapitsa/pull/187) made KFlash the default. Every drafter's candidates are now verified
