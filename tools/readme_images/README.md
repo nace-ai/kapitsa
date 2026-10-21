@@ -28,7 +28,7 @@ Everything is in `readme_images.json`:
   splits a version onto two lines.
 - **`poster.macs[].rows[].cells`:** one cell per engine. It is one of:
   - `{"value": tok/s, "method": "KFlash" | "DFlash2" | "MTP" | "no spec" | ...}`; Kapitsa's cell can add
-    `"prefill": tok/s` (a 4K prompt), drawn as a third line;
+    `"prefill": tok/s` (a 4K prompt); when any Kapitsa cell has it, the column is wider and every Kapitsa cell reads `prefill / decode`, in one size;
   - `null`, drawn as a dash: not measured;
   - `"x"`, drawn as ×: can't run on that Mac.
 - **`header`:** which Mac and model row the header's bars show, and which engines, in order (sorted by speed).
