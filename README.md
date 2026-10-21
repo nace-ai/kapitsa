@@ -51,7 +51,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Qwen
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>Splash</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**201&nbsp;tok/s**</mark><br><sub>KFlash</sub> | 102<br><sub>MTP</sub> | —<br><sub>no support</sub> | 137<br><sub>MTP</sub> | 109<br><sub>MTP</sub> | 104<br><sub>MTP</sub> | 81<br><sub>no speculative<br>decoding</sub> | 70<br><sub>MTP</sub> | 88<br><sub>MTP</sub> |
 | Qwen3.8<br>27B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**63&nbsp;tok/s**</mark><br><sub>KFlash</sub> | 45<br><sub>DFlash2</sub> | 53<br><sub>DFlash2</sub> | 54<br><sub>DFlash2</sub> | 32<br><sub>MTP</sub> | 36<br><sub>MTP</sub> | 15<br><sub>no speculative<br>decoding</sub> | 18<br><sub>MTP</sub> | 28<br><sub>MTP</sub> |
@@ -59,7 +59,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Nemotron
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark><br><sub>loops</sub> | —<br><sub>no support</sub> | 6<br><sub>no speculative<br>decoding</sub> | 48<br><sub>no speculative<br>decoding</sub> |
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**112&nbsp;tok/s**</mark><br><sub>KFlash</sub> | — | — | 65<br><sub>DSpark</sub> |
@@ -69,7 +69,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Qwen
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>Splash</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1,<br>llama.cpp runtime 2.60.0</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**332&nbsp;tok/s**</mark><br><sub>DFlash</sub> | 192<br><sub>MTP</sub> | —<br><sub>no support</sub> | 271<br><sub>MTP</sub> | 213 | 175<br><sub>MTP</sub> | 154<br><sub>no speculative<br>decoding</sub> | 160<br><sub>MTP</sub> | 148<br><sub>MTP</sub> |
 | Qwen3.8<br>27B<br><sub>4-bit</sub> | <mark>**102&nbsp;tok/s**</mark><br><sub>DFlash2</sub> | 93<br><sub>DFlash2</sub> | — | 🟩&nbsp;**130**<br><sub>DFlash2</sub> | 68 | 69<br><sub>MTP</sub> | 32<br><sub>no speculative<br>decoding</sub> | 51<br><sub>MTP</sub> | 54<br><sub>MTP</sub> |
@@ -78,7 +78,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Nemotron
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1,<br>llama.cpp runtime 2.60.0</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**117&nbsp;tok/s**</mark><br><sub>loops</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | 9 | 76 |
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**239&nbsp;tok/s**</mark><br><sub>DSpark</sub> | 190 | 190 | 153 | 131 | 110 | 159 | 139 |
@@ -89,7 +89,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Qwen
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>Splash</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**95&nbsp;tok/s**</mark><br><sub>KFlash</sub> | 55<br><sub>MTP</sub> | —<br><sub>no support</sub> | 62<br><sub>MTP</sub> | 55<br><sub>MTP</sub> | 42<br><sub>MTP</sub> | 47<br><sub>no speculative<br>decoding</sub> | 38<br><sub>MTP</sub> | 46<br><sub>no speculative<br>decoding</sub> |
 | Qwen3.5<br>9B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**51&nbsp;tok/s**</mark><br><sub>DFlash</sub> | —<br><sub>not run</sub> | —<br><sub>no support</sub> | 37<br><sub>MTP</sub> | —<br><sub>not run</sub> | —<br><sub>not run</sub> | —<br><sub>not run</sub> | —<br><sub>not run</sub> | 30<br><sub>no speculative<br>decoding</sub> |
@@ -97,7 +97,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Nemotron
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**40&nbsp;tok/s**</mark><br><sub>no speculative<br>decoding</sub> | —<br><sub>no support</sub> | 4<br><sub>no speculative<br>decoding</sub> | 30<br><sub>no speculative<br>decoding</sub> |
 | Nemotron 3 Nano 4B<br><sub>FP8</sub> | 🟩&nbsp;<mark>**37&nbsp;tok/s**</mark><br><sub>prompt lookup</sub> | —<br><sub>not run</sub> | 28<br><sub>Q4_K_M</sub> | 21<br><sub>BF16</sub> |
@@ -107,7 +107,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Qwen
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>Splash</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Splash<br>1.4.0</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1,<br>llama.cpp runtime 2.60.0</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Qwen3.5<br>4B<br><sub>4-bit</sub> | 🟩&nbsp;<mark>**179&nbsp;tok/s**</mark><br><sub>DFlash</sub> | 113<br><sub>MTP</sub> | —<br><sub>no support</sub> | 163<br><sub>MTP</sub> | 134<br><sub>MTP</sub> | 113<br><sub>MTP</sub> | 89<br><sub>no speculative<br>decoding</sub> | 93<br><sub>MTP</sub> | 101<br><sub>MTP</sub> |
 | Qwen3.8<br>27B<br><sub>4-bit</sub> | <mark>**61&nbsp;tok/s**</mark><br><sub>DFlash2</sub> | 51<br><sub>DFlash2</sub> | — | 🟩&nbsp;**71**<br><sub>DFlash2</sub> | 40<br><sub>MTP</sub> | 41<br><sub>MTP</sub> | 17<br><sub>no speculative<br>decoding</sub> | 30<br><sub>MTP</sub> | 32<br><sub>MTP</sub> |
@@ -115,7 +115,7 @@ kapitsa update                  # update now (it also updates itself)
 
 #### Nemotron
 
-| Model | <mark>**Kapitsa**</mark> | <sub>oMLX</sub> | <sub>mlx‑serve</sub> | <sub>Ollama</sub> | <sub>MTPLX</sub> | <sub>LM&nbsp;Studio</sub> | <sub>llama.cpp</sub> | <sub>MLX</sub> |
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1,<br>llama.cpp runtime 2.60.0</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**70&nbsp;tok/s**</mark><br><sub>loops</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | 13 | 53 |
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**136&nbsp;tok/s**</mark><br><sub>DSpark</sub> | 124<br><sub>MTP</sub> | 115<br><sub>MTP</sub> | 92 | 101 | 72 | 101<br><sub>MTP</sub> | 94 |
