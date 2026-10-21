@@ -101,3 +101,6 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_compare
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_compare.py build

@@ -553,6 +553,41 @@ newest by default), and `--submit --dry-run` prints exactly what it would send, 
 address, without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
 [bench/community](../bench/community/README.md).
 
+### Comparing engines on this Mac
+
+`kapitsa bench compare` runs the same protocol against the other local engines that are installed here, one at a time,
+and ranks them. Nothing is installed or downloaded for you, nothing is sent anywhere, and nothing is shared unless you
+paste the report yourself.
+
+```bash
+kapitsa bench compare                 # asks which model (4b, 27b, 35b) in a terminal; 4b elsewhere
+kapitsa bench compare --list          # which engines it found, which are missing and how to get them; measures nothing
+kapitsa bench compare --model 4b --engines kapitsa,omlx,mlx-serve
+kapitsa bench compare --quick         # 4K prompt only, 2 decode runs: about 3 minutes per engine
+kapitsa bench compare --json          # JSON on stdout (progress goes to stderr)
+kapitsa bench compare --report        # a Markdown report to paste into an issue or a PR
+```
+
+It looks for oMLX, mlx-serve, mlx-lm, llama.cpp, Ollama, LM Studio, MTPLX, Rapid-MLX and mlx-vlm on your `PATH` and at
+the usual `OMLX_BIN`, `MLX_SERVE_BIN`, `MLX_LM_SERVER`, `LLAMA_SERVER`, `OLLAMA_BIN`, `LMS_BIN` and so on. For each one
+it runs the best configuration the [harness](../bench/harness/README.md) has for the model (its speculative decoding on,
+when it has one, the way that engine is meant to be run) through `bench/harness/compare_engines.py`, under the GPU lock, with
+thinking off and the same sampler, prompts and corpus for everyone. An engine that is not installed, or whose weights
+are not on this Mac, is listed under "skipped" with the reason and how to get it. One engine failing does not stop the
+others.
+
+The table ranks engines by decode tok/s, with prefill tok/s, the time to the first token (cold and with the prompt cached)
+and peak memory. The files are in `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`,
+`report.md` and the per-engine logs. `--report FILE` writes the report there too.
+
+The report has a "Who beats Kapitsa here, and why" part. The reasons come only from what the configurations say
+(speculative decoding, quantization, weights folder, versions) and memory, and the report says plainly that they are
+leads for a look, not findings. **Run it on a quiet Mac, plugged in**: a run waits up to 5 minutes per engine for other apps to leave the GPU
+and marks a number it could not get quiet. If another engine beats Kapitsa on your Mac, open the
+"Engine comparison" issue with the report: that is how we find out.
+
+It needs the repository's `bench/harness` folder (`KAPITSA_HARNESS` names another copy) and macOS Python 3.
+
 ## Running in the background
 
 Homebrew arrives with the first release. `brew services start kapitsa` then runs `kapitsa serve` (the best model for

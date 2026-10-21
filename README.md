@@ -28,6 +28,7 @@ kapitsa serve                   # chat + OpenAI/Anthropic APIs at http://127.0.0
 kapitsa claude                  # Claude Code on Kapitsa (also: codex, opencode, pi)
 kapitsa doctor                  # this Mac's GPU and memory, and which models fit it
 kapitsa bench                   # benchmark this Mac, share it with the community
+kapitsa bench compare           # the same test against the other engines installed here
 kapitsa pull 27b                # download a model without starting it
 kapitsa list                    # downloaded models and their size
 kapitsa rm 27b                  # delete a downloaded model
@@ -121,7 +122,7 @@ kapitsa update                  # update now (it also updates itself)
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**136&nbsp;tok/s**</mark><br><sub>DSpark</sub> | 124<br><sub>MTP</sub> | 115<br><sub>MTP</sub> | 92 | 101 | 72 | 101<br><sub>MTP</sub> | 94 |
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**79&nbsp;tok/s**</mark><br><sub>LiLiCorr</sub> | 39<br><sub>no spec</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | 41 |
 
-<sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md).</sub>
+<sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes what to [paste into an issue](https://github.com/nace-ai/kapitsa/issues/new?template=engine-comparison.yml).</sub>
 
 ## Models
 

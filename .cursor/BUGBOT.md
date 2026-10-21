@@ -39,6 +39,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
   `$BENCH_GPU_LOCK` (default `~/.cache/nace-gpu.lock`, i.e. `lockf -k -t <ms> <file> <command>`), unless the caller sets
   `NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1` because it already holds it. Flag a new GPU-using path that skips it. Tests
   must point `BENCH_GPU_LOCK` at a temporary file, never at the real lock.
+- `kapitsa bench compare` (bench/harness/kbench.py) must stay a wrapper over the harness's own scripts: one engine at a
+  time under the GPU lock, the same protocol for every engine, nothing installed, downloaded or sent for the user. Flag a
+  new network call, a telemetry or upload path, an auto-install, or a "reason" in its report that is not derived from a
+  configuration fact or a measured number.
 - Benchmark and quality inputs (bench/prompts, bench/quality/ids_*, bench/quality/src, bench/results, bench/community/results)
   are frozen: flag edits to them that are not clearly intended, and any regenerated or reformatted copy.
 

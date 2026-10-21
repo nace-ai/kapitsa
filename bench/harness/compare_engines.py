@@ -1087,7 +1087,7 @@ def run_config(c, args, stamp):
         leaks = [s["name"] for s in result["warmup"]["steps"] if s.get("thinking_leak")]
         if leaks:
             log(f"{label}: WARNING: thinking was not switched off in warm-up {leaks}; runs will be INVALID")
-        qok, qwait, busy = gpu_hogs.wait_quiet(args.quiet_max, 15, args.quiet_timeout, exclude_roots=lambda: mon_roots,
+        qok, qwait, busy = gpu_hogs.wait_quiet(args.quiet_max, args.quiet_s, args.quiet_timeout, exclude_roots=lambda: mon_roots,
                                                log=lambda m: log(f"{label}: {m}"), own_max=args.quiet_max)
         prov["gpu_quiet_wait_s"] = round(qwait, 1)
         if not qok:
@@ -1258,6 +1258,7 @@ def main():
     ap.add_argument("--reverse", action="store_true", help="run configs in reverse order (interleave across sessions)")
     ap.add_argument("--quiet-max", type=float, default=gpu_hogs.FOREIGN_MAX_PCT)
     ap.add_argument("--quiet-timeout", type=float, default=300)
+    ap.add_argument("--quiet-s", type=float, default=15, help="seconds the GPU must stay quiet before a run (default 15)")
     ap.add_argument("--lock-timeout", type=float, default=None)
     ap.add_argument("--out-dir", default=None, help="results, logs and engine state (default $BENCH_OUT or bench/harness/runs)")
     ap.add_argument("--env-file", default=None, help=f"KEY=VALUE file of paths for this Mac (default {os.path.relpath(bench.LOCAL_ENV)} if present)")
