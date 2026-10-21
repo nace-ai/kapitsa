@@ -4,7 +4,7 @@ Kapitsa's prefill on the M5 Pro after the M5 prefill kernels landed ([#205](http
 GEMMs, [#215](https://github.com/nace-ai/kapitsa/pull/215) attention, the Nemotron-H kernels of 2026-10-20), written by
 [bench/harness](../../harness/README.md): `compare_engines.py configs/kapitsa.json configs/lightning.json --skip agent`, the full
 protocol minus the agent session, one config at a time under the GPU lock. MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro, 48 GB, macOS 26.5.2, on AC power.
-Kapitsa 0.2.2 (b50f1fc, main after #239). Times are local (UTC+5), 19:56-20:12.
+Kapitsa 0.2.2: the first set (19:56-20:12 local, UTC+5) is b50f1fc (main after #239); the second set (22:00-22:30) records `git_head` a13f8fd, a commit on the #241 branch that differs from b50f1fc only in README, docs, poster and stored results (no source or build files), so it is the same engine.
 
 The README poster's M5 Pro cells for Kapitsa on the 27B, 35B-A3B and Lightning are the second set of runs below (22:00-22:30), prefill and
 decode from the same run; the 4B is not on the poster's M5 Pro panel any more. The first set (19:56-20:12) predates them and is kept. The
