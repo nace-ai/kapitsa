@@ -10,8 +10,8 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 
 ## 🔥 What's new
 
-- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and nearly 2× oMLX.** One verify pass checks a whole tree of the drafter's guesses. M4 Pro, decode at T=0.6: 63 vs 18 tok/s on the 27B, 201 vs 102 on the 4B; +6% over the build before it on the 27B ([how it works](docs/kflash.md), [#187](https://github.com/nace-ai/kapitsa/pull/187)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 21 of 24 model and Mac pairs** against eight engines, up to 2.3× MLX (27B, M5 Pro, 74 vs 32 tok/s). On the M5 Pro Kapitsa is the 10-21 re-run and the others the 10-19 runs ([poster](#benchmarks)).
+- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and nearly 2× oMLX.** One verify pass checks a whole tree of the drafter's guesses. M4 Pro, decode at T=0.6: 63 vs 18 tok/s on the 27B, 201 vs 102 on the 4B; +6% over the build before it on the 27B, −3% on a long agent turn ([how it works](docs/kflash.md), [#187](https://github.com/nace-ai/kapitsa/pull/187)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 21 of 24 model and Mac pairs** against eight engines, up to 2.3× MLX (4B, M4 Pro, 201 vs 88 tok/s). On the M5 Pro Kapitsa is the 10-21 re-run and the others the 10-19 runs ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B ([#207](https://github.com/nace-ai/kapitsa/pull/207)).
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (Qwen3.5 4B, M5 Pro, a busy GPU, not bit-identical, no output check yet; [#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215)).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** M4 Pro, 35B: a 16K-token follow-up starts in **0.16 s instead of 17 s**, about 100× ([#212](https://github.com/nace-ai/kapitsa/pull/212), `--disk-cache`).
