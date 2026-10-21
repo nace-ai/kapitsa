@@ -5,7 +5,8 @@
 // Then dfl_attn_qk (fused q / k norm + RoPE) against dfl_qk_prep + dfl_attn_mma at 8 / 16 / 32 splits, host- and
 // GPU-planned. DAT_MMA_ONLY=1 skips the scalar kernel (its threadgroup memory exceeds what the two Metal validation
 // layers together allow), DAT_REPS=n times n back-to-back pairs per command buffer, DAT_PARTS=1/2 only the attention
-// / the reduce, DAT_SRC=<file> + DAT_KERNEL=<name> (+ DAT_THREADS) a variant appended to the library.
+// / the reduce, DAT_SRC=<file> + DAT_KERNEL=<name> (+ DAT_THREADS) a variant appended to the library,
+// DAT_PAIR_ONLY=1 only the last check (the pair GEMM, the one kernel here with no threadgroup-memory problem).
 // The last check is the 16-row drafting block's pair GEMM (qmm8t2d / qmm8t2dp) against two per-tile qmm8t dispatches
 // on the same T tables, bitwise; it needs the tensor library (Apple10, macOS 26) and is skipped otherwise.
 #include "metal/gpu.h"
@@ -32,6 +33,7 @@ int main(int argc, char** argv) {
   std::vector<int> Ps;
   for (int i = 1; i < argc; ++i) Ps.push_back(atoi(argv[i]));
   if (Ps.empty()) Ps = {1, 85, 700, 2047, 2048, 2055, 4100, 9000};
+  if (getenv("DAT_PAIR_ONLY")) Ps.clear();  // only the pair-GEMM check, for a validation-layer run of that kernel
   Gpu& g = Gpu::get();
   if (const char* src = getenv("DAT_SRC")) {  // extra kernel source (variants of dfl_attn_qk, picked by DAT_KERNEL)
     FILE* f = fopen(src, "rb");
