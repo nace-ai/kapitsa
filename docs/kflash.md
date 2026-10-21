@@ -1,6 +1,6 @@
 # KFlash: verifying the drafter's best guesses as a tree
 
-**In short:** a speculative decoder guesses several tokens and lets the big model check them, but engines that run a drafter as published check one chain and stop at its first wrong guess. KFlash checks a best-first tree of the drafter's candidates in the same 8-row pass, and keeps only tokens the big model itself writes, so a greedy reply is the one plain decoding writes. On an M4 Pro against the engine just before it, that was 6% faster on the 27B's coding answer and 16% on its prose answer, with 15-23% more for three requests at once.
+**In short:** a speculative decoder guesses several tokens and lets the big model check them, but engines that run a drafter as published check one chain and stop at its first wrong guess. KFlash checks a best-first tree of the drafter's candidates in the same 8-row pass, and keeps only tokens the big model itself writes, so a greedy reply is the one plain decoding writes. On an M4 Pro against the engine just before it, that was 6% faster on the 27B's coding answer and 16% on its prose answer, and with three requests at once the 27B gained 15-23%.
 
 Kapitsa writes several tokens per pass of the big model. A small block drafter guesses the next 7 tokens, and the
 target model checks all of them in one pass of 8 rows: the last token it wrote, plus the 7 guesses. It keeps the guesses
