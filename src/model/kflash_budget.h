@@ -144,6 +144,7 @@ class KfBatch {
   struct Member {
     float lc[kDrafts] = {};    // log c_p, p = 0 .. 6
     bool sampled = false;      // T > 0: exact speculative sampling (this budget's calibration)
+    bool masked = false;       // its rows sample under a grammar's masks (structured output): no calibration records
     int kmax = kDrafts;        // drafts it may verify
     float surv[kDrafts] = {};  // (plan) its survivals
   };
@@ -151,7 +152,8 @@ class KfBatch {
   // from `greedy`'s calibration (the drafter's KfBudget; null: the identity). Returns the rows in all.
   int plan(Member* m, int M, const KfBudget* greedy, int* k);
   // After the cycle: each member's verified drafts k[g] and accepted drafts a[g] (<= k[g]), the cycle's GPU ms (its
-  // drafting passes' command buffer and the verify's). The greedy members' records go to `greedy`.
+  // drafting passes' command buffer and the verify's). The greedy members' records go to `greedy`; a masked member's
+  // acceptances (a grammar's, not the drafter's) are no records, but its tokens and rows count in the rate and cost.
   void observe(const Member* m, int M, const int* k, const int* a, double ms, KfBudget* greedy);
   void save(int fresh = 1);
   // for logs: cycles by members and rows, tokens per cycle expected and got, rates, costs, the sampled calibration

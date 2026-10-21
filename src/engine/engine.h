@@ -2,6 +2,7 @@
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
 // included) and Nemotron-H models (NVIDIA's safetensors).
 #pragma once
+#include "engine/grammar.h"
 #include "engine/prefix_cache.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
@@ -184,6 +185,9 @@ struct ChatRequest {
   int loops = 0;
   std::string effort;
   int thinking_budget = -1;     // Anthropic thinking.budget_tokens; 0: thinking disabled
+  // Structured output (src/engine/grammar.h: a JSON schema, any JSON object, tool calls the request forces or strict
+  // tools): what the reply must follow after its reasoning, or null. The engine samples each token under its mask.
+  std::shared_ptr<const Grammar> grammar;
 };
 
 struct ToolCall {
@@ -321,6 +325,10 @@ class Engine {
   // query (not a tool response); those are kept through tool loops (see Engine::chat).
   struct TurnCheckpoint : Checkpoint {
     bool query = false;
+    // The slot's prefix checkpoint (the last one of ckpts): the state at the end of the system block, saved while a
+    // prompt is read through it and never overwritten by a turn boundary, so a new question that shares the system
+    // prompt and tools restores it however early it diverges. It has no drafter snapshot (the ring starts empty).
+    bool prefix = false;
   };
   struct Slot {
     std::unique_ptr<Seq> seq;
@@ -436,7 +444,19 @@ class Engine {
     bool runner = false;
     bool stopped = false;  // its handle() said stop in the last cycle (it leaves as done)
     int cycles = 0, tokens = 0;
+    // structured output: the request's grammar and its state there (its chat()'s, advanced by its handle()); while
+    // *g_on its rows sample under masks the runner computes (null: no grammar)
+    const GrammarMatcher* gm = nullptr;
+    GrammarState* gst = nullptr;
+    const bool* g_on = nullptr;
+    bool masked() const { return gm && *g_on; }
   };
+  // Structured output: a verify's masks, Seq::mask rows 0 .. rows - 1, from the grammar's state after the anchor
+  // tokens[P]: row r's is the state after row r's path (parent[r]: a tree's, null: a chain's, r - 1; rows from `live` on
+  // are never accepted). A row whose path the grammar does not allow is never accepted either (its parent's masked
+  // sample is not its token): any mask.
+  static void verify_masks(const GrammarMatcher& gm, const GrammarState& at, Seq& s, int P, int rows, const int* parent,
+                           int live);
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
   // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched);
   // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
@@ -508,9 +528,19 @@ class Engine {
   bool spec_ = false;
   size_t budget_ = 0;    // GPU memory budget (bytes)
   int context_fit_ = 0;  // see context_fit()
+  bool prefix_copy_ = true;   // a slot without the prefix checkpoint copies another's (NI_PREFIX_COPY=0: reads it)
+  bool prefix_ckpt_ = false;  // slots keep a prefix checkpoint (TurnCheckpoint::prefix)
   size_t fixed_bytes_ = 0;  // allocated at start (model, buffers, slots' state): context_fit_'s base
   long spec_cycles_ = 0, spec_accepted_ = 0;
   ChatRequest defaults_;
+  // Structured output: the vocabulary as grammars read it (built by the first request with a grammar, before its GPU
+  // turn), and the event a pass's sampler waits on until the host has written the pass's masks (one value per pass,
+  // in the order the passes run; under the turn)
+  std::shared_ptr<const TokenTable> token_table();
+  std::shared_ptr<const TokenTable> table_;
+  std::mutex table_mu_;
+  void* mask_event_ = nullptr;
+  uint64_t mask_value_ = 0;
 
  public:
   // Looped models: the loop count a request runs (its "loops", else its effort or thinking budget mapped, else the

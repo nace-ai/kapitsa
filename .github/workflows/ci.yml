@@ -43,6 +43,14 @@ jobs:
       - uses: actions/checkout@v5
       - run: python3 tests/test_pr_size.py
 
+  agentic-metrics-script:
+    # bench/harness/agentic.py against a fake server: no model, no GPU.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tests/test_agentic.py
+
   build-and-test:
     # Changes that can affect the build or the tests only (the filter below). Not a required check, so a skipped run never blocks a docs-only PR.
     runs-on: macos-15
@@ -74,7 +82,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -104,7 +112,13 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_compare
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_compare.py build
       - name: test_logit_compare
         # the venv has no numpy: the standard library's path, which numpy's must match (the test compares them)
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_logit_compare.py
+      - name: test_structured --cli
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_structured.py --cli build

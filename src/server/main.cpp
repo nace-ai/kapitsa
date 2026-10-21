@@ -11,7 +11,7 @@
 //   kapitsa rm MODEL...
 //   kapitsa mtp-sidecar SRC OUT [--revision REV] [--hidden post_norm|pre_norm]   (tools/mtp_sidecar.py, same bytes)
 //   kapitsa import FILE.gguf [--name NAME] [--mtp FILE] [--threads N] [--force]   (src/gguf/import.h)
-//   kapitsa bench [--model M] [--quick] [--json] [--submit [--dry-run]] [--out FILE]; kapitsa bench submit [FILE]
+//   kapitsa bench [--model M] [--quick] [--json] [--submit [--dry-run]] [--out FILE]; kapitsa bench submit [FILE]; kapitsa bench compare
 //                 (bench_cmd.cpp: the harness's protocol on this Mac, its result, the community results)
 //   kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on|off]   (update_cmd.cpp; and once a day, in the
 //                 background, the automatic update)
@@ -113,6 +113,8 @@ static ChatRequest parse_request(const json& b, const ChatRequest& defaults) {
     r.effort = e;  // looped models: the loop count (Engine::request_loops)
   }
   r.loops = api::request_loops_field(b);
+  // structured output: response_format, tool_choice required or named, strict tools (src/api/chat_completions.cpp)
+  r.grammar = api::chat_grammar(b, r.tools);
   return r;
 }
 
@@ -290,7 +292,7 @@ static void print_help() {
          "  rm MODEL     delete a downloaded model\n"
          "  import FILE  convert a GGUF (LM Studio, Ollama, llama.cpp) into a model (kapitsa import --help)\n"
          "  doctor       this Mac's GPU and memory, and which models fit it (kapitsa doctor --help)\n"
-         "  bench        benchmark Kapitsa on this Mac and share the result (kapitsa bench --help)\n"
+         "  bench        benchmark Kapitsa (and other engines: bench compare) on this Mac (kapitsa bench --help)\n"
          "  update       update Kapitsa to its latest release; it also updates itself (kapitsa update --help)\n\n"
          "Models are stored in %s (KAPITSA_HOME moves them). HF_TOKEN is used when set.\n",
          KAPITSA_VERSION, models_table().c_str(), hub::tilde(hub::models_dir()).c_str());
@@ -912,6 +914,10 @@ static int serve(int argc, char** argv, int first) {
     try {
       body = json::parse(req.body);
       r = parse_request(body, engine.request_defaults());
+    } catch (const api::ApiError& e) {
+      res.status = e.status;
+      res.set_content(api::dump(api::chat_error(e.what(), e.type, e.code, e.param)), "application/json");
+      return;
     } catch (const std::exception& ex) {
       res.status = 400;
       res.set_content(api::dump(api::chat_error(std::string("bad request: ") + ex.what())), "application/json");

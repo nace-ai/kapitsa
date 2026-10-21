@@ -29,7 +29,8 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test`:
+CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test prefix_cache_test grammar_test
+structured_check`:
 
 ```bash
 build/api_test
@@ -42,10 +43,12 @@ python3 tests/test_community.py build        # needs: jsonschema
 python3 tests/test_reasoning.py
 python3 tests/test_pr_size.py
 python3 tests/test_logit_compare.py
+python3 tests/test_structured.py --cli build    # with a model folder's tokenizer when one is downloaded
 ```
 
 Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
-`batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`): run it only when allowed, and report it as run.
+`batch_check`, `ni_v8check`, `tests/test_server.py URL`, `tests/test_disk_cache.py`, `tests/test_structured.py URL`,
+`logit_mask_check`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
 

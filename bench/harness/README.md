@@ -50,7 +50,25 @@ its follow-ups read slightly faster than the harness's for the same server.
 | Cached TTFT, 4K and 16K | After that prompt, three follow-up user turns on the growing conversation (append-only, 1 s apart, as an agent loop), median time to first token. Engines that cache prefixes answer from the cache. |
 | Tool calls | Streaming and non-streaming requests with two tools, with thinking off and on, plus a tool-result round trip. "pass" = every check passed. |
 | Agent session | A real coding-agent session, replayed request by request: opencode fixing a small Python project, recorded on Kapitsa ([Agent session](#agent-session)). Per request the time to first token, the writing rate and the time; per session the total time, prefill and decode time, the mean writing rate and the follow-up TTFT (median, p90). |
+| Agent-harness metrics (opt-in, `--agentic`) | Cold start (spawn to first token, and the first request's penalty over later ones), cold TTFT and decode tok/s at 1K to the largest context that fits `--max-ctx`, TTFT of a new question on a shared prefix, TTFT of a follow-up in a grown conversation, and whether a prefix survives another conversation, the agent replay's cache hit rate, sustained decode with a thermal check, idle vs peak memory. Details: [Agent-harness metrics](#agent-harness-metrics-agentic). |
 | Peak memory | `phys_footprint_peak` of the server's whole process tree, in bytes, after every phase. Memory-mapped weights (llama.cpp's default mmap, Ollama's GGUF runner) are not part of `phys_footprint`; they are recorded separately as resident mapped files. |
+
+## Agent-harness metrics (`--agentic`)
+
+Off by default, so existing results and their comparability are untouched. `compare_engines.py --agentic` (or
+`bench.py --agentic`) adds these, from `agentic.py`, with the same fairness rules as the core phases (explicit sampling,
+thinking off, a nonce right after the system start on cold prompts, middle-window decode rates, the GPU lock):
+
+| Metric | How |
+| --- | --- |
+| Cold start | `compare_engines` measures spawn to ready, then three ~1K-token requests before any warm-up: spawn to first token, and the first request's penalty over the median of the others. The file cache is not purged (that needs root), so this is a warm-file-cache start. |
+| Sweep | Cold requests at `--sweep-sizes` (default 1000,2000,4000,8000,16000,max; max = the largest that fits `--max-ctx`), `--sweep-repeats` each: TTFT, prefill tok/s and decode tok/s at that context; decode retention = largest over smallest. |
+| Cache | A fixed ~`--cache-tokens` prefix: cold TTFT, a follow-up in the grown conversation (what a chat or tool loop sends), three new questions on the same prefix, then a second conversation and the first again: does the prefix survive? Engines that keep only live state or turn checkpoints reuse the follow-up but not a new question on a shared prefix, so the two are reported apart. Engines that report no cached tokens show `-`, a reported 0 shows 0%. The agent replay's follow-up cache hit rate (cached over prompt tokens) is added too. |
+| Sustain | Back-to-back decodes for `--sustain-s` (default 300), last phase; first-third vs last-third median tok/s, flagged above 10% falloff, with `pmset` thermal state before and after. Battery power is flagged; Low Power Mode makes the run INVALID. |
+| Memory | Idle footprint of the server before any request next to the peak, so the KV cost is visible. |
+
+`--skip sweep,cache,sustain` drops one; `compare_table.py` writes an extra table and `_agentic.csv`. Smoke runs
+(labels starting `smoke`) stay out of the tables.
 
 ## What makes a run count
 
@@ -523,6 +541,7 @@ python3 agent_replay.py --base-url http://127.0.0.1:8000/v1 --model qwen3.6-35b-
 | `bench.py` | The benchmark client: one server, all measurements, one result JSON |
 | `compare_engines.py` | Runs configs one at a time: lock, start, warm up, quiet wait, `bench.py`, stop, provenance |
 | `compare_table.py` | Markdown and CSV tables from result files |
+| `agentic.py` | The `--agentic` phases: cold start, context sweep, cache, sustained decode and thermal state |
 | `agent_replay.py` | The agent-session replay (bench.py's `agent` phase, or by hand) |
 | `agent-task/` | The coding task the agent solved: the project it got, the prompt, the bugs |
 | `agent-traces/` | Recorded agent sessions (`opencode-ledger.json`) |

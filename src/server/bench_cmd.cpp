@@ -77,7 +77,9 @@ const char* kHelp =
     "                  with your gh login, or a prefilled issue in the browser without gh\n"
     "  --dry-run       with --submit: print what it would send, the gh commands or the issue's address; nothing is sent\n"
     "  --yes           don't ask which model to run: the best for this Mac (submitting still asks)\n\n"
-    "  kapitsa bench submit [FILE] [--dry-run]   submit a saved result (default: the newest)\n\n"
+    "  kapitsa bench submit [FILE] [--dry-run]   submit a saved result (default: the newest)\n"
+    "  kapitsa bench compare [--model M] ...      Kapitsa against the other engines installed here, one table\n"
+    "                                            (kapitsa bench compare --help)\n\n"
     "Community results, and how they are checked: https://github.com/nace-ai/kapitsa/blob/main/bench/community\n";
 
 volatile sig_atomic_t g_stop = 0;    // a stop signal
@@ -1067,11 +1069,74 @@ int run(const Options& o) {
   return code;
 }
 
+// `kapitsa bench compare`: the engine comparison is bench/harness/kbench.py (the harness's own scripts, one engine at
+// a time under the GPU lock); this finds the harness and python3 and hands over. Nothing is fetched or installed.
+std::string find_harness() {
+  std::vector<std::string> dirs;
+  // a harness named by the caller is the one or none: a wrong path is an error, not a quiet fall back to another copy
+  if (const char* e = getenv("KAPITSA_HARNESS"); e && *e) dirs = {e};
+  else {
+    const std::string exe = self_path();
+    const std::string bin = exe.substr(0, exe.rfind('/'));
+    for (const char* rel : {"/../bench/harness", "/../../bench/harness", "/../share/kapitsa/bench/harness"})
+      dirs.push_back(bin + rel);
+    if (char cwd[PATH_MAX]; getcwd(cwd, sizeof cwd)) dirs.push_back(std::string(cwd) + "/bench/harness");
+  }
+  for (const std::string& d : dirs) {
+    struct stat st;
+    char real[PATH_MAX];
+    if (stat((d + "/kbench.py").c_str(), &st) == 0 && realpath(d.c_str(), real)) return real;
+  }
+  return "";
+}
+
+int run_compare(int argc, char** argv, int first) {
+  const std::string dir = find_harness();
+  if (dir.empty()) {
+    fprintf(stderr,
+            "kapitsa bench compare: the benchmark harness (bench/harness) was not found next to this kapitsa.\n"
+            "It is in the repository: git clone https://github.com/nace-ai/kapitsa, then run kapitsa from its build\n"
+            "folder, from the checkout, or with KAPITSA_HARNESS=<checkout>/bench/harness. Nothing is downloaded for you.\n");
+    return 2;
+  }
+  const char* py = getenv("KAPITSA_PYTHON");
+  std::vector<std::string> args = {py && *py ? py : "/usr/bin/python3", dir + "/kbench.py"};
+  struct stat st;
+  if (!(py && *py) && stat(args[0].c_str(), &st) != 0) args[0] = "python3";
+  for (int i = first; i < argc; ++i) args.push_back(argv[i]);
+  std::vector<char*> av;
+  for (auto& a : args) av.push_back(a.data());
+  av.push_back(nullptr);
+  // the engines are measured against this binary, and no update may replace it mid-run
+  setenv("KAPITSA_BIN", self_path().c_str(), 1);
+  setenv("KAPITSA_NO_AUTO_UPDATE", "1", 1);
+  if (!update::hold_for_benchmark())
+    return fail("kapitsa was updated as this benchmark started. Run kapitsa bench compare again.");
+  // a child, not exec: the hold on this binary (a lock on a descriptor that exec would close) lasts the whole run
+  static volatile pid_t child = 0;
+  const pid_t pid = fork();
+  if (pid < 0) return fail(std::string("can't start python: ") + strerror(errno));
+  if (pid == 0) {
+    execvp(av[0], av.data());
+    fprintf(stderr, "kapitsa bench compare: can't start %s (%s). It needs Python 3 (macOS: xcode-select --install).\n",
+            av[0], strerror(errno));
+    _exit(127);
+  }
+  child = pid;
+  // Ctrl-C reaches python too (same process group); a SIGTERM to us is passed on, and python stops its server
+  signal(SIGINT, SIG_IGN);
+  signal(SIGTERM, [](int) { if (child > 0) kill(child, SIGTERM); });
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
+  return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+}
+
 }  // namespace
 
 int run_bench(int argc, char** argv, int first) {
   Options o;
   const char* help = "kapitsa bench --help";
+  if (first < argc && std::string(argv[first]) == "compare") return run_compare(argc, argv, first + 1);
   if (first < argc && std::string(argv[first]) == "submit")
     return submit_saved(std::vector<std::string>(argv + first + 1, argv + argc));
   for (int i = first; i < argc; ++i) {

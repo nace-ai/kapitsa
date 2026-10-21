@@ -428,8 +428,9 @@ void KfBatch::observe(const Member* m, int M, const int* k, const int* a, double
       n += kg;
       tok += ag + 1;
       for (int p = 0; p < kg; ++p) e += m[g].surv[p];
-      // the records: every verified draft whose drafts before it were accepted, and whether it was
-      for (int p = 0; p < std::min(ag + 1, kg); ++p) {
+      // the records: every verified draft whose drafts before it were accepted, and whether it was (none of a masked
+      // member's: the grammar's masks decided its acceptances, which would bias the drafter's calibration)
+      for (int p = 0; p < (m[g].masked ? 0 : std::min(ag + 1, kg)); ++p) {
         const int d = p + 1;
         const bool hit = p < ag;
         if (m[g].sampled) {

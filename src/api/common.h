@@ -53,6 +53,15 @@ void join_text(std::string& acc, const std::string& piece);
 // an object is kept as {"arguments": <text>})
 ojson arguments_object(const ojson& args);
 
+// Structured output (src/engine/grammar.h). A JSON Schema format's own fields, {"schema": ..., "strict": ...} (Chat's
+// response_format.json_schema, Responses' text.format), into spec; ApiError (400, param) for a malformed one.
+void schema_format(const ojson& f, OutputSpec& spec, const std::string& param);
+// The grammar of `spec` over the request's tools as the prompt declares them (output_grammar), or null when nothing
+// constrains the reply; ApiError (400) for one that cannot be held, naming the field at fault (format_param: the
+// API's name for the format).
+std::shared_ptr<const Grammar> request_grammar(const OutputSpec& spec, const ojson& tools,
+                                               const std::string& format_param = "response_format");
+
 // The events of one streamed reply. The server calls begin() once the engine has counted the prompt and matched it
 // against its cache (prompt_tokens and cached_tokens set), or at once, without them, for a stream that starts before
 // the request runs (Chat Completions), delta() for each engine delta, keepalive() when nothing was sent for a while,

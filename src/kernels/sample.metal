@@ -162,3 +162,26 @@ NI_INLINE void sample_stage2_impl(const device float* cv, const device uint* ci,
   threadgroup uint topi[64];
   sample_stage2_impl(cv, ci, tokens, out_probs, p, p.step + uint(dstep[p.out_index]), tid, ntg, sv, si, topv, topi);
 }
+
+// ---- Structured output: token masks on logits rows ----
+// Before a row's top-k stage, the logits of the tokens its mask leaves out (bit t of the row's words clear) become -inf,
+// so the sampler and every speculative acceptance after it read the masked distribution: greedy picks the best allowed
+// token, sampling draws from the allowed ones renormalized. A word of all ones (every token allowed) writes nothing.
+// grid: (ceil(W / 256), R) threadgroups x 256 threads, one 32-token word per thread.
+struct LogitMaskParams {
+  uint V;      // logits per row that are tokens
+  uint W;      // mask words per row (ceil(V / 32))
+  uint ld;     // floats between two logits rows
+  uint mrow0;  // the mask row of logits row 0
+};
+[[kernel]] void logit_mask_rows(device float* logits [[buffer(0)]], const device uint* mask [[buffer(1)]],
+                                constant LogitMaskParams& p [[buffer(2)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint w = gid.x, r = gid.y;
+  if (w >= p.W) return;
+  const uint bits = mask[(p.mrow0 + r) * p.W + w];
+  if (bits == 0xffffffffu) return;
+  device float* row = logits + ulong(r) * p.ld + w * 32;
+  const uint n = min(32u, p.V - w * 32);
+  for (uint b = 0; b < n; ++b)
+    if (!((bits >> b) & 1u)) row[b] = -INFINITY;
+}

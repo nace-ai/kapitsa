@@ -48,6 +48,17 @@
   "note": "Kapitsa's default settings for the 4B (`kapitsa pull 4b`: lmstudio-community's MLX 4-bit plus Qwen's own MTP head, mtp.safetensors built from the official checkpoint's mtp.* tensors, and z-lab's DFlash drafter z-lab/Qwen3.5-4B-DFlash, the companion the default --dflash auto finds in the model's dflash2/ folder). --dflash names the drafter so a missing one fails the run instead of falling back to the MTP head; dense prefill is split between the GPU and the Neural Engine. --slots 1 for parity with llama.cpp -np 1."
  },
  {
+  "label": "q35-4b-kapitsa-4slots",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa (DFlash drafter, default slots)",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve",
+          "--model", "{models}/qwen3.5-4b-4bit-mtp", "--model-id", "qwen3.5-4b",
+          "--dflash", "{models}/drafters/Qwen3.5-4B-DFlash",
+          "--host", "127.0.0.1", "--port", "8091", "--ctx", "32768"],
+  "env": {"NI_PREFIX_CKPT": "{env:NI_PREFIX_CKPT=1}"},
+  "note": "The 4B the way an agent harness runs it: no --slots, so Kapitsa's default (4 slots where memory allows; a main agent, its subagents and side requests each keep a conversation). The other Kapitsa configs pass --slots 1 for parity with llama.cpp -np 1, which cannot show whether a prefix survives another conversation."
+ },
+ {
   "label": "q35-4b-bf16-kapitsa",
   "extends": "q35-4b-kapitsa",
   "model_name": "Qwen3.5-4B (bf16)",
