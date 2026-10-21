@@ -5,8 +5,6 @@
   python3 tools/community_check.py --github          in CI (.github/workflows/community-bench.yml): the results a pull
                                                      request adds, read as data through the API (none of its code runs),
                                                      checked, the pull request labeled, a report in the job summary
-  python3 tools/community_check.py --from-issue N    a result submitted as an issue (the "Benchmark result" form):
-                                                     checked and written into bench/community/results/ (uses gh)
 
 A result passes when it validates against bench/community/schema.json (needs `pip install jsonschema`; --no-schema
 skips it) and is plausible: a Kapitsa version that was released (a v<version> tag) or is the current one in
@@ -16,7 +14,7 @@ times and memory within physical bounds and consistent with each other (the medi
 first token, prompt sizes within 1% of the reference, follow-ups faster than cold prompts); not a copy of a result
 already in the table. Warnings (an unknown Mac, flags, a failed tool check) do not fail it. Stdlib only, but jsonschema.
 """
-import argparse, datetime, glob, hashlib, json, os, re, statistics, subprocess, sys, urllib.error, urllib.parse, urllib.request
+import argparse, datetime, glob, json, os, re, statistics, subprocess, sys, urllib.error, urllib.parse, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -329,37 +327,10 @@ def github(schema):
     return 0 if ok else 1
 
 
-def from_issue(number, repo, schema, use_git=True, into=RESULTS):
-    """A result submitted as an issue: its JSON out of the form, checked, written into bench/community/results/ (into)"""
-    body = subprocess.run(["gh", "issue", "view", str(number), "--repo", repo, "--json", "body", "--jq", ".body"],
-                          capture_output=True, text=True, check=True).stdout
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", body, re.S) or re.search(r"(\{.*\})", body, re.S)
-    if not m:
-        raise SystemExit(f"issue {number} has no JSON")
-    r = json.loads(m.group(1))
-    text = json.dumps(r, indent=2, ensure_ascii=False) + "\n"
-    chip = re.sub(r"[^a-z0-9.]+", "-", r["mac"]["chip"].lower().removeprefix("apple ")).strip("-")
-    model = re.sub(r"[^a-z0-9.]+", "-", r["model"]["name"]) + ("-" + r["model"]["variant"] if r["model"]["variant"] else "")
-    name = f"kapitsa-bench-{r['time_utc'][:10]}-{chip}-{model}{'-quick' if r['mode'] == 'quick' else ''}-" \
-           f"{hashlib.sha256(text.encode()).hexdigest()[:6]}.json"
-    report, ok = check_texts([(name, text)], schema, use_git, named=True)
-    print(markdown(report))
-    if not ok:
-        return 1
-    os.makedirs(into, exist_ok=True)
-    with open(os.path.join(into, name), "w", encoding="utf-8") as fh:
-        fh.write(text)
-    print(f"-> {os.path.join(os.path.relpath(into, REPO), name)} (from issue #{number}); then python3 tools/community_table.py")
-    return 0
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("files", nargs="*", help="result files to check")
     ap.add_argument("--github", action="store_true", help="check a pull request's results in CI (env GH_TOKEN, GITHUB_REPOSITORY, PR_NUMBER)")
-    ap.add_argument("--from-issue", type=int, metavar="N", help="take a result from issue N (with gh) into bench/community/results/")
-    ap.add_argument("--repo", default="nace-ai/kapitsa", help="for --from-issue")
-    ap.add_argument("--into", default=RESULTS, help="for --from-issue: where the result goes (default bench/community/results)")
     ap.add_argument("--no-schema", action="store_true", help="skip the schema (when jsonschema is not installed)")
     ap.add_argument("--no-git", action="store_true", help="known versions from CMakeLists.txt only, not the git tags")
     a = ap.parse_args()
@@ -372,10 +343,8 @@ def main():
         schema = json.load(open(os.path.join(COMMUNITY, "schema.json"), encoding="utf-8"))
     if a.github:
         return github(schema)
-    if a.from_issue:
-        return from_issue(a.from_issue, a.repo, schema, not a.no_git, a.into)
     if not a.files:
-        ap.error("name result files, or --github / --from-issue")
+        ap.error("name result files, or --github")
     report, ok = check_texts([(f, open(f, encoding="utf-8").read()) for f in a.files], schema, not a.no_git)
     print(markdown(report))
     return 0 if ok else 1

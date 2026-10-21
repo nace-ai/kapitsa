@@ -2,7 +2,7 @@
 //   bench_test self                    the Mac table, the names and formats, the embedded corpus (exit 1 on a failure)
 //   bench_test protocol CASES.json     the protocol's functions on the cases' inputs, as JSON (compared with bench.py's)
 //   bench_test result [quick]          a result file from a made-up run, as JSON (checked against schema.json)
-//   bench_test plan RESULT.json LOGIN  the pull request's plan and the issue form's address for a result, as JSON
+//   bench_test plan RESULT.json LOGIN  the pull request's plan for a result, as JSON
 //   bench_test machine                 this Mac and its conditions now, as the command records them
 //   bench_test run PORT                the protocol against a server on 127.0.0.1:PORT, with fixed nonces
 //   bench_test lock [HOLD_S]           takes the GPU lock (BENCH_GPU_LOCK), holds it HOLD_S seconds
@@ -283,10 +283,8 @@ int plan(const std::string& path, const std::string& login) {
   const std::string content = read(path);
   const ojson r = ojson::parse(content);
   const PrPlan p = pr_plan(target_repo(), login, r, content);
-  bool fits = false;
-  const std::string url = issue_url(target_repo(), result_title(r), r.dump(), &fits);
   printf("%s\n", ojson{{"repo", p.repo}, {"fork", p.fork}, {"branch", p.branch}, {"path", p.path}, {"title", p.title},
-                       {"body", p.body}, {"commands", p.commands}, {"issue_url", url}, {"issue_url_fits", fits},
+                       {"body", p.body}, {"commands", p.commands},
                        {"submit_problem", submit_problem(r)}, {"file_name", result_file_name(r)}}
                      .dump()
                      .c_str());

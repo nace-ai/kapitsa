@@ -317,7 +317,7 @@ def render(doc, t):
     if doc["skipped"]:
         out += ["", t.bold("Not measured")] + [skipped_line(s, t) for s in doc["skipped"]]
     out += ["", t.dim(f"Results and logs: {doc['out_dir']}"),
-            t.dim("`kapitsa bench compare --report` prints a Markdown block to paste into an issue or PR.")]
+            t.dim("`kapitsa bench compare --report` prints a Markdown block to keep or quote in a PR.")]
     return "\n".join(out)
 
 
@@ -338,7 +338,7 @@ def why(e, kap, decode_gap=True):
 
 
 def scrub(text, doc):
-    """Paths that name the user or this Mac's folders must not leave it in a report people paste into an issue."""
+    """Paths that name the user or this Mac's folders must not leave it in a report people share."""
     home = os.path.expanduser("~")
     for root, tag in ((doc.get("out_dir"), "<out>"), (os.environ.get("BENCH_MODELS"), "<models>"), (home, "~")):
         if root and root != "/":
@@ -427,7 +427,7 @@ def parse(argv):
     ap.add_argument("--list", action="store_true", help="show what was found and what is missing; start nothing")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (progress goes to stderr)")
     ap.add_argument("--report", nargs="?", const="-", metavar="FILE",
-                    help="print a Markdown block for an issue or PR (and write it to FILE)")
+                    help="print a Markdown block to keep or quote in a PR (and write it to FILE)")
     ap.add_argument("--out", help="folder for results and logs (default ~/.cache/kapitsa/bench/compare/<time>)")
     ap.add_argument("--ignore-running", action="store_true", help="measure even when other engines are running")
     ap.add_argument("--yes", "-y", action="store_true", help="do not ask before measuring")

@@ -11,7 +11,7 @@
 // - monitor.cpp: gpu_hogs.py's contention monitor and quiet wait, plus who uses the GPU, the thermal state and the
 //   power source per sample.
 // - result.cpp: the result file (bench/community/schema.json), its name, and the texts made from it.
-// - submit.cpp: a pull request with the user's own `gh`, else a prefilled issue in the browser.
+// - submit.cpp: a pull request from the user's fork, made with their own `gh` (there is no other way in).
 #pragma once
 #include <nlohmann/json.hpp>
 
@@ -342,10 +342,6 @@ struct GhStatus {
   std::string path, login;
 };
 GhStatus gh_status();
-// The issue form, prefilled with the JSON when the address stays under kIssueUrlMax (*fits); else without it (the
-// JSON then goes on the clipboard)
-constexpr size_t kIssueUrlMax = 4500;  // longer addresses lose GitHub's sign-in redirect, and fail from about 7 KB
-std::string issue_url(const std::string& repo, const std::string& title, const std::string& compact_json, bool* fits);
 // The steps of a pull request from `login`'s fork, as the gh commands they run (for --dry-run and the confirmation)
 struct PrPlan {
   std::string repo, fork, branch, path, title, body, file_name, content;

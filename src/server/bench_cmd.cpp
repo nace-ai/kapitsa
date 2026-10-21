@@ -3,8 +3,7 @@
 // 32K context, NI_* variables cleared), warms it up, waits for a quiet GPU, measures it over the local API while a
 // monitor samples the other processes' GPU time, the thermal state and the power source, then stops it. The result
 // (bench/community/schema.json) is saved and, when asked, submitted to the community results: a pull request with
-// the user's own gh login, else a prefilled issue in the browser, never without an answer at the terminal (one
-// question; Enter is a yes).
+// the user's own gh login, never without an answer at the terminal (one question; Enter is a yes).
 #include "bench/bench.h"
 #include "engine/engine.h"
 #include "gguf/gguf.h"
@@ -74,8 +73,8 @@ const char* kHelp =
     "  --json          the result as JSON on stdout (progress on stderr)\n"
     "  --out FILE      where to save the result (default: %s/kapitsa-bench-<date>-<chip>-<model>.json)\n"
     "  --submit        add the result to the community results: asks once (Enter is yes), then opens a pull request\n"
-    "                  with your gh login, or a prefilled issue in the browser without gh\n"
-    "  --dry-run       with --submit: print what it would send, the gh commands or the issue's address; nothing is sent\n"
+    "                  from your fork with your gh login (it needs gh, logged in)\n"
+    "  --dry-run       with --submit: print what it would send, the gh commands and the pull request; nothing is sent\n"
     "  --yes           don't ask which model to run: the best for this Mac (submitting still asks)\n\n"
     "  kapitsa bench submit [FILE] [--dry-run]   submit a saved result (default: the newest)\n"
     "  kapitsa bench compare [--model M] ...      Kapitsa against the other engines installed here, one table\n"
@@ -372,69 +371,60 @@ int not_sent(const std::string& file) {
 }
 
 // Adds a result (saved as `file`) to the community results after one question at the terminal, Enter for yes: a pull
-// request with the user's gh login, else the issue form in the browser, prefilled
-int submit(const ojson& result, const std::string& content, const std::string& file, bool dry) {
+// request from the user's fork with their gh login. Without gh there is no other way in (no issue, no browser form): it
+// says how to get gh, or how to open the pull request by hand. `offered` is the question at the end of a run, where a
+// Mac without gh is not an error.
+int submit(const ojson& result, const std::string& content, const std::string& file, bool dry, bool offered = false) {
   if (const std::string why = submit_problem(result); !why.empty()) return fail(why);
   const std::string repo = target_repo();
   const GhStatus gh = gh_status();
-  const std::string title = result_title(result);
-  if (gh.logged_in) {
-    const PrPlan plan = pr_plan(repo, gh.login, result, content);
+  if (!gh.logged_in) {
+    const PrPlan plan = pr_plan(repo, "<your gh login>", result, content);
+    const std::string why = gh.installed ? "gh is not logged in" : "gh is not installed";
     if (dry) {
-      printf("Dry run: nothing is sent. With your gh login (@%s) this would open a pull request on %s:\n\n", gh.login.c_str(),
-             repo.c_str());
+      printf("Dry run: nothing is sent. %s, and a result is added only as a pull request from your fork. With gh logged in it "
+             "would open one on %s:\n\n",
+             why.c_str(), repo.c_str());
       for (const auto& c : plan.commands) printf("  %s\n", c.c_str());
       printf("\nFile %s:\n%s\nPull request \"%s\":\n\n%s\n", plan.path.c_str(), content.c_str(), plan.title.c_str(),
              plan.body.c_str());
-      bool fits = false;
-      const std::string url = issue_url(repo, title, result.dump(), &fits);
-      printf("Without gh, the browser would open the issue form instead%s:\n  %s\n",
-             fits ? "" : " (the JSON goes on the clipboard: it does not fit in the address)", url.c_str());
       return 0;
     }
-    if (!can_confirm()) return fail("Submitting asks first, at a terminal. Run it in one: kapitsa bench submit FILE");
-    if (!ask_yes("  Add it to the community results? It opens a pull request on " + repo + " as @" + gh.login + "."))
-      return not_sent(file);
-    try {
-      Ticker t("Submitting");
-      const std::string url = open_pr(plan, gh.path, [&](const std::string& step) {
-        t.detail(step);
-        if (!g_tui) fprintf(stderr, "%s\n", step.c_str());
-      });
-      t.done();
-      if (g_tui) ui::ok("Pull request opened: " + bold(url));
-      else fprintf(stderr, "Pull request opened: %s\n", url.c_str());
+    const std::string how = std::string("Results are added as a pull request from your fork, and ") + why + ". " +
+                            (gh.installed ? "Log in with gh auth login" : "Install it (brew install gh), log in with gh auth login") +
+                            ", then kapitsa bench submit " + hub::tilde(file) + ". Or by hand: fork " + repo + ", add " +
+                            hub::tilde(file) + " as " + plan.path + " and open a pull request.";
+    if (offered) {
+      term::line("  " + dim(how), stderr);
       return 0;
-    } catch (const std::exception& e) {
-      return fail(std::string(e.what()) + " Nothing else was changed; kapitsa bench submit FILE tries again.");
     }
+    return fail(how);
   }
-  // no gh (or not logged in): the issue form, prefilled
-  const std::string compact = result.dump();
-  bool fits = false;
-  const std::string url = issue_url(repo, title, compact, &fits);
+  const PrPlan plan = pr_plan(repo, gh.login, result, content);
   if (dry) {
-    printf("Dry run: nothing is sent. %s, so this would open the issue form in the browser%s:\n  %s\n\nWith the JSON:\n%s\n",
-           gh.installed ? "gh is not logged in" : "gh is not installed",
-           fits ? ", prefilled" : " (the JSON goes on the clipboard: it does not fit in the address)", url.c_str(),
-           compact.c_str());
+    printf("Dry run: nothing is sent. With your gh login (@%s) this would open a pull request on %s:\n\n", gh.login.c_str(),
+           repo.c_str());
+    for (const auto& c : plan.commands) printf("  %s\n", c.c_str());
+    printf("\nFile %s:\n%s\nPull request \"%s\":\n\n%s\n", plan.path.c_str(), content.c_str(), plan.title.c_str(),
+           plan.body.c_str());
     return 0;
   }
   if (!can_confirm()) return fail("Submitting asks first, at a terminal. Run it in one: kapitsa bench submit FILE");
-  if (!ask_yes("  Add it to the community results? It opens a prefilled issue on " + repo + " in the browser" +
-               (fits ? "." : ", with the result on the clipboard.")))
+  if (!ask_yes("  Add it to the community results? It opens a pull request on " + repo + " as @" + gh.login + "."))
     return not_sent(file);
-  if (!fits) {
-    FILE* p = popen("/usr/bin/pbcopy", "w");
-    if (p) fputs(compact.c_str(), p), pclose(p);
+  try {
+    Ticker t("Submitting");
+    const std::string url = open_pr(plan, gh.path, [&](const std::string& step) {
+      t.detail(step);
+      if (!g_tui) fprintf(stderr, "%s\n", step.c_str());
+    });
+    t.done();
+    if (g_tui) ui::ok("Pull request opened: " + bold(url));
+    else fprintf(stderr, "Pull request opened: %s\n", url.c_str());
+    return 0;
+  } catch (const std::exception& e) {
+    return fail(std::string(e.what()) + " Nothing else was changed; kapitsa bench submit FILE tries again.");
   }
-  const int rc = system(("/usr/bin/open " + shell_quote(url)).c_str());
-  if (rc != 0) return fail("Can't open the browser. Open this address: " + url);
-  const std::string note = fits ? "The issue form is open in the browser: check it and press Submit."
-                                : "The issue form is open in the browser; paste the JSON (on the clipboard) into Result, then Submit.";
-  if (g_tui) ui::ok(note);
-  else fprintf(stderr, "%s\n", note.c_str());
-  return 0;
 }
 
 std::string newest_result() {
@@ -1064,7 +1054,7 @@ int run(const Options& o) {
   }
   if (g_tui && submit_problem(result).empty() && can_confirm()) {
     term::line("", stderr);
-    return submit(result, content, out_path, false) ? 1 : code;
+    return submit(result, content, out_path, false, true) ? 1 : code;
   }
   return code;
 }

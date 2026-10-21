@@ -238,20 +238,6 @@ check(set_labels and set(set_labels[0][2]["labels"]) == {"benchmark", "invalid",
 check(("DELETE", "/repos/nace-ai/kapitsa/issues/7/labels/flagged", None) in calls, "--github: a stale label it manages is removed")
 srv.shutdown()
 
-# ---------------------------------------------------------------- an issue submission, taken in (with a stand-in gh)
-gh_dir = os.path.join(tmp, "gh")
-os.makedirs(gh_dir)
-body = "### Result\n\n```json\n" + json.dumps(quick) + "\n```\n\n### Notes\n\n_No response_"
-with open(os.path.join(gh_dir, "gh"), "w") as fh:
-    fh.write(f"#!{sys.executable}\nimport sys\nassert sys.argv[1:3] == ['issue', 'view'] and sys.argv[3] == '12'\nprint({body!r})\n")
-os.chmod(os.path.join(gh_dir, "gh"), 0o755)
-into = os.path.join(tmp, "into")
-p = subprocess.run([sys.executable, os.path.join(REPO, "tools", "community_check.py"), "--from-issue", "12", "--into", into, "--no-git"],
-                   env=dict(os.environ, PATH=gh_dir + ":" + os.environ["PATH"]), capture_output=True, text=True, timeout=120)
-taken = os.listdir(into) if os.path.isdir(into) else []
-check(p.returncode == 0 and len(taken) == 1 and taken[0].startswith("kapitsa-bench-2026-10-18-m4-pro-qwen3.6-35b-a3b-4bit-quick-"),
-      "--from-issue: the form's JSON, checked and written as a result file", (p.stdout + p.stderr)[-300:])
-check(taken and json.load(open(os.path.join(into, taken[0]))) == quick, "--from-issue: the result unchanged")
 shutil.rmtree(tmp, ignore_errors=True)
 print(f"\n{'FAIL' if FAILS else 'ok'}: {len(FAILS)} failed" + (f": {FAILS}" if FAILS else ""))
 sys.exit(1 if FAILS else 0)

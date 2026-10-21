@@ -10,8 +10,8 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
 3. The rates and checks on the published runs' own data: decode_rates on every decode run's recorded events, distinct4
    on every saved text, Python's rounding, bench.py's summaries; with edge cases.
 4. The result file: bench/community/schema.json (with jsonschema, when installed) and tools/community_check.py.
-5. Submitting: the plan and the issue form's address, `kapitsa bench submit --dry-run` with and without gh, and a
-   stand-in gh that records what it is asked: nothing without an answer at a terminal, one question (Enter is a yes),
+5. Submitting: the plan, `kapitsa bench submit --dry-run` with and without gh (a pull request is the only way in: no
+   issue, no browser), and a stand-in gh that records what it is asked: nothing without an answer at a terminal, one question (Enter is a yes),
    then the pull request's calls.
 6. `kapitsa bench` fails before loading anything when the model can't be had (a home without models, no network).
 7. The GPU lock, on a test file: it waits for lockf's holder and names it, and lockf waits for it.
@@ -19,7 +19,6 @@ usage: test_bench.py [BUILD_DIR]   (default: build; needs BUILD_DIR/bench_test a
    --json and on a terminal; the result saved, valid against the schema, refused for submission.
 """
 import glob, http.server, json, os, pty, random, re, select, shutil, socketserver, subprocess, sys, tempfile, threading, time
-import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -328,11 +327,7 @@ check(plan["title"] == "Benchmark: MacBook Pro (16-inch, 2024) · M4 Pro · 48 G
 check(plan["path"].startswith("bench/community/results/kapitsa-bench-2026-10-18-m4-pro-qwen3.6-35b-a3b-4bit-") and
       plan["path"].endswith(".json"), "the file's path", plan["path"])
 check(plan["fork"] == "tester/kapitsa" and plan["submit_problem"] == "", "the fork, and nothing in the way")
-q = urllib.parse.parse_qs(urllib.parse.urlparse(plan["issue_url"]).query)
-check(plan["issue_url_fits"] and q["template"] == ["benchmark-result.yml"] and
-      json.loads(q["result"][0]) == full, "the issue form's address carries the JSON",
-      plan["issue_url"][:120])
-check(len(plan["issue_url"]) <= 4500, "the address stays under GitHub's limit", str(len(plan["issue_url"])))
+check("issue_url" not in plan, "the plan has no issue form: a pull request is the only way in")
 
 # a stand-in gh: records its calls, answers like GitHub
 gh_dir = tempfile.mkdtemp(prefix="kapitsa-fake-gh-")
@@ -381,8 +376,8 @@ def calls():
 
 
 r = run([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json"), "--dry-run"], env=env)
-check(r.returncode == 0 and "gh api -X POST repos/nace-ai/kapitsa/forks" in r.stdout and "issues/new?template=benchmark-result.yml" in r.stdout,
-      "submit --dry-run with gh: prints the gh commands and the issue form's address", (r.stdout + r.stderr)[-400:])
+check(r.returncode == 0 and "gh api -X POST repos/nace-ai/kapitsa/forks" in r.stdout and "issues/new" not in r.stdout,
+      "submit --dry-run with gh: prints the gh commands and no issue form", (r.stdout + r.stderr)[-400:])
 check([c["args"][:4] for c in calls()] == [["api", "--hostname", "github.com", "user"]], "the dry run only asked gh who is logged in",
       json.dumps(calls()))
 open(gh_log, "w").close()
@@ -390,8 +385,11 @@ r = run([KAPITSA, "bench", "--dry-run"], env=env)
 check(r.returncode == 2, "--dry-run without --submit is a usage error")
 nogh = dict(env, PATH="/usr/bin:/bin")
 r = run([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json"), "--dry-run"], env=nogh)
-check(r.returncode == 0 and "gh is not installed" in r.stdout and "https://github.com/nace-ai/kapitsa/issues/new?" in r.stdout,
-      "submit --dry-run without gh: prints the issue form's address", r.stdout[-300:])
+check(r.returncode == 0 and "gh is not installed" in r.stdout and "gh api -X POST repos/nace-ai/kapitsa/pulls" in r.stdout
+      and "issues/new" not in r.stdout, "submit --dry-run without gh: says so and shows the pull request, no issue form", r.stdout[-300:])
+r = run([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], env=nogh, stdin=subprocess.DEVNULL, start_new_session=True)
+check(r.returncode == 1 and "gh is not installed" in r.stderr and "pull request" in r.stderr and "issue" not in r.stderr.lower()
+      and "browser" not in r.stderr.lower(), "submit without gh: explains how to get gh, offers no other path", r.stderr[-300:])
 r = run([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], env=env, stdin=subprocess.DEVNULL, start_new_session=True)
 check(r.returncode == 1 and "terminal" in r.stderr, "without a terminal nothing is submitted", r.stderr[-200:])
 check(not [c for c in calls() if c["args"][:2] != ["api", "--hostname"]], "and gh was asked for nothing else")

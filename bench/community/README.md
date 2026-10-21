@@ -21,11 +21,12 @@ At the end it asks once whether to send it: Enter is yes, `n` keeps it on your M
 
 - with [gh](https://cli.github.com) installed and logged in, it opens a pull request that adds the file under
   [results/](results/), from your fork (made if you have none). It uses your gh login and nothing else.
-- without gh, it opens the "Benchmark result" issue form in your browser with the JSON filled in: check it and press
-  Submit. A maintainer turns it into a pull request.
+- without gh it sends nothing and says how to get gh (`brew install gh`, then `gh auth login`). Results are added only
+  as pull requests from your fork, never as issues: to do it by hand, fork the repo, add the file under
+  [results/](results/) and open a pull request.
 
 `kapitsa bench submit` sends a result you saved earlier (they are in `~/.cache/kapitsa/bench/`), and
-`--submit --dry-run` prints exactly what it would send, with the gh commands or the issue's address, without sending
+`--submit --dry-run` prints exactly what it would send, with the gh commands and the pull request, without sending
 anything.
 
 ## What is in a result
@@ -93,6 +94,6 @@ results reach `main`, the workflow rewrites RESULTS.md (`python3 tools/community
 | [schema.json](schema.json) | The result's format (version 1) |
 | [mac-models.json](mac-models.json) | Apple silicon Macs by model identifier, from Apple's "Identify your Mac model" pages |
 
-For maintainers: `python3 tools/community_check.py --from-issue N` takes a result submitted as issue N (the "Benchmark
-result" form), checks it and writes it into `results/`; commit it in a pull request. `python3 tools/mac_models.py`
+For maintainers: `python3 tools/community_check.py FILE...` checks result files, and CI runs it on every pull request
+that touches `results/`. `python3 tools/mac_models.py`
 updates mac-models.json from Apple's pages when new Macs come out (`--check` only compares).

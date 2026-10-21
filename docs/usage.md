@@ -654,10 +654,10 @@ it never runs beside a harness run.
 
 At the end of a run in a terminal (or with `--submit`) it asks once whether to add the result to the community
 results: Enter is yes, `n` keeps it on your Mac only. With [gh](https://cli.github.com) logged in it opens a pull
-request from your fork (it uses your gh login and nothing else); without gh it opens the "Benchmark result" issue form
-in the browser with the JSON filled in, for you to submit. `kapitsa bench submit [FILE]` sends a saved result (the
-newest by default), and `--submit --dry-run` prints exactly what it would send, with the gh commands or the issue's
-address, without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
+request from your fork (it uses your gh login and nothing else); without gh nothing is sent and it says how to get gh
+(results are added only as pull requests from your fork, never as issues). `kapitsa bench submit [FILE]` sends a saved result (the
+newest by default), and `--submit --dry-run` prints exactly what it would send, with the gh commands and the pull request,
+without sending anything. Only results of the catalog's models are taken, at any precision. How results are checked:
 [bench/community](../bench/community/README.md).
 
 ### Comparing engines on this Mac
@@ -672,7 +672,7 @@ kapitsa bench compare --list          # which engines it found, which are missin
 kapitsa bench compare --model 4b --engines kapitsa,omlx,mlx-serve
 kapitsa bench compare --quick         # 4K prompt only, 2 decode runs: about 3 minutes per engine
 kapitsa bench compare --json          # JSON on stdout (progress goes to stderr)
-kapitsa bench compare --report        # a Markdown report to paste into an issue or a PR
+kapitsa bench compare --report        # a Markdown report to keep, or to quote in a PR
 ```
 
 It looks for oMLX, mlx-serve, mlx-lm, llama.cpp, Ollama, LM Studio, MTPLX, Rapid-MLX and mlx-vlm on your `PATH` and at
@@ -690,7 +690,7 @@ The report has a "Who beats Kapitsa here, and why" part; its reasons come only f
 decoding, weights folder, versions) and are leads, not findings. **Run it on a quiet Mac, plugged in**: a run waits up
 to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. It refuses to start
 while another engine or model server is running (`--ignore-running` overrides). If another engine beats Kapitsa on your
-Mac, open the "Engine comparison" issue with the report. It needs the repository's `bench/harness` folder
+Mac, the report is yours to keep or to quote in a pull request; nothing is sent anywhere. It needs the repository's `bench/harness` folder
 (`KAPITSA_HARNESS` names another copy) and macOS Python 3.
 
 ## Running in the background

@@ -1,6 +1,6 @@
 // Submitting a `kapitsa bench` result (bench.h): a pull request that adds the file under bench/community/results/, made
-// with the user's own `gh` login (its REST calls through `gh api`: a fork, a branch on it, the file, the pull request),
-// else the "Benchmark result" issue form in the browser with the JSON filled in. No other credentials are read or used.
+// with the user's own `gh` login (its REST calls through `gh api`: a fork, a branch on it, the file, the pull request).
+// No other credentials are read or used, and without gh nothing is sent: there is no issue or browser path.
 #include "bench/bench.h"
 
 #include <fcntl.h>
@@ -125,16 +125,6 @@ std::string base64(const std::string& in) {
   return out;
 }
 
-std::string urlencode(const std::string& s) {
-  std::string out;
-  char b[4];
-  for (unsigned char c : s) {
-    if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') out += char(c);
-    else snprintf(b, sizeof b, "%%%02X", c), out += b;
-  }
-  return out;
-}
-
 // A JSON request body for `gh api --input FILE`, in a file of its own (removed after the call)
 struct InputFile {
   std::string path;
@@ -175,15 +165,6 @@ GhStatus gh_status() {
   const Ran r = run({s.path, "api", "--hostname", "github.com", "user", "--jq", ".login"});
   if (r.code == 0 && !trim(r.out).empty()) s.logged_in = true, s.login = trim(r.out);
   return s;
-}
-
-std::string issue_url(const std::string& repo, const std::string& title, const std::string& compact_json, bool* fits) {
-  // an issue form opens prefilled from its fields' ids in the address
-  const std::string base = "https://github.com/" + repo + "/issues/new?template=benchmark-result.yml&title=" + urlencode(title);
-  // the form's result field renders as JSON (GitHub fences it): the JSON as it is
-  const std::string full = base + "&result=" + urlencode(compact_json);
-  *fits = full.size() <= kIssueUrlMax;
-  return *fits ? full : base;
 }
 
 PrPlan pr_plan(const std::string& repo, const std::string& login, const ojson& result, const std::string& content) {

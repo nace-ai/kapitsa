@@ -1,9 +1,8 @@
 // The result file of `kapitsa bench` (bench/community/schema.json, version kSchema) and the texts made from it: its
 // name, the pull request's title and body, and the formats the screens share (bench.h).
 //
-// The file is small on purpose (about 2 KB): the person submitting it reads all of it before it is sent, and without
-// gh it travels in the address of a prefilled GitHub issue, which GitHub cuts at about 4.5 KB. So it keeps what the
-// community table and its checks need: the medians and each run's rate, the prompts' sizes and times, the follow-ups'
+// The file is small on purpose (about 2 KB): the person submitting it reads all of it before it is sent, and a
+// maintainer reads it as a pull request's file. So it keeps what the community table and its checks need: the medians and each run's rate, the prompts' sizes and times, the follow-ups'
 // times, the peak memory, the tool check, and the conditions in brief (the phases other apps disturbed, the swap, the
 // thermal state, the power), with the harness's flags.
 #include "bench/bench.h"
