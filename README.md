@@ -8,6 +8,16 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 
 [Quickstart](#quickstart) · [CLI](#cli) · [Benchmarks](#benchmarks) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
 
+## 🔥 What's new
+
+- **[2026-10-21]** **KFlash** ([#187](https://github.com/nace-ai/kapitsa/pull/187)), our speculative decoding engine: the drafter's best-first tree is checked in one 8-row pass and the output is plain decoding's. M4 Pro, 27B, greedy: +6% on code, +16% on prose. **[How it works →](docs/kflash.md)**
+- **[2026-10-21]** KFlash batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207)): with 3 requests at once on the M4 Pro, 35B +16-20%, 27B +15-23%.
+- **[2026-10-21]** M5 prefill on Metal 4 tensor ops ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215)): 1.3-1.5x prefill on the 4B.
+- **[2026-10-21]** SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)): a 16K follow-up after a restart reaches its first token in 0.16 s on the 35B, against 17 s cold.
+- **[2026-10-21]** `kapitsa bench compare` ([#197](https://github.com/nace-ai/kapitsa/pull/197), [#219](https://github.com/nace-ai/kapitsa/pull/219)): the same test against the engines already installed on your Mac.
+
+The poster's numbers each have a stored run with logs in [bench/results](bench/README.md). Output is checked by [`tools/logit_compare.py`](https://github.com/nace-ai/kapitsa/pull/208), which compares full-vocabulary logits to a per-model [noise floor](tools/logit_floors) measured by [`tools/logit_dump`](https://github.com/nace-ai/kapitsa/pull/210).
+
 ## Quickstart
 
 **Requirements:** a Mac with Apple silicon (M1 or newer) and macOS 14 Sonoma or later.

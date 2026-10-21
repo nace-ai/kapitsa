@@ -1,5 +1,7 @@
 # KFlash: verifying the drafter's best guesses as a tree
 
+**In short:** a speculative decoder guesses several tokens and lets the big model check them, but engines that run a drafter as published check one chain and stop at its first wrong guess. KFlash checks a best-first tree of the drafter's candidates in the same 8-row pass, and keeps only tokens the big model itself writes, so a greedy reply is the one plain decoding writes. On an M4 Pro against the engine just before it, that was 6% faster on the 27B's coding answer and 16% on its prose answer, with 15-23% more for three requests at once.
+
 Kapitsa writes several tokens per pass of the big model. A small block drafter guesses the next 7 tokens, and the
 target model checks all of them in one pass of 8 rows: the last token it wrote, plus the 7 guesses. It keeps the guesses
 it agrees with, up to the first one it doesn't, and adds one token of its own. When the guesses are right, one pass
@@ -330,13 +332,17 @@ The full write-up, with the run conditions, the runs left out and one line per r
 - **A determinism gap past 16K tokens in the server.** The tree zone's chunk size follows the KV cache's capacity, which
   `kapitsa serve` grows as a conversation does. Past 16,256 positions, a row verified near a growth step can get another
   chunk size under another tree schedule. The position-only partition above would close the gap.
-- **Nemotron is not measured yet.** Trees are on by default with DSpark and LiLiCorr, but their speed hasn't been
-  measured: Lightning, the smallest such model, is a 23 GB download. `tools/nh_tree_check`'s planted-branch acceptance
-  cases have failed since the merge that added chained DSpark drafting. Its real loops on a small synthetic model
-  (chain and tree, greedy and sampled) match plain decoding, but the failure needs an explanation before Nemotron trees
-  are trusted.
+- **Nemotron has one run per build, and a failing check.** Trees are on by default with DSpark and LiLiCorr. On the M4 Pro,
+  Lightning and Bolt went from 104.3 to 111.7 and from 64.3 to 68.8 tok/s at T 0.6, and from 115.7 to 113.7 and from
+  69.4 to 71.2 greedy, one run per build with contention flags
+  ([results](../bench/results/2026-10-21-kflash-trees/README.md)). That is inside the 3-8% spread between runs of one
+  build, so there is no per-cycle A/B for them. `tools/nh_tree_check`'s planted-branch acceptance cases have failed since
+  the merge that added chained DSpark drafting. Its real loops on a small synthetic model (chain and tree, greedy and
+  sampled) match plain decoding, but the failure needs an explanation before Nemotron trees are trusted.
 - **Requests decoding together verify chains.** When the 27B, the 35B or Bolt decode several requests in one batched
-  pass, each request verifies its chain. Trees run in a request's own cycles, alone or taking turns.
+  pass, each request verifies its chain, and the batch budget ([#207](https://github.com/nace-ai/kapitsa/pull/207))
+  picks how many of the 8 rows each gets: with three requests at once on the M4 Pro, the 35B gained 16-20% and the 27B
+  15-23%, and with two or four, between −1% and +4%. Trees run in a request's own cycles, alone or taking turns.
 - **One Mac.** The speed numbers are an M4 Pro's. The 35B's determinism checks also ran on an M5 Pro, and an earlier
   build of the 4B gained 2-16% on the coding answer on an M1 Pro.
 
