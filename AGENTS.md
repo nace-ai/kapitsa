@@ -43,7 +43,7 @@ python3 tests/test_pr_size.py
 python3 tests/test_logit_compare.py
 ```
 
-Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `nh_eval --vcheck`,
+Everything else needs a model folder, often the GPU too (`parser_test MODEL_DIR`, `tests/vision/check_cpu.py`, `logit_dump`,
 `batch_check`, `ni_v8check`, `tests/test_server.py URL`): run it only when allowed, and report it as run.
 
 Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (the same hooks CI runs).
