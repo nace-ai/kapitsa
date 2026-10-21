@@ -13,7 +13,7 @@
 // layers, like the scalar kernel.
 // The last check is the 16-row drafting block's pair GEMM (qmm8t2d / qmm8t2dp) against two per-tile qmm8t dispatches
 // on the same T tables, bitwise; it needs the tensor library (Apple10, macOS 26) and is skipped otherwise. main()
-// returns 1 if any exactness check fails.
+// returns 1 if any exactness check fails, 3 when a check selected by DAT_QK16_ONLY / DAT_PAIR_ONLY did not run.
 #include "metal/gpu.h"
 #include "model/dflash2.h"
 #include "model/kparams.h"
@@ -39,9 +39,11 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) Ps.push_back(atoi(argv[i]));
   if (Ps.empty()) Ps = {1, 85, 700, 2047, 2048, 2055, 4100, 9000};
   if (getenv("DAT_PAIR_ONLY")) Ps.clear();  // only the pair-GEMM check, for a validation-layer run of that kernel
+  const bool pair_only = getenv("DAT_PAIR_ONLY") != nullptr;
   const bool qk16_only = getenv("DAT_QK16_ONLY") != nullptr;
   Gpu& g = Gpu::get();
-  int fails = 0;  // the exactness checks below: a script can tell a failing run from a passing one
+  int fails = 0;  // every exactness check below: a script can tell a failing run from a passing one
+  bool ran16 = false, ran_pair = false;  // whether each gated check actually ran on this GPU
   if (const char* src = getenv("DAT_SRC")) {  // extra kernel source (variants of dfl_attn_qk, picked by DAT_KERNEL)
     FILE* f = fopen(src, "rb");
     std::string x;
@@ -155,8 +157,11 @@ int main(int argc, char** argv) {
           for (int x = 0; x < 64; ++x) s += double(xh.as<__fp16>()[r * 4096 + gi * 64 + x]);
           serr = std::max(serr, std::fabs(s - xs.as<float>()[gi * 8 + r]));
         }
-      printf("P=%5d %-12s min chunk %3u: splits %2u x chunk %4u: rel err %.2e max abs %.2e (sums %.1e)  GPU attn+reduce median %.4f ms\n",
-             P, variant ? "dfl_attn_mma" : "dfl_attn", mchunk, nsplit, chunk, std::sqrt(num / den), mx, serr, ts[ts.size() / 2]);
+      const bool ok = std::sqrt(num / den) <= 2e-3 && mx <= 5e-3 && serr <= 1e-3;  // half-precision output
+      if (!ok) ++fails;
+      printf("P=%5d %-12s min chunk %3u: splits %2u x chunk %4u: rel err %.2e max abs %.2e (sums %.1e)  GPU attn+reduce "
+             "median %.4f ms%s\n", P, variant ? "dfl_attn_mma" : "dfl_attn", mchunk, nsplit, chunk, std::sqrt(num / den),
+             mx, serr, ts[ts.size() / 2], ok ? "" : "  FAIL");
     }
   }
   // dfl_attn_qk (q / k norm + RoPE fused) against dfl_qk_prep + dfl_attn_mma on raw projections, host-planned and
@@ -266,9 +271,11 @@ int main(int argc, char** argv) {
             if (it >= 2) ts.push_back(e->gpu_ms() / reps);
           }
           std::sort(ts.begin(), ts.end());
+          const bool ok = md <= 5e-3 && sd <= 5e-3;  // the fused path must match prep + mma
+          if (!ok) ++fails;
           printf("P=%5d dfl_attn_qk %s splits %2u (chunk %3u x %2u): max |o - ref| %.2e (max |ref| %.2e, sums %.1e)  "
-                 "GPU attn+reduce median %.4f ms\n", P, gpu ? "gpu " : "host", splits, chunk, nsplit, md, ref, sd,
-                 ts[ts.size() / 2]);
+                 "GPU attn+reduce median %.4f ms%s\n", P, gpu ? "gpu " : "host", splits, chunk, nsplit, md, ref, sd,
+                 ts[ts.size() / 2], ok ? "" : "  FAIL");
         }
       // The 16-row block (NI_DFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
       // all 16 block keys, and dfl_attn_reduce sums with nr = 16 into two X8 tiles. A wrong row-tile index there would
@@ -381,9 +388,12 @@ int main(int argc, char** argv) {
           const double rel = std::sqrt(num / den);
           const bool ok = rel <= 5e-3 && mx <= 2e-2;  // half-precision output against an fp64 reference
           if (!ok) ++fails;
+          ran16 = true;
           printf("P=%5d dfl_attn_qk16 + reduce(nr 16) splits %2u (chunk %3u x %2u): rel err %.2e max abs %.2e "
                  "(max |ref| %.2e)%s\n", P, splits, chunk, nsplit, rel, mx, refmax, ok ? "" : "  FAIL");
         }
+      } else {
+        printf("dfl_attn_qk16: skipped, needs Apple10\n");
       }
     }
   }
@@ -401,6 +411,7 @@ int main(int argc, char** argv) {
     if (!g.pipeline("qmm8t2d_b4_nt16", false).pso) {
       printf("qmm8t2d: the tensor library did not build, skipped\n");
     } else {
+      ran_pair = true;
       struct Case { uint32_t K, nt, pf, ks; };
       for (const Case c : {Case{2048, 16, 0, 8}, Case{4096, 32, 1, 4}}) {
         const uint32_t K = c.K, N = 1024, R16 = 16, gpr = K / 64;
@@ -486,6 +497,14 @@ int main(int argc, char** argv) {
         if (bad) ++fails;
       }
     }
+  }
+  if (qk16_only && !ran16) {
+    printf("DAT_QK16_ONLY=1, but the 16-row attention check did not run\n");
+    return 3;
+  }
+  if (pair_only && !ran_pair) {
+    printf("DAT_PAIR_ONLY=1, but the pair-GEMM check did not run\n");
+    return 3;
   }
   return fails ? 1 : 0;
 }
