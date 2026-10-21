@@ -4,6 +4,8 @@
   <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen and Nemotron. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa with KFlash 161, Splash with DFlash2 135, oMLX with DFlash2 127, Ollama with MTP 89, LM Studio 86, MTPLX with MTP 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
 </picture>
 
+Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron models locally, built for coding agents. `kapitsa opencode`, `claude`, `codex` and `pi` start the agent on a local model; `kapitsa serve` exposes it on OpenAI and Anthropic APIs.
+
 [Quickstart](#quickstart) · [CLI](#cli) · [Benchmarks](#benchmarks) · [Models](#models) · [How KFlash works](docs/kflash.md) · [Docs](docs/usage.md)
 
 ## Quickstart
@@ -41,12 +43,58 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
+Kapitsa is fastest in 23 of the 26 model and Mac pairs measured against eight engines. mlx-serve is ahead on Qwen3.8 27B (M5 Max, M5 Pro) and on Flash-Next (M5 Max).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
-  <img alt="Decode speed of a 512-token coding answer, in tokens per second, for Kapitsa and eight other engines on a MacBook Pro M4 Pro 48 GB and an M1 Pro 16 GB, each engine in its fastest setup with its decoding method under it (Kapitsa: KFlash); the numbers are in the tables below" src="docs/assets/benchmarks-light.webp">
+  <img alt="Decode speed of a 512-token coding answer in tokens per second, with Kapitsa's prefill speed under its number, for Kapitsa and eight other engines on a MacBook Pro M5 Max 128 GB, M5 Pro 48 GB, M4 Pro 48 GB and M1 Pro 16 GB; Kapitsa is fastest in 23 of 26 model and Mac pairs, mlx-serve is ahead on Qwen3.8 27B (M5 Max, M5 Pro) and on Flash-Next (M5 Max)" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>Writing speed of a coding answer, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). 🟩 fastest per model · — not measured · [details](docs/benchmarks.md#the-readmes-tables). Kapitsa's KFlash cells were measured after [#187](https://github.com/nace-ai/kapitsa/pull/187) ([numbers](docs/benchmarks.md#kflash-trees-m4-pro-2026-10-21)); its other cells are from earlier builds, which ran the drafter's chain (DFlash, DFlash2, DSpark, LiLiCorr).</sub>
+<sub>Decode speed of a 512-token coding answer in tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding); under Kapitsa's number, its prefill speed on a 4K prompt. × cannot run that model on that Mac · — not measured. The poster shows the models that differ most per Mac; the tables below and the [details](docs/benchmarks.md#the-readmes-tables) have every cell.</sub>
+
+#### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
+
+| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
+| --- | ---: | ---: | --- |
+| Qwen3.5 4B | **332 tok/s**<br><sub>DFlash</sub> | 3,339 tok/s | mlx-serve 271 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | 102 tok/s<br><sub>DFlash2</sub> | 456 tok/s | **mlx-serve 130 tok/s**<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **281 tok/s**<br><sub>DFlash2</sub> | 2,434 tok/s | mlx-serve 264 tok/s<sub>, MTP</sub> |
+| Flash-Next 180B | 105 tok/s<br><sub>MTP</sub> | 875 tok/s | **mlx-serve 108 tok/s** |
+| Bolt 74B | **120 tok/s**<br><sub>LiLiCorr</sub> | 960 tok/s | oMLX 69 tok/s<sub>, no spec</sub> |
+
+#### MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB
+
+| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
+| --- | ---: | ---: | --- |
+| Qwen3.5 4B | **179 tok/s**<br><sub>DFlash</sub> | 2,091 tok/s | mlx-serve 163 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | 61 tok/s<br><sub>DFlash2</sub> | 403 tok/s | **mlx-serve 71 tok/s**<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **167 tok/s**<br><sub>DFlash2</sub> | 1,258 tok/s | mlx-serve 156 tok/s<sub>, MTP</sub> |
+| Lightning 30B | **136 tok/s**<br><sub>DSpark</sub> | 1,022 tok/s | oMLX 124 tok/s<sub>, MTP</sub> |
+
+#### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
+
+| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
+| --- | ---: | ---: | --- |
+| Qwen3.5 4B | **201 tok/s**<br><sub>KFlash</sub> | 1,930 tok/s | mlx-serve 137 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | **63 tok/s**<br><sub>KFlash</sub> | 396 tok/s | mlx-serve 54 tok/s<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **161 tok/s**<br><sub>KFlash</sub> | 1,168 tok/s | Splash 135 tok/s<sub>, DFlash2</sub> |
+| Lightning 30B | **112 tok/s**<br><sub>KFlash</sub> | 945 tok/s | MLX 65 tok/s<sub>, DSpark</sub> |
+| Bolt 74B | **69 tok/s**<br><sub>KFlash</sub> | 519 tok/s | oMLX 35 tok/s<sub>, no spec</sub> |
+
+#### MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB
+
+| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
+| --- | ---: | ---: | --- |
+| Qwen3.5 4B | **95 tok/s**<br><sub>KFlash</sub> | 306 tok/s | mlx-serve 62 tok/s<sub>, MTP</sub> |
+| Qwen3.5 9B | **51 tok/s**<br><sub>DFlash</sub> | 164 tok/s | mlx-serve 37 tok/s<sub>, MTP</sub> |
+| Qwen3.6 35B-A3B 2-bit | **53 tok/s**<br><sub>no spec</sub> | — | llama.cpp 38 tok/s |
+
+<sub>Prefill is Kapitsa's reading speed on a 4K-token prompt, from the newest run without a contention or invalid flag, as listed in [bench/README.md](bench/README.md): M4 Pro, M5 Pro and M1 Pro from 2026-10-19 (the M4 Pro 4B from the 10-19 06:20 run), M5 Max from 2026-10-18, where every stored run carries a GPU-contention flag, so read its prefill as a lower bound. Kapitsa's KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](docs/benchmarks.md#kflash-trees-m4-pro-2026-10-21)); its DFlash, DFlash2, DSpark and LiLiCorr cells are the runs listed in [bench/README.md](bench/README.md).</sub>
+
+<details>
+<summary>Every model and every engine, Mac by Mac (decode tok/s)</summary>
+
+🟩 fastest per model · — not measured
 
 ### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
 
@@ -122,9 +170,14 @@ kapitsa update                  # update now (it also updates itself)
 | Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**136&nbsp;tok/s**</mark><br><sub>DSpark</sub> | 124<br><sub>MTP</sub> | 115<br><sub>MTP</sub> | 92 | 101 | 72 | 101<br><sub>MTP</sub> | 94 |
 | Nemotron 3.5 Bolt 74B‑A9B<br><sub>2/4/8-bit mix</sub> | 🟩&nbsp;<mark>**79&nbsp;tok/s**</mark><br><sub>LiLiCorr</sub> | 39<br><sub>no spec</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no Metal support</sub> | 41 |
 
-<sub>Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.</sub>
+</details>
+
+Every recorded run, with its Mac, model, prefill and decode speed, is in the [benchmark table](bench/README.md). Measure your Mac: `kapitsa bench --submit` adds it to the [community results](bench/community/RESULTS.md). Another engine faster on your Mac? `kapitsa bench compare` ranks every engine you have installed, and `--report` writes a Markdown report.
 
 ## Models
+
+<details>
+<summary>The 11 models, their downloads and decoding</summary>
 
 | Model | Download | Decoding |
 | --- | --- | --- |
@@ -142,6 +195,8 @@ kapitsa update                  # update now (it also updates itself)
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
 for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` takes its `16gb` variant: unsloth's 2-bit GGUF, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Details](docs/usage.md#models-and-downloads)</sub>
+
+</details>
 
 ## How it works
 

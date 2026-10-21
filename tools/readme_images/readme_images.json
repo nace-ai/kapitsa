@@ -1,0 +1,82 @@
+{
+ "_about": [
+  "Data for tools/readme_images.py: the README's benchmark poster (docs/assets/benchmarks-*.webp) and header (docs/assets/header-*.svg).",
+  "A cell is {\"value\": tok/s, \"method\": speculative decoding method}, null (renders as a dash: not measured or not supported) or \"x\" (renders as ×: can't run that model on a Mac).",
+  "An engine whose numbers all share one method shows it under its name; otherwise each number shows its own. \"todo\" and \"note\" are never rendered; the script prints the todos.",
+  "Numbers: decode tok/s at T = 0.6 from the README's tables (docs/benchmarks.md, The README's tables), Kapitsa's KFlash runs on the M4 Pro as noted."
+ ],
+ "engines": [
+  {"name": "Kapitsa", "logo": "kapitsa"},
+  {"name": "mlx-serve", "version": "26.10.2"},
+  {"name": "oMLX", "logo": "logos/omlx.png", "version": "0.7.1rc1"},
+  {"name": "Splash", "logo": "logos/splash.svg", "tile": "#FFFFFF", "method": "DFlash2", "version": "1.4.0", "note": "Inco AI's engine (incoai/splash). It runs only Qwen3.8-27B and Qwen3.6-35B-A3B, each with its DFlash2 draft, and needs an M3 or newer."},
+  {"name": "Ollama", "logo": "logos/ollama.png", "tile": "#FFFFFF", "version": "0.40.5 / 0.40.6"},
+  {"name": "MTPLX", "version": "2.12.2"},
+  {"name": "MLX", "logo": "logos/mlx.png", "tile": "#FFFFFF", "note": "Apple's mlx-lm or mlx-vlm, whichever runs the model faster", "version": "mlx-lm 0.32.2\nmlx-vlm 0.7.8"},
+  {"name": "llama.cpp", "logo": "logos/llamacpp.png", "tile": "#FFFFFF", "version": "b11669"},
+  {"name": "LM Studio", "logo": "logos/lmstudio.png", "version": "MLX runtime\n1.13.1"}
+ ],
+ "poster": {
+  "size": [1600, 1834],
+  "title": "Kapitsa: the Apple silicon engine for Qwen and Nemotron",
+  "subtitle": [
+   "Decode tok/s of a 512-token coding answer, T 0.6, median of 5 · each engine in its fastest setup",
+   "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints"
+  ],
+  "footer": [
+   "Grey: share of the fastest engine in that row · small type: the decoding method (no spec: no speculative decoding) · line under Kapitsa: its prefill, tok/s at a 4K prompt",
+   "× can't run that model on that Mac (Splash: only the 27B and 35B, on an M3 or newer) · — not measured · the numbers: the tables below"
+  ],
+  "macs": [
+   {
+    "name": "MacBook Pro M5 Max 128 GB",
+    "rows": [
+     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 332, "method": "DFlash", "prefill": 3339}, "mlx-serve": {"value": 271, "method": "MTP"}, "oMLX": {"value": 192, "method": "MTP"}, "Splash": "x", "Ollama": {"value": 213}, "MTPLX": {"value": 175, "method": "MTP"}, "MLX": {"value": 148, "method": "MTP"}, "llama.cpp": {"value": 160, "method": "MTP"}, "LM Studio": {"value": 154, "method": "no spec"}}},
+     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 102, "method": "DFlash2", "prefill": 456}, "mlx-serve": {"value": 130, "method": "DFlash2"}, "oMLX": {"value": 93, "method": "DFlash2"}, "Splash": null, "Ollama": {"value": 68}, "MTPLX": {"value": 69, "method": "MTP"}, "MLX": {"value": 54, "method": "MTP"}, "llama.cpp": {"value": 51, "method": "MTP"}, "LM Studio": {"value": 32, "method": "no spec"}}},
+     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 281, "method": "DFlash2", "prefill": 2434}, "mlx-serve": {"value": 264, "method": "MTP"}, "oMLX": {"value": 232, "method": "DFlash2"}, "Splash": null, "Ollama": {"value": 166}, "MTPLX": {"value": 123, "method": "MTP"}, "MLX": {"value": 132, "method": "DFlash2"}, "llama.cpp": {"value": 171, "method": "MTP"}, "LM Studio": {"value": 127, "method": "no spec"}}},
+     {"model": "Flash-Next 180B", "cells": {"Kapitsa": {"value": 105, "method": "MTP", "prefill": 875}, "mlx-serve": {"value": 108}, "oMLX": {"value": 107, "method": "MTP"}, "Splash": "x", "Ollama": {"value": 60}, "MTPLX": {"value": 88, "method": "MTP"}, "MLX": {"value": 77, "method": "MTP"}, "llama.cpp": {"value": 96}, "LM Studio": "x"}},
+     {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 120, "method": "LiLiCorr", "prefill": 960}, "mlx-serve": "x", "oMLX": {"value": 69, "method": "no spec"}, "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 69}, "llama.cpp": "x", "LM Studio": "x"}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M5 Pro 48 GB",
+    "rows": [
+     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 179, "method": "DFlash", "prefill": 2091}, "mlx-serve": {"value": 163, "method": "MTP"}, "oMLX": {"value": 113, "method": "MTP"}, "Splash": "x", "Ollama": {"value": 134, "method": "MTP"}, "MTPLX": {"value": 113, "method": "MTP"}, "MLX": {"value": 101, "method": "MTP"}, "llama.cpp": {"value": 93, "method": "MTP"}, "LM Studio": {"value": 89, "method": "no spec"}}},
+     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 61, "method": "DFlash2", "prefill": 403}, "mlx-serve": {"value": 71, "method": "DFlash2"}, "oMLX": {"value": 51, "method": "DFlash2"}, "Splash": null, "Ollama": {"value": 40, "method": "MTP"}, "MTPLX": {"value": 41, "method": "MTP"}, "MLX": {"value": 32, "method": "MTP"}, "llama.cpp": {"value": 30, "method": "MTP"}, "LM Studio": {"value": 17, "method": "no spec"}}},
+     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 167, "method": "DFlash2", "prefill": 1258}, "mlx-serve": {"value": 156, "method": "MTP"}, "oMLX": {"value": 144, "method": "DFlash2"}, "Splash": null, "Ollama": {"value": 102, "method": "MTP"}, "MTPLX": {"value": 89, "method": "MTP"}, "MLX": {"value": 98, "method": "DFlash2"}, "llama.cpp": {"value": 107, "method": "MTP"}, "LM Studio": {"value": 96, "method": "no spec"}}},
+     {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 136, "method": "DSpark", "prefill": 1022}, "mlx-serve": {"value": 115, "method": "MTP"}, "oMLX": {"value": 124, "method": "MTP"}, "Splash": "x", "Ollama": {"value": 92}, "MTPLX": {"value": 101}, "MLX": {"value": 94}, "llama.cpp": {"value": 101, "method": "MTP"}, "LM Studio": {"value": 72}}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M4 Pro 48 GB",
+    "rows": [
+     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 201, "method": "KFlash", "prefill": 1930}, "mlx-serve": {"value": 137, "method": "MTP", "note": "max depth 3"}, "oMLX": {"value": 102, "method": "MTP", "note": "oMLX's Lightning MTP"}, "Splash": "x", "Ollama": {"value": 109, "method": "MTP", "note": "MLX runner"}, "MTPLX": {"value": 104, "method": "MTP", "note": "depth 1"}, "MLX": {"value": 88, "method": "MTP", "note": "mlx-vlm, block 3"}, "llama.cpp": {"value": 70, "method": "MTP", "note": "n-max 2"}, "LM Studio": {"value": 81, "method": "no spec"}}},
+     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 63, "method": "KFlash", "note": "main after #187, 2026-10-21", "prefill": 396}, "mlx-serve": {"value": 54, "method": "DFlash2", "note": "draft tree, block 8"}, "oMLX": {"value": 45, "method": "DFlash2"}, "Splash": {"value": 53, "method": "DFlash2", "note": "Splash 1.4.0, 2026-10-21"}, "Ollama": {"value": 32, "method": "MTP", "note": "MLX runner"}, "MTPLX": {"value": 36, "method": "MTP", "note": "turbo profile, depth 3"}, "MLX": {"value": 28, "method": "MTP", "note": "mlx-vlm, block 3"}, "llama.cpp": {"value": 18, "method": "MTP", "note": "n-max 3"}, "LM Studio": {"value": 15, "method": "no spec"}}},
+     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 161, "method": "KFlash", "prefill": 1168}, "mlx-serve": {"value": 124, "method": "MTP", "note": "depth up to 2; its DFlash2 setup wrote 104"}, "oMLX": {"value": 127, "method": "DFlash2"}, "Splash": {"value": 135, "method": "DFlash2", "note": "Splash 1.4.0, 2026-10-21: 134.7 (132.3-144.5)"}, "Ollama": {"value": 89, "method": "MTP", "note": "MLX runner"}, "MTPLX": {"value": 80, "method": "MTP", "note": "sustained profile, depth 1"}, "MLX": {"value": 86, "method": "DFlash2", "note": "mlx-vlm with incoai's drafter"}, "llama.cpp": {"value": 69, "method": "MTP", "note": "n-max 1"}, "LM Studio": {"value": 86, "method": "no spec"}}},
+     {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 112, "method": "KFlash", "note": "main after #187, 2026-10-21 (DSpark drafter)", "prefill": 945}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 65, "method": "DSpark", "note": "mlx-vlm, block 6"}, "llama.cpp": null, "LM Studio": null}},
+     {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 69, "method": "KFlash", "note": "main after #187, 2026-10-21 (LiLiCorr drafter)", "prefill": 519}, "mlx-serve": null, "oMLX": {"value": 35, "method": "no spec", "note": "its LiLiCorr drafter fails at T = 0.6"}, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 32, "method": "no spec", "note": "mlx-vlm"}, "llama.cpp": "x", "LM Studio": null}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M1 Pro 16 GB",
+    "rows": [
+     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 95, "method": "KFlash", "note": "main after #187, 2026-10-21: mean of two runs, 92.6 and 97.5 (old main 90.7, 89.2)", "prefill": 306}, "mlx-serve": {"value": 62, "method": "MTP", "note": "max depth 2"}, "oMLX": {"value": 55, "method": "MTP"}, "Splash": "x", "Ollama": {"value": 55, "method": "MTP", "note": "MLX runner"}, "MTPLX": {"value": 42, "method": "MTP", "note": "depth 1"}, "MLX": {"value": 46, "method": "no spec", "note": "mlx-lm"}, "llama.cpp": {"value": 38, "method": "MTP", "note": "n-max 3"}, "LM Studio": {"value": 47, "method": "no spec"}}},
+     {"model": "Qwen3.5 9B", "cells": {"Kapitsa": {"value": 51, "method": "DFlash", "prefill": 164}, "mlx-serve": {"value": 37, "method": "MTP"}, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 30, "method": "no spec"}, "llama.cpp": null, "LM Studio": null}},
+     {"model": "Qwen3.6 35B-A3B 2-bit", "cells": {"Kapitsa": {"value": 53, "method": "no spec"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": null, "MTPLX": "x", "MLX": "x", "llama.cpp": {"value": 38}, "LM Studio": null}}
+    ]
+   }
+  ]
+ },
+ "header": {
+  "mac": "MacBook Pro M4 Pro 48 GB",
+  "model": "Qwen3.6 35B-A3B",
+  "engines": ["llama.cpp", "MTPLX", "LM Studio", "Ollama", "oMLX", "Splash", "Kapitsa"],
+  "title": "Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen and Nemotron",
+  "tagline": ["Blazing fast Apple Silicon optimized", "inference engine built for Qwen and Nemotron"],
+  "caption": [
+   "Writing speed, tok/s · Qwen3.6 35B-A3B · 4-bit",
+   "MacBook Pro (2024) · M4 Pro · 48 GB"
+  ],
+  "desc": "Writing speed in tokens per second for Qwen3.6 35B-A3B at 4-bit on a MacBook Pro (2024), M4 Pro, 48 GB"
+ }
+}
