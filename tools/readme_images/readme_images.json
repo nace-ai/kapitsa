@@ -20,11 +20,11 @@
   "size": [1600, 1834],
   "title": "Kapitsa: the Apple silicon engine for Qwen and Nemotron",
   "subtitle": [
-   "Decode tok/s of a 512-token coding answer, T 0.6, median of 5 · each engine in its fastest setup",
+   "Kapitsa: prefill / decode tok/s (a 4K prompt, then a 512-token coding answer) · the others: decode tok/s · T 0.6, median of 5 · each engine in its fastest setup",
    "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints"
   ],
   "footer": [
-   "Grey: share of the fastest engine in that row · small type: the decoding method (no spec: no speculative decoding) · line under Kapitsa: its prefill, tok/s at a 4K prompt",
+   "Grey: share of the fastest engine in that row · small type: the decoding method (no spec: no speculative decoding) · Kapitsa's prefill is the first number, decode the second",
    "× can't run that model on that Mac (Splash: only the 27B and 35B, on an M3 or newer) · — not measured · the numbers: the tables below"
   ],
   "macs": [

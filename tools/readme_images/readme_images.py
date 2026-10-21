@@ -113,12 +113,13 @@ POSTER = {
 }
 ORANGE = "#EE8E4E"
 X0, LW, KW = 40, 360, 212           # left edge, the model-name column, Kapitsa's column (the others share the rest)
+KW_PRE = 296                        # Kapitsa's column when it shows 'prefill / decode'
 TILE, TILE_Y = 70, 202              # logo tiles
 PANELS_Y, HEAD, PAD, GAP = 372, 74, 14, 30
 FOOT_GAP, FOOT_LINE, FOOT_PAD = 44, 32, 30
-RH_MIN, RH_MAX = 108, 150
+RH_MIN, RH_MAX = 88, 150
 F_MODEL, F_VAL, F_KVAL, F_UNIT, F_METH, F_KMETH, F_DASH = 32, 42, 44, 25, 20, 21, 28
-PRE_GAP = 11                        # between the lines under Kapitsa's number
+F_COMB = 40                         # 'prefill / decode', both at one size and weight
 M_GAP = 14                          # a number's baseline to the top of its method label
 CAP = 0.705                         # cap height of SF Pro and SF Mono, per em
 
@@ -211,8 +212,10 @@ def poster(data, theme):
     engines = data["engines"]
     names = [e["name"] for e in engines]
     under = header_methods(data)
-    OW = (W - 44 - X0 - LW - KW) / (len(engines) - 1)
-    colx = [(X0 + LW, KW)] + [(X0 + LW + KW + j * OW, OW) for j in range(len(engines) - 1)]
+    combined = any(isinstance(c, dict) and c.get('prefill') for m in P['macs'] for r in m['rows'] for c in r['cells'].values())
+    kw = KW_PRE if combined else KW
+    OW = (W - 44 - X0 - LW - kw) / (len(engines) - 1)
+    colx = [(X0 + LW, kw)] + [(X0 + LW + kw + j * OW, OW) for j in range(len(engines) - 1)]
     notes = []
 
     rows = [r for m in P["macs"] for r in m["rows"]]
@@ -280,20 +283,18 @@ def poster(data, theme):
                 if j == 0:
                     o.append(rect(cx + 3, ry + 5, cw - 6, rh - 10, 10, t["greens"][max(lvl, 4) if theme == "light" else lvl]))
                     pre = cell(row, e)[2].get("prefill") if isinstance(cell(row, e)[2], dict) else None
-                    kvb, kmb = vb, mb
-                    if pre:                   # a third line: the prefill speed, so the block is re-centered
-                        lines = 2 if meth else 1
-                        block = CAP * F_KVAL + lines * (PRE_GAP + CAP * F_KMETH)
-                        kvb = cy - block / 2 + CAP * F_KVAL
-                        kmb = kvb + PRE_GAP + CAP * F_KMETH
-                    o.append(f'<text x="{num(mid)}" y="{num(kvb)}" text-anchor="middle" fill="#FFFFFF">'
+                    if combined:              # one value, prefill first, both the same size and weight
+                        head = f"{fmt(pre)} / " if pre else f"{DASH} / "
+                        o.append(f'<text x="{num(mid)}" y="{num(vb)}" text-anchor="middle" fill="#FFFFFF">'
+                                 f'<tspan class="mono-b" font-size="{F_COMB}">{head}{fmt(v)}</tspan></text>')
+                        if meth:
+                            o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"])
+                        continue
+                    o.append(f'<text x="{num(mid)}" y="{num(vb)}" text-anchor="middle" fill="#FFFFFF">'
                              f'<tspan class="mono-b" font-size="{F_KVAL}">{fmt(v)}</tspan>'
                              f'<tspan class="sans-sb" font-size="{F_UNIT}" dx="7" fill="{t["unit"]}">tok/s</tspan></text>')
                     if meth:
-                        o += method_label(mid, kmb, meth, "sans-sb", F_KMETH, t["unit"])
-                        kmb += PRE_GAP + CAP * F_KMETH
-                    if pre:
-                        o.append(text(mid, kmb, f"prefill {pre:,}".replace(",", "\u202f"), "sans-m", F_KMETH, "#FFFFFF", "middle"))
+                        o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"])
                     continue
                 best = v == top
                 o.append(rect(cx + 3, ry + 5, cw - 6, rh - 10, 10, t["greys"][lvl]))
@@ -532,7 +533,7 @@ def main():
     print("README header alt text:", data["header"]["title"] + ". " + header_desc(data, rows[::-1]))
     words = "zero one two three four five six seven eight nine ten eleven twelve".split()
     others = len(data["engines"]) - 1
-    print("README poster alt text: Decode speed of a 512-token coding answer, in tokens per second, for Kapitsa and "
+    print("README poster alt text: Prefill and decode speed (a 4K prompt, then a 512-token coding answer) for Kapitsa, and decode speed for "
           f"{words[others] if others < len(words) else others} other engines on "
           + " and ".join("a " + m["name"] for m in data["poster"]["macs"])
           + ", each engine in its fastest setup and its speculative decoding method; the numbers are in the tables below")

@@ -47,47 +47,47 @@ Kapitsa is fastest in 23 of the 26 model and Mac pairs measured against eight en
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
-  <img alt="Poster of decode and prefill speed for Kapitsa and eight other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the tables below" src="docs/assets/benchmarks-light.webp">
+  <img alt="Poster of prefill / decode speed for Kapitsa and decode speed for eight other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the tables below" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>Decode speed of a 512-token coding answer in tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding); under Kapitsa's number, its prefill speed on a 4K prompt. × cannot run that model on that Mac · — not measured. The poster shows the models that differ most per Mac; the tables below and the [details](docs/benchmarks.md#the-readmes-tables) have every cell.</sub>
+<sub>Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Kapitsa shows prefill / decode, prefill on a 4K-token prompt and decode of a 512-token coding answer; the other engines show decode. × cannot run that model on that Mac · — not measured. The poster shows the models that differ most per Mac; the tables below and the [details](docs/benchmarks.md#the-readmes-tables) have every cell.</sub>
 
 #### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
 
-| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
-| --- | ---: | ---: | --- |
-| Qwen3.5 4B | **332 tok/s**<br><sub>DFlash</sub> | 3,339 tok/s | mlx-serve 271 tok/s<sub>, MTP</sub> |
-| Qwen3.8 27B | 102 tok/s<br><sub>DFlash2</sub> | 456 tok/s | **mlx-serve 130 tok/s**<sub>, DFlash2</sub> |
-| Qwen3.6 35B-A3B | **281 tok/s**<br><sub>DFlash2</sub> | 2,434 tok/s | mlx-serve 264 tok/s<sub>, MTP</sub> |
-| Flash-Next 180B | 105 tok/s<br><sub>MTP</sub> | 875 tok/s | **mlx-serve 108 tok/s** |
-| Bolt 74B | **120 tok/s**<br><sub>LiLiCorr</sub> | 960 tok/s | oMLX 69 tok/s<sub>, no spec</sub> |
+| Model | Kapitsa prefill / decode (tok/s) | Fastest other engine (decode) |
+| --- | ---: | --- |
+| Qwen3.5 4B | **3,339 / 332**<br><sub>DFlash</sub> | mlx-serve 271 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | 456 / 102<br><sub>DFlash2</sub> | **mlx-serve 130 tok/s**<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **2,434 / 281**<br><sub>DFlash2</sub> | mlx-serve 264 tok/s<sub>, MTP</sub> |
+| Flash-Next 180B | 875 / 105<br><sub>MTP</sub> | **mlx-serve 108 tok/s** |
+| Bolt 74B | **960 / 120**<br><sub>LiLiCorr</sub> | oMLX 69 tok/s<sub>, no spec</sub> |
 
 #### MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB
 
-| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
-| --- | ---: | ---: | --- |
-| Qwen3.5 4B | **179 tok/s**<br><sub>DFlash</sub> | 2,091 tok/s | mlx-serve 163 tok/s<sub>, MTP</sub> |
-| Qwen3.8 27B | 61 tok/s<br><sub>DFlash2</sub> | 403 tok/s | **mlx-serve 71 tok/s**<sub>, DFlash2</sub> |
-| Qwen3.6 35B-A3B | **167 tok/s**<br><sub>DFlash2</sub> | 1,258 tok/s | mlx-serve 156 tok/s<sub>, MTP</sub> |
-| Lightning 30B | **136 tok/s**<br><sub>DSpark</sub> | 1,022 tok/s | oMLX 124 tok/s<sub>, MTP</sub> |
+| Model | Kapitsa prefill / decode (tok/s) | Fastest other engine (decode) |
+| --- | ---: | --- |
+| Qwen3.5 4B | **2,091 / 179**<br><sub>DFlash</sub> | mlx-serve 163 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | 403 / 61<br><sub>DFlash2</sub> | **mlx-serve 71 tok/s**<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **1,258 / 167**<br><sub>DFlash2</sub> | mlx-serve 156 tok/s<sub>, MTP</sub> |
+| Lightning 30B | **1,022 / 136**<br><sub>DSpark</sub> | oMLX 124 tok/s<sub>, MTP</sub> |
 
 #### MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB
 
-| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
-| --- | ---: | ---: | --- |
-| Qwen3.5 4B | **201 tok/s**<br><sub>KFlash</sub> | 1,930 tok/s | mlx-serve 137 tok/s<sub>, MTP</sub> |
-| Qwen3.8 27B | **63 tok/s**<br><sub>KFlash</sub> | 396 tok/s | mlx-serve 54 tok/s<sub>, DFlash2</sub> |
-| Qwen3.6 35B-A3B | **161 tok/s**<br><sub>KFlash</sub> | 1,168 tok/s | Splash 135 tok/s<sub>, DFlash2</sub> |
-| Lightning 30B | **112 tok/s**<br><sub>KFlash</sub> | 945 tok/s | MLX 65 tok/s<sub>, DSpark</sub> |
-| Bolt 74B | **69 tok/s**<br><sub>KFlash</sub> | 519 tok/s | oMLX 35 tok/s<sub>, no spec</sub> |
+| Model | Kapitsa prefill / decode (tok/s) | Fastest other engine (decode) |
+| --- | ---: | --- |
+| Qwen3.5 4B | **1,930 / 201**<br><sub>KFlash</sub> | mlx-serve 137 tok/s<sub>, MTP</sub> |
+| Qwen3.8 27B | **396 / 63**<br><sub>KFlash</sub> | mlx-serve 54 tok/s<sub>, DFlash2</sub> |
+| Qwen3.6 35B-A3B | **1,168 / 161**<br><sub>KFlash</sub> | Splash 135 tok/s<sub>, DFlash2</sub> |
+| Lightning 30B | **945 / 112**<br><sub>KFlash</sub> | MLX 65 tok/s<sub>, DSpark</sub> |
+| Bolt 74B | **519 / 69**<br><sub>KFlash</sub> | oMLX 35 tok/s<sub>, no spec</sub> |
 
 #### MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB
 
-| Model | Kapitsa decode | Kapitsa prefill (4K) | Fastest other engine |
-| --- | ---: | ---: | --- |
-| Qwen3.5 4B | **95 tok/s**<br><sub>KFlash</sub> | 306 tok/s | mlx-serve 62 tok/s<sub>, MTP</sub> |
-| Qwen3.5 9B | **51 tok/s**<br><sub>DFlash</sub> | 164 tok/s | mlx-serve 37 tok/s<sub>, MTP</sub> |
-| Qwen3.6 35B-A3B 2-bit | **53 tok/s**<br><sub>no spec</sub> | — | llama.cpp 38 tok/s |
+| Model | Kapitsa prefill / decode (tok/s) | Fastest other engine (decode) |
+| --- | ---: | --- |
+| Qwen3.5 4B | **306 / 95**<br><sub>KFlash</sub> | mlx-serve 62 tok/s<sub>, MTP</sub> |
+| Qwen3.5 9B | **164 / 51**<br><sub>DFlash</sub> | mlx-serve 37 tok/s<sub>, MTP</sub> |
+| Qwen3.6 35B-A3B 2-bit | **— / 53**<br><sub>no spec</sub> | llama.cpp 38 tok/s |
 
 <sub>Prefill is Kapitsa's reading speed on a 4K-token prompt, from the newest run without a contention or invalid flag: 2026-10-19 on the M4 Pro (4B: 06:20 run), M5 Pro and M1 Pro, 2026-10-18 on the M5 Max, where every stored run is flagged for GPU contention, so read its prefill as a lower bound. KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](docs/benchmarks.md#kflash-trees-m4-pro-2026-10-21)); the DFlash, DFlash2, DSpark and LiLiCorr cells come from earlier runs. Every run is listed in [bench/README.md](bench/README.md).</sub>
 
