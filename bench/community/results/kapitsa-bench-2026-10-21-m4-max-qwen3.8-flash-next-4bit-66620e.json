@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-21T08:42:16Z",
+  "kapitsa": {
+    "version": "0.2.0",
+    "commit": "363c1a6"
+  },
+  "mac": {
+    "identifier": "Mac16,6",
+    "name": "MacBook Pro (14-inch, 2024)",
+    "year": 2024,
+    "chip": "Apple M4 Max",
+    "cpu_cores": 16,
+    "gpu_cores": 40,
+    "memory_gb": 128,
+    "macos": "26.6.2",
+    "macos_build": "25G83"
+  },
+  "model": {
+    "name": "qwen3.8-flash-next",
+    "title": "Qwen3.8-Flash-Next 180B-A7B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "5d423f9",
+    "decoding": "MTP",
+    "decoding_detail": "MTP speculative decoding depth 2",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 76.13,
+      "runs_tps": [
+        81.76,
+        78.02,
+        76.13,
+        73.03,
+        75.78
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 73.03,
+      "runs_tps": [
+        73.47,
+        74.32,
+        72.03,
+        73.03,
+        70.21
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4134,
+        "ttft_s": 6.3587,
+        "tps": 650.1,
+        "followup_s": [
+          0.1075,
+          0.1287,
+          0.0913
+        ],
+        "followup_median_s": 0.1075
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16284,
+        "ttft_s": 25.4086,
+        "tps": 640.9,
+        "followup_s": [
+          0.1053,
+          0.1169,
+          0.093
+        ],
+        "followup_median_s": 0.1053
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 70.5,
+    "mapped_gb": 5.47
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.2,
+    "gpu_other_mean_pct": 0.97,
+    "gpu_other_max_pct": 7.15,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [
+      "Microsoft Teams"
+    ],
+    "contention": []
+  },
+  "flags": [],
+  "invalid": []
+}
