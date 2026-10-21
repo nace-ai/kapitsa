@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-21T11:43:27Z",
+  "kapitsa": {
+    "version": "0.2.0",
+    "commit": "363c1a6"
+  },
+  "mac": {
+    "identifier": "Mac14,7",
+    "name": "MacBook Pro (13-inch, M2, 2022)",
+    "year": 2022,
+    "chip": "Apple M2",
+    "cpu_cores": 8,
+    "gpu_cores": 10,
+    "memory_gb": 16,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "nemotron-3-nano-4b",
+    "title": "Nemotron 3 Nano 4B",
+    "variant": "fp8",
+    "precision": "FP8",
+    "catalog": true,
+    "revision": "3fe6dab",
+    "decoding": "unknown",
+    "decoding_detail": "prompt-lookup speculative decoding (up to 4 drafts per cycle)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 21.69,
+      "runs_tps": [
+        21.97,
+        20.36,
+        21.69,
+        22.68,
+        21.36
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 21.26,
+      "runs_tps": [
+        20.82,
+        21.26,
+        21.39,
+        21.33,
+        20.31
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4184,
+        "ttft_s": 11.7973,
+        "tps": 354.7,
+        "followup_s": [
+          0.2032,
+          0.2165,
+          0.2076
+        ],
+        "followup_median_s": 0.2076
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16517,
+        "ttft_s": 51.3966,
+        "tps": 321.4,
+        "followup_s": [
+          0.2273,
+          0.3749,
+          0.4802
+        ],
+        "followup_median_s": 0.3749
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 4.98
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 45744,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 1.57,
+    "gpu_other_max_pct": 18.38,
+    "gpu_ambient_mean_pct": 0.9,
+    "gpu_users": [
+      "OpenChamber"
+    ],
+    "contention": [
+      "prefill_16000"
+    ]
+  },
+  "flags": [
+    "prefill_16000: 1648 pages swapped out during the phase",
+    "tools: 44096 pages swapped out during the phase",
+    "CONTENTION: sustained foreign GPU load > 5% in ['prefill_16000'] (mean 1.57%, top ['OpenChamber', 'TouchBarServer'])"
+  ],
+  "invalid": []
+}
