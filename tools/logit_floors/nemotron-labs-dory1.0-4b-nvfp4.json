@@ -1,0 +1,54 @@
+{
+  "model": "nemotron-labs-dory1.0-4b-nvfp4",
+  "measured": {
+    "build": "0.1.39 (0553f55)",
+    "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+    "macos": "27.0.1",
+    "date": "2026-10-21T07:54:29Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/.cache/kapitsa/models/nemotron-labs-dory1.0-4b-nvfp4"
+  },
+  "reference_path": "step",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 24, "top1": 0.9895833333333334, "flips": 2, "kl_mean": 0.0014157300416397175, "kl_median": 7.600900283105119e-05, "kl_p99": 0.015617365326221239, "kl_max": 0.04367426797563819, "margin_change_max": 4.141232490539551, "tie_margin": 0.9865188598632812, "nll_change_mean": 0.005392856330760337, "max_abs_diff": 6.206800222396851, "largest_flip_margin": 0.04400062561035156, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false}
+  },
+  "floor": {
+    "flips": 2,
+    "kl_mean": 0.0014157300416397175,
+    "kl_p99": 0.015617365326221239,
+    "kl_max": 0.04367426797563819,
+    "margin_change_max": 4.141232490539551,
+    "tie_margin": 0.9865188598632812,
+    "records": 192,
+    "top1": 0.9895833333333334,
+    "set_by": {"flips": "chunk", "kl_mean": "chunk", "kl_p99": "chunk", "kl_max": "chunk", "margin_change_max": "chunk", "tie_margin": "chunk"}
+  },
+  "gate": {
+    "min_top1": 0.979166,
+    "max_mean_kl": 0.00284,
+    "max_p99_kl": 0.0313,
+    "near_tie": 0.987,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 0.0,
+    "kl_p99": 0.0,
+    "kl_max": 0.0,
+    "margin_change_max": 0.0,
+    "tie_margin": 0.0,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.0,
+    "max_p99_kl": 0.0,
+    "near_tie": 0.0,
+    "max_far_flips": 0
+  }
+}

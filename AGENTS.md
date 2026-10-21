@@ -63,10 +63,11 @@ by `cmake/embed_*.cmake`; a new `.metal` file is picked up by the glob.
 
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
-interleaved A/B *and* an output check: greedy tokens and logits against the old path, with differences only at
-near-ties (`tools/logit_compare.py` reports the flips and their margins; `batch_check`, `ni_v8check` and
-`nh_eval --vcheck` are the usual comparisons). Put the numbers in the PR. "The same outputs to the bit" is a claim with
-evidence or it is not made.
+interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new
+build, `tools/logit_compare.py` between them, gated at twice the model's noise floor on this Mac
+(`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
+("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
+Never re-measure or edit a floor to let a change pass: `tools/logit_floor.py` re-measures one, in a PR of its own.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 

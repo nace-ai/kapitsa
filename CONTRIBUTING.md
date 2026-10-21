@@ -90,9 +90,74 @@ cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.c
 
 - Measure on the GPU only when nothing else runs on it, and interleave the runs of the old and the new build (A B A B
   ...). Report every run, not the best one, with the Mac, the macOS version and the commit.
-- A default changes only after an interleaved A/B and a check that the output stays the same: greedy tokens and
-  logits against the old path, with differences allowed only at near-ties.
+- A default changes only after an interleaved A/B and the [output check](#output-check): the logits against the old
+  build's, with differences allowed only within this Mac's noise floor (near-ties).
 - Put the numbers in the pull request, with the change that produced them.
+
+## Output check
+
+Did a change move the model's outputs beyond noise? Dump the logits over the whole vocabulary after the same fixed
+prefixes with the old and the new build, compare the dumps, and gate the difference at twice the model's noise floor on
+this Mac:
+
+```bash
+build-main/logit_dump MODEL_DIR /tmp/ref              # the old build (origin/main built in build-main); GPU lock
+build/logit_dump MODEL_DIR /tmp/new --from /tmp/ref   # the new build, on the reference's prefixes
+python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the gate
+```
+
+- `logit_dump` (its header has the details) prefills 8 windows cut from `bench/corpus.txt` (prefixes of 512 to 3200
+  tokens) as the engine prefills a prompt, then feeds the next 24 tokens of each teacher-forced (every row the text's own
+  next token, whatever the model would pick) through each decode path: `step` (plain decoding), `verify` (the
+  single-stream verify: KFlash's tree verify on Qwen, as DFlash2's cycle runs it) and `batch` (four requests in one
+  pass, as the engine batches them); `prefill` holds each window's last prompt row as the prefill samples it. Per path
+  it writes `sequences.txt`, `records.txt` and `logits.f32` (about 190 MB on the Qwen models: delete them after):
+  Splash's layout, so another engine's dump of the same prefixes compares too.
+- `tools/logit_compare.py` matches records by their prefix tokens and reports, in fp64 over the vocabulary, the rows
+  that are bitwise the same, the top-1 agreement and every flip with the reference's margin between the two tokens, the
+  mean, median, p99 and largest KL of the candidate from the reference, and the change in the next token's negative
+  log-likelihood. It passes when the mean and p99 KL are at most twice the floor's, there are at most twice its flips
+  (two in 192 rows at least), and every flip is a near-tie: at a reference margin under `near_tie`, the largest margin
+  the floor's own differences moved by half or more (twice them can flip it). When the two dumps' `prefill` rows are
+  bitwise the same, the change touched only the passes after the prefill, and the decode paths are held to the decode
+  floor; otherwise to the whole floor. The bounds are in `tools/logit_floors/<model>.json` (the dump's `meta.json`
+  names the model); `--against SOURCE` takes one source of the floor, a flag overrides its own bound. With numpy it
+  takes a second per path, without ~20 s.
+- The noise floor is how far the logits of the same prefixes move between the ways the engine legitimately computes
+  them: alone or decoding together with three others, plain decoding or the verify, DFlash2's chains or KFlash's trees,
+  a prefill cut into chunks of 512 rows instead of 2048 (a conversation's cached turns cut it anywhere), the Neural
+  Engine split or the GPU alone (dense models: the split takes chunks of 512 rows or more, and the server prefills on
+  the GPU until its program is ready). The worst of them per measure is the floor; the decode floor is the worst of
+  those that leave the prefill bitwise the same (the first three). `tools/logit_floor.py MODEL_DIR` measures both
+  (minutes on the GPU) and writes the JSON with every source's numbers. On the M4 Pro (MacBook Pro 16-inch 2024,
+  48 GB), macOS 27.0.1, 0.1.39 (0553f55), the KL of the 192 verify rows (Dory: of plain decoding), mean / p99:
+
+  | Model | Decode passes (alone vs 4 together) | Chunks of 512 vs 2048 | Neural Engine vs GPU | Gate: KL mean / p99, near-tie | Decode gate |
+  | --- | --- | --- | --- | --- | --- |
+  | Qwen3.6 35B-A3B 4-bit | 2.6e-4 / 3.0e-3 | 2.0e-4 / 6.8e-3 | (no split) | 5.1e-4 / 1.4e-2, 0.060 | 5.1e-4 / 6.0e-3, 0.060 |
+  | Qwen3.8 27B 4-bit | 2.0e-7 / 3.3e-6 | 6.6e-5 / 1.5e-3 (GPU alone: 4.6e-8 / 1.2e-6) | 1.9e-4 / 7.0e-3 | 3.8e-4 / 1.4e-2, 0.40 | 4.1e-7 / 6.6e-6, 0 |
+  | Qwen3.5 4B 4-bit | 5.1e-7 / 5.3e-6 | 2.1e-4 / 3.7e-3 (GPU alone: 1.0e-6 / 7.0e-6) | 9.3e-4 / 6.6e-3, 1 flip | 1.9e-3 / 1.3e-2, 1.52 | 1.0e-6 / 1.1e-5, 0 |
+  | Nemotron-Labs Dory 4B NVFP4 | (one request at a time) | 1.4e-3 / 1.6e-2, 2 flips | (no split) | 2.8e-3 / 3.1e-2, 0.99 | bitwise only |
+
+  The same build twice is bitwise the same on every path of all four. On the dense models the batched rows are bitwise
+  the chain verify's (alone against together is KFlash's tree verify against chains; plain decoding is closer still),
+  and chunking moves the prefill only where it moves rows between the Neural Engine and the GPU. The 35B's decode
+  floor is 500 to 1300 times theirs: batched, its experts run in other groupings than in the tree verify's
+  row-independent tiles, and a few rows move far (one by KL 0.034). A near-tie bound of 0 means no row came within
+  twice the floor's reach of a flip: any flip fails. Dory's chunking changes its arithmetic (last-loop KV: a chunk's
+  rows see each other's same-loop keys), not only its rounding. For scale, on the 4B: the verify's MLP gate/up on one
+  fused kernel (`NI_V8_GUSPLIT=0`) passes the decode gate (KL mean 7.2e-7); its codes as 1024 + q (`NI_V8_CM=0`) fail
+  it (3.3e-6, one row at 5.4e-4); the same weights re-encoded as 8-bit (`NI_REQUANT=8`: every kernel other) pass the
+  whole gate (7.7e-4, one flip at a margin of 0.03).
+- Put the comparison's output in the pull request. A change that is not meant to move outputs shows "every row bitwise
+  identical" or passes the gate; one that moves them on purpose (a precision, a quantization) fails it and says so, with
+  the numbers. A floor changes only with the conditions it measures (re-measured, in a pull request of its own), never
+  to let a change pass.
+- Raw dumps of `nh_eval --vcheck`, `ni_v8check` (`NI_V8CHECK_DUMP`) and `ni_run --dump-all-logits` compare with
+  `tools/logit_compare.py --vocab V`. Other questions have their own checks: `tools/kflash_invariance.py` and
+  `moe_tree_check` (a tree's size or shape must not change a row, bit for bit), `bench/batch/match.py` (batched
+  against single-stream greedy replies through the server); `batch_check` and `ni_v8check` time their passes while a
+  kernel is developed.
 
 ## Benchmarks
 
