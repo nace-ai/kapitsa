@@ -2,7 +2,8 @@
 """Writes the results table of bench/README.md from bench/results/**/*.json. Stdlib only, no GPU, no model.
 
   python3 bench/gen_readme.py            rewrite the table between the BEGIN/END markers of bench/README.md
-  python3 bench/gen_readme.py --check    exit 1 if bench/README.md is not what this script writes (CI runs it)
+  python3 bench/gen_readme.py --check    exit 1 if bench/README.md is not what this script writes, whoever the
+                                         "Submitted by" names are (CI runs it)
 
 One row per run record (schema 2, written by bench/harness/bench.py). JSON files that are not run records (a
 model manifest, a machine.json, a list such as 2026-10-21-kflash-trees/kflash-merge.json) are skipped, the same way
@@ -63,7 +64,7 @@ def mac(r):
 def version(r):
     v, e = str(r.get("version", "")), r["engine"]
     if e in ("kapitsa", "nace-infer"):
-        return v[:7] + ("+dirty" if v.endswith("+dirty") else "") if re.match(r"[0-9a-f]{7}", v) else v.split()[0]
+        return v[:7] + ("+dirty" if v.endswith("+dirty") else "") if re.match(r"[0-9a-f]{7}", v) else (v.split() or [DASH])[0]
     m = re.search(r"\b(b\d{4,6})\b", v) if e == "llama.cpp" else None
     if m:
         return m.group(1)
@@ -134,7 +135,10 @@ def records():
             continue
         if not (isinstance(r, dict) and r.get("schema") and "engine" in r and "label" in r and "when" in r):
             continue  # not a run record
-        rows.append(row(p, r, authors.get(os.path.relpath(p, REPO))))
+        try:
+            rows.append(row(p, r, authors.get(os.path.relpath(p, REPO))))
+        except (KeyError, TypeError, ValueError, IndexError) as e:
+            sys.exit(f"{os.path.relpath(p, REPO)}: not a complete run record ({e!r})")
     rows.sort(key=lambda x: (x[15], x[2], x[3], x[5]), reverse=True)
     return rows
 
@@ -152,9 +156,15 @@ def render():
     return "\n".join(out)
 
 
+def unsubmitted(text):
+    """The file with every table row's "Submitted by" cell blanked. The check ignores that column: a squash merge can
+    give the file's first commit another author than the pull request's commits had, and the check would fail on main."""
+    return re.sub(r"^(\| [^|]*? \| )[^|]*?( \| )", r"\1\2", text, flags=re.M)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--check", action="store_true", help="exit 1 if bench/README.md is stale")
+    ap.add_argument("--check", action="store_true", help="exit 1 if bench/README.md is stale (ignoring Submitted by)")
     a = ap.parse_args()
     text = open(README, encoding="utf-8").read()
     i, j = text.find(BEGIN), text.find(END)
@@ -162,7 +172,7 @@ def main():
         sys.exit(f"{README}: the BEGIN/END markers are missing")
     new = text[:i] + render() + text[j + len(END):]
     if a.check:
-        if new != text:
+        if unsubmitted(new) != unsubmitted(text):
             print("bench/README.md is stale: run `python3 bench/gen_readme.py` and commit the result", file=sys.stderr)
             return 1
         return 0

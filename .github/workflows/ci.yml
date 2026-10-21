@@ -45,13 +45,14 @@ jobs:
 
   bench-readme:
     # bench/README.md's table is written by bench/gen_readme.py from bench/results; a stale table fails here. The author
-    # column comes from git history, hence the full checkout.
+    # column comes from git history, hence the full checkout; the check ignores that column (a squash merge can change it).
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+      - run: python3 tests/test_gen_readme.py
       - run: python3 bench/gen_readme.py --check
 
   agentic-metrics-script:

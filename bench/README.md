@@ -1,7 +1,7 @@
 # Benchmark results
 
 Every run record under [bench/results](results/), one row each, newest first. The table is written by
-`python3 bench/gen_readme.py` (stdlib only, no GPU) and CI fails a pull request whose table is out of date.
+`python3 bench/gen_readme.py` (stdlib only, no GPU) and CI fails a pull request whose table is out of date (the Submitted by column is not compared). A pull request that adds a record regenerates the table with it; if another record's pull request merged first, rebase and regenerate.
 
 How to read it:
 
