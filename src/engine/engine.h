@@ -394,8 +394,11 @@ class Engine {
     int cycles = 0, tokens = 0;
   };
   // rows per member in a batch of n members (sum <= 8): 1 = plain rows, 1 + k = the anchor and k drafted tokens; 0:
-  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched).
-  // NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides the table.
+  // n requests take turns instead (one pass over their rows does not pay, or the drafter was not measured batched);
+  // kBatchBudget: KFlash's batch budget (KfBatch, DFlash2) chooses each member's rows every cycle from the members'
+  // drafts. NI_BATCH=0 turns batching off, NI_BATCH=1 on with every drafter; NI_BATCH_ROWS="n:rows,..." overrides
+  // the table and the budget; NI_BATCH_KF=0 keeps the table where the budget would choose.
+  static constexpr int kBatchBudget = 9;
   int batch_rows(int n) const;
   // at a decode cycle boundary: join the batch (one is running, or another request decodes and batching pays)
   bool batch_wanted() const;
@@ -403,6 +406,8 @@ class Engine {
   // with the turn once the job is done (true: the request stopped) or returned (false: back to its own loop at job.P)
   bool join_batch(BatchJob& job);
   void run_batch(BatchJob& me);
+  // one cycle of every member: rows per member, or kBatchBudget (each member drafts its chain, the budget then gives the
+  // members their rows: the verify is encoded once the drafting passes are done)
   void batch_cycle(int rows);
   // plain rows, pipelined: up to 8 passes, each encoded and committed before the host reads the one before it
   void batch_plain_run();
@@ -440,9 +445,10 @@ class Engine {
   bool batch_runner_ = false;     // a member's thread runs the batch
   bool batch_measured_ = false;   // batched decode measured with this model's drafter (batch_rows' default)
   double batch_backoff_ = 0;      // now_ms() before which no batch forms (the last one's members did not all come)
-  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles
-  long bstat_cycles_ = 0, bstat_rows_ = 0;
-  double bstat_wall_ = 0, bstat_gpu_ = 0;
+  // batch statistics since the last log line: cycles, rows, wall and GPU ms of the cycles, the GPU's idle time between
+  // the drafting passes and the verify (cycles with drafting passes)
+  long bstat_cycles_ = 0, bstat_rows_ = 0, bstat_drafted_ = 0;
+  double bstat_wall_ = 0, bstat_gpu_ = 0, bstat_gap_ = 0;
   std::mutex bmu_;                // a waiting member's job state / runner flag
   std::condition_variable bcv_;
   std::deque<uint64_t> slot_queue_;  // requests waiting for a free slot, first come first served (under the turn)

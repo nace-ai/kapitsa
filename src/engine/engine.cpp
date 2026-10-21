@@ -454,6 +454,7 @@ Engine::~Engine() = default;
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
   if (dfl_ && dfl_->budget()) dfl_->budget()->save();
+  if (dfl_ && dfl_->batch_budget()) dfl_->batch_budget()->save();
 }
 
 size_t default_mem_budget() {
@@ -824,6 +825,16 @@ int Engine::batch_rows(int n) const {
     return t;
   }();
   int rows = env[size_t(n)];
+  // KFlash's batch budget (DFlash2 drafters, 2 .. 4 members; NI_BATCH_KF=0 keeps the table below): each cycle, the rows
+  // of one verify pass in all and which member gets them, from the members' calibrated drafts and this Mac's measured
+  // cost of a batched cycle (KfBatch). Against the table on the M4 Pro (same streams, interleaved): 3 at once 35B
+  // +16-20%, 27B +14-22% (it batched them instead of taking turns: 8 rows in all instead of 2 each); 2 and 4 at once
+  // within -2 .. +4%
+  static const bool kf = [] {
+    const char* v = getenv("NI_BATCH_KF");
+    return !(v && *v) || atoi(v) != 0;
+  }();
+  if (rows < 0 && kf && dfl_ && dfl_->batch_budget() && n <= KfBatch::kMembers) return kBatchBudget;
   if (rows < 0) {
     // As measured on the M4 Pro (MacBook Pro, 48 GB), 512-token greedy replies to code prompts, tok/s in all against
     // the requests taking turns (bench/batch/concurrency.py streams):
@@ -942,7 +953,13 @@ void Engine::run_batch(BatchJob& me) {
     }
   }
   // this member left: another one runs the batch, or the last one goes back to its own loop
-  if (batch_.size() < 2) batch_stats();
+  if (batch_.size() < 2) {
+    batch_stats();
+    if (dfl_ && dfl_->batch_budget() && dfl_->batch_budget()->cycles() > 0) {
+      logi("%s", dfl_->batch_budget()->summary().c_str());
+      dfl_->batch_budget()->save(KfBatch::kSaveEvery);
+    }
+  }
   batch_runner_ = false;
   if (batch_.size() >= 2) {
     BatchJob* next = batch_.front();
@@ -960,11 +977,16 @@ void Engine::run_batch(BatchJob& me) {
 void Engine::batch_cycle(int rows) {
   Gpu& g = Gpu::get();
   const double t_cycle = now_ms();
-  const int k = rows - 1;  // drafted tokens per member
+  // KFlash's batch budget (DFlash2): every member drafts its chain, then the budget chooses the rows each verifies
+  const bool kfb = rows == kBatchBudget && dfl_ && dfl_->batch_budget();
+  if (rows == kBatchBudget && !kfb) rows = std::max(1, 8 / int(batch_.size()));  // (not reached: the budget is DFlash2's)
+  const int k = kfb ? DFlash2::kB - 1 : rows - 1;  // drafted tokens per member
   const std::vector<BatchJob*> jobs = batch_;
+  const size_t nj = jobs.size();
+  std::vector<int> kv(nj, k);  // drafts each member verifies (its rows: kv + 1)
   // Two command buffers, as a single request's cycle: the first (each member's staged rows into its drafter's ring
   // before its draft or when its stage is full, then its draft) starts on the GPU while the host encodes the second,
-  // one pass over every row
+  // one pass over every row (under the budget the second is encoded once the first is done: its rows follow the drafts)
   const SamplingParams greedy;
   auto e1 = g.begin();
   bool e1_work = false;
@@ -976,8 +998,8 @@ void Engine::batch_cycle(int rows) {
     const char* v = getenv("NI_BATCH_EXACT");
     return !(v && v[0] == '0');
   }();
+  std::vector<KfBatch::Member> mem(kfb ? nj : 0);
   if (dfl_) {
-    std::vector<Qwen35::VerifyGroup> groups;
     for (BatchJob* j : jobs) {
       Slot& sl = *j->slot;
       DFlashSeq& d = *sl.dseq;
@@ -987,22 +1009,50 @@ void Engine::batch_cycle(int rows) {
         const bool sampled = exact && j->sp.temperature > 0;
         dfl_->encode_draft(*e1, *sl.seq, d, j->P, sampled ? j->sp : greedy);
         if (sampled) dfl_->encode_save_walk(*e1, d);
+        if (kfb) dfl_->encode_save_scores(*e1, d);
         e1_work = true;
       }
-      groups.push_back(Qwen35::VerifyGroup{sl.seq.get(), j->P, rows, j->sp, &d.stage_hook, k > 0 ? 0 : d.staged});
     }
-    if (e1_work) e1->commit();
-    q35_->encode_verify_multi(*e2, groups);
+    if (kfb) {
+      // the budget's input, once the drafting passes are done: per member and draft position the largest of the 16
+      // candidates' probabilities under the walk's scores (a greedy walk's own draft; a sampled member's does not move
+      // it), and which calibration it takes (exact speculative sampling: the budget's own)
+      e1->commit();
+      e1->wait();
+      for (size_t i = 0; i < nj; ++i) {
+        const float* S = jobs[i]->slot->dseq->scores();
+        for (int p = 0; p < KfBatch::kDrafts; ++p) {
+          float mx = -INFINITY;
+          for (int c = 0; c < DFlash2::kTopK; ++c) mx = std::max(mx, S[p * DFlash2::kTopK + c]);
+          double z = 0;
+          for (int c = 0; c < DFlash2::kTopK; ++c) z += std::exp(double(S[p * DFlash2::kTopK + c] - mx));
+          mem[i].lc[p] = std::isfinite(mx) && z >= 1.0 ? float(-std::log(z)) : -30.0f;
+        }
+        mem[i].sampled = exact && jobs[i]->sp.temperature > 0;
+      }
+      dfl_->batch_budget()->plan(mem.data(), int(nj), dfl_->budget(), kv.data());
+    } else if (e1_work) {
+      e1->commit();
+    }
+    std::vector<Qwen35::VerifyGroup> groups;
+    for (size_t i = 0; i < nj; ++i) {
+      Slot& sl = *jobs[i]->slot;
+      groups.push_back(Qwen35::VerifyGroup{sl.seq.get(), jobs[i]->P, kv[i] + 1, jobs[i]->sp, &sl.dseq->stage_hook,
+                                           k > 0 ? 0 : sl.dseq->staged});
+    }
+    // (under the budget the GPU is idle until the pass's first layer is committed: it goes at once)
+    q35_->encode_verify_multi(*e2, groups, kfb ? 1 : 0);
     if (k > 0 && exact) {  // the sampled members' acceptance (stage-1 candidates per row: as the pass made them)
       uint32_t Kmax = 1;
       for (const auto& gr : groups)
         if (gr.sp.temperature > 0) Kmax = std::max(Kmax, uint32_t(std::clamp(gr.sp.top_k <= 0 ? 32 : gr.sp.top_k, 1, 32)));
       const uint32_t n = (uint32_t(model_->vocab()) + 2047) / 2048 * Kmax;
       int r0 = 0;
-      for (BatchJob* j : jobs) {
-        if (j->sp.temperature > 0)
-          dfl_->encode_accept_rows(*e2, *j->slot->seq, *j->slot->dseq, j->P, k, j->sp, r0, n);
-        r0 += rows;
+      for (size_t i = 0; i < nj; ++i) {
+        BatchJob* j = jobs[i];
+        if (j->sp.temperature > 0 && kv[i] > 0)
+          dfl_->encode_accept_rows(*e2, *j->slot->seq, *j->slot->dseq, j->P, kv[i], j->sp, r0, n);
+        r0 += kv[i] + 1;
       }
     }
   } else {
@@ -1020,18 +1070,26 @@ void Engine::batch_cycle(int rows) {
   }
   e2->commit_and_wait();
   bstat_gpu_ += e2->gpu_ms() + (e1_work ? e1->gpu_ms() : 0.0);
+  if (e1_work && k > 0) {  // the GPU's idle time between the drafting passes and the verify
+    bstat_gap_ += std::max(0.0, e2->gpu_start_host_ms() - e1->gpu_end_host_ms());
+    ++bstat_drafted_;
+  }
   const int* samp = dfl_ ? q35_->samples() : nh_->samples();
+  std::vector<int> acc(nj, 0);
   int r0 = 0;
-  for (BatchJob* j : jobs) {
+  for (size_t i = 0; i < nj; ++i) {
+    BatchJob* j = jobs[i];
     Seq& s = *j->slot->seq;
     int* tk = s.tokens();
+    const int kj = kv[i];
     int a = 0;  // drafts kept: while each equals the sample of the row before it
-    if (dfl_ && k > 0 && exact && j->sp.temperature > 0) {
+    if (dfl_ && kj > 0 && exact && j->sp.temperature > 0) {
       a = j->slot->dseq->accepted();  // (the acceptance wrote the token after them)
     } else {
-      while (a < k && samp[r0 + a] == tk[j->P + 1 + a]) ++a;
+      while (a < kj && samp[r0 + a] == tk[j->P + 1 + a]) ++a;
       tk[j->P + 1 + a] = samp[r0 + a];  // the sample after them
     }
+    acc[i] = a;
     int m = 0;  // rows fed: the anchor and the kept drafts, up to where the request stops
     bool go = true;
     while (m < a + 1) {
@@ -1063,10 +1121,14 @@ void Engine::batch_cycle(int rows) {
       (*j->trace)(lg + size_t(r0) * size_t(model_->vocab()), m, tk + j->P - m + 1);
     }
     if (!go) j->stopped = true;
-    r0 += rows;
+    r0 += kj + 1;
+    bstat_rows_ += kj + 1;
   }
+  // the budget reads the cycle's outcome (each member's verified and accepted drafts) and its GPU time: the drafting
+  // passes' command buffer and the verify's, as a single request's KFlash cycle is measured
+  if (kfb) dfl_->batch_budget()->observe(mem.data(), int(nj), kv.data(), acc.data(), e1->gpu_ms() + e2->gpu_ms(),
+                                         dfl_->budget());
   ++bstat_cycles_;
-  bstat_rows_ += long(rows) * long(jobs.size());
   bstat_wall_ += now_ms() - t_cycle;
   if (bstat_cycles_ >= 200) batch_stats();
 }
@@ -1165,10 +1227,11 @@ void Engine::batch_plain_run() {
 
 void Engine::batch_stats() {  // (debug log) how the batch's time splits
   if (bstat_cycles_ <= 0) return;
-  logd("batch: %ld cycles, %.1f rows each, %.2f ms per cycle (GPU %.2f)", bstat_cycles_,
-       double(bstat_rows_) / double(bstat_cycles_), bstat_wall_ / double(bstat_cycles_), bstat_gpu_ / double(bstat_cycles_));
-  bstat_cycles_ = bstat_rows_ = 0;
-  bstat_wall_ = bstat_gpu_ = 0;
+  logd("batch: %ld cycles, %.1f rows each, %.2f ms per cycle (GPU %.2f; idle before the verify %.3f)", bstat_cycles_,
+       double(bstat_rows_) / double(bstat_cycles_), bstat_wall_ / double(bstat_cycles_), bstat_gpu_ / double(bstat_cycles_),
+       bstat_drafted_ ? bstat_gap_ / double(bstat_drafted_) : 0.0);
+  bstat_cycles_ = bstat_rows_ = bstat_drafted_ = 0;
+  bstat_wall_ = bstat_gpu_ = bstat_gap_ = 0;
 }
 
 bool Engine::make_room(Slot& keep, size_t bytes) {

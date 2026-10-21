@@ -964,7 +964,7 @@ void Qwen35::encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& t
 // buffers: the GDN conv window, recurrence and tape (gdn_prep_verify, gdn_step_verify8s), the attention's KV cache
 // write and its attention over the cache (attn_prep, attn8m_partial, attn_rows_reduce), the sampler's second stage
 // (its parameters and RNG positions). Each group folds its sequence's pending rows first, as encode_verify8 does.
-void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups) {
+void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups, int split_after) {
   int R = 0;
   for (const VerifyGroup& gr : groups) {
     if (!gr.s || gr.R < 1) fatal("encode_verify_multi: an empty group");
@@ -1155,6 +1155,7 @@ void Qwen35::encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& gro
       e.dispatch((uint32_t(D) / 4 + 255) / 256, uint32_t(groups[g].R), 1, 256);
     }
     e.group_end();
+    if (i + 1 == split_after) e.split();  // (the GPU starts on the first layers)
   }
   for (const VerifyGroup& gr : groups) gr.s->n_pend = 0;  // folded by this pass; commit_rows() sets the new count
   const bool tl = enc_x8(e, x_, R, D, final_norm_, false, 0, nullptr, true);

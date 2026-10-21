@@ -281,6 +281,9 @@ class Qwen35 : public Model {
   // groups before it), each sampled with its group's parameters (RNG step: the row's position). With `cap`, the
   // drafter's target layer outputs of the group's rows go to cap->dst rows [cap_row0, cap_row0 + R) (cap->ld,
   // cap->slot; its positions are not used). Afterwards commit_rows() per sequence, as after encode_verify.
+  // split_after > 0: the pass's first split_after layers are committed as a command buffer of their own (Encoder::split)
+  // as soon as they are encoded, so the GPU starts on them while the host encodes the rest (a pass encoded only once the
+  // GPU is idle: the batch budget's, whose rows follow the drafting passes).
   struct VerifyGroup {
     Seq* s = nullptr;
     int pos = 0, R = 1;
@@ -291,7 +294,7 @@ class Qwen35 : public Model {
     // next pass can read them before the host has (pipelined plain rows)
     bool tok_out = false;
   };
-  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups);
+  void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups, int split_after = 0);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   virtual void encode_flush(Encoder& e, Seq& s);

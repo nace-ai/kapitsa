@@ -275,12 +275,14 @@ per second in all, 512-token replies to code prompts, greedy, on a MacBook Pro w
 
 | Requests at once | 1 | 2 | 3 | 4 |
 | --- | ---: | ---: | ---: | ---: |
-| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 56 (56) | 67 (58) |
-| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 184 (149) | 202 (161) |
+| Qwen3.8 27B, 4-bit | 57 | 66 (58) | 66 (56) | 67 (58) |
+| Qwen3.6 35B-A3B, 4-bit | 154 | 196 (160) | 206 (149) | 202 (161) |
 | Nemotron 3.5 Bolt, NVIDIA 24 GB | 65 | 77 (63) | 64 (63) | 75 (62) |
 
-In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. The 27B's three requests take turns:
-their drafts cost more than the shared pass saves. A request alone gets the tokens it always gets. Requests decoded
+In parentheses: the same requests taking turns on the GPU, as with `NI_BATCH=0`. With the Qwen models KFlash chooses
+each shared pass's rows (`NI_BATCH_KF`): how many in all, up to 8, and which request gets them, from each request's
+drafts and what a row costs on this Mac; three requests now share 8 rows instead of 2 each (or, on the 27B, taking
+turns). A request alone gets the tokens it always gets. Requests decoded
 together can get other tokens than alone where two candidates nearly tie (they are within the batched pass's rounding of
 each other), and sampled requests draw other random numbers, so their replies differ as two samples do. With the Qwen3.5
 4B's DFlash drafter, Nemotron 3.5 Lightning and Super-VL (not measured batched yet; `NI_BATCH=1` batches them), without
@@ -581,6 +583,8 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_DFLASH_TREE` | on | KFlash on the Qwen draft models: the draft model's guesses are checked as a best-first tree per pass (several continuations at once) instead of one chain; `0` checks a chain (overrides `NI_KFLASH` on these models). Greedy replies are the same either way; sampled ones follow the same distribution. The tree's shape follows the draft model's probabilities as calibrated against this Mac's own acceptances, and its size this Mac's measured cost per verified rows: one 8-row tile on the 27B and the 4B, 1 to 8 rows per pass on the 35B (its pass routes experts for those rows alone). |
 | `NI_TURN_MS` | `30` | Requests at once: how long a decoding request keeps the GPU before it gives its turn to a waiting one, in ms; `0` = after every decode step. |
 | `NI_BATCH` | on where measured | Requests decoding at once share one GPU pass ([Requests at once](#requests-at-once)): the 27B, the 35B and Bolt; `1`: the 4B, Lightning and Super-VL too (not measured yet); `0`: they take turns instead, each with the tokens it gets alone. |
+| `NI_BATCH_KF` | on | Requests decoding at once with the Qwen draft models (2 to 4 of them): KFlash chooses each shared pass's rows, how many in all and which request gets them, from the draft model's calibrated probabilities and this Mac's measured cost of a shared pass (cached with the KFlash budget). `0`: a fixed number per request, as measured before (two requests 4 rows each, three or four 2 each; the 27B's three take turns). |
+| `NI_BATCH_KF_FLOOR` | `0` | With `NI_BATCH_KF`: `1` gives every request in a shared pass at least one draft row. |
 | `NI_HISTORY_PREFILL` | on | After a reply, while the server is idle, prepare the conversation's next turn so a follow-up starts sooner; `0` turns it off. |
 | `NI_IMAGE_MAX_MB` | `32` | The largest image taken, in MB. |
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
