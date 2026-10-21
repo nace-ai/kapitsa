@@ -12,10 +12,10 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 
 - **[KFlash](docs/kflash.md)**: verify a tree of the drafter's guesses, not a chain. M4 Pro, 27B: +6.0% over three prompts (+16% prose, −3% a long agent turn; [runs](bench/results/2026-10-21-kflash-trees/README.md), [#187](https://github.com/nace-ai/kapitsa/pull/187)).
 - **KFlash budget**: three requests at once share one 8-row pass. M4 Pro: 35B +16-20%, 27B +15-23% ([#207](https://github.com/nace-ai/kapitsa/pull/207)).
-- **QMT prefill**: the M5's Metal 4 matrix units read the prompt. M5 Pro, 4B: 1.3-1.5x, +13% more at 16K ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215); not bit-identical).
+- **QMT prefill**: the M5's Metal 4 matrix units read the prompt. M5 Pro, 4B: 1.3-1.5x, +13% more at 16K, not a quiet GPU ([#205](https://github.com/nace-ai/kapitsa/pull/205), [#215](https://github.com/nace-ai/kapitsa/pull/215); not bit-identical).
 - **SSD prefix cache**: restart the server, keep the conversation. 16K follow-up on the 35B, M4 Pro: first token in 0.16-0.18 s, 17-18 s cold ([#212](https://github.com/nace-ai/kapitsa/pull/212), `--disk-cache`).
-- **Prefix reuse**: a new question over the shared system prompt starts warm. M5 Pro, 4B: 1.91 s to 0.06 s at 4K ([#198](https://github.com/nace-ai/kapitsa/pull/198), [#202](https://github.com/nace-ai/kapitsa/pull/202)).
-- **Output check**: no default changes until logits stay within twice the model's noise floor ([#208](https://github.com/nace-ai/kapitsa/pull/208), [#210](https://github.com/nace-ai/kapitsa/pull/210), [how](CONTRIBUTING.md#output-check)).
+- **Prefix reuse**: a new question over the shared system prompt starts warm. M5 Pro, 4B: 1.91 s to 0.06 s at 4K, not a quiet GPU ([#198](https://github.com/nace-ai/kapitsa/pull/198), [#202](https://github.com/nace-ai/kapitsa/pull/202)).
+- **Output check**: from now on a default changes only after its logits stay within twice the model's noise floor ([#208](https://github.com/nace-ai/kapitsa/pull/208), [#210](https://github.com/nace-ai/kapitsa/pull/210), [how](CONTRIBUTING.md#output-check)).
 - **`kapitsa bench compare`**: your Mac against every engine installed on it, in one command ([#197](https://github.com/nace-ai/kapitsa/pull/197), [#219](https://github.com/nace-ai/kapitsa/pull/219)).
 
 ## Quickstart
