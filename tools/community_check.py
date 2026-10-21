@@ -48,7 +48,7 @@ def catalog(repo=REPO):
     for i, m in enumerate(starts):
         chunk = body[m.end():starts[i + 1].start() if i + 1 < len(starts) else len(body)]
         variants = {}
-        for v in re.finditer(r'\{\.name = "([a-z0-9]+)",\s*\.quant = "[^"]*",(?:\s*\.label = "([^"]*)",)?', chunk):
+        for v in re.finditer(r'\{\.name = "([a-z0-9]+)",\s*\.quant = (?:"[^"]*"\s*)+,(?:\s*\.label = "([^"]*)",)?', chunk):
             name, label = v.group(1), v.group(2)
             variants[name] = label.split(" (")[0] if label else re.sub(r"bit$", "-bit", name)
         out[m.group(1)] = {"title": m.group(2), "variants": variants}
