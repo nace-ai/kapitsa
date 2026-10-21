@@ -269,55 +269,87 @@ def skipped_line(s, t):
     return f"  {t.yellow('–')} {s['name']:10} {s['reason']}" + (f"\n      {t.dim(s['hint'])}" if s["hint"] else "")
 
 
+def bar(frac, n=22):
+    k = int(round(max(0.0, min(1.0, frac)) * n * 8))
+    return ("█" * (k // 8) + " ▏▎▍▌▋▊▉"[k % 8]).rstrip().ljust(n)
+
+
+def measures(two, sl, ll):
+    """(heading, key, higher is better, formatter) for each column, in table order."""
+    m = [("decode tok/s", "decode_tps", True, f1), (f"prefill {sl}", "prefill_short_tps", True, lambda x: f1(x, 0))]
+    if two:
+        m.append((f"prefill {ll}", "prefill_long_tps", True, lambda x: f1(x, 0)))
+    return m + [("TTFT cold", "ttft_cold_s", False, ttft), ("TTFT cached", "ttft_cached_s", False, ttft),
+                ("memory", "memory_gb", False, lambda x: f"{x:.1f} GB")]
+
+
+def verdicts(ok, kap, ms, t):
+    """One line per measure: where Kapitsa stands and by how much, against the best other engine."""
+    rows, wins = [], 0
+    for head, key, hi, fmt in ms:
+        vals = [(e[key], e) for e in ok if e[key]]
+        if kap[key] is None or len(vals) < 2:
+            continue
+        others = [(v, e) for v, e in vals if e is not kap]
+        bv, be = max(others, key=lambda x: x[0]) if hi else min(others, key=lambda x: x[0])
+        r = kap[key] / bv if hi else bv / kap[key]  # >1: Kapitsa is ahead
+        place = 1 + sum(1 for v, _ in vals if (v > kap[key] if hi else v < kap[key]))
+        first = place == 1
+        wins += first
+        what = ("faster" if hi else "lower") if first else ("slower" if hi else "higher")
+        mark = t.green("✓") if first else t.red("✗")
+        rows.append(f"  {mark} {head.replace(' tok/s', ''):15}{('1st' if first else f'{place}th' if place > 3 else ('2nd', '3rd')[place - 2]):>4}"
+                    f"   {fmt(kap[key]):>9}   " + (t.green if first else t.red)(
+                        f"{max(r, 1 / r):.2f}x {what}") + t.dim(f" than {be['name']}"))
+    return wins, rows
+
+
 def render(doc, t):
-    m = doc["model"]
-    out = [t.bold(f"kapitsa bench compare  ·  {m['name']}") + t.dim(
-        f"  ·  {doc['machine']['chip']}, {doc['machine']['memory_gb']} GB, macOS {doc['machine']['macos']}"),
-        t.dim(f"profile {doc['profile']}: thinking off, one request at a time, sampler T=0.6; "
-              f"prefill {doc['sizes']} tokens; the harness in {doc['harness']['commit'] or 'this checkout'}"), ""]
+    m, mc = doc["model"], doc["machine"]
+    out = ["", f"  {t.accent(t.bold('kapitsa bench compare'))}  {t.bold(m['name'])}"
+           + t.dim(f"   {mc['chip']} · {mc['memory_gb']} GB · macOS {mc['macos']}"),
+           t.dim(f"  {doc['profile']} profile · thinking off · one request at a time · sampler T=0.6 · "
+                 f"prefill {doc['sizes'].replace(',', ' and ')} tokens"), ""]
     ok, top, kap = table_rows(doc)
-    sl, ll = doc["sizes"].split(",")[0], doc["sizes"].split(",")[-1]
-    two = sl != ll
-    head = ["#", "engine", "decode tok/s", "", f"prefill {sl}"] + ([f"prefill {ll}"] if two else []) + \
-           ["TTFT cold", "TTFT cached", "memory", "vs Kapitsa"]
-    rows = []
-    for i, e in enumerate(ok, 1):
-        vs = "" if e is kap or not kap or not kap["decode_tps"] else f"{e['decode_tps'] / kap['decode_tps']:.2f}x"
-        bar = ("█" * (int(round(18 * (e["decode_tps"] or 0) / top)) if top else 0)).ljust(18)
-        name = e["name"] + (" ←" if e is kap else "")
-        r = [str(i), name, f1(e["decode_tps"]), bar, f1(e["prefill_short_tps"], 0)]
-        if two:
-            r.append(f1(e["prefill_long_tps"], 0))
-        r += [ttft(e["ttft_cold_s"]), ttft(e["ttft_cached_s"]), f"{e['memory_gb']:.1f} GB" if e["memory_gb"] else "-", vs]
-        rows.append((e, r))
-    widths = [max([vlen(head[j])] + [vlen(r[j]) for _, r in rows]) for j in range(len(head))]
+    sizes = doc["sizes"].split(",")
+    ms = measures(sizes[0] != sizes[-1], sizes[0], sizes[-1])
     if ok:
-        out.append(t.dim("  ".join(pad(h, widths[j], right=j not in (1, 3)) for j, h in enumerate(head))))
-        for e, r in rows:
-            cells = []
-            for j, s in enumerate(r):
-                s = pad(s, widths[j], right=j not in (1, 3))
-                if j == 3:
-                    s = t.accent(s) if e is kap else t.dim(s)
-                elif j == 1 and e is kap:
-                    s = t.bold(s)
-                cells.append(s)
-            out.append("  ".join(cells))
+        best = {k: (max if hi else min)([e[k] for e in ok if e[k]] or [None], key=lambda x: x or 0) for _, k, hi, _ in ms}
+        w = [max(len(e["name"]) for e in ok) + 3] + [max(len(h), *(len(f(e[k])) for e in ok if e[k] is not None)) + 2
+                                                    for h, k, _, f in ms]
+        bw = max(6, min(22, t.width - 92))  # the rest of the table is ~90 columns; shorter bars on a narrow terminal
+        line = "  " + pad("", w[0]) + "".join(pad(h, w[i + 1], right=True) + (" " * (bw + 1) if i == 0 else "")
+                                              for i, (h, _, _, _) in enumerate(ms))
+        out += [t.dim(line), t.dim("  " + "─" * (len(line) - 2))]
+        for e in ok:
+            name = pad(("▸ " if e is kap else "  ") + e["name"], w[0])
+            cells = [t.accent(t.bold(name)) if e is kap else name]
+            for i, (h, k, hi, f) in enumerate(ms):
+                s = pad(f(e[k]) if e[k] is not None else "-", w[i + 1] - 2, right=True)
+                s = t.green(t.bold(s)) if len(ok) > 1 and e[k] is not None and e[k] == best[k] else s
+                cells.append("  " + s)
+                if i == 0:
+                    cells.append(" " + (t.accent if e is kap else t.dim)(bar((e[k] or 0) / top if top else 0, bw)))
+            out.append("  " + "".join(cells))
+        if kap and len(ok) > 1:
+            wins, rows = verdicts(ok, kap, ms, t)
+            out += ["", t.bold(f"  Kapitsa is first on {wins} of {len(rows)} measures")] + rows
     else:
-        out.append(t.red("No engine produced a number."))
+        out.append(t.red("  No engine produced a number."))
     for e in doc["engines"]:
         if e["status"] == "failed":
-            out += ["", t.red(f"✗ {e['name']}") + f" ({e['variant']}) did not finish: "
+            out += ["", t.red(f"  ✗ {e['name']}") + f" ({e['variant']}) did not finish: "
                     + clip("; ".join(e["invalid"]) or "no decode result", 200) + t.dim(f"  log: {e.get('log')}")]
     out.append("")
     for e in ok:
-        out.append(t.dim(f"  {e['name']:10} {clip(e['display'] or e['variant'], 38):38} {e['version'] or ''}"))
+        out.append(t.dim(f"  {e['name']:10} {clip(e['display'] or e['variant'], 38):38} {clip(e['version'] or '', 30)}"))
     for e in doc["engines"]:
         out += [t.yellow(f"  ! {e['name']}: {clip(f, t.width - 10)}") for f in e["flags"][:3]]
     if doc["skipped"]:
-        out += ["", t.bold("Not measured")] + [skipped_line(s, t) for s in doc["skipped"]]
-    out += ["", t.dim(f"Results and logs: {doc['out_dir']}"),
-            t.dim("`kapitsa bench compare --report` prints a Markdown block to keep or quote in a PR.")]
+        out += ["", t.bold("  Not measured")] + [skipped_line(s, t) for s in doc["skipped"]]
+    home = os.path.expanduser("~")
+    out += ["", t.dim("  Results and logs: " + doc["out_dir"].replace(home, "~", 1)),
+            t.dim("  `kapitsa bench compare --report` prints a Markdown block to keep or quote in a PR."), ""]
     return "\n".join(out)
 
 

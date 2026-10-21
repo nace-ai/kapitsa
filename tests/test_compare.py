@@ -11,7 +11,7 @@ usage: test_compare.py [BUILD_DIR]   (default: build; needs BUILD_DIR/kapitsa)
 3. The choice of configs: tuned variants first, controls (nomtp, bf16, mlx-q4) never, engines whose binary is missing
    told apart from weights that are missing.
 """
-import http.server, json, os, random, re, socketserver, subprocess, sys, tempfile, threading, time
+import http.server, io, json, os, random, re, socketserver, subprocess, sys, tempfile, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -207,6 +207,20 @@ check(r.returncode != 0 and "4b, 27b, 35b" in r.stderr, "an unknown model names 
 # ---------------------------------------------------------------- 3. the real configs
 import compare_engines as ce  # noqa: E402
 import kbench  # noqa: E402
+
+class Tty(io.StringIO):
+    def isatty(self):
+        return True
+
+
+plain, colour = kbench.render(doc, kbench.Term(Tty(), color=False)), kbench.render(doc, kbench.Term(Tty(), color=True))
+check("\033" not in plain and "\033" in colour, "colour only when asked for; the plain render has no escape codes")
+check(re.search(r"Kapitsa is first on \d of \d measures", plain) and re.search(r"[✓✗] decode\s+\d(st|nd|rd)", plain),
+      "a verdict line per measure says where Kapitsa stands", plain)
+check(re.search(r"x (faster|slower|lower|higher) than (oMLX|mlx-lm)", plain) and "▸ Kapitsa" in plain and "█" in plain,
+      "the verdict names the engine and the factor; the table marks Kapitsa and draws bars", plain)
+check(kbench.bar(0.5, 8) == "████    " and kbench.bar(1, 8) == "████████" and kbench.bar(1 / 16, 8) == "▌       ",
+      "bars have eighth-block resolution", repr(kbench.bar(1 / 16, 8)))
 os.environ.update(BENCH_MODELS=os.path.join(tmp, "models"))
 cfgs = ce.load_configs(sorted(__import__("glob").glob(os.path.join(HARNESS, "configs", "*.json"))))
 for model in kbench.MODELS:

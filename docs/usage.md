@@ -704,7 +704,7 @@ thinking off and the same sampler, prompts and corpus for everyone. An engine th
 are not on this Mac, is listed under "skipped" with the reason and how to get it. One engine failing does not stop the
 others.
 
-The table ranks engines by decode tok/s, with prefill tok/s, time to first token (cold and cached) and peak memory.
+The table ranks engines by decode tok/s, with prefill tok/s, time to first token (cold and cached) and peak memory; the best value in each column is green. Below it, one line per measure says where Kapitsa stands (1st or not) and by what factor against the best other engine.
 Files go to `~/.cache/kapitsa/bench/compare/<time>/` (`--out` changes that): `compare.json`, `report.md` and logs.
 
 The report has a "Who beats Kapitsa here, and why" part; its reasons come only from the configurations (speculative
