@@ -562,6 +562,10 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     tree_rows_ = 32 - __builtin_clz(allowed);  // the widest allowed count
     kf_budget_->set_rows(allowed, tree_rows_);
     kf_budget_->set_wide(tree_rows_ > kB);  // counts past 8: one wide verify; the budget also picks its capacity
+    // a block wider than the 8-row tile drafts the whole lattice in one weight read, so a cycle that verified only 8
+    // rows would leave half the draft on the floor: the block pins the capacity (and the size rule's choice of 8 rows,
+    // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
+    if (block() > kB) kf_budget_->pin_wide();
     if (tree_ && tree_rows_ > kB) {
       tg_.set_tree_rows(tree_rows_);
       logi("KFlash: tree verifies of %s rows (the size rule picks per cycle)",

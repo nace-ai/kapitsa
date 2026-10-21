@@ -125,6 +125,12 @@ void KfBudget::set_wide(bool on) {
   }
 }
 
+void KfBudget::pin_wide() {
+  std::lock_guard<std::mutex> lk(mu_);
+  pinned_ = true;
+  wide_pays_ = true;
+}
+
 void KfBudget::wide_costs() {
   cost8n_ = std::exp(lb_);
   for (int n = 1; n < kD; ++n) cost_[n] = c_.ncost[n] > 0 ? std::exp(lb_ + lq_[n]) : 0.0;
@@ -171,6 +177,10 @@ void KfBudget::fit(const std::vector<float>& x, const std::vector<uint8_t>& y, f
 // Wide verifies: the expected tokens per ms of the per-cycle choice among the allowed counts at their (wide) costs
 // against 8 rows at the narrow verify's cost, over the recent cycles' trees.
 void KfBudget::eval_wide() {
+  if (pinned_) {  // the capacity is not a decision (pin_wide)
+    wide_pays_ = true;
+    return;
+  }
   const size_t nc = ehist_.size() / 3;
   if (!nc || cost8n_ <= 0) {
     wide_pays_ = true;
@@ -340,18 +350,19 @@ void KfBudget::write(KfParams& p) {
   if (!forced) {
     if (wide) {
       // exploration: every allowed row count measured twice before the table decides, the narrow 8 rows too (the
-      // base first: this process's 8-row verify cost), and the refreshes
-      narrow = nb_ == 0;
+      // base first: this process's 8-row verify cost), and the refreshes; a pinned capacity (pin_wide) runs wide from
+      // the first cycle and has no narrow cost to learn, so its base starts at that cycle's own cost
+      narrow = !pinned_ && nb_ == 0;
       if (!narrow)
         for (int n = 1; n <= max_rows_; ++n)
           if (((allowed_ >> (n - 1)) & 1u) && c_.ncost[n] < 2) {
             force = n;
             break;
           }
-      if (!force && ncost8n_ < 2) narrow = true;
+      if (!force && !pinned_ && ncost8n_ < 2) narrow = true;
       if (!force && !narrow) {
         if (refresh_ > 0) force = refresh_;
-        else if (refresh_ < 0) narrow = true;
+        else if (refresh_ < 0 && !pinned_) narrow = true;
       }
       // capacity 8 unless the per-cycle choice among the wider counts pays (eval_wide)
       if (!force && !narrow && !wide_pays_) narrow = true;
