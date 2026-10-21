@@ -251,6 +251,7 @@ void FfnSplit::keep_loop() {
   while (!keep_stop_) {
     keep_cv_.wait_for(lk, std::chrono::duration<double, std::milli>(keep_period_ms_), [&] { return keep_stop_; });
     if (keep_stop_) break;
+    if (h_->retired()) break;  // the Neural Engine misbehaved: leave it alone
     if (in_chunk_ || fn_ >= 0) continue;
     const double idle_ms = now_ms() - last_use_;
     if (idle_ms < keep_period_ms_ || idle_ms > keep_window_s_ * 1000) continue;  // between chunks of a request, or asleep for good
@@ -511,7 +512,10 @@ void FfnSplit::begin_chunk(int T) {
   if (T < 1 || T > int(kMaxRows)) throw std::logic_error("ANE split: chunk rows out of range");
   in_chunk_ = true;
   {
-    std::lock_guard lk(keep_mu_);  // waits out a keepalive evaluation in flight (about 8 ms at most)
+    // Waits out a keepalive evaluation in flight (about 8 ms). Program::evaluate has no timeout, so the wait is bounded:
+    // if the Neural Engine is wedged in it, retire the split and the chunk falls back to the GPU alone.
+    std::unique_lock lk(keep_mu_, std::defer_lock);
+    if (!lk.try_lock_for(std::chrono::seconds(2))) h_->retire("the keepalive evaluation did not return");
   }
   fn_ = fn_for(T);
   T_ = T;

@@ -141,8 +141,8 @@ class FfnSplit {
   void keep_loop();
   double keep_window_s_ = 0, keep_period_ms_ = 2000;
   std::thread keep_;
-  std::mutex keep_mu_;  // held by the keepalive evaluation (it uses lane 0 / set 0) and briefly by begin_chunk
-  std::condition_variable keep_cv_;
+  std::timed_mutex keep_mu_;  // held by the keepalive evaluation (it uses lane 0 / set 0) and briefly by begin_chunk
+  std::condition_variable_any keep_cv_;
   bool keep_stop_ = false;
   std::atomic<bool> in_chunk_{false};
   std::atomic<double> last_use_{0};
