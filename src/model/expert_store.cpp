@@ -451,10 +451,10 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
   ExpertCache::Sync sync{[ev] { return Gpu::event_value(ev); }, [ev](uint64_t v) { Gpu::signal_event_cpu(ev, v); }};
   cache_ = std::make_unique<ExpertCache>(files, layers, E, lay, uint32_t(n), mem, sync, o.cache);
   const StoreStats st = cache_->stats();
-  logi("expert store: %u slots of %.2f MB (%.2f GB, %.1f%% of the %zu experts) in %s; %zu read at load in %.0f ms "
-       "(%.2f GB/s)%s",
+  logi("expert store: %u slots of %.2f MB (%.2f GB, %.1f%% of the %zu experts) in %s (up to %.2f GB each); %zu read "
+       "at load in %.0f ms (%.2f GB/s)%s",
        cache_->slots(), lay_.bytes / 1e6, arena_bytes() / 1e9, 100.0 * cache_->slots() / double(keys), keys,
-       c1 ? "two buffers" : "one buffer", cache_->filled(), cache_->fill_ms(),
+       c1 ? "two buffers" : "one buffer", double(per) * lay_.bytes / 1e9, cache_->filled(), cache_->fill_ms(),
        cache_->fill_ms() > 0 ? st.bytes / 1e6 / cache_->fill_ms() : 0.0,
        cache_->complete() ? " (all of them: no handshakes)" : "");
   cache_->reset_stats();

@@ -5,10 +5,10 @@ Either source can be a local file / folder or Hugging Face (HTTP range reads): o
 pack's non-expert tensors are fetched, straight into the output files.
 
   qwen4_exp_q20.py convert --out DIR [--pack DIR | --pack-repo REPO@REV] [--gguf FILE | --gguf-repo REPO@REV:PATH]
-                           [--table full|link|sparse] [--rows-ids @f ...] [--verify N] [--conns 16]
+                           [--table full|link|sparse] [--rows-ids @f ...] [--stream] [--verify N] [--conns 16]
   qwen4_exp_q20.py check DIR    the output's experts against its GGUF again (bytes) and its config
-  qwen4_exp_q20.py rows DIR @f ...   adds the token sequences' rows to DIR's sparse table (e.g. a generated
-                                     continuation, so a speed run reads the rows the model would)
+  qwen4_exp_q20.py rows DIR @f ... [--stream]   adds the token sequences' rows to DIR's sparse table (e.g. a
+                                     generated continuation, so a speed run reads the rows the model would)
 
 Q2_0 (ggml type 42 in ISTA-DASLab's / Strata's ggml): blocks of 64 weights in 18 bytes, an fp16 d and 16 bytes of 2-bit
 codes, LSB first, weight = (code - 1) d. GGUF expert tensors are [E][N][K] row-major (ne = K, N, E), as MLX's
@@ -307,9 +307,12 @@ def sparse_rows(id_files):
     return sorted(rows)
 
 
-def write_sparse_table(pack, out_path, rows, add=False):
+def write_sparse_table(pack, out_path, rows, add=False, stream=False, piece=16 << 20):
     """The pack's table file at full size with only `rows` written (APFS keeps the rest as holes). add: into the
-    existing file, skipping rows already there (nonzero scales). Returns (file size, table rows, rows written)."""
+    existing file, skipping rows already there (nonzero scales). stream: the rows are cut from whole reads of their
+    shards' tensors (`piece`-byte ranges) instead of three small reads a row, for many rows from a remote pack (its CDN
+    answers a few dozen small reads a second; a 4K prompt reads ~50K rows). Returns (file size, table rows, rows
+    written)."""
     f = TABLE
     if pack.local:
         hb = open(os.path.join(pack.src.path, f), "rb").read(8)
@@ -338,8 +341,8 @@ def write_sparse_table(pack, out_path, rows, add=False):
             os.pwrite(fd, head, 0)
             os.ftruncate(fd, size)
         starts = [L[0] for L in layout]
-        jobs = []
-        for r in rows:
+        want = {}  # shard -> its rows (local indices) to write
+        for r in sorted(set(rows)):
             k = bisect.bisect_right(starts, r) - 1
             f0, nr, wo, wb, so, gb, bo = layout[k]
             if not 0 <= r - f0 < nr:
@@ -347,14 +350,30 @@ def write_sparse_table(pack, out_path, rows, add=False):
             j = r - f0
             if add and any(os.pread(fd, gb, so + j * gb)):
                 continue
-            jobs += [(wo + j * wb, wo + (j + 1) * wb), (so + j * gb, so + (j + 1) * gb), (bo + j * gb, bo + (j + 1) * gb)]
-        for i in range(0, len(jobs), 3000):
-            part = jobs[i:i + 3000]
-            for (a, b), data in zip(part, pack.rows(f, part)):
-                os.pwrite(fd, data, a)
+            want.setdefault(k, []).append(j)
+        jobs = []  # (a, b, tensor offset, row bytes, rows in [a, b))
+        for k, js in sorted(want.items()):
+            f0, nr, wo, wb, so, gb, bo = layout[k]
+            for base, width in ((wo, wb), (so, gb), (bo, gb)):
+                if not stream:
+                    jobs += [(base + j * width, base + (j + 1) * width, base, width, [j]) for j in js]
+                    continue
+                per = max(1, piece // width)  # rows a piece
+                groups = {}
+                for j in js:
+                    groups.setdefault(j // per, []).append(j)
+                jobs += [(base + p * per * width, base + min(nr, (p + 1) * per) * width, base, width, g)
+                         for p, g in sorted(groups.items())]
+        batch = 32 if stream else 3000
+        for i in range(0, len(jobs), batch):
+            part = jobs[i:i + batch]
+            for (a, b, base, width, g), data in zip(part, pack.rows(f, [(x[0], x[1]) for x in part])):
+                for j in g:
+                    o = base + j * width
+                    os.pwrite(fd, data[o - a:o - a + width], o)
     finally:
         os.close(fd)
-    return size, first, len(jobs) // 3
+    return size, first, sum(len(js) for js in want.values())
 
 
 def cmd_convert(a):
@@ -440,7 +459,7 @@ def cmd_convert(a):
     if TABLE in files and TABLE not in done:
         if a.table == "sparse":
             rows = sparse_rows(a.rows_ids or [])
-            size, nrows, _ = write_sparse_table(pack, tpath, rows)
+            size, nrows, _ = write_sparse_table(pack, tpath, rows, stream=a.stream)
             log(f"{TABLE}: sparse, {len(rows)} of {nrows} rows written ({size / 1e9:.1f} GB apparent)")
         elif a.table == "link":
             if not pack.local:
@@ -534,7 +553,7 @@ def cmd_rows(a):
     with ThreadPoolExecutor(a.conns) as pool:
         pack = PackSource(a, pool)
         rows = sparse_rows(a.ids)
-        _, _, wrote = write_sparse_table(pack, os.path.join(a.dir, TABLE), rows, add=True)
+        _, _, wrote = write_sparse_table(pack, os.path.join(a.dir, TABLE), rows, add=True, stream=a.stream)
     log(f"{TABLE}: {len(rows)} rows read by the sequences, {wrote} of them added")
     return 0
 
@@ -550,6 +569,8 @@ def main():
     c.add_argument("--gguf-repo", default=GGUF_REPO)
     c.add_argument("--table", choices=["full", "link", "sparse"], default="full")
     c.add_argument("--rows-ids", nargs="*", help="token id files (@path) whose table rows --table sparse writes")
+    c.add_argument("--stream", action="store_true", help="--table sparse: rows cut from whole reads of the table's "
+                   "tensors (16 MB pieces) instead of three small reads a row: for many rows from a remote pack")
     c.add_argument("--verify", type=int, default=4, help="rows per expert tensor compared with the 4-bit pack")
     c.add_argument("--conns", type=int, default=16)
     k = sub.add_parser("check")
@@ -557,6 +578,8 @@ def main():
     r = sub.add_parser("rows")
     r.add_argument("dir")
     r.add_argument("ids", nargs="+", help="token id files (@path)")
+    r.add_argument("--stream", action="store_true", help="rows cut from whole reads of the table's tensors (16 MB "
+                   "pieces) instead of three small reads a row")
     r.add_argument("--conns", type=int, default=16)
     a = ap.parse_args()
     sys.exit({"convert": cmd_convert, "check": cmd_check, "rows": cmd_rows}[a.cmd](a))

@@ -146,8 +146,8 @@ def make_sources(root, swap_gate_up=False):
 
 
 def args(**k):
-    a = dict(out=None, pack=None, pack_repo=None, gguf=None, gguf_repo=None, table="link", rows_ids=None, verify=4,
-             conns=4)
+    a = dict(out=None, pack=None, pack_repo=None, gguf=None, gguf_repo=None, table="link", rows_ids=None, stream=False,
+             verify=4, conns=4)
     a.update(k)
     return types.SimpleNamespace(**a)
 
@@ -251,6 +251,12 @@ def main():
         check(False, "rows are not added to a file other than the pack's table")
     except ValueError:
         check(True, "rows are not added to a file other than the pack's table")
+    # streamed: the same rows cut from whole-tensor reads (pieces of 3 rows of codes, 24 of scales: rows share pieces)
+    tp2 = os.path.join(root, "streamed.safetensors")
+    _, _, wrote = Q.write_sparse_table(pk, tp2, rows, stream=True, piece=240)
+    _, _, wrote2 = Q.write_sparse_table(pk, tp2, more, add=True, stream=True, piece=240)
+    check(wrote == len(rows) and wrote2 == 2, f"streamed sparse table: {wrote} rows, then the 2 missing ({wrote2})")
+    check(open(tp2, "rb").read() == open(tp, "rb").read(), "streamed sparse table: the same file as row by row")
     print(f"\n{'all checks passed' if not fails else f'{len(fails)} FAILED'}")
     if tmp:
         tmp.cleanup()

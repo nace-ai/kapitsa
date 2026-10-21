@@ -501,12 +501,23 @@ run `kapitsa doctor`.
 A Flash-Next folder whose routed experts are in Q2_0 (2.25 bits a weight; `tools/qwen4_exp_q20.py` builds one from
 ISTA-DASLab's GSQ-RCO GGUF and Nace AI's 4-bit pack: 38.3 GB of model files, plus the 32 GB n-gram table) does not
 need them all in memory: it keeps as many as the budget leaves after its other weights, its buffers, the slots'
-state and one conversation's KV cache of up to 32K tokens, and reads the others from the SSD when a token routes them
-(`src/model/expert_store.h`).
+state and one conversation's KV cache of up to 32K tokens, with the process's GPU memory within 40% of the RAM, and
+reads the others from the SSD when a token routes them (`src/model/expert_store.h`). Why 40%: such a store waits on
+the CPU at every layer, and on a 48 GB M4 Pro every command buffer took 0.5-3.5 s longer once the process's GPU memory
+passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full speed.
 `kapitsa doctor` counts the smallest such store (2.1 GB) in its weights and lists the rest as streamed.
-`NI_EXPERT_STORE=<GB>` sets the store's size, `all` keeps every expert, `off` loads them as stacked tensors (the whole
-pack must then fit); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. No such folder has been run on a
-48 GB Mac yet: its speed there is not measured.
+`NI_EXPERT_STORE=<GB>` sets the store's size (any size), `all` keeps every expert, `off` loads them as stacked tensors
+(the whole pack must then fit); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. With `NI_LOG=1` each
+request's log says how many of its experts were in memory and how much was read.
+
+On that 48 GB M4 Pro (macOS 27.0.1; a 12 GB store, 35% of the experts, the automatic size there; 17-20 GB peak
+memory), with the published protocol's prompts: 512-token code answers at 16.8 tok/s greedy and 17.8 at T = 0.6 with
+MTP, 16.1 and 16.4 without; prefill 265-284 tok/s at 4K and 237 at 16K, with `--prefill-chunk 4096` 357 and 407; a
+follow-up's first token in 0.7-1.0 s. Decode finds ~90% of its experts in memory and reads 105-200 MB a token; a
+prefill chunk reads nearly every expert (~40 GB), so 4096-row chunks halve the reads a token. Any prompt of 64 tokens
+or more reads every expert of each layer: an 85-token one waits 6-8 s for its first token. The n-gram table of those
+runs held only the rows of their prompts and (mostly) their answers; a full table adds reads of its rows for other
+text.
 
 Super-VL's weights alone are 70.1 GB, so it needs a 96 GB+ Mac: on 128 GB (a 110.8 GB budget) it runs with its draft
 model (3.5 GB at two slots) and room for millions of tokens of KV cache; on 96 GB it starts without the draft model

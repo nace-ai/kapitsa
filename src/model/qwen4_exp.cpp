@@ -9,6 +9,7 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <dirent.h>
+#include <sys/sysctl.h>
 
 #include <algorithm>
 #include <cmath>
@@ -643,6 +644,23 @@ void Qwen4Exp::init_store(const std::string& dir) {
     }
     const size_t used = Gpu::get().allocated_bytes();
     o.bytes = budget > used + keep ? budget - used - keep : 0;
+    // A store short of all the experts waits on the CPU every layer. On a 48 GB M4 Pro (macOS 27) every command buffer
+    // then took 0.5-3 s longer (its submission blocked in IOGPU) once the process's GPU allocations passed ~45% of the
+    // RAM (15-24 GB stores), while 4-12 GB stores (39%) ran at full speed; so the automatic size keeps the allocations
+    // within 40% of the RAM, and no smaller than three layers' experts (NI_EXPERT_STORE=<GB> sets any size)
+    if (o.bytes < all) {
+      uint64_t ram = 0;
+      size_t len = sizeof ram;
+      sysctlbyname("hw.memsize", &ram, &len, nullptr, 0);
+      const size_t cap = size_t(0.40 * double(ram)), least = size_t(3) * E * lay.bytes;
+      const size_t lim = std::max(least, cap > used + keep ? cap - used - keep : 0);
+      if (lim < o.bytes) {
+        logi("expert store: %.1f GB rather than the %.1f GB the budget leaves (the process's GPU memory within 40%% of "
+             "the RAM: beyond ~45%%, every command buffer of a streamed store took seconds longer on a 48 GB Mac)",
+             lim / 1e9, o.bytes / 1e9);
+        o.bytes = lim;
+      }
+    }
   }
   o.bytes = std::min(o.bytes, all);
   if (const char* r = getenv("NI_EXPERT_READERS"); r && *r) o.cache.readers = atoi(r);

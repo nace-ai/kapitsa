@@ -85,6 +85,28 @@ static void ngram_drafts(const int* tok, int P, int k, std::vector<int>& out, in
 
 // Dory's speculative drafts (per-loop KV): NI_DORY_SPEC = both (the default: prompt lookup, else self-speculation),
 // ngram (prompt lookup only) or self
+// Streamed experts (a Qwen3.8-Flash-Next Q2_0 pack, src/model/expert_store.h): the store's work since the last call,
+// for a request's log line ("" when the model streams nothing); `tokens` > 0 adds the bytes read per token
+static std::string store_note(Model* m, const char* what, int tokens) {
+  auto* q4 = dynamic_cast<Qwen4Exp*>(m);
+  q20::ExpertStore* st = q4 ? q4->expert_store() : nullptr;
+  if (!st || st->complete()) return "";
+  const q20::StoreStats s = st->stats();
+  st->reset_stats();
+  const double n = std::max<double>(1, double(s.lookups));
+  char b[320];
+  snprintf(b, sizeof b, "%s: %llu experts looked up in %llu turns, %.1f%% in memory, %.1f%% read ahead and waited for, "
+           "%.1f%% read at the turn, %.2f GB read", what, (unsigned long long)s.lookups,
+           (unsigned long long)s.handshakes, 100.0 * double(s.hits) / n, 100.0 * double(s.late) / n,
+           100.0 * double(s.misses) / n, double(s.bytes) / 1e9);
+  std::string out = b;
+  if (tokens > 0) {
+    snprintf(b, sizeof b, " (%.1f MB a token)", double(s.bytes) / 1e6 / tokens);
+    out += b;
+  }
+  return out;
+}
+
 static std::string dory_spec_kind() {
   static const std::string k = [] {
     const char* v = getenv("NI_DORY_SPEC");
@@ -1894,6 +1916,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   s.embeds = nullptr;
   const double h_woke = Encoder::host_ms();
   res.prefill_ms = now_ms() - t0;
+  const std::string store_prompt = store_note(model_.get(), "prompt", n - start);
   // Neural Engine split: how busy the ANE was over the prefill. Near 100% it, not the GPU, is the bottleneck (a
   // smaller share would be faster: ane_calib --wave --write); the share is set for the GPU to be the bottleneck.
   if (const AneStats& a1 = model_->ane_stats(); a1.chunks > ane0.chunks)
@@ -2591,6 +2614,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
        "+%.1f ms, GPU %.1f ms, wake +%.1f ms), %d tokens in %.0f ms (%.1f tok/s), %s%s%s%s", n, start, res.prefill_ms,
        tok_ms, t_enc, lat_start, gpu_last, lat_wake, gen, res.decode_ms,
        gen > 1 ? (gen - 1) / (res.decode_ms / 1000) : 0.0, finish.c_str(), cyc, conc, lp);
+  if (!store_prompt.empty()) logi("expert store: %s; %s", store_prompt.c_str(), store_note(model_.get(), "decode", gen).c_str());
   return res;
 }
 
