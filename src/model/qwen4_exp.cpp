@@ -211,9 +211,9 @@ void Qwen4Exp::load(const std::string& dir) {
     L.router = qlin(m + "gate");
     L.shared_gate = qlin(m + "shared_expert_gate");
     L.router.gate = L.shared_gate.gate = true;
-    L.eg = qlin(m + "switch_mlp.gate_proj");
-    L.eu = qlin(m + "switch_mlp.up_proj");
-    L.ed = qlin(m + "switch_mlp.down_proj");
+    L.eg = qlin(m + "switch_mlp.gate_proj", true, true);
+    L.eu = qlin(m + "switch_mlp.up_proj", true, true);
+    L.ed = qlin(m + "switch_mlp.down_proj", true, true);
     L.sg = qlin(m + "shared_expert.gate_proj");
     L.su = qlin(m + "shared_expert.up_proj");
     L.sd = qlin(m + "shared_expert.down_proj");
@@ -877,10 +877,11 @@ void Qwen4Exp::enc_attn4(Encoder& e, Seq& s, int li, const Layer& L, const Qwen4
   enc_qmv(e, L.o, attn_out_, yb_, nullptr, nullptr);
 }
 
-// MoE of one row (u = the block input, fp32): router + shared gate, top-k, the fused 4-bit expert kernels; other
-// formats take the per-row MoE (the verify path at one row; u must then be in xrn_).
+// MoE of one row (u = the block input, fp32): router + shared gate, top-k, the fused 4-bit expert kernels (Q2_0
+// experts: q20::enc_decode); other formats take the per-row MoE (the verify path at one row; u must then be in xrn_).
 void Qwen4Exp::enc_moe4(Encoder& e, const Layer& L, const Buffer& u) {
-  if (!(L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4())) {
+  const bool q20 = L.eg.q20;  // check_formats: all three Q2_0 and a 4-bit shared expert
+  if (!q20 && !(L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4())) {
     if (u.mtl != xrn_.mtl) fatal("enc_moe4: the input must be xrn_");
     enc_moe_rows(e, L, 1, yb_, false, &xrn_);
     return;
@@ -896,6 +897,10 @@ void Qwen4Exp::enc_moe4(Encoder& e, const Layer& L, const Buffer& u) {
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, eidx_); e.buf(3, ewts_);
   e.val(4, tp);
   e.dispatch(1, 1, 1, 32);
+  if (q20) {
+    q20::enc_decode(e, q20_experts(L), q20_shared(L), q20_shape(), u, eidx_, ewts_, eh_, yb_);
+    return;
+  }
   e.use(pipe("moe_gate_up3_r2"));
   e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
   e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
@@ -1087,7 +1092,8 @@ void Qwen4Exp::encode_logits_rows(Encoder& e, int T, const Buffer& out) {
 std::string Qwen4Exp::formats_summary() const {
   std::map<std::string, size_t> bytes;
   auto add = [&](const QLinear& q) {
-    if (q) bytes[format_name(q.bits, q.gs)] += q.w->buf.size + (q.dense() ? 0 : q.s->buf.size + q.b->buf.size);
+    if (q && q.q20) bytes["Q2_0"] += q.w->buf.size + q.s->buf.size;
+    else if (q) bytes[format_name(q.bits, q.gs)] += q.w->buf.size + (q.dense() ? 0 : q.s->buf.size + q.b->buf.size);
   };
   add(embed_);
   add(lm_head_);
@@ -1185,7 +1191,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
       for (auto& [k, v] : q.items())
         if (v.is_object() && k.find(".ngram_embedding.") == std::string::npos &&
             (v.value("bits", 4) != q.value("bits", 4) || v.value("group_size", 64) != q.value("group_size", 64)))
-          ++other[format_name(v.value("bits", 4), v.value("group_size", 64))];
+          ++other[v.value("mode", "") == "q2_0" ? "Q2_0" : format_name(v.value("bits", 4), v.value("group_size", 64))];
       for (auto& [f, n] : other) m.formats += " + " + std::to_string(n) + " modules " + f;
     }
   }

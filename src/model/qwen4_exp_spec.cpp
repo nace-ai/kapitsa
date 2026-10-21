@@ -111,6 +111,12 @@ void Qwen4Exp::enc_moe4_rows(Encoder& e, const Layer& L, int R, bool mtp_layer) 
   e.buf(0, rlog_); e.buf(1, slog_); e.buf(2, ridx_); e.buf(3, rwts_);
   e.val(4, tp);
   e.dispatch(uint32_t(R), 1, 1, 32);
+  if (L.eg.q20) {
+    // Q2_0 experts (check_formats: a 4-bit shared expert): unique experts, gate/up, down for R <= kMaxVerify rows
+    q20::enc_verify(e, q20_experts(L), q20_shared(L), q20_shape(), R, xrn_, ridx_, rwts_, eh_, yb_, ue_,
+                    uw_.view(0, 512), uw_.view(1024, 1024), un_);
+    return;
+  }
   kp::Moe mp{uint32_t(D), uint32_t(cfg_.moe_I), uint32_t(cfg_.shared_I), uint32_t(k), cfg_.eps};
   const uint32_t Imax = uint32_t(std::max(cfg_.moe_I, cfg_.shared_I));
   const bool all4 = L.eg.q4() && L.eu.q4() && L.ed.q4() && L.sg.q4() && L.su.q4() && L.sd.q4();
