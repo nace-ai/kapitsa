@@ -164,7 +164,7 @@ def skip_hint(engine, why, tried, model):
 class Args:  # what compare_engines.plan()/run_config() read from argparse
     def __init__(self, prof, quiet_timeout, lock_timeout, quiet_s):
         self.sizes, self.skip, self.bench_args = prof["sizes"], prof["skip"], prof["bench_args"]
-        self.agent_trace, self.quiet_max, self.quiet_timeout = "none", None, quiet_timeout
+        self.agent_trace, self.quiet_max, self.quiet_timeout, self.agentic = "none", None, quiet_timeout, False
         self.lock_timeout, self.env_keys, self.quiet_s = lock_timeout, [], quiet_s
 
 
