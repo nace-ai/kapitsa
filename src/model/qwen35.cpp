@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 namespace ni {
+extern const char* const kTensorKernelSource;
 
 using json = nlohmann::json;
 
@@ -2010,8 +2011,26 @@ void Qwen35::enc_sample(Encoder& e, Seq& s, const Buffer& xrow, int out_index, c
 static Pipeline pipe(const std::string& n) {
   static std::unordered_map<std::string, Pipeline> cache;
   auto it = cache.find(n);
-  if (it == cache.end()) it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  if (it == cache.end()) {
+    if (n.rfind("qmt", 0) == 0) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+    it = cache.emplace(n, Gpu::get().pipeline(n)).first;
+  }
   return it->second;
+}
+
+// NI_QMT (read once; default on, 0 = off): the dense 4-bit prefill GEMMs (M >= 64, group 64) on Metal 4's tensor_ops
+// (qmt.metal: the M5's matrix units; bench_qmm on the M5 Pro, 2048-row chunks of Qwen3.5-4B's projections: 21-23
+// TFLOP/s against qmr's 7.4-7.6, the fused gate/up 22.8 against 7.5). Needs macOS 26 and an Apple10 GPU.
+static bool qmt_on() {
+  static const bool on = [] {
+    if (env_int("NI_QMT", 1) == 0) return false;
+    if (Gpu::get().apple_family() < 10) return false;
+    bool ok = false;
+    if (__builtin_available(macOS 26.0, *)) ok = true;
+    if (ok) logi("NI_QMT: dense prefill GEMMs on tensor_ops (qmt_m64_n64, qmtg_m64_n64), M >= 64");
+    return ok;
+  }();
+  return on;
 }
 
 void Qwen35::enc_rows_half(Encoder& e, const Buffer& x, const Tensor* norm, const Buffer& y, int T, int D) {
@@ -2082,6 +2101,14 @@ void Qwen35::enc_qmm_large(Encoder& e, const QLinear& L, const Buffer& xh, const
     e.val(5, p);
     if (mfast) e.dispatch((M + bm - 1) / bm, (L.N + bn - 1) / bn, 1, 128);
     else e.dispatch((L.N + bn - 1) / bn, (M + bm - 1) / bm, 1, 128);
+    return;
+  }
+  if (q.on && qmt_on() && M >= 64 && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
+    e.use(pipe("qmt_m64_n64"));
+    kp::Qmm p{uint32_t(M), L.N, L.K, L.K, L.N, add ? 1u : 0u, uint32_t(L.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, L.w->buf); e.buf(2, L.s->buf); e.buf(3, L.b->buf); e.buf(4, y);
+    e.val(5, p);
+    e.dispatch((L.N + 63) / 64, (uint32_t(M) + 63) / 64, 1, 128);
     return;
   }
   if (q.on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0) {
@@ -2392,6 +2419,15 @@ bool Qwen35::enc_qmm_gu(Encoder& e, const QLinear& G, const QLinear& U, const Bu
     return true;
   }
   if (!b8 && (!on || !ok(G) || !ok(U) || G.N != U.N || G.K != U.K)) return false;
+  if (!b8 && qmt_on() && M >= 64) {
+    e.use(pipe("qmtg_m64_n64"));
+    kp::Qmm p{uint32_t(M), G.N, G.K, G.K, G.N, 0, uint32_t(G.gs), 0, 0};
+    e.buf(0, xh); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, h);
+    e.val(5, p);
+    e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+    e.dispatch((G.N + 31) / 32, (uint32_t(M) + 63) / 64, 1, 128);
+    return true;
+  }
   const char* n = gu;
   uint32_t bm = 32, bn = 64, th = 128;
   if (b8) n = M < 64 ? "qmr8_gu_k32_w14_m16_n64" : "qmr8_gu_k32_w14_m32_n64", bm = M < 64 ? 16 : 32;

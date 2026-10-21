@@ -22,6 +22,7 @@
 #include <vector>
 
 using namespace ni;
+namespace ni { extern const char* const kTensorKernelSource; }
 
 struct QmmParams {
   uint32_t M, N, K, x_ld, y_ld, add, gs, w_expert_stride, s_expert_stride;
@@ -65,7 +66,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
       std::string n = argv[i];
       if (!std::regex_match(n, mt, full)) fatal("not a kernel name: %s", n.c_str());
-      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), n.find("_gu_") != std::string::npos, bits_for(n)});
+      kerns.push_back({n, std::stoi(mt[1]), std::stoi(mt[2]), threads_for(n), (n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0), bits_for(n)});
     }
   } else {
     std::vector<std::pair<int, int>> tiles = {{32, 32}, {64, 64}};
@@ -75,7 +76,7 @@ int main(int argc, char** argv) {
     }
     for (auto [bm, bn] : tiles) {
       std::string n = a1 + "_m" + std::to_string(bm) + "_n" + std::to_string(bn);
-      kerns.push_back({n, bm, bn, threads_for(n), n.find("_gu_") != std::string::npos, bits_for(n)});
+      kerns.push_back({n, bm, bn, threads_for(n), (n.find("_gu_") != std::string::npos || n.rfind("qmtg", 0) == 0), bits_for(n)});
     }
   }
   const int trials = getenv("QMM_TRIALS") ? atoi(getenv("QMM_TRIALS")) : 5;
@@ -114,7 +115,10 @@ int main(int argc, char** argv) {
     const double flop = 2.0 * M * N * K;
     const int reps = std::max(3, int(1.5e12 / flop));
     std::vector<Pipeline> pipes;
-    for (auto& k : kerns) pipes.push_back(g.pipeline(k.name));
+    for (auto& k : kerns) {
+      if (k.name.rfind("qmt", 0) == 0) g.compile_extra("tensor", kTensorKernelSource, true);
+      pipes.push_back(g.pipeline(k.name));
+    }
     QmmParams prm{M, N, K, K, N, 0, 64, 0, 0};
     auto run = [&](size_t ki, int n) {
       const Kern& k = kerns[ki];
@@ -124,7 +128,8 @@ int main(int argc, char** argv) {
         e->buf(0, X); e->buf(1, W); e->buf(2, S); e->buf(3, B); e->buf(4, Y);
         e->val(5, prm);
         if (k.gu) { e->buf(6, W2); e->buf(7, S2); e->buf(8, B2); }
-        e->dispatch((N + k.bn - 1) / k.bn, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
+        const int cb = k.name.rfind("qmtg", 0) == 0 ? k.bn / 2 : k.bn;
+        e->dispatch((N + cb - 1) / cb, (M + k.bm - 1) / k.bm, 1, std::min(k.threads, pipes[ki].max_threads));
       }
       e->commit_and_wait();
       return e->gpu_ms() / n;
