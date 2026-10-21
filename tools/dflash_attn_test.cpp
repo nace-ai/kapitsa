@@ -7,8 +7,13 @@
 // layers together allow), DAT_REPS=n times n back-to-back pairs per command buffer, DAT_PARTS=1/2 only the attention
 // / the reduce, DAT_SRC=<file> + DAT_KERNEL=<name> (+ DAT_THREADS) a variant appended to the library,
 // DAT_PAIR_ONLY=1 only the last check (the pair GEMM, the one kernel here with no threadgroup-memory problem).
+// DAT_QK16_ONLY=1 only the 16-row attention check (dfl_attn_qk16 + dfl_attn_reduce with nr = 16): the earlier two
+// skip dfl_attn_mma, whose threadgroup memory does not fit under the validation layers. dfl_attn_qk16 compiles to
+// more threadgroup memory than MTL_DEBUG_LAYER's 32768-byte assertion as well (51200), so the check runs without the
+// layers, like the scalar kernel.
 // The last check is the 16-row drafting block's pair GEMM (qmm8t2d / qmm8t2dp) against two per-tile qmm8t dispatches
-// on the same T tables, bitwise; it needs the tensor library (Apple10, macOS 26) and is skipped otherwise.
+// on the same T tables, bitwise; it needs the tensor library (Apple10, macOS 26) and is skipped otherwise. main()
+// returns 1 if any exactness check fails.
 #include "metal/gpu.h"
 #include "model/dflash2.h"
 #include "model/kparams.h"
@@ -34,7 +39,9 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) Ps.push_back(atoi(argv[i]));
   if (Ps.empty()) Ps = {1, 85, 700, 2047, 2048, 2055, 4100, 9000};
   if (getenv("DAT_PAIR_ONLY")) Ps.clear();  // only the pair-GEMM check, for a validation-layer run of that kernel
+  const bool qk16_only = getenv("DAT_QK16_ONLY") != nullptr;
   Gpu& g = Gpu::get();
+  int fails = 0;  // the exactness checks below: a script can tell a failing run from a passing one
   if (const char* src = getenv("DAT_SRC")) {  // extra kernel source (variants of dfl_attn_qk, picked by DAT_KERNEL)
     FILE* f = fopen(src, "rb");
     std::string x;
@@ -65,6 +72,7 @@ int main(int argc, char** argv) {
   const Pipeline pa = g.pipeline("dfl_attn"), pm = g.pipeline("dfl_attn_mma"), pr = g.pipeline("dfl_attn_reduce");
   const float scale = 1.0f / std::sqrt(128.0f);
   for (int P : Ps) {
+    if (qk16_only) break;
     // reference: row r sees context j in [max(0, P + r - 2047), P - 1] (ring slot j mod 2048) + the 8 block rows
     std::vector<double> ref(size_t(R) * HQ * D);
     for (int h = 0; h < HQ; ++h) {
@@ -157,6 +165,16 @@ int main(int argc, char** argv) {
     Buffer q = g.alloc(size_t(R) * 4096 * 4), kv = g.alloc(size_t(R) * 2048 * 4), qn = g.alloc(128 * 2), kn = g.alloc(128 * 2);
     Buffer inv = g.alloc(64 * 4), cs = g.alloc(8 * 64 * 8), gst = g.alloc(16), xh2 = g.alloc(size_t(2 * R) * 4096 * 2),
            xs2 = g.alloc(64 * 8 * 4);
+    // 16-row block: the raw q / kv of 16 rows, the reference's normed q / k / v stitched into the kernel's row order,
+    // and the reduce's two X8 tiles (values then the permuted T table, 16 x 4096 halves each)
+    const int R16 = 16;
+    Buffer q16 = g.alloc(size_t(R16) * 4096 * 4), kv16 = g.alloc(size_t(R16) * 2048 * 4), cs16 = g.alloc(16 * 64 * 8),
+           cs8b = g.alloc(8 * 64 * 8), qa = g.alloc(size_t(8) * 4096 * 4), kb8 = g.alloc(size_t(8) * 2048 * 4),
+           vb8 = g.alloc(size_t(8) * 2048 * 4), Q16 = g.alloc(size_t(R16) * 4096 * 4), K16 = g.alloc(size_t(R16) * 2048 * 4),
+           V16 = g.alloc(size_t(R16) * 2048 * 4), po16 = g.alloc(size_t(S) * HQ * R16 * D * 4),
+           pml16 = g.alloc(size_t(S) * HQ * R16 * 2 * 4), xh16 = g.alloc(size_t(2 * R16) * 4096 * 2), xs16 = g.alloc(2 * 512 * 4);
+    for (size_t i = 0; i < size_t(R16) * 4096; ++i) q16.as<float>()[i] = nd(rng) * 2.0f;
+    for (size_t i = 0; i < size_t(R16) * 2048; ++i) kv16.as<float>()[i] = nd(rng) * 2.0f;
     for (size_t i = 0; i < size_t(R) * 4096; ++i) q.as<float>()[i] = nd(rng) * 2.0f;
     for (size_t i = 0; i < size_t(R) * 2048; ++i) kv.as<float>()[i] = nd(rng) * 2.0f;
     for (int i = 0; i < 128; ++i) {
@@ -165,7 +183,7 @@ int main(int argc, char** argv) {
     }
     for (int i = 0; i < 64; ++i) inv.as<float>()[i] = 1.0f / std::pow(1e7f, float(2 * i) / 128.0f);
     for (int P : Ps) {
-      if (P + 8 >= (1 << 30)) continue;
+      const bool skip8 = qk16_only || P + 8 >= (1 << 30);
       uint32_t* gs = gst.as<uint32_t>();
       gs[0] = uint32_t(P); gs[1] = 0; gs[2] = uint32_t(P);
       auto rope = [&](Encoder& e, uint32_t Pk) {
@@ -176,6 +194,7 @@ int main(int argc, char** argv) {
         e.val(4, 512u);  // rows of the table: 8 rows x 64 dims
         e.dispatch(1, 1, 1, 512);
       };
+      if (!skip8)
       for (uint32_t splits : {8u, 16u, 32u})
         for (int gpu = 0; gpu < 2; ++gpu) {
           uint32_t lo, chunk, nsplit;
@@ -251,6 +270,121 @@ int main(int argc, char** argv) {
                  "GPU attn+reduce median %.4f ms\n", P, gpu ? "gpu " : "host", splits, chunk, nsplit, md, ref, sd,
                  ts[ts.size() / 2]);
         }
+      // The 16-row block (NI_DFLASH_BLOCK=16): dfl_attn_qk16 dispatches both row tiles (tg.z = 0, 1), every row sees
+      // all 16 block keys, and dfl_attn_reduce sums with nr = 16 into two X8 tiles. A wrong row-tile index there would
+      // not fault, it would only lower acceptance, so both kernels are checked against the same fp64 reference as the
+      // 8-row ones above. The reference's normed / roped q, k and v come from two dfl_qk_prep calls (rows 0-7 at P,
+      // rows 8-15 at P + 8) stitched into the row order the kernel reads.
+      if (g.apple_family() >= 10) {  // dfl_attn_qk16 runs on the matrix units
+        auto rope16 = [&](Encoder& e, uint32_t Pk, Buffer& dst, uint32_t rows) {
+          e.use(g.pipeline("dfl_rope_table"));
+          e.buf(0, inv); e.buf(1, dst);
+          e.val(2, Pk);
+          e.buf(3, gst);
+          e.val(4, 64u * rows);
+          e.dispatch(1, 1, 1, 64u * rows);
+        };
+        for (int half = 0; half < 2; ++half) {  // the reference's q / k / v, 8 rows at a time
+          auto e = g.begin();
+          rope16(*e, uint32_t(P) + uint32_t(8 * half), half ? cs8b : cs16, 8u);  // rows 0-7 of that half
+          kp::DflQk qp{uint32_t(P) + uint32_t(8 * half), 1e-6f, 4096, 2048};
+          e->use(g.pipeline("dfl_qk_prep"));
+          e->buf(0, q16, size_t(half) * 8 * 4096 * 4);
+          e->buf(1, kv16, size_t(half) * 8 * 2048 * 4);
+          e->buf(2, qn); e->buf(3, kn); e->buf(4, half ? cs8b : cs16);
+          e->buf(5, qa); e->buf(6, kb8); e->buf(7, vb8);
+          e->val(8, qp);
+          e->dispatch(40, 8, 1, 128);
+          e->commit_and_wait();
+          for (int h = 0; h < HQ; ++h)
+            for (int r = 0; r < 8; ++r)
+              for (int d = 0; d < D; ++d)
+                Q16.as<float>()[size_t(8 * half + r) * 4096 + h * 128 + d] = qa.as<float>()[(h * 8 + r) * 128 + d];
+          for (int gh = 0; gh < HKV; ++gh)
+            for (int r = 0; r < 8; ++r)
+              for (int d = 0; d < D; ++d) {
+                K16.as<float>()[size_t(8 * half + r) * 2048 + gh * 128 + d] = kb8.as<float>()[(gh * 8 + r) * 128 + d];
+                V16.as<float>()[size_t(8 * half + r) * 2048 + gh * 128 + d] = vb8.as<float>()[(gh * 8 + r) * 128 + d];
+              }
+        }
+        std::vector<double> ref16(size_t(R16) * HQ * D);
+        for (int h = 0; h < HQ; ++h) {
+          const int g8 = h / 4;
+          for (int r = 0; r < R16; ++r) {
+            const float* q = Q16.as<float>() + size_t(r) * 4096 + size_t(h) * D;
+            std::vector<double> sc;
+            std::vector<const void*> vrow;
+            std::vector<bool> isbf;
+            for (int j = std::max(0, P + r - 2047); j < P; ++j) {
+              const uint16_t* k = rk.as<uint16_t>() + (size_t(g8) * W + (j & 2047)) * D;
+              double v = 0;
+              for (int x = 0; x < D; ++x) v += double(q[x]) * bf16_to_f32(k[x]);
+              sc.push_back(v * scale);
+              vrow.push_back(rv.as<uint16_t>() + (size_t(g8) * W + (j & 2047)) * D);
+              isbf.push_back(true);
+            }
+            for (int b = 0; b < R16; ++b) {  // all 16 block keys are visible to every row
+              const float* k = K16.as<float>() + size_t(b) * 2048 + size_t(g8) * D;
+              double v = 0;
+              for (int x = 0; x < D; ++x) v += double(q[x]) * k[x];
+              sc.push_back(v * scale);
+              vrow.push_back(V16.as<float>() + size_t(b) * 2048 + size_t(g8) * D);
+              isbf.push_back(false);
+            }
+            double mx = -1e300, z = 0;
+            for (double v : sc) mx = std::max(mx, v);
+            std::vector<double> o(D, 0.0);
+            for (size_t i = 0; i < sc.size(); ++i) {
+              const double w = std::exp(sc[i] - mx);
+              z += w;
+              for (int x = 0; x < D; ++x)
+                o[x] += w * (isbf[i] ? bf16_to_f32(((const uint16_t*)vrow[i])[x]) : ((const float*)vrow[i])[x]);
+            }
+            for (int x = 0; x < D; ++x) ref16[(size_t(r) * HQ + h) * D + x] = o[x] / z;
+          }
+        }
+        for (uint32_t splits : {8u, 16u}) {
+          uint32_t lo, chunk, nsplit;
+          dfl_attn_plan(P, splits, 0, &lo, &chunk, &nsplit);
+          auto enc = [&](Encoder& e) {
+            kp::DflAttnQk ap{uint32_t(P), lo, chunk, nsplit, scale, 1e-6f, 4096, 2048};
+            e.use(g.pipeline("dfl_attn_qk16"));
+            e.buf(0, q16); e.buf(1, kv16); e.buf(2, qn); e.buf(3, kn); e.buf(4, cs16);
+            e.buf(5, rk); e.buf(6, rv); e.buf(7, po16); e.buf(8, pml16);
+            e.val(9, ap);
+            e.buf(10, gst);
+            e.dispatch(nsplit, 8, 2, 128);  // two row tiles
+            kp::DflAttnRed rp{nsplit, uint32_t(P), lo, chunk, uint32_t(R16)};
+            e.use(pr);
+            e.buf(0, po16); e.buf(1, pml16); e.buf(2, xh16); e.buf(3, xs16);
+            e.val(4, rp);
+            e.buf(5, gst);
+            e.dispatch(32, R16, 1, 128);
+          };
+          {
+            auto e = g.begin();
+            rope16(*e, uint32_t(P), cs16, 16u);  // the full 16-row table, for the kernel
+            enc(*e);
+            e->commit_and_wait();
+          }
+          double num = 0, den = 0, mx = 0, refmax = 0;
+          for (int r = 0; r < R16; ++r)
+            for (int h = 0; h < HQ; ++h)
+              for (int x = 0; x < D; ++x) {
+                const size_t i = size_t((r >> 3) * 16 + (r & 7)) * 4096 + size_t(h) * 128 + x;
+                const double a = double(xh16.as<__fp16>()[i]), b = ref16[(size_t(r) * HQ + h) * D + x];
+                num += (a - b) * (a - b);
+                den += b * b;
+                mx = std::max(mx, std::fabs(a - b));
+                refmax = std::max(refmax, std::fabs(b));
+              }
+          const double rel = std::sqrt(num / den);
+          const bool ok = rel <= 5e-3 && mx <= 2e-2;  // half-precision output against an fp64 reference
+          if (!ok) ++fails;
+          printf("P=%5d dfl_attn_qk16 + reduce(nr 16) splits %2u (chunk %3u x %2u): rel err %.2e max abs %.2e "
+                 "(max |ref| %.2e)%s\n", P, splits, chunk, nsplit, rel, mx, refmax, ok ? "" : "  FAIL");
+        }
+      }
     }
   }
   // A 16-row drafting block is two 8-row tiles (dfl_put2): qmm8t2d computes the pair from one weight load where the
@@ -349,8 +483,9 @@ int main(int argc, char** argv) {
                "(max |d| %.2e, rms %.2e of rms %.2e)%s\n", c.pf ? "pf" : "", N, K, c.nt, c.ks, bad,
                size_t(R16) * N, mx, std::sqrt(rms / (R16 * N)), std::sqrt(ref / (R16 * N)),
                bad ? "  NOT EXACT" : "");
+        if (bad) ++fails;
       }
     }
   }
-  return 0;
+  return fails ? 1 : 0;
 }
