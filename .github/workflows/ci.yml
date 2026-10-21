@@ -74,7 +74,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test grammar_test structured_check
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -101,3 +101,6 @@ jobs:
       - name: test_reasoning
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_reasoning.py
+      - name: test_structured --cli
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: $RUNNER_TEMP/venv/bin/python tests/test_structured.py --cli build

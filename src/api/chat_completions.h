@@ -22,6 +22,12 @@ ojson chat_error(const std::string& message, const std::string& type = "invalid_
 // OpenAI does (code context_length_exceeded, "maximum context length"), which clients answer by compacting.
 std::pair<int, ojson> chat_failure(const ChatResult& res);
 
+// Structured output of a request (src/engine/grammar.h): response_format (json_object; json_schema with its strict),
+// tool_choice (required, or a named function), parallel_tool_calls and strict tools ("strict": true in a function),
+// over `tools`, the request's as the prompt declares them (none for tool_choice "none"). Null when nothing constrains
+// the reply. Throws ApiError (400) for a malformed or unsupported one.
+std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools);
+
 // The stream: a chat.completion.chunk with the assistant's role at begin(), one per delta's reasoning
 // (reasoning_content), text (content) and tool calls (tool_calls, indexed across the reply), then one with
 // finish_reason and usage, and "data: [DONE]". begin() takes no counts (the stream starts before the request has a

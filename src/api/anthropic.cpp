@@ -310,6 +310,44 @@ MessagesRequest messages_request(const ojson& body) {
   MessagesRequest q;
   q.chat = messages_prompt(body, &q.show_thinking);
   ChatRequest& r = q.chat;
+  // Structured output (src/engine/grammar.h): tool_choice any (one call or more) or tool (that one's), with
+  // disable_parallel_tool_use (one call); strict tools ("strict": true); output_format / output_config.format, a JSON
+  // schema whose objects take no keys they do not declare (Anthropic's rule) unless they say otherwise
+  {
+    OutputSpec spec;
+    if (body.contains("tool_choice") && !body["tool_choice"].is_null()) {
+      const ojson& tc = body["tool_choice"];
+      if (!tc.is_object()) bad("tool_choice must be an object");
+      const std::string type = str(tc, "type");
+      if (type == "any") {
+        spec.tools = OutputSpec::Tools::kRequired;
+      } else if (type == "tool") {
+        if (str(tc, "name").empty()) bad("tool_choice.name: Field required for a tool choice of type \"tool\"");
+        spec.tools = OutputSpec::Tools::kNamed;
+        spec.tool = str(tc, "name");
+      } else if (type != "auto" && type != "none") {
+        bad("tool_choice.type must be \"auto\", \"any\", \"tool\" or \"none\"");
+      }
+      if (tc.contains("disable_parallel_tool_use") && tc["disable_parallel_tool_use"].is_boolean())
+        spec.parallel = !tc["disable_parallel_tool_use"].get<bool>();
+    }
+    if (!r.tools.empty() && body.contains("tools") && body["tools"].is_array())
+      for (const auto& t : body["tools"])
+        if (t.is_object() && t.contains("strict") && t["strict"].is_boolean() && t["strict"].get<bool>() &&
+            !str(t, "name").empty())
+          spec.strict_tools.push_back(str(t, "name"));
+    const ojson* of = nullptr;
+    if (body.contains("output_format") && !body["output_format"].is_null()) of = &body["output_format"];
+    else if (body.contains("output_config") && body["output_config"].is_object() && body["output_config"].contains("format") &&
+             !body["output_config"]["format"].is_null())
+      of = &body["output_config"]["format"];
+    if (of) {
+      if (!of->is_object() || str(*of, "type") != "json_schema") bad("output_format.type must be \"json_schema\"");
+      spec.strict = true;
+      schema_format(*of, spec, "output_format");
+    }
+    r.grammar = request_grammar(spec, r.tools, "output_format");
+  }
   if (!r.messages.empty() && r.messages.back()["role"] == "assistant")
     bad("a final assistant message (a prefill of the reply) is not supported; end the messages with a user turn");
   if (body.contains("max_tokens")) {

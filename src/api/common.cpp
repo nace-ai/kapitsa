@@ -110,4 +110,33 @@ ojson arguments_object(const ojson& args) {
   return ojson{{"arguments", dump(args)}};
 }
 
+void schema_format(const ojson& f, OutputSpec& spec, const std::string& param) {
+  spec.format = OutputSpec::Format::kJsonSchema;
+  if (!f.contains("schema") || f["schema"].is_null()) {
+    // no schema: any JSON object, as json_object
+    spec.format = OutputSpec::Format::kJsonObject;
+  } else if (!f["schema"].is_object() && !f["schema"].is_boolean()) {
+    throw ApiError(400, "invalid_request_error", param + ".schema must be a JSON Schema object", "", param + ".schema");
+  } else {
+    spec.schema = f["schema"];
+  }
+  if (f.contains("strict") && !f["strict"].is_null()) {
+    if (!f["strict"].is_boolean())
+      throw ApiError(400, "invalid_request_error", param + ".strict must be a boolean", "", param + ".strict");
+    spec.strict = f["strict"].get<bool>();
+  }
+}
+
+std::shared_ptr<const Grammar> request_grammar(const OutputSpec& spec, const ojson& tools, const std::string& format_param) {
+  try {
+    return output_grammar(spec, tools);
+  } catch (const GrammarError& e) {
+    const std::string m = e.what();
+    const std::string param = m.rfind("response format", 0) == 0 ? format_param
+                              : m.find("tool_choice") != std::string::npos ? "tool_choice"
+                                                                          : "tools";
+    throw ApiError(400, "invalid_request_error", m, "", param);
+  }
+}
+
 }  // namespace ni::api

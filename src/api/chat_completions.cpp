@@ -36,6 +36,55 @@ std::pair<int, ojson> chat_failure(const ChatResult& res) {
   return {400, chat_error(res.error.empty() ? "the request failed" : res.error)};
 }
 
+std::shared_ptr<const Grammar> chat_grammar(const ojson& body, const ojson& tools) {
+  auto bad = [](const std::string& m, const std::string& param) {
+    throw ApiError(400, "invalid_request_error", m, "", param);
+  };
+  auto str = [](const ojson& j, const char* k) {
+    return j.is_object() && j.contains(k) && j[k].is_string() ? j[k].get<std::string>() : std::string();
+  };
+  OutputSpec spec;
+  if (body.contains("response_format") && !body["response_format"].is_null()) {
+    const ojson& rf = body["response_format"];
+    if (!rf.is_object()) bad("response_format must be an object", "response_format");
+    const std::string type = str(rf, "type");
+    if (type == "json_object") {
+      spec.format = OutputSpec::Format::kJsonObject;
+    } else if (type == "json_schema") {
+      if (!rf.contains("json_schema") || !rf["json_schema"].is_object())
+        bad("response_format.json_schema must be an object with the schema", "response_format.json_schema");
+      schema_format(rf["json_schema"], spec, "response_format.json_schema");
+    } else if (type != "text") {
+      bad("response_format.type must be \"text\", \"json_object\" or \"json_schema\"", "response_format.type");
+    }
+  }
+  if (body.contains("tool_choice") && !body["tool_choice"].is_null()) {
+    const ojson& tc = body["tool_choice"];
+    if (tc.is_string()) {
+      const std::string v = tc.get<std::string>();
+      if (v == "required") spec.tools = OutputSpec::Tools::kRequired;
+      else if (v != "auto" && v != "none") bad("tool_choice must be \"none\", \"auto\", \"required\" or a function", "tool_choice");
+    } else if (tc.is_object() && str(tc, "type") == "function" && tc.contains("function") &&
+               !str(tc["function"], "name").empty()) {
+      spec.tools = OutputSpec::Tools::kNamed;
+      spec.tool = str(tc["function"], "name");
+    } else {
+      bad("tool_choice must be \"none\", \"auto\", \"required\" or {\"type\": \"function\", \"function\": {\"name\": ...}}",
+          "tool_choice");
+    }
+  }
+  if (body.contains("parallel_tool_calls") && body["parallel_tool_calls"].is_boolean())
+    spec.parallel = body["parallel_tool_calls"].get<bool>();
+  if (tools.is_array())
+    for (const ojson& t : tools) {
+      const ojson& f = t.is_object() && t.contains("function") ? t["function"] : t;
+      if (f.is_object() && f.contains("strict") && f["strict"].is_boolean() && f["strict"].get<bool>() &&
+          !str(f, "name").empty())
+        spec.strict_tools.push_back(str(f, "name"));
+    }
+  return request_grammar(spec, tools);
+}
+
 std::string ChatCompletionsStream::chunk(const ojson& delta, const ojson& finish, const ojson* usage) const {
   ojson c{{"id", id_},
           {"object", "chat.completion.chunk"},
