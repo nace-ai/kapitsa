@@ -29,11 +29,12 @@ cmake --build build -j --target kapitsa                  # the CLI only; drop --
 `all` also builds tools that need a newer macOS SDK than 15.x (`tensor_probe` uses `MTLLanguageVersion4_0`): on an older
 SDK build the named targets, as CI does.
 
-CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test fn_store_test`:
+CPU tests (no model, no GPU), after building `kapitsa api_test bench_test update_test fn_store_test fn_dflash_test`:
 
 ```bash
 build/api_test
 build/fn_store_test                          # the streamed-expert cache (src/model/expert_store.h)
+build/fn_dflash_test                         # DFlash2's stream_mean reduction checks (Flash-Next drafts)
 python3 tests/test_server.py --cli build/kapitsa
 python3 tests/test_sidecar.py build/kapitsa
 python3 tests/test_bench.py build            # needs: jsonschema; on a real Mac only (CI's VM runners fail it)

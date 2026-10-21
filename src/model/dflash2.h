@@ -21,6 +21,9 @@ struct DFlash2Config {
   int nq = 32, nkv = 8, hd = 128, block = 8, window = 2048, conv_gs = 16, rank = 256, topk = 16;
   float eps = 1e-6f, theta = 1e7f;
   std::vector<int> target_layers;  // target layer ids whose outputs feed fc, in slot order
+  // the target's layer outputs reach the draft as their hyper-connection streams' mean (target_hidden_reduction
+  // stream_mean: Qwen3.8-Flash-Next), else as they are
+  bool stream_mean = false;
   // DFlash (v1) drafter (DFlashDraftModel, e.g. z-lab/Qwen3.5-4B-DFlash): the same context path and block layout
   // without the block convolutions and the candidate selector; it runs with the 8-row block and the 2048-position
   // context ring here (trained with 16-row blocks and a 4096-position window: the block size is a runtime choice,
@@ -102,6 +105,11 @@ class DFlash2 {
                            size_t* per_slot, size_t* at_prefill = nullptr);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
   static bool supports(const Qwen35& target);
+  // The reduction a draft for this target reads its layer outputs with: "stream_mean" for a hyper-connected target
+  // (Qwen3.8-Flash-Next's 4 streams), else "none" (dflash_config.target_hidden_reduction; a config without it takes it)
+  static std::string target_reduction(const Qwen35Config& target);
+  // A drafter config.json's text against a target: the failed checks (the load-time ones; empty: it loads)
+  static std::vector<std::string> config_check(const std::string& config_json, const Qwen35Config& target);
   // Creates the drafter's and the 8-row verify's pipelines up front (in parallel, as Qwen35 does for its
   // prefill), so the first request does not create them inside its prompt commit and first cycles.
   // NI_PREWARM=0 skips it.

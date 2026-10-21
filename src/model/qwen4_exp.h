@@ -140,6 +140,8 @@ class Qwen4Exp : public Qwen35 {
   q20::Experts q20_rows_fetch(Encoder& e, const Layer& L, int R, const Buffer& idx, bool pred);
   void init_store(const std::string& dir);
   size_t mem_budget_arg_ = 0;
+  // DFlash2 capture of layer `layer`'s output rows [pos0, pos0 + R): their 4 streams' mean (stream_mean)
+  void enc_capture4(Encoder& e, int layer, int pos0, int R);
   void enc_moe4_down(Encoder& e, const Layer& L, int R, const Buffer& idx, const Buffer& wts);
   // R rows (verify / MTP) of the token mixers on the row GEMVs; u in xrn_, output to yb_
   void enc_gdn4_rows(Encoder& e, Seq& s, int li, const Layer& L, int R);

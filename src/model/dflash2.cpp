@@ -50,6 +50,15 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
     if (!ok) bad.push_back(what);
   };
   const json dc = c.value("dflash_config", json::object());
+  // How a target layer's output becomes the hidden row the draft reads, as it was trained (Splash 1.4.0's
+  // dflash_config.target_hidden_reduction): a hyper-connected target's streams by their mean (stream_mean: Qwen3.8-
+  // Flash-Next, Qwen4Exp::enc_capture4), another's row as it is (none). A config without it takes its target's.
+  {
+    const std::string want = DFlash2::target_reduction(t);
+    if (dc.contains("target_hidden_reduction") &&
+        !(dc["target_hidden_reduction"].is_string() && dc["target_hidden_reduction"].get<std::string>() == want))
+      bad.push_back("target_hidden_reduction " + want + " (the target's)");
+  }
   if (c.value("architectures", json::array()) == json::array({"DFlashDraftModel"})) {
     // DFlash (v1): Qwen3 decoder layers over [context features; block], no conv / selector (see DFlash2Config::v1)
     const int NL = c.value("num_hidden_layers", 0), H = c.value("hidden_size", 0), I = c.value("intermediate_size", 0);
@@ -72,7 +81,7 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
       for (auto& lt : c["layer_types"]) types = types && (lt == "sliding_attention" || lt == "full_attention");
     check(types, "layer types sliding / full attention");
     check(dc.value("block_size", DFlash2::kB) >= DFlash2::kB, "block >= 8");
-    check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
+    check(theta > 0 && rope_type == "default", "default rope");
     check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
     check(c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
     check(c.value("final_logit_softcapping", json()).is_null() && !dc.value("attention_sink_bias", false),
@@ -111,7 +120,8 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   check(dc.value("selector_rank", 0) == DFlash2::kRank && dc.value("selector_top_k", 0) == DFlash2::kTopK,
         "selector rank 256 / top-k 16");
   check(dc.value("block_size", 0) == DFlash2::kB, "block 8");
-  check(theta == 1e7 && rope_type == "default", "rope theta 1e7, default");
+  // any theta: the inverse frequencies come from it at load (inv_freq_; incoai's Flash-Next draft has 1e4, the others 1e7)
+  check(theta > 0 && rope_type == "default", "default rope");
   check(nq == 32 && nkv == 8 && hd == 128, "heads 32/8 x 128");
   check(c.value("rms_norm_eps", 1e-6f) == 1e-6f, "eps 1e-6");
   check(dc.value("input_embedding_scale", 1.0) == 1.0 && dc.value("output_multiplier", 1.0) == 1.0 &&
@@ -127,6 +137,15 @@ static std::vector<std::string> config_problems(const json& c, const Qwen35Confi
   check(H % 64 == 0 && I % 64 == 0, "hidden/intermediate multiples of 64");
   check(mask >= 0 && mask < vocab, "mask id");
   return bad;
+}
+
+std::string DFlash2::target_reduction(const Qwen35Config& t) { return t.hc > 1 ? "stream_mean" : "none"; }
+
+std::vector<std::string> DFlash2::config_check(const std::string& config_json, const Qwen35Config& target) {
+  const json c = json::parse(config_json, nullptr, false);
+  if (c.is_discarded() || !c.is_object()) return {"config.json is not a JSON object"};
+  if (!c.contains("dflash_config")) return {"dflash_config"};
+  return config_problems(c, target);
 }
 
 void DFlash2::load_config(const std::string& dir) {
@@ -152,6 +171,7 @@ void DFlash2::load_config(const std::string& dir) {
   cfg_.eps = c.value("rms_norm_eps", 1e-6f);
   cfg_.mask_id = dc["mask_token_id"];
   for (auto& v : dc["target_layer_ids"]) cfg_.target_layers.push_back(v);
+  cfg_.stream_mean = target_reduction(tg_.config()) == "stream_mean";
   if (cfg_.v1) {  // runs with this pipeline's 8-row block and 2048-position ring (DFlash2Config::v1)
     cfg_.trained_block = dc.value("block_size", 16);
     cfg_.trained_window = c.value("sliding_window", 0);

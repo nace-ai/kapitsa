@@ -599,6 +599,24 @@ struct AttnSparseParams {
   y[r * p.D + c] = 0.0f;
 }
 
+// ---- DFlash2 capture of a layer's output (dflash_config.target_hidden_reduction stream_mean) ----
+// The mean of row r's S streams after the layer, X + inj * y with the block output y not yet injected (has_y; the
+// next block's mix injects it), summed in fp32, as bf16 in columns [col0, col0 + D) of dst row dst_row0 + r (rows ld
+// apart). Reads only: the target's state is untouched. grid: (ceil(D / 256), R) x 256.
+struct HcCaptureParams {
+  uint R, D, S, ld, col0, dst_row0, has_y;
+};
+[[kernel]] void hc_capture_mean(const device float* X [[buffer(0)]], const device float* y [[buffer(1)]],
+                                const device float* inj [[buffer(2)]], device bfloat* dst [[buffer(3)]],
+                                constant HcCaptureParams& p [[buffer(4)]], uint2 gid [[thread_position_in_grid]]) {
+  const uint c = gid.x, r = gid.y;
+  if (c >= p.D || r >= p.R) return;
+  const float v = p.has_y ? y[r * p.D + c] : 0.0f;
+  float sum = 0.0f;
+  for (uint s = 0; s < p.S; ++s) sum += X[(r * p.S + s) * p.D + c] + inj[r * p.S + s] * v;
+  dst[size_t(p.dst_row0 + r) * p.ld + p.col0 + c] = bfloat(sum / float(p.S));
+}
+
 // ---- MTP head input: en = RMSNorm(embedding row) * we, hn = RMSNorm(the 4-stream state, ONE RMS over S*D) * wh ----
 // (both weights fp32, 1 + w). grid: R x 1024; en rows D apart, hn rows S*D apart.
 template <typename O>

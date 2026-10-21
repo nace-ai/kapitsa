@@ -454,6 +454,7 @@ static void parse_config(const json& root, Qwen35Config& cfg) {
   cfg.shared_I = t.value("shared_expert_intermediate_size", 0);
   cfg.dense_I = t.value("intermediate_size", 0);
   cfg.norm_topk = t.value("norm_topk_prob", true);
+  cfg.hc = t.value("hc_count", 1);
   for (auto& [k, v] : quant.items())
     if (v.is_object() && v.value("mode", std::string()).rfind("iq", 0) == 0) cfg.iq = true;
   auto eos = root.contains("eos_token_id") ? root["eos_token_id"] : t["eos_token_id"];

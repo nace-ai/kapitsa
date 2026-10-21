@@ -78,6 +78,7 @@ struct Qwen35Config {
   int experts = 0, top_k = 0, moe_I = 0, shared_I = 0, dense_I = 0;
   bool norm_topk = true;
   bool iq = false;  // routed experts in llama.cpp's IQ blocks (GGUF imports): their own MoE kernels (qwen35_iq.cpp)
+  int hc = 1;       // residual streams: Qwen3.8-Flash-Next's hyper-connections keep 4 (text_config.hc_count)
   std::vector<int> eos;
   int group_size = 64;
 };

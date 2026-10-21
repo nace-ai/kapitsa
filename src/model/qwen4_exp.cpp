@@ -681,6 +681,26 @@ q20::Experts Qwen4Exp::q20_rows_fetch(Encoder& e, const Layer& L, int R, const B
   return store_->experts(li);
 }
 
+// ---- block-drafter captures (DFlash2, target_hidden_reduction stream_mean) ----
+
+// Rows [pos0, pos0 + R) of layer `layer`'s output, the mean of their 4 streams with the MoE's output (yb_, weights
+// injM_) as the next block's mix will inject it, into the armed hook's slot for that layer (Qwen35::set_capture; rows
+// outside its positions are skipped). Reads only, so the target's outputs do not change.
+void Qwen4Exp::enc_capture4(Encoder& e, int layer, int pos0, int R) {
+  if (!cap_ || layer >= int(cap_->slot.size()) || cap_->slot[size_t(layer)] < 0) return;
+  const int lo = std::max(pos0, cap_->pos_base), hi = std::min(pos0 + R, cap_->pos_base + cap_->rows);
+  if (lo >= hi) return;
+  const uint32_t D = uint32_t(cfg_.hidden), S = uint32_t(c4_.hc), r0 = uint32_t(lo - pos0);
+  const struct {
+    uint32_t R, D, S, ld, col0, dst_row0, has_y;
+  } p{uint32_t(hi - lo), D, S, cap_->ld, uint32_t(cap_->slot[size_t(layer)]) * D, uint32_t(lo - cap_->pos_base), 1u};
+  e.use(pipe("hc_capture_mean"));
+  e.buf(0, x_, size_t(r0) * S * D * 4); e.buf(1, yb_, size_t(r0) * D * 4); e.buf(2, injM_, size_t(r0) * S * 4);
+  e.buf(3, cap_->dst);
+  e.val(4, p);
+  e.dispatch((D + 255) / 256, p.R, 1, 256);
+}
+
 // ---- encoders ----
 
 void Qwen4Exp::enc_expand(Encoder& e, int R) {
@@ -1166,6 +1186,7 @@ void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
     else enc_attn4(e, s, i, L, F, pos, xrn_);
     enc_gr_rows(e, F.gm, 1, x_, 0, true, injA_, injM_, xrn_, uint32_t(D));
     enc_moe4(e, L, xrn_);
+    enc_capture4(e, i, pos, 1);
   }
   // the final mix (its injection leaves the pre-mix state in x_: the MTP head's input)
   enc_gr_rows(e, mix_, 1, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
@@ -1208,6 +1229,7 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
     }
     enc_gr_prefill(e, F.gm, T, x_, true, injA_, injM_);
     enc_moe_prefill(e, L, T, yb_, /*xh_ready=*/true);
+    enc_capture4(e, i, pos0, T);
     // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
     if (T >= 256 && i + 1 < cfg_.layers) e.split();
   }
