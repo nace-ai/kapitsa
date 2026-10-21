@@ -315,6 +315,25 @@ def functional(tmp, log):
               "... without encoding the image again (its rows come from the SSD)", s.text()[m:][-500:])
         s.stop()
 
+    # 6. a DFlash drafter (--server-args "--dflash <drafter>"): the prompt's prefix checkpoint has no drafter ring, and the
+    #    save at stop used to dereference its null ring (a segfault: the server died at SIGTERM, the request after it too)
+    di = SERVER_ARGS.index("--dflash") if "--dflash" in SERVER_ARGS else -1
+    if di >= 0 and di + 1 < len(SERVER_ARGS) and SERVER_ARGS[di + 1] != "none":
+        s = Server(os.path.join(tmp, "home-dflash"), log)
+        # (a long system block, a short user turn: the prefix checkpoint sits at the end of the system block)
+        c7 = [{"role": "system", "content": "You are a coding agent. Repository notes:\n" + CORPUS_TEXT[:TOKENS * 4]},
+              {"role": "user", "content": "Summarize the notes in one sentence."}]
+        f7 = {"role": "user", "content": "Name one thing in them that could fail, in one sentence."}
+        a7, _, _, _ = chat(c7)
+        chat([{"role": "user", "content": "Say hello in five words."}], max_tokens=8)  # (a second conversation)
+        check(s.p.poll() is None, "with a drafter: the server runs after a long prompt")
+        s.stop()
+        check(s.p.returncode in (0, -signal.SIGTERM), "with a drafter: the save at stop does not crash", s.p.returncode)
+        s = Server(os.path.join(tmp, "home-dflash"), log)
+        _, w7, _, _ = chat(turn2(c7, a7, f7))
+        check(cached(w7) > TOKENS // 2, "with a drafter: the follow-up is cached after a restart", w7)
+        s.stop()
+
 
 def dir_mb(path):
     """MB of the files under path: what a cache that started empty holds (a save's log line counts only its own pass,

@@ -357,6 +357,8 @@ std::unique_ptr<Engine::DiskPlan> Engine::disk_plan(const Slot& slot) const {
   if (slot.live_ok && live >= d.min_pos) cs.push_back({live, -1, pcache::Snap::kLive});
   for (size_t i = 0; i < slot.ckpts.size(); ++i) {
     const TurnCheckpoint& c = slot.ckpts[i];
+    // the prefix checkpoint has no drafter ring (dckpts[i] is null): a restore from it could not rebuild the ring
+    if (dfl_ && c.prefix) continue;
     std::vector<Buffer> bufs;  // (a checkpoint without its whole state, as Dory's rings when memory was short: none)
     model_->disk_state(*slot.seq, &c, bufs);
     const bool whole = std::all_of(bufs.begin(), bufs.end(), [](const Buffer& b) { return b.mtl != nullptr; });
