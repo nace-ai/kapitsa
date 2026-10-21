@@ -205,6 +205,8 @@ for f in sorted(glob.glob(os.path.join(REPO, "bench", "results", "*", "*.json"))
         res = json.load(open(f))
     except Exception:
         continue
+    if not isinstance(res, dict):  # not a run's record (2026-10-21-kflash-trees/kflash-merge.json lists its arms)
+        continue
     for d in (res.get("decode") or []) + (res.get("decode_greedy") or []):
         if d.get("events_t_ms") and d.get("completion_tokens"):
             runs.append(d)
