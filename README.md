@@ -43,14 +43,14 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 23 of the 26 model and Mac pairs measured against eight engines.
+Kapitsa has the fastest decode in 21 of the 24 model and Mac pairs measured against eight engines.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
   <img alt="Poster of prefill / decode speed for Kapitsa and eight other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the poster" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>Each cell is prefill on a 4K-token prompt / decode of a 512-token answer, in tokens per second. × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer. × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
 <details>
 <summary>Models not on the poster (decode tok/s)</summary>

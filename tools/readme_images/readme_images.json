@@ -19,8 +19,9 @@
  "poster": {
   "size": [2200, 2480],
   "title": "Kapitsa: the Apple silicon engine for Qwen and Nemotron",
+  "legend": "Each cell: prefill / decode, tokens/s",
   "subtitle": [
-   "Every engine: prefill / decode tok/s (a 4K prompt, then a 512-token coding answer) · decode at T 0.6, median of 5 · each engine in its fastest setup",
+   "Prefill on a 4K-token prompt, decode of a 512-token coding answer · decode at T 0.6, median of 5 · each engine in its fastest setup",
    "Qwen at 4-bit (Q4_K_M on llama.cpp) · Nemotron as NVIDIA's own checkpoints"
   ],
   "footer": [
@@ -31,7 +32,6 @@
    {
     "name": "MacBook Pro M5 Max 128 GB",
     "rows": [
-     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 332, "method": "DFlash", "prefill": 3339}, "mlx-serve": {"value": 271, "method": "MTP", "prefill": 4897}, "oMLX": {"value": 192, "method": "MTP", "prefill": 5039}, "Splash": "x", "Ollama": {"value": 213, "prefill": 4671}, "MTPLX": {"value": 175, "method": "MTP", "prefill": 4597}, "MLX": {"value": 148, "method": "MTP", "prefill": 4542}, "llama.cpp": {"value": 160, "method": "MTP", "prefill": 3090}, "LM Studio": {"value": 154, "method": "no spec", "prefill": 1675}}},
      {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 102, "method": "DFlash2", "prefill": 456}, "mlx-serve": {"value": 130, "method": "DFlash2", "prefill": 690}, "oMLX": {"value": 93, "method": "DFlash2", "prefill": 761}, "Splash": null, "Ollama": {"value": 68, "prefill": 739}, "MTPLX": {"value": 69, "method": "MTP", "prefill": 733}, "MLX": {"value": 54, "method": "MTP", "prefill": 784}, "llama.cpp": {"value": 51, "method": "MTP", "prefill": 516}, "LM Studio": {"value": 32, "method": "no spec", "prefill": 217}}},
      {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 281, "method": "DFlash2", "prefill": 2434}, "mlx-serve": {"value": 264, "method": "MTP", "prefill": 3818}, "oMLX": {"value": 232, "method": "DFlash2", "prefill": 2968}, "Splash": null, "Ollama": {"value": 166, "prefill": 3690}, "MTPLX": {"value": 123, "method": "MTP", "prefill": 4328}, "MLX": {"value": 132, "method": "DFlash2", "prefill": 4271}, "llama.cpp": {"value": 171, "method": "MTP", "prefill": 2881}, "LM Studio": {"value": 127, "method": "no spec", "prefill": 1873}}},
      {"model": "Flash-Next 180B", "cells": {"Kapitsa": {"value": 105, "method": "MTP", "prefill": 875}, "mlx-serve": {"value": 108, "prefill": 1720}, "oMLX": {"value": 107, "method": "MTP", "prefill": 1260}, "Splash": "x", "Ollama": {"value": 60}, "MTPLX": {"value": 88, "method": "MTP", "prefill": 1263}, "MLX": {"value": 77, "method": "MTP", "prefill": 1030}, "llama.cpp": {"value": 96, "prefill": 842}, "LM Studio": "x"}},
@@ -41,10 +41,9 @@
    {
     "name": "MacBook Pro M5 Pro 48 GB",
     "rows": [
-     {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 179, "method": "DFlash", "prefill": 3032}, "mlx-serve": {"value": 163, "method": "MTP", "prefill": 2717}, "oMLX": {"value": 113, "method": "MTP", "prefill": 2842}, "Splash": "x", "Ollama": {"value": 134, "method": "MTP", "prefill": 2609}, "MTPLX": {"value": 113, "method": "MTP", "prefill": 2697}, "MLX": {"value": 101, "method": "MTP", "prefill": 2756}, "llama.cpp": {"value": 93, "method": "MTP", "prefill": 1799}, "LM Studio": {"value": 89, "method": "no spec", "prefill": 861}}},
-     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 61, "method": "DFlash2", "prefill": 465}, "mlx-serve": {"value": 71, "method": "DFlash2", "prefill": 496}, "oMLX": {"value": 51, "method": "DFlash2", "prefill": 446}, "Splash": null, "Ollama": {"value": 40, "method": "MTP", "prefill": 470}, "MTPLX": {"value": 41, "method": "MTP", "prefill": 462}, "MLX": {"value": 32, "method": "MTP", "prefill": 421}, "llama.cpp": {"value": 30, "method": "MTP", "prefill": 322}, "LM Studio": {"value": 17, "method": "no spec", "prefill": 118}}},
-     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 167, "method": "DFlash2", "prefill": 1824}, "mlx-serve": {"value": 156, "method": "MTP", "prefill": 2494}, "oMLX": {"value": 144, "method": "DFlash2", "prefill": 1619}, "Splash": null, "Ollama": {"value": 102, "method": "MTP", "prefill": 1518}, "MTPLX": {"value": 89, "method": "MTP", "prefill": 2569}, "MLX": {"value": 98, "method": "DFlash2", "prefill": 2474}, "llama.cpp": {"value": 107, "method": "MTP", "prefill": 1755}, "LM Studio": {"value": 96, "method": "no spec", "prefill": 997}}},
-     {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 136, "method": "DSpark", "prefill": 3048}, "mlx-serve": {"value": 115, "method": "MTP", "prefill": 1728}, "oMLX": {"value": 124, "method": "MTP", "prefill": 1938}, "Splash": "x", "Ollama": {"value": 92, "prefill": 2369}, "MTPLX": {"value": 101, "prefill": 1743}, "MLX": {"value": 94, "prefill": 1881}, "llama.cpp": {"value": 101, "method": "MTP", "prefill": 1915}, "LM Studio": {"value": 72, "prefill": 1479}}}
+     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 74, "method": "DFlash2", "prefill": 463}, "mlx-serve": {"value": 80, "method": "DFlash2", "prefill": 428}, "oMLX": {"value": 51, "method": "DFlash2", "prefill": 446}, "Splash": null, "Ollama": {"value": 40, "method": "MTP", "prefill": 470}, "MTPLX": {"value": 41, "method": "MTP", "prefill": 462}, "MLX": {"value": 32, "method": "MTP", "prefill": 421}, "llama.cpp": {"value": 30, "method": "MTP", "prefill": 322}, "LM Studio": {"value": 17, "method": "no spec", "prefill": 118}}},
+     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 195, "method": "DFlash2", "prefill": 1799}, "mlx-serve": {"value": 156, "method": "MTP", "prefill": 2494}, "oMLX": {"value": 144, "method": "DFlash2", "prefill": 1619}, "Splash": null, "Ollama": {"value": 102, "method": "MTP", "prefill": 1518}, "MTPLX": {"value": 89, "method": "MTP", "prefill": 2569}, "MLX": {"value": 98, "method": "DFlash2", "prefill": 2474}, "llama.cpp": {"value": 107, "method": "MTP", "prefill": 1755}, "LM Studio": {"value": 96, "method": "no spec", "prefill": 997}}},
+     {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 159, "method": "DSpark", "prefill": 3141}, "mlx-serve": {"value": 115, "method": "MTP", "prefill": 1728}, "oMLX": {"value": 124, "method": "MTP", "prefill": 1938}, "Splash": "x", "Ollama": {"value": 92, "prefill": 2369}, "MTPLX": {"value": 101, "prefill": 1743}, "MLX": {"value": 94, "prefill": 1881}, "llama.cpp": {"value": 101, "method": "MTP", "prefill": 1915}, "LM Studio": {"value": 72, "prefill": 1479}}}
     ]
    },
    {

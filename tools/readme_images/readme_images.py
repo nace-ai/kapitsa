@@ -236,8 +236,9 @@ def poster(data, theme):
     o = [rect(0, 0, W, H, 0, t["bg"])]
     o.append(mark(44, 43, 62, t["mark"], "mk"))
     o.append(text(122, 84, P["title"], "serif", 52, t["ink"]))
+    o.append(text(44, 128, P["legend"], "sans-b", 29, t["ink"]))      # bold: what every cell reads
     for i, s in enumerate(P["subtitle"]):
-        o.append(text(44, 138 + 31 * i, s, "sans", 23, t["ink2"]))
+        o.append(text(44, 162 + 28 * i, s, "sans", 22, t["ink2"]))
 
     for j, e in enumerate(engines):           # one header for every Mac: logo, name, method if it's the same everywhere
         cx, cw = colx[j]
