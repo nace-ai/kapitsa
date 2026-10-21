@@ -1,17 +1,19 @@
 # KFlash: where the work is
 
-A map of the KFlash work as of 2026-10-20: which branch holds what, what was measured, what is still open, and how
-to resume. KFlash is Kapitsa's tree-verify generation of speculative decoding. The target checks a best-first tree of
+A map of the KFlash work as of 2026-10-21: which branch holds what, what was measured, what is still open, and how
+to resume. **KFlash trees are in `main` since [#187](https://github.com/nace-ai/kapitsa/pull/187) (8b190f5, the
+`kflash-trees` branch squashed), on by default on every target; [docs/kflash.md](kflash.md) explains how they work and
+[docs/benchmarks.md](benchmarks.md#kflash-trees-m4-pro-2026-10-21) has the numbers.** KFlash is Kapitsa's tree-verify generation of speculative decoding. The target checks a best-first tree of
 the drafter's candidates instead of one chain, exactly, sized by a budget that each Mac measures for itself.
 
 ## Branches on origin
 
 | Branch | What it holds | State |
 | --- | --- | --- |
-| `main` | the released engine | KFlash not merged; `main` has moved on since KFlash forked at `701d431` |
+| `main` | the engine | KFlash trees merged as #187 (8b190f5) |
 | `kflash` | everything: trees (Qwen + Nemotron), the shared budget, the candidate decoder (trainer, Metal, results), budget persistence, 16/32-row verifies | integration branch, no PRs, tip `43947bf` |
-| `kflash-trees` | the release candidate: trees only, no decoder | this branch; forked from `701d431` |
-| PR #109 (`claude/dflash-3-kapitsa-f294ab`) | the copy lane (prompt lookup inside the DFlash loop) | open; an experiment, not KFlash |
+| `kflash-trees` | the release candidate: trees only, no decoder | merged into `main` as #187 |
+| `claude/dflash-3-kapitsa-f294ab` (PR #109, closed) | the copy lane (prompt lookup inside the DFlash loop), merged with main after #187: it runs in chain cycles only (`NI_KFLASH=0`) | closed 2026-10-21; next step: the copy chain as a branch of the KFlash tree (in chain cycles it took a 21K-token agent request on the 4B from 114 to 166 tok/s) |
 | `claude/copy-lane-ext` | the copy lane's follow-up work in progress: batched decode, Nemotron, skipping unused drafts | `4c58527`, marked WIP; it builds; `dflash_accept_test` passes on one seed stream but fails one new case on the default stream (unchecked); never run on a model; not KFlash |
 
 ### `kflash-trees` commits (no decoder code; authored by the user)
@@ -86,6 +88,23 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
   `m1pro/kflash-budget-save` landed as `bc46716`.
 
 ## Open items
+
+**From the merge bench (2026-10-21, [results](../bench/results/2026-10-21-kflash-trees/README.md)):**
+- **Long agent turns gain least.** On 18-23K-token requests the chain already accepts 2.9-6.4 tokens per cycle, and a
+  tree cycle costs 5-8% more on the dense models (1-6% at short context), so those turns land between −5% and +3%.
+  The part that grows with the context is the tree-zone attention: its chunk is fixed (128 keys, 160 at a ~20K
+  capacity), about 3x the chain's partial results at 19K tokens. Proposed: partition the zone by position alone
+  (128-key chunks below 4K, 256 below 8K, 512 beyond; ~69 partials per KV head at 19K, within the 1,024-entry buffer up
+  to a 32K context). Measure first with `NI_V8_TREE_CHUNK=256 / 512` (no rebuild).
+- **Determinism gap past 16K tokens in the server.** The zone's chunk follows the KV capacity, which `kapitsa serve`
+  grows by 25% in 1,024-position steps; past 16,256 positions a row verified near a growth step can get a different
+  chunk under a different tree schedule. The position-only partition closes it. Not covered by any check yet (all run
+  at short contexts with a fixed capacity).
+- **The 35B's tree cycle costs 6-16% more GPU time than its chain**, which eats most of its 10-15% acceptance gain:
+  per-cycle A/B +0.6% greedy; harness −4.4% at T 0.6 (one run each). Two causes, split unmeasured: the trees verify
+  more rows per cycle than the chain's dynamic depth did (4.8-7.1 against 3.5-5.7), and every MoE row routes its own
+  experts; and the row-independent expert numerics (`0b52781`, about 3% by its code comment, never timed on greedy).
+  So the budget's size choice on MoE is worth checking against its measured cost first.
 
 1. Dynamic MoE trees: done (`4fc87d0`; their greedy invariance is item 2). Optional: the 35B's sampled exactness check and more sampled seeds.
 2. **Greedy replies on MoE with dynamic trees: fixed in the attention (`NI_V8_TREE_ATTN=2`, tree zone); checked on the M5 Pro.**

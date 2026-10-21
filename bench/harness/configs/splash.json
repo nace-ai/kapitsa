@@ -1,0 +1,57 @@
+[
+ {
+  "label": "q36-35b-splash",
+  "display": "Splash 1.4.0 (DFlash2 drafter)",
+  "engine": "splash",
+  "version": "1.4.0",
+  "model_name": "Qwen3.6-35B-A3B",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "prepare": [
+   {"link_files": {"src": "{models}/qwen3.6-35b-a3b-4bit",
+                   "dst": "{state}/splash/hub/models--nace-local--Qwen3.6-35B-A3B-4bit/snapshots/a155f490c53267b16553606af1832c03e616fec4",
+                   "exclude": ["mtp.safetensors", "mtplx_*", "MTPLX_*", "dflash*", "kflash*"]}}
+  ],
+  "cmd": ["{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/python/bin/python3", "-u",
+          "{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/install/launcher.py", "serve",
+          "--model", "nace-local/Qwen3.6-35B-A3B-4bit", "--revision", "a155f490c53267b16553606af1832c03e616fec4",
+          "--draft-model", "{first:{models}/drafters/Qwen3.6-35B-A3B-DFlash2|{models}/qwen3.6-35b-a3b-4bit/dflash2}",
+          "--offline", "--language-only", "--host", "127.0.0.1", "--port", "8151", "--no-webui",
+          "--max-context", "32K", "--expert-memory", "off", "--idle-release", "off"],
+  "env": {"HF_HUB_CACHE": "{state}/splash/hub", "HF_HUB_OFFLINE": "1"},
+  "env_clear_prefixes": ["SPLASH_"],
+  "base_url": "http://127.0.0.1:8151/v1",
+  "model": "nace-local/Qwen3.6-35B-A3B-4bit",
+  "ready_timeout": 600,
+  "adaptive_warm": true,
+  "requires_paths": ["{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/engine/splash",
+                     "{models}/qwen3.6-35b-a3b-4bit/model.safetensors.index.json",
+                     "{first:{models}/drafters/Qwen3.6-35B-A3B-DFlash2|{models}/qwen3.6-35b-a3b-4bit/dflash2}/model.safetensors"],
+  "version_cmd": ["{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/python/bin/python3",
+                  "{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/install/launcher.py", "--version"],
+  "log_grep": ["Weights loaded|Kernel policy|Ready|already installed|Installing|Reinstalling|Updating",
+               "Neural Engine|SSD cache|[Ee]xpert|Memory:", "Done . input", "Error|error|Warning|Traceback|Refused"],
+  "note": "Splash 1.4.0, the release tarball (splash-1.4.0-arm64-macos26.tar.gz from github.com/incoai/splash/releases, unpacked; SPLASH_ROOT, by default where `brew install incoai/tap/splash` puts the same tree), served with `splash serve` (install/launcher.py, the command the Homebrew wrapper runs). Splash takes only Hugging Face repo ids for --model, so the harness links the model folder's files into a Hub-cache-shaped snapshot in {state} (nace-local/... is a local name, not a Hub repo; the revision is the SHA-1 of that name) and points HF_HUB_CACHE there; with --offline and a 40-hex --revision it asks the Hub for nothing. The MTP head and the drafter folder are not linked (Splash never reads MTP heads). Its DFlash2 drafter for this model, incoai/Qwen3.6-35B-A3B-DFlash2 (the one Kapitsa reads), is named as a local directory with --draft-model, so a missing drafter fails the run instead of starting a download. Otherwise Splash's own defaults: DFlash2 speculation, always on (one draft pass proposes a 7-token chain, verified exactly; on this mixture of experts a verify budget learned over earlier cycles picks the rows, --verify-rows auto, hence the three extra warm-up decodes), INT8 KV, FP32 recurrent state, the SSD prefix cache at its automatic quota (temporary files, gone at exit). --expert-memory off keeps every routed expert resident (1.4.0 can stream experts from the SSD; its automatic setting also loads them all where memory holds them, as here). --max-context 32K like the other engines; --language-only (text only, no vision preparation); --idle-release off (by default an idle server frees its weights after 10 minutes); --no-webui. Inherited SPLASH_* variables (API key, port, reasoning defaults) are cleared."
+ },
+ {
+  "label": "q38-27b-splash",
+  "extends": "q36-35b-splash",
+  "model_name": "Qwen3.8-27B",
+  "model_path": "{first:{models}/qwen3.8-27b-4bit-mtp|{models}/qwen3.8-27b-4bit}",
+  "prepare": [
+   {"link_files": {"src": "{first:{models}/qwen3.8-27b-4bit-mtp|{models}/qwen3.8-27b-4bit}",
+                   "dst": "{state}/splash/hub/models--nace-local--Qwen3.8-27B-4bit/snapshots/567aa6f717662a3d90babfde3dbdd71c7b2cd48c",
+                   "exclude": ["mtp.safetensors", "mtplx_*", "MTPLX_*", "dflash*", "kflash*"]}}
+  ],
+  "cmd": ["{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/python/bin/python3", "-u",
+          "{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/install/launcher.py", "serve",
+          "--model", "nace-local/Qwen3.8-27B-4bit", "--revision", "567aa6f717662a3d90babfde3dbdd71c7b2cd48c",
+          "--draft-model", "{first:{models}/drafters/Qwen3.8-27B-DFlash2|{models}/qwen3.8-27b-4bit/dflash2}",
+          "--offline", "--language-only", "--host", "127.0.0.1", "--port", "8151", "--no-webui",
+          "--max-context", "32K", "--idle-release", "off"],
+  "model": "nace-local/Qwen3.8-27B-4bit",
+  "requires_paths": ["{env:SPLASH_ROOT=/opt/homebrew/opt/splash/libexec}/engine/splash",
+                     "{first:{models}/qwen3.8-27b-4bit-mtp|{models}/qwen3.8-27b-4bit}/model.safetensors.index.json",
+                     "{first:{models}/drafters/Qwen3.8-27B-DFlash2|{models}/qwen3.8-27b-4bit/dflash2}/model.safetensors"],
+  "note": "As q36-35b-splash on the 27B trunk every engine reads (lmstudio-community/Qwen3.8-27B-MLX-4bit; the folder of the README's layout, else the one `kapitsa pull 27b` writes), with incoai/Qwen3.8-27B-DFlash2 named as a local directory (--draft-model). Splash's defaults: DFlash2 speculation verifying all 8 rows (a dense model), INT8 KV, FP32 recurrent state, and long prompts' FFN split between the GPU and the Neural Engine (W8A8 on the Neural Engine's share), calibrated once per Mac, model, macOS and build at the first start (about a minute, inside ready_timeout); a GPU-only variant would add --disable-ane with cmd_append. No --expert-memory (a dense model has no routed experts). --max-context 32K, --language-only, --idle-release off, --no-webui; inherited SPLASH_* variables cleared."
+ }
+]

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="400" viewBox="0 0 880 400" role="img" aria-labelledby="t d"><title id="t">What a verify row costs</title><desc id="d">Left: Qwen3.8-27B, dense, verify pass GPU time on an M4 Pro: a plain one-row decode step 67.3 ms, a verify of 1, 2, 4 and 8 rows 74.4, 70.6, 71.6 and 74.3 ms. Middle: Qwen3.6-35B-A3B, mixture of experts, the KFlash budget's measured cycle GPU time for 1 to 8 live rows: 14.8, 16.4, 18.0, 19.1, 19.5, 21.2, 22.3 and 23.1 ms. Right: Qwen3.8-27B with experimental 16- and 32-row tree verifies: 5.16, 5.81 and 6.01 tokens per cycle for 79.5, 137.2 and 264.3 ms per cycle, or 64.9, 42.3 and 22.7 tokens per GPU second at 8, 16 and 32 rows.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:#56615B}.h{font-size:15px;font-weight:600;fill:#0B0F0D}.s{font-size:12.5px;fill:#56615B}.l{font-size:12.5px;fill:#56615B}.li{font-size:12.5px;fill:#0B0F0D}.v{font-size:12px;font-weight:600;fill:#0B0F0D}.m{font-size:11.5px;fill:#66716A}.tk{font-size:13px;font-weight:600;fill:#0B0F0D}.tka{font-size:13px;font-weight:600;fill:#FFFFFF}.tkv{font-size:13px;font-weight:500;fill:#56615B}.e{text-anchor:end}.c{text-anchor:middle}</style>
+<rect x="1" y="1" width="878" height="398" rx="16" fill="#F6F9F7" stroke="#E1E8E3" stroke-width="1.5"/>
+<text x="24.0" y="34.0" class="h">Dense · Qwen3.8-27B</text>
+<text x="24.0" y="54.0" class="s">verify pass, GPU ms</text>
+<line x1="58.0" y1="286.0" x2="278.0" y2="286.0" stroke="#B9C3BD" stroke-width="1"/>
+<text x="52.0" y="290.0" class="m e">0</text>
+<line x1="58.0" y1="237.5" x2="278.0" y2="237.5" stroke="#E3E9E5" stroke-width="1"/>
+<text x="52.0" y="241.5" class="m e">20</text>
+<line x1="58.0" y1="189.0" x2="278.0" y2="189.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="52.0" y="193.0" class="m e">40</text>
+<line x1="58.0" y1="140.5" x2="278.0" y2="140.5" stroke="#E3E9E5" stroke-width="1"/>
+<text x="52.0" y="144.5" class="m e">60</text>
+<line x1="58.0" y1="92.0" x2="278.0" y2="92.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="52.0" y="96.0" class="m e">80</text>
+<path d="M68.0 286.0V126.8Q68.0 122.8 72.0 122.8H88.0Q92.0 122.8 92.0 126.8V286.0Z" fill="#9AA59F"/>
+<text x="80.0" y="116.8" class="v c">67.3</text>
+<text x="80.0" y="303.0" class="l c">plain</text>
+<path d="M112.0 286.0V109.6Q112.0 105.6 116.0 105.6H132.0Q136.0 105.6 136.0 109.6V286.0Z" fill="#B07A0C"/>
+<text x="124.0" y="99.6" class="v c">74.4</text>
+<text x="124.0" y="303.0" class="l c">1</text>
+<path d="M156.0 286.0V118.8Q156.0 114.8 160.0 114.8H176.0Q180.0 114.8 180.0 118.8V286.0Z" fill="#B07A0C"/>
+<text x="168.0" y="108.8" class="v c">70.6</text>
+<text x="168.0" y="303.0" class="l c">2</text>
+<path d="M200.0 286.0V116.4Q200.0 112.4 204.0 112.4H220.0Q224.0 112.4 224.0 116.4V286.0Z" fill="#B07A0C"/>
+<text x="212.0" y="106.4" class="v c">71.6</text>
+<text x="212.0" y="303.0" class="l c">4</text>
+<path d="M244.0 286.0V109.8Q244.0 105.8 248.0 105.8H264.0Q268.0 105.8 268.0 109.8V286.0Z" fill="#B07A0C"/>
+<text x="256.0" y="99.8" class="v c">74.3</text>
+<text x="256.0" y="303.0" class="l c">8</text>
+<text x="80.0" y="318.0" class="m c">decode</text>
+<text x="190.0" y="318.0" class="m c">rows verified</text>
+<text x="24.0" y="360.0" class="li">8 rows: 1.10× a plain decode step,</text>
+<text x="24.0" y="378.0" class="li">and no more than 1 row</text>
+<text x="306.0" y="34.0" class="h">MoE · Qwen3.6-35B-A3B</text>
+<text x="306.0" y="54.0" class="s">whole cycle (draft + verify), GPU ms</text>
+<line x1="334.0" y1="286.0" x2="580.0" y2="286.0" stroke="#B9C3BD" stroke-width="1"/>
+<text x="328.0" y="290.0" class="m e">0</text>
+<line x1="334.0" y1="247.2" x2="580.0" y2="247.2" stroke="#E3E9E5" stroke-width="1"/>
+<text x="328.0" y="251.2" class="m e">5</text>
+<line x1="334.0" y1="208.4" x2="580.0" y2="208.4" stroke="#E3E9E5" stroke-width="1"/>
+<text x="328.0" y="212.4" class="m e">10</text>
+<line x1="334.0" y1="169.6" x2="580.0" y2="169.6" stroke="#E3E9E5" stroke-width="1"/>
+<text x="328.0" y="173.6" class="m e">15</text>
+<line x1="334.0" y1="130.8" x2="580.0" y2="130.8" stroke="#E3E9E5" stroke-width="1"/>
+<text x="328.0" y="134.8" class="m e">20</text>
+<line x1="334.0" y1="92.0" x2="580.0" y2="92.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="328.0" y="96.0" class="m e">25</text>
+<path d="M338.4 286.0V175.2Q338.4 171.2 342.4 171.2H356.4Q360.4 171.2 360.4 175.2V286.0Z" fill="#B07A0C"/>
+<text x="349.4" y="165.2" class="v c">14.8</text>
+<text x="349.4" y="303.0" class="l c">1</text>
+<path d="M369.1 286.0V162.7Q369.1 158.7 373.1 158.7H387.1Q391.1 158.7 391.1 162.7V286.0Z" fill="#B07A0C"/>
+<text x="380.1" y="303.0" class="l c">2</text>
+<path d="M399.9 286.0V150.3Q399.9 146.3 403.9 146.3H417.9Q421.9 146.3 421.9 150.3V286.0Z" fill="#B07A0C"/>
+<text x="410.9" y="303.0" class="l c">3</text>
+<path d="M430.6 286.0V141.8Q430.6 137.8 434.6 137.8H448.6Q452.6 137.8 452.6 141.8V286.0Z" fill="#B07A0C"/>
+<text x="441.6" y="303.0" class="l c">4</text>
+<path d="M461.4 286.0V138.7Q461.4 134.7 465.4 134.7H479.4Q483.4 134.7 483.4 138.7V286.0Z" fill="#B07A0C"/>
+<text x="472.4" y="303.0" class="l c">5</text>
+<path d="M492.1 286.0V125.5Q492.1 121.5 496.1 121.5H510.1Q514.1 121.5 514.1 125.5V286.0Z" fill="#B07A0C"/>
+<text x="503.1" y="303.0" class="l c">6</text>
+<path d="M522.9 286.0V117.0Q522.9 113.0 526.9 113.0H540.9Q544.9 113.0 544.9 117.0V286.0Z" fill="#B07A0C"/>
+<text x="533.9" y="303.0" class="l c">7</text>
+<path d="M553.6 286.0V110.7Q553.6 106.7 557.6 106.7H571.6Q575.6 106.7 575.6 110.7V286.0Z" fill="#B07A0C"/>
+<text x="564.6" y="100.7" class="v c">23.1</text>
+<text x="564.6" y="303.0" class="l c">8</text>
+<text x="457.0" y="318.0" class="m c">live rows in the tree</text>
+<text x="306.0" y="360.0" class="li">8 rows: 1.56× one row; each row adds</text>
+<text x="306.0" y="378.0" class="li">the experts it routes to</text>
+<text x="608.0" y="34.0" class="h">Past one tile · Qwen3.8-27B</text>
+<text x="608.0" y="54.0" class="s">tokens per GPU second</text>
+<line x1="636.0" y1="286.0" x2="852.0" y2="286.0" stroke="#B9C3BD" stroke-width="1"/>
+<text x="630.0" y="290.0" class="m e">0</text>
+<line x1="636.0" y1="230.6" x2="852.0" y2="230.6" stroke="#E3E9E5" stroke-width="1"/>
+<text x="630.0" y="234.6" class="m e">20</text>
+<line x1="636.0" y1="175.1" x2="852.0" y2="175.1" stroke="#E3E9E5" stroke-width="1"/>
+<text x="630.0" y="179.1" class="m e">40</text>
+<line x1="636.0" y1="119.7" x2="852.0" y2="119.7" stroke="#E3E9E5" stroke-width="1"/>
+<text x="630.0" y="123.7" class="m e">60</text>
+<path d="M660.0 286.0V110.1Q660.0 106.1 664.0 106.1H680.0Q684.0 106.1 684.0 110.1V286.0Z" fill="#2F9A4B"/>
+<text x="672.0" y="100.1" class="v c">64.9</text>
+<text x="672.0" y="303.0" class="l c">8 rows</text>
+<text x="672.0" y="318.0" class="m c">5.16 tok</text>
+<text x="672.0" y="332.0" class="m c">79.5 ms</text>
+<path d="M732.0 286.0V172.8Q732.0 168.8 736.0 168.8H752.0Q756.0 168.8 756.0 172.8V286.0Z" fill="#9AA59F"/>
+<text x="744.0" y="162.8" class="v c">42.3</text>
+<text x="744.0" y="303.0" class="l c">16</text>
+<text x="744.0" y="318.0" class="m c">5.81 tok</text>
+<text x="744.0" y="332.0" class="m c">137 ms</text>
+<path d="M804.0 286.0V227.1Q804.0 223.1 808.0 223.1H824.0Q828.0 223.1 828.0 227.1V286.0Z" fill="#9AA59F"/>
+<text x="816.0" y="217.1" class="v c">22.7</text>
+<text x="816.0" y="303.0" class="l c">32</text>
+<text x="816.0" y="318.0" class="m c">6.01 tok</text>
+<text x="816.0" y="332.0" class="m c">264 ms</text>
+<text x="608.0" y="360.0" class="li">16 rows (an experiment): +13% tokens</text>
+<text x="608.0" y="378.0" class="li">per cycle for 1.73× the GPU time</text>
+</svg>

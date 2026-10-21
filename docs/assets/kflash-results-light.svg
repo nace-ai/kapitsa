@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="452" viewBox="0 0 880 452" role="img" aria-labelledby="t d"><title id="t">Tokens per cycle gained against cycle cost, per prompt</title><desc id="d">Per-prompt greedy A/B on an M4 Pro, KFlash trees against the chain of main before them. Horizontal: change in GPU time per cycle; vertical: change in tokens per cycle; on the diagonal the two cancel. Qwen 4B code: cost +6.1%, tokens +11.9%, speed +5.1%; Qwen 4B prose: cost +4.4%, tokens +13.9%, speed +9.1%; Qwen 4B r06: cost +6.4%, tokens +6.9%, speed +0.4%; Qwen 4B r07: cost +7.5%, tokens +4.5%, speed −2.7%; Qwen 4B r12: cost +5.6%, tokens +8.6%, speed +2.8%; Qwen 4B r18: cost +6.8%, tokens +5.1%, speed −1.8%; Qwen 27B code: cost +1.9%, tokens +7.9%, speed +6.0%; Qwen 27B prose: cost +1.4%, tokens +17.4%, speed +15.8%; Qwen 27B r07: cost +5.1%, tokens +2.2%, speed −2.9%; Qwen 35B code: cost +12.0%, tokens +15.5%, speed +3.2%; Qwen 35B prose: cost +6.1%, tokens +12.4%, speed +5.7%; Qwen 35B r06: cost +10.1%, tokens +9.8%, speed −0.6%; Qwen 35B r07: cost +16.0%, tokens +10.4%, speed −4.9%; Qwen 35B r12: cost +10.2%, tokens +10.1%, speed +0.0%.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:#56615B}.h{font-size:15px;font-weight:600;fill:#0B0F0D}.s{font-size:12.5px;fill:#56615B}.l{font-size:12.5px;fill:#56615B}.li{font-size:12.5px;fill:#0B0F0D}.v{font-size:12px;font-weight:600;fill:#0B0F0D}.m{font-size:11.5px;fill:#66716A}.tk{font-size:13px;font-weight:600;fill:#0B0F0D}.tka{font-size:13px;font-weight:600;fill:#FFFFFF}.tkv{font-size:13px;font-weight:500;fill:#56615B}.e{text-anchor:end}.c{text-anchor:middle}</style>
+<rect x="1" y="1" width="878" height="450" rx="16" fill="#F6F9F7" stroke="#E1E8E3" stroke-width="1.5"/>
+<text x="24.0" y="34.0" class="h">Tokens per cycle, trees vs old main</text>
+<line x1="84.0" y1="361.6" x2="584.0" y2="361.6" stroke="#B9C3BD" stroke-width="1"/>
+<text x="76.0" y="365.6" class="m e">0%</text>
+<line x1="84.0" y1="285.7" x2="584.0" y2="285.7" stroke="#E3E9E5" stroke-width="1"/>
+<text x="76.0" y="289.7" class="m e">+5%</text>
+<line x1="84.0" y1="209.8" x2="584.0" y2="209.8" stroke="#E3E9E5" stroke-width="1"/>
+<text x="76.0" y="213.8" class="m e">+10%</text>
+<line x1="84.0" y1="133.9" x2="584.0" y2="133.9" stroke="#E3E9E5" stroke-width="1"/>
+<text x="76.0" y="137.9" class="m e">+15%</text>
+<line x1="84.0" y1="58.0" x2="584.0" y2="58.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="76.0" y="62.0" class="m e">+20%</text>
+<line x1="134.0" y1="58.0" x2="134.0" y2="392.0" stroke="#B9C3BD" stroke-width="1"/>
+<text x="134.0" y="409.0" class="m c">0%</text>
+<line x1="259.0" y1="58.0" x2="259.0" y2="392.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="259.0" y="409.0" class="m c">+5%</text>
+<line x1="384.0" y1="58.0" x2="384.0" y2="392.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="384.0" y="409.0" class="m c">+10%</text>
+<line x1="509.0" y1="58.0" x2="509.0" y2="392.0" stroke="#E3E9E5" stroke-width="1"/>
+<text x="509.0" y="409.0" class="m c">+15%</text>
+<text x="584.0" y="428.0" class="s e">GPU time per cycle, trees vs old main</text>
+<line x1="134.0" y1="361.6" x2="584.0" y2="88.4" stroke="#56615B" stroke-width="1.4"/>
+<text x="551.5" y="101.1" class="m c" transform="rotate(-31.3 551.5 101.1)">break-even</text>
+<text x="99.0" y="73.2" class="v">faster</text>
+<text x="574.0" y="349.5" class="v e">slower</text>
+<circle cx="287.5" cy="181.5" r="5.5" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<circle cx="243.9" cy="151.3" r="5.5" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<circle cx="293.7" cy="257.4" r="5.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<circle cx="322.2" cy="293.9" r="5.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<circle cx="273.8" cy="231.4" r="5.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<circle cx="304.6" cy="283.6" r="5.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<rect x="176.5" y="235.4" width="11" height="11" rx="1.5" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<rect x="163.8" y="92.1" width="11" height="11" rx="1.5" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<rect x="256.9" y="322.7" width="11" height="11" rx="1.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<path d="M433.6 120.0L440.6 127.0L433.6 134.0L426.6 127.0Z" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<path d="M286.7 166.4L293.7 173.4L286.7 180.4L279.7 173.4Z" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<path d="M387.4 206.2L394.4 213.2L387.4 220.2L380.4 213.2Z" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<path d="M534.0 197.1L541.0 204.1L534.0 211.1L527.0 204.1Z" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<path d="M388.8 200.8L395.8 207.8L388.8 214.8L381.8 207.8Z" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<text x="297.5" y="190.5" class="l">4B code  +5.1%</text>
+<text x="253.9" y="155.3" class="l">4B prose  +9.1%</text>
+<text x="192.0" y="244.9" class="l">27B code  +6.0%</text>
+<text x="179.3" y="101.6" class="l">27B prose  +15.8%</text>
+<text x="422.6" y="131.0" class="l e">35B code  +3.2%</text>
+<text x="276.7" y="169.4" class="l e">35B prose  +5.7%</text>
+<text x="542.0" y="228.1" class="l e">35B agent r07  −4.9%</text>
+<text x="334.0" y="310.0" class="m">agent turns</text>
+<text x="612.0" y="84.0" class="v">Model</text>
+<circle cx="620.0" cy="106.0" r="5.5" fill="#56615B" stroke="#F6F9F7" stroke-width="2"/>
+<text x="636.0" y="110.0" class="l">Qwen3.5-4B</text>
+<rect x="614.5" y="122.5" width="11" height="11" rx="1.5" fill="#56615B" stroke="#F6F9F7" stroke-width="2"/>
+<text x="636.0" y="132.0" class="l">Qwen3.8-27B</text>
+<path d="M620.0 143.0L627.0 150.0L620.0 157.0L613.0 150.0Z" fill="#56615B" stroke="#F6F9F7" stroke-width="2"/>
+<text x="636.0" y="154.0" class="l">Qwen3.6-35B-A3B</text>
+<text x="612.0" y="192.0" class="v">Prompt</text>
+<circle cx="620.0" cy="214.0" r="5.5" fill="#2F9A4B" stroke="#F6F9F7" stroke-width="2"/>
+<text x="636.0" y="218.0" class="l">512-token code or prose answer</text>
+<circle cx="620.0" cy="236.0" r="5.5" fill="#9AA59F" stroke="#F6F9F7" stroke-width="2"/>
+<text x="636.0" y="240.0" class="l">agent turn, 18-23K tokens</text>
+<text x="636.0" y="256.0" class="l">of context</text>
+<text x="612.0" y="296.0" class="m">Greedy, M4 Pro, interleaved runs.</text>
+<text x="612.0" y="313.0" class="m">Labels: the change in tok/s.</text>
+<text x="612.0" y="330.0" class="m">Above the line, the extra tokens</text>
+<text x="612.0" y="347.0" class="m">outweigh the extra GPU time.</text>
+</svg>

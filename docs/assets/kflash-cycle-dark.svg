@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="470" viewBox="0 0 880 470" role="img" aria-labelledby="t d"><title id="t">One cycle: a chain and a tree in the same 8 rows</title><desc id="d">The same drafter candidates verified two ways in one 8-row pass. Top, before KFlash, the drafter's chain: if, key, in, self, .cache, colon, newline, return. The target accepts key, then writes not where the chain has in, so the cycle emits 2 tokens: key, not. Bottom, KFlash's best-first tree: rows if, key, in, self, .cache, not (a second child of key), colon, and in (under not), taken in order of path probability .71, .44, .32, .26, .23, .22, .21. The target accepts key, not, in and then writes self, so the cycle emits 4 tokens: key, not, in, self.</desc>
+<style>text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:#A3AEA8}.h{font-size:15px;font-weight:600;fill:#E8EEE9}.s{font-size:12.5px;fill:#A3AEA8}.l{font-size:12.5px;fill:#A3AEA8}.li{font-size:12.5px;fill:#E8EEE9}.v{font-size:12px;font-weight:600;fill:#E8EEE9}.m{font-size:11.5px;fill:#8A9690}.tk{font-size:13px;font-weight:600;fill:#E8EEE9}.tka{font-size:13px;font-weight:600;fill:#0B0F0D}.tkv{font-size:13px;font-weight:500;fill:#A3AEA8}.e{text-anchor:end}.c{text-anchor:middle}</style>
+<rect x="1" y="1" width="878" height="468" rx="16" fill="#0B0F0D" stroke="#1F2924" stroke-width="1.5"/>
+<text x="64.0" y="30.0" class="m c">P</text>
+<text x="170.0" y="30.0" class="m c">P+1</text>
+<text x="276.0" y="30.0" class="m c">P+2</text>
+<text x="382.0" y="30.0" class="m c">P+3</text>
+<text x="488.0" y="30.0" class="m c">P+4</text>
+<text x="594.0" y="30.0" class="m c">P+5</text>
+<text x="700.0" y="30.0" class="m c">P+6</text>
+<text x="806.0" y="30.0" class="m c">P+7</text>
+<text x="24.0" y="62.0" class="h">Before KFlash: the drafter's chain</text>
+<text x="624.0" y="62.0" class="l"><tspan class="v">2 tokens</tspan> emitted: key, not</text>
+<line x1="106.0" y1="106.0" x2="128.0" y2="106.0" stroke="#33A853" stroke-width="2.0"/>
+<line x1="212.0" y1="106.0" x2="234.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="318.0" y1="106.0" x2="340.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="424.0" y1="106.0" x2="446.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="530.0" y1="106.0" x2="552.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="636.0" y1="106.0" x2="658.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="742.0" y1="106.0" x2="764.0" y2="106.0" stroke="#45514B" stroke-width="1.4"/>
+<rect x="22.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#1E2823"/>
+<text x="64.0" y="110.5" class="tk c">if</text>
+<text x="64.0" y="85.0" class="m c">row 0</text>
+<rect x="128.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#33A853"/>
+<text x="170.0" y="110.5" class="tka c">key</text>
+<text x="170.0" y="85.0" class="m c">row 1</text>
+<rect x="234.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="276.0" y="110.5" class="tkv c">in</text>
+<text x="276.0" y="85.0" class="m c">row 2</text>
+<rect x="340.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="382.0" y="110.5" class="tkv c">self</text>
+<text x="382.0" y="85.0" class="m c">row 3</text>
+<rect x="446.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="488.0" y="110.5" class="tkv c">.cache</text>
+<text x="488.0" y="85.0" class="m c">row 4</text>
+<rect x="552.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="594.0" y="110.5" class="tkv c">:</text>
+<text x="594.0" y="85.0" class="m c">row 5</text>
+<rect x="658.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="700.0" y="110.5" class="tkv c">\n</text>
+<text x="700.0" y="85.0" class="m c">row 6</text>
+<rect x="764.0" y="91.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="806.0" y="110.5" class="tkv c">return</text>
+<text x="806.0" y="85.0" class="m c">row 7</text>
+<circle cx="316.0" cy="93.0" r="7" fill="#121915" stroke="#A3AEA8" stroke-width="1.2"/>
+<line x1="313.0" y1="90.0" x2="319.0" y2="96.0" stroke="#A3AEA8" stroke-width="1.4"/>
+<line x1="313.0" y1="96.0" x2="319.0" y2="90.0" stroke="#A3AEA8" stroke-width="1.4"/>
+<path d="M202.0 121.0C218.0 121.0 218.0 152.0 234.0 152.0" fill="none" stroke="#45514B" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="4 3"/>
+<rect x="234.0" y="137.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#33A853" stroke-width="1.6" stroke-dasharray="5 3"/>
+<text x="276.0" y="156.5" class="tk c">not</text>
+<text x="328.0" y="156.0" class="m">the target's own token after “key”: the rest of the chain is discarded</text>
+<line x1="24.0" y1="184.0" x2="856.0" y2="184.0" stroke="#1F2924" stroke-width="1.2"/>
+<text x="24.0" y="214.0" class="h">KFlash: a best-first tree in the same 8 rows</text>
+<text x="624.0" y="214.0" class="l"><tspan class="v">4 tokens</tspan> emitted: key, not, in, self</text>
+<line x1="106.0" y1="258.0" x2="128.0" y2="258.0" stroke="#33A853" stroke-width="2.0"/>
+<line x1="212.0" y1="258.0" x2="234.0" y2="258.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="318.0" y1="258.0" x2="340.0" y2="258.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="424.0" y1="258.0" x2="446.0" y2="258.0" stroke="#45514B" stroke-width="1.4"/>
+<line x1="530.0" y1="258.0" x2="552.0" y2="258.0" stroke="#45514B" stroke-width="1.4"/>
+<path d="M212.0 258.0C223.0 258.0 223.0 334.0 234.0 334.0" fill="none" stroke="#33A853" stroke-width="2.0" stroke-linecap="round" stroke-linejoin="round"/>
+<line x1="318.0" y1="334.0" x2="340.0" y2="334.0" stroke="#33A853" stroke-width="2.0"/>
+<line x1="424.0" y1="334.0" x2="446.0" y2="334.0" stroke="#45514B" stroke-width="1.4" stroke-dasharray="4 3"/>
+<rect x="22.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#1E2823"/>
+<text x="64.0" y="262.5" class="tk c">if</text>
+<text x="64.0" y="237.0" class="m c">row 0</text>
+<rect x="128.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#33A853"/>
+<text x="170.0" y="262.5" class="tka c">key</text>
+<text x="170.0" y="237.0" class="m c">row 1</text>
+<text x="170.0" y="288.0" class="m c">p .71</text>
+<rect x="234.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="276.0" y="262.5" class="tkv c">in</text>
+<text x="276.0" y="237.0" class="m c">row 2</text>
+<text x="276.0" y="288.0" class="m c">p .44</text>
+<rect x="340.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="382.0" y="262.5" class="tkv c">self</text>
+<text x="382.0" y="237.0" class="m c">row 3</text>
+<text x="382.0" y="288.0" class="m c">p .32</text>
+<rect x="446.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="488.0" y="262.5" class="tkv c">.cache</text>
+<text x="488.0" y="237.0" class="m c">row 4</text>
+<text x="488.0" y="288.0" class="m c">p .26</text>
+<rect x="552.0" y="243.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="594.0" y="262.5" class="tkv c">:</text>
+<text x="594.0" y="237.0" class="m c">row 6</text>
+<text x="594.0" y="288.0" class="m c">p .22</text>
+<rect x="234.0" y="319.0" width="84.0" height="30.0" rx="8" fill="#33A853"/>
+<text x="276.0" y="338.5" class="tka c">not</text>
+<text x="276.0" y="313.0" class="m c">row 5</text>
+<text x="276.0" y="364.0" class="m c">p .23</text>
+<rect x="340.0" y="319.0" width="84.0" height="30.0" rx="8" fill="#33A853"/>
+<text x="382.0" y="338.5" class="tka c">in</text>
+<text x="382.0" y="313.0" class="m c">row 7</text>
+<text x="382.0" y="364.0" class="m c">p .21</text>
+<rect x="446.0" y="319.0" width="84.0" height="30.0" rx="8" fill="#121915" stroke="#33A853" stroke-width="1.6" stroke-dasharray="5 3"/>
+<text x="488.0" y="338.5" class="tk c">self</text>
+<text x="552.0" y="338.0" class="m">the longest branch the target agrees with,</text>
+<text x="552.0" y="354.0" class="m">then its own next token</text>
+<text x="24.0" y="404.0" class="l"><tspan class="l">What the target model writes after “if”: </tspan><tspan class="li">key · not · in · self · .cache · :</tspan></text>
+<rect x="24.0" y="431.0" width="22.0" height="14.0" rx="4" fill="#33A853"/>
+<text x="54.0" y="442.0" class="l">accepted draft</text>
+<rect x="184.0" y="431.0" width="22.0" height="14.0" rx="4" fill="#121915" stroke="#55615A" stroke-width="1.2"/>
+<text x="214.0" y="442.0" class="l">verified, not accepted</text>
+<rect x="390.0" y="431.0" width="22.0" height="14.0" rx="4" fill="#121915" stroke="#33A853" stroke-width="1.5" stroke-dasharray="4 2"/>
+<text x="420.0" y="442.0" class="l">the target's own next token</text>
+<rect x="622.0" y="431.0" width="22.0" height="14.0" rx="4" fill="#1E2823"/>
+<text x="652.0" y="442.0" class="l">anchor: the last token emitted</text>
+</svg>

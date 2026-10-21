@@ -23,11 +23,16 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
 - Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so the Nemotron table leaves them out.
 - MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
   drafter on Bolt; mlx-serve the faster of MTP and DFlash2.
-- Qwen3.5 4B, 4-bit: Kapitsa's 179 tok/s was measured later, with its new drafter; the old build, rerun as a control, matched
-  its 122.
+- Kapitsa's Qwen cells (4B 201, 27B 63, 35B 161 tok/s): main with KFlash trees
+  ([#187](https://github.com/nace-ai/kapitsa/pull/187)), measured 2026-10-21 against main before it
+  ([KFlash trees](#kflash-trees-m4-pro-2026-10-21)). Its Nemotron cells: KFlash on Lightning 112 and Bolt 69 tok/s, measured the same day.
+- Splash 1.4.0 (Inco AI, `bench/harness/configs/splash.json`): the 27B (53) and the 35B (135) with its DFlash2
+  drafts, measured 2026-10-21 in the same session as Kapitsa's KFlash runs. It runs only those two models and needs an
+  M3 or newer. Rapid-MLX left the README's tables for it; its runs stay in the sections below.
 - Other apps used the GPU during MLX's 4B run and llama.cpp's Dory run (contention flagged).
 - A real opencode session on the 35B: Kapitsa 49 s, mlx-serve 62 s, oMLX 66 s
-  ([details](#a-real-coding-agent-session-2026-10-18)).
+  ([details](#a-real-coding-agent-session-2026-10-18)); on 2026-10-21, Kapitsa with KFlash 51.4 s and Splash 1.4.0 57.0 s
+  ([details](#kflash-trees-m4-pro-2026-10-21)).
 - Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`), llama.cpp NVIDIA's Dory fork on its Q5_K_M (last-loop KV),
   MLX mlx-lm's Dory pull request on snsnc's 4-bit (per-loop KV) ([details](#nemotron-dory10-4b-2026-10-19)).
 - Lightning: NVIDIA's NVFP4 with its DSpark drafter on Kapitsa and MLX (mlx-vlm); oMLX and llama.cpp not measured yet
@@ -62,8 +67,9 @@ What each cell of the README's tables ran, Mac by Mac (the runs are in the secti
   llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).
 
 **MacBook Pro M1 Pro 16 GB**
-- Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (the cell is its first run; its
-  last: 78.5 tok/s at T = 0.6, 90.0 greedy). Each engine in its fastest setting on this Mac, chosen in short runs:
+- Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (its runs: 85.5 and 78.5 tok/s at
+  T = 0.6). Kapitsa's 4B cell is now main with KFlash, 2026-10-21: the mean of two runs (92.6 and 97.5 tok/s; main before
+  it 90.7 and 89.2, [details](#kflash-trees-m4-pro-2026-10-21)). Splash needs an M3 or newer. Each engine in its fastest setting on this Mac, chosen in short runs:
   oMLX MTP, mlx-serve MTP depth 2, Ollama's MLX runner with MTP, MTPLX depth 1, llama.cpp MTP n-max 3, MLX mlx-lm.
   Rapid-MLX (no speculation, its faster setting here) in a bracket of its own, Kapitsa 0.1.36 first and last.
   Kapitsa 0.1.36 reads 16K-token prompts more slowly than mlx-lm, Rapid-MLX and LM Studio here (269 tok/s against 289,
@@ -1526,6 +1532,43 @@ fails at T = 0.6, as on the M5 Max).
 All at 2 loops. Kapitsa's last-loop KV, its default, wrote 67.8 tok/s at T = 0.6 (68.9 greedy) at 10:28; the README
 shows per-loop KV with speculative decoding. The "no support" cells are those found on the M4 Pro, at the same
 versions ([Bolt](#nemotron-35-bolt), [Dory](#nemotron-dory10-4b-2026-10-19)).
+
+## KFlash trees (M4 Pro, 2026-10-21)
+
+[#187](https://github.com/nace-ai/kapitsa/pull/187) made KFlash the default. Every drafter's candidates are now verified
+as a best-first tree instead of one chain, in the same 8-row pass, sized by a budget measured on each Mac
+([how KFlash works](kflash.md)). On the same MacBook Pro (M4 Pro, 48 GB, macOS 27.0.1, High Power mode, AC power), main
+before it (617f6a2) against main after it (8b190f5), both Release builds, plus Splash 1.4.0 on the two models it runs.
+The M1 Pro 16 GB ran the 4B. Result files, the configs and one line per A/B run:
+[bench/results/2026-10-21-kflash-trees](../bench/results/2026-10-21-kflash-trees/).
+
+| Model | Decode, T = 0.6: old → new main | Greedy: old → new main | Per-cycle A/B, greedy | Per-cycle A/B, T = 0.6 |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.5-4B | 185.7 → **200.8** (+8.1%) | 193.8 → **213.7** (+10.3%) | +2.1% (6 prompts) | +9.6% (3 prompts) |
+| Qwen3.8-27B | 60.4 → **60.5** (+0.2%) | 61.1 → **64.4** (+5.5%) | +6.0% (3 prompts) | +2.8% (2 prompts) |
+| Qwen3.6-35B-A3B | 168.1 → **160.6** (-4.4%) | 177.6 → **177.2** (-0.2%) | +0.6% (5 prompts) | — |
+| Nemotron 3.5 Lightning 30B-A3B | 104.3 → **111.7** (+7.1%) | 115.7 → **113.7** (-1.7%) | — | — |
+| Nemotron 3.5 Bolt 74B-A9B | 64.3 → **68.8** (+6.9%) | 69.4 → **71.2** (+2.6%) | — | — |
+
+The replayed opencode session on the 35B: 51.7 s on old main, 51.4 s on new main (-0.6%; writing rate 138.7 → 140.8 tok/s, +1.5%).
+
+Splash 1.4.0, the same protocol, its own defaults (DFlash2 draft, INT8 KV): the 35B 134.7 tok/s at T = 0.6 (140.9 greedy), the 27B 52.9 (57.6 greedy), and
+the agent session on the 35B in 57.0 s (Kapitsa with KFlash 51.4 s). The M1 Pro's 4B, alternating builds (old, new, new,
+old): 90.0 → 95.0 tok/s at T = 0.6 (+5.6%), 90.8 → 94.8 greedy (+4.4%).
+
+- **The harness's protocol**, one run per build: 5 sampled and 5 greedy runs of the coding answer, plus tool calls.
+  Prefill is left out because the trees don't touch it; the agent session runs on the 35B. One run per build is a
+  quick reading: this Mac's runs of one build have spread 3-8% at T = 0.6.
+- **The per-cycle A/B** (`ni_run`): five runs per prompt, interleaved old main, trees, chain, trees, old main. The prompts
+  are a coding answer, a prose answer and 18-23K-token requests of the recorded agent session. On the dense models the
+  trees' greedy output is identical to plain decoding on every prompt; old main's chain departs from it once (the 4B's
+  r13, a near-tie). The new build's chain runs at old main's speed (−0.3% to +0.4% on the dense models).
+- **Where the trees gain least: long agent turns.** There the chain already accepts 2.9-6.4 tokens per cycle. A tree
+  cycle costs 5-8% more on the dense models and 10-16% more on the 35B, so those turns land between −5% and +3%.
+  - On the dense models, the part that grows with the context is the tree-zone attention's fixed-size chunks: about 3x
+    the chain's partial results at 19K tokens. A repartition by position is proposed in the
+    [results' README](../bench/results/2026-10-21-kflash-trees/README.md#why-long-agent-turns-gain-less).
+  - On the 35B, the trees verify more rows than the chain did, and each row routes its own experts.
 
 ## Your Mac: `kapitsa bench`
 

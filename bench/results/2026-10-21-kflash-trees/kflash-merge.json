@@ -1,0 +1,186 @@
+[
+ {
+  "label": "q35-4b-kapitsa-main",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa main (617f6a2): drafter chains",
+  "model_path": "{models}/qwen3.5-4b-4bit",
+  "cmd": [
+   "<main-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.5-4b-4bit",
+   "--model-id",
+   "qwen3.5-4b",
+   "--dflash",
+   "{models}/qwen3.5-4b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit/config.json",
+   "{models}/qwen3.5-4b-4bit/mtp.safetensors",
+   "{models}/qwen3.5-4b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q35-4b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the main build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ },
+ {
+  "label": "q35-4b-kapitsa-trees",
+  "extends": "q35-4b-kapitsa",
+  "display": "Kapitsa kflash-trees (72a61e3): KFlash trees",
+  "model_path": "{models}/qwen3.5-4b-4bit",
+  "cmd": [
+   "<kflash-trees-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.5-4b-4bit",
+   "--model-id",
+   "qwen3.5-4b",
+   "--dflash",
+   "{models}/qwen3.5-4b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.5-4b-4bit/config.json",
+   "{models}/qwen3.5-4b-4bit/mtp.safetensors",
+   "{models}/qwen3.5-4b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q35-4b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the trees build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ },
+ {
+  "label": "q38-27b-kapitsa-main",
+  "extends": "q38-27b-kapitsa",
+  "display": "Kapitsa main (617f6a2): drafter chains",
+  "model_path": "{models}/qwen3.8-27b-4bit",
+  "cmd": [
+   "<main-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-27b-4bit",
+   "--model-id",
+   "qwen3.8-27b",
+   "--dflash",
+   "{models}/qwen3.8-27b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.8-27b-4bit/config.json",
+   "{models}/qwen3.8-27b-4bit/mtp.safetensors",
+   "{models}/qwen3.8-27b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q38-27b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the main build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ },
+ {
+  "label": "q38-27b-kapitsa-trees",
+  "extends": "q38-27b-kapitsa",
+  "display": "Kapitsa kflash-trees (72a61e3): KFlash trees",
+  "model_path": "{models}/qwen3.8-27b-4bit",
+  "cmd": [
+   "<kflash-trees-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.8-27b-4bit",
+   "--model-id",
+   "qwen3.8-27b",
+   "--dflash",
+   "{models}/qwen3.8-27b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.8-27b-4bit/config.json",
+   "{models}/qwen3.8-27b-4bit/mtp.safetensors",
+   "{models}/qwen3.8-27b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q38-27b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the trees build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ },
+ {
+  "label": "q36-35b-kapitsa-main",
+  "extends": "q36-35b-kapitsa",
+  "display": "Kapitsa main (617f6a2): drafter chains",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": [
+   "<main-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--model-id",
+   "qwen3.6-35b-a3b",
+   "--dflash",
+   "{models}/qwen3.6-35b-a3b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.6-35b-a3b-4bit/config.json",
+   "{models}/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q36-35b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the main build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ },
+ {
+  "label": "q36-35b-kapitsa-trees",
+  "extends": "q36-35b-kapitsa",
+  "display": "Kapitsa kflash-trees (72a61e3): KFlash trees",
+  "model_path": "{models}/qwen3.6-35b-a3b-4bit",
+  "cmd": [
+   "<kflash-trees-checkout>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/qwen3.6-35b-a3b-4bit",
+   "--model-id",
+   "qwen3.6-35b-a3b",
+   "--dflash",
+   "{models}/qwen3.6-35b-a3b-4bit/dflash2",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "requires_paths": [
+   "{models}/qwen3.6-35b-a3b-4bit/config.json",
+   "{models}/qwen3.6-35b-a3b-4bit/dflash2/model.safetensors"
+  ],
+  "adaptive_warm": true,
+  "note": "Merge bench of kflash-trees: the stock q36-35b-kapitsa settings on the kapitsa pull layout (the drafter in the model's dflash2/ folder), from the trees build. Three extra warm-up decodes on both arms (KFlash's budget adapts across requests; its cache was primed by a first run)."
+ }
+]
