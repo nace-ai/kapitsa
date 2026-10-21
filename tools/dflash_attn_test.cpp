@@ -497,6 +497,8 @@ int main(int argc, char** argv) {
         if (bad) ++fails;
       }
     }
+  } else {
+    printf("qmm8t2d: skipped, needs Apple10 and macOS 26\n");
   }
   if (qk16_only && !ran16) {
     printf("DAT_QK16_ONLY=1, but the 16-row attention check did not run\n");
