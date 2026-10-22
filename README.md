@@ -13,9 +13,9 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and nearly 2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **Kapitsa: the fastest decode in 21 of 24 model and Mac pairs** against eight engines, up to 2.3× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
-- [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt.
+- [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
-- [2026/10] 🧠 **Prefix reuse: subagents start warm.** A new question over the shared system prompt answers in **0.06 s instead of 1.9 s**.
+- [2026/10] 🧠 **Prefix reuse: subagents start warm.** A new question over the shared system prompt answers in **0.06 s instead of 1.9 s** (4K prompt, 4B, M5 Pro).
 - [2026/10] 🧪 **Output check: speed has to prove it kept the answers.** A default changes only after its logits stay within twice the model's noise floor ([how](CONTRIBUTING.md#output-check)).
 - [2026/10] 📊 **`kapitsa bench compare`: see it on your own Mac.** The same test against every engine installed here, in one command.
 
