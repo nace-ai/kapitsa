@@ -8,8 +8,8 @@ models it runs. The other engines' versions did not change, so their cells are s
 [2026-10-18 session](../2026-10-18-m5-max-session/README.md).
 
 Written by [bench/harness](../../harness/README.md): `compare_engines.py configs/*.json --only <config> --skip tools,agent`,
-one config at a time under the GPU lock, 00:22-01:20 local time. MacBook Pro (16-inch, 2026), `Mac17,6`, M5 Max,
-40-core GPU, 128 GB, macOS 26.4 (25E246), on AC power. Kapitsa 0.2.6, main `fd85910`; Splash 1.4.0, the release tarball
+one config at a time under the GPU lock, 00:22-01:20 local time, and Dory again at 01:46-01:52. MacBook Pro (16-inch, 2026), `Mac17,6`, M5 Max,
+40-core GPU, 128 GB, macOS 26.4 (25E246), on AC power. Kapitsa 0.2.6, main `fd85910` (the 01:46 Dory run: main `039ddea`); Splash 1.4.0, the release tarball
 (`configs/splash.json`).
 
 | Result file | Model | Engine | Prefill 4K / 16K (tok/s) | Decode T = 0.6, median (range) / greedy (tok/s) | Peak footprint (GB) | Flags |
@@ -28,7 +28,7 @@ one config at a time under the GPU lock, 00:22-01:20 local time. MacBook Pro (16
 **Contention.** A system `com.apple.WebKit` GPU process stayed open the whole session (5-7% of the GPU on average), so
 every run carries the harness's contention flag, as in the 2026-10-18 session (3-8%). Read the numbers as a lower bound.
 
-**Dory after #287.** The first Dory row ran on `fd85910`, before [#287](https://github.com/nace-ai/kapitsa/pull/287) moved Dory's prefill GEMMs onto the matrix units (default on an M5 with macOS 26). Dory ran again at 01:46 on main `039ddea` (#287, and #286, which adds Flint: its edits to shared files, `engine.cpp` and `tokenizer.cpp`, are new code taken only for a Flint model), and that run is the README's Dory cell: prefill 2,368 / 1,966 tok/s (was 1,077 / 1,021), decode 119.1 at T = 0.6 and 129.0 greedy, the same as before, with no repetition-loop flag. Both of Super-VL's decode phases are repetition-loop flagged (valid runs), which flatters a speculative decoder.
+**Dory after #287.** The first Dory row ran on `fd85910`, before [#287](https://github.com/nace-ai/kapitsa/pull/287) moved Dory's prefill GEMMs onto the matrix units (default on an M5 with macOS 26). Dory ran again at 01:46 on main `039ddea` (#287, and #286, which adds Flint: its edits to shared files, `engine.cpp` and `tokenizer.cpp`, are new code taken only for a Flint model), and that run is the README's Dory cell: prefill 2,368 / 1,966 tok/s (was 1,077 / 1,021), decode 119.1 at T = 0.6 and 129.0 greedy, within the earlier run's spread (one five-run median per build, 38 minutes apart, not an interleaved A/B), with no repetition-loop flag. Both of Super-VL's decode phases are repetition-loop flagged (valid runs), which flatters a speculative decoder.
 
 **Against the other engines.** Kapitsa has the fastest decode on the 27B, 35B-A3B, Bolt, Lightning, Super-VL and Dory (the last three are the README's collapsed Nemotron table). On Flash-Next mlx-serve
 (108 tok/s) and oMLX (107) are ahead of Kapitsa's 106. Splash reads prompts faster than Kapitsa on both models it runs:
