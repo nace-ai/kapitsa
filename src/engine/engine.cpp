@@ -616,12 +616,14 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
   // bound, so a sliver of rows costs little, and a model whose prefill splits on the Neural Engine keeps the plain
   // chunk (the split runs chunks of at most 2048 rows, so room would push every chunk off it).
   const bool room = prefill_even_chunks() && !p.dense && ane == 0;
-  // Single-stream 35B-A3B 4-bit on the 32-core M1 Max: larger prompt chunks
+  // Single-stream 35B-A3B 4-bit on the 32-core M1 Max and on the M5 (Apple10): larger prompt chunks
   // reduce expert-tile padding and weight rereads. Keep the existing chunk for
   // concurrent slots, other formats/devices, or when the extra buffers do not fit.
+  // M5 Pro, ni_run cold prefill, 2112 -> 4224 rows: 4K 2,637 -> 2,808 tok/s, 16K 2,095 -> 2,192 (logits bitwise the
+  // same); the buffers grow by 0.75 GB.
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
-      p.formats.rfind("4-bit group 64", 0) == 0 && Gpu::get().name() == "Apple M1 Max" &&
-      Gpu::get().core_count() == 32) {
+      p.formats.rfind("4-bit group 64", 0) == 0 &&
+      ((Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32) || Gpu::get().apple10())) {
     const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
