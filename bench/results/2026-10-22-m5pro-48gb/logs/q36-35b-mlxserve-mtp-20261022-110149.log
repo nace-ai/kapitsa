@@ -1,0 +1,525 @@
+[mem] MLX buffer-pool cap 3072 MB (was 46694 MB)
+Logging to /tmp/kap-27b/bench/results/2026-10-22-m5pro-48gb/state/mlx-serve/q36-35b-mtp/.mlx-serve/logs/mlx-serve-8173.log (rotates at 32 MB)
+mlx-serve 26.10.2 (MLX 0.32.3)
+[args] model: /Users/alisheramantay/Documents/nace/kapitsa-m5pro/models/mlx-serve/Qwen3.6-35B-A3B-MLX-Serve-4bit
+[args] drafter: <none>
+[args] serve: 127.0.0.1:8173, ctx-size=32768, pld=on, no-vision=false, prevent-sleep=true
+[args] kv-quant: off
+[args] kv-attn-mode: auto
+Metal GPU: true
+Model: qwen3_5_moe (40 layers, 2048-dim, head_dim=256, 16h/2kv, 4-bit affine quant)
+Loading tokenizer...
+  parsed tokenizer (19 MB) in 53ms
+  loaded 248044 vocab entries in 5ms
+  loaded 247587 merges in 7ms
+Tokenizer loaded: 248077 vocab, 247587 merges, 33 special tokens (byte-level BPE)
+[registry] max_resident_models=3, max_resident_mem=37.4 GB
+[preflight] weights ~19.00 GB, available 27.26 GB
+[preflight] mtp sidecar ~0.44 GB
+Loading model-00004-of-00004.safetensors...
+Loading model-00001-of-00004.safetensors...
+Loading model-00003-of-00004.safetensors...
+Loading model-00002-of-00004.safetensors...
+Loaded 2090 weights from 4 file(s)
+Precomputing MoE layer weights...
+[load] row-joined projection groups: 30
+Batch eval all weights: 2451ms
+[suppress] 14 of 21 flagged specials masked from sampling (template + eos exempt); 243 padding rows past id 248077 of 248320
+[wired] mode=max limit=38338 MB
+MoE routing compiled (kernel fusion enabled)
+GDN gate compiled (kernel fusion enabled); recurrent state bfloat16, gate bfloat16
+[vision] qwen tower prefix: vision_tower.
+[vision] qwen patch_embed layout: channels_last
+Vision encoder: Qwen3-VL ViT (depth=27, hidden=1152, heads=16, merge=2, out_hidden=2048)
+[mtp] loaded native MTP head (moe-mlp; per-weight quant, fallback bits=4/gs=64)
+[mtp] draft-only lm_head requantized to 3-bit/gs64
+[mtp] draft rerank: coarse 3-bit/gs64 head built (248320 rows); greedy drafts re-rank through the trunk head
+MTP head ready (depth=2, profile=generic).
+[dtype-trace] moe: residual in = bfloat16, first weight = n/a
+[moe] fused router kernel engaged: mode=softmax_gate E=256 K=8 tg=256
+[mlp] fused silu kernel engaged: n=512 tg=256
+[moe] affine-4 decode kernels engaged: topk=8 inter=512 hidden=2048 gs=64 (MLX_SERVE_MOE_AFFINE4=0 restores the per-slot gather kernels)
+[attn] fused QK-norm+RoPE (hd-256) engaged: hq=16 hk=2 hv=0 S=1 rd=64
+[dtype-trace] moe: residual out = bfloat16
+[vqmm] NAX verify lane engaged at 4-bit (nax tile, 16 rows): M=8 K=2048 N=8192 gs=64 (MLX_SERVE_VERIFY_QMM_NAX=0 restores stock)
+[moe] fused rows gate+up+SwiGLU kernel engaged: B=8 E_topk=8 inter=512 bits=4 gs=64
+[moe] fused rows down+reduce kernel engaged: B=8 E_topk=8 hidden=2048 bits=4 gs=64
+[moe-rows] verify rows engaged: S=8 K=8
+[nax-sdpa] engaged: stock fused sdpa (force_fused) serves hd-256 causal prefill and verify blocks > 8 rows; msv_attn_p256 causal arm declined (MLX_SERVE_NAX_SDPA=0 restores)
+[sdpa-split] engaged: qL=8 kL=8 Hq=16 Hkv=2 rows/group=4 (MLX_SERVE_SDPA_SPLIT=0 restores the single dispatch)
+[nax-sdpa] force_fused dispatch engaged: qL=32 kL=32 Hq=16 Hkv=2 hd=256
+Warmup complete (123 ms).
+Prefill chunk: 512 tokens (memory-sized down from 8192; --prefill-chunk overrides)
+Model ready (loaded on inference thread).
+Hot prefix cache: ENABLED (capacity=32, mem-cap=2048.0 MB)
+Concurrency: --max-concurrent=1, batched decode on
+Context size: 32768 tokens (manual)
+Request timeout: 300s
+Model context length: 262144 tokens
+Reasoning budget: unlimited
+PLD speculative decoding: ENABLED (draft_len=5, key_len=3; default for new requests)
+
+Server listening on http://127.0.0.1:8173
+  GET  /
+  GET  /health
+  GET  /props
+  GET  /v1/models
+  POST /v1/chat/completions
+  POST /v1/completions
+  POST /v1/embeddings
+  POST /v1/decisions, /v1/systemone (Laya, Kev, D1, Clef)
+  POST /v1/messages (Anthropic)
+  POST /v1/responses (OpenAI Responses)
+  POST /v1/responses/compact
+  GET  /v1/responses/{id}
+  DEL  /v1/responses/{id}
+  POST /tokenize
+  POST /detokenize
+
+RSS: 9.5G  Mem: 80%  CPU: 5%  GPU: 48%
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=64, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=11667b, user=51b, tools=0b, tool_msgs=0) 
+  > "Summarize the first file in the repository context."
+[admission] needed=1006 MB available=3619 MB reclaimable=0 MB width=512 verdict=admit
+  prompt=2927 tokens, max_gen=64, ctx=32768
+  spec-gate: ngram-score=0.207 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+[moe] prefill counting-sort route packing engaged (assignments=4096)
+[gather-nax] paired SwiGLU engaged: M=4096 E=256 N=512 K=2048
+[gather-nax] engaged: db bm=64 bk=64 M=4096 E=256 N=2048 K=512
+[mtp] draft rerank engaged (3-bit coarse -> top-32 -> trunk re-score)
+[gdn] verify fold engaged: S=2 Hk=16 Hv=32
+[mtp] cost table: bucket 2-4k measured w2:8.37/3 (ms/tok) replaces the fitted surface (scale 0.0717 at w2)
+  [spec-stats] mode=mtp attempts=31 accepts=33 avg_per_round=1.06 per_draft_pct=61.1% depth=2 drafted=54 ext_rounds=0 partial_rounds=15 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=18.53 two_ms_tok=0.00 one_ms_tok=8.14 verdict_round=0 trials=0 width_trials=0 table=2-4k:w2:8.00/21 table_drops=t0/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 2991 (2927 prompt + 64 generated)
+  [hot-cache] resident=138.81 / 2048.00 MB (1/32 entries)
+  <- 2927+64 tokens streamed [prefill: 2044.6 tok/s, decode: 116.3 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+[mtp] prompt-lookup drafts engaged: k=2 suffix=10
+  [spec-stats] mode=mtp attempts=11 accepts=14 avg_per_round=1.27 per_draft_pct=100.0% depth=2 drafted=14 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=14.58 two_ms_tok=0.00 one_ms_tok=5.41 verdict_round=0 trials=0 width_trials=0 table=<2k:w2:5.24/1 table_drops=t0/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] resident=212.63 / 2048.00 MB (2/32 entries)
+  <- 430+26 tokens streamed [prefill: 1464.8 tok/s, decode: 150.5 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.306075] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=200 accepts=310 avg_per_round=1.55 per_draft_pct=77.5% depth=2 drafted=400 ext_rounds=0 partial_rounds=62 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.25 two_ms_tok=0.00 one_ms_tok=6.14 verdict_round=0 trials=0 width_trials=0 table=<2k:w2:6.14/197 table_drops=t2/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=2/4/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:16.5/2
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=291.94 / 2048.00 MB (3/32 entries)
+  <- 85+512 tokens streamed [prefill: 489.2 tok/s, decode: 153.4 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.174590] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=223 accepts=289 avg_per_round=1.30 per_draft_pct=64.8% depth=2 drafted=446 ext_rounds=0 partial_rounds=109 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.06 two_ms_tok=0.00 one_ms_tok=7.41 verdict_round=0 trials=0 width_trials=0 table=<2k:w2:7.41/418 table_drops=t4/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=371.25 / 2048.00 MB (4/32 entries)
+  <- 85+512 tokens streamed [prefill: 486.0 tok/s, decode: 143.8 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.866398] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=243 accepts=269 avg_per_round=1.11 per_draft_pct=74.3% depth=2 drafted=362 ext_rounds=0 partial_rounds=76 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.74 two_ms_tok=0.00 one_ms_tok=6.16 verdict_round=0 trials=0 width_trials=4 table=<2k:w1:6.89/114,w2:6.16/525 table_drops=t26/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=450.56 / 2048.00 MB (5/32 entries)
+  <- 85+512 tokens streamed [prefill: 488.1 tok/s, decode: 145.5 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.907024] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=204 accepts=299 avg_per_round=1.47 per_draft_pct=73.3% depth=2 drafted=408 ext_rounds=0 partial_rounds=80 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.29 two_ms_tok=0.00 one_ms_tok=5.54 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.54/724 table_drops=t28/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=4/8/5
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.8/6
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=529.88 / 2048.00 MB (6/32 entries)
+  <- 85+512 tokens streamed [prefill: 227.9 tok/s, decode: 162.6 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.602595] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=208 accepts=304 avg_per_round=1.46 per_draft_pct=73.1% depth=2 drafted=416 ext_rounds=0 partial_rounds=79 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.06 two_ms_tok=0.00 one_ms_tok=5.33 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.33/930 table_drops=t30/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=609.19 / 2048.00 MB (7/32 entries)
+  <- 85+512 tokens streamed [prefill: 506.6 tok/s, decode: 164.4 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.989319] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=762 MB reclaimable=609 MB width=512 verdict=admit
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=212 accepts=300 avg_per_round=1.42 per_draft_pct=70.8% depth=2 drafted=424 ext_rounds=0 partial_rounds=81 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.12 two_ms_tok=0.00 one_ms_tok=7.57 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:7.57/1140 table_drops=t32/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=688.50 / 2048.00 MB (8/32 entries)
+  <- 85+512 tokens streamed [prefill: 507.0 tok/s, decode: 158.7 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.733513] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=699 MB reclaimable=688 MB width=512 verdict=admit
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=203 accepts=305 avg_per_round=1.50 per_draft_pct=75.1% depth=2 drafted=406 ext_rounds=0 partial_rounds=74 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.12 two_ms_tok=0.00 one_ms_tok=5.70 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.70/1340 table_drops=t34/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=2/4/2
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.5/8
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=767.81 / 2048.00 MB (9/32 entries)
+  <- 85+512 tokens streamed [prefill: 504.9 tok/s, decode: 167.5 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.848568] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=640 MB reclaimable=767 MB width=512 verdict=evict
+  prompt 85 tokens needs ~691MB, ~640MB available + ~767MB reclaimable hot cache (of ~767MB resident) — admitting, the prefill will evict
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 1 entries (79 MB live, 79 MB billed) to admit a 85-token prefill
+  [spec-stats] mode=mtp attempts=209 accepts=301 avg_per_round=1.44 per_draft_pct=72.0% depth=2 drafted=418 ext_rounds=0 partial_rounds=89 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.08 two_ms_tok=0.00 one_ms_tok=5.57 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.57/1545 table_drops=t36/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=2/4/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.3/10
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=767.81 / 2048.00 MB (9/32 entries)
+  <- 85+512 tokens streamed [prefill: 507.3 tok/s, decode: 163.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.500399] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=200 accepts=312 avg_per_round=1.56 per_draft_pct=78.0% depth=2 drafted=400 ext_rounds=0 partial_rounds=66 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.50 two_ms_tok=0.00 one_ms_tok=5.88 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.88/1743 table_drops=t38/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=847.13 / 2048.00 MB (10/32 entries)
+  <- 85+512 tokens streamed [prefill: 480.9 tok/s, decode: 165.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.538942] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=486 MB reclaimable=847 MB width=512 verdict=evict
+  prompt 85 tokens needs ~691MB, ~486MB available + ~847MB reclaimable hot cache (of ~847MB resident) — admitting, the prefill will evict
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 2 entries (158 MB live, 158 MB billed) to admit a 85-token prefill
+  [spec-stats] mode=mtp attempts=206 accepts=305 avg_per_round=1.48 per_draft_pct=74.0% depth=2 drafted=412 ext_rounds=0 partial_rounds=80 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.00 two_ms_tok=0.00 one_ms_tok=6.33 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:6.33/1946 table_drops=t40/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.1/11
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=767.81 / 2048.00 MB (9/32 entries)
+  <- 85+512 tokens streamed [prefill: 499.1 tok/s, decode: 161.7 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.184463] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=593 MB reclaimable=767 MB width=512 verdict=evict
+  prompt 85 tokens needs ~691MB, ~593MB available + ~767MB reclaimable hot cache (of ~767MB resident) — admitting, the prefill will evict
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 2 entries (158 MB live, 158 MB billed) to admit a 85-token prefill
+  [spec-stats] mode=mtp attempts=200 accepts=311 avg_per_round=1.56 per_draft_pct=77.8% depth=2 drafted=400 ext_rounds=0 partial_rounds=63 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.09 two_ms_tok=0.00 one_ms_tok=5.68 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.68/2143 table_drops=t42/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.3/12
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=688.50 / 2048.00 MB (8/32 entries)
+  <- 85+512 tokens streamed [prefill: 496.5 tok/s, decode: 165.0 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.619696] Write a complete, well-commented Python module that implements an..."
+[admission] needed=691 MB available=527 MB reclaimable=688 MB width=512 verdict=evict
+  prompt 85 tokens needs ~691MB, ~527MB available + ~688MB reclaimable hot cache (of ~688MB resident) — admitting, the prefill will evict
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 3 entries (238 MB live, 237 MB billed) to admit a 85-token prefill
+  [spec-stats] mode=mtp attempts=201 accepts=311 avg_per_round=1.55 per_draft_pct=77.4% depth=2 drafted=402 ext_rounds=0 partial_rounds=67 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.24 two_ms_tok=0.00 one_ms_tok=6.78 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:6.78/2342 table_drops=t44/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=529.88 / 2048.00 MB (6/32 entries)
+  <- 85+512 tokens streamed [prefill: 474.4 tok/s, decode: 159.8 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.00, top_p=1.00, top_k=1, stream=true, thinking=false, sys=58b, user=200b, tools=0b, tool_msgs=0) 
+  > "[run 0.151772] Write a complete, well-commented Python module that implements an..."
+  prompt=85 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.025 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=202 accepts=310 avg_per_round=1.53 per_draft_pct=76.7% depth=2 drafted=404 ext_rounds=0 partial_rounds=63 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=15.10 two_ms_tok=0.00 one_ms_tok=5.87 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.87/2542 table_drops=t46/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 597 (85 prompt + 512 generated)
+  [hot-cache] resident=609.19 / 2048.00 MB (7/32 entries)
+  <- 85+512 tokens streamed [prefill: 456.7 tok/s, decode: 165.5 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=72b, tools=0b, tool_msgs=0) 
+  > "In one sentence, what is the first file in the repository context about?"
+[admission] needed=1035 MB available=795 MB reclaimable=609 MB width=512 verdict=evict
+  prompt 4134 tokens needs ~1035MB, ~795MB available + ~609MB reclaimable hot cache (of ~609MB resident) — admitting, the prefill will evict
+  prompt=4134 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.231 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 4 entries (317 MB live, 317 MB billed) to admit a 4134-token prefill
+  [spec-stats] mode=mtp attempts=17 accepts=23 avg_per_round=1.35 per_draft_pct=67.6% depth=2 drafted=34 ext_rounds=0 partial_rounds=6 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=17.46 two_ms_tok=0.00 one_ms_tok=8.43 verdict_round=0 trials=0 width_trials=0 table=4-8k:w2:7.02/15 table_drops=t48/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 4174 (4134 prompt + 40 generated)
+  [hot-cache] resident=458.25 / 2048.00 MB (4/32 entries)
+  <- 4134+39 tokens streamed [prefill: 2083.1 tok/s, decode: 140.6 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (4 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=115b, tools=0b, tool_msgs=0) 
+  > "Now name one function defined in that file."
+[admission] needed=1037 MB available=886 MB reclaimable=291 MB width=512 verdict=evict
+  prompt 4192 tokens needs ~1037MB, ~886MB available + ~291MB reclaimable hot cache (of ~458MB resident) — admitting, the prefill will evict
+  prompt=4192 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.232 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 4103/4192 tokens (matched 4130; entry 4/4)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=5ae084a986599281; was 2991 tokens, 138.81 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=a6ff0f31186bb047; was 456 tokens, 73.81 MB; ssm 62.81 MB)
+  [hot-cache] evicted 2 entries (212 MB live, 212 MB billed) to admit a 4192-token prefill
+  [spec-stats] mode=mtp attempts=9 accepts=16 avg_per_round=1.78 per_draft_pct=88.9% depth=2 drafted=18 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=19.07 two_ms_tok=0.00 one_ms_tok=6.63 verdict_round=0 trials=0 width_trials=0 table=4-8k:w2:6.77/22 table_drops=t50/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 4217 (4192 prompt + 25 generated)
+  [hot-cache] inherited 3 checkpoints (<= 4130 tokens) from a shared prefix
+  [hot-cache] resident=443.34 / 2048.00 MB (3/32 entries)
+  <- 4192+25 tokens streamed [prefill: 437.9 tok/s (4103 cached / 4192 total), decode: 150.4 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (6 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=173b, tools=0b, tool_msgs=0) 
+  > "Name one class defined in that file, or say there is none."
+[admission] needed=1038 MB available=898 MB reclaimable=245 MB width=512 verdict=evict
+  prompt 4241 tokens needs ~1038MB, ~898MB available + ~245MB reclaimable hot cache (of ~443MB resident) — admitting, the prefill will evict
+  prompt=4241 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.230 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 4161/4241 tokens (matched 4188; entry 3/3)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=bef0c63031df8426; was 597 tokens, 79.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=2d229b56142bdbec; was 4174 tokens, 166.31 MB; ssm 62.81 MB)
+  [hot-cache] evicted 2 entries (214 MB live, 245 MB billed) to admit a 4241-token prefill
+  [spec-stats] mode=mtp attempts=6 accepts=11 avg_per_round=1.83 per_draft_pct=91.7% depth=2 drafted=12 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=17.42 two_ms_tok=0.00 one_ms_tok=5.97 verdict_round=0 trials=0 width_trials=0 table=4-8k:w2:6.48/26 table_drops=t52/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 4258 (4241 prompt + 17 generated)
+  [hot-cache] inherited 4 checkpoints (<= 4188 tokens) from a shared prefix
+  [hot-cache] resident=426.84 / 2048.00 MB (2/32 entries)
+  <- 4241+15 tokens streamed [prefill: 402.8 tok/s (4161 cached / 4241 total), decode: 176.4 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (8 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=17193b, user=209b, tools=0b, tool_msgs=0) 
+  > "Which modules does that file import?"
+[admission] needed=1039 MB available=995 MB reclaimable=197 MB width=512 verdict=evict
+  prompt 4273 tokens needs ~1039MB, ~995MB available + ~197MB reclaimable hot cache (of ~426MB resident) — admitting, the prefill will evict
+  prompt=4273 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.232 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 4210/4273 tokens (matched 4237; entry 2/2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=2d229b56142bdbec; was 4217 tokens, 197.72 MB; ssm 94.22 MB)
+  [hot-cache] evicted 1 entries (134 MB live, 197 MB billed) to admit a 4273-token prefill
+  [spec-stats] mode=mtp attempts=83 accepts=147 avg_per_round=1.77 per_draft_pct=88.6% depth=2 drafted=166 ext_rounds=0 partial_rounds=16 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=18.65 two_ms_tok=0.00 one_ms_tok=6.91 verdict_round=0 trials=0 width_trials=0 table=4-8k:w2:6.91/102 table_drops=t54/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=10/20/16
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=4-8k:k2:17.5/10
+  [hot-cache] decode-end checkpoint at 4529 (4273 prompt + 256 generated)
+  [hot-cache] inherited 5 checkpoints (<= 4237 tokens) from a shared prefix
+  [hot-cache] resident=492.16 / 2048.00 MB (2/32 entries)
+  <- 4273+256 tokens streamed [prefill: 397.7 tok/s (4210 cached / 4273 total), decode: 157.6 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=72b, tools=0b, tool_msgs=0) 
+  > "In one sentence, what is the first file in the repository context about?"
+[admission] needed=1332 MB available=942 MB reclaimable=492 MB width=512 verdict=evict
+  prompt 16286 tokens needs ~1332MB, ~942MB available + ~492MB reclaimable hot cache (of ~492MB resident) — admitting, the prefill will evict
+  prompt=16286 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.355 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=2d229b56142bdbec; was 4258 tokens, 229.13 MB; ssm 125.63 MB)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=2d229b56142bdbec; was 4529 tokens, 263.03 MB; ssm 157.03 MB)
+  [hot-cache] evicted 2 entries (398 MB live, 492 MB billed) to admit a 16286-token prefill
+  [spec-stats] mode=mtp attempts=17 accepts=24 avg_per_round=1.41 per_draft_pct=70.6% depth=2 drafted=34 ext_rounds=0 partial_rounds=6 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=21.15 two_ms_tok=0.00 one_ms_tok=8.62 verdict_round=0 trials=0 width_trials=0 table=8-16k:w2:8.62/15 table_drops=t56/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=legacy lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 16327 (16286 prompt + 41 generated)
+  [hot-cache] resident=458.72 / 2048.00 MB (1/32 entries)
+  <- 16286+41 tokens streamed [prefill: 1852.1 tok/s, decode: 114.4 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (4 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=115b, tools=0b, tool_msgs=0) 
+  > "Now name one function defined in that file."
+  prompt=16346 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.355 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 16255/16346 tokens (matched 16282; entry 1/1)
+  [spec-stats] mode=mtp attempts=7 accepts=14 avg_per_round=2.00 per_draft_pct=100.0% depth=2 drafted=14 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=22.09 two_ms_tok=0.00 one_ms_tok=7.37 verdict_round=0 trials=0 width_trials=0 table=8-16k:w2:7.89/19 table_drops=t58/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=legacy lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=8-16k:k2:20.1/1
+  [hot-cache] decode-end checkpoint at 16368 (16346 prompt + 22 generated)
+  [hot-cache] inherited 4 checkpoints (<= 16282 tokens) from a shared prefix
+  [hot-cache] resident=948.84 / 2048.00 MB (2/32 entries)
+  <- 16346+20 tokens streamed [prefill: 393.3 tok/s (16255 cached / 16346 total), decode: 136.8 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (6 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=173b, tools=0b, tool_msgs=0) 
+  > "Name one class defined in that file, or say there is none."
+[admission] needed=1335 MB available=1072 MB reclaimable=458 MB width=512 verdict=evict
+  prompt 16390 tokens needs ~1335MB, ~1072MB available + ~458MB reclaimable hot cache (of ~948MB resident) — admitting, the prefill will evict
+  prompt=16390 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.354 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 16315/16390 tokens (matched 16342; entry 2/2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=632e0af3387eaa56; was 16327 tokens, 458.72 MB; ssm 94.22 MB)
+  [hot-cache] evicted 1 entries (395 MB live, 458 MB billed) to admit a 16390-token prefill
+  [spec-stats] mode=mtp attempts=6 accepts=11 avg_per_round=1.83 per_draft_pct=91.7% depth=2 drafted=12 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=21.57 two_ms_tok=0.00 one_ms_tok=7.39 verdict_round=0 trials=0 width_trials=0 table=16-32k:w2:7.33/4 table_drops=t60/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=legacy lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 16407 (16390 prompt + 17 generated)
+  [hot-cache] inherited 5 checkpoints (<= 16342 tokens) from a shared prefix
+  [hot-cache] resident=1011.66 / 2048.00 MB (2/32 entries)
+  <- 16390+15 tokens streamed [prefill: 350.5 tok/s (16315 cached / 16390 total), decode: 145.3 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (8 msgs, max_tokens=256, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=68769b, user=209b, tools=0b, tool_msgs=0) 
+  > "Which modules does that file import?"
+[admission] needed=1335 MB available=1145 MB reclaimable=490 MB width=512 verdict=evict
+  prompt 16422 tokens needs ~1335MB, ~1145MB available + ~490MB reclaimable hot cache (of ~1011MB resident) — admitting, the prefill will evict
+  prompt=16422 tokens, max_gen=256, ctx=32768
+  spec-gate: ngram-score=0.354 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 16359/16422 tokens (matched 16386; entry 2/2)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=632e0af3387eaa56; was 16368 tokens, 490.13 MB; ssm 125.63 MB)
+  [hot-cache] evicted 1 entries (395 MB live, 490 MB billed) to admit a 16422-token prefill
+[gdn] packed prework engaged: Hk=16 Hv=32 S=7 B=1
+[gdn] fused norm-gate engaged: Hv=32 S=7 gate=swish
+[sdpa-split] engaged: qL=7 kL=16391 Hq=16 Hkv=2 rows/group=4 (MLX_SERVE_SDPA_SPLIT=0 restores the single dispatch)
+  [spec-stats] mode=mtp attempts=87 accepts=165 avg_per_round=1.90 per_draft_pct=94.8% depth=2 drafted=174 ext_rounds=0 partial_rounds=7 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=20.74 two_ms_tok=0.00 one_ms_tok=6.93 verdict_round=0 trials=0 width_trials=0 table=16-32k:w2:6.93/87 table_drops=t62/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=legacy lookup=2/4/2
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=16-32k:k2:18.9/2
+  [hot-cache] decode-end checkpoint at 16678 (16422 prompt + 256 generated)
+  [hot-cache] inherited 7 checkpoints (<= 16386 tokens) from a shared prefix
+  [hot-cache] resident=1105.88 / 2048.00 MB (2/32 entries)
+  <- 16422+256 tokens streamed [prefill: 129.6 tok/s (16359 cached / 16422 total), decode: 140.5 tok/s] [length]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [spec-stats] mode=mtp attempts=8 accepts=16 avg_per_round=2.00 per_draft_pct=100.0% depth=2 drafted=16 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=17.42 two_ms_tok=0.00 one_ms_tok=5.82 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.64/2548 table_drops=t64/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/1
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.4/13
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] resident=1179.69 / 2048.00 MB (3/32 entries)
+  <- 430+26 tokens streamed [prefill: 1519.5 tok/s, decode: 172.5 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=false, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+[admission] needed=898 MB available=898 MB reclaimable=1105 MB width=512 verdict=admit
+  prompt=430 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.124 (threshold=0.010)
+  [hot-cache] reused 399/430 tokens (matched 430; entry 3/3)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=632e0af3387eaa56; was 16407 tokens, 521.53 MB; ssm 157.03 MB)
+  [hot-cache] evicted 1 entries (395 MB live, 521 MB billed) to admit a 430-token prefill
+  [spec-stats] mode=mtp attempts=8 accepts=16 avg_per_round=2.00 per_draft_pct=100.0% depth=2 drafted=16 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=17.60 two_ms_tok=0.00 one_ms_tok=5.88 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.53/2554 table_drops=t66/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/1
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.2/14
+  [hot-cache] decode-end checkpoint at 456 (430 prompt + 26 generated)
+  [hot-cache] resident=658.16 / 2048.00 MB (2/32 entries)
+  <- 430+26 tokens (224ms) [prefill: 439.8 tok/s (399 cached / 430 total), decode: 175.6 tok/s] [tool_calls: 1]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (4 msgs, max_tokens=512, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=false, sys=143b, user=55b, tools=652b, tool_msgs=1) 
+  > "import sys
+
+def main():
+    print('hello from nace')
+    return 0
+
+if __name__ =..."
+[admission] needed=946 MB available=862 MB reclaimable=584 MB width=512 verdict=evict
+  prompt 510 tokens needs ~946MB, ~862MB available + ~584MB reclaimable hot cache (of ~658MB resident) — admitting, the prefill will evict
+  prompt=510 tokens, max_gen=512, ctx=32768
+  spec-gate: ngram-score=0.145 (threshold=0.010)
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 456/510 tokens (matched 456; entry 1/2)
+  [hot-cache] mtp history not adopted: want 456 tokens from base 0, snap holds 453 (matched 456)
+  [hot-cache] checked out 456-token entry to the slot (the share does not fit; the append donates in place)
+  [hot-cache] evicted LRU entry (admitting a long prefill; key=632e0af3387eaa56; was 16678 tokens, 584.34 MB; ssm 219.84 MB)
+  [hot-cache] evicted 1 entries (584 MB live, 584 MB billed) to admit a 510-token prefill
+  [spec-stats] mode=mtp attempts=56 accepts=89 avg_per_round=1.59 per_draft_pct=79.5% depth=2 drafted=112 ext_rounds=0 partial_rounds=17 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.23 two_ms_tok=0.00 one_ms_tok=6.06 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:6.05/2607 table_drops=t68/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.2/15
+  [hot-cache] decode-end checkpoint at 656 (510 prompt + 146 generated)
+  [hot-cache] resident=141.13 / 2048.00 MB (1/32 entries)
+  <- 510+146 tokens streamed [prefill: 399.1 tok/s (456 cached / 510 total), decode: 160.6 tok/s] [stop]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=428 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.125 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 399/428 tokens (matched 427; entry 1/1)
+  [hot-cache] mtp history not adopted: want 0 tokens from base 456, snap holds 196 (matched 399)
+  [spec-stats] mode=mtp attempts=23 accepts=42 avg_per_round=1.83 per_draft_pct=91.3% depth=2 drafted=46 ext_rounds=0 partial_rounds=5 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=16.55 two_ms_tok=0.00 one_ms_tok=5.71 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.74/2628 table_drops=t70/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/1
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.3/16
+  [hot-cache] decode-end checkpoint at 495 (428 prompt + 67 generated)
+  [hot-cache] inherited 2 checkpoints (<= 427 tokens) from a shared prefix
+  [hot-cache] resident=219.44 / 2048.00 MB (2/32 entries)
+  <- 428+67 tokens streamed [prefill: 447.1 tok/s (399 cached / 428 total), decode: 171.4 tok/s] [tool_calls]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (2 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=false, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=0) 
+  > "Open src/main.py and tell me what the entry point does."
+  prompt=428 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.125 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  [hot-cache] reused 399/428 tokens (matched 428; entry 2/2)
+  [spec-stats] mode=mtp attempts=23 accepts=45 avg_per_round=1.96 per_draft_pct=97.8% depth=2 drafted=46 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=17.42 two_ms_tok=0.00 one_ms_tok=5.85 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:6.89/114,w2:5.80/2649 table_drops=t72/c0/b0/i0 serial_drops=t0/c0/b0 depth_policy=accept lookup=1/2/0
+  [spec-stats] lazy=0/0
+  [spec-stats] lookup_table=<2k:k2:15.3/17
+  [hot-cache] decode-end checkpoint at 497 (428 prompt + 69 generated)
+  [hot-cache] inherited 2 checkpoints (<= 427 tokens) from a shared prefix
+  [hot-cache] resident=297.75 / 2048.00 MB (3/32 entries)
+  <- 428+69 tokens (489ms) [prefill: 432.3 tok/s (399 cached / 428 total), decode: 165.1 tok/s] [tool_calls: 1]
+  pld=enabled (draft_len=5, key_len=3)
+POST /v1/chat/completions (4 msgs, max_tokens=4096, temp=0.60, top_p=0.95, top_k=20, stream=true, thinking=true, sys=143b, user=55b, tools=652b, tool_msgs=1) 
+  > "import sys
+
+def main():
+    print('hello from nace')
+    return 0
+
+if __name__ =..."
+  prompt=508 tokens, max_gen=4096, ctx=32768
+  spec-gate: ngram-score=0.138 (threshold=0.010)
+  reasoning budget 2048: enforced in-stream
+  mtp=enabled (streaming, depth=2)
+  [hot-cache] reused 479/508 tokens (matched 507; entry 1/3)
+  [spec-stats] mode=mtp attempts=69 accepts=94 avg_per_round=1.36 per_draft_pct=75.8% depth=2 drafted=124 ext_rounds=0 partial_rounds=23 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=14.77 two_ms_tok=0.00 one_ms_tok=7.37 verdict_round=0 trials=0 width_trials=0 table=<2k:w1:7.29/126,w2:7.80/2700 table_drops=t76/c0/b0/i2 serial_drops=t0/c0/b0 depth_policy=accept lookup=0/0/0
+  [spec-stats] lazy=0/0
+  [hot-cache] decode-end checkpoint at 671 (508 prompt + 163 generated)
+  [hot-cache] inherited 4 checkpoints (<= 507 tokens) from a shared prefix
+  [hot-cache] resident=438.88 / 2048.00 MB (4/32 entries)
+  <- 508+162 tokens streamed [prefill: 413.9 tok/s (479 cached / 508 total), decode: 140.8 tok/s] [stop]
+
+Shutting down gracefully...

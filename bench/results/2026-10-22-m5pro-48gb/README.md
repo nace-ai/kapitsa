@@ -5,7 +5,8 @@
 decode race on the poster (74 against mlx-serve's 80 tok/s), so this is where the block had to be measured: four
 runs on `main` (`16f2b6a`, Kapitsa 0.2.5) and the mlx-serve 26.10.2 build already on this Mac, in **two passes in
 opposite order**, so the pass-order effect (the second engine in a pass reads 2-5% faster, see
-[2026-10-21](../2026-10-21-m5pro-48gb/README.md)) cancels in the means.
+[2026-10-21](../2026-10-21-m5pro-48gb/README.md)) cancels in the means. A second, shorter pair on the same day checks
+the other M5 Pro cell that could move, Qwen3.6-35B-A3B, which is a MoE target and so keeps 8 rows (the last section).
 
 Each engine therefore has two runs, one from each position:
 
@@ -48,6 +49,31 @@ flag's two-sample "sustained" rule).
 Two earlier single-engine attempts at the Kapitsa cell (09:35, 77.66 tok/s at 1.4% and 09:45, 82.15 tok/s at 12.6%)
 were discarded: the first was flagged on `prefill_16000`/`tools` only, the second everywhere, and a single run cannot
 say anything about a pair whose pass order matters. They are not stored here.
+
+## The same check on the 35B-A3B cell (10:51-11:14, two passes)
+
+The block is a **dense**-target default: MoE targets keep 8 rows, so the poster's 35B-A3B cell should not move. It was
+measured anyway, in the same two-pass shape and under the same lock, on `main` (`b07f274`, the branch whose tree
+[#278](https://github.com/nace-ai/kapitsa/pull/278) merged; Kapitsa 0.2.5) against the mlx-serve 26.10.2 build:
+
+| Pass | Engine | Run | Decode T=0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Peak (GB) | Foreign GPU load |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1 (fwd) | Kapitsa | `q36-35b-kapitsa-20261022-105127` | 197.48 (194.73-226.47) | 221.79 | 1,814 / 1,461 | 21.91 | **2.36% mean, flagged: no** |
+| 1 (fwd) | mlx-serve | `q36-35b-mlxserve-mtp-20261022-105522` | 152.12 (150.05-158.75) | 157.43 | 2,019 / 1,856 | 21.92 | 8.41% mean, 17.3% max |
+| 2 (rev) | mlx-serve | `q36-35b-mlxserve-mtp-20261022-110149` | 162.85 (158.38-165.75) | 163.95 | 2,079 / 1,850 | 20.99 | 3.91% mean, 20.7% max |
+| 2 (rev) | Kapitsa | `q36-35b-kapitsa-20261022-110818` | 204.38 (178.71-212.37) | 217.68 | 1,752 / 1,413 | 21.91 | 10.87% mean, 21.0% max |
+| | **Kapitsa mean** | | **200.93** | **219.74** | **1,783 / 1,437** | **21.91** | |
+| | **mlx-serve mean** | | **157.49** | **160.69** | **2,049 / 1,853** | **21.46** | |
+
+**The cell does not move, and nothing on the poster changes.** Kapitsa's flag-free pass reads 1,814 / 1,461 tok/s at
+4K / 16K and 197.48 / 221.79 tok/s decode against the 2026-10-21 run the poster carries, 1,799 / 1,455 and
+195.1 / 223.4: within 1.2% on every column (decode +1.2%, prefill +0.8% and +0.4%), which is what a MoE target keeping
+its 8 rows predicts. The cell is
+deliberately left as stored rather than refreshed with a 10-22 Kapitsa number, because the engine it is read against
+is mlx-serve's 2026-10-19 run, and pairing runs three days apart is the cross-day pairing
+[#280](https://github.com/nace-ai/kapitsa/pull/280) removed from the 27B row. Today's mlx-serve runs, both flagged,
+read 2,049 / 1,853 at 4K / 16K, about 18% under that stored 2,494 / 2,283, so they do not refresh its cell either.
+All four runs are stored here as evidence of the check; none of them feeds a poster number.
 
 ## Conditions
 
