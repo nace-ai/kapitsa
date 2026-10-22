@@ -469,10 +469,10 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   context_fit_ = int(std::min<size_t>(size_t(opts_.context), room / per));
   fixed_bytes_ = used;
   logi("GPU: %s, %d cores%s", g.name().c_str(), g.core_count(), g.core_count_measured() ? "" : " (not measured: NI_GPU_CORES or the tier's smallest)");
-  logi("memory: %.2f GB allocated (model, buffers, %d slots' state), budget %.1f GB (recommended working set %.1f GB): "
+  logi("memory: %.2f GB allocated (model, buffers, %d %s state), budget %.1f GB (recommended working set %.1f GB): "
        "KV room %.2f GB = %zu tokens (%.0f KB per token), one conversation up to %d of %d tokens",
-       used / 1e9, std::max(1, opts_.slots), budget_ / 1e9, g.recommended_working_set() / 1e9, room / 1e9, room / per,
-       per / 1024.0, context_fit_, opts_.context);
+       used / 1e9, std::max(1, opts_.slots), opts_.slots > 1 ? "slots'" : "slot's", budget_ / 1e9,
+       g.recommended_working_set() / 1e9, room / 1e9, room / per, per / 1024.0, context_fit_, opts_.context);
   // images: the model's vision tower, loaded on the first image that needs encoding
   if (auto enc = vision::open_encoder(opts_.model_dir, opts_.image_max_pixels)) {
     const std::string m0 = enc->image_start(), m1 = enc->image_end();

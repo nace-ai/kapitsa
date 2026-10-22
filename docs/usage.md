@@ -57,7 +57,7 @@ Those start the best model for this Mac, with the same output as before.
 | `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
-| `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` |
+| `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` (default), `16gb` (where `4bit` does not fit: 2-bit experts, 11.9 GB; [GGUF files](#gguf-files)) |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
@@ -76,11 +76,11 @@ see [Other models](#other-models)), a folder (a path starting with `/`, `~`, `./
 
 The first start of a model downloads it; later starts use the copy on disk, offline too. A name without a variant takes
 the default where it holds one conversation of 32K tokens (or of the `--context` given) with its draft model, else the
-first of the model's smaller variants that does, else the smallest: `35b` on a 16 or 24 GB Mac is `35b:16gb`. A catalog
-model that would not start on this Mac is refused before the download, naming one that fits. Without `--model`,
-`kapitsa serve` takes the first of `35b`, `27b`, `9b` and `4b` that holds one conversation of 32K tokens (or of the
-`--context` given) within this Mac's memory budget (a model not downloaded yet is planned from its file headers, a few
-hundred KB).
+first of the model's smaller variants that does, else the smallest: `35b` and `flint` on a 16 or 24 GB Mac are
+`35b:16gb` and `flint:16gb`. A catalog model that would not start on this Mac is refused before the download, naming one
+that fits. Without `--model`, `kapitsa serve` takes the first of `35b`, `27b`, `9b` and `4b` that holds one conversation
+of 32K tokens (or of the `--context` given) within this Mac's memory budget (a model not downloaded yet is planned from
+its file headers, a few hundred KB).
 
 The API calls the model by its name (`qwen3.5-4b`), as `name:variant` for a variant other than the default
 (`qwen3.6-35b-a3b:6bit`), or by its repo id or folder name; `--model-id` sets another. The server runs one model, so a
@@ -111,7 +111,8 @@ with BF16 embedding and head; 3.2 GB) and `bf16` (8.0 GB). Along two replies (32
 next-token distributions are a KL of 0.020 from the BF16 checkpoint's on average (NVIDIA's code, 2 loops), with the same
 top token at 94% of positions. With `nvfp4` the LM head loads as 8-bit rows (quantized from its BF16 at load: a
 next-token KL of 7e-6 from the BF16 head, the same top token at 319 of 320 positions, about 7% faster writing;
-`NI_DORY_HEAD=bf16` keeps it BF16).
+`NI_DORY_HEAD=bf16` keeps it BF16). Flint has two: `4bit` (the default, Recursive's MLX export) and `16gb`
+(unsloth's UD-IQ2_XXS GGUF, imported: [GGUF files](#gguf-files)).
 
 ### Other models
 
@@ -160,7 +161,8 @@ checkpoints in the Hugging Face layout, and weights larger than this Mac's memor
 `kapitsa import FILE.gguf` converts a GGUF file once into a model folder in the store and prints its name for
 `kapitsa serve --model`; `kapitsa serve --model FILE.gguf` and the coding-agent commands convert on first use and reuse
 the conversion after that. It reads the GGUF architectures `qwen35` and `qwen35moe` (Qwen3.5, 3.6 and 3.8) as LM Studio,
-Ollama (its blob files) and Hugging Face GGUF repos ship them; a split file is named by any of its parts.
+Ollama (its blob files) and Hugging Face GGUF repos ship them, and `flint` (Recursive's Flint, where its routed experts
+are IQ blocks: below); a split file is named by any of its parts.
 
 The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's draft layer, or `--mtp FILE`. Options:
 `--name NAME` (the folder; default: from the file name), `--threads N` (default: the performance cores, at most 8),
@@ -209,6 +211,25 @@ On a MacBook Pro M1 Pro 16 GB it decodes 52.6 tok/s (llama.cpp b11669 on the sam
 KL 0.023 with the same top token 97.5% of the time (llama.cpp's own CPU backend: 0.012 and 97.5%); part of the gap is
 the conversion of the file's Q5_K tensors to 6-bit. It has no MTP head, so it decodes plainly, and no vision tower: it
 reads text only.
+
+Flint's GGUFs import their own way. Their routed experts must be IQ blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S),
+which stay as they are; attention, the dense MLP and the shared expert take 4-bit group 64, the embedding 3-bit group
+64, the LM head 6-bit group 64, and the router stays bf16. A Flint GGUF with other experts (Recursive's Q4_1 file) is
+refused, pointing at `flint:4bit`. unsloth's `flint-UD-IQ2_XXS.gguf`
+([unsloth/flint-GGUF](https://huggingface.co/unsloth/flint-GGUF), 11.9 GB; IQ1_S, IQ2_XXS, IQ2_S and IQ3_XXS experts)
+imports in 6 s into 11.73 GB of weights, 13.0 GB on disk in all with the file's 11.9 GB (the experts file is an APFS
+clone of it). In a 16 GB Mac's 12.2 GB budget that leaves room for one conversation of 8K tokens: the engine runs it
+with one slot, 448-row prefill chunks and an 8K default context ([Memory](#memory-and-kapitsa-doctor)). The catalog has
+it as Flint's `16gb` variant, which `flint` takes where the 4-bit default does not fit (16 and 24 GB Macs):
+
+```bash
+kapitsa serve flint        # on a 16 GB Mac: flint:16gb, downloaded and imported the first time
+```
+
+On a MacBook Pro M1 Pro 16 GB it decodes 57.8 tok/s (llama.cpp d772569 on the same file: 42.5) and reads a 4K-token
+prompt in 9.2 s (10.8 s), at a peak of 11.6 GB (12.2 GB). The requantized tensors cost quality: against llama.cpp on the
+same file its next-token distributions are at KL 0.22 (median 0.018), with the same top token 89% of the time; on the
+same weights (its import written back as a GGUF) the two engines agree at KL 0.045 (median 0.001, 97.4%).
 
 ### Where models are stored
 
@@ -267,11 +288,12 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 
 ### Context
 
-`--context` sets how long one conversation can get: its prompt, its history and the reply share it. Without it,
-`kapitsa serve` and the coding-agent commands take 128K tokens, or the model's own limit where that is less, or less
-where this Mac's memory is tight: the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K,
-with one full conversation beside it. The server says which context it took and why. A context costs no memory until a
-conversation fills it (the KV cache grows with it), so the default only sizes what memory is kept for.
+`--context` sets how long one conversation can get: its prompt, its history and the reply share it. Without it, `kapitsa
+serve` and the coding-agent commands take 128K tokens, or the model's own limit where that is less, or less where this
+Mac's memory is tight: the most, in 8K steps down to 32K, that keeps the draft model the model has at 32K, with one full
+conversation beside it (below 32K only where one slot cannot hold 32K tokens: Flint's `16gb` on a 16 GB Mac takes 8K).
+The server says which context it took and why. A context costs no memory until a conversation fills it (the KV cache
+grows with it), so the default only sizes what memory is kept for.
 
 `--context max` takes the model's own limit (`max_position_embeddings` in its `config.json`): 256K for the Qwen models,
 Dory and Bolt, 1M for Lightning and Super-VL. A longer `--context` runs at that limit, and the server says so. Where a
@@ -589,7 +611,10 @@ the parts in use in the page cache and can drop them under pressure. When memory
   what each part needs and what would help (fewer `--slots`, `--prefill-chunk 1024`, no draft model, a smaller model,
   `--mem-budget`). `kapitsa serve --model NAME` checks this before downloading.
 - Where the draft model or 2048-token prefill chunks would keep one `--context` conversation from fitting, the engine
-  leaves the draft model out or uses 1024-token chunks.
+  leaves the draft model out or uses 1024-token chunks. Where even those leave less than the tokens it starts with (the
+  context, up to 8K), it takes smaller chunks (a multiple of 64 rows, at least 256), one slot where two would not start,
+  and a default context below 32K (in 8K steps, 1K steps below 8K, down to 4K): Flint's `16gb` on a 16 GB Mac runs
+  with 448-row chunks, one slot and 8K.
 - A prompt that needs more room takes it from cached image embeddings, then from idle slots, least recently used first
   (their conversations are read again when they return), then from the Neural Engine split (prefill then runs on the
   GPU alone) and last from the image encoder; failing that, the request gets an `insufficient memory` error. With
@@ -601,10 +626,10 @@ the parts in use in the page cache and can drop them under pressure. When memory
 per model, its memory part by part, whether it starts, the tokens of KV cache that fit, its decoding (draft model, MTP
 or plain), the image encoder's size and a rough speed estimate; then each catalog variant, whether it fits and which one
 `--model NAME` takes. It assumes `--context 64k` and, per model, the slots the server would start with (the catalog
-check: 2; `--context`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change that), and shows the context
-`kapitsa serve` takes there by default; `--model M`, repeatable, checks other models, downloaded or not; `--json` prints
-the same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`, `default_context`, `context_limit`,
-`decoding`, ...).
+check: 2, or 1 where 2 would not start; `--context`, `--slots`, `--prefill-chunk`, `--dflash` and `--mem-budget` change
+that), and shows the context `kapitsa serve` takes there by default; `--model M`, repeatable, checks other models,
+downloaded or not; `--json` prints the same for programs (`starts`, `fits_full_context`, `kv_tokens_in_budget`,
+`default_context`, `context_limit`, `decoding`, ...).
 
 What fits, for the 4-bit variants at `--context 64k --slots 2`, with the tokens of KV cache that fit in all. macOS sets
 the working set at about 2/3 to 78% of the RAM, depending on its version, hence the ranges:

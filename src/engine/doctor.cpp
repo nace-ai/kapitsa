@@ -491,8 +491,8 @@ int run_doctor(int argc, char** argv) {
     if (dir.rfind(hub::home_dir() + "/plans/", 0) == 0) name += ", not downloaded: planned from its headers";
     printf("  %s (%s, %d layers, hidden %d; weights %s)\n", name.c_str(), m.dense ? "dense" : "MoE", m.layers, m.hidden,
            m.formats.c_str());
-    printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d slot%s' state %.2f, KV %.0f KB/token%s%s\n",
-           m.weights / 1e9, m.mtp / 1e9, ch, m.activations / 1e9, slots, slots > 1 ? "s" : "",
+    printf("    memory: weights %.2f GB, MTP head %.2f, %d-row prefill buffers %.2f, %d %s state %.2f, KV %.0f KB/token%s%s\n",
+           m.weights / 1e9, m.mtp / 1e9, ch, m.activations / 1e9, slots, slots > 1 ? "slots'" : "slot's",
            slots * m.slot_state / 1e9, m.kv_per_pos / 1024.0,
            ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "",
            lp.dflash_bytes ? (std::string(", ") + drafter + " " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
@@ -558,8 +558,10 @@ int run_doctor(int argc, char** argv) {
       std::string what = f == 1 ? "fits" : f == 0 ? "too big" : "not planned (offline)";
       if (f == 0) {
         const std::string d = hub::plan_dir(r);
-        const LoadPlan lp = plan_load(d, dflash, false, ctx, slots, budget, chunk);
-        const StartNeed need = start_need(d, lp, lp.prefill_chunk, ctx, slots);
+        // whether it starts: with the slots the engine would take (one where two cannot start: auto_slots)
+        const int s = slots_opt > 0 ? slots : std::min(slots, auto_slots(d, eo, budget));
+        const LoadPlan lp = plan_load(d, dflash, false, ctx, s, budget, chunk);
+        const StartNeed need = start_need(d, lp, lp.prefill_chunk, ctx, s);
         char b[64];
         if (need.bytes > budget) snprintf(b, sizeof b, "needs %.1f GB", need.bytes / 1e9);
         else snprintf(b, sizeof b, "starts, but not with a full --ctx conversation and its drafter");
