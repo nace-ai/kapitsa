@@ -1094,7 +1094,15 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   static const bool tns = attn_t_ && !k16;
   static const char* ns_env = getenv("NI_DORY_ATTN_NS");
   static const bool ns8 = !(ns_env && *ns_env && atoi(ns_env) == 4);
-  e.use(pipe(tns ? (ns8 ? "dory_attn_t_g4s8k16" : "dory_attn_t_g4s4k16")
+  // A short suffix, an agent turn's follow-up, gives either kernel one 32-row threadgroup per (block, KV head), so the
+  // tensor form's 16 KB of staged tiles and 8 simdgroups buy nothing there and cost more: #314's interleaved A/B read the
+  // cached follow-up at 16K as 0.219 s against 0.159 s of the simdgroup kernel (+60 ms, +38%) and 4K as 0.124 against
+  // 0.105. Below NI_DORY_ATTN_T_MIN rows (default 64) the simdgroup kernel takes the dispatch; cold prefill, thousands of
+  // rows at a time, always keeps the tensor one.
+  static const char* tmin_env = getenv("NI_DORY_ATTN_T_MIN");
+  static const int tmin = tmin_env && *tmin_env ? atoi(tmin_env) : 64;
+  const bool tn = tns && int(T) >= tmin;
+  e.use(pipe(tn ? (ns8 ? "dory_attn_t_g4s8k16" : "dory_attn_t_g4s4k16")
                   : k16 || getenv("MTL_SHADER_VALIDATION") ? "dory_attn_prefill_k16" : "dory_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(ci)]);
@@ -1104,7 +1112,7 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   e.buf(5, pao_);
   e.val(6, ap);
   // (the tensor kernel's threadgroup is 16 / G tokens of one KV head: NS simdgroups of them, G heads each)
-  if (tns) {
+  if (tn) {
     const uint32_t tpt = ns8 ? 32 : 16;
     e.dispatch((uint32_t(T) + tpt - 1) / tpt, uint32_t(c.hkv), 1, ns8 ? 256 : 128);
   } else
