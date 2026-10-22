@@ -416,6 +416,14 @@ void put_utf8(std::string& s, uint32_t c) {
 
 } // namespace
 
+const char* const Tokenizer::kFlintSplit[3] = {
+    "\\p{N}{1,3}", "[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]+",
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
+    "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
+    " ?[\\p{P}\\p{S}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"};
+
 void Tokenizer::load(const std::string& path) {
   double t0 = now_ms();
   std::ifstream f(path);
@@ -430,13 +438,6 @@ void Tokenizer::load(const std::string& path) {
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+|"
       "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*|"
       "\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n/]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
-  static const char* kFlint[3] = {
-      "\\p{N}{1,3}", "[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff]+",
-      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]*[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]+"
-      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
-      "[^\\r\\n\\p{L}\\p{N}]?[\\p{Lu}\\p{Lt}\\p{Lm}\\p{Lo}\\p{M}]+[\\p{Ll}\\p{Lm}\\p{Lo}\\p{M}]*"
-      "(?i:'s|'t|'re|'ve|'m|'ll|'d)?|"
-      " ?[\\p{P}\\p{S}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"};
   auto isolated = [](const nlohmann::json& p, const char* re) {  // Split on the regex `re`, Isolated, not inverted
     return p.is_object() && p.value("type", "") == "Split" && p.contains("pattern") && p["pattern"].is_object() &&
            p["pattern"].value("Regex", "") == re && p.value("behavior", "") == "Isolated" && !p.value("invert", false);
@@ -445,9 +446,9 @@ void Tokenizer::load(const std::string& path) {
   if (pt.is_object() && pt.value("type", "") == "Sequence" && pt.contains("pretokenizers") &&
       pt["pretokenizers"].is_array()) {
     const auto& seq = pt["pretokenizers"];
-    if (seq.size() == 4 && isolated(seq[0], kFlint[0]) && isolated(seq[1], kFlint[1]) && isolated(seq[2], kFlint[2]) &&
-        seq[3].is_object() && seq[3].value("type", "") == "ByteLevel" && !seq[3].value("add_prefix_space", true) &&
-        !seq[3].value("use_regex", true))
+    if (seq.size() == 4 && isolated(seq[0], kFlintSplit[0]) && isolated(seq[1], kFlintSplit[1]) &&
+        isolated(seq[2], kFlintSplit[2]) && seq[3].is_object() && seq[3].value("type", "") == "ByteLevel" &&
+        !seq[3].value("add_prefix_space", true) && !seq[3].value("use_regex", true))
       split_ = Split::Flint;
     else
       for (auto& p : seq)

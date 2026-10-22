@@ -8,11 +8,17 @@
 // order (value head v of key group k at v * n_k + k) instead of Hugging Face's grouped order (k * r + v); the MTP
 // block sits after the trunk's layers (block_count includes it, nextn_predict_layers counts it), with eh_proj = fc,
 // enorm / hnorm = pre_fc_norm_embedding / pre_fc_norm_hidden and nextn.shared_head_norm = the head's norm.
+//
+// Recursive's Flint (arch "flint"): the tensors are Hugging Face's as they are, checked against RecursiveSI/flint-int4's
+// (unsloth's flint-UD-IQ2_XXS: norms, q / k norms, sinks (attn_sinks = softmax_offset) and router equal; q / k rows in
+// Hugging Face's order, no RoPE permutation; expert e of a stacked tensor is Hugging Face's expert e); the layer kinds
+// and RoPE come from attention.sliding_window_pattern / rope_pattern, the dense layers from leading_dense_block_count.
 #include "gguf/import.h"
 
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
 #include "hub/hub.h"
+#include "tokenizer/tokenizer.h"
 #include "util/term.h"
 
 #include <nlohmann/json.hpp>
@@ -252,6 +258,9 @@ struct Hp {
   double eps = 1e-6, theta = 1e7;
   std::vector<int64_t> sections;
   std::vector<bool> recurrent;
+  bool flint = false;                // Recursive's Flint (arch "flint")
+  int64_t window = 0, dense_lead = 0;  // Flint: the sliding window, the leading dense-MLP layers
+  std::vector<bool> swa, rope;         // Flint, per layer: sliding-window attention, RoPE
 };
 
 // an integer key, or the largest of an integer array (per-layer values)
@@ -338,6 +347,53 @@ void check_runs(const Hp& h, const std::string& file) {
   else if (h.moe && (h.H > 4096 || h.hv * h.dv > 4096 || h.hq * h.head_dim > 4096)) why = "a hidden size above 4096 for a MoE model";
   else if (h.H % 64) why = "a hidden size that is not a multiple of 64";
   if (!why.empty()) throw Error(file + " is a Qwen3.5-family model with " + why + ", which Kapitsa does not run.");
+}
+
+// Flint's shape (the GGUF architecture "flint")
+Hp read_hp_flint(const File& f) {
+  Hp h;
+  h.arch = "flint";
+  h.flint = h.moe = true;
+  const std::string a = "flint.", file = base_name(f.parts()[0]);
+  h.H = ival(f, a + "embedding_length");
+  h.layers = ival(f, a + "block_count");
+  h.hq = ival(f, a + "attention.head_count");
+  h.hkv = ival(f, a + "attention.head_count_kv");
+  h.head_dim = ival(f, a + "attention.key_length", h.hq ? h.H / h.hq : 0);
+  h.ctx = ival(f, a + "context_length", 262144);
+  h.eps = f.real(a + "attention.layer_norm_rms_epsilon", 1e-6);
+  h.theta = f.real(a + "rope.freq_base", 1e4);
+  h.ffn = ival(f, a + "feed_forward_length");
+  h.E = ival(f, a + "expert_count");
+  h.topk = ival(f, a + "expert_used_count");
+  h.moe_I = ival(f, a + "expert_feed_forward_length");
+  h.shared_I = ival(f, a + "expert_shared_feed_forward_length");
+  h.window = ival(f, a + "attention.sliding_window");
+  h.dense_lead = ival(f, a + "leading_dense_block_count", 0);
+  for (auto [key, out] : {std::pair{"attention.sliding_window_pattern", &h.swa}, {"attention.rope_pattern", &h.rope}}) {
+    const json& v = f.meta().value(a + key, json());
+    if (!v.is_array() || int64_t(v.size()) != h.layers) throw Error(file + " has no per-layer flint." + key + ".");
+    for (const auto& x : v) out->push_back(x.is_boolean() ? x.get<bool>() : x.get<int64_t>() != 0);
+  }
+  // the routing Kapitsa's Flint runs: sigmoid scores, the top k renormalized, no scale
+  if (ival(f, a + "expert_gating_func", 2) != 2 || !f.flag(a + "expert_weights_norm", true) ||
+      f.real(a + "expert_weights_scale", 1.0) != 1.0 || ival(f, a + "attention.value_length", h.head_dim) != h.head_dim)
+    throw Error(file + ": a Flint variant (routing or attention) Kapitsa does not run.");
+  const Tensor* emb = f.find("token_embd.weight");
+  if (!emb || emb->ne.size() != 2 || int64_t(emb->ne[0]) != h.H) throw Error(file + " has no token_embd.weight tensor.");
+  h.vocab = int64_t(emb->ne[1]);
+  h.tied = !f.find("output.weight");
+  return h;
+}
+
+// The shapes Kapitsa's Flint runs (model/flint.cpp) with IQ experts (src/kernels/wfmt_iq.metal), before a conversion
+void check_runs_flint(const Hp& h, const std::string& file) {
+  if (h.H % 512 || h.H > 4096 || h.head_dim != 128 || h.hq <= 0 || h.hkv <= 0 || h.hq % h.hkv || h.hq / h.hkv > 8 ||
+      h.E != 256 || h.topk < 1 || h.topk > 8 || h.window <= 0 || h.moe_I % 256 || h.shared_I % 64 || h.ffn % 64 ||
+      (h.topk + 1) * std::max(h.moe_I, h.shared_I) > 7168 || h.tied || h.dense_lead >= h.layers)
+    throw Error(file + " is a Flint shape Kapitsa does not run (hidden " + std::to_string(h.H) + ", heads " +
+                std::to_string(h.hq) + " / " + std::to_string(h.hkv) + ", " + std::to_string(h.E) + " experts top-" +
+                std::to_string(h.topk) + ").");
 }
 
 // ---------------------------------------------------------------- what to write
@@ -463,7 +519,7 @@ struct Builder {
     if (L.fmt == k4g32 && exact4(L.src->type) && L.mult.empty()) k += " (codes as stored)";
     else if (L.fmt.dense() && L.src->type == kBF16) k += " (as stored)";
     ++P.conv_count[(L.mtp ? "MTP head: " : "") + k];
-    if (type_class(L.src->type) <= kC3 && !P.follow && !L.fmt.iq) P.low.insert(type_name(L.src->type));
+    if (type_class(L.src->type) <= kC3 && !P.follow && !L.fmt.iq && !P.hp.flint) P.low.insert(type_name(L.src->type));
   }
 
   // a float parameter, bf16
@@ -748,6 +804,69 @@ struct Builder {
     }
     P.has_mtp = true;
   }
+
+  // Flint: Recursive's MLX names (model/flint.cpp). Every linear in 4-bit group 64, the format Flint's kernels run (its
+  // shared expert too: the IQ kernels' _s4 forms; Recursive's export has it in 4 bits), but the LM head in 6 bits (its
+  // qmvf_b6 matvec) and the embedding in 3 (the file's Q3_K), the router as stored (bf16), the routed experts as stored
+  // (IQ blocks): 11.73 GB for unsloth's UD-IQ2_XXS, which a 16 GB Mac's 12.2 GB budget holds with one 8K-token
+  // conversation (engine.cpp, fits_small). Against llama.cpp on the file itself (CPU, 192 decode rows), all in 4 bits
+  // cost KL 0.29 and +0.15 nats a token; of that, the head kept as stored took back 0.15 and 0.09 (6 bits here: 0.23 and
+  // +0.094), the attention 0.13 and 0.04, the shared expert 0.03; the 3-bit embedding adds 0.006 nats.
+  void build_flint() {
+    const Hp& h = P.hp;
+    const uint64_t H = uint64_t(h.H), QD = uint64_t(h.hq * h.head_dim), KD = uint64_t(h.hkv * h.head_dim);
+    const uint64_t E = uint64_t(h.E), I = uint64_t(h.moe_I), S = uint64_t(h.shared_I), FF = uint64_t(h.ffn);
+    linear(F, get(F, "token_embd.weight"), "model.embed_tokens", uint64_t(h.vocab), H, k3g64);
+    const Tensor* o = get(F, "output.weight");
+    check_ne(o, {h.H, h.vocab});
+    linear(F, o, "lm_head", uint64_t(h.vocab), H, k6g64);
+    param(F, "output_norm.weight", "model.norm.weight", {h.H}, 1, H);
+    auto lin = [&](const std::string& src, const std::string& out, uint64_t N, uint64_t K) {
+      const Tensor* t = get(F, src);
+      check_ne(t, {int64_t(K), int64_t(N)});
+      linear(F, t, out, N, K, k4g64);
+    };
+    for (int64_t i = 0; i < h.layers; ++i) {
+      const std::string b = "blk." + std::to_string(i) + ".", out = "model.layers." + std::to_string(i) + ".";
+      param(F, b + "attn_norm.weight", out + "input_layernorm.weight", {h.H}, 1, H);
+      param(F, b + "ffn_norm.weight", out + "post_attention_layernorm.weight", {h.H}, 1, H);
+      param(F, b + "attn_q_norm.weight", out + "self_attn.q_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim));
+      param(F, b + "attn_k_norm.weight", out + "self_attn.k_norm.weight", {h.head_dim}, 1, uint64_t(h.head_dim));
+      param(F, b + "attn_sinks.weight", out + "self_attn.softmax_offset", {h.hq}, 1, uint64_t(h.hq));
+      lin(b + "attn_q.weight", out + "self_attn.q_proj", QD, H);
+      lin(b + "attn_k.weight", out + "self_attn.k_proj", KD, H);
+      lin(b + "attn_v.weight", out + "self_attn.v_proj", KD, H);
+      lin(b + "attn_output.weight", out + "self_attn.o_proj", H, QD);
+      if (i < h.dense_lead) {
+        lin(b + "ffn_gate.weight", out + "mlp.gate_proj", FF, H);
+        lin(b + "ffn_up.weight", out + "mlp.up_proj", FF, H);
+        lin(b + "ffn_down.weight", out + "mlp.down_proj", H, FF);
+        continue;
+      }
+      const Tensor* router = get(F, b + "ffn_gate_inp.weight");
+      check_ne(router, {h.H, h.E});
+      linear(F, router, out + "mlp.gate", E, H, kBf16);
+      const Tensor* g = get(F, b + "ffn_gate_exps.weight");
+      const Tensor* u = get(F, b + "ffn_up_exps.weight");
+      const Tensor* d = get(F, b + "ffn_down_exps.weight");
+      check_ne(g, {h.H, int64_t(I), h.E});
+      check_ne(u, {h.H, int64_t(I), h.E});
+      check_ne(d, {int64_t(I), h.H, h.E});
+      if (!iq_gpu_type(g->type) || u->type != g->type || !iq_gpu_type(d->type))
+        throw Error(base_name(F.parts()[0]) + " stores layer " + std::to_string(i) + "'s routed experts as " +
+                    type_name(g->type) + " / " + type_name(d->type) + ": Kapitsa imports Flint GGUFs whose experts are "
+                    "in llama.cpp's IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S blocks (unsloth's UD-IQ files); flint:4bit "
+                    "is Recursive's 4-bit model.");
+      for (auto [t, n, N, K] : {std::tuple{g, "gate_proj", I, H}, {u, "up_proj", I, H}, {d, "down_proj", H, I}}) {
+        Lin& L = linear(F, t, out + "mlp.switch_mlp." + n, E * N, K, iq_fmt(t->type));
+        L.shape = {int64_t(E), int64_t(N), int64_t(K)};
+      }
+      P.iq = true;
+      lin(b + "ffn_gate_shexp.weight", out + "mlp.shared_expert.gate_proj", S, H);
+      lin(b + "ffn_up_shexp.weight", out + "mlp.shared_expert.up_proj", S, H);
+      lin(b + "ffn_down_shexp.weight", out + "mlp.shared_expert.down_proj", H, S);
+    }
+  }
 };
 
 // ---------------------------------------------------------------- tokenizer, config
@@ -766,11 +885,13 @@ struct Tok {
 
 Tok make_tokenizer(const File& f, const Hp& h) {
   const std::string file = base_name(f.parts()[0]);
+  const std::string model = h.flint ? "Flint" : "Qwen3.5", want = h.flint ? "flint" : "qwen35";
   if (f.str("tokenizer.ggml.model") != "gpt2")
-    throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not Qwen3.5's byte-level BPE.");
+    throw Error(file + ": tokenizer \"" + f.str("tokenizer.ggml.model") + "\" is not " + model + "'s byte-level BPE.");
   const std::string pre = f.str("tokenizer.ggml.pre");
-  if (pre != "qwen35")
-    throw Error(file + ": its pre-tokenizer is \"" + pre + "\", not Qwen3.5's (qwen35): not a Qwen3.5-family tokenizer.");
+  if (pre != want)
+    throw Error(file + ": its pre-tokenizer is \"" + pre + "\", not " + model + "'s (" + want + "): not " + model +
+                "'s tokenizer.");
   const json& toks = f.meta().value("tokenizer.ggml.tokens", json());
   const json& types = f.meta().value("tokenizer.ggml.token_type", json());
   const json& merges = f.meta().value("tokenizer.ggml.merges", json());
@@ -802,14 +923,26 @@ Tok make_tokenizer(const File& f, const Hp& h) {
   mg.reserve(merges.size() * 12);
   for (const auto& m : merges) mg += (mg.empty() ? "" : ",") + jstr(m.is_string() ? m.get<std::string>() : "");
   const std::string bl = "{\"type\":\"ByteLevel\",\"add_prefix_space\":false,\"trim_offsets\":false,\"use_regex\":false}";
+  auto split = [](const char* re) {
+    return "{\"type\":\"Split\",\"pattern\":{\"Regex\":" + jstr(re) + "},\"behavior\":\"Isolated\",\"invert\":false},";
+  };
+  // Flint: its tokenizer.json's (RecursiveSI/flint-int4) normalizer, pre-tokenizer (the three splits Kapitsa's tokenizer
+  // recognizes), post-processor and decoder
+  const std::string pre_tok =
+      h.flint ? "null,\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" + split(Tokenizer::kFlintSplit[0]) +
+                    split(Tokenizer::kFlintSplit[1]) + split(Tokenizer::kFlintSplit[2]) +
+                    "{\"type\":\"ByteLevel\",\"add_prefix_space\":false,\"trim_offsets\":true,\"use_regex\":false}]},"
+                    "\"post_processor\":null,\"decoder\":{\"type\":\"ByteLevel\",\"add_prefix_space\":true,"
+                    "\"trim_offsets\":true,\"use_regex\":true},\"model\":{\"type\":\"BPE\",\"dropout\":null,"
+                    "\"unk_token\":null,\"continuing_subword_prefix\":null,\"end_of_word_suffix\":null,"
+              : "{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":[" + split(kQwen35Split) +
+                    bl + "]},\"post_processor\":" + bl + ",\"decoder\":" + bl +
+                    ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
+                    "\"end_of_word_suffix\":\"\",";
   t.tokenizer_json = "{\"version\":\"1.0\",\"truncation\":null,\"padding\":null,\"added_tokens\":[" + added +
-                     "],\"normalizer\":{\"type\":\"NFC\"},\"pre_tokenizer\":{\"type\":\"Sequence\",\"pretokenizers\":["
-                     "{\"type\":\"Split\",\"pattern\":{\"Regex\":" + jstr(kQwen35Split) +
-                     "},\"behavior\":\"Isolated\",\"invert\":false}," + bl + "]},\"post_processor\":" + bl +
-                     ",\"decoder\":" + bl +
-                     ",\"model\":{\"type\":\"BPE\",\"dropout\":null,\"unk_token\":null,\"continuing_subword_prefix\":\"\","
-                     "\"end_of_word_suffix\":\"\",\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,"
-                     "\"vocab\":{" + vocab + "},\"merges\":[" + mg + "]}}";
+                     "],\"normalizer\":" + pre_tok +
+                     "\"fuse_unk\":false,\"byte_fallback\":false,\"ignore_merges\":false,\"vocab\":{" + vocab +
+                     "},\"merges\":[" + mg + "]}}";
   auto tok_at = [&](const char* key) -> json {
     const int64_t id = f.num(key, -1);
     if (id < 0 || id >= int64_t(toks.size())) return nullptr;
@@ -819,16 +952,25 @@ Tok make_tokenizer(const File& f, const Hp& h) {
   if (t.eos < 0 || t.eos >= int(toks.size())) throw Error(file + " names no end-of-sequence token.");
   ojson tc;
   tc["add_bos_token"] = f.flag("tokenizer.ggml.add_bos_token", false);
-  tc["add_prefix_space"] = false;
-  tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
-  tc["clean_up_tokenization_spaces"] = false;
-  tc["eos_token"] = toks[size_t(t.eos)];
-  tc["errors"] = "replace";
-  tc["model_max_length"] = h.ctx;
-  tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
-  tc["split_special_tokens"] = false;
-  tc["tokenizer_class"] = "Qwen2Tokenizer";
-  tc["unk_token"] = nullptr;
+  if (h.flint) {  // as RecursiveSI/flint-int4's
+    tc["add_eos_token"] = f.flag("tokenizer.ggml.add_eos_token", false);
+    tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
+    tc["clean_up_tokenization_spaces"] = false;
+    tc["eos_token"] = toks[size_t(t.eos)];
+    tc["model_max_length"] = h.ctx;
+    tc["tokenizer_class"] = "PreTrainedTokenizerFast";
+  } else {
+    tc["add_prefix_space"] = false;
+    tc["bos_token"] = tok_at("tokenizer.ggml.bos_token_id");
+    tc["clean_up_tokenization_spaces"] = false;
+    tc["eos_token"] = toks[size_t(t.eos)];
+    tc["errors"] = "replace";
+    tc["model_max_length"] = h.ctx;
+    tc["pad_token"] = tok_at("tokenizer.ggml.padding_token_id");
+    tc["split_special_tokens"] = false;
+    tc["tokenizer_class"] = "Qwen2Tokenizer";
+    tc["unk_token"] = nullptr;
+  }
   tc["chat_template"] = t.template_;
   std::string s = tc.dump(2, ' ', false, json::error_handler_t::replace);
   // added_tokens_decoder spliced in as text (its keys are ids)
@@ -837,7 +979,85 @@ Tok make_tokenizer(const File& f, const Hp& h) {
   return t;
 }
 
+// config.json's quantization: the most common format of the quantized trunk linears, the others per module (IQ blocks
+// as stored: mode iq1_s / iq2_xxs / iq2_s / iq3_xxs / iq3_s); null when nothing is quantized
+ojson quant_config(const Plan& P) {
+  std::map<std::pair<int, int>, int> n;
+  for (const Lin& L : P.lins)
+    if (!L.param && !L.mtp && !L.fmt.dense() && !L.fmt.iq) ++n[{L.fmt.bits, L.fmt.gs}];
+  if (n.empty()) return nullptr;
+  auto top = std::max_element(n.begin(), n.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
+  ojson q{{"group_size", top.second}, {"bits", top.first}, {"mode", "affine"}};
+  for (const Lin& L : P.lins)
+    if (L.fmt.iq)
+      q[L.name] = ojson{{"group_size", 256}, {"bits", L.fmt.bits}, {"mode", lower(type_name(L.fmt.iq))}};
+    else if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
+      q[L.name] = ojson{{"group_size", L.fmt.gs}, {"bits", L.fmt.bits}};
+  return q;
+}
+
+ojson source_config(const File& f) {
+  ojson src{{"file", base_name(f.parts()[0])}};
+  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) src["file_type"] = ft;
+  if (f.has("general.name")) src["name"] = f.str("general.name");
+  return src;
+}
+
+// Flint's config.json: the fields of Recursive's export (RecursiveSI/flint-int4) that model/flint.cpp reads
+ojson make_config_flint(const Plan& P, const Tok& tok, const File& f) {
+  const Hp& h = P.hp;
+  ojson c;
+  c["architectures"] = json::array({"FlintForCausalLM"});
+  c["attention_bias"] = false;
+  c["attention_sink"] = true;
+  c["bos_token_id"] = f.num("tokenizer.ggml.bos_token_id", -1);
+  json eos = f.meta().value("tokenizer.ggml.eog_token_ids", json::array({tok.eos}));
+  c["eos_token_id"] = eos;
+  c["head_dim"] = h.head_dim;
+  c["hidden_act"] = "silu";
+  c["hidden_size"] = h.H;
+  c["intermediate_size"] = h.ffn;
+  json lt = json::array(), dense = json::array(), norope = json::array();
+  for (int64_t i = 0; i < h.layers; ++i) {
+    lt.push_back(h.swa[size_t(i)] ? "sliding_attention" : "full_attention");
+    if (i < h.dense_lead) dense.push_back(i);
+    if (!h.rope[size_t(i)]) norope.push_back(i);
+  }
+  c["layer_types"] = lt;
+  c["max_position_embeddings"] = h.ctx;
+  c["mlp_only_layers"] = dense;
+  c["model_type"] = "flint";
+  c["moe_intermediate_size"] = h.moe_I;
+  c["no_rope_layer_indices"] = norope;
+  c["norm_topk_prob"] = true;
+  c["num_attention_heads"] = h.hq;
+  c["num_experts"] = h.E;
+  c["num_experts_per_tok"] = h.topk;
+  c["num_hidden_layers"] = h.layers;
+  c["num_key_value_heads"] = h.hkv;
+  char eps[32];
+  snprintf(eps, sizeof eps, "%g", float(h.eps));
+  c["rms_norm_eps"] = std::stod(eps);
+  c["rope_parameters"] = ojson{{"rope_theta", h.theta}, {"rope_type", "default"}};
+  c["rope_theta"] = h.theta;
+  c["router_expert_bias"] = false;
+  c["scoring_func"] = "sigmoid";
+  c["shared_expert_intermediate_size"] = h.shared_I;
+  c["sliding_window"] = h.window;
+  c["softmax_type"] = "learnable";
+  c["tie_word_embeddings"] = false;
+  c["vocab_size"] = h.vocab;
+  c["pad_token_id"] = f.num("tokenizer.ggml.padding_token_id", tok.eos);
+  if (const ojson q = quant_config(P); !q.is_null()) {
+    c["quantization"] = q;
+    c["quantization_config"] = q;
+  }
+  c["converted_from_gguf"] = source_config(f);
+  return c;
+}
+
 ojson make_config(const Plan& P, const Tok& tok, const File& f) {
+  if (P.hp.flint) return make_config_flint(P, tok, f);
   const Hp& h = P.hp;
   ojson t;
   t["attention_bias"] = false;
@@ -890,25 +1110,11 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
   c["model_type"] = h.moe ? "qwen3_5_moe" : "qwen3_5";
   c["text_config"] = t;
   c["tie_word_embeddings"] = h.tied;
-  // quantization: the most common format of the quantized trunk linears, the others per module
-  std::map<std::pair<int, int>, int> n;
-  for (const Lin& L : P.lins)
-    if (!L.param && !L.mtp && !L.fmt.dense() && !L.fmt.iq) ++n[{L.fmt.bits, L.fmt.gs}];
-  if (!n.empty()) {
-    auto top = std::max_element(n.begin(), n.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
-    ojson q{{"group_size", top.second}, {"bits", top.first}, {"mode", "affine"}};
-    for (const Lin& L : P.lins)
-      if (L.fmt.iq)  // llama.cpp's blocks as stored (mode iq1_s / iq2_xxs / iq2_s / iq3_xxs / iq3_s)
-        q[L.name] = ojson{{"group_size", 256}, {"bits", L.fmt.bits}, {"mode", lower(type_name(L.fmt.iq))}};
-      else if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
-        q[L.name] = ojson{{"group_size", L.fmt.gs}, {"bits", L.fmt.bits}};
+  if (const ojson q = quant_config(P); !q.is_null()) {
     c["quantization"] = q;
     c["quantization_config"] = q;
   }
-  ojson src{{"file", base_name(f.parts()[0])}};
-  if (const std::string ft = ftype_name(f.num("general.file_type", -1)); !ft.empty()) src["file_type"] = ft;
-  if (f.has("general.name")) src["name"] = f.str("general.name");
-  c["converted_from_gguf"] = src;
+  c["converted_from_gguf"] = source_config(f);
   return c;
 }
 
@@ -1284,22 +1490,24 @@ std::string import_model(const ImportOptions& opt) {
   if (arch == "qwen3next")
     throw Error(file + " is Qwen3-Next, the model before Qwen3.5; Kapitsa runs the Qwen3.5 family (Qwen3.5, Qwen3.6, "
                 "Qwen3.8).");
-  if (arch != "qwen35" && arch != "qwen35moe")
+  if (arch != "qwen35" && arch != "qwen35moe" && arch != "flint")
     throw Error(file + " is a \"" + arch + "\" model; Kapitsa runs the Qwen3.5 family (GGUF architectures qwen35 and "
-                "qwen35moe).");
+                "qwen35moe) and Recursive's Flint (flint).");
+  const bool flint = arch == "flint";
   for (auto& [k, v] : f.meta().items())
     if (k.rfind("prism.hadamard.", 0) == 0)
       throw Error(file + " stores its weights rotated (a Hadamard transform its runtime undoes), which Kapitsa does "
                   "not read. Choose another quantization of the model.");
   Plan P;
-  P.hp = read_hp(f);
-  check_runs(P.hp, file);
-  // the MTP head: the file's own block, else a separate file
+  P.hp = flint ? read_hp_flint(f) : read_hp(f);
+  if (flint) check_runs_flint(P.hp, file);
+  else check_runs(P.hp, file);
+  // the MTP head: the file's own block, else a separate file (Flint has none)
   std::unique_ptr<File> mf;
   const File* M = nullptr;
   if (P.hp.nextn > 0) {
     M = &f;
-  } else {
+  } else if (!flint) {
     if (s.mtp.empty()) s.mtp = find_mtp_file(f, P.hp);
     if (!s.mtp.empty()) {
       mf = std::make_unique<File>(s.mtp);
@@ -1329,14 +1537,15 @@ std::string import_model(const ImportOptions& opt) {
     throw Error(hub::tilde(dest) + " exists already and is not a conversion of " + file + ". Name this one with "
                 "--name, or replace that folder with --force.");
   }
-  find_majority(P, f);
+  if (!flint) find_majority(P, f);
   Builder B(P, f, M);
-  B.build();
+  if (flint) B.build_flint();
+  else B.build();
   if (M && !P.has_mtp) M = nullptr;
   for (const auto& t : f.tensors())  // tensors not read: the vision tower (none in llama.cpp's text GGUFs) is fine
     if (!B.used.count(t.name) && !ends_with(t.name, ".input_scale") && t.name.rfind("v.", 0) != 0 &&
         t.name.rfind("mm.", 0) != 0 && t.name.rfind("mtp.", 0) != 0 && !(P.hp.nextn && t.name.rfind("blk." + std::to_string(P.hp.layers) + ".", 0) == 0))
-      P.notes.insert("not converted: " + t.name + " (a tensor Kapitsa's Qwen3.5 does not use)");
+      P.notes.insert("not converted: " + t.name + " (a tensor Kapitsa does not use)");
   Tok tok = make_tokenizer(f, P.hp);
 
   // output files: trunk shards of at most 5 GB, the routed experts kept as stored (experts*.safetensors, one per GGUF
@@ -1488,7 +1697,7 @@ std::string import_model(const ImportOptions& opt) {
     // in a terminal: the file and where it goes, its formats as a small table, notes dim, warnings yellow
     const std::string dot = std::string(" ") + term::kDot + " ";
     term::line("  " + term::accent("⇄") + " Converting " + term::bold(base_name(file)) + "  " +
-                   term::dim(std::string(arch == "qwen35moe" ? "MoE" : "dense") + dot + gb(f.file_bytes()) +
+                   term::dim(std::string(P.hp.moe ? "MoE" : "dense") + dot + gb(f.file_bytes()) +
                              (mf ? dot + "MTP head from " + base_name(s.mtp) : "")),
                stderr);
     term::line("    " + term::dim(term::clip("into " + hub::tilde(dest), term::columns() - 5)), stderr);
@@ -1522,9 +1731,9 @@ std::string import_model(const ImportOptions& opt) {
           "GGUF gives a better model at about the size of the conversion.",
           false);
     }
-    if (!P.has_mtp) say(term::dim(term::kArrow), "no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts", true);
+    if (!P.has_mtp && !P.hp.flint) say(term::dim(term::kArrow), "no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts", true);
   } else if (opt.progress) {
-    fprintf(stderr, "Converting %s (%s, %s%s) into %s:\n", file.c_str(), arch == "qwen35moe" ? "MoE" : "dense",
+    fprintf(stderr, "Converting %s (%s, %s%s) into %s:\n", file.c_str(), P.hp.moe ? "MoE" : "dense",
             gb(f.file_bytes()).c_str(), mf ? (" + MTP head from " + base_name(s.mtp)).c_str() : "",
             hub::tilde(dest).c_str());
     for (auto& [k, n] : P.conv_count) fprintf(stderr, "  %4d x %s\n", n, k.c_str());
@@ -1543,7 +1752,7 @@ std::string import_model(const ImportOptions& opt) {
                       "than the file. A Q4_K_M or better GGUF gives a better model at about the size of the conversion.\n",
               l.c_str());
     }
-    if (!P.has_mtp)
+    if (!P.has_mtp && !P.hp.flint)
       fprintf(stderr, "  no MTP head (neither in the file nor as an mtp-*.gguf beside it): decoding without MTP drafts\n");
   }
   if (opt.dry_run && term::fancy()) {
@@ -1585,8 +1794,19 @@ std::string import_model(const ImportOptions& opt) {
     {
       ojson g{{"eos_token_id", make_config(P, tok, f)["eos_token_id"]}};
       for (const char* k : {"temp", "top_k", "top_p", "min_p"})
-        if (f.has(std::string("general.sampling.") + k))
-          g[std::string(k) == "temp" ? "temperature" : k] = f.meta()[std::string("general.sampling.") + k];
+        if (f.has(std::string("general.sampling.") + k)) {
+          // a float32 value as the shortest decimal that reads back to it (top_p 0.95, not 0.949999988079071)
+          json v = f.meta()[std::string("general.sampling.") + k];
+          for (int p = 1; v.is_number_float() && p <= 9; ++p) {
+            char b[32];
+            snprintf(b, sizeof b, "%.*g", p, v.get<double>());
+            if (float(strtod(b, nullptr)) == float(v.get<double>())) {
+              v = strtod(b, nullptr);
+              break;
+            }
+          }
+          g[std::string(k) == "temp" ? "temperature" : k] = v;
+        }
       write_text(tmp + "/generation_config.json", g.dump(2) + "\n");
     }
     std::vector<OutFile> outs(P.files.size());

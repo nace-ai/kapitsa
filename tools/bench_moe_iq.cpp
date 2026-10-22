@@ -14,6 +14,8 @@
 //   --topk K       experts per token (default 8)
 //   --shared SI    the shared expert's width when it differs from the routed experts' (Flint: --topk 6 --shared 1024;
 //                  the rows and prefill cases: the 8-row verify's kernels take a shared expert as wide as the others)
+//   --shared-bits 4  a 4-bit group-64 shared expert (Flint's GGUF imports: the rows kernels' _s4 forms) instead of 8
+// The prefill case also checks qrmi_gu_*_f32 (fp32 SwiGLU rows, which Flint stores as scaled half rows).
 //   --validate     small shapes, one kernel run per command buffer: run it under MTL_SHADER_VALIDATION=1
 //                  MTL_DEBUG_LAYER=1 to catch out-of-bounds access
 //   --variants     the tilings of each case side by side (rows: NR x simdgroups; v8: down NF; pf: tile widths),
@@ -143,9 +145,10 @@ IqMat synth_iq(uint32_t type, uint32_t E, uint32_t N, uint32_t K) {
   return m;
 }
 
-// MLX 8-bit group-64 matrix [N, K]
+// MLX 8-bit (or 4-bit) group-64 matrix [N, K]
 struct Q8Mat {
   uint32_t N = 0, K = 0;
+  int bits = 8;
   std::vector<uint8_t> q;
   std::vector<uint16_t> s, b;  // bf16
   Buffer w, sb, bb;
@@ -159,20 +162,23 @@ struct Q8Mat {
     w = g.alloc(q.size() + 64, "q8_w", false);
     sb = g.alloc(s.size() * 2 + 64, "q8_s", false);
     bb = g.alloc(b.size() * 2 + 64, "q8_b", false);
-    memcpy(w.ptr(), q.data(), q.size());
+    if (bits == 4) gg::pack_codes(q.data(), q.size(), 4, w.as<uint32_t>());
+    else memcpy(w.ptr(), q.data(), q.size());
     memcpy(sb.ptr(), s.data(), s.size() * 2);
     memcpy(bb.ptr(), b.data(), b.size() * 2);
   }
 };
 
+int g_shared_bits = 8;
+
 Q8Mat q8_from(const std::vector<float>& x, uint32_t N, uint32_t K) {
   Q8Mat m;
-  m.N = N, m.K = K;
+  m.N = N, m.K = K, m.bits = g_shared_bits;
   m.q.resize(size_t(N) * K);
   m.s.resize(size_t(N) * K / 64);
   m.b.resize(size_t(N) * K / 64);
   for (uint32_t n = 0; n < N; ++n)
-    gg::quantize(x.data() + size_t(n) * K, K, 8, 64, m.q.data() + size_t(n) * K, m.s.data() + size_t(n) * K / 64,
+    gg::quantize(x.data() + size_t(n) * K, K, m.bits, 64, m.q.data() + size_t(n) * K, m.s.data() + size_t(n) * K / 64,
                  m.b.data() + size_t(n) * K / 64);
   m.upload();
   return m;
@@ -384,8 +390,9 @@ void case_rows(const Layer& l, uint32_t R) {
     e.dispatch((Imax + nr * nsg - 1) / (nr * nsg), k + 1, R, 32 * nsg);
   };
   auto enc = [&](Encoder& e, int r, int nr, uint32_t nsg, int dnr, bool t16, int parts = 3) {
+    const std::string s4 = g_shared_bits == 4 ? "_s4" : "";
     if (parts & 1) {
-      e.use(pipe("moei_gu_rows_" + gf + "_r" + std::to_string(nr)));
+      e.use(pipe("moei_gu_rows_" + gf + "_r" + std::to_string(nr) + s4));
       e.buf(0, l.g.buf); e.buf(1, l.u.buf);
       e.buf(2, l.sg.w); e.buf(3, l.sg.sb); e.buf(4, l.sg.bb);
       e.buf(5, l.su.w); e.buf(6, l.su.sb); e.buf(7, l.su.bb);
@@ -395,7 +402,7 @@ void case_rows(const Layer& l, uint32_t R) {
       e.dispatch((Imax + nr * nsg - 1) / (nr * nsg), k + 1, R, 32 * nsg);
     }
     if (!(parts & 2)) return;
-    e.use(pipe("moei_down_rows_" + df + "_r" + std::to_string(dnr) + (t16 ? "_t16" : "")));
+    e.use(pipe("moei_down_rows_" + df + "_r" + std::to_string(dnr) + (t16 ? "_t16" : "") + s4));
     e.buf(0, l.d.buf);
     e.buf(1, l.sd.w); e.buf(2, l.sd.sb); e.buf(3, l.sd.bb);
     e.buf(4, h); e.buf(5, idx, size_t(r) * R * k * 4); e.buf(6, wts, size_t(r) * R * (k + 1) * 4); e.buf(7, x);
@@ -412,7 +419,8 @@ void case_rows(const Layer& l, uint32_t R) {
   const bool t16 = I == 512 && SI == 512;
   std::vector<Cfg> cfgs = {{2, 2, 8, t16}};  // the model's (Qwen35::enc_moe_iq_rows)
   if (g_validate) cfgs = {{2, 2, 8, t16}, {4, 1, 8, false}};
-  if (g_variants) {
+  if (g_shared_bits == 4) cfgs = {{2, 2, 8, false}};  // the _s4 forms: Flint's (Flint::enc_moe_iq_rows)
+  if (g_variants && g_shared_bits == 8) {
     cfgs = {{4, 2, 8, false}, {4, 2, 8, t16}, {2, 2, 8, t16}, {4, 2, 16, t16}, {8, 1, 16, t16}, {8, 2, 16, t16}};
   }
   const Routing& rt = rts[0];
@@ -757,6 +765,25 @@ void case_pf(const Layer& l, uint32_t T) {
         ey.add(Y.as<float>()[size_t(pr) * D + n], a, a2);
       }
     }
+    if (&c == &cfgs[0]) {  // gate/up as fp32 SwiGLU rows (Flint's qrmi_gu_*_f32) on the same tiles
+      Buffer H32 = g.alloc(size_t(P) * I * 4);
+      QrmIqParams gp{I, D, D, I, l.g.sec()};
+      auto e2 = g.begin();
+      e2->use(pipe("qrmi_gu_" + gf + "_m32_n64_k32_f32"));
+      e2->buf(0, X); e2->buf(1, l.g.buf); e2->buf(2, l.u.buf); e2->buf(3, H32);
+      e2->val(4, gp);
+      e2->buf(5, tiles); e2->buf(6, nt); e2->buf(7, xrows);
+      e2->dispatch(I / 64, max_tiles, 1, 128);
+      e2->commit_and_wait();
+      Err e32;
+      for (uint32_t m = 0; m < P; ++m)
+        for (uint32_t n = 0; n < I; ++n) {
+          const double hv = h2f(H.as<uint16_t>()[size_t(m) * I + n]), fv = H32.as<float>()[size_t(m) * I + n];
+          e32.add(fv, hv, hv);  // against the half path's rows: the same sums, one rounding apart
+        }
+      printf("  pf T=%u %s qrmi_gu f32: max |H32 - H| / max |H| %.2e%s\n", T, gf.c_str(), e32.rel(),
+             e32.rel() > 1e-3 ? "  FAILED" : "");
+    }
     printf("  pf T=%u %s/%s gu n%u%s/%u sg, dn n%u%s/%u sg: H rel.err %.2e (vs fp64 %.2e), Y rel.err %.2e (vs fp64 %.2e)%s\n",
            T, gf.c_str(), df.c_str(), c.gbn, c.gk, c.gwn, c.dbn, c.dk, c.dwn, eh.rel(), eh.rel2(), ey.rel(), ey.rel2(),
            eh.rel() > 2e-3 || ey.rel() > 1e-5 ? "  FAILED" : "");
@@ -782,6 +809,7 @@ int main(int argc, char** argv) {
     else if (a == "--fmt" && i + 1 < argc) fmt = argv[++i];
     else if (a == "--topk" && i + 1 < argc) topk = atoi(argv[++i]);
     else if (a == "--shared" && i + 1 < argc) shared = atoi(argv[++i]);
+    else if (a == "--shared-bits" && i + 1 < argc) g_shared_bits = atoi(argv[++i]);
     else if (a == "--validate") g_validate = true;
     else if (a == "--variants") g_variants = true;
     else if (a == "--trials" && i + 1 < argc) g_trials = atoi(argv[++i]);

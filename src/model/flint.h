@@ -4,13 +4,17 @@
 // per-head q / k RMSNorm, a learned sink logit per head; sliding-window layers (513 positions, a row's own included) with
 // RoPE, and full-attention layers without positional encoding (the first two, every fourth after them, the last).
 // Checkpoints: MLX safetensors, affine 4-bit group-64 projections and experts, an 8-bit embedding, the router in bf16
-// (Recursive's flint-int4). The math is Recursive's (rec's model.py, recursive-oss/rec).
+// (Recursive's flint-int4); or a GGUF import (`kapitsa import`, src/gguf/import.cpp: unsloth's flint-UD-IQ2_XXS) with
+// the routed experts in llama.cpp's IQ blocks as stored, run on src/kernels/wfmt_iq.metal's kernels, and the rest in
+// 4-bit group 64. The math is Recursive's (rec's model.py, recursive-oss/rec).
 // Sliding-window layers keep a ring of window + 8 positions (Dory's layout: a ring cannot go back further than its 8
 // spare rows, so checkpoints hold copies of the rings); full-attention layers a cache that grows with the conversation.
 #pragma once
 #include "loader/safetensors.h"
 #include "model/model.h"
 
+#include <deque>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,6 +35,7 @@ struct FlintConfig {
   int bos = -1;
   int bits = 4, gs = 64;                // the projections' and experts' format
   int embed_bits = 8;
+  std::map<std::string, uint32_t> iq;   // modules kept in llama.cpp's IQ blocks (GGUF imports): their GGUF type
 };
 
 // An MLX linear (or a stack of E of them): codes (uint32 words or bytes, the same little-endian stream), bf16 scale and
@@ -41,8 +46,12 @@ struct FlintMat {
   const Tensor* b = nullptr;
   uint32_t N = 0, K = 0, E = 1;
   int bits = 4, gs = 64;
+  // routed experts in llama.cpp's IQ blocks: their GGUF type (gguf::iq_gpu_type's; s, b null), w the stacked [E, N, K]
+  // matrix in the kernels' layout with its sections at these byte offsets (Q at 0)
+  uint32_t iq = 0;
+  uint32_t iq_x1 = 0, iq_x2 = 0, iq_x3 = 0, iq_d = 0;
   explicit operator bool() const { return w != nullptr; }
-  size_t row_bytes() const { return bits == 16 ? size_t(K) * 2 : size_t(K) * size_t(bits) / 8; }
+  size_t row_bytes() const;
 };
 
 struct FlintLayer {
@@ -125,9 +134,14 @@ class Flint : public Model {
   void enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T);
   void enc_moe_rows(Encoder& e, const FlintLayer& L, int R);
   void enc_moe_prefill(Encoder& e, const FlintLayer& L, int T);
+  // IQ experts (src/kernels/wfmt_iq.metal): loading, and the MoE passes after the router's top-k
+  void load_iq_experts();
+  void enc_moe_iq_rows(Encoder& e, const FlintLayer& L, int R);
+  void enc_moe_iq_prefill(Encoder& e, const FlintLayer& L, int T);
   // SwiGLU of fp32 gate / up rows into half rows scaled where they would overflow (mode: where the scale goes, as
   // flint_swiglu_scaled's)
-  void enc_swiglu(Encoder& e, const Buffer& g, const Buffer& u, const Buffer& h, int rows, uint32_t I, uint32_t mode);
+  void enc_swiglu(Encoder& e, const Buffer& g, const Buffer& u, const Buffer& h, int rows, uint32_t I, uint32_t mode,
+                  const Buffer* sorted = nullptr);
   void enc_head(Encoder& e, const Buffer& x, int R, const Buffer& out, size_t ld);
   void enc_sample(Encoder& e, const Buffer& lrow, const Buffer& tokens, int out_index, const SamplingParams& sp,
                   uint32_t step);
@@ -150,6 +164,8 @@ class Flint : public Model {
   WeightStore ws_;
   std::vector<FlintLayer> layers_;
   FlintMat embed_, head_;
+  std::deque<Tensor> iq_tensors_;  // the IQ experts in the kernels' layout (iq_bufs_), as the FlintMats point at them
+  std::vector<Buffer> iq_bufs_;
   const Tensor* final_norm_ = nullptr;
   Buffer inv_freq_;              // fp32 [hd / 2]: RoPE's inverse frequencies
   // (cos, sin) per frequency at one position, as flint_attn_d2 takes them inline (the last position asked for)

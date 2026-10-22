@@ -21,7 +21,8 @@
 // counter behind device-scope fences, atomic_thread_fence with thread_scope_device). Those fences come with Metal 3.2,
 // which macOS 14 does not have: there the library compiles without them (FLINT_FENCES 0), the three kernels only write
 // their partial results, and flint_router_topk_merge / flint_router_shared_merge / flint_attn_d2_merge run the same
-// merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS).
+// merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS). They do so
+// before Apple9 (M1, M2) too, where the last threadgroup read stale data behind the fences (the M1 Pro).
 
 #ifndef NI_UNROLL
 #define NI_UNROLL _Pragma("clang loop unroll(full)")
@@ -421,7 +422,9 @@ struct FlintRouteP {
 // prompt, where bf16 holds it): the prefill's GEMMs read half rows, so a row whose largest |h| passes 2^15 is stored
 // divided by a power of two s (exact), and s multiplies what the row's product is read with instead: mode 0, row p of
 // a top-k routing's pairs (p = t k + j: its routing weight wts[p + p / k]); mode 1, the shared expert's row t (its
-// weight wts[t (k + 1) + k]); mode 2, a dense MLP's row t (scale[t], applied by flint_add_scaled).
+// weight wts[t (k + 1) + k]); mode 2, a dense MLP's row t (scale[t], applied by flint_add_scaled); mode 3, the products
+// silu(gate) * up themselves in g (u unused) in moe_bucket3's sorted order (IQ experts: qrmi_gu_*_f32), row m the pair
+// rows[m] (its weight wts[q + q / k], q = rows[m]).
 // g, u: fp32 [rows][I]; h: half [rows][I]. grid: rows x 256 threads.
 struct FlintSwigluP {
   uint I, mode, k;
@@ -429,19 +432,21 @@ struct FlintSwigluP {
 [[kernel]] void flint_swiglu_scaled(const device float* g [[buffer(0)]], const device float* u [[buffer(1)]],
                                     device half* h [[buffer(2)]], device float* wts [[buffer(3)]],
                                     device float* scale [[buffer(4)]], constant FlintSwigluP& p [[buffer(5)]],
-                                    uint row [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],
-                                    uint ntg [[threads_per_threadgroup]]) {
+                                    const device uint* rows [[buffer(6)]], uint row [[threadgroup_position_in_grid]],
+                                    uint tid [[thread_index_in_threadgroup]], uint ntg [[threads_per_threadgroup]]) {
   threadgroup float scratch[32];
   const device float* gr = g + size_t(row) * p.I;
   const device float* ur = u + size_t(row) * p.I;
+  const bool prod = p.mode == 3;
   float m = 0.0f;
-  for (uint i = tid; i < p.I; i += ntg) m = max(m, fabs(silu(gr[i]) * ur[i]));
+  for (uint i = tid; i < p.I; i += ntg) m = max(m, fabs(prod ? gr[i] : silu(gr[i]) * ur[i]));
   m = tg_max(m, scratch, tid, ntg);
   const float s = m > 32768.0f ? exp2(ceil(log2(m / 32768.0f))) : 1.0f;
   const float inv = 1.0f / s;
-  for (uint i = tid; i < p.I; i += ntg) h[size_t(row) * p.I + i] = half(silu(gr[i]) * ur[i] * inv);
+  for (uint i = tid; i < p.I; i += ntg) h[size_t(row) * p.I + i] = half((prod ? gr[i] : silu(gr[i]) * ur[i]) * inv);
   if (tid == 0) {
-    if (p.mode == 0) wts[row + row / p.k] *= s;
+    if (p.mode == 3) wts[rows[row] + rows[row] / p.k] *= s;
+    else if (p.mode == 0) wts[row + row / p.k] *= s;
     else if (p.mode == 1) wts[row * (p.k + 1) + p.k] *= s;
     else scale[row] = s;
   }

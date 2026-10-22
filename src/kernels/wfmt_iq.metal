@@ -855,21 +855,22 @@ NI_INLINE float iq_xsum(thread const float4* xv) {
 // The words of one sub-block (32 values from 32 j) of row r: fetched for all of a lane's rows first (their loads in
 // flight together: with the loads next to their decode the kernels waited on memory, 30% of the ALU busy), then
 // computed. IQ (FMT, sections s): c0.xy = Q, c0.z = X1 (IQ2_S qh | scales << 8, IQ3_S signs, IQ3_XXS signs | scale),
-// c0.w = IQ3_S's qh | scale << 8 (IQ1_S: c0.x = Q, c0.y = X1), d; the result x 1 / iq_scale<FMT>(). Q8, an MLX 8-bit
-// group-64 row (scales ws, biases wb): the 32 codes in c0, c1, d = scale * 2^24, b = bias.
+// c0.w = IQ3_S's qh | scale << 8 (IQ1_S: c0.x = Q, c0.y = X1), d; the result x 1 / iq_scale<FMT>(). QB 8 / 4, an MLX
+// 8-bit / 4-bit group-64 row (scales ws, biases wb; the shared expert's): the 32 codes in c0, c1 (4-bit: c0),
+// d = scale * 2^24, b = bias.
 struct IqFetch {
   uint4 c0, c1;
   float d, b;
 };
 
-template <int FMT, bool Q8>
+template <int FMT, int QB>
 NI_INLINE IqFetch iq_fetch(const device uchar* W, const device bfloat* ws, const device bfloat* wb, IqSec s, uint r,
                            uint K, uint j) {
   IqFetch f;
-  if (Q8) {
-    const device uint4* p = (const device uint4*)((const device uint32_t*)W + size_t(r) * (K / 4) + j * 8);
+  if (QB) {
+    const device uint4* p = (const device uint4*)((const device uint32_t*)W + size_t(r) * (K * QB / 32) + j * QB);
     f.c0 = p[0];
-    f.c1 = p[1];
+    f.c1 = QB == 8 ? p[1] : uint4(0u);
     const uint g = r * (K / 64) + j / 2;
     f.d = float(ws[g]) * 16777216.0f;
     f.b = float(wb[g]);
@@ -888,9 +889,23 @@ NI_INLINE IqFetch iq_fetch(const device uchar* W, const device bfloat* ws, const
   return f;
 }
 
-template <int FMT, bool Q8>
+template <int FMT, int QB>
 NI_INLINE float iq_compute(IqFetch f, thread const float4* xv, float xs) {
-  if (Q8) {  // codes as fp16 subnormals q 2^-24
+  if (QB == 4) {  // codes as fp16 subnormals q 2^-24; word i: values 8i .. 8i + 7 = xv[2i], xv[2i + 1]
+    const uint cw[4] = {f.c0.x, f.c0.y, f.c0.z, f.c0.w};
+    float d = 0.0f;
+    _Pragma("clang loop unroll(full)")
+    for (int i = 0; i < 4; ++i) {
+      _Pragma("clang loop unroll(full)")
+      for (int b = 0; b < 4; ++b) {  // values 8i + b and 8i + b + 4
+        const half2 h = as_type<half2>((cw[i] >> (4 * b)) & 0x000F000Fu);
+        d = fma(float(h.x), xv[2 * i][b], d);
+        d = fma(float(h.y), xv[2 * i + 1][b], d);
+      }
+    }
+    return fma(f.d, d, f.b * xs);
+  }
+  if (QB == 8) {  // codes as fp16 subnormals q 2^-24
     const uint cw[8] = {f.c0.x, f.c0.y, f.c0.z, f.c0.w, f.c1.x, f.c1.y, f.c1.z, f.c1.w};
     float d = 0.0f;
     _Pragma("clang loop unroll(full)")
@@ -917,7 +932,7 @@ NI_INLINE float iq_compute(IqFetch f, thread const float4* xv, float xs) {
 //    acc[p][i] = row (l / T + RS i)'s sum in the T lanes of its group (the routed down projection: K = I = 512, 16
 //    lanes per row, 2 rows at a time).
 //  T = 0, other K: the (row, sub-block) items of the NR rows spread over the lanes; acc[p][j] in every lane.
-template <int FMT, int NR, int NP, bool Q8, int T>
+template <int FMT, int NR, int NP, int QB, int T>
 NI_INLINE void iq_rows_dot(const device uchar* const thread* W, const device bfloat* const thread* ws,
                            const device bfloat* const thread* wb, IqSec s, thread const uint* rr, uint K,
                            const device float* x, uint lane, thread float (&acc)[NP][NR]) {
@@ -937,15 +952,15 @@ NI_INLINE void iq_rows_dot(const device uchar* const thread* W, const device bfl
         _Pragma("clang loop unroll(full)")
         for (int q = 1; q < RS; ++q)
           if (ro == uint(q)) r = rr[q + RS * i];
-        f[p][i] = iq_fetch<FMT, Q8>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, r, K, j);
+        f[p][i] = iq_fetch<FMT, QB>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, r, K, j);
       }
     float4 xv[8];
     iq_load_x32(x, j * 32, xv);
-    const float xs = Q8 || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
+    const float xs = QB || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
     _Pragma("clang loop unroll(full)")
     for (int p = 0; p < NP; ++p)
       _Pragma("clang loop unroll(full)")
-      for (int i = 0; i < NI; ++i) acc[p][i] = iq_compute<FMT, Q8>(f[p][i], xv, xs);
+      for (int i = 0; i < NI; ++i) acc[p][i] = iq_compute<FMT, QB>(f[p][i], xv, xs);
     _Pragma("clang loop unroll(full)")
     for (int p = 0; p < NP; ++p)
       _Pragma("clang loop unroll(full)")
@@ -961,14 +976,14 @@ NI_INLINE void iq_rows_dot(const device uchar* const thread* W, const device bfl
     for (int p = 0; p < NP; ++p)
       _Pragma("clang loop unroll(full)")
       for (int j = 0; j < NR; ++j)
-        f[p][j] = iq_fetch<FMT, Q8>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, rr[j], K, k0 / 32);
+        f[p][j] = iq_fetch<FMT, QB>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, rr[j], K, k0 / 32);
     float4 xv[8];
     iq_load_x32(x, k0, xv);
-    const float xs = Q8 || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
+    const float xs = QB || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
     _Pragma("clang loop unroll(full)")
     for (int p = 0; p < NP; ++p)
       _Pragma("clang loop unroll(full)")
-      for (int j = 0; j < NR; ++j) acc[p][j] += iq_compute<FMT, Q8>(f[p][j], xv, xs);
+      for (int j = 0; j < NR; ++j) acc[p][j] += iq_compute<FMT, QB>(f[p][j], xv, xs);
   }
   if (KF < K) {
     const uint TT = (K - KF) / 32;
@@ -976,15 +991,15 @@ NI_INLINE void iq_rows_dot(const device uchar* const thread* W, const device bfl
       const uint jt = t / TT, j = KF / 32 + (t - jt * TT);
       float4 xv[8];
       iq_load_x32(x, j * 32, xv);
-      const float xs = Q8 || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
+      const float xs = QB || FMT == int(kIq1s) ? iq_xsum(xv) : 0.0f;
       uint r = rr[0];
       _Pragma("clang loop unroll(full)")
       for (int i = 1; i < NR; ++i)
         if (jt == uint(i)) r = rr[i];
       _Pragma("clang loop unroll(full)")
       for (int p = 0; p < NP; ++p) {
-        const float v = iq_compute<FMT, Q8>(
-            iq_fetch<FMT, Q8>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, r, K, j), xv, xs);
+        const float v = iq_compute<FMT, QB>(
+            iq_fetch<FMT, QB>(W[p], ws ? ws[p] : nullptr, wb ? wb[p] : nullptr, s, r, K, j), xv, xs);
         _Pragma("clang loop unroll(full)")
         for (int i = 0; i < NR; ++i) acc[p][i] += jt == uint(i) ? v : 0.0f;
       }
@@ -1003,10 +1018,10 @@ struct MoeIqParams {
 };
 
 // gate/up + SwiGLU: grid (ceil(max(I, SI) / (NR * simdgroups)), k + 1 slots, R rows); xn [R, D]; h [R, k + 1, Imax].
-// Slot k is the shared expert (MLX 8-bit group 64), on grid row 0: its rows read 4x the routed experts' bytes, so they
+// Slot k is the shared expert (MLX SB-bit group 64: 8, or 4 for Flint's), on grid row 0: its rows read 4x the routed experts' bytes, so they
 // go first and the routed rows fill in around them (at the end of the grid they ran as a tail: 77 -> 66 us per layer).
 // K = D % 1024 == 0.
-template <int FG, int NR>
+template <int FG, int NR, int SB>
 NI_INLINE void moei_gu_rows_impl(const device uchar* gw, const device uchar* uw, const device uint32_t* sgw,
                                  const device bfloat* sgs, const device bfloat* sgb, const device uint32_t* suw,
                                  const device bfloat* sus, const device bfloat* sub, const device float* xn,
@@ -1026,7 +1041,7 @@ NI_INLINE void moei_gu_rows_impl(const device uchar* gw, const device uchar* uw,
     const device uchar* W[2] = {(const device uchar*)sgw, (const device uchar*)suw};
     const device bfloat* S[2] = {sgs, sus};
     const device bfloat* B[2] = {sgb, sub};
-    iq_rows_dot<0, NR, 2, true, 0>(W, S, B, p.gu, rr, p.D, xn + r * p.D, lane, acc);
+    iq_rows_dot<0, NR, 2, SB, 0>(W, S, B, p.gu, rr, p.D, xn + r * p.D, lane, acc);
     sc = 1.0f;
   } else {
     const uint e = idx[r * p.k + slot];
@@ -1034,7 +1049,7 @@ NI_INLINE void moei_gu_rows_impl(const device uchar* gw, const device uchar* uw,
     _Pragma("clang loop unroll(full)")
     for (int j = 0; j < NR; ++j) rr[j] = e * N + min(row0 + j, N - 1);
     const device uchar* W[2] = {gw, uw};
-    iq_rows_dot<FG, NR, 2, false, 0>(W, nullptr, nullptr, p.gu, rr, p.D, xn + r * p.D, lane, acc);
+    iq_rows_dot<FG, NR, 2, 0, 0>(W, nullptr, nullptr, p.gu, rr, p.D, xn + r * p.D, lane, acc);
     sc = iq_scale<FG>();
   }
   const uint Imax = max(p.I, p.SI);
@@ -1048,7 +1063,7 @@ NI_INLINE void moei_gu_rows_impl(const device uchar* gw, const device uchar* uw,
 // one simdgroup per slot (k + 1 simdgroups; slot k the shared expert); the slots' sums go through threadgroup memory
 // and are added in slot order. T = I / 32 when it divides 32 (the lanes of a row share its h, see iq_rows_dot), else 0
 // (then I % 1024 == 0). grid (ceil(D / NR), R), 32 (k + 1) threads.
-template <int FD, int NR, int T>
+template <int FD, int NR, int T, int SB>
 NI_INLINE void moei_down_rows_impl(const device uchar* dw, const device uint32_t* sdw, const device bfloat* sds,
                                    const device bfloat* sdb, const device float* h, const device uint* idx,
                                    const device float* wts, device float* x, constant MoeIqParams& p, uint2 tgp,
@@ -1068,14 +1083,14 @@ NI_INLINE void moei_down_rows_impl(const device uchar* dw, const device uint32_t
       const device uchar* W[1] = {(const device uchar*)sdw};
       const device bfloat* S[1] = {sds};
       const device bfloat* B[1] = {sdb};
-      iq_rows_dot<0, NR, 1, true, T>(W, S, B, p.dn, rr, p.SI, hs, lane, acc);
+      iq_rows_dot<0, NR, 1, SB, T>(W, S, B, p.dn, rr, p.SI, hs, lane, acc);
     } else {
       const uint e = idx[r * p.k + slot];
       uint rr[NR];
       _Pragma("clang loop unroll(full)")
       for (int j = 0; j < NR; ++j) rr[j] = e * p.D + min(row0 + j, p.D - 1);
       const device uchar* W[1] = {dw};
-      iq_rows_dot<FD, NR, 1, false, T>(W, nullptr, nullptr, p.dn, rr, p.I, hs, lane, acc);
+      iq_rows_dot<FD, NR, 1, 0, T>(W, nullptr, nullptr, p.dn, rr, p.I, hs, lane, acc);
       w *= iq_scale<FD>();
     }
     if (T > 0) {
@@ -1095,7 +1110,7 @@ NI_INLINE void moei_down_rows_impl(const device uchar* dw, const device uint32_t
   }
 }
 
-#define NI_MOEI_GU_ROWS(NAME, FG, NR)                                                                          \
+#define NI_MOEI_GU_ROWS(NAME, FG, NR, SB)                                                                        \
   [[kernel]] void NAME(const device uchar* gw [[buffer(0)]], const device uchar* uw [[buffer(1)]],            \
                        const device uint32_t* sgw [[buffer(2)]], const device bfloat* sgs [[buffer(3)]],       \
                        const device bfloat* sgb [[buffer(4)]], const device uint32_t* suw [[buffer(5)]],       \
@@ -1104,10 +1119,10 @@ NI_INLINE void moei_down_rows_impl(const device uchar* dw, const device uint32_t
                        constant MoeIqParams& p [[buffer(10)]], const device uint* idx [[buffer(11)]],          \
                        uint3 tgp [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],  \
                        uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {     \
-    moei_gu_rows_impl<FG, NR>(gw, uw, sgw, sgs, sgb, suw, sus, sub, xn, h, p, idx, tgp, sg, nsg, lane);         \
+    moei_gu_rows_impl<FG, NR, SB>(gw, uw, sgw, sgs, sgb, suw, sus, sub, xn, h, p, idx, tgp, sg, nsg, lane);     \
   }
 
-#define NI_MOEI_DOWN_ROWS(NAME, FD, NR, T)                                                                     \
+#define NI_MOEI_DOWN_ROWS(NAME, FD, NR, T, SB)                                                                   \
   [[kernel]] void NAME(const device uchar* dw [[buffer(0)]], const device uint32_t* sdw [[buffer(1)]],        \
                        const device bfloat* sds [[buffer(2)]], const device bfloat* sdb [[buffer(3)]],         \
                        const device float* h [[buffer(4)]], const device uint* idx [[buffer(5)]],              \
@@ -1115,7 +1130,7 @@ NI_INLINE void moei_down_rows_impl(const device uchar* dw, const device uint32_t
                        constant MoeIqParams& p [[buffer(8)]], uint2 tgp [[threadgroup_position_in_grid]],      \
                        uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {  \
     threadgroup float part[17 * NR];                                                                         \
-    moei_down_rows_impl<FD, NR, T>(dw, sdw, sds, sdb, h, idx, wts, x, p, tgp, sg, lane, part);                \
+    moei_down_rows_impl<FD, NR, T, SB>(dw, sdw, sds, sdb, h, idx, wts, x, p, tgp, sg, lane, part);            \
   }
 
 // ---- MMA operands ----
@@ -1494,9 +1509,9 @@ NI_INLINE void qrmi_acc(const device half* X, const device uint* xrows, bool gat
   }
 }
 
-template <int FMT, int FL, int BN, int WN, int BK = 64>
+template <int FMT, int FL, int BN, int WN, int BK = 64, typename HT = half>
 NI_INLINE void qrmi_gu_body(const device half* X, const device uint* xrows, uint x_ld, uint m0, uint rows,
-                            const device uchar* const thread* W, IqSec s, uint rbase, device half* H, uint y_ld, uint N,
+                            const device uchar* const thread* W, IqSec s, uint rbase, device HT* H, uint y_ld, uint N,
                             uint K, uint n0, threadgroup half* xs, uint tid, uint sgn, uint2 rc) {
   constexpr int TN = BN / WN, FA = TN / 8;
   simdgroup_float8x8 acc[2 * FA][FL];
@@ -1510,7 +1525,7 @@ NI_INLINE void qrmi_gu_body(const device half* X, const device uint* xrows, uint
       for (int e = 0; e < 2; ++e) {
         const uint m = b * 8 + rc.y + e;
         const float g = acc[a][b].thread_elements()[e], u = acc[FA + a][b].thread_elements()[e];
-        if (m < rows) H[(m0 + m) * y_ld + n] = half(silu(g) * u);
+        if (m < rows) H[(m0 + m) * y_ld + n] = HT(silu(g) * u);
       }
   }
 }
@@ -1535,11 +1550,13 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
     }
 }
 
-// gate/up + SwiGLU: H (sorted rows, half) from X rows gathered through xrows. grid (N / BN, max tiles), 32 WN threads.
-#define NI_QRMI_GU(NAME, FMT, FB, BN, WN, BK)                                                                 \
+// gate/up + SwiGLU: H (sorted rows, half; HT float: fp32, as Flint scales them into half rows) from X rows gathered
+// through xrows. grid (N / BN, max tiles), 32 WN threads.
+#define NI_QRMI_GU(NAME, FMT, FB, BN, WN, BK) NI_QRMI_GU_T(NAME, FMT, FB, BN, WN, BK, half)
+#define NI_QRMI_GU_T(NAME, FMT, FB, BN, WN, BK, HT)                                                           \
   [[kernel, max_total_threads_per_threadgroup(WN * 32)]] void NAME(                                           \
       const device half* X [[buffer(0)]], const device uchar* Wg [[buffer(1)]], const device uchar* Wu [[buffer(2)]], \
-      device half* H [[buffer(3)]], constant QrmIqParams& p [[buffer(4)]], const device uint* tiles [[buffer(5)]], \
+      device HT* H [[buffer(3)]], constant QrmIqParams& p [[buffer(4)]], const device uint* tiles [[buffer(5)]], \
       const device uint* ntiles [[buffer(6)]], const device uint* xrows [[buffer(7)]],                       \
       uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                    \
       uint sg [[simdgroup_index_in_threadgroup]], uint lane [[thread_index_in_simdgroup]]) {                  \
@@ -1552,16 +1569,16 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
     threadgroup half* xs = (threadgroup half*)xs4;                                                           \
     const uint live = (rows + 7) / 8;                                                                        \
     if (FB >= 4 && live >= 4)                                                                                \
-      qrmi_gu_body<FMT, (FB >= 4 ? 4 : 1), BN, WN, BK>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
+      qrmi_gu_body<FMT, (FB >= 4 ? 4 : 1), BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else if (FB >= 3 && live == 3)                                                                           \
-      qrmi_gu_body<FMT, (FB >= 3 ? 3 : 1), BN, WN, BK>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
+      qrmi_gu_body<FMT, (FB >= 3 ? 3 : 1), BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else if (FB >= 2 && live == 2)                                                                           \
-      qrmi_gu_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
+      qrmi_gu_body<FMT, (FB >= 2 ? 2 : 1), BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, \
                                                        p.N, p.K, n0, xs, tid, sg, rc);                      \
     else                                                                                                     \
-      qrmi_gu_body<FMT, 1, BN, WN, BK>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, p.N, p.K, n0, xs, \
+      qrmi_gu_body<FMT, 1, BN, WN, BK, HT>(X, xrows, p.x_ld, m0, rows, W, p.sec, e * p.N, H, p.y_ld, p.N, p.K, n0, xs, \
                                        tid, sg, rc);                                                         \
   }
 
@@ -1599,14 +1616,17 @@ NI_INLINE void qrmi_dn_body(const device half* X, uint x_ld, uint m0, uint rows,
 // ---- instantiations: iq2xxs, iq2s, iq3s, iq3xxs, iq1s ----
 #define NI_IQ_ALL(X) X(iq2xxs, 1) X(iq2s, 2) X(iq3s, 3) X(iq3xxs, 4) X(iq1s, 5)
 #define NI_IQ_INST(SFX, FMT)                                                                                  \
-  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r2, FMT, 2)                                                         \
-  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r4, FMT, 4)                                                         \
-  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r8, FMT, 8)                                                         \
-  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r4, FMT, 4, 0)                                                  \
-  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r8, FMT, 8, 0)                                                  \
-  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r4_t16, FMT, 4, 16)                                             \
-  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r8_t16, FMT, 8, 16)                                             \
-  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r16_t16, FMT, 16, 16)                                           \
+  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r2, FMT, 2, 8)                                                      \
+  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r4, FMT, 4, 8)                                                      \
+  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r8, FMT, 8, 8)                                                      \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r4, FMT, 4, 0, 8)                                               \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r8, FMT, 8, 0, 8)                                               \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r4_t16, FMT, 4, 16, 8)                                          \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r8_t16, FMT, 8, 16, 8)                                          \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r16_t16, FMT, 16, 16, 8)                                        \
+  NI_MOEI_GU_ROWS(moei_gu_rows_##SFX##_r2_s4, FMT, 2, 4)                                                   \
+  NI_MOEI_DOWN_ROWS(moei_down_rows_##SFX##_r8_s4, FMT, 8, 0, 4)                                            \
+  NI_QRMI_GU_T(qrmi_gu_##SFX##_m32_n64_k32_f32, FMT, 4, 64, 4, 32, float)                                  \
   NI_MOE8I_GU(moe8i_gu_##SFX, FMT)                                                                         \
   NI_MOE8I_DOWN(moe8i_down_##SFX##_nf1, FMT, 1)                                                            \
   NI_MOE8I_DOWN(moe8i_down_##SFX##_nf2, FMT, 2)                                                            \

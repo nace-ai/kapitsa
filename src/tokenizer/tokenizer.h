@@ -28,6 +28,9 @@ class Tokenizer {
   bool is_special(int id) const;
   // An added token (tokenizer.json's added_tokens: <|im_end|>, <think>, <tool_call> ...): matched whole, never text
   bool is_added(int id) const;
+  // Flint's pre-tokenizer: the regexes of its tokenizer.json's three Isolated splits (before a ByteLevel without its
+  // regex), which select Split::Flint (the GGUF importer writes them)
+  static const char* const kFlintSplit[3];
 
  private:
   void bpe(const std::string& word, std::vector<int>& out) const;
