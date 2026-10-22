@@ -650,11 +650,16 @@ struct Builder {
       }
       return;
     }
-    // trunk, routed experts in IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S: kept as stored (src/kernels/wfmt_iq.metal
-    // reads the blocks; a GGUF's IQ2_XXS experts converted to 3-bit group 64 took 1.7x their bytes, which put
-    // Qwen3.6-35B-A3B's unsloth UD-IQ2_XXS at 15 GB instead of 11). Gate and up of one type, in tensors of their own;
-    // shapes the kernels take.
-    if (!gu && iq_gpu_type(g->type) && u->type == g->type && iq_gpu_type(d->type) && H % 512 == 0 && I % 256 == 0 &&
+    // trunk, routed experts in IQ2_XXS / IQ2_S / IQ3_S: kept as stored (src/kernels/wfmt_iq.metal reads the blocks; a
+    // GGUF's IQ2_XXS experts converted to 3-bit group 64 took 1.7x their bytes, which put Qwen3.6-35B-A3B's unsloth
+    // UD-IQ2_XXS at 15 GB instead of 11). Gate and up of one type, in tensors of their own; shapes the kernels take.
+    // IQ3_XXS and IQ1_S experts too with KAPITSA_IMPORT_IQ_NEW=1; by default they are still converted, until a Qwen file
+    // of them has been compared kept against converted (their kernels are checked on synthetic and Flint's blocks).
+    auto kept = [](uint32_t t) {
+      static const bool fresh = getenv("KAPITSA_IMPORT_IQ_NEW") && atoi(getenv("KAPITSA_IMPORT_IQ_NEW")) > 0;
+      return iq_gpu_type(t) && (fresh || (t != kIQ3_XXS && t != kIQ1_S));
+    };
+    if (!gu && kept(g->type) && u->type == g->type && kept(d->type) && H % 512 == 0 && I % 256 == 0 &&
         !getenv("KAPITSA_IMPORT_IQ_CONVERT")) {
       auto stacked_iq = [&](const Tensor* t, const std::string& n, uint64_t N, uint64_t K) {
         Lin& L = linear(f, t, out + "mlp.switch_mlp." + n, E * N, K, iq_fmt(t->type));

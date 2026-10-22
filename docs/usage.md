@@ -178,8 +178,8 @@ The MTP head comes from the file, an `mtp-*.gguf` beside it, an Ollama model's d
 
 In a mostly 4-bit-or-better file (unsloth's UD mixes, for example), the 1-3-bit tensors take the file's majority format.
 The experts of mixture-of-experts layers take 5-bit group 64 from 4-bit types, 4-bit group 64 from 3-bit and 3-bit group
-64 from 1-2-bit types, except routed experts in IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS or IQ3_S: those stay in the file's own
-blocks, which Kapitsa's kernels read as they are. The folder's experts file is then an APFS clone of the GGUF (no second copy; on
+64 from 1-2-bit types, except routed experts in IQ2_XXS, IQ2_S or IQ3_S (and IQ3_XXS or IQ1_S with
+`KAPITSA_IMPORT_IQ_NEW=1`): those stay in the file's own blocks, which Kapitsa's kernels read as they are. The folder's experts file is then an APFS clone of the GGUF (no second copy; on
 another volume, or with `KAPITSA_IMPORT_COPY=1`, a copy), and the model locks its weights in memory as it loads. Refused:
 the ternary TQ1_0 and TQ2_0, Hadamard-rotated weights, Qwen3-Next, other architectures.
 
