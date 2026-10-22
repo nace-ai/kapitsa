@@ -23,11 +23,12 @@ one config at a time under the GPU lock, 00:22-01:20 local time. MacBook Pro (16
 | `lightning-kapitsa-20261022-010104` | Nemotron 3.5 Lightning 30B-A3B NVFP4 | Kapitsa | 5,401 / 5,763 | 267.4 (250.2-278.9) / 277.9 | 19.0 | contention (5.8% mean, 10.2% max, com.apple.WebKit) |
 | `super-kapitsa-20261022-010647` | Nemotron 3.5 Super-VL 120B-A12B NVFP4 | Kapitsa | 1,117 / 1,192 | 93.7 (91.1-97.8) / 87.2 | 70.3 | contention (5.6% mean, 7.0% max, com.apple.WebKit); repetition loop: decode, decode_greedy |
 | `dory-kapitsa-perloop-20261022-011349` | Nemotron Dory1.0 4B NVFP4 (2 loops, per-loop KV) | Kapitsa | 1,077 / 1,021 | 119.5 (109.4-122.3) / 128.3 | 5.1 | contention (7.2% mean, 20.2% max, com.apple.WebKit); repetition loop: decode |
+| `dory-kapitsa-perloop-20261022-014626` | Nemotron Dory1.0 4B NVFP4 (2 loops, per-loop KV), main `039ddea` (after #287) | Kapitsa | 2,368 / 1,966 | 119.1 (109.9-122.3) / 129.0 | 5.1 | contention (6.8% mean, WebKit) |
 
 **Contention.** A system `com.apple.WebKit` GPU process stayed open the whole session (5-7% of the GPU on average), so
 every run carries the harness's contention flag, as in the 2026-10-18 session (3-8%). Read the numbers as a lower bound.
 
-**Dory predates #287.** The Dory row ran on `fd85910`, before [#287](https://github.com/nace-ai/kapitsa/pull/287) moved Dory's prefill GEMMs onto the matrix units (default on an M5 with macOS 26; 596 to 1,511 tok/s at 4K on the M5 Pro), so its prefill (1,077 / 1,021) is not main's now and its decode was not re-checked after that change. Dory's sampled decode and both of Super-VL's decode phases are repetition-loop flagged (valid runs), which flatters a speculative decoder; the earlier unflagged per-loop Dory run (117.4 tok/s, 2026-10-19) is within 2% of this one.
+**Dory after #287.** The first Dory row ran on `fd85910`, before [#287](https://github.com/nace-ai/kapitsa/pull/287) moved Dory's prefill GEMMs onto the matrix units (default on an M5 with macOS 26). Dory ran again at 01:46 on main `039ddea` (#287 and #286, whose engine changes are Flint-only), and that run is the README's Dory cell: prefill 2,368 / 1,966 tok/s (was 1,077 / 1,021), decode 119.1 at T = 0.6 and 129.0 greedy, the same as before, with no repetition-loop flag. Both of Super-VL's decode phases are repetition-loop flagged (valid runs), which flatters a speculative decoder.
 
 **Against the other engines.** Kapitsa has the fastest decode on the 27B, 35B-A3B, Bolt, Lightning, Super-VL and Dory (the last three are the README's collapsed Nemotron table). On Flash-Next mlx-serve
 (108 tok/s) and oMLX (107) are ahead of Kapitsa's 106. Splash reads prompts faster than Kapitsa on both models it runs:
