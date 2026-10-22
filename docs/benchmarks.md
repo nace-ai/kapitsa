@@ -83,9 +83,10 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
 - Flint 40B-A2.5B: not measured on this Mac yet (the poster's row is dashes).
 
 **MacBook Pro M3 Pro 36 GB**
-- Flint 40B-A2.5B only, not on the poster: Kapitsa (#303's macOS 14 kernels, `3da3798`) and llama.cpp b11804 on
-  Recursive's Q4_1 GGUF at the card's T 1.0, on macOS 14.1 and on battery; rec 0.1.0 refuses a 36 GB Mac (it requires
-  48 GiB) ([details](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22)).
+- Flint 40B-A2.5B only, not on the poster: Kapitsa (main `cff1b1e`, #303's macOS 14 kernels) and llama.cpp b11804 on
+  Recursive's Q4_1 GGUF at the card's T 1.0, on macOS 14.1 and AC power, each the mean of the clean pass's two runs
+  ([#341](https://github.com/nace-ai/kapitsa/pull/341)); rec 0.1.0 refuses a 36 GB Mac (it requires 48 GiB)
+  ([details](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22)).
 
 **MacBook Pro M1 Pro 16 GB**
 - Kapitsa's cells, all six: the 0.2.6 release, `kapitsa bench`'s full protocol on 2026-10-22, the models one after
