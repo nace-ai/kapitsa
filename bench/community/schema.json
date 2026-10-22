@@ -57,7 +57,7 @@
       "additionalProperties": false,
       "required": ["corpus_sha256", "decode_tokens", "decode_runs", "greedy_runs", "sizes"],
       "properties": {
-        "corpus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The prompt corpus (bench/harness/corpus); the frozen one is 1a9bb103..."},
+        "corpus_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The prompt corpus (bench/harness/corpus); the frozen one is 58a7756f... (the corpus up to 128K; the first 144,500 characters, 1a9bb103..., are the earlier 32K one, still accepted)"},
         "decode_tokens": {"type": "integer", "minimum": 1, "maximum": 8192},
         "decode_runs": {"type": "integer", "minimum": 1, "maximum": 50},
         "greedy_runs": {"type": "integer", "minimum": 0, "maximum": 50},
