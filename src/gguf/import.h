@@ -11,6 +11,9 @@
 // F32 / F16 / BF16 become bf16. In a file that is mostly 4-bit or better (unsloth's UD mixes), its 1-3-bit tensors
 // take the file's majority format instead. MoE experts (whose kernels have no group-32 forms) take 5-bit group 64 from
 // 4-bit types, and a layer's experts share one format, as do a dense layer's gate and up. Ternary types are refused.
+// Recursive's Flint (arch "flint", build_flint): only a file whose routed experts are IQ blocks, kept as stored (an
+// APFS clone of the GGUF); attention, the dense MLP and the shared expert become 4-bit group 64, the embedding 3-bit
+// group 64, the LM head 6-bit group 64, and the router stays bf16.
 #pragma once
 #include <string>
 
