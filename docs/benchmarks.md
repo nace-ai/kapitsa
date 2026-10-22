@@ -1444,18 +1444,18 @@ does. The Mac held about 6 GB in swap throughout. Result files, every run listed
 Each Kapitsa table below also carries a paragraph with that model's newest flag-free run on 0.2.2, which is after the
 M5 prefill kernels and the KFlash-tree default; the other engines' rows are the 2026-10-19 session in every table.
 Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.4, 18.6 →
-18.9 GB). The growth arrives with the SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)), which is
-new since 0.1.36 and on by default in `serve`: rebuilt binaries run with the table's own protocol (16K sweep, tool
-calls, cache turn, `--slots 1`) peak at 4,798 MB at 0.1.36, 4,799 MB at #212's parent, 5,610 MB at #212 itself and
-5,665 MB at 180a650, so no engine commit before #212 moves the peak and the commits after it add tens of megabytes.
-The largest transient it adds is the copy it takes of a conversation that is being replaced: when a request replaces a
-conversation the SSD lacks, `serve` copies that conversation's KV into RAM before the write-behind thread writes it to
-the SSD (each copy up to `capture_max`, RAM/32 capped at 1 GiB — 604 MB for a 16K conversation on the 4B) and frees it
-once the write finishes. That copy is why the doctor's plan total, a steady-state figure, does not move. On a single
-16K prefill the cache costs 0.33 GB (5,204 MB with it, 4,868 MB with `NI_DISK_CACHE=0`, two runs each), which covers
-one phase of the run and not the whole of the growth; the other three models were not split. The stored 4B run above,
-5,553 MB, is the same engine at 180a650 in a louder session, and peak footprint does not track the 7-12% foreign GPU
-load these runs were flagged with.
+18.9 GB). The growth is the SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)), which is new since
+0.1.36 and on by default in `serve`: rebuilt binaries run with the table's own protocol (16K sweep, tool calls, cache
+turn, `--slots 1`) peak at 4,798 MB at 0.1.36, 4,799 MB at #212's parent, 5,610 MB at #212 itself and 5,665 MB at
+180a650, and the same protocol at 180a650 with `--disk-cache 0` peaks at 4,851 MB (tools 4,358, sweep 4,851, cache
+turn 4,851), so the cache is about 0.8 GB of that 5,665 MB and the commits after #212 add about 50 MB. The largest
+thing it holds is the copy it takes of a conversation that is being replaced: when a request replaces a conversation
+the SSD lacks, `serve` copies that conversation's KV into RAM before the write-behind thread writes it to the SSD
+(each copy up to `capture_max`, RAM/32 capped at 1 GiB — 604 MB for a 16K conversation on the 4B) and frees it once
+the write finishes, which is why the peak lands in the phase that replaces the sweep's conversation and why the
+doctor's plan total, a steady-state figure, does not move. The stored 4B run above, 5,553 MB, is the same engine at
+180a650 in a louder session, and peak footprint does not track the 7-12% foreign GPU load these runs were flagged
+with.
 
 ### Qwen3.5-4B at 4-bit
 
