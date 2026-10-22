@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## 🔥 What's new
 
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro, with Flint's MoE prefill on the tensor units (#340), rec reads 4K and 16K prompts 1.1× and 1.4× as fast as Kapitsa and llama.cpp 1.1× and 1.3×; Kapitsa decodes 1.04× rec and 1.6× llama.cpp ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro, with Flint's MoE prefill on the tensor units (#340), Kapitsa reads 4K prompts 1.06× as fast as rec and 1.09× llama.cpp, rec and llama.cpp read 16K prompts 1.19× and 1.08× as fast, and Kapitsa decodes 1.05× rec and 1.65× llama.cpp ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **Kapitsa: the fastest decode in 24 of 26 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
@@ -97,7 +97,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **70**<br><sub>loops</sub> | × | × | × | × | × | 53 | 13 | × | × |
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 3141 / **159**<br><sub>KFlash</sub> | 1728 / 115<br><sub>MTP</sub> | 1938 / 124<br><sub>MTP</sub> | × | 2369 / 92 | 1743 / 101 | 1881 / 94 | 1915 / 101<br><sub>MTP</sub> | 1479 / 72 | × |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 **79**<br><sub>LiLiCorr</sub> | × | 39<br><sub>no spec</sub> | × | × | × | 41 | × | × | × |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 1920 / **151**<br><sub>no spec</sub> | — | — | × | — | — | — | 2072 / 92<br><sub>no spec · b11804</sub> | — | 2138 / 145<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2262 / **152**<br><sub>no spec</sub> | — | — | × | — | — | — | 2072 / 92<br><sub>no spec · b11804</sub> | — | 2138 / 145<br><sub>no spec</sub> |
 
 </details>
 

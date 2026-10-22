@@ -1,0 +1,202 @@
+{
+ "label": "flint-qtm",
+ "schema": 2,
+ "when": "2026-10-22 19:04:15",
+ "invalid": [
+  "harness: server never became ready (36s); see <run-root>/logs/flint-qtm-20261022-190135.log"
+ ],
+ "flags": [],
+ "config_label": "flint-qtm",
+ "display": "flint-qtm",
+ "engine": "kapitsa",
+ "version": "1455ab4+dirty",
+ "version_config": "auto",
+ "model_name": "Flint 40B-A2.5B",
+ "model_path": "{models}/flint-4bit",
+ "note": "A/B flint-qtm",
+ "config": {
+  "label": "flint-qtm",
+  "display": "flint-qtm",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons",
+   "--ref-prompt-tokens",
+   "4000:3874,16000:15066"
+  ],
+  "agent_trace": "none",
+  "note": "A/B flint-qtm"
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "26.5.2",
+    "BuildVersion": "25F84"
+   },
+   "hw_model": "Mac17,8",
+   "cpu": "Apple M5 Pro",
+   "memsize": "51539607552",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "2",
+   "vm": {
+    "swap_used_mb": 3798.75,
+    "swapouts": 19429445,
+    "swapins": 13195438,
+    "pageouts": 242487,
+    "memorystatus_level": 49
+   },
+   "gpu_mem": {
+    "in_use": 18139906048,
+    "alloc": 23508828160,
+    "util_pct": 87
+   },
+   "disk_free_bytes": 80030216192,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "~/Documents/nace/models/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "<repo>/build/kapitsa serve --model ~/Documents/nace/models/flint-4bit --model-id flint --host 127.0.0.1 --port 8401 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "<run-root>/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/flint-4bit",
+   "safetensors_bytes": 22568912600,
+   "safetensors_files": [
+    "model-00000.safetensors",
+    "model-00001.safetensors",
+    "model-00002.safetensors",
+    "model-00003.safetensors",
+    "model-00004.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "1455ab4637d7e51832d757582eb43e4a2e2be694",
+   "dirty": false
+  },
+  "config_file": "<run-root>/../ab_flint.json",
+  "env_file_keys": [],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "1455ab4637d7e51832d757582eb43e4a2e2be694",
+   "head_time": "2026-10-22T17:33:48+05:00",
+   "branch": "flint-m5-prefill",
+   "diff_head_sha256": "0d77333d2b5fd5f245178d41816c9050a3bb41e379203124fd197f0d8af6ca34",
+   "diff_bytes": 7709,
+   "dirty": true,
+   "diff_stat": "2 files changed, 54 insertions(+), 7 deletions(-)",
+   "untracked_files": 92,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "27c62ad399e831c1b27d33dfbfd3fe4a9413b190582124ffa5d10db77650d1f1",
+   "mtime": "2026-10-22T18:47:39"
+  },
+  "prepare": [
+   "empty <run-root>/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "~/Documents/nace/models",
+   "BENCH_OUT": "<run-root>",
+   "NI_DISK_CACHE_DIR": "<run-root>/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 36.1
+ },
+ "gpu_lock": {
+  "harness_wait_s": 123.97,
+  "harness_held_s": 41.5,
+  "harness_lock": "flock by the harness"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 241778688,
+   "alloc": 1936932864,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 8118.5,
+   "swapouts": 20374125,
+   "swapins": 13834972,
+   "pageouts": 242635,
+   "memorystatus_level": 89
+  },
+  "cleanup": [
+   "empty <run-root>/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 75497189376
+ },
+ "server_log": [
+  "[kapitsa] read 22.57 GB of weights in 7809 ms (2.9 GB/s)"
+ ],
+ "server_log_path": "logs/flint-qtm-20261022-190135.log"
+}

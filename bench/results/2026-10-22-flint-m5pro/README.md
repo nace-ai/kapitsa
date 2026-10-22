@@ -61,8 +61,8 @@ folder of engine binaries and scripts.
 
 **The poster's Flint cells are the means**, as prefill at 4K / decode at T 1.0: Kapitsa 1,374 / 146, rec 2,138 / 145, llama.cpp 2,072 / 92.
 The poster ranks a row by its decode value, so by that rule the row counts as Kapitsa's, but the margin is inside the
-runs' spread and greedy goes the other way: read it as a tie on decode, with rec 1.56x ahead on prefill. The poster's Kapitsa cell has since moved to the runs
-after #340 in [`2026-10-22-flint-m5pro-qtm`](../2026-10-22-flint-m5pro-qtm/README.md) (1,920 / 151).
+runs' spread and greedy goes the other way: read it as a tie on decode, with rec 1.56x ahead on prefill. The poster's Kapitsa cell has since moved to #340's run
+with the change, in [`2026-10-22-flint-m5pro-qtm`](../2026-10-22-flint-m5pro-qtm/README.md) (2,262 / 152).
 
 rec's second run (`flint-rec-20261022-161819`) has one more flag: its third cached 16K follow-up stopped at the
 length limit with no content, so the harness stopped that series. Its 16K follow-up TTFT, 0.237 s, is the median of all three

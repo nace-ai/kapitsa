@@ -1,0 +1,220 @@
+[
+ {
+  "label": "flint-base",
+  "display": "flint-base",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<base-repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons",
+   "--ref-prompt-tokens",
+   "4000:3874,16000:15066"
+  ],
+  "agent_trace": "none",
+  "note": "A/B flint-base"
+ },
+ {
+  "label": "flint-qtm",
+  "display": "flint-qtm",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons",
+   "--ref-prompt-tokens",
+   "4000:3874,16000:15066"
+  ],
+  "agent_trace": "none",
+  "note": "A/B flint-qtm"
+ },
+ {
+  "label": "flint64-base",
+  "display": "flint64-base",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<base-repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "72000",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons"
+  ],
+  "agent_trace": "none",
+  "note": "Kapitsa's defaults on Recursive's MLX 4-bit export (RecursiveSI/flint-int4, `kapitsa pull flint`): plain decoding (Flint has no drafter; prompt lookup is off by default). Sampling at Flint's recommended temperature 1.0 (top_p 0.95, top_k 20) for every engine. Flint reasons before every answer with no switch for it, so bench.py runs with --always-reasons (the reasoning is the reply's first part, its tokens counted), and its reference prompt tokens (4000: 3874, 16000: 15066) are Flint's chat template rendered by transformers' apply_chat_template and tokenized by tokenizers 0.23.3, the median of 8 nonces (3872-3877, 15065-15068). --slots 1 for parity with the others' single sequence. The SSD prefix cache is a folder in the harness state, emptied before and after each run.",
+  "ready_timeout": 600
+ },
+ {
+  "label": "flint64-qtm",
+  "display": "flint64-qtm",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "72000",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons"
+  ],
+  "agent_trace": "none",
+  "note": "Kapitsa's defaults on Recursive's MLX 4-bit export (RecursiveSI/flint-int4, `kapitsa pull flint`): plain decoding (Flint has no drafter; prompt lookup is off by default). Sampling at Flint's recommended temperature 1.0 (top_p 0.95, top_k 20) for every engine. Flint reasons before every answer with no switch for it, so bench.py runs with --always-reasons (the reasoning is the reply's first part, its tokens counted), and its reference prompt tokens (4000: 3874, 16000: 15066) are Flint's chat template rendered by transformers' apply_chat_template and tokenized by tokenizers 0.23.3, the median of 8 nonces (3872-3877, 15065-15068). --slots 1 for parity with the others' single sequence. The SSD prefix cache is a folder in the harness state, emptied before and after each run.",
+  "ready_timeout": 600
+ }
+]

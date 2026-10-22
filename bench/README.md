@@ -14,7 +14,7 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-612 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+616 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
@@ -37,6 +37,10 @@ How to read it:
 | 2026-10-22 | Alisher Amantay | M3 Pro, 36 GB | Flint 40B-A2.5B | 4-bit | Kapitsa | cff1b1e | 70.7 | 70.5 | 772 | 645 | 5.02 | – | – | [flint-kapitsa-20261022-210349](results/2026-10-22-flint-m3pro-ac/results/flint-kapitsa-20261022-210349.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 3f7f4c8 | 81.8 | 84.3 | 653 | 546 | 6.33 | – | – | [q38-27b-kapitsa-20261022-200236](results/2026-10-22-m5pro-27b-ane-split/results/q38-27b-kapitsa-20261022-200236.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 3f7f4c8 | 76.6 | 86.2 | 583 | 536 | 7.09 | – | – | [q38-27b-kapitsa-20261022-195053](results/2026-10-22-m5pro-27b-ane-split/results/q38-27b-kapitsa-20261022-195053.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | flint-base | 1455ab4 | 153.2 | – | 1392 | 1129 | 2.78 | – | – | [flint-base-20261022-191410](results/2026-10-22-flint-m5pro-qtm/pr340-ab/results/flint-base-20261022-191410.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | flint-qtm | 1455ab4+dirty | 152.4 | – | 2262 | 1635 | 1.71 | – | – | [flint-qtm-20261022-190420](results/2026-10-22-flint-m5pro-qtm/pr340-ab/results/flint-qtm-20261022-190420.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | flint-qtm | 1455ab4+dirty | – | – | – | – | – | – | invalid | [flint-qtm-20261022-190135](results/2026-10-22-flint-m5pro-qtm/pr340-ab/results/flint-qtm-20261022-190135.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | flint-base | 1455ab4 | 152.7 | – | 1392 | 1128 | 2.78 | – | – | [flint-base-20261022-185958](results/2026-10-22-flint-m5pro-qtm/pr340-ab/results/flint-base-20261022-185958.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 3112b93 | 71.2 | 80.3 | 1656 | 1311 | 2.53 | – | – | [dory-kapitsa-perloop-20261022-185535](results/2026-10-22-m5pro-dory/results/dory-kapitsa-perloop-20261022-185535.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, last-loop KV) | 3112b93 | 71.7 | 72.2 | 1625 | 1283 | 2.57 | – | contention | [dory-kapitsa-20261022-184939](results/2026-10-22-m5pro-dory/results/dory-kapitsa-20261022-184939.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Flint 40B-A2.5B | Q4_1 | llama.cpp b11804 | b11804 | 92.4 | 92.8 | 2072 | 1773 | 1.87 | – | – | [flint-llamacpp-20261022-180213](results/2026-10-22-flint-m5pro/results/flint-llamacpp-20261022-180213.json) |

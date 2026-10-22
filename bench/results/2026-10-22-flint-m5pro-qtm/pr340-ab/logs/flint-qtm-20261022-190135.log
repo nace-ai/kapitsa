@@ -1,0 +1,4 @@
+[kapitsa] compiled kernels in 10 ms
+[kapitsa] compiled the Flint kernels in 145 ms
+[kapitsa] compiled the tensor kernels in 553 ms
+[kapitsa] read 22.57 GB of weights in 7809 ms (2.9 GB/s)
