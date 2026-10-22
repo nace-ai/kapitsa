@@ -25,14 +25,17 @@ The runs are in this directory; the server logs are in `logs/`.
 **The 16-row block does not flip the 27B cell.** Under the same conditions on the same machine minutes apart,
 mlx-serve's draft tree is ahead on decode at both temperatures (78.16 against 76.89 sampled, 1.6%; 86.23 against
 83.08 greedy, 3.8%) and ahead on prefill too (4K 464 against 459, 16K 472 against 446). So the poster's ordering holds
-because mlx-serve is ahead on decode, and the poster's Kapitsa 4K lead (484 against 428) is a cross-day pairing — this
-10-22 run against mlx-serve's 10-21 run — not something these four runs show on the same day. The headline's count of
-pairs (16 of 17 on main) does not change.
+because mlx-serve is ahead on decode, and the poster now carries these four runs' means for both engines, so its 4K
+column has mlx-serve ahead too (464 against 459) instead of the cross-day 484-against-428 pairing it carried before.
+The headline's count of pairs (16 of 17 on main) does not change.
 
 **The block itself is real.** Every Kapitsa run logged `DFlash2: 16-row drafting block` and drafted at 16.00 rows per
 cycle (cf. the 8-row runs in [2026-10-21](../2026-10-21-m5pro-48gb/README.md)), and the flag-free run above reads
 484 / 453 tok/s at 4K / 16K against the 2026-10-21 run's 463 / 451, and 74.8 / 83.3 tok/s against 74.1 / 77.4.
-The poster's Kapitsa cell is that flag-free run: **75 tok/s decode, 484 tok/s 4K prefill**.
+The poster carries the pair, not one run: both its Kapitsa cell and its mlx-serve cell are this section's means,
+**77 tok/s decode and 459 tok/s 4K prefill** for Kapitsa against **78 and 464** for mlx-serve, so the two cells were
+measured together rather than a day apart. The flag-free run above is where the block's own numbers (484 / 453,
+74.8 / 83.3) come from.
 
 **Why most of the runs are flagged.** The machine's GPU was shared with this session's browser (`Microsoft Edge H`,
 the only foreign process in the samples), which showed up as 4-11% mean and up to 64% peak foreign GPU load. The
