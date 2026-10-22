@@ -70,10 +70,13 @@ struct Settings {
   double min_p = 0, presence_penalty = 0, frequency_penalty = 0, repeat_penalty = 1.0;
   std::string reasoning_effort = "low";  // the thinking-on tool test
   std::map<int, int> ref_prompt_tokens;  // size -> the cold prompt's usage.prompt_tokens
+  // the model reasons before every answer with no switch for it (Flint; bench.py --always-reasons): its reasoning is
+  // not a leak, and the prefill, follow-up and tool turns get room to finish it
+  bool always_reasons = false;
 };
 // The reference prompt_tokens of the cold prompts for a model's tokenizer family (bench.py REF_PROMPT_TOKENS, and
 // configs/bolt.json's for Nemotron): empty when unknown (the check is then reported as unchecked)
-std::map<int, int> reference_prompt_tokens(const std::string& family);  // "qwen3.5" | "nemotron-h"
+std::map<int, int> reference_prompt_tokens(const std::string& family);  // "qwen3.5" | "nemotron-h" | "flint"
 ojson sampling(const Settings& s, bool greedy);
 ojson no_think();
 ojson think_on(const Settings& s);

@@ -135,9 +135,10 @@ ojson tools_messages() {
 
 std::map<int, int> reference_prompt_tokens(const std::string& family) {
   // bench.py REF_PROMPT_TOKENS (Qwen3.6 / Qwen3.8 chat templates, thinking off; Qwen3.5-4B comes within 1%), and
-  // configs/bolt.json's --ref-prompt-tokens for Nemotron 3.5 Bolt
+  // configs/bolt.json's and configs/flint.json's --ref-prompt-tokens for Nemotron 3.5 Bolt and Recursive's Flint
   if (family == "qwen3.5") return {{4000, 4133}, {16000, 16286}};
   if (family == "nemotron-h") return {{4000, 4183}, {16000, 16514}};
+  if (family == "flint") return {{4000, 3874}, {16000, 15066}};
   return {};
 }
 
@@ -333,6 +334,11 @@ ojson post_json(const Settings& s, const ojson& body, int timeout_s) {
 
 // ---------------------------------------------------------------- checks
 
+// thinking_leak, or nothing for a model that always reasons (Settings::always_reasons)
+static std::vector<std::string> leaks(const Settings& s, const Stream& r) {
+  return s.always_reasons ? std::vector<std::string>{} : thinking_leak(r);
+}
+
 std::vector<std::string> thinking_leak(const Stream& r) {
   std::vector<std::string> out;
   if (!strip(r.reasoning).empty()) out.push_back("reasoning text returned (" + std::to_string(chars(r.reasoning)) + " chars)");
@@ -510,7 +516,7 @@ ojson t_decode(const Settings& s, bool greedy, Nonces& n) {
   res["usage_reported"] = ct > 0;
   res["rate"] = rate.info;
   res["distinct4"] = opt(d4);
-  for (const auto& why : thinking_leak(r)) res["invalid"].push_back(why);
+  for (const auto& why : leaks(s, r)) res["invalid"].push_back(why);
   if (!ct) res["invalid"].push_back("usage.completion_tokens missing (no fallback to event counts)");
   if (!rate.mid && ct) res["invalid"].push_back("too few streamed events for a middle-window rate");
   if (r.finish != "length") res["flags"].push_back("finish_reason=" + (r.finish.empty() ? std::string("None") : r.finish) +
@@ -534,7 +540,7 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
   const ojson msgs = prefill_messages(ctx, nonce, kPrefillQuestion);
   // max_tokens high enough that the answer ends naturally (a turn cut by max_tokens is not reusable as a cached
   // prefix in some engines; real agent turns end with stop or tool calls)
-  const ojson body = body_of(s, msgs, 256);
+  const ojson body = body_of(s, msgs, s.always_reasons ? 1024 : 256);
   const std::string sid = "bench-" + n.hex(48);
   ojson res = {{"target", size}, {"invalid", ojson::array()}, {"flags", ojson::array()}};
   Stream r;
@@ -555,7 +561,7 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
   res["cold_cached_tokens"] = cold_cached ? ojson(*cold_cached) : ojson(nullptr);
   res["finish"] = r.finish.empty() ? ojson(nullptr) : ojson(r.finish);
   res["reasoning_chars"] = chars(r.reasoning);
-  for (const auto& why : thinking_leak(r)) res["invalid"].push_back(why);
+  for (const auto& why : leaks(s, r)) res["invalid"].push_back(why);
   if (!pt) {
     res["invalid"].push_back("usage.prompt_tokens missing");
   } else if (exp) {
@@ -589,7 +595,7 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
     msgs2.push_back({{"role", "user"}, {"content", kFollowups[k]}});
     Stream r2;
     try {
-      r2 = stream_chat(s, body_of(s, msgs2, 256), sid);
+      r2 = stream_chat(s, body_of(s, msgs2, s.always_reasons ? 1024 : 256), sid);
     } catch (const std::exception& e) {
       cached["invalid"].push_back(("follow-up request failed: " + std::string(e.what())).substr(0, 300));
       break;
@@ -600,7 +606,7 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
                                  {"prompt_tokens", pt2 ? ojson(pt2) : ojson(nullptr)},
                                  {"cached_tokens", c2 ? ojson(*c2) : ojson(nullptr)},
                                  {"finish", r2.finish.empty() ? ojson(nullptr) : ojson(r2.finish)}});
-    for (const auto& why : thinking_leak(r2)) cached["invalid"].push_back("follow-up: " + why);
+    for (const auto& why : leaks(s, r2)) cached["invalid"].push_back("follow-up: " + why);
     if (c2 && prev_pt && *c2 < 0.5 * prev_pt)
       cached["flags"].push_back("follow-up reused only " + std::to_string(*c2) + " of " + std::to_string(prev_pt) +
                                 " prefix tokens");
@@ -652,7 +658,8 @@ std::string lower(std::string s) {
 
 ojson t_tools(const Settings& s, bool think) {
   const ojson msgs = tools_messages();
-  const ojson body = body_of(s, msgs, think ? 4096 : 512, false, think, {{"tools", tools()}, {"tool_choice", "auto"}});
+  const ojson body = body_of(s, msgs, think || s.always_reasons ? 4096 : 512, false, think,
+                             {{"tools", tools()}, {"tool_choice", "auto"}});
   ojson out = {{"thinking", think}};
   Stream r;
   try {
@@ -670,7 +677,7 @@ ojson t_tools(const Settings& s, bool think) {
                    {"total_s", r.total},
                    {"content_leak", leaked},
                    {"reasoning_chars", chars(r.reasoning)}};
-  if (!think && !thinking_leak(r).empty()) out["stream"]["thinking_leak"] = thinking_leak(r);
+  if (!think && !leaks(s, r).empty()) out["stream"]["thinking_leak"] = thinking_leak(r);
   // the same request, not streamed
   try {
     ojson b2 = body;

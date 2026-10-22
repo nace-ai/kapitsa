@@ -9,6 +9,7 @@
 #include "gguf/gguf.h"
 #include "gguf/import.h"
 #include "hub/hub.h"
+#include "model/flint.h"
 #include "model/nemotron_h.h"
 #include "server/beam.h"
 #include "server/cli.h"
@@ -62,12 +63,13 @@ namespace {
 const char* kHelp =
     "kapitsa bench [--model MODEL] [--quick] [--json] [--submit] [--out FILE]\n\n"
     "Benchmarks Kapitsa on this Mac with the protocol of its published benchmarks (bench/harness): writing speed\n"
-    "(512-token coding answers at temperature 0.6 and greedy, median of 5 runs each), reading a 4K- and a 16K-token\n"
-    "prompt, the time to the first token of a follow-up in each conversation, peak memory and tool calls. It starts\n"
-    "the model's server for the run and measures it over the local API, as the harness does, and records this Mac and\n"
-    "what could skew the numbers (other apps on the GPU, power source and mode, thermal state, swap). The result is\n"
-    "saved as JSON. A run takes 3 to 15 minutes; close other apps for a clean one.\n\n"
-    "  --model MODEL   35b, 27b, 4b or bolt (<model>:<variant> for another precision), a model folder or a .gguf file.\n"
+    "(512-token coding answers at temperature 0.6, Flint's at 1.0, and greedy, median of 5 runs each), reading a 4K-\n"
+    "and a 16K-token prompt, the time to the first token of a follow-up in each conversation, peak memory and tool\n"
+    "calls. It starts the model's server for the run and measures it over the local API, as the harness does, and\n"
+    "records this Mac and what could skew the numbers (other apps on the GPU, power source and mode, thermal state,\n"
+    "swap). The result is saved as JSON. A run takes 3 to 15 minutes; close other apps for a clean one.\n\n"
+    "  --model MODEL   35b, 27b, 4b, bolt or flint (<model>:<variant> for another precision), a model folder or a\n"
+    "                  .gguf file.\n"
     "                  Default: the best model for this Mac (in a terminal it asks)\n"
     "  --quick         a shorter run: 3 runs per writing test, the 4K prompt only (marked quick in the result)\n"
     "  --json          the result as JSON on stdout (progress on stderr)\n"
@@ -673,8 +675,14 @@ int run(const Options& o) {
   Settings s;
   s.model = ref.id.empty() ? mi.name : ref.id;
   if (o.quick) s.decode_runs = 3, s.greedy_runs = 3, s.sizes = {4000};
-  s.ref_prompt_tokens =
-      reference_prompt_tokens(NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h" : "qwen3.5");
+  const bool flint = Flint::is_model(ref.dir);
+  s.ref_prompt_tokens = reference_prompt_tokens(flint ? "flint"
+                                                : NemotronH::is_model(ref.dir) || Dory::is_model(ref.dir) ? "nemotron-h"
+                                                                                                          : "qwen3.5");
+  if (flint) {  // as configs/flint.json: its card's temperature, and its reasoning before every answer
+    s.temperature = 1.0;
+    s.always_reasons = true;
+  }
 
   // ---- the GPU lock: the harness's (gpu_hogs.GpuLock), held from the server's start until its memory is back, unless
   // the caller holds it (NACE_GPU_LOCK_HELD, as for bench.py)

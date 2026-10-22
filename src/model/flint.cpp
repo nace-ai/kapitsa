@@ -787,10 +787,10 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k);
   const uint32_t I = uint32_t(std::max(c.moe_I, c.shared_I));
   const kp::Moe mp{D, uint32_t(c.moe_I), uint32_t(c.shared_I), k, c.eps};
-  if (R == 1 && !small_tiles()) {
+  if (R == 1 && !small_tiles() && D == 2048) {
     // one decode row: the router with the shared expert's gate / up (its last threadgroup routes; the router's
-    // latency overlaps the shared expert's weights), the routed experts' gate / up, then the down products of every
-    // slot into the residual
+    // latency overlaps the shared expert's weights; its router rows are 2048 wide, so another hidden size takes the
+    // rows' path below), the routed experts' gate / up, then the down products of every slot into the residual
     const struct {
       uint32_t D, E, k, SI, hstride, nr;
       float eps;

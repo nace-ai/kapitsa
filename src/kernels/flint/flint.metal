@@ -560,7 +560,8 @@ NI_INLINE void flint_router_shared_impl(const device float* x, const device bflo
                                         threadgroup uint* last, uint tg, uint tid, uint ntg, uint sg, uint nsg,
                                         uint lane) {
   if (tg < p.nr) {
-    // D = 2048 (checked on the host): a lane's 8 chunks of 8 inputs, every load issued before the arithmetic
+    // D = 2048 (Flint::enc_moe_rows takes this kernel only then): a lane's 8 chunks of 8 inputs, every load issued
+    // before the arithmetic
     constexpr uint NCH = 2048 / 256;
     const uint e = tg * nsg + sg;
     float acc = 0.0f, ss = 0.0f;

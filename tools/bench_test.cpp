@@ -125,6 +125,8 @@ int self_test() {
   check(reference_prompt_tokens("qwen3.5").at(4000) == 4133 && reference_prompt_tokens("qwen3.5").at(16000) == 16286,
         "Qwen's reference prompt tokens");
   check(reference_prompt_tokens("nemotron-h").at(16000) == 16514, "Nemotron's reference prompt tokens");
+  check(reference_prompt_tokens("flint").at(4000) == 3874 && reference_prompt_tokens("flint").at(16000) == 15066,
+        "Flint's reference prompt tokens (configs/flint.json's)");
   // nonces: the shapes bench.py makes
   Nonces nn;
   const std::string r = nn.run(), h64 = nn.hex(64), h48 = nn.hex(48);
