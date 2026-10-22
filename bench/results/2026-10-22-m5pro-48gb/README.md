@@ -109,3 +109,21 @@ The expert tile moves each output's K reduction by one half ulp, so the logits a
 `tools/logit_compare.py --reorder` gates that drift and the cold temperature-0 continuations were identical (the
 evidence is in [#279](https://github.com/nace-ai/kapitsa/pull/279)). Decode moves with the prefill because the DFlash2
 drafter's verify batches are multi-row passes through the same grouped GEMMs.
+
+## 35B-A3B after #293: the prefill attention on the matrix units (15:00)
+
+[#293](https://github.com/nace-ai/kapitsa/pull/293) made the 35B's prefill attention `qattn_t_g8s4k16` the default on an
+M5-class GPU (`NI_QATTN_G8=0` keeps `attn_prefill11r`). One run on the merge commit `4b89f4e` (Kapitsa 0.2.6), same
+config and lock as above:
+
+| Run | Decode T=0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached 4K / 16K (s) | Peak (GB) | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `q36-35b-kapitsa-20261022-145449` | 200.71 (188.82-211.84) | 219.65 (178.68-222.01) | 2,548 / 2,031 | 0.05 / 0.07 | 21.7 | contention (6.82% mean, 19 of 22 samples) + one decode run looped |
+
+The browser (`Microsoft Edge H`) held 5.8% of the GPU through the decode phases and 6.8% overall, so the harness sat out
+its 300 s quiet window, took the record with the flag it always sets, and every number here is a lower bound. Read against
+the flag-free run above (`d53f02e`, 2,459 / 1,838 prefill, 217.0 / 227.0 decode): **prefill is up 3.6% at 4K and 10.5% at
+16K** even under that load, which is #293's ~11% 16K gain and is the reason the poster's 16K prefill cell is stale; decode
+reads 7% and 3% lower, and #293 does not touch the decode path (`qattn_t_g8s4k16` is prefill-only), so those two cells
+stay with the flag-free run rather than being rewritten from a contended one. The looped decode run is one of the five
+sampled at temperature 0.6 (distinct-4-gram 0.44), the same harness flag the earlier 35B runs carry.
