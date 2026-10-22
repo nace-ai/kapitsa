@@ -108,7 +108,7 @@ def by_context(metric, unit, title, sub):
         tol = 0.06 if n <= 8192 else 0.10  # two ±3% cells up to 8K; above 8K the README's ±10% for the ratios
         s.append(R.text(X(i), cy1 + 70, f"{r:.2f}×", "mono", 20,
                         T["kap"] if r > 1 + tol else (ORANGE if r < 1 - tol else T["ink2"]), "middle"))
-    s.append(R.text(cx0 - 60, cy1 + 70, "Kapitsa ÷ rec (grey: within noise)", "sans", 18, T["muted"], "end"))
+    s.append(R.text(cx0 - 60, cy1 + 70, "Kapitsa ÷ rec, grey = noise", "sans", 18, T["muted"], "end"))
     s.append(R.text((cx0 + cx1) / 2, cy1 + 104, "prompt length, tokens · one cold request per point, then 256 tokens · a point ±3% on a quiet GPU; "
                     "the ratios above 8K, with background load, ±10%", "sans", 18, T["muted"], "middle"))
     for j, (name, e, c) in enumerate(ENG):
@@ -137,7 +137,7 @@ def main():
         "headline": headline(),
         "decode-by-context": by_context(
             "decode", "tok/s", "Flint 40B-A2.5B on the M5 Pro: decode by context",
-            "Level with rec up to 8K; from 16K Kapitsa 1.10-1.15× ahead, inside the run-to-run spread"),
+            "Level with rec up to 8K; Kapitsa 1.10× at 16-32K (within noise), 1.12-1.15× at 64-128K (just above it)"),
         "prefill-by-context": by_context(
             "prefill", "tok/s", "Flint 40B-A2.5B on the M5 Pro: prefill by context",
             "rec reads prompts faster at every length: 1.4× at 1K, 1.6× at 4K, 2.3× at 128K"),
