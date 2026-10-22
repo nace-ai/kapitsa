@@ -243,9 +243,11 @@ def t_cache(a, log=print):
         msgs = [{"role": "system", "content": sysmsg[who]}, {"role": "user", "content": SHORT_Q[i % len(SHORT_Q)]}]
         if history:  # a grown conversation: the earlier question and its answer, then a new question
             msgs = [msgs[0]] + history + [msgs[1]]
-        # 256 tokens: the answer ends by itself (a turn cut by max_tokens is not reusable in some engines)
+        # 256 tokens: the answer ends by itself (a turn cut by max_tokens is not reusable in some engines); 1024 for a
+        # model that always reasons (Flint), so it gets through its reasoning to the answer, as bench.py's phases do
         try:
-            r = bench.stream_chat(a.base_url, bench.body_of(a, msgs, 256), session=sid[who])
+            r = bench.stream_chat(a.base_url, bench.body_of(a, msgs, 1024 if a.always_reasons else 256),
+                                  session=sid[who])
         except Exception as e:
             invalid.append(f"cache {label}: request failed: {e!r}"[:300])
             return None
@@ -267,6 +269,10 @@ def t_cache(a, log=print):
         time.sleep(a.turn_gap)
         hist = [{"role": "user", "content": SHORT_Q[0]}, {"role": "assistant", "content": cold["answer"]}]
         fol = ask("a", 5, "A follow-up", history=hist)
+        if fol and not fol.get("answer"):
+            flags.append("cache: the follow-up turn returned no content (cut inside its reasoning?)")
+    elif cold:
+        flags.append("cache: the cold turn returned no content (cut inside its reasoning?); the follow-up turn was skipped")
     warm = []
     for i in (1, 2, 3):
         time.sleep(a.turn_gap)

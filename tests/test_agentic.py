@@ -28,7 +28,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
     last = {}
     cache_sessions = 8
     log = []
-    reasons = False  # stream the first tokens as reasoning_content, as a model that always reasons (Flint) does
+    reasons = False  # stream reasoning_content first, as a model that always reasons (Flint) does: the first 300 tokens
 
     def log_message(self, *a):
         pass
@@ -43,13 +43,13 @@ class Fake(http.server.BaseHTTPRequestHandler):
         while len(Fake.last) > Fake.cache_sessions:
             Fake.last.pop(next(iter(Fake.last)))
         Fake.log.append((sid, pt, cached, body.get("max_tokens")))
-        n = min(body.get("max_tokens", 16), 64)
+        n = min(body.get("max_tokens", 16), 400 if Fake.reasons else 64)  # a reasoning model runs to its budget
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
         time.sleep(0.002 if cached else 0.02)  # a cache hit prefills faster
         for i in range(n):
-            key = "reasoning_content" if Fake.reasons and i < n // 2 else "content"
+            key = "reasoning_content" if Fake.reasons and i < 300 else "content"
             ev = {"choices": [{"delta": {key: f"w{i} "}, "finish_reason": None}]}
             self.wfile.write(f"data: {json.dumps(ev)}\n\n".encode())
             time.sleep(0.001)
@@ -160,6 +160,13 @@ check(not swr["invalid"] and all(p.get("decode_tps") for p in swr["points"]), "-
 Fake.last.clear()
 car = agentic.t_cache(a, log=lambda m: None)
 check(not [x for x in car["invalid"] if "reasoning" in x], "--always-reasons: the cache turns are valid", str(car["invalid"]))
+check(car.get("followup_ttft_s") is not None and not [x for x in car["flags"] if "no content" in x],
+      "--always-reasons: the cache turns get past the reasoning to an answer (budget 1024, not 256)", str(car)[:300])
+a.always_reasons = False
+Fake.last.clear()
+cnr = agentic.t_cache(a, log=lambda m: None)
+check(any("cold turn returned no content" in x for x in cnr["flags"]) and cnr.get("followup_ttft_s") is None,
+      "a cold turn cut inside its reasoning is flagged, not silently skipped", str(cnr["flags"]))
 a.always_reasons = False
 Fake.reasons = False
 
