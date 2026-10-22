@@ -1073,7 +1073,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
         const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
         auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
         const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: 4 bits = K / 8 words, g64 = K / 64
-        m.ffn_mma = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
+        m.ffn_mma = m.ffn_mma && iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
                     iw->second.shape.back() == K / 8 && is->second.shape.back() == K / 64;
       }
   }
