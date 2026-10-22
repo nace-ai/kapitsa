@@ -49,3 +49,41 @@ run differs (3.65 against 4.3 GB on last-loop KV; the cause is not measured here
 mlx-lm's Dory pull request reads 1,401 / 1,278 tok/s and llama.cpp's NVIDIA fork 938 / 951 on this Mac
 ([docs/benchmarks.md](../../../docs/benchmarks.md#nemotron-dory10-4b)), so Kapitsa is 1.09x mlx-lm at 4K and 0.89x at
 16K, and a one-off profile of the 16K step (not stored in this PR) puts the prefill GEMMs and `dory_attn_prefill` at 46.7% each.
+
+## After #314: the prefill attention on the matrix units (18:49-18:58)
+
+[#314](https://github.com/nace-ai/kapitsa/pull/314) moved Dory's prefill attention to the same Metal 4 tensor ops
+(`tensor/nh_dory_attn_t.metal`, on by default on an M5 with macOS 26, `NI_DORY_ATTN_T=0` keeps the simdgroup kernel).
+The 16K profile above had put the GEMMs and `dory_attn_prefill` at 46.7% of the step each, the same reason the GEMMs
+were the first target. These two runs are the same configs on main `3112b93` (the merged change), built Release in a
+clean worktree at that commit, in one hold of the GPU lock:
+
+```
+BENCH_MODELS=~/Documents/nace/models KAPITSA_BIN=/tmp/kap-post2/build/kapitsa \
+  compare_engines.py configs/dory.json --only dory-kapitsa,dory-kapitsa-perloop --skip tools,agent,sustain
+```
+
+Same Mac and macOS as above, on AC power, one Edge and one Slack process open. Four other sessions were queued on the
+GPU lock, and the host was reading 3.8 GB of swap while both runs measured (other sessions resident): the last-loop
+run carries the harness's contention flag on `prefill_16000` (mean 2.3%, Microsoft Edge Helper, a 5-sample busy run up
+to 32.7% foreign GPU), so its 16K cell is a lower bound; the per-loop run is flag-free. The per-loop record also
+carries two repetition-loop flags in decode at T = 0.6 (distinct-4-gram 0.4095 and 0.4827, 2 of 5 runs); one of them
+is the 76.89 tok/s maximum and the median, 71.15, sits below it.
+
+| Result file | Setting | Decode T = 0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (GB) | Flags |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `dory-kapitsa-20261022-184939.json` | 2 loops, last-loop KV (its default) | 71.7 (69.4-72.6) | 72.2 (71.6-72.5) | 1,625 / 1,283 | 0.13 / 0.21 | 4.19 + 0.63 mapped | contention (16K prefill) |
+| `dory-kapitsa-perloop-20261022-185535.json` | 2 loops, per-loop KV, speculative decoding | 71.2 (70.3-76.9)<sup>1</sup> | 80.3 (79.9-80.5) | 1,656 / 1,311 | 0.14 / 0.21 | 4.98 + 0.64 mapped | repetition loop (decode) |
+
+1. Two of the five sampled T = 0.6 runs looped (distinct-4-gram 0.41 and 0.48); the fastest, 76.89 tok/s, is one of them, so read the maximum as an upper bound. The median, 71.15, is not a loop.
+
+Median of the pair, against the #287 session above: prefill **1,522 -> 1,641 tok/s at 4K** (1.08x) and **1,142 -> 1,297
+at 16K** (1.14x), and against the 03:26 pre-#287 runs, 2.66x and 2.39x. That is larger than the kernel's own 1.24x / 1.22x
+on the attention alone, because a run of the step also loses the dispatch gaps the simdgroup kernel's narrow threadgroups
+leave behind; the interleaved A/B in #314 put the whole prefill at 1.04x / 1.07x on the same day, so read the two other
+sessions' difference as a floor of what the change did across days, not as a direct measurement of it. Decode is unchanged
+inside the runs' spread (70.7/73.1 -> 71.7/71.2 at T = 0.6, 72.5/80.5 -> 72.2/80.3 greedy), the cached follow-ups read
+0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, and the peak footprint is up 0.5-0.9 GB (4.19 and 4.98 GB against 3.65
+and 4.09) while the host was paging, so the footprint is not attributed here. Against the other engines on this Mac
+(mlx-lm 1,401 / 1,278, llama.cpp 938 / 951), the flag-free per-loop run reads 1.18x mlx-lm at 4K and 1.03x at 16K,
+and 1.77x / 1.38x llama.cpp.

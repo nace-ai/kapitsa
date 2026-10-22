@@ -1715,12 +1715,30 @@ Decode is inside the runs' spread (70.7 / 73.1 tok/s at T = 0.6 and 71.5 / 78.0 
 two contended records), the cached follow-ups are 0.10-0.11 / 0.15-0.16 s, and the peak footprint is 0.5-1.0 GB smaller
 (3.65 GB plus 0.67 GB mapped on last-loop KV, 4.09 + 0.67 on per-loop; the cause is not separated here, as for the 5.1 GB above). At 4K
 that is 1.09x mlx-lm's 1,401 and ahead of llama.cpp's 938; at 16K it is 0.89x mlx-lm's 1,278, and a one-off profile of the 16K prefill step (not stored in this PR)
-puts the GEMMs and `dory_attn_prefill` at 46.7% each, so that attention kernel looks like the next target. Three
+puts the GEMMs and `dory_attn_prefill` at 46.7% each, which made that attention kernel the next target. Three
 of the four records carry the harness's contention flag (a browser tab and Slack Helper, means 2.0-9.2%), so the prefill
 cells are lower bounds; the 14:30 run is flag-free. The 14:22 per-loop record also carries two repetition-loop flags
 (2 of its 5 sampled T = 0.6 runs, distinct-4-gram 0.47 and 0.49); a loop flatters a speculative decoder, and that record
 supplies the 74.0 in the per-loop pair's 73.1 T = 0.6 median, so read the per-loop decode figures as an upper bound. The
 last-loop KV default (the 70.7 median) has no loop flag.
+
+[#314](https://github.com/nace-ai/kapitsa/pull/314) took that attention kernel to the matrix units too
+(`tensor/nh_dory_attn_t.metal`, on by default, `NI_DORY_ATTN_T=0` keeps `dory_attn_prefill`; the switch is independent of
+`NI_DORY_TG`'s). Two runs on main `3112b93` in one hold of the GPU lock — last-loop KV at 18:49, per-loop at 18:55, all
+both records in
+[the same results directory](../bench/results/2026-10-22-m5pro-dory/README.md#after-314-the-prefill-attention-on-the-matrix-units-1849-1858) —
+read prefill **1,625 / 1,283 tok/s** on last-loop KV and **1,656 / 1,311** on per-loop, a median of **1,641 / 1,297**, which
+is **1.08x and 1.14x the #287 runs above** and 2.66x / 2.39x the 03:26 pre-#287 run. The flag-free record is the per-loop
+one, so its 1,656 / 1,311 are the cells: **1.18x mlx-lm's 1,401 at 4K and 1.03x its 1,278 at 16K** (llama.cpp's 938 / 951
+sit well behind), the 16K cell crossing over from the 0.89x above. The attention kernel alone is 1.24x / 1.22x (#314's
+interleaved A/B), and that A/B put the whole prefill at 1.04x / 1.07x on one day; the 1.08x / 1.14x here compares two
+sessions a few hours apart, so read it as what the change reads like across builds rather than as a measured 1.08x. Decode
+is inside the spread (71.7 / 71.2 tok/s at T = 0.6, 72.2 / 80.3 greedy; the per-loop record has two repetition-loop flags
+in its T = 0.6 runs, one of them the 76.89 maximum, so its median 71.15 is the reading), the cached follow-ups are
+0.13-0.14 / 0.21 s, and the peak footprint is 0.5-0.9 GB above the #287 runs (4.19 and 4.98 GB against 3.65 and 4.09) while
+the host was paging 3.8 GB of swap for other sessions, so the footprint is not attributed here. The last-loop record carries
+the harness's contention flag on its 16K prefill (Microsoft Edge Helper, mean 2.3%, a busy run up to 32.7%), so that one
+cell is a lower bound.
 
 ## Splash 1.4.0 against Kapitsa (M5 Pro, 2026-10-22)
 
