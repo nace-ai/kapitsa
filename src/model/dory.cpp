@@ -232,20 +232,25 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
   kv_ = kv;
   Gpu::get().compile_extra("Nemotron-H", kNhKernelSource);
   Gpu::get().compile_extra("Dory", kDoryKernelSource);
-  // the M5's matrix units (Apple10, Metal 4 on macOS 26) for the prefill GEMMs over 32 rows: nh_gemm_t_fp4_m64
-  // against nh_gemm_fp4_m64, the same dequantized half tiles and the same epilogue, only the summation order inside
-  // the matrix unit differs (Nemotron-H's own models take the same step above 32 rows)
-  if (Gpu::get().apple_family() >= 10 && !(getenv("NI_DORY_TG") && atoi(getenv("NI_DORY_TG")) == 0))
+  // the M5's matrix units (Apple10, Metal 4 on macOS 26), each with a switch of its own so that an A/B of one is not
+  // quietly an A/B of both: the prefill GEMMs over 32 rows (nh_gemm_t_fp4_m64 against nh_gemm_fp4_m64, the same
+  // dequantized half tiles and the same epilogue, only the summation order inside the matrix unit differs;
+  // Nemotron-H's own models take the same step above 32 rows, NI_DORY_TG=0) and the prefill attention
+  // (tensor/nh_dory_attn_t.metal against dory_attn_prefill, NI_DORY_ATTN_T=0).
+  const bool tg_on = !(getenv("NI_DORY_TG") && atoi(getenv("NI_DORY_TG")) == 0);
+  const bool at_on = !(getenv("NI_DORY_ATTN_T") && atoi(getenv("NI_DORY_ATTN_T")) == 0);
+  if (Gpu::get().apple_family() >= 10 && (tg_on || at_on))
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
-      tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
-      // the prefill attention on the same units: NS simdgroups of G tokens x G query heads of one KV head.
-      // NS 8 (32 tokens and 256 threads per threadgroup, the default) against 4 (16 and 128, NI_DORY_ATTN_NS=4):
-      // measured 578 against 623 ms at 4,132 tokens and 5,468 against 5,781 at 16,493, the same tiles either way.
+      if (tg_on) tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
+      // NS simdgroups of 16 / G tokens x G query heads of one KV head: NS 8 (32 tokens and 256 threads per
+      // threadgroup, the default) measured 578 against 623 ms at 4,132 tokens and 5,468 against 5,781 at 16,493
+      // against NS 4 (16 and 128, NI_DORY_ATTN_NS=4), the same tiles either way
       const char* ns = getenv("NI_DORY_ATTN_NS");
-      const char* name = ns && *ns && atoi(ns) == 4 ? "dory_attn_t_g4s4k16" : "dory_attn_t_g4s8k16";
-      attn_t_ = tg_ && !(getenv("NI_DORY_ATTN_T") && atoi(getenv("NI_DORY_ATTN_T")) == 0) &&
-                Gpu::get().pipeline(name, false).pso != nullptr && cfg_.hq / cfg_.hkv == 4;
+      if (at_on && cfg_.hq / cfg_.hkv == 4) {
+        const char* name = ns && *ns && atoi(ns) == 4 ? "dory_attn_t_g4s4k16" : "dory_attn_t_g4s8k16";
+        attn_t_ = Gpu::get().pipeline(name, false).pso != nullptr;
+      }
     }
   load(prefill_chunk);
 }

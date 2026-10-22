@@ -49,7 +49,7 @@ NI_INLINE const device half* da_kv_row(const device half* cache, const device ha
   return cache + (size_t(kvh) * p.rows + (p.ring ? key % p.rows : key)) * 256;
 }
 
-template <int NS, int BK, int LD, int G>   // G query heads per KV head (4 on the 4B, 8 on the 35B)
+template <int NS, int BK, int LD, int G>   // G query heads per KV head (4 on the model this runs on)
 NI_INLINE void dory_attn_t_impl(const device float* q, const device half* kc, const device half* vc,
                                 const device half* ck, const device half* cv, device float* out, constant DaParams& p,
                                 uint2 tg, uint sg, ushort lane, threadgroup half* kt, threadgroup half* vt) {
@@ -191,7 +191,8 @@ NI_INLINE void dory_attn_t_impl(const device float* q, const device half* kc, co
     threadgroup half kt[BK * LD], vt[BK * LD];                                                                        \
     dory_attn_t_impl<NS, BK, LD, G>(q, kc, vc, ck, cv, out, p, tg, sg, ushort(lane), kt, vt);                         \
   }
-// 16-key tiles (16 KB of threadgroup memory for both tiles); a threadgroup covers TT NS tokens of one KV head
+// 16-key tiles (16 KB of threadgroup memory for both tiles); a threadgroup covers TT NS tokens of one KV head. The
+// models this runs on have 4 query heads per KV head (G = 4); the kernel stays generic in G, but no instance exists
+// for another ratio until a model needs one.
 DORY_ATTN_T(dory_attn_t_g4s4k16, 4, 16, 256, 4)
 DORY_ATTN_T(dory_attn_t_g4s8k16, 8, 16, 256, 4)
-DORY_ATTN_T(dory_attn_t_g8s4k16, 4, 16, 256, 8)
