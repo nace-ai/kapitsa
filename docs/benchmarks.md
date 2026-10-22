@@ -44,7 +44,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   these runs carries the harness's contention flag (a system WebKit GPU process at 5-7% of the GPU), so read them as a lower bound.
   The other engines were not re-run: their cells and the notes below are the stored 2026-10-17/18 runs.
 - One session, Kapitsa first and last (each cell is the newest run with an unflagged decode phase, else the newest run).
-  The M5 Max's Kapitsa and Splash cells on the poster are the 2026-10-22 runs on main `fd85910` instead ([results](../bench/results/2026-10-22-m5-max/README.md)), taken with the GPU lock held, and every one of them carries the contention flag. Bolt's decode median (153 tok/s) includes two repetition-loop runs of its five (`valid_runs` 5); its greedy 154.6 is unflagged.
+  The M5 Max's Kapitsa and Splash cells on the poster, and Kapitsa's in the collapsed Nemotron table (Dory, Lightning, Super-VL), are the 2026-10-22 runs on main `fd85910` instead ([results](../bench/results/2026-10-22-m5-max/README.md)), taken with the GPU lock held, and every one of them carries the contention flag. Bolt's decode median (153 tok/s) includes two repetition-loop runs of its five (`valid_runs` 5); its greedy 154.6 is unflagged.
   Results: [bench/results/2026-10-18-m5-max-session](../bench/results/2026-10-18-m5-max-session/).
 - MLX: mlx-vlm with MTP on the 4B (Qwen's 4-bit head, block 3; mlx-lm 135) and the 27B (the model's head; mlx-lm 30),
   mlx-vlm with DFlash2 on the 35B (incoai's drafter, block 5; mlx-lm 112). oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt;
@@ -53,7 +53,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
 - Other apps used the GPU during both of Kapitsa's 27B runs (contention flagged: 102 and, first run, 115 tok/s; greedy
   113 and 110) and the MLX Flash-Next run. mlx-serve's DFlash2 draft tree on the 27B (blocks of 16) wrote 130 tok/s
   sampled, 143 greedy, unflagged.
-- Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`, build 36c2937; its closing run, 117 tok/s, greedy 130; the first, 113, was flagged), llama.cpp
+- Dory: 2 loops; Kapitsa per-loop KV (`--loop-kv per`; the 2026-10-22 run on `fd85910`, 119 tok/s, greedy 128; the 10-18/19 runs of build 36c2937 read 117 and, flagged, 113), llama.cpp
   NVIDIA's Dory fork (98a74c97) on its Q5_K_M, MLX mlx-lm's Dory pull request (208065f) on snsnc's 4-bit.
 - Super-VL: mlx-serve 26.10.2 loads neither NVIDIA's checkpoint nor the text-only MLX 4-bit conversion
   (`error: UnsupportedNemotronLatentMoe`). MTPLX 2.12.2 runs that conversion without MTP (it has no MTP head): 44 tok/s;
@@ -69,7 +69,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   a 148 GB working set and warns of a kernel panic). Neither guard was overridden. Kapitsa uses the least memory (70.5 GB; mlx-serve
   78.8, oMLX 104).
 - Nemotron: NVIDIA's NVFP4 on Kapitsa, mlx-vlm and Ollama, MLX 4-bit on oMLX, mlx-lm, mlx-serve and MTPLX, Q4_0 on
-  llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX reads prompts faster (3,600 against 1,900 tok/s at 4K).
+  llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX read prompts faster in the 10-18 session (3,600 against Kapitsa's 1,900 tok/s at 4K); Kapitsa's 2026-10-22 run reads 5,401.
 
 **MacBook Pro M1 Pro 16 GB**
 - Qwen: the full protocol in one hold of the GPU lock, Kapitsa 0.1.36 first and last (its runs: 85.5 and 78.5 tok/s at
