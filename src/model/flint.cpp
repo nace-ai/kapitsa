@@ -1094,7 +1094,13 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   e.dispatch(uint32_t(c.hq + 2 * c.hkv), uint32_t(T), 1, 128);
   const AttnPfP ap{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
                    ring ? uint32_t(c.window) : 0u, 1.0f / std::sqrt(float(c.hd))};
-  e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));
+  // NI_FLINT_QATTN: the attention's two products on the matrix units (tensor/qattn_t_flint.metal) where the dense
+  // GEMMs use them (qmt_: an Apple10 GPU on macOS 26); NI_FLINT_QATTN=0 keeps flint_attn_prefill
+  static const bool qat_env = !getenv("NI_FLINT_QATTN") || atoi(getenv("NI_FLINT_QATTN")) != 0;
+  const bool qat = qat_env && qmt_ && c.hd == 128 && c.hq == 8 * c.hkv;
+  const uint32_t qat_tok = small_tiles() ? 8 : 16;   // 2 tokens a simdgroup, NS 4 or 8 simdgroups
+  if (qat) e.use(pipe(small_tiles() ? "qattn_flint_s4k16" : "qattn_flint_s8k32p"));
+  else e.use(pipe(small_tiles() ? "flint_attn_prefill_k16" : "flint_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(li)]);
   e.buf(2, s.vc[size_t(li)]);
@@ -1103,7 +1109,8 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
   e.buf(5, L.sinks->buf);
   e.buf(6, pao_);
   e.val(7, ap);
-  e.dispatch((uint32_t(T) + 7) / 8, uint32_t(c.hkv), 1, 32 * uint32_t(c.hq / c.hkv));
+  if (qat) e.dispatch((uint32_t(T) + qat_tok - 1) / qat_tok, uint32_t(c.hkv), 1, 16 * qat_tok);
+  else e.dispatch((uint32_t(T) + 7) / 8, uint32_t(c.hkv), 1, 32 * uint32_t(c.hq / c.hkv));
   const uint32_t t0 = ring && uint32_t(T) > rows ? uint32_t(T) - rows : 0u;
   const StoreP sp{uint32_t(T), t0, uint32_t(pos0), uint32_t(c.hkv), rows, ring ? 1u : 0u};
   e.use(pipe("flint_kv_store"));
