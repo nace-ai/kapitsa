@@ -5,7 +5,7 @@ Every run record under [bench/results](results/), one row each, newest first. Th
 
 How to read it:
 
-- **Decode tok/s**: median of five 512-token answers at the run's sampling (T = 0.6); **Greedy** the same at T = 0. **Prefill**: a cold 4K- or 16K-token prompt divided by the time to its first token; **TTFT 4K** is that time. **Agent tok/s** is the write speed of the replayed coding-agent session, where the run had one.
+- **Decode tok/s**: median of five 512-token answers at the run's sampling (T = 0.6; Flint's runs 1.0, its model card's); **Greedy** the same at T = 0. **Prefill**: a cold 4K- or 16K-token prompt divided by the time to its first token; **TTFT 4K** is that time. **Agent tok/s** is the write speed of the replayed coding-agent session, where the run had one.
 - **Submitted by** is the author of the commit that first added the record. **Mac** is the machine the harness recorded (chip, unified memory). **Version** is the engine's version or Kapitsa's commit.
 - **–** means the run did not measure it (older harness builds did not time prefill on every run). Nothing is filled in.
 - **Flags**: `contention` means another app used the GPU during the run, `invalid` means a phase failed its checks. Both stay in the table so nothing is hidden; the numbers behind the [README](../README.md) pick runs without them, as [docs/benchmarks.md](../docs/benchmarks.md) explains.

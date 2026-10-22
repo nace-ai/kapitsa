@@ -69,7 +69,7 @@
       "additionalProperties": false,
       "required": ["decode", "decode_greedy", "prefill", "tool_calls", "peak_memory_gb"],
       "properties": {
-        "decode": {"$ref": "#/$defs/decode", "description": "Writing at temperature 0.6: the median and each valid run's rate over the middle of a 512-token answer, tok/s."},
+        "decode": {"$ref": "#/$defs/decode", "description": "Writing at temperature 0.6 (Flint at 1.0, its model card's): the median and each valid run's rate over the middle of a 512-token answer, tok/s."},
         "decode_greedy": {"anyOf": [{"$ref": "#/$defs/decode"}, {"type": "null"}], "description": "The same, greedy."},
         "prefill": {
           "type": "array",

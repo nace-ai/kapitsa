@@ -114,8 +114,9 @@ def render(results, results_dir, out_path):
              "([bench/harness](../harness/README.md)), as a client of the local server. Add yours with "
              "`kapitsa bench --submit`; [README.md](README.md) says how runs are checked.", "",
              "Writing: tokens per second of a 512-token coding answer, median of the runs (5, or 3 in a quick run), at "
-             "temperature 0.6 and greedy. Reading: a cold prompt of about 4K and 16K tokens, prompt tokens per second "
-             "to its first token. Follow-up: the time to the first token of a new message in that conversation. "
+             "temperature 0.6 (Flint at 1.0, its model card's) and greedy. Reading: a cold prompt of about 4K and 16K "
+             "tokens, prompt tokens per second to its first token. Follow-up: the time to the first token of a new message "
+             "in that conversation. "
              "Memory: the server's peak, GB of 2^30 bytes (a quick run reads no 16K prompt, so its peak is lower: about 0.4 GB "
              f"on the 4B). {WARN}: other apps used the GPU during that measurement "
              "(contention flagged), so it may be low. Different Macs, macOS versions and Kapitsa versions give "
@@ -149,8 +150,9 @@ def render(results, results_dir, out_path):
         for mk in sorted(models, key=order):
             rows = sorted(models[mk], key=lambda pr: pr[1]["time_utc"], reverse=True)
             m0 = rows[0][1]["model"]
+            t = community_check.TEMPERATURE.get(mk[0], 0.6)
             lines += [f"### {model_name(m0)} · {m0['precision']}", "",
-                      "| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | "
+                      f"| Run | Writing, T = {t:.1f} | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | "
                       "Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |",
                       "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |"]
             for p, r in rows:

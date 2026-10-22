@@ -21,8 +21,12 @@ REPO = os.path.normpath(os.path.join(HERE, ".."))
 COMMUNITY = os.path.join(REPO, "bench", "community")
 RESULTS = os.path.join(COMMUNITY, "results")
 CORPUS_SHA256 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"
-# usage.prompt_tokens of the cold prompts (bench.py REF_PROMPT_TOKENS; configs/bolt.json for Nemotron)
-REFERENCE = {"qwen": {4000: 4133, 16000: 16286}, "nemotron": {4000: 4183, 16000: 16514}}
+# usage.prompt_tokens of the cold prompts by tokenizer, as kapitsa bench checks them (src/bench/protocol.cpp): bench.py
+# REF_PROMPT_TOKENS, configs/bolt.json's for Nemotron, configs/flint.json's for Flint
+REFERENCE = {"qwen": {4000: 4133, 16000: 16286}, "nemotron": {4000: 4183, 16000: 16514},
+             "flint": {4000: 3874, 16000: 15066}}
+# the writing runs' temperature where it is not 0.6: Flint's model card's, as configs/flint.json (src/server/bench_cmd.cpp)
+TEMPERATURE = {"flint": 1.0}
 PROTOCOL = {"full": {"decode_tokens": 512, "decode_runs": 5, "greedy_runs": 5, "sizes": [4000, 16000]},
             "quick": {"decode_tokens": 512, "decode_runs": 3, "greedy_runs": 3, "sizes": [4000]}}
 FOLLOWUPS = 3
@@ -153,7 +157,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
             errs.append(f"{k}: median {d['median_tps']} is not the median of its runs {d['runs_tps']}")
         if not all(1 <= x <= 2000 for x in d["runs_tps"]):
             errs.append(f"{k}: rates {d['runs_tps']} outside 1-2000 tok/s")
-    family = "nemotron" if m["name"].startswith("nemotron") else "qwen"
+    family = "flint" if m["name"] == "flint" else "nemotron" if m["name"].startswith("nemotron") else "qwen"
     sizes = [p["size"] for p in res["prefill"]]
     if sizes != want["sizes"]:
         errs.append(f"prefill sizes {sizes}, the protocol's are {want['sizes']}")

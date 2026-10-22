@@ -90,6 +90,22 @@ e = cc.check_result(dory, cat, macs, versions)[0]
 check(not any("title" in x for x in e), "a title from an earlier release passes (Dory's, until 0.1.35)", str(e))
 check(ct.model_name(dory["model"]) == "Nemotron Dory1.0 4B", "the table names a model as the catalog does now",
       ct.model_name(dory["model"]))
+
+
+def prompts(r, sizes):
+    for p, n in zip(r["results"]["prefill"], sizes):
+        p.update(prompt_tokens=n, tps=round(n / p["ttft_s"], 1))
+
+
+flint = copy.deepcopy(full)  # what kapitsa bench writes for Flint: its prompts as Flint's own tokenizer counts them
+flint["model"].update(name="flint", title=cat["flint"]["title"], variant="4bit", precision=cat["flint"]["variants"]["4bit"])
+prompts(flint, (3873, 15065))
+e = cc.check_result(flint, cat, macs, versions)[0]
+check(not e, "Flint's prompts pass against its own reference (3,874 and 15,066 tokens)", str(e))
+r = copy.deepcopy(flint)
+prompts(r, (4133, 16286))
+e = cc.check_result(r, cat, macs, versions)[0]
+check(any("not within 1% of 3874" in x for x in e), "refused: Flint with the Qwen templates' prompt sizes", str(e))
 refused(lambda r: r["mac"].update(name="MacBook Pro (14-inch, 2024)"), "a Mac name that is not its identifier's", "is MacBook Pro (16-inch, 2024)")
 refused(lambda r: r["mac"].update(identifier="Mac99,9"), "a name for an identifier the table does not have", "not in mac-models.json")
 refused(lambda r: r.update(invalid=["decode: reasoning text returned (12 chars)"]), "invalid measurements", "invalid measurements")
@@ -160,6 +176,11 @@ check(all(c == "–" or c.endswith(("tok/s", "tok/s ⚠", " s", " s ⚠", " GB")
 m4_rows = md[i_m4:].splitlines()
 check(any("1,169 tok/s ⚠" in l and "contention (prefill_4000)" in l for l in m4_rows), "a disturbed measurement is marked, and its flag listed")
 check(any(") quick |" in l for l in m4_rows), "a quick run says so")
+both = ct.render([(os.path.join(res_dir, "flint.json"), flint), (os.path.join(res_dir, "qwen.json"), full)], res_dir, out)
+sections = {s.split("\n", 1)[0]: s for s in both.split("\n### ")[1:]}
+check("| Run | Writing, T = 1.0 |" in sections.get("Recursive Flint 40B-A2.5B · 4-bit", "")
+      and "| Run | Writing, T = 0.6 |" in sections.get("Qwen3.6 35B-A3B · 4-bit", ""),
+      "Flint's writing is headed T = 1.0 (its model card's), every other model's T = 0.6", str(list(sections)))
 p = subprocess.run([sys.executable, os.path.join(REPO, "tools", "community_table.py"), "--results", res_dir, "--out", out, "--check"],
                    capture_output=True, text=True)
 check(p.returncode == 0, "--check: up to date")

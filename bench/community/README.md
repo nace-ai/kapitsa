@@ -37,9 +37,9 @@ The JSON follows [schema.json](schema.json) and is about 2 KB:
   ([mac-models.json](mac-models.json)), the chip, CPU and GPU cores, memory, macOS version and build.
 - **Kapitsa:** its version and commit; the model, its precision, its pinned weights' revision, and how it decoded (the
   DFlash2, LiLiCorr or DSpark drafter, the MTP head, or plain).
-- **The numbers:** writing speed (decode) at temperature 0.6 and greedy, each run's and the median; reading a 4K- and
-  a 16K-token prompt (prefill: tokens per second to the first token); the time to the first token of three follow-ups in
-  each conversation; the server's peak memory; whether tool calls work.
+- **The numbers:** writing speed (decode) at temperature 0.6 (Flint at 1.0, its model card's) and greedy, each run's and
+  the median; reading a 4K- and a 16K-token prompt (prefill: tokens per second to the first token); the time to the first
+  token of three follow-ups in each conversation; the server's peak memory; whether tool calls work.
 - **The conditions:** power source, Low Power Mode and the energy mode, the worst thermal state, pages swapped out,
   other apps' share of the GPU and which apps, and the phases they disturbed; the harness's flags, and any measurement
   that failed its checks.
@@ -57,8 +57,8 @@ while a monitor samples every process's GPU time, the thermal state and the powe
 
 | Measurement | Full run | Quick run |
 | --- | --- | --- |
-| Writing, T = 0.6 and greedy: a 512-token coding answer, the rate over the middle of the stream | 5 runs each, median | 3 runs each |
-| Reading: a cold ~4K- and ~16K-token prompt (4,133 and 16,286 tokens with the Qwen templates) | both | the 4K one |
+| Writing, T = 0.6 (Flint: 1.0) and greedy: a 512-token coding answer, the rate over the middle of the stream | 5 runs each, median | 3 runs each |
+| Reading: a cold ~4K- and ~16K-token prompt (4,133 and 16,286 tokens with the Qwen templates, 4,183 and 16,514 with Nemotron's, 3,874 and 15,066 with Flint's) | both | the 4K one |
 | Follow-up: three new messages in that conversation, 1 s apart, time to the first token | median of 3 | median of 3 |
 | Peak memory: the server's `phys_footprint_peak` (what `footprint` shows), GB of 2^30 bytes | yes | yes |
 | Tool calls: streamed and whole replies with two tools, thinking off and on, and a round trip | yes | yes |
