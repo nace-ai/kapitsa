@@ -223,7 +223,7 @@ void ExpertCache::serve(const Req& r) {
   std::atomic_thread_fence(std::memory_order_seq_cst);
   sync_.set(r.go);
   const double t_go = Encoder::host_ms();
-  if (sync_.warm) sync_.warm();
+  if (r.warm && sync_.warm) sync_.warm();
   active_ = keys;
   // read ahead (a read-ahead expert enters the order as recent, unrouted: its first routed use counts as its first)
   uint64_t pf = 0;
@@ -473,11 +473,17 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
        cache_->fill_ms() > 0 ? st.bytes / 1e6 / cache_->fill_ms() : 0.0,
        cache_->complete() ? " (all of them: no handshakes)" : "");
   cache_->reset_stats();
-  if (!cache_->complete()) g.keep_warm(0);
+  if (!cache_->complete() && Gpu::heat_on()) g.keep_warm(0);
 }
 
 ExpertStore::~ExpertStore() {
   cache_.reset();
+  if (Gpu::heat_on()) {
+    const double t0 = Encoder::host_ms();
+    while (Gpu::heat_inflight() > 0 && Encoder::host_ms() - t0 < 100) usleep(500);
+    logi("GPU heater: %llu command buffers run, %d in flight at exit (after %.1f ms)",
+         (unsigned long long)Gpu::heat_started(), Gpu::heat_inflight(), Encoder::host_ms() - t0);
+  }
   Gpu& g = Gpu::get();
   if (chunk_[1].mtl && chunk_[1].mtl != chunk_[0].mtl) g.release(chunk_[1]);
   g.release(chunk_[0]);
@@ -502,7 +508,7 @@ std::vector<Buffer> ExpertStore::buffers() const {
 }
 
 void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, const Buffer* pred, uint32_t npred,
-                        int pred_layer, bool pred_all, bool scan) {
+                        int pred_layer, bool pred_all, bool scan, bool warm) {
   if (cache_->complete()) return;
   ExpertCache::Req r;
   r.layer = layer;
@@ -513,7 +519,9 @@ void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, co
   r.pred_layer = pred_layer;
   r.pred_all = pred_all;
   r.scan = scan;
-  if (Gpu::heat_on()) Gpu::get().keep_warm(kHeatMs);  // the pass's first wait comes before any go
+  // NI_GPU_HEAT=1, decode / verify only: the pass's first wait comes before any go
+  if (warm && Gpu::heat_on()) Gpu::get().keep_warm(kHeatMs);
+  r.warm = warm;
   r.ready = ++next_value_;
   r.go = ++next_value_;
   e.signal_event_inline(ev_, r.ready);

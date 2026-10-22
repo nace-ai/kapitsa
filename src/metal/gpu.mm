@@ -372,6 +372,7 @@ struct Heater {
   id<MTLBuffer> sink = nil;
   double rounds_per_ms = 0;
   std::atomic<int> inflight{0};
+  std::atomic<uint64_t> started{0};
   bool failed = false;
 };
 Heater& heater() {
@@ -403,10 +404,13 @@ id<MTLCommandBuffer> heat_cb(Heater& h, uint32_t rounds) {
 bool Gpu::heat_on() {
   static const bool on = [] {
     const char* v = getenv("NI_GPU_HEAT");
-    return !(v && *v && atoi(v) == 0);
+    return v && atoi(v) > 0;
   }();
   return on;
 }
+
+int Gpu::heat_inflight() { return heater().inflight.load(); }
+uint64_t Gpu::heat_started() { return heater().started.load(); }
 
 void Gpu::keep_warm(double ms) {
   if (!heat_on()) return;
@@ -451,6 +455,7 @@ void Gpu::keep_warm(double ms) {
       Heater* hp = &h;
       [cb addCompletedHandler:^(id<MTLCommandBuffer>) { hp->inflight.fetch_sub(1); }];
       h.inflight.fetch_add(1);
+      h.started.fetch_add(1);
       [cb commit];
     }
   }

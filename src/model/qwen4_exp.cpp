@@ -724,7 +724,7 @@ q20::Experts Qwen4Exp::q20_rows_fetch(Encoder& e, const Layer& L, int R, const B
   const int li = layer_index(L);
   if (!store_ || li < 0) return q20_experts(L);
   const uint32_t n = uint32_t(R * cfg_.top_k);
-  store_->begin(e, li, idx, n, pred ? &pidx_ : nullptr, n, pred ? li + 1 : -1, false, false);
+  store_->begin(e, li, idx, n, pred ? &pidx_ : nullptr, n, pred ? li + 1 : -1, false, false, /*warm=*/true);
   store_->end(e);
   return store_->experts(li);
 }

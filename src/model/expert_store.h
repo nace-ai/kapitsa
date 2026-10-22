@@ -131,6 +131,7 @@ class ExpertCache {
     uint32_t npred = 0;
     int pred_layer = -1;
     bool pred_all = false, scan = false;
+    bool warm = false;  // a decode / verify pass's turn: Sync::warm after the go (never a prefill chunk's)
     uint64_t ready = 0, go = 0;
   };
 
@@ -238,7 +239,7 @@ class ExpertStore {
   // end() before its expert kernels; work encoded between them does not need the experts and overlaps the turn. See
   // ExpertCache::Req for pred / pred_layer / pred_all / scan.
   void begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, const Buffer* pred, uint32_t npred, int pred_layer,
-             bool pred_all, bool scan);
+             bool pred_all, bool scan, bool warm = false);
   void end(Encoder& e);
   StoreStats stats() const { return cache_->stats(); }
   void reset_stats() { cache_->reset_stats(); }
