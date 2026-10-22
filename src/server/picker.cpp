@@ -216,7 +216,9 @@ Planned plan_choice(const hub::ModelRef& r, EngineOptions opt, size_t budget, in
     const int f = variant_fits(r, opt, budget);
     if (f == 1) p.fit = Fit::kFits;
     else if (f == 0)  // a conversation fits, but not beside the drafter, or not even that
-      p.fit = conversation_fits(d, p.context, opt.slots, budget) ? Fit::kNoDrafter : Fit::kTooBig;
+      p.fit = conversation_fits(d, p.context, opt.slots, budget) || small_start_fits(d, p.context, opt.slots, budget)
+                  ? Fit::kNoDrafter
+                  : Fit::kTooBig;
   } catch (const std::exception&) {
     p.fit = Fit::kUnknown;
   }

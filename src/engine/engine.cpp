@@ -741,6 +741,12 @@ bool conversation_fits(const std::string& model_dir, int context, int slots, siz
   return p.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
 }
 
+bool small_start_fits(const std::string& model_dir, int context, int slots, size_t budget) {
+  if (slots > 1) return false;
+  const MemPlan p = model_plan(model_dir, auto_prefill_chunk(model_dir, context, 1, budget));
+  return p.fixed(1) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+}
+
 int parse_context(const std::string& s, std::string* why) {
   std::string v;
   for (const char c : s) v += char(tolower(static_cast<unsigned char>(c)));
@@ -825,8 +831,11 @@ int variant_fits(const hub::ModelRef& ref, const EngineOptions& opt, size_t budg
     if (dir.empty()) return -1;
     // a context past the model's own limit is planned at the limit, as the server would run it
     const int ctx = context_within_limit(dir, opt.context);
-    if (!conversation_fits(dir, ctx, fit_slots(opt.slots), budget)) return 0;
-    const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, ctx, fit_slots(opt.slots), budget, opt.prefill_chunk);
+    // as the engine starts it: with one slot and smaller prefill chunks where nothing else holds the conversation
+    const bool small = !conversation_fits(dir, ctx, fit_slots(opt.slots), budget);
+    if (small && !small_start_fits(dir, ctx, opt.slots, budget)) return 0;
+    const LoadPlan lp = plan_load(dir, opt.dflash, opt.spec_depth == 0, ctx, small ? 1 : fit_slots(opt.slots), budget,
+                                  opt.prefill_chunk);
     return lp.dflash_left_out.empty() ? 1 : 0;
   } catch (const std::exception&) {  // headers that cannot be planned (a damaged download): unknown
     return -1;

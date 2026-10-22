@@ -358,6 +358,31 @@ def cli_checks(kapitsa):
         j = json.loads(out) if rc == 0 else {"rc": rc, "err": err}
         check(f"cli: flint on a {budget} GB budget -> flint:{want}",
               j.get("model") == "flint:" + want and j.get("downloaded") is True, json.dumps(j))
+    # the small start (src/engine/engine.cpp, fits_small): on a 12.2 GB budget the 16gb holds an 8K conversation only
+    # with one slot and prefill chunks below 1024 rows, its default context 8K, and the catalog check counts it as
+    # fitting there; on 16 GB the usual rules (two slots or more, 1024 rows or more, 32K or more) are unchanged.
+    # doctor plans every catalog model (about 40 s against the unreachable hub), so both run at once
+    procs = {b: subprocess.Popen([kapitsa, "doctor", "--json", "--model", "flint:16gb", "--context", "8k"],
+                                 env=dict(env, NI_MEM_BUDGET=b), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 text=True) for b in ["12.2", "16"]}
+    for budget, p in procs.items():
+        out, err = p.communicate(timeout=300)
+        try:
+            j = json.loads(out)
+            m, cv = j["models"][0], {c["variant"]: c for c in j["catalog_variants"] if c["model"] == "flint"}
+        except (ValueError, KeyError, IndexError):
+            check(f"cli: doctor on a {budget} GB budget", False, out + err)
+            continue
+        ch = m.get("prefill_chunk", 0)
+        if budget == "12.2":
+            ok = (m.get("starts") is True and m.get("slots") == 1 and 256 <= ch < 1024 and ch % 64 == 0 and
+                  m.get("default_context") == 8192 and cv["16gb"]["fits"] is True and cv["16gb"]["chosen"] is True)
+            what = "flint:16gb starts with 1 slot, a chunk below 1024 rows and 8K, and fits an 8K conversation"
+        else:
+            ok = m.get("slots", 0) >= 2 and ch >= 1024 and m.get("default_context", 0) >= 32768
+            what = "flint:16gb keeps the usual start (2+ slots, 1024+ rows, 32K+)"
+        check(f"cli: doctor on a {budget} GB budget: {what}", ok, json.dumps({k: m.get(k) for k in (
+            "starts", "slots", "prefill_chunk", "default_context")}) + " " + json.dumps(cv.get("16gb")))
     for a in ["flint:16gb", "flint:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)

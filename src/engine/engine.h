@@ -130,6 +130,10 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
 // state, the Neural Engine split): plan_load's test before it keeps a drafter, and the test `kapitsa serve` without
 // --model applies to pick the best model for this Mac.
 bool conversation_fits(const std::string& model_dir, int context, int slots, size_t budget);
+// Where conversation_fits does not hold, whether the conversation fits the way the engine then starts the model with
+// `slots` (0: the slots it picks; more than one: never): one slot (auto_slots) and the prefill chunk auto_prefill_chunk
+// takes below 1024 rows. Flint's 16gb on a 16 GB Mac: 448 rows and an 8K conversation.
+bool small_start_fits(const std::string& model_dir, int context, int slots, size_t budget);
 // A catalog variant on this Mac, from the engine's plan of its headers (its folder when downloaded, else
 // hub::plan_dir's): 1 when one conversation of opt.context tokens fits beside it within `budget` and its DFlash2
 // drafter (if it has one) is kept, 0 when not, -1 when it cannot be planned (not downloaded and offline).
