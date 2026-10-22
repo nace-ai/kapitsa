@@ -80,7 +80,7 @@
           "--model-id", "flint", "--host", "127.0.0.1", "--port", "8401", "--ctx", "8192", "--slots", "1"],
   "requires_paths": ["{models}/flint-16gb/experts.safetensors"],
   "bench_args": ["--temperature", "1.0", "--always-reasons", "--ref-prompt-tokens", "4000:3874"],
-  "note": "Kapitsa's flint:16gb (unsloth's flint-UD-IQ2_XXS GGUF imported, `kapitsa pull flint:16gb`: the routed experts in their IQ blocks, the rest 4-bit group 64) for a 16 GB Mac, with the defaults it takes there: one slot, 512-row prefill chunks, an 8K context (--ctx 8192 says it). Run with --sizes 4000: a 16K prompt does not fit. Otherwise as flint-kapitsa."
+  "note": "Kapitsa's flint:16gb (unsloth's flint-UD-IQ2_XXS GGUF imported, `kapitsa pull flint:16gb`: the routed experts in their IQ blocks, the embedding 3-bit, the LM head 6-bit, the rest 4-bit group 64) for a 16 GB Mac, with the defaults it takes there: one slot, 448-row prefill chunks, an 8K context (--ctx 8192 --slots 1 say them). Run with --sizes 4000: a 16K prompt does not fit. Otherwise as flint-kapitsa."
  },
  {
   "label": "flint-16gb-llamacpp",
