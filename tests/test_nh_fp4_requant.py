@@ -172,6 +172,10 @@ with tempfile.TemporaryDirectory() as td:
     src = os.path.join(td, "src")
     os.makedirs(src)
     write_st(os.path.join(src, "model-00001-of-00002.safetensors"), shard1)
+    side1 = {"metadata": {"total_size": 1}, "weight_map": {n: "model-00001-of-00002.safetensors" for n, _, _ in shard1}}
+    json.dump(side1, open(os.path.join(src, "model-00001-of-00002.json"), "w"))  # ModelOpt's per-shard index
+    side3 = '{"metadata": {"total_size": 0}, "weight_map": {"backbone.norm_f.weight": "model-00003-of-00003.safetensors"}}'
+    open(os.path.join(src, "model-00003-of-00003.json"), "w").write(side3)
     write_st(os.path.join(src, "model-00002-of-00002.safetensors"), shard2)
     write_st(os.path.join(src, "model-00003-of-00003.safetensors"), shard3)  # nothing to quantize: cloned
     wm = {n: "model-00001-of-00002.safetensors" for n, _, _ in shard1}
@@ -221,6 +225,14 @@ with tempfile.TemporaryDirectory() as td:
     out2 = os.path.join(td, "out2")
     run(out2)
     check(sha(out) == sha(out2), "a second run writes the same bytes")
+    sd = json.load(open(os.path.join(out, "model-00001-of-00002.json")))
+    o1h = rq.read_header(os.path.join(out, "model-00001-of-00002.safetensors"))[0]
+    check(sorted(sd["weight_map"]) == sorted(n for n in o1h if n != "__metadata__") and
+          sd["metadata"]["total_size"] == idx["metadata"]["total_size"] - sum(
+              os.path.getsize(os.path.join(out, f)) - rq.read_header(os.path.join(out, f))[1]
+              for f in ("model-00002-of-00002.safetensors", "model-00003-of-00003.safetensors")),
+          "a rewritten shard's per-shard index: its tensors and size")
+    check(open(os.path.join(out, "model-00003-of-00003.json")).read() == side3, "an unchanged shard's index as it was")
     s3 = "model-00003-of-00003.safetensors"
     check(sha(out)[s3] == hashlib.sha256(open(os.path.join(src, s3), "rb").read()).hexdigest() and
           idx["weight_map"]["backbone.norm_f.weight"] == s3, "a shard with nothing to quantize: the same file")

@@ -158,7 +158,7 @@ def copier(path, start, size, step=64 << 20):
             while left:
                 c = f.read(min(step, left))
                 if not c:
-                    raise IOError(f"{path}: short read")
+                    raise OSError(f"{path}: short read")
                 left -= len(c)
                 yield c
     return gen
@@ -227,7 +227,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
 
     tset = set(targets)
-    weight_map, shard_sha, total = {}, {}, 0
+    weight_map, shard_sha, total, rewritten = {}, {}, 0, set()
     for s in shards:
         h, base = headers[s]
         src = os.path.join(a.src, s)
@@ -260,6 +260,12 @@ def main():
         shard_sha[s] = sha
         for t in out:
             weight_map[t[0]] = s
+        side = s[:-len(".safetensors")] + ".json"
+        if os.path.isfile(os.path.join(a.src, side)):
+            # ModelOpt's per-shard index (NVIDIA's NVFP4 repos have one per shard): this shard's tensors now
+            json.dump({"metadata": {"total_size": size}, "weight_map": {n: s for n in sorted(t[0] for t in out)}},
+                      open(os.path.join(a.out, side), "w"), indent=4)
+            rewritten.add(side)
         print(f"{s}: {size / 1e9:.3f} GB, sha256 {sha}", flush=True)
     if index is not None:
         index = dict(index)
@@ -268,7 +274,7 @@ def main():
         json.dump(index, open(os.path.join(a.out, "model.safetensors.index.json"), "w"), indent=2)
     qc["quantization"] = dict(q, exclude_modules=[m for m in excluded if m not in tset])
     json.dump(qc, open(os.path.join(a.out, "hf_quant_config.json"), "w"), indent=4)
-    skip = set(shards) | {"model.safetensors.index.json", "hf_quant_config.json", "requant.json", ".gitattributes"}
+    skip = set(shards) | rewritten | {"model.safetensors.index.json", "hf_quant_config.json", "requant.json", ".gitattributes"}
     for f in sorted(os.listdir(a.src)):
         p = os.path.join(a.src, f)
         if f not in skip and os.path.isfile(p):
