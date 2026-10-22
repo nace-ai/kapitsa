@@ -1448,14 +1448,14 @@ Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 
 0.1.36 and on by default in `serve`: rebuilt binaries run with the table's own protocol (16K sweep, tool calls, cache
 turn, `--slots 1`) peak at 4,798 MB at 0.1.36, 4,799 MB at #212's parent, 5,610 MB at #212 itself and 5,665 MB at
 180a650, and the same protocol at 180a650 with `--disk-cache 0` peaks at 4,851 MB (tools 4,358, sweep 4,851, cache
-turn 4,851), so the cache is about 0.8 GB of that 5,665 MB and the commits after #212 add about 50 MB. The largest
-thing it holds is the copy it takes of a conversation that is being replaced: when a request replaces a conversation
-the SSD lacks, `serve` copies that conversation's KV into RAM before the write-behind thread writes it to the SSD
-(each copy up to `capture_max`, RAM/32 capped at 1 GiB — 604 MB for a 16K conversation on the 4B) and frees it once
-the write finishes, which is why the peak lands in the phase that replaces the sweep's conversation and why the
-doctor's plan total, a steady-state figure, does not move. The stored 4B run above, 5,553 MB, is the same engine at
-180a650 in a louder session, and peak footprint does not track the 7-12% foreign GPU load these runs were flagged
-with.
+turn 4,851), so the cache is about 0.8 GB of that 5,665 MB and the commits after #212 add about 50 MB. That split is
+measured on the 4B; the 27B, 35B and Lightning rows were not re-run with the cache off. The largest thing the cache
+holds is the copy it takes of a conversation that is being replaced: when a request replaces a conversation the SSD
+lacks, `serve` copies that conversation's KV into RAM before the write-behind thread writes it to the SSD (each copy
+up to `capture_max`, RAM/32 capped at 1 GiB — 604 MB for a 16K conversation on the 4B) and frees it once the write
+finishes, which is why the peak lands in the phase that replaces the sweep's conversation and why the doctor's plan
+total, a steady-state figure, does not move. The stored 4B run above, 5,553 MB, is the same engine at 180a650 in a
+louder session, and peak footprint does not track the 7-12% foreign GPU load these runs were flagged with.
 
 ### Qwen3.5-4B at 4-bit
 
