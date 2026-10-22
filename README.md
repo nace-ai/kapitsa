@@ -10,8 +10,8 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen and Nemotron mod
 
 ## 🔥 What's new
 
-- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and nearly 2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 16 of 17 model and Mac pairs** against eight engines, up to 2.3× MLX ([poster](#benchmarks)).
+- [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 19 of 21 model and Mac pairs** against eight engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
@@ -54,14 +54,14 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 16 of the 17 model and Mac pairs measured against eight engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 19 of the 21 model and Mac pairs measured against eight engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
-  <img alt="Poster of prefill / decode speed for Kapitsa and eight other engines on a MacBook Pro M5 Pro, M4 Pro and M1 Pro; the numbers are in the poster" src="docs/assets/benchmarks-light.webp">
+  <img alt="Poster of prefill / decode speed for Kapitsa and eight other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the poster" src="docs/assets/benchmarks-light.webp">
 </picture>
 
-<sub>**Each cell reads prefill / decode in tokens per second.** M5 Max results are being re-measured. Prefill is a 4K-token prompt, decode a 512-token answer. × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
+<sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer. × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
 
 <details>
 <summary>Models not on the poster (decode tok/s)</summary>
