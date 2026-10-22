@@ -388,7 +388,8 @@ def report(doc):
     ok, top, kap = table_rows(doc)
     sl, ll = doc["sizes"].split(",")[0], doc["sizes"].split(",")[-1]
     L = [f"### `kapitsa bench compare`: {m['name']} on {mc['chip']}, {mc['memory_gb']} GB, macOS {mc['macos']}", "",
-         f"{doc['kapitsa']['version']}; harness {doc['harness']['commit'] or 'unknown'} "
+         f"{doc['kapitsa']['version']}; harness "
+         f"{doc['harness']['commit'] or doc['harness'].get('version') or 'unknown'} "
          f"(`bench/harness`, profile `{doc['profile']}`: thinking off, one request at a time, T=0.6, prefill "
          f"{doc['sizes']} tokens, medians). Measured {doc['when']}.", "",
          f"| # | engine | decode tok/s | prefill {sl} tok/s | prefill {ll} tok/s | TTFT cold | TTFT cached | memory | vs Kapitsa |",
@@ -648,7 +649,7 @@ def kapitsa_version():
 
 def harness_commit(ce):
     info = ce.bench.harness_info()
-    return {"commit": (info.get("git_head") or "")[:7], "dirty": info.get("dirty")}
+    return {"commit": (info.get("git_head") or "")[:7], "dirty": info.get("dirty"), "version": info.get("version")}
 
 
 if __name__ == "__main__":

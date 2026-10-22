@@ -701,6 +701,56 @@ std::string version_of(const std::string& path) {
   return valid_version(v) ? v : "";
 }
 
+// The benchmark harness beside the notices, where find_harness() (bench_cmd.cpp) looks for it, so `kapitsa bench
+// compare` runs it from an install with no clone. A release carries it in the tarball (bench/harness), so an update
+// installs it too: an install made before releases shipped it gets it here, and an older one is replaced whole
+// (staged beside it, then renamed over it) so a half copy never leaves a harness that does not match this binary.
+// A release without one (all of them before it shipped) keeps whatever is installed.
+bool install_harness(const std::string& from, const Install& in, std::string* why) {
+  if (!is_file(join(from, "kbench.py"))) return true;
+  const std::string bench = join(in.notices, "bench");
+  std::error_code ec;
+  std::filesystem::create_directories(bench, ec);
+  const std::string dest = join(bench, "harness"), pid = std::to_string(getpid());
+  const std::string fresh = dest + ".new." + pid, old = dest + ".old." + pid;
+  std::filesystem::remove_all(fresh, ec);
+  std::filesystem::copy(from, fresh,
+                        std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing, ec);
+  if (ec) {
+    *why = "Can't write " + hub::tilde(fresh) + " (" + ec.message() + ")";
+    std::filesystem::remove_all(fresh, ec);
+    return false;
+  }
+  // local.env is the user's own per-machine settings (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes into the new folder,
+  // and if it can't be read the old harness (with it) stays as it is rather than the update silently dropping it
+  if (is_file(join(dest, "local.env"))) {
+    std::error_code keep;
+    std::filesystem::copy_file(join(dest, "local.env"), join(fresh, "local.env"),
+                               std::filesystem::copy_options::overwrite_existing, keep);
+    if (keep) {
+      *why = "Can't keep " + hub::tilde(join(dest, "local.env")) + " (" + keep.message() + ")";
+      std::filesystem::remove_all(fresh, ec);
+      return false;
+    }
+  }
+  ec.clear();
+  std::filesystem::rename(dest, old, ec);
+  const bool had = !ec;
+  ec.clear();
+  std::filesystem::rename(fresh, dest, ec);
+  if (ec) {
+    *why = "Can't write " + hub::tilde(dest) + " (" + ec.message() + ")";
+    std::filesystem::remove_all(fresh, ec);
+    if (had) {
+      std::error_code back;
+      std::filesystem::rename(old, dest, back);
+    }
+    return false;
+  }
+  std::filesystem::remove_all(old, ec);
+  return true;
+}
+
 Done install(const Install& in, const std::string& version, const Stage& stage) {
   Done d;
   auto failed = [&](Failure f, const std::string& why) {
@@ -761,7 +811,8 @@ Done install(const Install& in, const std::string& version, const Stage& stage) 
   if (says != version)
     return failed(Failure::kRefused, "the kapitsa in " + name + (says.empty() ? " does not run" : " is version " + says));
 
-  // the switch, then the rollback copy and the license files beside each other (where install.sh puts the notices)
+  // the switch, then the rollback copy, the license files and the benchmark harness beside each other (where
+  // install.sh puts the notices)
   if (stage) stage("Installing it");
   std::string kept;
   if (Done s = switch_to(in, next, tmp.path, &kept); s.failure != Failure::kNone) return s;
@@ -773,6 +824,7 @@ Done install(const Install& in, const std::string& version, const Stage& stage) 
     chmod(join(x, f).c_str(), 0644);
     if (!move(join(x, f), join(in.notices, f), &warn) && d.warning.empty()) d.warning = warn;
   }
+  if (!install_harness(join(join(x, "bench"), "harness"), in, &warn) && d.warning.empty()) d.warning = warn;
   return d;
 }
 

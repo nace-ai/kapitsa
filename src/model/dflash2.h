@@ -82,14 +82,19 @@ void dfl_attn_plan(int P, uint32_t max_splits, uint32_t min_chunk, uint32_t* lo,
 class DFlash2 {
  public:
   static constexpr int kB = 8, kWin = 2048, kTopK = 16, kRank = 256, kCtxKeep = 2047;
-  // The drafting block's rows: kB (8, the tile and the default), or 16 (NI_DFLASH_BLOCK=16: the anchor + 15 mask
-  // rows, two 8-row tiles; opt-in, KFlash tree cycles only). Everything the default path runs stays at 8.
-  static int block();
+  // The drafting block's rows: kB (8, the tile), or 16 (the anchor + 15 mask rows, two 8-row tiles; KFlash tree cycles
+  // only). NI_DFLASH_BLOCK picks it (8, 16, or `auto` for the default); where that says nothing it is 8, and Engine asks
+  // for 16 on a single-slot engine that takes the 16-row paths (the ctor's rows16). Fixed while the drafter loads, since
+  // alloc_buffers() and the reduced head size the rows from it; per drafter, so a process that switches models
+  // (ModelManager::switch_to) picks its block again.
+  int block() const { return block_; }
   static constexpr uint32_t kGpuChunk = 256;  // context positions per attention split, GPU-driven passes
   // default reduced draft head rows: from a ranked id list (NI_DFLASH_HEAD_IDS), and in id order (the default)
   static constexpr int kHeadRows = 65536, kHeadRowsIdOrder = 98304;
-  // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4).
-  DFlash2(Qwen35& target, const std::string& dir, int bits = 0);
+  // bits: 4 or 8 (0: NI_DFLASH_BITS, default 4). rows16: draft a 16-row block where this target, the drafter's
+  // projections and the knobs allow it and NI_DFLASH_BLOCK says nothing (Engine passes slots == 1: a 16-row block has
+  // no batched cycle to lose, Engine::batch_rows).
+  DFlash2(Qwen35& target, const std::string& dir, int bits = 0, bool rows16 = false);
   const DFlash2Config& config() const { return cfg_; }
   int bits() const { return bits_; }
   size_t resident_bytes() const { return resident_; }
@@ -106,8 +111,20 @@ class DFlash2 {
   // as stored; buffers; the reduced draft head, rows of the target's LM head of head_row_bytes each), the target's
   // 8-row verify scratch and the prompt-capture buffers of the first prefill (*at_prefill, included); *per_slot:
   // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
+  // The drafting block the engine will load for `target` with `slots` slots: NI_DFLASH_BLOCK if it names 8 or 16, else
+  // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
+  // block_env: NI_DFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
+  // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
+  // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
+  // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
+  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok);
+  // Whether this Mac and these knobs run the drafting pass on the matrix units (dfl_tw_supported() and V8Knobs):
+  // plan_block_rows takes the answer as an argument so that the decision itself is left with the environment alone.
+  static bool tensor_path_ok();
+  // block_rows: the drafting block the engine will load (plan_block_rows), whose rows the target's verify buffers and
+  // every slot's verify tape are sized from.
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill = nullptr);
+                           size_t* per_slot, size_t* at_prefill = nullptr, int block_rows = kB);
   // The target's tensors the drafter borrows have a supported format (4-bit embedding, 4/8-bit g64 LM head).
   static bool supports(const Qwen35& target);
   // The reduction a draft for this target reads its layer outputs with: "stream_mean" for a hyper-connected target
@@ -222,8 +239,8 @@ class DFlash2 {
   // after each tree cycle completed: the cycle's GPU ms for the budget, its drafting half's command buffer and its
   // verify's (the loop calls it after its wait)
   void observe(double ms);
-  // proposals verified per cycle: NI_DFLASH_VERIFY (1..7), default 7
-  static int verify_depth();
+  // proposals verified per cycle: NI_DFLASH_VERIFY (1..block - 1), default block() - 1
+  int verify_depth() const { return vdepth_; }
   // dynamic verify depth threshold (dfl_depth; MoE targets only): 0.5 by default, NI_DFLASH_DYN=tau, 0 = off
   float dyn_tau() const { return dyn_tau_; }
   // sampled cycles verify with row-independent MoE numerics (Qwen35::set_verify_moe_exact)
@@ -271,6 +288,12 @@ class DFlash2 {
   QLinear quantize(const std::vector<const Tensor*>& parts, const char* label, const std::vector<uint32_t>& perm = {});
   QLinear row_view(const QLinear& src, uint32_t r0, uint32_t n);
   void alloc_buffers();
+  // a 16-row block's drafting pass on the tensor path: not the v1 drafter, the matrix units on, 4-bit group-64
+  // projections, the fused attention (the load-time gate below refuses NI_DFLASH_BLOCK=16 without it)
+  bool rows16_tensor_ok() const;
+  // and whether this target and these knobs allow the block at all: trees on, a depth-15 walk (NI_DFLASH_VERIFY >= 15),
+  // the target's wide tree verify, and rows16_tensor_ok
+  bool rows16_auto_ok() const;
 
   // dfl_qmm8, or the target's tensor-op GEMM qmm8t (src/kernels/tensor/verify8t.metal) on the X8 table's T table
   // when the target has it on (Qwen35::v8_tw) and every segment is 4-bit group 64 with oscale 1
@@ -295,6 +318,8 @@ class DFlash2 {
   std::string dir_;
   DFlash2Config cfg_;
   int bits_ = 4;
+  int block_ = kB;         // kB, or 16 (the ctor picks it before anything is sized)
+  int vdepth_ = kB - 1;    // proposals verified per cycle: verify_depth()
   size_t resident_ = 0;
   std::vector<DLayer> layers_;
   QLinear fc_, sel_w_, kv_all_;

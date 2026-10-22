@@ -281,5 +281,30 @@ with tempfile.TemporaryDirectory() as tmp:
     dfl, dgate = lf.floor_and_gate(sources, "decode")
     check(dfl["kl_p99"] == 1e-4 and dgate["max_p99_kl"] == 2e-4, "the decode floor: its own sources alone", dfl)
 
+    # ---- --reorder: the order-change gate, for a change that only reassociates the K reduction ----
+    with open(floor_json, "w") as f:
+        json.dump({"gate": {"min_top1": 0.999, "max_mean_kl": 1e-9, "max_p99_kl": 4e-6, "near_tie": 1e-4,
+                            "max_far_flips": 0}}, f)
+    rc, out = run(R, N, "--floor", floor_json)
+    check(rc == 1, "a floor a reordering cannot pass", out)
+    rc, out = run(R, N, "--reorder")
+    check(rc == 0 and "order-change gate" in out and "PASS (the order-change gate" in out,
+          "--reorder passes rounding noise the floor refuses", out)
+    rc, out = run(R, N, "--reorder", "--no-gate")
+    check(rc == 2 and "--reorder sets its own bounds" in out, "--reorder takes no --no-gate", out)
+    rc, out = run(R, N, "--reorder", "--floor", floor_json)
+    check(rc == 2, "--reorder takes no --floor", out)
+    rc, out = run(R, F, "--reorder", "--min-top1", "0.9", "--max-nll-change", "1")
+    check(rc == 0 and "1 flip, 1 of them near-ties" in out, "--reorder: a near-tie flip inside its margin", out)
+    # a drift of the size an expert GEMM reordering causes passes; a bigger one does not
+    reordered = [[f32(x + rnd.gauss(0, 0.02)) for x in r] for r in ref]
+    rc, out = run(R, write_dump(os.path.join(tmp, "reordered"), seqs, recs, reordered, meta), "--reorder")
+    check(rc == 0, "--reorder: drift of the order a reordering causes", out)
+    drifted = [[f32(x + rnd.gauss(0, 0.25)) for x in r] for r in ref]
+    rc, out = run(R, write_dump(os.path.join(tmp, "drifted"), seqs, recs, drifted, meta), "--reorder")
+    check(rc == 1 and "FAIL: mean KL" in out, "--reorder: a drift beyond it fails", out)
+    rc, out = run(R, write_dump(os.path.join(tmp, "lower2"), seqs, recs, lower, meta), "--reorder")
+    check(rc == 1 and "FAIL: mean NLL change" in out, "--reorder: the next token's NLL is bounded", out)
+
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)

@@ -5,14 +5,16 @@
 usage: test_update.py [BUILD_DIR]   (default: build; needs BUILD_DIR/kapitsa and BUILD_DIR/update_test, the full build)
 
 The releases are real ones: this build's kapitsa signed as packaging/release/build.sh signs a release (ad hoc, hardened
-runtime, identifier ai.nace.kapitsa) and packed as it packs one, with its sha256. A newer (or older) release is the same
-binary with its version string changed, signed again: a real kapitsa that is the version it says (checked first).
+runtime, identifier ai.nace.kapitsa) and packed as it packs one, with its sha256 and its bench/harness. A newer (or
+older) release is the same binary with its version string changed, signed again: a real kapitsa that is the version it
+says (checked first).
 Installs are made by install.sh --from-file into temporary folders.
 
 1. update_test: version order, release names, kinds of install by path.
 2. --check: up to date, newer, older, prereleases, numeric order, no release, unreachable, a bad KAPITSA_UPDATE_URL.
 3. kapitsa update on an install.sh install: the binary switched in one rename (it runs throughout), the old one kept as
-   the rollback copy (its inode: a process running it keeps it), the license files updated, the state.
+   the rollback copy (its inode: a process running it keeps it), the license files and the benchmark harness updated,
+   the state; an install from before the harness shipped gets it.
 4. Refused, with nothing changed: a wrong sha256, an unsigned binary, a broken signature, another identifier, another
    version, a tarball that is not a release, a symlink, a redirect away from GitHub, a missing release.
 5. --rollback (twice), --version (an older release, asked for), and the errors around them.
@@ -242,10 +244,11 @@ def binary(version, how="signed", identifier=IDENTIFIER):
     return path
 
 
-def tar_release(version, binary_path=None, sha256=None, files=("kapitsa", "LICENSE", "THIRD_PARTY_NOTICES"), symlink=False):
-    """Serves release `version` as packaging/release/build.sh packs it: kapitsa, LICENSE and THIRD_PARTY_NOTICES in a
-    folder of the release's name (ustar, gzip), and its .sha256 (shasum's format) or `sha256` in its place. Also
-    written to TMP/dl for install.sh --from-file. Returns the tarball's path there."""
+def tar_release(version, binary_path=None, sha256=None, files=("kapitsa", "LICENSE", "THIRD_PARTY_NOTICES"), symlink=False,
+                harness=True):
+    """Serves release `version` as packaging/release/build.sh packs it: kapitsa, LICENSE, THIRD_PARTY_NOTICES and
+    bench/harness in a folder of the release's name (ustar, gzip), and its .sha256 (shasum's format) or `sha256` in
+    its place. Also written to TMP/dl for install.sh --from-file. Returns the tarball's path there."""
     name = f"kapitsa-{version}-darwin-arm64"
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz", format=tarfile.USTAR_FORMAT) as t:
@@ -263,6 +266,9 @@ def tar_release(version, binary_path=None, sha256=None, files=("kapitsa", "LICEN
         for f in ("LICENSE", "THIRD_PARTY_NOTICES"):
             if f in files:
                 entry(f"{name}/{f}", data=f"{f} of {version}\n".encode())
+        if harness:  # bench/harness, which `kapitsa bench compare` runs (a nested file too, as the real one has)
+            entry(f"{name}/bench/harness/kbench.py", mode=0o755, data=f"# kbench.py of {version}\n".encode())
+            entry(f"{name}/bench/harness/configs/q35-4b.json", data=f'{{"release": "{version}"}}\n'.encode())
     data = buf.getvalue()
     sums = f"{sha256 or hashlib.sha256(data).hexdigest()}  {name}.tar.gz\n".encode()
     url = f"/releases/download/v{version}/{name}.tar.gz"
@@ -420,6 +426,10 @@ runner.kill(), runner.wait()
 check(open(os.path.join(notices_of(S1), "LICENSE")).read() == f"LICENSE of {N}\n" and
       open(os.path.join(notices_of(S1), "THIRD_PARTY_NOTICES")).read() == f"THIRD_PARTY_NOTICES of {N}\n",
       "the license files updated where install.sh put them")
+kb1 = os.path.join(notices_of(S1), "bench", "harness", "kbench.py")
+check(open(kb1).read() == f"# kbench.py of {N}\n" and os.access(kb1, os.X_OK) and
+      open(os.path.join(notices_of(S1), "bench", "harness", "configs", "q35-4b.json")).read() == f'{{"release": "{N}"}}\n',
+      "the benchmark harness updated beside the notices, where bench compare looks for it", open(kb1).read())
 check(not leftovers(S1), "no temporary folder left beside the binary", leftovers(S1))
 r1 = rec(H1, S1)
 check(r1.get("result") == "updated" and r1.get("from") == V and r1.get("to") == N and not r1.get("notice") and
@@ -428,6 +438,27 @@ n0 = logged()
 r = run([S1, "update"], env(H1))
 check(r.returncode == 0 and f"kapitsa {N} is up to date" in r.stdout and not since(n0, "GET"),
       "run again: up to date, nothing downloaded", r.stdout + r.stderr)
+
+# a user's local.env in the harness survives an update
+SH1, HH1 = standalone("sh1"), home("sh1")
+lenv = os.path.join(notices_of(SH1), "bench", "harness", "local.env")
+os.makedirs(os.path.dirname(lenv), exist_ok=True)
+open(lenv, "w").write("LLAMA_SERVER=/x/llama-server\n")
+tar_release(N)
+r = run([SH1, "update"], env(HH1))
+kb1b = os.path.join(notices_of(SH1), "bench", "harness", "kbench.py")
+check(r.returncode == 0 and open(kb1b).read() == f"# kbench.py of {N}\n" and os.path.isfile(lenv)
+      and open(lenv).read() == "LLAMA_SERVER=/x/llama-server\n",
+      "the harness updated and the user's local.env kept", r.stdout + r.stderr)
+
+# an install made before releases shipped the harness (v0.2.5 and older) gets it from the next update
+SH2, HH2 = standalone("sh2"), home("sh2")
+shutil.rmtree(os.path.join(notices_of(SH2), "bench"), ignore_errors=True)
+tar_release(N)
+r = run([SH2, "update"], env(HH2))
+hk2 = os.path.join(notices_of(SH2), "bench", "harness", "kbench.py")
+check(r.returncode == 0 and os.path.isfile(hk2) and open(hk2).read() == f"# kbench.py of {N}\n",
+      "an install without a harness gets it on update", r.stdout + r.stderr)
 
 # ---------------------------------------------------------------- 4. refused releases change nothing
 

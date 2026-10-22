@@ -71,6 +71,10 @@ class KfBudget {
   void set_rows(uint32_t allowed, int max_rows);
   // the counts past 8 run as one wide verify of capacity max_rows (see above): the capacity is chosen per cycle
   void set_wide(bool on);
+  // every cycle verifies at capacity max_rows: for a drafter whose block is wider than the 8-row tile, which drafts
+  // the whole lattice per weight read, a capacity 8 cycle verifies half of what was drafted (measured on a 16-row
+  // block: 69.3 tok/s on narrow cycles against 90.6 on wide ones, so the fallback is not a choice worth having there)
+  void pin_wide();
   // after a cycle: the tree descriptor as its acceptance left it (rows, records) and the cycle's GPU time (ms): its
   // drafting half's command buffer and its verify's, Encoder::gpu_ms() of each
   void observe(const int32_t* tree, double ms);
@@ -126,6 +130,7 @@ class KfBudget {
   int last_[kD] = {};  // the cycle that last measured each row count
   int refresh_ = 0;    // a row count the next cycles verify to re-measure it (0: none; -1: the narrow 8 rows)
   bool wide_ = false, wide_pays_ = true, wide_saved_ = false;  // wide_saved_: a wide run wrote the cache
+  bool pinned_ = false;  // wide_pays_ is not a decision (pin_wide): every cycle verifies at capacity max_rows
   double cost8n_ = 0, lb_ = 0, lq_[kD] = {};
   int ncost8n_ = 0, last8n_ = 0, nb_ = 0, narrow_cycles_ = 0, since_eval_ = 0, narrow_writes_ = 0;
   static constexpr int kStatsEvery = 8;  // capacity 8: one cycle in this many builds max_rows nodes (the E statistics)

@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
   sp.temperature = temp;
   sp.top_p = top_p;
   sp.top_k = top_k;
-  const int K = DFlash2::verify_depth();
+  const int K = dfl.verify_depth();
   // prefill with the drafter's prompt capture
   dfl.begin_prefill(n, 0);
   for (int p = 0; p < n; p += m.prefill_chunk()) {

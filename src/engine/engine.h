@@ -86,6 +86,16 @@ size_t default_mem_budget();
 // The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
 // less than one conversation of `context` tokens in the budget (activations scale with the chunk)
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
+// Rows of the next prefill chunk with `p` of `n` rows done: min(chunk, n - p), or with `even` those rows split evenly
+// over the chunks that rule would take (a 4130-token prompt at a 2048 chunk is 2048+2048+34 plain, 2065+2065 even), so
+// a prompt a few rows past a multiple of the chunk pays no extra pass. Never more than `chunk` rows, so the planned
+// buffers still hold every chunk; `even` is off for a model whose prefill a Neural Engine split runs (it needs chunks
+// of at most FfnSplit::kMaxRows rows), see Model::ane_split_on.
+int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even);
+// Rows the prefill buffers plan for: `chunk` plus its tail room (2112 for 2048), so an even chunk still fits them
+int prefill_chunk_room(int chunk);
+// NI_BAL (default on; 0 = the chunking before tail room and even chunks), read once
+bool prefill_even_chunks();
 
 // What the engine settles before it loads a model, from the safetensors headers alone (its constructor and
 // `kapitsa doctor` share it): the DFlash2 drafter and the prefill chunk.

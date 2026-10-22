@@ -102,6 +102,26 @@ static int moe_qmr() {
   return v;
 }
 
+// NI_MOE_QTM: the qmt tile (tensor_ops) on the routed experts' grouped GEMMs (qmtm_gu_* / qmtm_dn_*) instead of the
+// simdgroup qrm kernels. On where the tensor units are usable (the M5 family on macOS 26, the same condition as the
+// dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
+// 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
+static bool qmt_on();
+static bool moe_qtm() {
+  // The tile sums each output's K reduction in a different association order, so it does not reproduce the
+  // simdgroup path's logits to the bit: it moves the 35B's logits by ~1.1e-3 mean KL, 1.3x the 8.1e-4 the shipped
+  // qrm path already moves against the order before it, and its cold 4K and 16K temperature-0 continuations came out
+  // identical. That is not noise, so it is gated by `tools/logit_compare.py --reorder` (the
+  // order-change bounds, docs in AGENTS.md) instead of the model's noise floor, and the user accepted the trade on
+  // 2026-10-22 for a 1.25x 4K prefill rate (2,272 -> 1,702 ms, interleaved A/B on the M5 Pro). Speed and drift were
+  // measured there; a tile's rounding is shape-dependent rather than Mac-dependent. Only passes above 128 rows reach
+  // this path -- shorter ones take the short-prefill MoE path above (8-row tiles), so a chunk's tail rows do not -- and
+  // a dump at --chunk 160, whose 96-row tails go short, shows the drift and passes the gate. Off wherever the dense
+  // path's tensor units are off.
+  static const bool v = env_int("NI_MOE_QTM", qmt_on() ? 1 : 0) != 0;
+  return v;
+}
+
 // The 35B's grouped prefill on the 32-core M1 Max benefits from staging a full
 // 64-input group per step. Other measured devices keep their 32-input tiles.
 static int moe_qmr_k(int hidden, int intermediate) {
@@ -963,7 +983,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
   return total;
 }
 
-Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
+Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   MemPlan m;
   Qwen35Config c;
   parse_config(read_json(dir + "/config.json"), c);
@@ -1055,9 +1075,12 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
   // gate/up on large prefills while NI_QMM_GU is on; 8-bit ones through qmr8, unless NI_QMM8=0)
   const json q = r.contains("quantization") ? r["quantization"] : json::object();
   const bool fused = qmm_gu_enabled() && (q.value("bits", 4) != 8 || qmm8_on());
-  // the verify rows the plan reserves: 8, or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows),
-  // whose buffers and tape are that tall (set_tree_rows, new_seq); the drafting pass picks its rows from the same call
-  const size_t vrows = kf_dense_rows(c) > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
+  // the verify rows the plan reserves: 8; 16 where the engine drafts a 16-row block (rows16, and the block pins the
+  // verify to its width); or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows): the buffers and
+  // tape are that tall (set_tree_rows, new_seq), and the drafting pass picks its rows from the same call
+  const uint32_t wide = kf_dense_rows(c);
+  const size_t vrows =
+      rows16 ? size_t(16) : wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
   for (const ActBuf& a : act_layout(c, chunk, int(vrows), has_mtp, fused ? vrows : size_t(chunk)))
     m.activations += a.bytes;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
@@ -2595,12 +2618,20 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   // generic expert formats: wfmt.metal's qrmf_* (the qrm design, 32-row tiles)
   const bool gen = G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn) && G.K % 64 == 0 &&
                    Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
-  const bool qrm = !gen && moe_qmr() && G.gs == 64 && U.gs == 64 && Dn.gs == 64 && G.K % 64 == 0 && Dn.K % 64 == 0 &&
-                   G.N % 64 == 0 && Dn.N % 128 == 0;
+  // qmtm_gu_m64_n64 / qmtm_dn_m64_n64: tile width BN 64 (gate/up: 32 gate + 32 up columns per threadgroup) and K
+  // step 32, the measured best; the tensor library builds only these two.
+  constexpr int qtm_gu_n = 64, qtm_dn_n = 64;
+  // qmtm_gu_m64_n64 / qmtm_dn_m64_n64 on 64-row tiles: the qmt tile (tensor_ops) on the routed experts' grouped
+  // GEMMs (4-bit g64). 64 rows is the whole tile of an expert's bucket at 4K-16K rows of a 256-expert layer.
+  const bool qtm = !q20 && !gen && moe_qtm() && qmt_on() && G.bits == 4 && G.gs == 64 && U.bits == 4 &&
+                   U.gs == 64 && Dn.bits == 4 && Dn.gs == 64 && G.K % 64 == 0 && Dn.K % 64 == 0 &&
+                   G.N % qtm_gu_n == 0 && Dn.N % qtm_dn_n == 0;
+  const bool qrm = !qtm && !gen && moe_qmr() && G.gs == 64 && U.gs == 64 && Dn.gs == 64 && G.K % 64 == 0 &&
+                   Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
   // NI_MOE_BM: rows per tile (16, 32 or 64); partial tiles skip their empty 8-row fragments
   static const int bm_env = getenv("NI_MOE_BM") ? atoi(getenv("NI_MOE_BM")) : 64;
-  const int bm = q20 || gen ? 32 : qrm ? moe_qmr() : bm_env;
-  const int kBnGu = q20 || qrm || gen ? 64 : 32, kBnDn = q20 || qrm || gen ? 128 : 64;
+  const int bm = q20 || gen ? 32 : qtm ? 64 : qrm ? moe_qmr() : bm_env;
+  const int kBnGu = q20 || qrm || gen ? 64 : qtm ? qtm_gu_n / 2 : 32, kBnDn = q20 || qrm || gen ? 128 : qtm ? qtm_dn_n : 64;
   auto fits = [gen, q20](const QLinear& q) {
     if (q20) return q.q20 && q.K % 64 == 0;
     return gen ? q.K % 32 == 0 : q.bits == 4 && q.gs % 32 == 0 && q.K % 32 == 0;
@@ -2617,6 +2648,11 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
                     L.sg.K == G.K && L.su.K == G.K && L.sd.K == Dn.K && L.sd.N == Dn.N && L.sg.same_format(G) &&
                     L.su.same_format(G) && L.sd.same_format(Dn) && L.sg.gs == G.gs && L.su.gs == G.gs &&
                     L.sd.gs == Dn.gs;
+  static bool qtm_logged = false;
+  if (qtm && !qtm_logged) {
+    qtm_logged = true;
+    logi("NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)");
+  }
   const int S = fold ? T : 0;
   if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
   enc_proj(e, {{&L.router, rlog_, false}, {&L.shared_gate, slog_, false}}, xh_, T);
@@ -2653,7 +2689,8 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), uint32_t(size_t(G.N) * G.row_bytes() / 4),
                G.dense() ? 0u : G.N * (G.K / G.gs), uint32_t(E)};
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
-    e.use(pipe(gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
+    e.use(pipe(qtm ? "qmtm_gu_m64_n64"
+               : gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
                : qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
     e.buf(0, xh_);
     e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf);
@@ -2670,7 +2707,8 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
                Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
     const QLinear& SD = fold ? L.sd : Dn;
-    e.use(pipe(gen ? "qrmf_dn_" + Dn.fmt() + "_m32_n128"
+    e.use(pipe(qtm ? "qmtm_dn_m64_n64"
+               : gen ? "qrmf_dn_" + Dn.fmt() + "_m32_n128"
                : qrm ? "qrm_dn" + qm + "_n" + std::to_string(kBnDn) : "qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
     e.buf(0, hhalf_);
     e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf);

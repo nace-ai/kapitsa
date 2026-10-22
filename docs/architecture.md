@@ -32,7 +32,9 @@ they decode.
    ancestors only, the recurrent layers run from its own branch's state, and the longest branch that agrees with the
    target is kept, so the reply is plain decoding's. The tree's size follows this Mac's measured cost per verify row
    count and the drafter's probabilities as calibrated against its own acceptances: whole 8-row tiles on the dense Qwen
-   models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in; the GPU runs the tiles the drafting pass chose, with
+   models (27B, 4B), where each cycle verifies 8 rows, or 16 or 32 when `NI_KFLASH_ROWS=8,16,32` names them (opt-in, but
+   for the 16-row drafting block below, which sets every cycle to 16 rows on a one-slot engine; the GPU runs the tiles the
+   drafting pass chose, with
    no host round trip), as many as pay in expected tokens per millisecond on this Mac; on MoE targets (the Qwen
    35B-A3B, the Nemotron drafters), whose verify pays per row for its experts, 1 to 8 rows per pass, the GPU routing
    experts (and running the recurrent step and the sampler) for those rows alone. Plain generation is available with
@@ -111,9 +113,13 @@ new architecture requires more than implementing `Model` if it needs a new draft
   grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
   backends have separate kernel sets for their shapes and stored weight formats.
 * **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
-  backend, and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B; the 27B and 35B keep
-  the older attention), run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
-  Measured on the 4B only; its greedy output is not bit-identical to the simdgroup path.
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B; the 27B and 35B keep
+  the older attention) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
+  The 35B-A3B's routed expert prefill runs the same tile over the MoE bucket's 64-row expert tiles
+  (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels). Measured on the 4B (dense)
+  and the 35B-A3B (experts): neither is bit-identical to the simdgroup paths, since the tile reassociates each output's
+  K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
+  noise floor.
 * **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
   are accepted. Throughput depends on the model, prompt, sampling settings and acceptance rate.
 * **Requests at once share passes.** While several requests decode, one target pass verifies all of their rows and

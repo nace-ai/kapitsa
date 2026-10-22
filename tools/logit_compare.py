@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Did a change move the model's outputs beyond noise? Compares two logit dumps and gates the result.
 
-  logit_compare.py REFERENCE CANDIDATE [--floor FILE] [--against SOURCE] [--no-gate] [--min-top1 X]
-                   [--max-mean-kl X] [--max-p99-kl X] [--near-tie X] [--max-far-flips N] [--flips N] [--json FILE]
-                   [--vocab V]
+  logit_compare.py REFERENCE CANDIDATE [--floor FILE] [--against SOURCE] [--reorder] [--no-gate] [--min-top1 X]
+                   [--max-mean-kl X] [--max-p99-kl X] [--near-tie X] [--max-far-flips N] [--max-nll-change X]
+                   [--flips N] [--json FILE] [--vocab V]
 
 REFERENCE and CANDIDATE are dumps of build/logit_dump, or of another engine that writes the same layout: a directory
 holding sequences.txt (token ids, one sequence per line), records.txt (per scored prefix its sequence's line and
@@ -28,7 +28,10 @@ the dumps' prefill paths are bitwise the same (a change confined to the passes a
 are held to its "decode_gate", twice what moves their rows when only the prefill stays the same (alone against
 batched). The prefill path itself (one row per window) is reported, not gated: a change to the prefill moves the
 decode rows after it, which are. --against SOURCE takes twice one source of the floor instead; a flag overrides its
-own bound; --no-gate only reports. Non-finite logits always fail. Exit status 2: the dumps cannot be compared. numpy
+own bound; --no-gate only reports. --reorder gates at the order-change bounds instead of the floor (see below): for a
+change that keeps every product and only reassociates the K reduction, an expert GEMM on the tensor units instead of
+simdgroups, which cannot be bit-identical to the path it replaces. Those bounds are not a floor and never beat one:
+they hold the change to the drift the already-shipped path carries. Non-finite logits always fail. Exit status 2: the dumps cannot be compared. numpy
 when it is installed, else the standard library (the same numbers, slower).
 """
 import argparse
@@ -47,7 +50,35 @@ except ImportError:  # the standard library computes the same numbers, ~50x slow
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLOORS = os.path.join(HERE, "logit_floors")
-GATE_KEYS = ("min_top1", "max_mean_kl", "max_p99_kl", "near_tie", "max_far_flips")
+GATE_KEYS = ("min_top1", "max_mean_kl", "max_p99_kl", "near_tie", "max_far_flips", "max_nll_change")
+
+# The order-change gate (--reorder): for a change that keeps every product and only reassociates the K reduction.
+# It cannot pass the floor's gate, and no bound tighter than the drift below is reachable by any such change:
+#   * half*half products are exact in fp32 (a 22-bit mantissa holds an 11-bit product), so the only difference a
+#     reordering makes is which partials are rounded where: a K=2048 sum in a different association order differs by
+#     ~sqrt(K)*2^-24 relative, ~3e-6, against a half ulp of ~1e-3, so ~0.5% of the sums land on the other half and
+#     ~0.6% of the outputs differ, by one ulp. Nothing in the arithmetic (fp32 partials, fp64 partials, a different
+#     order) avoids that; only bit-identical order does.
+#   * measured on the M5 Pro, 4-bit 35B-A3B, decode rows: the shipped qrm kernel moves the logits 8.1e-4 mean KL
+#     against the order before it, and the tensor-unit tile 1.07e-3 against that, 1.32x the drift already shipped.
+#   * the MoE prefill's tile is 1.25x at 4K (2,272 -> 1,702 ms) and 1.2x at 16K (11,093 -> 8,834 ms) end to end on
+#     the M5 Pro, with this session's interleaved A/B; the user accepted its drift on 2026-10-22 ("qtm on") on this
+#     evidence: the cold 4K and 16K temperature-0 continuations came out identical, and the tile's own outputs sit
+#     within one half-precision step of the simdgroup path's, element by element (tools/bench_moe.cpp, "vs qrm":
+#     h at most 0.85 of a step, 0 of 8.4M values past one; y at most 0.42, 0 of 33.5M; and both paths the same
+#     error against a double-precision reference, h 1.3e-4 and y 1.3e-7 sampled max).
+#     Neither is a claim that the drift is absent: it is the same kind of reassociation the shipped simdgroup kernels
+#     already carry, one rounding on ~0.6% of the values.
+# So the bounds are twice the first instance's measured drift, as the floor's gate is twice its measured floor: on
+# that 35B, 8 windows, step path, 192 rows (3 near-tie flips at reference margins 0.0155, 0.0307, 0.0590, mean KL
+# 1.088e-3, p99 2.078e-2, next-token NLL change +5.3e-3 nats) and prefill path, 8 rows (0 flips, mean KL 7.678e-4,
+# p99 3.787e-3, NLL change +5.2e-2 nats): top-1 agreement at least 0.968 (6 flips in 192, twice the 3 measured),
+# mean KL at most 2.2e-3, p99 KL at most 4.2e-2, every flip a near-tie under 0.5 logits and none past it, and the mean
+# NLL change at most 0.1 nats (twice the prefill path's, the larger). Everything else -- every change that is not a
+# pure K-order reassociation -- stays on the floor's gate; this flag is an author's claim that the diff only
+# reassociates, and the review checks it in the kernel.
+REORDER_GATE = {"min_top1": 0.968, "max_mean_kl": 2.2e-3, "max_p99_kl": 4.2e-2,
+                "near_tie": 0.5, "max_far_flips": 0, "max_nll_change": 0.1}
 
 
 class Dump:
@@ -300,6 +331,9 @@ def gate(s, bounds):
         fails.append(f"mean KL {s['kl_mean']:.3e} > {bounds['max_mean_kl']:.3e}")
     if bounds.get("max_p99_kl") is not None and s["kl_p99"] > bounds["max_p99_kl"]:
         fails.append(f"p99 KL {s['kl_p99']:.3e} > {bounds['max_p99_kl']:.3e}")
+    if bounds.get("max_nll_change") is not None and s.get("nll_change_mean") is not None:
+        if abs(s["nll_change_mean"]) > bounds["max_nll_change"]:
+            fails.append(f"mean NLL change {s['nll_change_mean']:+.3f} nats > {bounds['max_nll_change']:.3f}")
     if bounds.get("near_tie") is not None:
         far = s["flips"] - s["near_tie_flips"]
         allowed = bounds.get("max_far_flips") or 0
@@ -365,11 +399,15 @@ def main(argv=None):
     ap.add_argument("--against", metavar="SOURCE",
                     help="gate at twice this source of the floor (e.g. batch) instead of the worst of its sources")
     ap.add_argument("--no-gate", action="store_true", help="report only")
+    ap.add_argument("--reorder", action="store_true",
+                    help="gate at the order-change bounds (a change that only reassociates the K reduction: an "
+                         "expert GEMM on the tensor units instead of simdgroups) instead of the model's floor")
     ap.add_argument("--min-top1", type=float)
     ap.add_argument("--max-mean-kl", type=float)
     ap.add_argument("--max-p99-kl", type=float)
     ap.add_argument("--near-tie", type=float, help="a flip is a near-tie under this reference margin (logits)")
     ap.add_argument("--max-far-flips", type=int)
+    ap.add_argument("--max-nll-change", type=float, help="the mean change in the next token's NLL, in nats")
     ap.add_argument("--flips", type=int, default=10, help="flips to list (largest margin first)")
     ap.add_argument("--json", help="also write the summaries and the verdict here")
     ap.add_argument("--vocab", type=int, help="raw fp32 files of rows of this many logits")
@@ -382,22 +420,29 @@ def main(argv=None):
     # bounds: the floor's gate (or one source's, --against); decode: the decode passes' own gate, for the decode paths
     # of two dumps whose prefill rows are bitwise the same (only the passes after the prefill changed)
     bounds, decode, source = {}, None, None
+    if a.reorder and (a.no_gate or a.against or a.floor):
+        print("logit_compare: --reorder sets its own bounds (it takes no --no-gate, --against or --floor)", file=sys.stderr)
+        return 2
     if not a.no_gate:
-        path = floor_file(comparisons[0][1], comparisons[0][2], a.floor)
-        if path:
-            with open(path) as f:
-                floor = json.load(f)
-            try:
-                bounds = source_gate(floor, a.against) if a.against else dict(floor["gate"])
-            except ValueError as e:
-                print(f"logit_compare: {path}: {e}", file=sys.stderr)
+        if a.reorder:
+            bounds = dict(REORDER_GATE)
+            source = "the order-change gate (a reassociated K reduction, not the noise floor)"
+        else:
+            path = floor_file(comparisons[0][1], comparisons[0][2], a.floor)
+            if path:
+                with open(path) as f:
+                    floor = json.load(f)
+                try:
+                    bounds = source_gate(floor, a.against) if a.against else dict(floor["gate"])
+                except ValueError as e:
+                    print(f"logit_compare: {path}: {e}", file=sys.stderr)
+                    return 2
+                source = os.path.relpath(path) + (f", twice its {a.against} source" if a.against else "")
+                if not a.against and "decode_gate" in floor:
+                    decode = dict(floor["decode_gate"])
+            elif a.against:
+                print("logit_compare: --against needs a noise floor (--floor FILE)", file=sys.stderr)
                 return 2
-            source = os.path.relpath(path) + (f", twice its {a.against} source" if a.against else "")
-            if not a.against and "decode_gate" in floor:
-                decode = dict(floor["decode_gate"])
-        elif a.against:
-            print("logit_compare: --against needs a noise floor (--floor FILE)", file=sys.stderr)
-            return 2
         flags = [k for k in GATE_KEYS if getattr(a, k) is not None]
         for b in (bounds, decode):
             if b is not None:
@@ -410,7 +455,10 @@ def main(argv=None):
         use_decode = decode is not None and prefill_same and name != "prefill"
         # the prefill path (one row per window) only decides the decode paths' gate: a change to the prefill moves
         # every decode row after it, which the decode paths are gated on
-        b = {} if name == "prefill" and len(comparisons) > 1 else decode if use_decode else bounds
+        # (a reordered K reduction moves the prefill rows too, and its gate is the same on every path, so --reorder
+        # holds the prefill rows to it as well)
+        b = {} if name == "prefill" and len(comparisons) > 1 and not a.reorder else \
+            decode if use_decode else bounds
         try:
             s = compare(ref, cand, b.get("near_tie"))
         except (OSError, ValueError) as e:

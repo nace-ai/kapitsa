@@ -1,6 +1,7 @@
 #!/bin/bash
 # Builds a Kapitsa release: build/release/kapitsa-VERSION-darwin-arm64.tar.gz (kapitsa, LICENSE,
-# THIRD_PARTY_NOTICES) and its .sha256. The Homebrew formula and install.sh install this tarball.
+# THIRD_PARTY_NOTICES and bench/harness, which `kapitsa bench compare` runs) and its .sha256. The Homebrew formula
+# and install.sh install this tarball; the harness carries VERSION (this release) since a copy has no checkout.
 #   packaging/release/build.sh [VERSION]    VERSION must be CMakeLists.txt's KAPITSA_VERSION (the default)
 # It builds the committed tree (HEAD, exported with git archive), never the working tree: Release (-O3), arm64,
 # CMakeLists.txt's deployment target. It strips and signs the binary, then checks its architecture, minimum macOS,
@@ -93,15 +94,25 @@ got_version=$("$bin" --version)
 
 # 4. The tarball: fixed owner, times (the commit's) and order, no extended attributes, so a rebuild matches
 install -m 0644 "$work/src/LICENSE" "$work/src/THIRD_PARTY_NOTICES" "$work/stage/$name/"
+# `kapitsa bench compare` runs this harness; install.sh and the formula put it beside the notices, where find_harness()
+# looks: <the binary's folder>/../share/kapitsa/bench/harness. The copy has no checkout, so its VERSION file says which
+# release it came with, and a report made from an install names its harness instead of "unknown".
+mkdir -p "$work/stage/$name/bench"
+cp -R "$work/src/bench/harness" "$work/stage/$name/bench/harness"
+printf '%s\n' "$version" > "$work/stage/$name/bench/harness/VERSION"
 stamp=$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M.%S "$commit")
-TZ=UTC touch -t "$stamp" "$work/stage/$name" "$work/stage/$name"/*
-(cd "$work/stage" && COPYFILE_DISABLE=1 tar -c -n --format ustar --uid 0 --gid 0 --uname root --gname wheel \
-  --no-xattrs --no-acls --no-fflags -f - "$name" "$name/kapitsa" "$name/LICENSE" "$name/THIRD_PARTY_NOTICES") |
-  gzip -9n > "$out/$name.tar.gz"
+find "$work/stage/$name" -exec env TZ=UTC touch -t "$stamp" {} +
+(cd "$work/stage" && find "$name" | LC_ALL=C sort |
+  COPYFILE_DISABLE=1 tar -c -n --format ustar --uid 0 --gid 0 --uname root --gname wheel \
+    --no-xattrs --no-acls --no-fflags -f - -T -) | gzip -9n > "$out/$name.tar.gz"
 (cd "$out" && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256")
+tar -tzf "$out/$name.tar.gz" | grep -qx "$name/bench/harness/kbench.py" ||
+  die "the tarball has no bench/harness: kapitsa bench compare would not find it."
 rm -rf "$work"
 
 printf '\n%s\n' "$out/$name.tar.gz"
 printf '  sha256    %s\n' "$(cut -d ' ' -f 1 "$out/$name.tar.gz.sha256")"
 printf '  size      %s bytes (binary %s bytes)\n' "$(stat -f %z "$out/$name.tar.gz")" "$(tar -xOzf "$out/$name.tar.gz" "$name/kapitsa" | wc -c | tr -d ' ')"
+printf '  harness   %s files (bench/harness, run by `kapitsa bench compare`)\n' \
+  "$(tar -tzf "$out/$name.tar.gz" | grep "/bench/harness/" | grep -vc "/$")"
 printf '  binary    %s, arm64, macOS %s or later, system libraries only, signed %s\n' "$got_version" "$minos" "$signed"

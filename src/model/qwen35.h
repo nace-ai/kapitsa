@@ -171,6 +171,7 @@ class Qwen35 : public Model {
   // Whether a prefill chunk of T rows would run the split (callers checkpoint the recurrent state
   // before such a chunk so it can be rerun on the GPU alone if the split fails).
   bool ane_splits(int T) const override;
+  bool ane_split_on() const override { return ane_ && !cfg_.moe; }
   // After the command of a chunk encoded with the split has completed: false if the split failed
   // (it is then off for the rest of the process) and the chunk must be rerun. True otherwise.
   bool ane_finish_chunk() override;
@@ -215,7 +216,8 @@ class Qwen35 : public Model {
   // What a model needs, from config.json and the safetensors headers only (no weights read): for fit
   // checks before loading and `kapitsa doctor`. Bytes.
   using MemPlan = ni::MemPlan;
-  static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
+  // rows16: the engine will draft with a 16-row block (one slot), whose verify rows the live state's tape is sized for
+  static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, bool rows16 = false);
   static Qwen35Config read_config(const std::string& model_dir);  // config.json only
   // The Neural Engine split this Mac would build for the model (dense FFN): its share in units of 512 channels
   // (0 = none), where it comes from, and its memory (surfaces + the engine's rerun checkpoint), as init_ane decides.

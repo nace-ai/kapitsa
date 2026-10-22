@@ -156,9 +156,9 @@ pick_prefix() {
   esac
 }
 
-# Installs $1 (the binary) into $prefix, and LICENSE and THIRD_PARTY_NOTICES from folder $2 beside it
+# Installs $1 (the binary) into $prefix, and LICENSE, THIRD_PARTY_NOTICES and the benchmark harness from folder $2
 install_kapitsa() {
-  local notices notice installed first run=kapitsa
+  local notices notice installed first run=kapitsa harness="$2/bench/harness"
   notices="$(dirname "$prefix")/share/kapitsa"
   mkdir -p "$notices" || die "can't create the license notices folder $notices."
   for notice in LICENSE THIRD_PARTY_NOTICES; do
@@ -167,8 +167,34 @@ install_kapitsa() {
   install -m 0755 "$1" "$prefix/kapitsa" || die "can't write $prefix/kapitsa (--prefix picks another folder)."
   installed=$("$prefix/kapitsa" --version) || die "the installed $prefix/kapitsa does not run."
 
+  # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
+  if [ -f "$harness/kbench.py" ]; then
+    # the harness is replaced whole, staged beside it and renamed over it, so a copy that fails (a full disk) leaves
+    # the installed one, with the user's local.env in it, exactly as it was
+    local bench next old
+    bench="$notices/bench"
+    next="$bench/harness.new.$$"
+    old="$bench/harness.old.$$"
+    mkdir -p "$bench" || die "can't create $bench."
+    rm -rf "$next"
+    cp -R "$harness" "$next" || { rm -rf "$next"; die "can't install the benchmark harness in $bench/harness."; }
+    # local.env is the user's own settings for the harness (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes with it
+    if [ -f "$bench/harness/local.env" ]; then
+      cp "$bench/harness/local.env" "$next/local.env" ||
+        { rm -rf "$next"; die "can't keep $bench/harness/local.env."; }
+    fi
+    rm -rf "$old"
+    if [ -d "$bench/harness" ]; then mv "$bench/harness" "$old" || { rm -rf "$next"; die "can't replace $bench/harness."; }; fi
+    if ! mv "$next" "$bench/harness"; then
+      if [ -d "$old" ]; then mv "$old" "$bench/harness" || true; fi
+      die "can't install the benchmark harness in $bench/harness."
+    fi
+    rm -rf "$old"
+  fi
+
   say "Installed $installed: $prefix/kapitsa"
   say "License notices: $notices"
+  if [ -f "$notices/bench/harness/kbench.py" ]; then say "Benchmark harness: $notices/bench/harness"; fi
   case ":$PATH:" in
     *":$prefix:"*)
       first=$(command -v kapitsa || true)
@@ -188,6 +214,7 @@ install_kapitsa() {
   say ""
   say "Next:"
   say "  $run serve        # starts the best model for this Mac; the first run downloads it"
+  say "  $run bench compare --list   # the other engines installed here, and what it would measure"
   say "  $run --help       # models and commands"
 }
 
@@ -197,7 +224,7 @@ main() {
     case "$1" in
       --prefix) [ $# -ge 2 ] || die "--prefix needs a folder."; prefix=$2; shift 2 ;;
       --prefix=*) prefix=${1#*=}; shift ;;
-      --version) [ $# -ge 2 ] || die "--version needs a release, e.g. 0.2.4."; version=$2; shift 2 ;;
+      --version) [ $# -ge 2 ] || die "--version needs a release, e.g. 0.2.6."; version=$2; shift 2 ;;
       --version=*) version=${1#*=}; shift ;;
       --from-source) mode=source; shift ;;
       --from-file) [ $# -ge 2 ] || die "--from-file needs a tarball."; mode="file"; from_file=$2; shift 2 ;;

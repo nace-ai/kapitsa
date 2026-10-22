@@ -148,7 +148,9 @@ with the largest E(n) − r · cost(n), where r is the tokens per millisecond of
 expected tokens beat what its milliseconds would earn at the going rate. Its first 16 cycles, before r exists, use
 E(n) / cost(n). Which counts it may choose depends on the target. Dense models verify whole 8-row tiles; where
 `NI_KFLASH_ROWS` names 16 and 32 as well, a dense model's budget measures those tiles on this Mac and may pick them per
-cycle (below). MoE targets may choose any count from 1 to 8.
+cycle (below), and a 16-row drafting block asks for 16 rows every cycle, so it is the block, not the budget, that
+decides the count there; it also drops 32, since a block that drafts 15 guesses has nothing wider to verify. MoE targets
+may choose any count from 1 to 8.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/kflash-budget-dark.svg">
@@ -202,7 +204,8 @@ in a different order. Three changes make a row's numbers depend on its position 
 
 We built 16- and 32-row tree verifies for the dense models, and this release ships them behind `NI_KFLASH_ROWS`: the
 default is one 8-row tile everywhere, and naming `8,16,32` lets the budget measure the wider tiles on the Mac and pick
-them per cycle.
+them per cycle. The exception is the 16-row drafting block below: it drafts 16 rows, so on a one-slot engine it also
+asks for 16-row verifies, which is what the wider rows are for.
 
 Their first version cost 1.73× and 3.32× an 8-row verify, because the verify's GEMMs ran one 8-row tile per weight
 read, so 16 rows streamed every weight twice. The tile-pair MLP (`qmm8t2`) multiplies two tiles per weight load, which
@@ -236,13 +239,15 @@ fill 15 rows instead of 7. Its first version drafted two 8-row tiles one after t
 the drafter's weights, so the drafting pass doubled (12.4 ms per cycle against 6.7) and gave back what the wider verify
 won. The drafter's two tiles are 8-row tiles of the same GEMM (`dfl_put2` writes both), so a pair kernel (`qmm8t2d`)
 multiplies both from one weight load: each weight tile is read once and multiplied twice, one destination per tile.
-`NI_DFLASH_BLOCK=16` is opt-in, needs KFlash trees and a target with the wide verify, drafts with the matrix units only
-(an M5-class GPU on macOS 26, the tensor path on, 4-bit group-64 projections, not the v1 drafter: a load-time check says
-so rather than the first request), and leaves the default 8-row block untouched. The developer knobs that take the
-drafting pass or the attention off that path are refused the same way: `NI_DFLASH_ATTN=scalar`, `NI_AB=dfl=1` (the old
-attention) and `NI_AB=dfl=128` (the MLP's own `qmm8_gu`), and the debug dumps `dflash_check` turns on. Requests take
-turns while it is on: it drafts a depth-15 lattice and has no batched cycle, so two requests decoding together share no
-verify.
+Sixteen rows is the default where the whole path exists: a one-slot engine (the benchmark harness, `--slots 1`, a
+`bench` run) drafts 16-row blocks, and `NI_DFLASH_BLOCK=8` keeps the 8-row block. It needs KFlash trees and a target
+with the wide verify, drafts with the matrix units only (an M5-class GPU on macOS 26, the tensor path on, 4-bit group-64
+projections, not the v1 drafter: a load-time check says so rather than the first request), and a server with more than
+one slot keeps 8 rows, because a block that drafts a depth-15 lattice has no batched cycle: two requests decoding
+together would share no verify and take turns, where the 8-row block shares one pass between them. The developer knobs
+that take the drafting pass or the attention off that path are refused the same way: `NI_DFLASH_ATTN=scalar`,
+`NI_AB=dfl=1` (the old attention) and `NI_AB=dfl=128` (the MLP's own `qmm8_gu`), and the debug dumps `dflash_check`
+turns on.
 
 A paired A/B on the 27B over a 256-token coding prompt (greedy, three interleaved runs each, `NI_ANE=0`, all under the
 GPU lock: MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2, this change's code) measures it: the default 8-row block runs
@@ -252,9 +257,50 @@ same block with the pair kernel off (`NI_DFL_PAIR=0`) runs 69.0/69.5/69.5 tok/s 
 GEMM is 3.5% of the cycle and all of the lead; without it the block measures at parity. At temperature 0.6 the same
 pairing gives 54.5/55.2/55.1 against 60.2/60.6/60.6 tok/s (median +10%). All nine greedy runs wrote the same ids as
 plain decoding (md5 `f84ce83a…`), acceptance by position matched to the last digit between the two drafting paths, and
-`logit_compare` of `logit_dump` from `main` (1079f08) and from this branch found the default path's every row bitwise
-identical (prefill 8 records, step 192, verify 192). Not checked: a whole-reply comparison over a corpus, the benchmark
-cells, and whether a 32-row drafting block (four tiles, two pairs) pays.
+`logit_compare` of `logit_dump` from `main` (1079f08) and from the branch that added them found the default path's every row bitwise
+identical (prefill 8 records, step 192, verify 192).
+
+The harness's corpus is where the block pays what it should, because its replies keep the depth-15 lattice full. Two
+cells of one binary, ten runs each, five greedy and five at temperature 0.6, interleaved forward and reverse under the
+GPU lock, `NI_DFLASH_BLOCK=8` against the default, on the harness's own server command (`--slots 1`, 32768 context,
+512-token completions; MacBook Pro Mac17,8, Apple M5 Pro, macOS 26.5.2; both cells carried the harness's contention flag
+for foreign GPU load during their prefill and tool phases, and neither flagged its decode phases): the 8-row block reads
+76.07 tok/s greedy (all ten runs 71.7-76.8, which is the published 76.4) and 71.70 at temperature 0.6, the 16-row default
+87.59 tok/s greedy (85.6-90.4) and 79.77 at temperature 0.6, median +15% greedy and +11% sampled. The wide cycles cost
+77.7-104 ms of GPU time against 70.3-85 ms for the 8-row block, and carried 6.33 tokens per cycle against 5.17, so the
+block pays for the deeper lattice: 1.10x the cycle for 1.22x the tokens at their floors. 17 of the 20 greedy runs wrote
+the same 2120-token reply (md5 `ca846aca…`); the other three took a branch at one near-tie (two at 2151 tokens, one at
+2168): three runs per arm on the final code put the 2168 one in the 8-row arm and a 2151 one in the 16-row arm, and
+mlx-serve's own DFlash2 cell took the 2151 branch at temperature 0 as well, so the branch is this corpus's near-tie,
+not the drafting block's. The claim that parity is "identical greedy replies" holds up to that near-tie: `logit_compare`
+does not gate the 16-row verify (it walks an 8-row chain), so the three per-arm repeats above are the evidence there.
+
+That default needs its capacity pinned. The budget weighs a cycle's row count by the tokens it expects per millisecond,
+and keeps both the expectations and the measured cycle costs per model, drafter and chip in `~/.cache/kapitsa/kflash/`,
+so a 16-row cost measured while something else held the GPU can leave a table that prefers 8-row cycles long after. A
+16-row block drafts the whole depth-15 lattice in one weight read, and an 8-row cycle verifies half of it: on this Mac a
+table written during a burst of foreign GPU load ran the 16-row block at 69.3 tok/s, 9% below the 8-row block's 76.5,
+where the same binary with all 72 cycles at 16 rows ran at 93.5. `pin_wide()` therefore fixes the capacity at the block's
+width, `NI_DFLASH_BLOCK=8` being the way back to the 8-row block, and a first run measures and keeps the 16-row cycle:
+the A/B above started from that warm narrow-biased table and none of its 81,594 cycles verified 8 rows. The block
+itself is decided per drafter, while it loads: a server that switches models (`--allow-switch`) decides each one's
+block again, so a MoE target after a 27B keeps its 8-row block. The engine's memory plan is told which block will load
+(a one-slot engine: 16 rows), and reserves that many rows of the target's verify buffers and of every slot's verify tape:
+the 27B plans 1.637 GB against the 1.635 GB it allocates at load, where the 8-row block plans 1.608 GB against 1.610 GB.
+
+The block also runs with Metal's validation on: `MTL_SHADER_VALIDATION=1`, one slot, a 1246-token prompt asked three
+ways (greedy, temperature 0.6, and a `json_schema` reply through the grammar trie) spent 38, 22 and 34 cycles, every one
+of them at 16 rows, with no validation error and no abort. `MTL_DEBUG_LAYER=1` cannot run on this tree at all: prefill
+attention's `attn_prefill11g` asks for 40960 bytes of threadgroup memory against the 32768-byte limit, in kernels this
+change does not touch.
+
+`logit_compare` of `logit_dump` from `main` and from this branch found every row bitwise identical, but `logit_dump` does
+not instantiate the drafter: it gates the target's kernels (prefill, 8-row step, 8-row verify), and the 16-row verify and
+the pair kernel are checked by the greedy replies above (identical but for one near-tie), not by a bitwise comparison.
+
+Not checked: whether a 32-row drafting block (four tiles, two pairs) pays, and a re-run of the published benchmark
+table, whose 27B row predates this default (82.07 tok/s there against 87.59 here, that cell's budget still free to
+return to 8-row cycles); those cells re-measure every engine and are a PR of their own.
 
 ### The drafters as published
 
