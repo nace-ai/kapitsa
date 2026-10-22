@@ -560,6 +560,9 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
               "V8Knobs::dfl 1 / 128)", block());
       allowed |= 1u << (block() - 1);
       allowed &= ~(1u << (kB - 1));
+      // and nothing wider: a 16-row block drafts a 15-guess lattice, so a 32-row verify has nothing more to check,
+      // while pin_wide() would pin every cycle to the widest allowed count (2x the rows for the same tree)
+      allowed &= (1u << block()) - 1;
     }
     tree_rows_ = 32 - __builtin_clz(allowed);  // the widest allowed count
     kf_budget_->set_rows(allowed, tree_rows_);
@@ -789,9 +792,22 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   const char* v = block_env ? block_env : getenv("NI_DFLASH_BLOCK");
   if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
     return atoi(v) == 16 ? 16 : kB;
-  // the default: Engine asks a one-slot engine for the 16-row block (a MoE target has no wide verify to run it, and a
-  // multi-slot engine co-decodes requests, so it keeps the tile)
-  return slots == 1 && !target.moe ? 16 : kB;
+  // The default, and the same conditions the load refuses NI_DFLASH_BLOCK=16 under, as far as they can be read
+  // without the drafter: a one-slot engine on a dense target, trees on, a walk deep enough for all 16 rows, and the
+  // matrix units with the fused attention the drafting pass needs. What is left out is the drafter's own weights (a
+  // v1 drafter, projections that are not 4-bit group 64), so on such a drafter this is an upper bound: the plan
+  // reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE target has no wide verify, and a multi-slot engine
+  // co-decodes requests, so both keep the 8-row tile.
+  if (slots != 1 || target.moe) return kB;
+  const char* kf = getenv("NI_KFLASH");
+  const char* tv = getenv("NI_DFLASH_TREE");
+  if (!(tv && *tv ? atoi(tv) != 0 : (!(kf && *kf) || atoi(kf) != 0))) return kB;
+  const char* vv = getenv("NI_DFLASH_VERIFY");
+  if (vv && *vv && atoi(vv) < 15) return kB;
+  const char* av = getenv("NI_DFLASH_ATTN");
+  if (av && std::string(av) == "scalar") return kB;
+  if (!dfl_tw_supported() || !v8_knobs().tw || (v8_knobs().dfl & (1 | 32 | 128))) return kB;
+  return 16;
 }
 
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
@@ -875,7 +891,11 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   // target that opted out reserves nothing here), or this drafter drafting a 16-row block, which Engine asks for on a
   // one-slot engine and which pins the verify to 16 rows (KfBudget::pin_wide).
   const uint32_t wide = Qwen35::kf_dense_rows(target);
-  const size_t rows = std::max<size_t>(size_t(block_rows), wide > (1u << (Qwen35::kMaxVerify - 1)) ? Qwen35::kMaxTreeRows : size_t(Qwen35::kMaxVerify));
+  // a block wider than the 8-row tile bounds the verify at its own width: the constructor masks the wider counts away
+  // there, so a wide KFlash row set cannot make the verify taller than the lattice the block drafts
+  const size_t rows = block_rows > Qwen35::kMaxVerify ? size_t(block_rows)
+                      : wide > (1u << (Qwen35::kMaxVerify - 1)) ? size_t(Qwen35::kMaxTreeRows)
+                                                                : size_t(Qwen35::kMaxVerify);
   if (rows > size_t(Qwen35::kMaxVerify)) {
     const size_t extra = rows - Qwen35::kMaxVerify;
     b += extra * nH * 2 + extra * V * 4 + 2 * extra * (V / 2048 + 2) * 64 * 4 + (size_t(extra) << 19);

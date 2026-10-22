@@ -149,7 +149,8 @@ expected tokens beat what its milliseconds would earn at the going rate. Its fir
 E(n) / cost(n). Which counts it may choose depends on the target. Dense models verify whole 8-row tiles; where
 `NI_KFLASH_ROWS` names 16 and 32 as well, a dense model's budget measures those tiles on this Mac and may pick them per
 cycle (below), and a 16-row drafting block asks for 16 rows every cycle, so it is the block, not the budget, that
-decides the count there. MoE targets may choose any count from 1 to 8.
+decides the count there; it also drops 32, since a block that drafts 15 guesses has nothing wider to verify. MoE targets
+may choose any count from 1 to 8.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/kflash-budget-dark.svg">
@@ -285,6 +286,16 @@ itself is decided per drafter, while it loads: a server that switches models (`-
 block again, so a MoE target after a 27B keeps its 8-row block. The engine's memory plan is told which block will load
 (a one-slot engine: 16 rows), and reserves that many rows of the target's verify buffers and of every slot's verify tape:
 the 27B plans 1.637 GB against the 1.635 GB it allocates at load, where the 8-row block plans 1.608 GB against 1.610 GB.
+
+The block also runs with Metal's validation on: `MTL_SHADER_VALIDATION=1`, one slot, a 1246-token prompt asked three
+ways (greedy, temperature 0.6, and a `json_schema` reply through the grammar trie) spent 38, 22 and 34 cycles, every one
+of them at 16 rows, with no validation error and no abort. `MTL_DEBUG_LAYER=1` cannot run on this tree at all: prefill
+attention's `attn_prefill11g` asks for 40960 bytes of threadgroup memory against the 32768-byte limit, in kernels this
+change does not touch.
+
+`logit_compare` of `logit_dump` from `main` and from this branch found every row bitwise identical, but `logit_dump` does
+not instantiate the drafter: it gates the target's kernels (prefill, 8-row step, 8-row verify), and the 16-row verify and
+the pair kernel are checked by the identical greedy replies above, not by a bitwise comparison.
 
 Not checked: whether a 32-row drafting block (four tiles, two pairs) pays, and a re-run of the published benchmark
 table, whose 27B row predates this default (82.07 tok/s there against 87.59 here, that cell's budget still free to

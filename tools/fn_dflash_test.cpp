@@ -119,6 +119,20 @@ void run_cpu() {
             back = DFlash2::plan_block_rows(dense, 1, "");
   check(first == 16 && moe_next == 8 && back == 16,
         "16 then 8 then 16 in one process: the next model decides for itself");
+  // the cheap half of rows16_auto_ok: the knobs that make the load keep 8 rows take the plan with them, so a start
+  // that cannot run the block does not reserve its rows
+  setenv("NI_KFLASH", "0", 1);
+  const int kf0 = DFlash2::plan_block_rows(dense, 1, "");
+  unsetenv("NI_KFLASH");
+  setenv("NI_DFLASH_VERIFY", "7", 1);
+  const int shallow = DFlash2::plan_block_rows(dense, 1, "");
+  unsetenv("NI_DFLASH_VERIFY");
+  setenv("NI_DFLASH_ATTN", "scalar", 1);
+  const int scalar = DFlash2::plan_block_rows(dense, 1, "");
+  unsetenv("NI_DFLASH_ATTN");
+  check(kf0 == 8 && shallow == 8 && scalar == 8,
+        "NI_KFLASH=0, NI_DFLASH_VERIFY=7, NI_DFLASH_ATTN=scalar: the plan keeps 8 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "") == 16, "and with the knobs back off: 16 rows");
   // incoai/Qwen3.8-Flash-Next-DFlash2 @ a22a1744 (Apache-2.0), its config.json's fields that the checks read: 5 draft
   // layers over target layers 5, 15, 25, 35, 45, rope theta 1e4, no target_hidden_reduction (the target's: stream_mean)
   const std::string incoai = R"({"architectures": ["DFlash2DraftModel"], "is_causal": false,

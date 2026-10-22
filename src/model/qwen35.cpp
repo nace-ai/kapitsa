@@ -1060,7 +1060,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   // tape are that tall (set_tree_rows, new_seq), and the drafting pass picks its rows from the same call
   const uint32_t wide = kf_dense_rows(c);
   const size_t vrows =
-      wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : rows16 ? size_t(16) : size_t(kMaxVerify);
+      rows16 ? size_t(16) : wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
   for (const ActBuf& a : act_layout(c, chunk, int(vrows), has_mtp, fused ? vrows : size_t(chunk)))
     m.activations += a.bytes;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
