@@ -292,7 +292,8 @@ The block also runs with Metal's validation on: `MTL_SHADER_VALIDATION=1`, one s
 ways (greedy, temperature 0.6, and a `json_schema` reply through the grammar trie) spent 38, 22 and 34 cycles, every one
 of them at 16 rows, with no validation error and no abort. `MTL_DEBUG_LAYER=1` cannot run on this tree at all: prefill
 attention's `attn_prefill11g` asks for 40960 bytes of threadgroup memory against the 32768-byte limit, in kernels this
-change does not touch.
+change does not touch (the layer counts static threadgroup memory twice; its 20,480 B is inside the limit, see
+`AGENTS.md`).
 
 `logit_compare` of `logit_dump` from `main` and from this branch found every row bitwise identical, but `logit_dump` does
 not instantiate the drafter: it gates the target's kernels (prefill, 8-row step, 8-row verify), and the 16-row verify and

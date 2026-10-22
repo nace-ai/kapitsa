@@ -91,7 +91,9 @@ cache, removed at the end): `python3 tests/test_disk_cache.py build/kapitsa ~/.c
 - Keep new code in the style of the code around it: C++20, in the existing formatting. Comments explain why.
 - No new dependencies without a strong reason: Kapitsa builds with the Xcode Command Line Tools and CMake alone.
 - Run new or changed Metal kernels at small sizes first, with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`: a kernel
-  that reads or writes out of bounds can fault the GPU and take the desktop down with it.
+  that reads or writes out of bounds can fault the GPU and take the desktop down with it. The layer counts static
+  threadgroup memory twice on macOS 26.x, so kernels above 16,384 B of it abort under the layer whatever the change is
+  (AGENTS.md has the measurements); say so in the PR instead.
 
 ## Speed changes
 

@@ -67,6 +67,16 @@ changed kernel at small sizes first, with `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAY
 Kernel sources live in `src/kernels/` (including `nemotron/`, `dory/`, `tensor/`) and are concatenated into one string
 by `cmake/embed_*.cmake`; a new `.metal` file is picked up by the glob.
 
+That layer counts a kernel's static threadgroup memory **twice** on this macOS and compares the sum against the device's
+32,768 B threadgroup cap, so a dispatch aborts whenever a kernel's static allocation is above 16,384 B, whatever the
+change under review. Measured on 2026-10-22, M5 Pro / macOS 26.5.2 (build 25F84): `attn_prefill11`'s 20,480 B reads as
+`total used threadgroupMemoryLength(40960) must be <= 32768` and aborts, while `attn_prefill11_k16x`'s 16,384 B reads as
+exactly 32,768 B and runs with the layer on. A full prefill therefore aborts with the layer held on `attn_prefill11g`
+(20,480 B static, read as 40,960) and `moe_gate_up3_r2` (16,448 B, read as 32,896) no matter what the PR touches; the
+driver's own check agrees with the real limit, which `tools/ni_kstats --limits` reports. So: hold the layer at small
+sizes when the changed kernel's static memory is 16,384 B or less, and when it is more say in the PR that the layer's
+doubling makes a run impossible, with the kernel's size; a PR is not "unverified" for saying that.
+
 **Changing speed or numerics.** One change per PR. Measure only on an idle GPU (nothing else running), interleave old
 and new builds (A B A B), report every run with the Mac, macOS version and commit. A default changes only after an
 interleaved A/B *and* the output check of CONTRIBUTING.md ("Output check"): `build/logit_dump` of the old and the new

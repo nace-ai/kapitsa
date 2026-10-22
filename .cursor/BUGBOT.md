@@ -20,7 +20,10 @@ not ask for abstractions, interfaces or configuration the change does not need.
 - A kernel signature changed without every encoder call site (src/**/*.cpp, *.mm) updated: argument index, type and
   buffer order must match, and so must constants passed with `setBytes`.
 - A new or changed kernel needs, in the PR description, a statement that it ran at small sizes with
-  `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`. If the PR changes a kernel and says nothing about it, flag it.
+  `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1`. If the PR changes a kernel and says nothing about it, flag it. The layer
+  counts static threadgroup memory twice on macOS 26.x and aborts above 16,384 B of it (AGENTS.md, with the measurements
+  and `tools/ni_kstats --limits`), so a statement that gives the size and says the run is impossible is the expected
+  answer there; do not ask for a run the layer cannot finish.
 
 ## Claims about speed and outputs
 
