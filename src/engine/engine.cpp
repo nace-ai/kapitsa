@@ -364,7 +364,7 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       const size_t a0 = Gpu::get().allocated_bytes();
       // one slot: nothing decodes alongside a request, so a 16-row block's deeper lattice is free to take (with more
       // slots a 16-row block has no batched cycle at all, Engine::batch_rows, and requests take turns instead)
-      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots);
+      const int block_rows = DFlash2::plan_block_rows(q35_->config(), opts_.slots, nullptr, DFlash2::tensor_path_ok());
       const bool rows16 = block_rows > DFlash2::kB;
       dfl_ = std::make_unique<DFlash2>(*q35_, dir, 0, rows16);
       dfl_dir_ = dir;
@@ -597,7 +597,7 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
       // instead); the model with 1024-row prefill buffers, the slots' state, the Neural Engine split and one full
       // conversation come first
       const Qwen35Config dc = Qwen35::read_config(model_dir);
-      const int block_rows = DFlash2::plan_block_rows(dc, slots);
+      const int block_rows = DFlash2::plan_block_rows(dc, slots, nullptr, DFlash2::tensor_path_ok());
       const Qwen35::MemPlan p = Qwen35::plan(model_dir, 1024, block_rows > DFlash2::kB);
       size_t per_slot = 0;  // the ring of the live state and of each of the slot's two checkpoints
       lp.dflash_bytes = lp.dflash_found_bytes =

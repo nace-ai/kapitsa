@@ -115,7 +115,12 @@ class DFlash2 {
   // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
   // block_env: NI_DFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
   // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
-  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env = nullptr);
+  // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
+  // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
+  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok);
+  // Whether this Mac runs the drafting pass on the matrix units (dfl_tw_supported(), asked of the GPU): plan_block_rows
+  // takes the answer as an argument so that the decision itself stays pure.
+  static bool tensor_path_ok();
   // block_rows: the drafting block the engine will load (plan_block_rows), whose rows the target's verify buffers and
   // every slot's verify tape are sized from.
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,

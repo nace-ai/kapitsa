@@ -103,36 +103,38 @@ void run_cpu() {
   Qwen35Config dense = plain, moe = plain;
   dense.moe = false;
   moe.moe = true;
-  check(DFlash2::plan_block_rows(dense, 1, "") == 16, "one slot, dense target, unset: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "auto") == 16, "NI_DFLASH_BLOCK=auto is the default: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "8") == 8, "NI_DFLASH_BLOCK=8: 8 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "16") == 16, "NI_DFLASH_BLOCK=16, dense target: 16 rows");
-  check(DFlash2::plan_block_rows(dense, 2, "") == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
-  check(DFlash2::plan_block_rows(moe, 1, "") == 8, "one slot, MoE target: 8 rows (no wide tree verify to run)");
-  check(DFlash2::plan_block_rows(moe, 1, "16") == 16,
+  check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "one slot, dense target, unset: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "auto", true) == 16, "NI_DFLASH_BLOCK=auto is the default: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "8", true) == 8, "NI_DFLASH_BLOCK=8: 8 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "16", true) == 16, "NI_DFLASH_BLOCK=16, dense target: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 2, "", true) == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
+  check(DFlash2::plan_block_rows(moe, 1, "", true) == 8, "one slot, MoE target: 8 rows (no wide tree verify to run)");
+  check(DFlash2::plan_block_rows(moe, 1, "16", true) == 16,
         "NI_DFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)");
   setenv("NI_DFLASH_BLOCK", "8", 1);
-  const int env8 = DFlash2::plan_block_rows(dense, 1);
+  const int env8 = DFlash2::plan_block_rows(dense, 1, nullptr, true);
   unsetenv("NI_DFLASH_BLOCK");
-  check(env8 == 8 && DFlash2::plan_block_rows(dense, 1) == 16, "the environment is read when no value is passed: 16, 8, 16");
-  const int first = DFlash2::plan_block_rows(dense, 1, ""), moe_next = DFlash2::plan_block_rows(moe, 1, ""),
-            back = DFlash2::plan_block_rows(dense, 1, "");
+  check(env8 == 8 && DFlash2::plan_block_rows(dense, 1, nullptr, true) == 16, "the environment is read when no value is passed: 16, 8, 16");
+  const int first = DFlash2::plan_block_rows(dense, 1, "", true), moe_next = DFlash2::plan_block_rows(moe, 1, "", true),
+            back = DFlash2::plan_block_rows(dense, 1, "", true);
   check(first == 16 && moe_next == 8 && back == 16,
         "16 then 8 then 16 in one process: the next model decides for itself");
   // the cheap half of rows16_auto_ok: the knobs that make the load keep 8 rows take the plan with them, so a start
   // that cannot run the block does not reserve its rows
   setenv("NI_KFLASH", "0", 1);
-  const int kf0 = DFlash2::plan_block_rows(dense, 1, "");
+  const int kf0 = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_KFLASH");
   setenv("NI_DFLASH_VERIFY", "7", 1);
-  const int shallow = DFlash2::plan_block_rows(dense, 1, "");
+  const int shallow = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_DFLASH_VERIFY");
   setenv("NI_DFLASH_ATTN", "scalar", 1);
-  const int scalar = DFlash2::plan_block_rows(dense, 1, "");
+  const int scalar = DFlash2::plan_block_rows(dense, 1, "", true);
   unsetenv("NI_DFLASH_ATTN");
   check(kf0 == 8 && shallow == 8 && scalar == 8,
         "NI_KFLASH=0, NI_DFLASH_VERIFY=7, NI_DFLASH_ATTN=scalar: the plan keeps 8 rows");
-  check(DFlash2::plan_block_rows(dense, 1, "") == 16, "and with the knobs back off: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "", true) == 16, "and with the knobs back off: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "", false) == 8,
+        "no matrix units on this Mac (an M1-M4, or CI's virtual GPU): the plan keeps 8 rows too");
   // incoai/Qwen3.8-Flash-Next-DFlash2 @ a22a1744 (Apache-2.0), its config.json's fields that the checks read: 5 draft
   // layers over target layers 5, 15, 25, 35, 45, rope theta 1e4, no target_hidden_reduction (the target's: stream_mean)
   const std::string incoai = R"({"architectures": ["DFlash2DraftModel"], "is_causal": false,
