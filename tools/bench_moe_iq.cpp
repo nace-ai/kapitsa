@@ -10,7 +10,10 @@
 //                  fetch them (SRC/<tensor>.bin, SRC/meta.json): blk.<L>.ffn_{gate,up,down}_exps.weight (and the
 //                  shared expert's tensors, made 8-bit group 64 as the importer makes them); else synthetic blocks
 //   --layer L      the layer of --tensors (default 0: IQ2_XXS gate/up, IQ2_S down; 39: IQ3_S down)
-//   --fmt gu:dn    synthetic formats (iq2xxs, iq2s, iq3s; default iq2xxs:iq2s)
+//   --fmt gu:dn    synthetic formats (iq1s, iq2xxs, iq2s, iq3xxs, iq3s; default iq2xxs:iq2s)
+//   --topk K       experts per token (default 8)
+//   --shared SI    the shared expert's width when it differs from the routed experts' (Flint: --topk 6 --shared 1024;
+//                  the rows and prefill cases: the 8-row verify's kernels take a shared expert as wide as the others)
 //   --validate     small shapes, one kernel run per command buffer: run it under MTL_SHADER_VALIDATION=1
 //                  MTL_DEBUG_LAYER=1 to catch out-of-bounds access
 //   --variants     the tilings of each case side by side (rows: NR x simdgroups; v8: down NF; pf: tile widths),
@@ -93,15 +96,14 @@ float h2f(uint16_t u) {
 }
 double hround(double v) { return double(_Float16(float(v))); }
 
-std::string fmt_name(uint32_t t) { return t == gg::kIQ2_XXS ? "iq2xxs" : t == gg::kIQ2_S ? "iq2s" : "iq3s"; }
+std::string fmt_name(uint32_t t) { return gg::iq_suffix(t); }
 uint32_t fmt_type(const std::string& s) {
-  if (s == "iq2xxs") return gg::kIQ2_XXS;
-  if (s == "iq2s") return gg::kIQ2_S;
-  if (s == "iq3s") return gg::kIQ3_S;
+  for (uint32_t t : {gg::kIQ1_S, gg::kIQ2_XXS, gg::kIQ2_S, gg::kIQ3_XXS, gg::kIQ3_S})
+    if (s == gg::iq_suffix(t)) return t;
   fatal("unknown format %s", s.c_str());
   return 0;
 }
-size_t block_bytes(uint32_t t) { return t == gg::kIQ2_XXS ? 66 : t == gg::kIQ2_S ? 82 : 110; }
+size_t block_bytes(uint32_t t) { return gg::iq_block_bytes(t); }
 
 // A stacked IQ matrix [E, N, K]: the GGUF blocks (host, for the reference) and the GPU layout
 struct IqMat {
@@ -133,7 +135,8 @@ IqMat synth_iq(uint32_t type, uint32_t E, uint32_t N, uint32_t K) {
   for (size_t b = 0; b < nblk; ++b) {
     uint8_t* p = m.raw.data() + b * bb;
     for (size_t i = 2; i < bb; ++i) p[i] = uint8_t(byte(rng));
-    const uint16_t d = f2h(urand(2e-5f, 2.5e-3f) * (type == gg::kIQ3_S ? 4.0f : 1.0f));
+    // d at about the GGUFs' value scale (IQ3_S's d multiplies 1-15, IQ1_S's 1-15 x 1.125)
+    const uint16_t d = f2h(urand(2e-5f, 2.5e-3f) * (type == gg::kIQ3_S ? 4.0f : type == gg::kIQ1_S ? 40.0f : 1.0f));
     memcpy(p, &d, 2);
   }
   m.upload();
@@ -182,7 +185,7 @@ Q8Mat synth_q8(uint32_t N, uint32_t K) {
 }
 
 struct Layer {
-  uint32_t D = 0, I = 0, E = 0, k = 0;
+  uint32_t D = 0, I = 0, E = 0, k = 0, SI = 0;  // SI: the shared expert's width
   IqMat g, u, d;
   Q8Mat sg, su, sd;
 };
@@ -221,6 +224,7 @@ Layer real_layer(const std::string& dir, int L) {
     ne = m.at("ne").get<std::vector<uint64_t>>();
     const std::string t = m.at("type");
     type = t == "IQ2_XXS" ? gg::kIQ2_XXS : t == "IQ2_S" ? gg::kIQ2_S : t == "IQ3_S" ? gg::kIQ3_S
+           : t == "IQ3_XXS" ? gg::kIQ3_XXS : t == "IQ1_S" ? gg::kIQ1_S
            : t == "Q5_K" ? gg::kQ5_K : t == "Q6_K" ? gg::kQ6_K : t == "Q8_0" ? gg::kQ8_0 : t == "F32" ? gg::kF32 : 999;
     return read_file(dir + "/" + b + n + ".bin");
   };
@@ -229,7 +233,7 @@ Layer real_layer(const std::string& dir, int L) {
     IqMat m;
     std::vector<uint64_t> ne;
     m.raw = tensor(n, ne, m.type);
-    if (!gg::iq_gpu_type(m.type)) fatal("%s is not IQ2_XXS / IQ2_S / IQ3_S", n.c_str());
+    if (!gg::iq_gpu_type(m.type)) fatal("%s is not IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S", n.c_str());
     m.K = uint32_t(ne[0]), m.N = uint32_t(ne[1]), m.E = uint32_t(ne[2]);
     m.upload();
     return m;
@@ -237,7 +241,7 @@ Layer real_layer(const std::string& dir, int L) {
   l.g = iq("ffn_gate_exps.weight");
   l.u = iq("ffn_up_exps.weight");
   l.d = iq("ffn_down_exps.weight");
-  l.D = l.g.K, l.I = l.g.N, l.E = l.g.E, l.k = 8;
+  l.D = l.g.K, l.I = l.g.N, l.E = l.g.E, l.k = 8, l.SI = l.I;
   auto q8 = [&](const std::string& n, uint32_t N, uint32_t K) {
     if (!has(n)) {
       logi("%s: not in %s, synthetic", n.c_str(), dir.c_str());
@@ -246,6 +250,7 @@ Layer real_layer(const std::string& dir, int L) {
     std::vector<uint64_t> ne;
     uint32_t type = 0;
     const std::vector<uint8_t> raw = tensor(n, ne, type);
+    N = uint32_t(ne[1]), K = uint32_t(ne[0]);  // the file's shape (Flint's shared expert is wider than its experts)
     std::vector<float> x(size_t(N) * K);
     gg::dequantize(type, raw.data(), x.data(), x.size());
     return q8_from(x, N, K);
@@ -253,18 +258,19 @@ Layer real_layer(const std::string& dir, int L) {
   l.sg = q8("ffn_gate_shexp.weight", l.I, l.D);
   l.su = q8("ffn_up_shexp.weight", l.I, l.D);
   l.sd = q8("ffn_down_shexp.weight", l.D, l.I);
+  l.SI = l.sg.N;
   return l;
 }
 
-Layer synth_layer(uint32_t D, uint32_t I, uint32_t E, uint32_t k, uint32_t tgu, uint32_t tdn) {
+Layer synth_layer(uint32_t D, uint32_t I, uint32_t E, uint32_t k, uint32_t tgu, uint32_t tdn, uint32_t SI) {
   Layer l;
-  l.D = D, l.I = I, l.E = E, l.k = k;
+  l.D = D, l.I = I, l.E = E, l.k = k, l.SI = SI;
   l.g = synth_iq(tgu, E, I, D);
   l.u = synth_iq(tgu, E, I, D);
   l.d = synth_iq(tdn, E, D, I);
-  l.sg = synth_q8(I, D);
-  l.su = synth_q8(I, D);
-  l.sd = synth_q8(D, I);
+  l.sg = synth_q8(SI, D);
+  l.su = synth_q8(SI, D);
+  l.sd = synth_q8(D, SI);
   return l;
 }
 
@@ -349,7 +355,7 @@ Pipeline pipe(const std::string& n) { return Gpu::get().pipeline(n); }
 // ---------------------------------------------------------------------------------------------------------------- rows
 void case_rows(const Layer& l, uint32_t R) {
   Gpu& g = Gpu::get();
-  const uint32_t D = l.D, I = l.I, k = l.k, Imax = I;
+  const uint32_t D = l.D, I = l.I, SI = l.SI, k = l.k, Imax = std::max(I, SI);
   const int rot = g_validate ? 1 : 16;
   std::vector<Routing> rts;
   for (int i = 0; i < rot; ++i) rts.push_back(make_routing(R, l.E, k));
@@ -362,7 +368,7 @@ void case_rows(const Layer& l, uint32_t R) {
   std::vector<float> x0(size_t(R) * D);
   for (auto& v : x0) v = urand(-2.0f, 2.0f);
   memcpy(xn.ptr(), x0.data(), x0.size() * 4);
-  MoeIqParams p{D, I, I, k, l.g.sec(), l.d.sec()};
+  MoeIqParams p{D, I, SI, k, l.g.sec(), l.d.sec()};
   const std::string gf = fmt_name(l.g.type), df = fmt_name(l.d.type);
   // gate/up: nr rows per simdgroup, nsg simdgroups; down: dnr rows per threadgroup of k + 1 simdgroups, t16: the
   // lanes of a row share its h (I = 512)
@@ -403,7 +409,7 @@ void case_rows(const Layer& l, uint32_t R) {
     int dnr;
     bool t16;
   };
-  const bool t16 = I == 512;
+  const bool t16 = I == 512 && SI == 512;
   std::vector<Cfg> cfgs = {{2, 2, 8, t16}};  // the model's (Qwen35::enc_moe_iq_rows)
   if (g_validate) cfgs = {{2, 2, 8, t16}, {4, 1, 8, false}};
   if (g_variants) {
@@ -415,7 +421,7 @@ void case_rows(const Layer& l, uint32_t R) {
   std::vector<double> wg, wu;
   for (uint32_t t = 0; t < R; ++t)
     for (uint32_t s = 0; s <= k; ++s)
-      for (uint32_t n = 0; n < I; ++n) {
+      for (uint32_t n = 0; n < (s == k ? SI : I); ++n) {
         double a = 0, b = 0;
         if (s == k) {
           for (uint32_t c = 0; c < D; ++c) a += l.sg.at(n, c) * x0[size_t(t) * D + c], b += l.su.at(n, c) * x0[size_t(t) * D + c];
@@ -435,7 +441,12 @@ void case_rows(const Layer& l, uint32_t R) {
     e->commit_and_wait();
     Err eh, ex;
     const float* hg = h.as<float>();
-    for (size_t i = 0; i < href.size(); ++i) eh.add(hg[i], href[i], href[i]);
+    for (uint32_t t = 0; t < R; ++t)
+      for (uint32_t s = 0; s <= k; ++s)
+        for (uint32_t n = 0; n < (s == k ? SI : I); ++n) {
+          const size_t i = (size_t(t) * (k + 1) + s) * Imax + n;
+          eh.add(hg[i], href[i], href[i]);
+        }
     std::vector<double> wd;
     for (uint32_t t = 0; t < R; ++t) {
       std::vector<double> acc(D, 0.0);
@@ -445,7 +456,7 @@ void case_rows(const Layer& l, uint32_t R) {
         for (uint32_t n = 0; n < D; ++n) {
           double a = 0;
           if (s == k) {
-            for (uint32_t c2 = 0; c2 < I; ++c2) a += l.sd.at(n, c2) * hs[c2];
+            for (uint32_t c2 = 0; c2 < SI; ++c2) a += l.sd.at(n, c2) * hs[c2];
           } else {
             l.d.row(rt.idx[t * k + s], n, wd);
             for (uint32_t c2 = 0; c2 < I; ++c2) a += wd[c2] * hs[c2];
@@ -762,13 +773,15 @@ void case_pf(const Layer& l, uint32_t T) {
 
 int main(int argc, char** argv) {
   std::string dir, fmt = "iq2xxs:iq2s";
-  int layer = 0;
+  int layer = 0, topk = 8, shared = 0;
   std::vector<std::string> cases;
   for (int i = 1; i < argc; ++i) {
     const std::string a = argv[i];
     if (a == "--tensors" && i + 1 < argc) dir = argv[++i];
     else if (a == "--layer" && i + 1 < argc) layer = atoi(argv[++i]);
     else if (a == "--fmt" && i + 1 < argc) fmt = argv[++i];
+    else if (a == "--topk" && i + 1 < argc) topk = atoi(argv[++i]);
+    else if (a == "--shared" && i + 1 < argc) shared = atoi(argv[++i]);
     else if (a == "--validate") g_validate = true;
     else if (a == "--variants") g_variants = true;
     else if (a == "--trials" && i + 1 < argc) g_trials = atoi(argv[++i]);
@@ -790,19 +803,22 @@ int main(int argc, char** argv) {
   Layer l;
   if (g_validate) {
     const size_t c = fmt.find(':');
-    l = synth_layer(512, 512, 32, 4, fmt_type(fmt.substr(0, c)), fmt_type(fmt.substr(c + 1)));
+    l = synth_layer(512, 512, 32, std::min(topk, 4), fmt_type(fmt.substr(0, c)), fmt_type(fmt.substr(c + 1)),
+                    shared ? uint32_t(shared) : 512u);
   } else if (!dir.empty()) {
     l = real_layer(dir, layer);
+    l.k = uint32_t(topk);
   } else {
     const size_t c = fmt.find(':');
-    l = synth_layer(2048, 512, 256, 8, fmt_type(fmt.substr(0, c)), fmt_type(fmt.substr(c + 1)));
+    l = synth_layer(2048, 512, 256, uint32_t(topk), fmt_type(fmt.substr(0, c)), fmt_type(fmt.substr(c + 1)),
+                    shared ? uint32_t(shared) : 512u);
   }
-  printf("layer: D %u, I %u, %u experts, top-%u, gate/up %s, down %s%s\n", l.D, l.I, l.E, l.k,
+  printf("layer: D %u, I %u, shared %u, %u experts, top-%u, gate/up %s, down %s%s\n", l.D, l.I, l.SI, l.E, l.k,
          fmt_name(l.g.type).c_str(), fmt_name(l.d.type).c_str(), dir.empty() ? " (synthetic)" : " (real tensors)");
   for (uint32_t R : {1u, 2u, 4u})
     if (want("rows R=" + std::to_string(R))) case_rows(l, R);
   for (uint32_t R : {2u, 4u, 8u})
-    if (want("v8 R=" + std::to_string(R))) case_v8(l, R);
+    if (want("v8 R=" + std::to_string(R)) && l.SI == l.I) case_v8(l, R);
   for (uint32_t T : {64u, 512u, 2048u, 4096u})
     if (want("pf T=" + std::to_string(T)) && (!g_validate || T <= 512)) case_pf(l, T);
   return 0;

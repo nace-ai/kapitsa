@@ -174,14 +174,13 @@ std::string ftype_name(int64_t t) {
 
 struct Fmt {
   int bits = 16, gs = 0;  // bits 16: bf16
-  uint32_t iq = 0;        // routed experts kept in llama.cpp's blocks: their type (IQ2_XXS, IQ2_S, IQ3_S)
+  uint32_t iq = 0;        // routed experts kept in llama.cpp's blocks: their type (iq_gpu_type)
   bool dense() const { return bits == 16 && !iq; }
   bool operator==(const Fmt& o) const { return bits == o.bits && gs == o.gs && iq == o.iq; }
   bool operator!=(const Fmt& o) const { return !(*this == o); }
 };
 const Fmt kBf16{16, 0}, k3g64{3, 64}, k4g32{4, 32}, k4g64{4, 64}, k5g64{5, 64}, k6g64{6, 64}, k8g64{8, 64};
-Fmt iq_fmt(uint32_t t) { return Fmt{t == kIQ3_S ? 3 : 2, 256, t}; }
-uint64_t iq_block_bytes(uint32_t t) { return t == kIQ2_XXS ? 66 : t == kIQ2_S ? 82 : 110; }
+Fmt iq_fmt(uint32_t t) { return Fmt{iq_bits(t), 256, t}; }
 
 std::string fmt_name(Fmt f) {
   if (f.iq) return type_name(f.iq) + " (as stored)";
@@ -651,9 +650,10 @@ struct Builder {
       }
       return;
     }
-    // trunk, routed experts in IQ2_XXS / IQ2_S / IQ3_S: kept as stored (src/kernels/wfmt_iq.metal reads the blocks; a
-    // GGUF's IQ2_XXS experts converted to 3-bit group 64 took 1.7x their bytes, which put Qwen3.6-35B-A3B's unsloth
-    // UD-IQ2_XXS at 15 GB instead of 11). Gate and up of one type, in tensors of their own; shapes the kernels take.
+    // trunk, routed experts in IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S: kept as stored (src/kernels/wfmt_iq.metal
+    // reads the blocks; a GGUF's IQ2_XXS experts converted to 3-bit group 64 took 1.7x their bytes, which put
+    // Qwen3.6-35B-A3B's unsloth UD-IQ2_XXS at 15 GB instead of 11). Gate and up of one type, in tensors of their own;
+    // shapes the kernels take.
     if (!gu && iq_gpu_type(g->type) && u->type == g->type && iq_gpu_type(d->type) && H % 512 == 0 && I % 256 == 0 &&
         !getenv("KAPITSA_IMPORT_IQ_CONVERT")) {
       auto stacked_iq = [&](const Tensor* t, const std::string& n, uint64_t N, uint64_t K) {
@@ -893,7 +893,7 @@ ojson make_config(const Plan& P, const Tok& tok, const File& f) {
     auto top = std::max_element(n.begin(), n.end(), [](auto& a, auto& b) { return a.second < b.second; })->first;
     ojson q{{"group_size", top.second}, {"bits", top.first}, {"mode", "affine"}};
     for (const Lin& L : P.lins)
-      if (L.fmt.iq)  // llama.cpp's blocks as stored (mode iq2_xxs / iq2_s / iq3_s)
+      if (L.fmt.iq)  // llama.cpp's blocks as stored (mode iq1_s / iq2_xxs / iq2_s / iq3_xxs / iq3_s)
         q[L.name] = ojson{{"group_size", 256}, {"bits", L.fmt.bits}, {"mode", lower(type_name(L.fmt.iq))}};
       else if (!L.param && !L.mtp && !L.fmt.dense() && (L.fmt.bits != top.first || L.fmt.gs != top.second))
         q[L.name] = ojson{{"group_size", L.fmt.gs}, {"bits", L.fmt.bits}};
@@ -1455,9 +1455,10 @@ std::string import_model(const ImportOptions& opt) {
   }
   if (nx) {
     const bool all = std::find(xclone.begin(), xclone.end(), false) == xclone.end();
-    P.notes.insert(all ? "MoE experts kept as stored (IQ2_XXS / IQ2_S / IQ3_S): read in place through an APFS clone of "
-                         "the GGUF (no second copy on the disk)"
-                       : "MoE experts kept as stored (IQ2_XXS / IQ2_S / IQ3_S), copied into experts.safetensors");
+    P.notes.insert(all ? "MoE experts kept as stored (IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S): read in place "
+                         "through an APFS clone of the GGUF (no second copy on the disk)"
+                       : "MoE experts kept as stored (IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S), copied into "
+                         "experts.safetensors");
   }
   total += tok.tokenizer_json.size() + tok.tokenizer_config.size() + tok.template_.size() + (1u << 20);
   if (!opt.plan_dir.empty()) {  // hub::plan_dir: the headers a memory plan reads, and the sizes
@@ -1688,8 +1689,8 @@ int run_import(int argc, char** argv) {
       "Formats: Q4_0/Q4_1/Q4_K keep their codes (4-bit group 32); Q8_0/Q6_K become 8-bit, Q5_x 6-bit, IQ4_x/MXFP4/NVFP4\n"
       "5-bit (group 64), IQ3_x/Q3_K 4-bit group 32, IQ1/IQ2/Q2_K 3-bit group 64, F16/BF16/F32 bf16; in a mostly\n"
       "4-bit-or-better file its 1-3-bit tensors take the file's majority format. MoE experts take 5-bit group 64 from\n"
-      "4-bit types; in IQ2_XXS / IQ2_S / IQ3_S they stay as stored, read in place through an APFS clone of the GGUF\n"
-      "(no second copy on the disk; KAPITSA_IMPORT_COPY=1 copies them).\n";
+      "4-bit types; in IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S they stay as stored, read in place through an APFS\n"
+      "clone of the GGUF (no second copy on the disk; KAPITSA_IMPORT_COPY=1 copies them).\n";
   for (int i = 2; i < argc; ++i) {
     const std::string a = argv[i];
     auto next = [&]() -> std::string {

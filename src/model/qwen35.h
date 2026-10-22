@@ -39,15 +39,15 @@ struct QLinear {
   bool mtp = false;   // part of the MTP head (8-bit prefill GEMM on qmr8 since it was introduced)
   bool gate = false;  // the trunk's MoE router / shared-expert gate: their 8-bit prefill GEMMs keep the old kernels
   // Routed experts of a GGUF import kept in llama.cpp's blocks (src/kernels/wfmt_iq.metal): their GGUF type
-  // (gguf::kIQ2_XXS, kIQ2_S or kIQ3_S; bits 2 / 3, gs 256, s and b point at w), 0 otherwise. w is the stacked
-  // [E, N, K] matrix in the kernels' layout, its sections at these byte offsets (Q at 0).
+  // (gguf::iq_gpu_type's; bits 1-3, gs 256, s and b point at w), 0 otherwise. w is the stacked [E, N, K] matrix in the
+  // kernels' layout, its sections at these byte offsets (Q at 0).
   uint32_t iq = 0;
   uint32_t iq_x1 = 0, iq_x2 = 0, iq_x3 = 0, iq_d = 0;
   explicit operator bool() const { return w != nullptr; }
   bool dense() const { return bits == 16 && !iq; }
   bool q4() const { return bits == 4 && gs == 64 && !iq; }  // the specialized 4-bit kernels
   bool q8() const { return bits == 8 && gs == 64 && !iq; }  // the specialized 8-bit kernels
-  // kernel-name suffix of the format: "f16" (bf16), "f<bits>g<gs>", "q20", or iq2xxs / iq2s / iq3s
+  // kernel-name suffix of the format: "f16" (bf16), "f<bits>g<gs>", "q20", or iq1s / iq2xxs / iq2s / iq3xxs / iq3s
   std::string fmt() const;
   std::string name() const;  // "4-bit group 64", "bf16", "IQ2_XXS", "Q2_0", ...
   bool same_format(const QLinear& o) const {

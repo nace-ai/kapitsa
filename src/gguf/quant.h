@@ -3,6 +3,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace ni::gguf {
 
@@ -24,15 +25,21 @@ float from_f16(uint16_t h);
 // n codes of `bits` bits -> MLX's packing: value j at bits [bits*j, bits*j + bits) of a little-endian stream of
 // uint32 words (n * bits must be a multiple of 32).
 void pack_codes(const uint8_t* codes, size_t n, int bits, uint32_t* words);
-// llama.cpp's IQ2_XXS / IQ2_S / IQ3_S blocks in the GPU layout of src/kernels/wfmt_iq.metal (routed experts kept as
-// the GGUF stores them): a matrix of `rows` rows of K values (K % 256 == 0) as sections Q (a uint2 per 32 values),
-// X1-X3 (the types' other bits) and D (llama.cpp's half d per 256 values), the GGUF's bytes per 256 values. The bits
-// are moved, not changed.
+// llama.cpp's IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS / IQ3_S blocks in the GPU layout of src/kernels/wfmt_iq.metal (routed
+// experts kept as the GGUF stores them): a matrix of `rows` rows of K values (K % 256 == 0) as sections Q (a uint2 per
+// 32 values, IQ1_S a uint), X1-X3 (the types' other bits) and D (llama.cpp's half d per 256 values), the GGUF's bytes
+// per 256 values. The bits are moved, not changed.
 struct IqLayout {
   size_t x1 = 0, x2 = 0, x3 = 0, d = 0;  // byte offsets of the sections X1, X2, X3, D (Q at 0)
   size_t bytes = 0;                      // the whole matrix
 };
-bool iq_gpu_type(uint32_t type);  // a type with that layout: IQ2_XXS, IQ2_S, IQ3_S
+bool iq_gpu_type(uint32_t type);  // a type with that layout: IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S
+size_t iq_block_bytes(uint32_t type);  // the type's bytes per 256 values
+int iq_bits(uint32_t type);            // its nominal bits (1, 2 or 3), as config.json's quantization names it
+// the kernel-name suffix (wfmt_iq.metal's instantiations: iq1s, iq2xxs, iq2s, iq3xxs, iq3s), and the quantization mode
+// the importer writes in config.json (iq1_s, iq2_xxs, ...) back to the type (0: another mode)
+std::string iq_suffix(uint32_t type);
+uint32_t iq_mode_type(const std::string& mode);
 IqLayout iq_layout(uint32_t type, size_t rows, size_t K);
 // Rows [r0, r1) of the matrix from their GGUF blocks (src: the bytes of row r0 onwards) into dst (the matrix's buffer,
 // iq_layout(type, rows, K).bytes long).

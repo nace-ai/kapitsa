@@ -130,7 +130,9 @@ https://github.com/ggml-org/ggml
 The IQ2_XXS lattice table in src/kernels/nemotron/nh_common.h (nh_iq2xxs_grid) is adapted from ggml's iq2xxs_grid
 (ggml/src/ggml-common.h). The IQ1 / IQ2 / IQ3 codebooks in src/gguf/iq_grids.h are adapted from ggml's iq1s_grid,
 iq2xxs_grid, iq2xs_grid, iq2s_grid, iq3xxs_grid and iq3s_grid (ggml/src/ggml-common.h), and the IQ decoders in
-src/gguf/quant.cpp follow ggml's dequantize_row_iq* (ggml/src/ggml-quants.c). The file headers note it.
+src/gguf/quant.cpp follow ggml's dequantize_row_iq* (ggml/src/ggml-quants.c). The grid tables of the IQ MoE kernels in
+src/kernels/wfmt_iq.metal are adapted from ggml's iq2xxs_grid, iq2s_grid, iq3xxs_grid, iq3s_grid and iq1s_grid_gpu
+(ggml/src/ggml-common.h). The file headers note it.
 
 Copyright (c) 2023-2026 The ggml authors
 

@@ -1,6 +1,7 @@
 #include "model/qwen35.h"
 #include "ane/ffn_split.h"
 #include "gguf/gguf.h"
+#include "gguf/quant.h"
 #include "model/kparams.h"
 #include "util/bf16.h"
 #include "util/log.h"
@@ -43,13 +44,13 @@ std::string format_name(int bits, int gs) {
   return bits == 16 ? std::string("bf16") : std::to_string(bits) + "-bit group " + std::to_string(gs);
 }
 std::string QLinear::fmt() const {
-  if (iq) return iq == gguf::kIQ2_XXS ? "iq2xxs" : iq == gguf::kIQ2_S ? "iq2s" : "iq3s";
+  if (iq) return gguf::iq_suffix(iq);
   if (q20) return "q20";
   return bits == 16 ? std::string("f16") : "f" + std::to_string(bits) + "g" + std::to_string(gs);
 }
 std::string QLinear::name() const { return iq ? gguf::type_name(iq) : q20 ? std::string("Q2_0") : format_name(bits, gs); }
 size_t QLinear::row_bytes() const {
-  if (iq) return size_t(K) / 256 * (iq == gguf::kIQ2_XXS ? 66 : iq == gguf::kIQ2_S ? 82 : 110);
+  if (iq) return size_t(K) / 256 * gguf::iq_block_bytes(iq);
   return size_t(K) * size_t(bits) / 8;
 }
 static bool gdn_par();
@@ -543,15 +544,12 @@ const Tensor* Qwen35::bf16_copy(const Tensor* t, float offset) {
   return &owned_.back();
 }
 
-// The GGUF type of a module kept in llama.cpp's IQ blocks (quantization mode iq2_xxs / iq2_s / iq3_s), else 0
+// The GGUF type of a module kept in llama.cpp's IQ blocks (quantization mode iq1_s / iq2_xxs / iq2_s / iq3_xxs /
+// iq3_s), else 0
 static uint32_t iq_mode(const std::string& full, const std::string& name) {
   for (const auto& key : {full, name})
-    if (quant_cfg_.contains(key) && quant_cfg_[key].is_object()) {
-      const std::string m = quant_cfg_[key].value("mode", std::string());
-      if (m == "iq2_xxs") return gguf::kIQ2_XXS;
-      if (m == "iq2_s") return gguf::kIQ2_S;
-      if (m == "iq3_s") return gguf::kIQ3_S;
-    }
+    if (quant_cfg_.contains(key) && quant_cfg_[key].is_object())
+      if (const uint32_t t = gguf::iq_mode_type(quant_cfg_[key].value("mode", std::string()))) return t;
   return 0;
 }
 
@@ -565,11 +563,11 @@ QLinear Qwen35::qlin(const std::string& name, bool required, bool q20_ok) {
   }
   if (const uint32_t t = iq_mode(full, name)) {
     // routed experts in llama.cpp's blocks, [E, N, K / 256 * block bytes] as bytes: read by load_iq_experts
-    const size_t bb = t == gguf::kIQ2_XXS ? 66 : t == gguf::kIQ2_S ? 82 : 110;
+    const size_t bb = gguf::iq_block_bytes(t);
     if (L.w->dtype != DType::U8 || L.w->shape.size() != 3 || L.w->shape[2] % int64_t(bb))
       fatal("%s.weight: not the %s blocks of stacked experts", full.c_str(), gguf::type_name(t).c_str());
     L.iq = t;
-    L.bits = t == gguf::kIQ3_S ? 3 : 2;
+    L.bits = gguf::iq_bits(t);
     L.gs = 256;
     L.N = uint32_t(L.w->shape[1]);
     L.K = uint32_t(L.w->shape[2] / int64_t(bb) * 256);
@@ -1044,7 +1042,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
       for (auto& [k, v] : q.items()) {
         if (!v.is_object()) continue;
         const std::string mode = v.value("mode", std::string());
-        if (mode.rfind("iq", 0) == 0) {  // llama.cpp's IQ blocks: IQ2_XXS, IQ2_S, IQ3_S
+        if (mode.rfind("iq", 0) == 0) {  // llama.cpp's IQ blocks: IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S
           std::string u = mode;
           for (auto& c : u) c = char(toupper(static_cast<unsigned char>(c)));
           ++other[u];

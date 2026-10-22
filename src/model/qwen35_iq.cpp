@@ -1,7 +1,7 @@
-// Routed experts in llama.cpp's IQ blocks (IQ2_XXS, IQ2_S, IQ3_S), as `kapitsa import` keeps them from a GGUF
-// (src/gguf/import.cpp): loading (the blocks' bits moved into the layout of src/kernels/wfmt_iq.metal) and the MoE
-// passes of such layers on wfmt_iq.metal's kernels: one or a few token rows (decode, the small-batch verify), the 8-row
-// verify (moe8) and prefill. The shared expert is the importer's 8-bit group 64; router and top-k are the other
+// Routed experts in llama.cpp's IQ blocks (IQ1_S, IQ2_XXS, IQ2_S, IQ3_XXS, IQ3_S), as `kapitsa import` keeps them from
+// a GGUF (src/gguf/import.cpp): loading (the blocks' bits moved into the layout of src/kernels/wfmt_iq.metal) and the
+// MoE passes of such layers on wfmt_iq.metal's kernels: one or a few token rows (decode, the small-batch verify), the
+// 8-row verify (moe8) and prefill. The shared expert is the importer's 8-bit group 64; router and top-k are the other
 // formats' passes.
 #include "gguf/gguf.h"
 #include "gguf/quant.h"
