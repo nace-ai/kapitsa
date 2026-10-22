@@ -138,7 +138,8 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   1.09x against the cell after #318); Kapitsa decodes faster on both (10% on the 27B against the cell after #318, 16% on
   the 35B-A3B).
   Kapitsa's 35B-A3B cell is that session's flag-free closing run, 2,552 / 209, and its decode **reads lower than 217**
-  (`d53f02e`): three runs of current main read 201-209, not yet explained
+  (`d53f02e`, one run). That is session state, not a regression: an interleaved decode-only A/B of the two trees
+  reads 204.8 (`d53f02e`) against 206.5 (`4b89f4e`)
   ([details](#splash-140-against-kapitsa-m5-pro-2026-10-22)).
 - MLX: mlx-vlm with MTP on the 4B and 27B, DFlash2 on the 35B; mlx-lm on Lightning and Dory, mlx-vlm on Bolt. oMLX
   runs MTP on the 4B and Lightning, DFlash2 on the 27B and 35B, no drafter on Bolt; mlx-serve MTP on the 4B, 35B and
