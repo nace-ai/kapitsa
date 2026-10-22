@@ -2325,7 +2325,8 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     if (vpf) {
       int q = p;
-      // the suffix's rows [q, upto) as verify passes: as many rows a pass as the target's verify holds (NI_VPF_ROWS), 8 at most
+      // the suffix's rows [q, upto) as verify passes: as many rows a pass as NI_VPF_ROWS gave the target's verify (32, 24
+      // or 16), and 8 for what is left under 16
       auto vpf_rows = [&](int upto) {
         while (q < upto) {
           const int left = upto - q;
