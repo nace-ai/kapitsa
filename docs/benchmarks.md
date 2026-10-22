@@ -1877,40 +1877,46 @@ T 1.0:
 
 ## Recursive Flint 40B-A2.5B (M3 Pro 36 GB, macOS 14, 2026-10-22)
 
-The M4 Pro protocol and sweep above, repeated on a MacBook Pro M3 Pro (18-core GPU), 36 GB, macOS 14.1, on battery
-(98% to 70%, Low Power Mode off), with the same configs, weights and engine builds. Two things differ from the M4 Pro:
+The M4 Pro protocol and sweep above, repeated on a MacBook Pro M3 Pro (18-core GPU), 36 GB, macOS 14.1, **on AC power**
+(Low Power Mode off, the display asleep), with the same configs, weights and llama.cpp build, and Kapitsa built from main
+at `cff1b1e`. **These numbers supersede the first M3 Pro run
+([#306](https://github.com/nace-ai/kapitsa/pull/306), [bench/results/2026-10-22-flint-m3pro](../bench/results/2026-10-22-flint-m3pro/README.md)),
+which ran on battery.** They agree with it within 1%: on this Mac battery power did not slow either engine. Two things
+differ from the M4 Pro:
 
-- **Kapitsa ran [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path** (`3da3798`, merged unchanged as `f206376`). Flint's fused
-  kernels need Metal 3.2 (macOS 15), so on macOS 14 #303 runs their three merges as separate dispatches. On macOS 15+
-  the fused kernels run.
+- **Kapitsa runs [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path.** Flint's fused kernels need
+  Metal 3.2 (macOS 15), so on macOS 14 Kapitsa runs their three merges as separate dispatches. On macOS 15+ the fused
+  kernels run.
 - **rec 0.1.0 refuses this Mac** ("this model requires 48 GiB of memory; detected 36 GiB"), so it has no numbers here.
 
-No run saw foreign GPU load. Result files, logs and the sweep are in
-[bench/results/2026-10-22-flint-m3pro](../bench/results/2026-10-22-flint-m3pro/README.md).
+The harness saw no foreign GPU load. A first pass of the protocol is not counted: with the display awake on AC power,
+macOS's animated wallpaper kept its video decoder at about 148% CPU, which the harness's GPU sampler does not see, and
+both engines came out 3-9% slower. Result files, logs, that first pass and the sweep are in
+[bench/results/2026-10-22-flint-m3pro-ac](../bench/results/2026-10-22-flint-m3pro-ac/README.md).
 
 | Engine | Decode T = 1.0 / greedy (tok/s) | Prefill 4K / 16K (tok/s) | Follow-up TTFT 4K / 16K (s) | Peak (GB) |
 | --- | ---: | ---: | ---: | ---: |
-| **Kapitsa** (2 runs) | **73.7 / 74.5** | **799 / 674** | **0.15 / 0.18** | **23.0** |
-| llama.cpp b11804 (1 run) | 51.0 / 51.2 | 771 / 640 | 0.37 / 0.49 | 26.6 |
+| **Kapitsa** (2 runs) | **73.6 / 74.5** | **801 / 672** | **0.16 / 0.19** | **23.0** |
+| llama.cpp b11804 (2 runs) | 50.9 / 51.0 | 772 / 645 | 0.37 / 0.50 | 26.6 |
 | rec 0.1.0 | × | × | × | × |
 
-Kapitsa decodes 1.45x as fast as llama.cpp, against 1.61x on the M4 Pro, and reads 4K and 16K prompts 1.04-1.05x as
-fast. Kapitsa reaches 58% of its M4 Pro decode speed and llama.cpp 64%. The split merges' share of that gap was not
+Kapitsa decodes 1.45x as fast as llama.cpp, against 1.61x on the M4 Pro, and reads 4K and 16K prompts 1.04x as fast.
+Kapitsa reaches 58% of its M4 Pro decode speed and llama.cpp 64%. The split merges' share of that gap was not
 measured separately.
 
-The context sweep. Sizes here are round thousands, 2.3% below the M4 Pro's powers of two. llama.cpp ran with
-`-c 70000`, because `-c 140000` ran out of GPU memory, so it stops at 64K:
+The context sweep, at the M4 Pro's sizes (powers of two). llama.cpp ran with `-c 70000`, because `-c 140000` does not
+fit in GPU memory here, so it stops at 64K:
 
 | Prefill / decode (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **Kapitsa** prefill | 649 | 747 | 737 | 701 | 628 | 518 | 380 | 249 |
-| llama.cpp b11804 prefill | 523 | 781 | 768 | 723 | 636 | 506 | 350 | – |
-| **Kapitsa** decode | **71.3** | **70.2** | **68.2** | **64.5** | **58.4** | **49.3** | **37.1** | **25.2** |
-| llama.cpp b11804 decode | 51.7 | 50.8 | 49.4 | 47.1 | 44.1 | 37.9 | 27.6 | – |
+| **Kapitsa** prefill | 653 | 751 | 742 | 705 | 630 | 516 | 377 | 245 |
+| llama.cpp b11804 prefill | 527 | 786 | 768 | 723 | 633 | 502 | 343 | – |
+| **Kapitsa** decode | **71.6** | **70.0** | **68.1** | **64.5** | **58.1** | **48.9** | **36.9** | **24.8** |
+| llama.cpp b11804 decode | 51.7 | 50.8 | 49.5 | 47.3 | 43.5 | 37.6 | 25.3 | – |
 
-- **Decode.** Kapitsa is 1.30-1.38x llama.cpp's speed at every length both reached, and decodes 25.2 tok/s at 128K.
-- **Prefill.** llama.cpp is 1-4% faster from 2K to 16K, level at 32K, and Kapitsa is 1.08x ahead at 64K. Kapitsa's
-  sweep prefill is lower than in the protocol (737 against 799 at 4K). Its `--ctx 262144` leaves room only for 1024-row
+- **Decode.** Kapitsa is 1.30-1.46x llama.cpp's speed at every length both reached, and decodes 24.8 tok/s at 128K.
+- **Prefill.** llama.cpp is 0-5% faster from 2K to 16K, and Kapitsa is ahead at 32K (1.03x) and 64K (1.10x). Kapitsa's
+  sweep prefill is lower than in the protocol (742 against 801 at 4K). Its `--ctx 262144` leaves room only for 1024-row
   prefill chunks on 36 GB, where the protocol's `--ctx 32768` keeps 2048. That is probably part of the gap, but no
   sweep ran at `--ctx 32768` to measure it.
 

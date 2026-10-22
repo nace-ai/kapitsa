@@ -1,0 +1,323 @@
+{
+ "what": "Flint 40B-A2.5B on a MacBook Pro M3 Pro 36 GB (macOS 14.1, on AC power, display asleep), 2026-10-22: one cold request per prompt size and engine, a coding agent's context (bench/corpus.txt, then this repository's source files in path order, cut to the size in Flint's tokens, a random nonce at the start), then a 256-token reply at T 1.0, top_p 0.95, top_k 20. Sizes are powers of two (1024 to 131072), as on the M4 Pro",
+ "prefill_tps": "prompt tokens / time to the first streamed token",
+ "decode_tps": "tokens per second between the 16th and the 4th-from-last streamed event",
+ "servers": {
+  "kapitsa": "kapitsa serve --model flint-4bit --ctx 262144 --slots 1 (NI_DISK_CACHE=0), main cff1b1e",
+  "llamacpp": "llama-server -m flint-int4-q4_1.gguf -c 70000 -np 1 -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 2048 --jinja --cache-ram 0 --temp 1 --top-p 0.95 --top-k 20 --min-p 0 (b11804, c7fc50941); -c 140000 does not fit on this Mac (see 2026-10-22-flint-m3pro), so 128K was not run",
+  "rec": "not run: rec 0.1.0 refuses this Mac ('this model requires 48 GiB of memory; detected 36 GiB')"
+ },
+ "context_source_tokens": {
+  "kapitsa": 1688187,
+  "llamacpp": 1688187
+ },
+ "points": {
+  "kapitsa": [
+   {
+    "size": 1024,
+    "prompt_tokens": 1011,
+    "ttft_s": 1.5479280948638916,
+    "prefill_tps": 653.1311133602085,
+    "completion_tokens": 256,
+    "events": 245,
+    "decode_tps": 71.632131768801
+   },
+   {
+    "size": 2048,
+    "prompt_tokens": 2033,
+    "ttft_s": 2.707556962966919,
+    "prefill_tps": 750.8613956443801,
+    "completion_tokens": 256,
+    "events": 250,
+    "decode_tps": 70.00132145587133
+   },
+   {
+    "size": 4096,
+    "prompt_tokens": 4080,
+    "ttft_s": 5.495589733123779,
+    "prefill_tps": 742.4134984837858,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 68.14766900511587
+   },
+   {
+    "size": 8192,
+    "prompt_tokens": 8175,
+    "ttft_s": 11.591949224472046,
+    "prefill_tps": 705.2308323384956,
+    "completion_tokens": 256,
+    "events": 254,
+    "decode_tps": 64.48617909428029
+   },
+   {
+    "size": 16384,
+    "prompt_tokens": 16370,
+    "ttft_s": 25.982704162597656,
+    "prefill_tps": 630.0344990097208,
+    "completion_tokens": 256,
+    "events": 249,
+    "decode_tps": 58.14558400319072
+   },
+   {
+    "size": 32768,
+    "prompt_tokens": 32754,
+    "ttft_s": 63.5267698764801,
+    "prefill_tps": 515.593663327855,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 48.886535124377765
+   },
+   {
+    "size": 65536,
+    "prompt_tokens": 65523,
+    "ttft_s": 173.65376615524292,
+    "prefill_tps": 377.3197751520331,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 36.8889481830883
+   },
+   {
+    "size": 131072,
+    "prompt_tokens": 131018,
+    "ttft_s": 535.2278752326965,
+    "prefill_tps": 244.78919365520414,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 24.782005124273873
+   }
+  ],
+  "llamacpp": [
+   {
+    "size": 1024,
+    "prompt_tokens": 1008,
+    "ttft_s": 1.9130980968475342,
+    "prefill_tps": 526.8940477547991,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 51.7325912506789
+   },
+   {
+    "size": 2048,
+    "prompt_tokens": 2036,
+    "ttft_s": 2.589505195617676,
+    "prefill_tps": 786.2505946872031,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 50.80724489037188
+   },
+   {
+    "size": 4096,
+    "prompt_tokens": 4081,
+    "ttft_s": 5.312988042831421,
+    "prefill_tps": 768.1176707156931,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 49.45571838723804
+   },
+   {
+    "size": 8192,
+    "prompt_tokens": 8180,
+    "ttft_s": 11.319563150405884,
+    "prefill_tps": 722.6427284613621,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 47.25063556140793
+   },
+   {
+    "size": 16384,
+    "prompt_tokens": 16370,
+    "ttft_s": 25.867976903915405,
+    "prefill_tps": 632.8287697489872,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 43.46927238230874
+   },
+   {
+    "size": 32768,
+    "prompt_tokens": 32754,
+    "ttft_s": 65.28110122680664,
+    "prefill_tps": 501.73785957137153,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 37.56545889665667
+   },
+   {
+    "size": 65536,
+    "prompt_tokens": 65522,
+    "ttft_s": 190.92385816574097,
+    "prefill_tps": 343.1839301252773,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 25.250531158564634
+   }
+  ]
+ },
+ "warmup": {
+  "kapitsa": [
+   {
+    "size": 2048,
+    "prompt_tokens": 2036,
+    "ttft_s": 5.052803993225098,
+    "prefill_tps": 402.94458338971987,
+    "completion_tokens": 256,
+    "events": 250,
+    "decode_tps": 69.98401857621023
+   }
+  ],
+  "llamacpp": [
+   {
+    "size": 2048,
+    "prompt_tokens": 2034,
+    "ttft_s": 3.232780933380127,
+    "prefill_tps": 629.1796573649341,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 50.831637483421325
+   }
+  ]
+ },
+ "first_attempt": {
+  "why": "21:20-21:41: overlapped this Mac's niced model downloads (kapitsa pull, 21:19-21:40), so it was rerun as the points above (21:57-22:18) with nothing else running; kept for completeness",
+  "points": {
+   "kapitsa": [
+    {
+     "size": 1024,
+     "prompt_tokens": 1007,
+     "ttft_s": 1.562164068222046,
+     "prefill_tps": 644.618590636323,
+     "completion_tokens": 256,
+     "events": 242,
+     "decode_tps": 71.27731109186047
+    },
+    {
+     "size": 2048,
+     "prompt_tokens": 2033,
+     "ttft_s": 2.70914888381958,
+     "prefill_tps": 750.4201825680802,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 69.85737965744563
+    },
+    {
+     "size": 4096,
+     "prompt_tokens": 4082,
+     "ttft_s": 5.499686241149902,
+     "prefill_tps": 742.224159890713,
+     "completion_tokens": 256,
+     "events": 253,
+     "decode_tps": 67.81131291406267
+    },
+    {
+     "size": 8192,
+     "prompt_tokens": 8180,
+     "ttft_s": 11.609829902648926,
+     "prefill_tps": 704.575352833863,
+     "completion_tokens": 256,
+     "events": 253,
+     "decode_tps": 64.0315034844255
+    },
+    {
+     "size": 16384,
+     "prompt_tokens": 16370,
+     "ttft_s": 26.00504779815674,
+     "prefill_tps": 629.4931709819938,
+     "completion_tokens": 256,
+     "events": 253,
+     "decode_tps": 57.951381476066146
+    },
+    {
+     "size": 32768,
+     "prompt_tokens": 32756,
+     "ttft_s": 63.56703519821167,
+     "prefill_tps": 515.2985332391517,
+     "completion_tokens": 256,
+     "events": 246,
+     "decode_tps": 48.467459189553345
+    },
+    {
+     "size": 65536,
+     "prompt_tokens": 65521,
+     "ttft_s": 173.74260210990906,
+     "prefill_tps": 377.1153373111772,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 36.6454211306109
+    },
+    {
+     "size": 131072,
+     "prompt_tokens": 131019,
+     "ttft_s": 535.693902015686,
+     "prefill_tps": 244.57810609194416,
+     "completion_tokens": 256,
+     "events": 254,
+     "decode_tps": 24.483211016969467
+    }
+   ],
+   "llamacpp": [
+    {
+     "size": 1024,
+     "prompt_tokens": 1010,
+     "ttft_s": 1.9152958393096924,
+     "prefill_tps": 527.3336783126008,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 49.38310364932967
+    },
+    {
+     "size": 2048,
+     "prompt_tokens": 2032,
+     "ttft_s": 2.609712839126587,
+     "prefill_tps": 778.629728732938,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 50.859205841778135
+    },
+    {
+     "size": 4096,
+     "prompt_tokens": 4084,
+     "ttft_s": 5.318249940872192,
+     "prefill_tps": 767.9217873182968,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 49.469598716194525
+    },
+    {
+     "size": 8192,
+     "prompt_tokens": 8177,
+     "ttft_s": 11.322998046875,
+     "prefill_tps": 722.1585631428017,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 47.16732617215222
+    },
+    {
+     "size": 16384,
+     "prompt_tokens": 16370,
+     "ttft_s": 25.891468048095703,
+     "prefill_tps": 632.2546087225054,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 43.388378840513774
+    },
+    {
+     "size": 32768,
+     "prompt_tokens": 32753,
+     "ttft_s": 65.42658019065857,
+     "prefill_tps": 500.60693841180444,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 37.428588940682424
+    },
+    {
+     "size": 65536,
+     "prompt_tokens": 65522,
+     "ttft_s": 192.53741002082825,
+     "prefill_tps": 340.30789129713537,
+     "completion_tokens": 256,
+     "events": 255,
+     "decode_tps": 26.181819280547632
+    }
+   ]
+  }
+ }
+}

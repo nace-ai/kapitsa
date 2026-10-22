@@ -1,0 +1,26 @@
+21:57:51 power 'AC Power' free 95% :: kapitsa
+kapitsa ready after 8s
+context source: 1688187 tokens
+{"size": 1024, "prompt_tokens": 1011, "ttft_s": 1.5479280948638916, "prefill_tps": 653.1311133602085, "completion_tokens": 256, "events": 245, "decode_tps": 71.632131768801}
+{"size": 2048, "prompt_tokens": 2033, "ttft_s": 2.707556962966919, "prefill_tps": 750.8613956443801, "completion_tokens": 256, "events": 250, "decode_tps": 70.00132145587133}
+{"size": 4096, "prompt_tokens": 4080, "ttft_s": 5.495589733123779, "prefill_tps": 742.4134984837858, "completion_tokens": 256, "events": 255, "decode_tps": 68.14766900511587}
+{"size": 8192, "prompt_tokens": 8175, "ttft_s": 11.591949224472046, "prefill_tps": 705.2308323384956, "completion_tokens": 256, "events": 254, "decode_tps": 64.48617909428029}
+{"size": 16384, "prompt_tokens": 16370, "ttft_s": 25.982704162597656, "prefill_tps": 630.0344990097208, "completion_tokens": 256, "events": 249, "decode_tps": 58.14558400319072}
+{"size": 32768, "prompt_tokens": 32754, "ttft_s": 63.5267698764801, "prefill_tps": 515.593663327855, "completion_tokens": 256, "events": 255, "decode_tps": 48.886535124377765}
+{"size": 65536, "prompt_tokens": 65523, "ttft_s": 173.65376615524292, "prefill_tps": 377.3197751520331, "completion_tokens": 256, "events": 255, "decode_tps": 36.8889481830883}
+{"size": 131072, "prompt_tokens": 131018, "ttft_s": 535.2278752326965, "prefill_tps": 244.78919365520414, "completion_tokens": 256, "events": 255, "decode_tps": 24.782005124273873}
+done
+22:12:36 rc=0 kapitsa
+22:12:41 power 'AC Power' free 96% :: llamacpp -c 70000
+llamacpp ready after 14s
+context source: 1688187 tokens
+{"size": 1024, "prompt_tokens": 1008, "ttft_s": 1.9130980968475342, "prefill_tps": 526.8940477547991, "completion_tokens": 256, "events": 255, "decode_tps": 51.7325912506789}
+{"size": 2048, "prompt_tokens": 2036, "ttft_s": 2.589505195617676, "prefill_tps": 786.2505946872031, "completion_tokens": 256, "events": 255, "decode_tps": 50.80724489037188}
+{"size": 4096, "prompt_tokens": 4081, "ttft_s": 5.312988042831421, "prefill_tps": 768.1176707156931, "completion_tokens": 256, "events": 255, "decode_tps": 49.45571838723804}
+{"size": 8192, "prompt_tokens": 8180, "ttft_s": 11.319563150405884, "prefill_tps": 722.6427284613621, "completion_tokens": 256, "events": 255, "decode_tps": 47.25063556140793}
+{"size": 16384, "prompt_tokens": 16370, "ttft_s": 25.867976903915405, "prefill_tps": 632.8287697489872, "completion_tokens": 256, "events": 255, "decode_tps": 43.46927238230874}
+{"size": 32768, "prompt_tokens": 32754, "ttft_s": 65.28110122680664, "prefill_tps": 501.73785957137153, "completion_tokens": 256, "events": 255, "decode_tps": 37.56545889665667}
+{"size": 65536, "prompt_tokens": 65522, "ttft_s": 190.92385816574097, "prefill_tps": 343.1839301252773, "completion_tokens": 256, "events": 255, "decode_tps": 25.250531158564634}
+done
+22:18:54 rc=0 llamacpp
+22:18:54 SWEEP2-DONE power 'AC Power'

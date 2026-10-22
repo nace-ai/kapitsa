@@ -1,0 +1,120 @@
+21:03:49 power 'AC Power' 100% free 94% :: --only flint-kapitsa
+
+===== flint-kapitsa  [kapitsa] Kapitsa  version cff1b1e
+[21:03:49] flint-kapitsa: GPU lock acquired after 0.0s wait
+[21:03:49] flint-kapitsa: starting /Users/nacer_b/kq/main/build/kapitsa serve --model /Users/nacer_b/models/flint-4bit --model-id flint --host 127.0.0.1 --port 8401 --ctx 32768 --slots 1
+[21:04:03] flint-kapitsa: ready after 14s (pid 23963, listener 23963)
+[21:04:17] flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (13.53s)
+[21:04:18] flint-kapitsa:  warm-up tools: ok (1.22s)
+[21:04:37] flint-kapitsa: GPU quiet after 19s; benchmarking
+== flint-kapitsa
+  decode T=1.0: 70.49 tok/s (e2e 70.58; 512 tok, finish=length, d4=0.906)
+  decode T=1.0: 71.07 tok/s (e2e 70.58; 512 tok, finish=length, d4=0.916)
+  decode T=1.0: 71.67 tok/s (e2e 70.65; 512 tok, finish=length, d4=0.9279)
+  decode T=1.0: 70.72 tok/s (e2e 70.06; 512 tok, finish=length, d4=0.9119)
+  decode T=1.0: 68.29 tok/s (e2e 68.53; 512 tok, finish=length, d4=0.9077)
+  decode median 70.72 (min 68.29, max 71.67) over 5/5 valid
+  decode T=0: median 70.47 (min 70.01, max 70.73) over 5/5 valid
+  prefill 4000: 3873 tok (ref 3874), TTFT 5.02s -> 772 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [3898, 3923, 3952])
+  prefill 16000: 15067 tok (ref 15066), TTFT 23.35s -> 645 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [15111, 15158, 15209])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.51 GB, resident mapped files 0.02 GB, swap used 530.12 MB
+  -> /Users/nacer_b/kq/flint/out/results/flint-kapitsa-20261022-210349.json
+[21:07:28] flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[21:07:28] flint-kapitsa: GPU lock released after 219.2s held
+[21:07:28] flint-kapitsa: -> /Users/nacer_b/kq/flint/out/results/flint-kapitsa-20261022-210349.json
+21:07:28 rc=0 :: --only flint-kapitsa
+21:07:28 power 'AC Power' 100% free 93% :: --only flint-llamacpp
+
+===== flint-llamacpp  [llama.cpp] llama.cpp b11804  version 0.7.0-dev (b11804, c7fc50941)
+[21:07:28] flint-llamacpp: GPU lock acquired after 0.0s wait
+[21:07:28] flint-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/models/flint-int4-gguf/flint-int4-q4_1.gguf --host 127.0.0.1 --port 8411 -a flint -c 32768 -np 1 -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 2048 -lm none --jinja --cache-ram 0 --temp 1 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[21:07:43] flint-llamacpp: ready after 14s (pid 24518, listener 24518)
+[21:07:48] flint-llamacpp:  warm-up prefill~2.9k+decode64: ok (5.57s)
+[21:07:49] flint-llamacpp:  warm-up tools: ok (1.38s)
+[21:08:08] flint-llamacpp: GPU quiet after 19s; benchmarking
+== flint-llamacpp
+  decode T=1.0: 46.53 tok/s (e2e 46.72; 512 tok, finish=length, d4=0.9296)
+  decode T=1.0: 46.60 tok/s (e2e 46.89; 512 tok, finish=length, d4=0.9315)
+  decode T=1.0: 46.71 tok/s (e2e 46.98; 512 tok, finish=length, d4=0.9587)
+  decode T=1.0: 46.08 tok/s (e2e 45.57; 512 tok, finish=length, d4=0.9415)
+  decode T=1.0: 47.05 tok/s (e2e 46.71; 512 tok, finish=length, d4=0.9002)
+  decode median 46.6 (min 46.08, max 47.05) over 5/5 valid
+  decode T=0: median 47.45 (min 47.36, max 47.52) over 5/5 valid
+  prefill 4000: 3872 tok (ref 3874), TTFT 5.23s -> 740 tok/s, cold cached=0 | cached TTFT median 0.29s over 3 turns (cached [3872, 3952, 3980])
+  prefill 16000: 15067 tok (ref 15066), TTFT 24.30s -> 620 tok/s, cold cached=0 | cached TTFT median 0.58s over 3 turns (cached [15067, 15127, 15174]) flags ['follow-up returned no content; stopping the cached series']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.94 GB, resident mapped files 0.03 GB, swap used 561.25 MB
+  -> /Users/nacer_b/kq/flint/out/results/flint-llamacpp-20261022-210728.json
+[21:12:17] flint-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[21:12:17] flint-llamacpp: GPU lock released after 288.7s held
+[21:12:17] flint-llamacpp: -> /Users/nacer_b/kq/flint/out/results/flint-llamacpp-20261022-210728.json  flags: 2
+21:12:17 rc=0 :: --only flint-llamacpp
+21:12:17 power 'AC Power' 100% free 93% :: --only flint-kapitsa
+
+===== flint-kapitsa  [kapitsa] Kapitsa  version cff1b1e
+[21:12:17] flint-kapitsa: GPU lock acquired after 0.0s wait
+[21:12:17] flint-kapitsa: starting /Users/nacer_b/kq/main/build/kapitsa serve --model /Users/nacer_b/models/flint-4bit --model-id flint --host 127.0.0.1 --port 8401 --ctx 32768 --slots 1
+[21:12:28] flint-kapitsa: ready after 11s (pid 25283, listener 25283)
+[21:12:34] flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (6.0s)
+[21:12:35] flint-kapitsa:  warm-up tools: ok (0.85s)
+[21:12:54] flint-kapitsa: GPU quiet after 19s; benchmarking
+== flint-kapitsa
+  decode T=1.0: 68.91 tok/s (e2e 68.21; 512 tok, finish=length, d4=0.9028)
+  decode T=1.0: 68.72 tok/s (e2e 68.16; 512 tok, finish=length, d4=0.8636)
+  decode T=1.0: 68.70 tok/s (e2e 68.48; 512 tok, finish=length, d4=0.9342)
+  decode T=1.0: 70.07 tok/s (e2e 69.32; 512 tok, finish=length, d4=0.9097)
+  decode T=1.0: 69.82 tok/s (e2e 69.79; 512 tok, finish=length, d4=0.9449)
+  decode median 68.91 (min 68.7, max 70.07) over 5/5 valid
+  decode T=0: median 70.48 (min 69.17, max 70.75) over 5/5 valid
+  prefill 4000: 3873 tok (ref 3874), TTFT 5.01s -> 773 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [3927, 3984, 4027])
+  prefill 16000: 15067 tok (ref 15066), TTFT 23.25s -> 648 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [15115, 15138, 15166])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.49 GB, resident mapped files 0.02 GB, swap used 561.25 MB
+  -> /Users/nacer_b/kq/flint/out/results/flint-kapitsa-20261022-211217.json
+[21:15:50] flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[21:15:50] flint-kapitsa: GPU lock released after 213.2s held
+[21:15:50] flint-kapitsa: -> /Users/nacer_b/kq/flint/out/results/flint-kapitsa-20261022-211217.json
+21:15:50 rc=0 :: --only flint-kapitsa
+21:15:50 power 'AC Power' 100% free 93% :: --only flint-llamacpp
+
+===== flint-llamacpp  [llama.cpp] llama.cpp b11804  version 0.7.0-dev (b11804, c7fc50941)
+[21:15:50] flint-llamacpp: GPU lock acquired after 0.0s wait
+[21:15:51] flint-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/models/flint-int4-gguf/flint-int4-q4_1.gguf --host 127.0.0.1 --port 8411 -a flint -c 32768 -np 1 -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 2048 -lm none --jinja --cache-ram 0 --temp 1 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[21:16:05] flint-llamacpp: ready after 14s (pid 25846, listener 25846)
+[21:16:10] flint-llamacpp:  warm-up prefill~2.9k+decode64: ok (5.67s)
+[21:16:12] flint-llamacpp:  warm-up tools: ok (1.38s)
+[21:16:31] flint-llamacpp: GPU quiet after 19s; benchmarking
+== flint-llamacpp
+  decode T=1.0: 47.39 tok/s (e2e 46.95; 512 tok, finish=length, d4=0.9066)
+  decode T=1.0: 47.29 tok/s (e2e 46.97; 512 tok, finish=length, d4=0.928)
+  decode T=1.0: 47.12 tok/s (e2e 46.85; 512 tok, finish=length, d4=0.936)
+  decode T=1.0: 47.28 tok/s (e2e 46.80; 512 tok, finish=length, d4=0.9135)
+  decode T=1.0: 47.49 tok/s (e2e 47.11; 512 tok, finish=length, d4=0.9247)
+  decode median 47.29 (min 47.12, max 47.49) over 5/5 valid
+  decode T=0: median 47.72 (min 46.94, max 48.24) over 5/5 valid
+  prefill 4000: 3875 tok (ref 3874), TTFT 5.23s -> 741 tok/s, cold cached=0 | cached TTFT median 0.47s over 3 turns (cached [3875, 3948, 3987])
+  prefill 16000: 15064 tok (ref 15066), TTFT 23.76s -> 634 tok/s, cold cached=0 | cached TTFT median 0.43s over 3 turns (cached [15064, 15129, 15168])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.94 GB, resident mapped files 0.03 GB, swap used 583.38 MB
+  -> /Users/nacer_b/kq/flint/out/results/flint-llamacpp-20261022-211550.json
+[21:20:12] flint-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[21:20:12] flint-llamacpp: GPU lock released after 261.8s held
+[21:20:12] flint-llamacpp: -> /Users/nacer_b/kq/flint/out/results/flint-llamacpp-20261022-211550.json  flags: 1
+21:20:12 rc=0 :: --only flint-llamacpp
+21:20:12 power 'AC Power' 100% free 95% :: --only flint-rec
+
+===== flint-rec  [rec] rec 0.1.0  version 0.1.0
+[21:20:12] flint-rec: GPU lock acquired after 0.0s wait
+[21:20:12] flint-rec: starting /Users/nacer_b/flint-m3/engines/rec/rec serve --port 11511 --context 32768
+[21:20:16] flint-rec: FAILED: server never became ready (4s); see /Users/nacer_b/kq/flint/out/logs/flint-rec-20261022-212012.log
+[21:20:22] flint-rec: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[21:20:22] flint-rec: GPU lock released after 9.2s held
+[21:20:22] flint-rec: -> /Users/nacer_b/kq/flint/out/results/flint-rec-20261022-212012.json  INVALID: ['harness: server never became ready (4s); see /Users/nacer_b/kq/flint/out/logs/flint-rec-20261022-212012.log']
+21:20:22 rc=0 :: --only flint-rec
+21:20:22 PROTOCOL-DONE
+21:41:23 ALL-DONE

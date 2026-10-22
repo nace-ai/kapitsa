@@ -1,5 +1,7 @@
 # M3 Pro, 36 GB: Recursive Flint 40B-A2.5B on Kapitsa and llama.cpp, 2026-10-22
 
+**Superseded by the AC-power run of the same day, [2026-10-22-flint-m3pro-ac](../2026-10-22-flint-m3pro-ac/README.md).**
+
 Flint 40B-A2.5B is Recursive's coding MoE (256 experts, 6 routed and a shared one a token, 2.5B active). This is the
 [M4 Pro run](../2026-10-22-flint-m4pro/README.md) repeated on a MacBook Pro M3 Pro with 36 GB on macOS 14.1, with the
 same configs, weights and engine builds:
