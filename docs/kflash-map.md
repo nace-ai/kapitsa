@@ -164,7 +164,8 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
 5. 16/32-row verifies: **in PRs [#245](https://github.com/nace-ai/kapitsa/pull/245) (the kernels) and
    [#246](https://github.com/nace-ai/kapitsa/pull/246) (the budget chooses 8, 16 or 32 rows), opt-in:**
    - `NI_KFLASH_ROWS` defaults to `8`, one 8-row tile; naming `8,16,32` lets the budget measure and pick wider tiles
-     per cycle. With the tile-pair MLP a 16-row verify cycle costs 1.07× and a 32-row one 1.49× the 8-row cycle on the
+     per cycle. (The 16-row drafting block later in this file overrides both: on a one-slot engine it runs every cycle
+     at 16 rows.) With the tile-pair MLP a 16-row verify cycle costs 1.07× and a 32-row one 1.49× the 8-row cycle on the
      27B's coding answer; on a paired A/B (27B, greedy, n=3) asking for `8,16,32` gave a median +3% tok/s
      (72.9 vs 70.5) at +12% tokens per cycle, ranges overlapping, so not claimed as a gain.
    - A wide verify's attention is the 8-row tree attention (`attn8m_partial_tree`: each row's ancestors by mask), not
