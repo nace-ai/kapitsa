@@ -54,7 +54,7 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 21 of the 24 model and Mac pairs measured against eight engines (on the M5 Pro, Kapitsa was re-run on 10-21 and the other engines are the 10-19 runs, except mlx-serve's 27B).
+Kapitsa has the fastest decode in 21 of the 24 model and Mac pairs measured against eight engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
