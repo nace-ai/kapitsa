@@ -517,7 +517,10 @@ size_t default_mem_budget() {
 
 MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   // kept per process: a model's headers do not change while it is planned, and the largest take most of a second to
-  // read (Super-VL's), which the picker, `kapitsa doctor` and default_context would otherwise pay on every plan
+  // read (Super-VL's), which the picker, `kapitsa doctor` and default_context would otherwise pay on every plan.
+  // The plan is the 8-row one: the key has no slot count, so a 16-row block's rows (a drafter's verify buffers, ~30 MB
+  // on the 27B) are not in it. The picker is 0.07% of a 38 GB budget optimistic there; the engine's own load plans the
+  // block it will really use (DFlash2::plan_block_rows) and logs that against what loading takes.
   static std::mutex mu;
   static std::map<std::string, MemPlan> plans;
   const std::string key = model_dir + "\n" + std::to_string(prefill_chunk) + "\n" + std::to_string(Dory::serving_loops()) +
