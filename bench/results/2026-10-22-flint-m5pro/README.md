@@ -131,6 +131,15 @@ most chosen prefill windows still had some (up to 16% mean), so the long-context
 to about ±10%. Each point's runs, warm-ups, chosen run and both runs' foreign load are in `context-sweep/sweep.json`,
 the servers' logs in `context-sweep/logs/`. 256K was not run.
 
+## Charts
+
+Three 16:9 charts in the README poster's dark style, each at 1920x1080 and, as `-2x`, 3840x2160, drawn from the
+tables above and `context-sweep/sweep.json` by `charts/flint_charts.py` (`python3 flint_charts.py`, needs Chrome):
+[headline](charts/flint-kapitsa-m5pro-headline.png),
+[decode by context](charts/flint-kapitsa-m5pro-decode-by-context.png),
+[prefill by context](charts/flint-kapitsa-m5pro-prefill-by-context.png). They show Kapitsa and rec only:
+llama.cpp was not run on this Mac.
+
 ## Conditions
 
 MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro (20-core GPU), 48 GB, macOS 26.5.2 (25F84), on AC power in High Power
