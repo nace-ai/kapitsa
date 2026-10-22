@@ -110,8 +110,8 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   and Ollama and LM Studio were not run on it.
 - Flint 40B-A2.5B with 2-bit experts: unsloth's UD-IQ2_XXS GGUF on Kapitsa (`flint:16gb`, its IQ experts as stored
   since [#324](https://github.com/nace-ai/kapitsa/pull/324)) and on llama.cpp master `d772569`, both at the model
-  card's T 1.0. Kapitsa's cell is the mean of its two 2026-10-22 runs, prefill and decode from the same runs (422 /
-  57.9). llama.cpp swapped during its T 1.0 decode and its prefill, so by the swap rule its cell is its greedy decode
+  card's T 1.0. Kapitsa's cell is its two 2026-10-22 runs on the branch rebased onto main (`47960e8`): decode their
+  mean (61.3), prefill the run that did not swap during it (414). llama.cpp swapped during its T 1.0 decode and its prefill, so by the swap rule its cell is its greedy decode
   (42.5; T 1.0: 42.8), with no prefill. The MLX engines and rec don't read GGUF files, and Ollama and LM Studio were not
   run on it ([details](#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - Nemotron Nano: Kapitsa on NVIDIA's FP8 (the 4B, with #129's 8-bit head and #131's tail kernels) and NVFP4 (the 9B v2);
@@ -160,13 +160,13 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
 
 Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the README's per-Mac tables under Models, the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
 
-Kapitsa's method label is the setup the run used: KFlash (the drafter's best-first tree, on by default since [#187](https://github.com/nace-ai/kapitsa/pull/187)) on the M5 Max, M5 Pro and M4 Pro, whose runs are builds from 2026-10-21 on (b50f1fc, a13f8fd; the M5 Max's fd85910), with the DFlash2, DSpark or LiLiCorr drafter named in each run's config, and on the M1 Pro, whose Kapitsa cells are the 0.2.6 release (`76a4970`) on 2026-10-22 ([details](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22); its Flint 2-bit row: builds of `60caf11`, below); Flash-Next keeps MTP.
+Kapitsa's method label is the setup the run used: KFlash (the drafter's best-first tree, on by default since [#187](https://github.com/nace-ai/kapitsa/pull/187)) on the M5 Max, M5 Pro and M4 Pro, whose runs are builds from 2026-10-21 on (b50f1fc, a13f8fd; the M5 Max's fd85910), with the DFlash2, DSpark or LiLiCorr drafter named in each run's config, and on the M1 Pro, whose Kapitsa cells are the 0.2.6 release (`76a4970`) on 2026-10-22 ([details](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22); its Flint 2-bit row: `47960e8`, below); Flash-Next keeps MTP.
 
 Prefill is the reading speed on a 4K-token prompt. Kapitsa's comes from the newest run without a contention or invalid flag, except on the M5 Max's cells (all flagged, below) and two M5 Pro cells where the run's build matters too, and both are the 2026-10-22 runs on main: the 27B, which is the mean of two flag-free runs on main `3f7f4c8` after [#318](https://github.com/nace-ai/kapitsa/pull/318) (618 tok/s; [results](../bench/results/2026-10-22-m5pro-27b-ane-split/README.md)), and the 35B-A3B, which is the newest flag-free run, on [#293](https://github.com/nace-ai/kapitsa/pull/293)'s merge (`4b89f4e`, 2,552 tok/s, 15:27, the closing run of the Splash session; it replaces `d53f02e`'s 2,459, and its decode, 209, is down from `d53f02e`'s 217, [details](#splash-140-against-kapitsa-m5-pro-2026-10-22)). That Mac's Lightning cell is a 2026-10-21 run (Kapitsa 0.2.2, built from a13f8fd for the 22:00-22:30 runs on the poster, b50f1fc for the 19:56-20:12 ones; a13f8fd differs from b50f1fc only in README, docs, poster and stored results, no source or build files, so the engine is the same; macOS 26.5.2, [10-21 results](../bench/results/2026-10-21-m5pro-48gb/README.md), [10-22 results](../bench/results/2026-10-22-m5pro-48gb/README.md)). The M5 Max's Kapitsa and Splash cells are 2026-10-22 runs on main `fd85910` (Dory's on `039ddea`, after [#287](https://github.com/nace-ai/kapitsa/pull/287)), prefill and decode from the same run, every one flagged for contention ([results](../bench/results/2026-10-22-m5-max/README.md)). Elsewhere prefill comes from 2026-10-19 on the M4 Pro (4B: 06:20 run); on the M1 Pro, Kapitsa's prefill and decode come from the same 0.2.6 `kapitsa bench` run per model (2026-10-22, stored in [bench/community/results](../bench/community/results/)). The other engines' prefill is from their own stored run closest to the decode value shown, in the same session as that decode (2026-10-18 to 10-21), flagged or not: several of those runs carry contention flags, LM Studio's every one. Where another engine reads faster, the poster shows it: the headline, the blue outlines and the orange bars rank decode only. Splash shows a dash where it has no prefill run (the M4 Pro). The M5 Pro's 27B cell is the mean of two flag-free 2026-10-22 runs on main `3f7f4c8`, after [#318](https://github.com/nace-ai/kapitsa/pull/318) (79 tok/s decode, 618 prefill; it replaces the 77 / 459 of the earlier pair on `16f2b6a`, after [#266](https://github.com/nace-ai/kapitsa/pull/266)'s 16-row drafting block). Only Kapitsa was re-run: mlx-serve's 27B cell is still its two runs of that `16f2b6a` pair (78.2 tok/s sampled, 464 tok/s 4K prefill; each engine's two runs interleaved in opposite order, three of the four contention-flagged for that session's browser), so the two 27B cells are now hours apart on the same day, and Kapitsa's 1.3% sampled-decode lead (79.2 against 78.2) is inside the runs' spread. Its 35B-A3B cell is the 2026-10-22 run on main after [#279](https://github.com/nace-ai/kapitsa/pull/279) moved the expert prefill to the tensor units (217 tok/s decode, 2,459 prefill at 4K, prefill and decode from the same flag-free run); its Lightning cell is a single 2026-10-21 run, prefill and decode together. The other engines' M5 Pro cells are still the 2026-10-19 runs (on the 27B mlx-serve's decode went from 71 in the 10-19 run to 78 in this pair). KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](#kflash-trees-m4-pro-2026-10-21)); the DFlash, DFlash2, DSpark and LiLiCorr cells come from earlier runs. Every run is listed in [bench/README.md](../bench/README.md).
 
 Flint's rows (M4 Pro and M5 Pro, 2026-10-22) differ in three ways. It decodes at the model card's T 1.0, not 0.6. Every cell, Kapitsa's included, is the mean of that engine's runs, with prefill and decode from the same runs. And its llama.cpp cell is b11804, not the column's b11669: b11804 is llama.cpp's first build with Flint. rec runs only Flint, so its column is × elsewhere ([M4 Pro](#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 The M1 Pro's Flint 2-bit row (2026-10-22) is unsloth's UD-IQ2_XXS GGUF on both engines, also at T 1.0: Kapitsa's cell
-is the mean of its two runs, llama.cpp's is its greedy decode, the one phase it did not swap in, with no prefill
+is the mean of its two runs on the rebased branch (prefill: the swap-free one), llama.cpp's is its greedy decode, the one phase it did not swap in, with no prefill
 ([details](#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 
 ## Quality: Qwen3.6 35B-A3B against bf16 (2026-10-19)
@@ -2097,15 +2097,20 @@ prompt does not fit 8K of context), at the model card's T 1.0 with `--always-rea
 
 | Engine | Decode T = 1.0 / greedy (tok/s) | Prefill 4K (tok/s) | Follow-up TTFT 4K (s) | Peak (GB) | Swapped during |
 | --- | ---: | ---: | ---: | ---: | --- |
-| **Kapitsa** (2 runs) | **57.9 / 57.8** | **422** | **0.20** | **11.6** | none<sup>1</sup> |
+| **Kapitsa** (2 runs) | **61.3 / 61.3** | **414**<sup>1</sup> | **0.25** | **11.6** | prefill<sup>1</sup>, tools |
 | llama.cpp d772569 (1 run) | 42.8 / 42.5 | 358 | 0.68 | 12.2 | decode, prefill, tools |
 
-1. Kapitsa's first run swapped 3,188 pages during its tool-call phase, which is not in the table.
+1. Kapitsa's first run swapped 9,156 pages during its prefill, so the prefill is its second run's (its first read
+   413).
 
-- **Decode.** Kapitsa decodes 1.36x as fast as llama.cpp on the same file (greedy, the one phase llama.cpp did not
-  swap in: 57.8 against 42.5 tok/s).
-- **Prefill.** Kapitsa reads the 4K prompt in 9.2 s, llama.cpp in 10.8 s, swapping 30,828 pages (about 480 MB) as
+- **Decode.** Kapitsa decodes 1.44x as fast as llama.cpp on the same file (greedy, the one phase llama.cpp did not
+  swap in: 61.3 against 42.5 tok/s).
+- **Prefill.** Kapitsa reads the 4K prompt in 9.4 s, llama.cpp in 10.8 s, swapping 30,828 pages (about 480 MB) as
   it did.
+- **Builds.** These are the branch rebased onto main, where the M1's decode merges take
+  [#303](https://github.com/nace-ai/kapitsa/pull/303)'s separate dispatches. That made decode 4% faster than the
+  branch's first fix: 61.3-61.6 against 58.9-59.3 tok/s through `kapitsa serve`, alternating builds. The two runs of
+  the first build (57.6 and 58.2 tok/s, prefill 422-423) are in the results folder too.
 - **Quality.** The requantized tensors cost quality: against llama.cpp on the GGUF as stored, Kapitsa's next-token
   distributions are at KL 0.22 (median 0.018), with the same top token 89% of the time, 0.10 nats per token higher.
   On the same weights (Kapitsa's import written back as a GGUF for llama.cpp) the two agree at KL 0.045 (median 0.001,
