@@ -113,8 +113,8 @@ new architecture requires more than implementing `Model` if it needs a new draft
   grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
   backends have separate kernel sets for their shapes and stored weight formats.
 * **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
-  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B; the 27B keeps the
-  older attention, and the 35B can move to it with `NI_QATTN_G8=1`) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B) and 8 (the 35B, on
+  `qattn_t_g8s4k16` by default; the 27B keeps the older attention) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off, `NI_QATTN_G8=0` keeps the 35B on `attn_prefill11r`).
   The 35B-A3B's routed expert prefill runs the same tile over the MoE bucket's 64-row expert tiles
   (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels). Measured on the 4B (dense)
   and the 35B-A3B (experts): neither is bit-identical to the simdgroup paths, since the tile reassociates each output's
