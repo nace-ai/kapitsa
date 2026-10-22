@@ -2278,15 +2278,17 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     // whole weight pass. On the 27B a 39-58-row suffix prefills in 250-490 ms while a verify pass costs ~95 ms
     // whatever the target, so the pass wins there; on the 4B the same suffix prefills in ~53 ms and the pass costs
     // it ~30-40 ms (39/40/45 rows, 4K and 16K prefixes, replies identical either way), so it loses. The weight
-    // scale hidden*intermediate*layers separates the two cases (27B 5.7e9, 4B 7.5e8); below 2e9 the default stays
-    // on the prefill path. MoE targets (whose verify reads the union of its rows' experts) and targets whose
-    // tables hold 8 rows need NI_VPF=1 too.
+    // scale hidden*intermediate*layers separates the two cases (27B 5.7e9, 4B 7.5e8). The floor is placed at
+    // 3e9, above the unmeasured middle (a 9B-class target lands around 2e9), so a target nobody has measured keeps
+    // the prefill path: the pass might win there, but only the two ends are known and off is the older behaviour.
+    // MoE targets (whose verify reads the union of its rows' experts) and targets whose tables hold 8 rows need
+    // NI_VPF=1 too.
     long long vpf_scale = 0;
     if (q35_) {
       const Qwen35Config& vcfg = q35_->config();
       vpf_scale = (long long)vcfg.hidden * vcfg.dense_I * vcfg.layers;
     }
-    const bool vpf_default = q35_ && !q35_->config().moe && vpf_scale >= 2000000000LL && q35_->verify_chain_ok(16);
+    const bool vpf_default = q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->verify_chain_ok(16);
     const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0;
