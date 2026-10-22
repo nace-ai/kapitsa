@@ -223,6 +223,7 @@ void ExpertCache::serve(const Req& r) {
   std::atomic_thread_fence(std::memory_order_seq_cst);
   sync_.set(r.go);
   const double t_go = Encoder::host_ms();
+  if (sync_.warm) sync_.warm();
   active_ = keys;
   // read ahead (a read-ahead expert enters the order as recent, unrouted: its first routed use counts as its first)
   uint64_t pf = 0;
@@ -433,6 +434,10 @@ void ExpertCache::reset_stats() {
 
 // ---- ExpertStore ----
 
+// the heater's reach past each go or encoded wait: decode layers come ~0.3 ms apart (a prefill layer takes longer, but
+// its waits are a small share of it)
+constexpr double kHeatMs = 4.0;
+
 ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vector<LayerSrc>& layers, uint32_t E,
                          SlotLayout lay, const Options& o)
     : lay_(lay), E_(E) {
@@ -457,7 +462,8 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
   mem.per_chunk = per;
   mem.table = table_.as<uint32_t>();
   void* ev = ev_;
-  ExpertCache::Sync sync{[ev] { return Gpu::event_value(ev); }, [ev](uint64_t v) { Gpu::signal_event_cpu(ev, v); }};
+  ExpertCache::Sync sync{[ev] { return Gpu::event_value(ev); }, [ev](uint64_t v) { Gpu::signal_event_cpu(ev, v); },
+                         Gpu::heat_on() ? std::function<void()>([] { Gpu::get().keep_warm(kHeatMs); }) : nullptr};
   cache_ = std::make_unique<ExpertCache>(files, layers, E, lay, uint32_t(n), mem, sync, o.cache);
   const StoreStats st = cache_->stats();
   logi("expert store: %u slots of %.2f MB (%.2f GB, %.1f%% of the %zu experts) in %s (up to %.2f GB each); %zu read "
@@ -467,6 +473,7 @@ ExpertStore::ExpertStore(const std::vector<std::string>& files, const std::vecto
        cache_->fill_ms() > 0 ? st.bytes / 1e6 / cache_->fill_ms() : 0.0,
        cache_->complete() ? " (all of them: no handshakes)" : "");
   cache_->reset_stats();
+  if (!cache_->complete()) g.keep_warm(0);
 }
 
 ExpertStore::~ExpertStore() {
@@ -506,6 +513,7 @@ void ExpertStore::begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, co
   r.pred_layer = pred_layer;
   r.pred_all = pred_all;
   r.scan = scan;
+  if (Gpu::heat_on()) Gpu::get().keep_warm(kHeatMs);  // the pass's first wait comes before any go
   r.ready = ++next_value_;
   r.go = ++next_value_;
   e.signal_event_inline(ev_, r.ready);

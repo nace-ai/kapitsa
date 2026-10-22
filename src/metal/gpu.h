@@ -62,6 +62,14 @@ class Gpu {
   // The event's value as the CPU sees it now (MTLSharedEvent signaledValue; a few ns, for spinning on)
   static uint64_t event_value(void* event);
   void release(Buffer& b);
+  // Keeps the GPU from going idle for about the next `ms`: a tiny ALU kernel (one 32-thread threadgroup) on a queue of
+  // its own, at most two command buffers of about ms / 2 in flight. A GPU parked on an unresolved event wait resumes
+  // ~150 us late on an M5 Pro, ~60 us while something else keeps it busy (tools/ni_handshake.mm, warm mode); the
+  // heater takes no measurable time from other work. Cheap when enough is in flight (an atomic load); thread-safe.
+  // ms <= 0: only prepares it (compiles the kernel and times it once: ~10 ms, at load rather than at a first token).
+  // NI_GPU_HEAT=0 turns it off; heat_on() says whether it is on.
+  void keep_warm(double ms);
+  static bool heat_on();
 
   // Compiles the embedded kernel library on first use. Extra source can be appended (tests).
   void compile(const std::string& extra_source = "");

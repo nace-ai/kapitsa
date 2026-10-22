@@ -112,6 +112,7 @@ class ExpertCache {
   struct Sync {
     std::function<uint64_t()> value;
     std::function<void(uint64_t)> set;
+    std::function<void()> warm;  // after each go: keeps the GPU busy until its next wait (Gpu::keep_warm); optional
   };
   struct Options {
     int readers = 16;     // reader threads (NI_EXPERT_READERS)
