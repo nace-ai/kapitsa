@@ -116,9 +116,9 @@
    {
     "name": "MacBook Pro M3 Pro 36 GB",
     "title": "MacBook Pro (16-inch, 2023) · M3 Pro · 36 GB",
-    "caption": "macOS 14.1: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.",
+    "caption": "macOS 14.1, on AC power: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.",
     "rows": [
-     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 73.61, "method": "no spec", "prefill": 801, "note": "2026-10-22, macOS 14.1 on AC, main cff1b1e (#303's macOS 14 kernels), mean of the clean pass's two runs, T 1.0 (bench/results/2026-10-22-flint-m3pro-ac, #341; supersedes the battery run of #306)"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 50.87, "method": "no spec", "prefill": 772, "detail": "b11804", "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22 on AC, mean of the clean pass's two runs, T 1.0 (bench/results/2026-10-22-flint-m3pro-ac)"}, "LM Studio": null, "rec": "x"}}
+     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 73.6, "method": "no spec", "prefill": 801, "note": "2026-10-22, macOS 14.1 on AC, main cff1b1e (#303's macOS 14 kernels), mean of the clean pass's two runs, T 1.0 (bench/results/2026-10-22-flint-m3pro-ac, #341; supersedes the battery run of #306)"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 50.86, "method": "no spec", "prefill": 772, "detail": "b11804", "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22 on AC, mean of the clean pass's two runs, T 1.0 (bench/results/2026-10-22-flint-m3pro-ac)"}, "LM Studio": null, "rec": "x"}}
     ]
    },
    {

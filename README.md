@@ -123,7 +123,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | --- | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 801 / **74**<br><sub>no spec</sub> | 772 / 51<br><sub>no spec</sub> |
 
-<sub>macOS 14.1: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.</sub>
+<sub>macOS 14.1, on AC power: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.</sub>
 
 </details>
 
