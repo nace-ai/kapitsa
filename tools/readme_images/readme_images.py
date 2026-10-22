@@ -222,8 +222,10 @@ def poster(data, theme):
     rows = [r for m in P["macs"] for r in m["rows"]]
     beaten = any(is_num(cell(r, "Kapitsa")[0]) and any(is_num(cell(r, e)[0]) and cell(r, e)[0] > cell(r, "Kapitsa")[0]
                                                          for e in names[1:]) for r in rows)
-    footer = list(P["footer"]) + (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't the fastest decode"]
-                                  if beaten else [])
+    tied = any(r.get("tie") for r in rows)  # engines whose decode is level with Kapitsa's, inside the runs' spread
+    footer = list(P["footer"]) + (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't alone at the fastest decode"
+                                   + (" · ≈: a decode tie with Kapitsa (the gap is inside the runs' spread)" if tied else "")]
+                                  if beaten or tied else [])
     foot_h = FOOT_GAP + len(footer) * FOOT_LINE + FOOT_PAD
     chrome = PANELS_Y + len(P["macs"]) * (HEAD + PAD) + (len(P["macs"]) - 1) * GAP + foot_h
     rh = min(RH_MAX, (H - chrome) // len(rows))
@@ -270,7 +272,8 @@ def poster(data, theme):
             two = any(is_num(v) and under[e] is None and cell(row, e)[1] for e, v in zip(names, vals))
             vb = cy - (CAP * F_KVAL + M_GAP + CAP * F_METH) / 2 + CAP * F_KVAL if two else cy + CAP / 2 * F_VAL
             mb = vb + M_GAP + CAP * F_METH
-            if k is not None and k < top:
+            tie = set(row.get("tie", []))
+            if k is not None and (k < top or tie):
                 o.append(rect(30, ry + 14, 7, rh - 28, 3, ORANGE))
             o.append(text(X0 + 10, cy + CAP / 2 * F_MODEL, row["model"], "sans", F_MODEL, t["ink"]))
             for j, (e, v) in enumerate(zip(names, vals)):
@@ -298,16 +301,17 @@ def poster(data, theme):
                     if meth:
                         o += method_label(mid, mb, meth, "sans-sb", F_KMETH, t["unit"])
                     continue
-                best = v == top
+                best = v == top or e in tie
                 o.append(rect(cx + 3, ry + 5, cw - 6, rh - 10, 10, t["greys"][lvl]))
+                tv = f"≈{fmt(v)}" if e in tie else fmt(v)
                 ink = t["ink"] if best else (t["ink2"] if theme == "light" else t["muted"])
                 if combined:                  # the same 'prefill / decode', the prefill from the engine's own run
                     cr = cell(row, e)[2]
                     pre = cr.get("prefill") if isinstance(cr, dict) else None
-                    o.append(text(mid, vb, f"{fmt(pre) if pre else DASH} / {fmt(v)}", "mono-b" if best else "mono",
+                    o.append(text(mid, vb, f"{fmt(pre) if pre else DASH} / {tv}", "mono-b" if best else "mono",
                                   F_CCOMB, ink, "middle"))
                 else:
-                    o.append(text(mid, vb, fmt(v), "mono-b" if best else "mono", F_VAL, ink, "middle"))
+                    o.append(text(mid, vb, tv, "mono-b" if best else "mono", F_VAL, ink, "middle"))
                 if meth:
                     o += method_label(mid, mb, meth, "sans-m", F_METH, t["method"])
                 if k is not None and v > k:

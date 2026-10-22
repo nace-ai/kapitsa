@@ -115,7 +115,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   re-run: mlx-serve's cell stays the mean of its two runs in that pair (78 tok/s decode, 464 prefill;
   [the four runs](../bench/results/2026-10-22-m5pro-48gb/README.md)). Kapitsa now reads the 4K prompt 1.33x as fast as
   mlx-serve and leads its sampled decode by 1.3% (79.2 against 78.2), inside the runs' spread; mlx-serve keeps greedy
-  (86.2 against 85.2). Unlike a lead measured in one session, this one crosses two sessions hours apart, and the stored mlx-serve runs carry the browser flag where Kapitsa's do not, so the row stays a tie in the README's count of pairs until mlx-serve is re-run in the same session.
+  (86.2 against 85.2). Unlike a lead measured in one session, this one crosses two sessions hours apart, and the stored mlx-serve runs carry the browser flag where Kapitsa's do not, so the row is a tie: the poster marks mlx-serve's cell ≈78 with the row's orange bar, and the README's count of pairs leaves it out. Competitors are not re-run for poster updates (only Kapitsa is), so it stays a tie until a Kapitsa change moves the gap past the spread.
 - Splash 1.4.0: the 27B (674 / 72) and the 35B-A3B (3,514 / 181) with its DFlash2 drafts, from two runs each on
   2026-10-22 between two Kapitsa runs on main `4b89f4e` (Kapitsa, Splash, Splash, Kapitsa), every Splash run
   contention-flagged (Microsoft Edge at 6.5-10% of the GPU): the mean of both runs, except the 35B-A3B's decode, which is
@@ -1576,7 +1576,7 @@ Neural Engine program ([results](../bench/results/2026-10-22-m5pro-27b-ane-split
 four-run means above and 1.28x / 1.19x their one flag-free run. Only Kapitsa was re-run; against the stored mlx-serve
 pair Kapitsa now reads the 4K prompt 1.33x as fast (618 against 464) and leads sampled decode by 1.3% (79.2 against
 78.2, inside the spread), while mlx-serve keeps greedy (86.2 against 85.2). The poster takes these two runs' means
-(618 / 79). The headline stays at 24 of 26: the 27B's sampled-decode lead is 1.3% across two sessions hours apart, inside the spread (one of the two Kapitsa runs, 76.6, is below mlx-serve's 78.2, and three of mlx-serve's four stored runs carry the browser flag while both Kapitsa runs do not), so that row is a tie until mlx-serve is re-run in the same session, interleaved.
+(618 / 79). The headline stays at 24 of 26: the 27B's sampled-decode lead is 1.3% across two sessions hours apart, inside the spread (one of the two Kapitsa runs, 76.6, is below mlx-serve's 78.2, and three of mlx-serve's four stored runs carry the browser flag while both Kapitsa runs do not), so that row is a tie, marked ≈ on mlx-serve's cell. Competitors are not re-run for poster updates; only a Kapitsa change past the spread would settle it.
 
 ### Qwen3.6-35B-A3B at 4-bit
 
