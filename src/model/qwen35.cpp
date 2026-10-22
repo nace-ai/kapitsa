@@ -102,14 +102,19 @@ static int moe_qmr() {
   return v;
 }
 
-// NI_MOE_QTM: the qmt tile (tensor_ops) on the routed experts' grouped GEMMs (qmtm_gu_* / qmtm_dn_*).
-// The M5's matrix units run this tile ~1.4x faster than the qrm kernels at the expert shapes; `NI_MOE_QTM=1` opts in
-// (off by default: it moves the logits further than the noise floor allows a default to, see moe_qtm()).
+// NI_MOE_QTM: the qmt tile (tensor_ops) on the routed experts' grouped GEMMs (qmtm_gu_* / qmtm_dn_*) instead of the
+// simdgroup qrm kernels. On where the tensor units are usable (the M5 family on macOS 26, the same condition as the
+// dense NI_QMT path) and the model keeps the 35B's shapes (below): 4K prefill 2,135 -> 1,574 ms and 16K 10,810 ->
+// 8,570 ms on the M5 Pro. `NI_MOE_QTM=0` keeps the qrm path; every other Mac defaults to qrm.
+static bool qmt_on();
 static bool moe_qtm() {
-  // Off by default: the tile is not bit-identical to the simdgroup path and moves the 35B's logits further than the
-  // model's noise floor allows a default to (tools/logit_floors). `NI_MOE_QTM=1` opts in: 4K prefill 2,135 -> 1,574 ms
-  // and 16K 10,810 -> 8,570 ms on the M5 Pro.
-  static const bool v = env_int("NI_MOE_QTM", 0) != 0;
+  // The tile sums each output's K reduction in a different association order, so it does not reproduce the
+  // simdgroup path's logits to the bit: it moves the 35B's logits by ~1.1e-3 mean KL, 1.3x the 8.1e-4 the shipped
+  // qrm path already moves against the order before it, and its cold 4K and 16K temperature-0 continuations came out
+  // identical. That is not noise, so it is gated by `tools/logit_compare.py --reorder` (the
+  // order-change bounds, docs in AGENTS.md) instead of the model's noise floor, and the user accepted the trade on
+  // 2026-10-22 for 35% more 4K prefill rate. Off wherever the dense path's tensor units are off.
+  static const bool v = env_int("NI_MOE_QTM", qmt_on() ? 1 : 0) != 0;
   return v;
 }
 

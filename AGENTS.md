@@ -73,6 +73,14 @@ build, `tools/logit_compare.py` between them, gated at twice the model's noise f
 (`tools/logit_floors/<model>.json`). Put its output in the PR. "The same outputs to the bit" is a claim with evidence
 ("every row bitwise identical") or it is not made; a change that fails the gate on purpose says it moves outputs.
 Never re-measure or edit a floor to let a change pass: `tools/logit_floor.py` re-measures one, in a PR of its own.
+One change cannot pass that gate and is still legitimate: a kernel that keeps every product and only reassociates the
+K reduction (the experts' GEMM on the M5's tensor units instead of the simdgroup kernels), where half*half products are
+exact in fp32 and a different order moves ~0.5% of the sums by one half ulp. Gate it with
+`tools/logit_compare.py --reorder` instead, whose bounds are twice the first such change's measured drift, as the floor's
+gate is twice its measured floor, and say in the PR why the change is a pure reassociation, with what the temperature-0
+continuations did (cold 4K and 16K prompts: the 35B-A3B's came out identical). That flag is a claim about the diff:
+anything that changes *what* is computed stays on the floor's gate. The first such change (35B-A3B MoE prefill on the
+tensor units, default on the M5 from 2026-10-22) was accepted by the user on that evidence.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 
