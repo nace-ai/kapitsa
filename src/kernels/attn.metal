@@ -1333,7 +1333,9 @@ NI_INLINE void attn_prefill9_impl(const device float* q, const device half* kc,
 NI_ATTN9(attn_prefill9_q4_k32, 4, 32)
 NI_ATTN9(attn_prefill9_q8_k16, 8, 16)
 NI_ATTN9(attn_prefill9_q4_k16, 4, 16)
-NI_ATTN9(attn_prefill9_q8_k32, 8, 32)
+// attn_prefill9_q8_k32 (QB 8, BK 32) is not instantiated: its static threadgroup memory is 32 * kLD2 halfs
+// (kLD2 = kDH + 8 = 264 at D = 256) plus QB * 2 * 32 * (BK / 4) floats, 33,280 B in all, and every Apple GPU caps
+// a threadgroup at 32,768 B, so the driver refuses to create the pipeline (AGXMetalG17X, error 3).
 
 template <uint QB, uint BK>
 NI_INLINE void attn_prefill10_impl(const device float* q, const device half* kc,
