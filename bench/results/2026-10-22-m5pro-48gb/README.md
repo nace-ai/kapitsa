@@ -50,11 +50,13 @@ Two earlier single-engine attempts at the Kapitsa cell (09:35, 77.66 tok/s at 1.
 were discarded: the first was flagged on `prefill_16000`/`tools` only, the second everywhere, and a single run cannot
 say anything about a pair whose pass order matters. They are not stored here.
 
-## The same check on the 35B-A3B cell (10:51-11:14, two passes)
+## 35B-A3B on the build before the tensor-unit expert prefill (10:51-11:14, two passes)
 
 The block is a **dense**-target default: MoE targets keep 8 rows, so the poster's 35B-A3B cell should not move. It was
-measured anyway, in the same two-pass shape and under the same lock, on `main` (`b07f274`, the branch whose tree
-[#278](https://github.com/nace-ai/kapitsa/pull/278) merged; Kapitsa 0.2.5) against the mlx-serve 26.10.2 build:
+measured anyway, in the same two-pass shape and under the same lock. **Build: `b07f274`** (the branch whose tree
+[#278](https://github.com/nace-ai/kapitsa/pull/278) merged; Kapitsa 0.2.5), which has the 16-row block but **not**
+[#279](https://github.com/nace-ai/kapitsa/pull/279): the routed experts' prefill ran the simdgroup path, i.e. the
+tensor-unit path was off. This is not current main. mlx-serve is the 26.10.2 build:
 
 | Pass | Engine | Run | Decode T=0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Peak (GB) | Foreign GPU load |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
@@ -65,15 +67,18 @@ measured anyway, in the same two-pass shape and under the same lock, on `main` (
 | | **Kapitsa mean** | | **200.93** | **219.74** | **1,783 / 1,437** | **21.91** | |
 | | **mlx-serve mean** | | **157.49** | **160.69** | **2,049 / 1,853** | **21.46** | |
 
-**The cell does not move, and nothing on the poster changes.** Kapitsa's flag-free pass reads 1,814 / 1,461 tok/s at
-4K / 16K and 197.48 / 221.79 tok/s decode against the 2026-10-21 run the poster carries, 1,799 / 1,455 and
-195.1 / 223.4: within 1.2% on every column (decode +1.2%, prefill +0.8% and +0.4%), which is what a MoE target keeping
-its 8 rows predicts. The cell is
-deliberately left as stored rather than refreshed with a 10-22 Kapitsa number, because the engine it is read against
-is mlx-serve's 2026-10-19 run, and pairing runs three days apart is the cross-day pairing
-[#280](https://github.com/nace-ai/kapitsa/pull/280) removed from the 27B row. Today's mlx-serve runs, both flagged,
-read 2,049 / 1,853 at 4K / 16K, about 18% under that stored 2,494 / 2,283, so they do not refresh its cell either.
-All four runs are stored here as evidence of the check; none of them feeds a poster number.
+**The 16-row block does not move this cell.** Kapitsa's flag-free pass reads 1,814 / 1,461 tok/s at 4K / 16K and
+197.48 / 221.79 tok/s decode against the 2026-10-21 run (`a13f8fd`), 1,799 / 1,455 and 195.1 / 223.4: within 1.2% on
+every column (decode +1.2%, prefill +0.8% and +0.4%), which is what a MoE target keeping its 8 rows predicts.
+
+**These numbers are not the poster's cell.** The poster's 35B-A3B Kapitsa cell is the 10:25 run on `d53f02e`
+([`q36-35b-kapitsa-20261022-102548`](results/q36-35b-kapitsa-20261022-102548.json), tensor-unit expert prefill on,
+[#283](https://github.com/nace-ai/kapitsa/pull/283)): 2,459 / 1,838 prefill, 217.0 / 227.0 decode. The four runs
+above, taken 30-50 minutes later on the build before that change, read 1,814 / 1,461 and 197.5 / 221.8 (flag-free pass),
+so the tensor-unit path is worth about 1.35x at 4K and 1.26x at 16K on this Mac (two builds, different sessions, not an
+interleaved A/B; #279's own A/B is the reference). Today's mlx-serve runs, both flagged, read 2,049 / 1,853 at 4K / 16K,
+about 18% under its stored 2,494 / 2,283, so they do not refresh its cell. All four runs are stored here as the
+before-state; none of them feeds a poster number.
 
 ## Conditions
 
@@ -83,3 +88,24 @@ caller for both engines (`lockf -k`, `NACE_GPU_LOCK_HELD=1`); no process was sus
 0.9 GB of 7.0 GB at the start (6.2 GB of that made by other sessions, RAM had 24-36 GB free); the 20.3 GB peak
 footprint is unaffected. Kapitsa: `qwen3.8-27b-4bit-mtp` with the `Qwen3.8-27B-DFlash2` drafter, build `16f2b6a`
 (0.2.5). mlx-serve: its own 4-bit pack with the DFlash2 draft tree (block 8), 26.10.2.
+
+## The 35B-A3B cell, after the experts' prefill moved to the tensor units
+
+The poster's M5 Pro Kapitsa cell for Qwen3.6-35B-A3B, re-measured on the build that runs the routed-expert prefill on
+the qmt tile by default ([#279](https://github.com/nace-ai/kapitsa/pull/279)); the cell it replaces is the 2026-10-21
+run at `a13f8fd` ([../2026-10-21-m5pro-48gb](../2026-10-21-m5pro-48gb/README.md)), 1,799 / 1,455 tok/s of prefill and
+195.1 / 223.4 of decode. Written by [bench/harness](../../harness/README.md):
+`compare_engines.py configs/kapitsa.json --only 'q36-35b-*'` under the GPU lock.
+
+MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro, 48 GB, macOS 26.5.2, on AC power in High Power mode, isolated: the
+quiet window passed and no phase is flagged. Kapitsa 0.2.5 at `d53f02e` (#279's branch commit before it was squashed to `2f1978d` on main; `git diff d53f02e 2f1978d -- src` is comment edits, #277's dead-tile removal and update/bench-command changes, so the engine is the same), 4-bit
+Qwen3.6-35B-A3B with its DFlash2 drafter.
+
+| Result file | Model | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (GB) | Agent session (s) | Flags |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `q36-35b-kapitsa-20261022-102548.json` | Qwen3.6 35B-A3B, DFlash2 | 2,459 / 1,838 | 217.0 (206.9-237.5) / 227.0 | 0.05 / 0.07 | 21.7 | 35.5 | none |
+
+The expert tile moves each output's K reduction by one half ulp, so the logits are not the simdgroup path's to the bit;
+`tools/logit_compare.py --reorder` gates that drift and the cold temperature-0 continuations were identical (the
+evidence is in [#279](https://github.com/nace-ai/kapitsa/pull/279)). Decode moves with the prefill because the DFlash2
+drafter's verify batches are multi-row passes through the same grouped GEMMs.
