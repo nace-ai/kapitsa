@@ -2,7 +2,7 @@
 """tools/nh_fp4_requant.py: its FP8 E4M3 and E2M1 rounding against a scalar reference of ModelOpt's NVFP4 recipe
 (written apart from the tool's vectorized one: per value, from the formats' definitions), ties and zero blocks, the
 dequantized error bound, and a run on a small fake NVFP4 checkpoint (two shards): the modules quantized and those
-kept (--keep, conv1d, already NVFP4), every other tensor copied byte for byte, the index, hf_quant_config.json and
+kept (the head without --head, --keep, conv1d, already NVFP4), every other tensor copied byte for byte, the index, hf_quant_config.json and
 requant.json, the same bytes on a second run, --dry-run writing nothing, and the refusal of a non-NVFP4 folder.
 CPU only. Needs numpy.
 
@@ -192,10 +192,13 @@ with tempfile.TemporaryDirectory() as td:
         return subprocess.run([sys.executable, TOOL, src, out, *extra], capture_output=True, text=True)
 
     r = run(os.path.join(td, "dry"), "--dry-run")
-    check(r.returncode == 0 and "4 modules to NVFP4" in r.stdout and not os.path.exists(os.path.join(td, "dry")),
-          "--dry-run lists 4 modules and writes nothing", r.stdout + r.stderr)
+    check(r.returncode == 0 and "3 modules to NVFP4" in r.stdout and "lm_head" not in r.stdout and
+          not os.path.exists(os.path.join(td, "dry")), "--dry-run: 3 modules, the head kept, nothing written",
+          r.stdout + r.stderr)
+    r = run(os.path.join(td, "dry"), "--dry-run", "--head")
+    check(r.returncode == 0 and "4 modules to NVFP4" in r.stdout, "--dry-run --head: 4 modules", r.stdout + r.stderr)
     out = os.path.join(td, "out")
-    r = run(out)
+    r = run(out, "--head")
     check(r.returncode == 0, "run on the fake checkpoint", r.stderr[-500:])
     o1, o2 = (read_st(os.path.join(out, f"model-0000{i}-of-00002.safetensors")) for i in (1, 2))
     s1, s2 = read_st(os.path.join(src, "model-00001-of-00002.safetensors")), read_st(os.path.join(src, "model-00002-of-00002.safetensors"))
@@ -223,7 +226,7 @@ with tempfile.TemporaryDirectory() as td:
           "other files copied")
     sha = lambda d: {f: hashlib.sha256(open(os.path.join(d, f), "rb").read()).hexdigest() for f in sorted(os.listdir(d))}
     out2 = os.path.join(td, "out2")
-    run(out2)
+    run(out2, "--head")
     check(sha(out) == sha(out2), "a second run writes the same bytes")
     sd = json.load(open(os.path.join(out, "model-00001-of-00002.json")))
     o1h = rq.read_header(os.path.join(out, "model-00001-of-00002.safetensors"))[0]
@@ -238,13 +241,14 @@ with tempfile.TemporaryDirectory() as td:
           idx["weight_map"]["backbone.norm_f.weight"] == s3, "a shard with nothing to quantize: the same file")
     check(rj["shards_sha256"] == {f: h for f, h in sha(out).items() if f.endswith(".safetensors")}, "requant.json shard sha256")
     out3 = os.path.join(td, "out3")
-    r = run(out3, "--keep", "lm_head", "--keep", "q_proj")
+    r = run(out3, "--keep", "q_proj")  # the head stays BF16 without --head
     o = {**read_st(os.path.join(out3, "model-00001-of-00002.safetensors")), **read_st(os.path.join(out3, "model-00002-of-00002.safetensors"))}
     check(r.returncode == 0 and o["lm_head.weight"] == alls["lm_head.weight"] and
           o["backbone.layers.1.mixer.q_proj.weight"] == alls["backbone.layers.1.mixer.q_proj.weight"] and
           o["backbone.layers.0.mixer.in_proj.weight"][0] == "U8" and
           json.load(open(os.path.join(out3, "hf_quant_config.json")))["quantization"]["exclude_modules"] ==
-          ["lm_head", "backbone.layers.0.mixer.conv1d", "backbone.layers.1.mixer.q_proj"], "--keep leaves those BF16")
+          ["lm_head", "backbone.layers.0.mixer.conv1d", "backbone.layers.1.mixer.q_proj"], "the head and --keep's modules stay BF16")
+    check(json.load(open(os.path.join(out3, "requant.json")))["head"] is False, "requant.json: head false")
     qc["quantization"]["quant_algo"] = "W4A16_NVFP4"  # (ModelOpt's name for the same weights, Dory's)
     json.dump(qc, open(os.path.join(src, "hf_quant_config.json"), "w"))
     check(run(os.path.join(td, "w4a16"), "--dry-run").returncode == 0, "accepts W4A16_NVFP4")

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""A ModelOpt NVFP4 Nemotron-H checkpoint with the linears NVIDIA left BF16 quantized to NVFP4 too: for Nemotron
-Nano 9B v2 NVFP4, the first and last two layers' Mamba / MLP projections, the four attention layers' q / k / v / o and
-the LM head (hf_quant_config.json's exclude_modules, less the Mamba conv1d weights, which stay BF16 as the embedding
-and the norms do). 1.38 B parameters: a decoded token then reads 4.67 GB of weights in place of 6.11 (Kapitsa loads a BF16 head of
-a dense NVFP4 model as Q8_0 rows), the files take 5.85 GB in place of 7.84; every other tensor is copied byte for byte.
+"""A ModelOpt NVFP4 Nemotron-H checkpoint with the linears NVIDIA left BF16 quantized to NVFP4 too, except the LM
+head: for Nemotron Nano 9B v2 NVFP4, the first and last two layers' Mamba / MLP projections and the four attention
+layers' q / k / v / o (hf_quant_config.json's exclude_modules, less the Mamba conv1d weights, which stay BF16 as the
+embedding and the norms do, and less lm_head). 0.80 B parameters: a decoded token then reads 4.97 GB of weights in
+place of 6.11 (Kapitsa loads a BF16 head of a dense NVFP4 model as Q8_0 rows), the files take 6.69 GB in place of
+7.84; every other tensor is copied byte for byte. Measured on Nano 9B v2 against the BF16 release (nh_eval --ref, 4092
+positions): mean KL 0.0169 vs the stock checkpoint's 0.0116, top-1 93.7% vs 95.1%; decode 1.20x stock on an M3 Pro.
 
-  python3 tools/nh_fp4_requant.py <NVFP4 checkpoint dir> <out dir> [--keep REGEX]... [--dry-run]
+  python3 tools/nh_fp4_requant.py <NVFP4 checkpoint dir> <out dir> [--head] [--keep REGEX]... [--dry-run]
 
+--head: the LM head to NVFP4 as well (4.67 GB a token, decode 1.27x stock), which costs far more: mean KL 0.0454,
+top-1 88.7% on the same sequences. For measurements, not for use.
 --keep REGEX: modules matching it stay BF16 (repeatable; e.g. --keep lm_head, --keep 'q_proj|k_proj|v_proj|o_proj'),
 for measuring which part costs the quality. The output folder holds the rewritten shards, their index,
 hf_quant_config.json without the quantized modules, every other file of the input folder (shards with nothing to
@@ -185,6 +189,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("src")
     ap.add_argument("out")
+    ap.add_argument("--head", action="store_true", help="the LM head to NVFP4 too (measurements only: 3.9x the KL)")
     ap.add_argument("--keep", action="append", default=[], help="modules matching this regex stay BF16")
     ap.add_argument("--dry-run", action="store_true", help="list what would be quantized, write nothing")
     a = ap.parse_args()
@@ -201,7 +206,7 @@ def main():
     else:
         index, shards = None, ["model.safetensors"]
     excluded = q.get("exclude_modules", [])
-    keep = [re.compile(k) for k in a.keep]
+    keep = [re.compile(k) for k in a.keep] + ([] if a.head else [re.compile(r"(^|\.)lm_head$")])
     # the modules to quantize: excluded linears with a BF16 2-D weight whose K is a multiple of 16
     headers = {s: read_header(os.path.join(a.src, s)) for s in shards}
     where = {n: s for s, (h, _) in headers.items() for n in h if n != "__metadata__"}
@@ -281,7 +286,7 @@ def main():
             shutil.copyfile(p, os.path.join(a.out, f))
     me = hashlib.sha256(open(os.path.abspath(__file__), "rb").read()).hexdigest()
     json.dump({"tool": "tools/nh_fp4_requant.py", "tool_sha256": me, "recipe": "ModelOpt NVFP4 PTQ, group 16, W4A16",
-               "quantized": targets, "kept_bf16_by_flag": a.keep, "source_exclude_modules": excluded,
+               "quantized": targets, "head": a.head, "kept_bf16_by_flag": a.keep, "source_exclude_modules": excluded,
                "shards_sha256": shard_sha},
               open(os.path.join(a.out, "requant.json"), "w"), indent=2)
     print(f"wrote {a.out}: {total / 1e9:.3f} GB of weights")

@@ -129,7 +129,11 @@ A folder needs `config.json`, the `*.safetensors` weights and `tokenizer.json`, 
 NVIDIA's dense Nemotron-H checkpoints run from a folder too (`kapitsa serve --model DIR`): Mamba-2, attention and dense
 MLP layers, no experts, as [Nemotron Nano 4B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16) (BF16) and
 [Nemotron Nano 9B v2](https://huggingface.co/nvidia/NVIDIA-Nemotron-Nano-9B-v2-NVFP4) (NVFP4, with its attention, first
-and last layers and LM head left BF16; the head loads as 8-bit rows, `NI_NH_HEAD`). They have no draft model. The 4B
+and last layers and LM head left BF16; the head loads as 8-bit rows, `NI_NH_HEAD`). `tools/nh_fp4_requant.py` writes
+a copy of that checkpoint with those attention, first and last layers in NVFP4 as well (the head as it is): a token
+reads 4.97 GB in place of 6.11 and decodes 1.20x as fast on an M3 Pro, at a mean KL of 0.0169 against the BF16 release
+where NVIDIA's checkpoint gives 0.0116 (top-1 93.7% against 95.1%); serve its output folder with `--model DIR`. They
+have no draft model. The 4B
 decodes with prompt lookup: drafts from earlier in the conversation (up to 4 per cycle), verified in one pass, so the
 reply is the one plain decoding gives, on an M1 Pro 4-8% sooner in BF16. In FP8 (with its 8-bit head) it is 1% sooner
 on the benchmark's code, 1.4-2.3x on replies that repeat the prompt (a rewrite of code it was given) and 4-5% later on
