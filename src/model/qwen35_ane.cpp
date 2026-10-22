@@ -100,8 +100,9 @@ void Qwen35::init_ane() {
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
   ane::Calibration cal;
   const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
-  // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights
-  bool mma = qmt_ready();
+  // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights: the M5 default share on
+  // the models it was measured on (mma_share_measured)
+  bool mma = qmt_ready() && mma_share_measured(cfg_);
   auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
   for (const Layer& L : layers_) mma = mma && g64(L.mg) && g64(L.mu) && g64(L.md);  // as plan()'s ffn_mma
   const uint32_t total = uint32_t(cfg_.dense_I / 512);

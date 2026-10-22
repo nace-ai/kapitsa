@@ -1063,9 +1063,9 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   if (!c.moe) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
     m.ffn_ane = format_supported(ff.first, ff.second);
-    // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, as
-    // init_ane decides it, so the planned and the loaded default share agree
-    m.ffn_mma = qmt_on();
+    // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, on
+    // a model the M5 share was measured on, as init_ane decides it, so the planned and the loaded default share agree
+    m.ffn_mma = qmt_on() && mma_share_measured(c);
     for (int i = 0; i < c.layers && m.ffn_mma; ++i)
       for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
         const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
@@ -2484,6 +2484,16 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
 }
 
 bool Qwen35::qmt_ready() { return qmt_on(); }
+
+// The M5 default share of the Neural Engine split (default_units' gpu_mma, #318) only on the models it was measured
+// and output-checked on: Qwen3.5 4B (hidden 2560, FFN 9216, 32 layers) and Qwen3.8 27B (5120, 17408, 64). Another
+// 4-bit group-64 dense model (the 9B) keeps the old default share, the whole FFN on the Neural Engine at 20 GPU cores,
+// until it is measured. NI_ANE_MMA=1 takes the M5 share on any such model (to measure one), 0 the old share on these.
+bool Qwen35::mma_share_measured(const Qwen35Config& c) {
+  if (const char* v = getenv("NI_ANE_MMA")) return atoi(v) != 0;
+  return (c.hidden == 2560 && c.dense_I == 9216 && c.layers == 32) ||
+         (c.hidden == 5120 && c.dense_I == 17408 && c.layers == 64);
+}
 
 // The GPU's channels [0, g) of the Neural Engine split's FFN (enc_mlp_gpu_part) on the M5's matrix units: gate/up and
 // SwiGLU of the leading g rows fused (qmtg_m64_n64) into hhalf_ [T, g], down over the leading g inputs of its rows

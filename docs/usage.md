@@ -759,6 +759,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_VPF_MAX` | `128` | The longest cached suffix `NI_VPF` takes, in rows (clamped to 2047, the drafter's prompt-capture window). The longest suffix measured is 116 rows, and at a 16K prefix it costs 757 ms as verify passes against 994 ms on the prefill path (64 rows: 491 against 527), so the pass still wins there; 128 caps the default just above that measurement, and past it the two have not been compared. |
 | `NI_VPF_WIDE` | on | `0` keeps `NI_VPF` passes at 8 rows on a target that verifies 16 wide: an experiment knob, not a measured configuration. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
+| `NI_ANE_MMA` | on for the Qwen 4B and 27B | M5 with macOS 26, 4-bit group-64 Qwen dense models: the Neural Engine split's default share for the GPU's FFN on the matrix units (27B: 24 of 34 units, 4B: 13 of 18). Other models (the 9B) keep the older default until measured. `1` takes it on any such model, `0` keeps the older one. |
 | `NI_ANE_KEEP_S` | `300` | Seconds after the last prefill chunk (or model load) during which a background evaluation keeps the Neural Engine awake, so a short prompt after a pause skips its 70–120 ms wake. `0` turns it off. |
 | `NI_ANE_KEEP_MS` | `2000` | Period of that keepalive evaluation in milliseconds (floor 100). |
 | `NI_DFLASH` | `auto` | As `--dflash` when the option is absent: `auto`, `none` or a folder. |
