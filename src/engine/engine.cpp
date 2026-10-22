@@ -558,9 +558,16 @@ bool prefill_even_chunks() {
 int prefill_chunk_room(int c) { return c + std::max(8, c / 32); }
 int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even) {
   const int64_t left = n - p;
-  if (!even || left <= chunk) return int(std::min<int64_t>(chunk, left));
-  const int64_t k = (left + chunk - 1) / chunk;  // the chunks min(chunk, left) would take, without one more
-  return int((left + k - 1) / k);
+  int rows;
+  if (!even || left <= chunk) {
+    rows = int(std::min<int64_t>(chunk, left));
+  } else {
+    const int64_t k = (left + chunk - 1) / chunk;  // the chunks min(chunk, left) would take, without one more
+    rows = int((left + k - 1) / k);
+  }
+  logd("prefill chunk of %d rows: %lld of %lld left, chunk %d%s", rows, (long long)left, (long long)n, chunk,
+       even ? " even" : "");
+  return rows;
 }
 
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {

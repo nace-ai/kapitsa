@@ -87,8 +87,9 @@ size_t default_mem_budget();
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
 // Rows of the next prefill chunk with `p` of `n` rows done: min(chunk, n - p), or with `even` those rows split evenly
 // over the chunks that rule would take (a 4130-token prompt at a 2048 chunk is 2048+2048+34 plain, 2065+2065 even), so
-// a prompt a few rows past a multiple of the chunk pays no extra pass. Never more than `chunk`. Pass `even` only where
-// the model has tail room for it (prefill_even_chunks() and no Neural Engine split, see Model::ane_split_on).
+// a prompt a few rows past a multiple of the chunk pays no extra pass. Never more than `chunk` rows, so the planned
+// buffers still hold every chunk; `even` is off for a model whose prefill a Neural Engine split runs (it needs chunks
+// of at most FfnSplit::kMaxRows rows), see Model::ane_split_on.
 int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even);
 // Rows the prefill buffers plan for: `chunk` plus its tail room (2112 for 2048), so an even chunk still fits them
 int prefill_chunk_room(int chunk);

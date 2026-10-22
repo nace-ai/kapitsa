@@ -390,15 +390,17 @@ int main(int argc, char** argv) {
       m.reset(s);
       load_tokens(s, w);
       const double t0 = now_ms();
-      // the engine's own chunking (Engine::chat takes prefill_chunk_rows too), so a dump exercises tail room and the
-      // even split: --chunk 2112 with NI_BAL on is what the engine runs, --chunk 2048 NI_BAL=0 what it ran before
+      // the engine's chunking (Engine::chat takes prefill_chunk_rows too): --chunk 2112 with NI_BAL on is what the
+      // engine runs, --chunk 2048 NI_BAL=0 what it ran before, and --chunk 2048 with NI_BAL on changes only the split
+      const int C = m.prefill_chunk();
       const bool even = prefill_even_chunks() && !m.ane_split_on();
-      for (int p0 = 0, C = m.prefill_chunk(); p0 < w.L0; p0 += C) {
+      for (int p0 = 0; p0 < w.L0;) {
         const int T = prefill_chunk_rows(C, p0, w.L0, even);
         auto e = g.begin();
         m.encode_prefill(*e, s, p0, T, sp, 0, p0 + T == w.L0);
         e->commit_and_wait();
         if (!m.ane_finish_chunk()) fatal("the Neural Engine prefill split failed on a chunk; rerun with NI_ANE=0");
+        p0 += T;
       }
       t_prefill += now_ms() - t0;
       prefilled += w.L0;
