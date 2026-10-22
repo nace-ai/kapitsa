@@ -30,15 +30,6 @@
   ],
   "macs": [
    {
-    "name": "MacBook Pro M5 Max 128 GB",
-    "rows": [
-     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 102, "method": "DFlash2", "prefill": 456}, "mlx-serve": {"value": 130, "method": "DFlash2", "prefill": 690}, "oMLX": {"value": 93, "method": "DFlash2", "prefill": 761}, "Splash": null, "Ollama": {"value": 68, "prefill": 739}, "MTPLX": {"value": 69, "method": "MTP", "prefill": 733}, "MLX": {"value": 54, "method": "MTP", "prefill": 784}, "llama.cpp": {"value": 51, "method": "MTP", "prefill": 516}, "LM Studio": {"value": 32, "method": "no spec", "prefill": 217}}},
-     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 281, "method": "DFlash2", "prefill": 2434}, "mlx-serve": {"value": 264, "method": "MTP", "prefill": 3818}, "oMLX": {"value": 232, "method": "DFlash2", "prefill": 2968}, "Splash": null, "Ollama": {"value": 166, "prefill": 3690}, "MTPLX": {"value": 123, "method": "MTP", "prefill": 4328}, "MLX": {"value": 132, "method": "DFlash2", "prefill": 4271}, "llama.cpp": {"value": 171, "method": "MTP", "prefill": 2881}, "LM Studio": {"value": 127, "method": "no spec", "prefill": 1873}}},
-     {"model": "Flash-Next 180B", "cells": {"Kapitsa": {"value": 105, "method": "MTP", "prefill": 875}, "mlx-serve": {"value": 108, "prefill": 1720}, "oMLX": {"value": 107, "method": "MTP", "prefill": 1260}, "Splash": "x", "Ollama": {"value": 60}, "MTPLX": {"value": 88, "method": "MTP", "prefill": 1263}, "MLX": {"value": 77, "method": "MTP", "prefill": 1030}, "llama.cpp": {"value": 96, "prefill": 842}, "LM Studio": "x"}},
-     {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 120, "method": "LiLiCorr", "prefill": 960}, "mlx-serve": "x", "oMLX": {"value": 69, "method": "no spec", "prefill": 913}, "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 69, "prefill": 941}, "llama.cpp": "x", "LM Studio": "x"}}
-    ]
-   },
-   {
     "name": "MacBook Pro M5 Pro 48 GB",
     "rows": [
      {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 74, "method": "KFlash", "prefill": 463}, "mlx-serve": {"value": 80, "method": "DFlash2", "prefill": 428}, "oMLX": {"value": 51, "method": "DFlash2", "prefill": 446}, "Splash": null, "Ollama": {"value": 40, "method": "MTP", "prefill": 470}, "MTPLX": {"value": 41, "method": "MTP", "prefill": 462}, "MLX": {"value": 32, "method": "MTP", "prefill": 421}, "llama.cpp": {"value": 30, "method": "MTP", "prefill": 322}, "LM Studio": {"value": 17, "method": "no spec", "prefill": 118}}},
