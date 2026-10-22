@@ -440,7 +440,7 @@ check(r.returncode == 0 and f"kapitsa {N} is up to date" in r.stdout and not sin
       "run again: up to date, nothing downloaded", r.stdout + r.stderr)
 
 # a user's local.env in the harness survives an update
-S4, H4 = standalone("s4"), home("s4")
+S4, H4 = standalone("sloc"), home("sloc")
 lenv = os.path.join(notices_of(S4), "bench", "harness", "local.env")
 os.makedirs(os.path.dirname(lenv), exist_ok=True)
 open(lenv, "w").write("LLAMA_SERVER=/x/llama-server\n")
