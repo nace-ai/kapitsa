@@ -1,0 +1,53 @@
+[00:18:49] preflight: 90% free
+
+===== pr2-attn1  [kapitsa] pr2-attn1  version 631bd25
+[00:18:49] pr2-attn1: GPU lock acquired after 0.0s wait
+[00:18:49] pr2-attn1: starting <repo>/build/kapitsa serve --model ~/Documents/nace/models/flint-4bit --model-id flint --host 127.0.0.1 --port 8401 --ctx 72000 --slots 1
+[00:18:59] pr2-attn1: ready after 10s (pid 32132, listener 32132)
+[00:19:07] pr2-attn1:  warm-up prefill~2.9k+decode64: ok (8.09s)
+[00:19:08] pr2-attn1:  warm-up tools: ok (0.62s)
+[00:20:08] pr2-attn1: gpu busy (60s): com.apple.WebKit[53367] 9%
+[00:20:39] pr2-attn1: GPU not quiet after 91s (['com.apple.WebKit[53367] 8%']); benchmarking anyway, contention will be flagged
+== pr2-attn1
+  decode T=1.0: 148.56 tok/s (e2e 146.99; 512 tok, finish=length, d4=0.9006)
+  decode T=1.0: 146.85 tok/s (e2e 148.09; 512 tok, finish=length, d4=0.9417)
+  decode T=1.0: 149.67 tok/s (e2e 148.51; 512 tok, finish=length, d4=0.9107)
+  decode T=1.0: 148.80 tok/s (e2e 148.96; 512 tok, finish=length, d4=0.9554)
+  decode T=1.0: 147.84 tok/s (e2e 146.95; 512 tok, finish=length, d4=0.9039)
+  decode median 148.56 (min 146.85, max 149.67) over 5/5 valid
+  prefill 4000: 3873 tok (ref 4133), TTFT 1.44s -> 2688 tok/s, cold cached=0 | cached TTFT median 0.11s over 3 turns (cached [3926, 3970, 4021]) INVALID ['prompt_tokens 3873 outside ±1% of 4133 (truncated or template drift)']
+  prefill 16000: 15064 tok (ref 16286), TTFT 6.08s -> 2479 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [15115, 15139, 15168]) INVALID ['prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)']
+  prefill 32000: 30189 tok (ref None), TTFT 14.31s -> 2110 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [30241, 30276, 30326]) flags ['no reference prompt_tokens for this corpus/size (unchecked)', 'follow-up returned no content; stopping the cached series']
+  memory: phys_footprint_peak 23.14 GB, resident mapped files 0.02 GB, swap used 640.88 MB
+  INVALID: ['prefill_4000: prompt_tokens 3873 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)']
+  -> <run-root>/results/pr2-attn1-20261023-001849.json
+[00:22:12] pr2-attn1: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:22:12] pr2-attn1: GPU lock released after 203.4s held
+[00:22:12] pr2-attn1: -> <run-root>/results/pr2-attn1-20261023-001849.json  INVALID: ['prefill_4000: prompt_tokens 3873 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)']  flags: 2
+
+===== pr2-attn0  [kapitsa] pr2-attn0  version 631bd25
+[00:22:12] pr2-attn0: GPU lock /tmp/kapitsa-gpu.lock is held by: 32105 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python bench/harness/compare_engin; 33081 lockf -k -t 14400 /tmp/kapitsa-gpu.lock /tmp/kap-gemm-dump.sh /tmp/kap-gemm-base qwen3.8-27b-4bit-mtp /tmp/kap-gemm-d27-ref; 36322 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/; waiting...
+[00:27:12] pr2-attn0: still waiting for the GPU lock (300s): 32105 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python bench/harness/compare_engin; 36322 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/
+[00:30:28] pr2-attn0: GPU lock acquired after 495.7s wait
+[00:30:28] pr2-attn0: starting <repo>/build/kapitsa serve --model ~/Documents/nace/models/flint-4bit --model-id flint --host 127.0.0.1 --port 8401 --ctx 72000 --slots 1
+[00:30:34] pr2-attn0: ready after 6s (pid 48507, listener 48507)
+[00:30:43] pr2-attn0:  warm-up prefill~2.9k+decode64: ok (8.31s)
+[00:30:43] pr2-attn0:  warm-up tools: ok (0.59s)
+[00:31:02] pr2-attn0: GPU quiet after 18s; benchmarking
+== pr2-attn0
+  decode T=1.0: 153.21 tok/s (e2e 151.89; 512 tok, finish=length, d4=0.942)
+  decode T=1.0: 151.95 tok/s (e2e 151.27; 512 tok, finish=length, d4=0.9073)
+  decode T=1.0: 152.81 tok/s (e2e 151.69; 512 tok, finish=length, d4=0.9533)
+  decode T=1.0: 151.69 tok/s (e2e 152.38; 512 tok, finish=length, d4=0.9303)
+  decode T=1.0: 152.40 tok/s (e2e 150.82; 512 tok, finish=length, d4=0.9515)
+  decode median 152.4 (min 151.69, max 153.21) over 5/5 valid
+  prefill 4000: 3876 tok (ref 4133), TTFT 1.73s -> 2244 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [3930, 3967, 4018]) INVALID ['prompt_tokens 3876 outside ±1% of 4133 (truncated or template drift)']
+  prefill 16000: 15066 tok (ref 16286), TTFT 9.22s -> 1634 tok/s, cold cached=0 | cached TTFT median 0.13s over 3 turns (cached [15116, 15147, 15219]) INVALID ['prompt_tokens 15066 outside ±1% of 16286 (truncated or template drift)']
+  prefill 32000: 30190 tok (ref None), TTFT 25.77s -> 1171 tok/s, cold cached=0 | cached TTFT median 0.16s over 3 turns (cached [30255, 30306, 30353]) flags ['no reference prompt_tokens for this corpus/size (unchecked)']
+  memory: phys_footprint_peak 23.14 GB, resident mapped files 0.02 GB, swap used 632.88 MB
+  INVALID: ['prefill_4000: prompt_tokens 3876 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 15066 outside ±1% of 16286 (truncated or template drift)']
+  -> <run-root>/results/pr2-attn0-20261023-002212.json
+[00:32:43] pr2-attn0: stopped (SIGTERM, survivors [], memory released after 5.0s)
+[00:32:44] pr2-attn0: GPU lock released after 135.6s held
+[00:32:44] pr2-attn0: -> <run-root>/results/pr2-attn0-20261023-002212.json  INVALID: ['prefill_4000: prompt_tokens 3876 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 15066 outside ±1% of 16286 (truncated or template drift)']  flags: 1
+[00:32:44] reverse rc=0

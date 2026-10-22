@@ -11,7 +11,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 ## 🔥 What's new
 
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 1.4× llama.cpp's decode on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro, with Flint's MoE prefill on the tensor units (#340), Kapitsa reads 4K prompts at 1,743-2,262 tok/s over three runs against rec's 2,138 and llama.cpp's 2,072, rec and llama.cpp read 16K prompts 1.19× and 1.08× as fast as Kapitsa's best run, and Kapitsa decodes 1.05× rec at T 1.0 (rec is ahead on greedy) and 1.65× llama.cpp ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **Kapitsa: the fastest decode in 25 of 27 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
@@ -105,7 +105,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>b11804</sub> | <sub>rec<br>0.1.0</sub> |
 | --- | ---: | ---: | ---: |
-| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2262 / **152**<br><sub>no spec</sub> | 2072 / 92<br><sub>no spec</sub> | 2138 / 145<br><sub>no spec</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 2691 / **149**<br><sub>no spec</sub> | 2072 / 92<br><sub>no spec</sub> | 2138 / 145<br><sub>no spec</sub> |
 
 </details>
 

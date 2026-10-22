@@ -14,10 +14,14 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-625 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+629 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-23 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-23 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn0 | 631bd25 | 152.4 | – | 2244 | 1634 | 1.73 | – | invalid | [pr2-attn0-20261023-002212](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn0-20261023-002212.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn1 | 631bd25 | 148.6 | – | 2688 | 2479 | 1.44 | – | invalid | [pr2-attn1-20261023-001849](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn1-20261023-001849.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn1 | 631bd25 | 149.2 | – | 2694 | 2435 | 1.44 | – | invalid, contention | [pr2-attn1-20261022-231822](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn1-20261022-231822.json) |
+| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn0 | 631bd25 | 149.6 | – | 2238 | 1608 | 1.73 | – | invalid, contention | [pr2-attn0-20261022-224904](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn0-20261022-224904.json) |
 | 2026-10-22 | Yerbol | M1 Pro, 16 GB | Flint 40B-A2.5B, 2-bit experts | 2-bit experts | Kapitsa (2-bit experts) | 2b5ab35 | 61.1 | 61.1 | 413 | – | 9.39 | – | – | [flint-16gb-kapitsa-20261022-230039](results/2026-10-22-flint-16gb-m1pro/results/flint-16gb-kapitsa-20261022-230039.json) |
 | 2026-10-22 | Yerbol | M1 Pro, 16 GB | Flint 40B-A2.5B, 2-bit experts | 2-bit experts | llama.cpp (UD-IQ2_XXS) | 0.7.0-dev | 42.6 | 42.1 | 346 | – | 11.19 | – | – | [flint-16gb-llamacpp-20261022-225553](results/2026-10-22-flint-16gb-m1pro/results/flint-16gb-llamacpp-20261022-225553.json) |
 | 2026-10-22 | Yerbol | M1 Pro, 16 GB | Flint 40B-A2.5B, 2-bit experts | 2-bit experts | Kapitsa (2-bit experts) | 2b5ab35 | 60.9 | 61.1 | 414 | – | 9.36 | – | – | [flint-16gb-kapitsa-20261022-225312](results/2026-10-22-flint-16gb-m1pro/results/flint-16gb-kapitsa-20261022-225312.json) |

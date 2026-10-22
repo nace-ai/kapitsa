@@ -1,0 +1,112 @@
+[
+ {
+  "label": "pr2-attn0",
+  "display": "pr2-attn0",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "72000",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_FLINT_QATTN": "0"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons"
+  ],
+  "agent_trace": "none",
+  "note": "A/B pr2-attn0",
+  "ready_timeout": 600
+ },
+ {
+  "label": "pr2-attn1",
+  "display": "pr2-attn1",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "cmd": [
+   "<repo>/build/kapitsa",
+   "serve",
+   "--model",
+   "{models}/flint-4bit",
+   "--model-id",
+   "flint",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8401",
+   "--ctx",
+   "72000",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache",
+   "NI_FLINT_QATTN": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8401/v1",
+  "model": "flint",
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons"
+  ],
+  "agent_trace": "none",
+  "note": "A/B pr2-attn1",
+  "ready_timeout": 600
+ }
+]
