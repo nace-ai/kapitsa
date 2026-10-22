@@ -3,7 +3,7 @@
 #include <MetalPerformancePrimitives/MetalPerformancePrimitives.h>
 using namespace mpp::tensor_ops;
 
-// ---- qattn_t: Qwen3.5 prefill attention (head dim 256, 4 query heads per KV head, sigmoid output gate) on the GPU's
+// ---- qattn_t: Qwen3.5/3.6 prefill attention (head dim 256, 4 or 8 query heads per KV head, sigmoid output gate) on the GPU's
 // matrix units (Metal 4 tensor_ops; Apple10 = M5). Buffers and result as attn_prefill11r (q fp32 [T][Hq][256], half KV
 // cache [Hkv][max_seq][256], gate in qg [T][Hq][2][256], fp32 out [T][Hq][256]); products as nh_attn_t.metal (16 x 16
 // fragments in registers, nhf_mma). A simdgroup takes 4 consecutive tokens x the KV head's 4 query heads = 16 rows
@@ -31,22 +31,22 @@ NI_INLINE nhf_h8 qa_load_kv(const threadgroup half* base, uint r0, uint c0, shor
   return v;
 }
 
-template <int NS, int BK, int LD>
+template <int NS, int BK, int LD, int G>   // G query heads per KV head (4 on the 4B, 8 on the 35B)
 NI_INLINE void qattn_t_impl(const device float* q, const device half* kc, const device half* vc, const device float* qg,
                             device float* out, constant QaParams& p, uint2 tg, uint sg, ushort lane, threadgroup half* kt,
                             threadgroup half* vt) {
-  constexpr int D = 256, G = 4, KT = BK / 16;
-  const uint t0 = (tg.x * NS + sg) * 4, kvh = tg.y;
+  constexpr int D = 256, KT = BK / 16, TT = 16 / G, SH = G == 8 ? 3 : 2;   // TT tokens x G heads per 16-row tile
+  const uint t0 = (tg.x * NS + sg) * TT, kvh = tg.y;
   const bool live = t0 < p.T;
   const uint tid = sg * 32 + lane;
-  const uint tgl = p.pos0 + min(tg.x * NS * 4 + NS * 4 - 1, p.T - 1);   // the threadgroup's last key
+  const uint tgl = p.pos0 + min(tg.x * NS * TT + NS * TT - 1, p.T - 1);   // the threadgroup's last key
   const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
   uint tk[2], hd[2], lim[2];
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) {
     const short r = fm + 8 * i;
-    tk[i] = t0 + (r >> 2);
-    hd[i] = kvh * G + (r & 3);
+    tk[i] = t0 + (r >> SH);
+    hd[i] = kvh * G + (r & (G - 1));
     lim[i] = p.pos0 + min(tk[i], p.T - 1);
   }
   const uint first = p.pos0 + t0;                    // the block's first token: its limit
@@ -152,16 +152,23 @@ NI_INLINE void qattn_t_impl(const device float* q, const device half* kc, const 
   }
 }
 
-#define QATTN_T(NAME, NS, BK, LD)                                                                                        \
+#define QATTN_T(NAME, NS, BK, LD, G)                                                                                  \
   [[kernel, max_total_threads_per_threadgroup(32 * NS)]] void NAME(                                                \
       const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]], const device half* vc [[buffer(2)]], \
       const device float* qg [[buffer(3)]], device float* out [[buffer(4)]], constant QaParams& p [[buffer(5)]],     \
       uint2 tg [[threadgroup_position_in_grid]], uint sg [[simdgroup_index_in_threadgroup]],                       \
       uint lane [[thread_index_in_simdgroup]]) {                                                                     \
     threadgroup half kt[BK * LD], vt[BK * LD];                                                                 \
-    qattn_t_impl<NS, BK, LD>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt);                                      \
+    qattn_t_impl<NS, BK, LD, G>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt);                                 \
   }
-QATTN_T(qattn_t_s8k16, 8, 16, 256)
-QATTN_T(qattn_t_s4k16, 4, 16, 256)
-QATTN_T(qattn_t_s16k16, 16, 16, 256)
-QATTN_T(qattn_t_s2k16, 2, 16, 256)
+QATTN_T(qattn_t_s8k16, 8, 16, 256, 4)
+QATTN_T(qattn_t_s4k16, 4, 16, 256, 4)
+QATTN_T(qattn_t_s16k16, 16, 16, 256, 4)
+QATTN_T(qattn_t_s2k16, 2, 16, 256, 4)
+// G = 8 (Qwen3.6-35B-A3B, 16 query heads over 2 KV heads): a 16-row tile holds 2 tokens x the KV head's 8
+// query heads, so a threadgroup of NS simdgroups covers 2 NS tokens. s4 (8 tokens per threadgroup, 128
+// threads) was the best of the shapes measured at T 2112 against 16493 keys: s4 56.63 ms, s8 61.46, s16 58.40,
+// against attn_prefill11r's 79.64 ms; BK 32 (s8 79.91, s16 69.40) is slower, its two tiles need 32 KB of
+// threadgroup memory. A shape dropped from this file needs its line back for tools/bench_attn.cpp, which
+// looks kernels up by name.
+QATTN_T(qattn_t_g8s4k16, 4, 16, 256, 8)

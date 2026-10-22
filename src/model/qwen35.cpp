@@ -2841,13 +2841,25 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   static const std::string full = getenv("NI_ATTN") && *getenv("NI_ATTN") ? an
                                   : Gpu::get().apple_family() <= 7 ? "attn_prefill11_k16xr" : an;
   uint32_t qb = 4, th = 256, gy = cfg_.hkv;
-  // NI_QATTN (default on, 0 = off): D 256, 4 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5
+  // NI_QATTN (default on, 0 = off): D 256, 4 or 8 query heads per KV head, on tensor_ops (qattn_t.metal) on the M5.
+  // G = 8 (the 35B) runs qattn_t_g8s4k16: 2 tokens x the KV head's 8 heads per 16-row tile, 8 tokens per
+  // threadgroup. bench_attn, T 2112 against 2112 / 4224 / 8448 / 16493 keys: 4.08 / 11.49 / 28.38 / 56.63 ms vs
+  // attn_prefill11r's 5.41 / 15.96 / 39.97 / 79.64 (1.32-1.41x), error 2.1-3.2e-4 against the fp64 reference (11r:
+  // 2.1-2.3e-4). End to end on the 35B, paired under the GPU lock: 4K prefill 1,693 -> 1,636 ms and 16K 8,819 ->
+  // 7,929 ms (median of three). It reassociates the K reductions, so its logits move (decode rows 5.6e-4 mean KL
+  // against 11r) and it is opt-in: NI_QATTN_G8=1 (default 0, the 35B stays on 11r); NI_ATTN overrides both.
   static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
-  if (qattn && cfg_.head_dim == 256 && cfg_.hq == 4 * cfg_.hkv) {
-    e.use(pipe("qattn_t_s8k16"));
+  const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
+  const bool qg8 = cfg_.hq == 8 * cfg_.hkv && env_int("NI_QATTN_G8", 0) != 0;
+  if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
+    e.use(pipe(qg8 ? "qattn_t_g8s4k16" : "qattn_t_s8k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
     e.val(5, fp);
-    e.dispatch((T + 31) / 32, cfg_.hkv, 1, 256);
+    if (qg8) {
+      e.dispatch((uint32_t(T) + 7) / 8, cfg_.hkv, 1, 128);   // 4 simdgroups x 2 tokens of one KV head
+    } else {
+      e.dispatch((uint32_t(T) + 31) / 32, cfg_.hkv, 1, 256);
+    }
     return;
   }
   if (full.rfind("attn_prefill11", 0) == 0) { qb = 32; gy = cfg_.hq; }  // 32 queries of one q head

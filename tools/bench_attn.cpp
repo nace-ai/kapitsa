@@ -110,7 +110,11 @@ int main(int argc, char** argv) {
     if (name.rfind("attn_prefill10_q", 0) == 0) { qb = atoi(name.c_str() + 16); th = qb * 64; }
     if (name.rfind("attn_prefill10u_q", 0) == 0) { qb = atoi(name.c_str() + 17); th = qb * 64; }
     if (name.rfind("attn_prefill11", 0) == 0) { qb = 32; th = 256; gy = Hq; }  // 32 queries of one q head  // 32 queries of one q head
-    if (name.rfind("qattn_t", 0) == 0) { const uint32_t nsg = name.find("s16") != std::string::npos ? 16 : name.find("s2k") != std::string::npos ? 2 : name.find("s8") != std::string::npos ? 8 : 4; qb = 4 * nsg; th = 32 * nsg; gy = Hkv; }
+    if (name.rfind("qattn_t", 0) == 0) {
+      const uint32_t nsg = name.find("s16") != std::string::npos ? 16 : name.find("s2k") != std::string::npos ? 2 : name.find("s8") != std::string::npos ? 8 : 4;
+      const bool g8 = name.find("g8") != std::string::npos;   // 2 tokens x 8 heads per tile instead of 4 x 4
+      qb = (g8 ? 2 : 4) * nsg; th = 32 * nsg; gy = Hkv;
+    }
     const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
     if (gq) gy = Hkv;
     auto run = [&](int n = 1) {  // n back-to-back calls in one command buffer, ms per call
