@@ -118,8 +118,8 @@ class DFlash2 {
   // tw_ok: whether this Mac has the matrix-unit drafting pass (dfl_tw_supported(): M5-class GPU, macOS 26): the
   // caller asks the GPU, so that the decision stays a pure function a CPU test can drive both ways.
   static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok);
-  // Whether this Mac runs the drafting pass on the matrix units (dfl_tw_supported(), asked of the GPU): plan_block_rows
-  // takes the answer as an argument so that the decision itself stays pure.
+  // Whether this Mac and these knobs run the drafting pass on the matrix units (dfl_tw_supported() and V8Knobs):
+  // plan_block_rows takes the answer as an argument so that the decision itself is left with the environment alone.
   static bool tensor_path_ok();
   // block_rows: the drafting block the engine will load (plan_block_rows), whose rows the target's verify buffers and
   // every slot's verify tape are sized from.

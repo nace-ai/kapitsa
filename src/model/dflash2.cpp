@@ -788,7 +788,9 @@ std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
   return d;
 }
 
-bool DFlash2::tensor_path_ok() { return dfl_tw_supported(); }
+bool DFlash2::tensor_path_ok() {
+  return dfl_tw_supported() && v8_knobs().tw && !(v8_knobs().dfl & (1 | 32 | 128));
+}
 
 int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env, bool tw_ok) {
   const char* v = block_env ? block_env : getenv("NI_DFLASH_BLOCK");
@@ -796,11 +798,10 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
     return atoi(v) == 16 ? 16 : kB;
   // The default, and the same conditions the load refuses NI_DFLASH_BLOCK=16 under, as far as they can be read
   // without the drafter: a one-slot engine on a dense target, trees on, a walk deep enough for all 16 rows, and the
-  // matrix units with the fused attention the drafting pass needs (tw_ok, from the caller's GPU). What is left out is
-  // the drafter's own weights (a
-  // v1 drafter, projections that are not 4-bit group 64), so on such a drafter this is an upper bound: the plan
-  // reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE target has no wide verify, and a multi-slot engine
-  // co-decodes requests, so both keep the 8-row tile.
+  // matrix units with the fused attention the drafting pass needs (tw_ok, which the caller fills from its GPU and its
+  // knobs). What is left out is the drafter's own weights (a v1 drafter, projections that are not 4-bit group 64), so
+  // on such a drafter this is an upper bound: the plan reserves 16 rows and the load keeps 8, ~30 MB on the 27B. A MoE
+  // target has no wide verify, and a multi-slot engine co-decodes requests, so both keep the 8-row tile.
   if (slots != 1 || target.moe) return kB;
   const char* kf = getenv("NI_KFLASH");
   const char* tv = getenv("NI_DFLASH_TREE");
@@ -809,7 +810,7 @@ int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* 
   if (vv && *vv && atoi(vv) < 15) return kB;
   const char* av = getenv("NI_DFLASH_ATTN");
   if (av && std::string(av) == "scalar") return kB;
-  if (!tw_ok || !v8_knobs().tw || (v8_knobs().dfl & (1 | 32 | 128))) return kB;
+  if (!tw_ok) return kB;
   return 16;
 }
 
