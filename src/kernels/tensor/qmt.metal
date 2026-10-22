@@ -171,11 +171,4 @@ NI_INLINE void qmt_tile(const device half* X, const device uint* const thread* W
   }
 
 NI_QMT(qmt_m64_n64, 64, 64, 32)
-NI_QMT(qmt_m64_n128, 64, 128, 32)
-NI_QMT(qmt_m32_n128, 32, 128, 32)
-NI_QMT(qmt_m128_n64, 128, 64, 32)
 NI_QMTG(qmtg_m64_n64, 64, 64, 32)
-NI_QMTG(qmtg_m32_n64, 32, 64, 32)
-NI_QMTG(qmtg_m128_n64, 128, 64, 32)
-NI_QMTG(qmtg_m64_n128, 64, 128, 32)
-NI_QMTG(qmtg_m128_n128, 128, 128, 32)
