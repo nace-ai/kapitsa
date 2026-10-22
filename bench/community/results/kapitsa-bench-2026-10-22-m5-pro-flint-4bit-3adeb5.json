@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-22T13:39:59Z",
+  "kapitsa": {
+    "version": "0.2.7",
+    "commit": "dc5cfff"
+  },
+  "mac": {
+    "identifier": "Mac17,8",
+    "name": "MacBook Pro (16-inch, M5 Pro or M5 Max)",
+    "year": 2026,
+    "chip": "Apple M5 Pro",
+    "cpu_cores": 18,
+    "gpu_cores": 20,
+    "memory_gb": 48,
+    "macos": "26.7.1",
+    "macos_build": "25G241"
+  },
+  "model": {
+    "name": "flint",
+    "title": "Recursive Flint 40B-A2.5B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "3b93f90",
+    "decoding": "plain",
+    "decoding_detail": "plain decoding",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 154.06,
+      "runs_tps": [
+        154.59,
+        152.73,
+        154.06,
+        154.96,
+        153.76
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 153.07,
+      "runs_tps": [
+        153.48,
+        153.07,
+        150.9,
+        153.24,
+        152.72
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 3873,
+        "ttft_s": 2.7858,
+        "tps": 1390.3,
+        "followup_s": [
+          0.1173,
+          0.1288,
+          0.1109
+        ],
+        "followup_median_s": 0.1173
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 15065,
+        "ttft_s": 13.4164,
+        "tps": 1122.9,
+        "followup_s": [
+          0.1421,
+          0.1522,
+          0.1372
+        ],
+        "followup_median_s": 0.1421
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 22.18
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "high",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 25160,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.6,
+    "gpu_other_max_pct": 4.16,
+    "gpu_ambient_mean_pct": 0.08,
+    "gpu_users": [
+      "Microsoft Teams"
+    ],
+    "contention": []
+  },
+  "flags": [
+    "decode_greedy: 25160 pages swapped out during the phase"
+  ],
+  "invalid": []
+}
