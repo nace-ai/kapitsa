@@ -1673,7 +1673,7 @@ gained only 1.04x / 1.03x there where the models above gained much more, because
 Qwen3.5 backend and Dory's own GEMMs were still on the simdgroup kernels.
 
 [#287](https://github.com/nace-ai/kapitsa/pull/287) put those GEMMs on the M5's matrix units (`nh_gemm_t_fp4_m64`, on by
-default, `NI_DORY_TG=0` keeps the old ones; 86% of the 4K prefill step before, 64% after and 47% at 16K). Two interleaved
+default, `NI_DORY_TG=0` keeps the old ones; the GEMMs were 86% of the 4K prefill step before, see `docs/usage.md`). Two interleaved
 sessions on the merged main `74b97d9` — last-loop KV then per-loop at 14:10/14:12, the same pair reversed at
 14:22/14:30, all four records in
 [the same results directory](../bench/results/2026-10-22-m5pro-dory/README.md#after-287-the-prefill-gemms-on-the-matrix-units-1410-1450) —
@@ -1681,11 +1681,14 @@ read prefill **1,522 / 1,142 tok/s** at 4K / 16K as the median of each setting's
 1,526 / 1,146 on last-loop KV, 1,496 / 1,123 and 1,516 / 1,114 on per-loop), which is **2.46x and 2.10x the 03:26 run**.
 Decode is inside the runs' spread (70.7 / 73.1 tok/s at T = 0.6 and 71.5 / 78.0 greedy, the lower greedy reads being the
 two contended records), the cached follow-ups are 0.10-0.11 / 0.15-0.16 s, and the peak footprint is 0.5-1.0 GB smaller
-(3.65 GB plus 0.67 GB mapped on last-loop KV, 4.09 + 0.67 on per-loop), the tensor path keeping less in flight. At 4K
-that is 1.09x mlx-lm's 1,401 and ahead of llama.cpp's 938; at 16K it is 0.89x mlx-lm's 1,278, and the 16K prefill step now
-splits evenly between the GEMMs and `dory_attn_prefill` (46.7% each), so that attention kernel is the next target. Three
+(3.65 GB plus 0.67 GB mapped on last-loop KV, 4.09 + 0.67 on per-loop; the cause is not separated here, as for the 5.1 GB above). At 4K
+that is 1.09x mlx-lm's 1,401 and ahead of llama.cpp's 938; at 16K it is 0.89x mlx-lm's 1,278, and a one-off profile of the 16K prefill step (not stored in this PR)
+puts the GEMMs and `dory_attn_prefill` at 46.7% each, so that attention kernel looks like the next target. Three
 of the four records carry the harness's contention flag (a browser tab and Slack Helper, means 2.0-9.2%), so the prefill
-cells are lower bounds; the 14:30 run is flag-free.
+cells are lower bounds; the 14:30 run is flag-free. The 14:22 per-loop record also carries two repetition-loop flags
+(2 of its 5 sampled T = 0.6 runs, distinct-4-gram 0.47 and 0.49); a loop flatters a speculative decoder, and that record
+supplies the 74.0 in the per-loop pair's 73.1 T = 0.6 median, so read the per-loop decode figures as an upper bound. The
+last-loop KV default (the 70.7 median) has no loop flag.
 
 ## KFlash trees (M4 Pro, 2026-10-21)
 
