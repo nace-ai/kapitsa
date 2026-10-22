@@ -70,12 +70,13 @@ median time to the first token of a cached second turn.
   don't read much into it. Only Kapitsa reached 128K, at 249 tok/s, a prompt read of 8.6 minutes and 34% of its 4K speed.
 - **Decode.** Kapitsa decodes 1.30-1.38x as fast as llama.cpp at every length both reached. At 128K it decodes
   25.2 tok/s, 37% of its 4K speed.
-- **Why Kapitsa's prefill is lower here than in the protocol** (737 against 799 tok/s at 4K, while llama.cpp's agree:
-  768 against 771). The sweep's `--ctx 262144` made Kapitsa choose 1024-row prefill chunks instead of 2048:
+- **Kapitsa's sweep prefill is lower than its protocol prefill** (737 against 799 tok/s at 4K), while llama.cpp's
+  agree (768 against 771). The sweep's `--ctx 262144` made Kapitsa choose 1024-row prefill chunks instead of 2048:
   `memory: 1024-row prefill chunks (2048 would leave less than one 262144-token conversation in the 27.8 GB budget)`
-  (`context-sweep/logs/kapitsa.log`). The protocol's `--ctx 32768` keeps 2048. The M4 Pro has room for both and its
-  sweep matched its protocol within 1%. So the sweep's Kapitsa prefill points understate what a shorter `--ctx` gives
-  on this Mac.
+  (`context-sweep/logs/kapitsa.log`). The protocol's `--ctx 32768` keeps 2048, and the M4 Pro, which has room for
+  2048 at both settings, saw its sweep match its protocol within 1%. The smaller chunks are probably part of the gap, but
+  this was not measured. No sweep ran at `--ctx 32768`, and other things differ too: one cold request against the
+  harness's median, a different prompt, and the battery falling from 92% to 70% during the sweep.
 
 How it ran (`context-sweep/`): `ctx_sweep.py` (the M4 Pro's, unchanged) against each engine's server. Each server was
 started by `sweep_engine.sh` (the M4 Pro's, with this Mac's paths and a `LLAMA_CTX` override) with a long context:

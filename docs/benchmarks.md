@@ -1860,8 +1860,9 @@ The context sweep. Sizes here are round thousands, 2.3% below the M4 Pro's power
 
 - **Decode.** Kapitsa is 1.30-1.38x llama.cpp's speed at every length both reached, and decodes 25.2 tok/s at 128K.
 - **Prefill.** llama.cpp is 1-4% faster from 2K to 16K, level at 32K, and Kapitsa is 1.08x ahead at 64K. Kapitsa's
-  sweep prefill is lower than in the protocol (737 against 799 at 4K) because its `--ctx 262144` leaves room only for
-  1024-row prefill chunks on 36 GB. The protocol's `--ctx 32768` keeps 2048.
+  sweep prefill is lower than in the protocol (737 against 799 at 4K). Its `--ctx 262144` leaves room only for 1024-row
+  prefill chunks on 36 GB, where the protocol's `--ctx 32768` keeps 2048. That is probably part of the gap, but no
+  sweep ran at `--ctx 32768` to measure it.
 
 ## Your Mac: `kapitsa bench`
 
