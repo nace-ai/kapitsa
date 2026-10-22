@@ -17,7 +17,9 @@ The floor is the worst of these sources per measure; the decode floor the worst 
 moves a row when the prefill stays bitwise the same). Each gate (logit_compare.gate_from): min_top1 = 1 - 2 max(flips,
 1) / records, mean and p99 KL at most twice the floor's, no flip at a margin of its tie_margin or more (the largest
 top-2 margin the floor moved by half of it: twice the floor's differences flip margins up to there). Writes
-tools/logit_floors/<model>.json (--out FILE elsewhere): every source's numbers, the floors, the gates, the conditions.
+tools/logit_floors/<model>.json, or <model>.m<N>.json on an M5 or later (logit_compare.floor_name: its tensor_ops
+paths sum in an order no earlier GPU runs), --out FILE elsewhere: every source's numbers, the floors, the gates, the
+conditions.
 --rescore derives the floors and gates of such a file again from its sources, without the GPU.
 """
 import argparse
@@ -80,7 +82,7 @@ def main():
     ap.add_argument("model")
     ap.add_argument("--bin", default=os.path.join(HERE, "..", "build", "logit_dump"))
     ap.add_argument("--work", help="where the dumps go, ~1 GB per path at once (default build/logit_floor/<model>)")
-    ap.add_argument("--out", help="default tools/logit_floors/<model>.json")
+    ap.add_argument("--out", help="default tools/logit_floors/<model>.json (<model>.m<N>.json on an M5 or later)")
     ap.add_argument("--keep", action="store_true", help="keep the dumps")
     ap.add_argument("--reuse", action="store_true", help="compare the dumps --work already holds, not run them again")
     ap.add_argument("--rescore", action="store_true",
@@ -100,7 +102,6 @@ def main():
             f.write(dumps(result))
         print("->", path)
         return
-    out = a.out or os.path.join(lc.FLOORS, model + ".json")
     work = a.work or os.path.join(HERE, "..", "build", "logit_floor", model)
     with open(os.path.join(a.model, "config.json")) as f:
         mtype = json.load(f).get("model_type", "")
@@ -126,6 +127,7 @@ def main():
     db = dump("b", paths)
     with open(os.path.join(da, ref, "meta.json")) as f:
         meta = json.load(f)
+    out = a.out or lc.floor_name(model, meta)
     sources = {"repeat": {"paths": {p: summary(cmp(da, db, p)) for p in ["prefill"] + paths}}}
     if not a.keep:
         shutil.rmtree(db)  # (disk: a dump is ~190 MB per path on the Qwen models)

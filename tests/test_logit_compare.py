@@ -306,5 +306,37 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out = run(R, write_dump(os.path.join(tmp, "lower2"), seqs, recs, lower, meta), "--reorder")
     check(rc == 1 and "FAIL: mean NLL change" in out, "--reorder: the next token's NLL is bounded", out)
 
+    # ---- the floor per chip: an M5 or later takes <model>.m<N>.json when there is one, else <model>.json ----
+    m4 = {"model": "fm", "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB"}
+    m5 = {"model": "fm", "mac": "MacBook Pro (14-inch, 2026), M5 Pro (20-core GPU), 48 GB"}
+    check(lc.chip_gen(m4) == 4 and lc.chip_gen(m5) == 5 and lc.chip_gen({"mac": "?"}) is None, "chip_gen from meta's mac")
+    saved, lc.FLOORS = lc.FLOORS, os.path.join(tmp, "floors")
+    try:
+        os.makedirs(lc.FLOORS)
+        base, own = os.path.join(lc.FLOORS, "fm.json"), os.path.join(lc.FLOORS, "fm.m5.json")
+        check(lc.floor_name("fm", m4) == base and lc.floor_name("fm", m5) == own and lc.floor_name("fm") == base,
+              "floor_name: M5 its own file, M1-M4 and unknown the model's")
+        open(base, "w").close()
+        D4, D5 = type("D", (), {"meta": m4}), type("D", (), {"meta": m5})
+        check(lc.floor_file(D5, D5, None) == base, "an M5 without its own floor falls back to the model's")
+        open(own, "w").close()
+        check(lc.floor_file(D5, D5, None) == own and lc.floor_file(D4, D4, None) == base,
+              "an M5 takes its own floor, an M4 the model's")
+        check(lc.floor_file(D5, D5, "given.json") == "given.json", "--floor wins")
+        # --reorder: the model's own "reorder_gate" (here one no noise passes) instead of REORDER_GATE
+        R5 = write_dump(os.path.join(tmp, "r5"), seqs, recs, ref, m5)
+        N5 = write_dump(os.path.join(tmp, "n5"), seqs, recs, reordered, m5)
+        with open(own, "w") as f:
+            json.dump({"gate": {}, "reorder_gate": {"max_mean_kl": 1e-12, "max_median_kl": 1e-12}}, f)
+        check(lc.main([R5, N5, "--reorder"]) == 1, "--reorder takes the model floor's own reorder_gate")
+        with open(own, "w") as f:
+            json.dump({"gate": {}}, f)
+        check(lc.main([R5, N5, "--reorder"]) == 0, "--reorder without one: REORDER_GATE")
+        s = lc.compare(lc.Dump(R5), lc.Dump(N5))
+        check(lc.gate(s, {"max_median_kl": s["kl_median"] / 2}) and not lc.gate(s, {"max_median_kl": s["kl_median"]}),
+              "max_median_kl bounds the median KL")
+    finally:
+        lc.FLOORS = saved
+
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)

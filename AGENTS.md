@@ -89,7 +89,8 @@ One change cannot pass that gate and is still legitimate: a kernel that keeps ev
 K reduction (the experts' GEMM on the M5's tensor units instead of the simdgroup kernels), where half*half products are
 exact in fp32 and a different order moves ~0.5% of the sums by one half ulp. Gate it with
 `tools/logit_compare.py --reorder` instead, whose bounds are twice the first such change's measured drift, as the floor's
-gate is twice its measured floor, and show in the PR that the diff is a reassociation rather than a precision change: the
+gate is twice its measured floor (a floor file's own `reorder_gate` replaces them for its model: Flint on the M5,
+CONTRIBUTING.md), and show in the PR that the diff is a reassociation rather than a precision change: the
 per-GEMM check in `tools/bench_moe.cpp` (`vs qrm` columns, every output within one half step of the shipped path's, and
 both paths' error the same against a double-precision reference) plus what the temperature-0 continuations did (cold 4K
 and 16K prompts: the 35B-A3B's came out identical). That flag is a claim about the diff:

@@ -1,0 +1,97 @@
+{
+  "model": "flint-4bit",
+  "measured": {
+    "build": "0.2.7 (9d88378)",
+    "mac": "MacBook Pro (16-inch, 2026), M5 Pro (20-core GPU), 48 GB",
+    "macos": "26.5.2",
+    "date": "2026-10-22T14:28:32Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/Documents/nace/models/flint-4bit"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.0009435399618362402, "kl_median": 4.605450204031389e-08, "kl_p99": 0.022568061712916105, "kl_max": 0.09308392065260482, "margin_change_max": 0.4670919179916382, "tie_margin": 0.6821626424789429, "nll_change_mean": -0.00567776544314602, "max_abs_diff": 2.7648048400878906, "what": "plain decoding (--spec 0) against the 8-row verify", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 0,
+    "kl_mean": 0.0009435399618362402,
+    "kl_p99": 0.022568061712916105,
+    "kl_max": 0.09308392065260482,
+    "margin_change_max": 0.4670919179916382,
+    "tie_margin": 0.6821626424789429,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.00189,
+    "max_p99_kl": 0.0452,
+    "near_tie": 0.683,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 0,
+    "kl_mean": 0.0009435399618362402,
+    "kl_p99": 0.022568061712916105,
+    "kl_max": 0.09308392065260482,
+    "margin_change_max": 0.4670919179916382,
+    "tie_margin": 0.6821626424789429,
+    "records": 192,
+    "top1": 1.0,
+    "set_by": {"kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.00189,
+    "max_p99_kl": 0.0452,
+    "near_tie": 0.683,
+    "max_far_flips": 0
+  },
+  "qmt0": {
+    "env": {"NI_QMT": "0"},
+    "what": "the same floor measurement with NI_QMT=0 (the simdgroup prefill GEMMs): not this Mac's default, for reference",
+    "sources": {"repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true}, "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false}, "step": {"records": 192, "bitwise": 0, "top1": 0.9895833333333334, "flips": 2, "kl_mean": 0.021944047486851387, "kl_median": 1.0926518468533614e-07, "kl_p99": 0.4655805789198644, "kl_max": 1.850726044487831, "margin_change_max": 1.9534614086151123, "tie_margin": 4.529568195343018, "nll_change_mean": -0.0038911539127954257, "max_abs_diff": 8.298120498657227, "largest_flip_margin": 4.529568195343018, "what": "plain decoding (--spec 0) against the 8-row verify", "in_floor": true, "decode": true}},
+    "floor": {"flips": 2, "kl_mean": 0.021944047486851387, "kl_p99": 0.4655805789198644, "kl_max": 1.850726044487831, "margin_change_max": 1.9534614086151123, "tie_margin": 4.529568195343018, "records": 192, "top1": 0.9895833333333334, "set_by": {"flips": "step", "kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}},
+    "gate": {"min_top1": 0.979166, "max_mean_kl": 0.0439, "max_p99_kl": 0.932, "near_tie": 4.53, "max_far_flips": 0}
+  },
+  "reorder_sources": {
+    "qmt_vs_qmr": {"paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.00038496324741874743, "kl_median": 3.1755294119072084e-05, "kl_p99": 0.001233381605959603, "kl_max": 0.0012599718359477974, "margin_change_max": 0.32726192474365234, "tie_margin": 0.0, "nll_change_mean": 0.011968256497278111, "max_abs_diff": 4.714710235595703}, "step": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.01176961706827931, "kl_median": 0.00012796926248982813, "kl_p99": 0.3040451189946876, "kl_max": 0.6287332612330625, "margin_change_max": 2.1596527099609375, "tie_margin": 1.5243124961853027, "nll_change_mean": -0.014514509036783292, "max_abs_diff": 11.285289764404297, "largest_flip_margin": 1.5243124961853027}, "verify": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.016842498491143155, "kl_median": 0.0001383191837870421, "kl_p99": 0.3940574692980973, "kl_max": 1.4495430849917645, "margin_change_max": 3.461695671081543, "tie_margin": 3.123523712158203, "nll_change_mean": -0.012727897506432696, "max_abs_diff": 12.304641723632812, "largest_flip_margin": 1.0018501281738281}}, "what": "the dense 4-bit prefill GEMMs on the tensor units (qmt_m64_n64, the default) against the simdgroup kernels (NI_QMT=0)", "in_reorder_gate": true},
+    "qmt_vs_qmr_safe_math": {"paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.0016601372410355395, "kl_median": 7.601974805828691e-05, "kl_p99": 0.011665725067800269, "kl_max": 0.012510559171766014, "margin_change_max": 0.320626437664032, "tie_margin": 0.1292710304260254, "nll_change_mean": 0.009663891046124848, "max_abs_diff": 1.5009765625}, "step": {"records": 192, "bitwise": 0, "top1": 0.9895833333333334, "flips": 2, "kl_mean": 0.02609833694773325, "kl_median": 0.00016631881971858705, "kl_p99": 0.3176249561006037, "kl_max": 3.120113952690116, "margin_change_max": 5.977674961090088, "tie_margin": 5.808078765869141, "nll_change_mean": 0.0050520466999067195, "max_abs_diff": 10.538738250732422, "largest_flip_margin": 5.808078765869141}, "verify": {"records": 192, "bitwise": 0, "top1": 0.9895833333333334, "flips": 2, "kl_mean": 0.027942720783643325, "kl_median": 0.00013819209644250148, "kl_p99": 0.33312602631674393, "kl_max": 3.4141138237000965, "margin_change_max": 6.149001121520996, "tie_margin": 5.826298713684082, "nll_change_mean": 0.004327802562605346, "max_abs_diff": 10.642292022705078, "largest_flip_margin": 5.826298713684082}}, "what": "the same, both builds with NI_MATH_SAFE=1 (kernels compiled without fast math)", "in_reorder_gate": true},
+    "fast_vs_safe_math_qmr": {"paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.001169572007101235, "kl_median": 0.00010006310963291457, "kl_p99": 0.004895185297880063, "kl_max": 0.004966425825194676, "margin_change_max": 0.3223142623901367, "tie_margin": 0.33802032470703125, "nll_change_mean": 0.047602052581077636, "max_abs_diff": 4.714225769042969}, "step": {"records": 192, "bitwise": 0, "top1": 0.9791666666666666, "flips": 4, "kl_mean": 0.03088594936269097, "kl_median": 0.0001513784206075563, "kl_p99": 0.4659499417874796, "kl_max": 3.4323002477439237, "margin_change_max": 3.1032190322875977, "tie_margin": 2.4757630825042725, "nll_change_mean": -0.015211034410755817, "max_abs_diff": 10.903541564941406, "largest_flip_margin": 1.5243124961853027}, "verify": {"records": 192, "bitwise": 0, "top1": 0.9791666666666666, "flips": 4, "kl_mean": 0.015937576604824026, "kl_median": 0.00010820599994079404, "kl_p99": 0.3588775894396651, "kl_max": 0.8431337503682838, "margin_change_max": 2.5879712104797363, "tie_margin": 3.123523712158203, "nll_change_mean": -0.02029796447739286, "max_abs_diff": 10.89080810546875, "largest_flip_margin": 1.0018501281738281}}, "what": "NI_QMT=0, fast math (the default) against NI_MATH_SAFE=1: the compiler's own reassociation (and its precise functions)", "in_reorder_gate": false},
+    "fast_vs_safe_math_qmt": {"paths": {"prefill": {"records": 8, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": 0.0022392479943507547, "kl_median": 0.0001546721206921027, "kl_p99": 0.009751710103235913, "kl_max": 0.0099344170943264, "margin_change_max": 0.3187006711959839, "tie_margin": 0.2273879051208496, "nll_change_mean": 0.04529768712992437, "max_abs_diff": 1.4163246154785156}, "step": {"records": 192, "bitwise": 0, "top1": 0.984375, "flips": 3, "kl_mean": 0.01600748778679399, "kl_median": 0.00014922126156696308, "kl_p99": 0.5239267855988141, "kl_max": 1.0602809640750033, "margin_change_max": 3.660615921020508, "tie_margin": 1.3376145362854004, "nll_change_mean": 0.004355521325934193, "max_abs_diff": 10.920486450195312, "largest_flip_margin": 1.173588752746582}, "verify": {"records": 192, "bitwise": 0, "top1": 0.984375, "flips": 3, "kl_mean": 0.020015312597728197, "kl_median": 0.00010980684254801088, "kl_p99": 0.5554556322572435, "kl_max": 1.7665756813270563, "margin_change_max": 4.293573379516602, "tie_margin": 1.4516663551330566, "nll_change_mean": -0.003242264408354815, "max_abs_diff": 11.035037994384766, "largest_flip_margin": 1.4516663551330566}}, "what": "the default, fast math against NI_MATH_SAFE=1", "in_reorder_gate": false}
+  },
+  "reorder_floor": {
+    "flips": 2,
+    "kl_mean": 0.027942720783643325,
+    "kl_p99": 0.3940574692980973,
+    "kl_max": 3.4141138237000965,
+    "margin_change_max": 6.149001121520996,
+    "tie_margin": 5.826298713684082,
+    "records": 192,
+    "kl_median": 0.00016631881971858705,
+    "top1": 0.9895833333333334
+  },
+  "reorder_gate": {
+    "min_top1": 0.979166,
+    "max_mean_kl": 0.0559,
+    "max_median_kl": 0.000333,
+    "max_p99_kl": 0.789,
+    "near_tie": 5.83,
+    "max_far_flips": 0,
+    "max_nll_change": 0.0291
+  },
+  "reorder_method": "logit_compare.py --reorder's bounds for this model on this Mac: twice the worst, per measure, of the decode paths (step and verify, 192 rows each) of the two qmt_vs_qmr sources (a pure K-order change: the same half x half products, summed in fp32 in another order), median KL twice the worst median, the mean NLL change twice the worst of every path, the prefill rows included. Dumps: build/logit_dump flint-4bit (default windows) as the floor's, with NI_QMT=0 and/or NI_MATH_SAFE=1, on the build and Mac in \"measured\". The fast_vs_safe_math sources (the compiler's reassociation plus its precise functions: more than a reorder) are context, not in the gate.",
+  "rows_768": {
+    "what": "the same build, windows and sources with --rows 96 (768 records a path): how far a 192-row floor and the reorder drift move with 4x the rows; not in any gate",
+    "repeat_step": {"records": 768, "bitwise": 768, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0},
+    "step_source_qmt": {"records": 768, "bitwise": 0, "top1": 0.9921875, "flips": 6, "kl_mean": 0.001859251028817114, "kl_median": 1.6104377415896093e-06, "kl_p99": 0.04917622447255606, "kl_max": 0.4738819427388037, "margin_change_max": 4.382824212312698, "tie_margin": 6.544651031494141, "nll_change_mean": -0.00265202000064817, "max_abs_diff": 15.462329864501953, "largest_flip_margin": 1.959970474243164},
+    "step_source_qmt0": {"records": 768, "bitwise": 0, "top1": 0.9921875, "flips": 6, "kl_mean": 0.010891926446797796, "kl_median": 4.755509448330656e-06, "kl_p99": 0.09569892094020979, "kl_max": 2.4447049019501654, "margin_change_max": 5.460815906524658, "tie_margin": 4.529568195343018, "nll_change_mean": -0.005930697922331513, "max_abs_diff": 10.393749237060547, "largest_flip_margin": 4.529568195343018},
+    "qmt_vs_qmr_verify": {"records": 768, "bitwise": 0, "top1": 0.9830729166666666, "flips": 13, "kl_mean": 0.013687649633695268, "kl_median": 0.00019564647118030924, "kl_p99": 0.38517752117834925, "kl_max": 1.4495430849917645, "margin_change_max": 5.493771076202393, "tie_margin": 6.200483798980713, "nll_change_mean": 0.004315399836594571, "max_abs_diff": 15.987194061279297, "largest_flip_margin": 2.590823173522949},
+    "qmt_vs_qmr_step": {"records": 768, "bitwise": 0, "top1": 0.98046875, "flips": 15, "kl_mean": 0.015787467595056087, "kl_median": 0.00018175732570993304, "kl_p99": 0.3107141664980328, "kl_max": 2.500738962932451, "margin_change_max": 5.761258602142334, "tie_margin": 3.8510050773620605, "nll_change_mean": 0.007594077758277913, "max_abs_diff": 13.261360168457031, "largest_flip_margin": 3.8510050773620605}
+  }
+}

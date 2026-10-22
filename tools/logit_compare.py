@@ -22,7 +22,8 @@ were near-ties), KL mean / median / p99 / max, the mean NLL change.
 The gate (exit status 1 past it): top-1 agreement at least --min-top1, mean and p99 KL at most --max-mean-kl and
 --max-p99-kl, and at most --max-far-flips flips (default 0) whose margin is --near-tie or more (near-ties: margins
 that twice the floor's own differences can flip, compare()'s tie_margin). The bounds come from the model's noise
-floor on this Mac, tools/logit_floors/<model>.json (meta.json names the model; tools/logit_floor.py measures it), or
+floor on this Mac, tools/logit_floors/<model>.json (meta.json names the model and the Mac; an M5 or later takes
+<model>.m<N>.json when there is one, floor_name(); tools/logit_floor.py measures it), or
 --floor FILE: its "gate", twice the worst of the conditions the engine legitimately runs a request under; but when
 the dumps' prefill paths are bitwise the same (a change confined to the passes after the prefill), the decode paths
 are held to its "decode_gate", twice what moves their rows when only the prefill stays the same (alone against
@@ -41,6 +42,7 @@ import json
 import math
 import operator
 import os
+import re
 import sys
 
 try:
@@ -50,7 +52,7 @@ except ImportError:  # the standard library computes the same numbers, ~50x slow
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FLOORS = os.path.join(HERE, "logit_floors")
-GATE_KEYS = ("min_top1", "max_mean_kl", "max_p99_kl", "near_tie", "max_far_flips", "max_nll_change")
+GATE_KEYS = ("min_top1", "max_mean_kl", "max_median_kl", "max_p99_kl", "near_tie", "max_far_flips", "max_nll_change")
 
 # The order-change gate (--reorder): for a change that keeps every product and only reassociates the K reduction.
 # It cannot pass the floor's gate, and no bound tighter than the drift below is reachable by any such change:
@@ -76,7 +78,9 @@ GATE_KEYS = ("min_top1", "max_mean_kl", "max_p99_kl", "near_tie", "max_far_flips
 # mean KL at most 2.2e-3, p99 KL at most 4.2e-2, every flip a near-tie under 0.5 logits and none past it, and the mean
 # NLL change at most 0.1 nats (twice the prefill path's, the larger). Everything else -- every change that is not a
 # pure K-order reassociation -- stays on the floor's gate; this flag is an author's claim that the diff only
-# reassociates, and the review checks it in the kernel.
+# reassociates, and the review checks it in the kernel. A floor file with a "reorder_gate" of its own (the model's
+# rounding-only drift measured on its Mac, e.g. tools/logit_floors/flint-4bit.m5.json) replaces these bounds for
+# that model.
 REORDER_GATE = {"min_top1": 0.968, "max_mean_kl": 2.2e-3, "max_p99_kl": 4.2e-2,
                 "near_tie": 0.5, "max_far_flips": 0, "max_nll_change": 0.1}
 
@@ -309,14 +313,30 @@ def source_gate(floor_json, name):
     return gate_from(worst(list(src["paths"].values()) if "paths" in src else [src]))
 
 
+def chip_gen(meta):
+    """The Apple chip generation a dump ran on (5 for an M5 Pro), from meta.json's "mac"; None when it names none."""
+    m = re.search(r"\bM(\d+)\b", (meta or {}).get("mac", ""))
+    return int(m.group(1)) if m else None
+
+
+def floor_name(model, meta=None):
+    """Where a model's floor on the dump's Mac lives: tools/logit_floors/<model>.m<N>.json on an M5 or later (its
+    tensor_ops prefill products sum in an order no earlier GPU runs, so its floor is its own), <model>.json on the
+    M1-M4 (every file before 2026-10-22 is an M4 Pro measurement)."""
+    gen = chip_gen(meta)
+    return os.path.join(FLOORS, f"{model}.m{gen}.json" if gen and gen >= 5 else model + ".json")
+
+
 def floor_file(ref, cand, given):
+    """--floor, else the floor of the reference dump's chip (floor_name), else <model>.json (an M5 without a floor of
+    its own is held to the M4 Pro's, which its tensor_ops paths may not pass)."""
     if given:
         return given
     model = ref.meta.get("model") or cand.meta.get("model")
     if model:
-        path = os.path.join(FLOORS, model + ".json")
-        if os.path.exists(path):
-            return path
+        for path in (floor_name(model, ref.meta or cand.meta), os.path.join(FLOORS, model + ".json")):
+            if os.path.exists(path):
+                return path
     return None
 
 
@@ -329,6 +349,8 @@ def gate(s, bounds):
         fails.append(f"top-1 agreement {s['top1']:.4f} < {bounds['min_top1']:.4f}")
     if bounds.get("max_mean_kl") is not None and s["kl_mean"] > bounds["max_mean_kl"]:
         fails.append(f"mean KL {s['kl_mean']:.3e} > {bounds['max_mean_kl']:.3e}")
+    if bounds.get("max_median_kl") is not None and s["kl_median"] > bounds["max_median_kl"]:
+        fails.append(f"median KL {s['kl_median']:.3e} > {bounds['max_median_kl']:.3e}")
     if bounds.get("max_p99_kl") is not None and s["kl_p99"] > bounds["max_p99_kl"]:
         fails.append(f"p99 KL {s['kl_p99']:.3e} > {bounds['max_p99_kl']:.3e}")
     if bounds.get("max_nll_change") is not None and s.get("nll_change_mean") is not None:
@@ -404,6 +426,7 @@ def main(argv=None):
                          "expert GEMM on the tensor units instead of simdgroups) instead of the model's floor")
     ap.add_argument("--min-top1", type=float)
     ap.add_argument("--max-mean-kl", type=float)
+    ap.add_argument("--max-median-kl", type=float)
     ap.add_argument("--max-p99-kl", type=float)
     ap.add_argument("--near-tie", type=float, help="a flip is a near-tie under this reference margin (logits)")
     ap.add_argument("--max-far-flips", type=int)
@@ -427,6 +450,15 @@ def main(argv=None):
         if a.reorder:
             bounds = dict(REORDER_GATE)
             source = "the order-change gate (a reassociated K reduction, not the noise floor)"
+            # a model whose floor file measured its own (its "reorder_gate": Flint, whose MoE router turns one
+            # rounding into an expert flip) is held to that instead of the 35B-A3B's
+            path = floor_file(comparisons[0][1], comparisons[0][2], None)
+            if path:
+                with open(path) as f:
+                    own = json.load(f).get("reorder_gate")
+                if own:
+                    bounds = {k: own[k] for k in GATE_KEYS if k in own}
+                    source = f"the order-change gate of {os.path.relpath(path)} (not the noise floor)"
         else:
             path = floor_file(comparisons[0][1], comparisons[0][2], a.floor)
             if path:

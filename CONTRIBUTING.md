@@ -160,6 +160,18 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   fused kernel (`NI_V8_GUSPLIT=0`) passes the decode gate (KL mean 7.2e-7); its codes as 1024 + q (`NI_V8_CM=0`) fail
   it (3.3e-6, one row at 5.4e-4); the same weights re-encoded as 8-bit (`NI_REQUANT=8`: every kernel other) pass the
   whole gate (7.7e-4, one flip at a margin of 0.03).
+- An M5 or later takes `tools/logit_floors/<model>.m<N>.json` when there is one (`logit_compare.floor_name`, from the
+  dump's `meta.json` Mac; `--floor` still wins): its tensor_ops paths sum in an order no earlier GPU runs, so its floor
+  is its own, and `logit_floor.py` writes it there instead of over the M4 Pro's. `flint-4bit.m5.json` (M5 Pro 48 GB,
+  macOS 26.5.2, 0.2.7 `9d88378`) is the first. Flint's repeat and 512-row chunks are bitwise on both chips, so its floor
+  is the verify against plain decoding alone: 9.4e-4 / 2.3e-2 mean / p99 KL with the shipped tensor_ops prefill GEMMs,
+  2.2e-2 / 0.47 with `NI_QMT=0` (kept in the file's `qmt0`, not its gate), 5.0e-3 / 4.2e-2 on the M4 Pro. That source is
+  a few rows whose routing flips (medians 1.6e-6 to 4.8e-6 on 768 rows), so it moves 6x to 23x with the build and the
+  rows; no source of Flint's moves the prefill. The file also carries Flint's own `reorder_gate`, which `--reorder`
+  takes instead of the 35B's: twice the qmt against `NI_QMT=0` drift of the decode paths, fast and safe math (mean
+  2.8e-2, median 1.7e-4, p99 0.39). Its mean and p99 are set by the few rows the router moves far, so it adds a
+  median bound (3.3e-4), which a larger error on every row would cross first (not yet shown with one). The
+  `fast_vs_safe_math` sources (the compiler's reassociation and precise functions) are context, not in the gate.
 - Put the comparison's output in the pull request. A change that is not meant to move outputs shows "every row bitwise
   identical" or passes the gate; one that moves them on purpose (a precision, a quantization) fails it and says so, with
   the numbers. A floor changes only with the conditions it measures (re-measured, in a pull request of its own), never
