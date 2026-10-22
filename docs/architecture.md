@@ -116,7 +116,9 @@ new architecture requires more than implementing `Model` if it needs a new draft
   backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B) and 8 (the 35B, on
   `qattn_t_g8s4k16` by default; the 27B keeps the older attention) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off, `NI_QATTN_G8=0` keeps the 35B on `attn_prefill11r`).
   The 35B-A3B's routed expert prefill runs the same tile over the MoE bucket's 64-row expert tiles
-  (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels). Measured on the 4B (dense)
+  (`src/kernels/tensor/qmt_moe.metal`, `NI_MOE_QTM=0` keeps it on the simdgroup kernels), and so do Flint's routed
+  expert GEMMs (`qmtm_g_m64_n64`: gate, up and down each to fp32 rows, so `flint_swiglu_scaled` still sees whole rows;
+  `NI_FLINT_MOE_QTM=0` keeps `qmm_moe_b4_m16_n64`). Measured on the 4B (dense)
   and the 35B-A3B (experts): neither is bit-identical to the simdgroup paths, since the tile reassociates each output's
   K reduction, so the experts' tile is gated by `tools/logit_compare.py --reorder` (AGENTS.md) rather than the model's
   noise floor.

@@ -193,7 +193,29 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     qtmm_tile<1, BM, BN, BK>(X, W, S, B, Y, p, m0, rows, tg.x * BN, nullptr, yrows, tid, sg, xs, ws);               \
   }
 
+// One grouped GEMM to fp32 rows on moe_bucket tiles, both sides indexed: Y[yrows[m]] = X[xrows[m]] W_e^T (Flint's
+// routed experts: gate and up by pair id from token rows, down by pair id from pair rows, qmm_moe_b4_m16_n64's
+// interface: buffers 0-9, QtmParams with shared_e = no expert). grid (N / BN, max tiles), 128 threads.
+#define NI_QTM_G(NAME, BM, BN, BK)                                                                                 \
+  [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                    \
+      const device half* X [[buffer(0)]], const device uint* Wd [[buffer(1)]], const device bfloat* Sd [[buffer(2)]], \
+      const device bfloat* Bd [[buffer(3)]], device float* Y [[buffer(4)]], constant QtmParams& p [[buffer(5)]],     \
+      const device uint* tiles [[buffer(6)]], const device uint* ntiles [[buffer(7)]],                              \
+      const device uint* xrows [[buffer(8)]], const device uint* yrows [[buffer(9)]],                               \
+      uint2 tg [[threadgroup_position_in_grid]], uint tid [[thread_index_in_threadgroup]],                          \
+      uint sg [[simdgroup_index_in_threadgroup]]) {                                                                 \
+    if (tg.y >= ntiles[0]) return;                                                                                 \
+    threadgroup half xs[2 * BM * BK];                                                                              \
+    threadgroup half ws[2 * BN * BK];                                                                              \
+    const uint e = tiles[tg.y * 3 + 0], m0 = tiles[tg.y * 3 + 1], rows = tiles[tg.y * 3 + 2] - m0;                 \
+    const device uint* W[1] = {Wd + e * p.w_es};                                                                   \
+    const device bfloat* S[1] = {Sd + e * p.s_es};                                                                 \
+    const device bfloat* B[1] = {Bd + e * p.s_es};                                                                 \
+    qtmm_tile<1, BM, BN, BK>(X, W, S, B, Y, p, m0, rows, tg.x * BN, xrows, yrows, tid, sg, xs, ws);                 \
+  }
+
 // BN 64 / BK 32 is the measured best; the BN 128 and BK 64 variants of the same tile ran slower on the M5 Pro
 // (dn BN 128 566 -> 221 ms for the 4K layer, BK 64 422 -> 492 ms at 1024 rows), so they are not built.
 NI_QTM_GU(qmtm_gu_m64_n64, 64, 64, 32)
 NI_QTM_DN(qmtm_dn_m64_n64, 64, 64, 32)
+NI_QTM_G(qmtm_g_m64_n64, 64, 64, 32)

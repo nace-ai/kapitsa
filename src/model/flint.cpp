@@ -1139,7 +1139,12 @@ void Flint::enc_layer_prefill(Encoder& e, Seq& s, int li, int pos0, int T) {
 void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
   const FlintConfig& c = cfg_;
   const uint32_t D = uint32_t(c.hidden), E = uint32_t(c.experts), k = uint32_t(c.top_k), P = uint32_t(T) * k;
-  constexpr uint32_t bm = 16;
+  // NI_FLINT_MOE_QTM: the routed experts' grouped GEMMs on the qmt tile (tensor_ops, qmtm_g_m64_n64, 64-row tiles)
+  // where the dense GEMMs use it (qmt_: an Apple10 GPU on macOS 26); NI_FLINT_MOE_QTM=0 keeps qmm_moe_b4_m16_n64
+  static const bool qtm_env = !getenv("NI_FLINT_MOE_QTM") || atoi(getenv("NI_FLINT_MOE_QTM")) != 0;
+  auto qtm_fits = [](const FlintMat& W) { return !W.iq && W.bits == 4 && W.gs == 64 && W.K % 64 == 0 && W.N % 64 == 0; };
+  const bool qtm = qtm_env && qmt_ && qtm_fits(L.eg) && qtm_fits(L.eu) && qtm_fits(L.ed);
+  const uint32_t bm = qtm ? 64 : 16;
   enc_gemm(e, L.router, pxh_, prlog_, T, false);
   const RouteP tp{uint32_t(T), k};
   e.use(pipe("flint_route"));
@@ -1163,15 +1168,21 @@ void Flint::enc_moe_prefill(Encoder& e, const FlintLayer& L, int T) {
     const uint32_t max_tiles = (P + bm - 1) / bm + E;
     // a grouped GEMM over the sorted pairs: X rows xrows[sorted row], Y rows yrows[sorted row] (pair ids)
     auto moe_gemm = [&](const FlintMat& W, const Buffer& xh, const Buffer& y, const Buffer& xrows) {
-      const kp::Qmm p{P, W.N, W.K, W.K, W.N, 0, uint32_t(W.gs), uint32_t(size_t(W.N) * W.row_bytes() / 4),
-                      W.N * (W.K / uint32_t(W.gs))};
-      e.use(pipe("qmm_moe_b4_m16_n64"));
+      const uint32_t w_es = uint32_t(size_t(W.N) * W.row_bytes() / 4), s_es = W.N * (W.K / uint32_t(W.gs));
+      if (qtm) {
+        const kp::Qmm2 p{W.N, W.K, W.K, W.N, uint32_t(W.gs), w_es, s_es, 0xffffffffu};
+        e.use(pipe("qmtm_g_m64_n64"));
+        e.val(5, p);
+      } else {
+        const kp::Qmm p{P, W.N, W.K, W.K, W.N, 0, uint32_t(W.gs), w_es, s_es};
+        e.use(pipe("qmm_moe_b4_m16_n64"));
+        e.val(5, p);
+      }
       e.buf(0, xh);
       e.buf(1, W.w->buf);
       e.buf(2, W.s->buf);
       e.buf(3, W.b->buf);
       e.buf(4, y);
-      e.val(5, p);
       e.buf(6, tiles_);
       e.buf(7, ntiles_);
       e.buf(8, xrows);
