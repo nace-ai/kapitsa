@@ -1,0 +1,79 @@
+  ✓ This Mac is supported
+  Preparing runtime (0s)
+  ✓ Runtime ready  2s
+  Loading Flint (0s)
+127.0.0.1 - - [22/Oct/2026 16:18:30] "GET /v1/models HTTP/1.1" 200 -
+2026-10-22 16:18:30,152 Ignoring unsupported request field 'chat_template_kwargs'
+2026-10-22 16:18:30,152 Ignoring unsupported request field 'reasoning_effort'
+2026-10-22 16:18:30,152 Ignoring unsupported request field 'repeat_penalty'
+127.0.0.1 - - [22/Oct/2026 16:18:30] "GET /health HTTP/1.1" 200 -
+  Loading Flint · Checking model identity (8s)
+127.0.0.1 - - [22/Oct/2026 16:18:30] "GET /v1/models HTTP/1.1" 200 -
+  Loading Flint · Checking generation (8s)
+127.0.0.1 - - [22/Oct/2026 16:18:30] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:18:30,482 Prefill: prompt=5 common_prefix=0 reused=0 new=5
+127.0.0.1 - - [22/Oct/2026 16:18:30] "POST /v1/chat/completions HTTP/1.1" 200 -
+  ✓ Loaded Flint  8s
+
+2026-10-22 16:18:30,713 Prefill: prompt=2697 common_prefix=0 reused=0 new=2697
+╭────────────────────────────────────────────────────────────────────────────╮
+│  ✓ flint is ready.                                                         │
+│                                                                            │
+│  Base URL    http://127.0.0.1:11511/v1                                     │
+│  Model       flint                                                         │
+│  Checkpoint  flint-int4                                                    │
+│  Context     32,768 tokens, input + output (up to 262,144 with --context)  │
+│  API key     rec auth token                                                │
+╰────────────────────────────────────────────────────────────────────────────╯
+Keep this terminal open. Press Ctrl+C to stop.
+127.0.0.1 - - [22/Oct/2026 16:18:32] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:18:32,374 Prefill: prompt=272 common_prefix=1 reused=0 new=272
+127.0.0.1 - - [22/Oct/2026 16:19:03] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:03,993 Prefill: prompt=64 common_prefix=3 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:07] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:07,776 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:11] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:11,510 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:15] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:15,245 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:18] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:18,953 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:22] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:22,746 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:26] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:26,315 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:29] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:29,903 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:33] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:33,504 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:37] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:37,037 Prefill: prompt=64 common_prefix=19 reused=0 new=64
+127.0.0.1 - - [22/Oct/2026 16:19:40] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:40,684 Prefill: prompt=3874 common_prefix=1 reused=0 new=3874
+127.0.0.1 - - [22/Oct/2026 16:19:44] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:44,724 Prefill: prompt=3952 common_prefix=3874 reused=3874 new=78
+127.0.0.1 - - [22/Oct/2026 16:19:47] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:47,910 Prefill: prompt=4009 common_prefix=3952 reused=3952 new=57
+127.0.0.1 - - [22/Oct/2026 16:19:51] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:51,250 Prefill: prompt=4058 common_prefix=4009 reused=4009 new=49
+127.0.0.1 - - [22/Oct/2026 16:19:55] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:19:55,310 Prefill: prompt=15066 common_prefix=3 reused=0 new=15066
+2026-10-22 16:19:58,976 Prefill progress: 8192 tokens processed
+127.0.0.1 - - [22/Oct/2026 16:20:05] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:05,439 Prefill: prompt=15138 common_prefix=15066 reused=15066 new=72
+127.0.0.1 - - [22/Oct/2026 16:20:07] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:07,684 Prefill: prompt=15166 common_prefix=15138 reused=15138 new=28
+127.0.0.1 - - [22/Oct/2026 16:20:10] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:10,021 Prefill: prompt=15188 common_prefix=15166 reused=15166 new=22
+127.0.0.1 - - [22/Oct/2026 16:20:19] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:19,803 Prefill: prompt=272 common_prefix=1 reused=0 new=272
+127.0.0.1 - - [22/Oct/2026 16:20:20] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:20,420 Prefill: prompt=272 common_prefix=272 reused=272 new=0
+127.0.0.1 - - [22/Oct/2026 16:20:20] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:20,711 Prefill: prompt=320 common_prefix=272 reused=272 new=48
+127.0.0.1 - - [22/Oct/2026 16:20:21] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:21,745 Prefill: prompt=272 common_prefix=272 reused=272 new=0
+127.0.0.1 - - [22/Oct/2026 16:20:22] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:22,040 Prefill: prompt=272 common_prefix=272 reused=272 new=0
+127.0.0.1 - - [22/Oct/2026 16:20:22] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:20:22,333 Prefill: prompt=320 common_prefix=272 reused=272 new=48

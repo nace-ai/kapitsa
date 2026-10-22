@@ -1,0 +1,42 @@
+  ✓ This Mac is supported
+  Preparing runtime (0s)
+  ✓ Runtime ready  3s
+  Loading Flint (0s)
+127.0.0.1 - - [22/Oct/2026 16:54:55] "GET /health HTTP/1.1" 200 -
+  Loading Flint · Checking model identity (8s)
+127.0.0.1 - - [22/Oct/2026 16:54:55] "GET /v1/models HTTP/1.1" 200 -
+  Loading Flint · Checking generation (8s)
+127.0.0.1 - - [22/Oct/2026 16:54:55] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:54:55,830 Prefill: prompt=5 common_prefix=0 reused=0 new=5
+127.0.0.1 - - [22/Oct/2026 16:54:55] "GET /v1/models HTTP/1.1" 200 -
+  ✓ Loaded Flint  9s
+
+╭──────────────────────────────────────────────╮
+│  ✓ flint is ready.                           │
+│                                              │
+│  Base URL    http://127.0.0.1:11511/v1       │
+│  Model       flint                           │
+│  Checkpoint  flint-int4                      │
+│  Context     262,144 tokens, input + output  │
+│  API key     rec auth token                  │
+╰──────────────────────────────────────────────╯
+Keep this terminal open. Press Ctrl+C to stop.
+127.0.0.1 - - [22/Oct/2026 16:54:57] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:54:57,902 Prefill: prompt=2036 common_prefix=0 reused=0 new=2036
+127.0.0.1 - - [22/Oct/2026 16:55:03] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:55:03,977 Prefill: prompt=16370 common_prefix=3 reused=0 new=16370
+2026-10-22 16:55:07,827 Prefill progress: 8192 tokens processed
+127.0.0.1 - - [22/Oct/2026 16:55:14] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:55:14,970 Prefill: prompt=32752 common_prefix=3 reused=0 new=32752
+2026-10-22 16:55:18,692 Prefill progress: 8192 tokens processed
+2026-10-22 16:55:23,174 Prefill progress: 16384 tokens processed
+2026-10-22 16:55:28,409 Prefill progress: 24576 tokens processed
+127.0.0.1 - - [22/Oct/2026 16:55:37] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 16:55:37,634 Prefill: prompt=65523 common_prefix=4 reused=0 new=65523
+2026-10-22 16:55:41,341 Prefill progress: 8192 tokens processed
+2026-10-22 16:55:45,816 Prefill progress: 16384 tokens processed
+2026-10-22 16:55:51,048 Prefill progress: 24576 tokens processed
+2026-10-22 16:55:57,086 Prefill progress: 32768 tokens processed
+2026-10-22 16:56:03,945 Prefill progress: 40960 tokens processed
+2026-10-22 16:56:11,673 Prefill progress: 49152 tokens processed
+2026-10-22 16:56:20,206 Prefill progress: 57344 tokens processed

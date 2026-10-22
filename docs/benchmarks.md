@@ -10,8 +10,9 @@ models with on a Mac: llama.cpp, Ollama, LM Studio, mlx-lm, oMLX and MTPLX (and 
 section](#mlx-serve-2026-10-18); the M4 Pro table's later cells: [their own section](#the-m4-pro-table-filled-in-2026-10-19);
 Nemotron Dory1.0 4B: [its own section](#nemotron-dory10-4b-2026-10-19); the 16 GB MacBook Pro M1 Pro: [its own
 section](#macbook-pro-m1-pro-16-gb-2026-10-19), and [its rerun with 0.2.6](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22); Recursive's Flint 40B-A2.5B against rec and llama.cpp: [its own
-section](#recursive-flint-40b-a25b-m4-pro-2026-10-22), and on a 36 GB M3 Pro under macOS 14: [its own
-section](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
+section](#recursive-flint-40b-a25b-m4-pro-2026-10-22), on a 36 GB M3 Pro under macOS 14: [its own
+section](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22), and against rec on the M5 Pro: [its own
+section](#recursive-flint-40b-a25b-m5-pro-2026-10-22)). [A real coding-agent session](#a-real-coding-agent-session-2026-10-18), replayed
 request by request, puts the engines through what an agent does. Each engine ran at its latest release with its own
 best settings, on the same 4-bit weights wherever it accepts them, through the same requests and the same checks. The
 harness and its configs are in [bench/harness](../bench/harness/README.md), and every result file behind these tables
@@ -127,7 +128,12 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   27B pack), no speculation on the 35B (its catalog turns it off for this model).
 - Dory: 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on
   snsnc's 4-bit.
-- Flint 40B-A2.5B: not measured on this Mac yet (the poster's row is dashes).
+- Flint 40B-A2.5B: Kapitsa (main `6c13588`) and rec 0.1.0 on Recursive's 4-bit MLX export, at the model card's T 1.0,
+  each cell the mean of two 2026-10-22 runs in opposite order (Kapitsa, rec, rec, Kapitsa), every run
+  contention-flagged (Microsoft Edge at 3-10% of the GPU), prefill and decode from the same runs. Decode is level
+  (Kapitsa 145.7, rec 144.9 tok/s, inside the runs' spread; greedy, rec is 2% ahead), so the row counts as Kapitsa's
+  by the measured value; **rec reads prompts 1.56x as fast** at 4K (2,138 against 1,374 tok/s). llama.cpp was not run:
+  its GGUF did not fit this Mac's free disk ([details](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 
 ## How the README poster was measured
 
@@ -137,7 +143,7 @@ Kapitsa's method label is the setup the run used: KFlash (the drafter's best-fir
 
 Prefill is the reading speed on a 4K-token prompt. Kapitsa's comes from the newest run without a contention or invalid flag, except on the M5 Max's cells (all flagged, below) and two M5 Pro cells where the run's build matters too, and both are the 2026-10-22 runs on main: the 27B, which is the mean of the two runs of the same-day pair so that both engines' cells come from one session (Kapitsa 0.2.5, `16f2b6a`, after the 16-row drafting block), and the 35B-A3B, which is the newest flag-free run, on [#293](https://github.com/nace-ai/kapitsa/pull/293)'s merge (`4b89f4e`, 2,552 tok/s, 15:27, the closing run of the Splash session; it replaces `d53f02e`'s 2,459, and its decode, 209, is down from `d53f02e`'s 217, [details](#splash-140-against-kapitsa-m5-pro-2026-10-22)). That Mac's Lightning cell is a 2026-10-21 run (Kapitsa 0.2.2, built from a13f8fd for the 22:00-22:30 runs on the poster, b50f1fc for the 19:56-20:12 ones; a13f8fd differs from b50f1fc only in README, docs, poster and stored results, no source or build files, so the engine is the same; macOS 26.5.2, [10-21 results](../bench/results/2026-10-21-m5pro-48gb/README.md), [10-22 results](../bench/results/2026-10-22-m5pro-48gb/README.md)). The M5 Max's Kapitsa and Splash cells are 2026-10-22 runs on main `fd85910` (Dory's on `039ddea`, after [#287](https://github.com/nace-ai/kapitsa/pull/287)), prefill and decode from the same run, every one flagged for contention ([results](../bench/results/2026-10-22-m5-max/README.md)). Elsewhere prefill comes from 2026-10-19 on the M4 Pro (4B: 06:20 run); on the M1 Pro, Kapitsa's prefill and decode come from the same 0.2.6 `kapitsa bench` run per model (2026-10-22, stored in [bench/community/results](../bench/community/results/)). The other engines' prefill is from their own stored run closest to the decode value shown, in the same session as that decode (2026-10-18 to 10-21), flagged or not: several of those runs carry contention flags, LM Studio's every one. Where another engine reads faster, the poster shows it: the headline, the blue outlines and the orange bars rank decode only. Splash shows a dash where it has no prefill run (the M4 Pro). The M5 Pro's 27B cell is the mean of two 2026-10-22 runs on main after [#266](https://github.com/nace-ai/kapitsa/pull/266)'s 16-row drafting block (77 tok/s decode, 459 prefill); mlx-serve's 27B cell is its two runs of that same pair, so the two 27B cells are one session rather than two runs a day apart, and the pair reads mlx-serve 78.2 tok/s sampled and 464 tok/s 4K prefill against Kapitsa 76.9 and 459 (each engine's two runs interleaved in opposite order; three of the four carry the harness's contention flag for this session's browser, and the decode means move 1.6% apart, inside the runs' own spread). Its 35B-A3B cell is the 2026-10-22 run on main after [#279](https://github.com/nace-ai/kapitsa/pull/279) moved the expert prefill to the tensor units (217 tok/s decode, 2,459 prefill at 4K, prefill and decode from the same flag-free run); its Lightning cell is a single 2026-10-21 run, prefill and decode together. The other engines' M5 Pro cells are still the 2026-10-19 runs (on the 27B mlx-serve's decode went from 71 in the 10-19 run to 78 in this pair). KFlash decode cells were measured on 2026-10-21 ([#187](https://github.com/nace-ai/kapitsa/pull/187), [numbers](#kflash-trees-m4-pro-2026-10-21)); the DFlash, DFlash2, DSpark and LiLiCorr cells come from earlier runs. Every run is listed in [bench/README.md](../bench/README.md).
 
-Flint's row (M4 Pro, 2026-10-22) differs in three ways. It decodes at the model card's T 1.0, not 0.6. Every cell, Kapitsa's included, is the mean of that engine's runs, with prefill and decode from the same runs. And its llama.cpp cell is b11804, not the column's b11669: b11804 is llama.cpp's first build with Flint. rec runs only Flint, so its column is × elsewhere ([details](#recursive-flint-40b-a25b-m4-pro-2026-10-22)).
+Flint's rows (M4 Pro and M5 Pro, 2026-10-22) differ in three ways. It decodes at the model card's T 1.0, not 0.6. Every cell, Kapitsa's included, is the mean of that engine's runs, with prefill and decode from the same runs. And its llama.cpp cell is b11804, not the column's b11669: b11804 is llama.cpp's first build with Flint. rec runs only Flint, so its column is × elsewhere ([M4 Pro](#recursive-flint-40b-a25b-m4-pro-2026-10-22), [M5 Pro](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 
 ## Quality: Qwen3.6 35B-A3B against bf16 (2026-10-19)
 
@@ -1945,6 +1951,43 @@ result files: [bench/results/2026-10-22-m1pro-16gb](../bench/results/2026-10-22-
 - One request per size: this Mac's repeated runs of one build spread 3-8%, so a single point's ratio reads within that.
 
 1. Both engines' 35B sweeps swapped (Kapitsa 36,072 pages, llama.cpp 207,104).
+
+## Recursive Flint 40B-A2.5B (M5 Pro, 2026-10-22)
+
+The M4 Pro's Flint protocol on the MacBook Pro M5 Pro, 48 GB (`Mac17,8`, macOS 26.5.2, High Power mode, AC power):
+Kapitsa (main `6c13588`) and rec 0.1.0 on Recursive's 4-bit MLX export, two passes in opposite order in one hold of
+the GPU lock, then a context sweep. llama.cpp was not run: its 24.2 GiB GGUF did not fit next to the MLX files within
+the session's 30 GiB free-disk floor. Microsoft Edge used 3-10% of the GPU through the runs, so every run is
+contention-flagged. Result files, logs and the sweep are in
+[bench/results/2026-10-22-flint-m5pro](../bench/results/2026-10-22-flint-m5pro/README.md).
+
+| Engine | Decode T = 1.0 / greedy (tok/s) | Prefill 4K / 16K (tok/s) | Follow-up TTFT 4K / 16K (s) | Peak (GB) |
+| --- | ---: | ---: | ---: | ---: |
+| **Kapitsa** (2 runs) | **145.7** / 148.8 | 1,374 / 1,108 | **0.12 / 0.14** | **23.3** |
+| rec 0.1.0 (2 runs) | 144.9 / **151.9** | **2,138 / 1,941** | 0.28 / 0.28 | 29.1 |
+
+The context sweep, as on the M4 Pro; the points with GPU load from the browser were run twice, and each cell is the
+run with less load in its window:
+
+| Prefill (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Kapitsa | 1,151 | 1,382 | 1,302 | 1,288 | 1,102 | 847 | 578 | 350 |
+| **rec 0.1.0** | **1,582** | **2,144** | **2,112** | **2,108** | **1,934** | **1,657** | **1,250** | **817** |
+| <sub>Kapitsa ÷ rec</sub> | <sub>0.73×</sub> | <sub>0.64×</sub> | <sub>0.62×</sub> | <sub>0.61×</sub> | <sub>0.57×</sub> | <sub>0.51×</sub> | <sub>0.46×</sub> | <sub>0.43×</sub> |
+
+| Decode (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **Kapitsa** | **144.8** | **138.3** | 130.4 | **129.4** | **118.0** | **97.4** | **74.3** | **49.5** |
+| rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5 | 88.6 | 64.5 | 43.1 |
+| <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.15×</sub> | <sub>1.15×</sub> |
+
+- **Prefill.** rec reads faster at every length, 1.4x at 1K, 1.6x at 4K, 2.3x at 128K: the reverse of the M4 Pro, where
+  Kapitsa led rec at every length. From the M4 Pro to the M5 Pro, Kapitsa's 4K prefill rises 1.42x and rec's 2.69x;
+  why rec gains so much more was not measured.
+- **Decode.** As on the M4 Pro: level up to 4K, then Kapitsa ahead, 1.10x at 16K and 32K and 1.15x at 64K and 128K.
+- **Method.** One cold request per point; with the browser's load, read the long-context ratios as about ±10%. Each
+  point's foreign GPU load and both runs are in the
+  [results folder](../bench/results/2026-10-22-flint-m5pro/README.md#context-sweep-1k-to-128k-tokens).
 
 ## Your Mac: `kapitsa bench`
 

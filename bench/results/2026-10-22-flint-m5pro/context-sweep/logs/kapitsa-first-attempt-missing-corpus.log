@@ -1,0 +1,11 @@
+[kapitsa] compiled kernels in 2898 ms
+[kapitsa] compiled the Flint kernels in 118 ms
+[kapitsa] compiled the tensor kernels in 531 ms
+[kapitsa] read 22.57 GB of weights in 2755 ms (8.2 GB/s)
+[kapitsa] Flint: 49 layers (14 full attention), 4-bit group 64 (embedding 8-bit group 64, LM head 4-bit group 64, router bf16), loaded in 3.6 s
+[kapitsa] tokenizer: 150000 tokens, 149744 merges, 144 added (116 ms)
+[kapitsa] GPU: Apple M5 Pro, 20 cores
+[kapitsa] memory: 22.59 GB allocated (model, buffers, 1 slots' state), budget 38.6 GB (recommended working set 40.2 GB): KV room 16.01 GB = 558307 tokens (28 KB per token), one conversation up to 262144 of 262144 tokens
+[kapitsa] engine ready: flint, context 262144, 1 slots, plain decoding
+[kapitsa] listening on http://127.0.0.1:8401
+Ready: chat at http://127.0.0.1:8401, API at http://127.0.0.1:8401/v1 (model "flint"). Ctrl+C stops.
