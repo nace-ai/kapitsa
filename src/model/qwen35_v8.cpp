@@ -201,15 +201,20 @@ static bool v8_wide_ok_c(const Qwen35Config& c) {
 bool Qwen35::verify_wide_ok() const { return v8_wide_ok_c(cfg_); }
 
 int Qwen35::vpf_pass_rows(const Qwen35Config& c) {
-  // NI_VPF_ROWS names the widest chain pass a cached suffix may run (8, 16, 24 or 32 rows); the default is the
-  // measured case: a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
-  // weights are worth a whole turn's prefill, so the suffix's rows stream them once instead of once per 8-row tile
+  // NI_VPF_ROWS names the widest chain pass a cached suffix may run (8, 16 or 32 rows: the widths the verify buffers
+  // hold - set_tree_rows rounds to whole 8-row tiles, and a 24 there would reserve three tiles for four); the default is
+  // the measured case: a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
+  // weights are worth a whole turn's prefill, so the suffix's rows stream them once instead of once per 8-row tile. The
+  // width is reserved at load (plan, the model's buffers, every sequence's tape), so a run that turns the path off
+  // (NI_VPF=0) keeps the 16-row block's capacity rather than holding memory for a pass it can never take.
+  const char* off = getenv("NI_VPF");
+  if (off && off[0] == '0' && off[1] == 0) return 8;
   const int max_rows = v8_wide_ok_c(c) ? kMaxTreeRows : 8;
   const char* v = getenv("NI_VPF_ROWS");
   if (v && *v) {
     if (v[0] == '0' && v[1] == 0) return 8;
     const int n = atoi(v);
-    const int rows = n <= 8 ? 8 : n <= 16 ? 16 : n <= 24 ? 24 : kMaxTreeRows;
+    const int rows = n <= 8 ? 8 : n <= 16 ? 16 : kMaxTreeRows;
     return rows < max_rows ? rows : max_rows;
   }
   if (c.moe) return 8;
