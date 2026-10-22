@@ -226,8 +226,8 @@ it as Flint's `16gb` variant, which `flint` takes where the 4-bit default does n
 kapitsa serve flint        # on a 16 GB Mac: flint:16gb, downloaded and imported the first time
 ```
 
-On a MacBook Pro M1 Pro 16 GB it decodes 61.3 tok/s (llama.cpp d772569 on the same file: 42.5) and reads a 4K-token
-prompt in 9.4 s (10.8 s), at a peak of 11.6 GB (12.2 GB). The requantized tensors cost quality: against llama.cpp on the
+On a MacBook Pro M1 Pro 16 GB it decodes 61 tok/s (llama.cpp d772569 on the same file, runs alternated: 42.4) and
+reads a 4K-token prompt in 9.4 s (10.9-11.2 s), at a peak of 11.6 GB (12.2 GB). The requantized tensors cost quality: against llama.cpp on the
 same file its next-token distributions are at KL 0.22 (median 0.018), with the same top token 89% of the time; on the
 same weights (its import written back as a GGUF) the two engines agree at KL 0.045 (median 0.001, 97.4%).
 
