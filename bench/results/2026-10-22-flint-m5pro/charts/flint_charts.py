@@ -20,10 +20,12 @@ SIZES = sorted(int(s) for s in SWEEP["kapitsa"])
 ENG = [("Kapitsa", "kapitsa", T["kap"]), ("rec 0.1.0", "rec", "#C9D1CC")]
 SETUP = ("MacBook Pro M5 Pro (20-core GPU), 48 GB · macOS 26.5.2 · plugged in · High Power mode · "
          "T 1.0, top_p 0.95, top_k 20 · one engine at a time · no speculative decoding")
-FOOT = ["llama.cpp b11804 not run on this Mac: its 24.2 GiB Q4_1 GGUF did not fit next to the MLX weights within the "
-        "session's 30 GiB free-disk floor",
-        "Microsoft Edge used 1-15% of the GPU on average in the protocol runs (flagged in the results) · "
-        "bench/results/2026-10-22-flint-m5pro · github.com/nace-ai/kapitsa"]
+LLAMA = ("llama.cpp b11804 not run on this Mac: its 24.2 GiB Q4_1 GGUF did not fit next to the MLX weights within the "
+         "session's 30 GiB free-disk floor")
+FOOT = [LLAMA, "Microsoft Edge used 3-10% of the GPU on average per protocol run (all flagged in the results) · "
+               "bench/results/2026-10-22-flint-m5pro · github.com/nace-ai/kapitsa"]
+FOOT_SWEEP = [LLAMA, "Background (Edge) GPU load in the plotted windows: 0-24% mean per cell, listed in "
+                     "context-sweep/sweep.json · bench/results/2026-10-22-flint-m5pro · github.com/nace-ai/kapitsa"]
 
 
 def k(n):
@@ -46,30 +48,31 @@ def frame(title, sub, body, foot=FOOT):
 
 
 def headline():
-    rows = [  # (label, kapitsa, rec, higher is better, format)
-        ("Decode, short context (tok/s, T 1.0)", 145.7, 144.9, True, "{:.1f}"),
-        ("Decode, short context, greedy (tok/s)", 148.8, 151.9, True, "{:.1f}"),
-        ("Prefill, 4K-token prompt (tok/s)", 1374, 2138, True, "{:,.0f}"),
-        ("Prefill, 16K-token prompt (tok/s)", 1108, 1941, True, "{:,.0f}"),
+    rows = [  # (label, kapitsa, rec, higher is better, format, tie tolerance)
+        # tolerance: two ±3% means, ±6%; the README gives the ratios above 8K (one loaded request each) as ±10%
+        ("Decode, short context (tok/s, T 1.0)", 145.7, 144.9, True, "{:.1f}", 0.06),
+        ("Decode, short context, greedy (tok/s)", 148.8, 151.9, True, "{:.1f}", 0.06),
+        ("Prefill, 4K-token prompt (tok/s)", 1374, 2138, True, "{:,.0f}", 0.06),
+        ("Prefill, 16K-token prompt (tok/s)", 1108, 1941, True, "{:,.0f}", 0.06),
         ("Decode at 128K context (tok/s, one request)", SWEEP["kapitsa"]["131072"]["decode"],
-         SWEEP["rec"]["131072"]["decode"], True, "{:.1f}"),
+         SWEEP["rec"]["131072"]["decode"], True, "{:.1f}", 0.10),
         ("Prefill at 128K (tok/s, one request)", SWEEP["kapitsa"]["131072"]["prefill"],
-         SWEEP["rec"]["131072"]["prefill"], True, "{:,.0f}"),
-        ("Follow-up turn at 4K, time to first token (s)", 0.12, 0.28, False, "{:.2f} s"),
-        ("Peak memory (GB)", 23.3, 29.1, False, "{:.1f} GB"),
+         SWEEP["rec"]["131072"]["prefill"], True, "{:,.0f}", 0.10),
+        ("Follow-up turn at 4K, first token (s, lower is better)", 0.12, 0.28, False, "{:.2f} s", 0.06),
+        ("Peak memory (GB, lower is better)", 23.3, 29.1, False, "{:.1f} GB", 0.06),
     ]
-    x0, lw, bx, bw = 64, 600, 690, 1000
+    x0, lw, bx, bw = 64, 600, 690, 940
     y, rh = 250, 86
     s = []
     for j, (name, _, c) in enumerate(ENG):
         s += [R.rect(bx + j * 220, 214, 22, 22, 5, c), R.text(bx + j * 220 + 34, 232, name, "sans-sb", 22, T["ink"])]
-    for i, (label, kv, rv, hi, f) in enumerate(rows):
+    for i, (label, kv, rv, hi, f, tol) in enumerate(rows):
         yy = y + i * rh
         s.append(R.rect(x0 - 16, yy, W - 2 * (x0 - 16), rh - 10, 14, T["panel"]))
         s.append(R.text(x0, yy + rh / 2 + 3, label, "sans-m", 25, T["ink"]))
         m = max(kv, rv)
         win = (kv >= rv) if hi else (kv <= rv)
-        tie = abs(kv - rv) / m < 0.02
+        tie = abs(kv - rv) / m <= tol
         for j, (v, (_, _, c)) in enumerate(zip((kv, rv), ENG)):
             by = yy + 12 + j * 32
             w = bw * v / m
@@ -79,8 +82,10 @@ def headline():
                             T["ink"] if best else T["ink2"]))
         if tie:
             s.append(R.text(W - 64, yy + rh / 2 + 3, "tie", "sans-sb", 20, T["muted"], "end"))
+        elif tol > 0.06:
+            s.append(R.text(W - 64, yy + rh / 2 + 3, "ratio ±10%", "sans-sb", 20, T["muted"], "end"))
     return frame("Flint 40B-A2.5B on the M5 Pro: Kapitsa vs rec 0.1.0",
-                 "Decode is a tie; rec reads prompts 1.4-2.3× as fast; Kapitsa starts follow-up turns 2.4× sooner",
+                 "Decode is a tie; rec reads prompts 1.4-2.3× as fast; Kapitsa starts follow-up turns sooner and uses less memory",
                  "".join(s))
 
 
@@ -100,11 +105,12 @@ def by_context(metric, unit, title, sub):
     for i, n in enumerate(SIZES):
         s.append(R.text(X(i), cy1 + 34, k(n), "mono", 22, T["ink2"], "middle"))
         r = vals["kapitsa"][i] / vals["rec"][i]
-        s.append(R.text(X(i), cy1 + 70, f"{r:.2f}×", "mono-b" if r >= 1 else "mono", 20,
-                        T["kap"] if r >= 1.02 else (T["ink2"] if r > 0.98 else ORANGE), "middle"))
-    s.append(R.text(cx0 - 60, cy1 + 70, "Kapitsa ÷ rec", "sans", 18, T["muted"], "end"))
-    s.append(R.text((cx0 + cx1) / 2, cy1 + 104, "prompt length, tokens · one cold request per point, then 256 tokens · ±3% on a "
-                    "quiet GPU; the ratios above 8K, with background load, ±10%", "sans", 18, T["muted"], "middle"))
+        tol = 0.06 if n <= 8192 else 0.10  # two ±3% cells up to 8K; above 8K the README's ±10% for the ratios
+        s.append(R.text(X(i), cy1 + 70, f"{r:.2f}×", "mono", 20,
+                        T["kap"] if r > 1 + tol else (ORANGE if r < 1 - tol else T["ink2"]), "middle"))
+    s.append(R.text(cx0 - 60, cy1 + 70, "Kapitsa ÷ rec (grey: within noise)", "sans", 18, T["muted"], "end"))
+    s.append(R.text((cx0 + cx1) / 2, cy1 + 104, "prompt length, tokens · one cold request per point, then 256 tokens · a point ±3% on a quiet GPU; "
+                    "the ratios above 8K, with background load, ±10%", "sans", 18, T["muted"], "middle"))
     for j, (name, e, c) in enumerate(ENG):
         pts = " ".join(f"{X(i):.1f},{Y(v):.1f}" for i, v in enumerate(vals[e]))
         s.append(f'<polyline points="{pts}" fill="none" stroke="{c}" stroke-width="{5 if j == 0 else 4}" '
@@ -118,7 +124,7 @@ def by_context(metric, unit, title, sub):
                             c if j == 0 else T["ink2"], "middle"))
         s += [R.rect(cx1 - 360 + j * 190, cy0 - 14, 22, 22, 5, c),
               R.text(cx1 - 326 + j * 190, cy0 + 4, name, "sans-sb", 22, T["ink"])]
-    return frame(title, sub, "".join(s))
+    return frame(title, sub, "".join(s), FOOT_SWEEP)
 
 
 ORANGE = R.ORANGE
