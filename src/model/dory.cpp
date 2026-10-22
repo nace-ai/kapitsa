@@ -907,7 +907,8 @@ void Dory::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& 
   // NVFP4 up to 32 rows (a short prompt or follow-up): the x4 kernels, 8 rows on 8 simdgroups splitting K, 9-32 rows
   // in SK parts of K summed by the last part to arrive (Nemotron-H's: nh_x_fp4.metal)
   if (W.fmt == NhFmt::FP4 && M <= 32 && W.K % 128 == 0) {
-    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
+    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, tiles = (W.N + 63) / 64,
+                   sk = NemotronH::split_merges() ? 1 : W.K <= 8192 ? 4 : 8;  // (split_merges: macOS 14)
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
       const V8P p{W.N, W.K, W.K, W.N, uint32_t(M), W.gs, uint32_t(epi)};
       e.use(pipe(tb == 1   ? x4(W, "nh_x4_v8", "nh_x4_v8_l0")

@@ -283,6 +283,7 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
   if (SK > 1) {
+#if NH_FENCES
     device float2* base = part + size_t(tile) * SK * nsg * (NF * TB * 32);
     _Pragma("clang loop unroll(full)")
     for (int f = 0; f < NF; ++f)
@@ -308,6 +309,9 @@ NI_INLINE void nh_x8_mm_impl(const device half* X, const device uchar* q, device
         acc[f][b].thread_elements()[1] = v.y;
       }
     if (tid == 0) atomic_store_explicit(cnt + tile, 0u, memory_order_relaxed);
+#else
+    return;  // (no merge without device-scope fences: the engine runs SK = 1, NH_FENCES in nh_common.h)
+#endif
   }
   _Pragma("clang loop unroll(full)")
   for (int f = 0; f < NF; ++f) {

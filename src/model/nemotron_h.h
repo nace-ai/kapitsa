@@ -224,6 +224,10 @@ class NemotronH : public Model {
   void enc_embed(Encoder& e, const Buffer& tokens, int tok_off, int R, const Buffer& out, const Buffer* params = nullptr,
                  size_t params_off = 0);
   static Pipeline pipeline(const std::string& name);
+  // No merge in the threadgroup to arrive last (NH_FENCES in nh_common.h): macOS 14, whose Metal 3.1 has no
+  // device-scope fences, or NI_NH_SPLIT=1. Then no fused one-token MoE layer, nh_x4_moe_dn + nh_moe2_sum2 for an
+  // NVFP4 latent model's expert sums and SK = 1 for the 9-32-row x4 / x8 GEMMs (Dory's too).
+  static bool split_merges();
 
  private:
   void load(int prefill_chunk);
@@ -317,6 +321,7 @@ class NemotronH : public Model {
   Buffer x2sorted_, x2tiles_, x2args_, x2rank_;  // verify routed experts grouped by expert (nh_x2_bucket)
   bool merge_flush_ = true;       // NI_NH_MERGE_FLUSH: a verify's scans commit the previous block's accepted rows
   bool fuse_dec_ = true;          // NI_NH_FUSE: a token's MoE layer in 4 dispatches (nh_zdec.metal)
+  bool split_ = split_merges();
   bool route_bucket_ = true;      // NI_NH_ROUTE_BUCKET: an M5 verify's IQ2 routing and bucketing in one dispatch
   uint32_t x2_sgd_ = 1;           // NI_NH_X2_SGD: simdgroups per threadgroup of a verify's IQ2 experts' down projection
   uint32_t moe_thr_ = 256;        // NI_NH_MOE_THR: threads per threadgroup of a verify's NVFP4 routed experts

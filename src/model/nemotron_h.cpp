@@ -467,6 +467,15 @@ bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry
   return false;
 }
 
+bool NemotronH::split_merges() {
+  static const bool split = [] {
+    if (const char* v = getenv("NI_NH_SPLIT")) return atoi(v) != 0;
+    if (__builtin_available(macOS 15.0, *)) return false;  // (Gpu::compile_library: Metal 3.2+)
+    return true;
+  }();
+  return split;
+}
+
 NemotronH::NemotronH(const std::string& path, int prefill_chunk) {
   path_ = path;
   while (path_.size() > 1 && path_.back() == '/') path_.pop_back();
@@ -1148,6 +1157,7 @@ void NemotronH::alloc_buffers() {
   memset(moecnt_.ptr(), 0, moecnt_.size);
   sd_ = g.alloc(size_t(cfg_.hidden) * 4, "nh_shared_down");
   if (const char* v = getenv("NI_NH_FUSE")) fuse_dec_ = atoi(v) != 0;
+  if (split_) fuse_dec_ = false;  // (its routing merges in the last router threadgroup)
   if (const char* v = getenv("NI_NH_ROUTE_BUCKET")) route_bucket_ = atoi(v) != 0;
   // a verify's IQ2 routed experts' down projection: 4 simdgroups per threadgroup on the M5 (16 rows of a tile; tools/
   // nh_x2moe_bench, a 5-row harness verify's 29 experts: 52.0 against 59.1 us with 1, 52.8 with 2, 52.0 with 8; the
@@ -2180,7 +2190,8 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       if (grouped) e.group_begin();
       // (the rows' sums into lo_: no nh_moe2_sum2 below; without latent projections the partials, then their sums
       // added into the residual by nh_moe2_sum2_add)
-      e.use(pipe(lat ? "nh_x4_moe_dn_sum" : L.down_e.l2 ? "nh_x4_moe_dn_l2" : "nh_x4_moe_dn"));
+      // (split_: nh_x4_moe_dn, its products to the bit, and nh_moe2_sum2 below)
+      e.use(pipe(lat && !split_ ? "nh_x4_moe_dn_sum" : L.down_e.l2 ? "nh_x4_moe_dn_l2" : "nh_x4_moe_dn"));
       e.buf(0, L.down_e.q);
       e.buf(1, L.down_e.s);
       e.buf(2, h_);
@@ -2267,6 +2278,13 @@ void NemotronH::enc_moe(Encoder& e, const NhLayer& L, int R) {
       e.val(2, mp);
       e.buf(3, live());
       e.buf(4, sdv_);
+      e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
+    } else if (fp4 && split_) {  // (nh_x4_moe_dn_sum's sums: the same additions in the same order)
+      e.use(pipe("nh_moe2_sum2"));
+      e.buf(0, part_);
+      e.buf(1, lo_);
+      e.val(2, mp);
+      e.buf(3, live());
       e.dispatch((uint32_t(cfg_.latent) + 63) / 64, nrows, 1, 64);
     } else if (!fp4) {
       e.use(pipe("nh_moe2_sum"));
@@ -2814,7 +2832,8 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
   const bool x8_tail = dense_ && W.K % 128 != 0 && W.K % 32 == 0;
   if (W.fmt == NhFmt::FP8 && x8_ && M <= 32 && (W.K % 128 == 0 || x8_tail) && (x_ld ? x_ld : W.K) % 8 == 0) {
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
-    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
+    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = split_ ? 1 : W.K <= 8192 ? 4 : 8,
+                   tiles = (W.N + 63) / 64;
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
       const bool n1 = tb == 1 && v8_n1_ && W.K % 128 == 0;
       std::string name = tb == 1   ? (n1 ? "nh_x8_v8_n1" : "nh_x8_v8")
@@ -2862,7 +2881,8 @@ void NemotronH::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buf
   if (W.fmt == NhFmt::FP4 && x4_ && M <= 32 && (W.K % 128 == 0 || x4_tail) && (x_ld ? x_ld : W.K) % 8 == 0 &&
       (M > 8 || v8_)) {
     const V8P p{W.N, W.K, x_ld ? x_ld : W.K, y_ld ? y_ld : W.N, uint32_t(M), W.gs, uint32_t(epi)};
-    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = W.K <= 8192 ? 4 : 8, tiles = (W.N + 63) / 64;
+    const uint32_t tb = M <= 8 ? 1 : M <= 16 ? 2 : M <= 24 ? 3 : 4, sk = split_ ? 1 : W.K <= 8192 ? 4 : 8,
+                   tiles = (W.N + 63) / 64;
     if (tb == 1 || (size_t(sk) * tiles * 2048 * tb <= x4part_.size && tiles * 4 <= x4cnt_.size)) {
       std::string name = tb == 1 ? "nh_x4_v8" : tb == 2 ? "nh_x4_mm16" : tb == 3 ? "nh_x4_mm24" : "nh_x4_mm32";
       if (!W.l2) name += "_l0";

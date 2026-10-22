@@ -453,6 +453,7 @@ NI_INLINE void nh_x4_mm_impl(const device half* X, const device uchar* q, const 
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
   if (SK > 1) {
+#if NH_FENCES
     device float2* base = part + size_t(tile) * SK * nsg * (NF * TB * 32);
     _Pragma("clang loop unroll(full)")
     for (int f = 0; f < NF; ++f)
@@ -478,6 +479,9 @@ NI_INLINE void nh_x4_mm_impl(const device half* X, const device uchar* q, const 
         acc[f][b].thread_elements()[1] = v.y;
       }
     if (tid == 0) atomic_store_explicit(cnt + tile, 0u, memory_order_relaxed);
+#else
+    return;  // (no merge without device-scope fences: the engine runs SK = 1, NH_FENCES in nh_common.h)
+#endif
   }
   const float post = p.gs * nh_x4_post_l[L];
   _Pragma("clang loop unroll(full)")
@@ -556,6 +560,7 @@ NH_X4_MM(nh_x4_mm32_l0_t, 4, 0, true)
   const uint e = uint(eid[pair]);
   nh_x4_mv_impl<0, 0>(q + size_t(e) * p.dn_q_stride, s + size_t(e) * p.dn_s_stride, h + size_t(pair) * p.h_stride,
                       part + size_t(pair) * p.D, p.D, p.I, ew[pair] * gse[e], (tgp.x * nsg + sg) * 4, lane, tlh);
+#if NH_FENCES  // (else the partials only: nh_x4_moe_dn's, NH_FENCES in nh_common.h)
   device atomic_uint* c = cnt + r * ntg.x + tgp.x;
   threadgroup_barrier(mem_flags::mem_device);
   if (tid == 0) {
@@ -572,6 +577,7 @@ NH_X4_MM(nh_x4_mm32_l0_t, 4, 0, true)
     lo[r * p.D + d] = v;
   }
   if (tid == 0) atomic_store_explicit(c, 0u, memory_order_relaxed);
+#endif
 }
 
 // ---- NVFP4 routed experts for prefill: the pairs grouped by expert (nh_moe_bucket tiles of <= 8 TB rows), each tile

@@ -67,6 +67,7 @@
     const device uchar* r8 = (const device uchar*)rw;
     if (row0 < p.E) nh_mv_dot<3, 4, 1>(r8, r8, xn, p.H, p.H, 1, row0, p.E, lane, nullptr, acc);
     nh_mv_store<4, 1, 0>(acc, logits, p.E, p.E, 1, 1.0f, row0, lane);
+#if NH_FENCES
     threadgroup_barrier(mem_flags::mem_device);
     if (tid == 0) {
       atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
@@ -77,6 +78,7 @@
     if (arrival != p.tg_r - 1) return;
     if (sg == 0) nh_route_row((const device float*)logits, bias, p.E, p.k, p.norm, p.scale, lane, eid, ew);
     if (tid == 0) atomic_store_explicit(counter, 0u, memory_order_relaxed);
+#endif
     return;
   }
   // shared up rows (NVFP4, relu^2)
