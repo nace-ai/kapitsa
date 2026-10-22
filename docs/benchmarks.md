@@ -132,8 +132,9 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   each cell the mean of two 2026-10-22 runs in opposite order (Kapitsa, rec, rec, Kapitsa), every run
   contention-flagged (Microsoft Edge at 3-10% of the GPU), prefill and decode from the same runs. Decode is level
   (Kapitsa 145.7, rec 144.9 tok/s, inside the runs' spread; greedy, rec is 2% ahead), so the row counts as Kapitsa's
-  by the measured value; **rec reads prompts 1.56x as fast** at 4K (2,138 against 1,374 tok/s). llama.cpp was not run:
-  its GGUF did not fit this Mac's free disk ([details](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+  by the measured value; **rec reads prompts 1.56x as fast** at 4K (2,138 against 1,374 tok/s). llama.cpp b11804 on
+  Recursive's Q4_1 GGUF is one run, about 1.5 hours later and with no foreign GPU load (92.4 tok/s decode, 2,072 tok/s
+  prefill at 4K: 1.51x Kapitsa's prompt speed, 0.63x its decode) ([details](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 
 ## How the README poster was measured
 
