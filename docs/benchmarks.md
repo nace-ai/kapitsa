@@ -2097,8 +2097,6 @@ The Mac was the MacBook Pro M1 Pro, 16 GB, on macOS 27.0.1, on AC power. The har
 prompt does not fit 8K of context), at the model card's T 1.0 with `--always-reasons`. Result files and logs are in
 [bench/results/2026-10-22-flint-16gb-m1pro](../bench/results/2026-10-22-flint-16gb-m1pro/README.md).
 
-| Engine | Decode T = 1.0 / greedy (tok/s) | Prefill 4K (tok/s) | Follow-up TTFT 4K (s) | Peak (GB) | Swapped during |
-| --- | ---: | ---: | ---: | ---: | --- |
 Two runs of each engine, alternated (llama.cpp, Kapitsa, llama.cpp, Kapitsa, 22:48-23:03), Kapitsa at `2b5ab35`:
 
 | Engine | Decode T = 1.0 (tok/s) | Decode greedy (tok/s) | Prefill 4K (tok/s) | Follow-up TTFT 4K (s) | Peak (GB) |

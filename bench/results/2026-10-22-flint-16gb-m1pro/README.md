@@ -110,7 +110,8 @@ each run. No run is flagged for contention: the foreign GPU load was at most 2.3
 
 **Kapitsa** ran `kapitsa serve --ctx 8192 --slots 1`, which chose 448-row prefill chunks itself; `--ctx 8192` and
 `--slots 1` are what it chooses on this Mac too. mlock held 11.2-11.4 GB of the weights; the rest stayed pageable, and
-no decode phase swapped.
+the Mac still swapped: three of Kapitsa's four decode phases (T 1.0 and greedy in each alternated run) swapped 2K-9K pages; only the
+second run's T 1.0 decode is swap-free (the bold 61.09 above), as the table lists.
 
 **llama.cpp** ran `llama-server` with `flint-llamacpp`'s flags, except `-c 8192` and `-ub 512` (in place of `-c 32768`
 and `-ub 2048`) for a 16 GB Mac. Those flags put every layer on the GPU and set `-fa on`, F16 KV, `--cache-ram 0`,
