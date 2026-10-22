@@ -114,6 +114,7 @@ int main(int argc, char** argv) {
       const uint32_t nsg = name.find("s16") != std::string::npos ? 16 : name.find("s2k") != std::string::npos ? 2 : name.find("s8") != std::string::npos ? 8 : 4;
       const bool g8 = name.find("g8") != std::string::npos;   // 2 tokens x 8 heads per tile instead of 4 x 4
       qb = (g8 ? 2 : 4) * nsg; th = 32 * nsg; gy = Hkv;
+      if (name.find("d2") != std::string::npos) qb /= 2;   // a pair of simdgroups per 16-row tile
     }
     const uint32_t nblk = gq ? (T * G + 31) / 32 : (T + qb - 1) / qb;
     if (gq) gy = Hkv;

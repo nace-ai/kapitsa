@@ -2909,18 +2909,25 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // 5.6e-4 mean KL, 1.10x the 35B's noise-floor gate, and it departs from that gate by the user's call (AGENTS.md,
   // "Changing speed or numerics"; tools/logit_floors/ is still the M4 Pro measurement of the old kernels).
   // NI_QATTN_G8=0 keeps the 35B on 11r; NI_ATTN overrides both.
+  // NI_QATTN_D2 (default on, 0 = off): G = 8 runs qattn_t_g8d2s8 instead, the head dim split over a pair of
+  // simdgroups (half the accumulator registers; qattn_t.metal), 8 tokens per threadgroup as before. bench_attn on the
+  // M5 Pro, T 4224 against 8448 keys / T 3328 against 16000: 24.22 / 44.42 ms vs g8s4k16's 44.08 / 78.23 (1.82x /
+  // 1.76x), error against the fp64 reference the same (2.58e-4 / 3.09e-4 vs 2.60e-4 / 3.08e-4). The scores add the
+  // two halves of the head dim separately, so logits are not bit-identical to g8s4k16's.
   static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
   // Only the environment is read once: the head ratios depend on cfg_, which changes when the server swaps models
   // (--allow-switch), and function-local statics survive the swap.
   static const bool g8_on = env_int("NI_QATTN_G8", 1) != 0;
+  static const bool d2_on = env_int("NI_QATTN_D2", 1) != 0;
   const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
   const bool qg8 = g8_on && cfg_.hq == 8 * cfg_.hkv;
   if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
-    e.use(pipe(qg8 ? "qattn_t_g8s4k16" : "qattn_t_s8k16"));
+    e.use(pipe(qg8 ? (d2_on ? "qattn_t_g8d2s8" : "qattn_t_g8s4k16") : "qattn_t_s8k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
     e.val(5, fp);
     if (qg8) {
-      e.dispatch((uint32_t(T) + 7) / 8, cfg_.hkv, 1, 128);   // 4 simdgroups x 2 tokens of one KV head
+      // g8s4k16: 4 simdgroups x 2 tokens of one KV head; g8d2s8: 4 pairs x 2 tokens
+      e.dispatch((uint32_t(T) + 7) / 8, cfg_.hkv, 1, d2_on ? 256 : 128);
     } else {
       e.dispatch((uint32_t(T) + 31) / 32, cfg_.hkv, 1, 256);
     }
