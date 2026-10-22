@@ -171,6 +171,7 @@ class Qwen35 : public Model {
   // Whether a prefill chunk of T rows would run the split (callers checkpoint the recurrent state
   // before such a chunk so it can be rerun on the GPU alone if the split fails).
   bool ane_splits(int T) const override;
+  bool ane_split_on() const override { return ane_ && !cfg_.moe; }
   // After the command of a chunk encoded with the split has completed: false if the split failed
   // (it is then off for the rest of the process) and the chunk must be rerun. True otherwise.
   bool ane_finish_chunk() override;

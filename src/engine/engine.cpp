@@ -248,9 +248,12 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     const int slots = std::max(1, opts_.slots);
     if (opts_.prefill_chunk <= 0) {
       opts_.prefill_chunk = lp.prefill_chunk;
-      if (opts_.prefill_chunk != 2048)
+      const int base = opts_.prefill_chunk > 2048 && opts_.prefill_chunk <= prefill_chunk_room(2048)
+                           ? 2048  // only its tail room: the 2048-row chunk still fits
+                           : opts_.prefill_chunk;
+      if (base != 2048)
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
-             opts_.prefill_chunk, opts_.context, budget_ / 1e9);
+             base, opts_.context, budget_ / 1e9);
     }
     const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
     const size_t rws = Gpu::get().recommended_working_set();
@@ -543,16 +546,22 @@ static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
 }
 
 // Tail room: a prompt a few rows past a chunk multiple should not pay a whole extra chunk of weight streaming for
-// those rows (4K on the 35B: 2048+2048+36 -> 2066+2066). The buffers get 1/32 more rows and the chunk loop splits
-// the prompt evenly, which only ever removes chunks. Off with NI_BAL=0 (the pre-even-split behaviour).
-static bool even_chunks() {
+// those rows (4K on the 35B: 2048+2048+34 -> 2065+2065). The buffers get 1/32 more rows and the chunk loop splits the
+// prompt evenly, which only ever removes chunks. Off with NI_BAL=0 (the chunking before it).
+bool prefill_even_chunks() {
   static const bool on = [] {
     const char* v = getenv("NI_BAL");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
   return on;
 }
-static int chunk_room(int c) { return c + std::max(8, c / 32); }
+int prefill_chunk_room(int c) { return c + std::max(8, c / 32); }
+int prefill_chunk_rows(int chunk, int64_t p, int64_t n, bool even) {
+  const int64_t left = n - p;
+  if (!even || left <= chunk) return int(std::min<int64_t>(chunk, left));
+  const int64_t k = (left + chunk - 1) / chunk;  // the chunks min(chunk, left) would take, without one more
+  return int((left + k - 1) / k);
+}
 
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget) {
   // 1024-row buffers need ~45% less than 2048-row ones (35B: 0.75 -> 0.38 GB, 27B: 0.94 -> 0.52) for a few % of
@@ -564,21 +573,25 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
     }
   const MemPlan p = model_plan(model_dir, 2048);
   const size_t ane = model_ane_bytes(model_dir, p);
+  // Tail room is for MoE prefill, which streams the expert weights once per chunk: a dense model's prefill is compute
+  // bound, so a sliver of rows costs little, and a model whose prefill splits on the Neural Engine keeps the plain
+  // chunk (the split runs chunks of at most 2048 rows, so room would push every chunk off it).
+  const bool room = prefill_even_chunks() && !p.dense && ane == 0;
   // Single-stream 35B-A3B 4-bit on the 32-core M1 Max: larger prompt chunks
   // reduce expert-tile padding and weight rereads. Keep the existing chunk for
   // concurrent slots, other formats/devices, or when the extra buffers do not fit.
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 && Gpu::get().name() == "Apple M1 Max" &&
       Gpu::get().core_count() == 32) {
-    const MemPlan wide = model_plan(model_dir, even_chunks() ? chunk_room(4096) : 4096);
+    const MemPlan wide = model_plan(model_dir, room ? prefill_chunk_room(4096) : 4096);
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
-      return even_chunks() ? chunk_room(4096) : 4096;
+      return room ? prefill_chunk_room(4096) : 4096;
   }
   if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) return 1024;
-  if (even_chunks()) {
-    const MemPlan r = model_plan(model_dir, chunk_room(2048));
+  if (room) {
+    const MemPlan r = model_plan(model_dir, prefill_chunk_room(2048));
     if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) <= budget)
-      return chunk_room(2048);
+      return prefill_chunk_room(2048);
   }
   return 2048;
 }
@@ -2167,11 +2180,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       if (dfl_) dfl_->begin_prefill(n, start);
       if (lili_) lili_->begin_prefill(n, start);
     }
-    int T = std::min(C, n - p);
-    if (even_chunks()) {  // same chunk count, even sizes: the trailing chunk is never a sliver
-      const int64_t rem = n - p, k = (rem + C - 1) / C;
-      T = int((rem + k - 1) / k);
-    }
+    int T = prefill_chunk_rows(C, p, n, prefill_even_chunks() && !model_->ane_split_on());
     Checkpoint* snap = nullptr;
     int snap_at = boundary;
     if (pbound > p && pbound < p + T) {
@@ -3261,8 +3270,9 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   }
   SamplingParams sp;
   const int C = model_->prefill_chunk();
+  const bool even = prefill_even_chunks() && !model_->ane_split_on();
   for (int p = start; p < n;) {
-    const int T = std::min(C, n - p);
+    const int T = prefill_chunk_rows(C, p, n, even);
     // as in chat(): a chunk the NI_ANE split runs is checkpointed and waited for, and rerun on the GPU
     // alone if the split failed (the rerun captures its rows for the drafter again)
     const bool split = model_->ane_splits(T);

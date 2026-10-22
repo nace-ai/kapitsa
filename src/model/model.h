@@ -147,6 +147,9 @@ class Model {
 
   // ---- GPU + Neural Engine split of the dense prefill FFN (Qwen35); none elsewhere ----
   virtual bool ane_splits(int) const { return false; }
+  // Chunks of this model's prefill go to a GPU + Neural Engine split, which runs chunks of at most FfnSplit::kMaxRows
+  // rows and is calibrated per chunk: its chunking is left as it was (no tail room, no even split)
+  virtual bool ane_split_on() const { return false; }
   virtual bool ane_finish_chunk() { return true; }
   // Gives up on the split of a chunk still running (a Neural Engine job that never reports): releases the GPU's
   // waits; ane_finish_chunk() then fails and the chunk reruns on the GPU alone

@@ -134,6 +134,7 @@ class NemotronH : public Model {
   bool can_snapshot() const override { return false; }
   // GPU + Neural Engine prefill split (NI_ANE; nemotron_ane.h)
   bool ane_splits(int T) const override;
+  bool ane_split_on() const override { return ane_ != nullptr; }
   bool ane_finish_chunk() override;
   void ane_abort(const std::string& why) override;
   bool grouped_passes() const override { return group_; }
