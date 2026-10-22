@@ -139,14 +139,15 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   27B pack), no speculation on the 35B (its catalog turns it off for this model).
 - Dory: 2 loops; Kapitsa per-loop KV, llama.cpp NVIDIA's Dory fork on its Q5_K_M, MLX mlx-lm's Dory pull request on
   snsnc's 4-bit.
-- Flint 40B-A2.5B: rec 0.1.0 and Kapitsa on Recursive's 4-bit MLX export, at the model card's T 1.0, each cell the
-  mean of that engine's 2026-10-22 runs, prefill and decode from the same runs. rec's are two runs in one hold of the
-  GPU lock, interleaved with Kapitsa `6c13588`'s, both contention-flagged (Microsoft Edge at 3-10% of the GPU).
-  Kapitsa's cell is #340's serve A/B run with the change (Flint's MoE prefill on the M5's tensor units; one run, no
-  foreign GPU load, which can only favour Kapitsa against rec's): 152.4 tok/s decode against rec's 144.9 and 2,262
-  tok/s prefill at 4K against rec's 2,138, 1.06x. llama.cpp b11804 on Recursive's Q4_1 GGUF is one run with no
-  foreign GPU load (92.4 tok/s decode, 2,072 tok/s prefill at 4K: 0.92x Kapitsa's prompt speed, 0.61x its decode)
-  ([details](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- Flint 40B-A2.5B: rec 0.1.0 and Kapitsa on Recursive's 4-bit MLX export, at the model card's T 1.0, each cell the mean
+  of that engine's 2026-10-22 runs, prefill and decode from the same runs. rec's are two runs in one hold of the GPU
+  lock, interleaved with Kapitsa `6c13588`'s, both contention-flagged (Microsoft Edge at 3-10% of the GPU). Kapitsa's
+  cell is #340's serve A/B run with the change (Flint's MoE prefill on the M5's tensor units; one run, no foreign GPU
+  load, which can only favour Kapitsa against rec's), by request rather than the newest-run rule, and the best of three
+  runs of the change: 152.4 tok/s decode against rec's 144.9 and 2,262 tok/s prefill at 4K against rec's 2,138, 1.06x.
+  The other two, on main `91a249a`, read 1,743 and 2,098 at 4K (0.82x and 0.98x rec's). llama.cpp b11804 on Recursive's
+  Q4_1 GGUF is one run with no foreign GPU load (92.4 tok/s decode, 2,072 tok/s prefill at 4K: 0.92x Kapitsa's prompt
+  speed, 0.61x its decode) ([details](#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 
 ## How the README poster was measured
 
@@ -2027,14 +2028,17 @@ which can only favour it. Result files, logs and the sweep are in
 **With [#340](https://github.com/nace-ai/kapitsa/pull/340)** (Flint's routed-expert prefill GEMMs on the M5's tensor
 units), the poster's cell is the PR's own serve A/B run with the change, `flint-qtm-20261022-190420`: main `1455ab4`
 plus the PR's uncommitted change (`1455ab4+dirty`), the harness and bench arguments of `configs/flint.json` but with
-greedy decode skipped, one run, flag-free on the cold prompts with no foreign GPU load (a cached 4K follow-up returned
-no content). It sits between two runs of `1455ab4` (152.65 and 153.19 decode, 1,392 and 1,392 / 1,128 and 1,129
-prefill). Its 4K prefill is 1.65x `6c13588`'s and 16K 1.48x; Kapitsa reads 4K prompts 1.06x as fast as rec and
-1.09x llama.cpp, rec and llama.cpp read 16K prompts 1.19x and 1.08x as fast, and Kapitsa decodes 1.05x rec and
-1.65x llama.cpp. rec and llama.cpp were not rerun, and the run was not interleaved with rec's, which had Edge's load.
-Two later Kapitsa-only runs on main `91a249a`, with the Windows App open, read 1,743 and 2,098 at 4K; they are kept as
-the second row. Result files: [bench/results/2026-10-22-flint-m5pro-qtm](../bench/results/2026-10-22-flint-m5pro-qtm/README.md).
-The context sweep below is `6c13588`'s, before #340.
+greedy decode skipped, one run with no foreign GPU load, and one flag: a cached 4K follow-up returned no content, which
+stopped the cached series. It is the best of three runs of the change; the two on main `91a249a` read 1,743 and 2,098 at
+4K, so the 4K lead over rec rests on this run (at the median, 2,098, Kapitsa reads 0.98x rec's speed). It sits between
+two runs of `1455ab4` (152.65 and 153.19 decode, 1,392 and 1,392 / 1,128 and 1,129 prefill). Its 4K prefill is 1.65x
+`6c13588`'s and 16K 1.48x; Kapitsa reads 4K prompts 1.06x as fast as rec and 1.09x llama.cpp, rec and llama.cpp read 16K
+prompts 1.19x and 1.08x as fast, and Kapitsa decodes 1.05x rec at T 1.0 (rec is ahead on greedy in its stored runs,
+151.9 against Kapitsa's 148.4 on `91a249a`) and 1.65x llama.cpp. rec and llama.cpp were not rerun, and the run was not
+interleaved with rec's, which had Edge's load. Two later Kapitsa-only runs on main `91a249a`, with the Windows App open,
+read 1,743 and 2,098 at 4K; they are kept as the second row. Result files:
+[bench/results/2026-10-22-flint-m5pro-qtm](../bench/results/2026-10-22-flint-m5pro-qtm/README.md). The context sweep
+below is `6c13588`'s, before #340.
 
 The context sweep, as on the M4 Pro; the points with GPU load from the browser were run twice, and each cell is the
 run with less load in its window (for decode, a window of one or two samples, so close to arbitrary):

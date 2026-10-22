@@ -23,11 +23,13 @@ build). The base is main `1455ab4`; the change is `1455ab4` with the PR's change
 | [`flint-qtm-20261022-190420`](pr340-ab/results/flint-qtm-20261022-190420.json) | change | **152.37** (151.5–153.4) | **2,261.5 / 1,634.5** | 0.10 / 0.13 | 22.95 | 0% | a cached 4K follow-up returned no content |
 | [`flint-base-20261022-191410`](pr340-ab/results/flint-base-20261022-191410.json) | `1455ab4` | 153.19 (151.9–153.6) | 1,392.4 / 1,129.2 | 0.12 / 0.14 | 22.95 | 0% | none |
 
-**The poster's M5 Pro Flint Kapitsa cell is `flint-qtm-20261022-190420`**: 2,262 / 152 (prefill at 4K / decode at
-T 1.0), one run, no foreign GPU load. Against the other engines' stored cells (prefill 4K / 16K, decode): rec 0.1.0
-2,138 / 1,941 and 144.9, llama.cpp b11804 2,072 / 1,773 and 92.4. Kapitsa reads 4K prompts 1.06x as fast as rec and
-1.09x llama.cpp; rec and llama.cpp read 16K prompts 1.19x and 1.08x as fast; Kapitsa decodes 1.05x rec and 1.65x
-llama.cpp. The runs were not interleaved with rec's, which had Edge at 3-10% of the GPU; that can only favour Kapitsa.
+**The poster's M5 Pro Flint Kapitsa cell is `flint-qtm-20261022-190420`**: 2,262 / 152 (prefill at 4K / decode at T
+1.0), one run, no foreign GPU load, chosen by request. It is the best of three runs of the change: the two on main
+`91a249a` below read 1,743 and 2,098 at 4K (0.82x and 0.98x rec's), so the 4K lead rests on this run. Against the other
+engines' stored cells (prefill 4K / 16K, decode): rec 0.1.0 2,138 / 1,941 and 144.9, llama.cpp b11804 2,072 / 1,773 and
+92.4. Kapitsa reads 4K prompts 1.06x as fast as rec and 1.09x llama.cpp; rec and llama.cpp read 16K prompts 1.19x and
+1.08x as fast; Kapitsa decodes 1.05x rec at T 1.0 (rec is ahead on greedy) and 1.65x llama.cpp. The runs were not
+interleaved with rec's, which had Edge at 3-10% of the GPU; that can only favour Kapitsa.
 
 ## Two later Kapitsa-only runs on main `91a249a`
 
