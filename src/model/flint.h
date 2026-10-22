@@ -176,6 +176,7 @@ class Flint : public Model {
   int tmax_ = 2048;
   size_t mem_budget_ = 0;
   bool qmt_ = false;             // dense 4-bit prefill GEMMs on Metal 4's tensor_ops (M5)
+  bool split_ = false;           // the decode kernels' merges in a dispatch of their own (split_merges)
 
   // decode / verify activations (kMaxRows rows)
   Buffer x_, xn_, qkv_, q_, ao_, mh_, part_o_, part_ml_, rlog_, eidx_, ewts_, eh_;

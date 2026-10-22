@@ -96,18 +96,16 @@ bool qmt_available() {
 }
 
 // The decode kernels' merges in a dispatch of their own (flint.metal, FLINT_FENCES): always on macOS 14, whose Metal
-// 3.1 has no device-scope fences for the last threadgroup to merge in, and before Apple9 (M1, M2), where that
-// threadgroup read stale data behind the fences: on the M1 Pro decode rows' experts and attention went wrong,
-// differently run to run (logit_dump of flint-16gb, step rows: NLL 9.05 / 10.56, top-1 0.19 / 0.06, where the verify
-// rows read 0.908; an M2 not verified). NI_FLINT_SPLIT=1 takes them on any Mac, NI_FLINT_SPLIT=0 keeps them fused
-// before Apple9 on macOS 15 and later.
-bool split_merges() {
-  static const bool v = [] {
-    if (env_on("NI_FLINT_SPLIT")) return true;
-    if (__builtin_available(macOS 15.0, *)) return !getenv("NI_FLINT_SPLIT") && Gpu::get().apple_family() < 9;
-    return true;
-  }();
-  return v;
+// 3.1 has no device-scope fences for the last threadgroup to merge in; NI_FLINT_SPLIT=1 takes them on a newer macOS too.
+// iq (a GGUF import's IQ experts): also before Apple9 (M1, M2), where that threadgroup read stale data behind the
+// fences: on the M1 Pro decode rows' experts and attention went wrong, differently run to run (logit_dump of
+// flint-16gb, step rows: NLL 9.05 / 10.56, top-1 0.19 / 0.06, where the verify rows read 0.908; an M2 not verified).
+// The 4-bit export keeps the fused kernels there until it is measured on such a Mac (it does not fit the 16 GB M1 Pro);
+// NI_FLINT_SPLIT=0 keeps them for IQ experts too.
+bool split_merges(bool iq) {
+  if (env_on("NI_FLINT_SPLIT")) return true;
+  if (__builtin_available(macOS 15.0, *)) return iq && !getenv("NI_FLINT_SPLIT") && Gpu::get().apple_family() < 9;
+  return true;
 }
 
 }  // namespace
@@ -287,6 +285,7 @@ Flint::Flint(const std::string& path, int prefill_chunk) {
   cfg_ = read_config(path_);
   Gpu::get().compile_extra("Flint", kFlintKernelSource);
   qmt_ = cfg_.bits == 4 && qmt_available();
+  split_ = split_merges(!cfg_.iq.empty());
   if (qmt_) Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
   load(prefill_chunk);
 }
@@ -486,7 +485,7 @@ void Flint::alloc_buffers() {
   mh_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_mlp_h");
   part_o_ = g.alloc(R * size_t(c.hq) * max_chunks * c.hd * 4, "flint_part_o");
   part_ml_ = g.alloc(R * size_t(c.hq) * max_chunks * 2 * 4, "flint_part_ml");
-  rlog_ = g.alloc(R * size_t(c.experts + 1) * 4, "flint_rlog");  // + the rows' norm scales (split_merges())
+  rlog_ = g.alloc(R * size_t(c.experts + 1) * 4, "flint_rlog");  // + the rows' norm scales (split_)
   eidx_ = g.alloc(R * k * 4 + 16, "flint_eidx");
   ewts_ = g.alloc(R * (k + 1) * 4 + 16, "flint_ewts");
   eh_ = g.alloc(R * (k + 1) * size_t(std::max(c.moe_I, c.shared_I)) * 4, "flint_eh");
@@ -838,7 +837,7 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
       float eps, scale;
       uint32_t split;
     } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, L.rope ? 1u : 0u, k0, tps, S, c.eps,
-         1.0f / std::sqrt(float(c.hd)), split_merges() ? 1u : 0u};
+         1.0f / std::sqrt(float(c.hd)), split_ ? 1u : 0u};
     e.use(pipe(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2"));
     e.buf(0, qkv_);
     e.buf(1, L.qn->buf);
@@ -926,7 +925,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
       uint32_t D, E, k, SI, hstride, nr;
       float eps;
       uint32_t split;
-    } rp{D, E, k, uint32_t(c.shared_I), I, E / 8, c.eps, split_merges() ? 1u : 0u};
+    } rp{D, E, k, uint32_t(c.shared_I), I, E / 8, c.eps, split_ ? 1u : 0u};
     e.use(pipe("flint_router_shared"));
     e.buf(0, x_); e.buf(1, L.post_norm->buf); e.buf(2, L.router.w->buf); e.buf(3, rlog_); e.buf(4, xn_);
     e.bytes(5, &rp, sizeof rp);
@@ -960,7 +959,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   }
   // logits, top-k and the normalized rows in one dispatch (the last threadgroup to finish routes)
   constexpr uint32_t rnsg = 4;
-  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, 1, split_merges() ? 1u : 0u};
+  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, 1, split_ ? 1u : 0u};
   e.use(pipe("flint_router_topk"));
   e.buf(0, x_);
   e.buf(1, L.post_norm->buf);
