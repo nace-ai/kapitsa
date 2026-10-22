@@ -2849,8 +2849,8 @@ void Qwen35::enc_attn_prefill(Encoder& e, const Buffer& kc, const Buffer& vc, in
   // 7,929 ms (median of three). It reassociates the K reductions, so its logits move (decode rows 5.6e-4 mean KL
   // against 11r) and it is opt-in: NI_QATTN_G8=1 (default 0, the 35B stays on 11r); NI_ATTN overrides both.
   static const bool qattn = !(getenv("NI_ATTN") && *getenv("NI_ATTN")) && env_int("NI_QATTN", 1) != 0 && qmt_on();
-  const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
-  const bool qg8 = cfg_.hq == 8 * cfg_.hkv && env_int("NI_QATTN_G8", 0) != 0;
+  static const bool qg4 = cfg_.hq == 4 * cfg_.hkv;
+  static const bool qg8 = cfg_.hq == 8 * cfg_.hkv && env_int("NI_QATTN_G8", 0) != 0;
   if (qattn && cfg_.head_dim == 256 && (qg4 || qg8)) {
     e.use(pipe(qg8 ? "qattn_t_g8s4k16" : "qattn_t_s8k16"));
     e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, qg_); e.buf(4, attn_out_);
