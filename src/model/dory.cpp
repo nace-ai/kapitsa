@@ -239,6 +239,13 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
     if (__builtin_available(macOS 26.0, *)) {
       Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
       tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
+      // the prefill attention on the same units: NS simdgroups of G tokens x G query heads of one KV head.
+      // NS 8 (32 tokens and 256 threads per threadgroup, the default) against 4 (16 and 128, NI_DORY_ATTN_NS=4):
+      // measured 578 against 623 ms at 4,132 tokens and 5,468 against 5,781 at 16,493, the same tiles either way.
+      const char* ns = getenv("NI_DORY_ATTN_NS");
+      const char* name = ns && *ns && atoi(ns) == 4 ? "dory_attn_t_g4s4k16" : "dory_attn_t_g4s8k16";
+      attn_t_ = tg_ && !(getenv("NI_DORY_ATTN_T") && atoi(getenv("NI_DORY_ATTN_T")) == 0) &&
+                Gpu::get().pipeline(name, false).pso != nullptr && cfg_.hq / cfg_.hkv == 4;
     }
   load(prefill_chunk);
 }
@@ -1076,9 +1083,14 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   const AttnPfP ap{uint32_t(T), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring, window,
                    1.0f / std::sqrt(float(c.hd))};
   // (16-key tiles under GPU shader validation, whose instrumentation doubles the 32-key kernel's threadgroup memory
-  // past the limit; NI_DORY_ATTN_K16=1 selects them too)
-  static const bool k16 = getenv("MTL_SHADER_VALIDATION") || env_on("NI_DORY_ATTN_K16");
-  e.use(pipe(k16 ? "dory_attn_prefill_k16" : "dory_attn_prefill"));
+  // past the limit; NI_DORY_ATTN_K16=1 selects them too. The tensor kernel's 16 KB doubles to the limit itself, so it
+  // is taken under the layer as well)
+  static const bool k16 = env_on("NI_DORY_ATTN_K16");
+  static const bool tns = attn_t_ && !k16;
+  static const char* ns_env = getenv("NI_DORY_ATTN_NS");
+  static const bool ns8 = !(ns_env && *ns_env && atoi(ns_env) == 4);
+  e.use(pipe(tns ? (ns8 ? "dory_attn_t_g4s8k16" : "dory_attn_t_g4s4k16")
+                  : k16 || getenv("MTL_SHADER_VALIDATION") ? "dory_attn_prefill_k16" : "dory_attn_prefill"));
   e.buf(0, pq_);
   e.buf(1, s.kc[size_t(ci)]);
   e.buf(2, s.vc[size_t(ci)]);
@@ -1086,7 +1098,12 @@ void Dory::enc_layer_prefill(Encoder& e, Seq& s, const DoryLayer& L, int loop, i
   e.buf(4, pcv_);
   e.buf(5, pao_);
   e.val(6, ap);
-  e.dispatch((uint32_t(T) + 31) / 32, uint32_t(c.hq), 1, 256);
+  // (the tensor kernel's threadgroup is 16 / G tokens of one KV head: NS simdgroups of them, G heads each)
+  if (tns) {
+    const uint32_t tpt = ns8 ? 32 : 16;
+    e.dispatch((uint32_t(T) + tpt - 1) / tpt, uint32_t(c.hkv), 1, ns8 ? 256 : 128);
+  } else
+    e.dispatch((uint32_t(T) + 31) / 32, uint32_t(c.hq), 1, 256);
   if (write) {
     const uint32_t r0 = ring && uint32_t(T) > rows ? uint32_t(T) - rows : 0u;
     const StoreP sp{uint32_t(T), r0, uint32_t(pos0), uint32_t(c.hkv), rows, ring};

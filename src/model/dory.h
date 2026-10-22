@@ -201,6 +201,10 @@ class Dory : public Model {
   // M5's matrix units (Metal 4 tensor_ops, Apple10 and macOS 26) for the prefill GEMMs over 32 rows: the Nemotron-H
   // gemms of nemotron/nh_gemm.metal with the products on matmul2d (tensor/nh_gemm_t.metal). NI_DORY_TG=0 turns it off.
   bool tg_ = false;
+  // ...and for the prefill attention, the same kernels with their products on the matrix units
+  // (tensor/nh_dory_attn_t.metal), when one exists for the model's query heads per KV head. NI_DORY_ATTN_T=0 keeps
+  // dory_attn_prefill, which the models with another ratio and the GPUs below Apple10 take anyway.
+  bool attn_t_ = false;
   static const char* x4(const NhMat& W, const char* l2, const char* l0) { return W.l2 ? l2 : l0; }
   int attn_max_chunks_ = 64;
   // prefill activations (tmax_ rows; on first use)
