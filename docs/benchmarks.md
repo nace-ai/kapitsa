@@ -1576,7 +1576,8 @@ The run before it, 0.2.2 at `a13f8fd`, read 1,799 / 1,455 tok/s and 195.1 / 223.
 Since then the 35B's prefill attention runs on the matrix units by default ([#293](https://github.com/nace-ai/kapitsa/pull/293),
 `qattn_t_g8s4k16` in place of `attn_prefill11r`). The first run on that merge (`4b89f4e`, 2026-10-22 15:00) reads
 **2,548 / 2,031 tok/s** at 4K / 16K, 3.6% and 10.5% over the run above, which would put it second at 4K behind MTPLX's
-2,569 and still fourth at 16K. It is not the cell: the session's browser held 6-7% of the GPU through every phase, so the
+2,569 and still fourth at 16K. It is not the cell: the Mac was on battery power (High Power mode; the runs above are on AC), so the gap is not
+like-for-like, and the session's browser held 6-7% of the GPU through every phase, so the
 harness flagged it for contention, and its decode reads 200.7 / 219.7 tok/s, 7% and 3% under the flag-free run, in a path
 this change does not touch (the new kernel is prefill-only). The cell keeps `d53f02e`'s decode and therefore the poster
 row; the newer run is stored as a lower bound on prefill
@@ -1675,14 +1676,29 @@ Kapitsa's row above is the 2026-10-19 session, before the M5 prefill kernels
 ([#205](https://github.com/nace-ai/kapitsa/pull/205)). On 2026-10-22 03:26 (main at `180a650`, per-loop KV, the row's
 setting) it read **618 / 543 tok/s** at 4K / 16K and decoded **72.4 / 80.5 tok/s** (T = 0.6 / greedy), with cached
 follow-ups at 0.10 / 0.15 s and a peak footprint of 5.1 GB plus 0.65 GB of mapped clean pages; its last-loop KV
-default wrote 71.7 (one of the five runs looped, flagged) / 72.5 at 4.3 GB,
-[`dory-kapitsa-perloop-20261022-032657.json`](../bench/results/2026-10-22-m5pro-dory/README.md); the 5.1 GB peak is
-1.0 GB above the row's 4.1, more than the 0.3-0.9 GB rise of the four models above, and is not attributed here. The
-greedy cells are 1.06x the row's (79.8-82.3 against 75.1-76.7, disjoint), but that is one session each, not an
-interleaved A/B, and at T = 0.6 the two overlap (72.4, 69.0-74.5, against 69.6, 61.1-71.5). Prefill is only 1.04x /
-1.03x where the models above gained much more, because the QMT prefill kernels cover the Qwen3.5 backend and Dory's
-own kernels are unchanged. Another app used 7% of the GPU through both prefill phases of the run (flagged), so those
-two prefill cells are lower bounds; the decode phases ran quiet.
+default wrote 71.7 (one of the five runs looped, flagged) / 72.5 at 4.3 GB
+([`dory-kapitsa-perloop-20261022-032657.json`](../bench/results/2026-10-22-m5pro-dory/README.md)). The 5.1 GB peak is
+1.0 GB above the row's 4.1, more than the 0.3-0.9 GB rise of the four models above, and is not attributed here. Prefill
+gained only 1.04x / 1.03x there where the models above gained much more, because the QMT prefill kernels cover the
+Qwen3.5 backend and Dory's own GEMMs were still on the simdgroup kernels.
+
+[#287](https://github.com/nace-ai/kapitsa/pull/287) put those GEMMs on the M5's matrix units (`nh_gemm_t_fp4_m64`, on by
+default, `NI_DORY_TG=0` keeps the old ones; the GEMMs were 86% of the 4K prefill step before, see `docs/usage.md`). Two interleaved
+sessions on the merged main `74b97d9` — last-loop KV then per-loop at 14:10/14:12, the same pair reversed at
+14:22/14:30, all four records in
+[the same results directory](../bench/results/2026-10-22-m5pro-dory/README.md#after-287-the-prefill-gemms-on-the-matrix-units-1410-1450) —
+read prefill **1,522 / 1,142 tok/s** at 4K / 16K as the median of each setting's two runs (1,517 / 1,137 and
+1,526 / 1,146 on last-loop KV, 1,496 / 1,123 and 1,516 / 1,114 on per-loop), which is **2.46x and 2.10x the 03:26 run**.
+Decode is inside the runs' spread (70.7 / 73.1 tok/s at T = 0.6 and 71.5 / 78.0 greedy, the lower greedy reads being the
+two contended records), the cached follow-ups are 0.10-0.11 / 0.15-0.16 s, and the peak footprint is 0.5-1.0 GB smaller
+(3.65 GB plus 0.67 GB mapped on last-loop KV, 4.09 + 0.67 on per-loop; the cause is not separated here, as for the 5.1 GB above). At 4K
+that is 1.09x mlx-lm's 1,401 and ahead of llama.cpp's 938; at 16K it is 0.89x mlx-lm's 1,278, and a one-off profile of the 16K prefill step (not stored in this PR)
+puts the GEMMs and `dory_attn_prefill` at 46.7% each, so that attention kernel looks like the next target. Three
+of the four records carry the harness's contention flag (a browser tab and Slack Helper, means 2.0-9.2%), so the prefill
+cells are lower bounds; the 14:30 run is flag-free. The 14:22 per-loop record also carries two repetition-loop flags
+(2 of its 5 sampled T = 0.6 runs, distinct-4-gram 0.47 and 0.49); a loop flatters a speculative decoder, and that record
+supplies the 74.0 in the per-loop pair's 73.1 T = 0.6 median, so read the per-loop decode figures as an upper bound. The
+last-loop KV default (the 70.7 median) has no loop flag.
 
 ## KFlash trees (M4 Pro, 2026-10-21)
 

@@ -114,14 +114,16 @@ drafter's verify batches are multi-row passes through the same grouped GEMMs.
 
 [#293](https://github.com/nace-ai/kapitsa/pull/293) made the 35B's prefill attention `qattn_t_g8s4k16` the default on an
 M5-class GPU (`NI_QATTN_G8=0` keeps `attn_prefill11r`). One run on the merge commit `4b89f4e` (Kapitsa 0.2.6), same
-config and lock as above:
+lock and flags as above, but **on battery power** (the record's `power` reads 'Battery Power', `powermode` 2 = High Power;
+the runs above are on AC power), so this is not a like-for-like comparison with them:
 
 | Run | Decode T=0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached 4K / 16K (s) | Peak (GB) | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | `q36-35b-kapitsa-20261022-145449` | 200.71 (188.82-211.84) | 219.65 (178.68-222.01) | 2,548 / 2,031 | 0.05 / 0.07 | 21.7 | contention (6.82% mean, 19 of 22 samples) + one decode run looped |
 
 The browser (`Microsoft Edge H`) held 5.8% of the GPU through the decode phases and 6.8% overall, so the harness sat out
-its 300 s quiet window, took the record with the flag it always sets, and every number here is a lower bound. Read against
+its 300 s quiet window and took the record with the flag it always sets. Contention and battery power can only lower the
+numbers, so the prefill cells read as lower bounds, but the decode comparison below mixes both effects. Read against
 the flag-free run above (`d53f02e`, 2,459 / 1,838 prefill, 217.0 / 227.0 decode): **prefill is up 3.6% at 4K and 10.5% at
 16K** even under that load, which is #293's ~11% 16K gain and is the reason the poster's 16K prefill cell is stale; decode
 reads 7% and 3% lower, and #293 does not touch the decode path (`qattn_t_g8s4k16` is prefill-only), so those two cells
