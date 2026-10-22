@@ -567,6 +567,16 @@ static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
+// The small start: `slots` slots with 256-row prefill buffers and one conversation of `context` tokens. A model that
+// holds a conversation of its default context only that way (Flint 40B-A2.5B with 2-bit experts on a 16 GB Mac: 11.73
+// GB of weights in a 12.2 GB budget) runs with one slot (auto_slots), the largest prefill chunk that leaves that
+// conversation room (auto_prefill_chunk: 448 rows there) and the largest default context that fits, in 1K steps below
+// 8K (default_context: 8K there). Prefill on the M1 Pro, 4,352 tokens: 11.7 s at 256 rows, 9.5 at 512, 8.0 at 2048.
+static bool fits_small(const std::string& model_dir, int context, int slots, size_t budget) {
+  const MemPlan p = model_plan(model_dir, 256);
+  return p.fixed(slots) + model_ane_bytes(model_dir, p) + p.kv_per_pos * size_t(context) <= budget;
+}
+
 // Tail room: a prompt a few rows past a chunk multiple should not pay a whole extra chunk of weight streaming for
 // those rows (4K on the 35B: 2048+2048+34 -> 2065+2065). The buffers get 1/32 more rows and the chunk loop splits the
 // prompt evenly, which only ever removes chunks. Off with NI_BAL=0 (the chunking before it).
@@ -616,7 +626,17 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
     if (wide.fixed(1) + model_ane_bytes(model_dir, wide) + wide.kv_per_pos * size_t(context) <= budget)
       return room ? prefill_chunk_room(4096) : 4096;
   }
-  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) return 1024;
+  if (p.fixed(std::max(1, slots)) + ane + p.kv_per_pos * size_t(context) > budget) {
+    // 1024-row buffers, or the largest multiple of 64 rows down to 256 that leaves the tokens the engine starts with
+    // (the context, up to 8K; fits_small)
+    for (int c = 1024; c > 256; c -= 64) {
+      const MemPlan pc = model_plan(model_dir, c);
+      if (pc.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, pc) +
+              pc.kv_per_pos * size_t(std::min(context, 8192)) <= budget)
+        return c;
+    }
+    return 256;
+  }
   if (room) {
     const MemPlan r = model_plan(model_dir, prefill_chunk_room(2048));
     if (r.fixed(std::max(1, slots)) + model_ane_bytes(model_dir, r) + r.kv_per_pos * size_t(context) <= budget)
@@ -698,6 +718,9 @@ StartNeed start_need(const std::string& model_dir, const LoadPlan& lp, int prefi
 
 int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget) {
   try {
+    // two slots that cannot even start where one can (fits_small): one
+    const int start = std::min(opt.context, 8192);
+    if (!fits_small(model_dir, start, 2, budget) && fits_small(model_dir, start, 1, budget)) return 1;
     const bool spec_off = opt.spec_depth == 0;
     const LoadPlan two = plan_load(model_dir, opt.dflash, spec_off, opt.context, 2, budget, opt.prefill_chunk);
     // the most slots up to kAutoSlots that cost nothing two slots have: the same decoding (a drafter two slots keep is
@@ -781,6 +804,13 @@ int default_context(const std::string& model_dir, const EngineOptions& opt, size
       }
       c = std::max(floor, lo * 8192);
       w = keep.empty() ? ContextWhy::kMemory : ContextWhy::kMemoryWithDrafter;
+      // a model one slot cannot hold even the floor's conversation in (fits_small): the largest it holds, in 8K steps
+      // from 8K, in 1K steps below 8K (down to 4K)
+      if (!fits_small(model_dir, floor, 1, budget)) {
+        c = 8192;
+        while (c + 8192 < floor && fits_small(model_dir, c + 8192, 1, budget)) c += 8192;
+        while (c > 4096 && !fits_small(model_dir, c, 1, budget)) c -= 1024;
+      }
     }
   } catch (const std::exception&) {  // headers that cannot be planned: the engine reports it when it loads them
     c = floor;

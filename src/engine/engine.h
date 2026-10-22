@@ -72,7 +72,8 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk);
 // Slots when none are asked for (EngineOptions::slots 0): kAutoSlots, so that an agent's conversation and its parallel
 // subagents or side requests each run on a warm slot of their own, or as many (down to 2, the old default) as the
 // model's memory plan, the engine's own, holds without costing anything two slots have: one full --ctx conversation
-// beside them, the same decoding (drafter) and the same prefill chunk. From the safetensors headers alone (the engine,
+// beside them, the same decoding (drafter) and the same prefill chunk; 1 where two slots cannot start (a conversation
+// of the context, up to 8K tokens, with 256-row prefill buffers) and one can. From the safetensors headers alone (the engine,
 // `kapitsa serve` and `kapitsa doctor` share it).
 constexpr int kAutoSlots = 4;
 int auto_slots(const std::string& model_dir, const EngineOptions& opt, size_t budget);
@@ -84,7 +85,8 @@ inline int fit_slots(int slots) { return slots > 0 ? slots : 2; }
 // the Neural Engine service's buffers and other GPU users. NI_MEM_BUDGET=<GB> overrides it.
 size_t default_mem_budget();
 // The prefill chunk (rows) the engine picks when none is given: 2048, or 1024 when 2048-row buffers would leave
-// less than one conversation of `context` tokens in the budget (activations scale with the chunk)
+// less than one conversation of `context` tokens in the budget (activations scale with the chunk), less (a multiple of
+// 64, at least 256) when 1024-row ones would leave less than the tokens the engine starts with (the context, up to 8K)
 int auto_prefill_chunk(const std::string& model_dir, int context, int slots, size_t budget);
 // Rows of the next prefill chunk with `p` of `n` rows done: min(chunk, n - p), or with `even` those rows split evenly
 // over the chunks that rule would take (a 4130-token prompt at a 2048 chunk is 2048+2048+34 plain, 2065+2065 even), so
@@ -148,7 +150,9 @@ int model_context_limit(const std::string& model_dir);
 int context_within_limit(const std::string& model_dir, int context);
 // The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: kDefaultContext (128K),
 // or the model's limit where that is less, or less where this Mac's memory is tight: the largest, in 8K steps down to
-// kMinDefaultContext (32K), that keeps the drafter the model has at 32K, with one full conversation beside it. The
+// kMinDefaultContext (32K), that keeps the drafter the model has at 32K, with one full conversation beside it (below
+// 32K, in 8K steps and 1K steps below 8K, only for a model one slot cannot hold 32K tokens in: Flint with 2-bit experts
+// on 16 GB, 8K). The
 // model and its precision are picked at 32K, and a context costs no memory until a conversation fills it (the KV
 // cache grows with it). *why, if given: why it is less than kDefaultContext.
 constexpr int kDefaultContext = 131072, kMinDefaultContext = 32768;

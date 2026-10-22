@@ -417,9 +417,10 @@ const std::vector<CatalogModel>& catalog() {
        .about = "Recursive's MoE for coding agents, 2.5B active per token: reasoning and tool calls, prompt lookup drafts",
        .brief = "Recursive coding-agent MoE, 2.5B active",
        // Recursive's MLX export as it is (the weights its own engine, rec, runs): affine 4-bit group-64 projections and
-       // experts, 8-bit embedding, bf16 router. No drafter: prompt lookup.
+       // experts, 8-bit embedding, bf16 router. No drafter: prompt lookup. Where it does not fit (16-24 GB Macs): the
+       // 2-bit experts of 16gb.
        .default_variant = "4bit",
-       .fallbacks = {},
+       .fallbacks = {"16gb"},
        .variants = {
            {.name = "4bit",
             .quant = "MLX affine 4-bit, group 64 (8-bit embedding, bf16 router)",
@@ -428,6 +429,19 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "3b93f9053b530488405ae9fca51d4900d6ce21f0",
             .companions = {},
             .download_gb = 22.58},
+           // a 16 GB Mac's: unsloth's UD-IQ2_XXS GGUF imported (11.73 GB of weights: one slot, 448-row prefill chunks and
+           // an 8K default context in a 16 GB Mac's 12.2 GB budget), its routed experts read in the file's own blocks
+           {.name = "16gb",
+            .quant = "IQ1_S / IQ2_XXS / IQ2_S / IQ3_XXS routed experts (as stored), 4-bit group 64 attention and shared "
+                     "expert, 3-bit embedding, 6-bit head, bf16 router",
+            .label = "2-bit experts (unsloth UD-IQ2_XXS GGUF)",
+            .repo = "unsloth/flint-GGUF",
+            .revision = "20468edfc38ab43d6914cc88b08cbecb05d0fc62",
+            .gguf = {.path = "flint-UD-IQ2_XXS.gguf",
+                     .sha256 = "c1fa4a6d5ec67fbeff460c68829984e4aa3eea95dc9d2067691f19e5406deeee",
+                     .size = 11855541696},
+            .companions = {},
+            .download_gb = 11.86},
        }}
   };
   return c;

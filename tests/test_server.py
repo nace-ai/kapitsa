@@ -150,6 +150,9 @@ PINNED = {
 # the 35B's 16gb variant: repo, revision, file, sha256, size
 GGUF16 = ("unsloth/Qwen3.6-35B-A3B-GGUF", "a483e9e6cbd595906af30beda3187c2663a1118c", "Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
           "2e8f5f705355c56311432d0a8a5d14a696dbb7e4b197d05c75ba805fc1857bef", 10756586464)
+# Flint's 16gb variant
+GGUFF = ("unsloth/flint-GGUF", "20468edfc38ab43d6914cc88b08cbecb05d0fc62", "flint-UD-IQ2_XXS.gguf",
+         "c1fa4a6d5ec67fbeff460c68829984e4aa3eea95dc9d2067691f19e5406deeee", 11855541696)
 
 def cli_checks(kapitsa):
     home = tempfile.mkdtemp(prefix="kapitsa-test-")
@@ -316,6 +319,48 @@ def cli_checks(kapitsa):
     for a in ["35b:16gb", "35b:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted qwen3.6-35b-a3b:" + a.split(":")[1] in out, out + err)
+    # Flint's 16gb: unsloth's UD-IQ2_XXS GGUF, imported after its download; `flint` takes it where the 4-bit does not
+    # fit (planned from a Flint config and a header of each variant's weights: 22.6 and 11.7 GB)
+    for a in ["flint:16gb", "FLINT:16GB", "unsloth/flint-GGUF"]:
+        j = plan(a)
+        check(f"cli: {a} -> flint:16gb, one pinned GGUF file to import, no drafter",
+              j.get("model") == "flint:16gb" and j.get("id") == "flint:16gb" and j.get("kind") == "catalog" and
+              j.get("variant") == "16gb" and
+              (j.get("repo"), j.get("revision"), j.get("file"), j.get("sha256"), j.get("download_bytes")) == GGUFF and
+              j.get("companions") == [] and j.get("dir") == os.path.join(models, "flint-16gb"), json.dumps(j))
+    full = [0, 1] + list(range(5, 48, 4)) + [48]
+    cfgf = {"model_type": "flint", "hidden_size": 2048, "num_hidden_layers": 49, "vocab_size": 150144,
+            "num_attention_heads": 32, "num_key_value_heads": 4, "head_dim": 128, "intermediate_size": 6144,
+            "moe_intermediate_size": 512, "shared_expert_intermediate_size": 1024, "num_experts": 256,
+            "num_experts_per_tok": 6, "sliding_window": 513, "mlp_only_layers": [0, 1], "no_rope_layer_indices": full,
+            "layer_types": ["full_attention" if i in full else "sliding_attention" for i in range(49)],
+            "eos_token_id": [150001], "bos_token_id": 150000, "quantization": {"bits": 4, "group_size": 64}}
+    def fake_flint(variant, weights, manifest):
+        d = os.path.join(models, "flint-" + variant)
+        os.makedirs(os.path.join(d, ".kapitsa"))
+        hdr = json.dumps({"model.layers.2.mlp.switch_mlp.gate_proj.weight":
+                          {"dtype": "U8", "shape": [weights], "data_offsets": [0, weights]}}).encode()
+        files = {"config.json": json.dumps(cfgf).encode(), "model.safetensors": len(hdr).to_bytes(8, "little") + hdr}
+        for n, b in files.items():
+            with open(os.path.join(d, n), "wb") as f:
+                f.write(b)
+        manifest.update(name="flint:" + variant, variant=variant, commit=manifest["revision"], companions=[],
+                        files=[{"path": n, "size": len(b)} for n, b in files.items()],
+                        total_bytes=sum(len(b) for b in files.values()))
+        with open(os.path.join(d, ".kapitsa", "manifest.json"), "w") as f:
+            json.dump(manifest, f)
+    fake_flint("4bit", 22_570_000_000, {"repo": "RecursiveSI/flint-int4",
+                                        "revision": "3b93f9053b530488405ae9fca51d4900d6ce21f0"})
+    fake_flint("16gb", 11_690_000_000, {"repo": GGUFF[0], "revision": GGUFF[1],
+                                        "gguf": {"path": GGUFF[2], "sha256": GGUFF[3], "size": GGUFF[4]}})
+    for budget, want in [("12.2", "16gb"), ("48", "4bit")]:
+        rc, out, err = run("pull", "--dry-run", "--json", "flint", env_add={"NI_MEM_BUDGET": budget})
+        j = json.loads(out) if rc == 0 else {"rc": rc, "err": err}
+        check(f"cli: flint on a {budget} GB budget -> flint:{want}",
+              j.get("model") == "flint:" + want and j.get("downloaded") is True, json.dumps(j))
+    for a in ["flint:16gb", "flint:4bit"]:
+        rc, out, err = run("rm", a)
+        check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)
     rc, _, err = run("pull", "--dry-run", "4b:9bit")
     check("cli: an unknown variant is refused with the model's variants",
           rc == 2 and "has no variant" in err and DEFAULTS["qwen3.5-4b"][0] + " (the default)" in err, err)

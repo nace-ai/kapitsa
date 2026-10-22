@@ -69,5 +69,32 @@
   "bench_args": ["--temperature", "1.0", "--always-reasons", "--ref-prompt-tokens", "4000:3874,16000:15066"],
   "agent_trace": "none",
   "note": "llama-server (a build with Flint support: b11804; LLAMA_SERVER names it) on Recursive's Q4_1 GGUF for llama.cpp on Metal, with the flags of its model card (-ngl all, F16 KV, --cache-ram 0, Flint's sampling) except -b/-ub 2048, the 2048-token prefill chunks the other engines use, in place of the card's -b 256 -ub 128 (not run), and -c 32768 -np 1 as the others."
+ },
+ {
+  "label": "flint-16gb-kapitsa",
+  "extends": "flint-kapitsa",
+  "display": "Kapitsa (2-bit experts)",
+  "model_name": "Flint 40B-A2.5B, 2-bit experts",
+  "model_path": "{models}/flint-16gb",
+  "cmd": ["{env:KAPITSA_BIN={first:{repo}/build/kapitsa|kapitsa}}", "serve", "--model", "{models}/flint-16gb",
+          "--model-id", "flint", "--host", "127.0.0.1", "--port", "8401", "--ctx", "8192", "--slots", "1"],
+  "requires_paths": ["{models}/flint-16gb/experts.safetensors"],
+  "bench_args": ["--temperature", "1.0", "--always-reasons", "--ref-prompt-tokens", "4000:3874"],
+  "note": "Kapitsa's flint:16gb (unsloth's flint-UD-IQ2_XXS GGUF imported, `kapitsa pull flint:16gb`: the routed experts in their IQ blocks, the rest 4-bit group 64) for a 16 GB Mac, with the defaults it takes there: one slot, 512-row prefill chunks, an 8K context (--ctx 8192 says it). Run with --sizes 4000: a 16K prompt does not fit. Otherwise as flint-kapitsa."
+ },
+ {
+  "label": "flint-16gb-llamacpp",
+  "extends": "flint-llamacpp",
+  "display": "llama.cpp (UD-IQ2_XXS)",
+  "model_name": "Flint 40B-A2.5B, 2-bit experts",
+  "model_path": "{models}/flint-gguf/flint-UD-IQ2_XXS.gguf (unsloth/flint-GGUF)",
+  "cmd": ["{env:LLAMA_SERVER={first:llama-server|/opt/homebrew/bin/llama-server}}",
+          "-m", "{models}/flint-gguf/flint-UD-IQ2_XXS.gguf",
+          "--host", "127.0.0.1", "--port", "8411", "-a", "flint", "-c", "8192", "-np", "1", "-ngl", "999",
+          "-fa", "on", "-ctk", "f16", "-ctv", "f16", "-b", "2048", "-ub", "512", "-lm", "none", "--jinja",
+          "--cache-ram", "0", "--temp", "1", "--top-p", "0.95", "--top-k", "20", "--min-p", "0", "--no-webui"],
+  "requires_paths": ["{models}/flint-gguf/flint-UD-IQ2_XXS.gguf"],
+  "bench_args": ["--temperature", "1.0", "--always-reasons", "--ref-prompt-tokens", "4000:3874"],
+  "note": "llama-server on the same GGUF as flint-16gb-kapitsa (unsloth's flint-UD-IQ2_XXS, the file the catalog's flint:16gb imports), with flint-llamacpp's flags but -c 8192 and -ub 512 for a 16 GB Mac."
  }
 ]
