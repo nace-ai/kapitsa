@@ -3,8 +3,9 @@
 
 usage: test_compare.py [BUILD_DIR]   (default: build; needs BUILD_DIR/kapitsa)
 
-1. The command finds the harness (KAPITSA_HARNESS, or the installed <prefix>/share/kapitsa/bench/harness), hands over
-   its arguments, forwards the exit code, and says what to do when the harness is not there.
+1. The command finds the harness (KAPITSA_HARNESS, the installed <prefix>/share/kapitsa/bench/harness, or
+   bench/harness in the binary's own folder), hands over its arguments, forwards the exit code, and says what to do
+   when the harness is not there.
 2. bench bench/harness/kbench.py against two scripted OpenAI-compatible servers (configs with no command, so nothing is
    started; the GPU lock is a test file): --list, the run, the table, --json, --report, the saved files, an engine that
    fails (a closed port) and does not stop the others, and an engine that is not installed, listed with how to get it.
@@ -152,6 +153,17 @@ check(r.returncode == 7 and "ARGS --model 4b --list" in r.stdout and
       "BIN " + os.path.realpath(os.path.join(inst, "bin", "kapitsa")) in r.stdout,
       "an installed layout: share/kapitsa/bench/harness beside the binary is found, with no env var",
       r.stdout + r.stderr)
+
+# an unpacked release: kapitsa and bench/harness in the same folder, run from anywhere else (kapitsa update puts the
+# harness there when the folder itself holds the notices)
+unpacked = os.path.join(tmp, "unpacked")
+os.makedirs(unpacked)
+shutil.copy2(KAPITSA, os.path.join(unpacked, "kapitsa"))
+shutil.copytree(stub, os.path.join(unpacked, "bench", "harness"))
+r = run([os.path.join(unpacked, "kapitsa"), "bench", "compare", "--model", "4b", "--list"],
+        env={k: v for k, v in env0.items() if k != "KAPITSA_BIN"}, cwd=elsewhere)
+check(r.returncode == 7 and "ARGS --model 4b --list" in r.stdout,
+      "an unpacked release: bench/harness in the binary's own folder is found, with no env var", r.stdout + r.stderr)
 
 # ---------------------------------------------------------------- 2. kbench.py against scripted engines
 fast, p_fast = serve(0.0004)

@@ -169,16 +169,19 @@ install_kapitsa() {
 
   # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
   if [ -f "$harness/kbench.py" ]; then
-    # local.env is the user's own settings for the harness: it survives a re-install
+    # local.env is the user's own settings for the harness: it survives a re-install, through a private staging folder
+    local keep
+    keep=$(mktemp -d "${TMPDIR:-/tmp}/kapitsa-harness.XXXXXX") || die "can't make a folder to keep the harness settings."
     if [ -f "$notices/bench/harness/local.env" ]; then
-      cp "$notices/bench/harness/local.env" "${TMPDIR:-/tmp}/kapitsa-local.env.$$" || die "can't keep $notices/bench/harness/local.env."
+      cp "$notices/bench/harness/local.env" "$keep/local.env" ||
+        { rm -rf "$keep"; die "can't keep $notices/bench/harness/local.env."; }
     fi
     rm -rf "$notices/bench/harness"
     mkdir -p "$notices/bench"
-    cp -R "$harness" "$notices/bench/harness" || die "can't install the benchmark harness in $notices/bench/harness."
-    if [ -f "${TMPDIR:-/tmp}/kapitsa-local.env.$$" ]; then
-      mv "${TMPDIR:-/tmp}/kapitsa-local.env.$$" "$notices/bench/harness/local.env"
-    fi
+    cp -R "$harness" "$notices/bench/harness" ||
+      { rm -rf "$keep"; die "can't install the benchmark harness in $notices/bench/harness."; }
+    if [ -f "$keep/local.env" ]; then mv "$keep/local.env" "$notices/bench/harness/local.env"; fi
+    rm -rf "$keep"
   fi
 
   say "Installed $installed: $prefix/kapitsa"

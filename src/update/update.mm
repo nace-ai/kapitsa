@@ -721,10 +721,18 @@ bool install_harness(const std::string& from, const Install& in, std::string* wh
     std::filesystem::remove_all(fresh, ec);
     return false;
   }
-  // local.env is the user's own per-machine settings (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes into the new folder
-  if (is_file(join(dest, "local.env")))
+  // local.env is the user's own per-machine settings (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes into the new folder,
+  // and if it can't be read the old harness (with it) stays as it is rather than the update silently dropping it
+  if (is_file(join(dest, "local.env"))) {
+    std::error_code keep;
     std::filesystem::copy_file(join(dest, "local.env"), join(fresh, "local.env"),
-                               std::filesystem::copy_options::overwrite_existing, ec);
+                               std::filesystem::copy_options::overwrite_existing, keep);
+    if (keep) {
+      *why = "Can't keep " + hub::tilde(join(dest, "local.env")) + " (" + keep.message() + ")";
+      std::filesystem::remove_all(fresh, ec);
+      return false;
+    }
+  }
   ec.clear();
   std::filesystem::rename(dest, old, ec);
   const bool had = !ec;

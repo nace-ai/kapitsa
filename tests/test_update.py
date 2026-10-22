@@ -440,24 +440,24 @@ check(r.returncode == 0 and f"kapitsa {N} is up to date" in r.stdout and not sin
       "run again: up to date, nothing downloaded", r.stdout + r.stderr)
 
 # a user's local.env in the harness survives an update
-S4, H4 = standalone("sloc"), home("sloc")
-lenv = os.path.join(notices_of(S4), "bench", "harness", "local.env")
+SH1, HH1 = standalone("sh1"), home("sh1")
+lenv = os.path.join(notices_of(SH1), "bench", "harness", "local.env")
 os.makedirs(os.path.dirname(lenv), exist_ok=True)
 open(lenv, "w").write("LLAMA_SERVER=/x/llama-server\n")
 tar_release(N)
-r = run([S4, "update"], env(H4))
-kb4 = os.path.join(notices_of(S4), "bench", "harness", "kbench.py")
-check(r.returncode == 0 and open(kb4).read() == f"# kbench.py of {N}\n" and os.path.isfile(lenv)
+r = run([SH1, "update"], env(HH1))
+kb1b = os.path.join(notices_of(SH1), "bench", "harness", "kbench.py")
+check(r.returncode == 0 and open(kb1b).read() == f"# kbench.py of {N}\n" and os.path.isfile(lenv)
       and open(lenv).read() == "LLAMA_SERVER=/x/llama-server\n",
       "the harness updated and the user's local.env kept", r.stdout + r.stderr)
 
 # an install made before releases shipped the harness (v0.2.5 and older) gets it from the next update
-S3, H3 = standalone("s3"), home("s3")
-shutil.rmtree(os.path.join(notices_of(S3), "bench"), ignore_errors=True)
+SH2, HH2 = standalone("sh2"), home("sh2")
+shutil.rmtree(os.path.join(notices_of(SH2), "bench"), ignore_errors=True)
 tar_release(N)
-r = run([S3, "update"], env(H3))
-kb3 = os.path.join(notices_of(S3), "bench", "harness", "kbench.py")
-check(r.returncode == 0 and os.path.isfile(kb3) and open(kb3).read() == f"# kbench.py of {N}\n",
+r = run([SH2, "update"], env(HH2))
+hk2 = os.path.join(notices_of(SH2), "bench", "harness", "kbench.py")
+check(r.returncode == 0 and os.path.isfile(hk2) and open(hk2).read() == f"# kbench.py of {N}\n",
       "an install without a harness gets it on update", r.stdout + r.stderr)
 
 # ---------------------------------------------------------------- 4. refused releases change nothing

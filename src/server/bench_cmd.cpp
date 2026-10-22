@@ -1068,7 +1068,9 @@ std::string find_harness() {
   else {
     const std::string exe = self_path();
     const std::string bin = exe.substr(0, exe.rfind('/'));
-    for (const char* rel : {"/../bench/harness", "/../../bench/harness", "/../share/kapitsa/bench/harness"})
+    // beside the binary (an unpacked release), where a checkout's build/ or an install keeps it
+    for (const char* rel : {"/bench/harness", "/../bench/harness", "/../../bench/harness",
+                            "/../share/kapitsa/bench/harness"})
       dirs.push_back(bin + rel);
     if (char cwd[PATH_MAX]; getcwd(cwd, sizeof cwd)) dirs.push_back(std::string(cwd) + "/bench/harness");
   }
