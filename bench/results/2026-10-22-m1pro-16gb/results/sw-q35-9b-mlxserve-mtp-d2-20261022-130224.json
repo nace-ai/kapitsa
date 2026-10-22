@@ -1,0 +1,2373 @@
+{
+ "schema": 2,
+ "label": "sw-q35-9b-mlxserve-mtp-d2",
+ "model": "qwen3.5-9b-4bit-mlx-serve",
+ "base_url": "http://127.0.0.1:8173/v1",
+ "when": "2026-10-22 13:04:22",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8173/v1",
+  "model": "qwen3.5-9b-4bit-mlx-serve",
+  "label": "sw-q35-9b-mlxserve-mtp-d2",
+  "pid": 48524,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-q35-9b-mlxserve-mtp-d2-20261022-130224.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792656262.303,
+   1792656752.059
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 48524,
+     "name": "mlx-serve",
+     "phys_footprint": 7990709680,
+     "phys_footprint_peak": 9228979656,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 3538944,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 7620.5,
+   "phys_footprint_peak_mb": 8801.4,
+   "mapped_file_clean_mb": 3.4,
+   "swap_used_mb": 1665.38,
+   "memorystatus_level": 35,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 614.6,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1689.38,
+  "swapouts": 23111178,
+  "swapins": 20671070,
+  "pageouts": 706147,
+  "memorystatus_level": 80
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 6614.0,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1101,
+    "ttft_s": 6.734586041,
+    "prefill_tps": 163.4844359099636,
+    "decode_tps": 33.620360370770975,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2128,
+    "ttft_s": 12.718927708999999,
+    "prefill_tps": 167.30970162635745,
+    "decode_tps": 36.86713550198488,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4157,
+    "ttft_s": 25.162470584,
+    "prefill_tps": 165.20635309329685,
+    "decode_tps": 34.30894520534377,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8306,
+    "ttft_s": 53.143164917,
+    "prefill_tps": 156.29479375141597,
+    "decode_tps": 30.084107379094657,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16312,
+    "ttft_s": 110.96183787499999,
+    "prefill_tps": 147.00549587485824,
+    "decode_tps": 27.384210642014054,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 31546,
+    "ttft_s": 242.84679620900002,
+    "prefill_tps": 129.90082839244346,
+    "decode_tps": 23.783052787813443,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.707,
+  "retention_from_tokens": 1101,
+  "retention_to_tokens": 31546,
+  "max_prompt_tokens": 31546,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1101,
+      "completion_tokens": 192,
+      "ttft_s": 6.734586041,
+      "prefill_tps": 163.4844359099636,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 33.620360370770975
+     }
+    ],
+    "prompt_tokens": 1101,
+    "ttft_s": 6.734586041,
+    "prefill_tps": 163.4844359099636,
+    "decode_tps": 33.620360370770975
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2128,
+      "completion_tokens": 192,
+      "ttft_s": 12.718927708999999,
+      "prefill_tps": 167.30970162635745,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 36.86713550198488
+     }
+    ],
+    "prompt_tokens": 2128,
+    "ttft_s": 12.718927708999999,
+    "prefill_tps": 167.30970162635745,
+    "decode_tps": 36.86713550198488
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4157,
+      "completion_tokens": 192,
+      "ttft_s": 25.162470584,
+      "prefill_tps": 165.20635309329685,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 34.30894520534377
+     }
+    ],
+    "prompt_tokens": 4157,
+    "ttft_s": 25.162470584,
+    "prefill_tps": 165.20635309329685,
+    "decode_tps": 34.30894520534377
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8306,
+      "completion_tokens": 192,
+      "ttft_s": 53.143164917,
+      "prefill_tps": 156.29479375141597,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 30.084107379094657
+     }
+    ],
+    "prompt_tokens": 8306,
+    "ttft_s": 53.143164917,
+    "prefill_tps": 156.29479375141597,
+    "decode_tps": 30.084107379094657
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16312,
+      "completion_tokens": 192,
+      "ttft_s": 110.96183787499999,
+      "prefill_tps": 147.00549587485824,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.384210642014054
+     }
+    ],
+    "prompt_tokens": 16312,
+    "ttft_s": 110.96183787499999,
+    "prefill_tps": 147.00549587485824,
+    "decode_tps": 27.384210642014054
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 31546,
+      "completion_tokens": 192,
+      "ttft_s": 242.84679620900002,
+      "prefill_tps": 129.90082839244346,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 23.783052787813443
+     }
+    ],
+    "prompt_tokens": 31546,
+    "ttft_s": 242.84679620900002,
+    "prefill_tps": 129.90082839244346,
+    "decode_tps": 23.783052787813443
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 2717,
+ "peak_footprint_mb": 8801,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 8801.4,
+ "mapped_file_clean_mb": 3.4,
+ "vm_end": {
+  "swap_used_mb": 1665.38,
+  "swapouts": 23111178,
+  "swapins": 20672501,
+  "pageouts": 706147,
+  "memorystatus_level": 39
+ },
+ "when_end": "2026-10-22 13:12:32",
+ "warmup": {
+  "adaptive": true,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 19.52,
+    "prompt_tokens": 2927,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 3.34,
+    "prompt_tokens": 430,
+    "completion_tokens": 26,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#1",
+    "ok": true,
+    "s": 14.74,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#2",
+    "ok": true,
+    "s": 15.2,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#3",
+    "ok": true,
+    "s": 15.05,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1069,
+   "completion_tokens": 8,
+   "ttft_s": 6.465897666,
+   "prefill_tps": 165.3289388759095,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1069,
+    "completion_tokens": 8,
+    "ttft_s": 6.428692042,
+    "prefill_tps": 166.28576902050958,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1070,
+    "completion_tokens": 8,
+    "ttft_s": 6.428462000000003,
+    "prefill_tps": 166.44727774699444,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1070,
+    "completion_tokens": 2,
+    "ttft_s": 6.427479000000002,
+    "prefill_tps": 166.47273371099303,
+    "finish": "stop",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 6.428462000000003,
+  "first_request_penalty_s": 0.037,
+  "invalid": [],
+  "spawn_to_ready_s": 4.0,
+  "spawn_to_first_token_s": 10.47
+ },
+ "contention": {
+  "overall": {
+   "samples": 239,
+   "mean_foreign_gpu_pct": 0.1,
+   "max_foreign_gpu_pct": 25.0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "NotificationCent"
+   ],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 239,
+    "mean_foreign_gpu_pct": 0.1,
+    "max_foreign_gpu_pct": 25.0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "NotificationCent"
+    ],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792656264.099,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656266.142,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656268.184,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656270.274,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656272.352,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656274.43,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656276.482,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656278.529,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656280.569,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656282.61,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656284.649,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656286.69,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656288.762,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656290.81,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656292.862,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656294.905,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656296.948,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656298.989,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656301.031,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656303.072,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656305.112,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656307.152,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656309.193,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656311.233,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656313.273,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656315.313,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656317.353,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656319.427,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656321.502,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656323.582,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656325.629,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656327.671,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656329.713,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656331.754,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656333.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656335.828,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656337.87,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656339.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656341.953,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656343.995,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656346.052,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656348.117,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656350.18,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656352.235,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656354.284,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656356.33,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656358.372,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656360.418,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656362.454,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656364.494,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656366.536,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656368.575,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656370.617,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656372.659,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656374.699,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656376.74,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656378.811,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656380.892,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656382.975,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656385.022,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656387.062,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656389.105,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656391.141,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656393.183,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656395.223,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656397.267,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656399.301,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656401.348,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656403.395,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656405.436,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656407.477,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656409.518,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656411.559,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656413.599,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656415.64,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656417.679,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656419.719,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656421.761,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656423.802,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656425.841,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656427.881,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656429.923,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656431.963,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656434.004,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656436.044,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656438.083,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656440.123,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656442.164,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656444.217,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656446.267,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656448.323,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656450.372,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656452.42,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656454.464,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656456.507,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656458.548,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656460.59,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656462.63,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656464.671,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656466.711,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656468.75,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656470.789,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656472.827,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656474.869,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656476.905,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656478.947,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656480.988,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656483.029,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656485.061,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656487.102,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656489.142,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656491.182,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656493.223,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656495.291,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656497.338,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656499.414,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656501.46,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656503.502,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656505.542,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656507.583,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656509.617,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656511.657,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656513.697,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656515.737,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656517.777,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656519.817,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656521.857,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656523.897,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656525.937,
+    25.0,
+    "NotificationCent",
+    25.0,
+    0.0
+   ],
+   [
+    1792656527.977,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656530.017,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656532.056,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656534.096,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656536.136,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656538.176,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656540.217,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656542.273,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656544.324,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656546.374,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656548.438,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656550.493,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656552.556,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656554.614,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656556.667,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656558.707,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656560.754,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656562.791,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656564.833,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656566.874,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656568.916,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656570.96,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656573.001,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656575.045,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656577.092,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656579.131,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656581.171,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656583.204,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656585.245,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656587.284,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656589.325,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656591.365,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656593.405,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656595.446,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656597.486,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656599.526,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656601.566,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656603.606,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656605.644,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656607.684,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656609.724,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656611.763,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656613.803,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656615.843,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656617.883,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656619.922,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656621.962,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656624.001,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656626.041,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656628.081,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656630.12,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656632.159,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656634.199,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656636.239,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656638.278,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656640.318,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656642.358,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656644.397,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656646.437,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656648.477,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656650.517,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656652.557,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656654.597,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656656.639,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656658.672,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656660.729,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656662.792,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656664.85,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656666.904,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656668.954,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656671.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656673.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656675.081,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656677.123,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656679.159,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656681.199,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656683.241,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656685.281,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656687.32,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656689.36,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656691.4,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656693.441,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656695.482,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656697.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656699.562,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656701.602,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656703.64,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656705.68,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656707.721,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656709.758,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656711.801,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656713.842,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656715.882,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656717.922,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656719.962,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656722.003,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656724.043,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656726.083,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656728.124,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656730.164,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656732.204,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656734.244,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656736.285,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656738.325,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656740.364,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656742.405,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656744.446,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656746.516,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656748.571,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656750.617,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-q35-9b-mlxserve-mtp-d2",
+ "display": "mlx-serve + MTP (max depth 2)",
+ "engine": "mlx-serve",
+ "version": "26.10.2",
+ "version_config": "26.10.2",
+ "model_name": "Qwen3.5-9B",
+ "model_path": "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+ "note": "mlx-serve 26.10.2 on the 9B trunk every engine reads (lmstudio-community/Qwen3.5-9B-MLX-4bit @b455506, cloned) with the sidecar mtp/weights.safetensors: mlx-community/Qwen3.5-9B-MTP-4bit @222dfd2 (Qwen's MTP head at 4 bits) renamed to mtp.* (tools/mlx_serve_pack.py qwen3.5-9b). MTP with exact verification, --no-drafter, max depth 2 (the 4B's best on this Mac).",
+ "config": {
+  "label": "sw-q35-9b-mlxserve-mtp-d2",
+  "display": "mlx-serve + MTP (max depth 2)",
+  "engine": "mlx-serve",
+  "version": "26.10.2",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-9b-mtp"
+   },
+   {
+    "write_json": {
+     "path": "{state}/mlx-serve/q35-9b-mtp/harness.json",
+     "data": {
+      "home_of": "mlx-serve, emptied before each run"
+     }
+    }
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-9b-mtp"
+  },
+  "env_clear_prefixes": [
+   "MLX_SERVE_"
+  ],
+  "base_url": "http://127.0.0.1:8173/v1",
+  "model": "qwen3.5-9b-4bit-mlx-serve",
+  "ready_timeout": 600,
+  "adaptive_warm": true,
+  "requires_paths": [
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve/config.json",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve/mtp/weights.safetensors"
+  ],
+  "version_cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--version"
+  ],
+  "log_grep": [
+   "\\[spec-stats\\] mode=",
+   "\\[mtp\\]|\\[dflash\\]|\\[row-exact\\]|drafter ready|MTP head ready|round-cost|=enabled \\(streaming",
+   "warn|WARN|error|Error"
+  ],
+  "note": "mlx-serve 26.10.2 on the 9B trunk every engine reads (lmstudio-community/Qwen3.5-9B-MLX-4bit @b455506, cloned) with the sidecar mtp/weights.safetensors: mlx-community/Qwen3.5-9B-MTP-4bit @222dfd2 (Qwen's MTP head at 4 bits) renamed to mtp.* (tools/mlx_serve_pack.py qwen3.5-9b). MTP with exact verification, --no-drafter, max depth 2 (the 4B's best on this Mac)."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1689.38,
+    "swapouts": 23111178,
+    "swapins": 20671022,
+    "pageouts": 706116,
+    "memorystatus_level": 87
+   },
+   "gpu_mem": {
+    "in_use": 11780096,
+    "alloc": 798507008,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 20098035712,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "cmd_shell": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model {models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve --host 127.0.0.1 --port 8173 --ctx-size 32768 --no-drafter --mtp-max-depth 2",
+  "env": {
+   "HOME": "<scratch>/sweep/runs/state/mlx-serve/q35-9b-mtp"
+  },
+  "env_cleared": [
+   "MLX_SERVE_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/mlx-serve/qwen3.5-9b-4bit-mlx-serve",
+   "safetensors_bytes": 5950221142,
+   "safetensors_files": [
+    "model-00001-of-00002.safetensors",
+    "model-00002-of-00002.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "version_cmd_output": "mlx-serve 26.10.2\nmlx 0.32.3\nmlx-c 56b2d39fc831\nnax off (requires M5-class GPU)\nggml 0.26.0 (d81235049)\nllama.cpp b11429\ngguf 3\nds4 unknown\n[mem] MLX buffer-pool cap 2048 MB (was 15564 MB)",
+  "prepare": [
+   "empty <scratch>/sweep/runs/state/mlx-serve/q35-9b-mtp (harness-owned cache dir)",
+   "write <scratch>/sweep/runs/state/mlx-serve/q35-9b-mtp/harness.json: {\"home_of\": \"mlx-serve, emptied before each run\"}"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "KAPITSA_BIN": "~/engines/kapitsa/0.2.6/kapitsa",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server"
+  },
+  "ready_s": 4.0,
+  "server_pid": 48524,
+  "listener_pid": 48524,
+  "gpu_quiet_wait_s": 19.0,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 11780096,
+   "alloc": 798507008,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1665.38,
+   "swapouts": 23111178,
+   "swapins": 20672501,
+   "pageouts": 706147,
+   "memorystatus_level": 86
+  },
+  "disk_free_bytes": 20097630208
+ },
+ "version_detected": null,
+ "server_log": [
+  "[mtp] loaded native MTP head (dense-mlp; per-weight quant, fallback bits=4/gs=64)",
+  "[mtp] draft-only lm_head requantized to 3-bit/gs64",
+  "[mtp] draft rerank: coarse 3-bit/gs64 head built (248320 rows); greedy drafts re-rank through the trunk head",
+  "MTP head ready (depth=2, profile=generic).",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] draft rerank engaged (3-bit coarse -> top-32 -> trunk re-score)",
+  "  [spec-stats] mode=mtp attempts=5 accepts=3 avg_per_round=0.60 per_draft_pct=60.0% depth=2 drafted=5 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=51.01 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trials",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=5 accepts=3 avg_per_round=0.60 per_draft_pct=60.0% depth=2 drafted=5 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=51.48 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trials",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=5 accepts=3 avg_per_round=0.60 per_draft_pct=60.0% depth=2 drafted=5 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=51.65 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trials",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=1 accepts=1 avg_per_round=1.00 per_draft_pct=100.0% depth=2 drafted=1 ext_rounds=0 partial_rounds=0 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=52.72 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trial",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] cost table: bucket 2-4k measured w2:28.97/3 (ms/tok) replaces the fitted surface (scale 0.0207 at w2)",
+  "  [spec-stats] mode=mtp attempts=31 accepts=33 avg_per_round=1.06 per_draft_pct=61.1% depth=2 drafted=54 ext_rounds=0 partial_rounds=14 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=65.59 two_ms_tok=0.00 one_ms_tok=32.58 verdict_round=0 trials=0 width_t",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] prompt-lookup drafts engaged: k=2 suffix=10",
+  "  [spec-stats] mode=mtp attempts=11 accepts=14 avg_per_round=1.27 per_draft_pct=100.0% depth=2 drafted=14 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=53.55 two_ms_tok=0.00 one_ms_tok=21.08 verdict_round=0 trials=0 width_t",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=216 accepts=296 avg_per_round=1.37 per_draft_pct=68.5% depth=2 drafted=432 ext_rounds=0 partial_rounds=88 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=68.32 two_ms_tok=0.00 one_ms_tok=28.53 verdict_round=0 trials=0 widt",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=222 accepts=290 avg_per_round=1.31 per_draft_pct=65.3% depth=2 drafted=444 ext_rounds=0 partial_rounds=104 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=65.22 two_ms_tok=0.00 one_ms_tok=25.08 verdict_round=0 trials=0 wid",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=234 accepts=278 avg_per_round=1.19 per_draft_pct=67.6% depth=2 drafted=411 ext_rounds=0 partial_rounds=92 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=64.44 two_ms_tok=0.00 one_ms_tok=28.90 verdict_round=0 trials=0 widt",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=102 accepts=90 avg_per_round=0.88 per_draft_pct=66.2% depth=2 drafted=136 ext_rounds=0 partial_rounds=35 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=54.29 two_ms_tok=0.00 one_ms_tok=29.06 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=78 accepts=113 avg_per_round=1.45 per_draft_pct=72.4% depth=2 drafted=156 ext_rounds=0 partial_rounds=30 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=65.92 two_ms_tok=0.00 one_ms_tok=30.13 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=84 accepts=108 avg_per_round=1.29 per_draft_pct=64.3% depth=2 drafted=168 ext_rounds=0 partial_rounds=41 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=67.58 two_ms_tok=0.00 one_ms_tok=31.30 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 28.08 ms/tok vs single 29.74 ms/tok -> two-chunk every round (period 12)",
+  "[mtp] regime gate: two-chunk 31.84 ms/tok vs single 29.96 ms/tok -> two-chunk throttled (period 13)",
+  "[mtp] regime gate: two-chunk 31.84 ms/tok vs single 31.93 ms/tok -> two-chunk every round (period 8)",
+  "  [spec-stats] mode=mtp attempts=96 accepts=95 avg_per_round=0.99 per_draft_pct=68.3% depth=2 drafted=139 ext_rounds=12 partial_rounds=38 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=5.07 round_ms=56.89 two_ms_tok=32.98 one_ms_tok=32.07 verdict_round=44 trials=2 wid",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 29.70 ms/tok vs single 61.36 ms/tok -> two-chunk every round (period 128)",
+  "[mtp] regime gate: two-chunk 35.30 ms/tok vs single 29.67 ms/tok -> two-chunk throttled (period 38)",
+  "[mtp] regime gate: two-chunk 35.30 ms/tok vs single 35.55 ms/tok -> two-chunk every round (period 8)",
+  "  [spec-stats] mode=mtp attempts=108 accepts=84 avg_per_round=0.78 per_draft_pct=67.7% depth=2 drafted=124 ext_rounds=3 partial_rounds=34 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=8.30 round_ms=61.92 two_ms_tok=36.82 one_ms_tok=33.01 verdict_round=15 trials=0 wid",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 42.69 ms/tok vs single 69.52 ms/tok -> two-chunk every round (period 126)",
+  "[mtp] regime gate: two-chunk 47.48 ms/tok vs single 44.37 ms/tok -> two-chunk throttled (period 15)",
+  "  [spec-stats] mode=mtp attempts=109 accepts=83 avg_per_round=0.76 per_draft_pct=65.4% depth=2 drafted=127 ext_rounds=4 partial_rounds=37 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=11.02 round_ms=71.98 two_ms_tok=51.60 one_ms_tok=43.02 verdict_round=15 trials=1 wi"
+ ],
+ "server_log_path": "logs/sw-q35-9b-mlxserve-mtp-d2-20261022-130224.log"
+}

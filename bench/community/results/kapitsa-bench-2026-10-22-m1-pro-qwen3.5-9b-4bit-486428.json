@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-22T06:59:46Z",
+  "kapitsa": {
+    "version": "0.2.6",
+    "commit": "76a4970"
+  },
+  "mac": {
+    "identifier": "MacBookPro18,3",
+    "name": "MacBook Pro (14-inch, 2021)",
+    "year": 2021,
+    "chip": "Apple M1 Pro",
+    "cpu_cores": 8,
+    "gpu_cores": 14,
+    "memory_gb": 16,
+    "macos": "27.0.1",
+    "macos_build": "26A434"
+  },
+  "model": {
+    "name": "qwen3.5-9b",
+    "title": "Qwen3.5-9B",
+    "variant": "4bit",
+    "precision": "4-bit",
+    "catalog": true,
+    "revision": "b455506",
+    "decoding": "unknown",
+    "decoding_detail": "KFlash speculative decoding (DFlash2 lattice, tree verify)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ]
+  },
+  "results": {
+    "decode": {
+      "median_tps": 56.75,
+      "runs_tps": [
+        52.5,
+        59.5,
+        56.75,
+        59.62,
+        53.23
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 57.79,
+      "runs_tps": [
+        57.79,
+        55.46,
+        62.37,
+        56.93,
+        62.87
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4133,
+        "ttft_s": 19.0202,
+        "tps": 217.3,
+        "followup_s": [
+          0.1804,
+          0.2302,
+          0.1709
+        ],
+        "followup_median_s": 0.1804
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16284,
+        "ttft_s": 80.5784,
+        "tps": 202.1,
+        "followup_s": [
+          0.2144,
+          0.2554,
+          0.2091
+        ],
+        "followup_median_s": 0.2144
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 7.96
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 1482,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.03,
+    "gpu_other_max_pct": 1.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.4699)",
+    "decode_greedy: 1482 pages swapped out during the phase"
+  ],
+  "invalid": []
+}

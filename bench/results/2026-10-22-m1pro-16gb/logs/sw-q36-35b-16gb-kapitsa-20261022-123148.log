@@ -1,0 +1,48 @@
+[kapitsa] NI_QMM: dense prefill GEMM qmr_k64_w12_m32_n64 (M >= 64), qmr_k64_w14_m16_n64 / qmr_k64_w12_m8_n64 below
+[kapitsa] NI_QMM8=1: 8-bit prefill GEMMs on qmr8 (all but the MoE router)
+[kapitsa] memory: 1024-row prefill chunks (2048 would leave less than one 32768-token conversation in the 12.2 GB budget)
+[kapitsa] read 1.92 GB of weights in 428 ms (4.5 GB/s)
+[kapitsa] read 9.06 GB of IQ experts in 4060 ms; 10.99 GB of weights locked in memory
+[kapitsa] read 0.00 GB of weights in 0 ms (0.0 GB/s)
+[kapitsa] no MTP head in ~/.cache/kapitsa/models/qwen3.6-35b-a3b-16gb; speculative decoding off
+[kapitsa] NI_MOE_QMR: MoE prefill expert GEMMs qrm_gu/qrm_dn, 32-row tiles
+[kapitsa] compiled kernels in 29 ms
+[kapitsa] compiled the weight-format kernels in 34 ms
+[kapitsa] prewarmed 206 prefill pipelines in 98 ms
+[kapitsa] loaded ~/.cache/kapitsa/models/qwen3.6-35b-a3b-16gb: 40 layers, MoE, 1.9 GB mapped in 4888 ms; weights 4-bit group 32 6%, 6-bit group 64 8%, 8-bit group 64 4%, IQ2_S 29%, IQ2_XXS 50%, IQ3_S 3%, bf16 0%
+[kapitsa] tokenizer: 248044 tokens, 247587 merges, 33 added (280 ms)
+[kapitsa] memory pressure warning: the weights are no longer kept wired while idle
+[kapitsa] DFlash2: no drafter found for ~/.cache/kapitsa/models/qwen3.6-35b-a3b-16gb (looked next to the model and in ~/.cache/nace-infer-models/drafters)
+[kapitsa] GPU: Apple M1 Pro, 14 cores
+[kapitsa] memory: 11.58 GB allocated (model, buffers, 1 slots' state), budget 12.2 GB (recommended working set 12.7 GB): KV room 0.59 GB = 28921 tokens (20 KB per token), one conversation up to 28921 of 32768 tokens
+[kapitsa] engine ready: qwen3.6-35b-a3b, context 32768, 1 slots, plain decoding
+[kapitsa] listening on http://127.0.0.1:8091
+Ready: chat at http://127.0.0.1:8091, API at http://127.0.0.1:8091/v1 (model "qwen3.6-35b-a3b"). Ctrl+C stops.
+[kapitsa] SSD prefix cache: <scratch>/sweep/runs/state/kapitsa/prefix-cache/bcef1a937a627d6f6a79a2132e2bad29, up to 6.7 GiB (auto: a quarter of the free space beyond 10 GiB, at most 32 GiB; --disk-cache 0 turns it off): 0 conversations taken back (0 MiB)
+[kapitsa] NI_QMM_GU: dense gate/up/SwiGLU fused (qmr_gu_k64_w14_m32_n64, m16_n64 / m8_n32 below 64 rows)
+[kapitsa] chat: prompt 1069 (cached 0) in 2479 ms (+2.0 ms template/tokenize; last chunk: encoded by 1220.6 ms, GPU start +1152.4 ms, GPU 105.4 ms, wake +0.3 ms), 3 tokens in 63 ms (31.8 tok/s), stop
+[kapitsa] SSD cache: saved the conversation slot 0 held (1062 tokens, 153 MB written) in 123 ms
+[kapitsa] chat: prompt 1070 (cached 0) in 2417 ms (+32.5 ms template/tokenize; last chunk: encoded by 1156.9 ms, GPU start +1154.2 ms, GPU 105.5 ms, wake +0.2 ms), 3 tokens in 59 ms (34.0 tok/s), stop
+[kapitsa] SSD cache: saved the conversation slot 0 held (1063 tokens, 153 MB written) in 109 ms
+[kapitsa] chat: prompt 1070 (cached 0) in 2413 ms (+46.4 ms template/tokenize; last chunk: encoded by 1153.2 ms, GPU start +1153.9 ms, GPU 105.3 ms, wake +0.2 ms), 3 tokens in 60 ms (33.6 tok/s), stop
+[kapitsa] SSD cache: saved the conversation slot 0 held (1063 tokens, 153 MB written) in 66 ms
+[kapitsa] chat: prompt 1066 (cached 0) in 2409 ms (+11.9 ms template/tokenize; last chunk: encoded by 1150.5 ms, GPU start +1152.7 ms, GPU 105.2 ms, wake +0.2 ms), 3 tokens in 60 ms (33.6 tok/s), stop
+[kapitsa] SSD cache: saved the conversation slot 0 held (1059 tokens, 153 MB written) in 57 ms
+[kapitsa] chat: prompt 2924 (cached 0) in 6121 ms (+19.1 ms template/tokenize; last chunk: encoded by 3978.2 ms, GPU start +2025.0 ms, GPU 117.8 ms, wake +0.2 ms), 64 tokens in 1288 ms (48.9 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (2917 tokens, 191 MB written) in 98 ms
+[kapitsa] chat: prompt 430 (cached 0) in 1066 ms (+30.3 ms template/tokenize; last chunk: encoded by 0.7 ms, GPU start +931.1 ms, GPU 134.0 ms, wake +0.2 ms), 27 tokens in 517 ms (50.3 tok/s), tool_calls
+[kapitsa] memory pressure normal: the weights are kept wired again
+[kapitsa] memory pressure warning: the weights are no longer kept wired while idle
+[kapitsa] chat: prompt 1101 (cached 0) in 2665 ms (+7.2 ms template/tokenize; last chunk: encoded by 1337.5 ms, GPU start +1109.3 ms, GPU 217.8 ms, wake +0.2 ms), 192 tokens in 3740 ms (51.1 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (1094 tokens, 154 MB written) in 198 ms
+[kapitsa] chat: prompt 2132 (cached 0) in 4687 ms (+71.6 ms template/tokenize; last chunk: encoded by 3024.9 ms, GPU start +1440.3 ms, GPU 221.8 ms, wake +0.2 ms), 192 tokens in 3800 ms (50.3 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (2125 tokens, 175 MB written) in 229 ms
+[kapitsa] chat: prompt 4159 (cached 0) in 8989 ms (+92.3 ms template/tokenize; last chunk: encoded by 6987.6 ms, GPU start +1770.8 ms, GPU 230.7 ms, wake +0.1 ms), 192 tokens in 3909 ms (48.9 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (4152 tokens, 217 MB written) in 255 ms
+[kapitsa] chat: prompt 8306 (cached 0) in 18791 ms (+133.7 ms template/tokenize; last chunk: encoded by 16373.7 ms, GPU start +2166.4 ms, GPU 250.4 ms, wake +0.2 ms), 192 tokens in 4178 ms (45.7 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (8299 tokens, 302 MB written) in 441 ms
+[kapitsa] chat: prompt 16310 (cached 0) in 40357 ms (+245.8 ms template/tokenize; last chunk: encoded by 37119.4 ms, GPU start +2929.3 ms, GPU 307.8 ms, wake +0.2 ms), 192 tokens in 4704 ms (40.6 tok/s), length
+[kapitsa] SSD cache: saved the conversation slot 0 held (16303 tokens, 466 MB written) in 879 ms
+[kapitsa] chat: prompt 20952 (cached 0) in 55567 ms (+190.7 ms template/tokenize; last chunk: encoded by 52101.7 ms, GPU start +3133.1 ms, GPU 331.5 ms, wake +0.2 ms), 192 tokens in 5015 ms (38.1 tok/s), length
+[kapitsa] SSD cache: saved slot 0 (20945 tokens, 2 restore points; 41 of 41 KV blocks and 2 states new: 561 MB) in 612 ms
+[kapitsa] SSD prefix cache: 1 conversation saved as the server stops (561 MB in 612 ms)

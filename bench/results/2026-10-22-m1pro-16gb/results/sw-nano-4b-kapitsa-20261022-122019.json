@@ -1,0 +1,1327 @@
+{
+ "schema": 2,
+ "label": "sw-nano-4b-kapitsa",
+ "model": "nano-4b",
+ "base_url": "http://127.0.0.1:8091/v1",
+ "when": "2026-10-22 12:21:02",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "nano-4b",
+  "label": "sw-nano-4b-kapitsa",
+  "pid": 32344,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-nano-4b-kapitsa-20261022-122019.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792653663.139,
+   1792653869.135
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 32344,
+     "name": "kapitsa",
+     "phys_footprint": 5436707376,
+     "phys_footprint_peak": 5634363952,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 182534144,
+     "mapped_file_wired": 822099968
+    }
+   ],
+   "phys_footprint_mb": 5184.8,
+   "phys_footprint_peak_mb": 5373.3,
+   "mapped_file_clean_mb": 174.1,
+   "swap_used_mb": 1232.94,
+   "memorystatus_level": 46,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 255.7,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1248.94,
+  "swapouts": 23065058,
+  "swapins": 20653257,
+  "pageouts": 644542,
+  "memorystatus_level": 55
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 4717.0,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1111,
+    "ttft_s": 2.554780959,
+    "prefill_tps": 434.8709411216494,
+    "decode_tps": 36.46253746589057,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2167,
+    "ttft_s": 4.864034250000001,
+    "prefill_tps": 445.51495499851785,
+    "decode_tps": 36.556684128312575,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4207,
+    "ttft_s": 9.426047791000002,
+    "prefill_tps": 446.3164300966994,
+    "decode_tps": 36.40848788749671,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8412,
+    "ttft_s": 19.529338249999995,
+    "prefill_tps": 430.7365611837873,
+    "decode_tps": 35.22600881197905,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16543,
+    "ttft_s": 41.195412875,
+    "prefill_tps": 401.5738366355674,
+    "decode_tps": 30.418565432649523,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32006,
+    "ttft_s": 93.618895541,
+    "prefill_tps": 341.87542819262495,
+    "decode_tps": 26.40320869598896,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.724,
+  "retention_from_tokens": 1111,
+  "retention_to_tokens": 32006,
+  "max_prompt_tokens": 32006,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1111,
+      "completion_tokens": 192,
+      "ttft_s": 2.554780959,
+      "prefill_tps": 434.8709411216494,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 36.46253746589057
+     }
+    ],
+    "prompt_tokens": 1111,
+    "ttft_s": 2.554780959,
+    "prefill_tps": 434.8709411216494,
+    "decode_tps": 36.46253746589057
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2167,
+      "completion_tokens": 192,
+      "ttft_s": 4.864034250000001,
+      "prefill_tps": 445.51495499851785,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 36.556684128312575
+     }
+    ],
+    "prompt_tokens": 2167,
+    "ttft_s": 4.864034250000001,
+    "prefill_tps": 445.51495499851785,
+    "decode_tps": 36.556684128312575
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4207,
+      "completion_tokens": 192,
+      "ttft_s": 9.426047791000002,
+      "prefill_tps": 446.3164300966994,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 36.40848788749671
+     }
+    ],
+    "prompt_tokens": 4207,
+    "ttft_s": 9.426047791000002,
+    "prefill_tps": 446.3164300966994,
+    "decode_tps": 36.40848788749671
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8412,
+      "completion_tokens": 192,
+      "ttft_s": 19.529338249999995,
+      "prefill_tps": 430.7365611837873,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 35.22600881197905
+     }
+    ],
+    "prompt_tokens": 8412,
+    "ttft_s": 19.529338249999995,
+    "prefill_tps": 430.7365611837873,
+    "decode_tps": 35.22600881197905
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16543,
+      "completion_tokens": 192,
+      "ttft_s": 41.195412875,
+      "prefill_tps": 401.5738366355674,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 30.418565432649523
+     }
+    ],
+    "prompt_tokens": 16543,
+    "ttft_s": 41.195412875,
+    "prefill_tps": 401.5738366355674,
+    "decode_tps": 30.418565432649523
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32006,
+      "completion_tokens": 192,
+      "ttft_s": 93.618895541,
+      "prefill_tps": 341.87542819262495,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 26.40320869598896
+     }
+    ],
+    "prompt_tokens": 32006,
+    "ttft_s": 93.618895541,
+    "prefill_tps": 341.87542819262495,
+    "decode_tps": 26.40320869598896
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 552,
+ "peak_footprint_mb": 5373,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 5373.3,
+ "mapped_file_clean_mb": 174.1,
+ "vm_end": {
+  "swap_used_mb": 1232.94,
+  "swapouts": 23065058,
+  "swapins": 20653938,
+  "pageouts": 644878,
+  "memorystatus_level": 46
+ },
+ "when_end": "2026-10-22 12:24:29",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 8.3,
+    "prompt_tokens": 2928,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 1.59,
+    "prompt_tokens": 455,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1080,
+   "completion_tokens": 3,
+   "ttft_s": 3.0962686249999996,
+   "prefill_tps": 348.80694500465063,
+   "finish": "stop",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1079,
+    "completion_tokens": 3,
+    "ttft_s": 2.404176167,
+    "prefill_tps": 448.80238595260977,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1080,
+    "completion_tokens": 3,
+    "ttft_s": 2.4007143749999997,
+    "prefill_tps": 449.86609454529554,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1077,
+    "completion_tokens": 3,
+    "ttft_s": 2.4010605409999997,
+    "prefill_tps": 448.55178851568996,
+    "finish": "stop",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 2.4010605409999997,
+  "first_request_penalty_s": 0.695,
+  "invalid": [],
+  "spawn_to_ready_s": 4.1,
+  "spawn_to_first_token_s": 7.2
+ },
+ "contention": {
+  "overall": {
+   "samples": 100,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 100,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792653664.958,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653667.002,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653669.045,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653671.08,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653673.124,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653675.168,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653677.214,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653679.258,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653681.303,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653683.343,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653685.383,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653687.428,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653689.472,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653691.516,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653693.56,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653695.603,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653697.646,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653699.69,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653701.733,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653703.775,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653705.82,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653707.863,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653709.908,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653711.955,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653713.998,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653716.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653718.088,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653720.135,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653722.178,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653724.217,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653726.259,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653728.302,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653730.348,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653732.428,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653734.484,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653736.542,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653738.597,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653740.645,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653742.691,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653744.738,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653746.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653748.844,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653750.895,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653752.934,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653754.981,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653757.035,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653759.094,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653761.143,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653763.19,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653765.245,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653767.292,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653769.338,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653771.383,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653773.428,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653775.471,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653777.515,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653779.559,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653781.605,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653783.649,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653785.685,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653787.722,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653789.763,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653791.816,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653793.861,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653795.905,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653797.946,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653799.995,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653802.038,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653804.085,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653806.128,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653808.174,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653810.219,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653812.27,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653814.314,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653816.357,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653818.402,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653820.451,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653822.517,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653824.581,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653826.629,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653828.669,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653830.718,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653832.764,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653834.81,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653836.85,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653838.885,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653840.93,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653842.974,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653845.019,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653847.07,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653849.128,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653851.172,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653853.246,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653855.309,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653857.357,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653859.4,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653861.452,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653863.506,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653865.55,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792653867.628,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-nano-4b-kapitsa",
+ "display": "Kapitsa 0.2.6 (prompt lookup, catalog nano-4b)",
+ "engine": "kapitsa",
+ "version": "0.2.6",
+ "version_config": "auto",
+ "model_name": "Nemotron-3-Nano-4B",
+ "model_path": "~/.cache/kapitsa/models/nemotron-3-nano-4b-fp8",
+ "note": "M1 Pro 16 GB sweep, 2026-10-22: the 0.2.6 release, the catalog model and its default decoding, as kapitsa bench starts it.",
+ "config": {
+  "label": "sw-nano-4b-kapitsa",
+  "display": "Kapitsa 0.2.6 (prompt lookup, catalog nano-4b)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-3-Nano-4B",
+  "model_path": "~/.cache/kapitsa/models/nemotron-3-nano-4b-fp8",
+  "cmd": [
+   "{env:KAPITSA_BIN}",
+   "serve",
+   "--model",
+   "nano-4b",
+   "--model-id",
+   "nano-4b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "nano-4b",
+  "note": "M1 Pro 16 GB sweep, 2026-10-22: the 0.2.6 release, the catalog model and its default decoding, as kapitsa bench starts it."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1248.94,
+    "swapouts": 23065058,
+    "swapins": 20653257,
+    "pageouts": 644529,
+    "memorystatus_level": 83
+   },
+   "gpu_mem": {
+    "in_use": 11829248,
+    "alloc": 798326784,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 46719180800,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/engines/kapitsa/0.2.6/kapitsa",
+   "serve",
+   "--model",
+   "nano-4b",
+   "--model-id",
+   "nano-4b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "~/engines/kapitsa/0.2.6/kapitsa serve --model nano-4b --model-id nano-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "<scratch>/sweep/runs/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [
+   "KAPITSA_BIN"
+  ],
+  "weights": {
+   "model_path": "~/.cache/kapitsa/models/nemotron-3-nano-4b-fp8",
+   "safetensors_bytes": 5267055808,
+   "safetensors_files": [
+    "model-00001-of-00002.safetensors",
+    "model-00002-of-00002.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "binary": {
+   "sha256": "4d061ee92621fdf64d117a7a05506de738b60c1bb571ea36e5791ddcaf0060c7",
+   "mtime": "2026-10-22T11:00:01"
+  },
+  "prepare": [
+   "empty <scratch>/sweep/runs/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "NI_DISK_CACHE_DIR": "<scratch>/sweep/runs/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 4.1,
+  "server_pid": 32344,
+  "listener_pid": 32344,
+  "gpu_quiet_wait_s": 19.0,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 11829248,
+   "alloc": 798326784,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1232.94,
+   "swapouts": 23065058,
+   "swapins": 20653938,
+   "pageouts": 644878,
+   "memorystatus_level": 82
+  },
+  "cleanup": [
+   "empty <scratch>/sweep/runs/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 44868263936
+ },
+ "server_log": [
+  "[kapitsa] engine ready: nano-4b, context 32768, 1 slots, prompt-lookup speculative decoding (up to 4 drafts per cycle)",
+  "[kapitsa] chat: prompt 1080 (cached 0) in 3093 ms (+2.1 ms template/tokenize; last chunk: encoded by 3015.3 ms, GPU start +46.5 ms, GPU 30.8 ms, wake +0.2 ms), 3 tokens in 59 ms (33.9 tok/s), stop, 1.00 tok/cycle",
+  "[kapitsa] chat: prompt 1079 (cached 0) in 2398 ms (+5.3 ms template/tokenize; last chunk: encoded by 2319.8 ms, GPU start +46.6 ms, GPU 31.0 ms, wake +0.2 ms), 3 tokens in 58 ms (34.7 tok/s), stop, 1.00 tok/cycle",
+  "[kapitsa] chat: prompt 1080 (cached 0) in 2398 ms (+1.5 ms template/tokenize; last chunk: encoded by 2320.5 ms, GPU start +46.7 ms, GPU 31.0 ms, wake +0.2 ms), 3 tokens in 58 ms (34.6 tok/s), stop, 1.00 tok/cycle",
+  "[kapitsa] chat: prompt 1077 (cached 0) in 2397 ms (+2.6 ms template/tokenize; last chunk: encoded by 2319.2 ms, GPU start +46.7 ms, GPU 31.1 ms, wake +0.2 ms), 3 tokens in 58 ms (34.7 tok/s), stop, 1.00 tok/cycle",
+  "[kapitsa] chat: prompt 2928 (cached 0) in 6438 ms (+9.0 ms template/tokenize; last chunk: encoded by 6355.4 ms, GPU start +49.9 ms, GPU 32.8 ms, wake +0.2 ms), 64 tokens in 1852 ms (34.0 tok/s), length, 1.00 tok/cycle",
+  "[kapitsa] chat: prompt 455 (cached 0) in 1066 ms (+4.9 ms template/tokenize; last chunk: encoded by 968.9 ms, GPU start +66.5 ms, GPU 30.3 ms, wake +0.2 ms), 27 tokens in 514 ms (50.6 tok/s), tool_calls, 1.53 tok/cycle",
+  "[kapitsa] chat: prompt 1111 (cached 0) in 2541 ms (+5.5 ms template/tokenize; last chunk: encoded by 2357.2 ms, GPU start +152.9 ms, GPU 30.8 ms, wake +0.2 ms), 192 tokens in 5238 ms (36.5 tok/s), length, 1.06 tok/cycle",
+  "[kapitsa] chat: prompt 2167 (cached 0) in 4861 ms (+2.1 ms template/tokenize; last chunk: encoded by 4673.6 ms, GPU start +155.2 ms, GPU 32.0 ms, wake +0.2 ms), 192 tokens in 5265 ms (36.3 tok/s), length, 1.07 tok/cycle",
+  "[kapitsa] chat: prompt 4207 (cached 0) in 9415 ms (+9.6 ms template/tokenize; last chunk: encoded by 9221.5 ms, GPU start +159.5 ms, GPU 34.1 ms, wake +0.2 ms), 192 tokens in 5267 ms (36.3 tok/s), length, 1.10 tok/cycle",
+  "[kapitsa] chat: prompt 8412 (cached 0) in 19489 ms (+34.0 ms template/tokenize; last chunk: encoded by 19282.2 ms, GPU start +168.6 ms, GPU 38.4 ms, wake +0.2 ms), 192 tokens in 5443 ms (35.1 tok/s), length, 1.13 tok/cycle",
+  "[kapitsa] chat: prompt 16543 (cached 0) in 41167 ms (+26.7 ms template/tokenize; last chunk: encoded by 40926.5 ms, GPU start +192.8 ms, GPU 47.5 ms, wake +0.2 ms), 192 tokens in 6338 ms (30.1 tok/s), length, 1.09 tok/cycle",
+  "[kapitsa] chat: prompt 32006 (cached 0) in 93581 ms (+35.8 ms template/tokenize; last chunk: encoded by 93279.4 ms, GPU start +238.3 ms, GPU 63.0 ms, wake +0.2 ms), 192 tokens in 7249 ms (26.3 tok/s), length, 1.02 tok/cycle"
+ ],
+ "server_log_path": "logs/sw-nano-4b-kapitsa-20261022-122019.log"
+}

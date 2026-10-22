@@ -93,9 +93,9 @@ Kapitsa has the fastest decode in 23 of the 25 model and Mac pairs measured agai
 
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: |
-| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**40&nbsp;tok/s**</mark><br><sub>no spec</sub> | —<br><sub>no support</sub> | 4<br><sub>no spec</sub> | 30<br><sub>no spec</sub> |
+| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**39&nbsp;tok/s**</mark><br><sub>no spec</sub> | —<br><sub>no support</sub> | 4<br><sub>no spec</sub> | 30<br><sub>no spec</sub> |
 | Nemotron 3 Nano 4B<br><sub>FP8</sub> | 🟩&nbsp;<mark>**37&nbsp;tok/s**</mark><br><sub>prompt lookup</sub> | —<br><sub>not run</sub> | 28<br><sub>Q4_K_M</sub> | 21<br><sub>BF16</sub> |
-| Nemotron Nano 9B v2<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**25&nbsp;tok/s**</mark><br><sub>prompt lookup</sub> | —<br><sub>not run</sub> | 14<br><sub>Q4_K_M</sub> | 18 |
+| Nemotron Nano 9B v2<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**25&nbsp;tok/s**</mark><br><sub>no spec</sub> | —<br><sub>not run</sub> | 14<br><sub>Q4_K_M</sub> | 18 |
 
 ### MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB
 

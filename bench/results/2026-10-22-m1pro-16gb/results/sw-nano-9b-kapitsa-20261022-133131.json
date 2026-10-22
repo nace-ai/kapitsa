@@ -1,0 +1,2074 @@
+{
+ "schema": 2,
+ "label": "sw-nano-9b-kapitsa",
+ "model": "nano-9b",
+ "base_url": "http://127.0.0.1:8091/v1",
+ "when": "2026-10-22 13:32:40",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "nano-9b",
+  "label": "sw-nano-9b-kapitsa",
+  "pid": 60596,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-nano-9b-kapitsa-20261022-133131.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792657960.691,
+   1792658380.397
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 60596,
+     "name": "kapitsa",
+     "phys_footprint": 7599151440,
+     "phys_footprint_peak": 7796775248,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 9519104,
+     "mapped_file_wired": 1174421504
+    }
+   ],
+   "phys_footprint_mb": 7247.1,
+   "phys_footprint_peak_mb": 7435.6,
+   "mapped_file_clean_mb": 9.1,
+   "swap_used_mb": 1612.25,
+   "memorystatus_level": 34,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 494.9,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1628.25,
+  "swapouts": 23112386,
+  "swapins": 20676220,
+  "pageouts": 706493,
+  "memorystatus_level": 46
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 6784.5,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1110,
+    "ttft_s": 6.056424042,
+    "prefill_tps": 183.27646682306067,
+    "decode_tps": 24.360516810754866,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2165,
+    "ttft_s": 11.396299166,
+    "prefill_tps": 189.97395281260378,
+    "decode_tps": 24.188567604005318,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4206,
+    "ttft_s": 22.168719457999998,
+    "prefill_tps": 189.7267908490847,
+    "decode_tps": 24.477772994298853,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8410,
+    "ttft_s": 45.75000408299999,
+    "prefill_tps": 183.82512020638327,
+    "decode_tps": 23.61507189861464,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16542,
+    "ttft_s": 91.997188042,
+    "prefill_tps": 179.80984367096073,
+    "decode_tps": 22.692547252941846,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32006,
+    "ttft_s": 192.923659625,
+    "prefill_tps": 165.89981789798324,
+    "decode_tps": 21.414523815762998,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.879,
+  "retention_from_tokens": 1110,
+  "retention_to_tokens": 32006,
+  "max_prompt_tokens": 32006,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1110,
+      "completion_tokens": 192,
+      "ttft_s": 6.056424042,
+      "prefill_tps": 183.27646682306067,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 24.360516810754866
+     }
+    ],
+    "prompt_tokens": 1110,
+    "ttft_s": 6.056424042,
+    "prefill_tps": 183.27646682306067,
+    "decode_tps": 24.360516810754866
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2165,
+      "completion_tokens": 192,
+      "ttft_s": 11.396299166,
+      "prefill_tps": 189.97395281260378,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 24.188567604005318
+     }
+    ],
+    "prompt_tokens": 2165,
+    "ttft_s": 11.396299166,
+    "prefill_tps": 189.97395281260378,
+    "decode_tps": 24.188567604005318
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4206,
+      "completion_tokens": 192,
+      "ttft_s": 22.168719457999998,
+      "prefill_tps": 189.7267908490847,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 24.477772994298853
+     }
+    ],
+    "prompt_tokens": 4206,
+    "ttft_s": 22.168719457999998,
+    "prefill_tps": 189.7267908490847,
+    "decode_tps": 24.477772994298853
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8410,
+      "completion_tokens": 192,
+      "ttft_s": 45.75000408299999,
+      "prefill_tps": 183.82512020638327,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 23.61507189861464
+     }
+    ],
+    "prompt_tokens": 8410,
+    "ttft_s": 45.75000408299999,
+    "prefill_tps": 183.82512020638327,
+    "decode_tps": 23.61507189861464
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16542,
+      "completion_tokens": 192,
+      "ttft_s": 91.997188042,
+      "prefill_tps": 179.80984367096073,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 22.692547252941846
+     }
+    ],
+    "prompt_tokens": 16542,
+    "ttft_s": 91.997188042,
+    "prefill_tps": 179.80984367096073,
+    "decode_tps": 22.692547252941846
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32006,
+      "completion_tokens": 192,
+      "ttft_s": 192.923659625,
+      "prefill_tps": 165.89981789798324,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 21.414523815762998
+     }
+    ],
+    "prompt_tokens": 32006,
+    "ttft_s": 192.923659625,
+    "prefill_tps": 165.89981789798324,
+    "decode_tps": 21.414523815762998
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 6136,
+ "peak_footprint_mb": 7436,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 7435.6,
+ "mapped_file_clean_mb": 9.1,
+ "vm_end": {
+  "swap_used_mb": 1612.25,
+  "swapouts": 23112386,
+  "swapins": 20677158,
+  "pageouts": 706520,
+  "memorystatus_level": 34
+ },
+ "when_end": "2026-10-22 13:39:40",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 18.04,
+    "prompt_tokens": 2930,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 3.37,
+    "prompt_tokens": 375,
+    "completion_tokens": 31,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1078,
+   "completion_tokens": 3,
+   "ttft_s": 6.329839375,
+   "prefill_tps": 170.30447948768054,
+   "finish": "stop",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1077,
+    "completion_tokens": 8,
+    "ttft_s": 5.707501083,
+    "prefill_tps": 188.6990443519816,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1078,
+    "completion_tokens": 8,
+    "ttft_s": 5.707376750000002,
+    "prefill_tps": 188.87836693100726,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1078,
+    "completion_tokens": 8,
+    "ttft_s": 5.707558125000002,
+    "prefill_tps": 188.8723647470519,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 5.707501083,
+  "first_request_penalty_s": 0.622,
+  "invalid": [],
+  "spawn_to_ready_s": 4.0,
+  "spawn_to_first_token_s": 10.33
+ },
+ "contention": {
+  "overall": {
+   "samples": 205,
+   "mean_foreign_gpu_pct": 0.08,
+   "max_foreign_gpu_pct": 16.65,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 1,
+   "longest_busy_run": 1,
+   "top": [
+    "NotificationCent"
+   ],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 205,
+    "mean_foreign_gpu_pct": 0.08,
+    "max_foreign_gpu_pct": 16.65,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 1,
+    "longest_busy_run": 1,
+    "top": [
+     "NotificationCent"
+    ],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792657962.469,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657964.514,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657966.559,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657968.599,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657970.65,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657972.697,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657974.738,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657976.791,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657978.833,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657980.872,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657982.915,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657984.956,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657986.996,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657989.036,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657991.078,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657993.118,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657995.154,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657997.198,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657999.236,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658001.275,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658003.314,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658005.354,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658007.388,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658009.426,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658011.465,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658013.505,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658015.544,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658017.583,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658019.623,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658021.664,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658023.704,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658025.746,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658027.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658029.825,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658031.861,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658033.901,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658035.941,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658037.992,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658040.036,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658042.085,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658044.127,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658046.172,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658048.212,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658050.252,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658052.291,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658054.327,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658056.367,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658058.404,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658060.436,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658062.477,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658064.51,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658066.549,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658068.579,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658070.62,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658072.661,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658074.702,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658076.743,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658078.784,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658080.833,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658082.883,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658084.922,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658086.962,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658089.001,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658091.041,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658093.081,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658095.12,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658097.162,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658099.192,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658101.233,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658103.28,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658105.32,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658107.359,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658109.397,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658111.436,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658113.475,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658115.518,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658117.577,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658119.629,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658121.673,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658123.719,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658125.76,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658127.8,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658129.839,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658131.878,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658133.917,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658135.948,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658137.988,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658140.027,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658142.066,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658144.096,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658146.135,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658148.174,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658150.214,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658152.253,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658154.293,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658156.333,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658158.364,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658160.403,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658162.441,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658164.481,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658166.52,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658168.56,
+    16.65,
+    "NotificationCent",
+    16.65,
+    0.0
+   ],
+   [
+    1792658170.6,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658172.64,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658174.681,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658176.72,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658178.755,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658180.792,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658182.837,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658184.893,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658186.94,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658188.981,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658191.021,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658193.062,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658195.101,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658197.141,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658199.18,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658201.22,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658203.259,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658205.3,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658207.34,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658209.374,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658211.413,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658213.452,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658215.489,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658217.526,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658219.559,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658221.598,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658223.637,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658225.676,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658227.716,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658229.755,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658231.794,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658233.833,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658235.872,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658237.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658239.95,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658241.99,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658244.027,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658246.06,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658248.105,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658250.162,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658252.209,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658254.25,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658256.294,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658258.337,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658260.376,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658262.406,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658264.445,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658266.483,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658268.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658270.561,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658272.601,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658274.641,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658276.68,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658278.72,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658280.76,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658282.798,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658284.839,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658286.88,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658288.921,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658290.962,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658293.004,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658295.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658297.073,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658299.113,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658301.143,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658303.186,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658305.23,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658307.269,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658309.327,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658311.372,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658313.415,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658315.466,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658317.511,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658319.551,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658321.592,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658323.633,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658325.671,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658327.71,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658329.749,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658331.787,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658333.826,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658335.866,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658337.905,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658339.944,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658341.984,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658344.023,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658346.063,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658348.104,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658350.146,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658352.184,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658354.225,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658356.264,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658358.302,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658360.34,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658362.379,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658364.419,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658366.457,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658368.497,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658370.536,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658372.575,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658374.616,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658376.67,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792658378.719,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-nano-9b-kapitsa",
+ "display": "Kapitsa 0.2.6 (catalog nano-9b)",
+ "engine": "kapitsa",
+ "version": "0.2.6",
+ "version_config": "auto",
+ "model_name": "Nemotron-Nano-9B-v2",
+ "model_path": "~/.cache/kapitsa/models/nemotron-nano-9b-v2-nvfp4",
+ "note": "M1 Pro 16 GB sweep, 2026-10-22: the 0.2.6 release, the catalog model and its default decoding, as kapitsa bench starts it.",
+ "config": {
+  "label": "sw-nano-9b-kapitsa",
+  "display": "Kapitsa 0.2.6 (catalog nano-9b)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-Nano-9B-v2",
+  "model_path": "~/.cache/kapitsa/models/nemotron-nano-9b-v2-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN}",
+   "serve",
+   "--model",
+   "nano-9b",
+   "--model-id",
+   "nano-9b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "nano-9b",
+  "note": "M1 Pro 16 GB sweep, 2026-10-22: the 0.2.6 release, the catalog model and its default decoding, as kapitsa bench starts it."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1628.25,
+    "swapouts": 23112386,
+    "swapins": 20676220,
+    "pageouts": 706452,
+    "memorystatus_level": 84
+   },
+   "gpu_mem": {
+    "in_use": 11272192,
+    "alloc": 759054336,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 20096503808,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/engines/kapitsa/0.2.6/kapitsa",
+   "serve",
+   "--model",
+   "nano-9b",
+   "--model-id",
+   "nano-9b",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "~/engines/kapitsa/0.2.6/kapitsa serve --model nano-9b --model-id nano-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "<scratch>/sweep/runs/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [
+   "KAPITSA_BIN"
+  ],
+  "weights": {
+   "model_path": "~/.cache/kapitsa/models/nemotron-nano-9b-v2-nvfp4",
+   "safetensors_bytes": 7835225280,
+   "safetensors_files": [
+    "model-00001-of-00010.safetensors",
+    "model-00002-of-00010.safetensors",
+    "model-00003-of-00010.safetensors",
+    "model-00004-of-00010.safetensors",
+    "model-00005-of-00010.safetensors",
+    "model-00006-of-00010.safetensors",
+    "model-00007-of-00010.safetensors",
+    "model-00008-of-00010.safetensors",
+    "model-00009-of-00010.safetensors",
+    "model-00010-of-00010.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "binary": {
+   "sha256": "4d061ee92621fdf64d117a7a05506de738b60c1bb571ea36e5791ddcaf0060c7",
+   "mtime": "2026-10-22T11:00:01"
+  },
+  "prepare": [
+   "empty <scratch>/sweep/runs/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "NI_DISK_CACHE_DIR": "<scratch>/sweep/runs/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 4.0,
+  "server_pid": 60596,
+  "listener_pid": 60596,
+  "gpu_quiet_wait_s": 18.9,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 11272192,
+   "alloc": 758808576,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1612.25,
+   "swapouts": 23112386,
+   "swapins": 20677158,
+   "pageouts": 706520,
+   "memorystatus_level": 84
+  },
+  "cleanup": [
+   "empty <scratch>/sweep/runs/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 20131979264
+ },
+ "server_log": [
+  "[kapitsa] engine ready: nano-9b, context 32768, 1 slots, plain decoding",
+  "[kapitsa] chat: prompt 1078 (cached 0) in 6319 ms (+8.4 ms template/tokenize; last chunk: encoded by 4.8 ms, GPU start +6249.6 ms, GPU 64.6 ms, wake +0.2 ms), 3 tokens in 124 ms (16.1 tok/s), stop",
+  "[kapitsa] chat: prompt 1077 (cached 0) in 5704 ms (+2.6 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +5637.2 ms, GPU 64.6 ms, wake +0.2 ms), 8 tokens in 329 ms (21.3 tok/s), length",
+  "[kapitsa] chat: prompt 1078 (cached 0) in 5704 ms (+2.0 ms template/tokenize; last chunk: encoded by 1.6 ms, GPU start +5638.2 ms, GPU 64.5 ms, wake +0.2 ms), 8 tokens in 329 ms (21.3 tok/s), length",
+  "[kapitsa] chat: prompt 1078 (cached 0) in 5705 ms (+2.1 ms template/tokenize; last chunk: encoded by 1.6 ms, GPU start +5638.1 ms, GPU 64.6 ms, wake +0.2 ms), 8 tokens in 330 ms (21.2 tok/s), length",
+  "[kapitsa] chat: prompt 2930 (cached 0) in 15386 ms (+6.9 ms template/tokenize; last chunk: encoded by 7626.5 ms, GPU start +7692.2 ms, GPU 67.1 ms, wake +0.2 ms), 64 tokens in 2650 ms (23.8 tok/s), length",
+  "[kapitsa] chat: prompt 375 (cached 0) in 2088 ms (+8.3 ms template/tokenize; last chunk: encoded by 1.6 ms, GPU start +2022.8 ms, GPU 63.5 ms, wake +0.2 ms), 31 tokens in 1270 ms (23.6 tok/s), tool_calls",
+  "[kapitsa] chat: prompt 1110 (cached 0) in 6045 ms (+1.7 ms template/tokenize; last chunk: encoded by 1.1 ms, GPU start +5979.0 ms, GPU 64.6 ms, wake +0.2 ms), 192 tokens in 7883 ms (24.2 tok/s), length",
+  "[kapitsa] chat: prompt 2165 (cached 0) in 11392 ms (+2.9 ms template/tokenize; last chunk: encoded by 5650.5 ms, GPU start +5675.4 ms, GPU 66.0 ms, wake +0.2 ms), 192 tokens in 7938 ms (24.1 tok/s), length",
+  "[kapitsa] chat: prompt 4206 (cached 0) in 22158 ms (+9.8 ms template/tokenize; last chunk: encoded by 14665.3 ms, GPU start +7423.4 ms, GPU 68.8 ms, wake +0.2 ms), 192 tokens in 8002 ms (23.9 tok/s), length",
+  "[kapitsa] chat: prompt 8410 (cached 0) in 45728 ms (+21.1 ms template/tokenize; last chunk: encoded by 36317.1 ms, GPU start +9335.5 ms, GPU 74.9 ms, wake +0.2 ms), 192 tokens in 8157 ms (23.4 tok/s), length",
+  "[kapitsa] chat: prompt 16542 (cached 0) in 91964 ms (+31.7 ms template/tokenize; last chunk: encoded by 80764.8 ms, GPU start +11112.4 ms, GPU 86.4 ms, wake +0.3 ms), 192 tokens in 8461 ms (22.6 tok/s), length",
+  "[kapitsa] chat: prompt 32006 (cached 0) in 192872 ms (+48.8 ms template/tokenize; last chunk: encoded by 178789.7 ms, GPU start +13974.9 ms, GPU 107.5 ms, wake +0.2 ms), 192 tokens in 8963 ms (21.3 tok/s), length"
+ ],
+ "server_log_path": "logs/sw-nano-9b-kapitsa-20261022-133131.log"
+}

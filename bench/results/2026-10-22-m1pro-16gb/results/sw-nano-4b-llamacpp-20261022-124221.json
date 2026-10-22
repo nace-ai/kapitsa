@@ -1,0 +1,1661 @@
+{
+ "schema": 2,
+ "label": "sw-nano-4b-llamacpp",
+ "model": "nano-4b",
+ "base_url": "http://127.0.0.1:8083/v1",
+ "when": "2026-10-22 12:50:52",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8083/v1",
+  "model": "nano-4b",
+  "label": "sw-nano-4b-llamacpp",
+  "pid": 43889,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-nano-4b-llamacpp-20261022-124221.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792655452.439,
+   1792655754.711
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 43889,
+     "name": "llama-server",
+     "phys_footprint": 8406916080,
+     "phys_footprint_peak": 8406916080,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 29982720,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 8017.5,
+   "phys_footprint_peak_mb": 8017.5,
+   "mapped_file_clean_mb": 28.6,
+   "swap_used_mb": 1753.56,
+   "memorystatus_level": 41,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 457.59,
+  "harness_held_s": 361.3,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1777.56,
+  "swapouts": 23111178,
+  "swapins": 20665290,
+  "pageouts": 706085,
+  "memorystatus_level": 63
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 5675.3,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1115,
+    "ttft_s": 4.085339417,
+    "prefill_tps": 272.9271392629554,
+    "decode_tps": 28.66473438647659,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2168,
+    "ttft_s": 8.071187208000001,
+    "prefill_tps": 268.6098022668984,
+    "decode_tps": 28.501865318660997,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4210,
+    "ttft_s": 15.728700583999998,
+    "prefill_tps": 267.66356047762883,
+    "decode_tps": 28.109221378856095,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8414,
+    "ttft_s": 31.821315958999996,
+    "prefill_tps": 264.413954810699,
+    "decode_tps": 27.65214202998395,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16545,
+    "ttft_s": 65.197112167,
+    "prefill_tps": 253.7689086231395,
+    "decode_tps": 26.76883768412532,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32006,
+    "ttft_s": 135.55354749999998,
+    "prefill_tps": 236.11333373624916,
+    "decode_tps": 25.188599794730706,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.879,
+  "retention_from_tokens": 1115,
+  "retention_to_tokens": 32006,
+  "max_prompt_tokens": 32006,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1115,
+      "completion_tokens": 192,
+      "ttft_s": 4.085339417,
+      "prefill_tps": 272.9271392629554,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.66473438647659
+     }
+    ],
+    "prompt_tokens": 1115,
+    "ttft_s": 4.085339417,
+    "prefill_tps": 272.9271392629554,
+    "decode_tps": 28.66473438647659
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2168,
+      "completion_tokens": 192,
+      "ttft_s": 8.071187208000001,
+      "prefill_tps": 268.6098022668984,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.501865318660997
+     }
+    ],
+    "prompt_tokens": 2168,
+    "ttft_s": 8.071187208000001,
+    "prefill_tps": 268.6098022668984,
+    "decode_tps": 28.501865318660997
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4210,
+      "completion_tokens": 192,
+      "ttft_s": 15.728700583999998,
+      "prefill_tps": 267.66356047762883,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.109221378856095
+     }
+    ],
+    "prompt_tokens": 4210,
+    "ttft_s": 15.728700583999998,
+    "prefill_tps": 267.66356047762883,
+    "decode_tps": 28.109221378856095
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8414,
+      "completion_tokens": 192,
+      "ttft_s": 31.821315958999996,
+      "prefill_tps": 264.413954810699,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.65214202998395
+     }
+    ],
+    "prompt_tokens": 8414,
+    "ttft_s": 31.821315958999996,
+    "prefill_tps": 264.413954810699,
+    "decode_tps": 27.65214202998395
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16545,
+      "completion_tokens": 192,
+      "ttft_s": 65.197112167,
+      "prefill_tps": 253.7689086231395,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 26.76883768412532
+     }
+    ],
+    "prompt_tokens": 16545,
+    "ttft_s": 65.197112167,
+    "prefill_tps": 253.7689086231395,
+    "decode_tps": 26.76883768412532
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32006,
+      "completion_tokens": 192,
+      "ttft_s": 135.55354749999998,
+      "prefill_tps": 236.11333373624916,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.188599794730706
+     }
+    ],
+    "prompt_tokens": 32006,
+    "ttft_s": 135.55354749999998,
+    "prefill_tps": 236.11333373624916,
+    "decode_tps": 25.188599794730706
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 7310,
+ "peak_footprint_mb": 8017,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 8017.5,
+ "mapped_file_clean_mb": 28.6,
+ "vm_end": {
+  "swap_used_mb": 1753.56,
+  "swapouts": 23111178,
+  "swapins": 20666831,
+  "pageouts": 706098,
+  "memorystatus_level": 41
+ },
+ "when_end": "2026-10-22 12:55:54",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 13.29,
+    "prompt_tokens": 2932,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 2.63,
+    "prompt_tokens": 456,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1079,
+   "completion_tokens": 3,
+   "ttft_s": 3.9131877080000095,
+   "prefill_tps": 275.7342812342283,
+   "finish": "stop",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 3,
+    "ttft_s": 3.9190865420000023,
+    "prefill_tps": 275.8295813106337,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 3,
+    "ttft_s": 3.926256959,
+    "prefill_tps": 275.3258411989739,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1082,
+    "completion_tokens": 3,
+    "ttft_s": 3.9304240000000163,
+    "prefill_tps": 275.28836583533877,
+    "finish": "stop",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 3.926256959,
+  "first_request_penalty_s": -0.013,
+  "invalid": [],
+  "spawn_to_ready_s": 2.0,
+  "spawn_to_first_token_s": 5.91
+ },
+ "contention": {
+  "overall": {
+   "samples": 148,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 148,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792655454.251,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655456.288,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655458.328,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655460.377,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655462.421,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655464.454,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655466.495,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655468.537,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655470.578,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655472.614,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655474.661,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655476.709,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655478.748,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655480.79,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655482.829,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655484.871,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655486.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655488.951,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655490.991,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655493.032,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655495.07,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655497.117,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655499.157,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655501.199,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655503.236,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655505.269,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655507.3,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655509.341,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655511.374,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655513.407,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655515.448,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655517.479,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655519.551,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655521.602,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655523.643,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655525.694,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655527.738,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655529.787,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655531.835,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655533.881,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655535.916,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655537.948,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655539.993,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655542.033,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655544.085,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655546.135,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655548.172,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655550.209,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655552.25,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655554.29,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655556.363,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655558.412,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655560.449,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655562.482,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655564.516,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655566.549,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655568.59,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655570.632,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655572.67,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655574.711,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655576.75,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655578.796,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655580.841,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655582.879,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655584.915,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655586.948,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655588.983,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655591.024,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655593.065,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655595.103,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655597.139,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655599.172,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655601.215,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655603.269,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655605.323,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655607.365,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655609.413,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655611.456,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655613.495,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655615.527,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655617.586,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655619.626,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655621.66,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655623.712,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655625.765,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655627.834,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655629.906,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655631.973,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655634.039,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655636.097,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655638.141,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655640.186,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655642.233,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655644.278,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655646.323,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655648.368,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655650.405,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655652.439,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655654.471,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655656.512,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655658.543,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655660.584,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655662.625,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655664.667,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655666.706,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655668.74,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655670.774,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655672.813,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655674.853,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655676.891,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655678.932,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655680.975,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655683.019,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655685.053,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655687.095,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655689.135,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655691.167,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655693.211,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655695.263,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655697.295,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655699.359,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655701.406,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655703.448,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655705.509,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655707.558,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655709.598,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655711.63,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655713.664,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655715.701,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655717.741,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655719.781,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655721.857,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655723.919,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655725.981,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655728.034,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655730.104,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655732.162,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655734.216,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655736.263,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655738.304,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655740.341,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655742.377,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655744.417,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655746.461,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655748.503,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655750.552,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655752.603,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655754.648,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-nano-4b-llamacpp",
+ "display": "llama.cpp b11669 (NVIDIA's Q4_K_M GGUF)",
+ "engine": "llama.cpp",
+ "version": "0.7.0-dev (b11669, 620d2225c)",
+ "version_config": "auto",
+ "model_name": "Nemotron-3-Nano-4B",
+ "model_path": "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+ "note": "M1 Pro 16 GB sweep: nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF @ ba223d1, NVIDIA's own Q4_K_M.",
+ "config": {
+  "label": "sw-nano-4b-llamacpp",
+  "display": "llama.cpp b11669 (NVIDIA's Q4_K_M GGUF)",
+  "engine": "llama.cpp",
+  "version": "auto",
+  "model_name": "Nemotron-3-Nano-4B",
+  "model_path": "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+  "cmd": [
+   "{env:LLAMA_SERVER}",
+   "-m",
+   "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8083",
+   "-a",
+   "nano-4b",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--no-webui"
+  ],
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8083/v1",
+  "model": "nano-4b",
+  "flag_check": "llama-server",
+  "requires_paths": [
+   "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf"
+  ],
+  "note": "M1 Pro 16 GB sweep: nvidia/NVIDIA-Nemotron-3-Nano-4B-GGUF @ ba223d1, NVIDIA's own Q4_K_M."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1777.56,
+    "swapouts": 23111178,
+    "swapins": 20665238,
+    "pageouts": 706084,
+    "memorystatus_level": 86
+   },
+   "gpu_mem": {
+    "in_use": 11780096,
+    "alloc": 797294592,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 25545572352,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/engines/llama.cpp/llama-b11669/llama-server",
+   "-m",
+   "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8083",
+   "-a",
+   "nano-4b",
+   "-c",
+   "32768",
+   "-np",
+   "1",
+   "-ngl",
+   "999",
+   "-fa",
+   "on",
+   "-b",
+   "2048",
+   "-ub",
+   "2048",
+   "-lm",
+   "none",
+   "--jinja",
+   "--reasoning-format",
+   "deepseek",
+   "--cache-ram",
+   "8192",
+   "--no-webui"
+  ],
+  "cmd_shell": "~/engines/llama.cpp/llama-b11669/llama-server -m {models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf --host 127.0.0.1 --port 8083 -a nano-4b -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --no-webui",
+  "env": {
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf"
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "flag_changes": [],
+  "prepare": [],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "KAPITSA_BIN": "~/engines/kapitsa/0.2.6/kapitsa",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "ready_s": 2.0,
+  "server_pid": 43889,
+  "listener_pid": 43889,
+  "gpu_quiet_wait_s": 18.9,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 81428480,
+   "alloc": 802603008,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1753.56,
+   "swapouts": 23111178,
+   "swapins": 20666831,
+   "pageouts": 706098,
+   "memorystatus_level": 86
+  },
+  "disk_free_bytes": 21283889152
+ },
+ "server_log": [
+  "0.01.440.258 I cmn          init: llama threadpool init, n_threads = 6",
+  "0.01.589.545 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 32768, kv_unified = 'false'"
+ ],
+ "server_log_path": "logs/sw-nano-4b-llamacpp-20261022-124221.log"
+}

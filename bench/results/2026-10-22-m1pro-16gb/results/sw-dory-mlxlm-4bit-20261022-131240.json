@@ -1,0 +1,2206 @@
+{
+ "schema": 2,
+ "label": "sw-dory-mlxlm-4bit",
+ "model": "default_model",
+ "base_url": "http://127.0.0.1:8321/v1",
+ "when": "2026-10-22 13:13:46",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8321/v1",
+  "model": "default_model",
+  "label": "sw-dory-mlxlm-4bit",
+  "pid": 52280,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4184,16000:16517",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-dory-mlxlm-4bit-20261022-131240.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792656826.818,
+   1792657253.31
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 52280,
+     "name": "python",
+     "phys_footprint": 12308138840,
+     "phys_footprint_peak": 12629560152,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 393216,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 11738.0,
+   "phys_footprint_peak_mb": 12044.5,
+   "mapped_file_clean_mb": 0.4,
+   "swap_used_mb": 1636.25,
+   "memorystatus_level": 9,
+   "swapouts_delta": 1208
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 498.2,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1665.38,
+  "swapouts": 23111178,
+  "swapins": 20672517,
+  "pageouts": 706149,
+  "memorystatus_level": 84
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 4924.9,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1114,
+    "ttft_s": 5.6497945000000005,
+    "prefill_tps": 197.17531319059478,
+    "decode_tps": 27.921218612329408,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2169,
+    "ttft_s": 11.123712666999998,
+    "prefill_tps": 194.98885533376213,
+    "decode_tps": 27.768335557087312,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4209,
+    "ttft_s": 22.104015249999996,
+    "prefill_tps": 190.41789251389523,
+    "decode_tps": 26.890280387793005,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8410,
+    "ttft_s": 45.45705791699999,
+    "prefill_tps": 185.00977373757476,
+    "decode_tps": 25.308111853108937,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16541,
+    "ttft_s": 94.53772899999998,
+    "prefill_tps": 174.96718162121286,
+    "decode_tps": 22.764674790159294,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32003,
+    "ttft_s": 201.069140833,
+    "prefill_tps": 159.1641555109663,
+    "decode_tps": 19.253446852772345,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.69,
+  "retention_from_tokens": 1114,
+  "retention_to_tokens": 32003,
+  "max_prompt_tokens": 32003,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1114,
+      "completion_tokens": 192,
+      "ttft_s": 5.6497945000000005,
+      "prefill_tps": 197.17531319059478,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.921218612329408
+     }
+    ],
+    "prompt_tokens": 1114,
+    "ttft_s": 5.6497945000000005,
+    "prefill_tps": 197.17531319059478,
+    "decode_tps": 27.921218612329408
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2169,
+      "completion_tokens": 192,
+      "ttft_s": 11.123712666999998,
+      "prefill_tps": 194.98885533376213,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.768335557087312
+     }
+    ],
+    "prompt_tokens": 2169,
+    "ttft_s": 11.123712666999998,
+    "prefill_tps": 194.98885533376213,
+    "decode_tps": 27.768335557087312
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4209,
+      "completion_tokens": 192,
+      "ttft_s": 22.104015249999996,
+      "prefill_tps": 190.41789251389523,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 26.890280387793005
+     }
+    ],
+    "prompt_tokens": 4209,
+    "ttft_s": 22.104015249999996,
+    "prefill_tps": 190.41789251389523,
+    "decode_tps": 26.890280387793005
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8410,
+      "completion_tokens": 192,
+      "ttft_s": 45.45705791699999,
+      "prefill_tps": 185.00977373757476,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.308111853108937
+     }
+    ],
+    "prompt_tokens": 8410,
+    "ttft_s": 45.45705791699999,
+    "prefill_tps": 185.00977373757476,
+    "decode_tps": 25.308111853108937
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16541,
+      "completion_tokens": 192,
+      "ttft_s": 94.53772899999998,
+      "prefill_tps": 174.96718162121286,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 22.764674790159294
+     }
+    ],
+    "prompt_tokens": 16541,
+    "ttft_s": 94.53772899999998,
+    "prefill_tps": 174.96718162121286,
+    "decode_tps": 22.764674790159294
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32003,
+      "completion_tokens": 192,
+      "ttft_s": 201.069140833,
+      "prefill_tps": 159.1641555109663,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 19.253446852772345
+     }
+    ],
+    "prompt_tokens": 32003,
+    "ttft_s": 201.069140833,
+    "prefill_tps": 159.1641555109663,
+    "decode_tps": 19.253446852772345
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 2273,
+ "peak_footprint_mb": 11745,
+ "invalid": [],
+ "flags": [
+  "sweep: 1208 pages swapped out during the phase"
+ ],
+ "peak_memory_mb": 12044.5,
+ "mapped_file_clean_mb": 0.4,
+ "vm_end": {
+  "swap_used_mb": 1636.25,
+  "swapouts": 23112386,
+  "swapins": 20675465,
+  "pageouts": 706228,
+  "memorystatus_level": 9
+ },
+ "when_end": "2026-10-22 13:20:53",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 17.15,
+    "prompt_tokens": 2929,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 3.87,
+    "prompt_tokens": 455,
+    "completion_tokens": 45,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1081,
+   "completion_tokens": 8,
+   "ttft_s": 6.173121708999999,
+   "prefill_tps": 175.11399433838704,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 8,
+    "ttft_s": 5.409207457999999,
+    "prefill_tps": 199.84443347633945,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 8,
+    "ttft_s": 5.410731792000002,
+    "prefill_tps": 199.78813246635227,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1079,
+    "completion_tokens": 8,
+    "ttft_s": 5.414774125000001,
+    "prefill_tps": 199.26962327352848,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 5.410731792000002,
+  "first_request_penalty_s": 0.762,
+  "invalid": [],
+  "spawn_to_ready_s": 2.1,
+  "spawn_to_first_token_s": 8.27
+ },
+ "contention": {
+  "overall": {
+   "samples": 208,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 208,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792656828.621,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656830.662,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656832.703,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656834.75,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656836.798,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656838.844,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656840.887,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656842.927,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656844.968,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656847.008,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656849.048,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656851.088,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656853.134,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656855.179,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656857.228,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656859.269,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656861.31,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656863.348,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656865.389,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656867.435,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656869.481,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656871.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656873.563,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656875.603,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656877.643,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656879.686,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656881.729,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656883.777,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656885.826,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656887.869,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656889.928,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656891.979,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656894.018,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656896.058,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656898.099,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656900.132,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656902.173,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656904.214,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656906.255,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656908.295,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656910.335,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656912.376,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656914.416,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656916.456,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656918.507,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656920.557,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656922.608,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656924.659,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656926.727,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656928.788,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656930.844,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656932.889,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656934.933,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656936.975,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656939.025,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656941.068,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656943.11,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656945.15,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656947.191,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656949.224,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656951.266,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656953.307,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656955.347,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656957.387,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656959.427,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656961.468,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656963.508,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656965.55,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656967.592,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656969.632,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656971.676,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656973.722,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656975.764,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656977.804,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656979.844,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656981.885,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656983.92,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656985.961,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656987.995,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656990.038,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656992.078,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656994.108,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656996.149,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656998.181,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657000.221,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657002.262,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657004.302,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657006.344,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657008.383,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657010.42,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657012.461,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657014.501,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657016.542,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657018.582,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657020.622,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657022.662,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657024.704,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657026.746,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657028.79,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657030.835,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657032.898,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657034.945,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657036.99,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657039.033,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657041.077,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657043.119,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657045.162,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657047.204,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657049.246,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657051.289,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657053.336,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657055.377,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657057.418,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657059.464,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657061.505,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657063.546,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657065.586,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657067.627,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657069.667,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657071.708,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657073.748,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657075.789,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657077.83,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657079.869,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657081.91,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657083.95,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657085.991,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657088.032,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657090.072,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657092.111,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657094.152,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657096.192,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657098.234,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657100.278,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657102.318,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657104.359,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657106.4,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657108.432,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657110.476,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657112.523,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657114.565,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657116.605,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657118.651,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657120.692,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657122.733,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657124.781,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657126.83,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657128.87,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657130.922,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657132.966,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657135.006,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657137.063,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657139.128,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657141.19,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657143.239,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657145.287,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657147.333,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657149.378,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657151.422,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657153.462,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657155.502,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657157.543,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657159.584,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657161.625,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657163.667,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657165.708,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657167.75,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657169.791,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657171.832,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657173.874,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657175.907,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657177.947,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657179.987,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657182.03,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657184.072,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657186.112,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657188.153,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657190.197,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657192.244,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657194.283,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657196.326,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657198.366,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657200.406,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657202.447,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657204.5,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657206.544,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657208.584,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657210.625,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657212.664,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657214.707,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657216.75,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657218.789,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657220.831,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657222.871,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657224.91,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657226.954,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657228.994,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657231.026,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657233.085,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657235.135,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657237.185,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657239.256,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657241.315,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657243.357,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657245.399,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657247.441,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657249.49,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792657251.539,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-dory-mlxlm-4bit",
+ "display": "mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)",
+ "engine": "mlx-lm",
+ "version": "mlx_lm 0.32.3.dev3+g208065f33 mlx 0.32.4",
+ "version_config": "auto",
+ "model_name": "Nemotron-Labs-Dory1.0-4B",
+ "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+ "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Per-loop KV (its default).",
+ "config": {
+  "label": "sw-dory-mlxlm-4bit",
+  "display": "mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8321",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 2,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "per_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8321/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Per-loop KV (its default)."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1665.38,
+    "swapouts": 23111178,
+    "swapins": 20672501,
+    "pageouts": 706147,
+    "memorystatus_level": 86
+   },
+   "gpu_mem": {
+    "in_use": 11780096,
+    "alloc": 798507008,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 20097576960,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "--model",
+   "<scratch>/sweep/runs/state/dory-mlxlm-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8321",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "cmd_shell": "~/venvs/mlx-lm-dory/bin/mlx_lm.server --model <scratch>/sweep/runs/state/dory-mlxlm-4bit --host 127.0.0.1 --port 8321 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+   "safetensors_bytes": 2237759471,
+   "safetensors_files": [
+    "model.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "empty <scratch>/sweep/runs/state/dory-mlxlm-4bit (harness-owned cache dir)",
+   "link 8 files of {models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit into <scratch>/sweep/runs/state/dory-mlxlm-4bit (excluded: ['config.json'])",
+   "write <scratch>/sweep/runs/state/dory-mlxlm-4bit/config.json: {\"architectures\": [\"DoryForCausalLM\"], \"attention_bias\": false, \"attention_output_gate_logit_scale_init\": null, \"dtype\": \"bfloat16\", \"head_dim\": 256, \"hidden_act\": \"silu\", \"hidden_size\": 2560, \"initializer_range\": 0.0177, \"intermediate_size\": 7168, \"layer_types\": [\"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\"], \"max_position_embeddings\": 262144, \"mlp_bias\": false, \"model_type\": \"dory\", \"n_input_layers\": 16, \"n_output_layers\": 16, \"n_recurrent_layers\": 40, \"n_recurrent_loops\": 2, \"ngpt_alpha_init\": 0.05, \"num_attention_heads\": 16, \"num_hidden_layers\": 72, \"num_key_value_heads\": 4, \"quantization\": {\"group_size\": 64, \"bits\": 4, \"mode\": \"affine\"}, \"quantization_config\": {\"group_size\": 64, \"bits\": 4, \"mode\": \"affine\"}, \"rope_parameters\": {\"sliding_attention\": {\"rope_type\": \"default\", \"rope_theta\": 10000, \"partial_rotary_factor\": 1.0}, \"full_attention\": {\"rope_type\": \"default\", \"rope_theta\": 10000000, \"partial_rotary_factor\": 1.0}}, \"sliding_window\": 1024, \"tie_word_embeddings\": false, \"vocab_size\": 131072, \"recurrent_kv_cache_mode\": \"per_loop\"}"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "KAPITSA_BIN": "~/engines/kapitsa/0.2.6/kapitsa",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_SERVE_BIN": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 2.1,
+  "server_pid": 52280,
+  "listener_pid": 52280,
+  "gpu_quiet_wait_s": 18.9,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.0,
+  "gpu_mem_after": {
+   "in_use": 11272192,
+   "alloc": 759054336,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1636.25,
+   "swapouts": 23112386,
+   "swapins": 20675469,
+   "pageouts": 706228,
+   "memorystatus_level": 84
+  },
+  "disk_free_bytes": 20101939200
+ },
+ "server_log": [
+  "2026-10-22 13:12:42,834 - INFO - Starting httpd at 127.0.0.1 on port 8321...",
+  "127.0.0.1 - - [22/Oct/2026 13:12:43] \"GET /v1/models HTTP/1.1\" 200 -",
+  "[transformers] You are using a model of type `dory` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please"
+ ],
+ "server_log_path": "logs/sw-dory-mlxlm-4bit-20261022-131240.log"
+}

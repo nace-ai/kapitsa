@@ -1,0 +1,1704 @@
+{
+ "schema": 2,
+ "label": "sw-q35-4b-mlxserve-mtp-d2",
+ "model": "qwen3.5-4b-4bit-mlx-serve",
+ "base_url": "http://127.0.0.1:8173/v1",
+ "when": "2026-10-22 12:57:16",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8173/v1",
+  "model": "qwen3.5-4b-4bit-mlx-serve",
+  "label": "sw-q35-4b-mlxserve-mtp-d2",
+  "pid": 46212,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "<scratch>/sweep/runs/results/sw-q35-4b-mlxserve-mtp-d2-20261022-125600.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+  "dirty": false
+ },
+ "phases": {
+  "sweep": [
+   1792655836.905,
+   1792656136.795
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 46212,
+     "name": "mlx-serve",
+     "phys_footprint": 5144856856,
+     "phys_footprint_peak": 7193020720,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 3309568,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 4906.5,
+   "phys_footprint_peak_mb": 6859.8,
+   "mapped_file_clean_mb": 3.2,
+   "swap_used_mb": 1689.38,
+   "memorystatus_level": 54,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "~/.cache/nace-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0.0,
+  "harness_held_s": 383.6,
+  "harness_lock": "flock by the harness"
+ },
+ "vm_start": {
+  "swap_used_mb": 1745.56,
+  "swapouts": 23111178,
+  "swapins": 20666913,
+  "pageouts": 706098,
+  "memorystatus_level": 85
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 3897.0,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1101,
+    "ttft_s": 3.6486497079999998,
+    "prefill_tps": 301.7554679436495,
+    "decode_tps": 59.28832209856571,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2129,
+    "ttft_s": 6.922018791999999,
+    "prefill_tps": 307.5692314589718,
+    "decode_tps": 57.822929716397006,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4157,
+    "ttft_s": 13.844605332999997,
+    "prefill_tps": 300.26135812563587,
+    "decode_tps": 58.66474437306612,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8306,
+    "ttft_s": 29.659709207999995,
+    "prefill_tps": 280.043204124188,
+    "decode_tps": 48.15848059993713,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16310,
+    "ttft_s": 65.820772333,
+    "prefill_tps": 247.79411456135097,
+    "decode_tps": 40.755639980316346,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 31547,
+    "ttft_s": 154.43926316699998,
+    "prefill_tps": 204.26800382935812,
+    "decode_tps": 28.365101712106807,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.478,
+  "retention_from_tokens": 1101,
+  "retention_to_tokens": 31547,
+  "max_prompt_tokens": 31547,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1101,
+      "completion_tokens": 192,
+      "ttft_s": 3.6486497079999998,
+      "prefill_tps": 301.7554679436495,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 59.28832209856571
+     }
+    ],
+    "prompt_tokens": 1101,
+    "ttft_s": 3.6486497079999998,
+    "prefill_tps": 301.7554679436495,
+    "decode_tps": 59.28832209856571
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2129,
+      "completion_tokens": 192,
+      "ttft_s": 6.922018791999999,
+      "prefill_tps": 307.5692314589718,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 57.822929716397006
+     }
+    ],
+    "prompt_tokens": 2129,
+    "ttft_s": 6.922018791999999,
+    "prefill_tps": 307.5692314589718,
+    "decode_tps": 57.822929716397006
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4157,
+      "completion_tokens": 192,
+      "ttft_s": 13.844605332999997,
+      "prefill_tps": 300.26135812563587,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 58.66474437306612
+     }
+    ],
+    "prompt_tokens": 4157,
+    "ttft_s": 13.844605332999997,
+    "prefill_tps": 300.26135812563587,
+    "decode_tps": 58.66474437306612
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8306,
+      "completion_tokens": 192,
+      "ttft_s": 29.659709207999995,
+      "prefill_tps": 280.043204124188,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 48.15848059993713
+     }
+    ],
+    "prompt_tokens": 8306,
+    "ttft_s": 29.659709207999995,
+    "prefill_tps": 280.043204124188,
+    "decode_tps": 48.15848059993713
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16310,
+      "completion_tokens": 192,
+      "ttft_s": 65.820772333,
+      "prefill_tps": 247.79411456135097,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 40.755639980316346
+     }
+    ],
+    "prompt_tokens": 16310,
+    "ttft_s": 65.820772333,
+    "prefill_tps": 247.79411456135097,
+    "decode_tps": 40.755639980316346
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 31547,
+      "completion_tokens": 192,
+      "ttft_s": 154.43926316699998,
+      "prefill_tps": 204.26800382935812,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.365101712106807
+     }
+    ],
+    "prompt_tokens": 31547,
+    "ttft_s": 154.43926316699998,
+    "prefill_tps": 204.26800382935812,
+    "decode_tps": 28.365101712106807
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 1393,
+ "peak_footprint_mb": 6800,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 6859.8,
+ "mapped_file_clean_mb": 3.2,
+ "vm_end": {
+  "swap_used_mb": 1689.38,
+  "swapouts": 23111178,
+  "swapins": 20671022,
+  "pageouts": 706116,
+  "memorystatus_level": 54
+ },
+ "when_end": "2026-10-22 13:02:16",
+ "warmup": {
+  "adaptive": true,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 10.7,
+    "prompt_tokens": 2926,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 1.86,
+    "prompt_tokens": 430,
+    "completion_tokens": 26,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#1",
+    "ok": true,
+    "s": 8.97,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#2",
+    "ok": true,
+    "s": 9.17,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#3",
+    "ok": true,
+    "s": 9.29,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1069,
+   "completion_tokens": 8,
+   "ttft_s": 3.525630334,
+   "prefill_tps": 303.20819221769267,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1068,
+    "completion_tokens": 8,
+    "ttft_s": 3.484093875,
+    "prefill_tps": 306.5359425770352,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1069,
+    "completion_tokens": 8,
+    "ttft_s": 3.481893124999999,
+    "prefill_tps": 307.0168904164743,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1069,
+    "completion_tokens": 8,
+    "ttft_s": 3.4782527499999993,
+    "prefill_tps": 307.3382174426514,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 3.481893124999999,
+  "first_request_penalty_s": 0.044,
+  "invalid": [],
+  "spawn_to_ready_s": 2.0,
+  "spawn_to_first_token_s": 5.53
+ },
+ "contention": {
+  "overall": {
+   "samples": 146,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 146,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792655838.744,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655840.816,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655842.86,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655844.902,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655846.939,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655848.986,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655851.044,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655853.109,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655855.156,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655857.202,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655859.241,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655861.282,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655863.314,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655865.355,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655867.396,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655869.439,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655871.481,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655873.523,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655875.565,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655877.607,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655879.649,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655881.691,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655883.733,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655885.775,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655887.817,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655889.86,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655891.902,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655893.944,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655895.986,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655898.03,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655900.071,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655902.133,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655904.2,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655906.247,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655908.288,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655910.328,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655912.368,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655914.409,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655916.449,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655918.489,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655920.53,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655922.57,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655924.601,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655926.641,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655928.681,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655930.721,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655932.76,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655934.809,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655936.869,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655938.934,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655940.993,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655943.049,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655945.098,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655947.144,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655949.184,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655951.228,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655953.27,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655955.311,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655957.351,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655959.391,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655961.424,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655963.455,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655965.494,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655967.534,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655969.574,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655971.614,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655973.657,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655975.701,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655977.742,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655979.783,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655981.823,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655983.861,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655985.902,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655987.943,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655989.983,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655992.023,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655994.063,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655996.102,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792655998.142,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656000.182,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656002.222,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656004.263,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656006.306,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656008.346,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656010.391,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656012.436,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656014.477,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656016.536,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656018.584,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656020.625,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656022.687,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656024.735,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656026.775,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656028.813,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656030.853,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656032.894,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656034.935,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656036.966,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656039.007,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656041.047,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656043.086,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656045.126,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656047.167,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656049.207,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656051.248,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656053.302,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656055.373,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656057.429,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656059.503,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656061.567,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656063.628,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656065.681,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656067.732,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656069.778,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656071.821,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656073.865,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656075.907,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656077.949,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656079.987,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656082.028,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656084.069,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656086.109,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656088.149,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656090.189,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656092.231,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656094.271,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656096.311,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656098.352,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656100.394,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656102.435,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656104.476,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656106.512,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656108.546,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656110.588,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656112.631,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656114.672,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656116.713,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656118.748,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656120.789,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656122.828,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656124.87,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656126.913,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656128.955,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656131.024,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656133.102,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792656135.166,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-q35-4b-mlxserve-mtp-d2",
+ "display": "mlx-serve + MTP (max depth 2)",
+ "engine": "mlx-serve",
+ "version": "26.10.2",
+ "version_config": "26.10.2",
+ "model_name": "Qwen3.5-4B",
+ "model_path": "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+ "note": "M1 Pro tuning.",
+ "config": {
+  "label": "sw-q35-4b-mlxserve-mtp-d2",
+  "display": "mlx-serve + MTP (max depth 2)",
+  "engine": "mlx-serve",
+  "version": "26.10.2",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+  "prepare": [
+   {
+    "clean_dir": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d2"
+   }
+  ],
+  "cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "env": {
+   "HOME": "{state}/mlx-serve/q35-4b-mlxserve-mtp-d2"
+  },
+  "env_clear_prefixes": [
+   "MLX_SERVE_"
+  ],
+  "base_url": "http://127.0.0.1:8173/v1",
+  "model": "qwen3.5-4b-4bit-mlx-serve",
+  "ready_timeout": 600,
+  "adaptive_warm": true,
+  "requires_paths": [
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve/config.json",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve/mtp/weights.safetensors"
+  ],
+  "version_cmd": [
+   "{env:MLX_SERVE_BIN=mlx-serve}",
+   "--version"
+  ],
+  "log_grep": [
+   "\\[spec-stats\\] mode=",
+   "\\[mtp\\]|\\[dflash\\]|\\[row-exact\\]|drafter ready|MTP head ready|round-cost|=enabled \\(streaming",
+   "warn|WARN|error|Error"
+  ],
+  "note": "M1 Pro tuning."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "27.0.1",
+    "BuildVersion": "26A434"
+   },
+   "hw_model": "MacBookPro18,3",
+   "cpu": "Apple M1 Pro",
+   "memsize": "17179869184",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1753.56,
+    "swapouts": 23111178,
+    "swapins": 20666831,
+    "pageouts": 706098,
+    "memorystatus_level": 86
+   },
+   "gpu_mem": {
+    "in_use": 81428480,
+    "alloc": 802603008,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 21267075072,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve",
+   "--serve",
+   "--model",
+   "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8173",
+   "--ctx-size",
+   "32768",
+   "--no-drafter",
+   "--mtp-max-depth",
+   "2"
+  ],
+  "cmd_shell": "~/engines/mlx-serve/26.10.2/mlx-serve-macos-arm64/mlx-serve --serve --model {models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve --host 127.0.0.1 --port 8173 --ctx-size 32768 --no-drafter --mtp-max-depth 2",
+  "env": {
+   "HOME": "<scratch>/sweep/runs/state/mlx-serve/q35-4b-mlxserve-mtp-d2"
+  },
+  "env_cleared": [
+   "MLX_SERVE_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/mlx-serve/qwen3.5-4b-4bit-mlx-serve",
+   "safetensors_bytes": 3034301037,
+   "safetensors_files": [
+    "model.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "d2cb71dc5077b8a6bd7bd36e848ed279454474e1",
+   "dirty": false
+  },
+  "config_file": "../../../../../../../..<scratch>/sweep/m1-sweep.json",
+  "env_file_keys": [
+   "BENCH_GPU_AMBIENT",
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_SERVE_BIN"
+  ],
+  "gpu_lock_path": "~/.cache/nace-gpu.lock",
+  "gpu_ambient": [
+   "Claude",
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "version_cmd_output": "mlx-serve 26.10.2\nmlx 0.32.3\nmlx-c 56b2d39fc831\nnax off (requires M5-class GPU)\nggml 0.26.0 (d81235049)\nllama.cpp b11429\ngguf 3\nds4 unknown\n[mem] MLX buffer-pool cap 2048 MB (was 15564 MB)",
+  "prepare": [
+   "empty <scratch>/sweep/runs/state/mlx-serve/q35-4b-mlxserve-mtp-d2 (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "{models}",
+   "BENCH_OUT": "<scratch>/sweep/runs",
+   "BENCH_GPU_AMBIENT": "Claude",
+   "KAPITSA_BIN": "~/engines/kapitsa/0.2.6/kapitsa",
+   "LLAMA_SERVER": "~/engines/llama.cpp/llama-b11669/llama-server",
+   "MLX_LM_SERVER": "~/venvs/mlx-lm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "~/venvs/mlx-lm-dory/bin/mlx_lm.server"
+  },
+  "ready_s": 2.0,
+  "server_pid": 46212,
+  "listener_pid": 46212,
+  "gpu_quiet_wait_s": 19.0,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 11780096,
+   "alloc": 798507008,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1689.38,
+   "swapouts": 23111178,
+   "swapins": 20671022,
+   "pageouts": 706116,
+   "memorystatus_level": 87
+  },
+  "disk_free_bytes": 20098101248
+ },
+ "version_detected": null,
+ "server_log": [
+  "[mtp] loaded native MTP head (dense-mlp; per-weight quant, fallback bits=4/gs=64)",
+  "[mtp] draft-only lm_head requantized to 3-bit/gs64",
+  "[mtp] draft rerank: coarse 3-bit/gs64 head built (248320 rows); greedy drafts re-rank through the trunk head",
+  "MTP head ready (depth=2, profile=generic).",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] draft rerank engaged (3-bit coarse -> top-32 -> trunk re-score)",
+  "  [spec-stats] mode=mtp attempts=4 accepts=4 avg_per_round=1.00 per_draft_pct=100.0% depth=2 drafted=4 ext_rounds=0 partial_rounds=0 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=50.56 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trial",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=5 accepts=3 avg_per_round=0.60 per_draft_pct=60.0% depth=2 drafted=5 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=32.52 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trials",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=4 accepts=4 avg_per_round=1.00 per_draft_pct=100.0% depth=2 drafted=4 ext_rounds=0 partial_rounds=0 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=32.14 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trial",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=5 accepts=3 avg_per_round=0.60 per_draft_pct=60.0% depth=2 drafted=5 ext_rounds=0 partial_rounds=2 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=31.82 two_ms_tok=0.00 one_ms_tok=0.00 verdict_round=0 trials=0 width_trials",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] cost table: bucket 2-4k measured w2:24.79/3 (ms/tok) replaces the fitted surface (scale 0.0339 at w2)",
+  "  [spec-stats] mode=mtp attempts=28 accepts=36 avg_per_round=1.29 per_draft_pct=75.0% depth=2 drafted=48 ext_rounds=0 partial_rounds=8 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=40.64 two_ms_tok=0.00 one_ms_tok=17.56 verdict_round=0 trials=0 width_tr",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] prompt-lookup drafts engaged: k=2 suffix=10",
+  "  [spec-stats] mode=mtp attempts=11 accepts=14 avg_per_round=1.27 per_draft_pct=100.0% depth=2 drafted=14 ext_rounds=0 partial_rounds=1 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=32.91 two_ms_tok=0.00 one_ms_tok=12.93 verdict_round=0 trials=0 width_t",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=216 accepts=294 avg_per_round=1.36 per_draft_pct=68.1% depth=2 drafted=432 ext_rounds=0 partial_rounds=92 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=40.04 two_ms_tok=0.00 one_ms_tok=15.16 verdict_round=0 trials=0 widt",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=221 accepts=291 avg_per_round=1.32 per_draft_pct=65.8% depth=2 drafted=442 ext_rounds=0 partial_rounds=106 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=40.29 two_ms_tok=0.00 one_ms_tok=14.42 verdict_round=0 trials=0 wid",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=257 accepts=255 avg_per_round=0.99 per_draft_pct=66.4% depth=2 drafted=384 ext_rounds=0 partial_rounds=97 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=32.98 two_ms_tok=0.00 one_ms_tok=17.82 verdict_round=0 trials=0 widt",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=105 accepts=87 avg_per_round=0.83 per_draft_pct=78.4% depth=2 drafted=111 ext_rounds=0 partial_rounds=24 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=30.86 two_ms_tok=0.00 one_ms_tok=17.11 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=105 accepts=87 avg_per_round=0.83 per_draft_pct=78.4% depth=2 drafted=111 ext_rounds=0 partial_rounds=24 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=30.85 two_ms_tok=0.00 one_ms_tok=16.86 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "  [spec-stats] mode=mtp attempts=100 accepts=92 avg_per_round=0.92 per_draft_pct=79.3% depth=2 drafted=116 ext_rounds=0 partial_rounds=23 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=0.00 round_ms=32.57 two_ms_tok=0.00 one_ms_tok=18.44 verdict_round=0 trials=0 width",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 177.75 ms/tok vs single 17.32 ms/tok -> two-chunk throttled (period 128)",
+  "  [spec-stats] mode=mtp attempts=102 accepts=90 avg_per_round=0.88 per_draft_pct=75.6% depth=2 drafted=119 ext_rounds=0 partial_rounds=22 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=1.92 round_ms=39.62 two_ms_tok=177.75 one_ms_tok=21.29 verdict_round=15 trials=0 wi",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 24.88 ms/tok vs single 20.10 ms/tok -> two-chunk throttled (period 48)",
+  "[mtp] regime gate: two-chunk 24.88 ms/tok vs single 25.57 ms/tok -> two-chunk every round (period 8)",
+  "  [spec-stats] mode=mtp attempts=91 accepts=101 avg_per_round=1.11 per_draft_pct=63.9% depth=2 drafted=158 ext_rounds=1 partial_rounds=42 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=10.84 round_ms=54.53 two_ms_tok=24.88 one_ms_tok=26.38 verdict_round=15 trials=0 wi",
+  "  mtp=enabled (streaming, depth=2)",
+  "[mtp] regime gate: two-chunk 23.11 ms/tok vs single 26.03 ms/tok -> two-chunk every round (period 26)",
+  "  [spec-stats] mode=mtp attempts=95 accepts=97 avg_per_round=1.02 per_draft_pct=52.4% depth=2 drafted=185 ext_rounds=5 partial_rounds=56 runtime_disabled=false reason=none adaptive=undecided serial_cell=0.00 sync_ms=4.19 round_ms=71.20 two_ms_tok=26.99 one_ms_tok=33.83 verdict_round=45 trials=0 widt"
+ ],
+ "server_log_path": "logs/sw-q35-4b-mlxserve-mtp-d2-20261022-125600.log"
+}
