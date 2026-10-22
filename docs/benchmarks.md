@@ -1454,8 +1454,8 @@ and Lightning, which is after the M5 prefill kernels and the KFlash-tree default
 routed-expert prefill moved to the tensor units ([#279](https://github.com/nace-ai/kapitsa/pull/279); that run's binary
 reports 0.2.5, the version between the last bump and this one, and the code ships in 0.2.6); the other engines' rows
 are the 2026-10-19 session in every table.
-Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.7, 18.6 →
-18.9 GB; the 35B's 21.7 GB is its 0.2.5 run). The growth is the SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)), which is new since
+Current main also peaks 0.3-0.9 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.7, 18.6 →
+18.9 GB; the 35B's 21.7 GB is its 0.2.5 run). The growth is mostly the SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)), which is new since
 0.1.36 and on by default in `serve`: rebuilt binaries run with the table's own protocol (16K sweep, tool calls, cache
 turn, `--slots 1`) peak at 4,798 MB at 0.1.36, 4,799 MB at #212's parent, 5,610 MB at #212 itself and 5,665 MB at
 180a650, and the same protocol at 180a650 with `--disk-cache 0` peaks at 4,851 MB (tools 4,358, sweep 4,851, cache
@@ -1550,8 +1550,8 @@ greedy), 1.39x / 1.42x mlx-serve, with cached follow-ups at 0.05 / 0.07 s (the t
 21.7 GB: flag-free, on AC power in High Power mode (the run's binary reports 0.2.5, since it is a commit between the
 last version bump and the next; the same code ships in 0.2.6),
 [`q36-35b-kapitsa-20261022-102548.json`](../bench/results/2026-10-22-m5pro-48gb/README.md). The prefill gain is the
-routed-expert GEMM moving to the tensor units by default ([#279](https://github.com/nace-ai/kapitsa/pull/279)), 1.25x
-at 4K and 1.20x at 16K over the simdgroup path on the same Mac; the decode moves with it because the drafter's verify
+routed-expert GEMM moving to the tensor units by default ([#279](https://github.com/nace-ai/kapitsa/pull/279)), -25%
+time to first token at 4K and -20% at 16K over the simdgroup path on the same Mac (2,272 -> 1,702 ms and 11,093 -> 8,834 ms, #279's interleaved A/B, a different measurement from this table's cross-session 2,459 / 1,799); the decode moves with it because the drafter's verify
 batches are multi-row passes through the same kernels. Read as stored it is fourth of nine on prefill at 4K (MTPLX
 2,569, mlx-serve 2,494 and mlx-vlm 2,474 lead) and fourth at 16K (mlx-vlm 2,401, MTPLX 2,303 and mlx-serve 2,283 lead).
 The run before it, 0.2.2 at `a13f8fd`, read 1,799 / 1,455 tok/s and 195.1 / 223.4 tok/s: fifth at 4K, seventh at 16K,
@@ -1642,7 +1642,7 @@ setting) it read **618 / 543 tok/s** at 4K / 16K and decoded **72.4 / 80.5 tok/s
 follow-ups at 0.10 / 0.15 s and a peak footprint of 5.1 GB plus 0.65 GB of mapped clean pages; its last-loop KV
 default wrote 71.7 (one of the five runs looped, flagged) / 72.5 at 4.3 GB,
 [`dory-kapitsa-perloop-20261022-032657.json`](../bench/results/2026-10-22-m5pro-dory/README.md); the 5.1 GB peak is
-1.0 GB above the row's 4.1, more than the 0.3-0.8 GB rise of the four models above, and is not attributed here. The
+1.0 GB above the row's 4.1, more than the 0.3-0.9 GB rise of the four models above, and is not attributed here. The
 greedy cells are 1.06x the row's (79.8-82.3 against 75.1-76.7, disjoint), but that is one session each, not an
 interleaved A/B, and at T = 0.6 the two overlap (72.4, 69.0-74.5, against 69.6, 61.1-71.5). Prefill is only 1.04x /
 1.03x where the models above gained much more, because the QMT prefill kernels cover the Qwen3.5 backend and Dory's

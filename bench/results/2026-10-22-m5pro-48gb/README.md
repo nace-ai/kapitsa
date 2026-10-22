@@ -67,7 +67,7 @@ run at `a13f8fd` ([../2026-10-21-m5pro-48gb](../2026-10-21-m5pro-48gb/README.md)
 `compare_engines.py configs/kapitsa.json --only 'q36-35b-*'` under the GPU lock.
 
 MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro, 48 GB, macOS 26.5.2, on AC power in High Power mode, isolated: the
-quiet window passed and no phase is flagged. Kapitsa 0.2.5 at `d53f02e` (main after #274 plus #279), 4-bit
+quiet window passed and no phase is flagged. Kapitsa 0.2.5 at `d53f02e` (#279's branch commit before it was squashed to `2f1978d` on main; `git diff d53f02e 2f1978d -- src` is comment edits, #277's dead-tile removal and update/bench-command changes, so the engine is the same), 4-bit
 Qwen3.6-35B-A3B with its DFlash2 drafter.
 
 | Result file | Model | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (GB) | Agent session (s) | Flags |
