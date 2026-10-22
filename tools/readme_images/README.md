@@ -35,7 +35,7 @@ Everything is in `readme_images.json`:
   - `"x"`, drawn as ×: can't run on that Mac.
 - **`header`:** which Mac and model row the header's bars show, and which engines, in order (sorted by speed).
 
-The poster is the README's only source of speed numbers (the collapsed table under it holds the Nemotron models the poster leaves out, written by hand). The 16:9 grid keeps its data inline in `reddit_grid.py`.
+`readme_images.json` is the README's only source of speed numbers. `python3 tools/readme_images/readme_images.py --tables` writes the README's per-Mac tables under Models from it: each Mac's poster rows plus its `tables.macs[].rows` (the models the poster leaves out), named by `tables.models`; `--tables --check` fails if README.md differs. A cell's `"detail"` (a weight format or engine build) shows in the tables only. The 16:9 grid keeps its data inline in `reddit_grid.py`.
 
 ## The Watch → Custom → Releases GIF
 

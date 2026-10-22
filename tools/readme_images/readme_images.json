@@ -46,7 +46,7 @@
      {"model": "Qwen3.8 27B", "tie": ["mlx-serve"], "cells": {"Kapitsa": {"value": 79, "method": "KFlash", "note": "2026-10-22, main 3f7f4c8 after #318, mean of two flag-free runs", "prefill": 618}, "mlx-serve": {"value": 78, "method": "DFlash2", "note": "2026-10-22 pair on main 16f2b6a, mean of two runs (draft tree, block 8); not re-run after #318", "prefill": 464}, "oMLX": {"value": 51, "method": "DFlash2", "prefill": 446}, "Splash": {"value": 72, "method": "DFlash2", "note": "Splash 1.4.0, 2026-10-22, mean of two runs between Kapitsa runs on 4b89f4e (ABBA), all contention-flagged: 72.2, prefill 674", "prefill": 674}, "Ollama": {"value": 40, "method": "MTP", "prefill": 470}, "MTPLX": {"value": 41, "method": "MTP", "prefill": 462}, "MLX": {"value": 32, "method": "MTP", "prefill": 421}, "llama.cpp": {"value": 30, "method": "MTP", "prefill": 322}, "LM Studio": {"value": 17, "method": "no spec", "prefill": 118}, "rec": "x"}},
      {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 209, "method": "KFlash", "note": "2026-10-22 15:27, main 4b89f4e, flag-free, the closing run of the Splash ABBA", "prefill": 2552}, "mlx-serve": {"value": 156, "method": "MTP", "prefill": 2494}, "oMLX": {"value": 144, "method": "DFlash2", "prefill": 1619}, "Splash": {"value": 181, "method": "DFlash2", "note": "Splash 1.4.0, 2026-10-22, two runs between Kapitsa runs on 4b89f4e (ABBA), all contention-flagged: decode 180.5 from the loop-free run (the other run has a repetition-loop answer; mean of both 179.1), prefill 3,514 the mean of both", "prefill": 3514}, "Ollama": {"value": 102, "method": "MTP", "prefill": 1518}, "MTPLX": {"value": 89, "method": "MTP", "prefill": 2569}, "MLX": {"value": 98, "method": "DFlash2", "prefill": 2474}, "llama.cpp": {"value": 107, "method": "MTP", "prefill": 1755}, "LM Studio": {"value": 96, "method": "no spec", "prefill": 997}, "rec": "x"}},
      {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 159, "method": "KFlash", "prefill": 3141}, "mlx-serve": {"value": 115, "method": "MTP", "prefill": 1728}, "oMLX": {"value": 124, "method": "MTP", "prefill": 1938}, "Splash": "x", "Ollama": {"value": 92, "prefill": 2369}, "MTPLX": {"value": 101, "prefill": 1743}, "MLX": {"value": 94, "prefill": 1881}, "llama.cpp": {"value": 101, "method": "MTP", "prefill": 1915}, "LM Studio": {"value": 72, "prefill": 1479}, "rec": "x"}},
-     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 145.7, "method": "no spec", "prefill": 1374, "note": "2026-10-22, mean of two runs in opposite order (main 6c13588), T 1.0"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 92.4, "method": "no spec", "prefill": 2072, "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22, one run, T 1.0"}, "LM Studio": null, "rec": {"value": 144.9, "method": "no spec", "prefill": 2138, "note": "rec 0.1.0, 2026-10-22, mean of two runs in opposite order, T 1.0"}}}
+     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 145.7, "method": "no spec", "prefill": 1374, "note": "2026-10-22, mean of two runs in opposite order (main 6c13588), T 1.0"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 92.4, "method": "no spec", "prefill": 2072, "detail": "b11804", "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22, one run, T 1.0"}, "LM Studio": null, "rec": {"value": 144.9, "method": "no spec", "prefill": 2138, "note": "rec 0.1.0, 2026-10-22, mean of two runs in opposite order, T 1.0"}}}
     ]
    },
    {
@@ -57,7 +57,7 @@
      {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 161, "method": "KFlash", "prefill": 1168}, "mlx-serve": {"value": 124, "method": "MTP", "note": "depth up to 2; its DFlash2 setup wrote 104", "prefill": 986}, "oMLX": {"value": 127, "method": "DFlash2", "prefill": 1035}, "Splash": {"value": 135, "method": "DFlash2", "note": "Splash 1.4.0, 2026-10-21: 134.7 (132.3-144.5)"}, "Ollama": {"value": 89, "method": "MTP", "note": "MLX runner", "prefill": 892}, "MTPLX": {"value": 80, "method": "MTP", "note": "sustained profile, depth 1", "prefill": 918}, "MLX": {"value": 86, "method": "DFlash2", "note": "mlx-vlm with incoai's drafter", "prefill": 985}, "llama.cpp": {"value": 69, "method": "MTP", "note": "n-max 1", "prefill": 663}, "LM Studio": {"value": 86, "method": "no spec", "prefill": 957}, "rec": "x"}},
      {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 112, "method": "KFlash", "note": "main after #187, 2026-10-21 (DSpark drafter)", "prefill": 945}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 65, "method": "DSpark", "note": "mlx-vlm, block 6", "prefill": 721}, "llama.cpp": null, "LM Studio": null, "rec": "x"}},
      {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 69, "method": "KFlash", "note": "main after #187, 2026-10-21 (LiLiCorr drafter)", "prefill": 519}, "mlx-serve": null, "oMLX": {"value": 35, "method": "no spec", "note": "its LiLiCorr drafter fails at T = 0.6", "prefill": 298}, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 32, "method": "no spec", "note": "mlx-vlm", "prefill": 300}, "llama.cpp": "x", "LM Studio": null, "rec": "x"}},
-     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 127.9, "method": "no spec", "prefill": 968, "note": "2026-10-22, mean of two runs in opposite order (build 4e227c6, #286), T 1.0"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 79.6, "method": "no spec", "prefill": 977, "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22, one run, T 1.0"}, "LM Studio": null, "rec": {"value": 126.6, "method": "no spec", "prefill": 796, "note": "rec 0.1.0, 2026-10-22, mean of two runs in opposite order, T 1.0"}}}
+     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 127.9, "method": "no spec", "prefill": 968, "note": "2026-10-22, mean of two runs in opposite order (build 4e227c6, #286), T 1.0"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 79.6, "method": "no spec", "prefill": 977, "detail": "b11804", "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22, one run, T 1.0"}, "LM Studio": null, "rec": {"value": 126.6, "method": "no spec", "prefill": 796, "note": "rec 0.1.0, 2026-10-22, mean of two runs in opposite order, T 1.0"}}}
     ]
    },
    {
@@ -66,6 +66,68 @@
      {"model": "Qwen3.5 4B", "cells": {"Kapitsa": {"value": 97, "method": "KFlash", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 97.2 (86.8-102.5), greedy 100.3; prefill from the same run", "prefill": 401}, "mlx-serve": {"value": 62, "method": "MTP", "note": "max depth 2", "prefill": 286}, "oMLX": {"value": 55, "method": "MTP", "prefill": 281}, "Splash": "x", "Ollama": {"value": 55, "method": "MTP", "note": "MLX runner", "prefill": 298}, "MTPLX": {"value": 42, "method": "MTP", "note": "depth 1", "prefill": 305}, "MLX": {"value": 46, "method": "no spec", "note": "mlx-lm", "prefill": 308}, "llama.cpp": {"value": 38, "method": "MTP", "note": "n-max 3", "prefill": 315}, "LM Studio": {"value": 47, "method": "no spec", "prefill": 308}, "rec": "x"}},
      {"model": "Qwen3.5 9B", "cells": {"Kapitsa": {"value": 57, "method": "KFlash", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 56.8 (52.5-59.6), greedy 57.8; prefill from the same run", "prefill": 217}, "mlx-serve": {"value": 37, "method": "MTP", "prefill": 159}, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 30, "method": "no spec", "prefill": 170}, "llama.cpp": null, "LM Studio": null, "rec": "x"}},
      {"model": "Qwen3.6 35B-A3B 2-bit", "cells": {"Kapitsa": {"value": 52, "method": "no spec", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 52.2 (50.7-53.0), greedy 53.4; every phase swapped 2.8K-10.7K pages (the 10-19 swap-free run: 52.6); prefill from the same run", "prefill": 462}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": null, "MTPLX": "x", "MLX": "x", "llama.cpp": {"value": 38}, "LM Studio": null, "rec": "x"}}
+    ]
+   }
+  ]
+ },
+ "tables": {
+  "_about": "The README's Models section: one collapsed table per Mac (python3 readme_images.py --tables). A Mac's table is its poster rows, then its rows here; a Mac not on the poster has only these. \"models\" names each row's model in the tables, keyed by the rows' \"model\". A cell's \"detail\" shows under its method in the tables only; a Mac's \"caption\" shows under its table. An engine gets a column on a Mac only where it has a number there; \"versions\" replaces an engine's poster version in the tables' headers.",
+  "versions": {"LM Studio": "MLX runtime 1.13.1, llama.cpp runtime 2.60.0", "MLX": "mlx-lm 0.32.2, mlx-vlm 0.7.8"},
+  "models": {
+   "Qwen3.5 4B": {"name": "Qwen3.5-4B", "alias": "4b", "about": "dense · 4-bit, 4.6 GB"},
+   "Qwen3.5 9B": {"name": "Qwen3.5-9B", "alias": "9b", "about": "dense · 4-bit, 9.0 GB"},
+   "Qwen3.8 27B": {"name": "Qwen3.8-27B", "alias": "27b", "about": "dense · 4-bit, 20.2 GB"},
+   "Qwen3.6 35B-A3B": {"name": "Qwen3.6-35B-A3B", "alias": "35b", "about": "MoE, 3B active · 4-bit, 22.1 GB"},
+   "Qwen3.6 35B-A3B 2-bit": {"name": "Qwen3.6-35B-A3B", "alias": "35b:16gb", "about": "MoE, 3B active · 2-bit experts (unsloth's GGUF), 10.8 GB"},
+   "Flash-Next 180B": {"name": "Qwen3.8-Flash-Next 180B-A7B", "alias": "flash-next", "about": "MoE, 7B active · 4-bit, 105.9 GB"},
+   "Dory1.0 4B": {"name": "Nemotron Dory1.0 4B", "alias": "dory", "about": "looped dense · NVFP4, 3.2 GB"},
+   "Nano 4B": {"name": "Nemotron 3 Nano 4B", "alias": "nano-4b", "about": "hybrid Mamba-2 · FP8, 5.3 GB"},
+   "Nano 9B v2": {"name": "Nemotron Nano 9B v2", "alias": "nano-9b", "about": "hybrid Mamba-2 · NVFP4, 7.9 GB"},
+   "Lightning 30B": {"name": "Nemotron 3.5 Lightning 30B-A3B", "alias": "lightning", "about": "hybrid MoE, 3B active · NVFP4, 22.9 GB"},
+   "Bolt 74B": {"name": "Nemotron 3.5 Bolt 74B-A9B", "alias": "bolt", "about": "hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB"},
+   "Super-VL 120B": {"name": "Nemotron 3.5 Super-VL 120B-A12B", "alias": "super", "about": "hybrid MoE, 12B active · NVFP4, 76.4 GB"},
+   "Flint 40B": {"name": "Recursive Flint 40B-A2.5B", "alias": "flint", "about": "MoE, 2.5B active · 4-bit, 22.6 GB"}
+  },
+  "macs": [
+   {
+    "name": "MacBook Pro M5 Max 128 GB",
+    "title": "MacBook Pro (16-inch, 2026) · M5 Max · 128 GB",
+    "rows": [
+     {"model": "Dory1.0 4B", "cells": {"Kapitsa": {"value": 119, "method": "loops", "note": "2026-10-22 on main 039ddea (after #287), per-loop KV, contention-flagged"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 76}, "llama.cpp": {"value": 9}, "LM Studio": "x", "rec": "x"}},
+     {"model": "Lightning 30B", "cells": {"Kapitsa": {"value": 267, "method": "KFlash", "note": "2026-10-22 on main fd85910, contention-flagged"}, "mlx-serve": {"value": 190}, "oMLX": {"value": 190}, "Splash": "x", "Ollama": {"value": 153}, "MTPLX": {"value": 131}, "MLX": {"value": 139}, "llama.cpp": {"value": 159}, "LM Studio": {"value": 110}, "rec": "x"}},
+     {"model": "Super-VL 120B", "cells": {"Kapitsa": {"value": 94, "method": "KFlash", "note": "2026-10-22 on main fd85910, contention- and loop-flagged"}, "mlx-serve": "x", "oMLX": {"value": 52}, "Splash": "x", "Ollama": {"value": 64}, "MTPLX": {"value": 44}, "MLX": {"value": 46}, "llama.cpp": {"value": 66}, "LM Studio": {"value": 61}, "rec": "x"}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M5 Pro 48 GB",
+    "title": "MacBook Pro (16-inch, 2026) · M5 Pro · 48 GB",
+    "rows": [
+     {"model": "Dory1.0 4B", "cells": {"Kapitsa": {"value": 70, "method": "loops"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 53}, "llama.cpp": {"value": 13}, "LM Studio": "x", "rec": "x"}},
+     {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 79, "method": "LiLiCorr"}, "mlx-serve": "x", "oMLX": {"value": 39, "method": "no spec"}, "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 41}, "llama.cpp": "x", "LM Studio": "x", "rec": "x"}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M4 Pro 48 GB",
+    "title": "MacBook Pro (16-inch, 2024) · M4 Pro · 48 GB",
+    "rows": [
+     {"model": "Dory1.0 4B", "cells": {"Kapitsa": {"value": 64, "method": "loops"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 48, "method": "no spec"}, "llama.cpp": {"value": 6, "method": "no spec"}, "LM Studio": "x", "rec": "x"}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M3 Pro 36 GB",
+    "title": "MacBook Pro (16-inch, 2023) · M3 Pro · 36 GB",
+    "caption": "macOS 14.1, on battery: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.",
+    "rows": [
+     {"model": "Flint 40B", "cells": {"Kapitsa": {"value": 73.75, "method": "no spec", "prefill": 799, "note": "2026-10-22, macOS 14.1 on battery, #303's macOS 14 kernels (3da3798), mean of two runs, T 1.0 (bench/results/2026-10-22-flint-m3pro)"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": {"value": 51.0, "method": "no spec", "prefill": 771, "detail": "b11804", "note": "b11804 on Recursive's Q4_1 GGUF, 2026-10-22, one run, T 1.0"}, "LM Studio": null, "rec": "x"}}
+    ]
+   },
+   {
+    "name": "MacBook Pro M1 Pro 16 GB",
+    "title": "MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB",
+    "rows": [
+     {"model": "Dory1.0 4B", "cells": {"Kapitsa": {"value": 39, "method": "no spec", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 39.2"}, "mlx-serve": "x", "oMLX": "x", "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 30, "method": "no spec"}, "llama.cpp": {"value": 4, "method": "no spec"}, "LM Studio": "x", "rec": "x"}},
+     {"model": "Nano 4B", "cells": {"Kapitsa": {"value": 37, "method": "prompt lookup", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 37.0"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 21, "detail": "BF16"}, "llama.cpp": {"value": 28, "detail": "Q4_K_M"}, "LM Studio": null, "rec": "x"}},
+     {"model": "Nano 9B v2", "cells": {"Kapitsa": {"value": 25, "method": "no spec", "note": "the 0.2.6 release, kapitsa bench 2026-10-22: 24.5"}, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": {"value": 18}, "llama.cpp": {"value": 14, "detail": "Q4_K_M"}, "LM Studio": null, "rec": "x"}}
     ]
    }
   ]

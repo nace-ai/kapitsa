@@ -54,6 +54,7 @@ jobs:
           fetch-depth: 0
       - run: python3 tests/test_gen_readme.py
       - run: python3 bench/gen_readme.py --check
+      - run: python3 tools/readme_images/readme_images.py --tables --check
 
   agentic-metrics-script:
     # bench/harness/agentic.py against a fake server: no model, no GPU.

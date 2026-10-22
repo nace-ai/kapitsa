@@ -58,6 +58,101 @@ def check(data):
         if e not in names:
             sys.exit(f"readme_images.json: unknown engine {e!r} in header.engines")
     header_row(data)
+    T = data.get("tables")
+    if T:
+        for mac in T["macs"]:
+            for row in mac["rows"]:
+                for e in row["cells"]:
+                    if e not in names:
+                        sys.exit(f"readme_images.json: unknown engine {e!r} in tables {mac['name']} / {row['model']}")
+        for mac in data["poster"]["macs"] + T["macs"]:
+            for row in mac["rows"]:
+                if row["model"] not in T["models"]:
+                    sys.exit(f"readme_images.json: {mac['name']} / {row['model']} has no entry in tables.models")
+        for mac in data["poster"]["macs"]:
+            if mac["name"] not in {m["name"] for m in T["macs"]}:
+                sys.exit(f"readme_images.json: poster Mac {mac['name']} has no entry in tables.macs")
+
+
+# ---------------------------------------------------------------- the README's per-Mac tables (Markdown)
+NB = "\u00a0"
+LEGEND = "<sub>Each cell: prefill / decode, tokens/s"     # where the tables start in README.md
+
+
+def table_rows(data, tmac):
+    """a Mac's rows for its table: its poster rows and its tables rows, in tables.models order, rows without a number
+    dropped"""
+    T = data["tables"]
+    rows = [r for m in data["poster"]["macs"] if m["name"] == tmac["name"] for r in m["rows"]] + tmac["rows"]
+    rows = [r for r in rows if any(is_num(cell(r, e)[0]) for e in r["cells"])]
+    order = list(T["models"])
+    return sorted(rows, key=lambda r: order.index(r["model"]))
+
+
+def table_cell(row, engine, top, shared=None):
+    v, meth, raw = cell(row, engine)
+    if v is None:
+        return DASH
+    if v == "x":
+        return CROSS
+    tie = engine in row.get("tie", [])
+    d = ("≈" if tie else "") + fmt(v)
+    if v == top or tie:
+        d = f"**{d}**"
+    pre = raw.get("prefill") if isinstance(raw, dict) else None
+    s = f"{fmt(pre)}{NB}/{NB}{d}" if pre else d
+    if v == top:
+        s = f"🟩{NB}{s}"
+    detail = raw.get("detail") if isinstance(raw, dict) else None
+    sub = " · ".join(x for x in (meth, None if detail == shared else detail) if x)
+    return s + (f"<br><sub>{sub}</sub>" if sub else "")
+
+
+def tables(data):
+    """the README's per-Mac tables: a legend line and one <details> block per Mac"""
+    T = data["tables"]
+    out = [LEGEND + " (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · "
+           "small type: the decoding method · × can't run on that Mac · — not measured</sub>"]
+    for tmac in T["macs"]:
+        rows = table_rows(data, tmac)
+        engines = [e for e in data["engines"] if any(is_num(cell(r, e["name"])[0]) for r in rows)]
+        shared = {}                         # an engine whose every number on this Mac has one detail: it heads the column
+        for e in engines:
+            ds = {(cell(r, e["name"])[2] or {}).get("detail") for r in rows if is_num(cell(r, e["name"])[0])}
+            shared[e["name"]] = ds.pop() if len(ds) == 1 else None
+        head = []
+        for e in engines:
+            if e["name"] == "Kapitsa":
+                head.append("<mark>**Kapitsa**</mark>")
+                continue
+            name = e["name"].replace(" ", "&nbsp;").replace("-", "\u2011")
+            ver = shared[e["name"]] or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " ")
+            head.append(f"<sub>{name}<br>{ver}</sub>" if ver else f"<sub>{name}</sub>")
+        n = len(rows)
+        out += ["", "<details>", f"<summary><b>{tmac['title']}</b> · {n} model{'s' if n != 1 else ''}</summary>", "",
+                "| Model | " + " | ".join(head) + " |", "| --- |" + " ---: |" * len(engines)]
+        for r in rows:
+            m = T["models"][r["model"]]
+            top = max(cell(r, e["name"])[0] for e in engines if is_num(cell(r, e["name"])[0]))
+            out.append(f"| **{m['name']}** · `{m['alias']}`<br><sub>{m['about']}</sub> | "
+                       + " | ".join(table_cell(r, e["name"], top, shared[e["name"]]) for e in engines) + " |")
+        if tmac.get("caption"):
+            out += ["", f"<sub>{tmac['caption']}</sub>"]
+        out += ["", "</details>"]
+    return "\n".join(out) + "\n"
+
+
+def readme_with_tables(readme, block):
+    """README text with its Models section's tables replaced: from the legend line (or, the first time, the section's
+    first <details>) to the section's last </details>"""
+    start = readme.index("\n## Models\n")
+    end = readme.find("\n## ", start + 1)
+    end = len(readme) if end < 0 else end
+    sec = readme[start:end]
+    a = sec.find(LEGEND)
+    a = sec.index("<details>") if a < 0 else a
+    b = sec.rindex("</details>") + len("</details>\n")
+    return readme[:start] + sec[:a] + block + sec[b:] + readme[end:]
 
 
 def method_label(mid, base, meth, cls, size, fill):
@@ -504,10 +599,25 @@ def main():
     ap.add_argument("--poster", action="store_true", help="only the poster (two WebP files)")
     ap.add_argument("--headers", action="store_true", help="only the header (three SVG files; no Chrome needed)")
     ap.add_argument("--out", type=Path, default=ROOT / "docs" / "assets", help="output folder (default: docs/assets)")
+    ap.add_argument("--tables", action="store_true", help="only the README's per-Mac tables (rewrites README.md's Models section)")
+    ap.add_argument("--check", action="store_true", help="with --tables: fail if README.md's tables are not what the data gives")
+    ap.add_argument("--readme", type=Path, default=ROOT / "README.md")
     ap.add_argument("--data", type=Path, default=HERE / "readme_images.json")
     a = ap.parse_args()
     data = json.loads(a.data.read_text(encoding="utf-8"))
     check(data)
+    if a.tables:
+        old = a.readme.read_text(encoding="utf-8")
+        new = readme_with_tables(old, tables(data))
+        if a.check:
+            if new != old:
+                sys.exit(f"{a.readme}: the Models tables differ from readme_images.json; run python3 "
+                         "tools/readme_images/readme_images.py --tables")
+            print(f"{a.readme}: the Models tables match readme_images.json")
+        elif new != old:
+            a.readme.write_text(new, encoding="utf-8")
+            print("wrote", a.readme)
+        return
     a.out.mkdir(parents=True, exist_ok=True)
     written = []
     if not a.poster:
@@ -545,10 +655,11 @@ def main():
     print("README header alt text:", data["header"]["title"] + ". " + header_desc(data, rows[::-1]))
     words = "zero one two three four five six seven eight nine ten eleven twelve".split()
     others = len(data["engines"]) - 1
-    print("README poster alt text: Prefill and decode speed (a 4K prompt, then a 512-token coding answer) for Kapitsa and "
-          f"{words[others] if others < len(words) else others} other engines on "
-          + " and ".join("a " + m["name"] for m in data["poster"]["macs"])
-          + ", each engine in its fastest setup and its speculative decoding method; the numbers are in the poster; Nemotron models not on it are in the collapsed table below")
+    chips = [m["name"].removeprefix("MacBook Pro ").rsplit(" ", 2)[0] for m in data["poster"]["macs"]]
+    print("README poster alt text: Poster of prefill / decode speed for Kapitsa and "
+          f"{words[others] if others < len(words) else others} other engines on a MacBook Pro "
+          + ", ".join(chips[:-1]) + " and " + chips[-1]
+          + "; the numbers are in the poster and in the Models section's tables")
 
 
 if __name__ == "__main__":

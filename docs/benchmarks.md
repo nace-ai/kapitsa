@@ -20,10 +20,10 @@ is in [bench/results/2026-10-17](../bench/results/2026-10-17/).
 
 ## The README's tables
 
-What each cell of the README's poster and its collapsed Nemotron table ran, Mac by Mac (the runs are in the sections below). The poster's prefill / decode cells read the 4K-prompt prefill from `bench/results`: Kapitsa's prefill is from its newest run without a contention or invalid flag (the M5 Max's cells are the exception: all six are 2026-10-22 runs flagged for contention), and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's 27B Kapitsa cell is the mean of two flag-free 2026-10-22 runs on main `3f7f4c8`, after [#318](https://github.com/nace-ai/kapitsa/pull/318), prefill and decode from those runs, and mlx-serve's is the mean of its two runs in the earlier 2026-10-22 interleaved pair on `16f2b6a`; Kapitsa's 35B-A3B cell is a flag-free 2026-10-22 run on main `4b89f4e`, prefill and decode together, and its Lightning cell is a single 2026-10-21 run; the M5 Pro's Splash cells are each the mean of two contention-flagged 2026-10-22 runs between two Kapitsa runs; the other M5 Pro cells are the 2026-10-18 and 10-19 runs). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not.
+What each cell of the README's poster and its per-Mac tables under Models ran, Mac by Mac (the tables hold the poster's cells and the models it leaves out, decode only where no prefill run is paired) (the runs are in the sections below). The poster's prefill / decode cells read the 4K-prompt prefill from `bench/results`: Kapitsa's prefill is from its newest run without a contention or invalid flag (the M5 Max's cells are the exception: all six are 2026-10-22 runs flagged for contention), and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's 27B Kapitsa cell is the mean of two flag-free 2026-10-22 runs on main `3f7f4c8`, after [#318](https://github.com/nace-ai/kapitsa/pull/318), prefill and decode from those runs, and mlx-serve's is the mean of its two runs in the earlier 2026-10-22 interleaved pair on `16f2b6a`; Kapitsa's 35B-A3B cell is a flag-free 2026-10-22 run on main `4b89f4e`, prefill and decode together, and its Lightning cell is a single 2026-10-21 run; the M5 Pro's Splash cells are each the mean of two contention-flagged 2026-10-22 runs between two Kapitsa runs; the other M5 Pro cells are the 2026-10-18 and 10-19 runs). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not.
 
 **MacBook Pro M4 Pro 48 GB**
-- Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so the Nemotron table leaves them out.
+- Ollama, LM Studio, MTPLX and mlx-serve can't run Dory or Bolt, so their Dory cells in the M4 Pro's table are ×.
 - MLX: Apple's mlx-lm or mlx-vlm, whichever runs the model. oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no
   drafter on Bolt; mlx-serve the faster of MTP and DFlash2.
 - Kapitsa's Qwen cells (4B 201, 27B 63, 35B 161 tok/s): main with KFlash trees
@@ -54,7 +54,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   these runs carries the harness's contention flag (a system WebKit GPU process at 5-7% of the GPU), so read them as a lower bound.
   The other engines were not re-run: their cells and the notes below are the stored 2026-10-17/18 runs.
 - One session, Kapitsa first and last (each cell is the newest run with an unflagged decode phase, else the newest run).
-  The M5 Max's Kapitsa and Splash cells on the poster, and Kapitsa's in the collapsed Nemotron table (Dory, Lightning, Super-VL), are the 2026-10-22 runs on main `fd85910` (Dory's on `039ddea`, below) instead ([results](../bench/results/2026-10-22-m5-max/README.md)), taken with the GPU lock held, and every one of them carries the contention flag. Bolt's decode median (153 tok/s) includes two repetition-loop runs of its five (`valid_runs` 5); its greedy 154.6 is unflagged. Both of Super-VL's decode phases (93.7 sampled, 87.2 greedy) are loop-flagged too, and a loop flatters a speculative decoder, so read them as upper bounds. Dory's cell is a re-run on main `039ddea`, after [#287](https://github.com/nace-ai/kapitsa/pull/287) (the matrix-unit prefill GEMMs, on by default on an M5 with macOS 26): 119.1 tok/s decode, within the `fd85910` run's spread (one run per build, not an A/B), now without a loop flag, and 2,368 tok/s prefill at 4K (was 1,077).
+  The M5 Max's Kapitsa and Splash cells on the poster, and Kapitsa's Dory, Lightning and Super-VL cells in its table, are the 2026-10-22 runs on main `fd85910` (Dory's on `039ddea`, below) instead ([results](../bench/results/2026-10-22-m5-max/README.md)), taken with the GPU lock held, and every one of them carries the contention flag. Bolt's decode median (153 tok/s) includes two repetition-loop runs of its five (`valid_runs` 5); its greedy 154.6 is unflagged. Both of Super-VL's decode phases (93.7 sampled, 87.2 greedy) are loop-flagged too, and a loop flatters a speculative decoder, so read them as upper bounds. Dory's cell is a re-run on main `039ddea`, after [#287](https://github.com/nace-ai/kapitsa/pull/287) (the matrix-unit prefill GEMMs, on by default on an M5 with macOS 26): 119.1 tok/s decode, within the `fd85910` run's spread (one run per build, not an A/B), now without a loop flag, and 2,368 tok/s prefill at 4K (was 1,077).
   Results: [bench/results/2026-10-18-m5-max-session](../bench/results/2026-10-18-m5-max-session/).
 - MLX: mlx-vlm with MTP on the 4B (Qwen's 4-bit head, block 3; mlx-lm 135) and the 27B (the model's head; mlx-lm 30),
   mlx-vlm with DFlash2 on the 35B (incoai's drafter, block 5; mlx-lm 112). oMLX runs DFlash2 on the 27B and 35B, MTP on the 4B, no drafter on Bolt;
@@ -81,6 +81,11 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
 - Nemotron: NVIDIA's NVFP4 on Kapitsa, mlx-vlm and Ollama, MLX 4-bit on oMLX, mlx-lm, mlx-serve and MTPLX, Q4_0 on
   llama.cpp, Q4_K_M on LM Studio. On Lightning oMLX read prompts faster in the 10-18 session (3,600 against Kapitsa's 1,900 tok/s at 4K); Kapitsa's 2026-10-22 run reads 5,401.
 - Flint 40B-A2.5B: not measured on this Mac yet (the poster's row is dashes).
+
+**MacBook Pro M3 Pro 36 GB**
+- Flint 40B-A2.5B only, not on the poster: Kapitsa (#303's macOS 14 kernels, `3da3798`) and llama.cpp b11804 on
+  Recursive's Q4_1 GGUF at the card's T 1.0, on macOS 14.1 and on battery; rec 0.1.0 refuses a 36 GB Mac (it requires
+  48 GiB) ([details](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22)).
 
 **MacBook Pro M1 Pro 16 GB**
 - Kapitsa's cells, all six: the 0.2.6 release, `kapitsa bench`'s full protocol on 2026-10-22, the models one after
@@ -143,7 +148,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
 
 ## How the README poster was measured
 
-Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
+Tokens per second, each engine in its fastest setup, its decoding method under each value (no spec: no speculative decoding). Every cell reads prefill / decode: prefill on a 4K-token prompt, decode of a 512-token coding answer. × cannot run that model on that Mac · — not measured (a dash before the slash: no prefill run for that engine). The poster shows the models that differ most per Mac; the README's per-Mac tables under Models, the [details](#the-readmes-tables) and [bench/README.md](../bench/README.md) have every cell.
 
 Kapitsa's method label is the setup the run used: KFlash (the drafter's best-first tree, on by default since [#187](https://github.com/nace-ai/kapitsa/pull/187)) on the M5 Max, M5 Pro and M4 Pro, whose runs are builds from 2026-10-21 on (b50f1fc, a13f8fd; the M5 Max's fd85910), with the DFlash2, DSpark or LiLiCorr drafter named in each run's config, and on the M1 Pro, whose Kapitsa cells are the 0.2.6 release (`76a4970`) on 2026-10-22 ([details](#macbook-pro-m1-pro-16-gb-kapitsa-026-2026-10-22)); Flash-Next keeps MTP.
 
