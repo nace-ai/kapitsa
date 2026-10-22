@@ -170,5 +170,8 @@ NI_INLINE void qmt_tile(const device half* X, const device uint* const thread* W
     qmt_tile<2, BM, BN, BK>(X, W, S, B, H, p, tg.y * BM, tg.x * (BN / 2), tid, sg, xs, ws);                              \
   }
 
+// Only the 64x64 tile is dispatched (src/model/qwen35.cpp); the wider and M-split shapes the tile experiments tried
+// are not instantiated. To sweep one of them again, add its line here: tools/bench_qmm.cpp finds kernels by name in
+// this source, so an absent line is an absent kernel ("kernel %s not found"), not a slower path.
 NI_QMT(qmt_m64_n64, 64, 64, 32)
 NI_QMTG(qmtg_m64_n64, 64, 64, 32)
