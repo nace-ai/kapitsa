@@ -4,13 +4,14 @@
 
 Kapitsa measured on people's own Macs with `kapitsa bench`: the protocol of the published benchmarks ([bench/harness](../harness/README.md)), as a client of the local server. Add yours with `kapitsa bench --submit`; [README.md](README.md) says how runs are checked.
 
-Writing: tokens per second of a 512-token coding answer, median of the runs (5, or 3 in a quick run), at temperature 0.6 and greedy. Reading: a cold prompt of about 4K and 16K tokens, prompt tokens per second to its first token. Follow-up: the time to the first token of a new message in that conversation. Memory: the server's peak, GB of 2^30 bytes (a quick run reads no 16K prompt, so its peak is lower: about 0.4 GB on the 4B). ⚠: other apps used the GPU during that measurement (contention flagged), so it may be low. Different Macs, macOS versions and Kapitsa versions give different numbers; these are what each run measured.
+Writing: tokens per second of a 512-token coding answer, median of the runs (5, or 3 in a quick run), at temperature 0.6 (Flint at 1.0, its model card's) and greedy. Reading: a cold prompt of about 4K and 16K tokens, prompt tokens per second to its first token. Follow-up: the time to the first token of a new message in that conversation. Memory: the server's peak, GB of 2^30 bytes (a quick run reads no 16K prompt, so its peak is lower: about 0.4 GB on the 4B). ⚠: other apps used the GPU during that measurement (contention flagged), so it may be low. Different Macs, macOS versions and Kapitsa versions give different numbers; these are what each run measured.
 
 | Mac | Runs |
 | --- | ---: |
-| [Mac Studio (2026) · M5 Max 32-core GPU · 36 GB](#mac-studio-2026--m5-max-32-core-gpu--36-gb) | 1 |
+| [Mac Studio (2026) · M5 Max 32-core GPU · 36 GB](#mac-studio-2026--m5-max-32-core-gpu--36-gb) | 5 |
 | [MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB](#macbook-air-13-inch-2026--m5-10-core-gpu--24-gb) | 1 |
 | [MacBook Pro (14-inch, 2026) · M5 Pro 16-core GPU · 48 GB](#macbook-pro-14-inch-2026--m5-pro-16-core-gpu--48-gb) | 1 |
+| [MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB](#macbook-pro-16-inch-2026--m5-pro-20-core-gpu--48-gb) | 1 |
 | [Mac mini (2024) · M4 10-core GPU · 24 GB](#mac-mini-2024--m4-10-core-gpu--24-gb) | 1 |
 | [Mac mini (2024) · M4 10-core GPU · 32 GB](#mac-mini-2024--m4-10-core-gpu--32-gb) | 1 |
 | [Mac mini (2024) · M4 Pro 16-core GPU · 48 GB](#mac-mini-2024--m4-pro-16-core-gpu--48-gb) | 2 |
@@ -30,11 +31,35 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 
 ## Mac Studio (2026) · M5 Max 32-core GPU · 36 GB
 
+### Qwen3.8 27B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-qwen3.8-27b-4bit-11a65e.json) | 97.5 tok/s | 102.3 tok/s | 518 tok/s | 510 tok/s | 0.16 s | 0.17 s | 19.6 GB | pass | unknown | 0.2.4 | 27.0.1 | – |
+
+### Qwen3.6 35B-A3B · 4-bit
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-qwen3.6-35b-a3b-4bit-f36c35.json) | 292.1 tok/s | 303.6 tok/s | 2,871 tok/s | 2,328 tok/s | 0.04 s | 0.05 s | 20.9 GB | pass | unknown | 0.2.4 | 27.0.1 | – |
+
+### Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-nemotron-3.5-bolt-24gb-1e1ba2.json) | 129.8 tok/s | 144.5 tok/s | 930 tok/s | 962 tok/s | 0.17 s | 0.17 s | 22.9 GB + 1.0 mapped | pass | LiLiCorr | 0.2.4 | 27.0.1 | – |
+
 ### Nemotron 3 Nano 4B · FP8
 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-nemotron-3-nano-4b-fp8-d4efda.json) | 94.7 tok/s | 94.2 tok/s | 4,936 tok/s | 3,964 tok/s | 0.06 s | 0.07 s | 5.1 GB + 0.5 mapped | pass | unknown | 0.2.4 | 27.0.1 | – |
+
+### Nemotron Nano 9B v2 · NVFP4
+
+| Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-22](results/kapitsa-bench-2026-10-22-m5-max-nemotron-nano-9b-v2-nvfp4-e5c0af.json) | 60.9 tok/s | 60.8 tok/s | 2,230 tok/s | 2,014 tok/s | 0.09 s | 0.10 s | 7.2 GB + 1.1 mapped | pass | plain | 0.2.4 | 27.0.1 | short answer |
 
 ## MacBook Air (13-inch, 2026) · M5 10-core GPU · 24 GB
 
@@ -51,6 +76,14 @@ Writing: tokens per second of a 512-token coding answer, median of the runs (5, 
 | Run | Writing, T = 0.6 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
 | [2026-10-19](results/kapitsa-bench-2026-10-19-m5-pro-qwen3.8-27b-6bit-f05370.json) | 45.0 tok/s | 42.9 tok/s | 333 tok/s | 300 tok/s | 0.26 s | 0.30 s | 26.8 GB | pass | DFlash2 | 0.1.38 | 26.4 | – |
+
+## MacBook Pro (16-inch, 2026) · M5 Pro 20-core GPU · 48 GB
+
+### Recursive Flint 40B-A2.5B · 4-bit
+
+| Run | Writing, T = 1.0 | Writing, greedy | Reading 4K | Reading 16K | Follow-up 4K | Follow-up 16K | Peak memory | Tool calls | Decoding | Kapitsa | macOS | Flags |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | --- | --- | --- | --- |
+| [2026-10-22](results/kapitsa-bench-2026-10-22-m5-pro-flint-4bit-3adeb5.json) | 154.1 tok/s | 153.1 tok/s | 1,390 tok/s | 1,123 tok/s | 0.12 s | 0.14 s | 22.2 GB | pass | plain | 0.2.7 | 26.7.1 | swap |
 
 ## Mac mini (2024) · M4 10-core GPU · 24 GB
 
