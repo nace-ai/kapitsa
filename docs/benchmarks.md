@@ -1604,7 +1604,7 @@ contention-flagged, so they refresh no cell ([10-22 results](../bench/results/20
 On 0.2.2 (`a13f8fd`, `3a5bbf0`) Kapitsa decodes fastest in four of the tables above: 226.7, 74.1,
 195.1 and 159.3 tok/s at T = 0.6 on the 4B, the 27B, the 35B and Lightning, 1.39x, 1.04x, 1.25x and 1.29x the next
 engine, and 1.44x, 1.40x and 1.37x greedy on the 4B, 35B and Lightning (mlx-serve's block-8 DFlash2 draft tree keeps
-the 27B's greedy cell, 85.6 against 77.4, 1.11x). The 35B's newest run (0.2.5, `d53f02e`) reads 217.0 and 227.0 tok/s,
+the 27B's greedy cell, 85.6 against 77.4, 1.11x). The 35B's 0.2.5 run (`d53f02e`; the poster's cell is now the flag-free `4b89f4e` run, 209) reads 217.0 and 227.0 tok/s,
 1.39x and 1.42x that same engine, so the lead grew with the expert prefill rather than staying at 1.25x / 1.40x. It
 answers cached follow-ups soonest on the 4B and the 35B (0.05 / 0.06 s and 0.05 / 0.07 s; next MTPLX, 0.06 / 0.08 s
 and 0.08 / 0.11 s). It reads prompts fastest on the 4B at
