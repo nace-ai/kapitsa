@@ -14,10 +14,14 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-629 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-23 down to 2026-10-16, newest first.
+633 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-23 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | e6e1f46 | 209.8 | 223.6 | 2728 | 2193 | 1.52 | – | – | [q36-35b-kapitsa-20261023-033450](results/2026-10-23-m5-pro-35b-27b/results/q36-35b-kapitsa-20261023-033450.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | e6e1f46 | 214.4 | 222.7 | 2729 | 2194 | 1.51 | – | – | [q36-35b-kapitsa-20261023-033137](results/2026-10-23-m5-pro-35b-27b/results/q36-35b-kapitsa-20261023-033137.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | e6e1f46 | 219.3 | 219.2 | 2730 | 2194 | 1.51 | – | – | [q36-35b-kapitsa-20261023-032952](results/2026-10-23-m5-pro-35b-27b/results/q36-35b-kapitsa-20261023-032952.json) |
+| 2026-10-23 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | e6e1f46 | 198.6 | 229.9 | 2728 | 2192 | 1.51 | – | – | [q36-35b-kapitsa-20261023-032830](results/2026-10-23-m5-pro-35b-27b/results/q36-35b-kapitsa-20261023-032830.json) |
 | 2026-10-23 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn0 | 631bd25 | 152.4 | – | 2244 | 1634 | 1.73 | – | invalid | [pr2-attn0-20261023-002212](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn0-20261023-002212.json) |
 | 2026-10-23 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn1 | 631bd25 | 148.6 | – | 2688 | 2479 | 1.44 | – | invalid | [pr2-attn1-20261023-001849](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn1-20261023-001849.json) |
 | 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | pr2-attn1 | 631bd25 | 149.2 | – | 2694 | 2435 | 1.44 | – | invalid, contention | [pr2-attn1-20261022-231822](results/2026-10-22-flint-m5pro-qattn/pr345-ab/results/pr2-attn1-20261022-231822.json) |
