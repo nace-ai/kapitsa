@@ -22,7 +22,7 @@ SETUP = ("MacBook Pro M5 Pro (20-core GPU), 48 GB · macOS 26.5.2 · plugged in 
          "T 1.0, top_p 0.95, top_k 20 · one engine at a time · no speculative decoding")
 LLAMA = ("llama.cpp: Recursive's Q4_1 GGUF, -b/-ub 2048 (not the card's 256/128), run about 1.5 h after the others "
          "on a GPU with no background load")
-FOOT = [LLAMA + "; one run", "Microsoft Edge used 3-10% of the GPU on average in each Kapitsa and rec protocol run (all "
+FOOT = [LLAMA + "; one run, its 128K rows from its own server load", "Microsoft Edge used 3-10% of the GPU on average in each Kapitsa and rec protocol run (all "
         "flagged), 0% in llama.cpp's · bench/results/2026-10-22-flint-m5pro · github.com/nace-ai/kapitsa"]
 FOOT_SWEEP = [LLAMA + "; its 128K point on its own server load", "Background (Edge) GPU load in the plotted windows: "
               "Kapitsa and rec 0-24% mean per cell, llama.cpp 0% · context-sweep/sweep.json · github.com/nace-ai/kapitsa"]

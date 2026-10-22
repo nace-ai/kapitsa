@@ -10,7 +10,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## 🔥 What's new
 
-- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro rec reads prompts 1.4-2.3× as fast as Kapitsa and llama.cpp 1.6×; decode is level with rec to about 1.1× ahead from 16K, and 1.5-1.6× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
+- [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro rec reads prompts 1.4-2.3× as fast as Kapitsa and llama.cpp 1.6-1.7×; decode is level with rec to about 1.1× ahead from 16K, and 1.5-1.6× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
 - [2026/10] 🏆 **Kapitsa: the fastest decode in 24 of 26 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
