@@ -3,15 +3,15 @@
 
 usage: test_compare.py [BUILD_DIR]   (default: build; needs BUILD_DIR/kapitsa)
 
-1. The command finds the harness (KAPITSA_HARNESS), hands over its arguments, forwards the exit code, and says what to
-   do when the harness is not there.
+1. The command finds the harness (KAPITSA_HARNESS, or the installed <prefix>/share/kapitsa/bench/harness), hands over
+   its arguments, forwards the exit code, and says what to do when the harness is not there.
 2. bench bench/harness/kbench.py against two scripted OpenAI-compatible servers (configs with no command, so nothing is
    started; the GPU lock is a test file): --list, the run, the table, --json, --report, the saved files, an engine that
    fails (a closed port) and does not stop the others, and an engine that is not installed, listed with how to get it.
 3. The choice of configs: tuned variants first, controls (nomtp, bf16, mlx-q4) never, engines whose binary is missing
    told apart from weights that are missing.
 """
-import http.server, io, json, os, random, re, socketserver, subprocess, sys, tempfile, threading, time
+import http.server, io, json, os, random, re, shutil, socketserver, subprocess, sys, tempfile, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
@@ -135,7 +135,23 @@ check("ARGS --model 4b --list" in r.stdout, "the arguments reach kbench.py", r.s
 check(r.returncode == 7, "the exit code is forwarded", str(r.returncode))
 check(f"BIN {KAPITSA}" in r.stdout or "BIN " + os.path.realpath(KAPITSA) in r.stdout, "KAPITSA_BIN names this binary", r.stdout)
 r = run([KAPITSA, "bench", "compare"], env=dict(env0, KAPITSA_HARNESS=os.path.join(tmp, "nowhere")), cwd=tmp)
-check(r.returncode == 2 and "clone" in r.stderr, "no harness: says where to get it, downloads nothing, starts nothing", r.stderr)
+check(r.returncode == 2 and "KAPITSA_HARNESS" in r.stderr and "install.sh" in r.stderr,
+      "no harness: says how to get it, downloads nothing, starts nothing", r.stderr)
+
+# the installed layout: <prefix>/bin/kapitsa with <prefix>/share/kapitsa/bench/harness beside it, which install.sh and
+# the Homebrew formula make. No KAPITSA_HARNESS, and a folder with no bench/harness of its own: the reported bug.
+inst = os.path.join(tmp, "inst")
+os.makedirs(os.path.join(inst, "bin"))
+shutil.copy2(KAPITSA, os.path.join(inst, "bin", "kapitsa"))
+shutil.copytree(stub, os.path.join(inst, "share", "kapitsa", "bench", "harness"))
+elsewhere = os.path.join(tmp, "elsewhere")
+os.makedirs(elsewhere)
+r = run([os.path.join(inst, "bin", "kapitsa"), "bench", "compare", "--model", "4b", "--list"],
+        env={k: v for k, v in env0.items() if k != "KAPITSA_BIN"}, cwd=elsewhere)
+check(r.returncode == 7 and "ARGS --model 4b --list" in r.stdout and
+      "BIN " + os.path.realpath(os.path.join(inst, "bin", "kapitsa")) in r.stdout,
+      "an installed layout: share/kapitsa/bench/harness beside the binary is found, with no env var",
+      r.stdout + r.stderr)
 
 # ---------------------------------------------------------------- 2. kbench.py against scripted engines
 fast, p_fast = serve(0.0004)

@@ -156,9 +156,9 @@ pick_prefix() {
   esac
 }
 
-# Installs $1 (the binary) into $prefix, and LICENSE and THIRD_PARTY_NOTICES from folder $2 beside it
+# Installs $1 (the binary) into $prefix, and LICENSE, THIRD_PARTY_NOTICES and the benchmark harness from folder $2
 install_kapitsa() {
-  local notices notice installed first run=kapitsa
+  local notices notice installed first run=kapitsa harness="$2/bench/harness"
   notices="$(dirname "$prefix")/share/kapitsa"
   mkdir -p "$notices" || die "can't create the license notices folder $notices."
   for notice in LICENSE THIRD_PARTY_NOTICES; do
@@ -167,8 +167,16 @@ install_kapitsa() {
   install -m 0755 "$1" "$prefix/kapitsa" || die "can't write $prefix/kapitsa (--prefix picks another folder)."
   installed=$("$prefix/kapitsa" --version) || die "the installed $prefix/kapitsa does not run."
 
+  # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
+  if [ -f "$harness/kbench.py" ]; then
+    rm -rf "$notices/bench/harness"
+    mkdir -p "$notices/bench"
+    cp -R "$harness" "$notices/bench/harness" || die "can't install the benchmark harness in $notices/bench/harness."
+  fi
+
   say "Installed $installed: $prefix/kapitsa"
   say "License notices: $notices"
+  if [ -f "$notices/bench/harness/kbench.py" ]; then say "Benchmark harness: $notices/bench/harness"; fi
   case ":$PATH:" in
     *":$prefix:"*)
       first=$(command -v kapitsa || true)
@@ -188,6 +196,7 @@ install_kapitsa() {
   say ""
   say "Next:"
   say "  $run serve        # starts the best model for this Mac; the first run downloads it"
+  say "  $run bench compare --list   # the other engines installed here, and what it would measure"
   say "  $run --help       # models and commands"
 }
 

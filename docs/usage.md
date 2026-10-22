@@ -714,8 +714,9 @@ The report has a "Who beats Kapitsa here, and why" part; its reasons come only f
 decoding, weights folder, versions) and are leads, not findings. **Run it on a quiet Mac, plugged in**: a run waits up
 to 5 minutes per engine for other apps to leave the GPU and marks a number it could not get quiet. It refuses to start
 while another engine or model server is running (`--ignore-running` overrides). If another engine beats Kapitsa on your
-Mac, the report is yours to keep or to quote in a pull request; nothing is sent anywhere. It needs the repository's `bench/harness` folder
-(`KAPITSA_HARNESS` names another copy) and macOS Python 3.
+Mac, the report is yours to keep or to quote in a pull request; nothing is sent anywhere. The harness ships with
+Kapitsa, in `share/kapitsa/bench/harness` beside the binary (`KAPITSA_HARNESS` names another copy), so an `install.sh`
+or Homebrew install needs no clone; it needs macOS Python 3.
 
 ## Running in the background
 

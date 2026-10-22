@@ -1084,9 +1084,8 @@ int run_compare(int argc, char** argv, int first) {
   const std::string dir = find_harness();
   if (dir.empty()) {
     fprintf(stderr,
-            "kapitsa bench compare: the benchmark harness (bench/harness) was not found next to this kapitsa.\n"
-            "It is in the repository: git clone https://github.com/nace-ai/kapitsa, then run kapitsa from its build\n"
-            "folder, from the checkout, or with KAPITSA_HARNESS=<checkout>/bench/harness. Nothing is downloaded for you.\n");
+            "kapitsa bench compare: the benchmark harness (bench/harness) was not found beside this kapitsa; reinstall "
+            "it with install.sh or Homebrew (a release ships the harness), or set KAPITSA_HARNESS to another copy.\n");
     return 2;
   }
   const char* py = getenv("KAPITSA_PYTHON");

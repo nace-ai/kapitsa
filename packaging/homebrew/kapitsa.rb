@@ -29,6 +29,9 @@ class Kapitsa < Formula
       bin.install "kapitsa"
     end
     pkgshare.install "LICENSE", "THIRD_PARTY_NOTICES"
+    # `kapitsa bench compare` runs this harness; find_harness() looks for it in pkgshare, so a brew install needs no
+    # checkout and no KAPITSA_HARNESS
+    (pkgshare/"bench").install "bench/harness"
   end
 
   def caveats
@@ -53,6 +56,8 @@ class Kapitsa < Formula
   test do
     assert_match "kapitsa", shell_output("#{bin}/kapitsa --version")
     assert_match "kapitsa opencode", shell_output("#{bin}/kapitsa --help")
+    # the harness ships with the formula: bench compare finds it with no checkout and no environment variable
+    assert_match "kapitsa bench compare", shell_output("#{bin}/kapitsa bench compare --help")
     # model names resolve offline
     ENV["KAPITSA_HOME"] = testpath.to_s
     assert_match "qwen3.5-4b", shell_output("#{bin}/kapitsa pull --dry-run --json 4b")
