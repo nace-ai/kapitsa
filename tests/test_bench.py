@@ -305,6 +305,7 @@ check(r.returncode == 0, "tools/community_check.py accepts both", (r.stdout + r.
 full = json.loads(results["full"])
 check(len(json.dumps(full, separators=(",", ":"))) < 2500, "the result is small enough to read and to travel in an address",
       str(len(json.dumps(full))))
+check(full["protocol"].get("temperature") == 0.6, "the result records its writing runs' temperature", str(full["protocol"]))
 import getpass  # noqa: E402
 
 
@@ -330,6 +331,21 @@ check(plan["path"].startswith("bench/community/results/kapitsa-bench-2026-10-18-
       plan["path"].endswith(".json"), "the file's path", plan["path"])
 check(plan["fork"] == "tester/kapitsa" and plan["submit_problem"] == "", "the fork, and nothing in the way")
 check("issue_url" not in plan, "the plan has no issue form: a pull request is the only way in")
+# Flint writes at 1.0, its model card's: its card says so, from the result's record or, in a result written before
+# kapitsa bench recorded the temperature, from the model's name
+flint = json.loads(results["full"])
+flint["model"].update(name="flint", title="Recursive Flint 40B-A2.5B", variant="4bit", precision="4-bit", decoding="plain",
+                      decoding_detail="plain decoding", drafter=None)
+for kind in ("recorded", "older"):
+    if kind == "recorded":
+        flint["protocol"]["temperature"] = 1.0
+    else:
+        del flint["protocol"]["temperature"]
+    with open(os.path.join(tmp, f"flint-{kind}.json"), "w") as fh:
+        json.dump(flint, fh, indent=2)
+    body = json.loads(run([BENCH_TEST, "plan", os.path.join(tmp, f"flint-{kind}.json"), "tester"]).stdout)["body"]
+    check("| Writing, T = 1.0 |" in body and "T = 0.6" not in body, f"Flint's card: writing at T = 1.0 ({kind} result)",
+          body[:300])
 
 # a stand-in gh: records its calls, answers like GitHub
 gh_dir = tempfile.mkdtemp(prefix="kapitsa-fake-gh-")
@@ -441,6 +457,9 @@ plain = " ".join(re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text).replace("│", " ")
 check(code == 0 and "Writing" in plain and "Google Chrome and Slack used the GPU: 12% on average, up to 40%. Close them for a clean run."
       in plain and "CONTENTION" not in plain and plain.count("[Y/n]") == 1,
       "submitting a saved result shows its card first, with who used the GPU in words", plain[-500:])
+code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "flint-older.json")], ["n"], environ=tenv)
+plain = " ".join(re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text).replace("│", " ").split())
+check(code == 0 and "T = 1.0" in plain and "T = 0.6" not in plain, "a saved Flint result's card on screen: T = 1.0", plain[-500:])
 open(gh_log, "w").close()
 code, text = with_terminal([KAPITSA, "bench", "submit", os.path.join(tmp, "full.json")], [""])
 got = calls()
@@ -534,6 +553,18 @@ code, text = with_terminal([KAPITSA, "bench", "--model", "4b", "--quick"], [], t
 plain = __import__("re").sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
 check(code == 1 and "Writing, T = 0.6" in plain and "Reading 4K" in plain and "Follow-up at 4K" in plain and "Tool calls" in plain
       and "╭" in plain and "Saved" in plain, "a terminal: the phases and the summary card", plain[-600:])
+# Flint from a folder of its own (config.json's model_type, a name outside the catalog): its writing runs at 1.0, its model
+# card's, and the progress, the summary and the saved result say so
+flint_dir = os.path.join(xhome, "my-flint")
+os.makedirs(flint_dir)
+with open(os.path.join(flint_dir, "config.json"), "w") as fh:
+    json.dump({"model_type": "flint"}, fh)
+r = run([KAPITSA, "bench", "--model", flint_dir, "--quick"], env=xenv, timeout=300)
+saved = glob.glob(os.path.join(xhome, "bench", "kapitsa-bench-*-my-flint-quick.json"))
+res = json.load(open(saved[0])) if saved else {}
+check(res.get("protocol", {}).get("temperature") == 1.0 and "decode T=1.0: median" in r.stderr and "T=0.6" not in r.stderr
+      and "| Writing, T = 1.0 |" in r.stdout, "Flint from a folder: its writing at T = 1.0, shown and recorded",
+      (r.stdout + r.stderr)[-500:])
 shutil.rmtree(xhome, ignore_errors=True)
 
 shutil.rmtree(tmp, ignore_errors=True)

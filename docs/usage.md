@@ -671,7 +671,7 @@ for 15 seconds (5 minutes at most, 2 for `--quick`), then measures:
 
 | Measurement | How |
 | --- | --- |
-| Writing | A 512-token coding answer, at temperature 0.6 and greedy, 5 runs each (3 with `--quick`), median; the rate over the middle of the stream |
+| Writing | A 512-token coding answer, at temperature 0.6 (Flint at 1.0, its model card's; the result records which) and greedy, 5 runs each (3 with `--quick`), median; the rate over the middle of the stream |
 | Reading | A cold prompt of about 4K and 16K tokens (the 4K one with `--quick`): prompt tokens per second to the first token |
 | Follow-up | Three new messages in that conversation, 1 s apart: the median time to the first token |
 | Peak memory | The server's `phys_footprint_peak`, what macOS's `footprint` shows (lower in a quick run, which holds no 16K conversation) |

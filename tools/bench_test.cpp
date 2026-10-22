@@ -130,6 +130,14 @@ int self_test() {
   check(reference_prompt_tokens("nemotron-h").at(16000) == 16514, "Nemotron's reference prompt tokens");
   check(reference_prompt_tokens("flint").at(4000) == 3874 && reference_prompt_tokens("flint").at(16000) == 15066,
         "Flint's reference prompt tokens (configs/flint.json's)");
+  // the writing runs' temperature in the texts: the result's own, or for a result written before it was recorded, Flint's
+  // 1.0 by its catalog name and 0.6 for any other model
+  check(fmt_temp(0.6) == "0.6" && fmt_temp(1.0) == "1.0", "fmt_temp", fmt_temp(1.0));
+  check(writing_temperature(ojson{{"protocol", {{"temperature", 1.0}}}, {"model", {{"name", "flint-int4"}}}}) == 1.0,
+        "the writing temperature a result records (a Flint folder outside the catalog)");
+  check(writing_temperature(ojson{{"protocol", ojson::object()}, {"model", {{"name", "flint"}}}}) == 1.0 &&
+            writing_temperature(ojson{{"protocol", ojson::object()}, {"model", {{"name", "qwen3.6-35b-a3b"}}}}) == 0.6,
+        "an older result's writing temperature: Flint's 1.0, any other model's 0.6");
   // nonces: the shapes bench.py makes
   Nonces nn;
   const std::string r = nn.run(), h64 = nn.hex(64), h48 = nn.hex(48);

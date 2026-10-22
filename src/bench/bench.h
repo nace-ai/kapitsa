@@ -329,12 +329,16 @@ std::string result_title(const ojson& result);
 std::string result_mac_line(const ojson& result);
 // The pull request's body: the summary table and the conditions, in Markdown
 std::string result_markdown(const ojson& result);
+// The temperature of the writing runs (decode; the greedy ones are at 0): the result's protocol.temperature, or for a
+// result written before it was recorded, Flint's 1.0 (its model card's, as configs/flint.json) and 0.6 for any other
+double writing_temperature(const ojson& result);
 // The checks a result must pass to be submitted ("" when it may be)
 std::string submit_problem(const ojson& result);
-// Formats for the screens and texts: "153.7 tok/s", "1,169 tok/s", "0.06 s", "21.1 GB"
+// Formats for the screens and texts: "153.7 tok/s", "1,169 tok/s", "0.06 s", "21.1 GB", a temperature "0.6"
 std::string fmt_tps(double v, bool integer = false);
 std::string fmt_secs(double v);
 std::string fmt_gb(double bytes);
+std::string fmt_temp(double t);
 std::string thousands(long v);
 
 // ---------------------------------------------------------------- submitting (submit.cpp)

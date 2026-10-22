@@ -44,6 +44,12 @@ std::string fmt_gb(double bytes) {
   return b;
 }
 
+std::string fmt_temp(double t) {
+  char b[32];
+  snprintf(b, sizeof b, "%.1f", t);
+  return b;
+}
+
 std::string model_display(const std::string& title) {
   // "Qwen3.6-35B-A3B" -> "Qwen3.6 35B-A3B", as the README names the Qwen models
   std::string t = title;
@@ -228,7 +234,8 @@ ojson make_result(const RunInputs& in) {
                     {"decode_tokens", s.decode_tokens},
                     {"decode_runs", s.decode_runs},
                     {"greedy_runs", s.greedy_runs},
-                    {"sizes", s.sizes}};
+                    {"sizes", s.sizes},
+                    {"temperature", s.temperature}};
   ojson users = ojson::array();
   for (const auto& u : overall.value("gpu_users", ojson::array())) users.push_back(u["name"]);
   ojson conditions = {{"power_source", in.power_start.source.empty() ? ojson(nullptr) : ojson(in.power_start.source)},
@@ -278,6 +285,11 @@ std::string result_title(const ojson& r) {
   return t;
 }
 
+double writing_temperature(const ojson& r) {
+  if (r.contains("protocol") && is_num(r["protocol"], "temperature")) return r["protocol"]["temperature"].get<double>();
+  return r.contains("model") && str_or(r["model"], "name") == "flint" ? 1.0 : 0.6;
+}
+
 std::string result_markdown(const ojson& r) {
   const ojson& res = r["results"];
   const ojson& m = r["model"];
@@ -301,7 +313,7 @@ std::string result_markdown(const ojson& r) {
               "-core GPU · " + std::to_string(ram_gb(r)) + " GB";
   const std::string model_col = model_display(str_or(m, "title", str_or(m, "name"))) + " · " + str_or(m, "precision");
   std::string s = "| " + mac_col + " | " + model_col + " |\n| --- | ---: |\n";
-  s += "| Writing, T = 0.6 | " + cell_decode("decode") + " |\n";
+  s += "| Writing, T = " + fmt_temp(writing_temperature(r)) + " | " + cell_decode("decode") + " |\n";
   s += "| Writing, greedy | " + cell_decode("decode_greedy") + " |\n";
   for (const auto& p : res["prefill"]) {
     const int size = p["size"];

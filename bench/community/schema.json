@@ -61,7 +61,8 @@
         "decode_tokens": {"type": "integer", "minimum": 1, "maximum": 8192},
         "decode_runs": {"type": "integer", "minimum": 1, "maximum": 50},
         "greedy_runs": {"type": "integer", "minimum": 0, "maximum": 50},
-        "sizes": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1000, "maximum": 32000}}
+        "sizes": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "integer", "minimum": 1000, "maximum": 32000}},
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2, "description": "The writing runs' sampling temperature (decode; decode_greedy samples at 0): 0.6, Flint's 1.0 (its model card's). Results written before Kapitsa recorded it leave it out."}
       }
     },
     "results": {

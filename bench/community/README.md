@@ -37,9 +37,10 @@ The JSON follows [schema.json](schema.json) and is about 2 KB:
   ([mac-models.json](mac-models.json)), the chip, CPU and GPU cores, memory, macOS version and build.
 - **Kapitsa:** its version and commit; the model, its precision, its pinned weights' revision, and how it decoded (the
   DFlash2, LiLiCorr or DSpark drafter, the MTP head, or plain).
-- **The numbers:** writing speed (decode) at temperature 0.6 (Flint at 1.0, its model card's) and greedy, each run's and
-  the median; reading a 4K- and a 16K-token prompt (prefill: tokens per second to the first token); the time to the first
-  token of three follow-ups in each conversation; the server's peak memory; whether tool calls work.
+- **The numbers:** writing speed (decode) at temperature 0.6 (Flint at 1.0, its model card's; the result records which)
+  and greedy, each run's and the median; reading a 4K- and a 16K-token prompt (prefill: tokens per second to the first
+  token); the time to the first token of three follow-ups in each conversation; the server's peak memory; whether tool
+  calls work.
 - **The conditions:** power source, Low Power Mode and the energy mode, the worst thermal state, pages swapped out,
   other apps' share of the GPU and which apps, and the phases they disturbed; the harness's flags, and any measurement
   that failed its checks.
@@ -76,7 +77,7 @@ Every pull request that adds files under `results/` runs [the check](../../.gith
 - a model and precision of the catalog ([src/hub/catalog.cpp](../../src/hub/catalog.cpp)), at their pinned weights;
 - Apple's name and year for its model identifier, as [mac-models.json](mac-models.json) has them (an identifier it
   does not have yet passes, with a warning);
-- the protocol of its mode, the frozen prompt corpus, and no invalid measurement;
+- the protocol of its mode and its model's writing temperature, the frozen prompt corpus, and no invalid measurement;
 - rates, times and memory within physical bounds and consistent with each other (each median is its runs' median;
   prompt tokens within 1% of the reference; tokens per second equal to tokens over the time to the first token);
 - not a copy of a result already in the table.

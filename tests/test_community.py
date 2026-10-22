@@ -97,8 +97,9 @@ def prompts(r, sizes):
         p.update(prompt_tokens=n, tps=round(n / p["ttft_s"], 1))
 
 
-flint = copy.deepcopy(full)  # what kapitsa bench writes for Flint: its prompts as Flint's own tokenizer counts them
+flint = copy.deepcopy(full)  # what kapitsa bench writes for Flint: its prompts as Flint's own tokenizer counts them, T = 1.0
 flint["model"].update(name="flint", title=cat["flint"]["title"], variant="4bit", precision=cat["flint"]["variants"]["4bit"])
+flint["protocol"]["temperature"] = 1.0
 prompts(flint, (3873, 15065))
 e = cc.check_result(flint, cat, macs, versions)[0]
 check(not e, "Flint's prompts pass against its own reference (3,874 and 15,066 tokens)", str(e))
@@ -106,6 +107,15 @@ r = copy.deepcopy(flint)
 prompts(r, (4133, 16286))
 e = cc.check_result(r, cat, macs, versions)[0]
 check(any("not within 1% of 3874" in x for x in e), "refused: Flint with the Qwen templates' prompt sizes", str(e))
+r = copy.deepcopy(flint)
+r["protocol"]["temperature"] = 0.6
+e = cc.check_result(r, cat, macs, versions)[0]
+check(any("protocol temperature is 0.6" in x for x in e), "refused: Flint writing at 0.6, not its 1.0", str(e))
+del r["protocol"]["temperature"]
+e = cc.check_result(r, cat, macs, versions)[0]
+check(not e and not list(jsonschema.Draft202012Validator(schema).iter_errors(r)),
+      "a result from before the temperature was recorded passes", str(e))
+refused(lambda r: r["protocol"].update(temperature=1.0), "the 35B writing at 1.0, not its 0.6", "protocol temperature is 1.0")
 refused(lambda r: r["mac"].update(name="MacBook Pro (14-inch, 2024)"), "a Mac name that is not its identifier's", "is MacBook Pro (16-inch, 2024)")
 refused(lambda r: r["mac"].update(identifier="Mac99,9"), "a name for an identifier the table does not have", "not in mac-models.json")
 refused(lambda r: r.update(invalid=["decode: reasoning text returned (12 chars)"]), "invalid measurements", "invalid measurements")

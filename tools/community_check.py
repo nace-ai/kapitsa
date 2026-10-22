@@ -143,6 +143,9 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
     for k, v in want.items():
         if r["protocol"][k] != v:
             errs.append(f"protocol {k} is {r['protocol'][k]}, a {r['mode']} run's is {v}")
+    t, want_t = r["protocol"].get("temperature"), TEMPERATURE.get(m["name"], 0.6)  # older results leave it out
+    if t is not None and abs(t - want_t) > 1e-9:
+        errs.append(f"protocol temperature is {t}, {m['name']}'s writing runs are at {want_t}")
     if r["invalid"]:
         errs.append("invalid measurements: " + "; ".join(r["invalid"][:3]))
     # the numbers

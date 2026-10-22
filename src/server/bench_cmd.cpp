@@ -542,7 +542,7 @@ void print_summary(const ojson& r, const std::string& path) {
   }
   rows.push_back("");
   if (res["decode"].is_object() && res["decode"]["median_tps"].is_number()) {
-    std::string v = bold(fmt_tps(res["decode"]["median_tps"])) + mark("decode") + dim("  T = 0.6");
+    std::string v = bold(fmt_tps(res["decode"]["median_tps"])) + mark("decode") + dim("  T = " + fmt_temp(writing_temperature(r)));
     if (res["decode_greedy"].is_object() && res["decode_greedy"]["median_tps"].is_number())
       v += dot + bold(fmt_tps(res["decode_greedy"]["median_tps"])) + mark("decode_greedy") + dim("  greedy");
     row("Writing", v);
@@ -922,6 +922,8 @@ int run(const Options& o) {
                              {"swapouts_delta", v0.swapouts >= 0 && v1.swapouts >= 0 ? ojson(v1.swapouts - v0.swapouts) : ojson(nullptr)}};
       if (stopping()) throw Stopped{};
     };
+    // the writing runs' temperature, as sampled: 0.6, Flint's 1.0 (set above)
+    const std::string writing_t = fmt_temp(s.temperature), writing = "Writing, T = " + writing_t;
     auto decode_phase = [&](const char* name, bool greedy, int runs, const char* label) {
       Ticker t(label);
       ojson all = ojson::array();
@@ -934,7 +936,7 @@ int run(const Options& o) {
           if (!g_tui) {
             char v[32] = "NA";
             if (d["decode_tps"].is_number()) snprintf(v, sizeof v, "%.2f", d["decode_tps"].get<double>());
-            fprintf(stderr, "  decode T=%s: %s tok/s (%s tok, finish=%s)%s\n", greedy ? "0" : "0.6", v,
+            fprintf(stderr, "  decode T=%s: %s tok/s (%s tok, finish=%s)%s\n", greedy ? "0" : writing_t.c_str(), v,
                     d.value("completion_tokens", ojson()).dump().c_str(), d.value("finish", ojson()).dump().c_str(),
                     d["invalid"].empty() ? "" : (" INVALID " + d["invalid"].dump()).c_str());
           }
@@ -951,13 +953,13 @@ int run(const Options& o) {
                  sm["valid_runs"].get<int>(), sm["runs"].get<int>());
       else
         snprintf(d, sizeof d, "no valid run");
-      phase_line(greedy ? "Writing, greedy" : "Writing, T = 0.6", sm.contains("median_tps") ? fmt_tps(sm["median_tps"]) : "–", d, ok);
+      phase_line(label, sm.contains("median_tps") ? fmt_tps(sm["median_tps"]) : "–", d, ok);
       char med[32] = "NA";
       if (sm.contains("median_tps")) snprintf(med, sizeof med, "%.2f", sm["median_tps"].get<double>());
-      say(std::string(greedy ? "decode T=0" : "decode T=0.6") + ": median " + med + " tok/s over " +
+      say("decode T=" + (greedy ? std::string("0") : writing_t) + ": median " + med + " tok/s over " +
           std::to_string(sm["valid_runs"].get<int>()) + "/" + std::to_string(sm["runs"].get<int>()) + " valid");
     };
-    decode_phase("decode", false, s.decode_runs, "Writing, T = 0.6");
+    decode_phase("decode", false, s.decode_runs, writing.c_str());
     decode_phase("decode_greedy", true, s.greedy_runs, "Writing, greedy");
     raw["prefill"] = ojson::array();
     for (int size : s.sizes) {
