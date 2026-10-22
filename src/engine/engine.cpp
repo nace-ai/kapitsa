@@ -2271,7 +2271,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     int T = prefill_chunk_rows(C, p, n, prefill_even_chunks() && !model_->ane_split_on());
     // NI_VPF: a request whose whole new suffix is a few rows over a long cached prefix (an agent turn) runs the
-    // suffix as verify passes: one pass per up to 16 rows (8 where the target verifies narrow), the sampler of the
+    // suffix as verify passes: one pass per up to 32 rows (16 or 8 where the target verifies narrow, NI_VPF_ROWS), the sampler of the
     // last row giving the reply's first token. Its rows are chain rows, exactly what the verify pass verifies, and
     // its GDN recurrent state is left pending (commit_rows) exactly as a decode cycle leaves the rows it accepted:
     // the first decoding pass folds them. The drafter's prefill capture hook is armed above and encodes these rows
@@ -2325,7 +2325,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     if (vpf) {
       int q = p;
-      // the suffix's rows [q, upto) as verify passes: 16 rows a pass where the target is wide, else 8
+      // the suffix's rows [q, upto) as verify passes: as many rows a pass as the target's verify holds (NI_VPF_ROWS), 8 at most
       auto vpf_rows = [&](int upto) {
         while (q < upto) {
           const int left = upto - q;

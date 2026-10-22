@@ -318,8 +318,8 @@ class Qwen35 : public Model {
   void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups, int split_after = 0);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
   // A chain pass: plain rows [pos, pos + R) verified as the verify's rows (row t at position pos + t, its state its
-  // predecessors' fold), for a cached turn's pending suffix. R <= 8 is the 8-row verify with no tree; R = 16 a wide
-  // verify over a chain tree descriptor (a target of verify_wide_ok with set_tree_rows(16)). Every row is a real
+  // predecessors' fold), for a cached turn's pending suffix. R <= 8 is the 8-row verify with no tree; R = 16, 24 or 32 a
+  // wide verify over a chain tree descriptor (a target of verify_wide_ok with the capacity for it: pass_rows). Every row is a real
   // token, so commit_rows(s, R) after each pass folds them all; a pass streams the weights once, the point of it.
   void encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp);
   // rows is a whole number of 8-row tiles of the verify capacity (8, 16, 24 or 32): the wide path reads the tile

@@ -1193,8 +1193,8 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
 
 bool Qwen35::verify_tree_ok() const { return v8_tree_ok_c(cfg_); }
 
-// A chain pass (see the header): plain rows verified as a tree's single path. The descriptor is the same for every
-// pass of every request (16 rows of a straight chain), so it is built once and never rewritten: the plan kernel copies
+// A chain pass (see the header): plain rows verified as a tree's single path. There is one descriptor per row count a
+// pass may run (16, 24 or 32 rows of a straight chain), built once and never rewritten: the plan kernel copies
 // it into the verify's own descriptor region, and a pass still on the GPU may read it after the host moved on.
 void Qwen35::encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp) {
   // The rows' draws: row r samples with step + depth(r), and the sampler of the plain prefill path draws the reply's
