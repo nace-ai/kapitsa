@@ -72,6 +72,10 @@ def check(data):
         for mac in data["poster"]["macs"]:
             if mac["name"] not in {m["name"] for m in T["macs"]}:
                 sys.exit(f"readme_images.json: poster Mac {mac['name']} has no entry in tables.macs")
+        for model in T["models"]:
+            k = sum(model in f["models"] for f in T["families"])
+            if k != 1:
+                sys.exit(f"readme_images.json: tables.models {model!r} is in {k} of tables.families, not exactly one")
 
 
 # ---------------------------------------------------------------- the README's per-Mac tables (Markdown)
@@ -108,34 +112,45 @@ def table_cell(row, engine, top, shared=None):
     return s + (f"<br><sub>{sub}</sub>" if sub else "")
 
 
+def family_table(data, rows):
+    """one family's table on one Mac: a column for every engine with a number in these rows, Kapitsa first"""
+    T = data["tables"]
+    engines = [e for e in data["engines"] if any(is_num(cell(r, e["name"])[0]) for r in rows)]
+    shared = {}                             # an engine whose every number in the table has one detail: it heads the column
+    for e in engines:
+        ds = {(cell(r, e["name"])[2] or {}).get("detail") for r in rows if is_num(cell(r, e["name"])[0])}
+        shared[e["name"]] = ds.pop() if len(ds) == 1 else None
+    head = []
+    for e in engines:
+        if e["name"] == "Kapitsa":
+            head.append("<mark>**Kapitsa**</mark>")
+            continue
+        name = e["name"].replace(" ", "&nbsp;").replace("-", "\u2011")
+        ver = shared[e["name"]] or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " ")
+        head.append(f"<sub>{name}<br>{ver}</sub>" if ver else f"<sub>{name}</sub>")
+    out = ["| Model | " + " | ".join(head) + " |", "| --- |" + " ---: |" * len(engines)]
+    for r in rows:
+        m = T["models"][r["model"]]
+        top = max(cell(r, e["name"])[0] for e in engines if is_num(cell(r, e["name"])[0]))
+        out.append(f"| **{m['name']}** · `{m['alias']}`<br><sub>{m['about']}</sub> | "
+                   + " | ".join(table_cell(r, e["name"], top, shared[e["name"]]) for e in engines) + " |")
+    return out
+
+
 def tables(data):
-    """the README's per-Mac tables: a legend line and one <details> block per Mac"""
+    """the README's per-Mac tables: a legend line and one <details> block per Mac, holding one table per model family
+    (tables.families) that has a row on that Mac, under the family's name when there are two or more"""
     T = data["tables"]
     out = [LEGEND + " (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · "
            "small type: the decoding method · × can't run on that Mac · — not measured</sub>"]
     for tmac in T["macs"]:
         rows = table_rows(data, tmac)
-        engines = [e for e in data["engines"] if any(is_num(cell(r, e["name"])[0]) for r in rows)]
-        shared = {}                         # an engine whose every number on this Mac has one detail: it heads the column
-        for e in engines:
-            ds = {(cell(r, e["name"])[2] or {}).get("detail") for r in rows if is_num(cell(r, e["name"])[0])}
-            shared[e["name"]] = ds.pop() if len(ds) == 1 else None
-        head = []
-        for e in engines:
-            if e["name"] == "Kapitsa":
-                head.append("<mark>**Kapitsa**</mark>")
-                continue
-            name = e["name"].replace(" ", "&nbsp;").replace("-", "\u2011")
-            ver = shared[e["name"]] or T.get("versions", {}).get(e["name"], e.get("version", "")).replace("\n", " ")
-            head.append(f"<sub>{name}<br>{ver}</sub>" if ver else f"<sub>{name}</sub>")
+        groups = [(f["name"], [r for r in rows if r["model"] in f["models"]]) for f in T["families"]]
+        groups = [(name, rs) for name, rs in groups if rs]
         n = len(rows)
-        out += ["", "<details>", f"<summary><b>{tmac['title']}</b> · {n} model{'s' if n != 1 else ''}</summary>", "",
-                "| Model | " + " | ".join(head) + " |", "| --- |" + " ---: |" * len(engines)]
-        for r in rows:
-            m = T["models"][r["model"]]
-            top = max(cell(r, e["name"])[0] for e in engines if is_num(cell(r, e["name"])[0]))
-            out.append(f"| **{m['name']}** · `{m['alias']}`<br><sub>{m['about']}</sub> | "
-                       + " | ".join(table_cell(r, e["name"], top, shared[e["name"]]) for e in engines) + " |")
+        out += ["", "<details>", f"<summary><b>{tmac['title']}</b> · {n} model{'s' if n != 1 else ''}</summary>"]
+        for name, rs in groups:
+            out += [""] + ([f"**{name}**", ""] if len(groups) > 1 else []) + family_table(data, rs)
         if tmac.get("caption"):
             out += ["", f"<sub>{tmac['caption']}</sub>"]
         out += ["", "</details>"]

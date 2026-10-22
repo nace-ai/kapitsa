@@ -71,8 +71,12 @@
   ]
  },
  "tables": {
-  "_about": "The README's Models section: one collapsed table per Mac (python3 readme_images.py --tables). A Mac's table is its poster rows, then its rows here; a Mac not on the poster has only these. \"models\" names each row's model in the tables, keyed by the rows' \"model\". A cell's \"detail\" shows under its method in the tables only; a Mac's \"caption\" shows under its table. An engine gets a column on a Mac only where it has a number there; \"versions\" replaces an engine's poster version in the tables' headers.",
+  "_about": "The README's Models section: one collapsed dropdown per Mac (python3 readme_images.py --tables). A Mac's rows are its poster rows, then its rows here; a Mac not on the poster has only these. \"models\" names each row's model in the tables, keyed by the rows' \"model\". A cell's \"detail\" shows under its method in the tables only; a Mac's \"caption\" shows under its table. \"families\" splits each Mac's dropdown into one table per family, in this order (a Mac with one family has one table); an engine gets a column in a family's table only where it has a number there; \"versions\" replaces an engine's poster version in the tables' headers.",
   "versions": {"LM Studio": "MLX runtime 1.13.1, llama.cpp runtime 2.60.0", "MLX": "mlx-lm 0.32.2, mlx-vlm 0.7.8"},
+  "families": [
+    {"name": "Qwen and Nemotron", "models": ["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.8 27B", "Qwen3.6 35B-A3B", "Qwen3.6 35B-A3B 2-bit", "Flash-Next 180B", "Dory1.0 4B", "Nano 4B", "Nano 9B v2", "Lightning 30B", "Bolt 74B", "Super-VL 120B"]},
+    {"name": "Recursive Flint", "models": ["Flint 40B"]}
+  ],
   "models": {
    "Qwen3.5 4B": {"name": "Qwen3.5-4B", "alias": "4b", "about": "dense · 4-bit, 4.6 GB"},
    "Qwen3.5 9B": {"name": "Qwen3.5-9B", "alias": "9b", "about": "dense · 4-bit, 9.0 GB"},
