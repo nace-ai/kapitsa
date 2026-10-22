@@ -1887,15 +1887,21 @@ and the desktop app driving the runs stayed open, with 2.3 GB already in swap. R
 | Nemotron 3 Nano 4B, FP8 | prompt lookup | **37.0** (35.9-38.5) | 37.5 (37.2-37.5) | 447 / 401 | 0.14 / 0.19 | 5.0 + 0.8 mapped | pass |
 | Nemotron Nano 9B v2, NVFP4 | plain | **24.5** (24.1-24.9) | 24.8 (24.7-25.0) | 189 / 180 | 0.54 / 0.57 | 7.1 + 0.6 mapped | pass |
 
-Against this Mac's earlier Kapitsa cells, the models with a drafter moved and the others did not:
+Against this Mac's earlier Kapitsa cells (2026-10-19 and 10-20, other sessions, not interleaved with these runs), the
+models with a drafter moved and the others did not:
 
-- **Qwen3.5-4B and 9B: decode +12-14%, prefill +31-32%.** The 4B writes 97.2 tok/s at T = 0.6 against 0.1.36's 85.5
-  (100.3 greedy against 88.0), the 9B 56.8 against 0.1.37's 50.7; both now decode with KFlash trees
-  ([#187](https://github.com/nace-ai/kapitsa/pull/187)). They read 401 / 354 tok/s at 4K / 16K against 306 / 269 (4B)
-  and 217 / 202 against 164 / 153 (9B), the M1's prefill tiles ([#89](https://github.com/nace-ai/kapitsa/pull/89),
-  [#92](https://github.com/nace-ai/kapitsa/pull/92)) now in a release: ahead of every engine measured here at both sizes
-  (on the 4B the next were llama.cpp's swapping 315 and mlx-lm's 308 at 4K and mlx-lm's 289 at 16K; on the 9B mlx-lm's
-  170 / 165).
+- **Qwen3.5-4B and 9B: decode +12-14%, prefill +31-32% against their earlier cells.** The 4B writes 97.2 tok/s at
+  T = 0.6 against 0.1.36's 85.5 (100.3 greedy against 88.0), the 9B 56.8 against 0.1.37's 50.7 (that run's DFlash
+  drafter; 0.2.6 runs KFlash). They read 401 / 354 tok/s at 4K / 16K against 306 / 269 (4B) and 217 / 202 against
+  164 / 153 (9B), ahead of every engine measured here at both sizes (on the 4B the next were llama.cpp's swapping 315
+  and mlx-lm's 308 at 4K and mlx-lm's 289 at 16K; on the 9B mlx-lm's 170 / 165). This is a dated comparison, not an
+  A/B: 0.1.36 to 0.2.6 brings KFlash trees ([#187](https://github.com/nace-ai/kapitsa/pull/187)), the M1's prefill
+  tiles ([#89](https://github.com/nace-ai/kapitsa/pull/89), [#92](https://github.com/nace-ai/kapitsa/pull/92)) and the
+  verify tiling ([#77](https://github.com/nace-ai/kapitsa/pull/77)) among other changes. Measured on their own on this
+  Mac in interleaved A/Bs, KFlash gave the 4B +5.6% at T = 0.6 (90.0 to 95.0 tok/s,
+  [KFlash trees](#kflash-trees-m4-pro-2026-10-21)), the prefill tiles took its 4K / 16K prompts from 301-305 / 264-267
+  to 388-389 / 343-349 tok/s ([above](#qwen35-4b-at-4-bit-the-full-protocol)), and the verify tiling shortened DFlash
+  cycles 3-5%. The rest of the decode difference is not isolated.
 - **The 35B with 2-bit experts, Dory and the two Nanos: within 3%.** They decode without a drafter (prompt lookup on the
   Nano 4B), where this Mac's 200 GB/s sets the rate: 52.2 tok/s against 52.6, 39.2 against 0.1.37's 40.5 (greedy 40.2),
   37.0 against 37.3, 24.5 against 25.1. The 35B's cached follow-ups are quicker than in its 2026-10-19 runs (0.16 / 0.23 s
