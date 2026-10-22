@@ -27,6 +27,8 @@ one config at a time under the GPU lock, 00:22-01:20 local time. MacBook Pro (16
 **Contention.** A system `com.apple.WebKit` GPU process stayed open the whole session (5-7% of the GPU on average), so
 every run carries the harness's contention flag, as in the 2026-10-18 session (3-8%). Read the numbers as a lower bound.
 
+**Dory predates #287.** The Dory row ran on `fd85910`, before [#287](https://github.com/nace-ai/kapitsa/pull/287) moved Dory's prefill GEMMs onto the matrix units (default on an M5 with macOS 26; 596 to 1,511 tok/s at 4K on the M5 Pro), so its prefill (1,077 / 1,021) is not main's now and its decode was not re-checked after that change. Dory's sampled decode and both of Super-VL's decode phases are repetition-loop flagged (valid runs), which flatters a speculative decoder; the earlier unflagged per-loop Dory run (117.4 tok/s, 2026-10-19) is within 2% of this one.
+
 **Against the other engines.** Kapitsa has the fastest decode on the 27B, 35B-A3B, Bolt, Lightning, Super-VL and Dory (the last three are the README's collapsed Nemotron table). On Flash-Next mlx-serve
 (108 tok/s) and oMLX (107) are ahead of Kapitsa's 106. Splash reads prompts faster than Kapitsa on both models it runs:
 on the 27B 898 against 459 tok/s at 4K (its long prompts split between the GPU and the Neural Engine), on the 35B-A3B
