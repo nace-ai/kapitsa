@@ -76,7 +76,7 @@
   "versions": {"LM Studio": "MLX runtime 1.13.1, llama.cpp runtime 2.60.0", "MLX": "mlx-lm 0.32.2, mlx-vlm 0.7.8"},
   "families": [
     {"name": "Qwen and Nemotron", "models": ["Qwen3.5 4B", "Qwen3.5 9B", "Qwen3.8 27B", "Qwen3.6 35B-A3B", "Qwen3.6 35B-A3B 2-bit", "Flash-Next 180B", "Dory1.0 4B", "Nano 4B", "Nano 9B v2", "Lightning 30B", "Bolt 74B", "Super-VL 120B"]},
-    {"name": "Recursive Flint", "models": ["Flint 40B"]}
+    {"name": "Recursive Flint", "models": ["Flint 40B", "Flint 40B 2-bit"]}
   ],
   "models": {
    "Qwen3.5 4B": {"name": "Qwen3.5-4B", "alias": "4b", "about": "dense · 4-bit, 4.6 GB"},

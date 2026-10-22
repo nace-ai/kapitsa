@@ -145,6 +145,8 @@ The catalog models measured on each Mac, against the engines that run them: one 
 <details>
 <summary><b>MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB</b> · 7 models</summary>
 
+**Qwen and Nemotron**
+
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 401 / **97**<br><sub>KFlash</sub> | 286 / 62<br><sub>MTP</sub> | 281 / 55<br><sub>MTP</sub> | 298 / 55<br><sub>MTP</sub> | 305 / 42<br><sub>MTP</sub> | 308 / 46<br><sub>no spec</sub> | 315 / 38<br><sub>MTP</sub> | 308 / 47<br><sub>no spec</sub> |
@@ -153,7 +155,12 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39**<br><sub>no spec</sub> | × | × | × | × | 30<br><sub>no spec</sub> | 4<br><sub>no spec</sub> | × |
 | **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 🟩 **37**<br><sub>prompt lookup</sub> | — | — | — | — | 21<br><sub>BF16</sub> | 28<br><sub>Q4_K_M</sub> | — |
 | **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 🟩 **25**<br><sub>no spec</sub> | — | — | — | — | 18 | 14<br><sub>Q4_K_M</sub> | — |
-| **Recursive Flint 40B-A2.5B** · `flint:16gb`<br><sub>MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB</sub> | 🟩 414 / **61**<br><sub>no spec</sub> | × | × | — | × | × | 43<br><sub>no spec · d772569</sub> | — |
+
+**Recursive Flint**
+
+| Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>d772569</sub> |
+| --- | ---: | ---: |
+| **Recursive Flint 40B-A2.5B** · `flint:16gb`<br><sub>MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB</sub> | 🟩 414 / **61**<br><sub>no spec</sub> | 43<br><sub>no spec</sub> |
 
 </details>
 
