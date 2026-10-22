@@ -84,13 +84,13 @@ at 16K** (1.14x), and against the 03:26 pre-#287 runs, 2.66x and 2.39x. The atte
 the change reads like across two builds a few hours apart, not a measurement of it: part of the difference is the two
 sessions, and the end-to-end gain is larger than the kernel's share of the step, which these records do not explain. Decode
 is unchanged inside the runs' spread (70.7/73.1 -> 71.7/71.2 at T = 0.6, 72.5/80.5 -> 72.2/80.3 greedy). The cached
-follow-ups read 0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, and a pair of runs the same evening (M5 Pro, macOS 26,
-main's `3112b93` build) points at this switch rather than the session: `NI_DORY_ATTN_T=0` reads 0.092 / 0.154 s of cached
-follow-up and 1,545 / 1,163 tok/s of cold prefill, the default 0.113 / 0.195 and 1,600 / 1,281. One run per arm, not
-interleaved, and the default arm was contention-flagged at 6.07% mean, so its prefill is a lower bound and its cached
-follow-up an upper one: at most about 40 ms at 16K (+27%), not a measured 40 ms. That arm's cached follow-up (0.113 / 0.195 s) also reads faster than the two records' 0.13-0.14 / 0.21 s (13-19% at 4K, about 7% at 16K) while its cold prefill (1,600 / 1,281 tok/s) is level with their median 1,641 / 1,297, so the slower follow-up in the records is not explained by a faster session, and part of the session-to-session difference is still unexplained. A cached follow-up prefills a short
-suffix, where the tensor kernel's 32-token threadgroups and 16-key tiles have nothing to amortize, which is why the switch
-looks like the cause; falling back below some token count is follow-up work, not part of this measurement. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak
+follow-ups read 0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, which is this switch: an interleaved ABAB the same
+evening (M5 Pro, macOS 26, main's `3112b93` build, two runs per arm) reads 0.105 / 0.159 s of cached follow-up with
+`NI_DORY_ATTN_T=0` against 0.124 / 0.219 on the default (+19 ms / +60 ms, +18% / +38%), cold prefill 1,558 / 1,156 against
+1,664 / 1,317 tok/s. Each arm's two runs stay within 0.008 s of each other and these records sit on the default arm's line, so the 30-40% read
+here is that cost plus a slower session. A cached follow-up prefills a short suffix, where the tensor kernel's 32-token
+threadgroups and 16-key tiles have nothing to amortize, which is why that path pays; falling back below some token count is
+follow-up work, not part of this measurement. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak
 4.18 -> 4.19 GiB on last-loop KV and 5.02 -> 4.98 on per-loop. Against the other engines on this Mac
 (mlx-lm 1,401 / 1,278, llama.cpp 938 / 951), the flag-free per-loop run reads 1.18x mlx-lm at 4K and 1.03x at 16K,
 and 1.77x / 1.38x llama.cpp.
