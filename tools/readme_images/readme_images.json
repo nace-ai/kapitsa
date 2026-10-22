@@ -3,7 +3,7 @@
   "Data for tools/readme_images.py: the README's benchmark poster (docs/assets/benchmarks-*.webp) and header (docs/assets/header-*.svg).",
   "A cell is {\"value\": tok/s, \"method\": speculative decoding method}, null (renders as a dash: not measured or not supported) or \"x\" (renders as ×: can't run that model on a Mac).",
   "An engine whose numbers all share one method shows it under its name; otherwise each number shows its own. \"todo\" and \"note\" are never rendered; the script prints the todos.",
-  "Numbers: decode tok/s at T = 0.6 (docs/benchmarks.md, The README's tables; Flint at its card's T = 1.0, each of its cells the mean of that engine's 2026-10-22 runs, prefill and decode from the same runs), Kapitsa's KFlash runs on the M4 Pro as noted; \"prefill\" on a cell is the 4K-prompt reading speed from bench/results. Kapitsa's prefill is from its newest run without a contention or invalid flag, and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's 27B cells, Kapitsa's and mlx-serve's, are the same 2026-10-22 interleaved pair on main, each the mean of its two runs, prefill and decode from those runs; the M5 Pro's 35B-A3B cell is its 2026-10-22 run on the build with the expert prefill on the tensor units, prefill and decode together, and its Lightning cell is a single 2026-10-21 run with prefill and decode together). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not."
+  "Numbers: decode tok/s at T = 0.6 (docs/benchmarks.md, The README's tables; Flint at its card's T = 1.0, each of its cells the mean of that engine's 2026-10-22 runs, prefill and decode from the same runs), Kapitsa's KFlash runs on the M4 Pro as noted; \"prefill\" on a cell is the 4K-prompt reading speed from bench/results. Kapitsa's prefill is from its newest run without a contention or invalid flag (the M5 Max's Kapitsa and Splash cells are the exception: 2026-10-22 runs on main, each flagged for contention, Bolt's decode median including two repetition-loop runs), and its decode is the number in the cell's decode column; they can come from different runs (the M5 Pro's 27B cells, Kapitsa's and mlx-serve's, are the same 2026-10-22 interleaved pair on main, each the mean of its two runs, prefill and decode from those runs; the M5 Pro's 35B-A3B cell is its 2026-10-22 run on the build with the expert prefill on the tensor units, prefill and decode together, and its Lightning cell is a single 2026-10-21 run with prefill and decode together). The other engines' prefill is from the stored run closest to the decode value shown, flagged or not."
  ],
  "engines": [
   {"name": "Kapitsa", "logo": "kapitsa"},
@@ -18,7 +18,7 @@
   {"name": "rec", "version": "0.1.0", "note": "Recursive's own engine for Flint (recursive-oss/rec: a Go launcher over rec-mlx, MLX 0.32 with a resident decode megakernel); it runs only Flint"}
  ],
  "poster": {
-  "size": [2400, 2480],
+  "size": [2400, 2568],
   "title": "Kapitsa: the Apple silicon engine for Qwen, Nemotron and Flint",
   "legend": "Each cell: prefill / decode, tokens/s",
   "subtitle": [
@@ -30,6 +30,16 @@
    "× can't run that model on that Mac (Splash: only the 27B and 35B, on an M3 or newer; rec: only Flint) · — not measured (before the slash: no prefill run for that engine) · the numbers come from bench/results (llama.cpp b11804 for Flint, its first build with it)"
   ],
   "macs": [
+   {
+    "name": "MacBook Pro M5 Max 128 GB",
+    "rows": [
+     {"model": "Qwen3.8 27B", "cells": {"Kapitsa": {"value": 140, "method": "KFlash", "prefill": 459}, "mlx-serve": {"value": 130, "method": "DFlash2", "prefill": 690}, "oMLX": {"value": 93, "method": "DFlash2", "prefill": 761}, "Splash": {"value": 116, "method": "DFlash2", "prefill": 898}, "Ollama": {"value": 68, "prefill": 739}, "MTPLX": {"value": 69, "method": "MTP", "prefill": 733}, "MLX": {"value": 54, "method": "MTP", "prefill": 784}, "llama.cpp": {"value": 51, "method": "MTP", "prefill": 516}, "LM Studio": {"value": 32, "method": "no spec", "prefill": 217}, "rec": "x"}},
+     {"model": "Qwen3.6 35B-A3B", "cells": {"Kapitsa": {"value": 325, "method": "KFlash", "prefill": 4702}, "mlx-serve": {"value": 264, "method": "MTP", "prefill": 3818}, "oMLX": {"value": 232, "method": "DFlash2", "prefill": 2968}, "Splash": {"value": 290, "method": "DFlash2", "prefill": 6640}, "Ollama": {"value": 166, "prefill": 3690}, "MTPLX": {"value": 123, "method": "MTP", "prefill": 4328}, "MLX": {"value": 132, "method": "DFlash2", "prefill": 4271}, "llama.cpp": {"value": 171, "method": "MTP", "prefill": 2881}, "LM Studio": {"value": 127, "method": "no spec", "prefill": 1873}, "rec": "x"}},
+     {"model": "Flash-Next 180B", "cells": {"Kapitsa": {"value": 106, "method": "MTP", "prefill": 1165}, "mlx-serve": {"value": 108, "prefill": 1720}, "oMLX": {"value": 107, "method": "MTP", "prefill": 1260}, "Splash": "x", "Ollama": {"value": 60}, "MTPLX": {"value": 88, "method": "MTP", "prefill": 1263}, "MLX": {"value": 77, "method": "MTP", "prefill": 1030}, "llama.cpp": {"value": 96, "prefill": 842}, "LM Studio": "x", "rec": "x"}},
+     {"model": "Bolt 74B", "cells": {"Kapitsa": {"value": 153, "method": "KFlash", "prefill": 1016}, "mlx-serve": "x", "oMLX": {"value": 69, "method": "no spec", "prefill": 913}, "Splash": "x", "Ollama": "x", "MTPLX": "x", "MLX": {"value": 69, "prefill": 941}, "llama.cpp": "x", "LM Studio": "x", "rec": "x"}},
+     {"model": "Flint 40B", "cells": {"Kapitsa": null, "mlx-serve": null, "oMLX": null, "Splash": "x", "Ollama": null, "MTPLX": null, "MLX": null, "llama.cpp": null, "LM Studio": null, "rec": null}, "todo": "Flint on the M5 Max: not measured yet (configs/flint.json)"}
+    ]
+   },
    {
     "name": "MacBook Pro M5 Pro 48 GB",
     "rows": [

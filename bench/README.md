@@ -14,7 +14,7 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-546 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+552 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
@@ -34,6 +34,12 @@ How to read it:
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 16f2b6a | 79.0 | 82.8 | 434 | 439 | 9.53 | – | contention | [q38-27b-kapitsa-20261022-095116](results/2026-10-22-m5pro-48gb/results/q38-27b-kapitsa-20261022-095116.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | fd01fe9 | 72.4 | 80.5 | 618 | 543 | 6.78 | – | contention | [dory-kapitsa-perloop-20261022-032657](results/2026-10-22-m5pro-dory/results/dory-kapitsa-perloop-20261022-032657.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, last-loop KV) | fd01fe9 | 71.7 | 72.5 | 618 | 543 | 6.77 | – | contention | [dory-kapitsa-20261022-031737](results/2026-10-22-m5pro-dory/results/dory-kapitsa-20261022-031737.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Nemotron 3.5 Bolt-74B-A9B | 2-bit experts | Kapitsa (LiLiCorr drafter, GPU + Neural Engine prefill) | fd85910 | 153.2 | 154.6 | 1016 | 1062 | 4.11 | – | contention | [bolt-kapitsa-20261022-005440](results/2026-10-22-m5-max/results/bolt-kapitsa-20261022-005440.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Qwen3.8 Flash-Next | 4-bit | Kapitsa (MTP, default depth) | fd85910 | 105.8 | 106.0 | 1165 | 1140 | 3.55 | – | contention | [flash-kapitsa-20261022-004742](results/2026-10-22-m5-max/results/flash-kapitsa-20261022-004742.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Splash 1.4.0 (DFlash2 drafter) | 1.4.0 | 290.0 | 300.0 | 6640 | 5866 | 0.62 | – | contention | [q36-35b-splash-20261022-004151](results/2026-10-22-m5-max/results/q36-35b-splash-20261022-004151.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | fd85910 | 325.4 | 361.3 | 4702 | 3442 | 0.88 | – | contention | [q36-35b-kapitsa-20261022-003608](results/2026-10-22-m5-max/results/q36-35b-kapitsa-20261022-003608.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Splash 1.4.0 (DFlash2 drafter) | 1.4.0 | 115.6 | 124.6 | 898 | 955 | 4.61 | – | contention | [q38-27b-splash-20261022-002916](results/2026-10-22-m5-max/results/q38-27b-splash-20261022-002916.json) |
+| 2026-10-22 | – | M5 Max, 128 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | fd85910 | 140.0 | 145.0 | 459 | 511 | 9.01 | – | contention | [q38-27b-kapitsa-20261022-002219](results/2026-10-22-m5-max/results/q38-27b-kapitsa-20261022-002219.json) |
 | 2026-10-21 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.5 4B | 4-bit | Kapitsa (DFlash drafter) | 3a5bbf0 | 226.7 | 238.8 | 3269 | 2735 | 1.26 | – | – | [q35-4b-kapitsa-20261021-235433](results/2026-10-21-m5pro-48gb/results/q35-4b-kapitsa-20261021-235433.json) |
 | 2026-10-21 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.2 | 79.9 | 89.4 | 428 | 454 | 9.65 | – | – | [q38-27b-mlxserve-dflash2-20261021-222511](results/2026-10-21-m5pro-48gb/results/q38-27b-mlxserve-dflash2-20261021-222511.json) |
 | 2026-10-21 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | a13f8fd | 74.1 | 77.4 | 463 | 451 | 8.92 | – | – | [q38-27b-kapitsa-20261021-221847](results/2026-10-21-m5pro-48gb/results/q38-27b-kapitsa-20261021-221847.json) |

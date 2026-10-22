@@ -22,6 +22,7 @@ namespace ni {
 
 extern const char* const kNhKernelSource;
 extern const char* const kDoryKernelSource;
+extern const char* const kTensorKernelSource;
 
 namespace {
 
@@ -231,6 +232,14 @@ Dory::Dory(const std::string& path, int prefill_chunk, int loops, LoopKv kv) {
   kv_ = kv;
   Gpu::get().compile_extra("Nemotron-H", kNhKernelSource);
   Gpu::get().compile_extra("Dory", kDoryKernelSource);
+  // the M5's matrix units (Apple10, Metal 4 on macOS 26) for the prefill GEMMs over 32 rows: nh_gemm_t_fp4_m64
+  // against nh_gemm_fp4_m64, the same dequantized half tiles and the same epilogue, only the summation order inside
+  // the matrix unit differs (Nemotron-H's own models take the same step above 32 rows)
+  if (Gpu::get().apple_family() >= 10 && !(getenv("NI_DORY_TG") && atoi(getenv("NI_DORY_TG")) == 0))
+    if (__builtin_available(macOS 26.0, *)) {
+      Gpu::get().compile_extra("tensor", kTensorKernelSource, true);
+      tg_ = Gpu::get().pipeline("nh_gemm_t_fp4_m64", false).pso != nullptr;
+    }
   load(prefill_chunk);
 }
 
@@ -921,8 +930,12 @@ void Dory::enc_gemm(Encoder& e, const NhMat& W, const Buffer& xh, const Buffer& 
     return;
   }
   const int bm = M <= 16 ? 16 : M <= 32 ? 32 : 64;
-  const std::string name = std::string(W.fmt == NhFmt::FP4 ? x4(W, "nh_gemm_fp4l2", "nh_gemm_fp4") : W.fmt == NhFmt::Q8 ? "nh_gemm_q8" : "nh_gemm_bf16w") +
-                           "_m" + std::to_string(bm);
+  // over 32 rows on the M5 the same tile runs on the matrix units (tensor/nh_gemm_t.metal)
+  const bool tg = tg_ && M > 32 && W.fmt == NhFmt::FP4 && W.K % 32 == 0;
+  const std::string name = tg ? x4(W, "nh_gemm_t_fp4l2_m64", "nh_gemm_t_fp4_m64")
+                              : std::string(W.fmt == NhFmt::FP4 ? x4(W, "nh_gemm_fp4l2", "nh_gemm_fp4")
+                                               : W.fmt == NhFmt::Q8 ? "nh_gemm_q8" : "nh_gemm_bf16w") +
+                                    "_m" + std::to_string(bm);
   const GemmP p{uint32_t(M), W.N, W.K, W.K, W.N, W.gs, uint32_t(epi), 0, 0, 1};
   e.use(pipe(name));
   e.buf(0, xh);
