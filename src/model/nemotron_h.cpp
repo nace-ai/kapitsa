@@ -469,9 +469,11 @@ bool nh_describe(const SafetensorsIndex::Entry& w, const SafetensorsIndex::Entry
 
 bool NemotronH::split_merges() {
   static const bool split = [] {
+    // macOS 14 always splits: its library is compiled without the merges (NH_FENCES 0), so NI_NH_SPLIT=0 may only
+    // turn the split off where the fences exist (Gpu::compile_library: Metal 3.2+, macOS 15)
+    if (!__builtin_available(macOS 15.0, *)) return true;
     if (const char* v = getenv("NI_NH_SPLIT")) return atoi(v) != 0;
-    if (__builtin_available(macOS 15.0, *)) return false;  // (Gpu::compile_library: Metal 3.2+)
-    return true;
+    return false;
   }();
   return split;
 }
