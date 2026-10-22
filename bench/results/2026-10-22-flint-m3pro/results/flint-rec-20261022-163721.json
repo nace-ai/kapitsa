@@ -1,0 +1,193 @@
+{
+ "label": "flint-rec",
+ "schema": 2,
+ "when": "2026-10-22 16:37:23",
+ "invalid": [
+  "harness: server never became ready (2s); see /Users/nacer_b/flint-m3/out/logs/flint-rec-20261022-163721.log"
+ ],
+ "flags": [],
+ "config_label": "flint-rec",
+ "display": "rec 0.1.0",
+ "engine": "rec",
+ "version": "0.1.0",
+ "version_config": "0.1.0",
+ "model_name": "Flint 40B-A2.5B",
+ "model_path": "{models}/flint-4bit",
+ "note": "Recursive's own engine (recursive-oss/rec v0.1.0, its release binary: a Go launcher over rec-mlx, MLX 0.32 with a resident decode megakernel), `rec serve` as its README runs it, on the same int4 files (APFS clones in the folder rec keeps its pinned manifest's files in, so nothing is downloaded or copied), under a short XDG_DATA_HOME (~/.cache/kbr): rec's unix socket lives there and a socket path is limited to 104 bytes. --context 32768 as Kapitsa's --ctx. Its key file holds a fixed local token (32 bytes as hex) that the harness sends; the first start verifies every file's SHA-256 (ready_timeout 1800).",
+ "config": {
+  "label": "flint-rec",
+  "display": "rec 0.1.0",
+  "engine": "rec",
+  "version": "0.1.0",
+  "model_name": "Flint 40B-A2.5B",
+  "model_path": "{models}/flint-4bit",
+  "prepare": [
+   {
+    "clone_files": {
+     "src": "{models}/flint-4bit",
+     "dst": "{home}/.cache/kbr/rec/models/fdc85248ad77a0fa9fbf0abda8b1525bea8ee74c11ada2ec95eb66113353d677",
+     "files": [
+      "chat_template.jinja",
+      "config.json",
+      "generation_config.json",
+      "model-00000.safetensors",
+      "model-00001.safetensors",
+      "model-00002.safetensors",
+      "model-00003.safetensors",
+      "model-00004.safetensors",
+      "special_tokens_map.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "flint-int4.json"
+     ]
+    }
+   },
+   {
+    "write_text": {
+     "path": "{home}/.cache/kbr/rec/config/api-key",
+     "text": "6b61706974736162656e63682d7265632d6b65792d6c6f63616c2d6f6e6c7921\n",
+     "mode": "600"
+    }
+   }
+  ],
+  "cmd": [
+   "{env:REC_BIN=rec}",
+   "serve",
+   "--port",
+   "11511",
+   "--context",
+   "32768"
+  ],
+  "env": {
+   "XDG_DATA_HOME": "{home}/.cache/kbr"
+  },
+  "env_clear_prefixes": [
+   "REC_"
+  ],
+  "base_url": "http://127.0.0.1:11511/v1",
+  "model": "flint",
+  "api_key": "6b61706974736162656e63682d7265632d6b65792d6c6f63616c2d6f6e6c7921",
+  "ready_timeout": 1800,
+  "requires_paths": [
+   "{models}/flint-4bit/model-00004.safetensors"
+  ],
+  "bench_args": [
+   "--temperature",
+   "1.0",
+   "--always-reasons",
+   "--ref-prompt-tokens",
+   "4000:3874,16000:15066"
+  ],
+  "agent_trace": "none",
+  "note": "Recursive's own engine (recursive-oss/rec v0.1.0, its release binary: a Go launcher over rec-mlx, MLX 0.32 with a resident decode megakernel), `rec serve` as its README runs it, on the same int4 files (APFS clones in the folder rec keeps its pinned manifest's files in, so nothing is downloaded or copied), under a short XDG_DATA_HOME (~/.cache/kbr): rec's unix socket lives there and a socket path is limited to 104 bytes. --context 32768 as Kapitsa's --ctx. Its key file holds a fixed local token (32 bytes as hex) that the harness sends; the first start verifies every file's SHA-256 (ready_timeout 1800)."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'Battery Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1193.06,
+    "swapouts": 619280,
+    "swapins": 536255,
+    "pageouts": 41565,
+    "memorystatus_level": 96
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 2006564864,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 350936952832,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/flint-m3/engines/rec/rec",
+   "serve",
+   "--port",
+   "11511",
+   "--context",
+   "32768"
+  ],
+  "cmd_shell": "/Users/nacer_b/flint-m3/engines/rec/rec serve --port 11511 --context 32768",
+  "env": {
+   "XDG_DATA_HOME": "/Users/nacer_b/.cache/kbr"
+  },
+  "env_cleared": [
+   "REC_BIN"
+  ],
+  "weights": {
+   "model_path": "{models}/flint-4bit",
+   "safetensors_bytes": 22568912600,
+   "safetensors_files": [
+    "model-00000.safetensors",
+    "model-00001.safetensors",
+    "model-00002.safetensors",
+    "model-00003.safetensors",
+    "model-00004.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "3da379812e1d24c0f2d3783ae4453d06ee281ddd",
+   "dirty": false
+  },
+  "config_file": "configs/flint.json",
+  "env_file_keys": [
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "REC_BIN"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "clone 12 files of /Users/nacer_b/models/flint-4bit into /Users/nacer_b/.cache/kbr/rec/models/fdc85248ad77a0fa9fbf0abda8b1525bea8ee74c11ada2ec95eb66113353d677",
+   "write /Users/nacer_b/.cache/kbr/rec/config/api-key (65 characters)"
+  ],
+  "env_relevant": {
+   "BENCH_OUT": "/Users/nacer_b/flint-m3/out",
+   "KAPITSA_BIN": "/Users/nacer_b/kapitsa-flint/build/kapitsa",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "BENCH_API_KEY": "<redacted>"
+  },
+  "ready_s": 2.0
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0.0,
+  "harness_held_s": 7.2,
+  "harness_lock": "flock by the harness"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 2006564864,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1193.06,
+   "swapouts": 619280,
+   "swapins": 536255,
+   "pageouts": 41565,
+   "memorystatus_level": 96
+  },
+  "disk_free_bytes": 350936948736
+ },
+ "version_detected": null,
+ "server_log": [],
+ "server_log_path": "logs/flint-rec-20261022-163721.log"
+}
