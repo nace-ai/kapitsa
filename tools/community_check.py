@@ -20,7 +20,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.normpath(os.path.join(HERE, ".."))
 COMMUNITY = os.path.join(REPO, "bench", "community")
 RESULTS = os.path.join(COMMUNITY, "results")
-CORPUS_SHA256 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"
+CORPUS_SHA256 = "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2"
+CORPUS_SHA256_V1 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"  # the first 144,500 characters of it (bench/harness/corpus/NOTICE.md): the same prompts
 # usage.prompt_tokens of the cold prompts by tokenizer, as kapitsa bench checks them (src/bench/protocol.cpp): bench.py
 # REF_PROMPT_TOKENS, configs/bolt.json's for Nemotron, configs/flint.json's for Flint
 REFERENCE = {"qwen": {4000: 4133, 16000: 16286}, "nemotron": {4000: 4183, 16000: 16514},
@@ -137,7 +138,7 @@ def check_result(r, cat, macs, versions, existing=(), now=None):
         errs.append(f"{mac['memory_gb']} GB of memory is not plausible")
     # the protocol
     want = PROTOCOL[r["mode"]]
-    if r["protocol"]["corpus_sha256"] != CORPUS_SHA256:
+    if r["protocol"]["corpus_sha256"] not in (CORPUS_SHA256, CORPUS_SHA256_V1):
         errs.append("the prompts are not from the frozen corpus")
     for k, v in want.items():
         if r["protocol"][k] != v:

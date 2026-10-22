@@ -68,6 +68,9 @@ out_f = open(a.out, "a") if a.out else None
 
 def ctx_of(tokens, offset=0):
     want = int(tokens * CHARS_PER_TOKEN)
+    if offset + want > len(corpus):  # never a silently short prompt
+        sys.exit(f"a {tokens:,}-token prompt at offset {offset:,} needs {offset + want:,} characters of the corpus, "
+                 f"and {a.corpus} has {len(corpus):,}: ask for a smaller size or pass a longer --corpus")
     return corpus[offset:offset + want]
 
 

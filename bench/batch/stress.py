@@ -68,6 +68,8 @@ def no_think(b):
 def corpus_ctx(tokens):
     with open(os.path.join(HERE, "..", "corpus.txt"), encoding="utf-8") as f:
         c = f.read()
+    if int(tokens * 4.25) + 1 >= len(c):  # never a silently short prompt
+        sys.exit(f"a {tokens:,}-token prompt needs {int(tokens * 4.25):,} characters of the corpus, which has {len(c):,}")
     off = random.randrange(0, len(c) - int(tokens * 4.25) - 1)
     return c[off:off + int(tokens * 4.25)]
 

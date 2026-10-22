@@ -50,9 +50,13 @@ import gpu_hogs  # noqa: E402
 
 SCHEMA = 2
 CORPUS_FILE = os.path.join(HERE, "corpus", "bench_corpus.txt")
-CORPUS_SHA256 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"  # corpus/NOTICE.md
+CORPUS_SHA256 = "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2"  # corpus/NOTICE.md
+# the corpus before its extension (V1): its first 144,500 characters, byte for byte, so every prompt up to ~34,000
+# tokens is the same from either, and results of either are the frozen corpus' (corpus/NOTICE.md)
+CORPUS_SHA256_V1 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28"
+FROZEN_SHA256 = (CORPUS_SHA256, CORPUS_SHA256_V1)
 CHARS_PER_TOKEN = 4.25          # build_context() heuristic: target tokens -> characters cut from the corpus
-CORPUS_TOKENS_MAX = 34000       # frozen corpus length in "heuristic tokens" (~144.5k chars)
+CORPUS_TOKENS_MAX = 152941      # frozen corpus length in "heuristic tokens" (650,000 chars; V1: ~34,000)
 WARM_TOKENS = 2700              # warm-up prompt ~2.9k tokens: > one 2048-token prefill chunk everywhere
 WARM_OFFSET_CHARS = 100000      # warm-up text comes from a part of the corpus no timed prompt uses
 COLD_CACHE_MAX = 16             # a cold prompt shares only "<|im_start|>system\n[session " (~5 tokens)
@@ -63,6 +67,7 @@ PROMPT_TOL = 0.01               # ±1% around the reference prompt_tokens
 # 16285-16287). For another corpus pass --ref-prompt-tokens, or the check is reported as unchecked.
 REF_PROMPT_TOKENS = {
     CORPUS_SHA256: {4000: 4133, 16000: 16286},
+    CORPUS_SHA256_V1: {4000: 4133, 16000: 16286},  # the same prompts
 }
 
 DECODE_USER = ("Write a complete, well-commented Python module that implements an LRU cache with TTL expiry, "
@@ -243,15 +248,44 @@ def corpus_record():
     p = CORPUS_FILE
     rel = os.path.relpath(p, HERE)
     return {"path": p if rel.startswith("..") else rel, "sha256": corpus_sha(),
-            "frozen": corpus_sha() == CORPUS_SHA256}
+            "frozen": corpus_sha() in FROZEN_SHA256}
+
+
+def corpus_short(target_tokens, chars_per_token=CHARS_PER_TOKEN, offset=0):
+    """None when a prompt of target_tokens from `offset` fits in the corpus, else why not (in words)."""
+    need = offset + int(target_tokens * chars_per_token)
+    n = len(load_corpus())
+    if need <= n:
+        return None
+    return (f"a {target_tokens:,}-token prompt{f' at offset {offset:,}' if offset else ''} needs {need:,} characters "
+            f"of the prompt corpus, and {CORPUS_FILE} has {n:,} (about {int(n / chars_per_token):,} tokens at "
+            f"{chars_per_token} characters each)")
 
 
 def build_context(target_tokens, chars_per_token=CHARS_PER_TOKEN, offset=0):
-    want = int(target_tokens * chars_per_token)
-    c = load_corpus()
-    if offset + want > len(c):
-        raise ValueError(f"corpus has {len(c)} chars; {target_tokens} tokens at offset {offset} need {offset + want}")
-    return c[offset:offset + want]
+    why = corpus_short(target_tokens, chars_per_token, offset)
+    if why:  # never a silently short prompt
+        raise ValueError(why)
+    return load_corpus()[offset:offset + int(target_tokens * chars_per_token)]
+
+
+def check_sizes(a):
+    """Every prompt size this run asks for fits in the corpus, checked before the GPU lock and any request:
+    exits with the reason otherwise (a prompt cut short would be measured as the size it is not)."""
+    skip = set(filter(None, a.skip.split(",")))
+    asks = []
+    if "prefill" not in skip:
+        asks += [("--sizes", int(x)) for x in a.sizes.split(",") if x]
+    if a.agentic:
+        import agentic
+        if "sweep" not in skip:
+            asks += [("--sweep-sizes", t) for t in agentic.sweep_targets(a.sweep_sizes, a.max_ctx)]
+        if "cache" not in skip:
+            asks.append(("--cache-tokens", min(a.cache_tokens, agentic.sweep_targets("max", a.max_ctx, 256)[-1])))
+    for flag, t in asks:
+        why = corpus_short(t)
+        if why:
+            raise SystemExit(f"{flag}: {why}. Ask for a smaller size, or pass --corpus with a longer text.")
 
 
 SYS = ("You are Nace, a local coding agent. You help the user with their repository. "
@@ -794,6 +828,7 @@ def main():
     if os.path.exists(LOCAL_ENV):
         load_env_file(LOCAL_ENV)
     a = parse_args()
+    check_sizes(a)
     skip = set(filter(None, a.skip.split(",")))
     lock = None
     if not a.no_gpu_lock and not os.environ.get("NACE_GPU_LOCK_HELD"):

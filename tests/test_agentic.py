@@ -186,6 +186,34 @@ check(compare_engines.live_slots(["s", "--slots"]) == 0 and compare_engines.live
       and compare_engines.live_slots([]) == 0 and compare_engines.live_slots(None) == 0,
       "live_slots is 0 when the command leaves it to the engine")
 
+# ---- the corpus: long enough for a 128K prompt, its first 144,500 characters the corpus before the extension
+c = bench.load_corpus()
+check(len(c) >= 128000 * bench.CHARS_PER_TOKEN, "the corpus holds a 128K-token prompt", str(len(c)))
+check(bench.corpus_record()["frozen"], "the extended corpus is the frozen one")
+import hashlib  # noqa: E402
+check(hashlib.sha256(c[:144500].encode()).hexdigest() == bench.CORPUS_SHA256_V1,
+      "its first 144,500 characters are byte-identical to the corpus before the extension")
+check(len(bench.build_context(128000)) == 544000 and bench.corpus_short(128000) is None, "a 128K context is cut whole")
+why = bench.corpus_short(200000)
+check(why is not None and "200,000-token" in why and f"{len(c):,}" in why, "a size past the corpus says why", why)
+try:
+    bench.build_context(200000)
+    check(False, "build_context refuses a size past the corpus")
+except ValueError as e:
+    check("needs" in str(e), "build_context refuses a size past the corpus", str(e))
+for argv, ok, name in [(["--sizes", "4000,131072"], True, "a 128K prefill size passes the size check"),
+                       (["--sizes", "4000,200000"], False, "a prefill size past the corpus fails before any request"),
+                       (["--sizes", "200000", "--skip", "prefill"], True, "a skipped phase's sizes are not checked"),
+                       (["--agentic", "--max-ctx", "131072", "--sweep-sizes", "64000,max"], True,
+                        "an agentic sweep to 128K passes the size check"),
+                       (["--agentic", "--max-ctx", "262144", "--sweep-sizes", "max"], False,
+                        "an agentic sweep 'max' past the corpus fails before any request")]:
+    try:
+        bench.check_sizes(bench.parse_args(["--base-url", "http://x", "--model", "m", "--label", "t"] + argv))
+        check(ok, name)
+    except SystemExit as e:
+        check(not ok and "corpus" in str(e), name, str(e))
+
 srv.shutdown()
 print("FAILED: " + ", ".join(FAILED) if FAILED else "all passed")
 sys.exit(1 if FAILED else 0)

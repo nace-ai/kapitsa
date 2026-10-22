@@ -98,7 +98,10 @@ Each engine has different hidden defaults. The harness sends everything explicit
 - **Same sampler everywhere.** Every request sets temperature, top_p, top_k, `min_p 0`, presence and frequency
   penalty 0 and `repeat_penalty 1.0`, because llama.cpp defaults `min_p` to 0.05 and Ollama's qwen3.6 tag sets
   presence_penalty 1.5. `repetition_penalty` is never sent (mlx-lm adds a logits processor for any non-zero value).
-- **Same prompts.** Long prompts are cut from the frozen corpus (`corpus/`, sha256 recorded in every result). Cold
+- **Same prompts.** Long prompts are cut from the frozen corpus (`corpus/`, sha256 recorded in every result). It has
+  650,000 characters, enough for a 128K-token prompt; its first 144,500 are the corpus before its 22 Oct 2026
+  extension, byte for byte, so prompts up to ~34K tokens are the same from either and both checksums count as frozen.
+  A size the corpus can't hold stops the run before any request, with the reason, instead of a short prompt. Cold
   prompts must come back within ±1% of the reference token count (catches truncation and chat-template drift) and
   must not report cached tokens.
 - **Honest decode numbers.** A decode run must end on `length` at exactly 512 tokens (else flagged); every text is

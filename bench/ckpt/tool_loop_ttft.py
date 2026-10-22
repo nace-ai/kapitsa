@@ -80,7 +80,11 @@ rng = random.Random(a.seed)
 
 
 def excerpt(tokens, offset):
-    return corpus[offset:offset + int(tokens * CHARS_PER_TOKEN)]
+    want = int(tokens * CHARS_PER_TOKEN)
+    if offset + want > len(corpus):  # never a silently short prompt
+        sys.exit(f"a {tokens:,}-token excerpt at offset {offset:,} needs {offset + want:,} characters of the corpus, "
+                 f"and {a.corpus} has {len(corpus):,}: ask for fewer tokens or pass a longer --corpus")
+    return corpus[offset:offset + want]
 
 
 def tool_file(step, calls, word):

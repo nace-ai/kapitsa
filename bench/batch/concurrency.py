@@ -64,9 +64,17 @@ def corpus():
         return f.read()
 
 
+def corpus_cut(tokens, offset=0):
+    """`tokens` worth of the corpus from `offset`; exits rather than return a short cut"""
+    c, want = corpus(), int(tokens * CHARS_PER_TOKEN)
+    if offset + want > len(c):
+        sys.exit(f"a {tokens:,}-token prompt at offset {offset:,} needs {offset + want:,} characters of the corpus, "
+                 f"and {CORPUS} has {len(c):,}: lower the size")
+    return c[offset:offset + want]
+
+
 def context_messages(tokens, nonce, question, offset=0):
-    c = corpus()
-    ctx = c[offset:offset + int(tokens * CHARS_PER_TOKEN)]
+    ctx = corpus_cut(tokens, offset)
     return [{"role": "system", "content": f"[{nonce}] {SYS}\n\n# Repository context\n{ctx}"},
             {"role": "user", "content": question}]
 
@@ -349,7 +357,7 @@ def cmd_memtake(a):
             msgs.append({"role": "user", "content": follow})
     w_cached = (o["usage"] or {}).get("prompt_tokens")
     msgs.append({"role": "user", "content": "More of the repository:\n" +
-                 corpus()[90000:90000 + int(room * 0.40 * CHARS_PER_TOKEN)] + "\n\nIn one sentence, what does it do?"})
+                 corpus_cut(room * 0.40, 90000) + "\n\nIn one sentence, what does it do?"})
     r_tokens = int(room * 0.35)
     rmsgs = context_messages(int(room * 0.10), f"R {nonce:012x}",
                              "Ignore the context above. Count from 1 to 100000, one number per line, nothing else.",

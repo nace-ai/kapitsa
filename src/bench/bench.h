@@ -35,6 +35,7 @@ using ojson = nlohmann::ordered_json;
 
 constexpr int kSchema = 1;                      // the result file's schema (bench/community/schema.json)
 extern const char* const kCorpusSha256;         // bench/harness/corpus/NOTICE.md
+extern const char* const kCorpusSha256V1;       // its first 144,500 characters (before the extension): the same prompts
 const std::string& corpus();                    // bench/harness/corpus/bench_corpus.txt, embedded at build time
 std::string sha256_hex(const std::string& data);
 // bench.py build_context(): the corpus' characters (code points, as Python slices a str) from `offset` on, as many as

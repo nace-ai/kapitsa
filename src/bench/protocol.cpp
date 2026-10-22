@@ -20,7 +20,9 @@ namespace ni::bench {
 
 // ---------------------------------------------------------------- the corpus and the prompts
 
-const char* const kCorpusSha256 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28";
+const char* const kCorpusSha256 = "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2";
+// the corpus before its extension: its first 144,500 characters, so a result of it has the same prompts
+const char* const kCorpusSha256V1 = "1a9bb103b3f6d39ee5b9f5bf7207e304c5ce92788c273685f597508c7d2bde28";
 
 const std::string& corpus() {
   static const std::string c = kBenchCorpus;
@@ -64,7 +66,7 @@ static int chars(const std::string& s) {
 }
 
 std::string build_context(int target_tokens, int offset_chars) {
-  // the byte offset of every character, once (the corpus is 144,500 characters in 145,652 bytes)
+  // the byte offset of every character, once (the corpus is 650,000 characters in 653,464 bytes)
   static const std::vector<size_t> at = [] {
     std::vector<size_t> v;
     const std::string& c = corpus();

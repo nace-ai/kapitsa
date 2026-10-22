@@ -355,7 +355,8 @@ std::string submit_problem(const ojson& r) {
            "kapitsa bench --model 35b, 27b, 4b or bolt, at any precision.";
   if (!r["invalid"].empty())
     return "This run has invalid measurements (" + r["invalid"][0].get<std::string>() + "), so it can't go in the table.";
-  if (str_or(r["protocol"], "corpus_sha256") != kCorpusSha256) return "This run did not use the frozen prompt corpus.";
+  if (const std::string c = str_or(r["protocol"], "corpus_sha256"); c != kCorpusSha256 && c != kCorpusSha256V1)
+    return "This run did not use the frozen prompt corpus.";
   return "";
 }
 

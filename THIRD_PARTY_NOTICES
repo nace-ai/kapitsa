@@ -4,12 +4,17 @@ Kapitsa (Copyright 2026 Nace AI, Apache-2.0, see LICENSE) includes the following
 each under its own license. Model weights are not part of Kapitsa: they keep their own licenses.
 
 The benchmark corpus (bench/harness/corpus/bench_corpus.txt, embedded in the kapitsa binary for `kapitsa bench`):
-excerpts of eight source files of Hugging Face Transformers (src/transformers/models/*/modeling_*.py: granite_speech,
-modernvbert, altclip, xcodec, t5, ctrl, emu3, videoprism), Apache License 2.0 (the text is in LICENSE). Each excerpt
-keeps its file's copyright and license header: Copyright 2018-2026 The HuggingFace Inc. team, Illuin Technology and
-contributors, The BAAI Teams Authors, Mesh TensorFlow authors and T5 Authors, Salesforce, NVIDIA CORPORATION. Changes:
-each file cut to its first 20,000 characters under a "### FILE: <name>" heading and a code fence, the whole cut to
-144,500 characters. Used only as prompt text, never executed. Details: bench/harness/corpus/NOTICE.md.
+excerpts of 33 source files of Hugging Face Transformers v5.17.0 (src/transformers/models/*/modeling_*.py:
+granite_speech, modernvbert, altclip, xcodec, t5, ctrl, emu3, videoprism, bart, bert, bloom, clip, deberta_v2, detr,
+electra, falcon, gemma, gemma2, gpt2, led, llama, longformer, mamba, mbart, mixtral, opt, pegasus, phi3, qwen2_moe,
+qwen3, roberta, swin, vit), Apache License 2.0 (the text is in LICENSE). Each excerpt keeps its file's copyright and
+license header: Copyright 2018-2026 The HuggingFace Inc. team, Illuin Technology and contributors, The BAAI Teams
+Authors, Mesh TensorFlow authors and T5 Authors, Salesforce, NVIDIA CORPORATION, The Fairseq Authors, The Google AI
+Language Team Authors, BigScience workshop, The OpenAI Team Authors, Microsoft, Microsoft Research, Facebook AI
+Research, the Falcon authors, Google, Google AI, Ross Wightman, Iz Beltagy, Matthew E. Peters, Arman Cohan,
+EleutherAI, The Allen Institute for AI team, state-spaces/mamba org, Mistral AI, The Qwen team, Alibaba Group.
+Changes: each file cut to its first 20,000 characters under a "### FILE: <name>" heading and a code fence, the whole
+cut to 650,000 characters. Used only as prompt text, never executed. Details: bench/harness/corpus/NOTICE.md.
 
 ================================================================================
 Splash (Inco), Apache License 2.0

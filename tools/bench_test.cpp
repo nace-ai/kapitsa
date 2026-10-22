@@ -40,22 +40,25 @@ std::string read(const std::string& p) {
 int self_test() {
   // the corpus
   check(sha256_hex(corpus()) == kCorpusSha256, "the embedded corpus is the frozen one", sha256_hex(corpus()));
-  check(corpus().size() == 145652, "the corpus has 145,652 bytes", std::to_string(corpus().size()));
+  check(corpus().size() == 653464, "the corpus has 653,464 bytes", std::to_string(corpus().size()));
   auto chars = [](const std::string& x) {
     size_t n = 0;
     for (unsigned char c : x) n += (c & 0xC0) != 0x80;
     return n;
   };
+  check(chars(corpus()) == 650000 && sha256_hex(corpus().substr(0, build_context(34000).size())) == kCorpusSha256V1,
+        "its first 144,500 characters are the corpus before the extension", "");
   check(chars(build_context(4000)) == 17000 && chars(build_context(16000)) == 68000, "contexts of int(tokens * 4.25) characters");
   check(chars(build_context(2700, 100000)) == 11475, "the warm-up context: 11,475 characters from character 100,000");
   check(build_context(16000).size() > 68000, "the 16K context holds non-ASCII characters (more bytes than characters)");
   bool threw = false;
   try {
-    build_context(40000);
+    build_context(160000);
   } catch (const std::exception&) {
     threw = true;
   }
   check(threw, "a context past the corpus' end is refused");
+  check(chars(build_context(128000)) == 544000, "a 128K context fits", "");
   // the Mac table: every entry named and dated, and this one's known models
   const ojson& t = mac_models();
   check(t.contains("models") && t["models"].size() >= 58, "the Mac table is embedded");
