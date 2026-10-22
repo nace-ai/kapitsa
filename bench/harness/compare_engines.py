@@ -828,9 +828,12 @@ def do_prepare(actions, ctx, dry):
 
 def wait_ready(base, proc, port, timeout=900):
     t0 = time.time()
+    # with the config's key (run_config sets BENCH_API_KEY): a server that wants one (rec) answers 401 without it
+    req = urllib.request.Request(base.rstrip("/") + "/models",
+                                 headers={"Authorization": "Bearer " + os.environ.get("BENCH_API_KEY", "local")})
     while time.time() - t0 < timeout:
         try:
-            with urllib.request.urlopen(base.rstrip("/") + "/models", timeout=5) as r:
+            with urllib.request.urlopen(req, timeout=5) as r:
                 if r.status == 200:
                     return True, time.time() - t0
         except Exception:
