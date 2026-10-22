@@ -322,9 +322,14 @@ class Qwen35 : public Model {
   // verify over a chain tree descriptor (a target of verify_wide_ok with set_tree_rows(16)). Every row is a real
   // token, so commit_rows(s, R) after each pass folds them all; a pass streams the weights once, the point of it.
   void encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp);
+  // rows is a whole number of 8-row tiles of the verify capacity (8, 16, 24 or 32): the wide path reads the tile
+  // pair of an odd tile count one tile past its last, which is inside the capacity's tables
   bool verify_chain_ok(int rows) const {
-    return rows <= 8 || (rows == 16 && verify_wide_ok() && tree_rows_ >= 16);
+    return rows <= 8 || (rows % 8 == 0 && rows <= verify_rows_max() && verify_wide_ok());
   }
+  // The rows the verify buffers hold: the capacity set_tree_rows sizes (the drafter's tree width) or the wider chain
+  // pass a cached suffix may run (pass_rows_, sized at load from vpf_pass_rows)
+  int verify_rows_max() const { return tree_rows_ > pass_rows_ ? tree_rows_ : pass_rows_; }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   virtual void encode_flush(Encoder& e, Seq& s);
   // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
@@ -385,6 +390,12 @@ class Qwen35 : public Model {
   // NI_DFLASH_TREE, NI_KFLASH_ROWS) let them. DFlash2 picks its rows from it and plan() reserves the tape they need, so
   // the sizes agree; a bad NI_KFLASH_ROWS is fatal here (before either).
   static uint32_t kf_dense_rows(const Qwen35Config& c);
+  // The rows a cached suffix's chain pass runs (NI_VPF_ROWS, else the measured default: 32 on a dense target at or
+  // above the weight floor the NI_VPF default uses, 8 elsewhere): plan() reserves the tape for them and the model
+  // sizes its verify buffers for them at load. Kept apart from kf_dense_rows, which is the drafter's tree width: the
+  // pass is the engine's own, not a decode cycle's, so it may be wider than anything the drafter drafts.
+  static int vpf_pass_rows(const Qwen35Config& c);
+  static constexpr long long kPassWeightFloor = 3000000000LL;  // hidden * dense intermediate * layers
   // The widest tree verify to prepare for (8, 16 or 32 rows): the verify's model-wide buffers (X8 tables, logits,
   // candidates, samples) are sized for it here, and a sequence's verify tape is allocated at it in new_seq (the tape of
   // one created before this call grows on its first wide verify). Call while nothing is in flight (the drafter's
@@ -650,11 +661,15 @@ class Qwen35 : public Model {
   // region (a ring of kV8wRegions, so a verify still on the GPU keeps its own), descriptors so far; under NI_PROFILE the
   // live tiles the host read from the tree (-1: GPU-driven)
   int tree_rows_ = 8;
+  // the rows a cached suffix's chain pass may run (vpf_pass_rows): wider than tree_rows_ where the drafter drafts a
+  // 16-row block, so the suffix's rows stream the weights once per pass instead of once per 8-row tile
+  int pass_rows_ = 8;
   int v8w_R_ = 0, v8w_region_ = 0, v8w_n_ = 0, v8w_host_nt_ = -1;
   Buffer v8w_desc_, v8w_args_;
-  // the chain tree descriptor of encode_verify_chain (a single path of 16 rows, built once: the passes of a request
-  // share it and the plan kernel copies it into its own region, so it is never rewritten while a pass may still read it)
-  Buffer chain_tree_;
+  // the chain tree descriptors of encode_verify_chain, one per row count it runs (index rows / 8), each a single path
+  // built once: the passes of a request share them and the plan kernel copies them into its own region, so they are
+  // never rewritten while a pass may still read them
+  Buffer chain_tree_[kMaxTreeRows / 8 + 1];
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 

@@ -788,6 +788,11 @@ Qwen35::Qwen35(const std::string& dir, int prefill_chunk) : dir_(dir), tmax_(pre
   Gpu::get().make_resident(ws_.buffers());
   Gpu::get().make_resident(owned_bufs_);  // converted / copied tensors (bf16 copies, test transforms, MTP head)
   alloc_state();
+  // the chain passes of a cached suffix size the verify buffers for their own rows (vpf_pass_rows), which is wider
+  // than the drafter's tree on a target whose block drafts 16 rows: raising the capacity here, before anything is in
+  // flight, only resizes this model's buffers (the drafter sizes its own drafting width from kf_dense_rows)
+  pass_rows_ = vpf_pass_rows(cfg_);
+  if (pass_rows_ > tree_rows_) set_tree_rows(pass_rows_);
   prewarm_pipelines();
   logi("loaded %s: %d layers, %s, %.1f GB mapped in %.0f ms; weights %s", dir.c_str(), cfg_.layers,
        cfg_.moe ? "MoE" : "dense", ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str());
@@ -1093,9 +1098,10 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   // the verify rows the plan reserves: 8; 16 where the engine drafts a 16-row block (rows16, and the block pins the
   // verify to its width); or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows): the buffers and
   // tape are that tall (set_tree_rows, new_seq), and the drafting pass picks its rows from the same call
+  // and a cached suffix's chain pass may run wider than the drafter drafts (vpf_pass_rows): its tape is the tallest
   const uint32_t wide = kf_dense_rows(c);
-  const size_t vrows =
-      rows16 ? size_t(16) : wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
+  const size_t vrows = std::max(rows16 ? size_t(16) : wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify),
+                                size_t(vpf_pass_rows(c)));
   for (const ActBuf& a : act_layout(c, chunk, int(vrows), has_mtp, fused ? vrows : size_t(chunk)))
     m.activations += a.bytes;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
@@ -1140,7 +1146,7 @@ std::unique_ptr<Seq> Qwen35::new_seq(int limit, int initial) {
       s->rec.push_back(g.alloc(size_t(cfg_.lin_hv) * cfg_.lin_dv * cfg_.lin_dk * 4, "gdn_state"));
       bytes += s->conv.back().size + s->rec.back().size;
       // the verify tape at the rows this model's verifies run (plan() reserves the same): no growth on a request
-      const size_t vr = size_t(std::max(kMaxVerify, tree_rows_));
+      const size_t vr = size_t(std::max(kMaxVerify, verify_rows_max()));
       s->pend_qkv.push_back(g.alloc(vr * C * 4, "pend_qkv"));
       s->pend_k.push_back(g.alloc(vr * cfg_.lin_hv * cfg_.lin_dk * 4, "pend_k"));
       s->pend_g.push_back(g.alloc(vr * cfg_.lin_hv * 4, "pend_g"));

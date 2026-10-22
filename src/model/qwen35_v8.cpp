@@ -137,7 +137,7 @@ void Qwen35::v8_alloc() {
   const int W = std::max({D, VD, cfg_.hq * cfg_.head_dim, cfg_.dense_I, cfg_.moe_I, cfg_.shared_I, 64});
   if (W % 64) fatal("8-row verify: widths must be multiples of 64");
   // row tiles: a wide tree verify's tables follow each other (set_tree_rows; MoE targets stay at one tile)
-  const size_t rt = cfg_.moe ? 1 : size_t(std::max(1, tree_rows_ / 8));
+  const size_t rt = cfg_.moe ? 1 : size_t(std::max(1, verify_rows_max() / 8));
   v8t_ = g.alloc(size_t(W) * 8 * 2 * rt, "x8_table");
   v8s_ = g.alloc(size_t(W) / 64 * 8 * 4 * rt, "x8_sums");
   v8tl_ = g.alloc(size_t(W) * 8 * 2 * rt, "x8_table_lo");
@@ -199,6 +199,23 @@ static bool v8_wide_ok_c(const Qwen35Config& c) {
 }
 
 bool Qwen35::verify_wide_ok() const { return v8_wide_ok_c(cfg_); }
+
+int Qwen35::vpf_pass_rows(const Qwen35Config& c) {
+  // NI_VPF_ROWS names the widest chain pass a cached suffix may run (8, 16, 24 or 32 rows); the default is the
+  // measured case: a dense target at or above the weight floor of the NI_VPF default (engine.cpp), where a pass'
+  // weights are worth a whole turn's prefill, so the suffix's rows stream them once instead of once per 8-row tile
+  const int max_rows = v8_wide_ok_c(c) ? kMaxTreeRows : 8;
+  const char* v = getenv("NI_VPF_ROWS");
+  if (v && *v) {
+    if (v[0] == '0' && v[1] == 0) return 8;
+    const int n = atoi(v);
+    const int rows = n <= 8 ? 8 : n <= 16 ? 16 : n <= 24 ? 24 : kMaxTreeRows;
+    return rows < max_rows ? rows : max_rows;
+  }
+  if (c.moe) return 8;
+  const long long scale = (long long)c.hidden * c.dense_I * c.layers;
+  return scale >= kPassWeightFloor ? max_rows : 8;
+}
 
 uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
   // one 8-row tile: the default, and all a MoE target or a target without the wide kernels can run
@@ -276,7 +293,8 @@ void Qwen35::grow_tape(Encoder& e, Seq& s, int rows) {
 
 void Qwen35::v8_wide_begin(Encoder& e, Seq& s, int R) {
   if (!verify_wide_ok()) fatal("tree verify of %d rows: this model's verify runs 8 rows (verify_wide_ok)", R);
-  if (R > tree_rows_) fatal("tree verify of %d rows: the verify buffers hold %d (set_tree_rows)", R, tree_rows_);
+  if (R > verify_rows_max())
+    fatal("tree verify of %d rows: the verify buffers hold %d (set_tree_rows, pass_rows)", R, verify_rows_max());
   Gpu& g = Gpu::get();
   if (!v8w_desc_) {
     v8w_desc_ = g.alloc(size_t(kV8wRegions) * kV8wDesc * 16, "v8w_desc");
@@ -287,7 +305,7 @@ void Qwen35::v8_wide_begin(Encoder& e, Seq& s, int R) {
   // verify than the tape was grown for only grows it once, and a 16-row block's tape stays at 16 rows
   for (int i = 0; i < cfg_.layers; ++i)
     if (cfg_.is_linear[i]) {
-      if (s.pend_g[i].size < size_t(tree_rows_) * cfg_.lin_hv * 4) grow_tape(e, s, tree_rows_);
+      if (s.pend_g[i].size < size_t(verify_rows_max()) * cfg_.lin_hv * 4) grow_tape(e, s, verify_rows_max());
       break;
     }
   v8w_R_ = R;
@@ -1031,8 +1049,9 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
   const bool wide = v8_tree_ != nullptr && R > 8;
   // R whole 8-row tiles of the capacity set_tree_rows sized (8, 16 or 32 rows): the tile-pair MLP reads two tiles per
   // pair, so an odd tile count's last pair reaches one tile past R but stays inside the capacity's tables
-  if (R < 1 || R > (wide ? tree_rows_ : 8) || (wide && R % 8))
-    fatal("encode_verify8: R=%d: the verify tables hold %d rows (set_tree_rows)", R, wide ? tree_rows_ : 8);
+  if (R < 1 || R > (wide ? verify_rows_max() : 8) || (wide && R % 8))
+    fatal("encode_verify8: R=%d: the verify tables hold %d rows (set_tree_rows, pass_rows)", R,
+          wide ? verify_rows_max() : 8);
   if (pos + R + 1 >= s.cap) fatal("context full (%d)", s.cap);
   v8_alloc();
   const int D = cfg_.hidden;
@@ -1179,14 +1198,17 @@ void Qwen35::encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const Sampl
     encode_verify(e, s, pos, R, sp, step, /*v8=*/true);
     return;
   }
-  if (!verify_chain_ok(R)) fatal("chain verify of %d rows: this model's verify runs %d", R, tree_rows_);
+  if (!verify_chain_ok(R)) fatal("chain verify of %d rows: this model's verify holds %d", R, verify_rows_max());
   Gpu& g = Gpu::get();
   if (!s.pend_path) s.pend_path = g.alloc(size_t(kf::kPathWords) * 4, "pend_path");
-  if (!chain_tree_) {
-    chain_tree_ = g.alloc(size_t(kf::kWords) * 4, "verify_chain_tree");
-    memset(chain_tree_.ptr(), 0, chain_tree_.size);
-    int32_t* w = chain_tree_.as<int32_t>();
-    const int n = 16;
+  // one descriptor per row count (16, 24 or 32; 8 rows run the tree-less path above), each built once: a pass still
+  // on the GPU reads its own descriptor, so a request alternating widths must not share one
+  const int slot = R / 8;
+  if (!chain_tree_[slot]) {
+    chain_tree_[slot] = g.alloc(size_t(kf::kWords) * 4, "verify_chain_tree");
+    memset(chain_tree_[slot].ptr(), 0, chain_tree_[slot].size);
+    int32_t* w = chain_tree_[slot].as<int32_t>();
+    const int n = R;
     w[kf::kN] = n;
     w[kf::kNodes] = n;
     w[kf::kCap] = n;
@@ -1198,7 +1220,7 @@ void Qwen35::encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const Sampl
     w[kf::kA] = n - 1;  // every row accepted: they are all real tokens
     for (int i = 0; i < n; ++i) w[kf::kPath + i] = i;
   }
-  set_verify_tree(&chain_tree_);
+  set_verify_tree(&chain_tree_[slot]);
   encode_verify(e, s, pos, R, sp, step, /*v8=*/true);
   set_verify_tree(nullptr);
 }
