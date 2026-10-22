@@ -198,6 +198,9 @@ class Dory : public Model {
   // nh_gemm_fp4l2_m*): on the M1's GPU (Apple7) their decode is 12-16% faster at Dory's shapes, with the same outputs
   // to the bit (the layouts' values differ by powers of 2, which the kernels undo exactly). NI_DORY_FP4=l0 / l2.
   bool fp4_l2_ = false;
+  // M5's matrix units (Metal 4 tensor_ops, Apple10 and macOS 26) for the prefill GEMMs over 32 rows: the Nemotron-H
+  // gemms of nemotron/nh_gemm.metal with the products on matmul2d (tensor/nh_gemm_t.metal). NI_DORY_TG=0 turns it off.
+  bool tg_ = false;
   static const char* x4(const NhMat& W, const char* l2, const char* l0) { return W.l2 ? l2 : l0; }
   int attn_max_chunks_ = 64;
   // prefill activations (tmax_ rows; on first use)
