@@ -1830,7 +1830,7 @@ T 1.0:
 The M4 Pro protocol and sweep above, repeated on a MacBook Pro M3 Pro (18-core GPU), 36 GB, macOS 14.1, on battery
 (98% to 70%, Low Power Mode off), with the same configs, weights and engine builds. Two things differ from the M4 Pro:
 
-- **Kapitsa ran [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path** (`3da3798`). Flint's fused
+- **Kapitsa ran [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path** (`3da3798`, merged unchanged as `f206376`). Flint's fused
   kernels need Metal 3.2 (macOS 15), so on macOS 14 #303 runs their three merges as separate dispatches. On macOS 15+
   the fused kernels run.
 - **rec 0.1.0 refuses this Mac** ("this model requires 48 GiB of memory; detected 36 GiB"), so it has no numbers here.

@@ -6,7 +6,7 @@ same configs, weights and engine builds:
 
 - Kapitsa on Recursive's 4-bit MLX export
   ([RecursiveSI/flint-int4](https://huggingface.co/RecursiveSI/flint-int4) @ 3b93f905), built from
-  [#303](https://github.com/nace-ai/kapitsa/pull/303)'s `3da3798`. Kapitsa's Flint kernels need Metal 3.2 (macOS 15)
+  [#303](https://github.com/nace-ai/kapitsa/pull/303)'s `3da3798` (merged unchanged as `f206376`). Kapitsa's Flint kernels need Metal 3.2 (macOS 15)
   on main and do not compile on macOS 14. #303 runs their three last-threadgroup merges as separate dispatches there.
   **These numbers are that macOS 14 path.** On macOS 15 and later the fused kernels the M4 Pro measured run instead.
 - llama.cpp b11804 (`c7fc50941`, the release's macOS arm64 build), on Recursive's Q4_1 GGUF
