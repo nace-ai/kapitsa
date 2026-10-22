@@ -1739,8 +1739,7 @@ in its T = 0.6 runs, one of them the 76.89 maximum, so its median 71.15 is the r
 macOS 26, main's `3112b93` build) points at this switch rather than the session: with `NI_DORY_ATTN_T=0` a cached follow-up
 reads 0.092 / 0.154 s and cold prefill 1,545 / 1,163 tok/s, with the default 0.113 / 0.195 and 1,600 / 1,281. That is one
 run per arm, not interleaved, and the default arm was contention-flagged at 6.07% mean foreign GPU, so its prefill is a lower
-bound and its cached follow-up an upper one: the cost at 16K is at most about 40 ms (+27%), not a measured 40 ms. The default
-arm also reads 10-15% faster than the two records here, so part of the difference between sessions is still not explained. A
+bound and its cached follow-up an upper one: the cost at 16K is at most about 40 ms (+27%), not a measured 40 ms. The default arm's cached follow-up (0.113 / 0.195 s) also reads faster than the two records' 0.13-0.14 / 0.21 s (13-19% at 4K, about 7% at 16K) while its cold prefill (1,600 / 1,281 tok/s) is level with their median 1,641 / 1,297, so the slower follow-up in the records is not explained by a faster session, and part of the session-to-session difference is still unexplained. A
 cached follow-up prefills a short suffix, where the tensor kernel's 32-token threadgroups and 16-key tiles have nothing to
 amortize, which is why the switch looks like the cause; a fallback below some token count is follow-up work, not part of this
 measurement. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak 4.18 -> 4.19 GiB on
