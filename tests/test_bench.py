@@ -362,11 +362,12 @@ else:
 """)
 os.chmod(os.path.join(gh_dir, "gh"), 0o755)
 # no model can be had: an empty Kapitsa home, a HOME without the Hugging Face cache or the app's models, no network to
-# Hugging Face; and the real GPU lock, so that even a run that got further could not load a model outside it
+# Hugging Face; and a temporary GPU lock (never the shared /tmp/kapitsa-gpu.lock, which another session's benchmark may hold
+# for hours), so that even a run that got further could not load a model outside a lock
 home = tempfile.mkdtemp(prefix="kapitsa-home-")
 env = dict(os.environ, PATH=gh_dir + ":/usr/bin:/bin", KAPITSA_HOME=home, HOME=os.path.join(home, "user"),
            HF_ENDPOINT="http://127.0.0.1:9", HF_HUB_CACHE=os.path.join(home, "hf"), NO_COLOR="1",
-           BENCH_GPU_LOCK=os.path.expanduser("/tmp/kapitsa-gpu.lock"))
+           BENCH_GPU_LOCK=os.path.join(home, "gpu.lock"))
 os.makedirs(env["HOME"])
 env.pop("NACE_GPU_LOCK_HELD", None)
 env.pop("GH_TOKEN", None)

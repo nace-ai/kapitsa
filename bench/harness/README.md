@@ -81,6 +81,8 @@ Each engine has different hidden defaults. The harness sends everything explicit
   /tmp/kapitsa-gpu.lock` direct run in another session or tree take the same file: `flock` and `lockf` on one path do
   block each other (checked on macOS 26: `lockf -k` waits out a Python `fcntl.flock(LOCK_EX)` holder of the same file),
   and two GPU jobs that take different files do not exclude each other at all.
+  A `BENCH_GPU_LOCK=~/.cache/nace-gpu.lock` left in a `local.env`, shell profile or launchd job from before keeps that
+  caller on the old file: remove it.
   To wait in `lockf` or put a time limit on a run, take the lock outside and run one engine's configs per call, e.g.
   `lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py <configs> --only <labels>`:
   the harness then does not take the lock itself, and the lock is released between engines.
