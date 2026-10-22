@@ -140,7 +140,7 @@ def main():
             "Kapitsa vs rec: level to 8K, 1.10× at 16-32K (noise), 1.12-1.15× at 64-128K; both 1.4-1.6× llama.cpp"),
         "prefill-by-context": by_context(
             "prefill", "tok/s", "Flint 40B-A2.5B on the M5 Pro: prefill by context",
-            "llama.cpp reads prompts 1.6× as fast as Kapitsa at every length, rec 1.4-2.3×; llama.cpp and rec level from 2K to 8K"),
+            "llama.cpp reads prompts 1.6-1.7× as fast as Kapitsa at every length, rec 1.4-2.3×; llama.cpp and rec level from 2K to 8K"),
     }
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)

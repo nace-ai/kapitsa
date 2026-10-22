@@ -1990,7 +1990,7 @@ run with less load in its window (for decode, a window of one or two samples, so
 
 - **Prefill.** rec reads faster at every length, 1.4x at 1K, 1.6x at 4K, 2.3x at 128K: the reverse of the M4 Pro, where
   Kapitsa led rec at every length. From the M4 Pro to the M5 Pro, Kapitsa's 4K prefill rises 1.42x and rec's 2.69x;
-  why rec gains so much more was not measured. llama.cpp reads 1.6x as fast as Kapitsa at every length (0.60-0.64x),
+  why rec gains so much more was not measured. llama.cpp reads 1.6-1.7x as fast as Kapitsa at every length (0.60-0.64x),
   level with rec from 2K to 8K and behind it from 16K (0.67x at 128K); on the M4 Pro Kapitsa led it from 32K (1.51x at 128K).
 - **Decode.** Level up to 8K, then Kapitsa 1.10-1.15x ahead from 16K, which is inside the spread: Kapitsa's own 16K
   decode differs by 7% between its two sweeps. In the protocol runs decode is a tie (T 1.0 0.6% apart, greedy rec 2%

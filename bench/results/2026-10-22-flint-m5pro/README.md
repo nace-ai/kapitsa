@@ -64,8 +64,8 @@ The poster ranks a row by its decode value, so by that rule the row counts as Ka
 runs' spread and greedy goes the other way: read it as a tie on decode, with rec 1.56x ahead on prefill.
 
 rec's second run (`flint-rec-20261022-161819`) has one more flag: its third cached 16K follow-up stopped at the
-length limit with no content, so the harness stopped that series. Its 16K follow-up TTFT is the median of the two
-valid samples (0.237 s). llama.cpp's run has the same flag at 4K: its third cached follow-up stopped at the length
+length limit with no content, so the harness stopped that series. Its 16K follow-up TTFT, 0.237 s, is the median of all three
+samples, the empty one included (0.310, 0.237, 0.232 s); the two valid ones alone have a median of 0.274 s. llama.cpp's run has the same flag at 4K: its third cached follow-up stopped at the length
 limit with no content; its 4K follow-up TTFT, 0.224 s, is the median of all three samples (0.217-0.235 s), the empty
 one included, and 0.22 s without it.
 
@@ -93,7 +93,7 @@ one included, and 0.22 s without it.
 - **Prefill.** rec reads faster at every length, and its lead grows with the prompt: 1.4x at 1K, 1.6x at 4K, 1.75x at
   16K, 2.3x at 128K. At 128K, rec keeps 39% of its 4K speed and Kapitsa 27%. On the M4 Pro, Kapitsa led at every
   length (1.09-1.22x) and kept 31% at 128K. llama.cpp is ahead of rec at 1K (1.15x), level from 2K to 8K (0.97-1.03x)
-  and behind from 16K (0.91x, 0.67x at 128K), and it reads 1.6x as fast as Kapitsa at every length (Kapitsa
+  and behind from 16K (0.91x, 0.67x at 128K), and it reads 1.6-1.7x as fast as Kapitsa at every length (Kapitsa
   0.60-0.64x). On the M4 Pro, llama.cpp led Kapitsa at 1K-2K (Kapitsa 0.93-0.96x), they were level from 4K to 16K, and Kapitsa led
   from 32K, 1.51x at 128K.
 - **Decode.** The M4 Pro's shape again, but closer: level up to 8K (0.98-1.05x), then Kapitsa 1.10-1.15x ahead from
@@ -106,7 +106,7 @@ one included, and 0.22 s without it.
   (551 against 199) and decodes 1.32x (31.3 against 23.8).
 
 The sweep's 2K and 4K prefill points bracket the harness's 4K numbers above for Kapitsa and rec (Kapitsa 1,382 and
-1,302 against 1,374; rec 2,144 and 2,112 against 2,138). llama.cpp's sit 5-6% above its one harness run (2,194 and
+1,302 against 1,374; rec 2,144 and 2,112 against 2,138). llama.cpp's sit 4-6% above its one harness run (2,194 and
 2,166 against 2,072).
 
 How it ran (`context-sweep/`): `ctx_sweep.py` against each engine's server, started by `sweep_engine.sh` with a long
