@@ -96,6 +96,29 @@ void run_cpu() {
   check(DFlash2::config_check(draft_config("none"), plain).empty() && DFlash2::config_check(draft_config(""), plain).empty(),
         "a target without streams + none or nothing: loads");
   check(!DFlash2::config_check("[1, 2]", flash).empty(), "not a config: refused");
+
+  // The drafting block the memory plan reserves rows for: a pure decision on (target, slots, NI_DFLASH_BLOCK), asked
+  // several times in one process here, as an --allow-switch server does (each model decides its own at its load).
+  std::printf("drafting block (DFlash2::plan_block_rows)\n");
+  Qwen35Config dense = plain, moe = plain;
+  dense.moe = false;
+  moe.moe = true;
+  check(DFlash2::plan_block_rows(dense, 1, "") == 16, "one slot, dense target, unset: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "auto") == 16, "NI_DFLASH_BLOCK=auto is the default: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "8") == 8, "NI_DFLASH_BLOCK=8: 8 rows");
+  check(DFlash2::plan_block_rows(dense, 1, "16") == 16, "NI_DFLASH_BLOCK=16, dense target: 16 rows");
+  check(DFlash2::plan_block_rows(dense, 2, "") == 8, "two slots: 8 rows (a 16-row block has no batched cycle)");
+  check(DFlash2::plan_block_rows(moe, 1, "") == 8, "one slot, MoE target: 8 rows (no wide tree verify to run)");
+  check(DFlash2::plan_block_rows(moe, 1, "16") == 16,
+        "NI_DFLASH_BLOCK=16, MoE target: 16 rows (the load-time check refuses it)");
+  setenv("NI_DFLASH_BLOCK", "8", 1);
+  const int env8 = DFlash2::plan_block_rows(dense, 1);
+  unsetenv("NI_DFLASH_BLOCK");
+  check(env8 == 8 && DFlash2::plan_block_rows(dense, 1) == 16, "the environment is read when no value is passed: 16, 8, 16");
+  const int first = DFlash2::plan_block_rows(dense, 1, ""), moe_next = DFlash2::plan_block_rows(moe, 1, ""),
+            back = DFlash2::plan_block_rows(dense, 1, "");
+  check(first == 16 && moe_next == 8 && back == 16,
+        "16 then 8 then 16 in one process: the next model decides for itself");
   // incoai/Qwen3.8-Flash-Next-DFlash2 @ a22a1744 (Apache-2.0), its config.json's fields that the checks read: 5 draft
   // layers over target layers 5, 15, 25, 35, 45, rope theta 1e4, no target_hidden_reduction (the target's: stream_mean)
   const std::string incoai = R"({"architectures": ["DFlash2DraftModel"], "is_causal": false,

@@ -113,7 +113,9 @@ class DFlash2 {
   // one context ring (a slot holds three: the live state and its two checkpoints' snapshots).
   // The drafting block the engine will load for `target` with `slots` slots: NI_DFLASH_BLOCK if it names 8 or 16, else
   // 16 on a one-slot engine whose target has a wide tree verify, else 8 (the load-time checks repeat this in full).
-  static int plan_block_rows(const Qwen35Config& target, int slots);
+  // block_env: NI_DFLASH_BLOCK's value to decide from (nullptr: the environment; "" or "auto": the default), so the
+  // decision can be asked several times in one process (a --allow-switch server decides each model at its load).
+  static int plan_block_rows(const Qwen35Config& target, int slots, const char* block_env = nullptr);
   // block_rows: the drafting block the engine will load (plan_block_rows), whose rows the target's verify buffers and
   // every slot's verify tape are sized from.
   static size_t plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,

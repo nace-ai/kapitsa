@@ -269,7 +269,9 @@ for foreign GPU load during their prefill and tool phases, and neither flagged i
 77.7-104 ms of GPU time against 70.3-85 ms for the 8-row block, and carried 6.33 tokens per cycle against 5.17, so the
 block pays for the deeper lattice: 1.10x the cycle for 1.22x the tokens at their floors. 17 of the 20 greedy runs wrote
 the same 2120-token reply (md5 `ca846aca…`); the other three took a branch at one near-tie (two at 2151 tokens, one at
-2168), the divergence this corpus shows at temperature 0 in other engines too.
+2168): three runs per arm on the final code put the 2168 one in the 8-row arm and a 2151 one in the 16-row arm, and
+mlx-serve's own DFlash2 cell took the 2151 branch at temperature 0 as well, so the branch is this corpus's near-tie,
+not the drafting block's.
 
 That default needs its capacity pinned. The budget weighs a cycle's row count by the tokens it expects per millisecond,
 and keeps both the expectations and the measured cycle costs per model, drafter and chip in `~/.cache/kapitsa/kflash/`,

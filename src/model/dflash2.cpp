@@ -785,8 +785,8 @@ std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
   return d;
 }
 
-int DFlash2::plan_block_rows(const Qwen35Config& target, int slots) {
-  const char* v = getenv("NI_DFLASH_BLOCK");
+int DFlash2::plan_block_rows(const Qwen35Config& target, int slots, const char* block_env) {
+  const char* v = block_env ? block_env : getenv("NI_DFLASH_BLOCK");
   if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
     return atoi(v) == 16 ? 16 : kB;
   // the default: Engine asks a one-slot engine for the 16-row block (a MoE target has no wide verify to run it, and a
