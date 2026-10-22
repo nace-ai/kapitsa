@@ -193,9 +193,7 @@ NI_INLINE void qtmm_tile(const device half* X, const device uint* const thread* 
     qtmm_tile<1, BM, BN, BK>(X, W, S, B, Y, p, m0, rows, tg.x * BN, nullptr, yrows, tid, sg, xs, ws);               \
   }
 
+// BN 64 / BK 32 is the measured best; the BN 128 and BK 64 variants of the same tile ran slower on the M5 Pro
+// (dn BN 128 566 -> 221 ms for the 4K layer, BK 64 422 -> 492 ms at 1024 rows), so they are not built.
 NI_QTM_GU(qmtm_gu_m64_n64, 64, 64, 32)
-NI_QTM_GU(qmtm_gu_m64_n128, 64, 128, 32)
-NI_QTM_GU(qmtm_gu_m64_n64_k64, 64, 64, 64)
-NI_QTM_DN(qmtm_dn_m64_n128, 64, 128, 32)
 NI_QTM_DN(qmtm_dn_m64_n64, 64, 64, 32)
-NI_QTM_DN(qmtm_dn_m64_n64_k64, 64, 64, 64)

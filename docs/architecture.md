@@ -101,9 +101,11 @@ new architecture requires more than implementing `Model` if it needs a new draft
   grouped expert operations avoid routing all work through general-purpose tensor operators. The Qwen and Nemotron
   backends have separate kernel sets for their shapes and stored weight formats.
 * **QMT prefill.** On Apple10 GPUs (the M5) under macOS 26, the 4-bit dense GEMMs of the Qwen3.5
-  backend, and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B; the 27B and 35B keep
-  the older attention), run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
-  Measured on the 4B only; its greedy output is not bit-identical to the simdgroup path.
+  backend and its prefill attention for head dim 256 with 4 query heads per KV head (the 4B and 9B; the 27B and 35B keep
+  the older attention) run on Metal 4 tensor ops (`src/kernels/tensor/qmt.metal`, `qattn_t.metal`; `NI_QMT=0` turns it off).
+  The 35B-A3B's routed expert prefill runs the same tile over the MoE bucket's 64-row expert tiles
+  (`src/kernels/tensor/qmt_moe.metal`; off by default on numerical grounds, `NI_MOE_QTM=1` turns it on). Measured on the 4B (dense) and the
+  35B-A3B (experts); their greedy output is not bit-identical to the simdgroup paths.
 * **Several verified tokens per target pass.** DFlash2, MTP and LiLiCorr amortize target-model work when the drafts
   are accepted. Throughput depends on the model, prompt, sampling settings and acceptance rate.
 * **Requests at once share passes.** While several requests decode, one target pass verifies all of their rows and

@@ -762,6 +762,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_IMAGE_TIMEOUT_S` | `30` | The time limit for downloading an `http(s)` image, in seconds. |
 | `NI_IMAGE_CACHE_MB` | `256` | GPU memory kept for the embeddings of recent images. |
 | `NI_MOE_QMR_K` | Auto | Input staging width for native 4-bit group-64 expert prefill: `32` or `64`; `0` means auto. Auto uses paired 32-input staging (`64`) for hidden size 2048 and expert intermediate size 512 on the 32-core M1 Max; other cases retain `32`. |
+| `NI_MOE_QTM` | off | Qwen3.6 35B-A3B routed expert prefill on Metal 4 tensor ops (Apple10 GPU, macOS 26, 4-bit group-64 experts; `src/kernels/tensor/qmt_moe.metal`): 64-row tiles of the MoE bucket, as the dense QMT prefill; `1` turns it on. 4K prefill 2,135 -> 1,574 ms and 16K 10,810 -> 8,570 ms on the M5 Pro, with logits further from the simdgroup path's than the 35B's noise floor lets a default move (`tools/logit_compare.py`), so it is opt-in. |
 | `NI_NH_BF16` | off | Nemotron Super-VL: `1` keeps its BF16 latent projections in BF16 instead of 8-bit (exact; about 4% slower decoding). |
 | `NI_NH_ATTN_Q8` | off | Nemotron Lightning: `1` stores its BF16 attention projections in 8-bit (about 3% faster decoding, slightly less accurate). |
 | `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |

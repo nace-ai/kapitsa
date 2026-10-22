@@ -103,10 +103,13 @@ static int moe_qmr() {
 }
 
 // NI_MOE_QTM: the qmt tile (tensor_ops) on the routed experts' grouped GEMMs (qmtm_gu_* / qmtm_dn_*).
-// The M5's matrix units run this tile 2x faster than the qrm kernels at the expert shapes, so it is the default
-// where qmt is available; NI_MOE_QTM=0 keeps the qrm path for A/B.
+// The M5's matrix units run this tile ~1.4x faster than the qrm kernels at the expert shapes; `NI_MOE_QTM=1` opts in
+// (off by default: it moves the logits further than the noise floor allows a default to, see moe_qtm()).
 static bool moe_qtm() {
-  static const bool v = env_int("NI_MOE_QTM", 1) != 0;
+  // Off by default: the tile is not bit-identical to the simdgroup path and moves the 35B's logits further than the
+  // model's noise floor allows a default to (tools/logit_floors). `NI_MOE_QTM=1` opts in: 4K prefill 2,135 -> 1,574 ms
+  // and 16K 10,810 -> 8,570 ms on the M5 Pro.
+  static const bool v = env_int("NI_MOE_QTM", 0) != 0;
   return v;
 }
 
@@ -2603,11 +2606,9 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   // generic expert formats: wfmt.metal's qrmf_* (the qrm design, 32-row tiles)
   const bool gen = G.bits != 4 && moe_prefill_format(G) && G.same_format(U) && G.same_format(Dn) && G.K % 64 == 0 &&
                    Dn.K % 64 == 0 && G.N % 64 == 0 && Dn.N % 128 == 0;
-  // NI_MOE_QTM_GU / NI_MOE_QTM_DN: tile widths of the qtm MoE kernels (gate/up: BN / 2 gate + BN / 2 up columns;
-  // down: BN columns). NI_MOE_QTM_BK=64 doubles the K step (32 keeps qrm's, and measures faster).
-  static const int qtm_gu_n = getenv("NI_MOE_QTM_GU") ? atoi(getenv("NI_MOE_QTM_GU")) : 64;
-  static const int qtm_dn_n = getenv("NI_MOE_QTM_DN") ? atoi(getenv("NI_MOE_QTM_DN")) : 64;
-  static const std::string qtm_bk = getenv("NI_MOE_QTM_BK") && atoi(getenv("NI_MOE_QTM_BK")) == 64 ? "_k64" : "";
+  // qmtm_gu_m64_n64 / qmtm_dn_m64_n64: tile width BN 64 (gate/up: 32 gate + 32 up columns per threadgroup) and K
+  // step 32, the measured best; the tensor library builds only these two.
+  constexpr int qtm_gu_n = 64, qtm_dn_n = 64;
   // qmtm_gu_m64_n64 / qmtm_dn_m64_n64 on 64-row tiles: the qmt tile (tensor_ops) on the routed experts' grouped
   // GEMMs (4-bit g64). 64 rows is the whole tile of an expert's bucket at 4K-16K rows of a 256-expert layer.
   const bool qtm = !q20 && !gen && moe_qtm() && qmt_on() && G.bits == 4 && G.gs == 64 && U.bits == 4 &&
@@ -2638,8 +2639,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
   static bool qtm_logged = false;
   if (qtm && !qtm_logged) {
     qtm_logged = true;
-    logi("NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n%d%s, qmtm_dn_m64_n%d%s, 64-row tiles)",
-         qtm_gu_n, qtm_bk.c_str(), qtm_dn_n, qtm_bk.c_str());
+    logi("NI_MOE_QTM: routed expert GEMMs on tensor_ops (qmtm_gu_m64_n64, qmtm_dn_m64_n64, 64-row tiles)");
   }
   const int S = fold ? T : 0;
   if (!xh_ready) enc_rows_half(e, xbuf, L.post_norm, xh_, T, D);
@@ -2677,7 +2677,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{G.N, G.K, G.K, G.N, uint32_t(G.gs), uint32_t(size_t(G.N) * G.row_bytes() / 4),
                G.dense() ? 0u : G.N * (G.K / G.gs), uint32_t(E)};
     const QLinear &SG = fold ? L.sg : G, &SU = fold ? L.su : U;
-    e.use(pipe(qtm ? "qmtm_gu_m64_n" + std::to_string(qtm_gu_n) + qtm_bk
+    e.use(pipe(qtm ? "qmtm_gu_m64_n64"
                : gen ? "qrmf_gu_" + G.fmt() + "_m32_n64"
                : qrm ? "qrm_gu" + qm + "_n" + std::to_string(kBnGu) : "qmm_moe_gu" + m + "_n" + std::to_string(kBnGu)));
     e.buf(0, xh_);
@@ -2695,7 +2695,7 @@ bool Qwen35::enc_moe_prefill_fused(Encoder& e, const Layer& L, int T, const Buff
     kp::Qmm2 p{Dn.N, Dn.K, Dn.K, Dn.N, uint32_t(Dn.gs), uint32_t(size_t(Dn.N) * Dn.row_bytes() / 4),
                Dn.dense() ? 0u : Dn.N * (Dn.K / Dn.gs), uint32_t(E)};
     const QLinear& SD = fold ? L.sd : Dn;
-    e.use(pipe(qtm ? "qmtm_dn_m64_n" + std::to_string(qtm_dn_n) + qtm_bk
+    e.use(pipe(qtm ? "qmtm_dn_m64_n64"
                : gen ? "qrmf_dn_" + Dn.fmt() + "_m32_n128"
                : qrm ? "qrm_dn" + qm + "_n" + std::to_string(kBnDn) : "qmm_moe_dn" + m + "_n" + std::to_string(kBnDn)));
     e.buf(0, hhalf_);

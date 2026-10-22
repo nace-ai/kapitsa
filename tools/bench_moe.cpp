@@ -7,6 +7,8 @@
 //           MMA order)
 //   qrm     moe_bucket2 (BM-row tiles), qrm_gu_* / qrm_dn_* (qmm_moe3.metal: weights dequantized
 //           straight into MMA registers; agrees with orig to rounding)
+//   qtm     moe_bucket2 (64-row tiles), qmtm_gu_m64_n64 / qmtm_dn_m64_n64 (tensor/qmt_moe.metal: the
+//           qmt tile on the routed experts' grouped GEMMs; same 4-bit g64 weights, fp32 accumulate)
 // Every path is checked against a double-precision CPU reference on sampled outputs (gate/up: on
 // the dequantized halfs of orig's rule half(s*q + b); down: on the path's own half h rows), as
 // max |got - ref| / (|ref| + 1) like bench_qmm. Timing: trials interleaved over the paths, each the
@@ -27,6 +29,7 @@
 #include <string>
 #include <vector>
 
+namespace ni { extern const char* const kTensorKernelSource; }
 using namespace ni;
 
 struct QmmParams {
@@ -93,6 +96,7 @@ int main(int argc, char** argv) {
   const int trials = argc > 3 ? atoi(argv[3]) : 5;
   const uint32_t D = 2048, I = 512, E = 256, k = 8, gs = 64, P = T * k;
   Gpu& g = Gpu::get();
+  g.compile_extra("tensor", kTensorKernelSource, true);  // qmtm_* (the routed experts on tensor_ops)
 
   QMat eg = make_qmat(g, E, I, D), eu = make_qmat(g, E, I, D), ed = make_qmat(g, E, D, I);
   Buffer xh = g.alloc(size_t(T) * D * 2);
@@ -159,10 +163,18 @@ int main(int argc, char** argv) {
       std::string gu = item.substr(0, c), dn = item.substr(c + 1);
       uint32_t bm = uint32_t(name_int(gu, "_m"));
       if (bm != uint32_t(name_int(dn, "_m"))) fatal("BENCH_QRM %s: gate/up and down tile rows differ", item.c_str());
-      paths.push_back({gu.substr(7) + "+" + dn.substr(7), gu, dn, 2, bm, uint32_t(name_int(gu, "_n")),
-                       uint32_t(name_int(dn, "_n"))});
+      const bool qtm = gu.rfind("qmtm_gu_") == 0;
+      const size_t strip = gu.rfind("qrm_gu_") == 0 ? 7 : 0;
+      const size_t strip_dn = dn.rfind("qrm_dn_") == 0 ? 7 : strip;
+      paths.push_back({gu.substr(strip) + "+" + dn.substr(strip_dn), gu, dn, 2, bm,
+                       uint32_t(name_int(gu, "_n")) / (qtm ? 2u : 1u), uint32_t(name_int(dn, "_n"))});
     }
   }
+  // the routed experts on tensor_ops (tensor/qmt_moe.metal), the NI_MOE_QTM path; BENCH_QTM=0 skips it.
+  // Its gate/up threadgroup covers BN / 2 output columns (NP = 2: gate and up of the same columns), so the gu
+  // grid is N / (BN / 2) -- the `bn_gu` here is the grid divisor, 32 for qmtm_gu_m64_n64.
+  if (!getenv("BENCH_QTM") || atoi(getenv("BENCH_QTM")))
+    paths.push_back({"qmtm_m64_n64", "qmtm_gu_m64_n64", "qmtm_dn_m64_n64", 2, 64, 32, 64});
   // BENCH_SHORT=1: the short-prefill expert paths (8-row tiles): qmms_moe (8-row MMA) and the hybrid
   // qmms_moe2 (tiles of <= 2 rows by FMAs)
   if (getenv("BENCH_SHORT") && atoi(getenv("BENCH_SHORT"))) {
