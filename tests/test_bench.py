@@ -366,7 +366,7 @@ os.chmod(os.path.join(gh_dir, "gh"), 0o755)
 home = tempfile.mkdtemp(prefix="kapitsa-home-")
 env = dict(os.environ, PATH=gh_dir + ":/usr/bin:/bin", KAPITSA_HOME=home, HOME=os.path.join(home, "user"),
            HF_ENDPOINT="http://127.0.0.1:9", HF_HUB_CACHE=os.path.join(home, "hf"), NO_COLOR="1",
-           BENCH_GPU_LOCK=os.path.expanduser("~/.cache/nace-gpu.lock"))
+           BENCH_GPU_LOCK=os.path.expanduser("/tmp/kapitsa-gpu.lock"))
 os.makedirs(env["HOME"])
 env.pop("NACE_GPU_LOCK_HELD", None)
 env.pop("GH_TOKEN", None)

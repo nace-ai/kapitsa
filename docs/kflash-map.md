@@ -186,7 +186,7 @@ Trees of 7 nodes vs `main`, interleaved, M4 Pro 48 GB:
 git fetch origin && git switch kflash-trees && git pull --ff-only
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j 12
 # exactness (GPU; hold the shared lock, at most 20 minutes per hold)
-lockf -k -t 3000 ~/.cache/nace-gpu.lock build/dflash_accept_test 20000
+lockf -k -t 3000 /tmp/kapitsa-gpu.lock build/dflash_accept_test 20000
 python3 tools/nh_synth.py /tmp/nh_small --dspark --small && build/nh_tree_check /tmp/nh_small
 build/ni_run ~/.cache/kapitsa/models/qwen3.5-4b-4bit @bench/prompts/code_27b.txt 256 0 --dflash none > /tmp/plain.txt
 build/ni_run ~/.cache/kapitsa/models/qwen3.5-4b-4bit @bench/prompts/code_27b.txt 256 0 --dflash auto --ref /tmp/plain.txt

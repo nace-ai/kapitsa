@@ -32,7 +32,7 @@ Fairness rules built in (see README.md, "What makes a run count"):
   * prompts are cut from a frozen corpus file (corpus/bench_corpus.txt, sha256 recorded) so every
     engine sees byte-identical prompts; cold prompt_tokens must be within ±1% of the reference count
     and the engine must not report reused cache tokens on the cold request.
-  * the GPU lock (gpu_hogs.LOCK_PATH, default ~/.cache/nace-gpu.lock) is held for the whole run unless
+  * the GPU lock (gpu_hogs.LOCK_PATH, default /tmp/kapitsa-gpu.lock) is held for the whole run unless
     the caller already holds it (compare_engines.py sets NACE_GPU_LOCK_HELD=1).
 
 Stdlib only, so it runs with any python3 (even macOS's system 3.9).

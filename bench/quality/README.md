@@ -45,4 +45,4 @@ precision runs: the measurements behind the default precisions (4-bit by default
 - `speed_mlx.py`: MLX prefill and decode speed of a local model (the yardstick for Kapitsa's numbers).
 - `table.py`: markdown tables from the results.
 
-GPU work takes `~/.cache/nace-gpu.lock` (as the other benchmarks); `NI_LOCK_HELD=1` when the caller holds it.
+GPU work takes `/tmp/kapitsa-gpu.lock` (as the other benchmarks); `NI_LOCK_HELD=1` when the caller holds it.

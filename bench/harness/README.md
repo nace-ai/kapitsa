@@ -74,11 +74,15 @@ thinking off, a nonce right after the system start on cold prompts, middle-windo
 
 Each engine has different hidden defaults. The harness sends everything explicitly and checks the answers:
 
-- **One engine at a time.** Every run holds an exclusive lock on `~/.cache/nace-gpu.lock` (BSD `flock`, the same
+- **One engine at a time.** Every run holds an exclusive lock on `/tmp/kapitsa-gpu.lock` (BSD `flock`, the same
   lock `lockf -k` takes; `BENCH_GPU_LOCK` names another file) from server start until its memory is released. Run
-  every other GPU job on the Mac under the same lock (`lockf -k ~/.cache/nace-gpu.lock <command>`), or close it.
+  every other GPU job on the Mac under the same lock (`lockf -k /tmp/kapitsa-gpu.lock <command>`), or close it.
+  The default lives in `/tmp`, not `~/.cache`, so that an unlocked `compare_engines.py` and a `lockf -k
+  /tmp/kapitsa-gpu.lock` direct run in another session or tree take the same file: `flock` and `lockf` on one path do
+  block each other (checked on macOS 26: `lockf -k` waits out a Python `fcntl.flock(LOCK_EX)` holder of the same file),
+  and two GPU jobs that take different files do not exclude each other at all.
   To wait in `lockf` or put a time limit on a run, take the lock outside and run one engine's configs per call, e.g.
-  `lockf -k -t 3000 ~/.cache/nace-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py <configs> --only <labels>`:
+  `lockf -k -t 3000 /tmp/kapitsa-gpu.lock env NACE_GPU_LOCK_HELD=1 python3 compare_engines.py <configs> --only <labels>`:
   the harness then does not take the lock itself, and the lock is released between engines.
 - **Quiet GPU.** After the warm-up the harness waits (up to 5 minutes) until no other process uses more than 5% of
   the GPU for 15 s and the server itself is idle; if that never happens, it measures anyway and lets the monitor flag
@@ -525,7 +529,7 @@ python3 bench.py --base-url http://127.0.0.1:8000/v1 --model qwen3.6-35b-a3b --l
 
 `--pid` measures that process tree's memory; `--decode-runs`, `--sizes`, `--skip decode,greedy,prefill,tools` and
 the sampling flags change the run (`--help`). Wrap your own server's whole lifetime in the lock instead, and tell
-`bench.py` so: `lockf -k ~/.cache/nace-gpu.lock sh -c 'start server; NACE_GPU_LOCK_HELD=1 python3 bench.py ...'`.
+`bench.py` so: `lockf -k /tmp/kapitsa-gpu.lock sh -c 'start server; NACE_GPU_LOCK_HELD=1 python3 bench.py ...'`.
 `python3 gpu_hogs.py` lists what is using the GPU right now.
 
 `agent_replay.py` replays the agent session alone against a running server (it takes the GPU lock the same way):

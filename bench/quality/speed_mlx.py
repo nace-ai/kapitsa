@@ -5,7 +5,7 @@
 
 Prefill: time to the first token of the prefill prompt (whole prompt, mlx-lm's default 2048-token steps).
 Decode: tokens/s of `gen` greedy tokens after the decode prompt (the first token excluded). Median of reps, after a
-warm-up. Holds ~/.cache/nace-gpu.lock (NI_LOCK_HELD=1: the caller holds it).
+warm-up. Holds /tmp/kapitsa-gpu.lock (NI_LOCK_HELD=1: the caller holds it).
 """
 import fcntl, json, os, statistics, sys, time
 
@@ -21,7 +21,7 @@ model_dir, pf, dp = args[0], args[1], args[2]
 ids = lambda a: [int(x) for x in open(a[1:]).read().split(",") if x.strip()]
 pf_ids, dp_ids = ids(pf), ids(dp)
 if not os.environ.get("NI_LOCK_HELD"):
-    lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
+    lock = os.fdopen(os.open(os.path.expanduser("/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 model, tok = load(model_dir)
 greedy = make_sampler(0.0)

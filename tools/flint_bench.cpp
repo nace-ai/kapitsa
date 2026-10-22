@@ -3,7 +3,7 @@
 //   flint_bench <model_dir> [--prompt N] [--steps N] [--chunk C] [--reps R] [--rows V]
 // --rows V (2-8): each decode step a verify pass of V rows instead (its cost; nothing is accepted)
 // NI_PROFILE=1: every dispatch in its own command buffer, the decode steps' GPU time per kernel (Encoder::profile_report).
-// Takes the GPU lock ($BENCH_GPU_LOCK, default ~/.cache/nace-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
+// Takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
 #include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/flint.h"

@@ -15,7 +15,7 @@ DFlash2 acceptance); a mix is judged on its real pack, whose acceptance can diff
 text each seed draws (4 seeds: a few points either way), so the summary gives the spread and the GPU time per
 DFlash2 cycle (the cost side, which does not depend on the text) beside the means. Results are written after every
 run; a run that exceeds --timeout seconds is killed (it would hold the GPU lock) and ends the measurement. Takes
-~/.cache/nace-gpu.lock unless NI_LOCK_HELD=1 (the caller holds it).
+/tmp/kapitsa-gpu.lock unless NI_LOCK_HELD=1 (the caller holds it).
 """
 import argparse, fcntl, json, os, re, statistics, subprocess, sys, time
 
@@ -100,7 +100,7 @@ def main():
         variants.append((name, os.path.expanduser(d), env))
     lock = None
     if not os.environ.get("NI_LOCK_HELD"):
-        lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
+        lock = os.fdopen(os.open(os.path.expanduser("/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
         fcntl.flock(lock, fcntl.LOCK_EX)
     code, p4k = os.path.join(PROMPTS, "code_27b.txt"), os.path.join(PROMPTS, "p4000.txt")
     dfl = ["--dflash", a.drafter]

@@ -5,7 +5,7 @@ layer's tensors.
   check_rtn.py <bf16 repo | local dir> <quantized repo> [layer=0] [--gpu]
 
 mlx_lm.convert quantizes on the GPU; the CPU's mx.quantize rounds a few codes differently (~1% of the words), so
---gpu (under ~/.cache/nace-gpu.lock) is the exact check.
+--gpu (under /tmp/kapitsa-gpu.lock) is the exact check.
 """
 import fcntl, json, os, sys
 
@@ -35,7 +35,7 @@ cw = {k: mx.array(v[0]).view(mx.bfloat16) if v[1] == "BF16" else mx.array(v[0]) 
     if cw and isinstance(next(iter(cw.values())), tuple) else cw
 lock = None
 if gpu:
-    lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
+    lock = os.fdopen(os.open(os.path.expanduser("/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 qfor = repo_qcfg(cand.config, cp)
 same = diff = 0

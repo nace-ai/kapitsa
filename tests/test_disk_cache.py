@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The SSD prefix cache across server restarts (src/engine/engine_disk.cpp). Needs a model folder and the GPU: it takes
-the GPU lock ($BENCH_GPU_LOCK, default ~/.cache/nace-gpu.lock) unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1 says the
+the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NACE_GPU_LOCK_HELD=1 or NI_LOCK_HELD=1 says the
 caller holds it. Servers start here with KAPITSA_HOME in a temporary folder (the cache, logs and KFlash's measurements
 stay there; it is removed at the end) and --disk-cache 2G. Greedy, thinking off, NI_ANE=0 (the Neural Engine program
 compiles in the background, and a prefill's numbers depend on whether it was ready).
@@ -67,7 +67,7 @@ def check(ok, name, detail=""):
 def gpu_lock():
     if os.environ.get("NACE_GPU_LOCK_HELD") == "1" or os.environ.get("NI_LOCK_HELD") == "1":
         return None
-    path = os.environ.get("BENCH_GPU_LOCK") or os.path.expanduser("~/.cache/nace-gpu.lock")
+    path = os.environ.get("BENCH_GPU_LOCK") or os.path.expanduser("/tmp/kapitsa-gpu.lock")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     f = open(path, "a")
     print(f"waiting for the GPU lock {path} ...", flush=True)

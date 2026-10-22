@@ -686,7 +686,7 @@ The result, about 2 KB of JSON ([bench/community/schema.json](../bench/community
 `~/.cache/kapitsa/bench/` (`--out FILE` puts it elsewhere; `--json` also prints it). It records the Mac (its model
 identifier with Apple's name and year, chip, CPU and GPU cores, memory, macOS version and build), Kapitsa's version, the
 model, its precision and how it decoded, the numbers and the conditions; no serial number, host name, user name or
-path. A run takes 3 to 15 minutes and holds the GPU lock that the benchmark harness uses (`~/.cache/nace-gpu.lock`), so
+path. A run takes 3 to 15 minutes and holds the GPU lock that the benchmark harness uses (`/tmp/kapitsa-gpu.lock`), so
 it never runs beside a harness run.
 
 At the end of a run in a terminal (or with `--submit`) it asks once whether to add the result to the community
@@ -746,7 +746,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `KAPITSA_UPDATE_URL` | `https://github.com/nace-ai/kapitsa/releases` | Where updates come from: a GitHub releases page or a copy of one (https, or http to this Mac). |
 | `KAPITSA_UPDATE_TIMEOUT_S` | `300` | The background check's time limit, in seconds. |
 | `KAPITSA_NO_PROMPT` | | `1`: never ask which model to start; without `--model`, the best model for this Mac ([Which model](#which-model)). |
-| `BENCH_GPU_LOCK` | `~/.cache/nace-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
+| `BENCH_GPU_LOCK` | `/tmp/kapitsa-gpu.lock` | `kapitsa bench`: the GPU lock it takes, the benchmark harness's; `NACE_GPU_LOCK_HELD=1` when the caller holds it. |
 | `BENCH_GPU_AMBIENT` | | `kapitsa bench`: more process names whose GPU use is ambient (recorded, never flagged), comma-separated, as for the harness. |
 | `KAPITSA_BENCH_REPO` | `nace-ai/kapitsa` | `kapitsa bench --submit`: the repository results go to. |
 | `HF_TOKEN` | the token `hf auth login` saved | Hugging Face token for gated or private repos. |

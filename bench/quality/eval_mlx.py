@@ -8,7 +8,7 @@
 Same reference file as tools/ni_eval.cpp (NIEVREF2: per position the top-K log-probs and the realized next token's
 log-prob). --ref-model: a second MLX model in this process, exact KL over the vocabulary. Logits come from an fp32
 LM head over MLX's final-norm hidden state (bf16 activations as mlx-lm runs them); --bf16-logits keeps mlx-lm's own
-bf16 logits instead (their rounding alone is a KL of ~1e-4). Holds ~/.cache/nace-gpu.lock while it computes (NI_LOCK_HELD=1: the caller holds it).
+bf16 logits instead (their rounding alone is a KL of ~1e-4). Holds /tmp/kapitsa-gpu.lock while it computes (NI_LOCK_HELD=1: the caller holds it).
 """
 import fcntl, json, os, struct, sys
 
@@ -42,7 +42,7 @@ def read_ids(a):
 
 ids = [read_ids(s) for s in seqs]
 if not os.environ.get("NI_LOCK_HELD"):  # set by a caller that already holds the lock (lockf ... sh)
-    lock = os.fdopen(os.open(os.path.expanduser("~/.cache/nace-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
+    lock = os.fdopen(os.open(os.path.expanduser("/tmp/kapitsa-gpu.lock"), os.O_RDONLY | os.O_CREAT, 0o644))
     fcntl.flock(lock, fcntl.LOCK_EX)
 
 

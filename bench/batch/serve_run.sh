@@ -3,7 +3,7 @@
 # Starts `kapitsa serve` on $PORT (default 8131) with --ctx ${CTX:-32768} --slots ${SLOTS:-2} (extra server flags in
 # $SERVE_ARGS, NI_* from the environment), waits until it is ready, runs each client command (the string BASE becomes
 # the server's /v1 URL), stops the server and prints the engine's request lines. Run it under the GPU lock:
-#   lockf -k -t 3000 ~/.cache/nace-gpu.lock perl -e 'alarm 1200; exec @ARGV' bench/batch/serve_run.sh ...
+#   lockf -k -t 3000 /tmp/kapitsa-gpu.lock perl -e 'alarm 1200; exec @ARGV' bench/batch/serve_run.sh ...
 set -u
 BIN="$1"; MODEL="$2"; LOG="$3"; shift 3
 PORT=${PORT:-8131}

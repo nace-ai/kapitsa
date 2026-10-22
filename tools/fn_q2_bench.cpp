@@ -21,7 +21,7 @@
 //                       file mid-pass, against the stacked planes' bit for bit (see run_store)
 //   --seed N   --rounds N (default 7)   --small: hidden 256, 64 experts of 128, top-8 (with check: for shader validation,
 //   MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1)
-// Run it under the GPU lock: lockf -k -t 600 ~/.cache/nace-gpu.lock build/fn_q2_bench check
+// Run it under the GPU lock: lockf -k -t 600 /tmp/kapitsa-gpu.lock build/fn_q2_bench check
 #include "metal/gpu.h"
 #include "model/kparams.h"
 #include "util/bf16.h"

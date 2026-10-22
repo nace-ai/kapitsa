@@ -197,7 +197,7 @@ Footprint footprint(const std::set<int>& pids, bool mapped = false);
 std::vector<int> other_kapitsas(int except = 0);
 
 // The harness's GPU lock (bench/harness/gpu_hogs.py GpuLock): an exclusive flock on BENCH_GPU_LOCK, else
-// ~/.cache/nace-gpu.lock, the lock `lockf -k <file> <cmd>` takes, so a benchmark never runs beside another GPU job that
+// /tmp/kapitsa-gpu.lock, the lock `lockf -k <file> <cmd>` takes, so a benchmark never runs beside another GPU job that
 // takes it. Opened read-only (the file may be immutable) with close-on-exec (the server does not inherit it), created
 // if missing, never removed.
 class GpuLock {

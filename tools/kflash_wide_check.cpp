@@ -11,7 +11,7 @@
 //  - the next pass after an accepted path through the later tiles (K/V compaction, the GDN tape and conv window fold
 //    of tape rows past 8): a plain step after encode_flush, and a second tree verify that folds the path itself
 //    (its live rows against plain decoding of path + their own root paths).
-// Exit code 0 when everything passes. Takes the GPU lock ($BENCH_GPU_LOCK, default ~/.cache/nace-gpu.lock) unless
+// Exit code 0 when everything passes. Takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless
 // NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
 #include "bench/bench.h"
 #include "kernels/kflash.h"

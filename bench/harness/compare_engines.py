@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Runs bench.py against several engine configurations, strictly one at a time. Stdlib only.
 
-Per config, inside ONE exclusive flock span on the GPU lock (gpu_hogs.LOCK_PATH, default ~/.cache/nace-gpu.lock,
+Per config, inside ONE exclusive flock span on the GPU lock (gpu_hogs.LOCK_PATH, default /tmp/kapitsa-gpu.lock,
 the lock `lockf -k <file> <cmd>` takes; the wait is logged):
   provenance (versions, git state, OS, power, swap) -> start the server (own process group, <out>/logs)
   -> wait until it answers -> warm-up (nonce'd ~2.9k-token prompt + 64-token decode, one tools request,

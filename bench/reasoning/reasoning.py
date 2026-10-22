@@ -13,7 +13,7 @@ Whether a quantization (4-bit, a 4/8-bit mix, 6-bit, 8-bit) answers competition 
 \\boxed{}."), thinking on, Qwen's sampling for thinking (T 0.6, top_p 0.95, top_k 20) and a per-sample seed, streams
 the reply, grades its last \\boxed{} (grader.py) and appends one JSON line per sample to the results file: the reply's
 text, answer, verdict, tokens and timing. A results file resumes: samples already graded are skipped. The GPU lock
-(bench/harness/gpu_hogs.py, ~/.cache/nace-gpu.lock) is held for the run unless --no-gpu-lock or NACE_GPU_LOCK_HELD=1.
+(bench/harness/gpu_hogs.py, /tmp/kapitsa-gpu.lock) is held for the run unless --no-gpu-lock or NACE_GPU_LOCK_HELD=1.
 `report` gives each label's accuracy with a 95% interval (bootstrap over problems), the replies cut short, without
 an answer or looping, and each label against the baseline on the same problems (the paired difference, its interval
 and, with one sample per problem, McNemar's exact test). Standard library only.

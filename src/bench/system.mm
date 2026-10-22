@@ -373,13 +373,16 @@ Footprint footprint(const std::set<int>& pids, bool mapped) {
 }
 
 std::string GpuLock::path() {
+  // One file for the whole Mac, in /tmp so that every session and every tree defaults to the same one: the harness used
+  // to default to ~/.cache/nace-gpu.lock while direct runs took lockf on /tmp/kapitsa-gpu.lock, and two GPU jobs that
+  // take different files do not exclude each other (it happened twice). BENCH_GPU_LOCK still names another file.
+  static const char* kDefault = "/tmp/kapitsa-gpu.lock";
   if (const char* p = getenv("BENCH_GPU_LOCK"); p && *p) {
     const std::string s = p;
     const char* h = getenv("HOME");
     return s.rfind("~/", 0) == 0 && h ? h + s.substr(1) : s;
   }
-  const char* h = getenv("HOME");
-  return std::string(h ? h : "") + "/.cache/nace-gpu.lock";
+  return kDefault;
 }
 
 bool GpuLock::acquire(const std::function<void(const std::string&)>& waiting) {

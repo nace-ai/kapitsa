@@ -29,7 +29,7 @@
 //   records.txt    per scored prefix: its sequence's line (from 0) and the prefix's length L; the row predicts token L
 //   logits.f32     per record, in order, the vocabulary's logits (fp32, little-endian)
 //   meta.json      the model, the path and how it ran (build, Mac, macOS, chunk, Neural Engine, tree, batch, NI_*)
-// Takes the GPU lock ($BENCH_GPU_LOCK, default ~/.cache/nace-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
+// Takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
 #include "engine/engine.h"
 #include "bench/bench.h"
 #include "metal/gpu.h"

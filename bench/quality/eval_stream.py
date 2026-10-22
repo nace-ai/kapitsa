@@ -33,7 +33,7 @@ writes every candidate's per-position KL, top-1 agreement and NLL. Each candidat
 Kapitsa reads them: every linear of the layers and the LM head (the embedding only as a tied head), plus the
 DFlash2 draft head (98,304 rows of the LM head, an 8-bit copy unless the head is 4- or 8-bit group 64).
 --local DIR reads the base tensors from a local MLX directory instead (tests). --layers N stops after N layers
-(debug: the head then runs on partial hidden states). GPU work holds ~/.cache/nace-gpu.lock, released while waiting
+(debug: the head then runs on partial hidden states). GPU work holds /tmp/kapitsa-gpu.lock, released while waiting
 for downloads (NI_LOCK_HELD=1: the caller holds it for the whole run). --f32 sets MLX_ENABLE_TF32=0 (MLX otherwise
 runs fp32 GEMMs as TF32 on the M5).
 """
@@ -59,7 +59,7 @@ import numpy as np
 from mlx_lm.models import qwen3_5
 
 UA = {"User-Agent": "kapitsa-quant-eval"}
-LOCK = os.path.expanduser("~/.cache/nace-gpu.lock")
+LOCK = os.path.expanduser("/tmp/kapitsa-gpu.lock")
 NP_DT = {"BF16": np.uint16, "F32": np.float32, "F16": np.float16, "U32": np.uint32, "I32": np.int32, "U8": np.uint8}
 DRAFT_HEAD_ROWS = 98304  # DFlash2::kHeadRowsIdOrder (src/model/dflash2.h): the draft head without a ranked id list
 

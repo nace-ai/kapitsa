@@ -22,8 +22,8 @@ Library use (compare_engines.py, bench.py):
   ContentionMonitor, wait_quiet, summarize_samples
 
 Environment:
-  BENCH_GPU_LOCK     lock file (default ~/.cache/nace-gpu.lock). Every GPU job on the Mac must use the same file,
-                     e.g. `lockf -k ~/.cache/nace-gpu.lock <cmd>` for anything that is not this harness.
+  BENCH_GPU_LOCK     lock file (default /tmp/kapitsa-gpu.lock). Every GPU job on the Mac must use the same file,
+                     e.g. `lockf -k /tmp/kapitsa-gpu.lock <cmd>` for anything that is not this harness.
   BENCH_GPU_AMBIENT  comma-separated process names to treat as ambient desktop load (added to AMBIENT below):
                      never blocks the quiet wait, never flags a result, recorded separately as "ambient".
 """
@@ -36,7 +36,7 @@ IGNORE = {"WindowServer"}
 # separately ("ambient_pct"), so the numbers stay transparent.
 AMBIENT_DEFAULT = ("mediaanalysisd", "photoanalysisd", "VisualIntelligenceCore")
 AMBIENT = set(AMBIENT_DEFAULT)
-LOCK_PATH = os.path.expanduser("~/.cache/nace-gpu.lock")
+LOCK_PATH = os.path.expanduser("/tmp/kapitsa-gpu.lock")
 FOREIGN_MAX_PCT = 5.0     # foreign GPU load above this, sustained, flags a result
 SUSTAIN_SAMPLES = 3       # consecutive samples (2 s each) that count as "sustained"
 COMM_LEN = 16             # ioreg reports the process name truncated to MAXCOMLEN (16) characters
@@ -46,7 +46,7 @@ def configure():
     """(Re)reads BENCH_GPU_LOCK and BENCH_GPU_AMBIENT, e.g. after an env file was loaded."""
     global AMBIENT, LOCK_PATH
     AMBIENT = set(AMBIENT_DEFAULT) | {x.strip() for x in os.environ.get("BENCH_GPU_AMBIENT", "").split(",") if x.strip()}
-    LOCK_PATH = os.path.expanduser(os.environ.get("BENCH_GPU_LOCK") or "~/.cache/nace-gpu.lock")
+    LOCK_PATH = os.path.expanduser(os.environ.get("BENCH_GPU_LOCK") or "/tmp/kapitsa-gpu.lock")
 
 
 configure()

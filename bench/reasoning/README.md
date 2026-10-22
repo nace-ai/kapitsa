@@ -49,7 +49,7 @@ reasoning and content, the answer read, the verdict, the finish reason, tokens, 
 and a distinct-4-gram ratio (below 0.5: a loop). A header line per run records the server's `/v1/models` entry, the
 request's settings, the machine, this checkout's commit and the dataset revision. A results file resumes: rerunning
 the same command skips the samples already graded and retries the ones that failed (HTTP errors, timeouts). The GPU
-lock (`~/.cache/nace-gpu.lock`) is held for the run unless `--no-gpu-lock` or `NACE_GPU_LOCK_HELD=1`.
+lock (`/tmp/kapitsa-gpu.lock`) is held for the run unless `--no-gpu-lock` or `NACE_GPU_LOCK_HELD=1`.
 
 ```bash
 cd bench/reasoning

@@ -58,7 +58,7 @@ Lint: `uv tool install prek && prek install` once, then `prek run --all-files` (
 ## Rules that bite here
 
 **GPU lock.** Anything that loads a model takes the exclusive flock on `$BENCH_GPU_LOCK` (default
-`~/.cache/nace-gpu.lock`), as `lockf -k -t <ms> <file> <command>` does, and a caller that already holds it says so with
+`/tmp/kapitsa-gpu.lock`), as `lockf -k -t <ms> <file> <command>` does, and a caller that already holds it says so with
 `NI_LOCK_HELD=1` / `NACE_GPU_LOCK_HELD=1`. A new script, workflow or test that uses the GPU takes the lock; a test
 points `BENCH_GPU_LOCK` at a temporary file. See `src/bench/system.mm` (`GpuLock`), `bench/shortpf/locked.sh`.
 

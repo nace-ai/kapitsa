@@ -32,7 +32,7 @@ of bf16 inference). 'pack' (local only): exactly the pack's tensors. Per-positio
 selection (with 1024-token sequences attention is exactly dense), reported separately; --long-only scores just that.
 Every sequence runs alone (batch 1): mlx-vlm's batched QSA prefill is wrong for B > 1.
 Activations, norms and dequantized weights are fp32 on both sides (bf16 activations add noise of the size of an
-8-bit quantization's error). GPU work holds ~/.cache/nace-gpu.lock (released while waiting for the network).
+8-bit quantization's error). GPU work holds /tmp/kapitsa-gpu.lock (released while waiting for the network).
 """
 import argparse
 import json

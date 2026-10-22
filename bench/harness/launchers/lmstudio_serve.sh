@@ -11,7 +11,7 @@
 # (llmster + the node worker that hosts the engine).
 #
 # GPU lock: compare_engines.py holds it for the whole server lifetime. By hand, wrap the run, e.g.
-#   lockf -k ~/.cache/nace-gpu.lock launchers/lmstudio_serve.sh serve 8197 qwen/qwen3.6-35b-a3b q36 --context-length 32768 --parallel 1
+#   lockf -k /tmp/kapitsa-gpu.lock launchers/lmstudio_serve.sh serve 8197 qwen/qwen3.6-35b-a3b q36 --context-length 32768 --parallel 1
 set -euo pipefail
 LMS="${LMS:-$HOME/.lmstudio/bin/lms}"
 cmd="${1:-}"; shift || true

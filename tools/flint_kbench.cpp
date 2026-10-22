@@ -8,7 +8,7 @@
 // (qmv2_b4_g64_r2_add), router (flint_router_topk), rshared (flint_router_shared), headN (the LM head on qmvf, N
 // simdgroups), and attention at position KB_POS (default 1024): prep, partial, reduce, d2 (flint_attn_d2), a trailing F
 // for a full-attention layer (a sliding-window one otherwise). "A+B" times A then B per call, "A|B" side by side.
-// Takes the GPU lock ($BENCH_GPU_LOCK, default ~/.cache/nace-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
+// Takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
 #include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/kparams.h"

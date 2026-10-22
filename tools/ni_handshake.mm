@@ -35,7 +35,7 @@
 //            spin is bounded, and a pass whose GPU gave up waiting counts as failed)
 // Every pass checks that the experts kernels read the slots the host wrote in that pass ("stale": a slot from before)
 // and that the host read the ids the router wrote ("ids stale"). base and presig have no misses.
-// Run it under the GPU lock: lockf -k -t 600 ~/.cache/nace-gpu.lock build/ni_handshake
+// Run it under the GPU lock: lockf -k -t 600 /tmp/kapitsa-gpu.lock build/ni_handshake
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 

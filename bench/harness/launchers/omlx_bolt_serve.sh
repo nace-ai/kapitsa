@@ -14,7 +14,7 @@
 # OMLX_BIN names oMLX's command (default: omlx on PATH).
 #
 # GPU lock: compare_engines.py holds it for the whole server lifetime. By hand, wrap the run in
-#   lockf -k ~/.cache/nace-gpu.lock launchers/omlx_bolt_serve.sh ...
+#   lockf -k /tmp/kapitsa-gpu.lock launchers/omlx_bolt_serve.sh ...
 set -uo pipefail
 PORT="$1"; IPORT="$2"; MID="$3"; shift 3
 OMLX="${OMLX_BIN:-omlx}"
