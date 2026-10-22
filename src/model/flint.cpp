@@ -41,7 +41,7 @@ struct RouteP {
 struct RouterTopkP {
   uint32_t R, D, E, k;
   float eps;
-  uint32_t write_xn;
+  uint32_t write_xn, split;
 };
 struct AcceptP {
   uint32_t P, K;
@@ -88,6 +88,17 @@ bool qmt_available() {
   if ((v && !strcmp(v, "0")) || Gpu::get().apple_family() < 10) return false;
   if (__builtin_available(macOS 26.0, *)) return true;
   return false;
+}
+
+// The decode kernels' merges in a dispatch of their own (flint.metal, FLINT_FENCES): always on macOS 14, whose Metal
+// 3.1 has no device-scope fences for the last threadgroup to merge in; NI_FLINT_SPLIT=1 takes them on a newer macOS too
+bool split_merges() {
+  static const bool v = [] {
+    if (env_on("NI_FLINT_SPLIT")) return true;
+    if (__builtin_available(macOS 15.0, *)) return false;
+    return true;
+  }();
+  return v;
 }
 
 }  // namespace
@@ -366,7 +377,7 @@ void Flint::alloc_buffers() {
   mh_ = g.alloc(R * size_t(std::max(c.ffn, 1)) * 4, "flint_mlp_h");
   part_o_ = g.alloc(R * size_t(c.hq) * max_chunks * c.hd * 4, "flint_part_o");
   part_ml_ = g.alloc(R * size_t(c.hq) * max_chunks * 2 * 4, "flint_part_ml");
-  rlog_ = g.alloc(R * size_t(c.experts) * 4, "flint_rlog");
+  rlog_ = g.alloc(R * size_t(c.experts + 1) * 4, "flint_rlog");  // + the rows' norm scales (split_merges())
   eidx_ = g.alloc(R * k * 4 + 16, "flint_eidx");
   ewts_ = g.alloc(R * (k + 1) * 4 + 16, "flint_ewts");
   eh_ = g.alloc(R * (k + 1) * size_t(std::max(c.moe_I, c.shared_I)) * 4, "flint_eh");
@@ -715,8 +726,9 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     const struct {
       uint32_t pos, Hq, Hkv, rows, ring, rope, k0, tps, S;
       float eps, scale;
+      uint32_t split;
     } ap{uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u, L.rope ? 1u : 0u, k0, tps, S, c.eps,
-         1.0f / std::sqrt(float(c.hd))};
+         1.0f / std::sqrt(float(c.hd)), split_merges() ? 1u : 0u};
     e.use(pipe(small_tiles() ? "flint_attn_d2_t16" : "flint_attn_d2"));
     e.buf(0, qkv_);
     e.buf(1, L.qn->buf);
@@ -731,6 +743,15 @@ void Flint::enc_layer_rows(Encoder& e, Seq& s, int li, int pos0, int R) {
     e.buf(10, acnt_);
     e.bytes(11, &ap, sizeof ap);
     e.dispatch(S, uint32_t(c.hkv), 1, 128);
+    if (ap.split && S > 1) {
+      e.use(pipe("flint_attn_d2_merge"));
+      e.buf(6, L.sinks->buf);
+      e.buf(7, ao_);
+      e.buf(8, part_o_);
+      e.buf(9, part_ml_);
+      e.bytes(11, &ap, sizeof ap);
+      e.dispatch(uint32_t(c.hkv), 1, 1, 128);
+    }
   } else {
     const PrepP pp{uint32_t(R), uint32_t(pos0), uint32_t(c.hq), uint32_t(c.hkv), rows, ring ? 1u : 0u,
                    L.rope ? 1u : 0u, 0, QKV, c.eps, 0};
@@ -794,7 +815,8 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     const struct {
       uint32_t D, E, k, SI, hstride, nr;
       float eps;
-    } rp{D, E, k, uint32_t(c.shared_I), I, E / 8, c.eps};
+      uint32_t split;
+    } rp{D, E, k, uint32_t(c.shared_I), I, E / 8, c.eps, split_merges() ? 1u : 0u};
     e.use(pipe("flint_router_shared"));
     e.buf(0, x_); e.buf(1, L.post_norm->buf); e.buf(2, L.router.w->buf); e.buf(3, rlog_); e.buf(4, xn_);
     e.bytes(5, &rp, sizeof rp);
@@ -802,6 +824,13 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
     e.buf(9, L.sg.w->buf); e.buf(10, L.sg.s->buf); e.buf(11, L.sg.b->buf);
     e.buf(12, L.su.w->buf); e.buf(13, L.su.s->buf); e.buf(14, L.su.b->buf); e.buf(15, eh_);
     e.dispatch(E / 8 + (uint32_t(c.shared_I) + 15) / 16, 1, 1, 256);
+    if (rp.split) {
+      e.use(pipe("flint_router_shared_merge"));
+      e.buf(0, x_); e.buf(1, L.post_norm->buf); e.buf(3, rlog_); e.buf(4, xn_);
+      e.bytes(5, &rp, sizeof rp);
+      e.buf(6, eidx_); e.buf(7, ewts_);
+      e.dispatch(1, 1, 1, 256);
+    }
     e.use(pipe("moe_gate_up3_r2"));
     e.buf(0, L.eg.w->buf); e.buf(1, L.eg.s->buf); e.buf(2, L.eg.b->buf);
     e.buf(3, L.eu.w->buf); e.buf(4, L.eu.s->buf); e.buf(5, L.eu.b->buf);
@@ -821,7 +850,7 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   }
   // logits, top-k and the normalized rows in one dispatch (the last threadgroup to finish routes)
   constexpr uint32_t rnsg = 4;
-  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, 1};
+  const RouterTopkP rp{uint32_t(R), D, E, k, c.eps, 1, split_merges() ? 1u : 0u};
   e.use(pipe("flint_router_topk"));
   e.buf(0, x_);
   e.buf(1, L.post_norm->buf);
@@ -833,6 +862,13 @@ void Flint::enc_moe_rows(Encoder& e, const FlintLayer& L, int R) {
   e.buf(7, ewts_);
   e.buf(8, rcnt_);
   e.dispatch(E / rnsg, 1, 1, 32 * rnsg);
+  if (rp.split) {
+    e.use(pipe("flint_router_topk_merge"));
+    e.buf(0, x_); e.buf(1, L.post_norm->buf); e.buf(3, rlog_); e.buf(4, xn_);
+    e.val(5, rp);
+    e.buf(6, eidx_); e.buf(7, ewts_);
+    e.dispatch(1, 1, 1, 32 * rnsg);
+  }
   if (small_tiles()) {
     // under GPU shader validation, which doubles a kernel's threadgroup memory (moe_gate_up3's 16 KB of staged input,
     // moe_down2_w's and moe4_down's 28 KB of staged hidden rows): the first decode kernels, which stage nothing (the

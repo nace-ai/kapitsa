@@ -8,6 +8,8 @@
 // (qmv2_b4_g64_r2_add), router (flint_router_topk), rshared (flint_router_shared), headN (the LM head on qmvf, N
 // simdgroups), and attention at position KB_POS (default 1024): prep, partial, reduce, d2 (flint_attn_d2), a trailing F
 // for a full-attention layer (a sliding-window one otherwise). "A+B" times A then B per call, "A|B" side by side.
+// router, rshared and d2 time the fused kernels (split 0): on macOS 14, which has no device-scope fences, they run without
+// their merges (flint.metal, FLINT_FENCES), so time only the rest there.
 // Takes the GPU lock ($BENCH_GPU_LOCK, default /tmp/kapitsa-gpu.lock) unless NI_LOCK_HELD=1 or NACE_GPU_LOCK_HELD=1.
 #include "bench/bench.h"
 #include "metal/gpu.h"
@@ -134,7 +136,8 @@ int main(int argc, char** argv) {
       const struct {
         uint32_t D, E, k, SI, hstride, nr;
         float eps;
-      } rp{D, E, K6, SI, SI, E / 8, 1e-6f};
+        uint32_t split;
+      } rp{D, E, K6, SI, SI, E / 8, 1e-6f, 0};
       e.use(pipe("flint_router_shared"));
       e.buf(0, x); e.buf(1, l.norm); e.buf(2, l.router); e.buf(3, logits); e.buf(4, xn);
       e.bytes(5, &rp, sizeof rp);
@@ -250,8 +253,8 @@ int main(int argc, char** argv) {
       const struct {
         uint32_t R, D, E, k;
         float eps;
-        uint32_t write_xn;
-      } rp{1, D, E, K6, 1e-6f, 1};
+        uint32_t write_xn, split;
+      } rp{1, D, E, K6, 1e-6f, 1, 0};
       e.use(pipe("flint_router_topk"));
       e.buf(0, x); e.buf(1, l.norm); e.buf(2, l.router); e.buf(3, logits); e.buf(4, xn);
       e.bytes(5, &rp, sizeof rp);
@@ -309,8 +312,8 @@ int main(int argc, char** argv) {
       uint32_t S = std::min(T, kSmax);
       const uint32_t tps = (T + S - 1) / S;
       S = (T + tps - 1) / tps;
-      const struct { uint32_t pos, Hq, Hkv, rows, ring, rope, k0, tps, S; float eps, scale; } dp{
-          pos, 32, 4, rows, full ? 0u : 1u, full ? 0u : 1u, k0, tps, S, 1e-6f, 0.0884f};
+      const struct { uint32_t pos, Hq, Hkv, rows, ring, rope, k0, tps, S; float eps, scale; uint32_t split; } dp{
+          pos, 32, 4, rows, full ? 0u : 1u, full ? 0u : 1u, k0, tps, S, 1e-6f, 0.0884f, 0};
       e.use(pipe("flint_attn_d2"));
       e.buf(0, y); e.buf(1, l.norm); e.buf(2, l.norm); e.bytes(3, cs.data(), cs.size() * 4); e.buf(4, kc); e.buf(5, vc);
       e.buf(6, l.norm); e.buf(7, ao); e.buf(8, po); e.buf(9, pml); e.buf(10, acnt); e.bytes(11, &dp, sizeof dp);

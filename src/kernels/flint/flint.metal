@@ -16,9 +16,21 @@
 //  - flint_swiglu_scaled / flint_add_scaled: the prefill's SwiGLU into half rows scaled where they would overflow;
 //  - flint_accept / flint_kv_tree_compact: speculative decoding's acceptance and a tree's accepted keys.
 // Head dim 128 throughout. K / V caches: half [Hkv][rows][128].
+//
+// flint_router_topk, flint_router_shared and flint_attn_d2 merge in the threadgroup that finishes last (an arrival
+// counter behind device-scope fences, atomic_thread_fence with thread_scope_device). Those fences come with Metal 3.2,
+// which macOS 14 does not have: there the library compiles without them (FLINT_FENCES 0), the three kernels only write
+// their partial results, and flint_router_topk_merge / flint_router_shared_merge / flint_attn_d2_merge run the same
+// merge as a dispatch of their own (p.split; Flint's split_merges(), NI_FLINT_SPLIT=1 on a newer macOS).
 
 #ifndef NI_UNROLL
 #define NI_UNROLL _Pragma("clang loop unroll(full)")
+#endif
+
+#if __METAL_VERSION__ >= 320
+#define FLINT_FENCES 1
+#else
+#define FLINT_FENCES 0
 #endif
 
 constant constexpr uint kFD = 128;  // head dim
@@ -451,10 +463,13 @@ struct FlintSwigluP {
 // top-k (flint_route's) by the threadgroup that finishes last (an arrival counter, reset by it); with xn != null that
 // threadgroup also writes the normalized rows (fp32 [R][D], the experts' gate / up input).
 // grid: E / NSG threadgroups x 32 NSG threads (a router row per simdgroup). D a multiple of 256.
+// split (and without FLINT_FENCES): threadgroup 0 writes the rows' norm scales after the logits (logits[R E + r]) and
+// flint_router_topk_merge (1 threadgroup x 32 NSG threads) routes and writes xn instead.
 struct FlintRouterTopkP {
   uint R, D, E, k;
   float eps;
   uint write_xn;
+  uint split;
 };
 NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint lane, device uint* idx,
                               device float* wts) {
@@ -522,7 +537,10 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
     const float v = simd_sum(acc[r]) * inv;
     if (lane == 0) logits[r * p.E + e] = v;
     if (sg == 0 && lane == 0) inv_s[r] = inv;
+    if ((!FLINT_FENCES || p.split) && tg == 0 && sg == 0 && lane == 0) logits[p.R * p.E + r] = inv;
   }
+  if (!FLINT_FENCES || p.split) return;
+#if FLINT_FENCES
   // the last threadgroup to finish: every row's logits are written
   atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
   threadgroup_barrier(mem_flags::mem_device);
@@ -538,6 +556,23 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
       xn[i] = x[size_t(r) * p.D + k] * inv_s[r] * float(nw[k]);
     }
   if (tid == 0) atomic_store_explicit(cnt, 0u, memory_order_relaxed);
+#endif
+}
+// flint_router_topk's last threadgroup's work as a dispatch of its own (split): the logits and norm scales it wrote
+[[kernel]] void flint_router_topk_merge(const device float* x [[buffer(0)]], const device bfloat* nw [[buffer(1)]],
+                                        const device float* logits [[buffer(3)]], device float* xn [[buffer(4)]],
+                                        constant FlintRouterTopkP& p [[buffer(5)]], device uint* idx [[buffer(6)]],
+                                        device float* wts [[buffer(7)]], uint tid [[thread_index_in_threadgroup]],
+                                        uint sg [[simdgroup_index_in_threadgroup]],
+                                        uint nsg [[simdgroups_per_threadgroup]], uint lane [[thread_index_in_simdgroup]],
+                                        uint ntg [[threads_per_threadgroup]]) {
+  for (uint r = sg; r < p.R; r += nsg)
+    flint_topk_row(logits + size_t(r) * p.E, p.E, p.k, lane, idx + r * p.k, wts + r * (p.k + 1));
+  if (p.write_xn)
+    for (uint i = tid; i < p.R * p.D; i += ntg) {
+      const uint r = i / p.D, k = i % p.D;
+      xn[i] = x[size_t(r) * p.D + k] * logits[p.R * p.E + r] * float(nw[k]);
+    }
 }
 
 // ---- one decode row's router and shared expert in one dispatch ----
@@ -546,9 +581,12 @@ NI_INLINE void flint_topk_row(const device float* logits, uint E, uint k, uint l
 // simdgroup), the normalized row staged once per threadgroup: h[k hstride + n] = silu(gate . xn) (up . xn). The routed
 // experts' gate / up (moe_gate_up3 over slots [0, k)) follow; the router's latency overlaps the shared expert's weights.
 // grid: nr + ceil(SI / (ROWS nsg)) threadgroups x 32 nsg threads.
+// split (and without FLINT_FENCES): threadgroup 0 writes the row's norm scale after the logits (logits[E]) and
+// flint_router_shared_merge (1 threadgroup x 256 threads) routes and writes xn instead.
 struct FlintRouterSharedP {
   uint D, E, k, SI, hstride, nr;
   float eps;
+  uint split;
 };
 template <int ROWS>
 NI_INLINE void flint_router_shared_impl(const device float* x, const device bfloat* nw, const device bfloat* W,
@@ -585,6 +623,11 @@ NI_INLINE void flint_router_shared_impl(const device float* x, const device bflo
     const float inv = metal::precise::rsqrt(simd_sum(ss) / float(p.D) + p.eps);
     const float v = simd_sum(acc) * inv;
     if (lane == 0) logits[e] = v;
+    if (!FLINT_FENCES || p.split) {
+      if (tg == 0 && sg == 0 && lane == 0) logits[p.E] = inv;  // (read by flint_router_shared_merge)
+      return;
+    }
+#if FLINT_FENCES
     atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
     threadgroup_barrier(mem_flags::mem_device);
     if (tid == 0) *last = atomic_fetch_add_explicit(cnt, 1u, memory_order_relaxed) == p.nr - 1 ? 1u : 0u;
@@ -594,6 +637,7 @@ NI_INLINE void flint_router_shared_impl(const device float* x, const device bflo
     if (sg == 0) flint_topk_row(logits, p.E, p.k, lane, idx, wts);
     for (uint i = tid; i < p.D; i += ntg) xn[i] = x[i] * inv * float(nw[i]);
     if (tid == 0) atomic_store_explicit(cnt, 0u, memory_order_relaxed);
+#endif
     return;
   }
   stage_x(x, p.D, true, p.eps, nw, xs, red, tid, ntg);
@@ -623,6 +667,18 @@ NI_INLINE void flint_router_shared_impl(const device float* x, const device bflo
   flint_router_shared_impl<2>(x, nw, W, logits, xn, p, idx, wts, cnt, sgw, sgs, sgb, suw, sus, sub, h, xs, red, &last,
                               tg, tid, ntg, sg, nsg, lane);
 }
+// flint_router_shared's routing as a dispatch of its own (split): the logits and the norm scale its router wrote
+[[kernel]] void flint_router_shared_merge(const device float* x [[buffer(0)]], const device bfloat* nw [[buffer(1)]],
+                                          const device float* logits [[buffer(3)]], device float* xn [[buffer(4)]],
+                                          constant FlintRouterSharedP& p [[buffer(5)]], device uint* idx [[buffer(6)]],
+                                          device float* wts [[buffer(7)]], uint tid [[thread_index_in_threadgroup]],
+                                          uint ntg [[threads_per_threadgroup]],
+                                          uint sg [[simdgroup_index_in_threadgroup]],
+                                          uint lane [[thread_index_in_simdgroup]]) {
+  if (sg == 0) flint_topk_row(logits, p.E, p.k, lane, idx, wts);
+  const float inv = logits[p.E];
+  for (uint i = tid; i < p.D; i += ntg) xn[i] = x[i] * inv * float(nw[i]);
+}
 
 // ---- one decode row's attention, v2: K / V staged in 32-key tiles, fp32 fragments ----
 // A threadgroup = one split of the visible keys [k0, pos] of one KV head, in 32-key tiles: K and V staged in
@@ -642,7 +698,31 @@ struct FlintAttnD2P {
   uint tps;  // tiles per split
   uint S;    // splits
   float eps, scale;
+  uint split;  // with S > 1 (and always without FLINT_FENCES): the partials alone; flint_attn_d2_merge merges them
 };
+
+// a KV head's S partials (part_o / part_ml) and its heads' sinks into out: thread tid of the head's 128 merges head
+// tid / 16's dims (tid % 16) 8 .. + 7. The same statements as flint_attn_d2_impl's last threadgroup (kept apart, so
+// the fused kernel stays as it was measured)
+NI_INLINE void flint_attn_d2_merge_impl(const device float* part_o, const device float* part_ml,
+                                        const device bfloat* sinks, device float* out, uint S, uint kvh, uint tid) {
+  const uint h = tid / 16, dd = (tid % 16) * 8, hq = kvh * 8 + h;
+  const float s2 = float(sinks[hq]) * M_LOG2E_F;
+  const device float* ml = part_ml + size_t(hq) * S * 2;
+  const device float4* po = (const device float4*)(part_o + size_t(hq) * S * kFD + dd);
+  float Mx = s2;
+  for (uint t = 0; t < S; ++t) Mx = max(Mx, ml[t * 2]);
+  float den = exp2(s2 - Mx);
+  float4 n0 = 0.0f, n1 = 0.0f;
+  _Pragma("clang loop unroll_count(4)") for (uint t = 0; t < S; ++t) {
+    const float wt = exp2(ml[t * 2] - Mx);
+    den += wt * ml[t * 2 + 1];
+    n0 += wt * po[t * (kFD / 4)];
+    n1 += wt * po[t * (kFD / 4) + 1];
+  }
+  ((device float4*)(out + hq * kFD + dd))[0] = n0 / den;
+  ((device float4*)(out + hq * kFD + dd))[1] = n1 / den;
+}
 
 // part tid % 16 of the tile's keys tid / 16 + 8 j, j < TK / 8 (zero past ke, and for the row's own position: written
 // apart)
@@ -826,6 +906,8 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
     part_ml[pb * 2 + 0] = Mh;
     part_ml[pb * 2 + 1] = Lh;
   }
+  if (!FLINT_FENCES || p.split) return;
+#if FLINT_FENCES
   atomic_thread_fence(mem_flags::mem_device, memory_order_seq_cst, thread_scope_device);
   threadgroup_barrier(mem_flags::mem_device);
   if (tid == 0) last = atomic_fetch_add_explicit(cnt + kvh, 1u, memory_order_relaxed) == p.S - 1 ? 1u : 0u;
@@ -847,6 +929,14 @@ NI_INLINE void flint_attn_d2_impl(const device float* qkv, const device bfloat* 
   ((device float4*)(out + hq * kFD + dd))[0] = n0 / den;
   ((device float4*)(out + hq * kFD + dd))[1] = n1 / den;
   if (tid == 0) atomic_store_explicit(cnt + kvh, 0u, memory_order_relaxed);
+#endif
+}
+// flint_attn_d2's merge as a dispatch of its own (split, S > 1): grid Hkv threadgroups x 128 threads
+[[kernel]] void flint_attn_d2_merge(const device bfloat* sinks [[buffer(6)]], device float* out [[buffer(7)]],
+                                    const device float* part_o [[buffer(8)]], const device float* part_ml [[buffer(9)]],
+                                    constant FlintAttnD2P& p [[buffer(11)]], uint kvh [[threadgroup_position_in_grid]],
+                                    uint tid [[thread_index_in_threadgroup]]) {
+  flint_attn_d2_merge_impl(part_o, part_ml, sinks, out, p.S, kvh, tid);
 }
 #define FLINT_ATTN_D2(NAME, TK)                                                                                        \
   [[kernel, max_total_threads_per_threadgroup(128)]] void NAME(                                                       \
