@@ -153,3 +153,10 @@ jobs:
       - name: test_structured --cli
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: $RUNNER_TEMP/venv/bin/python tests/test_structured.py --cli build
+      - name: test_nh_fp4_requant
+        # numpy in a venv of its own: the shared one stays without it for test_logit_compare's standard-library path
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv-np"
+          "$RUNNER_TEMP/venv-np/bin/pip" install --quiet numpy
+          "$RUNNER_TEMP/venv-np/bin/python" tests/test_nh_fp4_requant.py
