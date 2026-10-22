@@ -1967,7 +1967,7 @@ contention-flagged. Result files, logs and the sweep are in
 | rec 0.1.0 (2 runs) | 144.9 / **151.9** | **2,138 / 1,941** | 0.28 / 0.28 | 29.1 |
 
 The context sweep, as on the M4 Pro; the points with GPU load from the browser were run twice, and each cell is the
-run with less load in its window:
+run with less load in its window (for decode, a window of one or two samples, so close to arbitrary):
 
 | Prefill (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1978,13 +1978,16 @@ run with less load in its window:
 | Decode (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Kapitsa** | **144.8** | **138.3** | 130.4 | **129.4** | **118.0** | **97.4** | **74.3** | **49.5** |
-| rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5 | 88.6 | 64.5 | 43.1 |
-| <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.15×</sub> | <sub>1.15×</sub> |
+| rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5 | 88.6 | 66.4 | 43.1 |
+| <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.12×</sub> | <sub>1.15×</sub> |
 
 - **Prefill.** rec reads faster at every length, 1.4x at 1K, 1.6x at 4K, 2.3x at 128K: the reverse of the M4 Pro, where
   Kapitsa led rec at every length. From the M4 Pro to the M5 Pro, Kapitsa's 4K prefill rises 1.42x and rec's 2.69x;
   why rec gains so much more was not measured.
-- **Decode.** As on the M4 Pro: level up to 4K, then Kapitsa ahead, 1.10x at 16K and 32K and 1.15x at 64K and 128K.
+- **Decode.** Level up to 8K, then Kapitsa 1.10-1.15x ahead from 16K, which is inside the spread: Kapitsa's own 16K
+  decode differs by 7% between its two sweeps. In the protocol runs decode is a tie (T 1.0 0.6% apart, greedy rec 2%
+  ahead, Kapitsa's decode phases the contended ones); the poster's row counts as Kapitsa's by its rule of ranking
+  on the measured value.
 - **Method.** One cold request per point; with the browser's load, read the long-context ratios as about ±10%. Each
   point's foreign GPU load and both runs are in the
   [results folder](../bench/results/2026-10-22-flint-m5pro/README.md#context-sweep-1k-to-128k-tokens).

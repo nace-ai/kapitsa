@@ -38,8 +38,10 @@ folder of engine binaries and scripts.
 
 - **Prefill.** rec reads prompts 1.56x as fast as Kapitsa at 4K (2,138 against 1,374 tok/s) and 1.75x at 16K (1,941
   against 1,108). This is the reverse of the M4 Pro, where Kapitsa read 1.22x and 1.17x as fast as rec.
-- **Decode.** Level: Kapitsa 145.7 against rec 144.9 tok/s at T 1.0 (0.6% apart, inside both engines' spread), and
-  greedy 148.8 against 151.9 (rec 2% ahead). Kapitsa's second run, the most contended, is its slowest.
+- **Decode.** A tie: Kapitsa 145.7 against rec 144.9 tok/s at T 1.0 (0.6% apart, inside both engines' spread), and
+  greedy 148.8 against 151.9 (rec 2% ahead). The contention leans against Kapitsa here: its decode phases are flagged
+  in both runs (5.4% and 14.9% mean foreign load at T 1.0, 7.4% greedy in the second), rec's in neither, and Kapitsa's
+  second run, the most contended, is its slowest (142.8).
 - **Follow-up turns.** Kapitsa starts a cached second turn 2.4x sooner than rec at 4K (0.12 against 0.28 s) and 2.0x
   sooner at 16K.
 - **Memory.** Kapitsa peaks at 23.3 GB, rec at 29.1.
@@ -48,8 +50,8 @@ folder of engine binaries and scripts.
   measured.
 
 **The poster's Flint cells are the means**, as prefill at 4K / decode at T 1.0: Kapitsa 1,374 / 146, rec 2,138 / 145.
-The poster ranks a row by its decode value, so the row counts as Kapitsa's, by a margin inside the runs' spread; rec
-leads its prefill by 1.56x.
+The poster ranks a row by its decode value, so by that rule the row counts as Kapitsa's, but the margin is inside the
+runs' spread and greedy goes the other way: read it as a tie on decode, with rec 1.56x ahead on prefill.
 
 rec's second run (`flint-rec-20261022-161819`) has one more flag: its third cached 16K follow-up stopped at the
 length limit with no content, so the harness stopped that series. Its 16K follow-up TTFT is the median of the two
@@ -66,16 +68,17 @@ valid samples (0.237 s).
 | Decode (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Kapitsa** | **144.8** | **138.3** | 130.4 | **129.4** | **118.0** | **97.4** | **74.3** | **49.5** |
-| rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5¹ | 88.6¹ | 64.5¹ | 43.1 |
-| <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.15×</sub> | <sub>1.15×</sub> |
+| rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5¹ | 88.6¹ | 66.4 | 43.1 |
+| <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.12×</sub> | <sub>1.15×</sub> |
 
-¹ From the rerun (below).
+¹ From the rerun; both runs' values are in the table under *Contention and reruns*.
 
 - **Prefill.** rec reads faster at every length, and its lead grows with the prompt: 1.4x at 1K, 1.6x at 4K, 1.75x at
   16K, 2.3x at 128K. At 128K, rec keeps 39% of its 4K speed and Kapitsa 27%. On the M4 Pro, Kapitsa led at every
   length (1.09-1.22x) and kept 31% at 128K.
-- **Decode.** The M4 Pro's shape again: level up to 4K (0.98-1.01x), then Kapitsa ahead, 1.05x at 8K, 1.10x at 16K and
-  32K, 1.15x at 64K and 128K. At 128K, Kapitsa keeps 38% of its 4K decode speed, rec 33%.
+- **Decode.** The M4 Pro's shape again, but closer: level up to 8K (0.98-1.05x), then Kapitsa 1.10-1.15x ahead from
+  16K. That lead is the size of the noise: Kapitsa's own 16K decode differs by 7% between its two sweeps, and the
+  long-context ratios read as about ±10% (below). At 128K, Kapitsa keeps 38% of its 4K decode speed, rec 33%.
 - **Against the M4 Pro** at 128K: Kapitsa reads 1.17x as fast (350 against 300 tok/s) and decodes 1.08x (49.5 against
   45.7); rec reads 3.1x as fast (817 against 262) and decodes 1.22x (43.1 against 35.2).
 
@@ -97,18 +100,36 @@ target was added from the same commit, and the sweep ran after rec's.
 
 **Contention and reruns.** This sweep has a contention sampler: `gpu_hogs.py monitor` logged non-engine GPU load every
 2 s (`context-sweep/foreign-gpu/`). Its only source was Microsoft Edge, and it was heavy in places: up to 85% for a
-few seconds of Kapitsa's 128K prefill, and 53% on average through rec's 32K prefill. `sweep.json` gives each point's
-foreign load in its prefill and decode windows. The points with load in their windows were run once more (Kapitsa
-2K-16K, rec 16K-64K, the `-rerun` logs), and each table cell takes the run with less foreign load in that metric's
-window. Kapitsa's reruns were more contended than its first sweep (28-47% mean during prefill), so all its cells are
-from the first sweep. rec's 32K and 64K prefill and its 16K-64K decode are from the rerun, which had 7-16% foreign
-load against the first sweep's 7-53%. The rerun raised rec's 32K and 64K prefill by 13% and 15%, and its 16K and 32K
-decode by 7% and 13%; the other rerun points moved 2-5% in prefill and up to 7% in decode.
+few seconds of Kapitsa's 128K prefill, and 53% on average through rec's 32K prefill. The points with load in their
+windows were run once more (Kapitsa 2K-16K, rec 16K-64K, the `-rerun` logs), and each table cell takes the run with
+the lower mean foreign load in that metric's window (the first sweep on a tie). `context-sweep/choose_cells.py`
+rebuilds that choice from the committed sampler files and logs (`python3 choose_cells.py` prints it, `--write` stores
+it as `sweep.json`'s `chosen`, with both runs' values and load for every cell). rec's windows come from its log's
+request timestamps; Kapitsa's log has none, so its windows are laid back from the sweep's end with its logged
+durations, about 2 s of error.
+
+The prefill windows from 16K up hold 5-180 samples, but a 256-token decode lasts about 2 s and holds one or two of
+the sampler's 2 s readings, so **the decode choice rests on one or two samples and is close to arbitrary**. Both runs
+of every rerun point:
+
+| Point | First sweep (foreign load) | Rerun (foreign load) | Rerun vs first | Table uses |
+| --- | ---: | ---: | ---: | --- |
+| Kapitsa 2K prefill / decode | 1,382 (0%) / 138.3 (11%) | 1,333 (0%) / 133.9 (22%) | -3.5% / -3.2% | first / first |
+| Kapitsa 4K prefill / decode | 1,302 (24%) / 130.4 (16%) | 1,334 (28%) / 130.5 (43%) | +2.5% / +0.1% | first / first |
+| Kapitsa 8K prefill / decode | 1,288 (7%) / 129.4 (3%) | 1,227 (39%) / 123.6 (57%) | -4.7% / -4.5% | first / first |
+| Kapitsa 16K prefill / decode | 1,102 (11%) / 118.0 (8%) | 1,055 (46%) / 109.3 (47%) | -4.3% / -7.4% | first / first |
+| rec 16K prefill / decode | 1,934 (10%) / 100.6 (23%) | 1,897 (22%) / 107.5 (13%) | -1.9% / +6.9% | first / rerun |
+| rec 32K prefill / decode | 1,466 (53%) / 78.7 (38%) | 1,657 (13%) / 88.6 (10%) | +13.0% / +12.6% | rerun / rerun |
+| rec 64K prefill / decode | 1,084 (37%) / 66.4 (5%) | 1,250 (16%) / 64.5 (12%) | +15.3% / -2.9% | rerun / first |
+
+Kapitsa's reruns were more contended than its first sweep, so all its cells are from the first sweep. The rerun raised
+rec's 32K and 64K prefill by 13% and 15% and its 16K and 32K decode by 7% and 13%, the cells where the first sweep's
+load was 23-53%; the other rerun points moved 2-5%, and Kapitsa's 16K decode 7%.
 
 Each sweep cell is a single request: about ±3% on a quiet GPU (as on the M4 Pro), more where the load was. Above 8K,
-most chosen windows still had some (up to 16% mean), so the long-context ratios between the engines are good to about
-±10%. Each point's runs, warm-ups, chosen run and foreign load are in `context-sweep/sweep.json`, the servers' logs
-in `context-sweep/logs/`. 256K was not run.
+most chosen prefill windows still had some (up to 16% mean), so the long-context ratios between the engines are good
+to about ±10%. Each point's runs, warm-ups, chosen run and both runs' foreign load are in `context-sweep/sweep.json`,
+the servers' logs in `context-sweep/logs/`. 256K was not run.
 
 ## Conditions
 

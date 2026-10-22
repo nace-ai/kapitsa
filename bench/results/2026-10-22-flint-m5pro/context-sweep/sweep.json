@@ -2,7 +2,7 @@
  "what": "Flint 40B-A2.5B on a MacBook Pro M5 Pro 48 GB (Mac17,8, macOS 26.5.2), 2026-10-22: one cold request per prompt size and engine, a coding agent's context (bench/corpus.txt, then this repository's source files in path order at 6c13588, cut to the size in Flint's tokens, a random nonce at the start), then a 256-token reply at T 1.0, top_p 0.95, top_k 20. Points with foreign GPU load were rerun once (the -rerun runs); 'chosen' takes each metric from the run with less foreign load in that metric's window.",
  "prefill_tps": "prompt tokens / time to the first streamed token",
  "decode_tps": "tokens per second between the 16th and the 4th-from-last streamed event",
- "foreign_gpu": "mean %, max %, samples of non-engine GPU load (gpu_hogs.py, every 2 s) inside the window; rec's windows come from its log's request timestamps, Kapitsa's are walked back from the sweep's end with its log's durations (about 1 s error)",
+ "foreign_gpu": "chosen[engine][size]: <metric>_foreign is {run: [mean %, max %, samples]} of non-engine GPU load (gpu_hogs.py, every 2 s) inside that metric's window for every run that measured the point, <metric>_values each run's value, <metric>_run the run with the lower mean (the first sweep on a tie). Built by choose_cells.py from foreign-gpu/ and logs/: rec's windows from its log's request timestamps, Kapitsa's walked back from the sweep's end with its log's durations (about 2 s of error). A decode window (256 tokens, about 2 s) holds 1-2 samples, so the decode choice rests on one or two readings.",
  "servers": {
   "kapitsa": "kapitsa serve --model flint-4bit --ctx 262144 --slots 1 (NI_DISK_CACHE=0), build 6c13588",
   "rec": "rec serve --context 262144 (rec 0.1.0 release binary)"
@@ -281,260 +281,504 @@
    "1024": {
     "prefill": 1151,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     0.0,
-     0.0,
-     0
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      9.8,
+      9.8,
+      1
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 1151
+    },
     "decode": 144.8,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     4.3,
-     4.3,
-     1
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      1.6,
+      1.6,
+      1
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 144.8
+    }
    },
    "2048": {
     "prefill": 1382,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     9.8,
-     9.8,
-     1
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      0.0,
+      0.0,
+      0
+     ],
+     "kapitsa-rerun": [
+      0.0,
+      0.0,
+      0
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 1382,
+     "kapitsa-rerun": 1333
+    },
     "decode": 138.3,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     1.6,
-     1.6,
-     1
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      11.3,
+      11.3,
+      1
+     ],
+     "kapitsa-rerun": [
+      22.3,
+      22.3,
+      1
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 138.3,
+     "kapitsa-rerun": 133.9
+    }
    },
    "4096": {
     "prefill": 1302,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     11.4,
-     11.4,
-     2
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      23.5,
+      35.6,
+      2
+     ],
+     "kapitsa-rerun": [
+      28.2,
+      28.7,
+      2
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 1302,
+     "kapitsa-rerun": 1334
+    },
     "decode": 130.4,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     35.6,
-     35.6,
-     1
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      16.4,
+      16.4,
+      1
+     ],
+     "kapitsa-rerun": [
+      42.7,
+      42.7,
+      1
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 130.4,
+     "kapitsa-rerun": 130.5
+    }
    },
    "8192": {
     "prefill": 1288,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     10.5,
-     16.4,
-     3
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      6.5,
+      8.7,
+      3
+     ],
+     "kapitsa-rerun": [
+      38.6,
+      56.3,
+      3
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 1288,
+     "kapitsa-rerun": 1227
+    },
     "decode": 129.4,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     4.5,
-     4.5,
-     1
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      3.2,
+      3.2,
+      1
+     ],
+     "kapitsa-rerun": [
+      57.4,
+      57.4,
+      1
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 129.4,
+     "kapitsa-rerun": 123.6
+    }
    },
    "16384": {
     "prefill": 1102,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     9.3,
-     19.4,
-     7
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      10.8,
+      19.4,
+      7
+     ],
+     "kapitsa-rerun": [
+      46.1,
+      57.8,
+      7
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 1102,
+     "kapitsa-rerun": 1055
+    },
     "decode": 118.0,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     13.3,
-     13.3,
-     1
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      7.7,
+      7.7,
+      1
+     ],
+     "kapitsa-rerun": [
+      46.5,
+      53.2,
+      2
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 118.0,
+     "kapitsa-rerun": 109.3
+    }
    },
    "32768": {
     "prefill": 847,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     5.6,
-     18.7,
-     19
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      5.3,
+      18.7,
+      19
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 847
+    },
     "decode": 97.4,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     0.3,
-     0.6,
-     2
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 97.4
+    }
    },
    "65536": {
     "prefill": 578,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     1.6,
-     15.8,
-     55
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      1.7,
+      15.8,
+      56
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 578
+    },
     "decode": 74.3,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     3.6,
-     7.3,
-     2
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      0.0,
+      0.0,
+      2
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 74.3
+    }
    },
    "131072": {
     "prefill": 350,
     "prefill_run": "kapitsa",
-    "prefill_foreign": [
-     10.1,
-     85.4,
-     183
-    ],
+    "prefill_foreign": {
+     "kapitsa": [
+      10.1,
+      85.4,
+      182
+     ]
+    },
+    "prefill_values": {
+     "kapitsa": 350
+    },
     "decode": 49.5,
     "decode_run": "kapitsa",
-    "decode_foreign": [
-     2.5,
-     5.0,
-     2
-    ]
+    "decode_foreign": {
+     "kapitsa": [
+      1.7,
+      5.0,
+      3
+     ]
+    },
+    "decode_values": {
+     "kapitsa": 49.5
+    }
    }
   },
   "rec": {
    "1024": {
     "prefill": 1582,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     0.0,
-     0.0,
-     0
-    ],
+    "prefill_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      0
+     ]
+    },
+    "prefill_values": {
+     "rec": 1582
+    },
     "decode": 143.1,
     "decode_run": "rec",
-    "decode_foreign": [
-     0.0,
-     0.0,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "rec": 143.1
+    }
    },
    "2048": {
     "prefill": 2144,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     0.0,
-     0.0,
-     0
-    ],
+    "prefill_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      0
+     ]
+    },
+    "prefill_values": {
+     "rec": 2144
+    },
     "decode": 137.1,
     "decode_run": "rec",
-    "decode_foreign": [
-     0.0,
-     0.0,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "rec": 137.1
+    }
    },
    "4096": {
     "prefill": 2112,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     0.0,
-     0.0,
-     1
-    ],
+    "prefill_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      0
+     ]
+    },
+    "prefill_values": {
+     "rec": 2112
+    },
     "decode": 132.5,
     "decode_run": "rec",
-    "decode_foreign": [
-     0.0,
-     0.0,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "rec": 132.5
+    }
    },
    "8192": {
     "prefill": 2108,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     2.5,
-     5.0,
-     2
-    ],
+    "prefill_foreign": {
+     "rec": [
+      2.5,
+      5.0,
+      2
+     ]
+    },
+    "prefill_values": {
+     "rec": 2108
+    },
     "decode": 122.7,
     "decode_run": "rec",
-    "decode_foreign": [
-     0.0,
-     0.0,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "rec": 122.7
+    }
    },
    "16384": {
     "prefill": 1934,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     11.9,
-     13.0,
-     4
-    ],
+    "prefill_foreign": {
+     "rec": [
+      9.5,
+      13.0,
+      5
+     ],
+     "rec-rerun": [
+      22.2,
+      33.0,
+      4
+     ]
+    },
+    "prefill_values": {
+     "rec": 1934,
+     "rec-rerun": 1897
+    },
     "decode": 107.5,
     "decode_run": "rec-rerun",
-    "decode_foreign": [
-     9.2,
-     9.2,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      22.5,
+      22.5,
+      1
+     ],
+     "rec-rerun": [
+      12.6,
+      16.0,
+      2
+     ]
+    },
+    "decode_values": {
+     "rec": 100.6,
+     "rec-rerun": 107.5
+    }
    },
    "32768": {
     "prefill": 1657,
     "prefill_run": "rec-rerun",
-    "prefill_foreign": [
-     13.8,
-     18.2,
-     10
-    ],
+    "prefill_foreign": {
+     "rec": [
+      53.0,
+      63.6,
+      11
+     ],
+     "rec-rerun": [
+      13.4,
+      18.2,
+      10
+     ]
+    },
+    "prefill_values": {
+     "rec": 1466,
+     "rec-rerun": 1657
+    },
     "decode": 88.6,
     "decode_run": "rec-rerun",
-    "decode_foreign": [
-     7.4,
-     7.4,
-     1
-    ]
+    "decode_foreign": {
+     "rec": [
+      38.1,
+      38.1,
+      1
+     ],
+     "rec-rerun": [
+      10.4,
+      13.3,
+      2
+     ]
+    },
+    "decode_values": {
+     "rec": 78.7,
+     "rec-rerun": 88.6
+    }
    },
    "65536": {
     "prefill": 1250,
     "prefill_run": "rec-rerun",
-    "prefill_foreign": [
-     15.7,
-     24.4,
-     26
-    ],
-    "decode": 64.5,
-    "decode_run": "rec-rerun",
-    "decode_foreign": [
-     6.5,
-     6.9,
-     2
-    ]
+    "prefill_foreign": {
+     "rec": [
+      36.6,
+      66.0,
+      30
+     ],
+     "rec-rerun": [
+      15.6,
+      24.4,
+      25
+     ]
+    },
+    "prefill_values": {
+     "rec": 1084,
+     "rec-rerun": 1250
+    },
+    "decode": 66.4,
+    "decode_run": "rec",
+    "decode_foreign": {
+     "rec": [
+      5.4,
+      5.4,
+      1
+     ],
+     "rec-rerun": [
+      11.8,
+      17.4,
+      2
+     ]
+    },
+    "decode_values": {
+     "rec": 66.4,
+     "rec-rerun": 64.5
+    }
    },
    "131072": {
     "prefill": 817,
     "prefill_run": "rec",
-    "prefill_foreign": [
-     7.7,
-     19.8,
-     78
-    ],
+    "prefill_foreign": {
+     "rec": [
+      7.7,
+      19.8,
+      79
+     ]
+    },
+    "prefill_values": {
+     "rec": 817
+    },
     "decode": 43.1,
     "decode_run": "rec",
-    "decode_foreign": [
-     2.7,
-     4.4,
-     3
-    ]
+    "decode_foreign": {
+     "rec": [
+      2.7,
+      4.4,
+      3
+     ]
+    },
+    "decode_values": {
+     "rec": 43.1
+    }
    }
   }
  }
