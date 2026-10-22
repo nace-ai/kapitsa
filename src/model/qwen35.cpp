@@ -972,8 +972,14 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
       for (const char* k : {"embed_tokens.weight", "embed_tokens.scales", "lm_head.weight", "lm_head.scales"})
         if (name.size() >= strlen(k) && name.compare(name.size() - strlen(k), strlen(k), k) == 0)
           (*metas)[k] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
-      for (const char* k : {"layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales"})
-        if (name.find(k) != std::string::npos) (*metas)[k] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
+      // every layer's dense FFN tensors, keyed from "layers.": layers.<i>.mlp.{gate,up,down}_proj.{weight,scales}
+      const size_t lp = name.find("layers.");
+      for (const char* k : {".mlp.gate_proj.weight", ".mlp.gate_proj.scales", ".mlp.up_proj.weight",
+                            ".mlp.up_proj.scales", ".mlp.down_proj.weight", ".mlp.down_proj.scales"}) {
+        const size_t kl = strlen(k);
+        if (lp != std::string::npos && name.size() >= kl && name.compare(name.size() - kl, kl, k) == 0)
+          (*metas)[name.substr(lp)] = TensorMeta{v["dtype"], v["shape"].get<std::vector<int64_t>>(), b};
+      }
       if (name.find("embed_tokens.") != std::string::npos) (*metas)["embed_bytes"].bytes += b;
     }
     if (lm_head && name.find("lm_head.") != std::string::npos) *lm_head += b;
@@ -1059,7 +1065,17 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   if (!c.moe) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
     m.ffn_ane = format_supported(ff.first, ff.second);
-    m.ffn_mma = ff.first == 4 && ff.second == 64 && qmt_on();
+    // the split's GPU share on the matrix units (enc_mlp_gpu_part_qmt): every layer's gate, up and down 4-bit g64, as
+    // init_ane decides it, so the planned and the loaded default share agree
+    m.ffn_mma = qmt_on();
+    for (int i = 0; i < c.layers && m.ffn_mma; ++i)
+      for (const char* t : {"gate_proj", "up_proj", "down_proj"}) {
+        const std::string pre = "layers." + std::to_string(i) + ".mlp." + t;
+        auto iw = metas.find(pre + ".weight"), is = metas.find(pre + ".scales");
+        const int64_t K = t[0] == 'd' ? c.dense_I : c.hidden;  // input width: 4 bits = K / 8 words, g64 = K / 64
+        m.ffn_mma = iw != metas.end() && is != metas.end() && iw->second.dtype == "U32" &&
+                    iw->second.shape.back() == K / 8 && is->second.shape.back() == K / 64;
+      }
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
   {

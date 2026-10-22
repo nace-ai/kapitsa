@@ -102,7 +102,8 @@ void Qwen35::init_ane() {
   const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
   // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights
   bool mma = qmt_ready();
-  for (const Layer& L : layers_) mma = mma && L.mg.bits == 4 && L.mg.gs == 64 && L.md.bits == 4 && L.md.gs == 64;
+  auto g64 = [](const QLinear& q) { return q.bits == 4 && q.gs == 64; };
+  for (const Layer& L : layers_) mma = mma && g64(L.mg) && g64(L.mu) && g64(L.md);  // as plan()'s ffn_mma
   const uint32_t total = uint32_t(cfg_.dense_I / 512);
   uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, wave, mma);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
