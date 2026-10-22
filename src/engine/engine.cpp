@@ -2231,10 +2231,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     return v && v[0] == '1' && v[1] == 0;
   }();
   // DFlash2's prompt-capture hook covers the last 2047 rows of the prompt (kCtxKeep), and a wide pass whose first
-  // row lies below it is a fatal: a longer suffix must not enter this path
+  // row lies below it is a fatal: a longer suffix must not enter this path. The 128-row default is the longest
+  // measured suffix: 116 rows at a 16K prefix costs 757 ms as verify passes against 994 ms on the prefill path
+  // (64 rows 491 against 527), and the pass keeps winning there, so the older 64-row cap was leaving 24% on the table
   static const int vpf_max = [] {
     const char* v = getenv("NI_VPF_MAX");
-    return std::min(2047, v ? std::max(0, atoi(v)) : 64);
+    return std::min(2047, v ? std::max(0, atoi(v)) : 128);
   }();
   // one pass: 16 rows where the target verifies wide (two tiles read the weights once, ~90 ms at 16K either way),
   // else 8 (encode_verify8's row capacity without a tree); NI_VPF_WIDE=0 keeps it at 8 on a wide target. The target's
