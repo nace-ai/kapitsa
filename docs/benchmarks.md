@@ -1451,8 +1451,9 @@ does. The Mac held about 6 GB in swap throughout. Result files, every run listed
 
 Each Kapitsa table below also carries a paragraph with that model's newest flag-free run: on 0.2.2 for the 4B, the 27B
 and Lightning, which is after the M5 prefill kernels and the KFlash-tree default, and on 0.2.5 for the 35B-A3B, whose
-routed-expert prefill moved to the tensor units ([#279](https://github.com/nace-ai/kapitsa/pull/279)); the other
-engines' rows are the 2026-10-19 session in every table.
+routed-expert prefill moved to the tensor units ([#279](https://github.com/nace-ai/kapitsa/pull/279); that run's binary
+reports 0.2.5, the version between the last bump and this one, and the code ships in 0.2.6); the other engines' rows
+are the 2026-10-19 session in every table.
 Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.7, 18.6 →
 18.9 GB; the 35B's 21.7 GB is its 0.2.5 run). The growth is the SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)), which is new since
 0.1.36 and on by default in `serve`: rebuilt binaries run with the table's own protocol (16K sweep, tool calls, cache
@@ -1546,7 +1547,8 @@ Kapitsa's row above is the 2026-10-19 session, before the M5 prefill kernels ([#
 [#215](https://github.com/nace-ai/kapitsa/pull/215)) and the KFlash-tree decode default ([#187](https://github.com/nace-ai/kapitsa/pull/187)).
 On 0.2.5 (`d53f02e`) the 35B reads **2,459 / 1,838 tok/s** at 4K / 16K and decodes **217.0 / 227.0 tok/s** (T = 0.6 /
 greedy), 1.39x / 1.42x mlx-serve, with cached follow-ups at 0.05 / 0.07 s (the table's fastest) and a peak footprint of
-21.7 GB: flag-free, on AC power in High Power mode,
+21.7 GB: flag-free, on AC power in High Power mode (the run's binary reports 0.2.5, since it is a commit between the
+last version bump and the next; the same code ships in 0.2.6),
 [`q36-35b-kapitsa-20261022-102548.json`](../bench/results/2026-10-22-m5pro-48gb/README.md). The prefill gain is the
 routed-expert GEMM moving to the tensor units by default ([#279](https://github.com/nace-ai/kapitsa/pull/279)), 1.25x
 at 4K and 1.20x at 16K over the simdgroup path on the same Mac; the decode moves with it because the drafter's verify
