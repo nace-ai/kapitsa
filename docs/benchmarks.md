@@ -92,7 +92,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   setting from its newest run ([details](#macbook-pro-m5-pro-48-gb-2026-10-19)).
 - The 27B's Kapitsa cell is a 2026-10-22 run on main, after DFlash2 started drafting 16-row blocks by default on a
   one-slot engine ([#266](https://github.com/nace-ai/kapitsa/pull/266)); the block lifted the 4K prefill to 484 tok/s
-  and left the pair with mlx-serve where it was, mlx-serve still ahead on decode
+  and left the pair with mlx-serve where it was, mlx-serve ahead on decode and, in the same-day runs, on prefill
   ([the four runs](../bench/results/2026-10-22-m5pro-48gb/README.md)).
 - MLX: mlx-vlm with MTP on the 4B and 27B, DFlash2 on the 35B; mlx-lm on Lightning and Dory, mlx-vlm on Bolt. oMLX
   runs MTP on the 4B and Lightning, DFlash2 on the 27B and 35B, no drafter on Bolt; mlx-serve MTP on the 4B, 35B and
@@ -1514,14 +1514,16 @@ Kapitsa reads the prompt fourth of nine at both sizes.
 After [#266](https://github.com/nace-ai/kapitsa/pull/266) made DFlash2 draft 16 rows by default on a one-slot engine,
 the same cell on main ([`16f2b6a`](https://github.com/nace-ai/kapitsa/commit/16f2b6a), Kapitsa 0.2.5) reads
 **484 / 453 tok/s** at 4K / 16K and decodes **74.8 / 83.3 tok/s** (T = 0.6 / greedy), cached follow-ups at
-0.21 / 0.23 s, peak footprint 20.28 GB: flag-free (0.87% foreign GPU, the only run of the four below the flag's 5%),
+0.21 / 0.23 s, peak footprint 20.28 GB: flag-free (0.87% foreign GPU, the only one of the four with no flagged phase),
 every cycle at 16.00 rows per cycle, 0 at capacity 8,
 [`q38-27b-kapitsa-20261022-100545.json`](../bench/results/2026-10-22-m5pro-48gb/README.md). The 4K prefill is +4.5%
 on the 0.2.2 run above; the decode is +1% and a noise-level winner of the same run's 74.1, so read the two as equal.
-The block does not move the pair: in four runs on 10-22 (each engine twice, pass order reversed, both flagged for the
-browser's GPU load, a mean 4-11%) mlx-serve reads **78.2 tok/s** sampled and **86.2** greedy against Kapitsa's
-**76.9** and **83.1**, and mlx-serve keeps the 27B's decode at both temperatures while Kapitsa keeps only the 4K
-prefill on its own 10-21 runs. The headline's count of pairs is unchanged.
+The block does not move the pair: in four runs on 10-22 (each engine twice, pass order reversed, three of them flagged
+for the browser's GPU load at 4.4-11.5% mean, one flag-free at 0.87%) mlx-serve reads **78.2 tok/s** sampled and **86.2** greedy against Kapitsa's
+**76.9** and **83.1**: mlx-serve keeps the 27B's decode at both temperatures, and in these same-day runs it keeps the
+prefill too (4K 464 against 459, 16K 472 against 446). The poster's 4K lead for Kapitsa (484 against 428) is the
+cross-day pairing, its 10-22 run against mlx-serve's 10-21 one, not what the pair shows on the same day. The
+headline's count of pairs is unchanged.
 
 ### Qwen3.6-35B-A3B at 4-bit
 

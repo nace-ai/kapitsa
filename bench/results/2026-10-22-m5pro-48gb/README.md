@@ -24,9 +24,10 @@ The runs are in this directory; the server logs are in `logs/`.
 
 **The 16-row block does not flip the 27B cell.** Under the same conditions on the same machine minutes apart,
 mlx-serve's draft tree is ahead on decode at both temperatures (78.16 against 76.89 sampled, 1.6%; 86.23 against
-83.08 greedy, 3.8%) and, in these runs, on 16K prefill too. Kapitsa keeps the 27B's sampled-decode lead it has on the
-other Macs, but not this one: the poster's ordering for the pair (mlx-serve faster at decode, Kapitsa faster at 4K
-prefill on the 2026-10-21 flag-free runs) does not change, and neither does the headline's 21 of 24 pairs.
+83.08 greedy, 3.8%) and ahead on prefill too (4K 464 against 459, 16K 472 against 446). So the poster's ordering holds
+because mlx-serve is ahead on decode, and the poster's Kapitsa 4K lead (484 against 428) is a cross-day pairing — this
+10-22 run against mlx-serve's 10-21 run — not something these four runs show on the same day. The headline's count of
+pairs (16 of 17 on main) does not change.
 
 **The block itself is real.** Every Kapitsa run logged `DFlash2: 16-row drafting block` and drafted at 16.00 rows per
 cycle (cf. the 8-row runs in [2026-10-21](../2026-10-21-m5pro-48gb/README.md)), and the flag-free run above reads
@@ -37,8 +38,9 @@ The poster's Kapitsa cell is that flag-free run: **75 tok/s decode, 484 tok/s 4K
 the only foreign process in the samples), which showed up as 4-11% mean and up to 64% peak foreign GPU load. The
 flags are the harness's own (`CONTENTION: sustained foreign GPU load > 5% in ...`), not hand-set: a run of this pair
 cannot be made quiet while the GUI that starts it is open, so the pair was measured with the same contamination on
-both engines, and the poster cell comes from the one run that stayed under 5% in every phase (0.87% mean; the 21.8%
-single sample is a browser repaint during a 512-token decode, under the flag's two-sample "sustained" rule).
+both engines, and the poster cell comes from the only one of the four with no flagged phase (0.87% mean, no phase
+above the flag's 5% sustained mean; the 21.8% single sample is a browser repaint during a 512-token decode, under the
+flag's two-sample "sustained" rule).
 
 Two earlier single-engine attempts at the Kapitsa cell (09:35, 77.66 tok/s at 1.4% and 09:45, 82.15 tok/s at 12.6%)
 were discarded: the first was flagged on `prefill_16000`/`tools` only, the second everywhere, and a single run cannot
