@@ -31,12 +31,12 @@ Means of each engine's two runs:
 | Qwen3.8 27B | Kapitsa | 450 / 447 | 75.5 / 83.5 |
 | Qwen3.8 27B | Splash 1.4.0 | 674 / 618 | 72.2 / 70.8 |
 | Qwen3.6 35B-A3B | Kapitsa | 2,539 / 2,050 | 209.0 / 210.9 |
-| Qwen3.6 35B-A3B | Splash 1.4.0 | 3,514 / 3,091 | 179.1 / 191.1 |
+| Qwen3.6 35B-A3B | Splash 1.4.0 | 3,514 / 3,091 | 180.5 (loop-free run; both runs 179.1) / 191.1 |
 
 **Splash reads prompts faster; Kapitsa writes faster.** Splash leads prefill on both models: 1.50x Kapitsa's at 4K on
 the 27B (674 against 450 tok/s; its long prompts split between the GPU and the Neural Engine) and 1.38x on the 35B-A3B
-(3,514 against 2,539). Kapitsa leads decode on both: 5% at T = 0.6 on the 27B (75.5 against 72.2) and 17% on the
-35B-A3B (209.0 against 179.1); greedy, 18% and 10%. The M5 Max's 2026-10-22 runs read the same way
+(3,514 against 2,539). Kapitsa leads decode on both: 5% at T = 0.6 on the 27B (75.5 against 72.2) and 16% on the
+35B-A3B (209.0 against 180.5, the loop-free run); greedy, 18% and 10%. The M5 Max's 2026-10-22 runs read the same way
 ([results](../2026-10-22-m5-max/README.md)).
 
 **Contention.** Microsoft Edge, open on the desktop, held 5-10% of the GPU on average through the session (peaks of
@@ -48,13 +48,14 @@ prefill. Both engines' runs on a model saw the same desktop, in alternating orde
 the flagged numbers as lower bounds.
 
 **Repetition loop.** Splash's first 35B-A3B run has one decode answer in a repetition loop (distinct 4-grams 0.44, still
-a valid run); a loop flatters a speculative decoder, so that median reads high, if anything.
+a valid run, flagged). A loop flatters a speculative decoder; that run's median (177.7) is still the lower of the two, but
+the T = 0.6 decode figure for Splash's 35B-A3B (table above, the poster's 181) is the loop-free run alone, 180.5, so the
+loop cannot inflate it. Its greedy phase has no loop flag, so the greedy figure stays the mean of both runs.
 
 **Kapitsa's 35B-A3B cell.** The closing run, flag-free, is the newest Kapitsa 35B-A3B run without a contention or invalid
 flag, so under the poster's rule it is the cell now: 2,552 / 209 tok/s, on `4b89f4e`. It replaces the `d53f02e` run
 (2,459 / 217, 2026-10-22, before #293), which #301 kept because its own `4b89f4e` run was contention-flagged
-(2,548 / 201). Three runs of `4b89f4e` now read 201-209 tok/s decode against `d53f02e`'s 217; one run per build, not an
-interleaved A/B, so the gap is not attributed to a change here.
+(2,548 / 201). **The cell's decode drops from 217 to 209.** **Kapitsa's 35B-A3B decode is lower on current main than on `d53f02e`:** 217.0 / 227.0 tok/s (T = 0.6 / greedy) on `d53f02e`, flag-free, against 200.7-209.2 / 208.7-219.7 on three runs of `4b89f4e` (the flag-free one 208.9 / 213.1; the 200.7 run was on battery power and flagged), about 4% and 6% down. `d53f02e` is #279's branch head; main between it and `4b89f4e` adds #277, #285, #286 (Flint, with tokenizer changes) and #293, and the ones aimed at this model (#285, #293) are prefill-side, so the drop is not explained; these are single runs per build in different sessions, not an A/B, and whether it is a regression is being checked.
 
 The server logs are in `logs/`. Local paths are replaced by placeholders: `~` for the home folder, `<repo>` for the
 Kapitsa checkout, `<run-root>` for the run directory.
