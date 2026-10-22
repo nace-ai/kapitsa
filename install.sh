@@ -169,9 +169,16 @@ install_kapitsa() {
 
   # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
   if [ -f "$harness/kbench.py" ]; then
+    # local.env is the user's own settings for the harness: it survives a re-install
+    if [ -f "$notices/bench/harness/local.env" ]; then
+      cp "$notices/bench/harness/local.env" "${TMPDIR:-/tmp}/kapitsa-local.env.$$" || die "can't keep $notices/bench/harness/local.env."
+    fi
     rm -rf "$notices/bench/harness"
     mkdir -p "$notices/bench"
     cp -R "$harness" "$notices/bench/harness" || die "can't install the benchmark harness in $notices/bench/harness."
+    if [ -f "${TMPDIR:-/tmp}/kapitsa-local.env.$$" ]; then
+      mv "${TMPDIR:-/tmp}/kapitsa-local.env.$$" "$notices/bench/harness/local.env"
+    fi
   fi
 
   say "Installed $installed: $prefix/kapitsa"

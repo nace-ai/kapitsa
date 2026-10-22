@@ -224,6 +224,17 @@ check(r.returncode != 0 and "4b, 27b, 35b" in r.stderr, "an unknown model names 
 import compare_engines as ce  # noqa: E402
 import kbench  # noqa: E402
 
+# a release ships a copy of the harness with no git checkout: its VERSION says which release, and harness_info reads it
+copy = os.path.join(tmp, "harness-copy")
+shutil.copytree(HARNESS, copy, ignore=shutil.ignore_patterns("__pycache__"))
+with open(os.path.join(copy, "VERSION"), "w") as f:
+    f.write("9.9.9\n")
+r = run([sys.executable, "-c", "import sys; sys.path.insert(0, %r); import bench; print(bench.harness_info())" % copy],
+        env=env0)
+check(r.returncode == 0 and "'git_head': None" in r.stdout and "'version': '9.9.9'" in r.stdout,
+      "a harness copy with no checkout names its release in reports", r.stdout + r.stderr)
+
+
 class Tty(io.StringIO):
     def isatty(self):
         return True

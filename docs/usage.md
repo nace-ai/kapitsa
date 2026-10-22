@@ -799,7 +799,8 @@ Kapitsa releases are, and by the same Developer ID team as the running binary wh
 `--version` is the release's. Then it renames it over the old binary in one step, after checking that no `kapitsa bench`
 is running from it (a benchmark's servers must all run one binary) and that the file there is still the kapitsa that
 runs. The old binary is kept as `kapitsa.previous` beside the license files (`../share/kapitsa` from the binary's
-folder, where `install.sh` puts them, updated too). A release that fails a check changes nothing. A server that is
+folder, where `install.sh` puts them, updated too, with the benchmark harness in `bench/harness` there: your own
+`local.env` in it is kept, other edits are replaced, and `--rollback` leaves the newer harness). A release that fails a check changes nothing. A server that is
 running keeps the version it started with until it restarts. When the binary's folder is not yours to write (say
 `/usr/local/bin`), `kapitsa update` prints the command that works: `sudo /usr/local/bin/kapitsa update`.
 
@@ -836,5 +837,5 @@ again (`curl -fsSL https://raw.githubusercontent.com/nace-ai/kapitsa/main/instal
 
 `brew services stop kapitsa` if you started the service, then `brew uninstall kapitsa`; or delete the binary
 `install.sh` placed (in `/opt/homebrew/bin`, `~/.local/bin` or your `--prefix`) and `../share/kapitsa` next to that
-folder (the license files, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
+folder (the license files, the benchmark harness, and `kapitsa.previous` after an update). Deleting `~/.cache/kapitsa` (or `$KAPITSA_HOME`)
 removes the models, logs, update state and the SSD prefix cache (`prefix-cache/` alone: the cache).

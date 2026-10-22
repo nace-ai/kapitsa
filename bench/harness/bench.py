@@ -105,14 +105,23 @@ def out_dir():
 
 
 def harness_info():
-    """The harness's own version: git HEAD of its checkout and whether bench/harness has local changes."""
+    """The harness's own version: git HEAD of its checkout and whether bench/harness has local changes. A release
+    ships a copy with no checkout (packaging/release/build.sh), which says which release it came with in a VERSION
+    file instead, so a report made from an install names its harness too."""
     def git(*a):
         try:
             return subprocess.run(["git", "-C", HERE] + list(a), capture_output=True, text=True, timeout=10).stdout.strip()
         except Exception:
             return ""
     head = git("rev-parse", "HEAD")
-    return {"git_head": head or None, "dirty": bool(git("status", "--porcelain", "--", ".")) if head else None}
+    if head:
+        return {"git_head": head, "dirty": bool(git("status", "--porcelain", "--", "."))}
+    try:
+        with open(os.path.join(HERE, "VERSION")) as f:
+            version = f.read().strip()
+    except OSError:
+        version = ""
+    return {"git_head": None, "dirty": None, "version": version or None}
 
 
 # ---------------------------------------------------------------- memory

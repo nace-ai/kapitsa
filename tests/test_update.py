@@ -439,6 +439,18 @@ r = run([S1, "update"], env(H1))
 check(r.returncode == 0 and f"kapitsa {N} is up to date" in r.stdout and not since(n0, "GET"),
       "run again: up to date, nothing downloaded", r.stdout + r.stderr)
 
+# a user's local.env in the harness survives an update
+S4, H4 = standalone("s4"), home("s4")
+lenv = os.path.join(notices_of(S4), "bench", "harness", "local.env")
+os.makedirs(os.path.dirname(lenv), exist_ok=True)
+open(lenv, "w").write("LLAMA_SERVER=/x/llama-server\n")
+tar_release(N)
+r = run([S4, "update"], env(H4))
+kb4 = os.path.join(notices_of(S4), "bench", "harness", "kbench.py")
+check(r.returncode == 0 and open(kb4).read() == f"# kbench.py of {N}\n" and os.path.isfile(lenv)
+      and open(lenv).read() == "LLAMA_SERVER=/x/llama-server\n",
+      "the harness updated and the user's local.env kept", r.stdout + r.stderr)
+
 # an install made before releases shipped the harness (v0.2.5 and older) gets it from the next update
 S3, H3 = standalone("s3"), home("s3")
 shutil.rmtree(os.path.join(notices_of(S3), "bench"), ignore_errors=True)

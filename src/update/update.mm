@@ -721,6 +721,11 @@ bool install_harness(const std::string& from, const Install& in, std::string* wh
     std::filesystem::remove_all(fresh, ec);
     return false;
   }
+  // local.env is the user's own per-machine settings (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes into the new folder
+  if (is_file(join(dest, "local.env")))
+    std::filesystem::copy_file(join(dest, "local.env"), join(fresh, "local.env"),
+                               std::filesystem::copy_options::overwrite_existing, ec);
+  ec.clear();
   std::filesystem::rename(dest, old, ec);
   const bool had = !ec;
   ec.clear();

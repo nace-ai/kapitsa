@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds a Kapitsa release: build/release/kapitsa-VERSION-darwin-arm64.tar.gz (kapitsa, LICENSE,
 # THIRD_PARTY_NOTICES and bench/harness, which `kapitsa bench compare` runs) and its .sha256. The Homebrew formula
-# and install.sh install this tarball.
+# and install.sh install this tarball; the harness carries VERSION (this release) since a copy has no checkout.
 #   packaging/release/build.sh [VERSION]    VERSION must be CMakeLists.txt's KAPITSA_VERSION (the default)
 # It builds the committed tree (HEAD, exported with git archive), never the working tree: Release (-O3), arm64,
 # CMakeLists.txt's deployment target. It strips and signs the binary, then checks its architecture, minimum macOS,
@@ -95,9 +95,11 @@ got_version=$("$bin" --version)
 # 4. The tarball: fixed owner, times (the commit's) and order, no extended attributes, so a rebuild matches
 install -m 0644 "$work/src/LICENSE" "$work/src/THIRD_PARTY_NOTICES" "$work/stage/$name/"
 # `kapitsa bench compare` runs this harness; install.sh and the formula put it beside the notices, where find_harness()
-# looks: <the binary's folder>/../share/kapitsa/bench/harness
+# looks: <the binary's folder>/../share/kapitsa/bench/harness. The copy has no checkout, so its VERSION file says which
+# release it came with, and a report made from an install names its harness instead of "unknown".
 mkdir -p "$work/stage/$name/bench"
 cp -R "$work/src/bench/harness" "$work/stage/$name/bench/harness"
+printf '%s\n' "$version" > "$work/stage/$name/bench/harness/VERSION"
 stamp=$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M.%S "$commit")
 find "$work/stage/$name" -exec env TZ=UTC touch -t "$stamp" {} +
 (cd "$work/stage" && find "$name" | LC_ALL=C sort |
