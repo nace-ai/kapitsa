@@ -413,7 +413,7 @@ int main(int argc, char** argv) {
 
   if (dfl) {
     // NI_DFLASH_VERIFY=k: verify only the first k of the 7 proposals (lossless; fewer verify rows)
-    const int K = DFlash2::verify_depth();
+    const int K = dfl->verify_depth();
     const bool trace = getenv("NI_TRACE") != nullptr;
     // NI_DFLASH_CONF=<file>: per cycle "a c_0 .. c_6", c_p = softmax over the 16 candidates of the walk's
     // scores S_p at the chosen candidate (the drafter's confidence; calibration data for a dynamic depth)

@@ -215,7 +215,8 @@ class Qwen35 : public Model {
   // What a model needs, from config.json and the safetensors headers only (no weights read): for fit
   // checks before loading and `kapitsa doctor`. Bytes.
   using MemPlan = ni::MemPlan;
-  static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
+  // rows16: the engine will draft with a 16-row block (one slot), whose verify rows the live state's tape is sized for
+  static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048, bool rows16 = false);
   static Qwen35Config read_config(const std::string& model_dir);  // config.json only
   // The Neural Engine split this Mac would build for the model (dense FFN): its share in units of 512 channels
   // (0 = none), where it comes from, and its memory (surfaces + the engine's rerun checkpoint), as init_ane decides.

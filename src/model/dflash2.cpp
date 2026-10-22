@@ -353,13 +353,6 @@ QLinear DFlash2::row_view(const QLinear& src, uint32_t r0, uint32_t n) {
 
 static bool dfl_tw_supported();  // below: the drafter's GEMMs through Metal 4 tensor_ops
 
-// The block every drafter in this process drafts with (one per process: it is fixed at the first load, and
-// alloc_buffers() sizes everything from it).
-static int& dfl_block() {
-  static int b = -1;
-  return b;
-}
-
 bool DFlash2::rows16_tensor_ok() const {
   const char* av = getenv("NI_DFLASH_ATTN");
   const bool fused_attn = !(av && std::string(av) == "scalar") && !(v8_knobs().dfl & 1);
@@ -466,14 +459,23 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     for (size_t i = 0; i < cfg_.target_layers.size(); ++i) hk->slot[cfg_.target_layers[i]] = int(i);
     hk->ld = uint32_t(cfg_.target_layers.size() * cfg_.H);
   }
-  // The 16-row block, before anything is sized: Engine asks for it on a single-slot engine, where the wider block's
+  // The block, before anything is sized (alloc_buffers() and the reduced head read the rows): NI_DFLASH_BLOCK says 8 or
+  // 16, `auto` and unset leave it to the default. Engine asks for 16 on a single-slot engine, where the wider block's
   // cost is paid back by the deeper lattice it drafts (one weight read drafts 15 guesses instead of 7) and there is no
-  // batched cycle to lose. NI_DFLASH_BLOCK still decides where it is set; a target, a drafter or a knob that takes the
-  // drafting pass off the tensor path keeps 8 rows.
-  if (rows16 && !getenv("NI_DFLASH_BLOCK") && rows16_auto_ok()) {
-    dfl_block() = 16;
-    logi("DFlash2: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
-         "runs 16 rows; NI_DFLASH_BLOCK=8 keeps 8)");
+  // batched cycle to lose; a target, a drafter or a knob that takes the drafting pass off the tensor path keeps 8 rows.
+  {
+    const char* v = getenv("NI_DFLASH_BLOCK");
+    const bool said = v && *v && std::string(v) != "auto";  // `auto`: the default, one slot or not
+    if (said) {
+      block_ = atoi(v);
+      if (block_ != kB && block_ != 16) fatal("NI_DFLASH_BLOCK=%s: 8, 16 or auto", v);
+    } else if (rows16 && rows16_auto_ok()) {
+      block_ = 16;
+      logi("DFlash2: 16-row drafting block (one slot: the drafter drafts 15 guesses per weight read and the tree verify "
+           "runs 16 rows; NI_DFLASH_BLOCK=8 keeps 8)");
+    }
+    const char* vv = getenv("NI_DFLASH_VERIFY");
+    vdepth_ = std::clamp(vv && *vv ? atoi(vv) : block_ - 1, 1, block_ - 1);
   }
   alloc_buffers();
   {  // reduced draft head (default on): NI_DFLASH_HEAD=n rows (0 = the full vocabulary)
@@ -783,8 +785,17 @@ std::unique_ptr<DFlashSeq> DFlash2::new_seq() {
   return d;
 }
 
+int DFlash2::plan_block_rows(const Qwen35Config& target, int slots) {
+  const char* v = getenv("NI_DFLASH_BLOCK");
+  if (v && *v && std::string(v) != "auto")  // 8 or 16; anything else fatals when the drafter loads
+    return atoi(v) == 16 ? 16 : kB;
+  // the default: Engine asks a one-slot engine for the 16-row block (a MoE target has no wide verify to run it, and a
+  // multi-slot engine co-decodes requests, so it keeps the tile)
+  return slots == 1 && !target.moe ? 16 : kB;
+}
+
 size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, size_t head_row_bytes,
-                           size_t* per_slot, size_t* at_prefill) {
+                           size_t* per_slot, size_t* at_prefill, int block_rows) {
   namespace fs = std::filesystem;
   json c;
   if (std::ifstream f(dir + "/config.json"); f) {
@@ -830,12 +841,13 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
       }
     }
   }
-  // alloc_buffers()
+  // alloc_buffers(), term for term, at the rows the block drafts: Bk rows, Tk 8-row tiles, Dk lattice depth
   const size_t nH = nT * H, Kx = std::max({nH, size_t(4096), H, I}), KV = NL * 2048, G4 = 4 * (H / std::max<size_t>(gs, 1)),
-               ntg = (V + 2047) / 2048;
-  size_t b = 5 * 8 * H * 4 + 2 * 8 * I * 4 + 16 * Kx * 2 + Kx / 64 * 8 * 4 + 16 * H * 2 + H / 64 * 8 * 4 + 16 * I * 2 + I / 64 * 8 * 4 + 8 * G4 * 4 + 8 * 4096 * 4 +
-             8 * 2048 * 4 + 32 * 8 * 128 * 4 + 2 * 8 * 8 * 128 * 4 + 32 * (32 * 8 * 128 * 4 + 32 * 8 * 2 * 4) + 8 * V * 4 + 8 * kRank * 4 +
-             2 * 7 * ntg * 16 * 4 + 8 * nH * 2 + 8 * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
+               ntg = (V + 2047) / 2048, Bk = size_t(std::max(block_rows, int(kB))), Tk = Bk / 8, Dk = Bk - 1;
+  size_t b = 5 * Bk * H * 4 + 2 * Bk * I * 4 + 16 * Tk * Kx * 2 + Tk * Kx / 64 * 8 * 4 + 16 * Tk * H * 2 + Tk * H / 64 * 8 * 4 +
+             16 * Tk * I * 2 + Tk * I / 64 * 8 * 4 + Bk * G4 * 4 + Bk * 4096 * 4 + Bk * 2048 * 4 + 32 * Bk * 128 * 4 +
+             2 * 8 * Bk * 128 * 4 + 32 * (32 * Bk * 128 * 4 + 32 * Bk * 2 * 4) + Bk * V * 4 + Bk * kRank * 4 +
+             2 * Dk * ntg * 16 * 4 + 8 * nH * 2 + Bk * KV * 4 + size_t(kCtxKeep) * H * 4 + (64 << 10);
   const char* v8 = getenv("NI_DFLASH_V8");
   // A native 4-bit group-64 head row includes its packed codes, scales and biases.
   const bool head_q4 = head_row_bytes == size_t(target.hidden) / 2 + size_t(target.hidden) / 64 * 4;
@@ -856,17 +868,22 @@ size_t DFlash2::plan_bytes(const std::string& dir, const Qwen35Config& target, s
   if (at_prefill) *at_prefill = pf;
   // ring: [layers][8 kv heads][2048 slots][128] bf16, K and V (DFlash2::new_seq)
   if (per_slot) *per_slot = NL * 8 * kWin * 128 * 2 * 2;
-  // KFlash's wide tree verifies on dense targets (32 rows): the captures, the target's logits, candidates and X8
-  // tables of 32 rows (Qwen35::set_tree_rows), and per slot the verify tape's 24 more rows (Qwen35::grow_tape)
-  // only where the wide verifies run: kf_dense_rows reads the same knobs the drafting pass picks its rows from, so a
-  // target that opted out (NI_KFLASH=0, NI_KFLASH_ROWS=8, or one that cannot run them) reserves nothing here
-  if (Qwen35::kf_dense_rows(target) > (1u << (Qwen35::kMaxVerify - 1))) {
-    b += 24 * nH * 2 + 24 * V * 4 + 2 * 24 * (V / 2048 + 2) * 64 * 4 + (size_t(12) << 20);
+  // Above the 8-row tile the target's verify buffers and every slot's tape are taller than the plan's baseline: the
+  // captures, the target's logits, candidates and X8 tables (Qwen35::set_tree_rows), and per slot the verify tape's
+  // extra rows (Qwen35::grow_tape). Two ways to get there: KFlash's wide tree verifies on a dense target (32 rows),
+  // only where the knobs allow them (kf_dense_rows reads the same knobs the drafting pass picks its rows from, so a
+  // target that opted out reserves nothing here), or this drafter drafting a 16-row block, which Engine asks for on a
+  // one-slot engine and which pins the verify to 16 rows (KfBudget::pin_wide).
+  const uint32_t wide = Qwen35::kf_dense_rows(target);
+  const size_t rows = std::max<size_t>(size_t(block_rows), wide > (1u << (Qwen35::kMaxVerify - 1)) ? Qwen35::kMaxTreeRows : size_t(Qwen35::kMaxVerify));
+  if (rows > size_t(Qwen35::kMaxVerify)) {
+    const size_t extra = rows - Qwen35::kMaxVerify;
+    b += extra * nH * 2 + extra * V * 4 + 2 * extra * (V / 2048 + 2) * 64 * 4 + (size_t(extra) << 19);
     size_t lin = 0;
     for (const bool l : target.is_linear) lin += l ? 1 : 0;
     const size_t C = 2 * size_t(target.lin_hk) * target.lin_dk + size_t(target.lin_hv) * target.lin_dv;
     const size_t row = C + size_t(target.lin_hv) * (target.lin_dk + target.lin_dv + 1);
-    if (per_slot) *per_slot += lin * 24 * row * 4;
+    if (per_slot) *per_slot += lin * extra * row * 4;
   }
   return w + b + pf;
 }
@@ -1235,16 +1252,6 @@ void DFlash2::begin_prefill(int n, int start) {
 void DFlash2::set_prompt_captures(const uint16_t* rows_bf16, int rows) {
   if (!pcap_ || rows != pf_rows_) fatal("set_prompt_captures: call begin_prefill(n) first (rows %d vs %d)", rows, pf_rows_);
   memcpy(pcap_.ptr(), rows_bf16, size_t(rows) * hook_pf_.ld * 2);
-}
-
-int DFlash2::block() {
-  int& b = dfl_block();
-  if (b < 0) {  // set here, or by a drafter that loads with rows16 (the ctor)
-    const char* v = getenv("NI_DFLASH_BLOCK");
-    b = v && *v ? atoi(v) : kB;
-    if (b != 8 && b != 16) fatal("NI_DFLASH_BLOCK=%s: 8 or 16", v);
-  }
-  return b;
 }
 
 void DFlash2::encode_prefill_commit(Encoder& e, DFlashSeq& d) {
@@ -1747,12 +1754,6 @@ void DFlash2::encode_draft_impl(Encoder& e, Seq& s, DFlashSeq& d, int P, const S
 }
 
 // ---- acceptance and the decode cycle ----
-
-int DFlash2::verify_depth() {
-  static const int k = std::clamp(getenv("NI_DFLASH_VERIFY") && *getenv("NI_DFLASH_VERIFY") ? atoi(getenv("NI_DFLASH_VERIFY")) : block() - 1,
-                                  1, block() - 1);
-  return k;
-}
 
 void DFlash2::encode_dist(Encoder& e, int R, const SamplingParams& sp) {
   if (R < 1 || R > kB || sp.temperature <= 0) fatal("DFlash2 dist: R=%d T=%g", R, sp.temperature);

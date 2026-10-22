@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
   FILE* fo = out_path.empty() ? nullptr : fopen(out_path.c_str(), "w");
   std::map<std::vector<int>, long> ob1, ob2, ob3;
   long cyc_sum = 0, a0_hist[9] = {0};
-  const int K = DFlash2::verify_depth();
+  const int K = dfl->verify_depth();
   const double t0 = now_ms();
   for (long t = 0; t < trials; ++t) {
     sp.seed = mix32(seed_base + uint64_t(t));

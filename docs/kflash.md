@@ -278,7 +278,11 @@ so a 16-row cost measured while something else held the GPU can leave a table th
 table written during a burst of foreign GPU load ran the 16-row block at 69.3 tok/s, 9% below the 8-row block's 76.5,
 where the same binary with all 72 cycles at 16 rows ran at 93.5. `pin_wide()` therefore fixes the capacity at the block's
 width, `NI_DFLASH_BLOCK=8` being the way back to the 8-row block, and a first run measures and keeps the 16-row cycle:
-the A/B above started from that warm narrow-biased table and none of its 81,594 cycles verified 8 rows.
+the A/B above started from that warm narrow-biased table and none of its 81,594 cycles verified 8 rows. The block
+itself is decided per drafter, while it loads: a server that switches models (`--allow-switch`) decides each one's
+block again, so a MoE target after a 27B keeps its 8-row block. The engine's memory plan is told which block will load
+(a one-slot engine: 16 rows), and reserves that many rows of the target's verify buffers and of every slot's verify tape:
+the 27B plans 1.637 GB against the 1.635 GB it allocates at load, where the 8-row block plans 1.608 GB against 1.610 GB.
 
 Not checked: whether a 32-row drafting block (four tiles, two pairs) pays, and a re-run of the published benchmark
 table, whose 27B row predates this default (82.07 tok/s there against 87.59 here, that cell's budget still free to

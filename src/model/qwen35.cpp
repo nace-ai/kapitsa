@@ -963,7 +963,7 @@ static size_t st_bytes(const std::string& path, bool mtp, double expert_share = 
   return total;
 }
 
-Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
+Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   MemPlan m;
   Qwen35Config c;
   parse_config(read_json(dir + "/config.json"), c);
@@ -1055,9 +1055,12 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk) {
   // gate/up on large prefills while NI_QMM_GU is on; 8-bit ones through qmr8, unless NI_QMM8=0)
   const json q = r.contains("quantization") ? r["quantization"] : json::object();
   const bool fused = qmm_gu_enabled() && (q.value("bits", 4) != 8 || qmm8_on());
-  // the verify rows the plan reserves: 8, or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows),
-  // whose buffers and tape are that tall (set_tree_rows, new_seq); the drafting pass picks its rows from the same call
-  const size_t vrows = kf_dense_rows(c) > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : size_t(kMaxVerify);
+  // the verify rows the plan reserves: 8; 16 where the engine drafts a 16-row block (rows16, and the block pins the
+  // verify to its width); or 32 where KFlash's wide tree verifies run on this target (kf_dense_rows): the buffers and
+  // tape are that tall (set_tree_rows, new_seq), and the drafting pass picks its rows from the same call
+  const uint32_t wide = kf_dense_rows(c);
+  const size_t vrows =
+      wide > (1u << (kMaxVerify - 1)) ? size_t(kMaxTreeRows) : rows16 ? size_t(16) : size_t(kMaxVerify);
   for (const ActBuf& a : act_layout(c, chunk, int(vrows), has_mtp, fused ? vrows : size_t(chunk)))
     m.activations += a.bytes;
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
