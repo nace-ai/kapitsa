@@ -272,7 +272,8 @@ block pays for the deeper lattice: 1.10x the cycle for 1.22x the tokens at their
 the same 2120-token reply (md5 `ca846aca…`); the other three took a branch at one near-tie (two at 2151 tokens, one at
 2168): three runs per arm on the final code put the 2168 one in the 8-row arm and a 2151 one in the 16-row arm, and
 mlx-serve's own DFlash2 cell took the 2151 branch at temperature 0 as well, so the branch is this corpus's near-tie,
-not the drafting block's.
+not the drafting block's. The claim that parity is "identical greedy replies" holds up to that near-tie: `logit_compare`
+does not gate the 16-row verify (it walks an 8-row chain), so the three per-arm repeats above are the evidence there.
 
 That default needs its capacity pinned. The budget weighs a cycle's row count by the tokens it expects per millisecond,
 and keeps both the expectations and the measured cycle costs per model, drafter and chip in `~/.cache/kapitsa/kflash/`,
@@ -295,7 +296,7 @@ change does not touch.
 
 `logit_compare` of `logit_dump` from `main` and from this branch found every row bitwise identical, but `logit_dump` does
 not instantiate the drafter: it gates the target's kernels (prefill, 8-row step, 8-row verify), and the 16-row verify and
-the pair kernel are checked by the identical greedy replies above, not by a bitwise comparison.
+the pair kernel are checked by the greedy replies above (identical but for one near-tie), not by a bitwise comparison.
 
 Not checked: whether a 32-row drafting block (four tiles, two pairs) pays, and a re-run of the published benchmark
 table, whose 27B row predates this default (82.07 tok/s there against 87.59 here, that cell's budget still free to
