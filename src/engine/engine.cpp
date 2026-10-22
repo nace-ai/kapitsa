@@ -430,8 +430,9 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
 
   // Flint has no drafter: prompt lookup drafts up to K tokens per cycle when asked (--spec K, else NI_FLINT_NGRAM=K),
-  // verified in one pass; the reply is the one plain decoding writes (up to near-ties: a pass of 2+ rows sums in another
-  // order). Off by default: on an M4 Pro a pass of 2 / 4 rows costs 1.6 / 2.8 decode steps (each row brings its own 6
+  // verified in one pass; the reply is the one plain decoding writes up to near-ties (a pass of 2+ rows sums in another
+  // order) and to the rare row where a router score sits on bf16's rounding boundary: the router rounds its scores
+  // before its top-6, so such a pass can pick another expert there than a decode step (docs/usage.md). Off by default: on an M4 Pro a pass of 2 / 4 rows costs 1.6 / 2.8 decode steps (each row brings its own 6
   // of 256 experts), and on the benchmark's coding reply a draft exists for 1 token in 4 (replayed: 4-16% slower than
   // plain decoding; it pays only on replies that copy their prompt).
   if (flint_ && spec_asked != 0) {

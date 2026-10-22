@@ -145,7 +145,11 @@ attention without positional encoding, each head with a learned sink, then 256 e
 token) beside an always-on shared expert. It reasons before every answer (its template has no switch for that), and its
 tool calls, in GLM's `<tool_call>` format, come back as tool calls. It has no draft model and decodes plainly: prompt
 lookup (`--spec N`) checks 2-4 rows a pass at 1.6-2.8 times a decode step's cost on an M4 Pro (each row brings its own 6
-experts), and on the benchmark's code a draft exists for 1 token in 4, so it is off unless asked for.
+experts), and on the benchmark's code a draft exists for 1 token in 4, so it is off unless asked for. With it on, a reply
+can part from plain decoding's beyond a near-tie of the next token: Flint's router rounds its scores to bf16 before it
+takes its top 6, and where a score sits on a rounding boundary a verify pass, which sums in another order than a decode
+step, can pick another expert, and every layer after it computes something else. The output check met one such row in
+192 (layer 16 at a window's position 1684), at verify passes of 2, 4 and 8 rows alike.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
