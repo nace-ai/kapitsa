@@ -33,6 +33,19 @@ vm_stat > $SP/sweep/${E}${TAG}_vmstat_start.txt; sysctl vm.swapusage >> $SP/swee
 # a warm-up: a short prompt and a few tokens (kernel compilation, first allocations)
 $SP/venv/bin/python -I $SP/ctx_sweep.py $URL $KEY $SP/sweep/${E}${TAG}_warm.json $TOK $SRC 2048 > /dev/null 2>&1
 $SP/venv/bin/python -I $SP/ctx_sweep.py $URL $KEY $SP/sweep/$E$TAG.json $TOK $SRC $SIZES
+if [[ -n $SKIP128 ]]; then
+  # llama.cpp only (the step below the 30 GiB disk floor): 128K on the same server, and only if memory free >= 40% and
+  # swap used <= 9 GB right now (the orchestrator's rule)
+  mf=$(memory_pressure -Q | sed -n 's/.*free percentage: \([0-9]*\)%.*/\1/p')
+  sw=$(sysctl -n vm.swapusage | sed -n 's/.*used = \([0-9.]*\)M.*/\1/p' | cut -d. -f1)
+  echo "$(date +%T) before 128K: memory free ${mf}%, swap used ${sw} MB" | tee $SP/sweep/${E}${TAG}_128k_check.txt
+  if [[ $mf -ge 40 && $sw -le 9216 ]]; then
+    $SP/venv/bin/python -I $SP/ctx_sweep.py $URL $KEY $SP/sweep/${E}${TAG}_128k.json $TOK $SRC 131072
+    python3 -c "import json;a=json.load(open('$SP/sweep/$E$TAG.json'));a+=json.load(open('$SP/sweep/${E}${TAG}_128k.json'));json.dump(a,open('$SP/sweep/$E$TAG.json','w'),indent=1)"
+  else
+    echo "128K skipped: memory free ${mf}% (< 40?) or swap ${sw} MB (> 9216?)" | tee -a $SP/sweep/${E}${TAG}_128k_check.txt
+  fi
+fi
 vm_stat > $SP/sweep/${E}${TAG}_vmstat_end.txt; sysctl vm.swapusage >> $SP/sweep/${E}${TAG}_vmstat_end.txt
 kill $PID; wait $PID 2>/dev/null
 kill $MON 2>/dev/null

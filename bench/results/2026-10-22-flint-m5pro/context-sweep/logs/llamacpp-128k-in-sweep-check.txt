@@ -1,0 +1,2 @@
+18:07:20 before 128K: memory free 26%, swap used 3862 MB
+128K skipped: memory free 26% (< 40?) or swap 3862 MB (> 9216?)

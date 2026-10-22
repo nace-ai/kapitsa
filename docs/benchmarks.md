@@ -1956,15 +1956,17 @@ result files: [bench/results/2026-10-22-m1pro-16gb](../bench/results/2026-10-22-
 
 The M4 Pro's Flint protocol on the MacBook Pro M5 Pro, 48 GB (`Mac17,8`, macOS 26.5.2, High Power mode, AC power):
 Kapitsa (main `6c13588`) and rec 0.1.0 on Recursive's 4-bit MLX export, two passes in opposite order in one hold of
-the GPU lock, then a context sweep. llama.cpp was not run: its 24.2 GiB GGUF did not fit next to the MLX files within
-the session's 30 GiB free-disk floor. Microsoft Edge used 3-10% of the GPU through the runs, so every run is
-contention-flagged. Result files, logs and the sweep are in
+the GPU lock, then a context sweep; then llama.cpp b11804 on Recursive's Q4_1 GGUF, one harness run and its own sweep,
+about 1.5 hours later (the GGUF fitted on the disk only once the MLX files were deleted). Microsoft Edge used 3-10% of
+the GPU through Kapitsa's and rec's runs, so each of those is contention-flagged; llama.cpp's had no foreign load,
+which can only favour it. Result files, logs and the sweep are in
 [bench/results/2026-10-22-flint-m5pro](../bench/results/2026-10-22-flint-m5pro/README.md).
 
 | Engine | Decode T = 1.0 / greedy (tok/s) | Prefill 4K / 16K (tok/s) | Follow-up TTFT 4K / 16K (s) | Peak (GB) |
 | --- | ---: | ---: | ---: | ---: |
 | **Kapitsa** (2 runs) | **145.7** / 148.8 | 1,374 / 1,108 | **0.12 / 0.14** | **23.3** |
 | rec 0.1.0 (2 runs) | 144.9 / **151.9** | **2,138 / 1,941** | 0.28 / 0.28 | 29.1 |
+| llama.cpp b11804 (1 run) | 92.4 / 92.8 | 2,072 / 1,773 | 0.22 / 0.28 | 26.9 |
 
 The context sweep, as on the M4 Pro; the points with GPU load from the browser were run twice, and each cell is the
 run with less load in its window (for decode, a window of one or two samples, so close to arbitrary):
@@ -1972,23 +1974,30 @@ run with less load in its window (for decode, a window of one or two samples, so
 | Prefill (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Kapitsa | 1,151 | 1,382 | 1,302 | 1,288 | 1,102 | 847 | 578 | 350 |
-| **rec 0.1.0** | **1,582** | **2,144** | **2,112** | **2,108** | **1,934** | **1,657** | **1,250** | **817** |
+| **rec 0.1.0** | 1,582 | 2,144 | 2,112 | **2,108** | **1,934** | **1,657** | **1,250** | **817** |
+| llama.cpp b11804 | **1,826** | **2,194** | **2,166** | 2,047 | 1,760 | 1,350 | 914 | 551 |
 | <sub>Kapitsa ÷ rec</sub> | <sub>0.73×</sub> | <sub>0.64×</sub> | <sub>0.62×</sub> | <sub>0.61×</sub> | <sub>0.57×</sub> | <sub>0.51×</sub> | <sub>0.46×</sub> | <sub>0.43×</sub> |
+| <sub>Kapitsa ÷ llama.cpp</sub> | <sub>0.63×</sub> | <sub>0.63×</sub> | <sub>0.60×</sub> | <sub>0.63×</sub> | <sub>0.63×</sub> | <sub>0.63×</sub> | <sub>0.63×</sub> | <sub>0.64×</sub> |
 
 | Decode (tok/s) | 1K | 2K | 4K | 8K | 16K | 32K | 64K | 128K |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | **Kapitsa** | **144.8** | **138.3** | 130.4 | **129.4** | **118.0** | **97.4** | **74.3** | **49.5** |
 | rec 0.1.0 | 143.1 | 137.1 | **132.5** | 122.7 | 107.5 | 88.6 | 66.4 | 43.1 |
+| llama.cpp b11804 | 90.3 | 89.2 | 86.5 | 82.9 | 74.1 | 62.2 | 47.0 | 31.3 |
 | <sub>Kapitsa ÷ rec</sub> | <sub>1.01×</sub> | <sub>1.01×</sub> | <sub>0.98×</sub> | <sub>1.05×</sub> | <sub>1.10×</sub> | <sub>1.10×</sub> | <sub>1.12×</sub> | <sub>1.15×</sub> |
+| <sub>Kapitsa ÷ llama.cpp</sub> | <sub>1.60×</sub> | <sub>1.55×</sub> | <sub>1.51×</sub> | <sub>1.56×</sub> | <sub>1.59×</sub> | <sub>1.57×</sub> | <sub>1.58×</sub> | <sub>1.58×</sub> |
 
 - **Prefill.** rec reads faster at every length, 1.4x at 1K, 1.6x at 4K, 2.3x at 128K: the reverse of the M4 Pro, where
   Kapitsa led rec at every length. From the M4 Pro to the M5 Pro, Kapitsa's 4K prefill rises 1.42x and rec's 2.69x;
-  why rec gains so much more was not measured.
+  why rec gains so much more was not measured. llama.cpp reads 1.6x as fast as Kapitsa at every length (0.60-0.64x),
+  level with rec from 2K to 8K and behind it from 16K (0.67x at 128K); on the M4 Pro Kapitsa led it from 32K (1.51x at 128K).
 - **Decode.** Level up to 8K, then Kapitsa 1.10-1.15x ahead from 16K, which is inside the spread: Kapitsa's own 16K
   decode differs by 7% between its two sweeps. In the protocol runs decode is a tie (T 1.0 0.6% apart, greedy rec 2%
   ahead, Kapitsa's decode phases the contended ones); the poster's row counts as Kapitsa's by its rule of ranking
-  on the measured value.
-- **Method.** One cold request per point; with the browser's load, read the long-context ratios as about ±10%. Each
+  on the measured value. Kapitsa decodes 1.51-1.60x as fast as llama.cpp at every length, rec 1.38-1.59x.
+- **Method.** llama.cpp ran with `-b 2048 -ub 2048`, not the card's 256 / 128, as on the M4 Pro; its 128K point ran
+  on its own server load: the sweep's memory check, made with the server already loaded, had skipped it. One
+  cold request per point; with the browser's load, read the long-context ratios as about ±10%. Each
   point's foreign GPU load and both runs are in the
   [results folder](../bench/results/2026-10-22-flint-m5pro/README.md#context-sweep-1k-to-128k-tokens).
 

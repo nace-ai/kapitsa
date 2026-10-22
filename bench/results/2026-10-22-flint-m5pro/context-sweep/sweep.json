@@ -1,15 +1,17 @@
 {
- "what": "Flint 40B-A2.5B on a MacBook Pro M5 Pro 48 GB (Mac17,8, macOS 26.5.2), 2026-10-22: one cold request per prompt size and engine, a coding agent's context (bench/corpus.txt, then this repository's source files in path order at 6c13588, cut to the size in Flint's tokens, a random nonce at the start), then a 256-token reply at T 1.0, top_p 0.95, top_k 20. Points with foreign GPU load were rerun once (the -rerun runs); 'chosen' takes each metric from the run with less foreign load in that metric's window.",
+ "what": "Flint 40B-A2.5B on a MacBook Pro M5 Pro 48 GB (Mac17,8, macOS 26.5.2), 2026-10-22: one cold request per prompt size and engine, a coding agent's context (bench/corpus.txt, then this repository's source files in path order at 6c13588, cut to the size in Flint's tokens, a random nonce at the start), then a 256-token reply at T 1.0, top_p 0.95, top_k 20. Kapitsa and rec ran at 16:24-16:59, llama.cpp b11804 at 18:04-18:15 (its GGUF was downloaded after the MLX files were deleted, see the README). Kapitsa's and rec's points with foreign GPU load were rerun once (the -rerun runs; llama.cpp had none); 'chosen' takes each metric from the run with less foreign load in that metric's window.",
  "prefill_tps": "prompt tokens / time to the first streamed token",
  "decode_tps": "tokens per second between the 16th and the 4th-from-last streamed event",
- "foreign_gpu": "chosen[engine][size]: <metric>_foreign is {run: [mean %, max %, samples]} of non-engine GPU load (gpu_hogs.py, every 2 s) inside that metric's window for every run that measured the point, <metric>_values each run's value, <metric>_run the run with the lower mean (the first sweep on a tie). Built by choose_cells.py from foreign-gpu/ and logs/: rec's windows from its log's request timestamps, Kapitsa's walked back from the sweep's end with its log's durations (about 2 s of error). A decode window (256 tokens, about 2 s) holds 1-2 samples, so the decode choice rests on one or two readings.",
+ "foreign_gpu": "chosen[engine][size]: <metric>_foreign is {run: [mean %, max %, samples]} of non-engine GPU load (gpu_hogs.py, every 2 s) inside that metric's window for every run that measured the point, <metric>_values each run's value, <metric>_run the run with the lower mean (the first sweep on a tie). Built by choose_cells.py from foreign-gpu/ and logs/: rec's windows from its log's request timestamps, Kapitsa's and llama.cpp's walked back from the sweep's end with their logs' durations (about 2 s of error). A decode window (256 tokens, about 2 s) holds 1-2 samples, so the decode choice rests on one or two readings.",
  "servers": {
   "kapitsa": "kapitsa serve --model flint-4bit --ctx 262144 --slots 1 (NI_DISK_CACHE=0), build 6c13588",
-  "rec": "rec serve --context 262144 (rec 0.1.0 release binary)"
+  "rec": "rec serve --context 262144 (rec 0.1.0 release binary)",
+  "llamacpp": "llama-server b11804 -m flint-int4-q4_1.gguf (RecursiveSI/flint-int4-gguf @9c471510) -c 140000 -np 1 -ngl 999 -fa on -ctk f16 -ctv f16 -b 2048 -ub 2048 -lm none --jinja --cache-ram 0, Flint's sampling"
  },
  "context_source_tokens": {
   "kapitsa": 1645932,
-  "rec": 1645932
+  "rec": 1645932,
+  "llamacpp": 1645932
  },
  "points": {
   "kapitsa": [
@@ -159,6 +161,71 @@
     "events": 255,
     "decode_tps": 43.079224837881185
    }
+  ],
+  "llamacpp": [
+   {
+    "size": 1024,
+    "prompt_tokens": 1009,
+    "ttft_s": 0.5524299144744873,
+    "prefill_tps": 1826.4760353534373,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 90.29059544925742
+   },
+   {
+    "size": 2048,
+    "prompt_tokens": 2033,
+    "ttft_s": 0.9264998435974121,
+    "prefill_tps": 2194.2799170977414,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 89.19199637115955
+   },
+   {
+    "size": 4096,
+    "prompt_tokens": 4080,
+    "ttft_s": 1.8840601444244385,
+    "prefill_tps": 2165.5359634213796,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 86.51249286852031
+   },
+   {
+    "size": 8192,
+    "prompt_tokens": 8181,
+    "ttft_s": 3.997412919998169,
+    "prefill_tps": 2046.5736624485987,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 82.91215981214282
+   },
+   {
+    "size": 16384,
+    "prompt_tokens": 16372,
+    "ttft_s": 9.302083969116211,
+    "prefill_tps": 1760.0357139708233,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 74.1455049093855
+   },
+   {
+    "size": 32768,
+    "prompt_tokens": 32754,
+    "ttft_s": 24.25931692123413,
+    "prefill_tps": 1350.1616762890174,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 62.179791629525305
+   },
+   {
+    "size": 65536,
+    "prompt_tokens": 65522,
+    "ttft_s": 71.69983577728271,
+    "prefill_tps": 913.8375184502153,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 47.0210747543764
+   }
   ]
  },
  "reruns": {
@@ -273,6 +340,28 @@
     "completion_tokens": 200,
     "events": 197,
     "decode_tps": 128.74754457284104
+   }
+  ],
+  "llamacpp": [
+   {
+    "size": 2048,
+    "prompt_tokens": 2034,
+    "ttft_s": 1.088089942932129,
+    "prefill_tps": 1869.3307600278715,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 89.26346768230248
+   }
+  ],
+  "llamacpp-128k": [
+   {
+    "size": 2048,
+    "prompt_tokens": 2034,
+    "ttft_s": 0.9771389961242676,
+    "prefill_tps": 2081.5871724162835,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 89.72660277619853
    }
   ]
  },
@@ -780,6 +869,230 @@
      "rec": 43.1
     }
    }
+  },
+  "llamacpp": {
+   "1024": {
+    "prefill": 1826,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 1826
+    },
+    "decode": 90.3,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 90.3
+    }
+   },
+   "2048": {
+    "prefill": 2194,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 2194
+    },
+    "decode": 89.2,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 89.2
+    }
+   },
+   "4096": {
+    "prefill": 2166,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 2166
+    },
+    "decode": 86.5,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      1
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 86.5
+    }
+   },
+   "8192": {
+    "prefill": 2047,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      2
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 2047
+    },
+    "decode": 82.9,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      2
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 82.9
+    }
+   },
+   "16384": {
+    "prefill": 1760,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      4
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 1760
+    },
+    "decode": 74.1,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      2
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 74.1
+    }
+   },
+   "32768": {
+    "prefill": 1350,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      12
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 1350
+    },
+    "decode": 62.2,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      2
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 62.2
+    }
+   },
+   "65536": {
+    "prefill": 914,
+    "prefill_run": "llamacpp",
+    "prefill_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      35
+     ]
+    },
+    "prefill_values": {
+     "llamacpp": 914
+    },
+    "decode": 47.0,
+    "decode_run": "llamacpp",
+    "decode_foreign": {
+     "llamacpp": [
+      0.0,
+      0.0,
+      3
+     ]
+    },
+    "decode_values": {
+     "llamacpp": 47.0
+    }
+   },
+   "131072": {
+    "prefill": 551,
+    "prefill_run": "llamacpp-128k",
+    "prefill_foreign": {
+     "llamacpp-128k": [
+      0.0,
+      0.0,
+      115
+     ]
+    },
+    "prefill_values": {
+     "llamacpp-128k": 551
+    },
+    "decode": 31.3,
+    "decode_run": "llamacpp-128k",
+    "decode_foreign": {
+     "llamacpp-128k": [
+      0.0,
+      0.0,
+      5
+     ]
+    },
+    "decode_values": {
+     "llamacpp-128k": 31.3
+    }
+   }
   }
- }
+ },
+ "separate_loads": {
+  "llamacpp-128k": [
+   {
+    "size": 131072,
+    "prompt_tokens": 131018,
+    "ttft_s": 237.94561314582825,
+    "prefill_tps": 550.621624277241,
+    "completion_tokens": 256,
+    "events": 255,
+    "decode_tps": 31.265505872476023
+   }
+  ]
+ },
+ "separate_loads_note": "llama.cpp's 128K point: the sweep's check before it, on the loaded server (its 140K KV allocated), read 26% memory free and skipped it (logs/llamacpp-128k-in-sweep-check.txt); it ran on its own load after the same check Kapitsa and rec had before theirs (memory 88% free before the load), with a watchdog to stop it above 9 GB of swap. Swap stayed at 3.85 GB and vm_stat's swapouts did not move."
 }
