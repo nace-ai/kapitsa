@@ -39,6 +39,7 @@ What each cell of the README's poster and its collapsed Nemotron table ran, Mac 
   ([details](#nemotron-35-lightning)).
 
 **MacBook Pro M5 Max 128 GB**
+- Off the poster and the README's tables until it is re-measured; the notes below describe the stored 2026-10-17/18 runs.
 - One session, Kapitsa first and last (each cell is the newest run with an unflagged decode phase, else the newest run).
   Results: [bench/results/2026-10-18-m5-max-session](../bench/results/2026-10-18-m5-max-session/).
 - MLX: mlx-vlm with MTP on the 4B (Qwen's 4-bit head, block 3; mlx-lm 135) and the 27B (the model's head; mlx-lm 30),
