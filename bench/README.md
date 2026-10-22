@@ -14,10 +14,11 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-536 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+537 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-22 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | d53f02e | 217.0 | 227.0 | 2459 | 1838 | 1.68 | 174.8 | – | [q36-35b-kapitsa-20261022-102548](results/2026-10-22-m5pro-48gb/results/q36-35b-kapitsa-20261022-102548.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 16f2b6a | 74.8 | 83.3 | 484 | 453 | 8.54 | – | – | [q38-27b-kapitsa-20261022-100545](results/2026-10-22-m5pro-48gb/results/q38-27b-kapitsa-20261022-100545.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.2 | 81.9 | 87.5 | 467 | 475 | 8.86 | – | contention | [q38-27b-mlxserve-dflash2-20261022-100013](results/2026-10-22-m5pro-48gb/results/q38-27b-mlxserve-dflash2-20261022-100013.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.2 | 74.4 | 85.0 | 462 | 470 | 8.95 | – | contention | [q38-27b-mlxserve-dflash2-20261022-095547](results/2026-10-22-m5pro-48gb/results/q38-27b-mlxserve-dflash2-20261022-095547.json) |

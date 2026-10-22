@@ -57,3 +57,24 @@ caller for both engines (`lockf -k`, `NACE_GPU_LOCK_HELD=1`); no process was sus
 0.9 GB of 7.0 GB at the start (6.2 GB of that made by other sessions, RAM had 24-36 GB free); the 20.3 GB peak
 footprint is unaffected. Kapitsa: `qwen3.8-27b-4bit-mtp` with the `Qwen3.8-27B-DFlash2` drafter, build `16f2b6a`
 (0.2.5). mlx-serve: its own 4-bit pack with the DFlash2 draft tree (block 8), 26.10.2.
+
+## The 35B-A3B cell, after the experts' prefill moved to the tensor units
+
+The poster's M5 Pro Kapitsa cell for Qwen3.6-35B-A3B, re-measured on the build that runs the routed-expert prefill on
+the qmt tile by default ([#279](https://github.com/nace-ai/kapitsa/pull/279)); the cell it replaces is the 2026-10-21
+run at `a13f8fd` ([../2026-10-21-m5pro-48gb](../2026-10-21-m5pro-48gb/README.md)), 1,799 / 1,455 tok/s of prefill and
+195.1 / 223.4 of decode. Written by [bench/harness](../../harness/README.md):
+`compare_engines.py configs/kapitsa.json --only 'q36-35b-*'` under the GPU lock.
+
+MacBook Pro (16-inch, 2026), `Mac17,8`, M5 Pro, 48 GB, macOS 26.5.2, on AC power in High Power mode, isolated: the
+quiet window passed and no phase is flagged. Kapitsa 0.2.5 at `d53f02e` (main after #274 plus #279), 4-bit
+Qwen3.6-35B-A3B with its DFlash2 drafter.
+
+| Result file | Model | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (GB) | Agent session (s) | Flags |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `q36-35b-kapitsa-20261022-102548.json` | Qwen3.6 35B-A3B, DFlash2 | 2,459 / 1,838 | 217.0 (206.9-237.5) / 227.0 | 0.05 / 0.07 | 21.7 | 35.5 | none |
+
+The expert tile moves each output's K reduction by one half ulp, so the logits are not the simdgroup path's to the bit;
+`tools/logit_compare.py --reorder` gates that drift and the cold temperature-0 continuations were identical (the
+evidence is in [#279](https://github.com/nace-ai/kapitsa/pull/279)). Decode moves with the prefill because the DFlash2
+drafter's verify batches are multi-row passes through the same grouped GEMMs.
