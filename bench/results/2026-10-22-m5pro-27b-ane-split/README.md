@@ -35,7 +35,7 @@ runs are in `results/`, the server logs in `logs/`.
   inside the runs' spread (72.8-91.4).
 - Against the stored mlx-serve pair (78.16 sampled, 86.23 greedy, 464 / 472 prefill), Kapitsa now reads ahead on
   sampled decode by 1.3% (79.21 against 78.16), inside the spread, and mlx-serve stays ahead on greedy by 1.2%. The
-  poster ranks by the measured sampled value, as it does for Flint, so the M5 Pro's 27B row now counts as Kapitsa's.
+  lead crosses two sessions hours apart and the stored mlx-serve runs carry the browser flag where these do not, so the row stays a tie in the README's count of pairs (24 of 26) until mlx-serve is re-run in the same session.
   Kapitsa reads the 4K prompt 1.33x as fast as mlx-serve (618 against 464).
 - Against Splash 1.4.0's stored 27B cell (674 / 72, two contention-flagged runs on `4b89f4e`), Splash still reads the
   4K prompt faster, now 1.09x instead of 1.50x; Kapitsa decodes 10% faster at T 0.6 and 20% greedy.
