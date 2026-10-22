@@ -177,7 +177,7 @@ def t_sweep(a, log=print):
                 ct = rec.get("completion_tokens")
                 mid, e2e, _ = bench.decode_rates(r, ct, a.window_head, a.window_tail)
                 rec["decode_tps"] = mid
-                for why in bench.thinking_leak(r):
+                for why in [] if a.always_reasons else bench.thinking_leak(r):  # (a model that always reasons: Flint)
                     invalid.append(f"sweep {tg}: {why}")
                 if r["finish"] != "length":
                     flags.append(f"sweep {tg}: finish_reason={r['finish']} (expected length)")
@@ -252,7 +252,7 @@ def t_cache(a, log=print):
         u = r["usage"] or {}
         t = {"label": label, "conversation": who, "prompt_tokens": u.get("prompt_tokens"),
              "cached_tokens": bench.cached_of(u, r["timings"]), "ttft_s": r["ttft"], "finish": r["finish"]}
-        for why in bench.thinking_leak(r):
+        for why in [] if a.always_reasons else bench.thinking_leak(r):
             invalid.append(f"cache {label}: {why}")
         t["answer"] = r["content"]
         res["turns"].append(t)

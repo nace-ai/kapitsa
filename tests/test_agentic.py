@@ -28,6 +28,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
     last = {}
     cache_sessions = 8
     log = []
+    reasons = False  # stream the first tokens as reasoning_content, as a model that always reasons (Flint) does
 
     def log_message(self, *a):
         pass
@@ -48,7 +49,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         time.sleep(0.002 if cached else 0.02)  # a cache hit prefills faster
         for i in range(n):
-            ev = {"choices": [{"delta": {"content": f"w{i} "}, "finish_reason": None}]}
+            key = "reasoning_content" if Fake.reasons and i < n // 2 else "content"
+            ev = {"choices": [{"delta": {key: f"w{i} "}, "finish_reason": None}]}
             self.wfile.write(f"data: {json.dumps(ev)}\n\n".encode())
             time.sleep(0.001)
         fin = {"choices": [{"delta": {}, "finish_reason": "length"}],
@@ -145,6 +147,21 @@ Fake.cache_sessions = 8
 
 su = agentic.t_sustain(a, log=lambda m: None)
 check(su["valid_runs"] >= 2 and su["duration_s"] >= 0 and "thermal_start" in su, "sustain runs until the time is up", str(su)[:200])
+
+# ---- a model that always reasons: its reasoning text is INVALID in the sweep and the cache turns unless the config
+# says --always-reasons (Flint's), as in the prefill and decode phases
+Fake.reasons = True
+check(any("reasoning text returned" in x for x in agentic.t_sweep(a, log=lambda m: None)["invalid"]),
+      "reasoning text in a sweep is INVALID without --always-reasons")
+a.always_reasons = True
+swr = agentic.t_sweep(a, log=lambda m: None)
+check(not swr["invalid"] and all(p.get("decode_tps") for p in swr["points"]), "--always-reasons: the sweep is valid",
+      str(swr["invalid"]))
+Fake.last.clear()
+car = agentic.t_cache(a, log=lambda m: None)
+check(not [x for x in car["invalid"] if "reasoning" in x], "--always-reasons: the cache turns are valid", str(car["invalid"]))
+a.always_reasons = False
+Fake.reasons = False
 
 # ---- failure is recorded, not raised
 b = bench.parse_args(["--base-url", "http://127.0.0.1:1/v1", "--model", "x", "--label", "t", "--sweep-sizes", "1000",
