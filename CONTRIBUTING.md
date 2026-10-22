@@ -26,8 +26,8 @@ first use instead.
 
 ## Tests
 
-These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/vit_check`, `build/bench_test`) come with
-the full build.
+These run on the CPU. The tools (`build/api_test`, `build/parser_test`, `build/tokenizer_test`, `build/vit_check`,
+`build/bench_test`) come with the full build.
 
 | Command | What it checks | Needs |
 | --- | --- | --- |
@@ -46,7 +46,9 @@ the full build.
 | `build/fn_q2_bench check --small`, `build/fn_q2_bench store` | The Q2_0 expert kernels at small shapes against a CPU reference in double (and through the slot table, bit for bit), and through the expert store mid-pass; run them under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` and the GPU lock | the GPU |
 | `build/api_test [MODEL_DIR...]` | The Anthropic Messages and OpenAI Responses translations: request mapping, exact event sequences, each coding agent's settings; the Chat Completions stream's bytes, keepalive and errors; with a model folder, tool loops through its chat template | a model folder for the template checks (default: the 35B and 27B, if downloaded) |
 | `venv/bin/python tests/sdk_check.py build/api_test` | The official `anthropic` and `openai` Python SDKs parse every recorded reply | a venv: `python3 -m venv venv && venv/bin/pip install anthropic openai` |
-| `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids | a Qwen model folder |
+| `build/parser_test MODEL_DIR` | The streaming parser (reasoning, content, tool calls) on real token ids; with a Flint folder, its GLM-format tool calls too | a Qwen or Flint model folder |
+| `build/tokenizer_test` | Flint's pre-tokenizer split against the pieces Hugging Face tokenizers 0.23.3 makes of the same texts (a synthetic tokenizer.json, one token per piece) | nothing |
+| `build/flint_compile` | Compiles Flint's kernels and the base library's pipelines it runs (no GPU work); run Flint's kernels themselves under `MTL_SHADER_VALIDATION=1 MTL_DEBUG_LAYER=1` (`build/logit_dump` on a Flint folder takes the 16-key tiles there) | a Mac with Metal |
 | `python3 tests/vision/check_cpu.py build/vit_check MODEL_DIR [--quick]` | The Qwen image processor against Pillow (and Hugging Face's processors when torch and transformers are installed) | a Qwen3.5-4B, Qwen3.6 or Qwen3.8 folder; Pillow and numpy |
 | `python3 tests/vision/check_radio_cpu.py MODEL_DIR build/vit_check IMAGE.png...` | Nemotron 3.5 Bolt's image processor against NVIDIA's own | the Bolt folder; torch |
 

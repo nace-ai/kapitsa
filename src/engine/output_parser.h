@@ -1,7 +1,8 @@
 // Streaming parser for Qwen3.5+ output: <think>...</think> reasoning, content, and tool calls in the
-// template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas. With TextTags, tags that
-// are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls) are matched in the
-// decoded text.
+// template's <tool_call><function=...><parameter=...> XML, turned into OpenAI-style deltas; with CallFormat::Glm, calls
+// in GLM-4.5's <tool_call>NAME<arg_key>...</arg_key><arg_value>...</arg_value></tool_call> (Flint's) instead. With
+// TextTags, tags that are no tokens of the vocabulary (Nemotron Nano 9B v2's <think> and <TOOLCALL>[...] JSON calls)
+// are matched in the decoded text.
 #pragma once
 #include "engine/engine.h"
 #include "tokenizer/tokenizer.h"
@@ -20,6 +21,12 @@ inline std::string random_id(const char* prefix) {
   return s;
 }
 
+// The markup of a call between its <tool_call> and </tool_call>
+enum class CallFormat {
+  QwenXml,  // <function=NAME>\n<parameter=KEY>\nVALUE\n</parameter>\n</function> (Qwen3.5+'s templates)
+  Glm,      // NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>... (GLM-4.5's and 4.7's, Flint's)
+};
+
 class OutputParser {
  public:
   // think_tools (NI_THINK_TOOLCALLS): a <tool_call> the model writes inside its reasoning is held back
@@ -32,12 +39,14 @@ class OutputParser {
   // renders a returned turn as "<think>\n" + reasoning + "</think>", so a reasoning that ended with the model's own
   // "\n" renders as generated and the next request reuses the cache through the reply; Qwen's templates add theirs)
   // text_tags: the tags matched in the text (think_tools is then off: it holds tokens)
+  // call_format: the markup between a call's tags; a call not written in it stays the text the model wrote
   OutputParser(const Tokenizer& t, int think_open, int think_close, int tc_open, int tc_close, bool start_in_think,
                bool parse_tools, const ojson& tools, bool think_tools = false, bool think_ws = false,
-               const TextTags& text_tags = {})
+               const TextTags& text_tags = {}, CallFormat call_format = CallFormat::QwenXml)
       : dec_(t), hdec_(t), tt_(text_tags), think_open_(think_open), think_close_(think_close), tc_open_(tc_open),
         tc_close_(tc_close), in_think_(start_in_think), parse_tools_(parse_tools),
-        think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), tools_(tools) {}
+        think_tools_(think_tools && parse_tools && !text_tags.any()), think_ws_(think_ws), fmt_(call_format),
+        tools_(tools) {}
 
   // Returns the delta produced by this token.
   ChatDelta push(int id) {
@@ -311,6 +320,10 @@ class OutputParser {
     if (b > a && v[b - 1] == '\n') --b;
     return v.substr(a, b - a);
   }
+  static std::string trim_ws(const std::string& v) {
+    const size_t a = v.find_first_not_of(" \n\r\t");
+    return a == std::string::npos ? std::string() : v.substr(a, v.find_last_not_of(" \n\r\t") - a + 1);
+  }
 
   std::string param_type(const std::string& fn, const std::string& param) const {
     for (auto& t : tools_) {
@@ -326,7 +339,20 @@ class OutputParser {
     return "string";
   }
 
+  // A value as the tool's schema types its parameter: a string's text as written, anything else as JSON (the text
+  // itself when it is no JSON)
+  ojson typed(const std::string& fn, const std::string& param, const std::string& val) const {
+    if (param_type(fn, param) == "string") return val;
+    ojson v = ojson::parse(val, nullptr, false);
+    return v.is_discarded() ? ojson(val) : v;
+  }
+
+  // The body of a call (between its tags), in the parser's call format
   bool parse_tool(const std::string& body, ToolCall& tc) const {
+    return fmt_ == CallFormat::Glm ? parse_glm(body, tc) : parse_qwen(body, tc);
+  }
+
+  bool parse_qwen(const std::string& body, ToolCall& tc) const {
     size_t f = body.find("<function=");
     if (f == std::string::npos) return false;
     size_t fe = body.find('>', f);
@@ -343,19 +369,41 @@ class OutputParser {
       size_t ve = body.find("</parameter>", pe);
       if (ve == std::string::npos) ve = body.find("</function>", pe);
       if (ve == std::string::npos) ve = body.size();
-      std::string val = trim_nl(body.substr(pe + 1, ve - pe - 1));
-      std::string type = param_type(tc.name, pname);
-      if (type == "string") {
-        args[pname] = val;
-      } else {
-        try {
-          args[pname] = ojson::parse(val);
-        } catch (...) {
-          args[pname] = val;
-        }
-      }
+      args[pname] = typed(tc.name, pname, trim_nl(body.substr(pe + 1, ve - pe - 1)));
       p = ve + 1;
     }
+    tc.arguments = args.dump();
+    tc.id = random_id("call_");
+    return true;
+  }
+
+  // GLM-4.5's call (Flint's template renders it): NAME<arg_key>KEY</arg_key><arg_value>VALUE</arg_value>..., a value
+  // the text of a string or the JSON of anything else; no arguments, NAME alone. Whitespace may surround the name and a
+  // key and separate the elements; a value is everything up to the first </arg_value>. Anything else (no name, a name
+  // with whitespace or a tag in it, a tag in a key, text between the elements, a tag left open) is no call.
+  bool parse_glm(const std::string& body, ToolCall& tc) const {
+    static const std::string ko = "<arg_key>", kc = "</arg_key>", vo = "<arg_value>", vc = "</arg_value>";
+    static const char* ws = " \n\r\t";
+    constexpr size_t npos = std::string::npos;
+    size_t p = body.find(ko);
+    const std::string name = trim_ws(body.substr(0, p));
+    if (name.empty() || name.find_first_of(" \n\r\t<") != npos) return false;
+    ojson args = ojson::object();
+    while (p != npos) {  // at an <arg_key>
+      const size_t ke = body.find(kc, p + ko.size());
+      if (ke == npos) return false;
+      const std::string key = trim_ws(body.substr(p + ko.size(), ke - p - ko.size()));
+      if (key.empty() || key.find(ko) != npos || key.find(vo) != npos || key.find(vc) != npos) return false;
+      size_t vs = body.find_first_not_of(ws, ke + kc.size());
+      if (vs == npos || body.compare(vs, vo.size(), vo) != 0) return false;
+      vs += vo.size();
+      const size_t ve = body.find(vc, vs);
+      if (ve == npos) return false;
+      args[key] = typed(name, key, body.substr(vs, ve - vs));
+      p = body.find_first_not_of(ws, ve + vc.size());
+      if (p != npos && body.compare(p, ko.size(), ko) != 0) return false;
+    }
+    tc.name = name;
     tc.arguments = args.dump();
     tc.id = random_id("call_");
     return true;
@@ -368,6 +416,7 @@ class OutputParser {
   int think_open_, think_close_, tc_open_, tc_close_;
   bool in_think_;
   bool parse_tools_, think_tools_, think_ws_;
+  CallFormat fmt_;
   const ojson& tools_;
   bool in_tool_ = false, skip_leading_ws_ = false;
   std::string tool_buf_, held_;

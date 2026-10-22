@@ -1091,7 +1091,7 @@ std::string now_iso() {
 
 // A Hugging Face repo that Kapitsa can run: a Qwen3.5-family hybrid model in MLX format, unquantized (bf16) or MLX
 // affine 3/4/5/6/8-bit with groups of 64 (4-bit also 32), one format or mixed per module (the engine's
-// format_supported, model/qwen35.cpp).
+// format_supported, model/qwen35.cpp); or Recursive's Flint in its MLX 4-bit export (model/flint.h).
 void check_supported(HttpClient& c, const Listing& L) {
   const RemoteFile* cfg = L.find("config.json");
   bool st = false;
@@ -1110,6 +1110,13 @@ void check_supported(HttpClient& c, const Listing& L) {
     throw Error(L.repo + ": its config.json is not valid JSON.");
   }
   const json t = j.contains("text_config") ? j["text_config"] : j;
+  if (j.value("model_type", std::string()) == "flint") {
+    const json q = j.value("quantization", json::object());
+    if (!q.is_object() || q.value("bits", 0) != 4 || q.value("group_size", 0) != 64)
+      throw Error(L.repo + " is a Flint checkpoint Kapitsa does not run: it runs Flint's MLX 4-bit export, "
+                           "RecursiveSI/flint-int4 (`kapitsa pull flint`).");
+    return;
+  }
   if (!t.contains("linear_num_value_heads") || !t.contains("num_hidden_layers"))
     throw Error(L.repo + " is a " + j.value("model_type", std::string("different")) + " model." + runs);
   const json q = j.value("quantization", json::object());

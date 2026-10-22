@@ -112,7 +112,7 @@ Every recorded run, with its Mac, model, prefill and decode speed, is in the [be
 ## Models
 
 <details>
-<summary>The 11 models, their downloads and decoding</summary>
+<summary>The 12 models, their downloads and decoding</summary>
 
 | Model | Download | Decoding |
 | --- | --- | --- |
@@ -127,9 +127,10 @@ Every recorded run, with its Mac, model, prefill and decode speed, is in the [be
 | **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid Mamba-2 MoE, 3B active; text only</sub> | **NVIDIA NVFP4 · 22.9 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | **KFlash**<br><sub>NVIDIA's DSpark drafter</sub> |
 | **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid Mamba-2 MoE, 9B active</sub> | **NVIDIA 24 GB · 25.1 GB**<br><sub>2-bit experts, NVFP4, 8-bit</sub> | **KFlash**<br><sub>NVIDIA's LiLiCorr drafter</sub> |
 | **Nemotron 3.5 Super-VL 120B-A12B** · `super`<br><sub>hybrid Mamba-2 MoE, 12B active; 96 GB+ Macs</sub> | **NVIDIA NVFP4 · 76.4 GB**<br><sub>4-bit NVFP4 experts, FP8, BF16</sub> | **KFlash**<br><sub>NVIDIA's LiLiCorr drafter</sub> |
+| **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active; a coding model that reasons first; text only</sub> | **4-bit · 22.6 GB**<br><sub>Recursive's MLX export, 8-bit embedding</sub> | —<br><sub>prompt lookup with `--spec`</sub> |
 
-<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
-for the 27B, 35B, Lightning and Bolt, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` takes its `16gb` variant: unsloth's 2-bit GGUF, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Details](docs/usage.md#models-and-downloads)</sub>
+<sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
+for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` takes its `16gb` variant: unsloth's 2-bit GGUF, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Details](docs/usage.md#models-and-downloads)</sub>
 
 </details>
 

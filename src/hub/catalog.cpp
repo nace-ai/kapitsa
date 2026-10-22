@@ -3,7 +3,7 @@
 // the downloader, `pull`, `list`, `--help` and the folder names (<name>-<variant>) follow this table.
 //
 // - Models are listed as the README and the picker show them: Qwen from small to large, then Nemotron from small to
-//   large. `kapitsa serve` without --model takes the most capable one that fits this Mac (best_model's order,
+//   large, then Recursive's Flint. `kapitsa serve` without --model takes the most capable one that fits this Mac (best_model's order,
 //   src/server/main.cpp).
 // - `--model <name>` takes the model's default variant where the engine's memory plan of its headers leaves room for
 //   one --ctx conversation with its drafter, else the first of its fallbacks that does (smaller variants, best
@@ -410,6 +410,24 @@ const std::vector<CatalogModel>& catalog() {
             .revision = "59b8721646c38111a242da18218859fb2b454322",
             .companions = {lilicorr_super()},
             .download_gb = 76.38},
+       }},
+      {.name = "flint",
+       .aliases = {"recursive-flint", "flint-40b"},
+       .title = "Recursive Flint 40B-A2.5B",
+       .about = "Recursive's MoE for coding agents, 2.5B active per token: reasoning and tool calls, prompt lookup drafts",
+       .brief = "Recursive coding-agent MoE, 2.5B active",
+       // Recursive's MLX export as it is (the weights its own engine, rec, runs): affine 4-bit group-64 projections and
+       // experts, 8-bit embedding, bf16 router. No drafter: prompt lookup.
+       .default_variant = "4bit",
+       .fallbacks = {},
+       .variants = {
+           {.name = "4bit",
+            .quant = "MLX affine 4-bit, group 64 (8-bit embedding, bf16 router)",
+            .label = "4-bit (Recursive)",
+            .repo = "RecursiveSI/flint-int4",
+            .revision = "3b93f9053b530488405ae9fca51d4900d6ce21f0",
+            .companions = {},
+            .download_gb = 22.58},
        }}
   };
   return c;

@@ -53,6 +53,18 @@ add_custom_command(
   DEPENDS ${NI_DORY_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_dory.cmake
   COMMENT "Embedding the Dory Metal kernels")
 
+# Flint kernels: compiled only when a Flint model loads.
+file(GLOB NI_FLINT_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/flint/*.metal)
+set(NI_FLINT_EMBED ${CMAKE_BINARY_DIR}/generated/flint_kernels_embed.cpp)
+add_custom_command(
+  OUTPUT ${NI_FLINT_EMBED}
+  COMMAND ${CMAKE_COMMAND} -DOUT=${NI_FLINT_EMBED} -DSRC_DIR=${CMAKE_SOURCE_DIR}/src/kernels
+          -P ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_flint.cmake
+  DEPENDS ${NI_FLINT_KERNELS} ${CMAKE_SOURCE_DIR}/src/kernels/common.h ${CMAKE_SOURCE_DIR}/src/kernels/quant.h
+          ${CMAKE_SOURCE_DIR}/src/kernels/kflash.h
+          ${CMAKE_SOURCE_DIR}/cmake/embed_kernels_flint.cmake
+  COMMENT "Embedding the Flint Metal kernels")
+
 # Metal 4 tensor_ops kernels (src/kernels/tensor/): a library of their own, compiled as Metal 4 on a GPU with matrix units
 file(GLOB NI_TENSOR_KERNELS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/src/kernels/tensor/*.metal)
 set(NI_TENSOR_EMBED ${CMAKE_BINARY_DIR}/generated/tensor_kernels_embed.cpp)
@@ -85,7 +97,7 @@ file(GLOB_RECURSE NI_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp ${CMAKE_SOURCE_DIR}/src/*.mm)
 list(FILTER NI_SOURCES EXCLUDE REGEX ".*/src/server/.*")
 
-add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_TENSOR_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
+add_library(naceinfer STATIC ${NI_SOURCES} ${NI_EMBED} ${NI_NH_EMBED} ${NI_DORY_EMBED} ${NI_FLINT_EMBED} ${NI_TENSOR_EMBED} ${NI_BENCH_CORPUS} ${NI_MAC_MODELS})
 target_include_directories(naceinfer PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/third_party PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(naceinfer PUBLIC "-framework Metal" "-framework Foundation" "-framework CoreFoundation" "-framework IOSurface"
   "-framework IOKit" "-framework ImageIO" "-framework CoreGraphics" "-framework Security")

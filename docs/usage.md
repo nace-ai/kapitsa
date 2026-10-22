@@ -57,10 +57,11 @@ Those start the best model for this Mac, with the same output as before.
 | `nemotron-3.5-lightning` | `lightning`, `nemotron-lightning` | NVIDIA Nemotron 3.5 Lightning 30B-A3B: hybrid Mamba-2 mixture of experts, 3B active, 4-bit (NVFP4) experts; quick to reply and to read on 32 GB Macs and up | 22.9 GB | `nvfp4` |
 | `nemotron-3.5-bolt` | `bolt`, `nemotron-bolt` | NVIDIA Nemotron 3.5 Bolt 74B-A9B: hybrid Mamba-2 mixture of experts, 9B active, 2-bit experts; an agentic model | 25.1 GB | `24gb` |
 | `nemotron-3.5-super-vl` | `super-vl`, `super`, `nemotron-super` | NVIDIA Nemotron 3.5 Super-VL 120B-A12B: hybrid Mamba-2 mixture of experts, 12B active, 4-bit (NVFP4) experts; needs a 96 GB+ Mac | 76.4 GB | `nvfp4` |
+| `flint` | `recursive-flint`, `flint-40b` | Recursive Flint 40B-A2.5B: mixture of 256 experts, 2.5B active, sliding-window and full attention; a coding model that reasons before it answers; text only; 32 GB Macs and up | 22.6 GB | `4bit` |
 
 A download includes the companion files that speed decoding up: an MTP head and a DFlash2 draft model for the 35B and
 27B, an MTP head and z-lab's DFlash draft model for the 4B, NVIDIA's LiLiCorr draft model for Bolt and for Super-VL,
-its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory has none: it decodes without one, as
+its DSpark draft model for Lightning; Flash-Next's repo holds its MTP head. Dory and Flint have none: they decode without one, as
 does the 35B's `16gb` (its GGUF has no MTP head, and a draft model would not fit beside it).
 
 Flash-Next's `4bit` is Nace AI's quantization of Qwen's bf16 release
@@ -137,6 +138,14 @@ prompt lookup off. The 9B v2's template turns thinking on and off with `/think` 
 switches (`enable_thinking`, `reasoning_effort`, Anthropic's `thinking`) set that flag, and its
 `<TOOLCALL>[...]</TOOLCALL>` calls come back as tool calls. That template also drops a past turn's reasoning and its
 `<think>` tags, so a follow-up request reuses the cache up to the previous reply, not through it.
+
+Recursive's Flint (`--model flint`: [RecursiveSI/flint-int4](https://huggingface.co/RecursiveSI/flint-int4), its MLX
+4-bit export) has 49 layers: 35 of sliding-window attention (513 positions, a ring per conversation) and 14 of full
+attention without positional encoding, each head with a learned sink, then 256 experts routed by sigmoid scores (6 a
+token) beside an always-on shared expert. It reasons before every answer (its template has no switch for that), and its
+tool calls, in GLM's `<tool_call>` format, come back as tool calls. It has no draft model and decodes plainly: prompt
+lookup (`--spec N`) checks 2-4 rows a pass at 1.6-2.8 times a decode step's cost on an M4 Pro (each row brings its own 6
+experts), and on the benchmark's code a draft exists for 1 token in 4, so it is off unless asked for.
 
 Refused, with a message: other architectures, other quantizations (MLX's `mxfp4`, `nvfp4` and `mxfp8` modes among
 them; NVIDIA's own NVFP4 checkpoints of the catalog's Nemotron models are read as they are), mixture-of-experts
@@ -242,7 +251,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--context N` | `128k`, less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
 | `--dflash auto\|none\|DIR` | `auto` | Draft model: `auto` uses the one downloaded with the model, unless it would keep one `--context` conversation from fitting; `none` decodes without it (with the MTP head on Qwen); `DIR` names a drafter folder. |
-| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). |
+| `--spec N` | `1` on the 35B, `4` on the 27B and 4B | MTP draft depth when no draft model is used; `0` turns speculative decoding off. Dory with `--loop-kv per-loop`: drafts per cycle (by default 2 at 1-2 loops, 3 at 3-4; [speculative decoding](#dory-thinking-depth)). Dense Nemotron-H (Nemotron Nano): prompt lookup's drafts per cycle (by default 4 with BF16 or FP8 MLP layers, off with NVFP4). Flint: prompt lookup's drafts per cycle (off by default). |
 | `--mem-budget GB` | macOS's recommended working set, a little less | GPU memory Kapitsa may hold ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `--prefill-chunk N` | `2048` (`1024` when memory is short) | Prompt tokens per prefill pass. On a 32-core M1 Max, a single slot with the 35B-A3B 4-bit group-64 model uses `4096` when its memory plan fits. |
 | `--disk-cache SIZE` | `auto` | The SSD prefix cache: conversations kept on the SSD, also across restarts ([SSD prefix cache](#ssd-prefix-cache)). `auto`: a quarter of the free space beyond 10 GiB, at most 32 GiB; a size (`16G`, `512M`) caps it within that; `0` turns it off. |
@@ -567,10 +576,10 @@ Kapitsa holds at most a budget of GPU memory: Metal's recommended working set, w
 (at least 512 MB) for the Neural Engine service and other GPU users; `--mem-budget GB` (or `NI_MEM_BUDGET`) sets it.
 Fixed at start are the weights, the MTP head, the prefill buffers (they scale with `--prefill-chunk`), each slot's
 recurrent state and, where used, the Neural Engine split's buffers and the draft model. Each conversation's KV cache
-grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B, 8 KB on Bolt and on Super-VL, 6 KB
-on Lightning, 31 KB on Flash-Next. Flash-Next's n-gram table (32 GB) is not in the budget: it is mapped from its file,
-and each token reads 16 rows of it on the CPU, so macOS keeps the parts in use in the page cache and can drop them
-under pressure. When memory is short:
+grows as it fills: 36 KB per token on the 4B, 68 KB on the 27B, 22 KB on the 35B, 28 KB on Flint (plus 38 MB for its
+sliding-window rings), 8 KB on Bolt and on Super-VL, 6 KB on Lightning, 31 KB on Flash-Next. Flash-Next's n-gram table
+(32 GB) is not in the budget: it is mapped from its file, and each token reads 16 rows of it on the CPU, so macOS keeps
+the parts in use in the page cache and can drop them under pressure. When memory is short:
 
 - At start, the fixed part and an 8K-token KV cache must fit, else the server exits with `insufficient memory: ...`,
   what each part needs and what would help (fewer `--slots`, `--prefill-chunk 1024`, no draft model, a smaller model,
@@ -766,6 +775,7 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_NH_ATTN_Q8` | off | Nemotron Lightning: `1` stores its BF16 attention projections in 8-bit (about 3% faster decoding, slightly less accurate). |
 | `NI_NH_HEAD` | `q8` with NVFP4 or FP8 | Dense Nemotron-H models (Nemotron Nano): `bf16` keeps an NVFP4 or FP8 checkpoint's BF16 LM head (the 9B v2's, the 4B FP8's) BF16 instead of 8-bit rows; `q8` also runs a BF16 checkpoint's head as 8-bit rows. |
 | `NI_NH_NGRAM` | `4` with BF16 or FP8, `0` with NVFP4 | Dense Nemotron-H models (Nemotron Nano): prompt lookup's drafts per cycle when `--spec` is not given; `0` decodes plainly. |
+| `NI_FLINT_NGRAM` | `0` | Flint: prompt lookup's drafts per cycle when `--spec` is not given (up to 7); `0` decodes plainly. |
 | `NI_NH_FP4` | `l2` on M1 Macs, else `l0` | Dense Nemotron-H models: how NVFP4 codes are laid out for the GPU, as `NI_DORY_FP4`; both give the same outputs to the bit. |
 | `NI_DSPARK_DYN` | `0.3` on M5 Macs, else `0.2` | Nemotron Lightning's DSpark draft model with chains (`NI_KFLASH=0`): how many of its 7 drafts are verified, chosen per cycle as for `NI_LILI_DYN`; `0` verifies all 7. |
 | `NI_DSPARK_K` | `16` | Nemotron Lightning's DSpark draft model: the candidates per draft position its Markov head rescores (1-32). |

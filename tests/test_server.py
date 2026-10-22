@@ -231,6 +231,15 @@ def cli_checks(kapitsa):
               j.get("revision") == rev and j.get("companions") == [] and
               j.get("id") == (name if dv == "nvfp4" else name + ":" + dv) and
               j.get("dir") == os.path.join(models, name + "-" + dv), json.dumps(j))
+    # Recursive's Flint: its MLX 4-bit export, no drafter (plain decoding; prompt lookup with --spec); its repo by name
+    # resolves to the catalog's
+    for a in ["flint", "recursive-flint", "flint:4bit", "RecursiveSI/flint-int4"]:
+        name = "flint"
+        j = plan(a)
+        check(f"cli: {a} -> {name}:4bit, no drafter",
+              j.get("model") == name + ":4bit" and j.get("kind") == "catalog" and j.get("repo") == "RecursiveSI/flint-int4"
+              and j.get("revision") == "3b93f9053b530488405ae9fca51d4900d6ce21f0" and j.get("companions") == [] and
+              j.get("id") == name and j.get("dir") == os.path.join(models, name + "-4bit"), json.dumps(j))
     # NVIDIA's Nemotron Nano: the 4B in FP8 (default) and BF16, the 9B v2 in NVFP4; no drafter (prompt lookup)
     nano4, nano9 = "nemotron-3-nano-4b", "nemotron-nano-9b-v2"
     for a, name, dv, default, repo, rev in [

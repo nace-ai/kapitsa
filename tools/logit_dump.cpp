@@ -33,6 +33,7 @@
 #include "bench/bench.h"
 #include "metal/gpu.h"
 #include "model/dory.h"
+#include "model/flint.h"
 #include "model/kflash_budget.h"
 #include "model/nemotron_h.h"
 #include "model/qwen35.h"
@@ -250,7 +251,12 @@ int main(int argc, char** argv) {
   Qwen35* q = nullptr;
   NemotronH* nh = nullptr;
   Dory* dory = nullptr;
-  if (Dory::is_model(dir)) {
+  Flint* fl = nullptr;
+  if (Flint::is_model(dir)) {
+    auto m = std::make_unique<Flint>(dir, chunk);
+    fl = m.get();
+    model = std::move(m);
+  } else if (Dory::is_model(dir)) {
     LoopKv kv = LoopKv::last_loop;
     if (!loop_kv.empty() && !parse_loop_kv(loop_kv, &kv)) fatal("--loop-kv: last-loop or per-loop");
     auto m = std::make_unique<Dory>(dir, chunk, loops, kv);
@@ -267,7 +273,9 @@ int main(int argc, char** argv) {
   }
   Model& m = *model;
   const int V = m.vocab();
-  auto logits = [&]() -> const float* { return q ? q->logits() : nh ? nh->logits() : dory->logits(); };
+  auto logits = [&]() -> const float* {
+    return q ? q->logits() : nh ? nh->logits() : fl ? fl->logits() : dory->logits();
+  };
   auto begin_pass = [&] { return m.grouped_passes() ? g.begin_grouped() : g.begin(); };
   const SamplingParams sp;  // greedy: no pass samples a token the next row reads
 
@@ -285,12 +293,16 @@ int main(int argc, char** argv) {
   if (members * member_rows > kVerifyRows) fatal("--batch %d x --batch-rows %d: more than 8 rows", members, member_rows);
   for (const auto& p : paths) {
     if (p == "batch" && dory) fatal("Dory decodes one request at a time: no batch path");
+    if (p == "batch" && fl) fatal("Flint decodes one request at a time: no batch path");
     if (p == "verify" && dory && dory->kv_mode() != LoopKv::per_loop)
       fatal("Dory verifies drafts only with per-loop KV (--loop-kv per-loop); with last-loop KV it decodes step by step");
   }
   // rows a window feeds on a path: its scored rows, up to whole passes
+  // Flint: NI_FLINT_VERIFY_ROWS=R (2-8) verifies R rows a pass instead of 8 (its 2-4-row passes take other expert kernels)
+  const int vrows = fl && getenv("NI_FLINT_VERIFY_ROWS") ? std::clamp(atoi(getenv("NI_FLINT_VERIFY_ROWS")), 2, 8)
+                                                         : kVerifyRows;
   auto path_rows = [&](const std::string& p, const Window& w) {
-    const int k = p == "verify" ? kVerifyRows : p == "batch" ? member_rows : 1;
+    const int k = p == "verify" ? vrows : p == "batch" ? member_rows : 1;
     const int W = (w.W + k - 1) / k * k;
     if (w.W > 0 && int(w.toks.size()) < w.L0 + W)
       fatal("a sequence of %zu tokens: the %s path's passes of %d rows need %d", w.toks.size(), p.c_str(), k, w.L0 + W);
@@ -437,7 +449,7 @@ int main(int argc, char** argv) {
             s.pend_path = g.alloc(size_t(kf::kPathWords) * 4, "logit_dump_path");
             for (int r = 0; r < kVerifyRows; ++r) s.pend_path.as<int32_t>()[r] = r;  // kf_accept's path: the chain
           }
-          for (int i = 0, W = path_rows(o.name, w); i < W; i += kVerifyRows) {
+          for (int i = 0, W = path_rows(o.name, w); i < W; i += vrows) {
             const int P = w.L0 + i;
             auto e = q ? g.begin() : begin_pass();
             if (q && tree) {  // DFlash2::encode_cycle_verify's tree branch, the acceptance's writes made in advance
@@ -453,11 +465,13 @@ int main(int argc, char** argv) {
               q->encode_verify(*e, s, P, kVerifyRows, sp, uint32_t(P), /*v8=*/true);
             } else if (nh) {
               nh->encode_verify(*e, s, P, kVerifyRows);
+            } else if (fl) {
+              fl->encode_verify(*e, s, P, vrows);
             } else {
               dory->encode_verify(*e, s, P, kVerifyRows);
             }
             e->commit_and_wait();
-            for (int r = 0; r < kVerifyRows; ++r) put(o, w, i + r, logits() + size_t(r) * V);
+            for (int r = 0; r < vrows; ++r) put(o, w, i + r, logits() + size_t(r) * V);
             if (q) {
               q->commit_rows(s, kVerifyRows);
               s.pend_tree = tree;  // a tree's next pass folds the accepted path (pend_path), as after kf_accept

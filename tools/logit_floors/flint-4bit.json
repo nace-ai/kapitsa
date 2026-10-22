@@ -1,0 +1,55 @@
+{
+  "model": "flint-4bit",
+  "measured": {
+    "build": "0.2.4 (141f2c4)",
+    "mac": "MacBook Pro (16-inch, 2024), M4 Pro (20-core GPU), 48 GB",
+    "macos": "27.0.1",
+    "date": "2026-10-22T06:40:18Z",
+    "records": 192,
+    "source": "bench/corpus.txt",
+    "env": {},
+    "command": "tools/logit_floor.py ~/.cache/kapitsa/models/flint-4bit"
+  },
+  "reference_path": "verify",
+  "sources": {
+    "repeat": {"paths": {"prefill": {"records": 8, "bitwise": 8, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "step": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}, "verify": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0}}, "what": "the same build and command run twice", "in_floor": true, "decode": true},
+    "chunk": {"records": 192, "bitwise": 192, "top1": 1.0, "flips": 0, "kl_mean": 0.0, "kl_median": 0.0, "kl_p99": 0.0, "kl_max": 0.0, "margin_change_max": 0.0, "tie_margin": 0.0, "nll_change_mean": 0.0, "max_abs_diff": 0.0, "what": "prefill chunks of 512 rows against 2048", "in_floor": true, "decode": false},
+    "step": {"records": 192, "bitwise": 0, "top1": 0.9947916666666666, "flips": 1, "kl_mean": 0.005042740343911545, "kl_median": 1.941786532470265e-07, "kl_p99": 0.04186338148293263, "kl_max": 0.7853274472036345, "margin_change_max": 4.4213292598724365, "tie_margin": 4.007892370223999, "nll_change_mean": 0.007170367451464527, "max_abs_diff": 8.876276016235352, "largest_flip_margin": 4.007892370223999, "what": "plain decoding (--spec 0) against the 8-row verify", "in_floor": true, "decode": true}
+  },
+  "floor": {
+    "flips": 1,
+    "kl_mean": 0.005042740343911545,
+    "kl_p99": 0.04186338148293263,
+    "kl_max": 0.7853274472036345,
+    "margin_change_max": 4.4213292598724365,
+    "tie_margin": 4.007892370223999,
+    "records": 192,
+    "top1": 0.9947916666666666,
+    "set_by": {"flips": "step", "kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}
+  },
+  "gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.0101,
+    "max_p99_kl": 0.0838,
+    "near_tie": 4.01,
+    "max_far_flips": 0
+  },
+  "decode_floor": {
+    "flips": 1,
+    "kl_mean": 0.005042740343911545,
+    "kl_p99": 0.04186338148293263,
+    "kl_max": 0.7853274472036345,
+    "margin_change_max": 4.4213292598724365,
+    "tie_margin": 4.007892370223999,
+    "records": 192,
+    "top1": 0.9947916666666666,
+    "set_by": {"flips": "step", "kl_mean": "step", "kl_p99": "step", "kl_max": "step", "margin_change_max": "step", "tie_margin": "step"}
+  },
+  "decode_gate": {
+    "min_top1": 0.989583,
+    "max_mean_kl": 0.0101,
+    "max_p99_kl": 0.0838,
+    "near_tie": 4.01,
+    "max_far_flips": 0
+  }
+}

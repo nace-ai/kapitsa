@@ -298,6 +298,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     nh_ = m.get();
     model_ = std::move(m);
     publisher_sampling();
+  } else if (Flint::is_model(opts_.model_dir)) {
+    auto m = std::make_unique<Flint>(opts_.model_dir, opts_.prefill_chunk);
+    flint_ = m.get();
+    model_ = std::move(m);
+    publisher_sampling();
   } else {
     auto m = std::make_unique<Qwen35>(opts_.model_dir, opts_.prefill_chunk);
     q35_ = m.get();
@@ -305,9 +310,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   }
   tok_.load(opts_.model_dir + "/tokenizer.json");
   model_->set_mem_budget(budget_);
-  const std::string src = chat_template_source(opts_.model_dir);
+  std::string src = chat_template_source(opts_.model_dir);
   if (src.empty()) fatal("no chat template in %s", opts_.model_dir.c_str());
-  tmpl_ = std::make_unique<minja::chat_template>(src, "", "<|im_end|>");
+  if (flint_) src = flint_template(src);
+  tmpl_ = std::make_unique<minja::chat_template>(src, flint_ ? "<|begin_of_text|>" : "",
+                                                 flint_ ? "<|end_of_text|>" : "<|im_end|>");
   think_open_ = tok_.find("<think>");
   think_close_ = tok_.find("</think>");
   tc_open_ = tok_.find("<tool_call>");
@@ -414,6 +421,17 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
     }
   }
 
+  // Flint has no drafter: prompt lookup drafts up to K tokens per cycle when asked (--spec K, else NI_FLINT_NGRAM=K),
+  // verified in one pass; the reply is the one plain decoding writes (up to near-ties: a pass of 2+ rows sums in another
+  // order). Off by default: on an M4 Pro a pass of 2 / 4 rows costs 1.6 / 2.8 decode steps (each row brings its own 6
+  // of 256 experts), and on the benchmark's coding reply a draft exists for 1 token in 4 (replayed: 4-16% slower than
+  // plain decoding; it pays only on replies that copy their prompt).
+  if (flint_ && spec_asked != 0) {
+    const char* v = getenv("NI_FLINT_NGRAM");
+    const int k = spec_asked > 0 ? spec_asked : v && *v ? atoi(v) : 0;
+    if (k > 0) flint_ngram_ = std::min(k, Flint::kMaxRows - 1);
+  }
+
   // NI_PREFIX_CKPT=0: no prefix checkpoint. Not with LiLiCorr / KFlash drafters (their context has no rewind to an
   // empty ring).
   {
@@ -465,6 +483,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
   batch_measured_ = (dfl_ && !dfl_->config().v1) ||
                     (lili_ && std::string(lili_->name()) == "LiLiCorr" && nh_->iq2_experts());
   const std::string mode = lili_ ? std::string(lili_->name()) + " speculative decoding (7-token blocks)"
+                         : flint_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(flint_ngram_) +
+                                                  " drafts per cycle)"
                          : nh_ngram_ > 0 ? "prompt-lookup speculative decoding (up to " + std::to_string(nh_ngram_) +
                                                " drafts per cycle)"
                          : dfl_ && dfl_->tree() ? std::string("KFlash speculative decoding (DFlash2 lattice, tree verify)")
@@ -522,6 +542,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
     if (const auto it = plans.find(key); it != plans.end()) return it->second;
   }
   const MemPlan p = Dory::is_model(model_dir)       ? Dory::plan(model_dir, prefill_chunk)
+                    : Flint::is_model(model_dir)    ? Flint::plan(model_dir, prefill_chunk)
                     : Qwen4Exp::is_model(model_dir) ? Qwen4Exp::plan(model_dir, prefill_chunk)
                     : NemotronH::is_model(model_dir) ? NemotronH::plan(model_dir, prefill_chunk)
                                                      : Qwen35::plan(model_dir, prefill_chunk);
@@ -530,7 +551,7 @@ MemPlan model_plan(const std::string& model_dir, int prefill_chunk) {
   return p;
 }
 static size_t model_ane_bytes(const std::string& model_dir, const MemPlan& p) {
-  if (Dory::is_model(model_dir)) return 0;
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) return 0;
   return NemotronH::is_model(model_dir) ? p.ane : Qwen35::ane_plan(model_dir, p).bytes;
 }
 
@@ -565,8 +586,8 @@ LoadPlan plan_load(const std::string& model_dir, const std::string& dflash, bool
   lp.dflash_auto = want == "auto";
   lp.dflash_off = want == "none" || want == "0" || want == "off" || (lp.dflash_auto && spec_off);
   slots = std::max(1, slots);
-  if (Dory::is_model(model_dir)) {
-    lp.dflash_off = true;  // plain decoding (no drafter for Dory)
+  if (Dory::is_model(model_dir) || Flint::is_model(model_dir)) {
+    lp.dflash_off = true;  // no block drafter for Dory or Flint
   } else if (NemotronH::is_model(model_dir)) {
     // the block drafter (LiLiCorr, DSpark) in the model's dflash/ folder (auto), or the one named
     if (!lp.dflash_off) {
@@ -1505,7 +1526,21 @@ std::string Engine::render(const ChatRequest& r, bool add_generation_prompt) con
       return render_chat(*tmpl_, q, add_generation_prompt, images);
     }
   }
-  return render_chat(*tmpl_, r, add_generation_prompt, images);
+  return render_chat(*tmpl_, r, add_generation_prompt, images, flint_ != nullptr);
+}
+
+// Flint's chat template is written for Jinja2, and minja (third_party, not edited) differs from it in three places the
+// template uses: no replace filter (strings have the replace method), "\x00" read as the text "x00" (the template's
+// removal of NUL characters would delete that text from every message instead; dropped), and no ensure_ascii keyword
+// on tojson (whose output keeps non-ASCII text as ensure_ascii=False does). The source rewritten for minja.
+std::string flint_template(std::string src) {
+  auto replace_all = [&](const std::string& a, const std::string& b) {
+    for (size_t at = 0; (at = src.find(a, at)) != std::string::npos; at += b.size()) src.replace(at, a.size(), b);
+  };
+  replace_all("tojson(ensure_ascii=False)", "tojson");
+  replace_all(" | replace(\"\\x00\", \"\")", "");
+  replace_all(" | replace(", ".replace(");
+  return src;
 }
 
 // Whether a chat template reads message content as a string only (Dory's: a content array would render as its repr;
@@ -1553,7 +1588,7 @@ static ojson flatten_content(const ojson& messages) {
 }
 
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
-                        bool images) {
+                        bool images, bool native) {
   minja::chat_template_inputs in;
   int dropped = 0;
   in.messages = images ? vision::without_image_data(r.messages) : without_images(r.messages, &dropped);
@@ -1564,7 +1599,7 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
   // query, so which assistant turns keep their reasoning does not change), and the marker's turn is then replaced.
   std::vector<std::string> later;
   static const std::string mark = "\x02kapitsa-system-turn-";
-  for (size_t i = 1; i < in.messages.size(); ++i) {
+  for (size_t i = 1; i < in.messages.size() && !native; ++i) {
     ojson& m = in.messages[i];
     if (role_of(m) != "system") continue;
     later.push_back(content_text(m.contains("content") ? m["content"] : ojson()));
@@ -1574,6 +1609,7 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
   in.add_generation_prompt = add_generation_prompt;
   in.extra_context = r.template_kwargs;
   minja::chat_template_options opt;
+  opt.apply_polyfills = !native;
   std::string text = tmpl.apply(in, opt);
   for (size_t k = 0; k < later.size(); ++k) {
     const std::string inner = "<tool_response>" + mark + std::to_string(k) + "\x02</tool_response>";
@@ -1740,7 +1776,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   // task, an agent's next conversation) then reuses the block however early it diverges.
   int pbound = -1;
   if (prefix_ckpt_ && images.empty()) {
-    const size_t off = text.find("<|im_start|>user");
+    const size_t off = text.find(flint_ ? "<|user|>" : "<|im_start|>user");
     if (off != std::string::npos && off > 0) {
       const std::vector<int> pt = tok_.encode(text.substr(0, off));
       if (pt.size() >= 64 && int(pt.size()) < n && (boundary < 0 || int(pt.size()) < boundary) &&
@@ -1765,6 +1801,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     std::string why;
     if (grammar_calls(*r.grammar) && (tc_open_ < 0 || tc_close_ < 0))
       why = "this model has no <tool_call> / </tool_call> tokens: its replies cannot be held to tool calls";
+    else if (grammar_calls(*r.grammar) && flint_)
+      why = "Flint writes its tool calls in GLM's markup, which the tool-call grammar does not hold yet: send "
+            "tool_choice \"auto\" and non-strict tools";
     else if (think && think_close_ < 0)
       why = "this model writes its reasoning's end as text: structured output needs reasoning off with it";
     if (!why.empty()) {
@@ -2262,10 +2301,12 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_THINK_TOOLCALLS");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
-  // (Nemotron-H and Dory: the whitespace before </think> stays in the reasoning, as their templates render returned
-  // turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text)
+  // (Nemotron-H, Dory and Flint: the whitespace before </think> stays in the reasoning, as their templates render
+  // returned turns, unless the template writes a newline of its own there: think_ws_; the Nano 9B v2's tags as text;
+  // Flint's calls in GLM's markup)
   OutputParser parser(tok_, think_open_, think_close_, tc_open_, tc_close_, think, !r.tools.empty(), r.tools,
-                      think_tools, (nh_ != nullptr || dory_ != nullptr) && think_ws_, text_tags_);
+                      think_tools, (nh_ != nullptr || dory_ != nullptr || flint_ != nullptr) && think_ws_, text_tags_,
+                      flint_ ? CallFormat::Glm : CallFormat::QwenXml);
   const auto& eos = stop_ids_;
   double t1 = now_ms();
   int gen = 0;
@@ -2388,7 +2429,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_GRAMMAR_SPEC");
     return !(v && v[0] == '0');
   }();
-  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || depth > 0;
+  const bool spec_loop = lili_ || dfl_ || dory_spec_ > 0 || nh_ngram_ > 0 || flint_ngram_ > 0 || depth > 0;
   const bool g_dfl = gm && dfl_ && grammar_spec;
   const bool g_direct = gm && !g_dfl && (g_on || !spec_loop);
   g_in_spec = gm && !g_direct && !g_on;
@@ -2821,6 +2862,54 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     nh_->encode_flush(*e3, s);
     e3->commit_and_wait();
     fed_until = P;
+  } else if (flint_ngram_ > 0) {
+    // Flint: prompt lookup. When the last tokens occurred earlier in the conversation, the tokens that followed them (up
+    // to flint_ngram_) are drafts, verified with the pending token in one pass; otherwise the pass is the pending
+    // token's row alone. Each row samples at its own position, accepting the drafts that agree. Rows past the accepted
+    // ones leave keys at positions the next pass writes again before any row reads them (a ring's included: its 8
+    // spare rows hold them), so nothing is committed or flushed.
+    int P = n;
+    req_cycles = 0;
+    bool go = handle(s.tokens()[n]);
+    std::vector<int> nd;
+    while (go) {
+      constexpr int B = Flint::kMaxRows;
+      if (P + 2 * B + 2 > s.cap && s.cap < s.limit) {
+        if (mtp_e) mtp_e->wait();
+        grow_kv(std::min(s.limit, P + 2 * B + 2), [] {});
+      }
+      if (P + B + 1 >= s.cap) {
+        finish = "length";
+        res.context_full = true;
+        break;
+      }
+      if (mtp_e) mtp_e->wait();  // (nothing reads the token buffer before the drafts are written)
+      ngram_drafts(s.tokens(), P, flint_ngram_, nd);
+      int* tw = s.tokens();
+      for (size_t j = 0; j < nd.size(); ++j) tw[P + 1 + int(j)] = nd[j];
+      const int R = int(nd.size()) + 1;
+      auto e2 = g.begin();
+      flint_->encode_verify(*e2, s, P, R);
+      flint_->encode_accept(*e2, s, P, R, R - 1, sp);
+      e2->commit_and_wait();
+      const int a = flint_->accepted();
+      const int* tk = s.tokens();
+      int m = 0;
+      while (m < a + 1) {
+        ++m;
+        if (!handle(tk[P + m])) {
+          go = false;
+          break;
+        }
+      }
+      ++spec_cycles_;
+      ++req_cycles;
+      spec_accepted_ += m;
+      cycle_done(m);
+      P += m;
+      if (go && contended()) yield_turn(res);
+    }
+    fed_until = P;
   } else if (depth > 0) {
     // Speculative decoding: the MTP head drafts `depth` tokens, the trunk verifies them together
     // with the pending token, accepted rows are committed through the DeltaNet tape.
@@ -3078,7 +3167,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
   slot.live_ok = finish == "tool_calls";
   ++slot.version;  // (a state the SSD prefix cache does not have yet)
   char cyc[64] = "";
-  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_) && req_cycles > 0)
+  if ((dfl_ || lili_ || dory_spec_ || nh_ngram_ || flint_ngram_) && req_cycles > 0)
     snprintf(cyc, sizeof cyc, ", %.2f tok/cycle", double(gen - 1) / req_cycles);
   // requests in flight at once: the slot, the wait for it, the turns given to the others (prefill, decode)
   char conc[256] = "";
@@ -3172,7 +3261,7 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
     return;
   }
   const size_t mpos = text.rfind(marker);
-  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind("<|im_start|>", mpos);
+  const size_t cut = mpos == std::string::npos ? std::string::npos : text.rfind(flint_ ? "<|user|>" : "<|im_start|>", mpos);
   if (cut == std::string::npos) return;
   text.resize(cut);
   std::vector<int> t2 = tok_.encode(text);

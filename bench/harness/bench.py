@@ -16,7 +16,9 @@ Measures, through the server's /v1/chat/completions streaming API (what coding a
 Fairness rules built in (see README.md, "What makes a run count"):
   * thinking is turned off with BOTH chat_template_kwargs.enable_thinking=false and
     reasoning_effort="none" (Ollama and LM Studio only honour the latter, MTPLX and mlx-lm only the
-    former); a run that returns reasoning text, or content with <think>/</think>, is INVALID
+    former); a run that returns reasoning text, or content with <think>/</think>, is INVALID. A model that
+    reasons before every answer with no switch for it (Recursive's Flint) runs with --always-reasons: its
+    reasoning is part of the reply (its tokens count in the decode rate) and its prefill turns get 1024 tokens
   * every request sends the same sampling parameters, including the neutral ones engines default
     differently (min_p 0: llama.cpp defaults to 0.05; presence_penalty 0: Ollama's qwen3.6 Modelfile
     has 1.5; repeat_penalty 1.0, the llama.cpp key). `repetition_penalty` is never sent: mlx-lm builds
@@ -275,7 +277,7 @@ def decode_messages():
 
 # ---------------------------------------------------------------- HTTP
 def post(base, body, stream, timeout=1800, session=None):
-    h = {"Content-Type": "application/json", "Authorization": "Bearer local"}
+    h = {"Content-Type": "application/json", "Authorization": "Bearer " + os.environ.get("BENCH_API_KEY", "local")}
     if session:  # stable per-conversation id; engines like MTPLX key their KV session bank on it
         h["X-Session-Id"] = session
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode(), headers=h)
@@ -508,7 +510,7 @@ def t_decode(a, greedy=False):
                 "usage_reported": bool(ct), "rate": info, "timings": r["timings"],
                 "distinct4": distinct4(text or r["reasoning"]), "text": text, "reasoning": r["reasoning"],
                 "events_t_ms": [round(x * 1000, 2) for x in r["ev_t"]], "events_chars": r["ev_c"]})
-    res["invalid"] += thinking_leak(r)
+    res["invalid"] += [] if a.always_reasons else thinking_leak(r)
     if not ct:
         res["invalid"].append("usage.completion_tokens missing (no fallback to event counts)")
     if mid is None and ct:
@@ -539,7 +541,7 @@ def t_prefill(a, size, ref):
     msgs = prefill_messages(ctx, nonce, "In one sentence, what is the first file in the repository context about?")
     # max_tokens high enough that the answer ends naturally: a turn cut by max_tokens ("length") is not
     # reusable as a cached prefix in some engines (MTPLX), and real agent turns end with stop/tool_calls.
-    body = body_of(a, msgs, 256)
+    body = body_of(a, msgs, 1024 if a.always_reasons else 256)
     sid = f"bench-{random.getrandbits(48):012x}"
     res = {"target": size, "invalid": [], "flags": []}
     try:
@@ -555,7 +557,7 @@ def t_prefill(a, size, ref):
                 "prefill_tps": (pt / r["ttft"]) if pt and r["ttft"] else None, "cold_cached_tokens": cold_cached,
                 "first_event_chars": r["ev_c"][0] if r["ev_c"] else None, "timings": r["timings"],
                 "finish": r["finish"], "answer": r["content"], "reasoning_chars": len(r["reasoning"])})
-    res["invalid"] += thinking_leak(r)
+    res["invalid"] += [] if a.always_reasons else thinking_leak(r)
     if not pt:
         res["invalid"].append("usage.prompt_tokens missing")
     elif exp:
@@ -579,7 +581,7 @@ def t_prefill(a, size, ref):
         time.sleep(a.turn_gap)  # emulate tool execution / client think time between agent turns
         msgs2 = hist + [{"role": "user", "content": q}]
         try:
-            r2 = stream_chat(a.base_url, body_of(a, msgs2, 256), session=sid)
+            r2 = stream_chat(a.base_url, body_of(a, msgs2, 1024 if a.always_reasons else 256), session=sid)
         except Exception as e:
             cached["invalid"].append(f"follow-up request failed: {e!r}"[:300])
             break
@@ -588,7 +590,7 @@ def t_prefill(a, size, ref):
         rec = {"ttft_s": r2["ttft"], "prompt_tokens": u2.get("prompt_tokens"), "cached_tokens": c2,
                "finish": r2["finish"], "answer": r2["content"]}
         cached["samples"].append(rec)
-        for why in thinking_leak(r2):
+        for why in [] if a.always_reasons else thinking_leak(r2):
             cached["invalid"].append(f"follow-up: {why}")
         if c2 is not None and prev_pt and c2 < 0.5 * prev_pt:
             cached["flags"].append(f"follow-up reused only {c2} of {prev_pt} prefix tokens")
@@ -627,7 +629,7 @@ def tools_messages():
 
 def t_tools(a, think):
     msgs = tools_messages()
-    body = body_of(a, msgs, 4096 if think else 512, think=think, tools=TOOLS, tool_choice="auto")
+    body = body_of(a, msgs, 4096 if think or a.always_reasons else 512, think=think, tools=TOOLS, tool_choice="auto")
     out = {"thinking": think}
     # streaming
     try:
@@ -641,7 +643,7 @@ def t_tools(a, think):
     out["stream"] = {"ok": ok, "tool_calls": r["tool_calls"], "finish": r["finish"], "ttft_s": r["ttft"],
                      "total_s": r["total"], "content_leak": leaked, "reasoning_chars": len(r["reasoning"]),
                      "content_head": r["content"][:200]}
-    if not think and thinking_leak(r):
+    if not think and not a.always_reasons and thinking_leak(r):
         out["stream"]["thinking_leak"] = thinking_leak(r)
     # non-streaming
     try:
@@ -741,6 +743,9 @@ def parse_args(argv=None):
     ap.add_argument("--extra-body", default="", help="JSON merged into every request body")
     ap.add_argument("--reasoning-effort", default="low", help="effort for the thinking-on tools test")
     ap.add_argument("--no-think-style", default="both", choices=["both", "kwargs", "effort", "none"])
+    ap.add_argument("--always-reasons", action="store_true",
+                    help="the model reasons before every answer with no switch for it (Recursive's Flint): reasoning "
+                         "is not a leak, and the prefill, cached and tool turns get room to finish it")
     ap.add_argument("--warmup", default="light", choices=["none", "light", "full"],
                     help="light: one tiny request; full: the compare_engines warm-up; none: caller warmed up")
     ap.add_argument("--adaptive-warm", action="store_true", help="with --warmup full: 3 extra full decodes")

@@ -1,12 +1,13 @@
 // Chat engine: prompt rendering (Jinja chat template), prefix reuse across turns, generation,
 // and streaming output parsing (reasoning / content / tool calls) for Qwen3.5+ models (MLX safetensors, Qwen3.8-Flash-Next
-// included) and Nemotron-H models (NVIDIA's safetensors).
+// included), Nemotron-H models (NVIDIA's safetensors) and Recursive's Flint (MLX safetensors).
 #pragma once
 #include "engine/grammar.h"
 #include "engine/prefix_cache.h"
 #include "hub/hub.h"
 #include "model/dflash2.h"
 #include "model/dory.h"
+#include "model/flint.h"
 #include "model/kflash_budget.h"
 #include "model/lilicorr.h"
 #include "model/nemotron_h.h"
@@ -149,9 +150,12 @@ struct ChatRequest;
 std::string chat_template_source(const std::string& model_dir);
 // A request's prompt by a chat template (Engine::render; CPU only, no model needed: tools/api_test checks it).
 // `images`: image parts render as images (their data left out; the engine puts the images' rows in place), else image
-// and video parts become a short note.
+// and video parts become a short note. `native`: the template renders every role and tool call itself (Flint's), so
+// no minja polyfills and system messages after the first stay where they are.
 std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, bool add_generation_prompt,
-                        bool images = false);
+                        bool images = false, bool native = false);
+// Flint's chat template rewritten for minja (engine.cpp)
+std::string flint_template(std::string src);
 
 // One request's progress while it runs, for a live display (`kapitsa serve`'s dashboard in a terminal): the caller
 // passes it in ChatRequest::live and reads it from any thread; the engine writes it with relaxed atomic stores between
@@ -485,6 +489,8 @@ class Engine {
   Qwen35* q35_ = nullptr;    // model_ when it is a Qwen3.5-family model (MTP, DFlash2, Neural Engine split; Qwen4Exp too)
   NemotronH* nh_ = nullptr;  // model_ when it is a Nemotron-H model
   Dory* dory_ = nullptr;     // model_ when it is a Dory model
+  Flint* flint_ = nullptr;   // model_ when it is a Flint model
+  int flint_ngram_ = 0;      // Flint: prompt-lookup drafts per cycle (0: plain decoding)
   int dory_spec_ = 0;        // Dory speculative decoding (per-loop KV): drafts per cycle (0: plain decoding)
   bool dory_spec_auto_ = false;  // drafts per cycle by the request's loops (no --spec)
   std::unique_ptr<Checkpoint> ane_ck_;  // NI_ANE: recurrent state before a split chunk (rerun on failure)

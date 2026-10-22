@@ -71,17 +71,17 @@ One request alone runs the single-stream path unchanged. Requests decoded togeth
 two candidates are within the batched pass's rounding of each other, and sampled requests draw other random numbers;
 `NI_BATCH=0` makes them take turns instead.
 
-## Three model backends
+## Four model backends
 
-| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory |
-| --- | --- | --- | --- |
-| Backend | `Qwen35` | `NemotronH` | `Dory` |
-| Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) |
-| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals |
-| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV |
-| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints |
-| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) |
-| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None |
+| | Qwen3.5 family | Nemotron 3.5 Bolt | Nemotron Dory | Recursive Flint |
+| --- | --- | --- | --- | --- |
+| Backend | `Qwen35` | `NemotronH` | `Dory` | `Flint` |
+| Recurrent layers | Gated DeltaNet | Mamba-2 | None: a shared block of 40 sublayers runs 1-4 times per token (looped) | None |
+| Other layers | Attention; dense FFN or MoE | Attention; LatentMoE (dense relu² MLP in Nemotron Nano 4B / 9B v2) | Sliding-window and full attention, dense MLP; normalized (nGPT) residuals | Sliding-window and full attention with learned sinks; MoE (2 dense layers first) |
+| Default speculation | DFlash2 on 35B/27B; DFlash on 4B | LiLiCorr block drafter (DSpark on Lightning); prompt lookup on Nemotron Nano 4B | None with last-loop KV; prompt lookup with per-loop KV | None (prompt lookup with `--spec`) |
+| Checkpoints | MLX-format safetensors; supported GGUF imports | NVIDIA's safetensors checkpoint | NVIDIA's safetensors checkpoints | Recursive's MLX export |
+| Weight formats | BF16 and supported affine quantizations | NVFP4, IQ2_XXS, Q8_0 and BF16 by tensor type | NVFP4 or BF16 (on the Nemotron-H kernels; the LM head 8-bit with NVFP4) | Affine 4-bit, 8-bit embedding, BF16 router |
+| Neural Engine prefill | Dense FFN portions | Mamba projections and shared-expert work | None | None |
 
 Qwen3.8-Flash-Next (`Qwen4Exp`) is a subclass of `Qwen35` that reuses its projections, DeltaNet, attention, experts,
 sampler and KV handling, and adds the 4-stream hyper-connection residual, the per-layer n-gram embedding (hashed and
@@ -91,7 +91,17 @@ gathered on the CPU from a mapped table) and the sparse-attention indexer. A pac
 and a handshake between each layer's routing and its expert kernels lets a CPU thread read the missing ones from the
 SSD before the GPU goes on.
 
-All three implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
+Recursive's Flint (`Flint`) has no recurrent layers: 35 sliding-window attention layers keep their keys in a ring of
+528 positions per conversation (the window of 513 and 8 spare rows that a verify pass may fill), 14 full-attention
+layers keep a growing cache, and each head's learned sink joins its softmax. A decode row's attention is one dispatch
+(`flint_attn_d2`: norms, RoPE, the cache write, split-K over 32-key tiles, the merge by the last threadgroup); verify
+passes and prefill chunks use split-K and tiled kernels of their own. Its MoE routes by sigmoid scores with an
+always-on shared expert, on the base library's expert kernels (`moe_gate_up3`, `moe_down`, the 2-4-row `moe4_*`, the
+prefill's grouped GEMMs). Its activations pass half's range in places (up to 75776 at layer 46), so the prefill's
+SwiGLU stores such rows divided by a power of two and folds the factor back into the row's weight
+(`flint_swiglu_scaled`). It has its own pre-tokenizer split and GLM's tool-call format in the output parser.
+
+All four implement `Model`: memory planning, sequence allocation, KV growth, recurrent checkpoints, prefill and decode.
 Speculative paths remain specialized: the engine also holds backend-specific pointers and drafter state. Adding a
 new architecture requires more than implementing `Model` if it needs a new drafter, tokenizer behavior or vision tower.
 
@@ -151,6 +161,7 @@ Neural Engine resources. `kapitsa doctor` uses the same planning logic to report
 | Qwen3.8-Flash-Next | [`qwen4_exp.h`](../src/model/qwen4_exp.h), [`ngram.h`](../src/model/ngram.h), [`qwen4.metal`](../src/kernels/qwen4.metal); Q2_0 experts and their store: [`moe_q20.h`](../src/model/moe_q20.h), [`expert_store.h`](../src/model/expert_store.h), [`zq2moe.metal`](../src/kernels/zq2moe.metal) |
 | Nemotron backend and drafters | [`nemotron_h.h`](../src/model/nemotron_h.h), [`nh_drafter.h`](../src/model/nh_drafter.h), [`lilicorr.h`](../src/model/lilicorr.h), [`dspark.h`](../src/model/dspark.h); KFlash trees: [`kflash_budget.h`](../src/model/kflash_budget.h), [`nh_tree.metal`](../src/kernels/nemotron/nh_tree.metal) |
 | Dory backend (looped; loops and KV mode per request and server) | [`dory.h`](../src/model/dory.h), [`src/kernels/dory/`](../src/kernels/dory/) |
+| Flint backend | [`flint.h`](../src/model/flint.h), [`src/kernels/flint/`](../src/kernels/flint/); the timing tools [`flint_bench.cpp`](../tools/flint_bench.cpp) and [`flint_kbench.cpp`](../tools/flint_kbench.cpp) |
 | Metal runtime and kernels | [`src/metal/`](../src/metal/), [`src/kernels/`](../src/kernels/) |
 | Neural Engine bridge and splits | [`src/ane/`](../src/ane/), [`nemotron_ane.h`](../src/model/nemotron_ane.h) |
 | Image encoders and embedding cache | [`src/vision/`](../src/vision/) |

@@ -34,7 +34,10 @@ Config files (configs/*.json) are lists of objects; several files are merged in 
   enabled       false = skipped (placeholders, experiments)
   requires_paths / requires_ollama_tag   skip with a message when missing
   prepare       [{"symlink": {"src", "dst"}}, {"write_json": {"path", "data"}}, {"clean_dir": path inside {state}},
-                 {"link_files": {"src", "dst", "exclude": [globs]}}  (per-file symlinks, nothing copied)]
+                 {"link_files": {"src", "dst", "exclude": [globs]}}  (per-file symlinks, nothing copied),
+                 {"clone_files": {"src", "dst", "files": [names]}}  (per-file APFS clones, nothing copied),
+                 {"write_text": {"path", "text", "mode"}}]
+  api_key       the bearer token the server wants (rec's key file): bench.py and the warm-up send it
   cleanup       the same steps after the server stopped (e.g. clean_dir of an on-disk KV cache the engine filled)
   stop          extra stop command (e.g. `mtplx stop --port N`); the process tree is killed anyway
   pid_file      file holding the pid of a server that detaches from the launcher (LM Studio's llmster
@@ -777,6 +780,37 @@ def do_prepare(actions, ctx, dry):
                 for f in os.listdir(dst):  # links that are no longer wanted (e.g. a newly excluded file)
                     if f not in names and os.path.islink(os.path.join(dst, f)):
                         os.remove(os.path.join(dst, f))
+        elif "clone_files" in act:
+            # per-file APFS clones (cp -c: no bytes copied, the clone's blocks shared with the original until either
+            # changes) of src's files into dst, for engines that refuse symlinks (rec checks that its model files are
+            # regular files of the manifest's sizes); "files" names them (default: src's top-level files). A regular
+            # file of the same size already in dst is left alone.
+            src, dst = act["clone_files"]["src"], act["clone_files"]["dst"]
+            names = act["clone_files"].get("files") or (sorted(
+                f for f in os.listdir(src) if not f.startswith(".") and os.path.isfile(os.path.join(src, f)))
+                if os.path.isdir(src) else [])
+            missing = [f for f in names if not os.path.isfile(os.path.join(src, f))]
+            if not names or missing:
+                raise ResolveError(f"clone_files: {', '.join(missing) or 'nothing'} to clone in {src}")
+            lines.append(f"clone {len(names)} files of {src} into {dst}")
+            if not dry:
+                os.makedirs(dst, exist_ok=True)
+                for f in names:
+                    s_, d = os.path.realpath(os.path.join(src, f)), os.path.join(dst, f)
+                    if os.path.islink(d):
+                        os.remove(d)
+                    elif os.path.isfile(d) and os.path.getsize(d) == os.path.getsize(s_):
+                        continue
+                    if subprocess.run(["cp", "-c", s_, d]).returncode != 0:
+                        raise ResolveError(f"clone_files: cp -c {s_} {d} failed (not on the same APFS volume?)")
+        elif "write_text" in act:
+            p = act["write_text"]["path"]
+            lines.append(f"write {p} ({len(act['write_text']['text'])} characters)")
+            if not dry:
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, "w") as f:
+                    f.write(act["write_text"]["text"])
+                os.chmod(p, int(str(act["write_text"].get("mode", "600")), 8))
         elif "clean_dir" in act:
             p = os.path.realpath(act["clean_dir"])
             if not p.startswith(os.path.realpath(STATE) + os.sep):
@@ -919,6 +953,7 @@ def plan(c, args, stamp):
     except ResolveError as e:
         p["errors"].append(str(e))
         p["env"] = c.get("env", {})
+    p["api_key"] = c.get("api_key")
     for rp in c.get("requires_paths", []):
         try:
             if not os.path.exists(expand(rp, ctx)):
@@ -1001,6 +1036,24 @@ class NoLock:
 
 
 def run_config(c, args, stamp):
+    # the bearer token the server wants (config "api_key"; bench.post sends $BENCH_API_KEY, else "local"): for this
+    # config's warm-up in this process and bench.py's requests in its child
+    key = c.get("api_key")
+    old_key = os.environ.get("BENCH_API_KEY")
+    if key:
+        os.environ["BENCH_API_KEY"] = key
+    else:
+        os.environ.pop("BENCH_API_KEY", None)
+    try:
+        return run_config_keyed(c, args, stamp)
+    finally:
+        if old_key is None:
+            os.environ.pop("BENCH_API_KEY", None)
+        else:
+            os.environ["BENCH_API_KEY"] = old_key
+
+
+def run_config_keyed(c, args, stamp):
     p, ctx = plan(c, args, stamp)
     label = c["label"]
     print(f"\n===== {label}  [{c.get('engine')}] {c.get('display')}  version {p['version']}", flush=True)
@@ -1112,7 +1165,7 @@ def run_config(c, args, stamp):
         if not any(s["ok"] for s in result["warmup"]["steps"]):
             raise ResolveError(f"warm-up failed: {result['warmup']['steps'][0].get('error')}")
         leaks = [s["name"] for s in result["warmup"]["steps"] if s.get("thinking_leak")]
-        if leaks:
+        if leaks and not getattr(ba, "always_reasons", False):  # (a model that always reasons: expected)
             log(f"{label}: WARNING: thinking was not switched off in warm-up {leaks}; runs will be INVALID")
         qok, qwait, busy = gpu_hogs.wait_quiet(args.quiet_max, args.quiet_s, args.quiet_timeout, exclude_roots=lambda: mon_roots,
                                                log=lambda m: log(f"{label}: {m}"), own_max=args.quiet_max)

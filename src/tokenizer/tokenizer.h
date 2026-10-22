@@ -1,6 +1,7 @@
 // Byte-level BPE tokenizer for HF tokenizer.json files: GPT-2 byte-to-unicode mapping, ranked merges, added
-// tokens; Qwen2/3/3.5's pre-tokenizer split with NFC normalization, or the Tekken split (Mistral, Nemotron 3.5: no
-// normalization, cased letter runs, single digits) with whole-word vocabulary hits first (ignore_merges).
+// tokens; Qwen2/3/3.5's pre-tokenizer split with NFC normalization, the Tekken split (Mistral, Nemotron 3.5: no
+// normalization, cased letter runs, single digits) with whole-word vocabulary hits first (ignore_merges), or Flint's
+// (Recursive: no normalization, digits in threes, CJK and kana runs, cased letter runs with their contractions).
 #pragma once
 #include <cstdint>
 #include <mutex>
@@ -39,8 +40,9 @@ class Tokenizer {
   std::vector<bool> special_;
   std::vector<bool> added_id_;
   int byte_id_[256];
-  bool tekken_ = false;         // Tekken pre-tokenizer (else Qwen's)
-  bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken has no normalizer)
+  enum class Split { Qwen, Tekken, Flint };  // the pre-tokenizer split, from tokenizer.json's pre_tokenizer
+  Split split_ = Split::Qwen;
+  bool nfc_ = true;             // NFC-normalize the text first (Qwen; Tekken and Flint have no normalizer)
   bool ignore_merges_ = false;  // a word found whole in the vocabulary is one token (HF BPE ignore_merges)
   mutable std::unordered_map<std::string, std::vector<int>> cache_;
   mutable std::mutex cache_mu_;

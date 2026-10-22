@@ -5,7 +5,7 @@ runs a request under, and the gate tools/logit_compare.py holds a change to (twi
   logit_floor.py <model_dir> [--bin build/logit_dump] [--work DIR] [--out FILE] [--keep] [--reuse] [--rescore]
 
 Dumps (build/logit_dump, its default windows: 192 rows from bench/corpus.txt; each run takes the GPU lock unless
-NI_LOCK_HELD=1) and compares, on the single-stream verify (Dory: plain decoding):
+NI_LOCK_HELD=1) and compares, on the single-stream verify (Dory: plain decoding; Flint: no batch path):
   repeat  the same build and command twice, every path: expected bitwise equal
   batch   alone against 4 requests decoding together (Engine::batch_rows' rows; the 4B batches only with NI_BATCH=1)
   step    plain decoding (--spec 0) against the verify: the near-tie differences the engine already accepts
@@ -104,7 +104,7 @@ def main():
     work = a.work or os.path.join(HERE, "..", "build", "logit_floor", model)
     with open(os.path.join(a.model, "config.json")) as f:
         mtype = json.load(f).get("model_type", "")
-    paths = ["step"] if mtype == "dory" else ["step", "verify", "batch"]
+    paths = ["step"] if mtype == "dory" else ["step", "verify"] if mtype == "flint" else ["step", "verify", "batch"]
     ref = "verify" if "verify" in paths else "step"
 
     def dump(name, run_paths, *extra, env=None):
