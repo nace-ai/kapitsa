@@ -283,9 +283,11 @@ void Qwen35::v8_wide_begin(Encoder& e, Seq& s, int R) {
     v8w_args_ = g.alloc(size_t(kV8wRegions) * kV8wDesc * 16, "v8w_args");
     memset(v8w_desc_.ptr(), 0, v8w_desc_.size);
   }
-  for (int i = 0; i < cfg_.layers; ++i)  // the sequence's tape: kMaxTreeRows rows (once)
+  // the sequence's tape: the rows this target's verifies run (set_tree_rows, which new_seq allocated), so a wider
+  // verify than the tape was grown for only grows it once, and a 16-row block's tape stays at 16 rows
+  for (int i = 0; i < cfg_.layers; ++i)
     if (cfg_.is_linear[i]) {
-      if (s.pend_g[i].size < size_t(kMaxTreeRows) * cfg_.lin_hv * 4) grow_tape(e, s, kMaxTreeRows);
+      if (s.pend_g[i].size < size_t(tree_rows_) * cfg_.lin_hv * 4) grow_tape(e, s, tree_rows_);
       break;
     }
   v8w_R_ = R;
