@@ -169,19 +169,27 @@ install_kapitsa() {
 
   # `kapitsa bench compare` runs the harness; it finds it next to the notices, with no checkout and no env var
   if [ -f "$harness/kbench.py" ]; then
-    # local.env is the user's own settings for the harness: it survives a re-install, through a private staging folder
-    local keep
-    keep=$(mktemp -d "${TMPDIR:-/tmp}/kapitsa-harness.XXXXXX") || die "can't make a folder to keep the harness settings."
-    if [ -f "$notices/bench/harness/local.env" ]; then
-      cp "$notices/bench/harness/local.env" "$keep/local.env" ||
-        { rm -rf "$keep"; die "can't keep $notices/bench/harness/local.env."; }
+    # the harness is replaced whole, staged beside it and renamed over it, so a copy that fails (a full disk) leaves
+    # the installed one, with the user's local.env in it, exactly as it was
+    local bench next old
+    bench="$notices/bench"
+    next="$bench/harness.new.$$"
+    old="$bench/harness.old.$$"
+    mkdir -p "$bench" || die "can't create $bench."
+    rm -rf "$next"
+    cp -R "$harness" "$next" || { rm -rf "$next"; die "can't install the benchmark harness in $bench/harness."; }
+    # local.env is the user's own settings for the harness (OLLAMA_MODELS, LLAMA_SERVER, ...): it goes with it
+    if [ -f "$bench/harness/local.env" ]; then
+      cp "$bench/harness/local.env" "$next/local.env" ||
+        { rm -rf "$next"; die "can't keep $bench/harness/local.env."; }
     fi
-    rm -rf "$notices/bench/harness"
-    mkdir -p "$notices/bench"
-    cp -R "$harness" "$notices/bench/harness" ||
-      { rm -rf "$keep"; die "can't install the benchmark harness in $notices/bench/harness."; }
-    if [ -f "$keep/local.env" ]; then mv "$keep/local.env" "$notices/bench/harness/local.env"; fi
-    rm -rf "$keep"
+    rm -rf "$old"
+    if [ -d "$bench/harness" ]; then mv "$bench/harness" "$old" || { rm -rf "$next"; die "can't replace $bench/harness."; }; fi
+    if ! mv "$next" "$bench/harness"; then
+      if [ -d "$old" ]; then mv "$old" "$bench/harness" || true; fi
+      die "can't install the benchmark harness in $bench/harness."
+    fi
+    rm -rf "$old"
   fi
 
   say "Installed $installed: $prefix/kapitsa"
