@@ -1881,7 +1881,7 @@ The M4 Pro protocol and sweep above, repeated on a MacBook Pro M3 Pro (18-core G
 (Low Power Mode off, the display asleep), with the same configs, weights and llama.cpp build, and Kapitsa built from main
 at `cff1b1e`. **These numbers supersede the first M3 Pro run
 ([#306](https://github.com/nace-ai/kapitsa/pull/306), [bench/results/2026-10-22-flint-m3pro](../bench/results/2026-10-22-flint-m3pro/README.md)),
-which ran on battery.** They agree with it within 1%: on this Mac battery power did not slow either engine. Two things
+which ran on battery.** Decode, prefill and memory agree with it within 1% (follow-up TTFT by one 10 ms step): on this Mac battery power did not slow either engine. Two things
 differ from the M4 Pro:
 
 - **Kapitsa runs [#303](https://github.com/nace-ai/kapitsa/pull/303)'s macOS 14 path.** Flint's fused kernels need

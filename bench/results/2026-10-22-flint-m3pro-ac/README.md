@@ -3,8 +3,8 @@
 **These numbers supersede the battery run of [2026-10-22-flint-m3pro](../2026-10-22-flint-m3pro/README.md)
 ([#306](https://github.com/nace-ai/kapitsa/pull/306)).** That run had the Mac on battery throughout, against the
 harness README's advice. This is the same protocol and the same context sweep on the same Mac, now on AC power, with
-Kapitsa built from main at `cff1b1e`. The result is the same: every protocol number of the clean pass is within 1% of
-the battery run's, so on this Mac, with Low Power Mode off, battery power did not slow either engine. The #306 folder
+Kapitsa built from main at `cff1b1e`. The result is the same: every decode, prefill and memory number of the clean pass is
+within 1% of the battery run's (the follow-up TTFTs differ by one 10 ms step), so on this Mac, with Low Power Mode off, battery power did not slow either engine. The #306 folder
 stays as recorded.
 
 Flint 40B-A2.5B is Recursive's coding MoE (256 experts, 6 routed and a shared one a token, 2.5B active). The engines:
@@ -55,7 +55,7 @@ The runs are in `results/` and their server logs in `logs/`, with each pass's dr
 tokens, with the range in brackets. Prefill uses the harness's 4K and 16K prompts (3,874 and 15,066 of Flint's tokens).
 Follow-up TTFT is the median time to the first token of a cached second turn. The means are over the clean pass.
 
-- **Against the battery run (#306): the same within 1%.** Kapitsa decodes 73.61 against 73.75 tok/s at T 1.0 and
+- **Against the battery run (#306): decode, prefill and memory the same within 1%.** Kapitsa decodes 73.61 against 73.75 tok/s at T 1.0 and
   74.53 against 74.47 greedy, and reads 801 / 672 against 799 / 674 tok/s. llama.cpp decodes 50.87 against 51.00 and
   51.00 against 51.18, and reads 772 / 645 against 771 / 640. The two runs are not interleaved and Kapitsa's builds
   differ (`cff1b1e` here, `3da3798` there).
