@@ -19,7 +19,7 @@ its stored run ([2026-10-19](../2026-10-19-m5pro-48gb/README.md), [Splash, 2026-
   16K, so the comparison with the old cell (4,132 / 16,284) is like for like
 - Four launches, each in its own hold of the GPU lock with at least 40% of memory free before it. The first launch of
   the fresh binary is stored but not counted (chosen before the runs; counting all four gives a T = 0.6 median of 212.1
-  and greedy 223.2 instead of 214.4 and 222.7, prefill unchanged). The cell is the median of the
+  and greedy 223.1 instead of 214.4 and 222.7, prefill unchanged). The cell is the median of the
   other three, each column its own median.
 
 | Run | Decode T=0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (MB) | Foreign GPU load |

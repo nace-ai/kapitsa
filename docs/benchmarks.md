@@ -1680,7 +1680,7 @@ corpus as the stored runs: 4,132 tokens at 4K and 16,284-16,288 at 16K), four la
 each, on AC power with the display asleep and no other GPU user (no run is flagged; the harness saw at most 1.4% foreign
 GPU). The first launch of the fresh binary is stored but not counted; the choice was made before the runs, as for the
 27B. Its prefill (2,728 / 2,192) matches the counted runs, and it holds the lowest decode, so it matters only for decode:
-counting all four launches gives a T = 0.6 median of 212.1 (greedy 223.2) instead of 214.4 (222.7). The cell is the
+counting all four launches gives a T = 0.6 median of 212.1 (greedy 223.1) instead of 214.4 (222.7). The cell is the
 median of the other three, each column its own median:
 
 | Run | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Cached follow-up 4K / 16K (s) | Peak (GB) |
