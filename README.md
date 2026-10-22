@@ -1,7 +1,7 @@
 <picture>
   <source media="(max-width: 600px)" srcset="docs/assets/header-narrow.svg">
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/header-dark.svg">
-  <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint. Writing speed of Qwen3.6 35B-A3B on a MacBook Pro (2024), M4 Pro, 48 GB, in tokens per second, at 4-bit: Kapitsa with KFlash 161, Splash with DFlash2 135, oMLX with DFlash2 127, Ollama with MTP 89, LM Studio 86, MTPLX with MTP 80, llama.cpp with MTP 69." src="docs/assets/header-light.svg">
+  <img alt="Kapitsa: a blazing fast Apple Silicon optimized inference engine built for Qwen, Nemotron and Flint. Writing speed of Recursive Flint 40B-A2.5B with 2-bit experts (unsloth's GGUF, the same file in both engines) on a MacBook Pro (2021), M1 Pro, 16 GB, in tokens per second: Kapitsa 61, llama.cpp 43." src="docs/assets/header-light.svg">
 </picture>
 
 Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Recursive's Flint models locally, built for coding agents. It starts opencode, Claude Code, Codex or pi on a local model, and serves OpenAI and Anthropic APIs.
@@ -10,9 +10,10 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 ## 🔥 What's new
 
+- [2026/10] 🪶 **Flint on a 16 GB Mac: 1.4× llama.cpp's decode on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)). On the M5 Pro, with Flint's MoE prefill on the tensor units (#340), Kapitsa reads 4K prompts at 1,743-2,262 tok/s over three runs against rec's 2,138 and llama.cpp's 2,072, rec and llama.cpp read 16K prompts 1.19× and 1.08× as fast as Kapitsa's best run, and Kapitsa decodes 1.05× rec at T 1.0 (rec is ahead on greedy) and 1.65× llama.cpp ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m5-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 24 of 26 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 25 of 27 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
@@ -55,7 +56,7 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 24 of the 26 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 25 of the 27 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -142,7 +143,7 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <details>
-<summary><b>MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB</b> · 6 models</summary>
+<summary><b>MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB</b> · 7 models</summary>
 
 | Model | <mark>**Kapitsa**</mark> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>Ollama<br>0.40.5 / 0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1, llama.cpp runtime 2.60.0</sub> |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -152,11 +153,12 @@ The catalog models measured on each Mac, against the engines that run them: one 
 | **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 **39**<br><sub>no spec</sub> | × | × | × | × | 30<br><sub>no spec</sub> | 4<br><sub>no spec</sub> | × |
 | **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 🟩 **37**<br><sub>prompt lookup</sub> | — | — | — | — | 21<br><sub>BF16</sub> | 28<br><sub>Q4_K_M</sub> | — |
 | **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 🟩 **25**<br><sub>no spec</sub> | — | — | — | — | 18 | 14<br><sub>Q4_K_M</sub> | — |
+| **Recursive Flint 40B-A2.5B** · `flint:16gb`<br><sub>MoE, 2.5B active · 2-bit experts (unsloth's GGUF), 11.9 GB</sub> | 🟩 414 / **61**<br><sub>no spec</sub> | × | × | — | × | × | 43<br><sub>no spec · d772569</sub> | — |
 
 </details>
 
 <sub>Other precisions: `--model 35b:6bit` is five times closer to bf16 than the 4-bit default ([KL](docs/benchmarks.md#quality-qwen36-35b-a3b-against-bf16-2026-10-19)). All but Lightning, Dory, the two Nemotron Nanos, Flint and the 35B's `16gb` read images. Memory: 16 GB for the 4B and 9B models, 32 GB
-for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` takes its `16gb` variant: unsloth's 2-bit GGUF, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
+for the 27B, 35B, Lightning, Bolt and Flint, 96 GB for Super-VL, 128 GB for Flash-Next. On a 16 or 24 GB Mac, `35b` and `flint` take their `16gb` variants: unsloth's 2-bit GGUFs, downloaded and imported in one step ([how](docs/usage.md#gguf-files)). [Every model's variants and draft models](docs/usage.md#models-and-downloads)</sub>
 
 ## How it works
 
