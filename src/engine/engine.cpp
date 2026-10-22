@@ -2246,11 +2246,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     const char* v = getenv("NI_VPF_WIDE");
     return !(v && v[0] == '0' && v[1] == 0);
   }();
-  const int vpf_pass = !vpf_wide || !q35_ ? 8
-                       : q35_->verify_chain_ok(32) ? 32
-                       : q35_->verify_chain_ok(24) ? 24
-                       : q35_->verify_chain_ok(16) ? 16
-                                                   : 8;
+  // the pass width comes from Qwen35::pass_rows (Qwen35::vpf_pass_rows at load), not from the verify buffers' capacity:
+  // the drafter raises that capacity to its own drafting width, which is not what NI_VPF_ROWS asks for
+  const int vpf_cap = q35_ ? q35_->pass_rows() : 8;
+  const int vpf_pass = !vpf_wide || vpf_cap <= 8 ? 8 : vpf_cap;
   int vpf_samp = -1;  // the row of samples() that holds such a suffix's first token
   // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
   // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
@@ -2294,7 +2293,10 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       const Qwen35Config& vcfg = q35_->config();
       vpf_scale = (long long)vcfg.hidden * vcfg.dense_I * vcfg.layers;
     }
-    const bool vpf_default = q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->verify_chain_ok(16);
+    // the measured case: a dense target at the weight floor whose drafter drafts a 16-row block (DFlash2). A dense
+    // target whose drafter drafts 8 rows keeps the prefill path, whatever capacity the pass sized for itself.
+    const bool vpf_default =
+        q35_ && !q35_->config().moe && vpf_scale >= 3000000000LL && q35_->drafter_wide() && q35_->verify_wide_ok();
     const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && (vpf_forced || vpf_default) &&
                      p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
                      s.mask_rows == 0;

@@ -240,10 +240,13 @@ uint32_t Qwen35::kf_dense_rows(const Qwen35Config& c) {
   return w ? w : one;  // nothing allowed left: the 8-row tile
 }
 
-void Qwen35::set_tree_rows(int rows) {
+void Qwen35::set_tree_rows(int rows, bool drafting) {
   // 8, 16 or 32 rows, a power of two: the tables hold whole 8-row tiles and the tile-pair MLP reads two at a time, so a
   // capacity of three tiles (24 rows) would read past them (a live verify of up to 24 rows still fits in 32)
   rows = rows <= 8 ? 8 : rows <= 16 ? 16 : kMaxTreeRows;
+  // what the drafter drafts is its own fact, kept apart from the capacity the pass raises (a pass wider than the
+  // drafter's block must not look like a drafter that drafts that wide)
+  if (drafting) drafter_wide_ = rows >= 16;
   if (rows <= tree_rows_) return;
   tree_rows_ = rows;
   Gpu& g = Gpu::get();

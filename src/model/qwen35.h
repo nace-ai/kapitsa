@@ -400,8 +400,14 @@ class Qwen35 : public Model {
   // candidates, samples) are sized for it here, and a sequence's verify tape is allocated at it in new_seq (the tape of
   // one created before this call grows on its first wide verify). Call while nothing is in flight (the drafter's
   // construction).
-  void set_tree_rows(int rows);
+  void set_tree_rows(int rows, bool drafting = false);
   int tree_rows() const { return tree_rows_; }
+  // The widest tree verify the drafter itself asked for (set_tree_rows with drafting): its drafting block, where the
+  // target's own chain passes may run wider (pass_rows). NI_VPF's default is measured on a target whose drafter drafts
+  // 16 rows, so the default keys on this and not on the capacity the pass raised.
+  bool drafter_wide() const { return drafter_wide_; }
+  // The rows one chain pass of a cached suffix runs (8, 16, 24 or 32: vpf_pass_rows at load).
+  int pass_rows() const { return pass_rows_; }
   // After a tree verify at pos: the K/V rows of the accepted path (the descriptor's, kf_accept) move to positions
   // pos + i (every attention layer)
   void encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& tree);
@@ -664,6 +670,7 @@ class Qwen35 : public Model {
   // the rows a cached suffix's chain pass may run (vpf_pass_rows): wider than tree_rows_ where the drafter drafts a
   // 16-row block, so the suffix's rows stream the weights once per pass instead of once per 8-row tile
   int pass_rows_ = 8;
+  bool drafter_wide_ = false;
   int v8w_R_ = 0, v8w_region_ = 0, v8w_n_ = 0, v8w_host_nt_ = -1;
   Buffer v8w_desc_, v8w_args_;
   // the chain tree descriptors of encode_verify_chain, one per row count it runs (index rows / 8), each a single path

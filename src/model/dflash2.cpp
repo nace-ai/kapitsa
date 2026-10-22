@@ -572,7 +572,7 @@ DFlash2::DFlash2(Qwen35& target, const std::string& dir, int bits, bool rows16) 
     // which measured 69.3 tok/s against 90.6 on this Mac, is not a decision the block leaves open)
     if (block() > kB) kf_budget_->pin_wide();
     if (tree_ && tree_rows_ > kB) {
-      tg_.set_tree_rows(tree_rows_);
+      tg_.set_tree_rows(tree_rows_, true);  // the drafter's own block: NI_VPF's default keys on it (Qwen35::drafter_wide)
       logi("KFlash: tree verifies of %s rows (the size rule picks per cycle)",
            allowed == ((1u << 7) | (1u << 15) | (1u << 31)) ? "8, 16 or 32" : r_list(allowed).c_str());
     }
