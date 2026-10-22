@@ -148,6 +148,9 @@ int main(int argc, char** argv) {
     std::vector<double> t_gu, t_dn, t_all;
     double err_h = 0, err_y = 0;
     size_t bad_h = 0, bad_y = 0;  // bitwise mismatches vs orig (fused only)
+    // vs qrm, in half ulps: max, count over 1 ulp, elements compared (qmtm paths only)
+    double dh = -1, dy = -1;
+    size_t dh_over = 0, dy_over = 0, n_h = 0, n_y = 0;
   };
   std::vector<Path> paths;
   paths.push_back({"orig", "qmm_moe_b4_m16_n64", "qmm_moe_b4_m16_n64", 0, 16, 64, 64});
@@ -373,6 +376,41 @@ int main(int argc, char** argv) {
       }
       for (size_t i = 0; i < size_t(P) * D; ++i) p.bad_y += o.yd.as<float>()[i] != p.yd.as<float>()[i];
     }
+    // vs qrm, element by element, in units of the result's own half-precision ulp: a change that only reassociates
+    // the K reduction moves each sum by ~sqrt(K)*2^-24 relative (~3e-6 here), so h lands within one half ulp of the
+    // simdgroup path's h (it is rounded to half either way) and y within one half ulp of the h it sums -- the
+    // quantization step. A precision change (half partials, a truncating or denormal-flushing accumulator) would
+    // instead push elements to many half ulps, which is what this check separates from a reassociation.
+    size_t qrmi = paths.size();
+    for (size_t pi = 0; pi < paths.size(); ++pi)
+      if (paths[pi].kind == 2 && paths[pi].name.rfind("qmtm_", 0) != 0) { qrmi = pi; break; }
+    double hmax = 0, ymax = 0;
+    for (uint32_t pair = 0; pair < P; ++pair) {
+      const uint16_t* c = hrow(qrmi, pair);
+      for (uint32_t n = 0; n < I; ++n) hmax = std::max(hmax, double(std::fabs(h2f(c[n]))));
+    }
+    for (size_t i = 0; i < size_t(P) * D; ++i)
+      ymax = std::max(ymax, double(std::fabs(paths[qrmi].yd.as<float>()[i])));
+    const double hstep = std::ldexp(hmax ? hmax : 1.0, -11), ystep = std::ldexp(ymax ? ymax : 1.0, -11);
+    for (size_t pi = 0; pi < paths.size(); ++pi) {
+      Path& p = paths[pi];
+      if (qrmi == paths.size() || pi == qrmi || p.name.rfind("qmtm_", 0) != 0) continue;
+      double max_h = 0, max_y = 0;
+      size_t over_h = 0, over_y = 0, n_h = 0, n_y = 0;
+      for (uint32_t pair = 0; pair < P; ++pair) {
+        const uint16_t *a = hrow(pi, pair), *c = hrow(qrmi, pair);
+        for (uint32_t n = 0; n < I; ++n) {
+          const double u = std::fabs(h2f(a[n]) - h2f(c[n])) / hstep;
+          if (u > max_h) max_h = u; ++n_h; if (u > 1.0 + 1e-9) ++over_h;
+        }
+      }
+      for (size_t i = 0; i < size_t(P) * D; ++i) {
+        const double r = paths[qrmi].yd.as<float>()[i], v = p.yd.as<float>()[i];
+        const double u = std::fabs(v - r) / ystep;
+        if (u > max_y) max_y = u; ++n_y; if (u > 1.0 + 1e-9) ++over_y;
+      }
+      p.dh = max_h; p.dy = max_y; p.dh_over = over_h; p.dy_over = over_y; p.n_h = n_h; p.n_y = n_y;
+    }
   }
   // ---- timing, trials interleaved over the paths
   for (auto& p : paths) gpu_time([&](Encoder& e) { bucket(e, p); gate_up(e, p); down(e, p); }, 1);
@@ -394,6 +432,8 @@ int main(int argc, char** argv) {
            p.name.c_str(), p.bm, gu * 1e3, tf(f_gu, gu), dn * 1e3, tf(f_dn, dn), all * 1e3, o_all / all, p.err_h,
            p.err_y, p.err_h > 4e-3 || p.err_y > 1e-3 ? " FAIL" : "");
     if (p.kind != 0) printf(" | vs orig: h %zu / y %zu values differ", p.bad_h, p.bad_y);
+    if (p.dh >= 0) printf(" | vs qrm, in half steps of each tensor's largest value: h %.2f (%zu/%zu over 1), y %.2f "
+                          "(%zu/%zu over 1)", p.dh, p.dh_over, p.n_h, p.dy, p.dy_over, p.n_y);
     printf("\n");
   }
   return 0;

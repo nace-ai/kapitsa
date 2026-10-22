@@ -61,8 +61,14 @@ GATE_KEYS = ("min_top1", "max_mean_kl", "max_p99_kl", "near_tie", "max_far_flips
 #     order) avoids that; only bit-identical order does.
 #   * measured on the M5 Pro, 4-bit 35B-A3B, decode rows: the shipped qrm kernel moves the logits 8.1e-4 mean KL
 #     against the order before it, and the tensor-unit tile 1.07e-3 against that, 1.32x the drift already shipped.
-#   * the user accepted that drift on 2026-10-22 for the MoE prefill's ~2x ("qtm on"), on this evidence: the
-#     temperature-0 continuations at 4K and 16K keep their content and change only wording.
+#   * the MoE prefill's tile is 1.25x at 4K (2,272 -> 1,702 ms) and 1.2x at 16K (11,093 -> 8,834 ms) end to end on
+#     the M5 Pro, with this session's interleaved A/B; the user accepted its drift on 2026-10-22 ("qtm on") on this
+#     evidence: the cold 4K and 16K temperature-0 continuations came out identical, and the tile's own outputs sit
+#     within one half-precision step of the simdgroup path's, element by element (tools/bench_moe.cpp, "vs qrm":
+#     h at most 0.85 of a step, 0 of 8.4M values past one; y at most 0.42, 0 of 33.5M; and both paths the same
+#     error against a double-precision reference, h 1.3e-4 and y 1.3e-7 sampled max).
+#     Neither is a claim that the drift is absent: it is the same kind of reassociation the shipped simdgroup kernels
+#     already carry, one rounding on ~0.6% of the values.
 # So the bounds are twice the first instance's measured drift, as the floor's gate is twice its measured floor: on
 # that 35B, 8 windows, step path, 192 rows (3 near-tie flips at reference margins 0.0155, 0.0307, 0.0590, mean KL
 # 1.088e-3, p99 2.078e-2, next-token NLL change +5.3e-3 nats) and prefill path, 8 rows (0 flips, mean KL 7.678e-4,

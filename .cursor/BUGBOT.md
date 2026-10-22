@@ -32,6 +32,11 @@ not ask for abstractions, interfaces or configuration the change does not need.
   floor in `tools/logit_floors/` for differences only at near-ties. If the diff changes the order of floating-point
   operations, a quantization, a rounding, a tile shape or a sampling path, treat the claim as unproven and say what
   changed. A report that FAILs the gate means the change moves outputs: the PR must say so.
+- `tools/logit_compare.py --reorder` is the gate for a change that keeps every product and only reassociates a K
+  reduction, and its bounds are twice that change's measured drift. A PR using it must also show the per-GEMM check that
+  separates a reassociation from a precision change: `tools/bench_moe.cpp`'s `vs qrm` columns (every output within one
+  half step of the shipped path's) and both paths' error against the double-precision reference. Anything that changes
+  what is computed stays on the floor's gate.
 - `tools/logit_floors/*.json` change only through `tools/logit_floor.py` (the file records its build, Mac and date), in
   a PR of their own: flag a floor or gate edited by hand, or loosened in the same PR as a change it lets pass.
 - A PR whose title or description says it was not verified on a GPU is fine; flag it only when the diff is a kernel or

@@ -113,7 +113,11 @@ static bool moe_qtm() {
   // qrm path already moves against the order before it, and its cold 4K and 16K temperature-0 continuations came out
   // identical. That is not noise, so it is gated by `tools/logit_compare.py --reorder` (the
   // order-change bounds, docs in AGENTS.md) instead of the model's noise floor, and the user accepted the trade on
-  // 2026-10-22 for 35% more 4K prefill rate. Off wherever the dense path's tensor units are off.
+  // 2026-10-22 for a 1.25x 4K prefill rate (2,272 -> 1,702 ms, interleaved A/B on the M5 Pro). Speed and drift were
+  // measured there; a tile's rounding is shape-dependent rather than Mac-dependent. Only passes above 128 rows reach
+  // this path -- shorter ones take the short-prefill MoE path above (8-row tiles), so a chunk's tail rows do not -- and
+  // a dump at --chunk 160, whose 96-row tails go short, shows the drift and passes the gate. Off wherever the dense
+  // path's tensor units are off.
   static const bool v = env_int("NI_MOE_QTM", qmt_on() ? 1 : 0) != 0;
   return v;
 }
