@@ -164,14 +164,17 @@ python3 tools/logit_compare.py /tmp/ref /tmp/new      # exit status 1 past the g
   dump's `meta.json` Mac; `--floor` still wins): its tensor_ops paths sum in an order no earlier GPU runs, so its floor
   is its own, and `logit_floor.py` writes it there instead of over the M4 Pro's. `flint-4bit.m5.json` (M5 Pro 48 GB,
   macOS 26.5.2, 0.2.7 `9d88378`) is the first. Flint's repeat and 512-row chunks are bitwise on both chips, so its floor
-  is the verify against plain decoding alone: 9.4e-4 / 2.3e-2 mean / p99 KL with the shipped tensor_ops prefill GEMMs,
-  2.2e-2 / 0.47 with `NI_QMT=0` (kept in the file's `qmt0`, not its gate), 5.0e-3 / 4.2e-2 on the M4 Pro. That source is
-  a few rows whose routing flips (medians 1.6e-6 to 4.8e-6 on 768 rows), so it moves 6x to 23x with the build and the
-  rows; no source of Flint's moves the prefill. The file also carries Flint's own `reorder_gate`, which `--reorder`
-  takes instead of the 35B's: twice the qmt against `NI_QMT=0` drift of the decode paths, fast and safe math (mean
-  2.8e-2, median 1.7e-4, p99 0.39). Its mean and p99 are set by the few rows the router moves far, so it adds a
-  median bound (3.3e-4), which a larger error on every row would cross first (not yet shown with one). The
-  `fast_vs_safe_math` sources (the compiler's reassociation and precise functions) are context, not in the gate.
+  is the verify against plain decoding alone, a few rows whose routing flips: on 768 rows (`--rows 96`) the medians are
+  1.6e-6 and 4.8e-6 against means of 1.9e-3 with the shipped tensor_ops prefill GEMMs and 1.1e-2 with `NI_QMT=0`, a
+  swing of 6x (23x on 192 rows, kept in the file's `rows_192`); no source of Flint's moves the prefill. Both paths ship
+  on the M5 (the default and its kill switch), so the gate is twice the worst of the two on 768 rows (`--also
+  NI_QMT=0`): mean 2.2e-2, p99 0.19, 6 flips in 768 (M4 Pro: 1.0e-2 / 8.4e-2 on 192). The file also carries Flint's
+  own `reorder_gate`, which `--reorder` takes instead of the 35B's (exceeded 7-13x by a pure reorder of Flint): twice
+  the qmt against `NI_QMT=0` drift of the decode paths, fast and safe math (mean 2.8e-2, median 1.7e-4, p99 0.39), with
+  a median bound (3.3e-4) a larger error on every row would cross first (not yet shown with one). It bounds a reorder's
+  drift only (a flip under 5.8 logits is not refused by itself): a change gated with it also shows the per-GEMM check
+  and the temperature-0 continuations above. `logit_floor.py --rows 96 --also NI_QMT=0 --reorder` measures all of it;
+  `--rescore` derives the floors and both gates again from the file's sources (this Mac's file by default).
 - Put the comparison's output in the pull request. A change that is not meant to move outputs shows "every row bitwise
   identical" or passes the gate; one that moves them on purpose (a precision, a quantization) fails it and says so, with
   the numbers. A floor changes only with the conditions it measures (re-measured, in a pull request of its own), never

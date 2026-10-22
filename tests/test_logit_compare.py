@@ -47,6 +47,52 @@ def f32(x):
     return array.array("f", [x])[0]
 
 
+def fsrc(kl):
+    """A floor source's summary with this mean KL (the measures logit_floor.py keeps)."""
+    return {"records": 192, "bitwise": 0, "top1": 1.0, "flips": 0, "kl_mean": kl, "kl_median": kl / 10,
+            "kl_p99": 10 * kl, "kl_max": 20 * kl, "margin_change_max": 0.1, "tie_margin": 0.2,
+            "nll_change_mean": 0.0, "max_abs_diff": 0.1}
+
+
+# A stand-in for build/logit_dump (its arguments and its dump layout): 3 windows of --rows rows (default 24), the
+# prefill path one row a window; deterministic, so a repeat is bitwise and so are chunks; step, NI_QMT=0 and
+# NI_MATH_SAFE=1 each move the rows by their own noise (NI_QMT=0's step the most), so every source differs.
+FAKE_DUMP = r'''#!/usr/bin/env python3
+import array, json, os, random, sys
+a = sys.argv[1:]
+out, paths = a[1], a[a.index("--paths") + 1].split(",")
+rows = int(a[a.index("--rows") + 1]) if "--rows" in a else 24
+env = {k: os.environ.get(k, "") for k in ("NI_QMT", "NI_MATH_SAFE")}
+V = 50
+for p in ["prefill"] + paths:
+    d = os.path.join(out, p)
+    os.makedirs(d, exist_ok=True)
+    n = 1 if p == "prefill" else rows
+    seqs = [[(w * 7 + i) % V for i in range(rows + 8)] for w in range(3)]
+    recs = [(w, 4 + i) for w in range(3) for i in range(n)]
+    data = []
+    for w, k in recs:
+        r = random.Random(w * 1000 + k)
+        row = [r.gauss(0, 2) for _ in range(V)]
+        for name, amp in [("step" if p == "step" else "", 0.3 if env["NI_QMT"] == "0" else 0.1),
+                          ("qmt0" if env["NI_QMT"] == "0" else "", 0.05), ("safe" if env["NI_MATH_SAFE"] else "", 0.04)]:
+            if name:
+                q = random.Random(f"{name} {w} {k}")
+                row = [x + amp * q.gauss(0, 1) for x in row]
+        data += row
+    with open(os.path.join(d, "sequences.txt"), "w") as f:
+        f.write("".join(" ".join(map(str, s)) + "\n" for s in seqs))
+    with open(os.path.join(d, "records.txt"), "w") as f:
+        f.write("".join(f"{s} {k}\n" for s, k in recs))
+    with open(os.path.join(d, "logits.f32"), "wb") as f:
+        f.write(array.array("f", data).tobytes())
+    with open(os.path.join(d, "meta.json"), "w") as f:
+        json.dump({"model": "fm", "path": p, "build": "test", "mac": "Apple M5 Pro", "macos": "26", "date": "now",
+                   "records": len(recs), "source": "fake", "env": {k: v for k, v in env.items() if v},
+                   "ane": {"evals": 0}, "verify": "chain"}, f)
+'''
+
+
 def run(*args):
     p = subprocess.run([sys.executable, SCRIPT, *args], capture_output=True, text=True)
     return p.returncode, p.stdout + p.stderr
@@ -277,6 +323,10 @@ with tempfile.TemporaryDirectory() as tmp:
     check(lf.floor_and_gate(sources)[1]["min_top1"] == 0.989583, "a floor without flips still allows two in 192")
     sources["repeat"]["paths"]["prefill"] = src(records=8, flips=8, kl_mean=9.0)  # (a check, not a measure)
     check(lf.floor_and_gate(sources)[0]["kl_mean"] == 2e-5, "the prefill path's rows are not in the floor")
+    mixed = dict(sources, step=dict(src(records=768, flips=6, kl_mean=1e-3), in_floor=True))
+    mfl, mgate = lf.floor_and_gate(mixed)
+    check(mfl["flips"] == 6 and mfl["records"] == 768 and mgate["min_top1"] == 0.984375,
+          "a source of more rows: its flips a share of its own rows", (mfl, mgate))
     sources["batch"]["decode"] = sources["repeat"]["decode"] = True
     dfl, dgate = lf.floor_and_gate(sources, "decode")
     check(dfl["kl_p99"] == 1e-4 and dgate["max_p99_kl"] == 2e-4, "the decode floor: its own sources alone", dfl)
@@ -337,6 +387,59 @@ with tempfile.TemporaryDirectory() as tmp:
               "max_median_kl bounds the median KL")
     finally:
         lc.FLOORS = saved
+
+    # ---- logit_floor.py end to end on a stand-in logit_dump (CPU): --rows, --also, --reorder, --rescore ----
+    fake = os.path.join(tmp, "fake_dump.py")
+    with open(fake, "w") as f:
+        f.write(FAKE_DUMP)
+    os.chmod(fake, 0o755)
+    mdir = os.path.join(tmp, "fm")
+    os.makedirs(mdir)
+    with open(os.path.join(mdir, "config.json"), "w") as f:
+        json.dump({"model_type": "flint"}, f)
+    out = os.path.join(tmp, "fm-floor.json")
+    p = subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), mdir, "--bin", fake, "--work",
+                        os.path.join(tmp, "fw"), "--out", out, "--rows", "6", "--also", "NI_QMT=0", "--reorder"],
+                       capture_output=True, text=True)
+    check(p.returncode == 0, "logit_floor.py --rows --also --reorder runs", p.stdout[-800:] + p.stderr[-800:])
+    if p.returncode == 0:
+        with open(out) as f:
+            fl = json.load(f)
+        names = set(fl["sources"])
+        check({"repeat", "chunk", "step", "repeat NI_QMT=0", "chunk NI_QMT=0", "step NI_QMT=0"} <= names,
+              "--also: every source again with the path's env", names)
+        check(fl["measured"]["records"] == 18 and "--rows 6" in fl["measured"]["command"]
+              and "--reorder" in fl["measured"]["command"], "--rows reaches logit_dump and the file", fl["measured"])
+        check(fl["floor"]["set_by"]["kl_mean"] == "step NI_QMT=0", "the floor: the worst of both paths",
+              fl["floor"]["set_by"])
+        check(set(fl["reorder_sources"]) == {"NI_QMT=0", "NI_QMT=0 NI_MATH_SAFE=1"}
+              and fl["reorder_gate"]["max_median_kl"] > 0 and "max_nll_change" in fl["reorder_gate"],
+              "--reorder: the default against each --also path, fast and safe math", fl.get("reorder_gate"))
+        rg = dict(fl["reorder_gate"])
+        fl["reorder_gate"] = {"max_mean_kl": 1.0}
+        with open(out, "w") as f:
+            json.dump(fl, f)
+        p = subprocess.run([sys.executable, os.path.join(TOOLS, "logit_floor.py"), mdir, "--rescore", "--out", out],
+                           capture_output=True, text=True)
+        with open(out) as f:
+            check(p.returncode == 0 and json.load(f)["reorder_gate"] == rg, "--rescore derives the reorder gate again")
+    lc_saved, lf_mac = lc.FLOORS, lf.this_mac
+    try:  # --rescore without --out: this Mac's file
+        lc.FLOORS = os.path.join(tmp, "floors2")
+        os.makedirs(lc.FLOORS)
+        for name in ("fm.json", "fm.m5.json"):
+            with open(os.path.join(lc.FLOORS, name), "w") as f:
+                json.dump({"model": "fm", "sources": {"step": fsrc(1e-3 if name == "fm.json" else 2e-3)}}, f)
+        lf.this_mac = lambda: {"mac": "Apple M5 Pro"}
+        old_argv, sys.argv = sys.argv, ["logit_floor.py", mdir.replace("fm", "x") + "/fm", "--rescore"]
+        try:
+            lf.main()
+        finally:
+            sys.argv = old_argv
+        with open(os.path.join(lc.FLOORS, "fm.m5.json")) as f5, open(os.path.join(lc.FLOORS, "fm.json")) as f4:
+            check("gate" in json.load(f5) and "gate" not in json.load(f4), "--rescore on an M5: its own file")
+    finally:
+        lc.FLOORS, lf.this_mac = lc_saved, lf_mac
 
 print("\nALL PASSED" if not FAILED else f"\nFAIL: {len(FAILED)} failed: {FAILED}")
 sys.exit(1 if FAILED else 0)
