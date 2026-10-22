@@ -81,16 +81,18 @@ is the 76.89 tok/s maximum and the median, 71.15, sits below it.
 Median of the pair, against the #287 session above: prefill **1,522 -> 1,641 tok/s at 4K** (1.08x) and **1,142 -> 1,297
 at 16K** (1.14x), and against the 03:26 pre-#287 runs, 2.66x and 2.39x. The attention kernel alone is 1.24x / 1.22x
 (#314's interleaved A/B) and that A/B put the whole prefill at 1.04x / 1.07x on one day, so the 1.08x / 1.14x here is what
-the change reads like across two builds a few hours apart, not a measurement of it: part of the difference is the two
-sessions, and the end-to-end gain is larger than the kernel's share of the step, which these records do not explain. Decode
+the change reads like across two builds a few hours apart, not a measurement of it; the interleaved pair below measures that
+same change and reads 1.068x / 1.139x, above #314's own 1.04x / 1.07x, so the whole prefill moved by roughly 1.05-1.14x
+depending on the day. Decode
 is unchanged inside the runs' spread (70.7/73.1 -> 71.7/71.2 at T = 0.6, 72.5/80.5 -> 72.2/80.3 greedy). The cached
-follow-ups read 0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, which is this switch: an interleaved ABAB the same
-evening (M5 Pro, macOS 26, main's `3112b93` build, two runs per arm) reads 0.105 / 0.159 s of cached follow-up with
-`NI_DORY_ATTN_T=0` against 0.124 / 0.219 on the default (+19 ms / +60 ms, +18% / +38%), cold prefill 1,558 / 1,156 against
-1,664 / 1,317 tok/s. Each arm's two runs stay within 0.008 s of each other and these records sit on the default arm's line, so the 30-40% read
-here is that cost plus a slower session. A cached follow-up prefills a short suffix, where the tensor kernel's 32-token
-threadgroups and 16-key tiles have nothing to amortize, which is why that path pays; falling back below some token count is
-follow-up work, not part of this measurement. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak
+follow-ups read 0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, which is this switch: that interleaved pair (M5 Pro,
+macOS 26, main's `3112b93` build, two runs per arm) reads 0.105 / 0.159 s of cached follow-up with `NI_DORY_ATTN_T=0`
+against 0.124 / 0.219 on the default, so the path pays +19 ms / +60 ms (+18% / +38%) while cold prefill gains 1,558 / 1,156
+-> 1,664 / 1,317 tok/s. At 16K the record's 0.21 s is the default arm's own 0.219 s, so that gap is the switch and nothing
+else; at 4K the record's 0.13-0.14 s sits a few milliseconds above the arm's 0.124 s, which no run here explains. The reason
+is the shape of the kernel: a cached follow-up prefills a short suffix, where 32-token threadgroups and 16-key tiles have
+nothing to amortize, and a fallback below some token count would recover it. That fallback is follow-up work, not part of
+this measurement. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak
 4.18 -> 4.19 GiB on last-loop KV and 5.02 -> 4.98 on per-loop. Against the other engines on this Mac
 (mlx-lm 1,401 / 1,278, llama.cpp 938 / 951), the flag-free per-loop run reads 1.18x mlx-lm at 4K and 1.03x at 16K,
 and 1.77x / 1.38x llama.cpp.
