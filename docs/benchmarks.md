@@ -1444,11 +1444,20 @@ does. The Mac held about 6 GB in swap throughout. Result files, every run listed
 Each Kapitsa table below also carries a paragraph with that model's newest flag-free run on 0.2.2, which is after the
 M5 prefill kernels and the KFlash-tree default; the other engines' rows are the 2026-10-19 session in every table.
 Current main also peaks 0.3-0.8 GB above these rows on all four models (4.7 → 5.4 GB, 19.4 → 20.2, 20.8 → 21.4,
-18.6 → 18.9 GB). The SSD prefix cache is new since 0.1.36 and on by default in `serve`. On the 4B it accounts for
-about 0.33 GB of the roughly 0.7 GB growth: a 16K prefill peaks at 5,204 MB with it (two runs, 5,203.6 and 5,204.1) and
-4,868 MB with `NI_DISK_CACHE=0` (these peak readings are not stored in the repo). That is a 16K-prefill figure, not the peak of the whole agentic run the table
-reports, and the other three models were not split. The doctor's memory plan is identical at 0.1.36 and current main,
-so none of the growth is weights or KV; the rest is runtime state the plan does not cover and is not attributed yet.
+18.6 → 18.9 GB). The SSD prefix cache ([#212](https://github.com/nace-ai/kapitsa/pull/212)) is new since 0.1.36 and on
+by default in `serve`. On the 4B it accounts for about 0.33 GB of the roughly 0.7 GB growth: a 16K prefill peaks at
+5,204 MB with it (two runs, 5,203.6 and 5,204.1) and 4,868 MB with `NI_DISK_CACHE=0` (these peak readings are not
+stored in the repo). That is a 16K-prefill figure, not the peak of the whole agentic run the table reports, and the
+other three models were not split. The doctor's memory plan is identical at 0.1.36 and current main, so none of the
+growth is weights or KV. Nearly all of it is the cache itself: when a request replaces a conversation the SSD lacks,
+`serve` copies that conversation's KV into RAM before writing it to the SSD (`capture_max`, RAM/32 capped at 1 GiB;
+604 MB for a 16K conversation on the 4B) and frees the copy once the write finishes. Binaries rebuilt along main's
+range and run with the table's protocol (16K sweep, tool calls, cache turn, `--slots 1`) peak at 4,798 MB at 0.1.36,
+4,799 MB at [#212]'s parent, 5,610 MB at [#212] itself and 5,665 MB at 180a650 (the stored run above, 5,553 MB, is the
+same engine in a louder session); the engine commits after #212 add tens of megabytes. The copy is transient: with
+`NI_DISK_CACHE=0` the same 16K prefill peaks at 4,868 MB, and the plan total does not move because the driver's budget
+covers the steady state. The runs behind these numbers were contention-flagged (7-12% foreign GPU load); peak
+footprint does not follow the load.
 
 ### Qwen3.5-4B at 4-bit
 
