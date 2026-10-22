@@ -39,12 +39,14 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
     lim[i] = p.pos0 + min(tk[i], p.T - 1);
     lo[i] = p.window && lim[i] + 1 > p.window ? lim[i] + 1 - p.window : 0u;
   }
-  // the threadgroup's keys [kfirst, kend); the simdgroup's: (first token's limit, last token's window start)
+  // the threadgroup's keys [kfirst, kend); the simdgroup's: a tile is skipped past the last token's limit or below the
+  // first token's window start, and masked where it crosses the first token's limit or the last token's window start
   const uint kend = p.pos0 + min(tgt0 + NS * TT, p.T);
   const uint kfirst = p.window && p.pos0 + tgt0 + 1 > p.window ? p.pos0 + tgt0 + 1 - p.window : 0u;
   const uint sfirst = p.pos0 + min(t0, p.T - 1);
   const uint slast = p.pos0 + min(t0 + TT - 1, p.T - 1);
   const uint slo = p.window && slast + 1 > p.window ? slast + 1 - p.window : 0u;
+  const uint sflo = p.window && sfirst + 1 > p.window ? sfirst + 1 - p.window : 0u;   // the first token's: one key lower
   const float qscale = p.scale * M_LOG2E_F;
   nhf_h8 qf[D / 16];
   _Pragma("clang loop unroll(full)")
@@ -82,7 +84,7 @@ NI_INLINE void qattn_flint_impl(const device float* q, const device half* kc, co
       *(threadgroup uint4*)(vt + r * LD + c) = vv4;
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (!live || k0 > slast || k0 + BK <= slo) continue;   // (tile loads and barriers are uniform over the threadgroup)
+    if (!live || k0 > slast || k0 + BK <= sflo) continue;   // (tile loads and barriers are uniform over the threadgroup)
     nhf_f8 sf[KT > 1 ? KT : 2];   // (BK 16: the product's second 16 keys are a copy of the first, dropped)
     _Pragma("clang loop unroll(full)")
     for (short f = 0; f < (KT > 1 ? KT : 2); ++f) sf[f] = nhf_f8(0.0f);
