@@ -179,6 +179,6 @@ bool write_calibration(const std::string& key, const Calibration& c);
 size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, int lanes);
 // Default share (units of 512 channels) for a chip without a calibration, for an FFN of `total` units
 // on a GPU of `cores` cores; 0 = the GPU alone.
-uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave);
+uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave, bool gpu_mma = false);
 
 }  // namespace ni::ane

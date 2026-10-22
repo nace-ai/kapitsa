@@ -103,6 +103,7 @@ struct MemPlan {
   int hidden = 0, layers = 0, ffn = 0;  // ffn: the dense FFN's intermediate size (0 for MoE)
   bool dense = false;
   bool ffn_ane = true;        // dense FFN weights in a format the Neural Engine split stages (any Kapitsa reads)
+  bool ffn_mma = false;       // the split's GPU share of that FFN runs on the matrix units (Qwen35: NI_QMT, 4-bit g64)
   std::string formats;        // "bf16", "4-bit group 64 + 80 modules 8-bit group 64", ...
   size_t ane = 0;             // a GPU + Neural Engine prefill split the model runs by default (Nemotron-H)
   size_t fixed(int slots) const { return weights + mtp + activations + size_t(slots) * slot_state; }

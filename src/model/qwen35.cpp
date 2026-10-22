@@ -1059,6 +1059,7 @@ Qwen35::MemPlan Qwen35::plan(const std::string& dir, int chunk, bool rows16) {
   if (!c.moe) {
     const auto ff = fmt_of("layers.0.mlp.gate_proj.weight", "layers.0.mlp.gate_proj.scales");
     m.ffn_ane = format_supported(ff.first, ff.second);
+    m.ffn_mma = ff.first == 4 && ff.second == 64 && qmt_on();
   }
   // weights one plain decode step multiplies (the prefill estimate's FLOPs): from the architecture
   {
@@ -2465,6 +2466,32 @@ bool Qwen35::enc_moe_prefill_small(Encoder& e, const Layer& L, int T, const Buff
   e.buf(3, xbuf);
   e.val(4, cp);
   e.dispatch((D / 4 + 63) / 64, T, 1, 64);
+  return true;
+}
+
+bool Qwen35::qmt_ready() { return qmt_on(); }
+
+// The GPU's channels [0, g) of the Neural Engine split's FFN (enc_mlp_gpu_part) on the M5's matrix units: gate/up and
+// SwiGLU of the leading g rows fused (qmtg_m64_n64) into hhalf_ [T, g], down over the leading g inputs of its rows
+// (qmt_m64_n64_ld) added into x. The qmm_b4_m64_n64 GEMMs the split otherwise runs are ~3x slower per channel on the
+// M5 Pro (ane_calib, 27B, 2048 rows: 5.4 ms per GPU unit against 1.6 for the GPU's whole FFN), which pushed the share
+// the GPU keeps to 0. The gate/up products are the GPU-alone FFN's (same kernel, tile and K order).
+bool Qwen35::enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
+  const QLinear &G = L.mg, &U = L.mu, &Dn = L.md;
+  auto ok = [](const QLinear& q) { return q.bits == 4 && q.gs == 64 && q.K % 64 == 0; };
+  if (!qmt_on() || T < 64 || g % 64 || !ok(G) || !ok(U) || !ok(Dn) || G.N != U.N || G.K != U.K) return false;
+  const uint32_t D = uint32_t(cfg_.hidden), I = G.N;
+  e.use(pipe("qmtg_m64_n64"));
+  kp::Qmm pg{uint32_t(T), g, G.K, G.K, g, 0, uint32_t(G.gs), 0, 0};
+  e.buf(0, xh_); e.buf(1, G.w->buf); e.buf(2, G.s->buf); e.buf(3, G.b->buf); e.buf(4, hhalf_);
+  e.val(5, pg);
+  e.buf(6, U.w->buf); e.buf(7, U.s->buf); e.buf(8, U.b->buf);
+  e.dispatch((g + 31) / 32, (uint32_t(T) + 63) / 64, 1, 128);
+  e.use(pipe("qmt_m64_n64_ld"));
+  kp::QmmLd pd{{uint32_t(T), D, g, g, D, 1u, uint32_t(Dn.gs), 0, 0}, I / 8, I / 64};
+  e.buf(0, hhalf_); e.buf(1, Dn.w->buf); e.buf(2, Dn.s->buf); e.buf(3, Dn.b->buf); e.buf(4, x);
+  e.val(5, pd);
+  e.dispatch((D + 63) / 64, (uint32_t(T) + 63) / 64, 1, 128);
   return true;
 }
 

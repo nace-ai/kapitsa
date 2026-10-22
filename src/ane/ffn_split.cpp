@@ -768,7 +768,7 @@ size_t split_bytes(uint32_t hidden, uint32_t inter, uint32_t units, int layers, 
   return b;
 }
 
-uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave) {
+uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool wave, bool gpu_mma) {
   // Measured on the M4 Pro (20-core GPU, 16-core ANE, 27B): the wavefront hides the ANE's
   // FFN of one row half under the GPU's mixer of the other, and the GPU stays the bottleneck up to the
   // whole FFN (34 of 34 units: 7.20 s per 2048-row chunk vs 7.40 at 33, 8.40 at 31); the plain split
@@ -781,6 +781,17 @@ uint32_t default_units(const std::string& chip, int cores, uint32_t total, bool 
   // a calibration: ane_calib --wave --write).
   if (!total || (chip.find("M4") == std::string::npos && chip.find("M5") == std::string::npos)) return 0;
   const double c = std::max(1, cores), k = 20.0 / c;
+  if (gpu_mma) {
+    // gpu_mma: the GPU's share runs on the M5's matrix units (Qwen35's NI_QMT, 4-bit group 64), ~3.5x cheaper per
+    // channel than its simdgroup GEMMs. Measured on the M5 Pro (20 cores, 27B, ane_calib, 2048 rows): the ANE
+    // ~1.68 ms per unit and the GPU 1.52 ms per unit it keeps; the GPU-alone chunk is ~4.8 s, ~75 ms per layer, ~50
+    // of them the FFN, so ~25 ms of mixer. Wavefront balance u = (25 + 1.52 x 34) k / (1.68 + 1.52 k): 24 of 34 at
+    // 20 cores (ane_calib --wave: 22-28 within noise at 2.99-3.30 s per chunk, 34 4.0 s); plain split
+    // u = 1.52 k U / (1.68 + 1.52 k): 16 of 34 (measured best 16).
+    const double g = 1.52 * k, a = 1.68;
+    const double frac = std::min(1.0, wave ? (25.0 * k + g * 34) / (a + g) / 34 : g / (a + g));
+    return std::max<uint32_t>(1, std::min<uint32_t>(total, uint32_t(std::lround(frac * total))));
+  }
   const double u34 = (100.0 + 6.2 * 34) * k / (1.94 + 6.2 * k);  // on the 27B's 34 units
   // plain split: ANE and GPU part concurrent per layer, balanced at u = g U / (a + g), matched to the 27 of 34
   // measured at 20 cores

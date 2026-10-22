@@ -100,7 +100,11 @@ void Qwen35::init_ane() {
   const bool wave = !getenv("NI_ANE_WAVE") || env_on("NI_ANE_WAVE");
   ane::Calibration cal;
   const bool have_cal = ane::read_calibration(ane::machine_key(chip, mkey) + (wave ? "|wave" : ""), cal);
-  uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), uint32_t(cfg_.dense_I / 512), wave);
+  // the GPU's share on the matrix units (enc_mlp_gpu_part_qmt) for 4-bit group 64 FFN weights
+  bool mma = qmt_ready();
+  for (const Layer& L : layers_) mma = mma && L.mg.bits == 4 && L.mg.gs == 64 && L.md.bits == 4 && L.md.gs == 64;
+  const uint32_t total = uint32_t(cfg_.dense_I / 512);
+  uint32_t units = have_cal ? cal.units : ane::default_units(chip, Gpu::get().core_count(), total, wave, mma);
   uint32_t min_rows = have_cal && cal.min_rows ? cal.min_rows : 512;
   if (getenv("NI_ANE_UNITS")) units = uint32_t(atoi(getenv("NI_ANE_UNITS")));
   if (getenv("NI_ANE_MIN_ROWS")) min_rows = uint32_t(atoi(getenv("NI_ANE_MIN_ROWS")));
@@ -160,7 +164,8 @@ Qwen35::AnePlan Qwen35::ane_plan(const std::string& dir, const MemPlan& m) {
   if (ane::read_calibration(ane::machine_key(chip, ane::model_key(dir)) + (wave ? "|wave" : ""), cal))
     a.units = cal.units, a.source = "calibration";
   else
-    a.units = ane::default_units(chip, Gpu::get().core_count(), a.total, wave), a.source = "default for this chip";
+    a.units = ane::default_units(chip, Gpu::get().core_count(), a.total, wave, m.ffn_mma),
+    a.source = "default for this chip";
   if (getenv("NI_ANE_UNITS")) a.units = uint32_t(atoi(getenv("NI_ANE_UNITS"))), a.source = "NI_ANE_UNITS";
   if (!a.units || a.units > a.total) {
     a.units = 0;
@@ -282,6 +287,7 @@ bool Qwen35::ane_rebuild(uint32_t units, uint32_t min_rows, const std::vector<ui
 // SwiGLU, down over the leading g inputs of its rows (row stride I), added into x (fp32).
 void Qwen35::enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x) {
   if (!g) return;  // the ANE takes every channel
+  if (enc_mlp_gpu_part_qmt(e, L, T, g, x)) return;
   const uint32_t D = uint32_t(cfg_.hidden), I = L.mg.N;
   const bool q4 = L.mg.q4() && L.mu.q4() && L.md.q4();
   // gate/up of the leading g rows and SwiGLU into hhalf_ [T, g]: 4-bit as two GEMMs into fp32 hg_ / hu_; the other

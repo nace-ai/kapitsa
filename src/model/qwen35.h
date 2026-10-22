@@ -538,6 +538,9 @@ class Qwen35 : public Model {
   int ane_wave_rows(int T) const;
   void enc_prefill_wave(Encoder& e, Seq& s, int pos0, int T, int h);
   void enc_mlp_gpu_part(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
+  // the same on the tensor_ops GEMMs (NI_QMT, 4-bit group 64); false: not applicable
+  bool enc_mlp_gpu_part_qmt(Encoder& e, const Layer& L, int T, uint32_t g, const Buffer& x);
+  static bool qmt_ready();  // NI_QMT's tensor_ops GEMMs are on
   void enc_mlp_prefill_split(Encoder& e, int li, const Layer& L, int T, const Buffer& x);
   void enc_mlp_rows(Encoder& e, const Layer& L, int R, const Buffer& x);
   QLinear own_qlin(const class WeightStore& w, const std::string& name);
