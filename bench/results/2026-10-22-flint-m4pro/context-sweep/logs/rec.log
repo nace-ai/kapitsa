@@ -1,0 +1,68 @@
+  ✓ This Mac is supported
+  Preparing runtime (0s)
+  ✓ Runtime ready  3s
+  Loading Flint (0s)
+  Loading Flint (10s)
+127.0.0.1 - - [22/Oct/2026 12:51:00] "GET /v1/models HTTP/1.1" 200 -
+127.0.0.1 - - [22/Oct/2026 12:51:00] "GET /health HTTP/1.1" 200 -
+  Loading Flint · Checking model identity (12s)
+127.0.0.1 - - [22/Oct/2026 12:51:00] "GET /v1/models HTTP/1.1" 200 -
+  Loading Flint · Checking generation (12s)
+127.0.0.1 - - [22/Oct/2026 12:51:00] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:00,860 Prefill: prompt=5 common_prefix=0 reused=0 new=5
+  ✓ Loaded Flint  13s
+
+╭──────────────────────────────────────────────╮
+│  ✓ flint is ready.                           │
+│                                              │
+│  Base URL    http://127.0.0.1:11511/v1       │
+│  Model       flint                           │
+│  Checkpoint  flint-int4                      │
+│  Context     262,144 tokens, input + output  │
+│  API key     rec auth token                  │
+╰──────────────────────────────────────────────╯
+Keep this terminal open. Press Ctrl+C to stop.
+127.0.0.1 - - [22/Oct/2026 12:51:02] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:02,369 Prefill: prompt=2037 common_prefix=0 reused=0 new=2037
+127.0.0.1 - - [22/Oct/2026 12:51:09] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:09,872 Prefill: prompt=1010 common_prefix=4 reused=0 new=1010
+127.0.0.1 - - [22/Oct/2026 12:51:12] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:12,588 Prefill: prompt=2033 common_prefix=4 reused=0 new=2033
+127.0.0.1 - - [22/Oct/2026 12:51:17] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:17,181 Prefill: prompt=4079 common_prefix=3 reused=0 new=4079
+127.0.0.1 - - [22/Oct/2026 12:51:23] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:23,626 Prefill: prompt=8179 common_prefix=3 reused=0 new=8179
+127.0.0.1 - - [22/Oct/2026 12:51:36] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:51:36,755 Prefill: prompt=16369 common_prefix=3 reused=0 new=16369
+2026-10-22 12:51:47,074 Prefill progress: 8192 tokens processed
+127.0.0.1 - - [22/Oct/2026 12:52:02] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:52:02,842 Prefill: prompt=32754 common_prefix=3 reused=0 new=32754
+2026-10-22 12:52:13,193 Prefill progress: 8192 tokens processed
+2026-10-22 12:52:25,937 Prefill progress: 16384 tokens processed
+2026-10-22 12:52:41,157 Prefill progress: 24576 tokens processed
+127.0.0.1 - - [22/Oct/2026 12:53:01] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:53:01,574 Prefill: prompt=65519 common_prefix=3 reused=0 new=65519
+2026-10-22 12:53:11,895 Prefill progress: 8192 tokens processed
+2026-10-22 12:53:24,662 Prefill progress: 16384 tokens processed
+2026-10-22 12:53:39,878 Prefill progress: 24576 tokens processed
+2026-10-22 12:53:57,549 Prefill progress: 32768 tokens processed
+2026-10-22 12:54:17,959 Prefill progress: 40960 tokens processed
+2026-10-22 12:54:40,618 Prefill progress: 49152 tokens processed
+2026-10-22 12:55:05,373 Prefill progress: 57344 tokens processed
+127.0.0.1 - - [22/Oct/2026 12:55:39] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-22 12:55:39,554 Prefill: prompt=131014 common_prefix=3 reused=0 new=131014
+2026-10-22 12:55:50,132 Prefill progress: 8192 tokens processed
+2026-10-22 12:56:03,478 Prefill progress: 16384 tokens processed
+2026-10-22 12:56:19,905 Prefill progress: 24576 tokens processed
+2026-10-22 12:56:39,492 Prefill progress: 32768 tokens processed
+2026-10-22 12:57:01,257 Prefill progress: 40960 tokens processed
+2026-10-22 12:57:24,232 Prefill progress: 49152 tokens processed
+2026-10-22 12:57:50,216 Prefill progress: 57344 tokens processed
+2026-10-22 12:58:21,348 Prefill progress: 65536 tokens processed
+2026-10-22 12:58:55,040 Prefill progress: 73728 tokens processed
+2026-10-22 12:59:28,551 Prefill progress: 81920 tokens processed
+2026-10-22 13:00:04,422 Prefill progress: 90112 tokens processed
+2026-10-22 13:00:44,500 Prefill progress: 98304 tokens processed
+2026-10-22 13:01:26,391 Prefill progress: 106496 tokens processed
+2026-10-22 13:02:13,896 Prefill progress: 114688 tokens processed
+2026-10-22 13:03:05,569 Prefill progress: 122880 tokens processed

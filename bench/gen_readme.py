@@ -24,7 +24,7 @@ DASH = "–"
 # the quantization, from the weights' path, then the run's name; first match wins
 QUANTS = [
     (r"nvfp4", "NVFP4"), (r"\bfp8\b|-fp8", "FP8"), (r"bf16", "bf16"), (r"24gb", "2-bit experts"),
-    (r"4\.7bpw", "4.7-bit"), (r"q4_k_m", "Q4_K_M"), (r"q5_k_m", "Q5_K_M"), (r"q4_0", "Q4_0"), (r"iq4_nl", "IQ4_NL"),
+    (r"4\.7bpw", "4.7-bit"), (r"q4_k_m", "Q4_K_M"), (r"q5_k_m", "Q5_K_M"), (r"q4_0", "Q4_0"), (r"q4_1", "Q4_1"), (r"iq4_nl", "IQ4_NL"),
     (r"iq2_xxs|2bit|2-bit", "2-bit experts"), (r"oq4e", "4-bit"), (r"8bit", "8-bit"), (r"6bit", "6-bit"),
     (r"5bit", "5-bit"), (r"4bit|4-bit|mlx-serve|mtplx|omlx|rapid|\bmtp\b", "4-bit"),
 ]

@@ -14,15 +14,20 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-541 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+546 runs on 4 Macs (M1 Pro, 16 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 2026-10-22 | Yerbol Kopzhassar | M4 Pro, 48 GB | Flint 40B-A2.5B | Q4_1 | llama.cpp b11804 | b11804 | 79.6 | 79.9 | 977 | 786 | 3.97 | – | contention | [flint-llamacpp-20261022-122927](results/2026-10-22-flint-m4pro/results/flint-llamacpp-20261022-122927.json) |
+| 2026-10-22 | Yerbol Kopzhassar | M4 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | Kapitsa | 160bfe1 | 126.9 | 132.2 | 968 | 819 | 4.00 | – | contention | [flint-kapitsa-20261022-122338](results/2026-10-22-flint-m4pro/results/flint-kapitsa-20261022-122338.json) |
+| 2026-10-22 | Yerbol Kopzhassar | M4 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | rec 0.1.0 | 0.1.0 | 126.7 | 132.4 | 801 | 703 | 4.84 | – | contention | [flint-rec-20261022-121616](results/2026-10-22-flint-m4pro/results/flint-rec-20261022-121616.json) |
+| 2026-10-22 | Yerbol Kopzhassar | M4 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | rec 0.1.0 | 0.1.0 | 126.4 | 132.3 | 791 | 695 | 4.90 | – | contention | [flint-rec-20261022-120842](results/2026-10-22-flint-m4pro/results/flint-rec-20261022-120842.json) |
+| 2026-10-22 | Yerbol Kopzhassar | M4 Pro, 48 GB | Flint 40B-A2.5B | 4-bit | Kapitsa | 4e227c6 | 128.9 | 131.0 | 968 | 816 | 4.00 | – | – | [flint-kapitsa-20261022-120544](results/2026-10-22-flint-m4pro/results/flint-kapitsa-20261022-120544.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | b07f274 | 204.4 | 217.7 | 1752 | 1413 | 2.36 | – | contention | [q36-35b-kapitsa-20261022-110818](results/2026-10-22-m5pro-48gb/results/q36-35b-kapitsa-20261022-110818.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | mlx-serve + MTP (depth up to 2) | 26.10.2 | 162.8 | 163.9 | 2079 | 1850 | 1.99 | – | contention | [q36-35b-mlxserve-mtp-20261022-110149](results/2026-10-22-m5pro-48gb/results/q36-35b-mlxserve-mtp-20261022-110149.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | mlx-serve + MTP (depth up to 2) | 26.10.2 | 152.1 | 157.4 | 2019 | 1856 | 2.05 | – | contention | [q36-35b-mlxserve-mtp-20261022-105522](results/2026-10-22-m5pro-48gb/results/q36-35b-mlxserve-mtp-20261022-105522.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | b07f274 | 197.5 | 221.8 | 1814 | 1461 | 2.28 | – | – | [q36-35b-kapitsa-20261022-105127](results/2026-10-22-m5pro-48gb/results/q36-35b-kapitsa-20261022-105127.json) |
-| 2026-10-22 | – | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | d53f02e | 217.0 | 227.0 | 2459 | 1838 | 1.68 | 174.8 | – | [q36-35b-kapitsa-20261022-102548](results/2026-10-22-m5pro-48gb/results/q36-35b-kapitsa-20261022-102548.json) |
+| 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.6 35B-A3B | 4-bit | Kapitsa (DFlash2 drafter) | d53f02e | 217.0 | 227.0 | 2459 | 1838 | 1.68 | 174.8 | – | [q36-35b-kapitsa-20261022-102548](results/2026-10-22-m5pro-48gb/results/q36-35b-kapitsa-20261022-102548.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | Kapitsa (DFlash2 drafter) | 16f2b6a | 74.8 | 83.3 | 484 | 453 | 8.54 | – | – | [q38-27b-kapitsa-20261022-100545](results/2026-10-22-m5pro-48gb/results/q38-27b-kapitsa-20261022-100545.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.2 | 81.9 | 87.5 | 467 | 475 | 8.86 | – | contention | [q38-27b-mlxserve-dflash2-20261022-100013](results/2026-10-22-m5pro-48gb/results/q38-27b-mlxserve-dflash2-20261022-100013.json) |
 | 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Qwen3.8 27B | 4-bit | mlx-serve + DFlash2 (draft tree, block 8) | 26.10.2 | 74.4 | 85.0 | 462 | 470 | 8.95 | – | contention | [q38-27b-mlxserve-dflash2-20261022-095547](results/2026-10-22-m5pro-48gb/results/q38-27b-mlxserve-dflash2-20261022-095547.json) |

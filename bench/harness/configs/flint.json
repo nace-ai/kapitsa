@@ -68,6 +68,6 @@
   "requires_paths": ["{models}/flint-int4-gguf/flint-int4-q4_1.gguf"],
   "bench_args": ["--temperature", "1.0", "--always-reasons", "--ref-prompt-tokens", "4000:3874,16000:15066"],
   "agent_trace": "none",
-  "note": "llama-server (a build with Flint support: b11804; LLAMA_SERVER names it) on Recursive's Q4_1 GGUF for llama.cpp on Metal, with the flags of its model card (-ngl all, F16 KV, --cache-ram 0, Flint's sampling) except -b/-ub 2048, the 2048-token prefill chunks the other engines use (the card's 256 / 128 were measured too: see the result notes), and -c 32768 -np 1 as the others."
+  "note": "llama-server (a build with Flint support: b11804; LLAMA_SERVER names it) on Recursive's Q4_1 GGUF for llama.cpp on Metal, with the flags of its model card (-ngl all, F16 KV, --cache-ram 0, Flint's sampling) except -b/-ub 2048, the 2048-token prefill chunks the other engines use, in place of the card's -b 256 -ub 128 (not run), and -c 32768 -np 1 as the others."
  }
 ]

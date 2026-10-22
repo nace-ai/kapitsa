@@ -1,0 +1,6 @@
+0.02.336.733 I srv  llama_server: initializing ...
+0.02.336.753 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.02.337.741 I srv  init_listene: The UI is disabled
+0.02.337.742 I srv  init_listene: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.02.337.843 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.02.339.704 I srv    load_model: loading model '/Users/flaminis/.cache/kapitsa/models/flint-int4-gguf/flint-int4-q4_1.gguf'
