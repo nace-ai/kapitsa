@@ -312,6 +312,7 @@ struct RunInputs {
   Settings settings;
   bool quick = false;
   int context = 32768, slots = 1;
+  int prefill_chunk = 0;  // explicit override; zero leaves server memory planning automatic
   std::string version, commit;  // Kapitsa's
   std::string time_utc;         // "2026-10-18T09:12:44Z"
   // bench.py's record of the run: decode, decode_summary, decode_greedy, decode_greedy_summary, prefill, tools,

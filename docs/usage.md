@@ -15,7 +15,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa rm M...` | Deletes downloaded models and says how much space that gave back. Folders outside the store are left alone. |
 | `kapitsa import FILE.gguf [options]` | Converts a GGUF file into a model folder ([GGUF files](#gguf-files)). |
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
-| `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
+| `kapitsa bench [--model M] [--prefill-chunk N] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
 | `kapitsa stage --model M [--layers A-B]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
@@ -905,9 +905,14 @@ numbers compare with them and with the [community results](../bench/community/RE
 ```bash
 kapitsa bench                     # in a terminal it asks which model; elsewhere the best model for this Mac
 kapitsa bench --model 35b:6bit    # a given model and precision
+kapitsa bench --model 35b --prefill-chunk 4096  # override prompt tokens per prefill pass
 kapitsa bench --quick             # a shorter run: 3 runs per writing test, the 4K prompt only
 kapitsa bench --submit            # then add the result to the community results (it asks first)
 ```
+
+`--prefill-chunk N` passes a positive integer to the benchmark server. Omit it to keep automatic memory planning.
+The terminal, Markdown and JSON reports record the requested size; the model may balance actual pass sizes.
+Custom-chunk runs are labelled `prefill` or `prefill-quick` and cannot be submitted as standard community results.
 
 It runs the protocol of [bench/harness](../bench/harness/README.md) (`bench.py`), request for request, as a client
 of the local API: it starts the model's server (`kapitsa serve` with one conversation slot and a 32K context, `NI_*`

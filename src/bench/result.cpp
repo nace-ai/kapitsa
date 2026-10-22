@@ -253,6 +253,7 @@ ojson make_result(const RunInputs& in) {
     for (const auto& x : raw["context"]["invalid"]) invalid.push_back("context: " + x.get<std::string>());
     for (const auto& x : raw["context"]["flags"]) flags.push_back("context: " + x.get<std::string>());
   }
+  if (in.prefill_chunk) protocol["prefill_chunk"] = in.prefill_chunk;
   ojson users = ojson::array();
   for (const auto& u : overall.value("gpu_users", ojson::array())) users.push_back(u["name"]);
   ojson conditions = {{"power_source", in.power_start.source.empty() ? ojson(nullptr) : ojson(in.power_start.source)},
@@ -268,7 +269,9 @@ ojson make_result(const RunInputs& in) {
                       {"contention", busy}};
   ojson result = {{"schema", kSchema},
           {"kind", "kapitsa-bench"},
-          {"mode", raw.contains("context") ? (in.quick ? "context-quick" : "context") : (in.quick ? "quick" : "full")},
+          {"mode", raw.contains("context") ? (in.quick ? "context-quick" : "context")
+                   : in.prefill_chunk ? (in.quick ? "prefill-quick" : "prefill")
+                   : (in.quick ? "quick" : "full")},
           {"time_utc", in.time_utc},
           {"kapitsa", {{"version", in.version}, {"commit", in.commit.empty() ? ojson(nullptr) : ojson(in.commit)}}},
           {"mac", mac},
@@ -399,6 +402,8 @@ std::string result_markdown(const ojson& r) {
               "-core GPU · " + std::to_string(ram_gb(r)) + " GB";
   const std::string model_col = model_display(str_or(m, "title", str_or(m, "name"))) + " · " + str_or(m, "precision");
   std::string s = "| " + mac_col + " | " + model_col + " |\n| --- | ---: |\n";
+  if (r["protocol"].contains("prefill_chunk"))
+    s += "| Prefill chunk (requested) | " + thousands(r["protocol"]["prefill_chunk"].get<int>()) + " tokens |\n";
   s += "| Writing, T = " + fmt_temp(writing_temperature(r)) + " | " + cell_decode("decode") + " |\n";
   s += "| Writing, greedy | " + cell_decode("decode_greedy") + " |\n";
   for (const auto& p : res["prefill"]) {
@@ -441,7 +446,8 @@ std::string result_markdown(const ojson& r) {
                       : str_or(c, "power_mode") == "automatic" ? " · Automatic power mode" : "") +
                      (str_or(c, "thermal_state").empty() ? "" : " · thermal state " + str_or(c, "thermal_state")) + " · " +
                      (r["protocol"].contains("context_window") ? "standard benchmark followed by context workload at " + std::to_string(r["protocol"]["context_window"].get<int>()) + " tokens" :
-                     str_or(r, "mode") == "quick" ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
+                     r["protocol"].contains("prefill_chunk") ? std::string("standard workload with an explicit prefill chunk of ") + std::to_string(r["protocol"]["prefill_chunk"].get<int>()) + " tokens" :
+                     str_or(r, "mode").find("quick") != std::string::npos ? "quick run (3 runs per writing test, the 4K prompt only)" : "full run");
   s += cond + "\n\n";
   if (r["flags"].empty()) {
     s += "Flags: none.\n";
@@ -457,6 +463,8 @@ std::string result_markdown(const ojson& r) {
 std::string submit_problem(const ojson& r) {
   if (r.value("kind", "") != "kapitsa-bench" || r.value("schema", 0) != kSchema) return "This is not a kapitsa bench result.";
   if (r.contains("protocol") && r["protocol"].contains("context_window")) return "Custom-context runs cannot be submitted as standard community benchmarks.";
+  if (r.contains("protocol") && r["protocol"].contains("prefill_chunk"))
+    return "Custom prefill chunks cannot be submitted as standard community benchmarks.";
   const ojson& m = r["model"];
   if (!m.value("catalog", false) || !m["variant"].is_string())
     return "Only results of the catalog's models can be submitted (their weights are pinned, so results compare): "
