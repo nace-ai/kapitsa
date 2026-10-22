@@ -251,9 +251,11 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
       const int base = opts_.prefill_chunk > 2048 && opts_.prefill_chunk <= prefill_chunk_room(2048)
                            ? 2048  // only its tail room: the 2048-row chunk still fits
                            : opts_.prefill_chunk;
-      if (base != 2048)
+      if (base < 2048)
         logi("memory: %d-row prefill chunks (2048 would leave less than one %d-token conversation in the %.1f GB budget)",
              base, opts_.context, budget_ / 1e9);
+      else if (base > 2048)  // the single-slot 35B's wide chunk (auto_prefill_chunk): chosen for speed, memory permitting
+        logi("prefill: %d-row chunks (fewer expert-weight reads; the memory plan fits them)", base);
     }
     const StartNeed need = start_need(opts_.model_dir, lp, opts_.prefill_chunk, opts_.context, slots);
     const size_t rws = Gpu::get().recommended_working_set();
@@ -620,7 +622,7 @@ int auto_prefill_chunk(const std::string& model_dir, int context, int slots, siz
   // reduce expert-tile padding and weight rereads. Keep the existing chunk for
   // concurrent slots, other formats/devices, or when the extra buffers do not fit.
   // M5 Pro, ni_run cold prefill, 2112 -> 4224 rows: 4K 2,637 -> 2,808 tok/s, 16K 2,095 -> 2,192 (logits bitwise the
-  // same); the buffers grow by 0.75 GB.
+  // same in dumps of at most 3,200 tokens, i.e. one chunk; a 16K prompt split over chunks was not dumped); the plan counts 0.75 GB more buffers, the measured peak footprint grows by 0.58 GB.
   if (slots == 1 && !p.dense && p.hidden == 2048 && p.layers == 40 &&
       p.formats.rfind("4-bit group 64", 0) == 0 &&
       ((Gpu::get().name() == "Apple M1 Max" && Gpu::get().core_count() == 32) || Gpu::get().apple10())) {
