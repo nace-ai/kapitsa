@@ -1734,9 +1734,11 @@ sit well behind), the 16K cell crossing over from the 0.89x above. The attention
 interleaved A/B), and that A/B put the whole prefill at 1.04x / 1.07x on one day; the 1.08x / 1.14x here compares two
 sessions a few hours apart, so read it as what the change reads like across builds rather than as a measured 1.08x. Decode
 is inside the spread (71.7 / 71.2 tok/s at T = 0.6, 72.2 / 80.3 greedy; the per-loop record has two repetition-loop flags
-in its T = 0.6 runs, one of them the 76.89 maximum, so its median 71.15 is the reading), the cached follow-ups are
-0.13-0.14 / 0.21 s, and the peak footprint is 0.5-0.9 GB above the #287 runs (4.19 and 4.98 GB against 3.65 and 4.09) while
-the host was paging 3.8 GB of swap for other sessions, so the footprint is not attributed here. The last-loop record carries
+in its T = 0.6 runs, one of them the 76.89 maximum, so its median 71.15 is the reading), the cached follow-ups read
+0.13-0.14 / 0.21 s against the 0.10-0.11 / 0.15-0.16 above (about 30-40% slower at 16K; a cached follow-up prefills a short
+suffix, which is the path this change touches, so that is a regression candidate rather than noise and it is not explained
+here), and the peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak 4.18 -> 4.19 GiB on
+last-loop KV and 5.02-5.03 -> 4.98 on per-loop. The last-loop record carries
 the harness's contention flag on its 16K prefill (Microsoft Edge Helper, mean 2.3%, a busy run up to 32.7%), so that one
 cell is a lower bound.
 

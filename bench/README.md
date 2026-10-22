@@ -14,11 +14,13 @@ How to read it:
 
 <!-- BEGIN GENERATED: results (python3 bench/gen_readme.py; do not edit by hand) -->
 
-591 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
+593 runs on 5 Macs (M1 Pro, 16 GB; M3 Pro, 36 GB; M4 Pro, 48 GB; M5 Max, 128 GB; M5 Pro, 48 GB), 2026-10-22 down to 2026-10-16, newest first.
 
 | Date | Submitted by | Mac | Model | Quant | Engine | Version | Decode tok/s | Greedy tok/s | Prefill 4K tok/s | Prefill 16K tok/s | TTFT 4K s | Agent tok/s | Flags | Record |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
-| 2026-10-22 | – | M5 Pro, 48 GB | Flint 40B-A2.5B | Q4_1 | llama.cpp b11804 | b11804 | 92.4 | 92.8 | 2072 | 1773 | 1.87 | – | – | [flint-llamacpp-20261022-180213](results/2026-10-22-flint-m5pro/results/flint-llamacpp-20261022-180213.json) |
+| 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, per-loop KV, speculative decoding) | 3112b93 | 71.2 | 80.3 | 1656 | 1311 | 2.53 | – | – | [dory-kapitsa-perloop-20261022-185535](results/2026-10-22-m5pro-dory/results/dory-kapitsa-perloop-20261022-185535.json) |
+| 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Nemotron Dory1.0-4B | NVFP4 | Kapitsa (NVFP4, 2 loops, last-loop KV) | 3112b93 | 71.7 | 72.2 | 1625 | 1283 | 2.57 | – | contention | [dory-kapitsa-20261022-184939](results/2026-10-22-m5pro-dory/results/dory-kapitsa-20261022-184939.json) |
+| 2026-10-22 | Alisher Amantay | M5 Pro, 48 GB | Flint 40B-A2.5B | Q4_1 | llama.cpp b11804 | b11804 | 92.4 | 92.8 | 2072 | 1773 | 1.87 | – | – | [flint-llamacpp-20261022-180213](results/2026-10-22-flint-m5pro/results/flint-llamacpp-20261022-180213.json) |
 | 2026-10-22 | Alisher Amantay | M3 Pro, 36 GB | Flint 40B-A2.5B | Q4_1 | llama.cpp b11804 | b11804 | 51.0 | 51.2 | 771 | 640 | 5.03 | – | – | [flint-llamacpp-20261022-164049](results/2026-10-22-flint-m3pro/results/flint-llamacpp-20261022-164049.json) |
 | 2026-10-22 | Alisher Amantay | M3 Pro, 36 GB | Flint 40B-A2.5B | 4-bit | Kapitsa | 3da3798 | 73.5 | 74.6 | 800 | 675 | 4.84 | – | – | [flint-kapitsa-20261022-163728](results/2026-10-22-flint-m3pro/results/flint-kapitsa-20261022-163728.json) |
 | 2026-10-22 | Alisher Amantay | M3 Pro, 36 GB | Flint 40B-A2.5B | 4-bit | rec 0.1.0 | 0.1.0 | – | – | – | – | – | – | invalid | [flint-rec-20261022-163721](results/2026-10-22-flint-m3pro/results/flint-rec-20261022-163721.json) |

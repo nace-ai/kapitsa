@@ -64,26 +64,29 @@ BENCH_MODELS=~/Documents/nace/models KAPITSA_BIN=/tmp/kap-post2/build/kapitsa \
 ```
 
 Same Mac and macOS as above, on AC power, one Edge and one Slack process open. Four other sessions were queued on the
-GPU lock, and the host was reading 3.8 GB of swap while both runs measured (other sessions resident): the last-loop
-run carries the harness's contention flag on `prefill_16000` (mean 2.3%, Microsoft Edge Helper, a 5-sample busy run up
-to 32.7% foreign GPU), so its 16K cell is a lower bound; the per-loop run is flag-free. The per-loop record also
+GPU lock and the host was reading 3.8 GB of swap while both runs measured (other sessions resident), which is why the
+neighbour shows up in the flag below: the last-loop run carries the harness's contention flag on `prefill_16000`
+(mean 2.3%, Microsoft Edge Helper, a 5-sample busy run up to 32.7% foreign GPU), so its 16K cell is a lower bound; the
+per-loop run is flag-free. The per-loop record also
 carries two repetition-loop flags in decode at T = 0.6 (distinct-4-gram 0.4095 and 0.4827, 2 of 5 runs); one of them
 is the 76.89 tok/s maximum and the median, 71.15, sits below it.
 
 | Result file | Setting | Decode T = 0.6 (tok/s) | Decode greedy (tok/s) | Prefill 4K / 16K (tok/s) | Cached follow-up 4K / 16K (s) | Peak footprint (GB) | Flags |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `dory-kapitsa-20261022-184939.json` | 2 loops, last-loop KV (its default) | 71.7 (69.4-72.6) | 72.2 (71.6-72.5) | 1,625 / 1,283 | 0.13 / 0.21 | 4.19 + 0.63 mapped | contention (16K prefill) |
-| `dory-kapitsa-perloop-20261022-185535.json` | 2 loops, per-loop KV, speculative decoding | 71.2 (70.3-76.9)<sup>1</sup> | 80.3 (79.9-80.5) | 1,656 / 1,311 | 0.14 / 0.21 | 4.98 + 0.64 mapped | repetition loop (decode) |
+| `dory-kapitsa-20261022-184939.json` | 2 loops, last-loop KV (its default) | 71.7 (69.4-72.6) | 72.2 (71.6-72.5) | 1,625 / 1,283 | 0.13 / 0.21 | 3.65 + 0.67 mapped | contention (16K prefill) |
+| `dory-kapitsa-perloop-20261022-185535.json` | 2 loops, per-loop KV, speculative decoding | 71.2 (70.3-76.9)<sup>1</sup> | 80.3 (79.9-80.5) | 1,656 / 1,311 | 0.14 / 0.21 | 4.09 + 0.68 mapped | repetition loop (decode) |
 
 1. Two of the five sampled T = 0.6 runs looped (distinct-4-gram 0.41 and 0.48); the fastest, 76.89 tok/s, is one of them, so read the maximum as an upper bound. The median, 71.15, is not a loop.
 
 Median of the pair, against the #287 session above: prefill **1,522 -> 1,641 tok/s at 4K** (1.08x) and **1,142 -> 1,297
-at 16K** (1.14x), and against the 03:26 pre-#287 runs, 2.66x and 2.39x. That is larger than the kernel's own 1.24x / 1.22x
-on the attention alone, because a run of the step also loses the dispatch gaps the simdgroup kernel's narrow threadgroups
-leave behind; the interleaved A/B in #314 put the whole prefill at 1.04x / 1.07x on the same day, so read the two other
-sessions' difference as a floor of what the change did across days, not as a direct measurement of it. Decode is unchanged
-inside the runs' spread (70.7/73.1 -> 71.7/71.2 at T = 0.6, 72.5/80.5 -> 72.2/80.3 greedy), the cached follow-ups read
-0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16, and the peak footprint is up 0.5-0.9 GB (4.19 and 4.98 GB against 3.65
-and 4.09) while the host was paging, so the footprint is not attributed here. Against the other engines on this Mac
+at 16K** (1.14x), and against the 03:26 pre-#287 runs, 2.66x and 2.39x. The attention kernel alone is 1.24x / 1.22x
+(#314's interleaved A/B) and that A/B put the whole prefill at 1.04x / 1.07x on one day, so the 1.08x / 1.14x here is what
+the change reads like across two builds a few hours apart, not a measurement of it: part of the difference is the two
+sessions, and the end-to-end gain is larger than the kernel's share of the step, which these records do not explain. Decode
+is unchanged inside the runs' spread (70.7/73.1 -> 71.7/71.2 at T = 0.6, 72.5/80.5 -> 72.2/80.3 greedy). The cached
+follow-ups read 0.13-0.14 / 0.21 s against 0.10-0.11 / 0.15-0.16: a cached follow-up prefills a short suffix, which is the
+path this change touches, so the 16K figure (about 30-40% slower) is a regression candidate rather than noise and these two
+records do not explain it. The peak footprint is unchanged: decode 3.65 / 4.09 GB in both sessions, the 16K-prefill peak
+4.18 -> 4.19 GiB on last-loop KV and 5.02 -> 4.98 on per-loop. Against the other engines on this Mac
 (mlx-lm 1,401 / 1,278, llama.cpp 938 / 951), the flag-free per-loop run reads 1.18x mlx-lm at 4K and 1.03x at 16K,
 and 1.77x / 1.38x llama.cpp.
