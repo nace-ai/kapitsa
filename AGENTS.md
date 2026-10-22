@@ -83,7 +83,12 @@ per-GEMM check in `tools/bench_moe.cpp` (`vs qrm` columns, every output within o
 both paths' error the same against a double-precision reference) plus what the temperature-0 continuations did (cold 4K
 and 16K prompts: the 35B-A3B's came out identical). That flag is a claim about the diff:
 anything that changes *what* is computed stays on the floor's gate. The first such change (35B-A3B MoE prefill on the
-tensor units, default on the M5 from 2026-10-22) was accepted by the user on that evidence.
+tensor units, default on the M5 from 2026-10-22) was accepted by the user on that evidence. The second, the same
+model's prefill attention (`qattn_t_g8s4k16`, the 35B's default on the M5 from 2026-10-22, `NI_QATTN_G8=0` keeps
+`attn_prefill11r`), passes `--reorder` too (prefill 3.8e-4, decode 5.6e-4 mean KL) but is 1.10x the floor's gate
+rather than inside it: the user accepted that departure for the default on the same reassociation evidence, and the
+35B's floor on an M5-class GPU is to be re-measured with `tools/logit_floor.py` in a PR of its own, because the file
+is an M4 Pro measurement of the kernels before both changes.
 Requests decoded together can legitimately differ at near-ties from alone (docs/architecture.md); a single-stream path
 must not change.
 
