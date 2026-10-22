@@ -12,7 +12,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 20 of 22 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 23 of 25 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
@@ -55,7 +55,7 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 20 of the 22 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 23 of the 25 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
@@ -76,6 +76,16 @@ Kapitsa has the fastest decode in 20 of the 22 model and Mac pairs measured agai
 | Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
 | --- | ---: | ---: | ---: | ---: |
 | Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**64&nbsp;tok/s**</mark><br><sub>loops</sub> | —<br><sub>no support</sub> | 6<br><sub>no spec</sub> | 48<br><sub>no spec</sub> |
+
+### MacBook Pro (16-inch, 2026) · M5 Max · 128 GB
+
+#### Nemotron
+
+| Model | <mark>**Kapitsa**</mark> | <sub>oMLX<br>0.7.1rc1</sub> | <sub>mlx‑serve<br>26.10.2</sub> | <sub>Ollama<br>0.40.6</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>LM&nbsp;Studio<br>MLX runtime 1.13.1,<br>llama.cpp runtime 2.60.0</sub> | <sub>llama.cpp<br>b11669</sub> | <sub>MLX<br>mlx-lm 0.32.2,<br>mlx-vlm 0.7.8</sub> |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Nemotron Dory1.0 4B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**119&nbsp;tok/s**</mark><br><sub>loops</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | —<br><sub>no support</sub> | 9 | 76 |
+| Nemotron 3.5 Lightning 30B‑A3B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**267&nbsp;tok/s**</mark><br><sub>KFlash</sub> | 190 | 190 | 153 | 131 | 110 | 159 | 139 |
+| Nemotron 3.5 Super‑VL 120B‑A12B<br><sub>NVFP4</sub> | 🟩&nbsp;<mark>**94&nbsp;tok/s**</mark><br><sub>KFlash</sub> | 52 | —<br><sub>no support</sub> | 64 | 44 | 61 | 66 | 46 |
 
 ### MacBook Pro (14-inch, 2021) · M1 Pro · 16 GB
 
