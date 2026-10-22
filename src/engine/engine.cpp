@@ -2209,6 +2209,43 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
                          : lili_ ? std::max(start, n - lili_->window())
                                  : n;
   double t_enc = 0, h_commit = 0;  // the last chunk's commit: ms since t0, host clock
+  // NI_VPF: a short cached suffix (an agent turn adds a few rows to a prefix of thousands) runs as decode-side
+  // verify passes instead of the small-prefill path. A pass streams the model's weights once whatever its row
+  // count, and the decode kernels stream them at ~2x the rate of the small-prefill GEMMs (measured on this M5 Pro:
+  // 210 vs 53-115 GB/s): a 16-row pass costs ~90 ms at a 16K prefix, where the prefill path costs ~120 ms plus
+  // ~7.6 ms a row. The rows are a chain, which is exactly what a verify pass verifies (row t at position pos + t,
+  // its state its predecessors' fold), so a cached turn's suffix is the work of a draft cycle's verify.
+  // NI_VPF=0 turns it off; NI_VPF_MAX (default 64) bounds the suffix's rows. Gated on a request that is nothing
+  // but such a suffix: one chunk, no prefix checkpoint inside it, no grammar mask, no image rows. The turn
+  // boundary's checkpoint (which the plain path saves when its chunk reaches it) is saved here between two passes,
+  // with the state folded up to it, so a suffix that holds the boundary is fine.
+  static const bool vpf_on = [] {
+    const char* v = getenv("NI_VPF");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  // NI_VPF=1 forces it on a target the default leaves out (a MoE one): a verify reads the union of its rows'
+  // routed experts, so "one weight pass whatever the rows" does not hold there and only the measured dense case
+  // keeps it on by default
+  static const bool vpf_forced = [] {
+    const char* v = getenv("NI_VPF");
+    return v && v[0] == '1' && v[1] == 0;
+  }();
+  // DFlash2's prompt-capture hook covers the last 2047 rows of the prompt (kCtxKeep), and a wide pass whose first
+  // row lies below it is a fatal: a longer suffix must not enter this path
+  static const int vpf_max = [] {
+    const char* v = getenv("NI_VPF_MAX");
+    return std::min(2047, v ? std::max(0, atoi(v)) : 64);
+  }();
+  // one pass: 16 rows where the target verifies wide (two tiles read the weights once, ~90 ms at 16K either way),
+  // else 8 (encode_verify8's row capacity without a tree); NI_VPF_WIDE=0 keeps it at 8 on a wide target. The target's
+  // tables are never resized from here: NI_KFLASH/DFlash2 size them and read the same count back, and a target that
+  // holds 8 rows keeps the 8-row pass.
+  static const bool vpf_wide = [] {
+    const char* v = getenv("NI_VPF_WIDE");
+    return !(v && v[0] == '0' && v[1] == 0);
+  }();
+  const int vpf_pass = (vpf_wide && q35_ && q35_->verify_chain_ok(16)) ? 16 : 8;
+  int vpf_samp = -1;  // the row of samples() that holds such a suffix's first token
   // The last two chunks' command buffers (committed): at most two chunks run ahead of the host, so a request that
   // arrives during a long prefill is seen within a chunk (encoding is far faster than the GPU: a 20K prompt's chunks
   // would all be queued in milliseconds). The GPU still always has the next chunk queued.
@@ -2228,6 +2265,21 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       if (lili_) lili_->begin_prefill(n, start);
     }
     int T = prefill_chunk_rows(C, p, n, prefill_even_chunks() && !model_->ane_split_on());
+    // NI_VPF: a request whose whole new suffix is a few rows over a long cached prefix (an agent turn) runs the
+    // suffix as verify passes: one pass per up to 16 rows (8 where the target verifies narrow), the sampler of the
+    // last row giving the reply's first token. Its rows are chain rows, exactly what the verify pass verifies, and
+    // its GDN recurrent state is left pending (commit_rows) exactly as a decode cycle leaves the rows it accepted:
+    // the first decoding pass folds them. The drafter's prefill capture hook is armed above and encodes these rows
+    // too, so its ring stays in step (the suffix ends the prompt). The turn boundary's checkpoint is saved between
+    // two passes; a prefix checkpoint inside the suffix or a grammar mask keeps the old path.
+    // A pass costs the same whatever the prefix (the weights are the traffic), so a prefix this short is a case the
+    // prefill path already runs cheaply: 1K cached rows is the floor measured to win at 4K and 16K.
+    // the default covers the case that was measured: a dense target that already verifies 16 rows wide. Anything
+    // else (a MoE target, a target whose tables hold 8 rows) needs NI_VPF=1
+    const bool vpf_default = q35_ && !q35_->config().moe && q35_->verify_chain_ok(16);
+    const bool vpf = vpf_on && q35_ && dfl_ && !lili_ && !spec_ && (vpf_forced || vpf_default) &&
+                     p == start && p >= 1024 && T == n - p && n - p <= vpf_max && pbound <= p && !s.embeds &&
+                     s.mask_rows == 0;
     Checkpoint* snap = nullptr;
     int snap_at = boundary;
     if (pbound > p && pbound < p + T) {
@@ -2238,7 +2290,7 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
       } else {
         T = pbound - p;
       }
-    } else if (boundary > p && boundary < p + T) {
+    } else if (!vpf && boundary > p && boundary < p + T) {
       // NI_SHORTPF captures the checkpoint inside the pass; a chunk the NI_ANE split would run is cut at
       // the boundary instead (the split's two-half wavefront does not capture mid-chunk state).
       if (in_pass && !model_->ane_splits(T)) snap = victim();
@@ -2246,15 +2298,38 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
     // NI_ANE=1: a chunk that runs the GPU + Neural Engine FFN split saves the recurrent state and
     // is waited for, so that it can run again on the GPU alone if the split fails.
-    const bool split = !snap && model_->ane_splits(T);
+    const bool split = !vpf && !snap && model_->ane_splits(T);
     if (split) {
       if (!ane_ck_) ane_ck_ = std::make_unique<Checkpoint>(model_->new_checkpoint());
       model_->save(*e, s, *ane_ck_, p);
     }
-    model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? snap_at - p : 0);
+    if (vpf) {
+      int q = p;
+      // the suffix's rows [q, upto) as verify passes: 16 rows a pass where the target is wide, else 8
+      auto vpf_rows = [&](int upto) {
+        while (q < upto) {
+          const int left = upto - q;
+          const int R = (vpf_pass == 16 && left >= 16) ? 16 : std::min(8, left);
+          q35_->encode_verify_chain(*e, s, q, R, sp);
+          q35_->commit_rows(s, R);
+          vpf_samp = R - 1;  // the last pass's last row: the token after the prompt's last row
+          q += R;
+        }
+      };
+      // the turn boundary inside the suffix: its checkpoint is the state after the rows before it, so fold those
+      // (a pass leaves them pending) and save it, exactly as the plain path does when its chunk reaches p == boundary
+      if (boundary > p && boundary < n) {
+        vpf_rows(boundary);
+        q35_->encode_flush(*e, s);
+        model_->save(*e, s, *victim(), boundary);
+      }
+      vpf_rows(n);
+    } else {
+      model_->encode_prefill(*e, s, p, T, sp, 0, p + T == n, snap, snap ? snap_at - p : 0);
+    }
     // MTP history: pairs (hidden_i, token_{i+1}) for prompt rows whose next token is known
-    const bool defer = spec_ && mtp_defer && !split && p + T == n;
-    if (spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
+    const bool defer = !vpf && spec_ && mtp_defer && !split && p + T == n;
+    if (!vpf && spec_ && !defer) q35_->encode_mtp_prefill(*e, s, p, std::min(p + T, n - 1) - p, 0);
     if (defer) {
       mtp_e = g.begin();
       q35_->encode_mtp_prefill(*mtp_e, s, p, std::min(p + T, n - 1) - p, 0);
@@ -2319,6 +2394,9 @@ ChatResult Engine::chat(const ChatRequest& r, const std::function<bool(const Cha
     }
   }
   e->wait();
+  // NI_VPF: the short suffix's rows ran as verify passes, whose sampler wrote one token per row; the last row's is
+  // the reply's first token (the small-prefill path samples it in its last chunk's pass instead)
+  if (vpf_samp >= 0) s.tokens()[n] = q35_->samples()[vpf_samp];
   s.embeds = nullptr;
   s.mask_rows = 0;  // (the first token's mask, if any, was the last chunk's)
   const double h_woke = Encoder::host_ms();

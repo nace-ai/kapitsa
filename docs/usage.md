@@ -755,6 +755,9 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_LOG` | `1` | `0` quiet, `1` a line per request with its timings, `2` debug. |
 | `NI_DFLASH_CORE4` | Auto | `1` selects the newer four-row 4-bit drafter core, `0` the earlier core. Auto uses the newer core on Apple10 and the 32-core M1 Max. |
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
+| `NI_VPF` | on for a dense target that verifies 16 rows wide | A cached turn's short new suffix (one chunk of at most `NI_VPF_MAX` rows over a cached prefix of at least 1K rows, no grammar mask, image rows or MTP speculation) runs as verify passes - one pass per 16 rows, 8 where the target verifies narrow - instead of the prefill path's small-T pass, whose GEMMs stream the weights at 53-115 GB/s where a verify pass reaches 210 GB/s. A cached follow-up's time to first token drops 16-27% on the 27B at a 4K to 16K prefix. `1` also takes the path on a target the default leaves out (a MoE model, whose verify reads the union of its rows' experts, or a target whose tables hold 8 rows), `0` restores the prefill path everywhere. |
+| `NI_VPF_MAX` | `64` | The longest cached suffix `NI_VPF` takes, in rows (clamped to 2047, the drafter's prompt-capture window). A verify pass costs a weight pass whatever the row count and the prefill path costs one too, so the two cross near 64 rows. |
+| `NI_VPF_WIDE` | on | `0` keeps `NI_VPF` passes at 8 rows on a target that verifies 16 wide: an experiment knob, not a measured configuration. |
 | `NI_ANE` | on where supported | `0` keeps prefill on the GPU, without the Neural Engine. |
 | `NI_ANE_KEEP_S` | `300` | Seconds after the last prefill chunk (or model load) during which a background evaluation keeps the Neural Engine awake, so a short prompt after a pause skips its 70–120 ms wake. `0` turns it off. |
 | `NI_ANE_KEEP_MS` | `2000` | Period of that keepalive evaluation in milliseconds (floor 100). |

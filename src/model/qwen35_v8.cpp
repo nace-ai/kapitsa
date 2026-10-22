@@ -1166,6 +1166,43 @@ void Qwen35::encode_verify8(Encoder& e, Seq& s, int pos, int R, const SamplingPa
 
 bool Qwen35::verify_tree_ok() const { return v8_tree_ok_c(cfg_); }
 
+// A chain pass (see the header): plain rows verified as a tree's single path. The descriptor is the same for every
+// pass of every request (16 rows of a straight chain), so it is built once and never rewritten: the plan kernel copies
+// it into the verify's own descriptor region, and a pass still on the GPU may read it after the host moved on.
+void Qwen35::encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp) {
+  // The rows' draws: row r samples with step + depth(r), and the sampler of the plain prefill path draws the reply's
+  // first token (the one after position n - 1) with step 0. So a pass's last row's draw is step 0, the same step the
+  // plain path's first-token draw uses: a sampled request then draws from the same uniform (same seed) as the old
+  // path does, and the rows before it draw at steps below 0, which no later draw reuses.
+  const uint32_t step = uint32_t(0) - uint32_t(R - 1);
+  if (R <= 8) {
+    encode_verify(e, s, pos, R, sp, step, /*v8=*/true);
+    return;
+  }
+  if (!verify_chain_ok(R)) fatal("chain verify of %d rows: this model's verify runs %d", R, tree_rows_);
+  Gpu& g = Gpu::get();
+  if (!s.pend_path) s.pend_path = g.alloc(size_t(kf::kPathWords) * 4, "pend_path");
+  if (!chain_tree_) {
+    chain_tree_ = g.alloc(size_t(kf::kWords) * 4, "verify_chain_tree");
+    memset(chain_tree_.ptr(), 0, chain_tree_.size);
+    int32_t* w = chain_tree_.as<int32_t>();
+    const int n = 16;
+    w[kf::kN] = n;
+    w[kf::kNodes] = n;
+    w[kf::kCap] = n;
+    for (int r = 0; r < n; ++r) {
+      w[kf::kPar + r] = r - 1;                      // the root's parent -1, then row r - 1: one straight path
+      w[kf::kDep + r] = r;                          // row r at position pos + r
+      w[kf::kMask + r] = int32_t(~0u >> (31 - r));  // its history: rows 0 .. r
+    }
+    w[kf::kA] = n - 1;  // every row accepted: they are all real tokens
+    for (int i = 0; i < n; ++i) w[kf::kPath + i] = i;
+  }
+  set_verify_tree(&chain_tree_);
+  encode_verify(e, s, pos, R, sp, step, /*v8=*/true);
+  set_verify_tree(nullptr);
+}
+
 void Qwen35::encode_kv_tree_compact(Encoder& e, Seq& s, int pos, const Buffer& tree) {
   const kp::KvTree p{uint32_t(pos), uint32_t(cfg_.hkv), uint32_t(cfg_.head_dim), uint32_t(s.cap)};
   for (int i = 0; i < cfg_.layers; ++i) {

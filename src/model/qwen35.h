@@ -317,6 +317,14 @@ class Qwen35 : public Model {
   };
   void encode_verify_multi(Encoder& e, const std::vector<VerifyGroup>& groups, int split_after = 0);
   void commit_rows(Seq& s, int n) { s.n_pend = n; }
+  // A chain pass: plain rows [pos, pos + R) verified as the verify's rows (row t at position pos + t, its state its
+  // predecessors' fold), for a cached turn's pending suffix. R <= 8 is the 8-row verify with no tree; R = 16 a wide
+  // verify over a chain tree descriptor (a target of verify_wide_ok with set_tree_rows(16)). Every row is a real
+  // token, so commit_rows(s, R) after each pass folds them all; a pass streams the weights once, the point of it.
+  void encode_verify_chain(Encoder& e, Seq& s, int pos, int R, const SamplingParams& sp);
+  bool verify_chain_ok(int rows) const {
+    return rows <= 8 || (rows == 16 && verify_wide_ok() && tree_rows_ >= 16);
+  }
   // Folds pending rows into the recurrent state (before plain decode/prefill or a checkpoint).
   virtual void encode_flush(Encoder& e, Seq& s);
   // MTP history for prompt rows [pos0, pos0 + R) using the trunk hidden states of the last
@@ -639,6 +647,9 @@ class Qwen35 : public Model {
   int tree_rows_ = 8;
   int v8w_R_ = 0, v8w_region_ = 0, v8w_n_ = 0, v8w_host_nt_ = -1;
   Buffer v8w_desc_, v8w_args_;
+  // the chain tree descriptor of encode_verify_chain (a single path of 16 rows, built once: the passes of a request
+  // share it and the plan kernel copies it into its own region, so it is never rewritten while a pass may still read it)
+  Buffer chain_tree_;
   std::deque<Tensor> owned_;
   std::vector<Buffer> owned_bufs_;
 
