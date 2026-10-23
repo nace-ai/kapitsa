@@ -95,7 +95,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
