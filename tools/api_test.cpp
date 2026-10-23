@@ -1067,6 +1067,93 @@ void reasoning_memory(const TmplModel& m, const std::string& tag) {
         tag + "reasoning memory: a turn the server did not write gets no reasoning");
 }
 
+// A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
+// minimal template with their argument line, so CI runs it).
+void float_arguments_text() {
+  struct Form { const char* name; const char* tail; };  // the end of the real templates' argument line
+  const Form forms[] = {{"plain", " else args_value | string %}"},
+                        {"no spaces, -%}", " else args_value|string -%}"},
+                        {"line break", "\n   else args_value | string %}"}};
+  for (const Form& f : forms) {
+    const std::string src =
+        "{%- for m in messages %}{%- if m.tool_calls %}{%- for tool_call in m.tool_calls %}"
+        "{%- if tool_call.function is defined %}{%- set tool_call = tool_call.function %}{%- endif %}"
+        "{%- for args_name, args_value in tool_call.arguments|items %}"
+        "{%- set args_value = args_value | tojson | safe if args_value is mapping or (args_value is sequence and args_value is not string)" +
+        std::string(f.tail) + "{{- '<parameter=' + args_name + '>' + args_value + '</parameter>;' }}{%- endfor %}{%- endfor %}{%- endif %}{%- endfor %}";
+    minja::chat_template tmpl(src, "", "");
+    ChatRequest r;
+    r.messages = J(R"([{"role": "assistant", "content": "", "tool_calls": [{"id": "1", "type": "function", "function": {"name": "f",
+      "arguments": {"a": 1.5, "b": 2.0, "c": 0.1, "d": 3, "e": "text", "f": [1.5]}}}]}])");
+    const std::string out = render_chat(tmpl, r, false);
+    check(out == "<parameter=a>1.5</parameter>;<parameter=b>2.0</parameter>;<parameter=c>0.1</parameter>;<parameter=d>3</parameter>;<parameter=e>text</parameter>;<parameter=f>[1.5]</parameter>;",
+          std::string("float arguments: 1.5, 2.0 and 0.1 keep their text through `| string` (") + f.name + ")", out);
+  }
+  // a template that renders arguments some other way is left alone
+  minja::chat_template other("{%- for m in messages %}{%- for t in m.tool_calls %}{{- t.function.arguments | tojson }}{%- endfor %}{%- endfor %}", "", "");
+  ChatRequest r;
+  r.messages = J(R"([{"role": "assistant", "content": "", "tool_calls": [{"id": "1", "type": "function", "function": {"name": "f", "arguments": {"a": 1.5}}}]}])");
+  check(render_chat(other, r, false).find("1.5") != std::string::npos && render_chat(other, r, false).find("1.500000") == std::string::npos, "float arguments: a template without `| string` renders them as before");
+}
+
+// An OpenAI chat client's tool loop (what `kapitsa serve` is mostly driven by): the reply's tool call goes back as
+// arguments text, the server parses it into an object (normalize_messages in src/server/main.cpp) and the template
+// writes it again. The parameter the model wrote must come back as the same text, else the next prompt diverges
+// inside the call and the cache restarts at the last checkpoint.
+void openai_tool_arguments(const TmplModel& m, const std::string& tag) {
+  const ojson tools = J(R"([{"type": "function", "function": {"name": "f", "description": "d", "parameters": {"type": "object",
+    "properties": {"s": {"type": "string"}, "i": {"type": "integer"}, "n": {"type": "number"}, "b": {"type": "boolean"},
+                   "a": {"type": "array"}, "o": {"type": "object"}, "x": {"anyOf": [{"type": "string"}, {"type": "integer"}]}}}}}])");
+  struct Case { const char* name; const char* param; const char* value; };
+  const Case cases[] = {
+      {"string", "s", "src/main.py"},
+      {"multi-line string with a leading space", "s", " def f():\n    return 1\n"},
+      {"integer", "i", "10"},
+      {"negative integer", "i", "-3"},
+      {"number 1.5", "n", "1.5"},
+      {"number 2.0", "n", "2.0"},
+      {"number 0.1", "n", "0.1"},
+      {"untyped value 1.5", "x", "1.5"},
+      // booleans are written as Python text ("True"): the template's own `| string`, as in the reference Jinja, so a model
+      // that writes JSON's `true` gets `True` back, which no server can avoid without changing the template
+      {"boolean True", "b", "True"},
+      {"boolean False", "b", "False"},
+      {"array", "a", "[\"a\", \"b\"]"},
+      {"array of objects", "a", "[{\"k\": \"v\", \"n\": 1}]"},
+      {"object", "o", "{\"path\": \"a.py\", \"line\": 3}"},
+      {"object with non-ASCII text", "o", "{\"t\": \"caf\xc3\xa9\"}"},
+      {"untyped value True", "x", "True"},
+      {"untyped value 42", "x", "42"},
+      {"untyped text", "x", "hello"},
+  };
+  for (const Case& c : cases) {
+    ChatRequest q1;
+    q1.messages = J(R"([{"role": "system", "content": "S"}, {"role": "user", "content": "Q"}])");
+    q1.tools = tools;
+    const std::string p1 = render_chat(*m.tmpl, q1, true);
+    std::vector<int> g1;
+    const std::string gen1 = std::string("Let me call it.\n</think>\n\n<tool_call>\n<function=f>\n<parameter=") + c.param +
+                             ">\n" + c.value + "\n</parameter>\n</function>\n</tool_call>";
+    auto d1 = generate(m, gen1, true, tools, &g1);
+    const ChatResult res = finished(d1, int(g1.size()));
+    ChatRequest q2 = q1;
+    ojson calls = ojson::array();
+    for (auto& tc : res.tool_calls)
+      calls.push_back({{"id", tc.id}, {"type", "function"}, {"function", {{"name", tc.name}, {"arguments", tc.arguments}}}});
+    // as the client sends it back: reasoning too (a client that keeps it), arguments as a string
+    q2.messages.push_back({{"role", "assistant"}, {"content", res.content}, {"reasoning_content", res.reasoning},
+                           {"tool_calls", calls}});
+    q2.messages.push_back({{"role", "tool"}, {"tool_call_id", res.tool_calls.empty() ? "" : res.tool_calls[0].id}, {"content", "ok"}});
+    for (auto& mm : q2.messages)  // normalize_messages
+      if (mm.contains("tool_calls"))
+        for (auto& tc : mm["tool_calls"]) tc["function"]["arguments"] = ojson::parse(tc["function"]["arguments"].get<std::string>());
+    std::string why;
+    const std::string p2 = render_chat(*m.tmpl, q2, true);
+    check(res.tool_calls.size() == 1 && continues(m, p1, g1, p2, &why),
+          tag + "openai: a tool call's argument as the model wrote it comes back as the same text (" + c.name + ")", why);
+  }
+}
+
 void template_checks(const TmplModel& m, const std::string& tag) {
   // a later system message is a system turn in place; images become a note; the template no longer raises
   ChatRequest r;
@@ -1202,6 +1289,7 @@ int main(int argc, char** argv) {
   chat_events();
   clients();
   reasoning_memory_unit();
+  float_arguments_text();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
@@ -1224,6 +1312,7 @@ int main(int argc, char** argv) {
     reasoning_memory(m, tag);
     responses_round_trip(m, tag, false);
     responses_round_trip(m, tag, true);
+    openai_tool_arguments(m, tag);
     template_checks(m, tag);
   }
   printf("%d passed, %d failed\n", passes, fails);

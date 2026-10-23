@@ -1708,6 +1708,21 @@ std::string render_chat(const minja::chat_template& tmpl, const ChatRequest& r, 
     later.push_back(content_text(m.contains("content") ? m["content"] : ojson()));
     m = {{"role", "user"}, {"content", "<tool_response>" + mark + std::to_string(later.size() - 1) + "\x02</tool_response>"}};
   }
+  // minja's `| string` writes a float as std::to_string does (1.5 as 1.500000), where the model wrote 1.5. The Qwen3.5
+  // and Nemotron templates run a scalar argument through it, so a float argument goes in as its text (what the other
+  // Qwen templates' `| tojson` writes) and the next prompt keeps the text of the reply that was generated.
+  const std::string& tsrc = tmpl.source();
+  std::string squeezed;  // the source without whitespace: `else args_value|string -%}` and a line break match too
+  for (char ch : tsrc)
+    if (ch != ' ' && ch != '\n' && ch != '\t' && ch != '\r') squeezed += ch;
+  if (squeezed.find("elseargs_value|string") != std::string::npos)
+    for (ojson& m : in.messages)
+      if (m.is_object() && m.contains("tool_calls") && m["tool_calls"].is_array())
+        for (ojson& tc : m["tool_calls"])
+          if (tc.is_object() && tc.contains("function") && tc["function"].is_object() && tc["function"].contains("arguments") &&
+              tc["function"]["arguments"].is_object())
+            for (auto& kv : tc["function"]["arguments"].items())
+              if (kv.value().is_number_float()) kv.value() = kv.value().dump();
   in.tools = r.tools.empty() ? ojson() : r.tools;
   in.add_generation_prompt = add_generation_prompt;
   in.extra_context = r.template_kwargs;
