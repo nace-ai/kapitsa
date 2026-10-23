@@ -71,6 +71,10 @@ bool Qwen35::ane_finish_chunk() {
   return ok;
 }
 
+void Qwen35::ane_abort(const std::string& why) {
+  if (ane_chunk_ && ane_) ane_->retire(why);
+}
+
 void Qwen35::init_ane() {
   if (cfg_.moe) {
     logi("NI_ANE: the Neural Engine split is for dense FFNs; this MoE model runs its prefill on the GPU");

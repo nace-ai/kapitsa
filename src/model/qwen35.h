@@ -175,6 +175,10 @@ class Qwen35 : public Model {
   // After the command of a chunk encoded with the split has completed: false if the split failed
   // (it is then off for the rest of the process) and the chunk must be rerun. True otherwise.
   bool ane_finish_chunk() override;
+  // Gives up on a chunk's split while its command is still waiting on the Neural Engine (a job that has not reported
+  // inside the waiter's bound): the split is retired, which raises its events to the values handed out so the GPU's
+  // waits pass, and ane_finish_chunk() then reports the failure so the chunk reruns on the GPU alone.
+  void ane_abort(const std::string& why) override;
   ane::FfnSplit* ane_split() { return ane_.get(); }
   // Startup check: layers [0, n) on random input rows, GPU alone vs split. Returns
   // RMS(split - gpu) / RMS(gpu - gpu_part) (worst over the functions checked).
