@@ -286,6 +286,7 @@ screen too), otherwise to stderr; Ctrl+C stops it.
 | `--disk-cache SIZE` | `auto` | The SSD prefix cache: conversations kept on the SSD, also across restarts ([SSD prefix cache](#ssd-prefix-cache)). `auto`: a quarter of the free space beyond 10 GiB, at most 32 GiB; a size (`16G`, `512M`) caps it within that; `0` turns it off. |
 | `--loops N` | `2` | Dory: how many times its shared block runs per token, 1-4 ([thinking depth](#dory-thinking-depth)); requests may choose their own. |
 | `--loop-kv MODE` | `last-loop` | Dory: the shared block's KV cache, `last-loop` (one per layer) or `per-loop` (one per loop, more memory). |
+| `--timing WHAT` | `both` | What the request log and the chat page show of the wait before the first token: `ttft` (the time to the first token), `prefill` (prompt tokens read per second) or `both`. The rate counts only the prompt tokens that were not served from the conversation's cache, over the engine's own prefill time: a follow-up that adds 80 tokens to a cached 20K prompt shows its 80 tokens' rate, and the chat page says "uncached". The API reports the time as `usage.kapitsa.prefill_ms` (OpenAI chat completions), so a client's rate is `(prompt_tokens - cached_tokens) / prefill_ms`. |
 | `--image-max-pixels N` | `1200000` (Bolt and Super-VL `1400000`) | Larger images are resized to about N pixels; `0` = the model's own limit ([Images](#images)). |
 | `--verbose` | off | In a terminal, show the engine's log on screen too. |
 | `--yes` | off | In a terminal without `--model`, start the best model for this Mac instead of asking ([Which model](#which-model)). |
@@ -702,7 +703,7 @@ for 15 seconds (5 minutes at most, 2 for `--quick`), then measures:
 | --- | --- |
 | Writing | A 512-token coding answer, at temperature 0.6 (Flint at 1.0, its model card's; the result records which) and greedy, 5 runs each (3 with `--quick`), median; the rate over the middle of the stream |
 | Reading | A cold prompt of about 4K and 16K tokens (the 4K one with `--quick`): prompt tokens per second to the first token |
-| Follow-up | Three new messages in that conversation, 1 s apart: the median time to the first token |
+| Follow-up | Three new messages in that conversation, 1 s apart: the median time to the first token, and the rate the new (uncached) part of the prompt was read at (`followup_suffix_tps` in the result's JSON, additive: older results lack it) |
 | Peak memory | The server's `phys_footprint_peak`, what macOS's `footprint` shows (lower in a quick run, which holds no 16K conversation) |
 | Tool calls | Streamed and whole replies with two tools, thinking off and on, and a round trip |
 

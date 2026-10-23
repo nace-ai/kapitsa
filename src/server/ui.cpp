@@ -545,6 +545,7 @@ void card(std::vector<std::string>& o, const std::vector<std::string>& rows, int
 std::atomic<bool> g_serve_ui{false};
 std::mutex g_req_mu;
 bool g_req_header = false;
+bool g_show_first = true, g_show_read = true;  // --timing
 
 }  // namespace
 
@@ -734,9 +735,9 @@ int images_in(const ojson& messages) {
 
 // The request lines' columns
 struct Cols {
-  bool time;
+  bool time, first, read;  // first, read: the time to the first token and the prefill tok/s (--timing); read needs a wide terminal
 };
-Cols cols_now() { return Cols{columns() >= 76}; }
+Cols cols_now() { return Cols{columns() >= 76, g_show_first, g_show_read && (columns() >= 98 || !g_show_first)}; }
 
 void request_header() {  // once, above the first request (g_req_mu)
   if (g_req_header) return;
@@ -744,10 +745,13 @@ void request_header() {  // once, above the first request (g_req_mu)
   const Cols c = cols_now();
   std::string h = "  ";
   if (c.time) h += left("time", 8) + "  ";
-  h += left("client", 9) + "  " + right("prompt", 6) + "  " + right("cache", 5) + "  " + right("first", 6) + "  " +
-       right("out", 5) + "  " + right("tok/s", 5) + "  " + right("step", 4) + "  finish";
+  h += left("client", 9) + "  " + right("prompt", 6) + "  " + right("cache", 5) + "  ";
+  if (c.first) h += right("first", 6) + "  ";
+  if (c.read) h += right("read/s", 6) + "  ";
+  h += right("out", 5) + "  " + right("tok/s", 5) + "  " + right("step", 4) + "  finish";
   line(section("Requests"));
   line(dim(h));
+  if (c.read) line(dim("  read/s: prompt tokens read per second of prefill, those not cached" + std::string(c.first ? " (first: time to first token)" : "")));
 }
 
 // ---- the dashboard: while requests are written, a strip under the request lines. The newest request as a beam
@@ -924,8 +928,12 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   strftime(at, sizeof at, "%H:%M:%S", localtime(&now));
   const double first = m->first.load();
   char b[32];
-  std::string ttft = "–", tps = "–", cached = "–", step = "–";
+  std::string ttft = "–", tps = "–", cached = "–", step = "–", pf = "–";
   if (first > 0) snprintf(b, sizeof b, "%.2fs", (first - m->t0) / 1000), ttft = b;
+  // prefill tok/s: the prompt tokens read (not the cached ones) over the time it took
+  if (const int fresh = r.prompt_tokens - r.cached_tokens; fresh > 0 && r.prefill_ms > 0 && r.finish_reason != "cancelled" &&
+                                                           r.finish_reason != "error")
+    snprintf(b, sizeof b, "%.0f", fresh / (r.prefill_ms / 1000)), pf = b;
   if (r.completion_tokens > 1 && r.decode_ms > 0)
     snprintf(b, sizeof b, "%.0f", (r.completion_tokens - 1) / (r.decode_ms / 1000)), tps = b;
   if (r.prompt_tokens > 0) snprintf(b, sizeof b, "%.0f%%", 100.0 * r.cached_tokens / r.prompt_tokens), cached = b;
@@ -941,11 +949,20 @@ void done(const std::shared_ptr<Meter>& m, const ChatResult& r) {
   std::string l = "  ";
   if (c.time) l += dim(at) + "  ";
   l += left(clip(m->client.empty() ? dim("–") : m->client, 9), 9) + "  " +
-       right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) + "  " + right(cached, 5) + "  " + right(ttft, 6) + "  " +
-       right(count(r.completion_tokens), 5) + "  " + right(tps, 5) + "  " + right(step, 4) + "  " + fin;
+       right(r.prompt_tokens ? count(r.prompt_tokens) : "–", 6) + "  " + right(cached, 5) + "  ";
+  if (c.first) l += right(ttft, 6) + "  ";
+  if (c.read) l += right(pf, 6) + "  ";
+  l += right(count(r.completion_tokens), 5) + "  " + right(tps, 5) + "  " + right(step, 4) + "  " + fin;
   std::lock_guard<std::mutex> lk(g_req_mu);
   request_header();
   line(clip(l, columns() - 1));
+}
+
+bool set_timing(const std::string& mode) {
+  if (mode != "ttft" && mode != "prefill" && mode != "both") return false;
+  g_show_first = mode != "prefill";
+  g_show_read = mode != "ttft";
+  return true;
 }
 
 }  // namespace ni::ui

@@ -121,6 +121,7 @@ dialog .btn{justify-self:end}
 </dialog>
 <script>
 "use strict";
+const TIMING = "__TIMING__";  // kapitsa serve --timing: ttft, prefill or both; the server fills it in
 const $ = (id) => document.getElementById(id);
 const log = $("log"), scroller = $("scroll"), input = $("input"), send = $("send"), stop = $("stop");
 const store = { get(k, d) { try { const v = localStorage.getItem("kapitsa." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -217,7 +218,8 @@ function statsText(s) {
   const p = [];
   if (s.tokens) p.push(s.tokens + " tokens");
   if (s.tps) p.push(s.tps.toFixed(1) + " tok/s");
-  if (s.ttft != null) p.push(s.ttft.toFixed(2) + " s to first token");
+  if (s.ttft != null && TIMING !== "prefill") p.push(s.ttft.toFixed(2) + " s to first token");
+  if (s.prefillTps && TIMING !== "ttft") p.push(Math.round(s.prefillTps).toLocaleString() + " tok/s prefill" + (s.cached ? " on the " + s.fresh + " uncached prompt tokens" : ""));
   if (s.cached) p.push(s.cached + " prompt tokens cached");
   if (s.stopped) p.push("stopped");
   return p.join(" · ");
@@ -446,6 +448,9 @@ async function ask() {
             m.stats.tokens = n;
             if (n > 1 && secs > 0) m.stats.tps = (n - 1) / secs;
             m.stats.cached = c.usage.prompt_tokens_details && c.usage.prompt_tokens_details.cached_tokens;
+            // prefill tok/s: the prompt tokens the engine read (not the cached ones) over the time it took (its own clock)
+            const ms = c.usage.kapitsa && c.usage.kapitsa.prefill_ms, fresh = c.usage.prompt_tokens - (m.stats.cached || 0);
+            if (ms > 0 && fresh > 0) { m.stats.prefillTps = fresh / (ms / 1000); m.stats.fresh = fresh; }
           }
         }
         if (!frame) frame = requestAnimationFrame(paint);

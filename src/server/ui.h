@@ -57,5 +57,8 @@ std::shared_ptr<Meter> meter(const httplib::Request& req, const ChatRequest& r);
 std::shared_ptr<LiveDecode> live_of(const std::shared_ptr<Meter>& m);
 void token(const std::shared_ptr<Meter>& m);
 void done(const std::shared_ptr<Meter>& m, const ChatResult& r);
+// What the request log shows of the time before the first token (`--timing`): "first" (time to the first token), "read/s"
+// (prefill tokens per second, the uncached prompt tokens only) or both (the default). False when `mode` is none of them.
+bool set_timing(const std::string& mode);
 
 }  // namespace ni::ui

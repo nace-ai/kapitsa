@@ -530,6 +530,9 @@ check(res["protocol"]["sizes"] == [4000] and res["protocol"]["decode_runs"] == 3
       "the quick protocol: 3 + 3 runs, the 4K prompt")
 check(res["results"]["prefill"][0]["prompt_tokens"] == 4133 and len(res["results"]["prefill"][0]["followup_s"]) == 3 and
       res["results"]["tool_calls"] == "pass", "the prompt, the follow-ups and the tool check as the server answered")
+ft = res["results"]["prefill"][0]
+check(ft.get("followup_suffix_tps", 0) > 0 and ft["followup_suffix_tps"] != ft["tps"],
+      "the follow-ups' prefill tok/s counts the uncached suffix only (additive field)", str(ft))
 hw = run(["sysctl", "-n", "hw.model"]).stdout.strip()
 check(res["mac"]["identifier"] == hw and res["mac"]["memory_gb"] > 0 and res["mac"]["chip"].startswith("Apple"), "this Mac")
 try:

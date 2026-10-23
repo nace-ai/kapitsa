@@ -552,7 +552,10 @@ void print_summary(const ojson& r, const std::string& path) {
     const std::string k = std::to_string(p["size"].get<int>() / 1000) + "K", ph = "prefill_" + std::to_string(p["size"].get<int>());
     if (p["tps"].is_number()) reading += (reading.empty() ? "" : dot) + bold(fmt_tps(p["tps"], true)) + mark(ph) + dim("  " + k);
     if (p["followup_median_s"].is_number())
-      follow += (follow.empty() ? "" : dot) + bold(fmt_secs(p["followup_median_s"])) + mark(ph) + dim("  at " + k);
+      follow += (follow.empty() ? "" : dot) + bold(fmt_secs(p["followup_median_s"])) + mark(ph) + dim("  at " + k) +
+                (p.contains("followup_suffix_tps") && p["followup_suffix_tps"].is_number()
+                     ? dim(" (new tokens " + fmt_tps(p["followup_suffix_tps"].get<double>(), true) + ")")
+                     : std::string());
   }
   if (!reading.empty()) row("Reading", reading);
   if (!follow.empty()) row("Follow-up", follow);
@@ -982,12 +985,19 @@ int run(const Options& o) {
         snprintf(d, sizeof d, "%s", p["invalid"].empty() ? "no answer" : p["invalid"][0].get<std::string>().c_str());
       phase_line("Reading " + k, p["prefill_tps"].is_number() ? fmt_tps(p["prefill_tps"], true) : "–", d, ok);
       const ojson& c = p.contains("cached") ? p["cached"] : ojson::object();
-      if (c.contains("median_ttft_s"))
-        phase_line("Follow-up at " + k, c["median_ttft_s"].is_number() ? fmt_secs(c["median_ttft_s"]) : "–",
-                   "median of " + std::to_string(c["samples"].size()) + " turns", c["invalid"].empty());
+      if (c.contains("median_ttft_s")) {
+        // time to first token, and the rate the new part of the prompt (not the cached prefix) was read at
+        std::string d = "median of " + std::to_string(c["samples"].size()) + " turns";
+        if (c["median_suffix_prefill_tps"].is_number())
+          d += "; the new tokens read at " + fmt_tps(c["median_suffix_prefill_tps"].get<double>(), true) + " (cache hit, uncached part only)";
+        phase_line("Follow-up at " + k, c["median_ttft_s"].is_number() ? fmt_secs(c["median_ttft_s"]) : "–", d, c["invalid"].empty());
+      }
       say("prefill " + std::to_string(size) + ": " + (p["prompt_tokens"].is_number() ? std::to_string(p["prompt_tokens"].get<int>()) : "NA") +
           " tok, " + (p["prefill_tps"].is_number() ? std::to_string(std::lround(p["prefill_tps"].get<double>())) : "NA") +
           " tok/s; cached TTFT median " + (c.contains("median_ttft_s") && c["median_ttft_s"].is_number() ? fmt_secs(c["median_ttft_s"]) : "NA") +
+          (c.contains("median_suffix_prefill_tps") && c["median_suffix_prefill_tps"].is_number()
+               ? " (" + std::to_string(std::lround(c["median_suffix_prefill_tps"].get<double>())) + " tok/s on the uncached suffix)"
+               : std::string()) +
           (p["invalid"].empty() ? "" : " INVALID " + p["invalid"].dump()));
     }
     {

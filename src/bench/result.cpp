@@ -185,12 +185,15 @@ ojson make_result(const RunInputs& in) {
       if (cached.contains("samples"))
         for (const auto& s : cached["samples"])
           if (is_num(s, "ttft_s")) turns.push_back(py_round(s["ttft_s"], 4));
-      prefill.push_back({{"size", p["target"]},
-                         {"prompt_tokens", is_num(p, "prompt_tokens") ? p["prompt_tokens"] : ojson(nullptr)},
-                         {"ttft_s", is_num(p, "ttft_s") ? ojson(py_round(p["ttft_s"], 4)) : ojson(nullptr)},
-                         {"tps", is_num(p, "prefill_tps") ? ojson(py_round(p["prefill_tps"], 1)) : ojson(nullptr)},
-                         {"followup_s", turns},
-                         {"followup_median_s", is_num(cached, "median_ttft_s") ? cached["median_ttft_s"] : ojson(nullptr)}});
+      ojson entry = {{"size", p["target"]},
+                     {"prompt_tokens", is_num(p, "prompt_tokens") ? p["prompt_tokens"] : ojson(nullptr)},
+                     {"ttft_s", is_num(p, "ttft_s") ? ojson(py_round(p["ttft_s"], 4)) : ojson(nullptr)},
+                     {"tps", is_num(p, "prefill_tps") ? ojson(py_round(p["prefill_tps"], 1)) : ojson(nullptr)},
+                     {"followup_s", turns},
+                     {"followup_median_s", is_num(cached, "median_ttft_s") ? cached["median_ttft_s"] : ojson(nullptr)}};
+      // additive: the rate the follow-ups' uncached suffix was read at (absent from results made before it)
+      if (is_num(cached, "median_suffix_prefill_tps")) entry["followup_suffix_tps"] = cached["median_suffix_prefill_tps"];
+      prefill.push_back(entry);
     }
 
   ojson results = {{"decode", raw.contains("decode") ? decode_block(raw["decode"], raw["decode_summary"]) : ojson(nullptr)},

@@ -85,7 +85,8 @@
               "ttft_s": {"type": ["number", "null"], "exclusiveMinimum": 0, "description": "Time to the first token of the cold prompt."},
               "tps": {"type": ["number", "null"], "exclusiveMinimum": 0, "description": "Reading speed: prompt tokens / ttft_s, tok/s."},
               "followup_s": {"type": "array", "maxItems": 10, "items": {"type": "number", "exclusiveMinimum": 0}, "description": "Time to the first token of each follow-up turn."},
-              "followup_median_s": {"type": ["number", "null"], "exclusiveMinimum": 0}
+              "followup_median_s": {"type": ["number", "null"], "exclusiveMinimum": 0},
+              "followup_suffix_tps": {"type": "number", "exclusiveMinimum": 0, "description": "Optional. Median over the follow-ups of the prompt tokens not served from the cache / time to the first token, tok/s."}
             }
           }
         },

@@ -604,9 +604,13 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
     }
     const std::optional<int> c2 = cached_of(r2.usage, r2.timings);
     const int pt2 = int_or(r2.usage, "prompt_tokens", 0);
+    // prefill tok/s of the new suffix only: prompt tokens not served from the cache over the time to the first token
+    const int fresh2 = c2 ? pt2 - *c2 : 0;
     cached["samples"].push_back({{"ttft_s", secs_or_null(r2.ttft)},
                                  {"prompt_tokens", pt2 ? ojson(pt2) : ojson(nullptr)},
                                  {"cached_tokens", c2 ? ojson(*c2) : ojson(nullptr)},
+                                 {"uncached_tokens", c2 && fresh2 > 0 ? ojson(fresh2) : ojson(nullptr)},
+                                 {"suffix_prefill_tps", fresh2 > 0 && r2.ttft > 0 ? ojson(py_round(fresh2 / r2.ttft, 1)) : ojson(nullptr)},
                                  {"finish", r2.finish.empty() ? ojson(nullptr) : ojson(r2.finish)}});
     for (const auto& why : leaks(s, r2)) cached["invalid"].push_back("follow-up: " + why);
     if (c2 && prev_pt && *c2 < 0.5 * prev_pt)
@@ -624,6 +628,10 @@ ojson t_prefill(const Settings& s, int size, Nonces& n, const Progress& progress
   for (const auto& x : cached["samples"])
     if (x["ttft_s"].is_number() && x["ttft_s"].get<double>() > 0) tt.push_back(x["ttft_s"]);
   cached["median_ttft_s"] = tt.empty() ? ojson(nullptr) : ojson(py_round(median(tt), 4));
+  std::vector<double> sp;
+  for (const auto& x : cached["samples"])
+    if (x["suffix_prefill_tps"].is_number()) sp.push_back(x["suffix_prefill_tps"]);
+  cached["median_suffix_prefill_tps"] = sp.empty() ? ojson(nullptr) : ojson(py_round(median(sp), 1));
   res["cached"] = cached;
   res["turn1_finish"] = res["finish"];
   return res;

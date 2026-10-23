@@ -1,5 +1,7 @@
 #include "api/chat_completions.h"
 
+#include <cmath>
+
 namespace ni::api {
 
 ojson chat_usage(const ChatResult& res) {
@@ -8,6 +10,10 @@ ojson chat_usage(const ChatResult& res) {
           {"total_tokens", res.prompt_tokens + res.completion_tokens},
           {"prompt_tokens_details", {{"cached_tokens", res.cached_tokens}}}};
   if (res.loops > 0) u["kapitsa"] = kapitsa_usage(res);  // looped models: the loop count the request ran
+  // the time the engine took to read the uncached part of the prompt (a client's prefill tok/s is
+  // (prompt_tokens - cached_tokens) / prefill_ms; its own time to first token also holds the network and the queue)
+  if (res.prefill_ms > 0 && res.finish_reason != "cancelled" && res.finish_reason != "error")
+    u["kapitsa"]["prefill_ms"] = std::round(res.prefill_ms * 10) / 10;
   return u;
 }
 

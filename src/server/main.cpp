@@ -2,7 +2,7 @@
 // (streaming, reasoning, tools; the translation is in src/api/), and a chat page at /.
 //   kapitsa serve [--model NAME | org/name[@rev] | DIR] [--model-id ID] [--host 127.0.0.1] [--port 8000]
 //                 [--ctx 32768] [--slots N] [--spec N] [--dflash auto|none|<drafter dir>] [--prefill-chunk 2048]
-//                 [--api-key K] [--mem-budget GB] [--image-max-pixels N]
+//                 [--api-key K] [--mem-budget GB] [--image-max-pixels N] [--timing ttft|prefill|both]
 //                 no --model: the best catalog model for this Mac's memory
 //   kapitsa claude|codex|opencode [--model M] [--port P] [--ctx N] [--api-key K] [client args]   (launch.cpp)
 //   kapitsa doctor [--model MODEL]... [--ctx N] [--slots N] [--dflash auto|none|<dir>] [--json]   this Mac, what fits
@@ -332,6 +332,9 @@ static void print_serve_help() {
          "                         \"loops\" or a reasoning effort (low 1, medium 2, high 4)\n"
          "  --loop-kv MODE         Dory: last-loop (default: one cache per layer, the size of a 1-loop model's) or\n"
          "                         per-loop (a cache per loop, as NVIDIA's vLLM commands run it; more memory)\n"
+         "  --timing WHAT          what the request log and the chat page show of the wait before the first token:\n"
+         "                         ttft (time to the first token), prefill (prompt tokens read per second, the\n"
+         "                         uncached ones only: a cache hit counts just its new tokens) or both (default)\n"
          "  --image-max-pixels N   images: resize larger ones to about N pixels (default 1200000, about what\n"
          "                         Anthropic's API sends Claude: a 2880x1800 screenshot becomes 1376x864, 1.2K\n"
          "                         tokens; Nemotron 3.5 Bolt and Super-VL 1400000, which small text needs there;\n"
@@ -628,6 +631,7 @@ static int serve(int argc, char** argv, int first) {
   std::string host = "127.0.0.1", api_key, model;
   int port = 8000;
   bool verbose = false, yes = false, allow_switch = false;
+  std::string timing = "both";  // --timing: what the request log and the chat page show of the time before the first token
   const char* help = "kapitsa serve --help";
   for (int i = first; i < argc; ++i) {
     std::string a = argv[i];
@@ -655,6 +659,10 @@ static int serve(int argc, char** argv, int first) {
     else if (a == "--allow-switch") allow_switch = true;
     else if (a == "--mem-budget") opt.mem_budget_gb = to_gb(a, next(), help);
     else if (a == "--image-max-pixels") opt.image_max_pixels = to_int(a, next(), help);
+    else if (a == "--timing") {
+      timing = next();
+      if (!ui::set_timing(timing)) usage_error("--timing takes ttft, prefill or both, not \"" + timing + "\"", help);
+    }
     else if (a == "--disk-cache") {
       opt.disk_cache = next();
       uint64_t bytes = 0;
@@ -887,14 +895,20 @@ static int serve(int argc, char** argv, int first) {
     res.set_content(R"({"status":"ok"})", "application/json");
   });
   // the chat page: one embedded file, no requests anywhere but this server's API
-  srv.Get("/", [](const httplib::Request&, httplib::Response& res) {
+  srv.Get("/", [timing](const httplib::Request&, httplib::Response& res) {
     res.set_header("Content-Security-Policy",
                    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; "
                    "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
     res.set_header("X-Content-Type-Options", "nosniff");
     res.set_header("Referrer-Policy", "no-referrer");
     res.set_header("Cache-Control", "no-cache");
-    res.set_content(kChatPage, "text/html; charset=utf-8");
+    static const std::string page = [&] {
+      std::string s = kChatPage;
+      const std::string key = "\"__TIMING__\"";
+      if (const size_t at = s.find(key); at != std::string::npos) s.replace(at, key.size(), "\"" + timing + "\"");
+      return s;
+    }();
+    res.set_content(page, "text/html; charset=utf-8");
   });
   srv.Get("/favicon.ico", [](const httplib::Request&, httplib::Response& res) { res.status = 204; });
   srv.Get("/v1/models", [model_mgr](const httplib::Request&, httplib::Response& res) {
