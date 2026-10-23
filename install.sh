@@ -224,7 +224,7 @@ main() {
     case "$1" in
       --prefix) [ $# -ge 2 ] || die "--prefix needs a folder."; prefix=$2; shift 2 ;;
       --prefix=*) prefix=${1#*=}; shift ;;
-      --version) [ $# -ge 2 ] || die "--version needs a release, e.g. 0.2.11."; version=$2; shift 2 ;;
+      --version) [ $# -ge 2 ] || die "--version needs a release, e.g. 0.2.12."; version=$2; shift 2 ;;
       --version=*) version=${1#*=}; shift ;;
       --from-source) mode=source; shift ;;
       --from-file) [ $# -ge 2 ] || die "--from-file needs a tarball."; mode="file"; from_file=$2; shift 2 ;;
