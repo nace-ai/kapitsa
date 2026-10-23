@@ -30,7 +30,7 @@ struct FakeStage : Remote {
   std::vector<int> asked;
   int cap = 0, step = 256;
   bool fail_next = false, gone = false;
-  void pass(const Pass&, const Rows&) override {}
+  bool pass(const Pass&, const Rows&) override { return true; }
   int new_seq(int) override { return 0; }
   int grow(int, int need) override {
     asked.push_back(need);

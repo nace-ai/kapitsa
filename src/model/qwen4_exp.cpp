@@ -208,8 +208,8 @@ void Qwen4Exp::load(const std::string& dir) {
   if (head && hi_ < L && !remote_) fatal("qwen4_exp: layers %d:%d of %d with no Macs for the rest", lo_, hi_, L);
   if (stage && remote_) fatal("qwen4_exp: a stage (layers %d:%d) sends nothing on", lo_, hi_);
   if (c4_.ple_layer >= 0 && (head ? c4_.ple_layer >= hi_ : c4_.ple_layer >= lo_))
-    fatal("qwen4_exp: the n-gram embedding (before layer %d) must be among the first Mac's layers (0:%d)", c4_.ple_layer,
-          head ? hi_ : lo_);
+    fatal("qwen4_exp: the n-gram block is in layer %d, which the first Mac of a split must hold (here it holds 1-%d): a "
+          "stage starts at layer %d or later", c4_.ple_layer + 1, head ? hi_ : lo_, c4_.ple_layer + 2);
   // the trunk and the MTP head (mtp.safetensors, read by load_mtp4): every tensor but the vision tower and the n-gram
   // table (mapped below); with NI_NO_MTP the head is left out too, as plan() leaves it out. A split's share: its own
   // layers (split_holds), the head's tensors on the head only.
@@ -1349,9 +1349,9 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
 
 // ---- a model split across Macs by layers ----
 
-// The head's hop: the GPU ends the pass's command buffer here with a ready signal (committed, so it runs while the host
-// encodes the rest), the remote sends the rows' state on once it is reached and writes the other Macs' result back,
-// and the rest of the pass waits for that
+// The head's hop: the pass so far is committed with a ready signal at its end; the remote waits for it on the CPU, sends
+// the rows' state to the other Macs and writes their result back, and only then is the rest of the pass encoded. The
+// GPU never waits for the network (a command buffer waiting on an event for ~5 s is killed: remote.h).
 void Qwen4Exp::enc_hop(Encoder& e, Remote::Kind k, Seq& s, int pos, int R, const Checkpoint* snap, int snap_row) {
   if (!remote_) return;
   if (s.pend_tree) fatal("a split model verifies no trees");
@@ -1372,10 +1372,8 @@ void Qwen4Exp::enc_hop(Encoder& e, Remote::Kind k, Seq& s, int pos, int R, const
   r.inj_bytes = size_t(c4_.hc) * 4;
   r.event = hop_ev_;
   r.ready = ++hop_v_;
-  r.back = ++hop_v_;
   e.signal_event(hop_ev_, r.ready);
-  remote_->pass(p, r);
-  e.wait_event(hop_ev_, r.back);
+  remote_->pass(p, r);  // (false: the Macs are lost, the rows garbage; the engine ends the request: Model::lost())
 }
 
 void Qwen4Exp::encode_stage(Encoder& e, Seq& s, const Remote::Pass& p, Checkpoint* snap) {

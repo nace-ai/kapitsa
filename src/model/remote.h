@@ -3,12 +3,12 @@
 // that order: what the model encodes into its command buffers here, they run between the same passes there.
 //
 // The contract an implementation keeps:
-//  - Order: every call is applied after every pass() posted before it, even one whose GPU ready value has not been
-//    reached yet (its command buffer not committed, or still running): a host operation (flush, save, restore, rope,
-//    grow, reset, drop_kv) is queued behind the passes, never sent ahead of them.
-//  - Release: a pass's event is always set to its back value, also when the other Macs are lost (then once the GPU has
-//    reached ready, its rows garbage and lost() saying why); otherwise the GPU queue would wait on it for ever.
-//  - pass() and every call but grow() return at once; grow() waits for the answer, and gives -1 once the Macs are lost.
+//  - Order: every call is applied by the other Macs after every pass() made before it.
+//  - pass() waits for the other Macs' result: it returns once their rows are back in the model's buffers, or once
+//    they are lost (false; the rows are then garbage and lost() says why), never later than a timeout. The GPU never
+//    waits for the network: a command buffer that waits on an event for about 5 s is killed with a GPU timeout
+//    (measured on macOS 27.0.1), and a Wi-Fi network can stall that long.
+//  - grow() waits for the answer too (-1 once the Macs are lost); every other call returns at once.
 #pragma once
 #include "metal/gpu.h"
 #include "model/model.h"
@@ -31,17 +31,18 @@ class Remote {
     int snap = -1;          // prefill: a checkpoint (Checkpoint::rid) saved inside the pass after snap_row rows
     int snap_row = 0;
   };
-  // A pass's rows. Once the GPU has set `event` to `ready`, the rows' state before the first remote layer (rows of x,
-  // y and inj, x_bytes, y_bytes and inj_bytes each, from the model's buffers) goes to the other Macs. Their state after
-  // the last layer comes back into the same buffers (a prefill's: x alone, its last block's injection applied), and
-  // the CPU then sets `event` to `back`, which the GPU waits for. pass() never blocks.
+  // A pass's rows: once the GPU has set `event` to `ready` (the work before the hop is done), the rows' state before the
+  // first remote layer (rows of x, y and inj, x_bytes, y_bytes and inj_bytes each, from the model's buffers) goes to the
+  // other Macs; their state after the last layer comes back into the same buffers (a prefill's: x alone, its last
+  // block's injection applied)
   struct Rows {
     Buffer x, y, inj;
     size_t x_bytes = 0, y_bytes = 0, inj_bytes = 0;
     void* event = nullptr;
-    uint64_t ready = 0, back = 0;
+    uint64_t ready = 0;
   };
-  virtual void pass(const Pass& p, const Rows& r) = 0;
+  // Waits for the other Macs' result (see the contract); false once they are lost
+  virtual bool pass(const Pass& p, const Rows& r) = 0;
   // Sequences and checkpoints, by the ids the other Macs know them by
   virtual int new_seq(int limit) = 0;
   // Makes the other Macs' caches of seq hold at least `need` positions; waits for their answer: the positions they

@@ -217,10 +217,11 @@ class Qwen4Exp : public Qwen35 {
   void enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap, int snap_row);
   void enc_verify_layers(Encoder& e, Seq& s, int pos, int R, const Buffer& rows, uint64_t ticket);
   // The head of a split model: layers [hi_, layers) of the pass on the other Macs (remote_), its rows' state out of and
-  // back into x_ / yb_ / injM_ around a GPU wait; nothing without a split
+  // back into x_ / yb_ / injM_; it waits on the CPU (the pass so far committed, the rest encoded once the rows are
+  // back); nothing without a split
   void enc_hop(Encoder& e, Remote::Kind k, Seq& s, int pos, int R, const Checkpoint* snap = nullptr, int snap_row = 0);
   std::shared_ptr<Remote> remote_;
-  void* hop_ev_ = nullptr;  // MTLSharedEvent of the hops: the GPU's ready values, the CPU's back values
+  void* hop_ev_ = nullptr;  // MTLSharedEvent of the hops: the GPU's ready values
   uint64_t hop_v_ = 0;
 
   Qwen4ExpConfig c4_;
