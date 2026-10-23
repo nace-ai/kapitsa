@@ -17,6 +17,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
+| `kapitsa stage --model M [--layers A-B]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
@@ -735,6 +736,54 @@ Lightning's weights are 18.2 GB (its MTP head is not loaded): on 16 GB Macs and 
 refused before the download, on 24 GB at 19.3 GB it starts without its draft model (79K tokens of KV cache in all at
 `--context 64k`), on 32 GB it runs with the draft model (0.7 GB at two slots) and 370K-970K tokens of KV cache, and from
 48 GB two conversations of its full 1M-token context fit.
+
+### Flash-Next across Macs
+
+Several Macs can run one Flash-Next together, each holding a run of its layers in memory: two 48 GB Macs hold the Q2_0
+pack (38.3 GB) with no experts read from the SSD; the 4-bit pack needs three of them, or one 128 GB Mac. The Mac that
+takes the requests, the head, holds the first layers, the embedding, the n-gram table, the final mix, the LM head and
+the MTP head; every other Mac runs `kapitsa stage` and holds a run of the layers after them:
+
+```
+# each other Mac
+kapitsa stage --model ~/models/flash-next-q2
+# this Mac: the head
+kapitsa serve --model ~/models/flash-next-q2 --split other-mac.local
+```
+
+The head asks each stage for its GPU memory budget and its memory bandwidth, and gives each Mac the run of layers that
+fits its memory with the fastest pass (`src/cluster/place.h`: a Mac's layers cost their decode bytes over its bandwidth,
+one Mac after another; a layer's weights count with two conversations' states on a linear-attention layer and two
+32K-token conversations' caches on a full-attention one); the stage loads them then. When the Macs' memory does not hold
+every routed expert of a Q2_0 pack, each Mac keeps its layers' dense weights and a store of 3 layers' experts and streams
+its other experts from its SSD, as one Mac alone does, and the head says so (how fast that runs is not measured). A
+stage started with `--layers A-B` keeps those instead, and every stage of the split must then be started that way.
+Several stages are listed in the order of their layers: `--split a.local,b.local`.
+
+A pass runs the head's layers, goes to the first stage, on through the others and back to the head
+(`src/cluster/pipe.h`): one hand-off per Mac whatever its rows, so a verify of the MTP head's two drafts costs the network
+what one token does. The rows travel as the fp32 state the layers read and write (51 KB a row for Flash-Next; 40 KB on
+a prefill's way back), so the replies are the same bits as the model whole on one Mac: `tools/split_check` compares a
+split model with the whole one pass by pass (prefill chunks, a checkpoint inside one, decode steps, the MTP head's
+drafts, verifies with pending rows, a restore, a reset, caches growing), and `tests/test_split.py` sends the same
+requests to a whole and a split server.
+
+Every Mac needs the model's `config.json` and its trunk's safetensors files, the same ones (the head checks a digest of
+them); a stage needs neither the n-gram table (`ple.safetensors`) nor the MTP head (`mtp.safetensors`). A stage serves
+one head at a time and waits for the next when it leaves. The head waits for each pass's rows on the CPU, not the GPU:
+a command buffer that waits on the GPU for about 5 s is killed with a GPU timeout, and a network can stall that long.
+When a stage stops answering (stopped, asleep or off the network; TCP keepalive notices a silent one in about 11-15 s), the request in flight ends with
+an error that says so, later ones at once, and the head needs a restart. macOS may ask, on a stage's first start,
+whether `kapitsa` may accept incoming connections (the firewall), and on the head whether the terminal may use the
+local network.
+
+What the network adds is a round trip per pass and its rows. Between two processes on one Mac (127.0.0.1; a synthetic
+pack of `tools/fn_synth.py --hidden 2560`, Flash-Next's own width, so its rows are the real 51 KB; M4 Pro, `split_check
+--repeat 15`, medians) the split added 0.46 ms to a decode step (1.47 -> 1.92 ms), 0.37 ms to a verify of 3 rows (2.44
+-> 2.80 ms) and 35.5 ms to a prefill chunk of 2048 rows (167 -> 202 ms: 105 MB out, 84 MB back). Between Macs it is
+not measured yet. Over Wi-Fi the rows also take their time on the air: a decode step's 102 KB and a 3-row verify's
+307 KB add a few milliseconds beside the network's own round trip (3-10 ms on a quiet network, an estimate), and a
+2048-row prefill chunk's 189 MB take seconds, so long prompts read far slower there than over Thunderbolt.
 
 ## Benchmarking this Mac
 

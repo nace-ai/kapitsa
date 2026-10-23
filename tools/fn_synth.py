@@ -7,11 +7,15 @@ kernels of decode need a stream of at least 512: a 1024-input chunk spans at mos
 layers (the 4th full attention), a 2048-token vocabulary. Random weights: the outputs mean nothing, but every kernel of
 a Flash-Next decode, verify and prefill runs on them, and the routed experts can be streamed (NI_EXPERT_STORE, src/
 model/expert_store.h): 85 MB of experts in 32 KiB slots.
-  python3 tools/fn_synth.py <out_dir> [--seed N] [--layers N]
-About 130 MB."""
+  python3 tools/fn_synth.py <out_dir> [--seed N] [--layers N] [--hidden N] [--tokenizer MODEL_DIR]
+About 130 MB. --tokenizer: a Qwen model folder whose tokenizer files (tokenizer.json, tokenizer_config.json,
+chat_template.jinja) the pack takes, with that model's vocabulary and end-of-turn token, so that `kapitsa serve` runs it
+(engine tests: replies are random tokens, the same ones every time); about 330 MB then. --hidden: another width (a
+multiple of 128 from 512; the real model's 2560 gives a split's rows their real size, 51 KB)."""
 import argparse
 import json
 import os
+import shutil
 import struct
 
 import numpy as np
@@ -143,12 +147,24 @@ def primes_after(base, count):
 
 
 def main():
+    global V, D
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--layers", type=int, default=6)
+    ap.add_argument("--tokenizer", default="")
+    ap.add_argument("--hidden", type=int, default=D)
     a = ap.parse_args()
     L = a.layers
+    if a.hidden < 512 or a.hidden % 128:
+        raise SystemExit("--hidden: a multiple of 128, at least 512")
+    D = a.hidden
+    eos = V - 1
+    if a.tokenizer:  # the model's vocabulary and its chat turn's end (<|im_end|>)
+        src = json.load(open(os.path.join(a.tokenizer, "config.json")))
+        V = src.get("text_config", src)["vocab_size"]
+        tok = json.load(open(os.path.join(a.tokenizer, "tokenizer.json")))
+        eos = next(t["id"] for t in tok["added_tokens"] if t["content"] == "<|im_end|>")
     if L < 4:
         raise SystemExit("--layers: at least 4 (the 4th is the attention layer)")
     os.makedirs(a.out, exist_ok=True)
@@ -231,12 +247,15 @@ def main():
         "hc_count": S, "hc_lowrank": RANK, "indexer_n_heads": IXH, "indexer_head_dim": IXD, "indexer_budget": 2048,
         "indexer_compress_ratio": 4, "output_gate_type": "sigmoid",
         "ple_layer_ids": [2], "ngram_size": NGRAM, "heads_per_ngram": PER_NGRAM, "seed": 1234,
-        "ple_conv_kernel_size": 4, "ngram_vocab_size_base": NG_BASE, "eos_token_id": V - 1,
+        "ple_conv_kernel_size": 4, "ngram_vocab_size_base": NG_BASE, "eos_token_id": eos,
         "mtp_num_hidden_layers": 1, "tie_word_embeddings": False,
     }
     cfg = {"architectures": ["Qwen4ExpForConditionalGeneration"], "model_type": "qwen4_exp", "text_config": text,
-           "tie_word_embeddings": False, "eos_token_id": V - 1, "quantization": q, "quantization_config": q}
+           "tie_word_embeddings": False, "eos_token_id": eos, "quantization": q, "quantization_config": q}
     json.dump(cfg, open(os.path.join(a.out, "config.json"), "w"), indent=1)
+    for f in ("tokenizer.json", "tokenizer_config.json", "chat_template.jinja") if a.tokenizer else ():
+        if os.path.exists(os.path.join(a.tokenizer, f)):
+            shutil.copy(os.path.join(a.tokenizer, f), os.path.join(a.out, f))
     size = sum(os.path.getsize(os.path.join(a.out, f)) for f in os.listdir(a.out))
     print(f"{a.out}: {L} layers, {E} experts of {I_E} (Q2_0), hidden {D}, {size / 1e6:.0f} MB")
 
