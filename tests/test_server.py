@@ -496,7 +496,7 @@ def cli_checks(kapitsa):
     # the port is checked before the model loads
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
-    s.listen(1)
+    s.listen(128)  # the port check connects to a listening port; each probe stays queued, unaccepted
     busy = s.getsockname()[1]
     t0 = time.time()
     rc, _, err = run("serve", "--model", folder, "--port", str(busy))
