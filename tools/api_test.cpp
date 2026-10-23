@@ -1094,6 +1094,11 @@ void disk_wait_unit() {
   check(decide(1.0737e9, 17000, 0, 0).wait && !decide(2.2e9, 17000, 0, 0).wait,
         "disk wait: unmeasured write speed: bounded by the queued bytes at the floor speed");
   check(!decide(1e8, 0, 3e6, 3).wait, "disk wait: nothing saved: no wait");
+  // a conversation too large to copy in memory (27B, 16k tokens: 1.5 GB), written before it is replaced: the SSD takes
+  // 4 GB/s (0.4 s) against 33 s of prefill: written; a drive at 0.3 GB/s (5 s) is not, nor is a short conversation
+  check(decide(1.5e9, 16000, 4e6, 0.5).wait, "disk wait: 1.5 GB at 4 GB/s saves 32 s of prefill: written inline");
+  check(!decide(1.5e9, 16000, 0.3e6, 0.5).wait, "disk wait: 1.5 GB at 0.3 GB/s (5 s, over the cap): not written");
+  check(!decide(1.5e9, 100, 4e6, 0.5).wait, "disk wait: 1.5 GB for 100 rows (0.2 s of prefill): not written");
 }
 
 void float_arguments_text() {
