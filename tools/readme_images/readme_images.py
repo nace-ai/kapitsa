@@ -34,7 +34,13 @@ NO_SPEC = "no spec"        # the record's method for plain decoding: shown as no
 KAPITSA_METHOD = "KFlash"  # every Kapitsa cell's label; the models it can't draft for are footnoted (KFLASH_NOTE)
 # KFlash verifies a draft model's guesses; the cells measured without one say so here, so the label stays true
 KFLASH_NOTE = ("KFlash needs a draft model: Flint, Dory, Nano 9B v2 and the 35B-A3B 2-bit have none and decode one token "
-               "per pass; Flash-Next drafts with its MTP head, Nano 4B by prompt lookup")
+               "per pass; Flash-Next drafts with its MTP head, Nano 4B with prompt lookup")
+# the rows KFLASH_NOTE speaks for: the poster carries it only when one of them is shown
+KFLASH_NOTE_ROWS = ("Flint", "Dory", "Nano", "Flash-Next")
+
+
+def kflash_note_needed(rows):
+    return any(r["model"].startswith(KFLASH_NOTE_ROWS) or r["model"].endswith("35B-A3B 2-bit") for r in rows)
 
 
 def cell(row, engine, kap_label=True):
@@ -346,7 +352,9 @@ def poster(data, theme):
     beaten = any(is_num(cell(r, "Kapitsa")[0]) and any(is_num(cell(r, e)[0]) and cell(r, e)[0] > cell(r, "Kapitsa")[0]
                                                          for e in names[1:]) for r in rows)
     tied = any(r.get("tie") for r in rows)  # engines whose decode is level with Kapitsa's, inside the runs' spread
-    footer = list(P["footer"]) + [KFLASH_NOTE]   # KFlash sits under every Kapitsa number: which ones had no drafter
+    footer = list(P["footer"])                # KFlash sits under every Kapitsa number: say which ones had no drafter
+    if kflash_note_needed(rows):
+        footer.append(KFLASH_NOTE)
     footer += (["Blue outline: faster decode than Kapitsa · orange bar: rows where Kapitsa isn't alone at the fastest decode"
                                    + (" · ≈: a decode tie with Kapitsa (the gap is inside the runs' spread)" if tied else "")]
                                   if beaten or tied else [])
