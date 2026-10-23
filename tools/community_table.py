@@ -23,6 +23,19 @@ VARIANT_ORDER = ["4bit", "5bit", "6bit", "8bit", "bf16", "24gb"]
 WARN = "⚠"
 
 
+# The decoding methods by the prefix of a result's decoding_detail (`kapitsa bench`'s decoding_of in src/bench/result.cpp)
+DECODINGS = ("KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain")
+
+
+def decoding(model):
+    """The result's decoding method; for one Kapitsa 0.2.0 to 0.2.14 recorded as unknown (KFlash and prompt lookup,
+    issue #295), the one its decoding_detail starts with, so the table is right without rewriting submitted files"""
+    if model["decoding"] != "unknown":
+        return model["decoding"]
+    detail = model.get("decoding_detail") or ""
+    return next((d for d in DECODINGS if detail.startswith(d)), "unknown")
+
+
 def chip_short(chip):
     return chip[6:] if chip.startswith("Apple ") else chip
 
@@ -175,7 +188,7 @@ def render(results, results_dir, out_path):
                 mem = res.get("peak_memory_gb")
                 cells.append("–" if mem is None else f"{mem:.1f} GB" + (f" + {res['mapped_gb']:.1f} mapped" if res.get("mapped_gb") else ""))
                 cells.append(res["tool_calls"] + mark("tools"))
-                cells.append(r["model"]["decoding"])
+                cells.append(decoding(r["model"]))
                 cells.append(r["kapitsa"]["version"])
                 cells.append(r["mac"]["macos"])
                 fl = short_flags(r)

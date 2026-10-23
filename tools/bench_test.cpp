@@ -113,6 +113,23 @@ int self_test() {
     check(got == d.want, std::string("display of ") + (*d.name ? d.name : "an unknown Mac"), got);
   }
   check(chip_short("Apple M4 Pro") == "M4 Pro", "chip_short");
+  // the decoding method by the server's "engine ready" line (src/engine/engine.cpp's mode), issue #295
+  const std::pair<const char*, const char*> lines[] = {
+      {"KFlash speculative decoding (DFlash2 lattice, tree verify)", "KFlash"},
+      {"KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"},
+      {"prompt-lookup speculative decoding (up to 4 drafts per cycle)", "prompt-lookup"},
+      {"DFlash2 speculative decoding (verify 7 of 7)", "DFlash2"},
+      {"LiLiCorr speculative decoding (7-token blocks)", "LiLiCorr"},
+      {"DSpark speculative decoding (7-token blocks)", "DSpark"},
+      {"MTP speculative decoding depth 2", "MTP"},
+      {"plain decoding", "plain"},
+      {"plain decoding, 2 loops by default (requests take 1-4), last-loop KV", "plain"},
+      {"", "unknown"},
+      {"a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)", "unknown"}};
+  for (const auto& [line, want] : lines) check(decoding_of(line) == want, std::string("the decoding of '") + line + "'", decoding_of(line));
+  check(decoding_has_drafter("KFlash") && decoding_has_drafter("DSpark") && !decoding_has_drafter("prompt-lookup") &&
+            !decoding_has_drafter("MTP") && !decoding_has_drafter("plain") && !decoding_has_drafter("unknown"),
+        "the methods that record a drafter");
   // formats and Python's rounding
   check(py_round(2.675, 2) == 2.67, "round(2.675, 2) is 2.67 (binary value below the tie)");
   check(py_round(0.125, 2) == 0.12, "round(0.125, 2) is 0.12 (tie to even)");

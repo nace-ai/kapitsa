@@ -83,6 +83,27 @@ errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(l
 e = cc.check_result(lightning, cat, macs, versions)[0]
 check(not errs and not any("decoding" in x or "drafter" in x for x in e), "DSpark decoding (Lightning) passes", str(errs + e)[:300])
 refused(lambda r: r["model"].update(decoding="DSpark", drafter=None), "DSpark decoding without its drafter", "drafter")
+# KFlash (the Qwen default since 0.2.0) and prompt lookup (the Nemotron Nano 4B), issue #295
+kflash = copy.deepcopy(full)
+kflash["model"].update(decoding="KFlash", decoding_detail="KFlash speculative decoding (DFlash2 lattice, tree verify)")
+lookup = copy.deepcopy(full)
+lookup["model"].update(name="nemotron-3-nano-4b", title=cat["nemotron-3-nano-4b"]["title"], variant="fp8",
+                       precision=cat["nemotron-3-nano-4b"]["variants"]["fp8"], decoding="prompt-lookup",
+                       decoding_detail="prompt-lookup speculative decoding (up to 4 drafts per cycle)", drafter=None)
+for name, r in (("KFlash decoding with its drafter", kflash), ("prompt-lookup decoding, no drafter", lookup)):
+    errs = [x.message for x in jsonschema.Draft202012Validator(schema).iter_errors(r)]
+    e = cc.check_result(r, cat, macs, versions)[0]
+    check(not errs and not any("decoding" in x or "drafter" in x for x in e), f"{name} passes", str(errs + e)[:300])
+refused(lambda r: r["model"].update(decoding="KFlash", drafter=None), "KFlash decoding without its drafter", "drafter")
+refused(lambda r: r["model"].update(decoding="KFlash (DFlash2)"), "a decoding name outside the schema's", "", schema_only=True)
+for detail, want in (("KFlash speculative decoding (DFlash2 lattice, tree verify)", "KFlash"),
+                     ("KFlash speculative decoding (DFlash2 lattice, tree verify), KFlash (DFlash2)", "KFlash"),
+                     ("prompt-lookup speculative decoding (up to 4 drafts per cycle)", "prompt-lookup"),
+                     ("a server kapitsa bench did not start (KAPITSA_BENCH_SERVER)", "unknown")):
+    got = ct.decoding({"decoding": "unknown", "decoding_detail": detail})
+    check(got == want, f"the table names a result 0.2.0-0.2.14 recorded as unknown by its detail: {want}", got)
+check(ct.decoding({"decoding": "DFlash2", "decoding_detail": "KFlash speculative decoding"}) == "DFlash2",
+      "the table keeps a recorded decoding as it is")
 dory = copy.deepcopy(full)
 dory["model"].update(name="nemotron-labs-dory1.0-4b", title="Nemotron-Labs Dory1.0 4B", variant="nvfp4",
                      precision=cat["nemotron-labs-dory1.0-4b"]["variants"]["nvfp4"])

@@ -844,10 +844,8 @@ int run(const Options& o) {
         }
       }
       mi.decoding_detail = detail;
-      mi.decoding = detail.rfind("DFlash2", 0) == 0 ? "DFlash2" : detail.rfind("LiLiCorr", 0) == 0 ? "LiLiCorr"
-                    : detail.rfind("DSpark", 0) == 0 ? "DSpark" : detail.rfind("MTP", 0) == 0 ? "MTP"
-                    : detail.rfind("plain", 0) == 0 ? "plain" : "unknown";
-      if (mi.decoding == "DFlash2" || mi.decoding == "LiLiCorr" || mi.decoding == "DSpark") mi.drafter = drafter_of(ref);
+      mi.decoding = decoding_of(detail);
+      if (decoding_has_drafter(mi.decoding)) mi.drafter = drafter_of(ref);
       const std::string done = accent(term::kOk) + " Loaded " + what + dim(" in " + term::duration(secs()));
       // beside the logo, each line within the terminal's width: a wrapped line would misplace the logo's last frame
       const int room = std::max(20, term::columns() - ui::kLogoCols - 6);

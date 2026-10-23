@@ -347,6 +347,20 @@ for kind in ("recorded", "older"):
     check("| Writing, T = 1.0 |" in body and "T = 0.6" not in body, f"Flint's card: writing at T = 1.0 ({kind} result)",
           body[:300])
 
+# the conditions line names the decoding: "DFlash2 drafter", "KFlash decoding" (its drafter recorded, issue #295),
+# "prompt-lookup decoding"
+for decoding, detail, drafter, want in (
+        ("DFlash2", "DFlash2 speculative decoding (verify 7 of 7)", "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6", " · DFlash2 drafter · "),
+        ("KFlash", "KFlash speculative decoding (DFlash2 lattice, tree verify)", "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6",
+         " · KFlash decoding · "),
+        ("prompt-lookup", "prompt-lookup speculative decoding (up to 4 drafts per cycle)", None, " · prompt-lookup decoding · ")):
+    r = json.loads(results["full"])
+    r["model"].update(decoding=decoding, decoding_detail=detail, drafter=drafter)
+    with open(os.path.join(tmp, f"dec-{decoding}.json"), "w") as fh:
+        json.dump(r, fh, indent=2)
+    body = json.loads(run([BENCH_TEST, "plan", os.path.join(tmp, f"dec-{decoding}.json"), "tester"]).stdout)["body"]
+    check(want in body, f"the card's conditions line: {want.strip(' ·')}", [l for l in body.splitlines() if l.startswith("Kapitsa ")])
+
 # a stand-in gh: records its calls, answers like GitHub
 gh_dir = tempfile.mkdtemp(prefix="kapitsa-fake-gh-")
 gh_log = os.path.join(gh_dir, "calls.jsonl")

@@ -101,6 +101,14 @@ std::string py_list(const std::vector<std::string>& v) {
 
 // ---------------------------------------------------------------- the result
 
+std::string decoding_of(const std::string& detail) {
+  for (const char* n : {"KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain"})
+    if (detail.rfind(n, 0) == 0) return n;
+  return "unknown";
+}
+
+bool decoding_has_drafter(const std::string& d) { return d == "KFlash" || d == "DFlash2" || d == "LiLiCorr" || d == "DSpark"; }
+
 ojson make_result(const RunInputs& in) {
   const ojson& raw = in.raw;
   ojson flags = ojson::array(), invalid = ojson::array();
@@ -342,7 +350,8 @@ std::string result_markdown(const ojson& r) {
   const std::string src = str_or(c, "power_source");
   std::string cond = "Kapitsa " + str_or(r["kapitsa"], "version") +
                      (r["kapitsa"]["commit"].is_string() ? " (" + r["kapitsa"]["commit"].get<std::string>() + ")" : "") + " · " +
-                     (m["drafter"].is_string() ? str_or(m, "decoding") + " drafter" : str_or(m, "decoding") + " decoding") +
+                     (m["drafter"].is_string() && str_or(m, "decoding") != "KFlash" ? str_or(m, "decoding") + " drafter"
+                                                                                       : str_or(m, "decoding") + " decoding") +
                      " · macOS " + str_or(mac, "macos") + " (" + str_or(mac, "macos_build") + ") · " +
                      (src == "ac" ? "on AC power" : src == "battery" ? "on battery" : src == "ups" ? "on UPS power" : "power source unknown") +
                      (str_or(c, "power_mode") == "high"  ? " · High Power mode"

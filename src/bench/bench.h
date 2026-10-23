@@ -291,7 +291,7 @@ struct ModelInfo {
   std::string quant;       // "MLX affine 4-bit, group 64"
   bool catalog = false;
   std::string repo, revision;
-  std::string decoding;        // "DFlash2", "LiLiCorr", "DSpark", "MTP", "plain" (from the server's "engine ready" line)
+  std::string decoding;        // decoding_of(decoding_detail): "KFlash", "DFlash2", "LiLiCorr", "DSpark", "MTP", ...
   std::string decoding_detail; // that line's decoding part
   std::string drafter;         // "incoai/Qwen3.6-35B-A3B-DFlash2@51ef7b6", "" when none
 };
@@ -317,6 +317,12 @@ struct RunInputs {
   std::vector<Busy> quiet_busy;
   bool external_server = false;  // tests: a server kapitsa bench did not start (its result is invalid)
 };
+// The decoding method a server's "engine ready" line names, by the prefix of its decoding part ("KFlash speculative
+// decoding (DFlash2 lattice, tree verify)" -> "KFlash"): "KFlash", "prompt-lookup", "DFlash2", "LiLiCorr", "DSpark",
+// "MTP", "plain", or "unknown" for a line it does not know (schema.json's enum)
+std::string decoding_of(const std::string& detail);
+// Whether that method runs a drafter model, which the result records ("KFlash", "DFlash2", "LiLiCorr", "DSpark")
+bool decoding_has_drafter(const std::string& decoding);
 // The result file's content (bench/community/schema.json)
 ojson make_result(const RunInputs& in);
 // A model's title as the README writes it: "Qwen3.6 35B-A3B"
