@@ -520,6 +520,8 @@ Engine::Engine(const EngineOptions& o) : opts_(o) {
 
 Engine::~Engine() { save_disk_cache(); }
 
+std::string Engine::lost() const { return model_->lost(); }
+
 bool Engine::streams_experts() const {
   auto* q4 = dynamic_cast<Qwen4Exp*>(model_.get());
   const q20::ExpertStore* st = q4 ? q4->expert_store() : nullptr;

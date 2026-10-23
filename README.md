@@ -53,8 +53,9 @@ kapitsa update                  # update now (it also updates itself)
 ```
 
 <sub>`--model` picks the model and its precision (`35b:6bit`). `kapitsa <command> --help` has the options.
-A Mac that cannot hold a model whole uses another Mac on the network that runs it
-([Several Macs](docs/usage.md#several-macs)); `--private` keeps a server to its own Mac. [Usage guide](docs/usage.md)</sub>
+A Mac that cannot hold a model whole uses another Mac on the network that runs it, and two Macs that would each stream
+Flash-Next pair to hold it in memory between them ([Several Macs](docs/usage.md#several-macs)); `--private` keeps a
+server to its own Mac. [Usage guide](docs/usage.md)</sub>
 
 ## Benchmarks
 

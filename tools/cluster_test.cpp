@@ -112,12 +112,16 @@ void json_checks() {
   m.budget_gb = 491.5;
   m.free_gb = 380.25;
   m.routes_to = "";
+  m.since = 1792000000.5;
+  m.stage_port = 9330;
+  m.stage_of = "0123456789abcdef";
   m.extra["layers"] = ojson::array({0, 20});
   const MacInfo r = from_json(ojson::parse(to_json(m).dump()));
   check(r.proto == m.proto && r.id == m.id && r.name == m.name && r.chip == m.chip && r.ram_gb == m.ram_gb &&
             r.budget_gb == m.budget_gb && r.free_gb == m.free_gb && r.model == m.model && r.whole == m.whole &&
             r.tok_s == m.tok_s && r.version == m.version && r.port == m.port && r.host == m.host &&
-            r.routes_to == m.routes_to && r.rtt_ms == m.rtt_ms && r.link == m.link,
+            r.routes_to == m.routes_to && r.since == m.since && r.stage_port == m.stage_port &&
+            r.stage_of == m.stage_of && r.rtt_ms == m.rtt_ms && r.link == m.link,
         "json: every field read back", to_json(r).dump());
   check(r.extra == m.extra && to_json(r).contains("layers"), "json: fields this protocol does not name kept",
         r.extra.dump());
@@ -143,7 +147,8 @@ void json_checks() {
   const auto keys = to_json(MacInfo{});
   std::string names;
   for (const auto& [k, v] : keys.items()) names += k + " ";
-  check(names == "proto id name chip ram_gb budget_gb free_gb model whole tok_s version port host routes_to rtt_ms link ",
+  check(names == "proto id name chip ram_gb budget_gb free_gb model whole tok_s version port host routes_to since "
+                 "stage_port stage_of rtt_ms link ",
         "json: the keys, in order", names);
 }
 
@@ -200,6 +205,51 @@ void pick_checks() {
         "model_base, model_variant");
 }
 
+// Two Macs that would each stream a model pair: the later started is the earlier one's stage
+void pair_checks() {
+  const std::string q2 = "qwen3.8-flash-next:q2_0";
+  auto alone = [&](const std::string& name, double since, double rtt) {
+    MacInfo m = server(name, q2, false, rtt, 20);
+    m.since = since;
+    return m;
+  };
+  auto with = [](const std::vector<MacInfo>& peers, const std::string& model) {
+    const auto h = pair_with(peers, model);
+    return h ? h->name : std::string("(none)");
+  };
+  const std::vector<MacInfo> two = {alone("Late", 200, 2), alone("Early", 100, 9)};
+  check(with(two, q2) == "Early", "pair: with the server that started first");
+  check(with(two, "Qwen3.8-Flash-Next:Q2_0") == "Early", "pair: names compared without case");
+  check(with(two, "qwen3.8-flash-next:4bit") == "(none)", "pair: only with the same variant (a split reads the same files)");
+  std::vector<MacInfo> no = {alone("Whole", 1, 1), alone("Proxy", 2, 1), alone("Stage", 3, 1), alone("Far", 4, 40),
+                             alone("Silent", 5, -1), alone("Future", 6, 1)};
+  no[0].whole = true;
+  no[1].routes_to = "Studio";
+  no[2].stage_port = 9330, no[2].stage_of = "Early-id";
+  no[5].proto = 2;
+  check(with(no, q2) == "(none)", "pair: never with a server that holds the model whole, sends its requests on, is a "
+                                  "stage, is past 15 ms, is silent or speaks another protocol");
+  // a head's stages: those paired with it, nearest first
+  MacInfo a = alone("A", 1, 3), b = alone("B", 2, 1), c = alone("C", 3, 2);
+  a.stage_port = 9331, a.stage_of = "Head-id";
+  b.stage_port = 9332, b.stage_of = "Other-id";
+  c.stage_port = 9333, c.stage_of = "Head-id";
+  const auto st = stages_for({a, b, c}, q2, "Head-id");
+  check(st.size() == 2 && st[0].name == "C" && st[1].name == "A", "pair: a head's stages, nearest first, not another's");
+  check(stages_for({a, c}, "qwen3.8-flash-next:4bit", "Head-id").empty() && stages_for({a, c}, q2, "").empty(),
+        "pair: no stages for another variant or no head");
+  c.rtt_ms = 30;
+  check(stages_for({a, c}, q2, "Head-id").size() == 1, "pair: not a stage past 15 ms");
+  // of two that run it alone, the later gives way (the same second: the larger id)
+  MacInfo me = alone("Me", 300.7, 0.2), first = alone("First", 100, 3), same = alone("Same", 300.2, 3);
+  check(gives_way(me, {first}) && !gives_way(first, {me}), "pair: the later server gives way, the earlier stays");
+  same.id = "aaa", me.id = "zzz";
+  check(gives_way(me, {same}) && !gives_way(same, {me}), "pair: started the same second: the larger id gives way");
+  check(!gives_way(me, {me}), "pair: not to itself");
+  first.rtt_ms = 30;
+  check(!gives_way(me, {first}), "pair: not over a long round trip");
+}
+
 void table_checks() {
   MacInfo here;
   here.name = "Yerbol's MacBook Pro";
@@ -213,12 +263,16 @@ void table_checks() {
   mini.chip = "Apple M4", mini.ram_gb = 16, mini.routes_to = "Studio";
   MacInfo air = server("Air", "qwen3.8-flash-next:q2_0", false, -1, 17);
   air.chip = "Apple M2", air.ram_gb = 24;
+  MacInfo stage = server("Pro", "qwen3.8-flash-next:q2_0", false, 2, 0);
+  stage.stage_port = 9330, stage.routes_to = "Studio";
   check(describe(studio) == "Studio (M3 Ultra, 512 GB)" && link_text(studio) == "Wi-Fi 4 ms" &&
             link_text(mini) == "Ethernet <1 ms" && link_text(mine) == "this Mac" && link_text(air) == "not answering",
         "describe, link_text", describe(studio) + " | " + link_text(studio) + " | " + link_text(mini));
   check(how_it_runs(studio) == "in memory" && how_it_runs(air) == "streams from SSD" && how_it_runs(mini) == "proxy" &&
-            how_it_runs(MacInfo{}).empty(),
+            how_it_runs(stage) == "stage" && how_it_runs(MacInfo{}).empty(),
         "how_it_runs");
+  check(plain(format_table(here, {stage}, 120)[2]).find("stage › Studio") != std::string::npos,
+        "table: a stage, and the Mac it holds layers for", plain(format_table(here, {stage}, 120)[2]));
   const std::vector<std::string> t = format_table(here, {studio, air, mine, mini}, 120);
   std::string all;
   for (const auto& l : t) all += plain(l) + "\n";
@@ -364,6 +418,7 @@ int main(int argc, char** argv) {
   json_checks();
   parse_checks();
   pick_checks();
+  pair_checks();
   table_checks();
   if (live) live_checks();
   printf("%d passed, %d failed\n", passes, fails);

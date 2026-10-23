@@ -30,7 +30,8 @@ bool runs_whole_here(const hub::ModelRef& ref, const EngineOptions& opt, size_t 
 // what the browser sees (cluster::pick_server); while none serves the model, a request gets 503 and says why.
 class Router {
  public:
-  Router(std::shared_ptr<cluster::Browser> browser, std::string model);
+  // head_id: the server whose stage this Mac is (pair.h): requests go there while it answers, whole or not
+  Router(std::shared_ptr<cluster::Browser> browser, std::string model, std::string head_id = "");
   // Where requests go now, if anywhere
   std::optional<cluster::MacInfo> peer() const;
   // The Mac requests went to last (for messages while it is away)
@@ -45,7 +46,7 @@ class Router {
  private:
   void forward(const httplib::Request& req, httplib::Response& res, const Done& done);
   std::shared_ptr<cluster::Browser> browser_;
-  std::string model_;
+  std::string model_, head_id_;
   mutable std::mutex mu_;
   mutable cluster::MacInfo last_;
 };

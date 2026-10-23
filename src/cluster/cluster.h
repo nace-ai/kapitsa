@@ -32,6 +32,10 @@ struct MacInfo {
   int port = 0;
   std::string host;        // where to reach it (IPv4): its address, 127.0.0.1 for a server on this Mac
   std::string routes_to;   // a server that sends its requests to another Mac: that Mac's name ("" otherwise)
+  double since = 0;        // when the server started (Unix seconds): of two that would pair, the later is the stage
+  // a server paired as the stage of another Mac's split (pair_with): its stage's port and that server's id
+  int stage_port = 0;
+  std::string stage_of;
   // measured by the Mac that found it (Browser)
   double rtt_ms = 0;       // median round trip of GET /health; 0 not measured, -1 not answering
   std::string link;        // "this Mac", "Wi-Fi", "Ethernet", "Thunderbolt" or "network"
@@ -64,11 +68,32 @@ std::string model_variant(const std::string& model);
 // else the most precise one (bf16, then 8-bit, 6-bit, ...); among those the lowest round trip, then the fastest.
 std::optional<MacInfo> pick_server(const std::vector<MacInfo>& peers, const std::string& model, bool runs_whole_here);
 
+// Two Macs that would each stream a model's experts from the SSD pair (docs/usage.md, "Several Macs"): one is the head
+// of a split of the model (src/cluster/pipe.h), the other its stage, which sends its own requests to the head. Of two
+// that could, the server that started later becomes the stage. A pass of the split crosses the network once there and
+// back, so a pair is made only over a short round trip: kPairRttMs (a token streamed from the SSD costs tens of ms more
+// than one read from memory; the hop costs about the round trip).
+constexpr double kPairRttMs = 15;
+
+// For a server about to start `model`, which it would stream: the server whose stage it would become. One that runs
+// the same model and variant (a split reads the same files on every Mac) by itself and streamed (not whole, not a
+// proxy, not a stage), answering within max_rtt_ms; the earliest started.
+std::optional<MacInfo> pair_with(const std::vector<MacInfo>& peers, const std::string& model,
+                                 double max_rtt_ms = kPairRttMs);
+
+// For a head (head_id) that runs `model` streamed: the stages paired with it, answering within max_rtt_ms, nearest first
+std::vector<MacInfo> stages_for(const std::vector<MacInfo>& peers, const std::string& model, const std::string& head_id,
+                                double max_rtt_ms = kPairRttMs);
+
+// Whether `me`, a server that runs its model by itself and streamed, gives way to another that does too and started
+// first (the same second: the smaller id), within max_rtt_ms: it then starts again as that one's stage
+bool gives_way(const MacInfo& me, const std::vector<MacInfo>& peers, double max_rtt_ms = kPairRttMs);
+
 // "Studio (M3 Ultra, 512 GB)"
 std::string describe(const MacInfo& m);
 // "Wi-Fi 4 ms", "this Mac", "Ethernet <1 ms", "not answering"
 std::string link_text(const MacInfo& m);
-// How it runs its model: "in memory", "streams from SSD", "proxy" ("" without a model)
+// How it runs its model: "in memory", "streams from SSD", "proxy", "stage" ("" without a model)
 std::string how_it_runs(const MacInfo& m);
 
 // `kapitsa cluster`'s table (term.h styles, plain when not a terminal), at most `width` columns: a header, then the

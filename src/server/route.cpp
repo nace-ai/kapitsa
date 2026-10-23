@@ -102,11 +102,15 @@ struct Forward {
 
 }  // namespace
 
-Router::Router(std::shared_ptr<cluster::Browser> browser, std::string model)
-    : browser_(std::move(browser)), model_(std::move(model)) {}
+Router::Router(std::shared_ptr<cluster::Browser> browser, std::string model, std::string head_id)
+    : browser_(std::move(browser)), model_(std::move(model)), head_id_(std::move(head_id)) {}
 
 std::optional<cluster::MacInfo> Router::peer() const {
-  auto p = cluster::pick_server(browser_->peers(), model_, false);
+  const std::vector<cluster::MacInfo> peers = browser_->peers();
+  std::optional<cluster::MacInfo> p;
+  for (const auto& m : peers)
+    if (!head_id_.empty() && m.id == head_id_ && m.rtt_ms >= 0 && !m.host.empty() && m.port > 0) p = m;
+  if (!p) p = cluster::pick_server(peers, model_, false);
   if (p) {
     std::lock_guard<std::mutex> lk(mu_);
     last_ = *p;

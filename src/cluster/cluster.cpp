@@ -107,14 +107,16 @@ MacInfo decode_txt(const void* txt, size_t len) {
   return m;
 }
 
-static const char* const kKeys[] = {"proto", "id",      "name", "chip",      "ram_gb", "budget_gb", "free_gb", "model",
-                                    "whole", "tok_s",   "version", "port",   "host",   "routes_to", "rtt_ms",  "link"};
+static const char* const kKeys[] = {"proto",   "id",      "name",       "chip",     "ram_gb", "budget_gb", "free_gb",
+                                    "model",   "whole",   "tok_s",      "version",  "port",   "host",      "routes_to",
+                                    "since",   "stage_port", "stage_of", "rtt_ms",   "link"};
 
 ojson to_json(const MacInfo& m) {
   ojson j{{"proto", m.proto},         {"id", m.id},          {"name", m.name},     {"chip", m.chip},
           {"ram_gb", m.ram_gb},       {"budget_gb", m.budget_gb}, {"free_gb", m.free_gb}, {"model", m.model},
           {"whole", m.whole},         {"tok_s", m.tok_s},    {"version", m.version}, {"port", m.port},
-          {"host", m.host},           {"routes_to", m.routes_to}, {"rtt_ms", m.rtt_ms}, {"link", m.link}};
+          {"host", m.host},           {"routes_to", m.routes_to}, {"since", m.since}, {"stage_port", m.stage_port},
+          {"stage_of", m.stage_of},   {"rtt_ms", m.rtt_ms},  {"link", m.link}};
   if (m.extra.is_object())
     for (const auto& [k, v] : m.extra.items())
       if (!j.contains(k)) j[k] = v;
@@ -156,6 +158,12 @@ MacInfo from_json(const ojson& j) {
   integer("port", m.port);
   str("host", m.host);
   str("routes_to", m.routes_to);
+  if (j.contains("since") && j["since"].is_number()) {  // Unix seconds: past kMaxNum
+    const double t = j["since"].get<double>();
+    if (std::isfinite(t) && t >= 0 && t < 1e11) m.since = t;
+  }
+  integer("stage_port", m.stage_port);
+  str("stage_of", m.stage_of);
   num("rtt_ms", m.rtt_ms);
   str("link", m.link);
   for (const auto& [k, v] : j.items())
@@ -208,6 +216,48 @@ std::optional<MacInfo> pick_server(const std::vector<MacInfo>& peers, const std:
   return *best;
 }
 
+namespace {
+
+// Runs `model` (the same variant) by itself and streamed, answering within max_rtt_ms
+bool streams_alone(const MacInfo& p, const std::string& model, double max_rtt_ms) {
+  return p.proto == kProto && !p.whole && p.routes_to.empty() && p.stage_port == 0 && !p.host.empty() && p.port > 0 &&
+         p.rtt_ms >= 0 && p.rtt_ms <= max_rtt_ms && !model.empty() && lower(p.model) == lower(model);
+}
+
+// Started before b: earlier, or the same second with the smaller id
+bool before(const MacInfo& a, const MacInfo& b) {
+  return std::make_tuple(std::floor(a.since), a.id) < std::make_tuple(std::floor(b.since), b.id);
+}
+
+}  // namespace
+
+std::optional<MacInfo> pair_with(const std::vector<MacInfo>& peers, const std::string& model, double max_rtt_ms) {
+  const MacInfo* best = nullptr;
+  for (const auto& p : peers)
+    if (streams_alone(p, model, max_rtt_ms) && (!best || before(p, *best))) best = &p;
+  if (!best) return std::nullopt;
+  return *best;
+}
+
+std::vector<MacInfo> stages_for(const std::vector<MacInfo>& peers, const std::string& model, const std::string& head_id,
+                                double max_rtt_ms) {
+  std::vector<MacInfo> out;
+  for (const auto& p : peers)
+    if (p.proto == kProto && p.stage_port > 0 && !head_id.empty() && p.stage_of == head_id && !p.host.empty() &&
+        p.rtt_ms >= 0 && p.rtt_ms <= max_rtt_ms && lower(p.model) == lower(model))
+      out.push_back(p);
+  std::sort(out.begin(), out.end(), [](const MacInfo& a, const MacInfo& b) {
+    return std::make_tuple(a.rtt_ms, a.id) < std::make_tuple(b.rtt_ms, b.id);
+  });
+  return out;
+}
+
+bool gives_way(const MacInfo& me, const std::vector<MacInfo>& peers, double max_rtt_ms) {
+  for (const auto& p : peers)
+    if (p.id != me.id && streams_alone(p, me.model, max_rtt_ms) && before(p, me)) return true;
+  return false;
+}
+
 std::string describe(const MacInfo& m) {
   std::string s = !m.name.empty() ? m.name : !m.host.empty() ? m.host : "a Mac";
   std::string what = chip_short(m.chip);
@@ -224,6 +274,7 @@ std::string link_text(const MacInfo& m) {
 }
 
 std::string how_it_runs(const MacInfo& m) {
+  if (m.stage_port > 0) return "stage";
   if (!m.routes_to.empty()) return "proxy";
   if (m.model.empty()) return "";
   return m.whole ? "in memory" : "streams from SSD";
@@ -267,7 +318,7 @@ std::vector<std::string> format_table(const MacInfo& here, const std::vector<Mac
     r.chip = chip_ram(m);
     r.model = m.model.empty() ? dim("idle") : m.model;
     r.runs = how_it_runs(m);
-    if (!m.routes_to.empty()) r.runs = "proxy " + std::string(kArrow) + " " + m.routes_to;
+    if (!m.routes_to.empty()) r.runs = r.runs + " " + std::string(kArrow) + " " + m.routes_to;
     else if (r.runs == "streams from SSD") r.runs = warn(r.runs);
     r.tps = m.tok_s > 0 ? fmt0(m.tok_s) : dim("–");
     r.link = m.rtt_ms < 0 ? warn(link_text(m)) : link_text(m);

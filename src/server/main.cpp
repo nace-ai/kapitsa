@@ -35,6 +35,7 @@
 #include "server/cli.h"
 #include "server/model_manager.h"
 #include "server/picker.h"
+#include "server/pair.h"
 #include "server/route.h"
 #include "server/ui.h"
 #include "util/log.h"
@@ -719,9 +720,10 @@ static std::function<cluster::MacInfo()> server_info(int port, size_t budget,
                                                      std::function<void(cluster::MacInfo&)> fill) {
   const std::string id = cluster::new_id();
   const cluster::MacInfo here = cluster::this_mac();
+  const double since = double(std::time(nullptr));
   return [=] {
     cluster::MacInfo m = here;
-    m.id = id, m.version = kVersion, m.port = port, m.host = cluster::lan_address(), m.link.clear();
+    m.id = id, m.version = kVersion, m.port = port, m.host = cluster::lan_address(), m.link.clear(), m.since = since;
     m.budget_gb = m.free_gb = std::round(double(budget) / 1e8) / 10;
     fill(m);
     return m;
@@ -753,17 +755,37 @@ static void print_network(const ui::Network& n) {
 }
 
 // Sends every request to the Mac `route` names (route.h): nothing loads here. Bound, advertised (unless private), then
-// served until a signal stops it; says when that Mac goes away and comes back.
+// served until a signal stops it; says when that Mac goes away and comes back. With `stage`, this Mac is the stage of
+// that Mac's split as well (pair.h): it holds the layers that one gives it, and starts again on its own once that one
+// has been away for 30 s.
 static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster::MacInfo& route, const std::string& key,
                         const std::string& host, int port, const std::string& api_key, const std::string& timing,
-                        bool visible, bool tui, const std::string& log_path, size_t budget) {
-  auto router = std::make_shared<Router>(browser, key);
+                        bool visible, bool tui, const std::string& log_path, size_t budget,
+                        const PairStage* stage = nullptr) {
+  int stage_port = 0;
+  const std::string head_id = stage ? stage->head_id : "";
+  if (stage) {
+    for (int p = cluster::kStagePort; p < cluster::kStagePort + 32 && !stage_port; ++p)
+      if (port_problem("0.0.0.0", p).empty()) stage_port = p;
+    if (!stage_port) return fail("No free port for this Mac's stage (9330-9361).");
+    cluster::StageOptions so;
+    so.model_dir = stage->model_dir;
+    so.port = stage_port;
+    so.name = cluster::this_mac().name;
+    so.mem = stage->mem;
+    so.gbs = stage->gbs;
+    so.chunk = stage->chunk;
+    so.status = [](const std::string& s) { logi("stage: %s", s.c_str()); };
+    std::thread([so] { cluster::run_stage(so); }).detach();
+  }
+  auto router = std::make_shared<Router>(browser, key, head_id);
   router->peer();
-  auto info = server_info(port, budget, [router, route, key](cluster::MacInfo& m) {
+  auto info = server_info(port, budget, [router, route, key, stage_port, head_id](cluster::MacInfo& m) {
     const auto p = router->peer();
     m.model = key;
     m.routes_to = p ? p->name : route.name;
     m.tok_s = p ? p->tok_s : 0;
+    m.stage_port = stage_port, m.stage_of = head_id;
   });
   httplib::Server srv;
   srv.set_payload_max_length(256u << 20);
@@ -779,6 +801,12 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
   const ui::Network net = network_of(visible, port, !api_key.empty(), browser.get());
+  if (stage) {
+    const std::string say = route.name + " runs " + cluster::model_base(key) + " too, from its SSD: this Mac pairs with "
+                            "it as the stage of its split, and the two hold the model in memory between them.";
+    if (tui) ui::note(say);
+    else fprintf(stderr, "%s\n", say.c_str());
+  }
   if (tui) {
     ui::Routed r;
     r.model = route.model, r.mac = route, r.base = base, r.log = log_path, r.net = net;
@@ -793,12 +821,22 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
   }
   fflush(stdout);
   // the Mac's comings and goings, as seen every second
-  std::thread([router, tui] {
+  std::thread([router, tui, head_id] {
     cluster::MacInfo was = router->last();
     bool there = true;
+    int away = 0;  // seconds the head of this stage's split has been away
     for (;;) {
       std::this_thread::sleep_for(std::chrono::seconds(1));
       const auto p = router->peer();
+      away = head_id.empty() || (p && p->id == head_id) ? 0 : away + 1;
+      if (away >= (env_on("NI_CLUSTER_PAIR") ? 5 : 30)) {
+        const std::string say = was.name + " has been away for " + std::to_string(away) +
+                                " s: this server starts again on its own.";
+        logi("cluster: %s", say.c_str());
+        if (tui) ui::warning(say);
+        else fprintf(stderr, "%s\n", say.c_str());
+        restart_server(head_id);
+      }
       if (p && there && p->id == was.id) continue;
       if (!p && !there) continue;
       std::string say;
@@ -820,6 +858,7 @@ static int serve_routed(std::shared_ptr<cluster::Browser> browser, const cluster
 
 static int serve(int argc, char** argv, int first) {
   exit_with_parent();
+  keep_args(argc, argv);
   EngineOptions opt;
   int context_req = 0;  // --context: 0 none (default_context), kContextMax, or tokens
   std::string host, api_key, model;  // host "": every address, 127.0.0.1 with --private
@@ -1001,11 +1040,28 @@ static int serve(int argc, char** argv, int first) {
     if (sp) sp->done();
     route = cluster::pick_server(browser->peers(), model_key(ref), false);
   }
+  // several Macs that would each stream the model pair (pair.h): this server becomes the stage of one that runs it
+  // alone and started first (and sends its own requests there), when the two hold it in memory between them
+  const bool pairing = may_route && split.empty() && !route && pairs_for(ref, opt, budget);
+  const std::string not_with = alone_from();
+  const int stage_chunk = opt.prefill_chunk > 0 ? opt.prefill_chunk : 2048;
+  std::optional<cluster::MacInfo> pair_head;
+  if (pairing) {
+    if (!browser) {
+      browser = std::make_shared<cluster::Browser>();
+      browser->wait(1.5);
+    }
+    std::vector<cluster::MacInfo> peers;
+    for (const auto& p : browser->peers())
+      if (p.id != not_with) peers.push_back(p);
+    pair_head = cluster::pair_with(peers, model_key(ref));
+    if (pair_head && !pair_fits(hub::plan_dir(ref), *pair_head, budget, stage_chunk)) pair_head.reset();
+  }
   const std::string nobody = !browser ? ""
                              : browser->error().empty()
                                  ? " No Mac on this network runs it whole either (kapitsa cluster lists them)."
                                  : " Kapitsa could not look for another Mac that runs it: " + browser->error() + ".";
-  if (!route && split.empty() && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
+  if (!route && !pair_head && split.empty() && ref.kind == hub::ModelRef::kCatalog && !hub::is_current(ref)) {
     // before a long download: the engine's own start check on the model's headers; a model that would not start
     // here is refused, with the one that fits (a split's share is known once its stages answer, after the download)
     if (const std::string dir = hub::plan_dir(ref); !dir.empty()) {
@@ -1060,8 +1116,25 @@ static int serve(int argc, char** argv, int first) {
     for (const auto& n : notes) ui::note(n);
   }
   if (route) return serve_routed(browser, *route, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget);
-  if (tui && visible && !browser) browser = std::make_shared<cluster::Browser>();  // the other Macs, for the ready card
-  if (!tui) browser.reset();
+  if (pair_head) {  // the stage of its split: the model's files here too, the layers it gives loaded when it does
+    try {
+      hub::PullOptions po;
+      if (ui::can_prompt(yes)) po.make_room = ui::make_room;
+      opt.model_dir = hub::ensure(ref, po);
+    } catch (const hub::Stopped& e) {
+      return stopped(e);
+    } catch (const hub::Error& e) {
+      return fail(e.what());
+    }
+    PairStage st;
+    st.model_dir = opt.model_dir, st.head_id = pair_head->id, st.mem = double(budget);
+    st.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
+    st.chunk = prefill_chunk_room(stage_chunk);
+    return serve_routed(browser, *pair_head, model_key(ref), host, port, api_key, timing, visible, tui, log_path, budget,
+                        &st);
+  }
+  if ((tui || pairing) && visible && !browser) browser = std::make_shared<cluster::Browser>();  // the ready card; pairs
+  if (!tui && !pairing) browser.reset();
   try {
     hub::PullOptions po;
     if (ui::can_prompt(yes)) po.make_room = ui::make_room;  // out of disk space: which models to delete, asked
@@ -1170,7 +1243,9 @@ static int serve(int argc, char** argv, int first) {
     const auto eng = model_mgr->current_engine();
     if (!eng) return;
     m.model = model_key(model_mgr->current_ref());
-    m.whole = !eng->streams_experts();
+    // (NI_CLUSTER_PAIR=1, tests: a model this Mac holds whole counts as streamed until it is split, so two servers on
+    // one Mac pair)
+    m.whole = !eng->streams_experts() && (!env_on("NI_CLUSTER_PAIR") || split_now());
     const size_t used = Gpu::get().allocated_bytes();
     m.free_gb = std::round(double(budget > used ? budget - used : 0) / 1e8) / 10;
     m.tok_s = std::round(ui::recent_tok_s() * 10) / 10;
@@ -1459,7 +1534,33 @@ static int serve(int argc, char** argv, int first) {
   std::unique_ptr<cluster::Advertiser> ad;  // visible to Kapitsa on the other Macs while it serves
   if (visible) ad = std::make_unique<cluster::Advertiser>(port, info);
   const ui::Network net = network_of(visible, port, !api_key.empty(), browser.get());
-  browser.reset();  // (it only counted the other Macs)
+  if (pairing) {  // the head's side of pairing (pair.h), and what a second Mac would bring
+    PairHead ph;
+    ph.mgr = model_mgr, ph.browser = browser, ph.me = info, ph.not_with = not_with;
+    ph.head.name = cluster::this_mac().name;
+    ph.head.mem = double(budget);
+    ph.head.gbs = bandwidth_gbs(Gpu::get().name(), Gpu::get().core_count());
+    ph.head.chunk = stage_chunk;
+    ph.head.may_stream = false;  // a pair holds the model in memory, or does not pair
+    ph.say = [tui](const std::string& line, bool warning) {
+      logi("cluster: %s", line.c_str());
+      if (tui && warning) ui::warning(line);
+      else if (tui) ui::ok(line);
+      else fprintf(stderr, "%s\n", line.c_str());
+    };
+    ph.give_way = [] { restart_server(); };
+    watch_pairs(ph);
+    const auto eng = model_mgr->current_engine();
+    if (const int gb = eng && eng->streams_experts() ? pair_ram_gb(opt.model_dir, budget, stage_chunk) : 0; gb > 0) {
+      const std::string tip = ref.name + " streams its experts from this Mac's SSD. A second Mac with " +
+                              std::to_string(gb) + " GB or more that runs `kapitsa serve --model " + model_key(ref) +
+                              "` on this network pairs with this one, and the two then hold it in memory.";
+      if (tui) ui::note(tip);
+      else fprintf(stderr, "%s\n", tip.c_str());
+    }
+  } else {
+    browser.reset();  // (it only counted the other Macs)
+  }
   const std::string shown = host == "0.0.0.0" || host == "::" ? "127.0.0.1" : host;
   const std::string base =
       "http://" + (shown.find(':') != std::string::npos ? "[" + shown + "]" : shown) + ":" + std::to_string(port);
