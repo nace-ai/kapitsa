@@ -360,6 +360,10 @@ class Qwen35 : public Model {
   const QLinear& embed_table() const { return embed_; }
   const std::string& model_dir() const { return dir_; }
   const QLinear& lm_head() const { return lm_head_; }
+  // The trunk layers this process holds, [layer_lo, layer_hi): all of them, except where a model is split across Macs
+  // by layers (Qwen4Exp, src/cluster/pipe.h); a sequence's state and checkpoints cover these layers only
+  int layer_lo() const { return lo_; }
+  int layer_hi() const { return hi_; }
   // Drafter's dynamic verify depth (DFlash2, MoE only): while set, the 8-row verify routes experts only
   // for rows < min(R, rows[0]) (uint read by the GPU); later rows' outputs are garbage and must not be used.
   void set_verify_row_limit(const Buffer* rows) { v8_rlim_ = rows; }
@@ -637,6 +641,10 @@ class Qwen35 : public Model {
 
   std::string dir_;
   std::string prefix_;
+  // the trunk layers held here (layer_lo / layer_hi): load_config sets hi_ to the model's layers unless a subclass set
+  // a range before it (Qwen4Exp's split)
+  int lo_ = 0, hi_ = 0;
+  bool local(int i) const { return i >= lo_ && i < hi_; }
   bool hf_names_ = false;  // official Hugging Face tensor names (model.language_model.*)
   bool hf_norms_ = false;  // zero-centred RMSNorm weights (Hugging Face): read as 1 + w
   Qwen35Config cfg_;

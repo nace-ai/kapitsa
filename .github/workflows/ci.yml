@@ -95,7 +95,7 @@ jobs:
         if: steps.changes.outputs.code == 'true'
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test
+          cmake --build build -j"$(sysctl -n hw.ncpu)" --target kapitsa api_test bench_test update_test prefix_cache_test grammar_test structured_check fn_store_test fn_dflash_test dflash_accept_test tokenizer_test iq_layout_test vision_pixels_test tree_reduce_test remote_test
       - name: Python environment
         if: steps.changes.outputs.code == 'true'
         run: |
@@ -126,6 +126,9 @@ jobs:
       - name: vision_pixels_test
         if: steps.changes.outputs.code == 'true' && !cancelled()
         run: build/vision_pixels_test
+      - name: remote_test
+        if: steps.changes.outputs.code == 'true' && !cancelled()
+        run: build/remote_test
       # tests/test_bench.py is not run here: on a hosted runner (a VM, "Apple M1 (Virtual)") `kapitsa bench` aborts on a
       # hardware field the VM does not report and the Mac name fails the result schema. Run it on a real Mac.
       - name: test_server --cli

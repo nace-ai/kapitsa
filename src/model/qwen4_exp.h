@@ -15,6 +15,7 @@
 #include "model/expert_store.h"
 #include "model/ngram.h"
 #include "model/qwen35.h"
+#include "model/remote.h"
 
 #include <atomic>
 #include <memory>
@@ -49,24 +50,51 @@ struct Qwen4Layer {
 
 class Qwen4Exp : public Qwen35 {
  public:
+  // A model split across Macs by layers (src/cluster/pipe.h): this process holds trunk layers [lo, hi). The head (lo
+  // 0) also holds the embedding, the n-gram block (its layer below hi), the final mix, the LM head and the MTP head,
+  // and `remote` runs layers [hi, layers) on the other Macs inside each pass (Remote); a stage (lo > 0) holds its
+  // layers alone and runs the parts of passes a head sends it (encode_stage). hi -1: every layer from lo.
+  struct Split {
+    int lo = 0, hi = -1;
+    std::shared_ptr<Remote> remote;
+  };
+  // The process's split, for the engine's Qwen4Exp and every plan(): set before either (the server's --split, `kapitsa
+  // stage`); none by default
+  static void set_split(const Split& s);
+  static const Split& split();
   // mem_budget: the GPU memory the model may hold, its KV caches and slots' state set apart (0: the default budget as
   // default_mem_budget(), less a 16K-token cache); a pack with Q2_0 routed experts keeps as many of them in memory
-  // as that leaves room for and streams the rest (NI_EXPERT_STORE=<GB>|all|off sets it)
-  explicit Qwen4Exp(const std::string& model_dir, int prefill_chunk = 2048, size_t mem_budget = 0);
+  // as that leaves room for and streams the rest (NI_EXPERT_STORE=<GB>|all|off sets it). split: this model's, instead
+  // of the process's (tools that hold a whole model beside a split one)
+  explicit Qwen4Exp(const std::string& model_dir, int prefill_chunk = 2048, size_t mem_budget = 0,
+                    const Split* split = nullptr);
   ~Qwen4Exp() override;
   // config.json's (text_config's) model_type is qwen4_exp_text / qwen4_exp
   static bool is_model(const std::string& model_dir);
+  // the process's split's share of the model (split())
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
   const Qwen4ExpConfig& config4() const { return c4_; }
+  std::string lost() const override { return remote_ ? remote_->lost() : ""; }
+
+  // ---- a stage of a split model ----
+  // The stage's part of a pass its head sent: the rows' state before layer layer_lo() is in residual(), block_out()
+  // and injection() (rows of hidden_row_bytes(), hidden * 4 and hc * 4 bytes); layers [layer_lo, layer_hi) run on it
+  // and leave the state after them there (a prefill on the last stage also injects its last block, as the head's own
+  // prefill does). snap: the stage's checkpoint of p.snap, or null.
+  void encode_stage(Encoder& e, Seq& s, const Remote::Pass& p, Checkpoint* snap);
+  Buffer block_out() const { return yb_; }
+  Buffer injection() const { return injM_; }
 
   // ---- memory ----
   std::unique_ptr<Seq> new_seq(int limit, int initial = -1) override;
+  bool reserve(Seq& s, int need) override;
   void drop_kv(Seq& s) override;
   size_t kv_bytes_per_pos() const override;
   void reset(Seq& s) override;
   Checkpoint new_checkpoint() override;
   void save(Encoder& e, const Seq& s, Checkpoint& c, int pos) override;
   void restore(Encoder& e, Seq& s, const Checkpoint& c) override;
+  void set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) override;
   // not on the SSD prefix cache yet: its indexer keys and n-gram window are state Qwen35's layout does not name
   std::string disk_format() const override { return ""; }
   bool copy_prefix(Encoder&, const Seq&, Seq&, int) override { return false; }  // the sparse indexer's keys too: not copied
@@ -181,6 +209,20 @@ class Qwen4Exp : public Qwen35 {
   };
   PleWait ple_rows_for(Seq& s, int pos);
   void ple_after_sample(Encoder& e, Seq& s, int pos);  // the pass samples tokens[pos]: gather its rows when done
+
+  // The trunk layers held here ([lo_, hi_)) of a decode step, a prefill chunk and a verify; the rows' state before
+  // layer lo_ is in x_ (and the previous block's output in yb_ / injM_), after layer hi_ - 1 there too. pw / rows /
+  // ticket: the n-gram rows (the head's)
+  void enc_step_layers(Encoder& e, Seq& s, int pos, const PleWait& pw);
+  void enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap, int snap_row);
+  void enc_verify_layers(Encoder& e, Seq& s, int pos, int R, const Buffer& rows, uint64_t ticket);
+  // The head of a split model: layers [hi_, layers) of the pass on the other Macs (remote_), its rows' state out of and
+  // back into x_ / yb_ / injM_; it waits on the CPU (the pass so far committed, the rest encoded once the rows are
+  // back); nothing without a split
+  void enc_hop(Encoder& e, Remote::Kind k, Seq& s, int pos, int R, const Checkpoint* snap = nullptr, int snap_row = 0);
+  std::shared_ptr<Remote> remote_;
+  void* hop_ev_ = nullptr;  // MTLSharedEvent of the hops: the GPU's ready values
+  uint64_t hop_v_ = 0;
 
   Qwen4ExpConfig c4_;
   int dbg_layers_ = -1;

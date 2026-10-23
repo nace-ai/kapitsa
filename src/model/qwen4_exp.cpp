@@ -81,6 +81,25 @@ bool is_trunk_expert(const std::string& n) {
   return n.find(".mlp.switch_mlp.") != std::string::npos && n.rfind("mtp.", 0) != 0;
 }
 
+// The trunk layer a tensor belongs to ("[language_model.]model.layers.<i>.*"), -1 for the rest (embedding, head,
+// final mix, the MTP head's mtp.layers.*)
+int trunk_layer(const std::string& n) {
+  const size_t at = n.find("model.layers.");
+  return at == std::string::npos ? -1 : atoi(n.c_str() + at + 13);
+}
+
+// Whether a split's share [lo, hi) holds tensor n: its own layers' tensors, and on the head (lo 0) everything that is
+// not another layer's (the embedding, the final mix, the LM head, the MTP head)
+bool split_holds(const std::string& n, int lo, int hi) {
+  const int l = trunk_layer(n);
+  return l >= 0 ? l >= lo && l < hi : lo == 0;
+}
+
+Qwen4Exp::Split& process_split() {
+  static Qwen4Exp::Split s;
+  return s;
+}
+
 // config.json's quantization gives the trunk's routed experts Q2_0 (tools/qwen4_exp_q20.py)
 bool q20_experts_in(const json& root) {
   for (const char* key : {"quantization", "quantization_config"}) {
@@ -107,8 +126,15 @@ bool Qwen4Exp::is_model(const std::string& dir) {
          r["text_config"].value("model_type", std::string()) == "qwen4_exp_text";
 }
 
-Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget)
+void Qwen4Exp::set_split(const Split& s) { process_split() = s; }
+const Qwen4Exp::Split& Qwen4Exp::split() { return process_split(); }
+
+Qwen4Exp::Qwen4Exp(const std::string& dir, int prefill_chunk, size_t mem_budget, const Split* split)
     : Qwen35(dir, prefill_chunk, NoLoad{}), mem_budget_arg_(mem_budget) {
+  const Split& sp = split ? *split : process_split();
+  lo_ = sp.lo;
+  hi_ = sp.hi;  // (-1: load_config's, every layer)
+  remote_ = sp.remote;
   load(dir);
 }
 
@@ -119,6 +145,7 @@ std::unique_ptr<Qwen35> load_qwen(const std::string& dir, int prefill_chunk) {
 
 Qwen4Exp::~Qwen4Exp() {
   if (ple_ev_) CFRelease(ple_ev_);
+  if (hop_ev_) CFRelease(hop_ev_);
 }
 
 const Tensor* Qwen4Exp::norm32(const Tensor* t, float offset) {
@@ -174,9 +201,19 @@ void Qwen4Exp::load(const std::string& dir) {
   if (c4_.ix_dim != 128 || c4_.ix_heads > 8 || c4_.ix_ratio != 4) fatal("qwen4_exp: indexer shape unsupported");
   if (c4_.ple_conv != 4) fatal("qwen4_exp: n-gram conv kernel %d unsupported", c4_.ple_conv);
   if (cfg_.hidden % 128 || cfg_.hidden > 4096) fatal("qwen4_exp: hidden size %d unsupported", cfg_.hidden);
+  // a split across Macs: the head (lo_ 0) sends the rest of every pass to its other Macs, the n-gram block (which reads
+  // the tokens) among its own layers; a stage holds layers after that block
+  const int L = cfg_.layers;
+  const bool head = lo_ == 0, stage = lo_ > 0;
+  if (head && hi_ < L && !remote_) fatal("qwen4_exp: layers %d:%d of %d with no Macs for the rest", lo_, hi_, L);
+  if (stage && remote_) fatal("qwen4_exp: a stage (layers %d:%d) sends nothing on", lo_, hi_);
+  if (c4_.ple_layer >= 0 && (head ? c4_.ple_layer >= hi_ : c4_.ple_layer >= lo_))
+    fatal("qwen4_exp: the n-gram block is in layer %d, which the first Mac of a split must hold (here it holds 1-%d): a "
+          "stage starts at layer %d or later", c4_.ple_layer + 1, head ? hi_ : lo_, c4_.ple_layer + 2);
   // the trunk and the MTP head (mtp.safetensors, read by load_mtp4): every tensor but the vision tower and the n-gram
-  // table (mapped below); with NI_NO_MTP the head is left out too, as plan() leaves it out
-  const bool no_mtp = getenv("NI_NO_MTP") != nullptr;
+  // table (mapped below); with NI_NO_MTP the head is left out too, as plan() leaves it out. A split's share: its own
+  // layers (split_holds), the head's tensors on the head only.
+  const bool no_mtp = getenv("NI_NO_MTP") != nullptr || stage;
   // Q2_0 routed experts go to the expert store (init_store): left unread here (deferred: listed, their bytes in the
   // files), unless NI_EXPERT_STORE=off keeps them as stacked planes
   q20_pack_ = q20_experts_in(root);
@@ -189,23 +226,30 @@ void Qwen4Exp::load(const std::string& dir) {
     defer = [td = defer](const std::string& n) { return is_trunk_expert(n) || (td && td(n)); };
   ws_.open_dir(
       dir,
-      [no_mtp](const std::string& n) {
+      [no_mtp, lo = lo_, hi = hi_](const std::string& n) {
         return n.find("vision_tower") == std::string::npos && n.find("visual.") == std::string::npos &&
-               n.find(".ngram_embedding.") == std::string::npos && !(no_mtp && n.rfind("mtp.", 0) == 0);
+               n.find(".ngram_embedding.") == std::string::npos && !(no_mtp && n.rfind("mtp.", 0) == 0) &&
+               split_holds(n, lo, hi);
       },
       [no_mtp](const std::string& f) { return f != "ple.safetensors" && !(no_mtp && f == "mtp.safetensors"); },
       defer);
-  if (ws_.has("language_model.model.embed_tokens.weight")) prefix_ = "language_model.";
-  else if (ws_.has("model.embed_tokens.weight")) prefix_ = "";
-  else fatal("%s: unrecognized weight naming (expected the MLX qwen4_exp layout)", dir.c_str());
-  embed_ = qlin("model.embed_tokens");
-  lm_head_ = qlin("lm_head");
+  {
+    // the naming from a tensor every share holds: its first layer's input mix
+    const std::string probe = "model.layers." + std::to_string(lo_) + ".attn_hyper_connection.hc_norm.weight";
+    if (ws_.has("language_model." + probe)) prefix_ = "language_model.";
+    else if (ws_.has(probe)) prefix_ = "";
+    else fatal("%s: unrecognized weight naming (expected the MLX qwen4_exp layout)", dir.c_str());
+  }
+  if (head) {
+    embed_ = qlin("model.embed_tokens");
+    lm_head_ = qlin("lm_head");
+  }
   final_norm_ = nullptr;  // the final normalization is the hyper-connection mix
   layers_.assign(size_t(cfg_.layers), Layer{});
   l4_.assign(size_t(cfg_.layers), Qwen4Layer{});
   int lossy = 0;
   auto param = [&](const std::string& n) { return bf16_param(&ws_.get(tname(n)), lossy); };
-  for (int i = 0; i < cfg_.layers; ++i) {
+  for (int i = lo_; i < hi_; ++i) {
     Layer& L = layers_[size_t(i)];
     Qwen4Layer& F = l4_[size_t(i)];
     const std::string p = "model.layers." + std::to_string(i) + ".";
@@ -260,8 +304,8 @@ void Qwen4Exp::load(const std::string& dir) {
       if (cw.shape.size() != 3 || cw.shape[1] != 4 || cw.shape[2] != 1) fatal("%s: conv1d is not [C, 4, 1]", q.c_str());
     }
   }
-  if (c4_.ple_layer >= 0 && !ple_key_) fatal("qwen4_exp: no n-gram embedding at layer %d", c4_.ple_layer);
-  mix_ = load_gr("model.hyper_connection_mixer", false);
+  if (head && c4_.ple_layer >= 0 && !ple_key_) fatal("qwen4_exp: no n-gram embedding at layer %d", c4_.ple_layer);
+  if (head) mix_ = load_gr("model.hyper_connection_mixer", false);
   if (lossy) logi("qwen4_exp: %d parameter values not exactly representable in bf16", lossy);
   for (const QLinear* q : {&embed_, &lm_head_})
     if (*q && !q->dense() && (q->s->dtype != DType::BF16 || q->b->dtype != DType::BF16))
@@ -269,8 +313,8 @@ void Qwen4Exp::load(const std::string& dir) {
   check_shapes();
   check_formats();
 
-  // the n-gram table: ple.safetensors' row shards, mapped (never in GPU memory)
-  if (c4_.ple_layer >= 0) {
+  // the n-gram table: ple.safetensors' row shards, mapped (never in GPU memory); the head's
+  if (head && c4_.ple_layer >= 0) {
     hash_ = NgramHash::make(cfg_.vocab, c4_.seed, 0, c4_.ngram_base, c4_.per_ngram, c4_.ngram, c4_.eos);
     const std::string tp = prefix_ + "model.layers." + std::to_string(c4_.ple_layer) + ".ple.ple_embedding.";
     // the hash constants the checkpoint carries must be the ones computed here
@@ -312,9 +356,13 @@ void Qwen4Exp::load(const std::string& dir) {
     for (const std::string& n : v) Gpu::get().pipeline(n, false);
   }
   ple_ev_ = Gpu::get().new_shared_event();
-  logi("loaded %s: Qwen3.8-Flash-Next, %d layers (%d attention), %.1f GB of weights in %.0f ms; %s; n-gram table %s%s%s",
-       dir.c_str(), cfg_.layers, attn_layers(), ws_.total_bytes() / 1e9, now_ms() - t0, formats_summary().c_str(),
-       table_.ok() ? table_.describe().c_str() : "none", store_ ? "; routed experts: " : "",
+  if (remote_) hop_ev_ = Gpu::get().new_shared_event();
+  char share[96] = "";
+  if (lo_ > 0 || hi_ < L)
+    snprintf(share, sizeof share, " (this Mac: layers %d-%d%s)", lo_ + 1, hi_, remote_ ? ", the rest on other Macs" : "");
+  logi("loaded %s: Qwen3.8-Flash-Next, %d layers (%d attention)%s, %.1f GB of weights in %.0f ms; %s; n-gram table "
+       "%s%s%s", dir.c_str(), cfg_.layers, attn_layers(), share, ws_.total_bytes() / 1e9, now_ms() - t0,
+       formats_summary().c_str(), table_.ok() ? table_.describe().c_str() : "none", store_ ? "; routed experts: " : "",
        store_ ? store_->describe().c_str() : "");
 }
 
@@ -453,9 +501,20 @@ std::unique_ptr<Seq> Qwen4Exp::new_seq(int limit, int initial) {
   s->ixb.assign(size_t(cfg_.layers), Buffer{});
   s->pconv = g.alloc(size_t(kRing) * c4_.hc * cfg_.hidden * 4, "ple_conv_state");
   memset(s->pconv.ptr(), 0, s->pconv.size);
+  if (remote_) s->rid = remote_->new_seq(limit);
   const int cap = initial < 0 ? limit : std::min(initial, limit);
+  if (cap > 0 && remote_ && !remote_reserve(*remote_, *s, cap))
+    fatal("the other Macs of this split have no room for a %d-token conversation%s", cap,
+          remote_->lost().empty() ? "" : (": " + remote_->lost()).c_str());
   if (cap > 0) grow_kv(*s, cap);
   return s;
+}
+
+bool Qwen4Exp::reserve(Seq& s, int need) {
+  // the other Macs' layers first: they hold the same positions of their own caches, grown by their own budgets and
+  // rounding, so what they hold (rcap) is tracked apart from this Mac's cap
+  if (remote_ && !remote_reserve(*remote_, s, need)) return false;
+  return Qwen35::reserve(s, need);
 }
 
 void Qwen4Exp::grow_kv(Seq& s, int cap) {
@@ -465,7 +524,7 @@ void Qwen4Exp::grow_kv(Seq& s, int cap) {
   Gpu& g = Gpu::get();
   const size_t kb = size_t(cap) * c4_.ix_dim * 2, bb = (size_t(cap) / c4_.ix_ratio + 1) * c4_.ix_dim * 4;
   std::vector<std::pair<Buffer*, size_t>> bufs;
-  for (int i = 0; i < cfg_.layers; ++i)
+  for (int i = lo_; i < hi_; ++i)
     if (!cfg_.is_linear[size_t(i)]) {
       bufs.push_back({&s.ixk[size_t(i)], kb});
       bufs.push_back({&s.ixb[size_t(i)], bb});
@@ -496,10 +555,14 @@ void Qwen4Exp::drop_kv(Seq& s) {
     for (Buffer& b : *v) g.release(b);
   g.release(s.mtp_ixk);
   g.release(s.mtp_ixb);
+  if (remote_ && s.rid >= 0) remote_->drop_kv(s.rid);
+  s.rcap = 0;
 }
 
 size_t Qwen4Exp::kv_bytes_per_pos() const {
-  const size_t layers = size_t(attn_layers() + (mtp_loaded_ ? 1 : 0));
+  int att = 0;
+  for (int i = lo_; i < hi_; ++i) att += !cfg_.is_linear[size_t(i)];
+  const size_t layers = size_t(att + (mtp_loaded_ ? 1 : 0));
   return layers * (size_t(2) * cfg_.hkv * cfg_.head_dim * 2 + size_t(c4_.ix_dim) * 2 + size_t(c4_.ix_dim) * 4 / c4_.ix_ratio);
 }
 
@@ -507,22 +570,31 @@ void Qwen4Exp::reset(Seq& s) {
   Qwen35::reset(s);
   if (s.pconv) memset(s.pconv.ptr(), 0, s.pconv.size);
   if (pend_.s == &s) pend_ = Pending{};
+  if (remote_ && s.rid >= 0) remote_->reset(s.rid);
 }
 
 Checkpoint Qwen4Exp::new_checkpoint() {
   Checkpoint c = Qwen35::new_checkpoint();
   c.pconv = Gpu::get().alloc(size_t(kRing) * c4_.hc * cfg_.hidden * 4, "ckpt_ple_conv");
+  if (remote_) c.rid = remote_->new_checkpoint();
   return c;
 }
 
 void Qwen4Exp::save(Encoder& e, const Seq& s, Checkpoint& c, int pos) {
   Qwen35::save(e, s, c, pos);
   enc_copy(e, s.pconv, c.pconv);
+  if (remote_) remote_->save(s.rid, c.rid, pos);
 }
 
 void Qwen4Exp::restore(Encoder& e, Seq& s, const Checkpoint& c) {
   Qwen35::restore(e, s, c);
   enc_copy(e, c.pconv, s.pconv);
+  if (remote_) remote_->restore(s.rid, c.rid);
+}
+
+void Qwen4Exp::set_rope_positions(Seq& s, int n, const std::vector<vision::ImageSpan>& spans) {
+  Qwen35::set_rope_positions(s, n, spans);
+  if (remote_) remote_->rope(s.rid, s.rope_n, s.rope_delta, s.rope_n ? s.rope_pos.as<int32_t>() : nullptr);
 }
 
 // ---- the n-gram rows ----
@@ -602,9 +674,10 @@ void Qwen4Exp::init_store(const std::string& dir) {
   const uint32_t E = uint32_t(cfg_.experts);
   std::vector<std::string> files;
   std::map<std::string, int> fidx;
-  std::vector<q20::LayerSrc> src(size_t(cfg_.layers));
+  // the layers held here (a split's share): the store's layer j is trunk layer lo_ + j
+  std::vector<q20::LayerSrc> src(size_t(hi_ - lo_));
   static const char* const kMat[3] = {"gate", "up", "down"};
-  for (int i = 0; i < cfg_.layers; ++i)
+  for (int i = lo_; i < hi_; ++i)
     for (int m = 0; m < 3; ++m)
       for (int part = 0; part < 2; ++part) {
         const std::string n = tname("model.layers." + std::to_string(i) + ".mlp.switch_mlp." + kMat[m] + "_proj") +
@@ -618,14 +691,14 @@ void Qwen4Exp::init_store(const std::string& dir) {
           fidx[path] = f;
           files.push_back(path);
         }
-        q20::PlaneSrc& p = src[size_t(i)].p[m * 2 + part];
+        q20::PlaneSrc& p = src[size_t(i - lo_)].p[m * 2 + part];
         p.file = f;
         p.off = off;
         p.stride = len / E;
         p.len = uint32_t(len / E);
       }
   const q20::SlotLayout lay = q20::slot_layout(uint32_t(cfg_.hidden), uint32_t(cfg_.moe_I));
-  const size_t all = size_t(cfg_.layers) * E * lay.bytes;
+  const size_t all = size_t(hi_ - lo_) * E * lay.bytes;
   q20::ExpertStore::Options o;
   const char* es = getenv("NI_EXPERT_STORE");
   if (es && !strcmp(es, "all")) {
@@ -712,21 +785,22 @@ q20::Experts Qwen4Exp::q20_fetch(Encoder& e, const Layer& L, const Buffer& ids, 
                                  const std::function<void()>& between) {
   const int li = layer_index(L);
   if (!store_ || li < 0) return Qwen35::q20_fetch(e, L, ids, n, T, between);
-  const int nl = li + 1 < cfg_.layers ? li + 1 : -1;
+  // (the store's layers are this Mac's: trunk layer li is its li - lo_)
+  const int nl = li + 1 < hi_ ? li + 1 - lo_ : -1;
   const bool all = T >= 64 && nl >= 0;
-  store_->begin(e, li, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > 16);
+  store_->begin(e, li - lo_, ids, n, nullptr, 0, all ? nl : -1, all, /*scan=*/T > 16);
   if (between) between();
   store_->end(e);
-  return store_->experts(li);
+  return store_->experts(li - lo_);
 }
 
 q20::Experts Qwen4Exp::q20_rows_fetch(Encoder& e, const Layer& L, int R, const Buffer& idx, bool pred) {
   const int li = layer_index(L);
   if (!store_ || li < 0) return q20_experts(L);
   const uint32_t n = uint32_t(R * cfg_.top_k);
-  store_->begin(e, li, idx, n, pred ? &pidx_ : nullptr, n, pred ? li + 1 : -1, false, false, /*warm=*/true);
+  store_->begin(e, li - lo_, idx, n, pred ? &pidx_ : nullptr, n, pred ? li + 1 - lo_ : -1, false, false, /*warm=*/true);
   store_->end(e);
-  return store_->experts(li);
+  return store_->experts(li - lo_);
 }
 
 // ---- block-drafter captures (DFlash2, target_hidden_reduction stream_mean) ----
@@ -1081,7 +1155,7 @@ void Qwen4Exp::enc_moe4(Encoder& e, const Layer& L, const Buffer& u) {
   constexpr uint32_t nsg = 8, gu_rows = 2, rows = 2;
   // streamed experts: the next layer's router on this input too (its top-k is read ahead during this layer)
   const int li = layer_index(L);
-  const bool pred = q20 && store_ && !store_->complete() && li >= 0 && li + 1 < cfg_.layers;
+  const bool pred = q20 && store_ && !store_->complete() && li >= 0 && li + 1 < hi_;
   std::vector<Seg> segs = {{&L.router, rlog_}, {&L.shared_gate, slog_}};
   if (pred) segs.push_back({&layers_[size_t(li + 1)].router, plog_});
   enc_qmv_multi(e, segs, u, nullptr);
@@ -1215,13 +1289,9 @@ void Qwen4Exp::enc_attn4_prefill(Encoder& e, Seq& s, int li, const Layer& L, con
 
 // ---- passes ----
 
-void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
-  if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+void Qwen4Exp::enc_step_layers(Encoder& e, Seq& s, int pos, const PleWait& pw) {
   const int D = cfg_.hidden;
-  const PleWait pw = c4_.ple_layer >= 0 ? ple_rows_for(s, pos) : PleWait{};
-  enc_embed(e, s.tok, pos, 1, yb_);
-  enc_expand(e, 1);
-  for (int i = 0; i < cfg_.layers; ++i) {
+  for (int i = lo_; i < hi_; ++i) {
     const Layer& L = layers_[size_t(i)];
     const Qwen4Layer& F = l4_[size_t(i)];
     if (i == c4_.ple_layer) {
@@ -1236,6 +1306,16 @@ void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
     enc_moe4(e, L, xrn_);
     enc_capture4(e, i, pos, 1);
   }
+}
+
+void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp, uint32_t step, bool sample) {
+  if (pos + 1 >= s.cap) fatal("context full (%d)", s.cap);
+  const int D = cfg_.hidden;
+  const PleWait pw = c4_.ple_layer >= 0 ? ple_rows_for(s, pos) : PleWait{};
+  enc_embed(e, s.tok, pos, 1, yb_);
+  enc_expand(e, 1);
+  enc_step_layers(e, s, pos, pw);
+  enc_hop(e, Remote::Kind::step, s, pos, 1);
   // the final mix (its injection leaves the pre-mix state in x_: the MTP head's input)
   enc_gr_rows(e, mix_, 1, x_, 0, true, injM_, injA_, xrn_, uint32_t(D));
   if (!sample) return;
@@ -1243,23 +1323,9 @@ void Qwen4Exp::encode_step(Encoder& e, Seq& s, int pos, const SamplingParams& sp
   ple_after_sample(e, s, pos + 1);
 }
 
-void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
-                              Checkpoint* snap, int snap_row) {
-  if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
-  if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
-  if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
-  const int D = cfg_.hidden;
-  // the chunk's n-gram rows (the tokens are known): gathered while the GPU runs the previous chunk
-  Buffer rows;
-  if (c4_.ple_layer >= 0) {
-    ple_pf_flip_ ^= 1;
-    rows = ple_pf_[ple_pf_flip_];
-    gather_rows(s.tokens(), pos0, T, rows.ptr(), true);
-  }
-  enc_embed(e, s.tok, pos0, T, yb_);
-  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, yb_, D);  // image rows
-  enc_expand(e, T);
-  for (int i = 0; i < cfg_.layers; ++i) {
+void Qwen4Exp::enc_prefill_layers(Encoder& e, Seq& s, int pos0, int T, const Buffer& rows, Checkpoint* snap,
+                                  int snap_row) {
+  for (int i = lo_; i < hi_; ++i) {
     const Layer& L = layers_[size_t(i)];
     const Qwen4Layer& F = l4_[size_t(i)];
     if (i == dbg_layers_) break;
@@ -1281,13 +1347,84 @@ void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const Samplin
     // a command buffer per layer of a long chunk (~1/48 of it), so the desktop's own GPU work is not held up
     if (T >= 256 && i + 1 < cfg_.layers) e.split();
   }
-  if (dbg_layers_ != 0) enc_inject(e, T, x_, injM_);  // the pre-mix state of every row (the MTP head's history, logits)
+}
+
+void Qwen4Exp::encode_prefill(Encoder& e, Seq& s, int pos0, int T, const SamplingParams& sp, uint32_t step, bool sample,
+                              Checkpoint* snap, int snap_row) {
+  if (T > tmax_) fatal("prefill chunk %d > %d", T, tmax_);
+  if (pos0 + T >= s.cap) fatal("context full (%d)", s.cap);
+  if (snap && (!can_snapshot() || snap_row <= 0 || snap_row >= T)) fatal("prefill snapshot at row %d of %d", snap_row, T);
+  const int D = cfg_.hidden;
+  // the chunk's n-gram rows (the tokens are known): gathered while the GPU runs the previous chunk
+  Buffer rows;
+  if (c4_.ple_layer >= 0) {
+    ple_pf_flip_ ^= 1;
+    rows = ple_pf_[ple_pf_flip_];
+    gather_rows(s.tokens(), pos0, T, rows.ptr(), true);
+  }
+  enc_embed(e, s.tok, pos0, T, yb_);
+  if (s.embeds) vision::enc_embed_runs(e, *s.embeds, pos0, T, yb_, D);  // image rows
+  enc_expand(e, T);
+  enc_prefill_layers(e, s, pos0, T, rows, snap, snap_row);
+  // the pre-mix state of every row (the MTP head's history, logits); a split's last Mac injects its last block itself
+  if (remote_ && dbg_layers_ < 0) enc_hop(e, Remote::Kind::prefill, s, pos0, T, snap, snap_row);
+  else if (dbg_layers_ != 0) enc_inject(e, T, x_, injM_);
   if (sample) {
     enc_gr_rows(e, mix_, 1, x_, size_t(T - 1), false, injM_, injA_, xrn_, uint32_t(D));
     enc_sample(e, s, xrn_, pos0 + T, sp, step);
     ple_after_sample(e, s, pos0 + T);
   }
   if (snap) snap->pos = pos0 + snap_row;
+}
+
+// ---- a model split across Macs by layers ----
+
+// The head's hop: the pass so far is committed with a ready signal at its end; the remote waits for it on the CPU, sends
+// the rows' state to the other Macs and writes their result back, and only then is the rest of the pass encoded. The
+// GPU never waits for the network (a command buffer waiting on an event for ~5 s is killed: remote.h).
+void Qwen4Exp::enc_hop(Encoder& e, Remote::Kind k, Seq& s, int pos, int R, const Checkpoint* snap, int snap_row) {
+  if (!remote_) return;
+  if (s.pend_tree) fatal("a split model verifies no trees");
+  Remote::Pass p;
+  p.kind = k;
+  p.seq = s.rid;
+  p.pos = pos;
+  p.rows = R;
+  p.n_pend = s.n_pend;
+  p.snap = snap ? snap->rid : -1;
+  p.snap_row = snap_row;
+  Remote::Rows r;
+  r.x = x_;
+  r.y = yb_;
+  r.inj = injM_;
+  r.x_bytes = hidden_row_bytes();
+  r.y_bytes = size_t(cfg_.hidden) * 4;
+  r.inj_bytes = size_t(c4_.hc) * 4;
+  r.event = hop_ev_;
+  r.ready = ++hop_v_;
+  e.signal_event(hop_ev_, r.ready);
+  remote_->pass(p, r);  // (false: the Macs are lost, the rows garbage; the engine ends the request: Model::lost())
+}
+
+void Qwen4Exp::encode_stage(Encoder& e, Seq& s, const Remote::Pass& p, Checkpoint* snap) {
+  if (lo_ == 0) fatal("encode_stage: the head runs whole passes");
+  if (p.pos + p.rows >= s.cap) fatal("context full (%d)", s.cap);
+  s.n_pend = p.n_pend;
+  switch (p.kind) {
+    case Remote::Kind::step:
+      enc_step_layers(e, s, p.pos, PleWait{});
+      break;
+    case Remote::Kind::verify:
+      enc_verify_layers(e, s, p.pos, p.rows, Buffer{}, 0);
+      s.n_pend = 0;  // folded by this verify, as on the head; the head's next message says how many it kept
+      break;
+    case Remote::Kind::prefill:
+      if (p.rows > tmax_) fatal("prefill chunk %d > %d", p.rows, tmax_);
+      enc_prefill_layers(e, s, p.pos, p.rows, Buffer{}, snap, p.snap_row);
+      if (hi_ == cfg_.layers) enc_inject(e, p.rows, x_, injM_);
+      if (snap) snap->pos = p.pos + p.snap_row;
+      break;
+  }
 }
 
 void Qwen4Exp::encode_logits_rows(Encoder& e, int T, const Buffer& out) {
@@ -1340,6 +1477,8 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
   Qwen35Config c = read_config(dir);
   Qwen4ExpConfig c4;
   parse4(root, c4);
+  // the process's share of a split model: its layers' tensors, the head's own ones on the head
+  const int lo = process_split().lo, hi = process_split().hi < 0 ? c.layers : std::min(process_split().hi, c.layers);
   // tensors as stored: the trunk (vision tower and the n-gram table left out), the MTP head (mtp.*)
   std::vector<std::string> files;
   if (DIR* d = opendir(dir.c_str())) {
@@ -1375,6 +1514,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
         table += b;
         continue;
       }
+      if (!split_holds(name, lo, hi)) continue;
       const size_t al = (b + 255) / 256 * 256;
       if (name.rfind("mtp.", 0) == 0) {
         if (!getenv("NI_NO_MTP")) m.mtp += al;
@@ -1389,7 +1529,7 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
   }
   (void)table;
   if (m.streamed)
-    m.weights += size_t(3) * c.experts * q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;
+    m.weights += size_t(std::min(3, hi - lo)) * c.experts * q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes;
   m.dense = false;
   m.hidden = c.hidden;
   m.layers = c.layers;
@@ -1414,19 +1554,19 @@ MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
                  vd = double(c.lin_hv) * c.lin_dv;
     const double qd = double(c.hq) * c.head_dim, kvd = double(c.hkv) * c.head_dim, gr = 2 * SD * c4.hc_rank + c4.hc * SD;
     double p = 0;
-    for (int i = 0; i < c.layers; ++i) {
+    for (int i = lo; i < hi; ++i) {
       p += c.is_linear[size_t(i)] ? H * (2 * kd + vd) + H * vd + 2 * H * c.lin_hv + vd * H
                                   : H * 2 * qd + 2 * H * kvd + qd * H + H * (c4.ix_heads + 1) * c4.ix_dim;
       p += double(c.top_k) * 3 * H * c.moe_I + 3 * H * c.shared_I + H * c.experts + H + 2 * gr;
     }
-    m.decode_params = size_t(p + double(c.vocab) * H);
+    m.decode_params = size_t(p + (lo == 0 ? double(c.vocab) * H : 0.0));
   }
   // buffers: Qwen35's for this config (x_ widened, the MTP rows) plus the hyper-connection / indexer / n-gram ones
   for (const ActBuf& a : act_layout(c, chunk, kMaxVerify, m.mtp > 0, size_t(kMaxVerify))) m.activations += a.bytes;
   m.activations += qwen4_act_bytes(c, c4, chunk, kMaxVerify, m.mtp > 0);
   const size_t C = 2 * size_t(c.lin_hk) * c.lin_dk + size_t(c.lin_hv) * c.lin_dv;
   int lin = 0, att = 0;
-  for (int i = 0; i < c.layers; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;
+  for (int i = lo; i < hi; ++i) (c.is_linear[size_t(i)] ? lin : att) += 1;
   const size_t pconv = size_t(kRing) * c4.hc * c.hidden * 4;
   const size_t state = size_t(lin) * (3 * C * 4 + size_t(c.lin_hv) * c.lin_dv * c.lin_dk * 4) + pconv;
   const size_t tape = size_t(lin) * kMaxVerify * (C + size_t(c.lin_hv) * c.lin_dk + c.lin_hv + size_t(c.lin_hv) * c.lin_dv) * 4;
