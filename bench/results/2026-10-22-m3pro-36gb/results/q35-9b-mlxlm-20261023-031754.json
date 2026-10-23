@@ -1,0 +1,1432 @@
+{
+ "schema": 2,
+ "label": "q35-9b-mlxlm",
+ "model": "default_model",
+ "base_url": "http://127.0.0.1:8081/v1",
+ "when": "2026-10-23 03:18:42",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8081/v1",
+  "model": "default_model",
+  "label": "q35-9b-mlxlm",
+  "pid": 72566,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-031754.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+  "dirty": true
+ },
+ "phases": {
+  "sweep": [
+   1792703922.939,
+   1792704162.183
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 72566,
+     "name": "python",
+     "phys_footprint": 10973836480,
+     "phys_footprint_peak": 13286618176,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 5586944,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 10465.5,
+   "phys_footprint_peak_mb": 12671.1,
+   "mapped_file_clean_mb": 5.3,
+   "swap_used_mb": 944.38,
+   "memorystatus_level": 79,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 293.6,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 952.38,
+  "swapouts": 959445,
+  "swapins": 849015,
+  "pageouts": 562400,
+  "memorystatus_level": 95
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 5647.2,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1101,
+    "ttft_s": 3.215725333,
+    "prefill_tps": 342.37998771271305,
+    "decode_tps": 25.649066101643836,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2131,
+    "ttft_s": 6.126523500000001,
+    "prefill_tps": 347.8318494983329,
+    "decode_tps": 25.94976142662885,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4153,
+    "ttft_s": 11.778054709,
+    "prefill_tps": 352.6049167377832,
+    "decode_tps": 25.423058975641116,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8308,
+    "ttft_s": 23.813002249999997,
+    "prefill_tps": 348.8850298160116,
+    "decode_tps": 24.99664690330039,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16309,
+    "ttft_s": 48.183879042,
+    "prefill_tps": 338.4742018338557,
+    "decode_tps": 23.221466669089825,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 31551,
+    "ttft_s": 99.449937167,
+    "prefill_tps": 317.25510240412115,
+    "decode_tps": 21.163958215099687,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.825,
+  "retention_from_tokens": 1101,
+  "retention_to_tokens": 31551,
+  "max_prompt_tokens": 31551,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1101,
+      "completion_tokens": 192,
+      "ttft_s": 3.215725333,
+      "prefill_tps": 342.37998771271305,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.649066101643836
+     }
+    ],
+    "prompt_tokens": 1101,
+    "ttft_s": 3.215725333,
+    "prefill_tps": 342.37998771271305,
+    "decode_tps": 25.649066101643836
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2131,
+      "completion_tokens": 192,
+      "ttft_s": 6.126523500000001,
+      "prefill_tps": 347.8318494983329,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.94976142662885
+     }
+    ],
+    "prompt_tokens": 2131,
+    "ttft_s": 6.126523500000001,
+    "prefill_tps": 347.8318494983329,
+    "decode_tps": 25.94976142662885
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4153,
+      "completion_tokens": 192,
+      "ttft_s": 11.778054709,
+      "prefill_tps": 352.6049167377832,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.423058975641116
+     }
+    ],
+    "prompt_tokens": 4153,
+    "ttft_s": 11.778054709,
+    "prefill_tps": 352.6049167377832,
+    "decode_tps": 25.423058975641116
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8308,
+      "completion_tokens": 192,
+      "ttft_s": 23.813002249999997,
+      "prefill_tps": 348.8850298160116,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 24.99664690330039
+     }
+    ],
+    "prompt_tokens": 8308,
+    "ttft_s": 23.813002249999997,
+    "prefill_tps": 348.8850298160116,
+    "decode_tps": 24.99664690330039
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16309,
+      "completion_tokens": 192,
+      "ttft_s": 48.183879042,
+      "prefill_tps": 338.4742018338557,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 23.221466669089825
+     }
+    ],
+    "prompt_tokens": 16309,
+    "ttft_s": 48.183879042,
+    "prefill_tps": 338.4742018338557,
+    "decode_tps": 23.221466669089825
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 31551,
+      "completion_tokens": 192,
+      "ttft_s": 99.449937167,
+      "prefill_tps": 317.25510240412115,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 21.163958215099687
+     }
+    ],
+    "prompt_tokens": 31551,
+    "ttft_s": 99.449937167,
+    "prefill_tps": 317.25510240412115,
+    "decode_tps": 21.163958215099687
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 5318,
+ "peak_footprint_mb": 12579,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 12671.1,
+ "mapped_file_clean_mb": 5.3,
+ "vm_end": {
+  "swap_used_mb": 944.38,
+  "swapouts": 959445,
+  "swapins": 849463,
+  "pageouts": 562400,
+  "memorystatus_level": 79
+ },
+ "when_end": "2026-10-23 03:22:42",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 10.71,
+    "prompt_tokens": 2923,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 2.36,
+    "prompt_tokens": 430,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1069,
+   "completion_tokens": 8,
+   "ttft_s": 4.023047290999999,
+   "prefill_tps": 265.71897436837764,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1070,
+    "completion_tokens": 8,
+    "ttft_s": 3.1013205420000007,
+    "prefill_tps": 345.0143206770788,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1069,
+    "completion_tokens": 8,
+    "ttft_s": 3.1060033330000003,
+    "prefill_tps": 344.17219989506043,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1069,
+    "completion_tokens": 8,
+    "ttft_s": 3.1030426670000004,
+    "prefill_tps": 344.5005804684927,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 3.1030426670000004,
+  "first_request_penalty_s": 0.92,
+  "invalid": [],
+  "spawn_to_ready_s": 2.1,
+  "spawn_to_first_token_s": 6.12
+ },
+ "contention": {
+  "overall": {
+   "samples": 118,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 118,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792703924.797,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703926.823,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703928.853,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703930.883,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703932.913,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703934.942,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703936.963,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792703938.991,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703941.021,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703943.051,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703945.082,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703947.111,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703949.14,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703951.169,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703953.203,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703955.235,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703957.266,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703959.292,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703961.317,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703963.348,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703965.379,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703967.409,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703969.438,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703971.467,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703973.495,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703975.524,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703977.554,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703979.584,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703981.612,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703983.641,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703985.671,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703987.699,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703989.732,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703991.762,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703993.794,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703995.82,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703997.849,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792703999.877,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704001.905,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704003.934,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704005.962,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704007.991,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704010.019,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704012.048,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704014.076,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704016.105,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704018.133,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704020.162,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704022.191,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704024.22,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704026.25,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704028.282,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704030.312,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704032.34,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704034.37,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704036.399,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704038.427,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704040.456,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704042.484,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704044.512,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704046.542,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704048.573,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704050.603,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704052.634,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704054.663,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704056.692,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704058.727,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704060.758,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704062.782,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704064.811,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704066.84,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704068.869,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704070.897,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704072.926,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704074.955,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704076.984,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704079.013,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704081.041,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704083.07,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704085.099,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704087.128,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704089.157,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704091.187,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704093.218,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704095.25,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704097.28,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704099.308,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704101.34,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704103.371,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704105.4,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704107.428,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704109.457,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704111.486,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704113.514,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704115.544,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704117.574,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704119.603,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704121.631,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704123.661,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704125.691,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704127.722,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704129.753,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704131.781,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704133.81,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704135.839,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704137.867,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704139.896,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704141.924,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704143.953,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704145.982,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704148.01,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704150.04,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704152.069,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704154.099,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704156.129,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704158.16,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704160.191,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792704162.22,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "q35-9b-mlxlm",
+ "display": "mlx-lm",
+ "engine": "mlx-lm",
+ "version": "mlx_lm 0.32.2 mlx 0.32.4",
+ "version_config": "auto",
+ "model_name": "Qwen3.5-9B",
+ "model_path": "{models}/qwen3.5-9b-4bit",
+ "note": "The catalog 9B's weights folder (lmstudio-community/Qwen3.5-9B-MLX-4bit); no speculative decoding.",
+ "config": {
+  "label": "q35-9b-mlxlm",
+  "display": "mlx-lm",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Qwen3.5-9B",
+  "model_path": "{models}/qwen3.5-9b-4bit",
+  "cmd": [
+   "{env:MLX_LM_SERVER=mlx_lm.server}",
+   "--model",
+   "{models}/qwen3.5-9b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8081",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "base_url": "http://127.0.0.1:8081/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{models}/qwen3.5-9b-4bit/config.json"
+  ],
+  "note": "The catalog 9B's weights folder (lmstudio-community/Qwen3.5-9B-MLX-4bit); no speculative decoding."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 952.38,
+    "swapouts": 959445,
+    "swapins": 848931,
+    "pageouts": 562400,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 1861140480,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 223594700800,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "--model",
+   "/Users/nacer_b/kq/bm/qwen3.5-9b-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8081",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "cmd_shell": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/qwen3.5-9b-4bit --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/qwen3.5-9b-4bit",
+   "safetensors_bytes": 6436804102,
+   "safetensors_files": [
+    "model-00001-of-00002.safetensors",
+    "model-00002-of-00002.safetensors",
+    "mtp.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "dirty": true
+  },
+  "config_file": "../../../m3pro.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [],
+  "env_relevant": {
+   "NI_LOCK_HELD": "1",
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "KAPITSA_BIN": "/Users/nacer_b/kq/nh/build/kapitsa",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "OLLAMA_BIN": "/Users/nacer_b/engines/ollama/ollama",
+   "OLLAMA_MODELS": "/Users/nacer_b/.ollama/models",
+   "OLLAMA_MLX_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 2.1,
+  "server_pid": 72566,
+  "listener_pid": 72566,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 1861140480,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 944.38,
+   "swapouts": 959445,
+   "swapins": 849467,
+   "pageouts": 562400,
+   "memorystatus_level": 95
+  },
+  "disk_free_bytes": 223592235008
+ },
+ "server_log": [
+  "2026-10-23 03:17:55,454 - INFO - Starting httpd at 127.0.0.1 on port 8081...",
+  "127.0.0.1 - - [23/Oct/2026 03:17:56] \"GET /v1/models HTTP/1.1\" 200 -",
+  "    self.handle_models_request()",
+  "  File \"/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py\", line 1839, in handle_models_request"
+ ],
+ "server_log_path": "logs/q35-9b-mlxlm-20261023-031754.log"
+}

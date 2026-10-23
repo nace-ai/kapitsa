@@ -1,0 +1,40 @@
+kapitsa bench: Nemotron 3.5 Bolt 74B-A9B NVIDIA 24 GB on MacBook Pro (16-inch, Nov 2023): Apple M3 Pro, 18-core GPU, 36 GB, macOS 14.1
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:62025 (log ~/.cache/kapitsa/logs/bench-62025.log)
+[?2026h  ✓ Loaded Nemotron 3.5 Bolt 74B-A9B  ·  NVIDIA 24 GB in 8.3s  ·  LiLiCorr spe…
+[?2026lReady after 8.3s: LiLiCorr speculative decoding (7-token blocks)
+Warm-up done in 17s
+GPU quiet after 18s
+  decode T=0.6: 49.72 tok/s (512 tok, finish="length")
+  decode T=0.6: 45.81 tok/s (512 tok, finish="length")
+  decode T=0.6: 46.27 tok/s (512 tok, finish="length")
+  decode T=0.6: 48.00 tok/s (512 tok, finish="length")
+  decode T=0.6: 51.69 tok/s (512 tok, finish="length")
+decode T=0.6: median 48.00 tok/s over 5/5 valid
+  decode T=0: 50.77 tok/s (512 tok, finish="length")
+  decode T=0: 55.08 tok/s (512 tok, finish="length")
+  decode T=0: 47.30 tok/s (512 tok, finish="length")
+  decode T=0: 47.02 tok/s (512 tok, finish="length")
+  decode T=0: 50.03 tok/s (512 tok, finish="length")
+decode T=0: median 50.03 tok/s over 5/5 valid
+prefill 4000: 4185 tok, 261 tok/s; cached TTFT median 0.33 s
+prefill 16000: 16514 tok, 251 tok/s; cached TTFT median 0.36 s
+tools: pass
+Benchmark: MacBook Pro (16-inch, Nov 2023) · M3 Pro · 36 GB · Nemotron 3.5 Bolt 74B-A9B NVIDIA 24 GB
+| MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB | Nemotron 3.5 Bolt 74B-A9B · NVIDIA 24 GB |
+| --- | ---: |
+| Writing, T = 0.6 | 48.0 tok/s (45.8–51.7, median of 5) |
+| Writing, greedy | 50.0 tok/s (47.0–55.1, median of 5) |
+| Reading a 4K-token prompt | 261 tok/s (4,185 tokens in 16.06 s) |
+| Follow-up at 4K | 0.33 s |
+| Reading a 16K-token prompt | 251 tok/s (16,514 tokens in 65.92 s) |
+| Follow-up at 16K | 0.36 s |
+| Peak memory | 22.4 GB |
+| Tool calls | pass |
+
+Kapitsa 0.2.9 (c490f81) · LiLiCorr drafter · macOS 14.1 (23B2073) · on AC power · Automatic power mode · thermal state nominal · full run
+
+Flags: none.
+
+Measured with `kapitsa bench`: the protocol of [bench/harness](https://github.com/nace-ai/kapitsa/tree/main/bench/harness), as a client of the local server.
+Saved /Users/nacer_b/kq/m3/cb/kapitsa-bench-bolt.json

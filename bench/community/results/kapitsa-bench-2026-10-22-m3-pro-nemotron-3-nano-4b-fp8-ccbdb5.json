@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "kind": "kapitsa-bench",
+  "mode": "full",
+  "time_utc": "2026-10-22T23:39:57Z",
+  "kapitsa": {
+    "version": "0.2.9",
+    "commit": "c490f81"
+  },
+  "mac": {
+    "identifier": "Mac15,7",
+    "name": "MacBook Pro (16-inch, Nov 2023)",
+    "year": 2023,
+    "chip": "Apple M3 Pro",
+    "cpu_cores": 12,
+    "gpu_cores": 18,
+    "memory_gb": 36,
+    "macos": "14.1",
+    "macos_build": "23B2073"
+  },
+  "model": {
+    "name": "nemotron-3-nano-4b",
+    "title": "Nemotron 3 Nano 4B",
+    "variant": "fp8",
+    "precision": "FP8",
+    "catalog": true,
+    "revision": "3fe6dab",
+    "decoding": "unknown",
+    "decoding_detail": "prompt-lookup speculative decoding (up to 4 drafts per cycle)",
+    "drafter": null
+  },
+  "protocol": {
+    "corpus_sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+    "decode_tokens": 512,
+    "decode_runs": 5,
+    "greedy_runs": 5,
+    "sizes": [
+      4000,
+      16000
+    ],
+    "temperature": 0.6
+  },
+  "results": {
+    "decode": {
+      "median_tps": 33.42,
+      "runs_tps": [
+        83.8,
+        33.42,
+        33.68,
+        33.29,
+        33.37
+      ]
+    },
+    "decode_greedy": {
+      "median_tps": 32.99,
+      "runs_tps": [
+        32.98,
+        33.1,
+        32.99,
+        32.74,
+        33.03
+      ]
+    },
+    "prefill": [
+      {
+        "size": 4000,
+        "prompt_tokens": 4184,
+        "ttft_s": 5.4641,
+        "tps": 765.7,
+        "followup_s": [
+          0.1164,
+          0.1037,
+          0.1091
+        ],
+        "followup_median_s": 0.1091
+      },
+      {
+        "size": 16000,
+        "prompt_tokens": 16517,
+        "ttft_s": 23.6818,
+        "tps": 697.5,
+        "followup_s": [
+          0.1394,
+          0.1448,
+          0.1358
+        ],
+        "followup_median_s": 0.1394
+      }
+    ],
+    "tool_calls": "pass",
+    "peak_memory_gb": 5.09
+  },
+  "conditions": {
+    "power_source": "ac",
+    "power_mode": "automatic",
+    "low_power_mode": false,
+    "thermal_state": "nominal",
+    "swapouts": 0,
+    "gpu_quiet_wait_s": 18.1,
+    "gpu_other_mean_pct": 0.0,
+    "gpu_other_max_pct": 0.0,
+    "gpu_ambient_mean_pct": 0.0,
+    "gpu_users": [],
+    "contention": []
+  },
+  "flags": [
+    "decode: repetition loop (distinct-4-gram 0.0262)",
+    "decode: repetition loop (distinct-4-gram 0.446)"
+  ],
+  "invalid": []
+}

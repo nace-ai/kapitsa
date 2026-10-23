@@ -1,0 +1,1550 @@
+23:00:00 waiting for DL-DONE (dl3) and OPULL-DONE
+23:05:36 waiting for DL-DONE (dl3) and B318-DONE (step-3 builds)
+23:06:11 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q35-4b-kapitsa
+
+===== sw-q35-4b-kapitsa  [kapitsa] Kapitsa 0.2.8 (catalog 4b)  version daf6e95
+[23:06:11] sw-q35-4b-kapitsa: GPU lock acquired after 0.0s wait
+[23:06:11] sw-q35-4b-kapitsa: starting /Users/nacer_b/kq/rel/build/kapitsa serve --model 4b --model-id qwen3.5-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:06:17] sw-q35-4b-kapitsa: ready after 6s (pid 36941, listener 36941)
+[23:06:22] sw-q35-4b-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.77s)
+[23:06:23] sw-q35-4b-kapitsa:  warm-up tools: ok (1.01s)
+[23:06:42] sw-q35-4b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q35-4b-kapitsa
+  decode T=0.6: 123.33 tok/s (e2e 121.35; 512 tok, finish=length, d4=0.4501) flags ['repetition loop (distinct-4-gram 0.4501)']
+  decode T=0.6: 129.97 tok/s (e2e 129.48; 512 tok, finish=length, d4=0.9677)
+  decode T=0.6: 121.27 tok/s (e2e 120.61; 512 tok, finish=length, d4=0.5984)
+  decode T=0.6: 122.01 tok/s (e2e 119.55; 512 tok, finish=length, d4=0.9554)
+  decode T=0.6: 133.63 tok/s (e2e 131.44; 512 tok, finish=length, d4=0.539)
+  decode median 123.33 (min 121.27, max 133.63) over 5/5 valid
+  decode T=0: median 134.3 (min 129.84, max 136.4) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 5.88s -> 703 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4201, 4232, 4272])
+  prefill 16000: 16287 tok (ref 16286), TTFT 25.49s -> 639 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16336, 16449, 16603])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 4.87 GB, resident mapped files 0.01 GB, swap used 1203.25 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261022-230611.json
+[23:08:19] sw-q35-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:08:19] sw-q35-4b-kapitsa: GPU lock released after 128.1s held
+[23:08:19] sw-q35-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261022-230611.json  flags: 1
+23:08:19 rc=0 :: sw-q35-4b-kapitsa
+23:08:24 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q38-27b-kapitsa
+
+===== sw-q38-27b-kapitsa  [kapitsa] Kapitsa 0.2.8 (catalog 27b)  version daf6e95
+[23:08:24] sw-q38-27b-kapitsa: GPU lock acquired after 0.0s wait
+[23:08:24] sw-q38-27b-kapitsa: starting /Users/nacer_b/kq/rel/build/kapitsa serve --model 27b --model-id qwen3.8-27b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:08:34] sw-q38-27b-kapitsa: ready after 9s (pid 37342, listener 37342)
+[23:09:04] sw-q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (30.26s)
+[23:09:09] sw-q38-27b-kapitsa:  warm-up tools: ok (4.67s)
+[23:09:27] sw-q38-27b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q38-27b-kapitsa
+  decode T=0.6: 35.82 tok/s (e2e 35.66; 512 tok, finish=length, d4=0.9552)
+  decode T=0.6: 38.56 tok/s (e2e 38.13; 512 tok, finish=length, d4=0.9398)
+  decode T=0.6: 39.69 tok/s (e2e 39.63; 512 tok, finish=length, d4=0.9348)
+  decode T=0.6: 36.59 tok/s (e2e 35.72; 512 tok, finish=length, d4=0.9437)
+  decode T=0.6: 36.94 tok/s (e2e 37.74; 512 tok, finish=length, d4=0.8602)
+  decode median 36.94 (min 35.82, max 39.69) over 5/5 valid
+  decode T=0: median 40.61 (min 40.18, max 40.65) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 37.58s -> 110 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [4182, 4214, 4250])
+  prefill 16000: 16284 tok (ref 16286), TTFT 156.83s -> 104 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [16335, 16370, 16413])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 19.30 GB, resident mapped files 0.01 GB, swap used 1205.62 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261022-230824.json
+[23:15:59] sw-q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:15:59] sw-q38-27b-kapitsa: GPU lock released after 455.0s held
+[23:15:59] sw-q38-27b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261022-230824.json
+23:16:01 0.2.8 runs done; building origin/main in ~/kq/head
+23:16:30 main build ok: kapitsa 0.2.9 (e86dea7) e86dea79b2751d04a3fa78bfa7746f4ebf981515
+KAPITSA_BIN=/Users/nacer_b/kq/head/build/kapitsa
+23:17:35 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q36-35b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-q36-35b-kapitsa  [kapitsa] Kapitsa (catalog 35b)  version e86dea7
+[23:17:35] sw-q36-35b-kapitsa: GPU lock acquired after 0.0s wait
+[23:17:35] sw-q36-35b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 35b --model-id qwen3.6-35b-a3b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:17:46] sw-q36-35b-kapitsa: ready after 10s (pid 38807, listener 38807)
+[23:17:51] sw-q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (5.45s)
+[23:17:52] sw-q36-35b-kapitsa:  warm-up tools: ok (0.9s)
+[23:18:11] sw-q36-35b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q36-35b-kapitsa
+  decode T=0.6: 106.12 tok/s (e2e 106.22; 512 tok, finish=length, d4=0.9539)
+  decode T=0.6: 105.92 tok/s (e2e 106.05; 512 tok, finish=length, d4=0.9807)
+  decode T=0.6: 107.10 tok/s (e2e 106.96; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 108.54 tok/s (e2e 109.38; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 102.90 tok/s (e2e 105.94; 512 tok, finish=length, d4=0.7347)
+  decode median 106.12 (min 102.9, max 108.54) over 5/5 valid
+  decode T=0: median 115.66 (min 112.9, max 122.48) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 4.83s -> 855 tok/s, cold cached=0 | cached TTFT median 0.08s over 3 turns (cached [4170, 4211, 4248])
+  prefill 16000: 16286 tok (ref 16286), TTFT 21.32s -> 764 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [16323, 16372, 16419])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 21.17 GB, resident mapped files 0.01 GB, swap used 1193.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q36-35b-kapitsa-20261022-231735.json
+[23:19:51] sw-q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:19:51] sw-q36-35b-kapitsa: GPU lock released after 135.4s held
+[23:19:51] sw-q36-35b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q36-35b-kapitsa-20261022-231735.json
+23:19:51 rc=0 :: sw-q36-35b-kapitsa
+23:19:56 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q35-9b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-q35-9b-kapitsa  [kapitsa] Kapitsa (catalog 9b)  version e86dea7
+[23:19:56] sw-q35-9b-kapitsa: GPU lock acquired after 0.0s wait
+[23:19:56] sw-q35-9b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 9b --model-id qwen3.5-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:20:00] sw-q35-9b-kapitsa: ready after 4s (pid 39187, listener 39187)
+[23:20:09] sw-q35-9b-kapitsa:  warm-up prefill~2.9k+decode64: ok (8.84s)
+[23:20:11] sw-q35-9b-kapitsa:  warm-up tools: ok (1.63s)
+[23:20:29] sw-q35-9b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q35-9b-kapitsa
+  decode T=0.6: 74.04 tok/s (e2e 73.37; 512 tok, finish=length, d4=0.7255)
+  decode T=0.6: 78.49 tok/s (e2e 78.15; 512 tok, finish=length, d4=0.713)
+  decode T=0.6: 77.48 tok/s (e2e 77.08; 512 tok, finish=length, d4=0.7265)
+  decode T=0.6: 74.57 tok/s (e2e 74.41; 512 tok, finish=length, d4=0.568)
+  decode T=0.6: 78.48 tok/s (e2e 77.04; 512 tok, finish=length, d4=0.9661)
+  decode median 77.48 (min 74.04, max 78.49) over 5/5 valid
+  decode T=0: median 84.24 (min 76.04, max 84.3) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 10.85s -> 381 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [4178, 4213, 4252])
+  prefill 16000: 16283 tok (ref 16286), TTFT 44.60s -> 365 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [16318, 16361, 16400])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=False
+  memory: phys_footprint_peak 7.97 GB, resident mapped files 0.01 GB, swap used 1193.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q35-9b-kapitsa-20261022-231956.json
+[23:23:01] sw-q35-9b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:23:01] sw-q35-9b-kapitsa: GPU lock released after 184.9s held
+[23:23:01] sw-q35-9b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q35-9b-kapitsa-20261022-231956.json
+23:23:01 rc=0 :: sw-q35-9b-kapitsa
+23:23:06 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-dory-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-dory-kapitsa  [kapitsa] Kapitsa (catalog dory)  version e86dea7
+[23:23:06] sw-dory-kapitsa: GPU lock acquired after 0.0s wait
+[23:23:06] sw-dory-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model dory --model-id dory --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:23:08] sw-dory-kapitsa: FAILED: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-dory-kapitsa-20261022-232306.log
+[23:23:13] sw-dory-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:23:13] sw-dory-kapitsa: GPU lock released after 7.2s held
+[23:23:13] sw-dory-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-dory-kapitsa-20261022-232306.json  INVALID: ['harness: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-dory-kapitsa-20261022-232306.log']
+23:23:13 rc=0 :: sw-dory-kapitsa
+23:23:18 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-nano-4b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-nano-4b-kapitsa  [kapitsa] Kapitsa (catalog nano-4b)  version e86dea7
+[23:23:18] sw-nano-4b-kapitsa: GPU lock acquired after 0.0s wait
+[23:23:19] sw-nano-4b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model nano-4b --model-id nano-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:23:21] sw-nano-4b-kapitsa: FAILED: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-nano-4b-kapitsa-20261022-232318.log
+[23:23:26] sw-nano-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:23:26] sw-nano-4b-kapitsa: GPU lock released after 7.2s held
+[23:23:26] sw-nano-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-4b-kapitsa-20261022-232318.json  INVALID: ['harness: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-nano-4b-kapitsa-20261022-232318.log']
+23:23:26 rc=0 :: sw-nano-4b-kapitsa
+23:23:31 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-nano-9b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-nano-9b-kapitsa  [kapitsa] Kapitsa (catalog nano-9b)  version e86dea7
+[23:23:31] sw-nano-9b-kapitsa: GPU lock acquired after 0.0s wait
+[23:23:31] sw-nano-9b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model nano-9b --model-id nano-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:23:33] sw-nano-9b-kapitsa: FAILED: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-nano-9b-kapitsa-20261022-232331.log
+[23:23:38] sw-nano-9b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:23:38] sw-nano-9b-kapitsa: GPU lock released after 7.2s held
+[23:23:38] sw-nano-9b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-9b-kapitsa-20261022-232331.json  INVALID: ['harness: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-nano-9b-kapitsa-20261022-232331.log']
+23:23:38 rc=0 :: sw-nano-9b-kapitsa
+23:23:43 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-lightning-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-lightning-kapitsa  [kapitsa] Kapitsa (catalog lightning)  version e86dea7
+[23:23:43] sw-lightning-kapitsa: GPU lock acquired after 0.0s wait
+[23:23:43] sw-lightning-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model lightning --model-id lightning --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:23:45] sw-lightning-kapitsa: FAILED: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-lightning-kapitsa-20261022-232343.log
+[23:23:51] sw-lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:23:51] sw-lightning-kapitsa: GPU lock released after 7.2s held
+[23:23:51] sw-lightning-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-lightning-kapitsa-20261022-232343.json  INVALID: ['harness: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-lightning-kapitsa-20261022-232343.log']
+23:23:51 rc=0 :: sw-lightning-kapitsa
+23:23:56 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-bolt-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-bolt-kapitsa  [kapitsa] Kapitsa (catalog bolt)  version e86dea7
+[23:23:56] sw-bolt-kapitsa: GPU lock acquired after 0.0s wait
+[23:23:56] sw-bolt-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model bolt --model-id bolt --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:24:00] sw-bolt-kapitsa: FAILED: server never became ready (4s); see /Users/nacer_b/kq/m3/out/logs/sw-bolt-kapitsa-20261022-232356.log
+[23:24:05] sw-bolt-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:24:05] sw-bolt-kapitsa: GPU lock released after 9.2s held
+[23:24:05] sw-bolt-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261022-232356.json  INVALID: ['harness: server never became ready (4s); see /Users/nacer_b/kq/m3/out/logs/sw-bolt-kapitsa-20261022-232356.log']
+23:24:05 rc=0 :: sw-bolt-kapitsa
+23:24:10 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-flint-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-flint-kapitsa  [kapitsa] Kapitsa (catalog flint)  version e86dea7
+[23:24:10] sw-flint-kapitsa: GPU lock acquired after 0.0s wait
+[23:24:10] sw-flint-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model flint --model-id flint --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:24:21] sw-flint-kapitsa: ready after 11s (pid 40162, listener 40162)
+[23:24:27] sw-flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (6.14s)
+[23:24:29] sw-flint-kapitsa:  warm-up tools: ok (1.18s)
+[23:24:29] sw-flint-kapitsa: WARNING: thinking was not switched off in warm-up ['prefill~2.9k+decode64', 'tools']; runs will be INVALID
+[23:24:47] sw-flint-kapitsa: GPU quiet after 19s; benchmarking
+== sw-flint-kapitsa
+  decode T=0.6: 74.27 tok/s (e2e 73.67; 512 tok, finish=length, d4=0.8684) INVALID ['reasoning text returned (2287 chars)']
+  decode T=0.6: 74.18 tok/s (e2e 73.57; 512 tok, finish=length, d4=0.8961) INVALID ['reasoning text returned (2228 chars)']
+  decode T=0.6: 74.28 tok/s (e2e 73.57; 512 tok, finish=length, d4=0.9489) INVALID ['reasoning text returned (2215 chars)']
+  decode T=0.6: 73.32 tok/s (e2e 73.51; 512 tok, finish=length, d4=0.832) INVALID ['reasoning text returned (2134 chars)']
+  decode T=0.6: 74.13 tok/s (e2e 73.48; 512 tok, finish=length, d4=0.9043) INVALID ['reasoning text returned (2177 chars)']
+  decode median None (min None, max None) over 0/5 valid
+  decode T=0: median None (min None, max None) over 0/5 valid INVALID ['reasoning text returned (2021 chars)', 'reasoning text returned (2064 chars)', 'reasoning text returned (2083 chars)', 'reasoning text returned (2211 chars)', 'reasoning text returned (2277 chars)']
+  prefill 4000: 3872 tok (ref 4133), TTFT 4.84s -> 800 tok/s, cold cached=0 | cached TTFT median 0.16s over 3 turns (cached [3928, 3975, 4004]) INVALID ['reasoning text returned (463 chars)', 'prompt_tokens 3872 outside ±1% of 4133 (truncated or template drift)', 'follow-up: reasoning text returned (774 chars)', 'follow-up: reasoning text returned (626 chars)', 'follow-up: reasoning text returned (1211 chars)'] flags ['follow-up returned no content; stopping the cached series']
+  prefill 16000: 15064 tok (ref 16286), TTFT 22.16s -> 680 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [15113, 15157, 15207]) INVALID ['reasoning text returned (399 chars)', 'prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)', 'follow-up: reasoning text returned (601 chars)', 'follow-up: reasoning text returned (516 chars)', 'follow-up: reasoning text returned (1160 chars)'] flags ['follow-up returned no content; stopping the cached series']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.59 GB, resident mapped files 0.02 GB, swap used 1200.25 MB
+  INVALID: ['decode: reasoning text returned (2134 chars)', 'decode: reasoning text returned (2177 chars)', 'decode: reasoning text returned (2215 chars)', 'decode: reasoning text returned (2228 chars)', 'decode: reasoning text returned (2287 chars)', 'decode_greedy: reasoning text returned (2021 chars)', 'decode_greedy: reasoning text returned (2064 chars)', 'decode_greedy: reasoning text returned (2083 chars)', 'decode_greedy: reasoning text returned (2211 chars)', 'decode_greedy: reasoning text returned (2277 chars)', 'prefill_4000: reasoning text returned (463 chars)', 'prefill_4000: prompt_tokens 3872 outside ±1% of 4133 (truncated or template drift)', 'cached_4000: follow-up: reasoning text returned (774 chars)', 'cached_4000: follow-up: reasoning text returned (626 chars)', 'cached_4000: follow-up: reasoning text returned (1211 chars)', 'prefill_16000: reasoning text returned (399 chars)', 'prefill_16000: prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)', 'cached_16000: follow-up: reasoning text returned (601 chars)', 'cached_16000: follow-up: reasoning text returned (516 chars)', 'cached_16000: follow-up: reasoning text returned (1160 chars)']
+  -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261022-232410.json
+[23:27:13] sw-flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:27:13] sw-flint-kapitsa: GPU lock released after 182.8s held
+[23:27:13] sw-flint-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261022-232410.json  INVALID: ['decode: reasoning text returned (2134 chars)', 'decode: reasoning text returned (2177 chars)', 'decode: reasoning text returned (2215 chars)', 'decode: reasoning text returned (2228 chars)', 'decode: reasoning text returned (2287 chars)', 'decode_greedy: reasoning text returned (2021 chars)', 'decode_greedy: reasoning text returned (2064 chars)', 'decode_greedy: reasoning text returned (2083 chars)', 'decode_greedy: reasoning text returned (2211 chars)', 'decode_greedy: reasoning text returned (2277 chars)', 'prefill_4000: reasoning text returned (463 chars)', 'prefill_4000: prompt_tokens 3872 outside ±1% of 4133 (truncated or template drift)', 'cached_4000: follow-up: reasoning text returned (774 chars)', 'cached_4000: follow-up: reasoning text returned (626 chars)', 'cached_4000: follow-up: reasoning text returned (1211 chars)', 'prefill_16000: reasoning text returned (399 chars)', 'prefill_16000: prompt_tokens 15064 outside ±1% of 16286 (truncated or template drift)', 'cached_16000: follow-up: reasoning text returned (601 chars)', 'cached_16000: follow-up: reasoning text returned (516 chars)', 'cached_16000: follow-up: reasoning text returned (1160 chars)']  flags: 2
+23:27:13 rc=0 :: sw-flint-kapitsa
+23:27:18 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q35-4b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-q35-4b-kapitsa  [kapitsa] Kapitsa (catalog 4b)  version e86dea7
+[23:27:18] sw-q35-4b-kapitsa: GPU lock acquired after 0.0s wait
+[23:27:18] sw-q35-4b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 4b --model-id qwen3.5-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:27:22] sw-q35-4b-kapitsa: ready after 4s (pid 40669, listener 40669)
+[23:27:27] sw-q35-4b-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.86s)
+[23:27:28] sw-q35-4b-kapitsa:  warm-up tools: ok (1.01s)
+[23:27:47] sw-q35-4b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q35-4b-kapitsa
+  decode T=0.6: 119.14 tok/s (e2e 119.25; 512 tok, finish=length, d4=0.9623)
+  decode T=0.6: 119.92 tok/s (e2e 118.68; 512 tok, finish=length, d4=0.5323)
+  decode T=0.6: 120.14 tok/s (e2e 119.44; 512 tok, finish=length, d4=0.7181)
+  decode T=0.6: 166.73 tok/s (e2e 162.42; 512 tok, finish=length, d4=0.6282)
+  decode T=0.6: 119.71 tok/s (e2e 119.56; 512 tok, finish=length, d4=0.4535) flags ['repetition loop (distinct-4-gram 0.4535)']
+  decode median 119.92 (min 119.14, max 166.73) over 5/5 valid
+  decode T=0: median 131.35 (min 115.59, max 133.44) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 5.88s -> 703 tok/s, cold cached=0 | cached TTFT median 0.07s over 3 turns (cached [4187, 4230, 4267])
+  prefill 16000: 16286 tok (ref 16286), TTFT 25.51s -> 638 tok/s, cold cached=0 | cached TTFT median 0.09s over 3 turns (cached [16336, 16397, 16462])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 4.86 GB, resident mapped files 0.01 GB, swap used 1200.25 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261022-232718.json
+[23:29:25] sw-q35-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:29:25] sw-q35-4b-kapitsa: GPU lock released after 126.3s held
+[23:29:25] sw-q35-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261022-232718.json  flags: 1
+23:29:25 rc=0 :: sw-q35-4b-kapitsa
+23:29:30 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-q38-27b-kapitsa (/Users/nacer_b/kq/head/bench/harness)
+
+===== sw-q38-27b-kapitsa  [kapitsa] Kapitsa (catalog 27b)  version e86dea7
+[23:29:30] sw-q38-27b-kapitsa: GPU lock acquired after 0.0s wait
+[23:29:30] sw-q38-27b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 27b --model-id qwen3.8-27b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:29:40] sw-q38-27b-kapitsa: ready after 10s (pid 41072, listener 41072)
+[23:30:10] sw-q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (29.65s)
+[23:30:14] sw-q38-27b-kapitsa:  warm-up tools: ok (4.67s)
+[23:30:33] sw-q38-27b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q38-27b-kapitsa
+  decode T=0.6: 39.80 tok/s (e2e 39.24; 512 tok, finish=length, d4=0.9564)
+  decode T=0.6: 41.07 tok/s (e2e 40.52; 512 tok, finish=length, d4=0.9076)
+  decode T=0.6: 38.59 tok/s (e2e 38.89; 512 tok, finish=length, d4=0.8482)
+  decode T=0.6: 35.24 tok/s (e2e 35.10; 512 tok, finish=length, d4=0.9479)
+  decode T=0.6: 41.85 tok/s (e2e 40.90; 512 tok, finish=length, d4=0.8837)
+  decode median 39.8 (min 35.24, max 41.85) over 5/5 valid
+  decode T=0: median 41.57 (min 41.54, max 42.03) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 37.57s -> 110 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [4204, 4237, 4281])
+  prefill 16000: 16285 tok (ref 16286), TTFT 153.89s -> 106 tok/s, cold cached=0 | cached TTFT median 0.40s over 3 turns (cached [16335, 16405, 16446])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 19.27 GB, resident mapped files 0.01 GB, swap used 1204.56 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261022-232930.json
+[23:36:56] sw-q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:36:56] sw-q38-27b-kapitsa: GPU lock released after 446.4s held
+[23:36:56] sw-q38-27b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261022-232930.json
+23:36:56 rc=0 :: sw-q38-27b-kapitsa
+23:36:56 PHASE-A-DONE
+23:37:19 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: sw-flint-kapitsa
+
+===== sw-flint-kapitsa  [kapitsa] Kapitsa (catalog flint)  version e86dea7
+[23:37:19] sw-flint-kapitsa: GPU lock acquired after 0.0s wait
+[23:37:20] sw-flint-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model flint --model-id flint --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[23:37:30] sw-flint-kapitsa: ready after 10s (pid 42359, listener 42359)
+[23:37:35] sw-flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (5.19s)
+[23:37:36] sw-flint-kapitsa:  warm-up tools: ok (1.18s)
+[23:37:55] sw-flint-kapitsa: GPU quiet after 19s; benchmarking
+== sw-flint-kapitsa
+  decode T=1.0: 73.56 tok/s (e2e 73.70; 512 tok, finish=length, d4=0.9106)
+  decode T=1.0: 73.32 tok/s (e2e 73.59; 512 tok, finish=length, d4=0.8415)
+  decode T=1.0: 74.17 tok/s (e2e 73.69; 512 tok, finish=length, d4=0.9325)
+  decode T=1.0: 73.20 tok/s (e2e 73.62; 512 tok, finish=length, d4=0.9124)
+  decode T=1.0: 73.22 tok/s (e2e 73.60; 512 tok, finish=length, d4=0.9306)
+  decode median 73.32 (min 73.2, max 74.17) over 5/5 valid
+  decode T=0: median 74.59 (min 74.34, max 74.67) over 5/5 valid
+  prefill 4000: 3875 tok (ref 3874), TTFT 4.84s -> 800 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [3929, 3976, 4029])
+  prefill 16000: 15066 tok (ref 15066), TTFT 22.72s -> 663 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [15124, 15174, 15222])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.49 GB, resident mapped files 0.02 GB, swap used 1209.44 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261022-233719.json
+[23:40:37] sw-flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:40:37] sw-flint-kapitsa: GPU lock released after 197.8s held
+[23:40:37] sw-flint-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261022-233719.json
+23:40:37 rc=0 :: sw-flint-kapitsa
+23:40:42 power 'AC Power' free 95% disk 211G vtdecoder   0.0 :: q35-4b-mtplx
+
+===== q35-4b-mtplx  [mtplx] MTPLX (sustained profile, depth 1)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[23:40:42] q35-4b-mtplx: GPU lock acquired after 0.0s wait
+[23:40:42] q35-4b-mtplx: starting /Users/nacer_b/engines/mtplx/bin/mtplx serve --model /Users/nacer_b/kq/bm/qwen3.5-4b-4bit-mtplx --model-id qwen3.5-4b --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --profile sustained --depth 1
+[23:40:59] q35-4b-mtplx: ready after 16s (pid 42924, listener 42924)
+[23:41:05] q35-4b-mtplx:  warm-up prefill~2.9k+decode64: ok (6.56s)
+[23:41:07] q35-4b-mtplx:  warm-up tools: ok (1.74s)
+[23:41:16] q35-4b-mtplx:  warm-up decode512#1: ok (9.04s)
+[23:41:25] q35-4b-mtplx:  warm-up decode512#2: ok (9.3s)
+[23:41:34] q35-4b-mtplx:  warm-up decode512#3: ok (9.01s)
+[23:41:55] q35-4b-mtplx: GPU quiet after 21s; benchmarking
+== q35-4b-mtplx
+  decode T=0.6: 67.12 tok/s (e2e 65.28; 512 tok, finish=length, d4=0.5559)
+  decode T=0.6: 63.76 tok/s (e2e 63.52; 512 tok, finish=length, d4=0.9727)
+  decode T=0.6: 61.78 tok/s (e2e 62.04; 512 tok, finish=length, d4=0.7293)
+  decode T=0.6: 65.22 tok/s (e2e 64.64; 512 tok, finish=length, d4=0.4906) flags ['repetition loop (distinct-4-gram 0.4906)']
+  decode T=0.6: 63.71 tok/s (e2e 63.14; 512 tok, finish=length, d4=0.5589)
+  decode median 63.76 (min 61.78, max 67.12) over 5/5 valid
+23:43:17 q3 restarted (30 GiB floor for B2, per-cell cleanup); recorded steps are skipped
+  decode T=0: median 66.61 (min 65.9, max 67.57) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 6.75s -> 612 tok/s, cold cached=0 | cached TTFT median 0.10s over 3 turns (cached [4181, 4216, 4253])
+  prefill 16000: 16286 tok (ref 16286), TTFT 29.23s -> 557 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [16336, 16379, 16424])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 14.80 GB, resident mapped files 0.00 GB, swap used 1209.44 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-4b-mtplx-20261022-234042.json
+[23:44:48] q35-4b-mtplx: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:44:48] q35-4b-mtplx: GPU lock released after 245.4s held
+[23:44:48] q35-4b-mtplx: -> /Users/nacer_b/kq/m3/out/results/q35-4b-mtplx-20261022-234042.json  flags: 1
+23:44:48 already recorded :: sw-flint-kapitsa
+23:44:48 already recorded :: q35-4b-mtplx
+23:44:53 power 'AC Power' free 95% disk 206G vtdecoder   0.0 :: q35-4b-mlxvlm-mtp
+
+===== q35-4b-mlxvlm-mtp  [mlx-lm] mlx-vlm server + MTP  version mlx-vlm 0.7.8, mlx 0.32.4
+[23:44:53] q35-4b-mlxvlm-mtp: GPU lock /tmp/kapitsa-gpu.lock is held by: 42974 /bin/bash /Users/nacer_b/nh14-build.sh; 43756 cmake --build build -j8 --target kapitsa logit_dump; 43853 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[23:45:17] q35-4b-mlxvlm-mtp: GPU lock acquired after 23.4s wait
+[23:45:17] q35-4b-mlxvlm-mtp: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/qwen3.5-4b-4bit-mtp --host 127.0.0.1 --port 8282 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/drafters/Qwen3.5-4B-MTP-4bit --draft-kind mtp --draft-block-size 3
+[23:45:21] q35-4b-mlxvlm-mtp: ready after 4s (pid 44081, listener 44081)
+[23:45:29] q35-4b-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (7.49s)
+[23:45:30] q35-4b-mlxvlm-mtp:  warm-up tools: ok (1.22s)
+[23:45:39] q35-4b-mlxvlm-mtp:  warm-up decode512#1: ok (9.74s)
+[23:45:49] q35-4b-mlxvlm-mtp:  warm-up decode512#2: ok (9.9s)
+[23:45:59] q35-4b-mlxvlm-mtp:  warm-up decode512#3: ok (9.22s)
+[23:46:17] q35-4b-mlxvlm-mtp: GPU quiet after 19s; benchmarking
+== q35-4b-mlxvlm-mtp
+  decode T=0.6: 57.32 tok/s (e2e 56.90; 512 tok, finish=length, d4=0.964)
+  decode T=0.6: 56.37 tok/s (e2e 56.21; 512 tok, finish=length, d4=0.5381)
+  decode T=0.6: 55.91 tok/s (e2e 55.82; 512 tok, finish=length, d4=0.7218)
+  decode T=0.6: 56.63 tok/s (e2e 56.39; 512 tok, finish=length, d4=0.9523)
+  decode T=0.6: 56.28 tok/s (e2e 56.00; 512 tok, finish=length, d4=0.969)
+  decode median 56.37 (min 55.91, max 57.32) over 5/5 valid
+  decode T=0: median 66.63 (min 65.88, max 70.07) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 6.43s -> 642 tok/s, cold cached=0 | cached TTFT median 0.51s over 3 turns (cached [4096, 4096, 4096])
+  prefill 16000: 16285 tok (ref 16286), TTFT 27.53s -> 592 tok/s, cold cached=0 | cached TTFT median 4.27s over 3 turns (cached [14336, 14336, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 9.27 GB, resident mapped files 0.00 GB, swap used 1209.44 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-4b-mlxvlm-mtp-20261022-234453.json
+[23:49:04] q35-4b-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[23:49:04] q35-4b-mlxvlm-mtp: GPU lock released after 227.2s held
+[23:49:04] q35-4b-mlxvlm-mtp: -> /Users/nacer_b/kq/m3/out/results/q35-4b-mlxvlm-mtp-20261022-234453.json
+23:49:04 rc=0 :: q35-4b-mlxvlm-mtp
+23:49:09 power 'AC Power' free 95% disk 206G vtdecoder   0.0 :: q35-4b-llamacpp-mtp2
+
+===== q35-4b-llamacpp-mtp2  [llama.cpp] llama.cpp + MTP (n-max 2)  version 0.7.0-dev (b11804, c7fc50941)
+[23:49:09] q35-4b-llamacpp-mtp2: GPU lock /tmp/kapitsa-gpu.lock is held by: 44203 /bin/bash /Users/nacer_b/nh14-test.sh dory nano4b nano9b lightning bolt; 45235 /Users/nacer_b/kapitsa-nh14/build/kapitsa serve --model /Users/nacer_b/.cache/kapitsa/models/nemotron-labs-dory1.0-4b-nvfp4 --model-id m --host 127.0.0.1 ; 45248 sleep 1; 45269 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[23:54:09] q35-4b-llamacpp-mtp2: still waiting for the GPU lock (300s): 44203 /bin/bash /Users/nacer_b/nh14-test.sh dory nano4b nano9b lightning bolt; 45269 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; 45406 /Users/nacer_b/kapitsa-nh14/build/kapitsa bench --model /Users/nacer_b/.cache/kapitsa/models/nemotron-3-nano-4b-fp8 --quick --yes --out /Users/nacer_b/nh1; 45407 /Users/nacer_b/kapitsa-nh14/build/kapitsa serve --model /Users/nacer_b/.cache/kapitsa/models/nemotron-3-nano-4b-fp8 --model-id nemotron-3-nano-4b-fp8 --ho
+[23:59:09] q35-4b-llamacpp-mtp2: still waiting for the GPU lock (600s): 44203 /bin/bash /Users/nacer_b/nh14-test.sh dory nano4b nano9b lightning bolt; 45269 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; 45475 /Users/nacer_b/kapitsa-nh14/build/kapitsa bench --model /Users/nacer_b/.cache/kapitsa/models/nemotron-nano-9b-v2-nvfp4 --quick --yes --out /Users/nacer_b/; 45476 /Users/nacer_b/kapitsa-nh14/build/kapitsa serve --model /Users/nacer_b/.cache/kapitsa/models/nemotron-nano-9b-v2-nvfp4 --model-id nemotron-nano-9b-v2-nvfp
+[00:04:09] q35-4b-llamacpp-mtp2: still waiting for the GPU lock (900s): 44203 /bin/bash /Users/nacer_b/nh14-test.sh dory nano4b nano9b lightning bolt; 45269 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; 45649 /Users/nacer_b/kapitsa-nh14/build/kapitsa bench --model /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-bolt-24gb --quick --yes --out /Users/nacer_b/nh1; 45650 /Users/nacer_b/kapitsa-nh14/build/kapitsa serve --model /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-bolt-24gb --model-id nemotron-3.5-bolt-24gb --ho
+[00:05:34] q35-4b-llamacpp-mtp2: GPU lock acquired after 984.8s wait
+[00:05:34] q35-4b-llamacpp-mtp2: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/.ollama/models/blobs/sha256-a9d0a3e1d8c91732a3812becd31f8d4a8ff57414903f226306069f0437e2ac50 --host 127.0.0.1 --port 8083 -a qwen3.5-4b -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --chat-template-file /Users/nacer_b/kq/bm/qwen3.5-4b-4bit-mtp/chat_template.jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-n-max 2 -md /Users/nacer_b/.ollama/models/blobs/sha256-83ba6dc1b62e441fd679cbfdb1df0fac0e14231a34ac890e4295d6e792e5dea9
+[00:05:38] q35-4b-llamacpp-mtp2: ready after 4s (pid 45693, listener 45693)
+[00:05:46] q35-4b-llamacpp-mtp2:  warm-up prefill~2.9k+decode64: ok (7.45s)
+[00:05:47] q35-4b-llamacpp-mtp2:  warm-up tools: ok (1.26s)
+[00:06:06] q35-4b-llamacpp-mtp2: GPU quiet after 19s; benchmarking
+== q35-4b-llamacpp-mtp2
+  decode T=0.6: 51.04 tok/s (e2e 51.33; 512 tok, finish=length, d4=0.5737)
+  decode T=0.6: 49.72 tok/s (e2e 49.44; 512 tok, finish=length, d4=0.9578)
+  decode T=0.6: 50.56 tok/s (e2e 50.72; 512 tok, finish=length, d4=0.7186)
+  decode T=0.6: 49.47 tok/s (e2e 49.36; 512 tok, finish=length, d4=0.5764)
+  decode T=0.6: 49.72 tok/s (e2e 49.82; 512 tok, finish=length, d4=0.971)
+  decode median 49.72 (min 49.47, max 51.04) over 5/5 valid
+  decode T=0: median 55.02 (min 54.99, max 55.23) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 8.07s -> 512 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [4127, 4189, 4223])
+  prefill 16000: 16285 tok (ref 16286), TTFT 34.30s -> 475 tok/s, cold cached=0 | cached TTFT median 0.35s over 3 turns (cached [16281, 16345, 16409])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 10.27 GB, resident mapped files 0.03 GB, swap used 707.56 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-4b-llamacpp-mtp2-20261022-234909.json
+[00:08:59] q35-4b-llamacpp-mtp2: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:08:59] q35-4b-llamacpp-mtp2: GPU lock released after 204.7s held
+[00:08:59] q35-4b-llamacpp-mtp2: -> /Users/nacer_b/kq/m3/out/results/q35-4b-llamacpp-mtp2-20261022-234909.json
+00:08:59 rc=0 :: q35-4b-llamacpp-mtp2
+00:09:04 power 'AC Power' free 95% disk 206G vtdecoder   0.0 :: q35-4b-ollama-mlx-q4
+
+===== q35-4b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[00:09:04] q35-4b-ollama-mlx-q4: GPU lock /tmp/kapitsa-gpu.lock is held by: 45906 bash -c ~/nh14-cold.sh ~/kapitsa-nh14/build/kapitsa /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4 lightning ~/nh14/cold; ~/nh14-cold.s; 46251 /bin/bash /Users/nacer_b/nh14-cold.sh /Users/nacer_b/kapitsa-nh14/build/kapitsa /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4 lightnin; 46261 /Users/nacer_b/kapitsa-nh14/build/kapitsa serve --model /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4 --model-id m --host 127.0.0.1 --; 46276 sleep 1; 46297 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[00:09:49] q35-4b-ollama-mlx-q4: GPU lock acquired after 45.3s wait
+[00:09:49] q35-4b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[00:09:51] q35-4b-ollama-mlx-q4: ready after 2s (pid 46394, listener 46394)
+[00:10:01] q35-4b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (9.24s)
+[00:10:02] q35-4b-ollama-mlx-q4:  warm-up tools: ok (1.06s)
+[00:10:09] q35-4b-ollama-mlx-q4:  warm-up decode512#1: ok (7.78s)
+[00:10:17] q35-4b-ollama-mlx-q4:  warm-up decode512#2: ok (7.63s)
+[00:10:25] q35-4b-ollama-mlx-q4:  warm-up decode512#3: ok (7.45s)
+[00:10:43] q35-4b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q35-4b-ollama-mlx-q4
+  decode T=0.6: 67.44 tok/s (e2e 66.86; 512 tok, finish=length, d4=0.963)
+  decode T=0.6: 66.92 tok/s (e2e 68.70; 512 tok, finish=length, d4=0.3798) flags ['repetition loop (distinct-4-gram 0.3798)']
+  decode T=0.6: 69.78 tok/s (e2e 69.27; 512 tok, finish=length, d4=0.5621)
+  decode T=0.6: 65.18 tok/s (e2e 65.19; 512 tok, finish=length, d4=0.9335)
+  decode T=0.6: 66.85 tok/s (e2e 67.73; 512 tok, finish=length, d4=1.0)
+  decode median 66.92 (min 65.18, max 69.78) over 5/5 valid
+  decode T=0: median 71.1 (min 70.04, max 71.93) over 5/5 valid flags ['repetition loop (distinct-4-gram 0.4725)']
+  prefill 4000: 4133 tok (ref 4133), TTFT 6.89s -> 600 tok/s, cold cached=2 | cached TTFT median 0.22s over 3 turns (cached [4128, 4225, 4265])
+  prefill 16000: 16286 tok (ref 16286), TTFT 30.18s -> 540 tok/s, cold cached=2 | cached TTFT median 0.35s over 3 turns (cached [16281, 16368, 16474])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 12.06 GB, resident mapped files 0.00 GB, swap used 718.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-4b-ollama-mlx-q4-20261023-000904.json
+[00:13:06] q35-4b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:13:06] q35-4b-ollama-mlx-q4: GPU lock released after 197.3s held
+[00:13:06] q35-4b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q35-4b-ollama-mlx-q4-20261023-000904.json  flags: 2
+00:13:07 rc=0 :: q35-4b-ollama-mlx-q4
+00:13:12 power 'AC Power' free 93% disk 206G vtdecoder   0.0 :: q38-27b-mtplx
+
+===== q38-27b-mtplx  [mtplx] MTPLX (turbo profile, depth 3)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[00:13:12] q38-27b-mtplx: GPU lock /tmp/kapitsa-gpu.lock is held by: 46338 /bin/bash /Users/nacer_b/nh14-b.sh; 46858 build/logit_dump /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4 /Users/nacer_b/nh14/lightning.dump; 46881 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[00:15:53] q38-27b-mtplx: GPU lock acquired after 160.9s wait
+[00:15:53] q38-27b-mtplx: starting /Users/nacer_b/engines/mtplx/bin/mtplx serve --model /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --profile turbo --depth 3
+[00:16:07] q38-27b-mtplx: ready after 14s (pid 46936, listener 46936)
+[00:16:42] q38-27b-mtplx:  warm-up prefill~2.9k+decode64: ok (35.21s)
+[00:16:51] q38-27b-mtplx:  warm-up tools: ok (9.1s)
+[00:17:21] q38-27b-mtplx:  warm-up decode512#1: ok (30.02s)
+[00:17:51] q38-27b-mtplx:  warm-up decode512#2: ok (30.28s)
+[00:18:22] q38-27b-mtplx:  warm-up decode512#3: ok (30.62s)
+[00:18:43] q38-27b-mtplx: GPU quiet after 21s; benchmarking
+== q38-27b-mtplx
+  decode T=0.6: 23.36 tok/s (e2e 23.30; 512 tok, finish=length, d4=0.6649)
+  decode T=0.6: 21.92 tok/s (e2e 21.97; 512 tok, finish=length, d4=0.9286)
+  decode T=0.6: 21.49 tok/s (e2e 21.18; 512 tok, finish=length, d4=0.7028)
+  decode T=0.6: 22.58 tok/s (e2e 21.97; 512 tok, finish=length, d4=0.9663)
+  decode T=0.6: 22.21 tok/s (e2e 21.85; 512 tok, finish=length, d4=0.8841)
+  decode median 22.21 (min 21.49, max 23.36) over 5/5 valid
+  decode T=0: median 24.38 (min 24.25, max 24.65) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 41.57s -> 99 tok/s, cold cached=0 | cached TTFT median 0.42s over 3 turns (cached [4207, 4268, 4332])
+  prefill 16000: 16287 tok (ref 16286), TTFT 171.08s -> 95 tok/s, cold cached=0 | cached TTFT median 0.51s over 3 turns (cached [16339, 16372, 16415])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 26.39 GB, resident mapped files 0.01 GB, swap used 718.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q38-27b-mtplx-20261023-001312.json
+[00:29:03] q38-27b-mtplx: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:29:03] q38-27b-mtplx: GPU lock released after 790.0s held
+[00:29:03] q38-27b-mtplx: -> /Users/nacer_b/kq/m3/out/results/q38-27b-mtplx-20261023-001312.json
+00:29:03 rc=0 :: q38-27b-mtplx
+00:29:08 power 'AC Power' free 95% disk 199G vtdecoder   0.0 :: q38-27b-mlxvlm-mtp
+
+===== q38-27b-mlxvlm-mtp  [mlx-lm] mlx-vlm server + MTP  version mlx-vlm 0.7.8, mlx 0.32.4
+[00:29:09] q38-27b-mlxvlm-mtp: GPU lock /tmp/kapitsa-gpu.lock is held by: 48333 /bin/bash /Users/nacer_b/nh14-c.sh; 48534 build/logit_dump /Users/nacer_b/.cache/kapitsa/models/nemotron-3.5-bolt-24gb /Users/nacer_b/nh14/boltrep/r1 --windows 2; 48557 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[00:29:36] q38-27b-mlxvlm-mtp: GPU lock acquired after 28.5s wait
+[00:29:36] q38-27b-mlxvlm-mtp: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp --host 127.0.0.1 --port 8285 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp --draft-kind mtp --draft-block-size 3
+[00:29:45] q38-27b-mlxvlm-mtp: ready after 8s (pid 48618, listener 48618)
+[00:30:18] q38-27b-mlxvlm-mtp:  warm-up prefill~2.9k+decode64: ok (33.91s)
+[00:30:25] q38-27b-mlxvlm-mtp:  warm-up tools: ok (6.56s)
+[00:30:57] q38-27b-mlxvlm-mtp:  warm-up decode512#1: ok (32.08s)
+[00:31:30] q38-27b-mlxvlm-mtp:  warm-up decode512#2: ok (32.54s)
+[00:32:02] q38-27b-mlxvlm-mtp:  warm-up decode512#3: ok (32.64s)
+[00:32:21] q38-27b-mlxvlm-mtp: GPU quiet after 19s; benchmarking
+== q38-27b-mlxvlm-mtp
+  decode T=0.6: 18.00 tok/s (e2e 17.81; 512 tok, finish=length, d4=0.9171)
+  decode T=0.6: 18.08 tok/s (e2e 17.93; 512 tok, finish=length, d4=0.9477)
+  decode T=0.6: 17.95 tok/s (e2e 17.88; 512 tok, finish=length, d4=0.9507)
+  decode T=0.6: 18.35 tok/s (e2e 18.13; 512 tok, finish=length, d4=0.9234)
+  decode T=0.6: 18.06 tok/s (e2e 17.99; 512 tok, finish=length, d4=0.9477)
+  decode median 18.06 (min 17.95, max 18.35) over 5/5 valid
+  decode T=0: median 19.44 (min 19.33, max 19.68) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 40.69s -> 102 tok/s, cold cached=0 | cached TTFT median 1.13s over 3 turns (cached [4131, 4205, 4255])
+  prefill 16000: 16288 tok (ref 16286), TTFT 166.94s -> 98 tok/s, cold cached=0 | cached TTFT median 1.75s over 3 turns (cached [16287, 16358, 16406])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.56 GB, resident mapped files 0.00 GB, swap used 718.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q38-27b-mlxvlm-mtp-20261023-002908.json
+[00:42:17] q38-27b-mlxvlm-mtp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:42:17] q38-27b-mlxvlm-mtp: GPU lock released after 760.3s held
+[00:42:17] q38-27b-mlxvlm-mtp: -> /Users/nacer_b/kq/m3/out/results/q38-27b-mlxvlm-mtp-20261023-002908.json
+00:42:17 rc=0 :: q38-27b-mlxvlm-mtp
+00:42:22 power 'AC Power' free 95% disk 200G vtdecoder   0.0 :: q38-27b-ollama-mlx-q4
+
+===== q38-27b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[00:42:22] q38-27b-ollama-mlx-q4: GPU lock acquired after 0.0s wait
+[00:42:22] q38-27b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[00:42:24] q38-27b-ollama-mlx-q4: ready after 2s (pid 50811, listener 50811)
+[00:43:02] q38-27b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (38.48s)
+[00:43:08] q38-27b-ollama-mlx-q4:  warm-up tools: ok (5.69s)
+[00:43:33] q38-27b-ollama-mlx-q4:  warm-up decode512#1: ok (24.58s)
+[00:43:56] q38-27b-ollama-mlx-q4:  warm-up decode512#2: ok (23.69s)
+[00:44:22] q38-27b-ollama-mlx-q4:  warm-up decode512#3: ok (25.61s)
+[00:44:41] q38-27b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q38-27b-ollama-mlx-q4
+  decode T=0.6: 22.95 tok/s (e2e 22.75; 512 tok, finish=length, d4=0.9674)
+  decode T=0.6: 21.76 tok/s (e2e 21.90; 512 tok, finish=length, d4=0.9495)
+  decode T=0.6: 22.07 tok/s (e2e 22.23; 512 tok, finish=length, d4=0.9287)
+  decode T=0.6: 22.51 tok/s (e2e 22.48; 512 tok, finish=length, d4=0.9369)
+  decode T=0.6: 22.94 tok/s (e2e 22.92; 512 tok, finish=length, d4=0.9291)
+  decode median 22.51 (min 21.76, max 22.95) over 5/5 valid
+  decode T=0: median 23.59 (min 23.27, max 23.75) over 5/5 valid
+  prefill 4000: 4131 tok (ref 4133), TTFT 41.77s -> 99 tok/s, cold cached=2 | cached TTFT median 0.61s over 3 turns (cached [4179, 4207, 4243])
+  prefill 16000: 16284 tok (ref 16286), TTFT 173.99s -> 94 tok/s, cold cached=2 | cached TTFT median 0.69s over 3 turns (cached [16345, 16388, 16437])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.86 GB, resident mapped files 0.00 GB, swap used 710.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q38-27b-ollama-mlx-q4-20261023-004222.json
+[00:53:14] q38-27b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:53:14] q38-27b-ollama-mlx-q4: GPU lock released after 652.2s held
+[00:53:14] q38-27b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q38-27b-ollama-mlx-q4-20261023-004222.json
+00:53:14 rc=0 :: q38-27b-ollama-mlx-q4
+00:53:19 power 'AC Power' free 95% disk 200G vtdecoder   0.0 :: q36-35b-mtplx
+
+===== q36-35b-mtplx  [mtplx] MTPLX (sustained profile, depth 1)  version mtplx 2.12.2 mlx_lm 0.31.3 mlx 0.32.2
+[00:53:19] q36-35b-mtplx: GPU lock /tmp/kapitsa-gpu.lock is held by: 51837 /bin/bash /Users/nacer_b/nh14-v.sh; 52194 build/logit_dump /Users/nacer_b/.cache/kapitsa/models/nemotron-labs-dory1.0-4b-nvfp4 /Users/nacer_b/nh14/val/nemotron-labs-dory1.0-4b-nvfp4 --paths step -; 52223 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[00:53:50] q36-35b-mtplx: GPU lock acquired after 30.2s wait
+[00:53:50] q36-35b-mtplx: starting /Users/nacer_b/engines/mtplx/bin/mtplx serve --model /Users/nacer_b/kq/bm/qwen3.6-35b-a3b-4bit --host 127.0.0.1 --port 8082 --no-auth --yes --context-window 32768 --no-stats-footer --mtp --profile sustained --depth 1
+[00:54:06] q36-35b-mtplx: ready after 16s (pid 52279, listener 52279)
+[00:54:12] q36-35b-mtplx:  warm-up prefill~2.9k+decode64: ok (6.53s)
+[00:54:14] q36-35b-mtplx:  warm-up tools: ok (1.82s)
+[00:54:25] q36-35b-mtplx:  warm-up decode512#1: ok (10.98s)
+[00:54:36] q36-35b-mtplx:  warm-up decode512#2: ok (10.81s)
+[00:54:47] q36-35b-mtplx:  warm-up decode512#3: ok (10.88s)
+[00:55:08] q36-35b-mtplx: GPU quiet after 21s; benchmarking
+== q36-35b-mtplx
+  decode T=0.6: 53.49 tok/s (e2e 52.23; 512 tok, finish=length, d4=0.9818)
+  decode T=0.6: 52.67 tok/s (e2e 51.82; 512 tok, finish=length, d4=0.9744)
+  decode T=0.6: 53.26 tok/s (e2e 52.22; 512 tok, finish=length, d4=0.9701)
+  decode T=0.6: 53.34 tok/s (e2e 52.67; 512 tok, finish=length, d4=0.9539)
+  decode T=0.6: 52.96 tok/s (e2e 52.68; 512 tok, finish=length, d4=0.5478)
+  decode median 53.26 (min 52.67, max 53.49) over 5/5 valid
+  decode T=0: median 49.31 (min 48.87, max 52.95) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 6.16s -> 671 tok/s, cold cached=0 | cached TTFT median 0.37s over 3 turns (cached [4172, 4214, 4251])
+  prefill 16000: 16287 tok (ref 16286), TTFT 26.99s -> 604 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [16326, 16367, 16406])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.38 GB, resident mapped files 0.01 GB, swap used 713.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/q36-35b-mtplx-20261023-005319.json
+[00:58:25] q36-35b-mtplx: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[00:58:25] q36-35b-mtplx: GPU lock released after 275.6s held
+[00:58:25] q36-35b-mtplx: -> /Users/nacer_b/kq/m3/out/results/q36-35b-mtplx-20261023-005319.json
+00:58:25 rc=0 :: q36-35b-mtplx
+00:58:25 nh build start (lock held)
+00:58:30 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: q36-35b-mlxvlm-dflash2
+
+===== q36-35b-mlxvlm-dflash2  [mlx-lm] mlx-vlm server + DFlash2  version mlx-vlm 0.7.8, mlx 0.32.4
+[00:58:30] q36-35b-mlxvlm-dflash2: GPU lock /tmp/kapitsa-gpu.lock is held by: 52425 bash -c echo "$(date +%T) nh build start (lock held)" >> /Users/nacer_b/kq/m3/q.log; cmake -S . -B build -DCMAKE_BUILD_TYPE=Release > /dev/null 2>&1 && cm; 53103 cmake --build build -j 10 --target kapitsa logit_dump; 53201 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js; waiting...
+[00:58:54] q36-35b-mlxvlm-dflash2: GPU lock acquired after 23.2s wait
+[00:58:54] q36-35b-mlxvlm-dflash2: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/qwen3.6-35b-a3b-4bit --host 127.0.0.1 --port 8289 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/drafters/Qwen3.6-35B-A3B-DFlash2 --draft-kind dflash
+00:58:54 nh build rc=0: kapitsa 0.2.9 (c490f81) (origin/main c490f81)
+[00:59:04] q36-35b-mlxvlm-dflash2: ready after 10s (pid 53432, listener 53432)
+[00:59:10] q36-35b-mlxvlm-dflash2:  warm-up prefill~2.9k+decode64: ok (6.52s)
+[00:59:12] q36-35b-mlxvlm-dflash2:  warm-up tools: ok (1.3s)
+[00:59:21] q36-35b-mlxvlm-dflash2:  warm-up decode512#1: ok (9.72s)
+[00:59:31] q36-35b-mlxvlm-dflash2:  warm-up decode512#2: ok (9.88s)
+[00:59:41] q36-35b-mlxvlm-dflash2:  warm-up decode512#3: ok (10.04s)
+[01:00:00] q36-35b-mlxvlm-dflash2: GPU quiet after 19s; benchmarking
+== q36-35b-mlxvlm-dflash2
+  decode T=0.6: 57.19 tok/s (e2e 57.01; 512 tok, finish=length, d4=0.9624)
+  decode T=0.6: 52.64 tok/s (e2e 52.16; 512 tok, finish=length, d4=0.5307)
+  decode T=0.6: 53.13 tok/s (e2e 50.19; 512 tok, finish=length, d4=0.9354)
+  decode T=0.6: 51.76 tok/s (e2e 51.26; 512 tok, finish=length, d4=0.7072)
+  decode T=0.6: 53.04 tok/s (e2e 52.79; 512 tok, finish=length, d4=0.5606)
+  decode median 53.04 (min 51.76, max 57.19) over 5/5 valid
+  decode T=0: median 62.5 (min 58.39, max 64.04) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 5.95s -> 695 tok/s, cold cached=0 | cached TTFT median 0.75s over 3 turns (cached [4096, 4096, 4096])
+  prefill 16000: 16287 tok (ref 16286), TTFT 24.97s -> 652 tok/s, cold cached=0 | cached TTFT median 4.18s over 3 turns (cached [14336, 14336, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.59 GB, resident mapped files 0.01 GB, swap used 713.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/q36-35b-mlxvlm-dflash2-20261023-005830.json
+[01:02:55] q36-35b-mlxvlm-dflash2: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:02:55] q36-35b-mlxvlm-dflash2: GPU lock released after 241.7s held
+[01:02:55] q36-35b-mlxvlm-dflash2: -> /Users/nacer_b/kq/m3/out/results/q36-35b-mlxvlm-dflash2-20261023-005830.json
+01:02:55 rc=0 :: q36-35b-mlxvlm-dflash2
+01:03:00 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: q36-35b-ollama-mlx-q4
+
+===== q36-35b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[01:03:01] q36-35b-ollama-mlx-q4: GPU lock acquired after 0.0s wait
+[01:03:01] q36-35b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[01:03:03] q36-35b-ollama-mlx-q4: ready after 2s (pid 54586, listener 54586)
+[01:03:16] q36-35b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (13.28s)
+[01:03:17] q36-35b-ollama-mlx-q4:  warm-up tools: ok (1.1s)
+[01:03:26] q36-35b-ollama-mlx-q4:  warm-up decode512#1: ok (9.24s)
+[01:03:36] q36-35b-ollama-mlx-q4:  warm-up decode512#2: ok (9.3s)
+[01:03:45] q36-35b-ollama-mlx-q4:  warm-up decode512#3: ok (9.18s)
+[01:04:03] q36-35b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q36-35b-ollama-mlx-q4
+  decode T=0.6: 57.23 tok/s (e2e 56.68; 512 tok, finish=length, d4=0.9545)
+  decode T=0.6: 57.23 tok/s (e2e 56.99; 512 tok, finish=length, d4=0.9926)
+  decode T=0.6: 57.54 tok/s (e2e 56.97; 512 tok, finish=length, d4=0.4669) flags ['repetition loop (distinct-4-gram 0.4669)']
+  decode T=0.6: 60.30 tok/s (e2e 60.10; 512 tok, finish=length, d4=0.9641)
+  decode T=0.6: 57.53 tok/s (e2e 56.81; 512 tok, finish=length, d4=0.7235)
+  decode median 57.53 (min 57.23, max 60.3) over 5/5 valid
+  decode T=0: median 64.31 (min 59.47, max 65.82) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 6.07s -> 681 tok/s, cold cached=2 | cached TTFT median 0.39s over 3 turns (cached [4129, 4188, 4235])
+  prefill 16000: 16284 tok (ref 16286), TTFT 27.37s -> 595 tok/s, cold cached=2 | cached TTFT median 0.48s over 3 turns (cached [16279, 16342, 16384])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 26.07 GB, resident mapped files 0.01 GB, swap used 713.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/q36-35b-ollama-mlx-q4-20261023-010300.json
+[01:06:41] q36-35b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:06:41] q36-35b-ollama-mlx-q4: GPU lock released after 220.6s held
+[01:06:41] q36-35b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q36-35b-ollama-mlx-q4-20261023-010300.json  flags: 1
+01:06:41 rc=0 :: q36-35b-ollama-mlx-q4
+01:06:46 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: q35-9b-llamacpp
+
+===== q35-9b-llamacpp  [llama.cpp] llama.cpp (unsloth Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[01:06:47] q35-9b-llamacpp: GPU lock acquired after 0.0s wait
+[01:06:47] q35-9b-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/kq/bm/gguf/Qwen3.5-9B-Q4_K_M.gguf -a qwen3.5-9b --host 127.0.0.1 --port 8083 -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --chat-template-file /Users/nacer_b/kq/bm/qwen3.5-9b-4bit/chat_template.jinja --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[01:06:51] q35-9b-llamacpp: ready after 4s (pid 55096, listener 55096)
+[01:07:03] q35-9b-llamacpp:  warm-up prefill~2.9k+decode64: ok (12.27s)
+[01:07:06] q35-9b-llamacpp:  warm-up tools: ok (3.16s)
+[01:07:25] q35-9b-llamacpp: GPU quiet after 19s; benchmarking
+== q35-9b-llamacpp
+  decode T=0.6: 23.38 tok/s (e2e 23.39; 512 tok, finish=length, d4=0.5546)
+  decode T=0.6: 23.38 tok/s (e2e 23.38; 512 tok, finish=length, d4=0.5306)
+  decode T=0.6: 23.40 tok/s (e2e 23.40; 512 tok, finish=length, d4=0.4508) flags ['repetition loop (distinct-4-gram 0.4508)']
+  decode T=0.6: 23.37 tok/s (e2e 23.38; 512 tok, finish=length, d4=0.5462)
+  decode T=0.6: 23.35 tok/s (e2e 23.36; 512 tok, finish=length, d4=0.5554)
+  decode median 23.38 (min 23.35, max 23.4) over 5/5 valid
+  decode T=0: median 23.4 (min 23.4, max 23.41) over 5/5 valid
+  prefill 4000: 4132 tok (ref 4133), TTFT 13.46s -> 307 tok/s, cold cached=0 | cached TTFT median 0.41s over 3 turns (cached [4128, 4191, 4227])
+  prefill 16000: 16286 tok (ref 16286), TTFT 55.91s -> 291 tok/s, cold cached=0 | cached TTFT median 0.46s over 3 turns (cached [16282, 16343, 16400])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 10.61 GB, resident mapped files 0.03 GB, swap used 545.12 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-9b-llamacpp-20261023-010646.json
+[01:13:22] q35-9b-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:13:22] q35-9b-llamacpp: GPU lock released after 395.8s held
+[01:13:22] q35-9b-llamacpp: -> /Users/nacer_b/kq/m3/out/results/q35-9b-llamacpp-20261023-010646.json  flags: 1
+01:13:22 rc=0 :: q35-9b-llamacpp
+01:13:27 power 'AC Power' free 93% disk 195G vtdecoder   0.0 :: q35-9b-mlxlm
+
+===== q35-9b-mlxlm  [mlx-lm] mlx-lm  version mlx_lm 0.32.2 mlx 0.32.4
+[01:13:28] q35-9b-mlxlm: GPU lock acquired after 0.0s wait
+[01:13:28] q35-9b-mlxlm: starting /Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/qwen3.5-9b-4bit --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[01:13:30] q35-9b-mlxlm: ready after 2s (pid 56121, listener 56121)
+[01:13:44] q35-9b-mlxlm:  warm-up prefill~2.9k+decode64: ok (14.68s)
+[01:13:47] q35-9b-mlxlm:  warm-up tools: ok (2.34s)
+[01:14:05] q35-9b-mlxlm: GPU quiet after 19s; benchmarking
+== q35-9b-mlxlm
+  decode T=0.6: 26.68 tok/s (e2e 26.25; 512 tok, finish=length, d4=0.5576)
+  decode T=0.6: 26.96 tok/s (e2e 26.45; 512 tok, finish=length, d4=0.5579)
+  decode T=0.6: 26.50 tok/s (e2e 26.45; 512 tok, finish=length, d4=0.9524)
+  decode T=0.6: 26.50 tok/s (e2e 26.45; 512 tok, finish=length, d4=0.7308)
+  decode T=0.6: 26.61 tok/s (e2e 26.44; 512 tok, finish=length, d4=0.711)
+  decode median 26.61 (min 26.5, max 26.96) over 5/5 valid
+  decode T=0: median 27.12 (min 27.01, max 27.45) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 11.75s -> 352 tok/s, cold cached=0 | cached TTFT median 0.39s over 3 turns (cached [4130, 4192, 4232])
+  prefill 16000: 16287 tok (ref 16286), TTFT 48.12s -> 338 tok/s, cold cached=0 | cached TTFT median 0.52s over 3 turns (cached [16283, 16351, 16413])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 9.58 GB, resident mapped files 0.01 GB, swap used 529.12 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-011328.json
+[01:19:22] q35-9b-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:19:22] q35-9b-mlxlm: GPU lock released after 354.1s held
+[01:19:22] q35-9b-mlxlm: -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-011328.json
+01:19:22 rc=0 :: q35-9b-mlxlm
+01:19:27 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: dory-mlxlm-4bit
+
+===== dory-mlxlm-4bit  [mlx-lm] mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)  version mlx_lm 0.32.2.dev0 mlx 0.32.4
+[01:19:27] dory-mlxlm-4bit: GPU lock acquired after 0.0s wait
+[01:19:27] dory-mlxlm-4bit: starting /Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server --model /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit --host 127.0.0.1 --port 8321 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[01:19:29] dory-mlxlm-4bit: ready after 2s (pid 57111, listener 57111)
+[01:19:43] dory-mlxlm-4bit:  warm-up prefill~2.9k+decode64: ok (13.77s)
+[01:19:45] dory-mlxlm-4bit:  warm-up tools: ok (2.09s)
+[01:20:04] dory-mlxlm-4bit: GPU quiet after 19s; benchmarking
+== dory-mlxlm-4bit
+01:20:12 q4 queued (Nemotron-H on c490f81 after #351); s3 now waits for NH-CLEANUP-DONE, A2 on c490f81 incl. the 5 Nemotron models
+  decode T=0.6: 29.87 tok/s (e2e 30.17; 512 tok, finish=length, d4=0.4951) flags ['repetition loop (distinct-4-gram 0.4951)']
+  decode T=0.6: 29.95 tok/s (e2e 29.23; 512 tok, finish=length, d4=0.5651)
+  decode T=0.6: 30.78 tok/s (e2e 30.25; 512 tok, finish=length, d4=0.7038)
+  decode T=0.6: 30.35 tok/s (e2e 29.70; 512 tok, finish=length, d4=0.6029)
+  decode T=0.6: 29.96 tok/s (e2e 29.98; 512 tok, finish=length, d4=0.6198)
+  decode median 29.96 (min 29.87, max 30.78) over 5/5 valid
+  decode T=0: median 30.56 (min 30.14, max 31.0) over 5/5 valid
+01:23:03 q4 and s3 relaunched detached (setsid, pidfiles ~/kq/m3/run); every q4/s3 leg under lockf -k
+  prefill 4000: 4185 tok (ref 4184), TTFT 12.15s -> 344 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [4206, 4243, 4285])
+  prefill 16000: 16518 tok (ref 16517), TTFT 52.97s -> 312 tok/s, cold cached=0 | cached TTFT median 0.46s over 3 turns (cached [16560, 16612, 16668])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 9.99 GB, resident mapped files 0.01 GB, swap used 529.12 MB
+  -> /Users/nacer_b/kq/m3/out/results/dory-mlxlm-4bit-20261023-011927.json
+[01:25:02] dory-mlxlm-4bit: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:25:02] dory-mlxlm-4bit: GPU lock released after 335.7s held
+[01:25:02] dory-mlxlm-4bit: -> /Users/nacer_b/kq/m3/out/results/dory-mlxlm-4bit-20261023-011927.json  flags: 1
+01:25:02 rc=0 :: dory-mlxlm-4bit
+01:25:08 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: nano-4b-llamacpp
+
+===== nano-4b-llamacpp  [llama.cpp] llama.cpp (NVIDIA's Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[01:25:08] nano-4b-llamacpp: GPU lock acquired after 0.0s wait
+[01:25:08] nano-4b-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/kq/bm/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf -a nano-4b --host 127.0.0.1 --port 8083 -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --no-webui
+[01:25:10] nano-4b-llamacpp: ready after 2s (pid 58115, listener 58115)
+[01:25:19] nano-4b-llamacpp:  warm-up prefill~2.9k+decode64: ok (8.89s)
+[01:25:20] nano-4b-llamacpp:  warm-up tools: ok (1.77s)
+[01:25:39] nano-4b-llamacpp: GPU quiet after 19s; benchmarking
+== nano-4b-llamacpp
+  decode T=0.6: 34.84 tok/s (e2e 34.85; 512 tok, finish=length, d4=0.7093)
+  decode T=0.6: 34.91 tok/s (e2e 34.92; 512 tok, finish=length, d4=0.9579)
+  decode T=0.6: 34.91 tok/s (e2e 34.91; 512 tok, finish=length, d4=0.9628)
+  decode T=0.6: 34.92 tok/s (e2e 34.90; 512 tok, finish=length, d4=0.9129)
+  decode T=0.6: 34.89 tok/s (e2e 34.90; 512 tok, finish=length, d4=0.5747)
+  decode median 34.91 (min 34.84, max 34.92) over 5/5 valid
+  decode T=0: median 34.89 (min 34.86, max 34.91) over 5/5 valid
+  prefill 4000: 4187 tok (ref 4133), TTFT 10.20s -> 410 tok/s, cold cached=0 | cached TTFT median 0.20s over 3 turns (cached [4219, 4254, 4294]) INVALID ['prompt_tokens 4187 outside ±1% of 4133 (truncated or template drift)']
+  prefill 16000: 16519 tok (ref 16286), TTFT 41.51s -> 398 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [16565, 16611, 16660]) INVALID ['prompt_tokens 16519 outside ±1% of 16286 (truncated or template drift)']
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 8.70 GB, resident mapped files 0.03 GB, swap used 529.12 MB
+  INVALID: ['prefill_4000: prompt_tokens 4187 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 16519 outside ±1% of 16286 (truncated or template drift)']
+  -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-012508.json
+[01:29:50] nano-4b-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:29:50] nano-4b-llamacpp: GPU lock released after 282.6s held
+[01:29:50] nano-4b-llamacpp: -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-012508.json  INVALID: ['prefill_4000: prompt_tokens 4187 outside ±1% of 4133 (truncated or template drift)', 'prefill_16000: prompt_tokens 16519 outside ±1% of 16286 (truncated or template drift)']
+01:29:50 rc=0 :: nano-4b-llamacpp
+01:29:55 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: nano-9b-mlxlm-4bit
+
+===== nano-9b-mlxlm-4bit  [mlx-lm] mlx-lm (mlx-community 4-bit)  version mlx_lm 0.32.2 mlx 0.32.4
+[01:29:55] nano-9b-mlxlm-4bit: GPU lock acquired after 0.0s wait
+[01:29:56] nano-9b-mlxlm-4bit: starting /Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/mlx/NVIDIA-Nemotron-Nano-9B-v2-4bits --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[01:29:58] nano-9b-mlxlm-4bit: ready after 2s (pid 58879, listener 58879)
+[01:30:13] nano-9b-mlxlm-4bit:  warm-up prefill~2.9k+decode64: ok (14.77s)
+[01:30:29] nano-9b-mlxlm-4bit:  warm-up tools: ok (16.69s)
+[01:30:29] nano-9b-mlxlm-4bit: WARNING: thinking was not switched off in warm-up ['tools']; runs will be INVALID
+[01:30:48] nano-9b-mlxlm-4bit: GPU quiet after 19s; benchmarking
+== nano-9b-mlxlm-4bit
+  decode T=0.6: 24.67 tok/s (e2e 24.61; 512 tok, finish=length, d4=0.9895)
+  decode T=0.6: 24.96 tok/s (e2e 24.83; 512 tok, finish=length, d4=0.9793)
+  decode T=0.6: 24.95 tok/s (e2e 24.84; 512 tok, finish=length, d4=0.9831)
+  decode T=0.6: 24.89 tok/s (e2e 24.85; 512 tok, finish=length, d4=0.9855)
+  decode T=0.6: 24.95 tok/s (e2e 24.83; 512 tok, finish=length, d4=0.9877)
+  decode median 24.95 (min 24.67, max 24.96) over 5/5 valid
+  decode T=0: median 25.28 (min 25.14, max 25.36) over 5/5 valid
+  prefill 4000: 4181 tok (ref 4133), TTFT 16.72s -> 250 tok/s, cold cached=0 | cached TTFT median 1.52s over 3 turns (cached [4159, 4159, 4159]) INVALID ['prompt_tokens 4181 outside ±1% of 4133 (truncated or template drift)', 'follow-up: content contains </think>', 'follow-up: content contains </think>'] flags ["turn 1 finish_reason=length (engines may not cache a 'length' turn)"]
+  prefill 16000: 16516 tok (ref 16286), TTFT 67.57s -> 244 tok/s, cold cached=0 | cached TTFT median 1.65s over 3 turns (cached [16494, 16494, 16494]) INVALID ['content contains </think>', 'prompt_tokens 16516 outside ±1% of 16286 (truncated or template drift)', 'follow-up: content contains </think>'] flags ["turn 1 finish_reason=length (engines may not cache a 'length' turn)"]
+  tools(think=False): stream ok=False [] leak=False | nonstream ok=False | roundtrip=None
+  tools(think=True): stream ok=False [] leak=False | nonstream ok=False | roundtrip=None
+  memory: phys_footprint_peak 14.15 GB, resident mapped files 0.01 GB, swap used 529.12 MB
+  INVALID: ['prefill_4000: prompt_tokens 4181 outside ±1% of 4133 (truncated or template drift)', 'cached_4000: follow-up: content contains </think>', 'cached_4000: follow-up: content contains </think>', 'prefill_16000: content contains </think>', 'prefill_16000: prompt_tokens 16516 outside ±1% of 16286 (truncated or template drift)', 'cached_16000: follow-up: content contains </think>']
+  -> /Users/nacer_b/kq/m3/out/results/nano-9b-mlxlm-4bit-20261023-012955.json
+[01:38:19] nano-9b-mlxlm-4bit: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:38:19] nano-9b-mlxlm-4bit: GPU lock released after 503.6s held
+[01:38:19] nano-9b-mlxlm-4bit: -> /Users/nacer_b/kq/m3/out/results/nano-9b-mlxlm-4bit-20261023-012955.json  INVALID: ['prefill_4000: prompt_tokens 4181 outside ±1% of 4133 (truncated or template drift)', 'cached_4000: follow-up: content contains </think>', 'cached_4000: follow-up: content contains </think>', 'prefill_16000: content contains </think>', 'prefill_16000: prompt_tokens 16516 outside ±1% of 16286 (truncated or template drift)', 'cached_16000: follow-up: content contains </think>']  flags: 2
+01:38:19 rc=0 :: nano-9b-mlxlm-4bit
+01:38:24 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: lightning-mlxvlm-dspark
+
+===== lightning-mlxvlm-dspark  [mlx-lm] mlx-vlm server + DSpark drafter (block 6)  version mlx-vlm 0.7.8, mlx 0.32.4
+[01:38:24] lightning-mlxvlm-dspark: GPU lock acquired after 0.0s wait
+[01:38:24] lightning-mlxvlm-dspark: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6
+[01:38:34] lightning-mlxvlm-dspark: ready after 10s (pid 60171, listener 60171)
+[01:38:45] lightning-mlxvlm-dspark:  warm-up prefill~2.9k+decode64: ok (10.02s)
+[01:38:46] lightning-mlxvlm-dspark:  warm-up tools: ok (1.69s)
+[01:39:00] lightning-mlxvlm-dspark:  warm-up decode512#1: ok (13.8s)
+[01:39:13] lightning-mlxvlm-dspark:  warm-up decode512#2: ok (13.41s)
+[01:39:28] lightning-mlxvlm-dspark:  warm-up decode512#3: ok (14.31s)
+[01:39:46] lightning-mlxvlm-dspark: GPU quiet after 19s; benchmarking
+== lightning-mlxvlm-dspark
+  decode T=0.6: 40.51 tok/s (e2e 39.32; 512 tok, finish=length, d4=0.8747)
+  decode T=0.6: 39.86 tok/s (e2e 38.87; 512 tok, finish=length, d4=0.8688)
+  decode T=0.6: 39.14 tok/s (e2e 38.80; 512 tok, finish=length, d4=0.8556)
+  decode T=0.6: 39.23 tok/s (e2e 38.81; 512 tok, finish=length, d4=0.8447)
+  decode T=0.6: 38.31 tok/s (e2e 38.23; 512 tok, finish=length, d4=0.9702)
+  decode median 39.23 (min 38.31, max 40.51) over 5/5 valid
+  decode T=0: median 39.98 (min 39.52, max 41.82) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 8.14s -> 514 tok/s, cold cached=0 | cached TTFT median 0.53s over 3 turns (cached [4183, 4253, 4297])
+  prefill 16000: 16517 tok (ref 16517), TTFT 33.17s -> 498 tok/s, cold cached=0 | cached TTFT median 0.70s over 3 turns (cached [16516, 16572, 16602])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.92 GB, resident mapped files 0.01 GB, swap used 532.31 MB
+  -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-013824.json
+[01:43:25] lightning-mlxvlm-dspark: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:43:25] lightning-mlxvlm-dspark: GPU lock released after 301.2s held
+[01:43:25] lightning-mlxvlm-dspark: -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-013824.json
+01:43:26 rc=0 :: lightning-mlxvlm-dspark
+01:43:26 PHASE-B-DONE
+01:43:26 sweep rival q35-4b: none (reused or not measured)
+01:43:31 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: sweep sw-q35-4b-kapitsa
+
+===== sw-q35-4b-kapitsa  [kapitsa] Kapitsa (catalog 4b)  version e86dea7
+[01:43:31] sw-q35-4b-kapitsa: GPU lock acquired after 0.0s wait
+[01:43:31] sw-q35-4b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 4b --model-id qwen3.5-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[01:43:35] sw-q35-4b-kapitsa: ready after 4s (pid 61482, listener 61482)
+[01:43:41] sw-q35-4b-kapitsa: cold start: ready 4.1s, first TTFT 1.5454533329999993s, repeat median 1.4715319580000008s
+[01:43:46] sw-q35-4b-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.7s)
+[01:43:47] sw-q35-4b-kapitsa:  warm-up tools: ok (1.0s)
+[01:44:06] sw-q35-4b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q35-4b-kapitsa
+  sweep 1000: 1103 tok, TTFT 1.58s, 699 tok/s prefill, decode 103.20 tok/s
+  sweep 2000: 2130 tok, TTFT 2.98s, 714 tok/s prefill, decode 102.75 tok/s
+  sweep 4000: 4158 tok, TTFT 5.89s, 706 tok/s prefill, decode 90.88 tok/s
+  sweep 8000: 8305 tok, TTFT 12.10s, 686 tok/s prefill, decode 85.73 tok/s
+  sweep 16000: 16310 tok, TTFT 25.56s, 638 tok/s prefill, decode 73.69 tok/s
+  sweep 30902: 31548 tok, TTFT 56.74s, 556 tok/s prefill, decode 57.88 tok/s
+  memory: phys_footprint_peak 5.29 GB, resident mapped files 0.01 GB, swap used 532.31 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261023-014331.json
+[01:46:11] sw-q35-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:46:11] sw-q35-4b-kapitsa: GPU lock released after 160.4s held
+[01:46:11] sw-q35-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q35-4b-kapitsa-20261023-014331.json
+01:46:11 rc=0 :: sweep sw-q35-4b-kapitsa
+01:46:11 sweep rival q38-27b: none (reused or not measured)
+01:46:16 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: sweep sw-q38-27b-kapitsa
+
+===== sw-q38-27b-kapitsa  [kapitsa] Kapitsa (catalog 27b)  version e86dea7
+[01:46:16] sw-q38-27b-kapitsa: GPU lock acquired after 0.0s wait
+[01:46:16] sw-q38-27b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 27b --model-id qwen3.8-27b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[01:46:27] sw-q38-27b-kapitsa: ready after 10s (pid 61963, listener 61963)
+[01:47:07] sw-q38-27b-kapitsa: cold start: ready 10.2s, first TTFT 10.734850125000001s, repeat median 9.538223916s
+[01:47:36] sw-q38-27b-kapitsa:  warm-up prefill~2.9k+decode64: ok (28.72s)
+[01:47:41] sw-q38-27b-kapitsa:  warm-up tools: ok (4.65s)
+[01:47:59] sw-q38-27b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q38-27b-kapitsa
+  sweep 1000: 1103 tok, TTFT 10.21s, 108 tok/s prefill, decode 28.63 tok/s
+  sweep 2000: 2132 tok, TTFT 19.29s, 111 tok/s prefill, decode 25.68 tok/s
+  sweep 4000: 4158 tok, TTFT 37.63s, 111 tok/s prefill, decode 25.17 tok/s
+  sweep 8000: 8308 tok, TTFT 75.74s, 110 tok/s prefill, decode 25.39 tok/s
+  sweep 16000: 16311 tok, TTFT 154.29s, 106 tok/s prefill, decode 27.33 tok/s
+  sweep 30902: 31550 tok, TTFT 320.16s, 99 tok/s prefill, decode 20.65 tok/s
+  memory: phys_footprint_peak 19.67 GB, resident mapped files 0.01 GB, swap used 537.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261023-014616.json
+[01:59:10] sw-q38-27b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[01:59:10] sw-q38-27b-kapitsa: GPU lock released after 773.6s held
+[01:59:10] sw-q38-27b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q38-27b-kapitsa-20261023-014616.json
+01:59:10 rc=0 :: sweep sw-q38-27b-kapitsa
+01:59:10 sweep rival q36-35b: none (reused or not measured)
+01:59:15 power 'AC Power' free 95% disk 195G vtdecoder   0.0 :: sweep sw-q36-35b-kapitsa
+
+===== sw-q36-35b-kapitsa  [kapitsa] Kapitsa (catalog 35b)  version e86dea7
+[01:59:15] sw-q36-35b-kapitsa: GPU lock acquired after 0.0s wait
+[01:59:15] sw-q36-35b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 35b --model-id qwen3.6-35b-a3b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[01:59:26] sw-q36-35b-kapitsa: ready after 10s (pid 63781, listener 63781)
+[01:59:32] sw-q36-35b-kapitsa: cold start: ready 10.2s, first TTFT 2.5928491250000008s, repeat median 1.1886705420000006s
+[01:59:36] sw-q36-35b-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.01s)
+[01:59:37] sw-q36-35b-kapitsa:  warm-up tools: ok (0.9s)
+[01:59:56] sw-q36-35b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q36-35b-kapitsa
+  sweep 1000: 1105 tok, TTFT 1.67s, 662 tok/s prefill, decode 86.60 tok/s
+  sweep 2000: 2128 tok, TTFT 2.40s, 886 tok/s prefill, decode 84.39 tok/s
+  sweep 4000: 4157 tok, TTFT 4.59s, 905 tok/s prefill, decode 86.38 tok/s
+  sweep 8000: 8305 tok, TTFT 9.70s, 856 tok/s prefill, decode 74.75 tok/s
+  sweep 16000: 16308 tok, TTFT 21.24s, 768 tok/s prefill, decode 62.46 tok/s
+  sweep 30902: 31552 tok, TTFT 49.33s, 640 tok/s prefill, decode 57.01 tok/s
+  memory: phys_footprint_peak 21.40 GB, resident mapped files 0.01 GB, swap used 541.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q36-35b-kapitsa-20261023-015915.json
+[02:01:47] sw-q36-35b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:01:47] sw-q36-35b-kapitsa: GPU lock released after 152.2s held
+[02:01:47] sw-q36-35b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q36-35b-kapitsa-20261023-015915.json
+02:01:47 rc=0 :: sweep sw-q36-35b-kapitsa
+02:01:47 sweep rival q35-9b: none (reused or not measured)
+02:01:52 power 'AC Power' free 94% disk 195G vtdecoder   0.0 :: sweep sw-q35-9b-kapitsa
+
+===== sw-q35-9b-kapitsa  [kapitsa] Kapitsa (catalog 9b)  version e86dea7
+[02:01:53] sw-q35-9b-kapitsa: GPU lock acquired after 0.0s wait
+[02:01:53] sw-q35-9b-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model 9b --model-id qwen3.5-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[02:01:57] sw-q35-9b-kapitsa: ready after 4s (pid 64210, listener 64210)
+[02:02:09] sw-q35-9b-kapitsa: cold start: ready 4.0s, first TTFT 2.9042745420000005s, repeat median 2.745373707999999s
+[02:02:17] sw-q35-9b-kapitsa:  warm-up prefill~2.9k+decode64: ok (8.9s)
+[02:02:19] sw-q35-9b-kapitsa:  warm-up tools: ok (1.62s)
+[02:02:38] sw-q35-9b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-q35-9b-kapitsa
+  sweep 1000: 1103 tok, TTFT 2.95s, 374 tok/s prefill, decode 57.50 tok/s
+  sweep 2000: 2129 tok, TTFT 5.58s, 382 tok/s prefill, decode 64.45 tok/s
+  sweep 4000: 4157 tok, TTFT 11.01s, 377 tok/s prefill, decode 60.53 tok/s
+  sweep 8000: 8304 tok, TTFT 21.90s, 379 tok/s prefill, decode 57.32 tok/s
+02:04:20 pick.py fixed (decode_summary.median_tps): Phase C swept no rival for 4B/27B/35B; their sweeps (Ollama MLX q4 each) go to q4. ~/kq/bm/ollama-mlx kept as ollama-mlx.keep (q3 cleanup removes only the link). m3pro.json: Nemotron --ref-prompt-tokens
+  sweep 16000: 16310 tok, TTFT 44.74s, 365 tok/s prefill, decode 50.38 tok/s
+  sweep 30902: 31550 tok, TTFT 94.02s, 336 tok/s prefill, decode 46.94 tok/s
+  memory: phys_footprint_peak 8.38 GB, resident mapped files 0.01 GB, swap used 541.19 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-q35-9b-kapitsa-20261023-020153.json
+[02:06:06] sw-q35-9b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:06:06] sw-q35-9b-kapitsa: GPU lock released after 253.4s held
+[02:06:06] sw-q35-9b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-q35-9b-kapitsa-20261023-020153.json
+02:06:06 rc=0 :: sweep sw-q35-9b-kapitsa
+02:06:06 sweep rival flint: none (reused or not measured)
+02:06:11 power 'AC Power' free 94% disk 195G vtdecoder   0.0 :: sweep sw-flint-kapitsa
+
+===== sw-flint-kapitsa  [kapitsa] Kapitsa (catalog flint)  version e86dea7
+[02:06:11] sw-flint-kapitsa: GPU lock acquired after 0.0s wait
+[02:06:11] sw-flint-kapitsa: starting /Users/nacer_b/kq/head/build/kapitsa serve --model flint --model-id flint --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[02:06:22] sw-flint-kapitsa: ready after 11s (pid 65016, listener 65016)
+02:06:24 q4/s3 relaunched: anchored wait patterns, 30G-floor df lines
+[02:06:29] sw-flint-kapitsa: cold start: ready 11.1s, first TTFT 2.7888962919999987s, repeat median 1.3289487919999985s
+[02:06:34] sw-flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.36s)
+[02:06:35] sw-flint-kapitsa:  warm-up tools: ok (0.8s)
+[02:06:53] sw-flint-kapitsa: GPU quiet after 19s; benchmarking
+== sw-flint-kapitsa
+  sweep 1000: 1032 tok, TTFT 1.61s, 643 tok/s prefill, decode 70.84 tok/s
+  sweep 2000: 1998 tok, TTFT 2.57s, 777 tok/s prefill, decode 69.97 tok/s
+  sweep 4000: 3900 tok, TTFT 4.93s, 791 tok/s prefill, decode 67.84 tok/s
+  sweep 8000: 7696 tok, TTFT 10.24s, 752 tok/s prefill, decode 63.58 tok/s
+  sweep 16000: 15088 tok, TTFT 22.29s, 677 tok/s prefill, decode 58.16 tok/s
+  sweep 30902: 29156 tok, TTFT 51.59s, 565 tok/s prefill, decode 49.22 tok/s
+  memory: phys_footprint_peak 22.65 GB, resident mapped files 0.02 GB, swap used 543.69 MB
+  INVALID: ['sweep: sweep 1000: reasoning text returned (889 chars)', 'sweep: sweep 2000: reasoning text returned (835 chars)', 'sweep: sweep 4000: reasoning text returned (854 chars)', 'sweep: sweep 8000: reasoning text returned (908 chars)', 'sweep: sweep 16000: reasoning text returned (924 chars)', 'sweep: sweep 30902: reasoning text returned (764 chars)']
+  -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261023-020611.json
+[02:08:52] sw-flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:08:52] sw-flint-kapitsa: GPU lock released after 160.4s held
+[02:08:52] sw-flint-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261023-020611.json  INVALID: ['sweep: sweep 1000: reasoning text returned (889 chars)', 'sweep: sweep 2000: reasoning text returned (835 chars)', 'sweep: sweep 4000: reasoning text returned (854 chars)', 'sweep: sweep 8000: reasoning text returned (908 chars)', 'sweep: sweep 16000: reasoning text returned (924 chars)', 'sweep: sweep 30902: reasoning text returned (764 chars)']
+02:08:52 rc=0 :: sweep sw-flint-kapitsa
+02:08:52 PHASE-C-DONE
+02:08:52 cleanup after Phase C: 198G free
+02:08:52 B2 pull qwen3.6:35b-a3b-mtp-q4_K_M (198G free)
+02:18:28 B2 pulled qwen3.6:35b-a3b-mtp-q4_K_M: 183G free
+02:19:33 power 'AC Power' free 94% disk 183G vtdecoder   0.0 :: q36-35b-llamacpp-mtp1
+
+===== q36-35b-llamacpp-mtp1  [llama.cpp] llama.cpp + MTP (n-max 1)  version 0.7.0-dev (b11804, c7fc50941)
+[02:19:33] q36-35b-llamacpp-mtp1: GPU lock acquired after 0.0s wait
+[02:19:33] q36-35b-llamacpp-mtp1: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/.ollama/models/blobs/sha256-d372de8e934898a59e6ccfabc3368474711384d8f1fd4d22d87a3f0a45400cdc --host 127.0.0.1 --port 8083 -a qwen3.6-35b-a3b -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --chat-template-file /Users/nacer_b/kq/bm/qwen3.6-35b-a3b-4bit/chat_template.jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-n-max 1
+[02:19:41] q36-35b-llamacpp-mtp1: ready after 8s (pid 65582, listener 65582)
+[02:19:48] q36-35b-llamacpp-mtp1:  warm-up prefill~2.9k+decode64: ok (6.33s)
+[02:19:49] q36-35b-llamacpp-mtp1:  warm-up tools: ok (1.3s)
+[02:20:08] q36-35b-llamacpp-mtp1: GPU quiet after 19s; benchmarking
+== q36-35b-llamacpp-mtp1
+  decode T=0.6: 51.59 tok/s (e2e 51.47; 512 tok, finish=length, d4=0.726)
+  decode T=0.6: 53.13 tok/s (e2e 53.26; 512 tok, finish=length, d4=0.9231)
+  decode T=0.6: 51.65 tok/s (e2e 51.70; 512 tok, finish=length, d4=0.9443)
+  decode T=0.6: 53.42 tok/s (e2e 53.62; 512 tok, finish=length, d4=0.7228)
+  decode T=0.6: 52.78 tok/s (e2e 53.00; 512 tok, finish=length, d4=0.9363)
+  decode median 52.78 (min 51.59, max 53.42) over 5/5 valid
+  decode T=0: median 52.46 (min 50.49, max 53.68) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 7.15s -> 578 tok/s, cold cached=0 | cached TTFT median 0.27s over 3 turns (cached [4177, 4222, 4266])
+  prefill 16000: 16287 tok (ref 16286), TTFT 30.92s -> 527 tok/s, cold cached=0 | cached TTFT median 0.28s over 3 turns (cached [16333, 16385, 16436])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 25.80 GB, resident mapped files 0.03 GB, swap used 527.69 MB
+  -> /Users/nacer_b/kq/m3/out/results/q36-35b-llamacpp-mtp1-20261023-021933.json
+[02:23:03] q36-35b-llamacpp-mtp1: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:23:03] q36-35b-llamacpp-mtp1: GPU lock released after 210.1s held
+[02:23:03] q36-35b-llamacpp-mtp1: -> /Users/nacer_b/kq/m3/out/results/q36-35b-llamacpp-mtp1-20261023-021933.json
+02:23:03 rc=0 :: q36-35b-llamacpp-mtp1
+02:23:09 B2 deleted qwen3.6:35b-a3b-mtp-q4_K_M: 204G free
+02:23:09 B2 pull qwen3.8:27b-mtp-q4_K_M (204G free)
+02:29:51 B2 pulled qwen3.8:27b-mtp-q4_K_M: 187G free
+02:30:56 power 'AC Power' free 94% disk 187G vtdecoder   0.0 :: q38-27b-llamacpp-mtp3
+
+===== q38-27b-llamacpp-mtp3  [llama.cpp] llama.cpp + MTP (n-max 3)  version 0.7.0-dev (b11804, c7fc50941)
+[02:30:56] q38-27b-llamacpp-mtp3: GPU lock acquired after 0.0s wait
+[02:30:56] q38-27b-llamacpp-mtp3: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/.ollama/models/blobs/sha256-f5f1dd8920d417aac2718b0bda3403da274301efdd6760b4f0f4b864ff2ad57d --host 127.0.0.1 --port 8083 -a qwen3.8-27b -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --chat-template-file /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp/chat_template.jinja --reasoning-format deepseek --cache-ram 8192 --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui --spec-type draft-mtp --spec-draft-n-max 3
+[02:31:02] q38-27b-llamacpp-mtp3: ready after 6s (pid 66226, listener 66226)
+[02:31:40] q38-27b-llamacpp-mtp3:  warm-up prefill~2.9k+decode64: ok (37.54s)
+[02:31:46] q38-27b-llamacpp-mtp3:  warm-up tools: ok (6.37s)
+[02:32:05] q38-27b-llamacpp-mtp3: GPU quiet after 19s; benchmarking
+== q38-27b-llamacpp-mtp3
+  decode T=0.6: 16.61 tok/s (e2e 16.68; 512 tok, finish=length, d4=0.9256)
+  decode T=0.6: 15.92 tok/s (e2e 16.02; 512 tok, finish=length, d4=0.8256)
+  decode T=0.6: 15.75 tok/s (e2e 15.88; 512 tok, finish=length, d4=0.7112)
+  decode T=0.6: 15.03 tok/s (e2e 15.06; 512 tok, finish=length, d4=0.945)
+  decode T=0.6: 16.59 tok/s (e2e 16.68; 512 tok, finish=length, d4=0.9642)
+  decode median 15.92 (min 15.03, max 16.61) over 5/5 valid
+  decode T=0: median 16.22 (min 15.95, max 17.21) over 5/5 valid
+  prefill 4000: 4134 tok (ref 4133), TTFT 47.86s -> 86 tok/s, cold cached=0 | cached TTFT median 0.79s over 3 turns (cached [4179, 4225, 4265])
+  prefill 16000: 16285 tok (ref 16286), TTFT 192.95s -> 84 tok/s, cold cached=0 | cached TTFT median 0.88s over 3 turns (cached [16337, 16382, 16423])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 27.71 GB, resident mapped files 0.03 GB, swap used 527.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q38-27b-llamacpp-mtp3-20261023-023056.json
+[02:43:19] q38-27b-llamacpp-mtp3: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:43:19] q38-27b-llamacpp-mtp3: GPU lock released after 743.0s held
+[02:43:19] q38-27b-llamacpp-mtp3: -> /Users/nacer_b/kq/m3/out/results/q38-27b-llamacpp-mtp3-20261023-023056.json
+02:43:19 rc=0 :: q38-27b-llamacpp-mtp3
+02:43:24 B2 deleted qwen3.8:27b-mtp-q4_K_M: 204G free
+02:43:29 PHASE-B2-DONE
+02:43:29 CLEANUP-DONE: 208G free; ollama   0B; kept for a Nemotron rerun: ~/kq/models/mlx, ~/kq/models/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf
+02:43:54 PHASE-NH start: kapitsa 0.2.9 (c490f81), harness ~/kq/nh; KAPITSA_BIN=/Users/nacer_b/kq/nh/build/kapitsa
+02:43:59 power 'AC Power' free 94% disk 208G vtdecoder   0.0 :: q35-9b-llamacpp
+
+===== q35-9b-llamacpp  [llama.cpp] llama.cpp (unsloth Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[02:43:59] q35-9b-llamacpp: SKIP: missing /Users/nacer_b/kq/bm/gguf/Qwen3.5-9B-Q4_K_M.gguf
+02:43:59 rc=0 :: q35-9b-llamacpp
+02:44:04 power 'AC Power' free 94% disk 208G vtdecoder   0.0 :: q35-9b-mlxlm
+
+===== q35-9b-mlxlm  [mlx-lm] mlx-lm  version mlx_lm 0.32.2 mlx 0.32.4
+[02:44:04] q35-9b-mlxlm: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 67982 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[02:44:05] q35-9b-mlxlm: starting /Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/qwen3.5-9b-4bit --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[02:44:07] q35-9b-mlxlm: ready after 2s (pid 67998, listener 67998)
+[02:44:18] q35-9b-mlxlm:  warm-up prefill~2.9k+decode64: ok (11.55s)
+[02:44:21] q35-9b-mlxlm:  warm-up tools: ok (2.36s)
+[02:44:39] q35-9b-mlxlm: GPU quiet after 19s; benchmarking
+== q35-9b-mlxlm
+  decode T=0.6: 26.44 tok/s (e2e 26.33; 512 tok, finish=length, d4=0.5611)
+  decode T=0.6: 26.95 tok/s (e2e 26.52; 512 tok, finish=length, d4=0.5706)
+  decode T=0.6: 26.50 tok/s (e2e 26.50; 512 tok, finish=length, d4=0.9762)
+  decode T=0.6: 26.74 tok/s (e2e 26.50; 512 tok, finish=length, d4=0.7202)
+  decode T=0.6: 26.86 tok/s (e2e 26.49; 512 tok, finish=length, d4=0.5538)
+  decode median 26.74 (min 26.44, max 26.95) over 5/5 valid
+  decode T=0: median 27.4 (min 27.27, max 27.49) over 5/5 valid
+  prefill 4000: 4135 tok (ref 4133), TTFT 11.71s -> 353 tok/s, cold cached=0 | cached TTFT median 0.39s over 3 turns (cached [4131, 4187, 4227])
+  prefill 16000: 16284 tok (ref 16286), TTFT 48.09s -> 339 tok/s, cold cached=0 | cached TTFT median 0.50s over 3 turns (cached [16280, 16345, 16404])
+  tools(think=False): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path": "src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 9.47 GB, resident mapped files 0.01 GB, swap used 527.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-024404.json
+[02:49:59] q35-9b-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:49:59] q35-9b-mlxlm: -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-024404.json
+02:49:59 rc=0 :: q35-9b-mlxlm
+02:50:04 power 'AC Power' free 94% disk 208G vtdecoder   0.0 :: nano-4b-llamacpp
+
+===== nano-4b-llamacpp  [llama.cpp] llama.cpp (NVIDIA's Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[02:50:04] nano-4b-llamacpp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 68902 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[02:50:04] nano-4b-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/kq/bm/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf -a nano-4b --host 127.0.0.1 --port 8083 -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --no-webui
+[02:50:06] nano-4b-llamacpp: ready after 2s (pid 68920, listener 68920)
+[02:50:15] nano-4b-llamacpp:  warm-up prefill~2.9k+decode64: ok (8.69s)
+[02:50:17] nano-4b-llamacpp:  warm-up tools: ok (1.77s)
+[02:50:36] nano-4b-llamacpp: GPU quiet after 19s; benchmarking
+== nano-4b-llamacpp
+02:51:34 s3 relaunched: first the q35-9b-llamacpp rerun (GGUF kept as .s3) and Kapitsa's Flint sweep again (sweep honoured no --always-reasons)
+  decode T=0.6: 34.87 tok/s (e2e 34.88; 512 tok, finish=length, d4=0.951)
+  decode T=0.6: 34.90 tok/s (e2e 34.91; 512 tok, finish=length, d4=0.9143)
+  decode T=0.6: 34.88 tok/s (e2e 34.89; 512 tok, finish=length, d4=0.9398)
+  decode T=0.6: 34.90 tok/s (e2e 34.89; 512 tok, finish=length, d4=0.8789)
+  decode T=0.6: 34.91 tok/s (e2e 34.90; 512 tok, finish=length, d4=0.9534)
+  decode median 34.9 (min 34.87, max 34.91) over 5/5 valid
+  decode T=0: median 34.88 (min 34.85, max 34.91) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 10.13s -> 413 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [4222, 4247, 4278])
+  prefill 16000: 16521 tok (ref 16517), TTFT 41.48s -> 398 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [16568, 16606, 16648])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 8.69 GB, resident mapped files 0.03 GB, swap used 527.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-025004.json
+[02:54:37] nano-4b-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:54:37] nano-4b-llamacpp: -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-025004.json
+02:54:37 rc=0 :: nano-4b-llamacpp
+02:54:37 sweep rival (RIV4): q35-4b-ollama-mlx-q4
+02:54:42 power 'AC Power' free 94% disk 208G vtdecoder   0.0 :: sweep q35-4b-ollama-mlx-q4
+
+===== q35-4b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[02:54:42] q35-4b-ollama-mlx-q4: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 69685 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[02:54:42] q35-4b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[02:54:44] q35-4b-ollama-mlx-q4: ready after 2s (pid 69702, listener 69702)
+[02:54:53] q35-4b-ollama-mlx-q4: cold start: ready 2.0s, first TTFT 3.073898708s, repeat median 1.7608632499999999s
+[02:54:59] q35-4b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (5.78s)
+[02:55:00] q35-4b-ollama-mlx-q4:  warm-up tools: ok (0.98s)
+[02:55:07] q35-4b-ollama-mlx-q4:  warm-up decode512#1: ok (7.43s)
+[02:55:15] q35-4b-ollama-mlx-q4:  warm-up decode512#2: ok (7.5s)
+[02:55:22] q35-4b-ollama-mlx-q4:  warm-up decode512#3: ok (7.55s)
+02:55:31 ~/kq/nh harness agentic.py = PR #361 (sweep + cache honour --always-reasons)
+[02:55:41] q35-4b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q35-4b-ollama-mlx-q4
+  sweep 1000: 1101 tok, TTFT 1.84s, 599 tok/s prefill, decode 63.00 tok/s
+  sweep 2000: 2130 tok, TTFT 3.50s, 608 tok/s prefill, decode 62.48 tok/s
+  sweep 4000: 4159 tok, TTFT 6.91s, 602 tok/s prefill, decode 66.37 tok/s
+  sweep 8000: 8303 tok, TTFT 14.28s, 581 tok/s prefill, decode 54.80 tok/s
+  sweep 16000: 16309 tok, TTFT 30.19s, 540 tok/s prefill, decode 52.95 tok/s
+  sweep 30902: 31549 tok, TTFT 66.47s, 475 tok/s prefill, decode 45.26 tok/s
+  memory: phys_footprint_peak 16.02 GB, resident mapped files 0.00 GB, swap used 527.94 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-4b-ollama-mlx-q4-20261023-025442.json
+[02:58:10] q35-4b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[02:58:10] q35-4b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q35-4b-ollama-mlx-q4-20261023-025442.json
+02:58:10 rc=0 :: sweep q35-4b-ollama-mlx-q4
+02:58:10 sweep rival (RIV27): q38-27b-ollama-mlx-q4
+02:58:15 power 'AC Power' free 94% disk 208G vtdecoder   0.0 :: sweep q38-27b-ollama-mlx-q4
+
+===== q38-27b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[02:58:15] q38-27b-ollama-mlx-q4: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 70188 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[02:58:15] q38-27b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[02:58:17] q38-27b-ollama-mlx-q4: ready after 2s (pid 70205, listener 70205)
+[02:59:08] q38-27b-ollama-mlx-q4: cold start: ready 2.0s, first TTFT 16.041757959s, repeat median 11.07087825s
+[02:59:40] q38-27b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (32.67s)
+[02:59:46] q38-27b-ollama-mlx-q4:  warm-up tools: ok (5.58s)
+[03:00:12] q38-27b-ollama-mlx-q4:  warm-up decode512#1: ok (25.59s)
+[03:00:36] q38-27b-ollama-mlx-q4:  warm-up decode512#2: ok (24.0s)
+[03:00:59] q38-27b-ollama-mlx-q4:  warm-up decode512#3: ok (23.43s)
+[03:01:18] q38-27b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q38-27b-ollama-mlx-q4
+  sweep 1000: 1101 tok, TTFT 11.43s, 96 tok/s prefill, decode 17.35 tok/s
+  sweep 2000: 2131 tok, TTFT 21.66s, 98 tok/s prefill, decode 17.24 tok/s
+  sweep 4000: 4158 tok, TTFT 42.12s, 99 tok/s prefill, decode 17.91 tok/s
+  sweep 8000: 8308 tok, TTFT 85.70s, 97 tok/s prefill, decode 16.22 tok/s
+  sweep 16000: 16308 tok, TTFT 174.25s, 94 tok/s prefill, decode 16.97 tok/s
+  sweep 30902: 31548 tok, TTFT 362.56s, 87 tok/s prefill, decode 13.04 tok/s
+  memory: phys_footprint_peak 31.60 GB, resident mapped files 0.00 GB, swap used 968.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/q38-27b-ollama-mlx-q4-20261023-025815.json
+[03:14:12] q38-27b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:14:12] q38-27b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q38-27b-ollama-mlx-q4-20261023-025815.json  flags: 1
+03:14:12 rc=0 :: sweep q38-27b-ollama-mlx-q4
+03:14:12 sweep rival (RIV35): q36-35b-ollama-mlx-q4
+03:14:17 power 'AC Power' free 96% disk 208G vtdecoder   0.0 :: sweep q36-35b-ollama-mlx-q4
+
+===== q36-35b-ollama-mlx-q4  [ollama] Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)  version 0.40.8
+[03:14:17] q36-35b-ollama-mlx-q4: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 72103 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:14:17] q36-35b-ollama-mlx-q4: starting /Users/nacer_b/engines/ollama/ollama serve
+[03:14:19] q36-35b-ollama-mlx-q4: ready after 2s (pid 72120, listener 72120)
+[03:14:33] q36-35b-ollama-mlx-q4: cold start: ready 2.0s, first TTFT 9.302211458999999s, repeat median 1.6171804170000001s
+[03:14:39] q36-35b-ollama-mlx-q4:  warm-up prefill~2.9k+decode64: ok (5.34s)
+[03:14:40] q36-35b-ollama-mlx-q4:  warm-up tools: ok (1.16s)
+[03:14:49] q36-35b-ollama-mlx-q4:  warm-up decode512#1: ok (8.89s)
+[03:14:58] q36-35b-ollama-mlx-q4:  warm-up decode512#2: ok (9.27s)
+[03:15:07] q36-35b-ollama-mlx-q4:  warm-up decode512#3: ok (8.84s)
+[03:15:26] q36-35b-ollama-mlx-q4: GPU quiet after 19s; benchmarking
+== q36-35b-ollama-mlx-q4
+  sweep 1000: 1102 tok, TTFT 1.77s, 623 tok/s prefill, decode 59.16 tok/s
+  sweep 2000: 2130 tok, TTFT 3.16s, 674 tok/s prefill, decode 60.50 tok/s
+  sweep 4000: 4159 tok, TTFT 6.17s, 674 tok/s prefill, decode 58.05 tok/s
+  sweep 8000: 8305 tok, TTFT 12.66s, 656 tok/s prefill, decode 50.92 tok/s
+  sweep 16000: 16307 tok, TTFT 27.32s, 597 tok/s prefill, decode 46.98 tok/s
+  sweep 30902: 31549 tok, TTFT 63.59s, 496 tok/s prefill, decode 41.78 tok/s
+  memory: phys_footprint_peak 27.87 GB, resident mapped files 0.01 GB, swap used 952.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/q36-35b-ollama-mlx-q4-20261023-031417.json
+[03:17:49] q36-35b-ollama-mlx-q4: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:17:49] q36-35b-ollama-mlx-q4: -> /Users/nacer_b/kq/m3/out/results/q36-35b-ollama-mlx-q4-20261023-031417.json
+03:17:49 rc=0 :: sweep q36-35b-ollama-mlx-q4
+03:17:49 sweep rival q35-9b: q35-9b-mlxlm
+03:17:54 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep q35-9b-mlxlm
+
+===== q35-9b-mlxlm  [mlx-lm] mlx-lm  version mlx_lm 0.32.2 mlx 0.32.4
+[03:17:54] q35-9b-mlxlm: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 72550 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:17:54] q35-9b-mlxlm: starting /Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/qwen3.5-9b-4bit --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[03:17:56] q35-9b-mlxlm: ready after 2s (pid 72566, listener 72566)
+[03:18:10] q35-9b-mlxlm: cold start: ready 2.1s, first TTFT 4.023047290999999s, repeat median 3.1030426670000004s
+[03:18:21] q35-9b-mlxlm:  warm-up prefill~2.9k+decode64: ok (10.71s)
+[03:18:24] q35-9b-mlxlm:  warm-up tools: ok (2.36s)
+[03:18:42] q35-9b-mlxlm: GPU quiet after 19s; benchmarking
+== q35-9b-mlxlm
+  sweep 1000: 1101 tok, TTFT 3.22s, 342 tok/s prefill, decode 25.65 tok/s
+  sweep 2000: 2131 tok, TTFT 6.13s, 348 tok/s prefill, decode 25.95 tok/s
+  sweep 4000: 4153 tok, TTFT 11.78s, 353 tok/s prefill, decode 25.42 tok/s
+  sweep 8000: 8308 tok, TTFT 23.81s, 349 tok/s prefill, decode 25.00 tok/s
+  sweep 16000: 16309 tok, TTFT 48.18s, 338 tok/s prefill, decode 23.22 tok/s
+  sweep 30902: 31551 tok, TTFT 99.45s, 317 tok/s prefill, decode 21.16 tok/s
+  memory: phys_footprint_peak 12.37 GB, resident mapped files 0.01 GB, swap used 944.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-031754.json
+[03:22:47] q35-9b-mlxlm: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:22:47] q35-9b-mlxlm: -> /Users/nacer_b/kq/m3/out/results/q35-9b-mlxlm-20261023-031754.json
+03:22:47 rc=0 :: sweep q35-9b-mlxlm
+03:22:48 RIVAL-SWEEPS-DONE: Ollama MLX models + 9B GGUF deleted; 208G free (floor 30G ok)
+/dev/disk3s5   460Gi   224Gi   208Gi    52%    479k  2.2G    0%   /System/Volumes/Data
+03:22:53 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sw-dory-kapitsa
+
+===== sw-dory-kapitsa  [kapitsa] Kapitsa (catalog dory)  version c490f81
+[03:22:53] sw-dory-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 73264 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:22:53] sw-dory-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model dory --model-id dory --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:23:01] sw-dory-kapitsa: ready after 8s (pid 73294, listener 73294)
+[03:23:10] sw-dory-kapitsa:  warm-up prefill~2.9k+decode64: ok (8.98s)
+[03:23:12] sw-dory-kapitsa:  warm-up tools: ok (1.86s)
+[03:23:31] sw-dory-kapitsa: GPU quiet after 19s; benchmarking
+== sw-dory-kapitsa
+  decode T=0.6: 35.23 tok/s (e2e 35.94; 512 tok, finish=length, d4=0.4455) flags ['repetition loop (distinct-4-gram 0.4455)']
+  decode T=0.6: 36.69 tok/s (e2e 35.87; 512 tok, finish=length, d4=0.7395)
+  decode T=0.6: 36.13 tok/s (e2e 35.87; 512 tok, finish=length, d4=0.5646)
+  decode T=0.6: 36.07 tok/s (e2e 35.94; 512 tok, finish=length, d4=0.9307)
+  decode T=0.6: 36.71 tok/s (e2e 35.95; 512 tok, finish=length, d4=0.607)
+  decode median 36.13 (min 35.23, max 36.71) over 5/5 valid
+  decode T=0: median 36.71 (min 36.4, max 36.74) over 5/5 valid
+  prefill 4000: 4185 tok (ref 4184), TTFT 9.31s -> 450 tok/s, cold cached=0 | cached TTFT median 0.15s over 3 turns (cached [4297, 4426, 4527])
+  prefill 16000: 16517 tok (ref 16517), TTFT 42.03s -> 393 tok/s, cold cached=0 | cached TTFT median 0.22s over 3 turns (cached [16570, 16612, 16652])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 4.12 GB, resident mapped files 0.01 GB, swap used 936.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-dory-kapitsa-20261023-032253.json
+[03:27:42] sw-dory-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:27:42] sw-dory-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-dory-kapitsa-20261023-032253.json  flags: 1
+03:27:42 rc=0 :: sw-dory-kapitsa
+03:27:47 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sw-nano-4b-kapitsa
+
+===== sw-nano-4b-kapitsa  [kapitsa] Kapitsa (catalog nano-4b)  version c490f81
+[03:27:47] sw-nano-4b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 74058 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:27:47] sw-nano-4b-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model nano-4b --model-id nano-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:27:49] sw-nano-4b-kapitsa: ready after 2s (pid 74088, listener 74088)
+[03:27:56] sw-nano-4b-kapitsa:  warm-up prefill~2.9k+decode64: ok (6.69s)
+[03:27:57] sw-nano-4b-kapitsa:  warm-up tools: ok (1.21s)
+[03:28:16] sw-nano-4b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-nano-4b-kapitsa
+  decode T=0.6: 34.40 tok/s (e2e 34.41; 512 tok, finish=length, d4=0.9227)
+  decode T=0.6: 33.07 tok/s (e2e 32.43; 512 tok, finish=length, d4=0.9632)
+  decode T=0.6: 40.91 tok/s (e2e 39.82; 512 tok, finish=length, d4=0.7975)
+  decode T=0.6: 34.47 tok/s (e2e 34.10; 512 tok, finish=length, d4=0.5709)
+  decode T=0.6: 33.75 tok/s (e2e 33.59; 512 tok, finish=length, d4=0.8755)
+  decode median 34.4 (min 33.07, max 40.91) over 5/5 valid
+  decode T=0: median 32.95 (min 32.92, max 32.97) over 5/5 valid
+  prefill 4000: 4181 tok (ref 4184), TTFT 5.47s -> 765 tok/s, cold cached=0 | cached TTFT median 0.12s over 3 turns (cached [4226, 4253, 4286])
+  prefill 16000: 16516 tok (ref 16517), TTFT 23.68s -> 698 tok/s, cold cached=0 | cached TTFT median 0.14s over 3 turns (cached [16555, 16612, 16661])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 5.09 GB, resident mapped files 0.01 GB, swap used 936.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-nano-4b-kapitsa-20261023-032747.json
+[03:31:50] sw-nano-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:31:50] sw-nano-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-4b-kapitsa-20261023-032747.json
+03:31:50 rc=0 :: sw-nano-4b-kapitsa
+03:31:55 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sw-nano-9b-kapitsa
+
+===== sw-nano-9b-kapitsa  [kapitsa] Kapitsa (catalog nano-9b)  version c490f81
+[03:31:55] sw-nano-9b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 74719 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:31:55] sw-nano-9b-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model nano-9b --model-id nano-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:31:57] sw-nano-9b-kapitsa: ready after 2s (pid 74749, listener 74749)
+[03:32:10] sw-nano-9b-kapitsa:  warm-up prefill~2.9k+decode64: ok (13.23s)
+[03:32:13] sw-nano-9b-kapitsa:  warm-up tools: ok (2.72s)
+[03:32:32] sw-nano-9b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-nano-9b-kapitsa
+  decode T=0.6: 20.88 tok/s (e2e 20.60; 512 tok, finish=length, d4=0.9904)
+  decode T=0.6: 20.85 tok/s (e2e 20.59; 512 tok, finish=length, d4=0.9016)
+  decode T=0.6: 20.82 tok/s (e2e 20.60; 512 tok, finish=length, d4=0.864)
+  decode T=0.6: 20.68 tok/s (e2e 20.60; 512 tok, finish=length, d4=0.9141)
+  decode T=0.6: 21.02 tok/s (e2e 20.87; 84 tok, finish=stop, d4=1.0) flags ['finish_reason=stop (expected length)', 'completion_tokens=84 != 512']
+  decode median 20.85 (min 20.68, max 21.02) over 5/5 valid
+  decode T=0: median 21.0 (min 20.83, max 21.01) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4184), TTFT 12.68s -> 330 tok/s, cold cached=0 | cached TTFT median 0.34s over 3 turns (cached [4176, 4231, 4295])
+  prefill 16000: 16518 tok (ref 16517), TTFT 52.30s -> 316 tok/s, cold cached=0 | cached TTFT median 0.36s over 3 turns (cached [16510, 16565, 16622])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 7.24 GB, resident mapped files 0.01 GB, swap used 936.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-nano-9b-kapitsa-20261023-033155.json
+[03:39:10] sw-nano-9b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:39:10] sw-nano-9b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-9b-kapitsa-20261023-033155.json  flags: 2
+03:39:10 rc=0 :: sw-nano-9b-kapitsa
+03:39:15 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sw-lightning-kapitsa
+
+===== sw-lightning-kapitsa  [kapitsa] Kapitsa (catalog lightning)  version c490f81
+[03:39:15] sw-lightning-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 75830 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:39:15] sw-lightning-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model lightning --model-id lightning --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:39:23] sw-lightning-kapitsa: ready after 8s (pid 75860, listener 75860)
+[03:39:29] sw-lightning-kapitsa:  warm-up prefill~2.9k+decode64: ok (5.95s)
+[03:39:30] sw-lightning-kapitsa:  warm-up tools: ok (1.03s)
+[03:39:49] sw-lightning-kapitsa: GPU quiet after 19s; benchmarking
+== sw-lightning-kapitsa
+  decode T=0.6: 69.18 tok/s (e2e 68.21; 512 tok, finish=length, d4=0.9393)
+  decode T=0.6: 78.33 tok/s (e2e 77.12; 512 tok, finish=length, d4=0.9509)
+  decode T=0.6: 75.28 tok/s (e2e 74.07; 512 tok, finish=length, d4=0.8821)
+  decode T=0.6: 67.96 tok/s (e2e 67.42; 512 tok, finish=length, d4=0.8975)
+  decode T=0.6: 77.33 tok/s (e2e 75.06; 512 tok, finish=length, d4=0.9318)
+  decode median 75.28 (min 67.96, max 78.33) over 5/5 valid
+  decode T=0: median 80.44 (min 77.49, max 84.77) over 5/5 valid
+  prefill 4000: 4183 tok (ref 4184), TTFT 5.31s -> 788 tok/s, cold cached=0 | cached TTFT median 0.19s over 3 turns (cached [4242, 4285, 4326])
+  prefill 16000: 16514 tok (ref 16517), TTFT 23.69s -> 697 tok/s, cold cached=0 | cached TTFT median 0.21s over 3 turns (cached [16567, 16596, 16637])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 18.58 GB, resident mapped files 0.01 GB, swap used 936.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-lightning-kapitsa-20261023-033915.json
+[03:41:59] sw-lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:41:59] sw-lightning-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-lightning-kapitsa-20261023-033915.json
+03:41:59 rc=0 :: sw-lightning-kapitsa
+03:42:04 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sw-bolt-kapitsa
+
+===== sw-bolt-kapitsa  [kapitsa] Kapitsa (catalog bolt)  version c490f81
+[03:42:05] sw-bolt-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 76271 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:42:05] sw-bolt-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model bolt --model-id bolt --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:42:15] sw-bolt-kapitsa: ready after 10s (pid 76301, listener 76301)
+[03:42:29] sw-bolt-kapitsa:  warm-up prefill~2.9k+decode64: ok (14.2s)
+[03:42:32] sw-bolt-kapitsa:  warm-up tools: ok (2.51s)
+[03:42:50] sw-bolt-kapitsa: GPU quiet after 19s; benchmarking
+== sw-bolt-kapitsa
+  decode T=0.6: 50.20 tok/s (e2e 49.57; 512 tok, finish=length, d4=0.9229)
+  decode T=0.6: 44.94 tok/s (e2e 45.89; 512 tok, finish=length, d4=0.7126)
+  decode T=0.6: 52.37 tok/s (e2e 52.68; 512 tok, finish=length, d4=0.6801)
+  decode T=0.6: 46.70 tok/s (e2e 46.79; 512 tok, finish=length, d4=0.8881)
+  decode T=0.6: 52.13 tok/s (e2e 51.61; 512 tok, finish=length, d4=0.9291)
+  decode median 50.2 (min 44.94, max 52.37) over 5/5 valid
+  decode T=0: median 50.94 (min 50.88, max 55.02) over 5/5 valid
+  prefill 4000: 4184 tok (ref 4183), TTFT 16.34s -> 256 tok/s, cold cached=0 | cached TTFT median 0.32s over 3 turns (cached [4224, 4251, 4284])
+  prefill 16000: 16513 tok (ref 16514), TTFT 65.93s -> 250 tok/s, cold cached=0 | cached TTFT median 0.40s over 3 turns (cached [16557, 16591, 16631])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 22.34 GB, resident mapped files 0.01 GB, swap used 920.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-034205.json
+[03:46:42] sw-bolt-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:46:42] sw-bolt-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-034205.json
+03:46:42 rc=0 :: sw-bolt-kapitsa
+03:46:47 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep sw-dory-kapitsa
+
+===== sw-dory-kapitsa  [kapitsa] Kapitsa (catalog dory)  version c490f81
+[03:46:47] sw-dory-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 76965 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:46:47] sw-dory-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model dory --model-id dory --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:46:49] sw-dory-kapitsa: ready after 2s (pid 76995, listener 76995)
+03:46:51 ~/kq/nh harness agentic.py = main 663d439 (#361 as merged)
+[03:47:00] sw-dory-kapitsa: cold start: ready 2.0s, first TTFT 3.0050353340000004s, repeat median 2.321053791999999s
+[03:47:08] sw-dory-kapitsa:  warm-up prefill~2.9k+decode64: ok (8.31s)
+[03:47:10] sw-dory-kapitsa:  warm-up tools: ok (1.81s)
+[03:47:29] sw-dory-kapitsa: GPU quiet after 19s; benchmarking
+== sw-dory-kapitsa
+  sweep 1000: 1114 tok, TTFT 2.44s, 457 tok/s prefill, decode 34.13 tok/s
+  sweep 2000: 2169 tok, TTFT 4.80s, 452 tok/s prefill, decode 33.71 tok/s
+  sweep 4000: 4208 tok, TTFT 9.42s, 447 tok/s prefill, decode 33.18 tok/s
+  sweep 8000: 8412 tok, TTFT 19.90s, 423 tok/s prefill, decode 30.90 tok/s
+  sweep 16000: 16541 tok, TTFT 42.03s, 394 tok/s prefill, decode 28.54 tok/s
+  sweep 30902: 32005 tok, TTFT 95.75s, 334 tok/s prefill, decode 24.26 tok/s
+  memory: phys_footprint_peak 4.44 GB, resident mapped files 0.01 GB, swap used 920.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-dory-kapitsa-20261023-034647.json
+[03:51:07] sw-dory-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:51:08] sw-dory-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-dory-kapitsa-20261023-034647.json
+03:51:08 rc=0 :: sweep sw-dory-kapitsa
+03:51:13 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep dory-mlxlm-4bit
+
+===== dory-mlxlm-4bit  [mlx-lm] mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)  version mlx_lm 0.32.2.dev0 mlx 0.32.4
+[03:51:13] dory-mlxlm-4bit: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 77672 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:51:13] dory-mlxlm-4bit: starting /Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server --model /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit --host 127.0.0.1 --port 8321 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[03:51:15] dory-mlxlm-4bit: ready after 2s (pid 77688, listener 77688)
+[03:51:27] dory-mlxlm-4bit: cold start: ready 2.1s, first TTFT 3.030884833s, repeat median 2.9558994170000013s
+[03:51:38] dory-mlxlm-4bit:  warm-up prefill~2.9k+decode64: ok (10.53s)
+[03:51:41] dory-mlxlm-4bit:  warm-up tools: ok (2.57s)
+[03:51:59] dory-mlxlm-4bit: GPU quiet after 19s; benchmarking
+== dory-mlxlm-4bit
+  sweep 1000: 1113 tok, TTFT 3.03s, 367 tok/s prefill, decode 28.59 tok/s
+  sweep 2000: 2168 tok, TTFT 6.10s, 355 tok/s prefill, decode 27.87 tok/s
+  sweep 4000: 4206 tok, TTFT 12.10s, 348 tok/s prefill, decode 27.83 tok/s
+  sweep 8000: 8412 tok, TTFT 25.20s, 334 tok/s prefill, decode 26.06 tok/s
+  sweep 16000: 16542 tok, TTFT 53.14s, 311 tok/s prefill, decode 23.29 tok/s
+  sweep 30902: 32006 tok, TTFT 115.10s, 278 tok/s prefill, decode 20.22 tok/s
+  memory: phys_footprint_peak 13.22 GB, resident mapped files 0.01 GB, swap used 920.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/dory-mlxlm-4bit-20261023-035113.json
+[03:56:25] dory-mlxlm-4bit: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:56:25] dory-mlxlm-4bit: -> /Users/nacer_b/kq/m3/out/results/dory-mlxlm-4bit-20261023-035113.json
+03:56:25 rc=0 :: sweep dory-mlxlm-4bit
+03:56:31 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep sw-nano-4b-kapitsa
+
+===== sw-nano-4b-kapitsa  [kapitsa] Kapitsa (catalog nano-4b)  version c490f81
+[03:56:31] sw-nano-4b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 78424 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:56:31] sw-nano-4b-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model nano-4b --model-id nano-4b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[03:56:33] sw-nano-4b-kapitsa: ready after 2s (pid 78454, listener 78454)
+[03:56:40] sw-nano-4b-kapitsa: cold start: ready 2.0s, first TTFT 2.3333151250000004s, repeat median 1.4213090419999999s
+[03:56:46] sw-nano-4b-kapitsa:  warm-up prefill~2.9k+decode64: ok (5.8s)
+[03:56:47] sw-nano-4b-kapitsa:  warm-up tools: ok (1.21s)
+[03:57:05] sw-nano-4b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-nano-4b-kapitsa
+  sweep 1000: 1113 tok, TTFT 1.55s, 716 tok/s prefill, decode 34.14 tok/s
+  sweep 2000: 2167 tok, TTFT 2.85s, 760 tok/s prefill, decode 32.52 tok/s
+  sweep 4000: 4209 tok, TTFT 5.50s, 765 tok/s prefill, decode 33.17 tok/s
+  sweep 8000: 8413 tok, TTFT 11.35s, 741 tok/s prefill, decode 31.52 tok/s
+  sweep 16000: 16543 tok, TTFT 23.65s, 700 tok/s prefill, decode 31.55 tok/s
+03:58:37 s3 relaunched with the HOLD gate (~/kq/m3/HOLD) for fa880208's slot
+  sweep 30902: 32004 tok, TTFT 54.00s, 593 tok/s prefill, decode 26.89 tok/s
+  memory: phys_footprint_peak 5.31 GB, resident mapped files 0.01 GB, swap used 912.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-nano-4b-kapitsa-20261023-035631.json
+[03:59:27] sw-nano-4b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[03:59:27] sw-nano-4b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-4b-kapitsa-20261023-035631.json
+03:59:27 rc=0 :: sweep sw-nano-4b-kapitsa
+03:59:32 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep nano-4b-llamacpp
+
+===== nano-4b-llamacpp  [llama.cpp] llama.cpp (NVIDIA's Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[03:59:32] nano-4b-llamacpp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 78921 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[03:59:32] nano-4b-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/kq/bm/gguf/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf -a nano-4b --host 127.0.0.1 --port 8083 -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --no-webui
+[03:59:34] nano-4b-llamacpp: ready after 2s (pid 78939, listener 78939)
+[03:59:44] nano-4b-llamacpp: cold start: ready 2.0s, first TTFT 2.533339125s, repeat median 2.449873833s
+[03:59:53] nano-4b-llamacpp:  warm-up prefill~2.9k+decode64: ok (8.69s)
+[03:59:55] nano-4b-llamacpp:  warm-up tools: ok (1.78s)
+[04:00:14] nano-4b-llamacpp: GPU quiet after 19s; benchmarking
+== nano-4b-llamacpp
+  sweep 1000: 1111 tok, TTFT 2.57s, 432 tok/s prefill, decode 34.79 tok/s
+  sweep 2000: 2168 tok, TTFT 5.24s, 413 tok/s prefill, decode 34.60 tok/s
+  sweep 4000: 4209 tok, TTFT 10.21s, 412 tok/s prefill, decode 34.24 tok/s
+  sweep 8000: 8412 tok, TTFT 20.48s, 411 tok/s prefill, decode 33.53 tok/s
+  sweep 16000: 16543 tok, TTFT 41.49s, 399 tok/s prefill, decode 32.00 tok/s
+  sweep 30902: 32007 tok, TTFT 84.89s, 377 tok/s prefill, decode 27.64 tok/s
+  memory: phys_footprint_peak 7.11 GB, resident mapped files 0.03 GB, swap used 904.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-035932.json
+[04:03:40] nano-4b-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:03:40] nano-4b-llamacpp: -> /Users/nacer_b/kq/m3/out/results/nano-4b-llamacpp-20261023-035932.json
+04:03:40 rc=0 :: sweep nano-4b-llamacpp
+04:03:45 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep sw-nano-9b-kapitsa
+
+===== sw-nano-9b-kapitsa  [kapitsa] Kapitsa (catalog nano-9b)  version c490f81
+[04:03:45] sw-nano-9b-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 79528 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:03:45] sw-nano-9b-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model nano-9b --model-id nano-9b --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[04:03:47] sw-nano-9b-kapitsa: ready after 2s (pid 79558, listener 79558)
+[04:04:03] sw-nano-9b-kapitsa: cold start: ready 2.0s, first TTFT 4.597690291999999s, repeat median 3.2813401669999998s
+[04:04:15] sw-nano-9b-kapitsa:  warm-up prefill~2.9k+decode64: ok (11.95s)
+[04:04:18] sw-nano-9b-kapitsa:  warm-up tools: ok (2.72s)
+[04:04:37] sw-nano-9b-kapitsa: GPU quiet after 19s; benchmarking
+== sw-nano-9b-kapitsa
+  sweep 1000: 1111 tok, TTFT 3.56s, 312 tok/s prefill, decode 20.57 tok/s
+  sweep 2000: 2165 tok, TTFT 6.58s, 329 tok/s prefill, decode 20.53 tok/s
+  sweep 4000: 4207 tok, TTFT 12.67s, 332 tok/s prefill, decode 20.25 tok/s
+  sweep 8000: 8412 tok, TTFT 26.19s, 321 tok/s prefill, decode 20.17 tok/s
+  sweep 16000: 16540 tok, TTFT 52.32s, 316 tok/s prefill, decode 19.80 tok/s
+  sweep 30902: 32007 tok, TTFT 110.10s, 291 tok/s prefill, decode 19.12 tok/s
+  memory: phys_footprint_peak 7.36 GB, resident mapped files 0.01 GB, swap used 904.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-nano-9b-kapitsa-20261023-040345.json
+[04:09:12] sw-nano-9b-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:09:12] sw-nano-9b-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-nano-9b-kapitsa-20261023-040345.json
+04:09:12 rc=0 :: sweep sw-nano-9b-kapitsa
+04:09:17 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep nano-9b-mlxlm-4bit
+
+===== nano-9b-mlxlm-4bit  [mlx-lm] mlx-lm (mlx-community 4-bit)  version mlx_lm 0.32.2 mlx 0.32.4
+[04:09:17] nano-9b-mlxlm-4bit: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 80313 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:09:17] nano-9b-mlxlm-4bit: starting /Users/nacer_b/engines/mlxlm/bin/mlx_lm.server --model /Users/nacer_b/kq/bm/mlx/NVIDIA-Nemotron-Nano-9B-v2-4bits --host 127.0.0.1 --port 8081 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048
+[04:09:19] nano-9b-mlxlm-4bit: ready after 2s (pid 80329, listener 80329)
+[04:09:39] nano-9b-mlxlm-4bit: cold start: ready 2.1s, first TTFT 5.21186725s, repeat median 4.3769117909999995s
+[04:09:53] nano-9b-mlxlm-4bit:  warm-up prefill~2.9k+decode64: ok (14.33s)
+[04:10:01] nano-9b-mlxlm-4bit:  warm-up tools: ok (8.08s)
+[04:10:01] nano-9b-mlxlm-4bit: WARNING: thinking was not switched off in warm-up ['tools']; runs will be INVALID
+[04:10:20] nano-9b-mlxlm-4bit: GPU quiet after 19s; benchmarking
+== nano-9b-mlxlm-4bit
+  sweep 1000: 1111 tok, TTFT 4.59s, 242 tok/s prefill, decode 24.01 tok/s
+  sweep 2000: 2163 tok, TTFT 8.72s, 248 tok/s prefill, decode 23.75 tok/s
+  sweep 4000: 4206 tok, TTFT 16.91s, 249 tok/s prefill, decode 23.70 tok/s
+  sweep 8000: 8409 tok, TTFT 33.92s, 248 tok/s prefill, decode 23.32 tok/s
+  sweep 16000: 16540 tok, TTFT 67.77s, 244 tok/s prefill, decode 23.39 tok/s
+  sweep 30902: 32001 tok, TTFT 135.29s, 237 tok/s prefill, decode 22.45 tok/s
+  memory: phys_footprint_peak 15.24 GB, resident mapped files 0.01 GB, swap used 896.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/nano-9b-mlxlm-4bit-20261023-040917.json
+[04:15:41] nano-9b-mlxlm-4bit: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:15:41] nano-9b-mlxlm-4bit: -> /Users/nacer_b/kq/m3/out/results/nano-9b-mlxlm-4bit-20261023-040917.json
+04:15:41 rc=0 :: sweep nano-9b-mlxlm-4bit
+04:15:46 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep sw-lightning-kapitsa
+
+===== sw-lightning-kapitsa  [kapitsa] Kapitsa (catalog lightning)  version c490f81
+[04:15:46] sw-lightning-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 81200 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:15:46] sw-lightning-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model lightning --model-id lightning --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[04:15:54] sw-lightning-kapitsa: ready after 8s (pid 81230, listener 81230)
+[04:16:02] sw-lightning-kapitsa: cold start: ready 8.1s, first TTFT 2.360310458999999s, repeat median 1.4476822499999997s
+[04:16:06] sw-lightning-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.91s)
+[04:16:08] sw-lightning-kapitsa:  warm-up tools: ok (1.02s)
+[04:16:26] sw-lightning-kapitsa: GPU quiet after 19s; benchmarking
+== sw-lightning-kapitsa
+  sweep 1000: 1112 tok, TTFT 1.83s, 609 tok/s prefill, decode 56.06 tok/s
+  sweep 2000: 2166 tok, TTFT 2.89s, 750 tok/s prefill, decode 51.60 tok/s
+  sweep 4000: 4209 tok, TTFT 5.31s, 792 tok/s prefill, decode 51.98 tok/s
+  sweep 8000: 8413 tok, TTFT 11.25s, 748 tok/s prefill, decode 48.46 tok/s
+  sweep 16000: 16543 tok, TTFT 23.77s, 696 tok/s prefill, decode 45.35 tok/s
+  sweep 30902: 32006 tok, TTFT 54.31s, 589 tok/s prefill, decode 33.95 tok/s
+  memory: phys_footprint_peak 18.67 GB, resident mapped files 0.01 GB, swap used 896.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-lightning-kapitsa-20261023-041546.json
+[04:18:37] sw-lightning-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:18:37] sw-lightning-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-lightning-kapitsa-20261023-041546.json
+04:18:37 rc=0 :: sweep sw-lightning-kapitsa
+04:18:42 power 'AC Power' free 95% disk 208G vtdecoder   0.0 :: sweep lightning-mlxvlm-dspark
+
+===== lightning-mlxvlm-dspark  [mlx-lm] mlx-vlm server + DSpark drafter (block 6)  version mlx-vlm 0.7.8, mlx 0.32.4
+[04:18:42] lightning-mlxvlm-dspark: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 81622 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:18:42] lightning-mlxvlm-dspark: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6
+[04:18:51] lightning-mlxvlm-dspark: ready after 8s (pid 81639, listener 81639)
+[04:19:02] lightning-mlxvlm-dspark: cold start: ready 8.5s, first TTFT 2.9067074999999996s, repeat median 2.308494584s
+[04:19:09] lightning-mlxvlm-dspark:  warm-up prefill~2.9k+decode64: ok (7.72s)
+[04:19:11] lightning-mlxvlm-dspark:  warm-up tools: ok (1.52s)
+[04:19:24] lightning-mlxvlm-dspark:  warm-up decode512#1: ok (13.35s)
+[04:19:38] lightning-mlxvlm-dspark:  warm-up decode512#2: ok (13.57s)
+[04:19:51] lightning-mlxvlm-dspark:  warm-up decode512#3: ok (13.49s)
+[04:20:10] lightning-mlxvlm-dspark: GPU quiet after 19s; benchmarking
+== lightning-mlxvlm-dspark
+  sweep 1000: 1113 tok, TTFT 2.52s, 442 tok/s prefill, decode 28.07 tok/s
+  sweep 2000: 2164 tok, TTFT 4.29s, 505 tok/s prefill, decode 28.18 tok/s
+  sweep 4000: 4209 tok, TTFT 8.32s, 506 tok/s prefill, decode 27.31 tok/s
+  sweep 8000: 8412 tok, TTFT 16.34s, 515 tok/s prefill, decode 25.72 tok/s
+  sweep 16000: 16542 tok, TTFT 33.24s, 498 tok/s prefill, decode 26.08 tok/s
+  sweep 30902: 32003 tok, TTFT 69.36s, 461 tok/s prefill, decode 23.14 tok/s
+  memory: phys_footprint_peak 25.97 GB, resident mapped files 0.01 GB, swap used 888.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-041842.json
+[04:23:16] lightning-mlxvlm-dspark: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:23:16] lightning-mlxvlm-dspark: -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-041842.json
+04:23:16 rc=0 :: sweep lightning-mlxvlm-dspark
+04:23:21 power 'AC Power' free 95% disk 207G vtdecoder   0.0 :: sweep sw-bolt-kapitsa
+
+===== sw-bolt-kapitsa  [kapitsa] Kapitsa (catalog bolt)  version c490f81
+[04:23:21] sw-bolt-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 82665 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:23:21] sw-bolt-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model bolt --model-id bolt --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[04:23:31] sw-bolt-kapitsa: ready after 10s (pid 82695, listener 82695)
+[04:23:50] sw-bolt-kapitsa: cold start: ready 10.1s, first TTFT 5.771045959s, repeat median 4.234387542s
+[04:24:03] sw-bolt-kapitsa:  warm-up prefill~2.9k+decode64: ok (12.47s)
+[04:24:05] sw-bolt-kapitsa:  warm-up tools: ok (2.53s)
+[04:24:24] sw-bolt-kapitsa: GPU quiet after 19s; benchmarking
+== sw-bolt-kapitsa
+  sweep 1000: 1115 tok, TTFT 4.82s, 231 tok/s prefill, decode 38.06 tok/s
+  sweep 2000: 2166 tok, TTFT 8.46s, 256 tok/s prefill, decode 31.66 tok/s
+  sweep 4000: 4206 tok, TTFT 16.08s, 262 tok/s prefill, decode 36.30 tok/s
+  sweep 8000: 8410 tok, TTFT 33.19s, 253 tok/s prefill, decode 37.83 tok/s
+04:25:54 s3 relaunched: after q4, Lightning x mlx-vlm and Kapitsa Bolt sweeps again (fa880208's download 04:22:42-~04:24:30 overlapped them), then the HOLD
+  sweep 16000: 16540 tok, TTFT 65.97s, 251 tok/s prefill, decode 34.17 tok/s
+  sweep 30902: 32003 tok, TTFT 140.59s, 228 tok/s prefill, decode 30.77 tok/s
+  memory: phys_footprint_peak 22.31 GB, resident mapped files 0.01 GB, swap used 880.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-042321.json
+[04:29:34] sw-bolt-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:29:34] sw-bolt-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-042321.json
+04:29:34 rc=0 :: sweep sw-bolt-kapitsa
+04:29:34 PHASE-NH-DONE
+04:29:34 NH-CLEANUP-DONE: 216G free (floor 30G ok)
+/dev/disk3s5   460Gi   216Gi   216Gi    51%    484k  2.3G    0%   /System/Volumes/Data
+04:29:59 power 'AC Power' disk 216G fetch none :: sweep lightning-mlxvlm-dspark (rerun: download overlap)
+
+===== lightning-mlxvlm-dspark  [mlx-lm] mlx-vlm server + DSpark drafter (block 6)  version mlx-vlm 0.7.8, mlx 0.32.4
+[04:29:59] lightning-mlxvlm-dspark: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 83920 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:29:59] lightning-mlxvlm-dspark: starting /Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6
+[04:30:09] lightning-mlxvlm-dspark: ready after 10s (pid 83937, listener 83937)
+[04:30:20] lightning-mlxvlm-dspark: cold start: ready 10.1s, first TTFT 2.750043915999999s, repeat median 2.3099119580000007s
+[04:30:28] lightning-mlxvlm-dspark:  warm-up prefill~2.9k+decode64: ok (7.9s)
+[04:30:30] lightning-mlxvlm-dspark:  warm-up tools: ok (1.52s)
+[04:30:43] lightning-mlxvlm-dspark:  warm-up decode512#1: ok (13.32s)
+[04:30:56] lightning-mlxvlm-dspark:  warm-up decode512#2: ok (13.16s)
+[04:31:09] lightning-mlxvlm-dspark:  warm-up decode512#3: ok (13.13s)
+[04:31:28] lightning-mlxvlm-dspark: GPU quiet after 19s; benchmarking
+== lightning-mlxvlm-dspark
+  sweep 1000: 1114 tok, TTFT 2.51s, 444 tok/s prefill, decode 33.73 tok/s
+  sweep 2000: 2168 tok, TTFT 4.31s, 503 tok/s prefill, decode 32.36 tok/s
+  sweep 4000: 4207 tok, TTFT 8.41s, 500 tok/s prefill, decode 24.66 tok/s
+  sweep 8000: 8411 tok, TTFT 16.33s, 515 tok/s prefill, decode 23.85 tok/s
+  sweep 16000: 16543 tok, TTFT 33.25s, 497 tok/s prefill, decode 27.40 tok/s
+  sweep 30902: 32006 tok, TTFT 69.03s, 464 tok/s prefill, decode 26.16 tok/s
+  memory: phys_footprint_peak 25.96 GB, resident mapped files 0.01 GB, swap used 880.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-042959.json
+[04:34:32] lightning-mlxvlm-dspark: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:34:32] lightning-mlxvlm-dspark: -> /Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-042959.json
+04:34:32 rc=0 :: sweep lightning-mlxvlm-dspark (rerun: download overlap)
+04:34:37 power 'AC Power' disk 216G fetch none :: sweep sw-bolt-kapitsa (rerun: download overlap)
+
+===== sw-bolt-kapitsa  [kapitsa] Kapitsa (catalog bolt)  version c490f81
+[04:34:37] sw-bolt-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 84849 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[04:34:37] sw-bolt-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model bolt --model-id bolt --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[04:34:47] sw-bolt-kapitsa: ready after 10s (pid 84879, listener 84879)
+[04:35:06] sw-bolt-kapitsa: cold start: ready 10.1s, first TTFT 5.747587750000001s, repeat median 4.234490707999999s
+[04:35:19] sw-bolt-kapitsa:  warm-up prefill~2.9k+decode64: ok (12.76s)
+[04:35:21] sw-bolt-kapitsa:  warm-up tools: ok (2.51s)
+[04:35:40] sw-bolt-kapitsa: GPU quiet after 19s; benchmarking
+== sw-bolt-kapitsa
+  sweep 1000: 1113 tok, TTFT 4.83s, 230 tok/s prefill, decode 38.65 tok/s
+  sweep 2000: 2168 tok, TTFT 8.46s, 256 tok/s prefill, decode 32.15 tok/s
+  sweep 4000: 4208 tok, TTFT 16.08s, 262 tok/s prefill, decode 36.79 tok/s
+  sweep 8000: 8407 tok, TTFT 32.87s, 256 tok/s prefill, decode 40.07 tok/s
+  sweep 16000: 16539 tok, TTFT 65.98s, 251 tok/s prefill, decode 31.20 tok/s
+  sweep 30902: 32002 tok, TTFT 140.64s, 228 tok/s prefill, decode 30.63 tok/s
+  memory: phys_footprint_peak 22.32 GB, resident mapped files 0.01 GB, swap used 880.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-043437.json
+[04:40:49] sw-bolt-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[04:40:49] sw-bolt-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-043437.json
+04:40:49 rc=0 :: sweep sw-bolt-kapitsa (rerun: download overlap)
+04:40:49 s3 HELD for fa880208's slot (q4 done; rm ~/kq/m3/HOLD to start s3)
+05:06:50 s3 start (hold released)
+
+===== q35-9b-llamacpp  [llama.cpp] llama.cpp (unsloth Q4_K_M GGUF)  version 0.7.0-dev (b11804, c7fc50941)
+[05:07:50] q35-9b-llamacpp: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 88271 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[05:07:50] q35-9b-llamacpp: starting /Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server -m /Users/nacer_b/kq/bm/gguf/Qwen3.5-9B-Q4_K_M.gguf -a qwen3.5-9b --host 127.0.0.1 --port 8083 -c 32768 -np 1 -ngl 999 -fa on -b 2048 -ub 2048 -lm none --jinja --reasoning-format deepseek --cache-ram 8192 --chat-template-file /Users/nacer_b/kq/bm/qwen3.5-9b-4bit/chat_template.jinja --ctx-checkpoints 32 --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0 --no-webui
+[05:07:55] q35-9b-llamacpp: ready after 4s (pid 88299, listener 88299)
+[05:08:07] q35-9b-llamacpp:  warm-up prefill~2.9k+decode64: ok (12.2s)
+[05:08:09] q35-9b-llamacpp:  warm-up tools: ok (2.56s)
+[05:08:28] q35-9b-llamacpp: GPU quiet after 19s; benchmarking
+== q35-9b-llamacpp
+  decode T=0.6: 23.41 tok/s (e2e 23.41; 512 tok, finish=length, d4=0.572)
+  decode T=0.6: 23.42 tok/s (e2e 23.42; 512 tok, finish=length, d4=0.4499) flags ['repetition loop (distinct-4-gram 0.4499)']
+  decode T=0.6: 23.37 tok/s (e2e 23.38; 512 tok, finish=length, d4=0.9525)
+  decode T=0.6: 23.39 tok/s (e2e 23.40; 512 tok, finish=length, d4=0.5631)
+  decode T=0.6: 23.39 tok/s (e2e 23.39; 512 tok, finish=length, d4=0.9677)
+  decode median 23.39 (min 23.37, max 23.42) over 5/5 valid
+  decode T=0: median 23.37 (min 23.31, max 23.39) over 5/5 valid
+  prefill 4000: 4133 tok (ref 4133), TTFT 13.45s -> 307 tok/s, cold cached=0 | cached TTFT median 0.31s over 3 turns (cached [4129, 4199, 4235])
+  prefill 16000: 16285 tok (ref 16286), TTFT 55.00s -> 296 tok/s, cold cached=0 | cached TTFT median 0.49s over 3 turns (cached [16281, 16351, 16408])
+  tools(think=False): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  tools(think=True): stream ok=True [('read_file', '{"path":"src/main.py"}')] leak=False | nonstream ok=True | roundtrip=True
+  memory: phys_footprint_peak 10.62 GB, resident mapped files 0.03 GB, swap used 848.38 MB
+  -> /Users/nacer_b/kq/m3/out/results/q35-9b-llamacpp-20261023-050750.json
+[05:14:29] q35-9b-llamacpp: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[05:14:29] q35-9b-llamacpp: -> /Users/nacer_b/kq/m3/out/results/q35-9b-llamacpp-20261023-050750.json  flags: 1
+05:14:29 rc=0 :: q35-9b-llamacpp
+05:14:29 9B GGUF deleted: 222G free (floor 30G ok)
+
+===== sw-flint-kapitsa  [kapitsa] Kapitsa (catalog flint)  version c490f81
+[05:14:34] sw-flint-kapitsa: GPU lock held externally (by the caller, NACE_GPU_LOCK_HELD=1); holders now: 89308 /Users/nacer_b/CLT/root/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python compare_engines.py configs/kapitsa.js
+[05:14:35] sw-flint-kapitsa: starting /Users/nacer_b/kq/nh/build/kapitsa serve --model flint --model-id flint --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1
+[05:14:45] sw-flint-kapitsa: ready after 11s (pid 89338, listener 89338)
+[05:15:01] sw-flint-kapitsa: cold start: ready 10.8s, first TTFT 10.996593792000002s, repeat median 1.3285038339999993s
+[05:15:05] sw-flint-kapitsa:  warm-up prefill~2.9k+decode64: ok (4.36s)
+[05:15:06] sw-flint-kapitsa:  warm-up tools: ok (1.16s)
+[05:15:25] sw-flint-kapitsa: GPU quiet after 19s; benchmarking
+== sw-flint-kapitsa
+  sweep 1000: 1034 tok, TTFT 1.60s, 648 tok/s prefill, decode 71.24 tok/s
+  sweep 2000: 1997 tok, TTFT 2.57s, 777 tok/s prefill, decode 70.82 tok/s
+  sweep 4000: 3893 tok, TTFT 4.93s, 790 tok/s prefill, decode 68.36 tok/s
+  sweep 8000: 7697 tok, TTFT 10.24s, 752 tok/s prefill, decode 64.55 tok/s
+  sweep 16000: 15088 tok, TTFT 22.30s, 677 tok/s prefill, decode 58.52 tok/s
+  sweep 30902: 29158 tok, TTFT 51.63s, 565 tok/s prefill, decode 49.75 tok/s
+  memory: phys_footprint_peak 22.65 GB, resident mapped files 0.02 GB, swap used 751.56 MB
+  -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261023-051434.json
+[05:17:24] sw-flint-kapitsa: stopped (SIGTERM, survivors [], memory released after 5.1s)
+[05:17:24] sw-flint-kapitsa: -> /Users/nacer_b/kq/m3/out/results/sw-flint-kapitsa-20261023-051434.json
+05:17:24 rc=0 :: sweep sw-flint-kapitsa
+05:19:26 rc=0 kapitsa bench 4b (c490f81)
+05:22:32 rc=0 kapitsa bench 9b (c490f81)
+05:29:55 rc=0 kapitsa bench 27b (c490f81)
+05:32:08 rc=0 kapitsa bench 35b (c490f81)
+05:35:21 rc=0 kapitsa bench flint (c490f81)
+05:39:52 rc=0 kapitsa bench dory (c490f81)
+05:43:48 rc=0 kapitsa bench nano-4b (c490f81)
+05:51:11 rc=0 kapitsa bench nano-9b (c490f81)
+05:53:52 rc=0 kapitsa bench lightning (c490f81)
+05:58:33 rc=0 kapitsa bench bolt (c490f81)
+05:58:33 PHASE-A2-DONE

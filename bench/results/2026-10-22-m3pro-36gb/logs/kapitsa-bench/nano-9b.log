@@ -1,0 +1,40 @@
+kapitsa bench: Nemotron Nano 9B v2 NVFP4 on MacBook Pro (16-inch, Nov 2023): Apple M3 Pro, 18-core GPU, 36 GB, macOS 14.1
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:61925 (log ~/.cache/kapitsa/logs/bench-61925.log)
+[?2026h  ✓ Loaded Nemotron Nano 9B v2  ·  NVFP4 in 2.1s  ·  plain decoding
+[?2026lReady after 2.1s: plain decoding
+Warm-up done in 16s
+GPU quiet after 18s
+  decode T=0.6: 20.78 tok/s (512 tok, finish="length")
+  decode T=0.6: 20.88 tok/s (512 tok, finish="length")
+  decode T=0.6: 20.70 tok/s (512 tok, finish="length")
+  decode T=0.6: 20.80 tok/s (512 tok, finish="length")
+  decode T=0.6: 20.84 tok/s (512 tok, finish="length")
+decode T=0.6: median 20.80 tok/s over 5/5 valid
+  decode T=0: 20.84 tok/s (512 tok, finish="length")
+  decode T=0: 21.07 tok/s (512 tok, finish="length")
+  decode T=0: 21.02 tok/s (512 tok, finish="length")
+  decode T=0: 21.02 tok/s (512 tok, finish="length")
+  decode T=0: 21.02 tok/s (512 tok, finish="length")
+decode T=0: median 21.02 tok/s over 5/5 valid
+prefill 4000: 4184 tok, 330 tok/s; cached TTFT median 0.33 s
+prefill 16000: 16516 tok, 316 tok/s; cached TTFT median 0.36 s
+tools: pass
+Benchmark: MacBook Pro (16-inch, Nov 2023) · M3 Pro · 36 GB · Nemotron Nano 9B v2 NVFP4
+| MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB | Nemotron Nano 9B v2 · NVFP4 |
+| --- | ---: |
+| Writing, T = 0.6 | 20.8 tok/s (20.7–20.9, median of 5) |
+| Writing, greedy | 21.0 tok/s (20.8–21.1, median of 5) |
+| Reading a 4K-token prompt | 330 tok/s (4,184 tokens in 12.68 s) |
+| Follow-up at 4K | 0.33 s |
+| Reading a 16K-token prompt | 316 tok/s (16,516 tokens in 52.31 s) |
+| Follow-up at 16K | 0.36 s |
+| Peak memory | 7.2 GB |
+| Tool calls | pass |
+
+Kapitsa 0.2.9 (c490f81) · plain decoding · macOS 14.1 (23B2073) · on AC power · Automatic power mode · thermal state nominal · full run
+
+Flags: none.
+
+Measured with `kapitsa bench`: the protocol of [bench/harness](https://github.com/nace-ai/kapitsa/tree/main/bench/harness), as a client of the local server.
+Saved /Users/nacer_b/kq/m3/cb/kapitsa-bench-nano-9b.json

@@ -1,0 +1,1379 @@
+{
+ "schema": 2,
+ "label": "lightning-mlxvlm-dspark",
+ "model": "/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4",
+ "base_url": "http://127.0.0.1:8273/v1",
+ "when": "2026-10-23 04:20:10",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8273/v1",
+  "model": "/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4",
+  "label": "lightning-mlxvlm-dspark",
+  "pid": 81639,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4184,16000:16517",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/nacer_b/kq/m3/out/results/lightning-mlxvlm-dspark-20261023-041842.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+  "dirty": true
+ },
+ "phases": {
+  "sweep": [
+   1792707610.924,
+   1792707790.123
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 81639,
+     "name": "python",
+     "phys_footprint": 22140073536,
+     "phys_footprint_peak": 27883091520,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 6275072,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 21114.4,
+   "phys_footprint_peak_mb": 26591.4,
+   "mapped_file_clean_mb": 6.0,
+   "swap_used_mb": 888.38,
+   "memorystatus_level": 39,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 273.6,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 896.38,
+  "swapouts": 959445,
+  "swapins": 852532,
+  "pageouts": 562541,
+  "memorystatus_level": 95
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 20497.4,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1113,
+    "ttft_s": 2.518500542,
+    "prefill_tps": 441.9296249649169,
+    "decode_tps": 28.07331110947308,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2164,
+    "ttft_s": 4.289271625,
+    "prefill_tps": 504.5145631223577,
+    "decode_tps": 28.178527106340287,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4209,
+    "ttft_s": 8.318768458000001,
+    "prefill_tps": 505.96431686378827,
+    "decode_tps": 27.306492895698565,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8412,
+    "ttft_s": 16.344378374999998,
+    "prefill_tps": 514.6723727876252,
+    "decode_tps": 25.7191768412251,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16542,
+    "ttft_s": 33.24036479200001,
+    "prefill_tps": 497.6479681709504,
+    "decode_tps": 26.081066855137728,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32003,
+    "ttft_s": 69.362668833,
+    "prefill_tps": 461.3865143662731,
+    "decode_tps": 23.138964037218656,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.824,
+  "retention_from_tokens": 1113,
+  "retention_to_tokens": 32003,
+  "max_prompt_tokens": 32003,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1113,
+      "completion_tokens": 192,
+      "ttft_s": 2.518500542,
+      "prefill_tps": 441.9296249649169,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.07331110947308
+     }
+    ],
+    "prompt_tokens": 1113,
+    "ttft_s": 2.518500542,
+    "prefill_tps": 441.9296249649169,
+    "decode_tps": 28.07331110947308
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2164,
+      "completion_tokens": 192,
+      "ttft_s": 4.289271625,
+      "prefill_tps": 504.5145631223577,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.178527106340287
+     }
+    ],
+    "prompt_tokens": 2164,
+    "ttft_s": 4.289271625,
+    "prefill_tps": 504.5145631223577,
+    "decode_tps": 28.178527106340287
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4209,
+      "completion_tokens": 192,
+      "ttft_s": 8.318768458000001,
+      "prefill_tps": 505.96431686378827,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.306492895698565
+     }
+    ],
+    "prompt_tokens": 4209,
+    "ttft_s": 8.318768458000001,
+    "prefill_tps": 505.96431686378827,
+    "decode_tps": 27.306492895698565
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8412,
+      "completion_tokens": 192,
+      "ttft_s": 16.344378374999998,
+      "prefill_tps": 514.6723727876252,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 25.7191768412251
+     }
+    ],
+    "prompt_tokens": 8412,
+    "ttft_s": 16.344378374999998,
+    "prefill_tps": 514.6723727876252,
+    "decode_tps": 25.7191768412251
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16542,
+      "completion_tokens": 192,
+      "ttft_s": 33.24036479200001,
+      "prefill_tps": 497.6479681709504,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 26.081066855137728
+     }
+    ],
+    "prompt_tokens": 16542,
+    "ttft_s": 33.24036479200001,
+    "prefill_tps": 497.6479681709504,
+    "decode_tps": 26.081066855137728
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32003,
+      "completion_tokens": 192,
+      "ttft_s": 69.362668833,
+      "prefill_tps": 461.3865143662731,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 23.138964037218656
+     }
+    ],
+    "prompt_tokens": 32003,
+    "ttft_s": 69.362668833,
+    "prefill_tps": 461.3865143662731,
+    "decode_tps": 23.138964037218656
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 2084,
+ "peak_footprint_mb": 26578,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 26591.4,
+ "mapped_file_clean_mb": 6.0,
+ "vm_end": {
+  "swap_used_mb": 888.38,
+  "swapouts": 959445,
+  "swapins": 853144,
+  "pageouts": 562541,
+  "memorystatus_level": 39
+ },
+ "when_end": "2026-10-23 04:23:10",
+ "warmup": {
+  "adaptive": true,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 7.72,
+    "prompt_tokens": 2930,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 1.52,
+    "prompt_tokens": 455,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#1",
+    "ok": true,
+    "s": 13.35,
+    "prompt_tokens": 86,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#2",
+    "ok": true,
+    "s": 13.57,
+    "prompt_tokens": 86,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#3",
+    "ok": true,
+    "s": 13.49,
+    "prompt_tokens": 86,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1081,
+   "completion_tokens": 8,
+   "ttft_s": 2.9067074999999996,
+   "prefill_tps": 371.8984452339976,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 8,
+    "ttft_s": 2.308494584,
+    "prefill_tps": 468.2705376448914,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1080,
+    "completion_tokens": 8,
+    "ttft_s": 2.3272277080000006,
+    "prefill_tps": 464.0714771001685,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1080,
+    "completion_tokens": 8,
+    "ttft_s": 2.291703875000003,
+    "prefill_tps": 471.26507564158936,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 2.308494584,
+  "first_request_penalty_s": 0.598,
+  "invalid": [],
+  "spawn_to_ready_s": 8.5,
+  "spawn_to_first_token_s": 11.41
+ },
+ "contention": {
+  "overall": {
+   "samples": 88,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 88,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792707612.617,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707614.653,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707616.683,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707618.714,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707620.745,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707622.773,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707624.804,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707626.828,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707628.859,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707630.889,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707632.923,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707634.953,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707636.982,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707639.011,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707641.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707643.073,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707645.104,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707647.136,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707649.167,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707651.197,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707653.228,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707655.259,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707657.291,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707659.326,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707661.371,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707663.402,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707665.433,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707667.463,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707669.494,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707671.526,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707673.556,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707675.586,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707677.616,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707679.647,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707681.677,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707683.712,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707685.752,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707687.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707689.815,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707691.846,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707693.877,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707695.907,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707697.937,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707699.969,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707702.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707704.032,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707706.065,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707708.096,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707710.127,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707712.157,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707714.186,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707716.214,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707718.244,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707720.273,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707722.306,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707724.338,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707726.37,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707728.401,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707730.43,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707732.461,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707734.49,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707736.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707738.553,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707740.582,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707742.613,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707744.643,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707746.673,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707748.709,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707750.751,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707752.781,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707754.812,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707756.842,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707758.874,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707760.906,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707762.936,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707764.967,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707766.997,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707769.026,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707771.054,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707773.083,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707775.112,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707777.133,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707779.171,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707781.204,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707783.234,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707785.265,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707787.293,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707789.324,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "lightning-mlxvlm-dspark",
+ "display": "mlx-vlm server + DSpark drafter (block 6)",
+ "engine": "mlx-lm",
+ "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+ "version_config": "mlx-vlm 0.7.8, mlx 0.32.4",
+ "model_name": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+ "model_path": "{models}/nemotron-3.5-lightning-nvfp4",
+ "note": "As lightning-mlxvlm, with the same DSpark drafter Kapitsa runs (NVIDIA's NVFP4 file, read by mlx-vlm's DFlash path, which takes DSpark's Markov head and causal block). Block size 6: the fastest of 4, 6 and 8 (the drafter's own block) in smoke tests on this Mac (2 runs each, 4K prompt; T = 0.6 / greedy tok/s: block 4 143.0 / 147.9, 6 142.7 / 159.0, 8 137.4 / 149.2). NVIDIA's DFlash drafter for this model (nvidia/...-NVFP4-DFlash @ 8abcc4db) was slower: 102.0 / 104.1 at its default block.",
+ "config": {
+  "label": "lightning-mlxvlm-dspark",
+  "display": "mlx-vlm server + DSpark drafter (block 6)",
+  "engine": "mlx-lm",
+  "version": "mlx-vlm 0.7.8, mlx 0.32.4",
+  "model_name": "Nemotron-3.5-Lightning-30B-A3B-NVFP4",
+  "model_path": "{models}/nemotron-3.5-lightning-nvfp4",
+  "cmd": [
+   "{env:MLX_VLM_PYTHON}",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "{models}/nemotron-3.5-lightning-nvfp4",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8273",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "{models}/nemotron-3.5-lightning-nvfp4/dflash",
+   "--draft-kind",
+   "dflash",
+   "--draft-block-size",
+   "6"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "base_url": "http://127.0.0.1:8273/v1",
+  "model": "{models}/nemotron-3.5-lightning-nvfp4",
+  "ready_timeout": 600,
+  "requires_paths": [
+   "{models}/nemotron-3.5-lightning-nvfp4/model.safetensors.index.json",
+   "{models}/nemotron-3.5-lightning-nvfp4/dflash/model.safetensors"
+  ],
+  "version_cmd": [
+   "{env:MLX_VLM_PYTHON}",
+   "-c",
+   "import importlib.metadata as m, json; d = m.distribution('mlx-vlm'); print('mlx-vlm', d.version, d.read_text('direct_url.json'), 'mlx', m.version('mlx'))"
+  ],
+  "log_grep": [
+   "[Ll]oad|model|APC|prefix|cache",
+   "[Dd]raft|MTP|mtp|accept",
+   "[Ee]rror|Traceback|WARNING"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "As lightning-mlxvlm, with the same DSpark drafter Kapitsa runs (NVIDIA's NVFP4 file, read by mlx-vlm's DFlash path, which takes DSpark's Markov head and causal block). Block size 6: the fastest of 4, 6 and 8 (the drafter's own block) in smoke tests on this Mac (2 runs each, 4K prompt; T = 0.6 / greedy tok/s: block 4 143.0 / 147.9, 6 142.7 / 159.0, 8 137.4 / 149.2). NVIDIA's DFlash drafter for this model (nvidia/...-NVFP4-DFlash @ 8abcc4db) was slower: 102.0 / 104.1 at its default block.",
+  "adaptive_warm": true
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 896.38,
+    "swapouts": 959445,
+    "swapins": 852532,
+    "pageouts": 562534,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 1861140480,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 223769014272,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "-m",
+   "mlx_vlm.server",
+   "--model",
+   "/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8273",
+   "--prefill-step-size",
+   "2048",
+   "--max-num-seqs",
+   "1",
+   "--draft-model",
+   "/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash",
+   "--draft-kind",
+   "dflash",
+   "--draft-block-size",
+   "6"
+  ],
+  "cmd_shell": "/Users/nacer_b/engines/mlxvlm/bin/python -m mlx_vlm.server --model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 --host 127.0.0.1 --port 8273 --prefill-step-size 2048 --max-num-seqs 1 --draft-model /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash --draft-kind dflash --draft-block-size 6",
+  "env": {
+   "HF_HUB_OFFLINE": "1",
+   "APC_ENABLED": "1",
+   "APC_DISK_ENABLED": "0"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{models}/nemotron-3.5-lightning-nvfp4",
+   "safetensors_bytes": 21561882284,
+   "safetensors_files": [
+    "model-00001-of-00052.safetensors",
+    "model-00002-of-00052.safetensors",
+    "model-00003-of-00052.safetensors",
+    "model-00004-of-00052.safetensors",
+    "model-00005-of-00052.safetensors",
+    "model-00006-of-00052.safetensors",
+    "model-00007-of-00052.safetensors",
+    "model-00008-of-00052.safetensors",
+    "model-00009-of-00052.safetensors",
+    "model-00010-of-00052.safetensors",
+    "model-00011-of-00052.safetensors",
+    "model-00012-of-00052.safetensors",
+    "model-00013-of-00052.safetensors",
+    "model-00014-of-00052.safetensors",
+    "model-00015-of-00052.safetensors",
+    "model-00016-of-00052.safetensors",
+    "model-00017-of-00052.safetensors",
+    "model-00018-of-00052.safetensors",
+    "model-00019-of-00052.safetensors",
+    "model-00020-of-00052.safetensors",
+    "model-00021-of-00052.safetensors",
+    "model-00022-of-00052.safetensors",
+    "model-00023-of-00052.safetensors",
+    "model-00024-of-00052.safetensors",
+    "model-00025-of-00052.safetensors",
+    "model-00026-of-00052.safetensors",
+    "model-00027-of-00052.safetensors",
+    "model-00028-of-00052.safetensors",
+    "model-00029-of-00052.safetensors",
+    "model-00030-of-00052.safetensors",
+    "model-00031-of-00052.safetensors",
+    "model-00032-of-00052.safetensors",
+    "model-00033-of-00052.safetensors",
+    "model-00034-of-00052.safetensors",
+    "model-00035-of-00052.safetensors",
+    "model-00036-of-00052.safetensors",
+    "model-00037-of-00052.safetensors",
+    "model-00038-of-00052.safetensors",
+    "model-00039-of-00052.safetensors",
+    "model-00040-of-00052.safetensors",
+    "model-00041-of-00052.safetensors",
+    "model-00042-of-00052.safetensors",
+    "model-00043-of-00052.safetensors",
+    "model-00044-of-00052.safetensors",
+    "model-00045-of-00052.safetensors",
+    "model-00046-of-00052.safetensors",
+    "model-00047-of-00052.safetensors",
+    "model-00048-of-00052.safetensors",
+    "model-00049-of-00052.safetensors",
+    "model-00050-of-00052.safetensors",
+    "model-00051-of-00052.safetensors",
+    "model-00052-of-00052.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "dirty": true
+  },
+  "config_file": "configs/lightning.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "version_cmd_output": "mlx-vlm 0.7.10 None mlx 0.32.4",
+  "prepare": [],
+  "env_relevant": {
+   "NI_LOCK_HELD": "1",
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "KAPITSA_BIN": "/Users/nacer_b/kq/nh/build/kapitsa",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "OLLAMA_BIN": "/Users/nacer_b/engines/ollama/ollama",
+   "OLLAMA_MODELS": "/Users/nacer_b/.ollama/models",
+   "OLLAMA_MLX_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 8.5,
+  "server_pid": 81639,
+  "listener_pid": 81639,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 1861140480,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 888.38,
+   "swapouts": 959445,
+   "swapins": 853144,
+   "pageouts": 562541,
+   "memorystatus_level": 95
+  },
+  "disk_free_bytes": 223334137856
+ },
+ "version_detected": null,
+ "server_log": [
+  "2026-10-23 04:18:43,842 - INFO - Pre-loading language model: /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4",
+  "2026-10-23 04:18:43,842 - INFO - APC enabled (block_size=16, num_blocks=2048, hash=fast, disk=False)",
+  "2026-10-23 04:18:43,843 - INFO - Loading model: /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4",
+  "2026-10-23 04:18:47,513 - INFO - Model and processor loaded successfully.",
+  "2026-10-23 04:18:47,514 - INFO - Loading speculative drafter (dflash): /Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4/dflash",
+  "2026-10-23 04:18:49,512 - INFO - Drafter ready; speculative decoding enabled.",
+  "2026-10-23 04:18:49,512 - INFO - APC self-check ok mode=exact schema=v4 layers=29 types=[ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache,KVCache,ArraysCache,ArraysCache,ArraysCache",
+  "2026-10-23 04:18:49,512 - INFO - Language model ready, continuous batching enabled.",
+  "INFO:     127.0.0.1:59233 - \"GET /v1/models HTTP/1.1\" 200 OK",
+  "2026-10-23 04:18:51,112 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:18:53,983 - INFO - Prefill completed: request=1181d9af0 prompt_tokens=1081 cached_tokens=0 elapsed=2.836s rate=381.2 tok/s",
+  "2026-10-23 04:18:54,313 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=1081 generated_tokens=8 elapsed=3.231s prefill=381.2 tok/s decode=24.3 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:18:54,325 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:18:56,621 - INFO - Prefill completed: request=82a032540 prompt_tokens=1081 cached_tokens=0 elapsed=2.252s rate=480.0 tok/s",
+  "2026-10-23 04:18:56,937 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=1081 generated_tokens=8 elapsed=2.622s prefill=480.0 tok/s decode=25.3 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:18:56,947 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:18:59,263 - INFO - Prefill completed: request=1181dbb00 prompt_tokens=1080 cached_tokens=0 elapsed=2.279s rate=473.8 tok/s",
+  "2026-10-23 04:18:59,581 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=1080 generated_tokens=8 elapsed=2.642s prefill=473.8 tok/s decode=25.3 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:18:59,591 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:01,871 - INFO - Prefill completed: request=1181db1a0 prompt_tokens=1080 cached_tokens=0 elapsed=2.240s rate=482.1 tok/s",
+  "2026-10-23 04:19:02,188 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=1080 generated_tokens=8 elapsed=2.605s prefill=482.1 tok/s decode=25.3 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:19:02,200 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:07,939 - INFO - Prefill completed: request=82a0324e0 prompt_tokens=2930 cached_tokens=0 elapsed=5.701s rate=514.0 tok/s",
+  "2026-10-23 04:19:09,905 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=2930 generated_tokens=64 elapsed=7.716s prefill=514.0 tok/s decode=32.6 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:19:09,914 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:10,918 - INFO - Prefill completed: request=82a033b30 prompt_tokens=455 cached_tokens=0 elapsed=0.966s rate=470.8 tok/s",
+  "2026-10-23 04:19:11,421 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=455 generated_tokens=27 elapsed=1.514s prefill=470.8 tok/s decode=53.7 tok/s finish_reason=tool_calls in_flight",
+  "2026-10-23 04:19:11,429 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:11,897 - INFO - Prefill completed: request=1181da150 prompt_tokens=86 cached_tokens=0 elapsed=0.430s rate=200.0 tok/s",
+  "2026-10-23 04:19:24,776 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=13.353s prefill=200.0 tok/s decode=39.8 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:19:24,785 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:25,259 - INFO - Prefill completed: request=1181da3c0 prompt_tokens=86 cached_tokens=0 elapsed=0.433s rate=198.4 tok/s",
+  "2026-10-23 04:19:38,347 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=13.569s prefill=198.4 tok/s decode=39.1 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:19:38,364 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:19:38,852 - INFO - Prefill completed: request=1181da4b0 prompt_tokens=86 cached_tokens=0 elapsed=0.431s rate=199.5 tok/s",
+  "2026-10-23 04:19:51,837 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=86 generated_tokens=512 elapsed=13.487s prefill=199.5 tok/s decode=39.4 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:20:10,937 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:20:13,441 - INFO - Prefill completed: request=1181da420 prompt_tokens=1113 cached_tokens=0 elapsed=2.465s rate=451.5 tok/s",
+  "2026-10-23 04:20:20,300 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=1113 generated_tokens=192 elapsed=9.370s prefill=451.5 tok/s decode=28.0 tok/s finish_reason=length in_flight=0",
+  "2026-10-23 04:20:20,311 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:20:24,589 - INFO - Prefill completed: request=1181d89e0 prompt_tokens=2164 cached_tokens=0 elapsed=4.233s rate=511.2 tok/s",
+  "2026-10-23 04:20:31,503 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=2164 generated_tokens=192 elapsed=11.200s prefill=511.2 tok/s decode=27.8 tok/s finish_reason=length in_flight=",
+  "2026-10-23 04:20:31,516 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:20:39,820 - INFO - Prefill completed: request=1187f5850 prompt_tokens=4209 cached_tokens=0 elapsed=8.257s rate=509.8 tok/s",
+  "2026-10-23 04:20:46,779 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=4209 generated_tokens=192 elapsed=15.275s prefill=509.8 tok/s decode=27.6 tok/s finish_reason=length in_flight=",
+  "2026-10-23 04:20:46,796 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:21:03,122 - INFO - Prefill completed: request=10edc1190 prompt_tokens=8412 cached_tokens=0 elapsed=16.276s rate=516.8 tok/s",
+  "2026-10-23 04:21:10,739 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=8412 generated_tokens=192 elapsed=23.958s prefill=516.8 tok/s decode=25.2 tok/s finish_reason=length in_flight=",
+  "2026-10-23 04:21:10,762 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:21:43,978 - INFO - Prefill completed: request=1181db830 prompt_tokens=16542 cached_tokens=0 elapsed=33.157s rate=498.9 tok/s",
+  "2026-10-23 04:21:51,571 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=16542 generated_tokens=192 elapsed=40.829s prefill=498.9 tok/s decode=25.3 tok/s finish_reason=length in_flight",
+  "2026-10-23 04:21:51,609 - INFO - Request started: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True in_flight=1",
+  "2026-10-23 04:23:00,932 - INFO - Prefill completed: request=10edc1e50 prompt_tokens=32003 cached_tokens=0 elapsed=69.235s rate=462.2 tok/s",
+  "2026-10-23 04:23:10,123 - INFO - Request completed: endpoint=/chat/completions model=/Users/nacer_b/kq/bm/nemotron-3.5-lightning-nvfp4 stream=True backend=continuous_batching prompt_tokens=32003 generated_tokens=192 elapsed=78.550s prefill=462.2 tok/s decode=20.9 tok/s finish_reason=length in_flight"
+ ],
+ "server_log_path": "logs/lightning-mlxvlm-dspark-20261023-041842.log"
+}

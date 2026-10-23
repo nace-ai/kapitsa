@@ -1,0 +1,258 @@
+{
+ "label": "sw-lightning-kapitsa",
+ "schema": 2,
+ "when": "2026-10-22 23:23:45",
+ "invalid": [
+  "harness: server never became ready (2s); see /Users/nacer_b/kq/m3/out/logs/sw-lightning-kapitsa-20261022-232343.log"
+ ],
+ "flags": [],
+ "config_label": "sw-lightning-kapitsa",
+ "display": "Kapitsa (catalog lightning)",
+ "engine": "kapitsa",
+ "version": "e86dea7",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Lightning-30B-A3B",
+ "model_path": "~/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4",
+ "note": "M3 Pro 36 GB sweep: Kapitsa built from main on the M3 (the commit is in each record; the first 4B and 27B runs used the 0.2.8 release, daf6e95), as the catalog ships the model, with its default decoding.",
+ "config": {
+  "label": "sw-lightning-kapitsa",
+  "display": "Kapitsa (catalog lightning)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Lightning-30B-A3B",
+  "model_path": "~/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4",
+  "cmd": [
+   "{env:KAPITSA_BIN}",
+   "serve",
+   "--model",
+   "lightning",
+   "--model-id",
+   "lightning",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "lightning",
+  "note": "M3 Pro 36 GB sweep: Kapitsa built from main on the M3 (the commit is in each record; the first 4B and 27B runs used the 0.2.8 release, daf6e95), as the catalog ships the model, with its default decoding."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 1193.19,
+    "swapouts": 927245,
+    "swapins": 829692,
+    "pageouts": 560707,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 2170454016,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 226603892736,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/kq/head/build/kapitsa",
+   "serve",
+   "--model",
+   "lightning",
+   "--model-id",
+   "lightning",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "/Users/nacer_b/kq/head/build/kapitsa serve --model lightning --model-id lightning --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "/Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [
+   "KAPITSA_BIN"
+  ],
+  "weights": {
+   "model_path": "~/.cache/kapitsa/models/nemotron-3.5-lightning-nvfp4",
+   "safetensors_bytes": 21561882284,
+   "safetensors_files": [
+    "model-00001-of-00052.safetensors",
+    "model-00002-of-00052.safetensors",
+    "model-00003-of-00052.safetensors",
+    "model-00004-of-00052.safetensors",
+    "model-00005-of-00052.safetensors",
+    "model-00006-of-00052.safetensors",
+    "model-00007-of-00052.safetensors",
+    "model-00008-of-00052.safetensors",
+    "model-00009-of-00052.safetensors",
+    "model-00010-of-00052.safetensors",
+    "model-00011-of-00052.safetensors",
+    "model-00012-of-00052.safetensors",
+    "model-00013-of-00052.safetensors",
+    "model-00014-of-00052.safetensors",
+    "model-00015-of-00052.safetensors",
+    "model-00016-of-00052.safetensors",
+    "model-00017-of-00052.safetensors",
+    "model-00018-of-00052.safetensors",
+    "model-00019-of-00052.safetensors",
+    "model-00020-of-00052.safetensors",
+    "model-00021-of-00052.safetensors",
+    "model-00022-of-00052.safetensors",
+    "model-00023-of-00052.safetensors",
+    "model-00024-of-00052.safetensors",
+    "model-00025-of-00052.safetensors",
+    "model-00026-of-00052.safetensors",
+    "model-00027-of-00052.safetensors",
+    "model-00028-of-00052.safetensors",
+    "model-00029-of-00052.safetensors",
+    "model-00030-of-00052.safetensors",
+    "model-00031-of-00052.safetensors",
+    "model-00032-of-00052.safetensors",
+    "model-00033-of-00052.safetensors",
+    "model-00034-of-00052.safetensors",
+    "model-00035-of-00052.safetensors",
+    "model-00036-of-00052.safetensors",
+    "model-00037-of-00052.safetensors",
+    "model-00038-of-00052.safetensors",
+    "model-00039-of-00052.safetensors",
+    "model-00040-of-00052.safetensors",
+    "model-00041-of-00052.safetensors",
+    "model-00042-of-00052.safetensors",
+    "model-00043-of-00052.safetensors",
+    "model-00044-of-00052.safetensors",
+    "model-00045-of-00052.safetensors",
+    "model-00046-of-00052.safetensors",
+    "model-00047-of-00052.safetensors",
+    "model-00048-of-00052.safetensors",
+    "model-00049-of-00052.safetensors",
+    "model-00050-of-00052.safetensors",
+    "model-00051-of-00052.safetensors",
+    "model-00052-of-00052.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "e86dea79b2751d04a3fa78bfa7746f4ebf981515",
+   "dirty": false
+  },
+  "config_file": "../../../m3pro.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "e86dea79b2751d04a3fa78bfa7746f4ebf981515",
+   "head_time": "2026-10-22T22:14:46+05:00",
+   "branch": "HEAD",
+   "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "diff_bytes": 0,
+   "dirty": false,
+   "diff_stat": "",
+   "untracked_files": 2,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "1147925a0127bae0db60835a8f29d3a5fa63a4de9e1743e154277a824c69fc51",
+   "mtime": "2026-10-22T23:16:27"
+  },
+  "prepare": [
+   "empty /Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "OLLAMA_BIN": "/Users/nacer_b/engines/ollama/ollama",
+   "OLLAMA_MODELS": "/Users/nacer_b/.ollama/models",
+   "OLLAMA_MLX_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "NI_DISK_CACHE_DIR": "/Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 2.0
+ },
+ "gpu_lock": {
+  "harness_wait_s": 0.0,
+  "harness_held_s": 7.2,
+  "harness_lock": "flock by the harness"
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 2170454016,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 1193.19,
+   "swapouts": 927245,
+   "swapins": 829692,
+   "pageouts": 560707,
+   "memorystatus_level": 95
+  },
+  "cleanup": [
+   "empty /Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 226603888640
+ },
+ "server_log": [],
+ "server_log_path": "logs/sw-lightning-kapitsa-20261022-232343.log"
+}

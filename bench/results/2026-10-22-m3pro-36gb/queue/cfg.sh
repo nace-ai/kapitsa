@@ -1,0 +1,5 @@
+C="configs/kapitsa.json configs/mlx-lm.json configs/mlx-vlm.json configs/llama.cpp.json configs/ollama.json configs/mtplx.json configs/dory.json configs/lightning.json configs/bolt.json $HOME/kq/m3pro.json"
+RIV4="q35-4b-mtplx,q35-4b-mlxvlm-mtp,q35-4b-llamacpp-mtp2,q35-4b-ollama-mlx-q4"
+RIV27="q38-27b-mtplx,q38-27b-mlxvlm-mtp,q38-27b-llamacpp-mtp3,q38-27b-ollama-mlx-q4"
+RIV35="q36-35b-mtplx,q36-35b-mlxvlm-dflash2,q36-35b-llamacpp-mtp1,q36-35b-ollama-mlx-q4"
+RIVO="q35-9b-llamacpp,q35-9b-mlxlm,dory-mlxlm-4bit,nano-4b-llamacpp,nano-9b-mlxlm-4bit,lightning-mlxvlm-dspark,bolt-mlxvlm"

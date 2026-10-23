@@ -1,0 +1,250 @@
+/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py:1894: UserWarning: mlx_lm.server is not recommended for production as it only implements basic security checks.
+  warnings.warn(
+2026-10-23 02:44:06,158 - INFO - Starting httpd at 127.0.0.1 on port 8081...
+127.0.0.1 - - [23/Oct/2026 02:44:07] "GET /v1/models HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 58555)
+Traceback (most recent call last):
+  File "/Users/nacer_b/tools/uvpy/cpython-3.12.15-macos-aarch64-none/lib/python3.12/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/Users/nacer_b/tools/uvpy/cpython-3.12.15-macos-aarch64-none/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py", line 1887, in <lambda>
+    lambda *args, **kwargs: handler_class(
+                            ^^^^^^^^^^^^^^
+  File "/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py", line 1211, in __init__
+    super().__init__(*args, **kwargs)
+  File "/Users/nacer_b/tools/uvpy/cpython-3.12.15-macos-aarch64-none/lib/python3.12/socketserver.py", line 766, in __init__
+    self.handle()
+  File "/Users/nacer_b/tools/uvpy/cpython-3.12.15-macos-aarch64-none/lib/python3.12/http/server.py", line 440, in handle
+    self.handle_one_request()
+  File "/Users/nacer_b/tools/uvpy/cpython-3.12.15-macos-aarch64-none/lib/python3.12/http/server.py", line 428, in handle_one_request
+    method()
+  File "/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py", line 1792, in do_GET
+    self.handle_models_request()
+  File "/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/mlx_lm/server.py", line 1839, in handle_models_request
+    hf_cache_info = scan_cache_dir()
+                    ^^^^^^^^^^^^^^^^
+  File "/Users/nacer_b/engines/mlxlm/lib/python3.12/site-packages/huggingface_hub/utils/_cache_manager.py", line 768, in scan_cache_dir
+    raise CacheNotFound(
+huggingface_hub.errors.CacheNotFound: Cache directory not found: /Users/nacer_b/.cache/huggingface/hub. Please use `cache_dir` argument or set `HF_HUB_CACHE` environment variable.
+----------------------------------------
+2026-10-23 02:44:08,165 - INFO - Prompt Cache: 0 sequences, 0.00 GB
+2026-10-23 02:44:08,165 - INFO - - assistant: 0 sequences, 0.00 GB
+2026-10-23 02:44:08,165 - INFO - - user: 0 sequences, 0.00 GB
+2026-10-23 02:44:08,165 - INFO - - system: 0 sequences, 0.00 GB
+127.0.0.1 - - [23/Oct/2026 02:44:08] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:44:13,804 - INFO - Prompt processing progress: 2048/2926
+2026-10-23 02:44:16,211 - INFO - Prompt processing progress: 2906/2926
+2026-10-23 02:44:16,341 - INFO - Prompt processing progress: 2922/2926
+2026-10-23 02:44:16,382 - INFO - Prompt processing progress: 2925/2926
+2026-10-23 02:44:16,429 - INFO - Prompt processing progress: 2926/2926
+2026-10-23 02:44:18,909 - INFO - Prompt Cache: 4 sequences, 0.59 GB
+2026-10-23 02:44:18,909 - INFO - - assistant: 2 sequences, 0.30 GB
+2026-10-23 02:44:18,909 - INFO - - user: 1 sequences, 0.15 GB
+2026-10-23 02:44:18,909 - INFO - - system: 1 sequences, 0.15 GB
+127.0.0.1 - - [23/Oct/2026 02:44:18] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:44:20,058 - INFO - Prompt processing progress: 408/430
+2026-10-23 02:44:20,170 - INFO - Prompt processing progress: 426/430
+2026-10-23 02:44:20,206 - INFO - Prompt processing progress: 429/430
+2026-10-23 02:44:20,231 - INFO - Prompt processing progress: 430/430
+2026-10-23 02:44:39,938 - INFO - Prompt Cache: 4 sequences, 0.34 GB
+2026-10-23 02:44:39,938 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:44:39,938 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:44:39,938 - INFO - - system: 2 sequences, 0.21 GB
+127.0.0.1 - - [23/Oct/2026 02:44:39] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:44:40,065 - INFO - Prompt processing progress: 20/85
+2026-10-23 02:44:40,253 - INFO - Prompt processing progress: 81/85
+2026-10-23 02:44:40,289 - INFO - Prompt processing progress: 84/85
+2026-10-23 02:44:40,313 - INFO - Prompt processing progress: 85/85
+2026-10-23 02:44:59,778 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:44:59,778 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:44:59,778 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:44:59,778 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:44:59] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:44:59,979 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:45:00,014 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:45:00,036 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:45:19,360 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:45:19,360 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:45:19,360 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:45:19,360 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:45:19] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:45:19,548 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:45:19,582 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:45:19,604 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:45:38,941 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:45:38,941 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:45:38,941 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:45:38,941 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:45:38] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:45:39,129 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:45:39,164 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:45:39,186 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:45:58,529 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:45:58,529 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:45:58,529 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:45:58,529 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:45:58] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:45:58,717 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:45:58,751 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:45:58,773 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:46:18,249 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:46:18,249 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:46:18,249 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:46:18,249 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:46:18] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:46:18,445 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:46:18,479 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:46:18,501 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:46:37,444 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:46:37,444 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:46:37,444 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:46:37,444 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:46:37] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:46:37,632 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:46:37,666 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:46:37,686 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:46:56,626 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:46:56,626 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:46:56,626 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:46:56,626 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:46:56] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:46:56,815 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:46:56,849 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:46:56,869 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:47:15,811 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:47:15,811 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:47:15,811 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:47:15,811 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:47:15] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:47:16,000 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:47:16,034 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:47:16,055 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:47:34,995 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:47:34,995 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:47:34,995 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:47:34,995 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:47:34] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:47:35,184 - INFO - Prompt processing progress: 61/65
+2026-10-23 02:47:35,219 - INFO - Prompt processing progress: 64/65
+2026-10-23 02:47:35,239 - INFO - Prompt processing progress: 65/65
+2026-10-23 02:47:54,367 - INFO - Prompt Cache: 4 sequences, 0.24 GB
+2026-10-23 02:47:54,367 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:47:54,367 - INFO - - user: 1 sequences, 0.05 GB
+2026-10-23 02:47:54,367 - INFO - - system: 2 sequences, 0.12 GB
+127.0.0.1 - - [23/Oct/2026 02:47:54] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:47:59,988 - INFO - Prompt processing progress: 2048/4135
+2026-10-23 02:48:05,714 - INFO - Prompt processing progress: 4096/4135
+2026-10-23 02:48:05,836 - INFO - Prompt processing progress: 4111/4135
+2026-10-23 02:48:05,944 - INFO - Prompt processing progress: 4131/4135
+2026-10-23 02:48:05,983 - INFO - Prompt processing progress: 4134/4135
+2026-10-23 02:48:06,013 - INFO - Prompt processing progress: 4135/4135
+2026-10-23 02:48:08,550 - INFO - Prompt Cache: 4 sequences, 0.61 GB
+2026-10-23 02:48:08,551 - INFO - - assistant: 1 sequences, 0.19 GB
+2026-10-23 02:48:08,551 - INFO - - user: 1 sequences, 0.19 GB
+2026-10-23 02:48:08,551 - INFO - - system: 2 sequences, 0.24 GB
+127.0.0.1 - - [23/Oct/2026 02:48:08] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:48:08,783 - INFO - Prompt processing progress: 56/60
+2026-10-23 02:48:08,824 - INFO - Prompt processing progress: 59/60
+2026-10-23 02:48:08,855 - INFO - Prompt processing progress: 60/60
+2026-10-23 02:48:10,580 - INFO - Prompt Cache: 4 sequences, 0.62 GB
+2026-10-23 02:48:10,580 - INFO - - assistant: 1 sequences, 0.19 GB
+2026-10-23 02:48:10,580 - INFO - - user: 1 sequences, 0.19 GB
+2026-10-23 02:48:10,580 - INFO - - system: 2 sequences, 0.24 GB
+127.0.0.1 - - [23/Oct/2026 02:48:10] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:48:10,806 - INFO - Prompt processing progress: 40/44
+2026-10-23 02:48:10,847 - INFO - Prompt processing progress: 43/44
+2026-10-23 02:48:10,876 - INFO - Prompt processing progress: 44/44
+2026-10-23 02:48:12,571 - INFO - Prompt Cache: 4 sequences, 0.62 GB
+2026-10-23 02:48:12,571 - INFO - - assistant: 1 sequences, 0.19 GB
+2026-10-23 02:48:12,571 - INFO - - user: 1 sequences, 0.19 GB
+2026-10-23 02:48:12,571 - INFO - - system: 2 sequences, 0.24 GB
+127.0.0.1 - - [23/Oct/2026 02:48:12] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:48:12,734 - INFO - Prompt processing progress: 32/36
+2026-10-23 02:48:12,779 - INFO - Prompt processing progress: 35/36
+2026-10-23 02:48:12,812 - INFO - Prompt processing progress: 36/36
+2026-10-23 02:48:20,040 - INFO - Prompt Cache: 4 sequences, 0.63 GB
+2026-10-23 02:48:20,040 - INFO - - assistant: 1 sequences, 0.20 GB
+2026-10-23 02:48:20,040 - INFO - - user: 1 sequences, 0.19 GB
+2026-10-23 02:48:20,040 - INFO - - system: 2 sequences, 0.24 GB
+127.0.0.1 - - [23/Oct/2026 02:48:20] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:48:25,675 - INFO - Prompt processing progress: 2048/16284
+2026-10-23 02:48:31,402 - INFO - Prompt processing progress: 4096/16284
+2026-10-23 02:48:37,238 - INFO - Prompt processing progress: 6144/16284
+2026-10-23 02:48:43,187 - INFO - Prompt processing progress: 8192/16284
+2026-10-23 02:48:49,242 - INFO - Prompt processing progress: 10240/16284
+2026-10-23 02:48:55,412 - INFO - Prompt processing progress: 12288/16284
+2026-10-23 02:49:01,696 - INFO - Prompt processing progress: 14336/16284
+2026-10-23 02:49:07,798 - INFO - Prompt processing progress: 16260/16284
+2026-10-23 02:49:07,951 - INFO - Prompt processing progress: 16280/16284
+2026-10-23 02:49:08,003 - INFO - Prompt processing progress: 16283/16284
+2026-10-23 02:49:08,046 - INFO - Prompt processing progress: 16284/16284
+2026-10-23 02:49:11,120 - INFO - Prompt Cache: 4 sequences, 1.94 GB
+2026-10-23 02:49:11,120 - INFO - - assistant: 1 sequences, 0.59 GB
+2026-10-23 02:49:11,120 - INFO - - user: 1 sequences, 0.58 GB
+2026-10-23 02:49:11,120 - INFO - - system: 2 sequences, 0.77 GB
+127.0.0.1 - - [23/Oct/2026 02:49:11] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:11,488 - INFO - Prompt processing progress: 65/69
+2026-10-23 02:49:11,547 - INFO - Prompt processing progress: 68/69
+2026-10-23 02:49:11,589 - INFO - Prompt processing progress: 69/69
+2026-10-23 02:49:14,198 - INFO - Prompt Cache: 4 sequences, 1.95 GB
+2026-10-23 02:49:14,198 - INFO - - assistant: 1 sequences, 0.59 GB
+2026-10-23 02:49:14,198 - INFO - - user: 1 sequences, 0.59 GB
+2026-10-23 02:49:14,198 - INFO - - system: 2 sequences, 0.77 GB
+127.0.0.1 - - [23/Oct/2026 02:49:14] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:14,466 - INFO - Prompt processing progress: 59/63
+2026-10-23 02:49:14,520 - INFO - Prompt processing progress: 62/63
+2026-10-23 02:49:14,563 - INFO - Prompt processing progress: 63/63
+2026-10-23 02:49:16,669 - INFO - Prompt Cache: 4 sequences, 1.95 GB
+2026-10-23 02:49:16,669 - INFO - - assistant: 1 sequences, 0.59 GB
+2026-10-23 02:49:16,669 - INFO - - user: 1 sequences, 0.59 GB
+2026-10-23 02:49:16,669 - INFO - - system: 2 sequences, 0.77 GB
+127.0.0.1 - - [23/Oct/2026 02:49:16] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:16,937 - INFO - Prompt processing progress: 40/44
+2026-10-23 02:49:16,992 - INFO - Prompt processing progress: 43/44
+2026-10-23 02:49:17,035 - INFO - Prompt processing progress: 44/44
+2026-10-23 02:49:26,496 - INFO - Prompt Cache: 4 sequences, 1.96 GB
+2026-10-23 02:49:26,496 - INFO - - assistant: 1 sequences, 0.60 GB
+2026-10-23 02:49:26,496 - INFO - - user: 1 sequences, 0.59 GB
+2026-10-23 02:49:26,496 - INFO - - system: 2 sequences, 0.77 GB
+127.0.0.1 - - [23/Oct/2026 02:49:26] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:27,905 - INFO - Prompt processing progress: 408/430
+2026-10-23 02:49:28,010 - INFO - Prompt processing progress: 426/430
+2026-10-23 02:49:28,046 - INFO - Prompt processing progress: 429/430
+2026-10-23 02:49:28,071 - INFO - Prompt processing progress: 430/430
+2026-10-23 02:49:29,115 - INFO - Prompt Cache: 4 sequences, 0.78 GB
+2026-10-23 02:49:29,115 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:49:29,115 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:49:29,115 - INFO - - system: 2 sequences, 0.65 GB
+127.0.0.1 - - [23/Oct/2026 02:49:29] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:29,162 - INFO - Prompt processing progress: 3/4
+2026-10-23 02:49:29,185 - INFO - Prompt processing progress: 4/4
+2026-10-23 02:49:30,222 - INFO - Prompt Cache: 4 sequences, 0.78 GB
+2026-10-23 02:49:30,222 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:49:30,222 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:49:30,222 - INFO - - system: 2 sequences, 0.65 GB
+127.0.0.1 - - [23/Oct/2026 02:49:30] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:30,409 - INFO - Prompt processing progress: 52/53
+2026-10-23 02:49:30,432 - INFO - Prompt processing progress: 53/53
+2026-10-23 02:49:34,002 - INFO - Prompt Cache: 4 sequences, 0.79 GB
+2026-10-23 02:49:34,003 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:49:34,003 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:49:34,003 - INFO - - system: 2 sequences, 0.65 GB
+127.0.0.1 - - [23/Oct/2026 02:49:34] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:34,039 - INFO - Prompt processing progress: 1/2
+2026-10-23 02:49:34,063 - INFO - Prompt processing progress: 2/2
+2026-10-23 02:49:36,610 - INFO - Prompt Cache: 4 sequences, 0.78 GB
+2026-10-23 02:49:36,610 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:49:36,610 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:49:36,610 - INFO - - system: 2 sequences, 0.65 GB
+127.0.0.1 - - [23/Oct/2026 02:49:36] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:36,646 - INFO - Prompt processing progress: 1/2
+2026-10-23 02:49:36,668 - INFO - Prompt processing progress: 2/2
+2026-10-23 02:49:39,144 - INFO - Prompt Cache: 4 sequences, 0.78 GB
+2026-10-23 02:49:39,144 - INFO - - assistant: 1 sequences, 0.07 GB
+2026-10-23 02:49:39,144 - INFO - - user: 1 sequences, 0.07 GB
+2026-10-23 02:49:39,144 - INFO - - system: 2 sequences, 0.65 GB
+127.0.0.1 - - [23/Oct/2026 02:49:39] "POST /v1/chat/completions HTTP/1.1" 200 -
+2026-10-23 02:49:39,416 - INFO - Prompt processing progress: 81/82
+2026-10-23 02:49:39,439 - INFO - Prompt processing progress: 82/82

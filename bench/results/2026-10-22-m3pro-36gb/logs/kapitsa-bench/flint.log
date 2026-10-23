@@ -1,0 +1,40 @@
+kapitsa bench: Recursive Flint 40B-A2.5B 4-bit on MacBook Pro (16-inch, Nov 2023): Apple M3 Pro, 18-core GPU, 36 GB, macOS 14.1
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:61794 (log ~/.cache/kapitsa/logs/bench-61794.log)
+[?2026h  ✓ Loaded Recursive Flint 40B-A2.5B  ·  4-bit in 8.8s  ·  plain decoding
+[?2026lReady after 8.8s: plain decoding
+Warm-up done in 6.3s
+GPU quiet after 18s
+  decode T=1.0: 72.27 tok/s (512 tok, finish="length")
+  decode T=1.0: 73.16 tok/s (512 tok, finish="length")
+  decode T=1.0: 72.21 tok/s (512 tok, finish="length")
+  decode T=1.0: 73.36 tok/s (512 tok, finish="length")
+  decode T=1.0: 73.60 tok/s (512 tok, finish="length")
+decode T=1.0: median 73.16 tok/s over 5/5 valid
+  decode T=0: 73.57 tok/s (512 tok, finish="length")
+  decode T=0: 73.50 tok/s (512 tok, finish="length")
+  decode T=0: 73.24 tok/s (512 tok, finish="length")
+  decode T=0: 73.47 tok/s (512 tok, finish="length")
+  decode T=0: 73.53 tok/s (512 tok, finish="length")
+decode T=0: median 73.50 tok/s over 5/5 valid
+prefill 4000: 3873 tok, 799 tok/s; cached TTFT median 0.15 s
+prefill 16000: 15066 tok, 676 tok/s; cached TTFT median 0.19 s
+tools: pass
+Benchmark: MacBook Pro (16-inch, Nov 2023) · M3 Pro · 36 GB · Recursive Flint 40B-A2.5B 4-bit
+| MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB | Recursive Flint 40B-A2.5B · 4-bit |
+| --- | ---: |
+| Writing, T = 1.0 | 73.2 tok/s (72.2–73.6, median of 5) |
+| Writing, greedy | 73.5 tok/s (73.2–73.6, median of 5) |
+| Reading a 4K-token prompt | 799 tok/s (3,873 tokens in 4.84 s) |
+| Follow-up at 4K | 0.15 s |
+| Reading a 16K-token prompt | 676 tok/s (15,066 tokens in 22.29 s) |
+| Follow-up at 16K | 0.19 s |
+| Peak memory | 22.2 GB |
+| Tool calls | pass |
+
+Kapitsa 0.2.9 (c490f81) · plain decoding · macOS 14.1 (23B2073) · on AC power · Automatic power mode · thermal state nominal · full run
+
+Flags: none.
+
+Measured with `kapitsa bench`: the protocol of [bench/harness](https://github.com/nace-ai/kapitsa/tree/main/bench/harness), as a client of the local server.
+Saved /Users/nacer_b/kq/m3/cb/kapitsa-bench-flint.json

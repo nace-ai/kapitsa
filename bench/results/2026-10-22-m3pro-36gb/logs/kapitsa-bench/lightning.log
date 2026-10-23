@@ -1,0 +1,40 @@
+kapitsa bench: Nemotron 3.5 Lightning 30B-A3B nvfp4 on MacBook Pro (16-inch, Nov 2023): Apple M3 Pro, 18-core GPU, 36 GB, macOS 14.1
+Left out of the server, as the harness does: NI_LOCK_HELD
+Starting the server on 127.0.0.1:61972 (log ~/.cache/kapitsa/logs/bench-61972.log)
+[?2026h  ✓ Loaded Nemotron 3.5 Lightning 30B-A3B  ·  nvfp4 in 6.2s  ·  DSpark specula…
+[?2026lReady after 6.2s: DSpark speculative decoding (7-token blocks)
+Warm-up done in 7.0s
+GPU quiet after 18s
+  decode T=0.6: 73.28 tok/s (512 tok, finish="length")
+  decode T=0.6: 73.46 tok/s (512 tok, finish="length")
+  decode T=0.6: 81.16 tok/s (512 tok, finish="length")
+  decode T=0.6: 62.73 tok/s (512 tok, finish="length")
+  decode T=0.6: 83.47 tok/s (512 tok, finish="length")
+decode T=0.6: median 73.46 tok/s over 5/5 valid
+  decode T=0: 77.83 tok/s (512 tok, finish="length")
+  decode T=0: 79.09 tok/s (512 tok, finish="length")
+  decode T=0: 80.35 tok/s (512 tok, finish="length")
+  decode T=0: 81.55 tok/s (512 tok, finish="length")
+  decode T=0: 82.54 tok/s (512 tok, finish="length")
+decode T=0: median 80.35 tok/s over 5/5 valid
+prefill 4000: 4184 tok, 789 tok/s; cached TTFT median 0.19 s
+prefill 16000: 16520 tok, 696 tok/s; cached TTFT median 0.21 s
+tools: pass
+Benchmark: MacBook Pro (16-inch, Nov 2023) · M3 Pro · 36 GB · Nemotron 3.5 Lightning 30B-A3B nvfp4
+| MacBook Pro (16-inch, Nov 2023) · M3 Pro 18-core GPU · 36 GB | Nemotron 3.5 Lightning 30B-A3B · nvfp4 |
+| --- | ---: |
+| Writing, T = 0.6 | 73.5 tok/s (62.7–83.5, median of 5) |
+| Writing, greedy | 80.3 tok/s (77.8–82.5, median of 5) |
+| Reading a 4K-token prompt | 789 tok/s (4,184 tokens in 5.30 s) |
+| Follow-up at 4K | 0.19 s |
+| Reading a 16K-token prompt | 696 tok/s (16,520 tokens in 23.74 s) |
+| Follow-up at 16K | 0.21 s |
+| Peak memory | 18.6 GB |
+| Tool calls | pass |
+
+Kapitsa 0.2.9 (c490f81) · DSpark drafter · macOS 14.1 (23B2073) · on AC power · Automatic power mode · thermal state nominal · full run
+
+Flags: none.
+
+Measured with `kapitsa bench`: the protocol of [bench/harness](https://github.com/nace-ai/kapitsa/tree/main/bench/harness), as a client of the local server.
+Saved /Users/nacer_b/kq/m3/cb/kapitsa-bench-lightning.json

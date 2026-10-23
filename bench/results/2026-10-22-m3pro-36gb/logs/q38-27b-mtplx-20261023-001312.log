@@ -1,0 +1,92 @@
+  ███╗   ███╗ ████████╗ ██████╗  ██╗      ██╗  ██╗
+  ████╗ ████║ ╚══██╔══╝ ██╔══██╗ ██║      ╚██╗██╔╝
+  ██╔████╔██║    ██║    ██████╔╝ ██║       ╚███╔╝ 
+  ██║╚██╔╝██║    ██║    ██╔═══╝  ██║       ██╔██╗ 
+  ██║ ╚═╝ ██║    ██║    ██║      ███████╗ ██╔╝ ██╗
+  ╚═╝     ╚═╝    ╚═╝    ╚═╝      ╚══════╝ ╚═╝  ╚═╝
+
+  Native MTP speculative decoding · Apple Silicon
+
+╭─ MTPLX 2.12.2 ─────────────────────────────────────────╮
+│                                                        │
+│      Model  qwen3.8-27b                                │
+│    Profile  turbo                                      │
+│        API  http://127.0.0.1:8082/v1                   │
+│       Mode  turbo MTP                                  │
+│    Browser  http://127.0.0.1:8082/                     │
+│  Listening  127.0.0.1:8082                             │
+│    Loading  /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp  │
+│     Warmup  16 tokens                                  │
+│       Auth  API key: leave blank for localhost         │
+│       Stop  Ctrl-C                                     │
+│                                                        │
+╰────────────────────────────────────────────────────────╯
+
+[1/6] Server config ready: http://127.0.0.1:8082/v1
+[2/6] Model resolved: /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp
+[3/6] Runtime contract verified — profile: turbo
+      Loading the model can take about a minute on first start.
+
+[4/6] Preparing turbo MTP runtime
+[4/6] Checking local acceleration runtime
+      This may take a few seconds.
+[4/6] Runtime checks complete
+[5/6] Loading model weights: /Users/nacer_b/kq/bm/qwen3.8-27b-4bit-mtp
+      This is the long step; MTPLX is mapping the model into MLX.
+      Model load in progress (this may take a minute).
+[5/6] Model loaded in 6.0s
+[5/6] Installing native-MTP draft head
+[frspec] disabled (MTPLX_FRSPEC_DRAFT=None)
+[5/6] Chat template profile: tokenizer
+[5/6] Context window: 32768 tokens
+[mtplx] dense-decode ceiling auto: 131072 tokens (15% RAM over 65536 B/token, from the model config)
+[5/6] Memory plan: 36G Mac: engine budget 27.0G, weights 18.8G, context 32768 (machine-bound), session bank up to 5.2G (yields to 3.2G under long-context load)
+[5/6] Memory plan: context window 32768 is machine-bound (model supports 262144); larger windows would swap on 36 GiB
+[5/6] GPU residency keepalive: every 1s for 600s after each request
+[mtplx] session-bank budget: 5.2G total (auto: machine memory plan, yields to live KV), 2.6G per-session cap, 24 entries max, model weights 18.8G. Override: MTPLX_SESSION_BANK_MAX_BYTES / MTPLX_SESSION_BANK_PER_SESSION_BYTES (sizes like 12G or 12GiB).
+[6/6] Warming model with 16 tokens
+[mtplx] compiled-verify prewarm {"buckets": [], "skipped": ["no_paged_entries"], "already": [], "elapsed_s": 0.0, "complete": true}
+{"event": "mtplx_ssd_session_cache_reconcile", "dir": "/Users/nacer_b/.mtplx/session-bank", "files_deleted": 0, "dirs_deleted": 0, "disk_bytes_deleted": 0, "elapsed_s": 3.939, "entries": 24, "disk_bytes": 4591325184, "max_bytes": 107374182400, "interrupted": false}
+[6/6] Extended warmup continues silently in the background
+[6/6] Warmup complete in 4.5s (5.75 tok/s)
+
+MTPLX is ready.
+Chat UI: http://127.0.0.1:8082/
+OpenAI API Base URL: http://127.0.0.1:8082/v1
+Model: qwen3.8-27b
+Reasoning history: preserve (policy auto)
+API key: leave blank for localhost
+Health check: http://127.0.0.1:8082/health
+Keep this terminal open. Press Ctrl-C to stop MTPLX.
+[mtplx] chat turn segmentation {"enabled": true, "reason": "structure holds and all 12 probe renders give the single-call ids when cut", "tokenizer": "TokenizerWrapper"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 2924, "completion_tokens": 64, "max_tokens": 64, "effective_max_tokens": 64, "finish_reason": "length", "elapsed_s": 34.20601, "tok_s": 22.157469, "end_to_end_tok_s": 1.871016, "seed": 2084191263, "attempts": 1, "blank_retries": 0, "text_preview": "The first file is a fragment of a PyTorch model implementation (likely from a Hugging Face Transformers model). It shows"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 8.711902, "tok_s": 21.997404, "end_to_end_tok_s": 3.099208, "seed": 1445538598, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 23.887885, "tok_s": 22.57245, "end_to_end_tok_s": 21.433459, "seed": 1146041059, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nLRU Cache with TTL Expiry, Thread-Safe Wrapper, and Pytest Test Suite.\n\nThis module provides:\n1. An LRU (L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 24.172514, "tok_s": 22.289217, "end_to_end_tok_s": 21.181082, "seed": 2043132590, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n\nThis module implements a Least Recently Used (LRU) cach"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 24.499593, "tok_s": 21.862707, "end_to_end_tok_s": 20.898307, "seed": 1100949766, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nLRU Cache with TTL Expiry and Thread-Safe Wrapper\n\nThis module implements a Least Recently Used (LRU) cach"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 23.059209, "tok_s": 23.356271, "end_to_end_tok_s": 22.20371, "seed": 1394549225, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nA complete implementation of an LRU cache with TTL expiry, thread-safe wrapper,\nand a comprehensive pytest"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 24.464067, "tok_s": 22.010525, "end_to_end_tok_s": 20.928654, "seed": 1219955261, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time-To-Live)\nexpiry, a thread-s"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 25.205934, "tok_s": 21.232493, "end_to_end_tok_s": 20.312678, "seed": 1806950339, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To Live)\n"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 24.15226, "tok_s": 22.193513, "end_to_end_tok_s": 21.198844, "seed": 1647336624, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time-To-Live)\n"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 24.488571, "tok_s": 21.902661, "end_to_end_tok_s": 20.907713, "seed": 661265079, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 22.44036, "tok_s": 23.988329, "end_to_end_tok_s": 22.816034, "seed": 1724323873, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 22.22607, "tok_s": 24.215251, "end_to_end_tok_s": 23.036012, "seed": 121617150, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nLRU Cache with TTL Expiry, Thread-Safe Wrapper, and Pytest Test Suite.\n\nThis module provides:\n1. A basic L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 22.388365, "tok_s": 24.028921, "end_to_end_tok_s": 22.869022, "seed": 497672877, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 22.114943, "tok_s": 24.373535, "end_to_end_tok_s": 23.151767, "seed": 1600715580, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 85, "completion_tokens": 512, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "length", "elapsed_s": 22.243577, "tok_s": 24.196087, "end_to_end_tok_s": 23.01788, "seed": 2043218308, "attempts": 1, "blank_retries": 0, "text_preview": "```python\n\"\"\"\nlru_cache_with_ttl.py\n\nA complete implementation of an LRU (Least Recently Used) cache with TTL (Time To L"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4135, "completion_tokens": 71, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 45.689356, "tok_s": 17.234436, "end_to_end_tok_s": 1.553972, "seed": 1223405694, "attempts": 1, "blank_retries": 0, "text_preview": "The first file in the repository context, `modeling_granite_speech.py`, is a Python module that implements the Granite S"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4228, "completion_tokens": 39, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 2.710832, "tok_s": 17.033831, "end_to_end_tok_s": 14.38673, "seed": 1822005294, "attempts": 1, "blank_retries": 0, "text_preview": "One function defined in that file is `get_audio_features`, which is a method on the `GraniteSpeechModel` class that runs"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4294, "completion_tokens": 37, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 2.887679, "tok_s": 14.980937, "end_to_end_tok_s": 12.813059, "seed": 821023075, "attempts": 1, "blank_retries": 0, "text_preview": "One class defined in that file is `GraniteSpeechConformerBlock`, which implements a single Conformer encoder block with "}
+{"event": "mtplx_openai_generation", "prompt_tokens": 4351, "completion_tokens": 235, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 9.89372, "tok_s": 24.764119, "end_to_end_tok_s": 23.752441, "seed": 1995084513, "attempts": 1, "blank_retries": 0, "text_preview": "The file imports the following modules:\n\n- `math`\n- `dataclasses` (specifically `dataclass`)\n- `torch`\n- `torch.nn.funct"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16287, "completion_tokens": 51, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 174.147539, "tok_s": 16.643474, "end_to_end_tok_s": 0.292855, "seed": 330972236, "attempts": 1, "blank_retries": 0, "text_preview": "The first file (`modeling_granite_speech.py`) implements the Granite Speech model, a multimodal architecture that combin"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16360, "completion_tokens": 11, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 1.197977, "tok_s": 19.585011, "end_to_end_tok_s": 9.182149, "seed": 1320805373, "attempts": 1, "blank_retries": 0, "text_preview": "One function defined in that file is `forward`."}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16398, "completion_tokens": 16, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "stop", "elapsed_s": 1.662529, "tok_s": 14.39375, "end_to_end_tok_s": 9.623891, "seed": 359674420, "attempts": 1, "blank_retries": 0, "text_preview": "One class defined in that file is `GraniteSpeechEncoderProjector`."}
+{"event": "mtplx_openai_generation", "prompt_tokens": 16434, "completion_tokens": 256, "max_tokens": 256, "effective_max_tokens": 256, "finish_reason": "length", "elapsed_s": 12.172858, "tok_s": 22.186719, "end_to_end_tok_s": 21.030394, "seed": 1115734007, "attempts": 1, "blank_retries": 0, "text_preview": "The file imports the following modules:\n\n- `math`\n- `dataclasses` (specifically `dataclass`)\n- `torch`\n- `torch.nn.funct"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 8.692308, "tok_s": 22.584358, "end_to_end_tok_s": 3.106194, "seed": 441646999, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 730, "completion_tokens": 27, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 1.339726, "tok_s": 22.940638, "end_to_end_tok_s": 20.153374, "seed": 478264610, "attempts": 1, "blank_retries": 0, "text_preview": "<tool_call>\n<function=read_file>\n<parameter=path>\nsrc/main.py\n</parameter>\n</function>\n</tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 810, "completion_tokens": 103, "max_tokens": 512, "effective_max_tokens": 512, "finish_reason": "stop", "elapsed_s": 5.516862, "tok_s": 21.323178, "end_to_end_tok_s": 18.670035, "seed": 1208378836, "attempts": 1, "blank_retries": 0, "text_preview": "The entry point in `src/main.py` is minimal:\n\n- It imports `sys`.\n- It defines a `main()` function that prints `hello fr"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 754, "completion_tokens": 47, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 9.816199, "tok_s": 23.990512, "end_to_end_tok_s": 4.788004, "seed": 698297827, "attempts": 1, "blank_retries": 0, "text_preview": "The user wants me to read src/main.py and explain what the entry point does.\n</think>\n\n<tool_call>\n<function=read_file>\n"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 754, "completion_tokens": 53, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 2.314566, "tok_s": 24.276876, "end_to_end_tok_s": 22.898462, "seed": 1288409387, "attempts": 1, "blank_retries": 0, "text_preview": "The user wants me to open src/main.py and explain what the entry point does. Let me read the file.\n</think>\n\n<tool_call>"}
+{"event": "mtplx_openai_generation", "prompt_tokens": 835, "completion_tokens": 161, "max_tokens": 4096, "effective_max_tokens": 4096, "finish_reason": "stop", "elapsed_s": 9.172721, "tok_s": 19.64998, "end_to_end_tok_s": 17.552044, "seed": 726511869, "attempts": 1, "blank_retries": 0, "text_preview": "The file is simple. Let me describe what the entry point does.\n</think>\n\n`src/main.py` is a minimal entry point:\n\n- **`m"}
+[mtplx] shutdown: flushing 9 pending SSD session-cache write(s) (bounded 10s)...
+[mtplx] shutdown: SSD session cache flushed 9/9 pending write(s) in 6.15s

@@ -1,0 +1,1784 @@
+{
+ "schema": 2,
+ "label": "sw-bolt-kapitsa",
+ "model": "bolt",
+ "base_url": "http://127.0.0.1:8091/v1",
+ "when": "2026-10-23 04:24:24",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "bolt",
+  "label": "sw-bolt-kapitsa",
+  "pid": 82695,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4183,16000:16514",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 1,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/nacer_b/kq/m3/out/results/sw-bolt-kapitsa-20261023-042321.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+  "dirty": true
+ },
+ "phases": {
+  "sweep": [
+   1792707864.911,
+   1792708167.722
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 82695,
+     "name": "kapitsa",
+     "phys_footprint": 23831934080,
+     "phys_footprint_peak": 23957533824,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 15187968,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 22727.9,
+   "phys_footprint_peak_mb": 22847.7,
+   "mapped_file_clean_mb": 14.5,
+   "swap_used_mb": 880.38,
+   "memorystatus_level": 32,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 372.6,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 880.38,
+  "swapouts": 959445,
+  "swapins": 853327,
+  "pageouts": 562667,
+  "memorystatus_level": 95
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 22373.8,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1115,
+    "ttft_s": 4.819339917,
+    "prefill_tps": 231.35948474331283,
+    "decode_tps": 38.05739486410498,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2166,
+    "ttft_s": 8.459224459,
+    "prefill_tps": 256.0518414540394,
+    "decode_tps": 31.656495761950197,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4206,
+    "ttft_s": 16.083930792,
+    "prefill_tps": 261.5032391268449,
+    "decode_tps": 36.296841199986105,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8410,
+    "ttft_s": 33.189588584,
+    "prefill_tps": 253.39271617408008,
+    "decode_tps": 37.829342355135246,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16540,
+    "ttft_s": 65.97327670900002,
+    "prefill_tps": 250.70757168778957,
+    "decode_tps": 34.1701097614889,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32003,
+    "ttft_s": 140.58529462500002,
+    "prefill_tps": 227.64116321956314,
+    "decode_tps": 30.76698837865162,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.808,
+  "retention_from_tokens": 1115,
+  "retention_to_tokens": 32003,
+  "max_prompt_tokens": 32003,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1115,
+      "completion_tokens": 192,
+      "ttft_s": 4.819339917,
+      "prefill_tps": 231.35948474331283,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 38.05739486410498
+     }
+    ],
+    "prompt_tokens": 1115,
+    "ttft_s": 4.819339917,
+    "prefill_tps": 231.35948474331283,
+    "decode_tps": 38.05739486410498
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2166,
+      "completion_tokens": 192,
+      "ttft_s": 8.459224459,
+      "prefill_tps": 256.0518414540394,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 31.656495761950197
+     }
+    ],
+    "prompt_tokens": 2166,
+    "ttft_s": 8.459224459,
+    "prefill_tps": 256.0518414540394,
+    "decode_tps": 31.656495761950197
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4206,
+      "completion_tokens": 192,
+      "ttft_s": 16.083930792,
+      "prefill_tps": 261.5032391268449,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 36.296841199986105
+     }
+    ],
+    "prompt_tokens": 4206,
+    "ttft_s": 16.083930792,
+    "prefill_tps": 261.5032391268449,
+    "decode_tps": 36.296841199986105
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8410,
+      "completion_tokens": 192,
+      "ttft_s": 33.189588584,
+      "prefill_tps": 253.39271617408008,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 37.829342355135246
+     }
+    ],
+    "prompt_tokens": 8410,
+    "ttft_s": 33.189588584,
+    "prefill_tps": 253.39271617408008,
+    "decode_tps": 37.829342355135246
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16540,
+      "completion_tokens": 192,
+      "ttft_s": 65.97327670900002,
+      "prefill_tps": 250.70757168778957,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 34.1701097614889
+     }
+    ],
+    "prompt_tokens": 16540,
+    "ttft_s": 65.97327670900002,
+    "prefill_tps": 250.70757168778957,
+    "decode_tps": 34.1701097614889
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32003,
+      "completion_tokens": 192,
+      "ttft_s": 140.58529462500002,
+      "prefill_tps": 227.64116321956314,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 30.76698837865162
+     }
+    ],
+    "prompt_tokens": 32003,
+    "ttft_s": 140.58529462500002,
+    "prefill_tps": 227.64116321956314,
+    "decode_tps": 30.76698837865162
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 21754,
+ "peak_footprint_mb": 22847,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 22847.7,
+ "mapped_file_clean_mb": 14.5,
+ "vm_end": {
+  "swap_used_mb": 880.38,
+  "swapouts": 959445,
+  "swapins": 853371,
+  "pageouts": 562697,
+  "memorystatus_level": 32
+ },
+ "when_end": "2026-10-23 04:29:28",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 12.47,
+    "prompt_tokens": 2929,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 2.53,
+    "prompt_tokens": 455,
+    "completion_tokens": 27,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1081,
+   "completion_tokens": 3,
+   "ttft_s": 5.771045959,
+   "prefill_tps": 187.314398062308,
+   "finish": "stop",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 3,
+    "ttft_s": 4.2335958750000025,
+    "prefill_tps": 255.33849519824548,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1081,
+    "completion_tokens": 3,
+    "ttft_s": 4.234387542,
+    "prefill_tps": 255.29075675709606,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1082,
+    "completion_tokens": 3,
+    "ttft_s": 4.238393125000002,
+    "prefill_tps": 255.285427304481,
+    "finish": "stop",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 4.234387542,
+  "first_request_penalty_s": 1.537,
+  "invalid": [],
+  "spawn_to_ready_s": 10.1,
+  "spawn_to_first_token_s": 15.87
+ },
+ "contention": {
+  "overall": {
+   "samples": 149,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 149,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792707866.42,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707868.45,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707870.47,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707872.5,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707874.534,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707876.565,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707878.595,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707880.626,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707882.656,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707884.685,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707886.721,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707888.755,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707890.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707892.814,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707894.843,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707896.871,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707898.908,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707900.941,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707902.97,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707904.999,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707907.028,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707909.057,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707911.086,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707913.115,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707915.145,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707917.174,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707919.202,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707921.231,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707923.261,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707925.291,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707927.32,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707929.35,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707931.379,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707933.408,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707935.437,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707937.466,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707939.495,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707941.524,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707943.552,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707945.581,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707947.61,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707949.64,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707951.669,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707953.698,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707955.727,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792707957.751,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707959.78,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707961.809,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707963.838,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707965.867,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707967.896,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707969.925,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707971.954,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707973.983,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707976.013,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707978.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707980.071,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707982.101,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707984.129,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707986.159,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707988.188,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707990.219,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707992.249,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707994.278,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707996.307,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792707998.336,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708000.365,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708002.394,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708004.423,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708006.452,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708008.477,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708010.506,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708012.534,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708014.564,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708016.585,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708018.614,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708020.643,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708022.672,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708024.702,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708026.731,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708028.76,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708030.788,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708032.817,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708034.846,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708036.875,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708038.904,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708040.932,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708042.96,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708044.989,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708047.018,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708049.048,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708051.081,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708053.109,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708055.146,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708057.185,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708059.22,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708061.249,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708063.283,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708065.313,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708067.342,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708069.371,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708071.399,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708073.428,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708075.459,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708077.488,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708079.517,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708081.546,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708083.577,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708085.608,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708087.637,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708089.669,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708091.698,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708093.727,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708095.762,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708097.794,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708099.824,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708101.853,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708103.882,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708105.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708107.941,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708109.97,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708112.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708114.029,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708116.058,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708118.087,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708120.116,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708122.145,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708124.174,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708126.203,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708128.231,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708130.266,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708132.296,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708134.325,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708136.353,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708138.382,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708140.411,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708142.44,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708144.468,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708146.503,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708148.534,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708150.563,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708152.592,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708154.62,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708156.653,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708158.682,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708160.711,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708162.74,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708164.769,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792708166.798,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "sw-bolt-kapitsa",
+ "display": "Kapitsa (catalog bolt)",
+ "engine": "kapitsa",
+ "version": "c490f81",
+ "version_config": "auto",
+ "model_name": "Nemotron-3.5-Bolt",
+ "model_path": "~/.cache/kapitsa/models/nemotron-3.5-bolt-24gb",
+ "note": "M3 Pro 36 GB sweep: Kapitsa built from main on the M3 (the commit is in each record; the first 4B and 27B runs used the 0.2.8 release, daf6e95), as the catalog ships the model, with its default decoding.",
+ "config": {
+  "label": "sw-bolt-kapitsa",
+  "display": "Kapitsa (catalog bolt)",
+  "engine": "kapitsa",
+  "version": "auto",
+  "model_name": "Nemotron-3.5-Bolt",
+  "model_path": "~/.cache/kapitsa/models/nemotron-3.5-bolt-24gb",
+  "cmd": [
+   "{env:KAPITSA_BIN}",
+   "serve",
+   "--model",
+   "bolt",
+   "--model-id",
+   "bolt",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "env": {
+   "NI_DISK_CACHE_DIR": "{state}/kapitsa/prefix-cache"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "cleanup": [
+   {
+    "clean_dir": "{state}/kapitsa/prefix-cache"
+   }
+  ],
+  "env_clear_prefixes": [
+   "NI_",
+   "KAPITSA_"
+  ],
+  "base_url": "http://127.0.0.1:8091/v1",
+  "model": "bolt",
+  "note": "M3 Pro 36 GB sweep: Kapitsa built from main on the M3 (the commit is in each record; the first 4B and 27B runs used the 0.2.8 release, daf6e95), as the catalog ships the model, with its default decoding.",
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4183,16000:16514"
+  ]
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 888.38,
+    "swapouts": 959445,
+    "swapins": 853148,
+    "pageouts": 562541,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 1861140480,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 223325687808,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/kq/nh/build/kapitsa",
+   "serve",
+   "--model",
+   "bolt",
+   "--model-id",
+   "bolt",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8091",
+   "--ctx",
+   "32768",
+   "--slots",
+   "1"
+  ],
+  "cmd_shell": "/Users/nacer_b/kq/nh/build/kapitsa serve --model bolt --model-id bolt --host 127.0.0.1 --port 8091 --ctx 32768 --slots 1",
+  "env": {
+   "NI_DISK_CACHE_DIR": "/Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache"
+  },
+  "env_cleared": [
+   "KAPITSA_BIN",
+   "NI_LOCK_HELD"
+  ],
+  "weights": {
+   "model_path": "~/.cache/kapitsa/models/nemotron-3.5-bolt-24gb",
+   "safetensors_bytes": 24083745496,
+   "safetensors_files": [
+    "model-00001-of-00090.safetensors",
+    "model-00002-of-00090.safetensors",
+    "model-00003-of-00090.safetensors",
+    "model-00004-of-00090.safetensors",
+    "model-00005-of-00090.safetensors",
+    "model-00006-of-00090.safetensors",
+    "model-00007-of-00090.safetensors",
+    "model-00008-of-00090.safetensors",
+    "model-00009-of-00090.safetensors",
+    "model-00010-of-00090.safetensors",
+    "model-00011-of-00090.safetensors",
+    "model-00012-of-00090.safetensors",
+    "model-00013-of-00090.safetensors",
+    "model-00014-of-00090.safetensors",
+    "model-00015-of-00090.safetensors",
+    "model-00016-of-00090.safetensors",
+    "model-00017-of-00090.safetensors",
+    "model-00018-of-00090.safetensors",
+    "model-00019-of-00090.safetensors",
+    "model-00020-of-00090.safetensors",
+    "model-00021-of-00090.safetensors",
+    "model-00022-of-00090.safetensors",
+    "model-00023-of-00090.safetensors",
+    "model-00024-of-00090.safetensors",
+    "model-00025-of-00090.safetensors",
+    "model-00026-of-00090.safetensors",
+    "model-00027-of-00090.safetensors",
+    "model-00028-of-00090.safetensors",
+    "model-00029-of-00090.safetensors",
+    "model-00030-of-00090.safetensors",
+    "model-00031-of-00090.safetensors",
+    "model-00032-of-00090.safetensors",
+    "model-00033-of-00090.safetensors",
+    "model-00034-of-00090.safetensors",
+    "model-00035-of-00090.safetensors",
+    "model-00036-of-00090.safetensors",
+    "model-00037-of-00090.safetensors",
+    "model-00038-of-00090.safetensors",
+    "model-00039-of-00090.safetensors",
+    "model-00040-of-00090.safetensors",
+    "model-00041-of-00090.safetensors",
+    "model-00042-of-00090.safetensors",
+    "model-00043-of-00090.safetensors",
+    "model-00044-of-00090.safetensors",
+    "model-00045-of-00090.safetensors",
+    "model-00046-of-00090.safetensors",
+    "model-00047-of-00090.safetensors",
+    "model-00048-of-00090.safetensors",
+    "model-00049-of-00090.safetensors",
+    "model-00050-of-00090.safetensors",
+    "model-00051-of-00090.safetensors",
+    "model-00052-of-00090.safetensors",
+    "model-00053-of-00090.safetensors",
+    "model-00054-of-00090.safetensors",
+    "model-00055-of-00090.safetensors",
+    "model-00056-of-00090.safetensors",
+    "model-00057-of-00090.safetensors",
+    "model-00058-of-00090.safetensors",
+    "model-00059-of-00090.safetensors",
+    "model-00060-of-00090.safetensors",
+    "model-00061-of-00090.safetensors",
+    "model-00062-of-00090.safetensors",
+    "model-00063-of-00090.safetensors",
+    "model-00064-of-00090.safetensors",
+    "model-00065-of-00090.safetensors",
+    "model-00066-of-00090.safetensors",
+    "model-00067-of-00090.safetensors",
+    "model-00068-of-00090.safetensors",
+    "model-00069-of-00090.safetensors",
+    "model-00070-of-00090.safetensors",
+    "model-00071-of-00090.safetensors",
+    "model-00072-of-00090.safetensors",
+    "model-00073-of-00090.safetensors",
+    "model-00074-of-00090.safetensors",
+    "model-00075-of-00090.safetensors",
+    "model-00076-of-00090.safetensors",
+    "model-00077-of-00090.safetensors",
+    "model-00078-of-00090.safetensors",
+    "model-00079-of-00090.safetensors",
+    "model-00080-of-00090.safetensors",
+    "model-00081-of-00090.safetensors",
+    "model-00082-of-00090.safetensors",
+    "model-00083-of-00090.safetensors",
+    "model-00084-of-00090.safetensors",
+    "model-00085-of-00090.safetensors",
+    "model-00086-of-00090.safetensors",
+    "model-00087-of-00090.safetensors",
+    "model-00088-of-00090.safetensors",
+    "model-00089-of-00090.safetensors",
+    "model-00090-of-00090.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "dirty": true
+  },
+  "config_file": "../../../m3pro.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "kapitsa_git": {
+   "head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "head_time": "2026-10-22T23:51:34+05:00",
+   "branch": "HEAD",
+   "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "diff_bytes": 0,
+   "dirty": false,
+   "diff_stat": "",
+   "untracked_files": 1,
+   "excluded": [
+    "bench",
+    "docs"
+   ]
+  },
+  "binary": {
+   "sha256": "21905e5382480bb2c8f1e8043e05191e6e2eb321c635bfb5ff2e44fe8580febf",
+   "mtime": "2026-10-23T00:58:51"
+  },
+  "prepare": [
+   "empty /Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "env_relevant": {
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "OLLAMA_BIN": "/Users/nacer_b/engines/ollama/ollama",
+   "OLLAMA_MODELS": "/Users/nacer_b/.ollama/models",
+   "OLLAMA_MLX_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "NI_DISK_CACHE_DIR": "/Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache"
+  },
+  "ready_s": 10.1,
+  "server_pid": 82695,
+  "listener_pid": 82695,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 1861140480,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 880.38,
+   "swapouts": 959445,
+   "swapins": 853371,
+   "pageouts": 562697,
+   "memorystatus_level": 95
+  },
+  "cleanup": [
+   "empty /Users/nacer_b/kq/m3/out/state/kapitsa/prefix-cache (harness-owned cache dir)"
+  ],
+  "disk_free_bytes": 221847306240
+ },
+ "server_log": [
+  "[kapitsa] LiLiCorr drafter: 5 layers, window 1024, 2 KV heads, 0.74 GB (NVFP4 as stored, BF16 matrices as Q8), draft head 131072 of 131072 rows (the target's), loaded in 0.7 s",
+  "[kapitsa] images: RADIO ViT-H/16 (32 blocks, width 1280, 16-pixel patches; images of 1024 to 5468 patches), 1.68 GB loaded on the first image",
+  "[kapitsa] engine ready: bolt, context 32768, 1 slots, LiLiCorr speculative decoding (7-token blocks), images on",
+  "[kapitsa] chat: prompt 1081 (cached 0) in 5759 ms (+10.8 ms template/tokenize; last chunk: encoded by 7.6 ms, GPU start +5683.6 ms, GPU 67.9 ms, wake +0.2 ms), 3 tokens in 136 ms (14.7 tok/s), stop, 2.00 tok/cycle",
+  "[kapitsa] chat: prompt 1081 (cached 0) in 4229 ms (+3.8 ms template/tokenize; last chunk: encoded by 2.0 ms, GPU start +4161.5 ms, GPU 65.5 ms, wake +0.1 ms), 3 tokens in 135 ms (14.9 tok/s), stop, 2.00 tok/cycle",
+  "[kapitsa] chat: prompt 1081 (cached 0) in 4228 ms (+5.6 ms template/tokenize; last chunk: encoded by 1.7 ms, GPU start +4160.6 ms, GPU 65.6 ms, wake +0.2 ms), 3 tokens in 135 ms (14.8 tok/s), stop, 2.00 tok/cycle",
+  "[kapitsa] chat: prompt 1082 (cached 0) in 4231 ms (+7.0 ms template/tokenize; last chunk: encoded by 1.8 ms, GPU start +4163.2 ms, GPU 65.5 ms, wake +0.2 ms), 3 tokens in 135 ms (14.9 tok/s), stop, 2.00 tok/cycle",
+  "[kapitsa] chat: prompt 2929 (cached 0) in 11093 ms (+11.0 ms template/tokenize; last chunk: encoded by 5483.2 ms, GPU start +5542.8 ms, GPU 67.0 ms, wake +0.2 ms), 64 tokens in 1365 ms (46.2 tok/s), length, 4.50 tok/cycle",
+  "[kapitsa] chat: prompt 455 (cached 0) in 2091 ms (+13.0 ms template/tokenize; last chunk: encoded by 2.8 ms, GPU start +2018.4 ms, GPU 69.3 ms, wake +0.2 ms), 27 tokens in 422 ms (61.6 tok/s), tool_calls, 6.50 tok/cycle",
+  "[kapitsa] chat: prompt 1115 (cached 0) in 4813 ms (+1.6 ms template/tokenize; last chunk: encoded by 3.2 ms, GPU start +4744.1 ms, GPU 65.7 ms, wake +0.1 ms), 192 tokens in 5081 ms (37.6 tok/s), length, 3.24 tok/cycle",
+  "[kapitsa] chat: prompt 2166 (cached 0) in 8446 ms (+12.6 ms template/tokenize; last chunk: encoded by 4175.0 ms, GPU start +4204.1 ms, GPU 66.5 ms, wake +0.1 ms), 192 tokens in 5987 ms (31.9 tok/s), length, 2.73 tok/cycle",
+  "[kapitsa] chat: prompt 4206 (cached 0) in 16068 ms (+15.4 ms template/tokenize; last chunk: encoded by 10611.2 ms, GPU start +5388.4 ms, GPU 67.9 ms, wake +0.1 ms), 192 tokens in 5265 ms (36.3 tok/s), length, 3.41 tok/cycle",
+  "[kapitsa] chat: prompt 8410 (cached 0) in 32866 ms (+276.8 ms template/tokenize; last chunk: encoded by 26068.7 ms, GPU start +6726.1 ms, GPU 70.9 ms, wake +0.1 ms), 192 tokens in 5319 ms (35.9 tok/s), length, 3.47 tok/cycle",
+  "[kapitsa] chat: prompt 16540 (cached 0) in 65952 ms (+19.5 ms template/tokenize; last chunk: encoded by 57992.2 ms, GPU start +7882.6 ms, GPU 77.0 ms, wake +0.1 ms), 192 tokens in 5579 ms (34.2 tok/s), length, 3.67 tok/cycle",
+  "[kapitsa] chat: prompt 32003 (cached 0) in 140559 ms (+24.7 ms template/tokenize; last chunk: encoded by 131015.6 ms, GPU start +9455.7 ms, GPU 87.6 ms, wake +0.1 ms), 192 tokens in 6467 ms (29.5 tok/s), length, 3.67 tok/cycle"
+ ],
+ "server_log_path": "logs/sw-bolt-kapitsa-20261023-042321.log"
+}

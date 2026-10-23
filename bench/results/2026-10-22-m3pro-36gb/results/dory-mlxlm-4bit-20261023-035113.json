@@ -1,0 +1,1652 @@
+{
+ "schema": 2,
+ "label": "dory-mlxlm-4bit",
+ "model": "default_model",
+ "base_url": "http://127.0.0.1:8321/v1",
+ "when": "2026-10-23 03:51:59",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8321/v1",
+  "model": "default_model",
+  "label": "dory-mlxlm-4bit",
+  "pid": 77688,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "4000:4184,16000:16517",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/nacer_b/kq/m3/out/results/dory-mlxlm-4bit-20261023-035113.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+  "dirty": true
+ },
+ "phases": {
+  "sweep": [
+   1792705919.985,
+   1792706180.18
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 77688,
+     "name": "python",
+     "phys_footprint": 13125395968,
+     "phys_footprint_peak": 14197564928,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 6225920,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 12517.4,
+   "phys_footprint_peak_mb": 13539.9,
+   "mapped_file_clean_mb": 5.9,
+   "swap_used_mb": 920.38,
+   "memorystatus_level": 84,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 312.8,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 920.38,
+  "swapouts": 959445,
+  "swapins": 850892,
+  "pageouts": 562437,
+  "memorystatus_level": 95
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 4881.8,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1113,
+    "ttft_s": 3.030702292,
+    "prefill_tps": 367.24161358175394,
+    "decode_tps": 28.591413665618965,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2168,
+    "ttft_s": 6.099331167000001,
+    "prefill_tps": 355.44880916284893,
+    "decode_tps": 27.872564338625935,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4206,
+    "ttft_s": 12.10024575,
+    "prefill_tps": 347.596246134092,
+    "decode_tps": 27.834736498547766,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8412,
+    "ttft_s": 25.202992916999996,
+    "prefill_tps": 333.76988311280735,
+    "decode_tps": 26.059797121070417,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16542,
+    "ttft_s": 53.139803625,
+    "prefill_tps": 311.2920799770833,
+    "decode_tps": 23.285682333963166,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 32006,
+    "ttft_s": 115.102561541,
+    "prefill_tps": 278.06505408308686,
+    "decode_tps": 20.221175771229348,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.707,
+  "retention_from_tokens": 1113,
+  "retention_to_tokens": 32006,
+  "max_prompt_tokens": 32006,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1113,
+      "completion_tokens": 192,
+      "ttft_s": 3.030702292,
+      "prefill_tps": 367.24161358175394,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 28.591413665618965
+     }
+    ],
+    "prompt_tokens": 1113,
+    "ttft_s": 3.030702292,
+    "prefill_tps": 367.24161358175394,
+    "decode_tps": 28.591413665618965
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2168,
+      "completion_tokens": 192,
+      "ttft_s": 6.099331167000001,
+      "prefill_tps": 355.44880916284893,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.872564338625935
+     }
+    ],
+    "prompt_tokens": 2168,
+    "ttft_s": 6.099331167000001,
+    "prefill_tps": 355.44880916284893,
+    "decode_tps": 27.872564338625935
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4206,
+      "completion_tokens": 192,
+      "ttft_s": 12.10024575,
+      "prefill_tps": 347.596246134092,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 27.834736498547766
+     }
+    ],
+    "prompt_tokens": 4206,
+    "ttft_s": 12.10024575,
+    "prefill_tps": 347.596246134092,
+    "decode_tps": 27.834736498547766
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8412,
+      "completion_tokens": 192,
+      "ttft_s": 25.202992916999996,
+      "prefill_tps": 333.76988311280735,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 26.059797121070417
+     }
+    ],
+    "prompt_tokens": 8412,
+    "ttft_s": 25.202992916999996,
+    "prefill_tps": 333.76988311280735,
+    "decode_tps": 26.059797121070417
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16542,
+      "completion_tokens": 192,
+      "ttft_s": 53.139803625,
+      "prefill_tps": 311.2920799770833,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 23.285682333963166
+     }
+    ],
+    "prompt_tokens": 16542,
+    "ttft_s": 53.139803625,
+    "prefill_tps": 311.2920799770833,
+    "decode_tps": 23.285682333963166
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 32006,
+      "completion_tokens": 192,
+      "ttft_s": 115.102561541,
+      "prefill_tps": 278.06505408308686,
+      "finish": "length",
+      "cached_tokens": 0,
+      "decode_tps": 20.221175771229348
+     }
+    ],
+    "prompt_tokens": 32006,
+    "ttft_s": 115.102561541,
+    "prefill_tps": 278.06505408308686,
+    "decode_tps": 20.221175771229348
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 2621,
+ "peak_footprint_mb": 13360,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 13539.9,
+ "mapped_file_clean_mb": 5.9,
+ "vm_end": {
+  "swap_used_mb": 920.38,
+  "swapouts": 959445,
+  "swapins": 850932,
+  "pageouts": 562437,
+  "memorystatus_level": 84
+ },
+ "when_end": "2026-10-23 03:56:20",
+ "warmup": {
+  "adaptive": false,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 10.53,
+    "prompt_tokens": 2929,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 2.57,
+    "prompt_tokens": 455,
+    "completion_tokens": 40,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1079,
+   "completion_tokens": 8,
+   "ttft_s": 3.030884833,
+   "prefill_tps": 356.001649502464,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1079,
+    "completion_tokens": 3,
+    "ttft_s": 2.941574417,
+    "prefill_tps": 366.8103699040295,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1078,
+    "completion_tokens": 3,
+    "ttft_s": 2.9558994170000013,
+    "prefill_tps": 364.69441206293914,
+    "finish": "stop",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1080,
+    "completion_tokens": 8,
+    "ttft_s": 2.9722071660000005,
+    "prefill_tps": 363.36632666607323,
+    "finish": "length",
+    "cached_tokens": 0
+   }
+  ],
+  "repeat_median_ttft_s": 2.9558994170000013,
+  "first_request_penalty_s": 0.075,
+  "invalid": [],
+  "spawn_to_ready_s": 2.1,
+  "spawn_to_first_token_s": 5.13
+ },
+ "contention": {
+  "overall": {
+   "samples": 128,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 128,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792705921.84,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705923.876,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705925.909,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705927.94,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705929.971,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705932.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705934.029,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705936.068,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705938.102,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705940.133,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705942.159,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705944.188,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705946.217,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705948.239,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705950.268,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705952.303,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705954.335,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705956.37,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705958.402,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705960.433,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705962.464,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705964.493,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705966.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705968.552,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705970.581,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705972.609,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705974.64,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705976.67,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705978.699,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705980.729,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705982.759,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705984.788,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705986.817,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705988.849,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705990.88,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705992.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705994.941,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705996.971,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792705999.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706001.029,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706003.06,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706005.088,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706007.117,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706009.146,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706011.176,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706013.204,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706015.235,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706017.265,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706019.294,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706021.323,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706023.353,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706025.388,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706027.421,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706029.455,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706031.486,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706033.515,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706035.546,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706037.574,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706039.604,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706041.633,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706043.662,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706045.69,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706047.721,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706049.752,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706051.786,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706053.819,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706055.851,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706057.881,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706059.911,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706061.941,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706063.973,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706066.005,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706068.037,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706070.067,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706072.098,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706074.128,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706076.16,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706078.19,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706080.221,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706082.251,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706084.28,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706086.309,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706088.338,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706090.367,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706092.395,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706094.432,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706096.464,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706098.494,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706100.522,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706102.551,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706104.583,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706106.613,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706108.643,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706110.671,
+    0,
+    "-",
+    0.0,
+    0
+   ],
+   [
+    1792706112.7,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706114.729,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706116.758,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706118.787,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706120.816,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706122.845,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706124.877,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706126.907,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706128.939,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706130.969,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706132.999,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706135.028,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706137.057,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706139.086,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706141.117,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706143.148,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706145.179,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706147.211,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706149.24,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706151.269,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706153.299,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706155.332,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706157.365,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706159.394,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706161.424,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706163.453,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706165.482,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706167.513,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706169.541,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706171.572,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706173.602,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706175.632,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706177.663,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792706179.694,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "dory-mlxlm-4bit",
+ "display": "mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)",
+ "engine": "mlx-lm",
+ "version": "mlx_lm 0.32.2.dev0 mlx 0.32.4",
+ "version_config": "auto",
+ "model_name": "Nemotron-Labs-Dory1.0-4B",
+ "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+ "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Per-loop KV (its default).",
+ "config": {
+  "label": "dory-mlxlm-4bit",
+  "display": "mlx-lm (PR #1988, 4-bit, 2 loops, per-loop KV)",
+  "engine": "mlx-lm",
+  "version": "auto",
+  "model_name": "Nemotron-Labs-Dory1.0-4B",
+  "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+  "cmd": [
+   "{env:MLX_LM_SERVER_DORY=mlx_lm.server}",
+   "--model",
+   "{state}/dory-mlxlm-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8321",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "prepare": [
+   {
+    "clean_dir": "{state}/dory-mlxlm-4bit"
+   },
+   {
+    "link_files": {
+     "src": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+     "dst": "{state}/dory-mlxlm-4bit",
+     "exclude": [
+      "config.json"
+     ]
+    }
+   },
+   {
+    "write_json": {
+     "path": "{state}/dory-mlxlm-4bit/config.json",
+     "data": {
+      "architectures": [
+       "DoryForCausalLM"
+      ],
+      "attention_bias": false,
+      "attention_output_gate_logit_scale_init": null,
+      "dtype": "bfloat16",
+      "head_dim": 256,
+      "hidden_act": "silu",
+      "hidden_size": 2560,
+      "initializer_range": 0.0177,
+      "intermediate_size": 7168,
+      "layer_types": [
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "sliding_attention",
+       "mlp",
+       "full_attention",
+       "mlp"
+      ],
+      "max_position_embeddings": 262144,
+      "mlp_bias": false,
+      "model_type": "dory",
+      "n_input_layers": 16,
+      "n_output_layers": 16,
+      "n_recurrent_layers": 40,
+      "n_recurrent_loops": 2,
+      "ngpt_alpha_init": 0.05,
+      "num_attention_heads": 16,
+      "num_hidden_layers": 72,
+      "num_key_value_heads": 4,
+      "quantization": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "quantization_config": {
+       "group_size": 64,
+       "bits": 4,
+       "mode": "affine"
+      },
+      "rope_parameters": {
+       "sliding_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000,
+        "partial_rotary_factor": 1.0
+       },
+       "full_attention": {
+        "rope_type": "default",
+        "rope_theta": 10000000,
+        "partial_rotary_factor": 1.0
+       }
+      },
+      "sliding_window": 1024,
+      "tie_word_embeddings": false,
+      "vocab_size": 131072,
+      "recurrent_kv_cache_mode": "per_loop"
+     }
+    }
+   }
+  ],
+  "base_url": "http://127.0.0.1:8321/v1",
+  "model": "default_model",
+  "requires_paths": [
+   "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}/config.json"
+  ],
+  "bench_args": [
+   "--ref-prompt-tokens",
+   "4000:4184,16000:16517"
+  ],
+  "note": "mlx-lm with its Dory model (ml-explore/mlx-lm PR #1988 @ 208065f, not merged; mlx 0.32.4) on the snsnc MLX 4-bit conversion (affine, groups of 64, made with mlx_lm.convert from NVIDIA's BF16; snsnc/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit @ d3b6295). Prompt cache for 4 sequences / 8 GB, 2048-token prefill steps; the weights are linked file by file and config.json is written with the loops and KV mode. Per-loop KV (its default)."
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 920.38,
+    "swapouts": 959445,
+    "swapins": 850888,
+    "pageouts": 562437,
+    "memorystatus_level": 95
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 1861140480,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 223767506944,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "--model",
+   "/Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit",
+   "--host",
+   "127.0.0.1",
+   "--port",
+   "8321",
+   "--prompt-cache-size",
+   "4",
+   "--prompt-cache-bytes",
+   "8589934592",
+   "--max-tokens",
+   "16384",
+   "--prefill-step-size",
+   "2048"
+  ],
+  "cmd_shell": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server --model /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit --host 127.0.0.1 --port 8321 --prompt-cache-size 4 --prompt-cache-bytes 8589934592 --max-tokens 16384 --prefill-step-size 2048",
+  "env": {
+   "HF_HUB_OFFLINE": "1"
+  },
+  "env_cleared": [],
+  "weights": {
+   "model_path": "{env:DORY_MLX_4BIT={models}/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit}",
+   "safetensors_bytes": 2237759471,
+   "safetensors_files": [
+    "model.safetensors"
+   ]
+  },
+  "harness": {
+   "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "dirty": true
+  },
+  "config_file": "configs/dory.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [
+   "empty /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit (harness-owned cache dir)",
+   "link 9 files of /Users/nacer_b/kq/bm/mlx/NVIDIA-Nemotron-Labs-Dory1.0-4B-mlx-4bit into /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit (excluded: ['config.json'])",
+   "write /Users/nacer_b/kq/m3/out/state/dory-mlxlm-4bit/config.json: {\"architectures\": [\"DoryForCausalLM\"], \"attention_bias\": false, \"attention_output_gate_logit_scale_init\": null, \"dtype\": \"bfloat16\", \"head_dim\": 256, \"hidden_act\": \"silu\", \"hidden_size\": 2560, \"initializer_range\": 0.0177, \"intermediate_size\": 7168, \"layer_types\": [\"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"sliding_attention\", \"mlp\", \"full_attention\", \"mlp\"], \"max_position_embeddings\": 262144, \"mlp_bias\": false, \"model_type\": \"dory\", \"n_input_layers\": 16, \"n_output_layers\": 16, \"n_recurrent_layers\": 40, \"n_recurrent_loops\": 2, \"ngpt_alpha_init\": 0.05, \"num_attention_heads\": 16, \"num_hidden_layers\": 72, \"num_key_value_heads\": 4, \"quantization\": {\"group_size\": 64, \"bits\": 4, \"mode\": \"affine\"}, \"quantization_config\": {\"group_size\": 64, \"bits\": 4, \"mode\": \"affine\"}, \"rope_parameters\": {\"sliding_attention\": {\"rope_type\": \"default\", \"rope_theta\": 10000, \"partial_rotary_factor\": 1.0}, \"full_attention\": {\"rope_type\": \"default\", \"rope_theta\": 10000000, \"partial_rotary_factor\": 1.0}}, \"sliding_window\": 1024, \"tie_word_embeddings\": false, \"vocab_size\": 131072, \"recurrent_kv_cache_mode\": \"per_loop\"}"
+  ],
+  "env_relevant": {
+   "NI_LOCK_HELD": "1",
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "KAPITSA_BIN": "/Users/nacer_b/kq/nh/build/kapitsa",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "OLLAMA_BIN": "/Users/nacer_b/engines/ollama/ollama",
+   "OLLAMA_MODELS": "/Users/nacer_b/.ollama/models",
+   "OLLAMA_MLX_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "HF_HUB_OFFLINE": "1"
+  },
+  "ready_s": 2.1,
+  "server_pid": 77688,
+  "listener_pid": 77688,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 1861140480,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 920.38,
+   "swapouts": 959445,
+   "swapins": 850932,
+   "pageouts": 562437,
+   "memorystatus_level": 95
+  },
+  "disk_free_bytes": 223767216128
+ },
+ "server_log": [
+  "2026-10-23 03:51:14,382 - INFO - Starting httpd at 127.0.0.1 on port 8321...",
+  "[transformers] You are using a model of type `dory` to instantiate a model of type ``. This may be expected if you are loading a checkpoint that shares a subset of the architecture (e.g., loading a `sam2_video` checkpoint into `Sam2Model`), but is otherwise not supported and can yield errors. Please",
+  "127.0.0.1 - - [23/Oct/2026 03:51:15] \"GET /v1/models HTTP/1.1\" 200 -",
+  "    self.handle_models_request()",
+  "  File \"/Users/nacer_b/engines/mlxlm-dory/lib/python3.12/site-packages/mlx_lm/server.py\", line 1839, in handle_models_request"
+ ],
+ "server_log_path": "logs/dory-mlxlm-4bit-20261023-035113.log"
+}

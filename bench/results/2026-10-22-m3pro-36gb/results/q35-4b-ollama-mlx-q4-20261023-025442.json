@@ -1,0 +1,1173 @@
+{
+ "schema": 2,
+ "label": "q35-4b-ollama-mlx-q4",
+ "model": "nace/qwen3.5:4b-mlx-4bit-mtp",
+ "base_url": "http://127.0.0.1:8193/v1",
+ "when": "2026-10-23 02:55:41",
+ "temperature": 0.6,
+ "args": {
+  "base_url": "http://127.0.0.1:8193/v1",
+  "model": "nace/qwen3.5:4b-mlx-4bit-mtp",
+  "label": "q35-4b-ollama-mlx-q4",
+  "pid": 69702,
+  "decode_tokens": 512,
+  "decode_runs": 5,
+  "greedy_runs": 5,
+  "window_head": 16,
+  "window_tail": 4,
+  "rep_threshold": 0.5,
+  "sizes": "4000,16000",
+  "corpus": null,
+  "ref_prompt_tokens": "",
+  "cached_samples": 3,
+  "turn_gap": 1.0,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "sampling_overrides": "",
+  "extra_body": "",
+  "reasoning_effort": "low",
+  "no_think_style": "both",
+  "always_reasons": false,
+  "warmup": "none",
+  "adaptive_warm": false,
+  "no_gpu_lock": false,
+  "skip": "decode,greedy,prefill,tools,agent,cache,sustain",
+  "agentic": true,
+  "sweep_sizes": "1000,2000,4000,8000,16000,max",
+  "sweep_repeats": 1,
+  "max_ctx": 32768,
+  "cache_tokens": 8000,
+  "server_slots": 0,
+  "sustain_s": 300,
+  "agent_trace": "",
+  "agent_tool_mode": "rendered",
+  "agent_gaps": "recorded",
+  "agent_max_turns": null,
+  "agent_timeout": 2400,
+  "out": "/Users/nacer_b/kq/m3/out/results/q35-4b-ollama-mlx-q4-20261023-025442.json"
+ },
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "sampling_greedy": {
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "top_k": 1,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "repeat_penalty": 1.0
+ },
+ "no_think": {
+  "chat_template_kwargs": {
+   "enable_thinking": false
+  },
+  "reasoning_effort": "none"
+ },
+ "corpus": {
+  "path": "corpus/bench_corpus.txt",
+  "sha256": "58a7756fd94fc48a7b7306d330b2c44663bdf22faa943f82430966c2878081b2",
+  "frozen": true
+ },
+ "harness": {
+  "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+  "dirty": true
+ },
+ "phases": {
+  "sweep": [
+   1792702541.482,
+   1792702684.566
+  ]
+ },
+ "memory": {
+  "sweep": {
+   "pids": [
+    {
+     "pid": 69702,
+     "name": "ollama",
+     "phys_footprint": 18434240,
+     "phys_footprint_peak": 18434240,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 557056,
+     "mapped_file_wired": 0
+    },
+    {
+     "pid": 69708,
+     "name": "ollama",
+     "phys_footprint": 8250517376,
+     "phys_footprint_peak": 17187219328,
+     "mapped_file_dirty": 0,
+     "mapped_file_clean": 4325376,
+     "mapped_file_wired": 0
+    }
+   ],
+   "phys_footprint_mb": 7885.9,
+   "phys_footprint_peak_mb": 16408.6,
+   "mapped_file_clean_mb": 4.7,
+   "swap_used_mb": 527.94,
+   "memorystatus_level": 84,
+   "swapouts_delta": 0
+  }
+ },
+ "gpu_lock": {
+  "held_by": "caller",
+  "path": "/tmp/kapitsa-gpu.lock",
+  "wait_s": null,
+  "harness_wait_s": 0,
+  "harness_held_s": 207.9,
+  "harness_lock": "held by the caller, NACE_GPU_LOCK_HELD=1"
+ },
+ "vm_start": {
+  "swap_used_mb": 527.94,
+  "swapouts": 930745,
+  "swapins": 847327,
+  "pageouts": 562180,
+  "memorystatus_level": 94
+ },
+ "thermal_start": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "idle_footprint_mb": 4656.0,
+ "sweep": {
+  "points": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1101,
+    "ttft_s": 1.83839175,
+    "prefill_tps": 598.8930270166845,
+    "decode_tps": 62.99782812320358,
+    "error": null
+   },
+   {
+    "target": 2000,
+    "prompt_tokens": 2130,
+    "ttft_s": 3.5027765419999994,
+    "prefill_tps": 608.0890329315218,
+    "decode_tps": 62.4833295469467,
+    "error": null
+   },
+   {
+    "target": 4000,
+    "prompt_tokens": 4159,
+    "ttft_s": 6.90991125,
+    "prefill_tps": 601.8890618891812,
+    "decode_tps": 66.36648585621256,
+    "error": null
+   },
+   {
+    "target": 8000,
+    "prompt_tokens": 8303,
+    "ttft_s": 14.279466541000001,
+    "prefill_tps": 581.4642988349714,
+    "decode_tps": 54.8040094354067,
+    "error": null
+   },
+   {
+    "target": 16000,
+    "prompt_tokens": 16309,
+    "ttft_s": 30.188675375000003,
+    "prefill_tps": 540.2356942599042,
+    "decode_tps": 52.95484783095094,
+    "error": null
+   },
+   {
+    "target": 30902,
+    "prompt_tokens": 31549,
+    "ttft_s": 66.472011167,
+    "prefill_tps": 474.62081327339894,
+    "decode_tps": 45.258519319584686,
+    "error": null
+   }
+  ],
+  "decode_retention": 0.718,
+  "retention_from_tokens": 1101,
+  "retention_to_tokens": 31549,
+  "max_prompt_tokens": 31549,
+  "runs": [
+   {
+    "target": 1000,
+    "runs": [
+     {
+      "target": 1000,
+      "prompt_tokens": 1101,
+      "completion_tokens": 192,
+      "ttft_s": 1.83839175,
+      "prefill_tps": 598.8930270166845,
+      "finish": "length",
+      "cached_tokens": 4,
+      "decode_tps": 62.99782812320358
+     }
+    ],
+    "prompt_tokens": 1101,
+    "ttft_s": 1.83839175,
+    "prefill_tps": 598.8930270166845,
+    "decode_tps": 62.99782812320358
+   },
+   {
+    "target": 2000,
+    "runs": [
+     {
+      "target": 2000,
+      "prompt_tokens": 2130,
+      "completion_tokens": 192,
+      "ttft_s": 3.5027765419999994,
+      "prefill_tps": 608.0890329315218,
+      "finish": "length",
+      "cached_tokens": 4,
+      "decode_tps": 62.4833295469467
+     }
+    ],
+    "prompt_tokens": 2130,
+    "ttft_s": 3.5027765419999994,
+    "prefill_tps": 608.0890329315218,
+    "decode_tps": 62.4833295469467
+   },
+   {
+    "target": 4000,
+    "runs": [
+     {
+      "target": 4000,
+      "prompt_tokens": 4159,
+      "completion_tokens": 192,
+      "ttft_s": 6.90991125,
+      "prefill_tps": 601.8890618891812,
+      "finish": "length",
+      "cached_tokens": 5,
+      "decode_tps": 66.36648585621256
+     }
+    ],
+    "prompt_tokens": 4159,
+    "ttft_s": 6.90991125,
+    "prefill_tps": 601.8890618891812,
+    "decode_tps": 66.36648585621256
+   },
+   {
+    "target": 8000,
+    "runs": [
+     {
+      "target": 8000,
+      "prompt_tokens": 8303,
+      "completion_tokens": 192,
+      "ttft_s": 14.279466541000001,
+      "prefill_tps": 581.4642988349714,
+      "finish": "length",
+      "cached_tokens": 4,
+      "decode_tps": 54.8040094354067
+     }
+    ],
+    "prompt_tokens": 8303,
+    "ttft_s": 14.279466541000001,
+    "prefill_tps": 581.4642988349714,
+    "decode_tps": 54.8040094354067
+   },
+   {
+    "target": 16000,
+    "runs": [
+     {
+      "target": 16000,
+      "prompt_tokens": 16309,
+      "completion_tokens": 192,
+      "ttft_s": 30.188675375000003,
+      "prefill_tps": 540.2356942599042,
+      "finish": "length",
+      "cached_tokens": 4,
+      "decode_tps": 52.95484783095094
+     }
+    ],
+    "prompt_tokens": 16309,
+    "ttft_s": 30.188675375000003,
+    "prefill_tps": 540.2356942599042,
+    "decode_tps": 52.95484783095094
+   },
+   {
+    "target": 30902,
+    "runs": [
+     {
+      "target": 30902,
+      "prompt_tokens": 31549,
+      "completion_tokens": 192,
+      "ttft_s": 66.472011167,
+      "prefill_tps": 474.62081327339894,
+      "finish": "length",
+      "cached_tokens": 4,
+      "decode_tps": 45.258519319584686
+     }
+    ],
+    "prompt_tokens": 31549,
+    "ttft_s": 66.472011167,
+    "prefill_tps": 474.62081327339894,
+    "decode_tps": 45.258519319584686
+   }
+  ],
+  "max_ctx": 32768,
+  "invalid": [],
+  "flags": []
+ },
+ "thermal_end": {
+  "speed_limit": null,
+  "scheduler_limit": null,
+  "battery": false,
+  "low_power": false
+ },
+ "peak_rss_mb": 2846,
+ "peak_footprint_mb": 14428,
+ "invalid": [],
+ "flags": [],
+ "peak_memory_mb": 16408.6,
+ "mapped_file_clean_mb": 4.7,
+ "vm_end": {
+  "swap_used_mb": 527.94,
+  "swapouts": 930745,
+  "swapins": 847327,
+  "pageouts": 562180,
+  "memorystatus_level": 84
+ },
+ "when_end": "2026-10-23 02:58:04",
+ "warmup": {
+  "adaptive": true,
+  "steps": [
+   {
+    "name": "prefill~2.9k+decode64",
+    "ok": true,
+    "s": 5.78,
+    "prompt_tokens": 2925,
+    "completion_tokens": 64,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "tools",
+    "ok": true,
+    "s": 0.98,
+    "prompt_tokens": 428,
+    "completion_tokens": 26,
+    "finish": "tool_calls",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#1",
+    "ok": true,
+    "s": 7.43,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#2",
+    "ok": true,
+    "s": 7.5,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   },
+   {
+    "name": "decode512#3",
+    "ok": true,
+    "s": 7.55,
+    "prompt_tokens": 85,
+    "completion_tokens": 512,
+    "finish": "length",
+    "thinking_leak": []
+   }
+  ],
+  "ok": true
+ },
+ "cold_start": {
+  "target": 1000,
+  "os_cache": "warm",
+  "first": {
+   "target": 1000,
+   "prompt_tokens": 1070,
+   "completion_tokens": 8,
+   "ttft_s": 3.073898708,
+   "prefill_tps": 348.09214669802316,
+   "finish": "length",
+   "cached_tokens": 0
+  },
+  "repeats": [
+   {
+    "target": 1000,
+    "prompt_tokens": 1068,
+    "completion_tokens": 8,
+    "ttft_s": 1.7608632499999999,
+    "prefill_tps": 606.5206937563153,
+    "finish": "length",
+    "cached_tokens": 0
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1070,
+    "completion_tokens": 8,
+    "ttft_s": 1.7559211660000003,
+    "prefill_tps": 609.366764703604,
+    "finish": "length",
+    "cached_tokens": 4
+   },
+   {
+    "target": 1000,
+    "prompt_tokens": 1072,
+    "completion_tokens": 8,
+    "ttft_s": 1.7656206670000003,
+    "prefill_tps": 607.1519324824486,
+    "finish": "length",
+    "cached_tokens": 4
+   }
+  ],
+  "repeat_median_ttft_s": 1.7608632499999999,
+  "first_request_penalty_s": 1.313,
+  "invalid": [],
+  "spawn_to_ready_s": 2.0,
+  "spawn_to_first_token_s": 5.07
+ },
+ "contention": {
+  "overall": {
+   "samples": 70,
+   "mean_foreign_gpu_pct": 0.0,
+   "max_foreign_gpu_pct": 0,
+   "mean_ambient_gpu_pct": 0.0,
+   "busy_samples": 0,
+   "longest_busy_run": 0,
+   "top": [],
+   "flagged": false
+  },
+  "phases": {
+   "sweep": {
+    "samples": 70,
+    "mean_foreign_gpu_pct": 0.0,
+    "max_foreign_gpu_pct": 0,
+    "mean_ambient_gpu_pct": 0.0,
+    "busy_samples": 0,
+    "longest_busy_run": 0,
+    "top": [],
+    "flagged": false
+   }
+  },
+  "samples": [
+   [
+    1792702543.328,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702545.36,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702547.39,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702549.419,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702551.445,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702553.475,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702555.504,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702557.533,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702559.562,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702561.594,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702563.624,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702565.653,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702567.683,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702569.711,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702571.74,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702573.771,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702575.804,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702577.835,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702579.865,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702581.896,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702583.926,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702585.956,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702587.985,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702590.013,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702592.042,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702594.072,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702596.102,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702598.131,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702600.159,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702602.189,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702604.218,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702606.255,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702608.291,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702610.322,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702612.348,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702614.378,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702616.406,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702618.435,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702620.464,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702622.492,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702624.538,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702626.572,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702628.6,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702630.631,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702632.66,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702634.688,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702636.717,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702638.746,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702640.774,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702642.807,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702644.837,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702646.866,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702648.899,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702650.93,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702652.963,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702655.0,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702657.029,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702659.057,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702661.087,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702663.124,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702665.158,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702667.188,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702669.217,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702671.249,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702673.279,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702675.308,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702677.338,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702679.368,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702681.4,
+    0,
+    "-",
+    0.0,
+    0.0
+   ],
+   [
+    1792702683.423,
+    0,
+    "-",
+    0.0,
+    0.0
+   ]
+  ],
+  "threshold_pct": 5.0,
+  "ambient_names": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ]
+ },
+ "config_label": "q35-4b-ollama-mlx-q4",
+ "display": "Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)",
+ "engine": "ollama",
+ "version": "0.40.8",
+ "version_config": "auto",
+ "model_name": "Qwen3.5-4B",
+ "model_path": "{models}/qwen3.5-4b-4bit-mtplx",
+ "note": "Ollama's MLX runner on the same MLX 4-bit trunk as the other MLX engines, imported without copying (tools/ollama_mlx_import.py, default --mtp-quant 4:64), with the MTP head of MTPLX's 4B release (Ollama's own MLX tags of this model, qwen3.5:4b-mlx, have no MTP head). Built-in MTP with the adaptive depth controller; parameters as the official qwen3.5 tag.",
+ "config": {
+  "label": "q35-4b-ollama-mlx-q4",
+  "display": "Ollama MLX runner (MLX 4-bit + MTP head, adaptive depth)",
+  "engine": "ollama",
+  "version": "auto",
+  "model_name": "Qwen3.5-4B",
+  "model_path": "{models}/qwen3.5-4b-4bit-mtplx",
+  "cmd": [
+   "{env:OLLAMA_BIN={first:ollama|/Applications/Ollama.app/Contents/Resources/ollama}}",
+   "serve"
+  ],
+  "env": {
+   "OLLAMA_HOST": "127.0.0.1:8193",
+   "OLLAMA_MODELS": "{env:OLLAMA_MLX_MODELS={models}/ollama-mlx}",
+   "OLLAMA_NOPRUNE": "1",
+   "OLLAMA_CONTEXT_LENGTH": "32768",
+   "OLLAMA_NUM_PARALLEL": "1",
+   "OLLAMA_MAX_LOADED_MODELS": "1",
+   "OLLAMA_KEEP_ALIVE": "-1",
+   "OLLAMA_FLASH_ATTENTION": "1",
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_clear_prefixes": [
+   "OLLAMA_",
+   "LLAMA_ARG_"
+  ],
+  "base_url": "http://127.0.0.1:8193/v1",
+  "model": "nace/qwen3.5:4b-mlx-4bit-mtp",
+  "requires_ollama_tag": "nace/qwen3.5:4b-mlx-4bit-mtp",
+  "note": "Ollama's MLX runner on the same MLX 4-bit trunk as the other MLX engines, imported without copying (tools/ollama_mlx_import.py, default --mtp-quant 4:64), with the MTP head of MTPLX's 4B release (Ollama's own MLX tags of this model, qwen3.5:4b-mlx, have no MTP head). Built-in MTP with the adaptive depth controller; parameters as the official qwen3.5 tag.",
+  "ready_timeout": 300,
+  "adaptive_warm": true,
+  "log_grep": [
+   "starting runner|ollama runner|mlx runner is ready",
+   "speculative decode stats",
+   "Loaded tensors|memory|model weights",
+   "version|inference compute",
+   "dequantizing|warn|WARN|error|Error"
+  ]
+ },
+ "provenance": {
+  "system_start": {
+   "sw_vers": {
+    "ProductName": "macOS",
+    "ProductVersion": "14.1",
+    "BuildVersion": "23B2073"
+   },
+   "hw_model": "Mac15,7",
+   "cpu": "Apple M3 Pro",
+   "memsize": "38654705664",
+   "power": "Now drawing from 'AC Power'",
+   "powermode": "0",
+   "vm": {
+    "swap_used_mb": 527.94,
+    "swapouts": 930745,
+    "swapins": 847327,
+    "pageouts": 562180,
+    "memorystatus_level": 94
+   },
+   "gpu_mem": {
+    "in_use": 15007744,
+    "alloc": 1861140480,
+    "util_pct": 0
+   },
+   "disk_free_bytes": 223597912064,
+   "ollama_app_loaded": "not running"
+  },
+  "cmd": [
+   "/Users/nacer_b/engines/ollama/ollama",
+   "serve"
+  ],
+  "cmd_shell": "/Users/nacer_b/engines/ollama/ollama serve",
+  "env": {
+   "OLLAMA_HOST": "127.0.0.1:8193",
+   "OLLAMA_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "OLLAMA_NOPRUNE": "1",
+   "OLLAMA_CONTEXT_LENGTH": "32768",
+   "OLLAMA_NUM_PARALLEL": "1",
+   "OLLAMA_MAX_LOADED_MODELS": "1",
+   "OLLAMA_KEEP_ALIVE": "-1",
+   "OLLAMA_FLASH_ATTENTION": "1",
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "env_cleared": [
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "weights": {
+   "model_path": "{models}/qwen3.5-4b-4bit-mtplx",
+   "ollama_manifest": "manifests-v2/ollama.com/nace/qwen3.5/4b-mlx-4bit-mtp",
+   "ollama_layers_bytes": 3148106333,
+   "ollama_model_layers": []
+  },
+  "harness": {
+   "git_head": "c490f8159622bb2d356b21c8d670d668997cbfb4",
+   "dirty": true
+  },
+  "config_file": "configs/ollama.json",
+  "env_file_keys": [
+   "BENCH_MODELS",
+   "BENCH_OUT",
+   "KAPITSA_BIN",
+   "LLAMA_SERVER",
+   "MLX_LM_SERVER",
+   "MLX_LM_SERVER_DORY",
+   "MLX_VLM_PYTHON",
+   "MTPLX_BIN",
+   "OLLAMA_BIN",
+   "OLLAMA_MLX_MODELS",
+   "OLLAMA_MODELS"
+  ],
+  "gpu_lock_path": "/tmp/kapitsa-gpu.lock",
+  "gpu_ambient": [
+   "VisualIntelligenceCore",
+   "mediaanalysisd",
+   "photoanalysisd"
+  ],
+  "prepare": [],
+  "env_relevant": {
+   "NI_LOCK_HELD": "1",
+   "BENCH_MODELS": "/Users/nacer_b/kq/bm",
+   "BENCH_OUT": "/Users/nacer_b/kq/m3/out",
+   "KAPITSA_BIN": "/Users/nacer_b/kq/nh/build/kapitsa",
+   "LLAMA_SERVER": "/Users/nacer_b/flint-m3/engines/llama/llama-b11804/llama-server",
+   "MLX_LM_SERVER": "/Users/nacer_b/engines/mlxlm/bin/mlx_lm.server",
+   "MLX_LM_SERVER_DORY": "/Users/nacer_b/engines/mlxlm-dory/bin/mlx_lm.server",
+   "MLX_VLM_PYTHON": "/Users/nacer_b/engines/mlxvlm/bin/python",
+   "MTPLX_BIN": "/Users/nacer_b/engines/mtplx/bin/mtplx",
+   "OLLAMA_HOST": "127.0.0.1:8193",
+   "OLLAMA_MODELS": "/Users/nacer_b/kq/bm/ollama-mlx",
+   "OLLAMA_NOPRUNE": "1",
+   "OLLAMA_CONTEXT_LENGTH": "32768",
+   "OLLAMA_NUM_PARALLEL": "1",
+   "OLLAMA_MAX_LOADED_MODELS": "1",
+   "OLLAMA_KEEP_ALIVE": "-1",
+   "OLLAMA_FLASH_ATTENTION": "1",
+   "GGML_METAL_RESIDENCY_KEEP_ALIVE_S": "3600"
+  },
+  "ready_s": 2.0,
+  "server_pid": 69702,
+  "listener_pid": 69702,
+  "gpu_quiet_wait_s": 18.7,
+  "bench_rc": 0
+ },
+ "teardown": {
+  "killed_with": "SIGTERM",
+  "survivors": [],
+  "port_closed": true,
+  "memory_release_s": 5.1,
+  "gpu_mem_after": {
+   "in_use": 15007744,
+   "alloc": 1861140480,
+   "util_pct": 0
+  },
+  "vm_after": {
+   "swap_used_mb": 527.94,
+   "swapouts": 930745,
+   "swapins": 847327,
+   "pageouts": 562180,
+   "memorystatus_level": 94
+  },
+  "disk_free_bytes": 223597158400
+ },
+ "server_log": [
+  "time=2026-10-23T02:54:42.550+06:00 level=INFO source=routes.go:2512 msg=\"Listening on 127.0.0.1:8193 (version 0.40.8)\"",
+  "time=2026-10-23T02:54:42.646+06:00 level=INFO source=types.go:32 msg=\"inference compute\" id=0 filter_id=0 library=Metal compute=0.0 name=MTL0 description=\"Apple M3 Pro\" libdirs=\"\" driver=0.0 pci_id=\"\" type=iGPU total=\"27.0 GiB\" available=\"27.0 GiB\"",
+  "time=2026-10-23T02:54:44.611+06:00 level=INFO source=sched.go:658 msg=\"system memory\" total=\"36.0 GiB\" free=\"33.3 GiB\" free_swap=\"0 B\"",
+  "time=2026-10-23T02:54:44.611+06:00 level=INFO source=sched.go:665 msg=\"gpu memory\" id=0 library=Metal available=\"26.5 GiB\" free=\"27.0 GiB\" minimum=\"512.0 MiB\" overhead=\"0 B\"",
+  "time=2026-10-23T02:54:44.648+06:00 level=INFO source=server.go:46 msg=\"MLX engine initialized\" \"MLX version\"=0.32.3-96-gbebd642 device=gpu",
+  "time=2026-10-23T02:54:45.016+06:00 level=INFO source=runner.go:285 msg=\"Loaded tensors from manifest\" count=1250",
+  "time=2026-10-23T02:54:45.848+06:00 level=INFO source=grammar.go:79 msg=\"Structured output initialized\" library=xgrammar version=v0.2.7 vocab_size=248320 path=/Users/nacer_b/engines/ollama/mlx_metal_v3/libollama_xgrammar.dylib",
+  "time=2026-10-23T02:54:45.916+06:00 level=INFO source=client.go:112 msg=\"mlx runner is ready\" port=58633",
+  "time=2026-10-23T02:54:47.791+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=6 drafted=2 accepted=2 acceptance=1.00 avg_draft=0.33 max_draft=1 avg_accepted=0.33 depth_over_time=\"0.0/0 0.0/0 0.0/0 0.0/0 1.0/1 1.0/1\"",
+  "time=2026-10-23T02:54:47.794+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.30 GiB\" held=\"3.05 GiB\"",
+  "time=2026-10-23T02:54:49.633+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=4 drafted=4 accepted=4 acceptance=1.00 avg_draft=1.00 max_draft=1 avg_accepted=1.00 depth_over_time=\"1.0/1 1.0/1 1.0/1 1.0/1\"",
+  "time=2026-10-23T02:54:49.636+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.48 GiB\" held=\"3.23 GiB\"",
+  "time=2026-10-23T02:54:51.470+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=4 drafted=4 accepted=4 acceptance=1.00 avg_draft=1.00 max_draft=1 avg_accepted=1.00 depth_over_time=\"1.0/1 1.0/1 1.0/1 1.0/1\"",
+  "time=2026-10-23T02:54:51.473+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.60 GiB\" held=\"3.36 GiB\"",
+  "time=2026-10-23T02:54:53.346+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=4 drafted=6 accepted=4 acceptance=0.67 avg_draft=1.50 max_draft=2 avg_accepted=1.00 depth_over_time=\"2.0/2 2.0/2 2.0/2 0.0/0\"",
+  "time=2026-10-23T02:54:53.350+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.78 GiB\" held=\"3.55 GiB\"",
+  "time=2026-10-23T02:54:59.108+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=32 drafted=61 accepted=32 acceptance=0.52 avg_draft=1.91 max_draft=3 avg_accepted=1.00 depth_over_time=\"2.0/2 2.0/2 2.2/3 2.8/3 2.2/3 1.5/2 1.2/2 1.2/2\"",
+  "time=2026-10-23T02:54:59.114+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"5.47 GiB\" held=\"3.80 GiB\"",
+  "time=2026-10-23T02:55:00.090+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=8 drafted=19 accepted=19 acceptance=1.00 avg_draft=2.38 max_draft=3 avg_accepted=2.38 depth_over_time=\"2.0/2 3.0/3 2.0/2 2.0/2 2.0/2 2.0/2 3.0/3 3.0/3\"",
+  "time=2026-10-23T02:55:00.094+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.87 GiB\" held=\"3.99 GiB\"",
+  "time=2026-10-23T02:55:07.521+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=211 drafted=524 accepted=301 acceptance=0.57 avg_draft=2.48 max_draft=4 avg_accepted=1.43 depth_over_time=\"2.2/3 2.0/3 2.0/3 2.0/2 2.3/3 3.2/4 3.0/4 3.0/4\"",
+  "time=2026-10-23T02:55:07.527+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.48 GiB\" held=\"4.10 GiB\"",
+  "time=2026-10-23T02:55:15.037+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=222 drafted=492 accepted=290 acceptance=0.59 avg_draft=2.22 max_draft=4 avg_accepted=1.31 depth_over_time=\"3.0/3 2.0/3 1.0/2 1.1/3 3.0/4 3.0/4 2.5/4 2.0/3\"",
+  "time=2026-10-23T02:55:15.044+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.60 GiB\" held=\"4.27 GiB\"",
+  "time=2026-10-23T02:55:22.576+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=247 drafted=410 accepted=265 acceptance=0.65 avg_draft=1.66 max_draft=4 avg_accepted=1.07 depth_over_time=\"1.9/3 2.0/3 2.0/3 1.8/3 2.5/4 1.1/2 1.0/2 1.0/1\"",
+  "time=2026-10-23T02:55:22.585+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"4.73 GiB\" held=\"4.38 GiB\"",
+  "time=2026-10-23T02:55:46.341+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=112 drafted=112 accepted=80 acceptance=0.71 avg_draft=1.00 max_draft=2 avg_accepted=0.71 depth_over_time=\"1.0/1 1.1/2 1.0/1 1.0/1 1.0/1 1.0/1 1.0/1 0.9/1\"",
+  "time=2026-10-23T02:55:46.349+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"5.78 GiB\" held=\"4.50 GiB\"",
+  "time=2026-10-23T02:55:52.834+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=104 drafted=134 accepted=88 acceptance=0.66 avg_draft=1.29 max_draft=4 avg_accepted=0.85 depth_over_time=\"1.0/1 1.0/1 1.1/2 2.3/4 1.8/3 1.1/2 1.1/2 0.9/1\"",
+  "time=2026-10-23T02:55:52.845+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"6.28 GiB\" held=\"4.64 GiB\"",
+  "time=2026-10-23T02:56:02.549+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=85 drafted=168 accepted=107 acceptance=0.64 avg_draft=1.98 max_draft=3 avg_accepted=1.26 depth_over_time=\"1.7/3 2.4/3 1.7/3 1.4/2 2.2/3 2.4/3 2.1/3 2.0/3\"",
+  "time=2026-10-23T02:56:02.555+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"6.56 GiB\" held=\"4.86 GiB\"",
+  "time=2026-10-23T02:56:20.280+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=104 drafted=171 accepted=88 acceptance=0.51 avg_draft=1.64 max_draft=3 avg_accepted=0.85 depth_over_time=\"2.4/3 1.5/2 2.2/3 1.2/3 2.1/3 1.6/2 1.2/2 1.1/2\"",
+  "time=2026-10-23T02:56:20.290+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"7.26 GiB\" held=\"5.30 GiB\"",
+  "time=2026-10-23T02:56:53.964+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=95 drafted=160 accepted=97 acceptance=0.61 avg_draft=1.68 max_draft=4 avg_accepted=1.02 depth_over_time=\"1.0/1 1.0/1 0.9/3 1.7/3 2.5/4 2.3/3 2.3/4 1.7/3\"",
+  "time=2026-10-23T02:56:53.988+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"8.46 GiB\" held=\"6.01 GiB\"",
+  "time=2026-10-23T02:58:04.565+06:00 level=INFO source=speculate_stats.go:62 msg=\"speculative decode stats\" iterations=98 drafted=157 accepted=94 acceptance=0.60 avg_draft=1.60 max_draft=4 avg_accepted=0.96 depth_over_time=\"1.7/3 2.8/4 0.8/3 1.4/3 2.1/3 1.2/2 1.2/2 1.7/3\"",
+  "time=2026-10-23T02:58:04.604+06:00 level=INFO source=pipeline.go:110 msg=memory peak=\"11.56 GiB\" held=\"7.38 GiB\""
+ ],
+ "server_log_path": "logs/q35-4b-ollama-mlx-q4-20261023-025442.log"
+}
