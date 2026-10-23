@@ -49,6 +49,11 @@ MacInfo decode_txt(const void* txt, size_t len);
 // GET /cluster's JSON, and back (missing or mistyped fields stay at their defaults)
 nlohmann::ordered_json to_json(const MacInfo& m);
 MacInfo from_json(const nlohmann::ordered_json& j);
+// GET /cluster's body as another Mac sent it (unauthenticated): read as from_json does, or nothing when it is past
+// kMaxClusterBody, nested deeper than kMaxClusterDepth (from_json and dump recurse once a level), or not JSON
+constexpr size_t kMaxClusterBody = 64 << 10;
+constexpr int kMaxClusterDepth = 8;
+std::optional<MacInfo> parse_cluster(const std::string& body);
 
 // "qwen3.8-flash-next" and "4bit" of "Qwen3.8-Flash-Next:4bit" (lower case; "" without a variant)
 std::string model_base(const std::string& model);

@@ -27,9 +27,11 @@
 #include <atomic>
 #include <cmath>
 #include <condition_variable>
-#include <future>
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <thread>
 
@@ -40,6 +42,7 @@ using ojson = nlohmann::ordered_json;
 namespace {
 
 constexpr double kReadEvery = 4000;    // ms between two reads of a server
+constexpr double kReadLimit = 5000;    // ms a read may take: a server slower than that counts as not answering
 constexpr double kResolveWait = 5000;  // ms a resolve may take before it is tried again
 constexpr double kTxtEvery = 5000;     // ms between two looks at what the advertised TXT record should say
 
@@ -135,7 +138,9 @@ struct Wake {
 };
 
 // One server read over HTTP at the first of `addrs` that answers best: its GET /cluster, and the median of three
-// GET /health round trips on the same connection. A server on this Mac is read at 127.0.0.1.
+// GET /health round trips on the same connection. A server on this Mac is read at 127.0.0.1. The body of an
+// unauthenticated peer is capped (cluster.h's parse_cluster) and so is the time it takes to come (kReadLimit; httplib's
+// timeouts are per recv: a peer could drip it).
 std::optional<MacInfo> read_server(const std::vector<std::string>& addrs, int port) {
   const auto own = own_addresses();
   std::optional<MacInfo> best;
@@ -147,10 +152,17 @@ std::optional<MacInfo> read_server(const std::vector<std::string>& addrs, int po
       c.set_read_timeout(2, 0);
       c.set_write_timeout(2, 0);
       c.set_keep_alive(true);
-      const auto r = c.Get("/cluster");
+      const double t0 = now_ms();
+      std::string body;
+      const auto r = c.Get("/cluster", [&](const char* d, size_t n) {
+        if (body.size() + n > kMaxClusterBody || now_ms() - t0 > kReadLimit) return false;
+        body.append(d, n);
+        return true;
+      });
       if (!r || r->status != 200) continue;
-      MacInfo m = from_json(ojson::parse(r->body, nullptr, false));
-      if (m.proto != kProto) break;
+      const std::optional<MacInfo> got = parse_cluster(body);
+      if (!got || got->proto != kProto) break;
+      MacInfo m = *got;
       std::vector<double> ms;
       for (int k = 0; k < 3; ++k) {
         const double t = now_ms();
@@ -332,7 +344,7 @@ struct Browser::Impl {
     MacInfo info;  // as read
     bool read = false, reading = false;
     int fails = 0;  // reads in a row that got no answer
-    double read_at = 0;
+    double read_at = 0, read_start = 0;
   };
 
   mutable std::mutex mu;
@@ -553,39 +565,35 @@ struct Browser::Impl {
     close_all(false);
   }
 
-  void reader() {
+  // Reads each server that is due on a thread of its own, which puts the answer in when it comes, so a slow server
+  // holds up no other. One still being read past kReadLimit counts as not answering; it is not read again until that
+  // read ends.
+  void reader(const std::shared_ptr<Impl>& self) {
     std::unique_lock<std::mutex> lk(mu);
     while (!stop) {
-      struct Job {
-        std::string name;
-        std::vector<std::string> addrs;
-        int port;
-      };
-      std::vector<Job> due;
       const double t = now_ms();
-      for (auto& [name, en] : entries)
-        if (en.resolved && en.txt.proto == kProto && !en.addrs.empty() && !en.reading &&
-            (en.read_at == 0 || t - en.read_at >= kReadEvery)) {
-          en.reading = true;
-          due.push_back({name, {en.addrs.begin(), en.addrs.end()}, en.port});
+      for (auto& [name, en] : entries) {
+        if (en.reading) {
+          if (t - en.read_start > kReadLimit && en.fails < 2) en.fails = 2, bump();
+          continue;
         }
-      if (!due.empty()) {
-        lk.unlock();
-        std::vector<std::future<std::optional<MacInfo>>> got;
-        for (const auto& j : due) got.push_back(std::async(std::launch::async, read_server, j.addrs, j.port));
-        std::vector<std::optional<MacInfo>> res;
-        for (auto& f : got) res.push_back(f.get());
-        lk.lock();
-        for (size_t k = 0; k < due.size(); ++k) {
-          const auto it = entries.find(due[k].name);
-          if (it == entries.end()) continue;
-          Entry& en = it->second;
-          en.reading = false;
-          en.read_at = now_ms();
-          if (res[k]) en.info = *res[k], en.read = true, en.fails = 0;
-          else ++en.fails;
-        }
-        bump();
+        if (!en.resolved || en.txt.proto != kProto || en.addrs.empty() || (en.read_at != 0 && t - en.read_at < kReadEvery))
+          continue;
+        en.reading = true;
+        en.read_start = t;
+        std::thread([self, name = name, addrs = std::vector<std::string>(en.addrs.begin(), en.addrs.end()),
+                     port = en.port] {
+          const std::optional<MacInfo> r = read_server(addrs, port);
+          std::lock_guard<std::mutex> g(self->mu);
+          const auto it = self->entries.find(name);
+          if (it == self->entries.end()) return;
+          Entry& e = it->second;
+          e.reading = false;
+          e.read_at = now_ms();
+          if (r) e.info = *r, e.read = true, e.fails = 0;
+          else ++e.fails;
+          self->bump();
+        }).detach();
       }
       cv.wait_for(lk, std::chrono::milliseconds(200));
     }
@@ -595,7 +603,7 @@ struct Browser::Impl {
 Browser::Browser(const std::string& type) : impl_(std::make_shared<Impl>()) {
   impl_->type = type;
   std::thread([s = impl_] { s->events(); }).detach();
-  std::thread([s = impl_] { s->reader(); }).detach();
+  std::thread([s = impl_] { s->reader(s); }).detach();
 }
 
 Browser::~Browser() {

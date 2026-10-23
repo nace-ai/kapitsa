@@ -164,6 +164,20 @@ MacInfo from_json(const ojson& j) {
   return m;
 }
 
+std::optional<MacInfo> parse_cluster(const std::string& body) {
+  if (body.size() > kMaxClusterBody) return std::nullopt;
+  bool deep = false;  // (the parser keeps its own stack: only what is built from the result recurses)
+  const ojson j = ojson::parse(
+      body,
+      [&](int depth, ojson::parse_event_t, ojson&) {
+        deep = deep || depth > kMaxClusterDepth;
+        return !deep;
+      },
+      false);
+  if (deep || j.is_discarded() || !j.is_object()) return std::nullopt;
+  return from_json(j);
+}
+
 std::string model_base(const std::string& model) {
   const std::string l = lower(model);
   return l.substr(0, l.find(':'));

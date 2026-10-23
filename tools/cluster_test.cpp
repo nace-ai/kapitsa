@@ -6,10 +6,12 @@
 //                         free port) must be found, read and timed by a Browser within a few seconds
 #include "cluster/cluster.h"
 #include "cluster/discovery.h"
+#include "util/log.h"
 #include "util/term.h"
 
 #include <httplib/httplib.h>
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -145,6 +147,23 @@ void json_checks() {
         "json: the keys, in order", names);
 }
 
+// another Mac's GET /cluster body, which nothing authenticates: deep, large or not JSON is no answer, and no crash
+void parse_checks() {
+  MacInfo m = server("Studio", "qwen3.8-flash-next:4bit", true, 4, 58);
+  const auto ok = parse_cluster(to_json(m).dump());
+  check(ok && ok->name == "Studio" && ok->whole, "parse_cluster: a server's body");
+  std::string deep = R"({"proto":1,"x":)";
+  for (int i = 0; i < 20000; ++i) deep += "[";
+  for (int i = 0; i < 20000; ++i) deep += "]";
+  deep += "}";
+  check(!parse_cluster(deep), "parse_cluster: nested 20,000 deep: no answer (and no crash)");
+  std::string nine = R"({"proto":1,"x":[[[[[[[[1]]]]]]]]})", eight = R"({"proto":1,"x":[[[[[[[1]]]]]]]})";
+  check(!parse_cluster(nine) && parse_cluster(eight), "parse_cluster: at most 8 levels");
+  const std::string big = R"({"proto":1,"name":")" + std::string(70000, 'a') + R"("})";
+  check(!parse_cluster(big), "parse_cluster: past 64 KiB: no answer");
+  check(!parse_cluster("not json") && !parse_cluster("[1,2]") && !parse_cluster(""), "parse_cluster: not an object");
+}
+
 void pick_checks() {
   const std::string fn = "qwen3.8-flash-next:4bit";
   std::vector<MacInfo> p = {server("Far", fn, true, 9, 70), server("Near", fn, true, 2, 50)};
@@ -275,8 +294,50 @@ void live_checks() {
     check(route && route->id == me.id, "live: pick_server routes to it");
     printf("     lan address %s; link to it: %s\n", lan_address().c_str(), lan_address().empty() ? "-" : link_to(lan_address()).c_str());
   }
+  // a peer that drips its body, and one nested deeper than allowed: shown as not answering within ~8 s, while a
+  // healthy server is read again all the same (its speed changed meanwhile)
+  httplib::Server drip, deep;
+  MacInfo slow = me, nest = me;
+  slow.id = new_id(), nest.id = new_id();
+  drip.Get("/cluster", [&](const httplib::Request&, httplib::Response& res) {
+    res.set_chunked_content_provider("application/json", [&](size_t off, httplib::DataSink& sink) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(off == 0 ? 0 : 700));
+      return sink.write(off == 0 ? "{" : " ", 1);
+    });
+  });
+  deep.Get("/cluster", [&](const httplib::Request&, httplib::Response& res) {
+    std::string b = R"({"proto":1,"x":)" + std::string(20000, '[') + std::string(20000, ']') + "}";
+    res.set_content(b, "application/json");
+  });
+  for (httplib::Server* s : {&drip, &deep})
+    s->Get("/health", [](const httplib::Request&, httplib::Response& res) { res.set_content("{}", "application/json"); });
+  slow.port = drip.bind_to_any_port("0.0.0.0");
+  nest.port = deep.bind_to_any_port("0.0.0.0");
+  std::thread td([&] { drip.listen_after_bind(); }), te([&] { deep.listen_after_bind(); });
+  {
+    Advertiser a1(port, [&] { return me; }), a2(slow.port, [&] { return slow; }), a3(nest.port, [&] { return nest; });
+    Browser b;
+    b.wait(3);
+    me.tok_s = 77;  // read again within kReadEvery plus a read
+    const double t0 = now_ms();
+    bool fresh = false, slow_out = false, nest_out = false;
+    while (now_ms() - t0 < 12000 && !(fresh && slow_out && nest_out)) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(250));
+      for (const auto& p : b.peers()) {
+        if (p.port == port && p.tok_s == 77) fresh = true;
+        if (p.port == slow.port && p.rtt_ms < 0) slow_out = true;
+        if (p.port == nest.port && p.rtt_ms < 0) nest_out = true;
+      }
+    }
+    check(fresh, "live: a healthy server read again beside one that drips its body");
+    check(slow_out && nest_out, "live: a dripping and a too-deep server shown as not answering");
+  }
   srv.stop();
+  drip.stop();
+  deep.stop();
   th.join();
+  td.join();
+  te.join();
 }
 
 }  // namespace
@@ -285,6 +346,7 @@ int main(int argc, char** argv) {
   const bool live = argc > 1 && !strcmp(argv[1], "--live");
   txt_checks();
   json_checks();
+  parse_checks();
   pick_checks();
   table_checks();
   if (live) live_checks();
