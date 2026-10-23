@@ -308,6 +308,8 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
       uint lane [[thread_index_in_simdgroup]]) {                                                                     \
     threadgroup half kt[16 * 256], vt[16 * 256];                                                                     \
     threadgroup float xs[NS * 256];                                                                                  \
+    /* Apple7-Apple10 allow 32 KB per threadgroup; ni_kstats --limits prints the pipeline's own figure */            \
+    static_assert(sizeof(kt) + sizeof(vt) + sizeof(xs) <= 32768, "qattn_t d2: threadgroup memory over 32 KB");      \
     qattn_t_d2_impl<NS, G>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt, xs);                                 \
   }
 // The 35B (G = 8): 4 pairs x 2 tokens = 8 tokens per threadgroup. bench_attn on the M5 Pro, T 4224 against 8448 keys
