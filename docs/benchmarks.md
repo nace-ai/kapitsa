@@ -166,7 +166,9 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
   (201.1 sampled, 222.3 greedy). It replaces 2,729 / 214, the median of three runs on `e6e1f46` after
   [#362](https://github.com/nace-ai/kapitsa/pull/362). The prompts are the same harness corpus as those runs' (4,132
   tokens at 4K), so the two compare like for like. These are the second of two sessions: the first (2,842 / 195) ran
-  alongside another session's CPU-side model conversion and was re-run once it ended; both are stored. Only Kapitsa
+  alongside another session's CPU-side model conversion and was re-run once it ended, but the second had more foreign
+  CPU load (other sessions' `kapitsa doctor` and `shasum` near 100% CPU at every counted launch), so the decode half is
+  not from a quiet Mac in either session; both are stored with their process snapshots. Only Kapitsa
   was re-run ([details](#qwen36-35b-a3b-at-4-bit), [results](../bench/results/2026-10-23-m5-pro-35b-365/README.md)).
 - MLX: mlx-vlm with MTP on the 4B and 27B, DFlash2 on the 35B; mlx-lm on Lightning and Dory, mlx-vlm on Bolt. oMLX
   runs MTP on the 4B and Lightning, DFlash2 on the 27B and 35B, no drafter on Bolt; mlx-serve MTP on the 4B, 35B and
@@ -1725,8 +1727,10 @@ flagged; the harness saw at most 0.7% foreign GPU). In each session the first la
 before the runs. The first session (07:55-08:16) ran alongside another session's model conversion (CPU and SSD, not the
 GPU, so the harness's GPU contention check does not see it; the `ps` snapshots taken at each launch are stored in the
 results' `process-snapshots/`) and read 2,842 / 2,505 and 195.1 / 214.5 tok/s; the
-protocol was run again once the conversion ended, and the second session is the cell. Another session's GGUF download
-(network and SSD writes, about 12 MB/s) overlapped its first two launches:
+protocol was run again once the conversion ended, and the second session is the cell. It was not quieter: other
+sessions' `kapitsa doctor` (another checkout) and a `shasum` of a GGUF sat near 100% CPU at the start of every counted
+launch, with a GGUF download (network and SSD, about 12 MB/s) in the first two, none of it seen by the GPU check. The
+choice of session rests on the conversion alone, made before the second ran, and prefill agrees across both:
 
 | Run | Prefill 4K / 16K (tok/s) | Decode T = 0.6 / greedy (tok/s) | Cached follow-up 4K / 16K (s) | Peak (GB) |
 | --- | ---: | ---: | ---: | ---: |

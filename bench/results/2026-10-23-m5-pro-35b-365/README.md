@@ -20,9 +20,13 @@ its stored run ([2026-10-19](../2026-10-19-m5pro-48gb/README.md), [Splash, 2026-
   stored but not counted (chosen before the runs), and the counted value is the median of the other three, each column
   its own median.
 
-**The cell is the second session.** The first session's decode came in under the old cell, and a CPU-side job of
-another session was running through it, so the whole protocol was run again once that job had ended, as the poster's
-rules ask for a leg spoiled by known foreign load. The first session is kept below.
+**The cell is the second session, which was not quieter than the first.** The first session's decode came in under the
+old cell with another session's model conversion (`conv.py`, 5.9-9% CPU) in the process list, so the coordinator had the
+whole protocol run again once that job ended, with every column taken from the new run. The `ps` snapshots stored with
+the runs show the second session had more foreign CPU load, not less (below), so the choice of session rests on the
+conversion alone, decided before session 2 ran, and is not a claim that session 2 was clean. Neither session has a GPU
+contention flag; both are stored, and their prefill agrees (2,802 / 2,479 against 2,842 / 2,505). The decode half of the
+cell should be read with the foreign load below in mind.
 
 ### Session 2, 08:36-08:49 (the cell)
 
@@ -36,10 +40,21 @@ rules ask for a leg spoiled by known foreign load. The first session is kept bel
 
 Every decode phase has 5 of 5 valid answers, and no run has a contention or invalid flag. The binary was no longer
 fresh (session 1 had compiled its kernels), but the first launch still compiled them again (2.96 s, tensor kernels
-623 ms; the counted launches 7-13 ms). The Metal compiler's CPU never passed 10% in a measured phase. Another session's
-GGUF download (`hf download`, network and SSD writes, about 12 MB/s) was in the process list at the start and end of
-launches 0 and 1 and gone by launch 2. It does not touch the GPU, and launch 1 (196.96) and launch 3 (222.64) bracket
-launch 2 (201.09), so the median does not hinge on it.
+623 ms; the counted launches 7-13 ms). The Metal compiler's CPU never passed 10% in a measured phase.
+
+Foreign CPU load in the snapshots (other sessions' jobs; the harness's contention check reads GPU only and saw 0-0.7%):
+
+| Launch | At start | At end |
+| --- | --- | --- |
+| 0 (not counted) | `kapitsa doctor` (another checkout) 98.9%, `hf download` 6.1% | three `clang -cc1` 84-100%, `kapitsa doctor` 98.2% |
+| 1 (196.96) | `kapitsa doctor` 96.1%, `hf download` 5.2% | `kapitsa doctor` 99.7%, `hf download` 4.1% |
+| 2 (201.09, the median) | `shasum -a 256` on a GGUF 99.3%, `kapitsa doctor` 98.7% | `shasum` 99.4%, `kapitsa doctor` 97.0% |
+| 3 (222.64) | `kapitsa doctor` 99.8% | the DSH web host (`node`) 209.9%, `kapitsa doctor` 98.1% |
+
+So every counted launch started next to at least one process near 100% CPU. Whether `kapitsa doctor` touches the GPU
+cannot be told from the snapshot. The decode spread (196.96-222.64, 13%) is not explained by it either way: the fastest
+launch ends next to the busiest process. In session 1 the only process at or above 20% CPU in any snapshot is one
+python job at 90.7% before launch 2.
 
 ### Session 1, 07:55-08:16 (superseded)
 
@@ -59,7 +74,8 @@ compiled the kernels (2.8-2.9 s, tensor kernels 592-621 ms); the compiler's CPU 
 The runs are in `results/`, the server logs in `logs/`. The harness's results do not record other processes, so the
 foreign jobs above are evidenced by `process-snapshots/`: the ten busiest processes (`ps`, by CPU) at the start of every
 launch, and in session 2 also at its end (home paths anonymized). `conv.py` is in session 1's launches 0-2 and not 3;
-`hf download` is in session 2's launches 0 and 1 only.
+`hf download` is in session 2's launches 0 and 1 only; `kapitsa doctor` is in every session-2 snapshot and no session-1
+snapshot.
 
 ### What changed on the poster
 
