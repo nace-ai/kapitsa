@@ -40,6 +40,13 @@ int run_bench(int argc, char** argv, int first);
 // kapitsa update: updates this kapitsa to the latest release (update_cmd.cpp); argv[first] is the first argument after
 // "update"
 int run_update(int argc, char** argv, int first);
+
+// kapitsa cluster (kapitsa macs): the Macs on this network that run Kapitsa (cluster_cmd.cpp); argv[first] is the
+// first argument after the command
+int run_cluster(int argc, char** argv, int first);
+// kapitsa stage: holds a run of Qwen3.8-Flash-Next's layers for another Mac's `kapitsa serve --split` (stage_cmd.cpp,
+// src/cluster/pipe.h); argv[first] is the first argument after "stage"
+int run_stage(int argc, char** argv, int first);
 // Before a command runs: the line about the last automatic update (in a terminal), and once a day the next check,
 // started in the background (update_cmd.cpp). Leaves help, the version, kapitsa update and kapitsa bench alone.
 void auto_update(int argc, char** argv);

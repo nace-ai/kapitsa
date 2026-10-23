@@ -487,6 +487,8 @@ int layout_width() { return std::min(columns(), 100); }
 
 // Whether this picker offers a context (kapitsa bench's does not: it runs its own)
 bool g_contexts = true;
+// Per model row: where it runs whole on the network ("Studio, 58 tok/s"; "" nowhere or not asked)
+std::vector<std::string> g_away;
 
 std::string keys_line(const char* enter, const char* esc) {
   const std::string sep = dim("  " + std::string(kDot) + "  ");
@@ -543,12 +545,16 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
   int tw = 0;
   for (size_t i = 0; i < rows.size(); ++i) {
     const ModelRow& r = rows[i];
-    const bool sel = i == cur, big = r.fit == Fit::kTooBig;
+    // a model this Mac would not hold that another Mac runs whole: picked, its requests go there
+    const bool away = i < g_away.size() && !g_away[i].empty() && (r.fit == Fit::kTooBig || r.slow);
+    const bool sel = i == cur, big = r.fit == Fit::kTooBig && !away;
     const std::string name = sel ? accent(bold(r.m->name)) : big ? dim(r.m->name) : r.m->name;
     std::string l = "  " + (sel ? accent(kArrow) : std::string(" ")) + " " + left(name, nw) + "   " +
                     right(dim(sizes[i]), sw) + "  " + left(marks[i], mw) +
                     (cw ? "   " + right(sel ? ctxs[i] : dim(ctxs[i]), cw) : std::string());
-    if (pw >= 12) {
+    if (pw >= 12 && away) {
+      l += "   " + accent(clip("on " + g_away[i], pw));
+    } else if (pw >= 12) {
       const std::string what = big        ? (mode && g_contexts ? "too big for this Mac at this context" : "too big for this Mac")
                                : r.slow   ? "no room for its draft model at this context (slower)"
                                : r.m->brief.empty() ? r.m->about
@@ -564,7 +570,9 @@ std::vector<std::string> models_screen(const std::vector<ModelRow>& rows, size_t
   if (any_best) legend += (legend.empty() ? "" : "   ") + accent(kStar) + dim(" best for this Mac");
   o.push_back(title_line("  " + bold("Pick a model") + context_title(mode), legend, std::min(std::max(tw, 60), W - 1)));
   for (auto& l : table) o.push_back(l);
-  if (rows[cur].fit == Fit::kTooBig) {
+  if (cur < g_away.size() && !g_away[cur].empty() && (rows[cur].fit == Fit::kTooBig || rows[cur].slow)) {
+    o.push_back("  " + dim(clip(std::string(kArrow) + " picked, its requests go to that Mac, which runs it whole", W - 3)));
+  } else if (rows[cur].fit == Fit::kTooBig) {
     char b[200];
     snprintf(b, sizeof b, "no precision of it fits the %.1f GB of GPU memory on this Mac%s", budget / 1e9,
              mode && g_contexts ? " with a conversation of this context" : "");
@@ -645,8 +653,9 @@ bool can_prompt(bool yes) {
 }
 
 std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const std::string& command, int context,
-                               bool ask_context) {
+                               bool ask_context, std::function<std::string(const hub::CatalogModel&)> elsewhere) {
   g_contexts = ask_context;
+  g_away.clear();
   (void)accent(" ");  // the terminal's colors are asked for before the keys are read
   guard_signals();    // the status block's signal handlers, which ours pass the signal on to
   Raw raw;            // from now on, keys wait for the picker (unechoed), even those typed while it gets ready
@@ -701,7 +710,16 @@ std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const st
     status(step == 1 ? models_screen(rows, cur, budget, mode)
                      : precisions_screen(rows[cur], vcur[cur], command, budget, mode));
   };
+  auto look = [&] {  // where the models run whole on the network, as found so far: a change redraws
+    if (!elsewhere) return false;
+    std::vector<std::string> away;
+    for (const auto& r : rows) away.push_back(elsewhere(*r.m));
+    if (away == g_away) return false;
+    g_away = std::move(away);
+    return true;
+  };
   plan();
+  look();
   draw();
   bool chosen = false;
   {
@@ -712,6 +730,7 @@ std::optional<Pick> pick_model(const EngineOptions& opt, size_t budget, const st
       for (;;) {
         const Press p = read_key(planner.done() ? 250 : 30);
         bool redraw = plan();
+        redraw = look() || redraw;
         if (columns() != cols) cols = columns(), redraw = true;  // resized
         if (p.key == Key::kNone) {
           if (redraw) draw();

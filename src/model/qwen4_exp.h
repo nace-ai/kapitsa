@@ -73,6 +73,17 @@ class Qwen4Exp : public Qwen35 {
   static bool is_model(const std::string& model_dir);
   // the process's split's share of the model (split())
   static MemPlan plan(const std::string& model_dir, int prefill_chunk = 2048);
+  // For placing a split (src/cluster/place.h), from the headers: each trunk layer's weight bytes as stored (its routed
+  // experts included, and apart: what a Q2_0 pack's store may stream) and as a decode step reads them (the routed share
+  // of its experts), whether it is a linear-attention layer, and the same for the head's own tensors (the embedding's
+  // row aside: the LM head, the final mix, the MTP head unless NI_NO_MTP) into *head
+  struct LayerBytes {
+    double weights = 0, decode = 0, experts = 0;
+    bool linear = false;
+  };
+  static std::vector<LayerBytes> layer_bytes(const std::string& model_dir, LayerBytes* head);
+  // A Q2_0 pack's store: the bytes of one layer's experts in its slots (plan() keeps at least 3 layers' worth)
+  static double store_layer_bytes(const std::string& model_dir);
   const Qwen4ExpConfig& config4() const { return c4_; }
   std::string lost() const override { return remote_ ? remote_->lost() : ""; }
 

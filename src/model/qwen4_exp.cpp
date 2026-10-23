@@ -1471,6 +1471,48 @@ std::string Qwen4Exp::formats_summary() const {
 
 // ---- memory plan (headers only) ----
 
+std::vector<Qwen4Exp::LayerBytes> Qwen4Exp::layer_bytes(const std::string& dir, LayerBytes* head) {
+  const Qwen35Config c = read_config(dir);
+  const double share = c.experts ? double(c.top_k) / c.experts : 1.0;
+  std::vector<LayerBytes> out(size_t(c.layers));
+  for (int i = 0; i < c.layers; ++i) out[size_t(i)].linear = c.is_linear[size_t(i)];
+  *head = LayerBytes{};
+  const bool mtp = !getenv("NI_NO_MTP");
+  if (DIR* d = opendir(dir.c_str())) {
+    while (dirent* e = readdir(d)) {
+      const std::string f = e->d_name;
+      if (f.size() <= 12 || f.compare(f.size() - 12, 12, ".safetensors") != 0 || f == "ple.safetensors") continue;
+      std::ifstream in(dir + "/" + f, std::ios::binary);
+      uint64_t n = 0;
+      if (!in.read(reinterpret_cast<char*>(&n), 8) || n > (256u << 20)) continue;
+      std::string h(n, '\0');
+      if (!in.read(h.data(), std::streamsize(n))) continue;
+      const json j = json::parse(h, nullptr, false);
+      if (!j.is_object()) continue;
+      for (auto& [name, v] : j.items()) {
+        if (name == "__metadata__" || name.find("vision_tower") != std::string::npos ||
+            name.find("visual.") != std::string::npos || name.find(".ngram_embedding.") != std::string::npos ||
+            (!mtp && name.rfind("mtp.", 0) == 0))
+          continue;
+        const double b = double(v["data_offsets"][1].get<size_t>() - v["data_offsets"][0].get<size_t>());
+        const int l = trunk_layer(name);
+        LayerBytes& t = l >= 0 && l < c.layers ? out[size_t(l)] : *head;
+        t.weights += b;
+        if (is_trunk_expert(name)) t.experts += b;
+        if (name.find("embed_tokens") == std::string::npos && name.rfind("mtp.", 0) != 0)
+          t.decode += name.find("switch_mlp") != std::string::npos ? b * share : b;
+      }
+    }
+    closedir(d);
+  }
+  return out;
+}
+
+double Qwen4Exp::store_layer_bytes(const std::string& dir) {
+  const Qwen35Config c = read_config(dir);
+  return double(c.experts) * double(q20::slot_layout(uint32_t(c.hidden), uint32_t(c.moe_I)).bytes);
+}
+
 MemPlan Qwen4Exp::plan(const std::string& dir, int chunk) {
   MemPlan m;
   const json root = read_json(dir + "/config.json");

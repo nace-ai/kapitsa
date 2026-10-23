@@ -7,7 +7,8 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 
 | Command | What it does |
 | --- | --- |
-| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`. Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa serve [--model M] [options]` | Starts the server: the chat page at `http://127.0.0.1:8000`, the APIs under `/v1`, visible to Kapitsa on the other Macs of the network ([Several Macs](#several-macs)). Without `--model`, a terminal asks which model ([Which model](#which-model)); elsewhere it is the best model for this Mac ([Server options](#server-options)). |
+| `kapitsa cluster [--json] [--watch]` | The Macs on this network that run Kapitsa: the model each serves, how, how fast, and the link to it ([Several Macs](#several-macs)). `kapitsa macs` is the same. |
 | `kapitsa claude`, `kapitsa codex`, `kapitsa opencode`, `kapitsa pi` | Starts that coding agent on Kapitsa ([Coding agents](#coding-agents)). |
 | `kapitsa pull M... [--from DIR]...` | Downloads models without starting them. `--dry-run [--json]` shows what `M` resolves to and downloads nothing. |
 | `kapitsa list [--json]` | The downloaded models: size on disk, complete or not, MTP head and draft model. |
@@ -16,6 +17,7 @@ from source, [CONTRIBUTING.md](../CONTRIBUTING.md); for how the engine works, [a
 | `kapitsa doctor [--model M]... [--json]` | This Mac and which models fit it ([Memory and `kapitsa doctor`](#memory-and-kapitsa-doctor)). |
 | `kapitsa bench [--model M] [--quick] [--submit]` | Benchmarks Kapitsa on this Mac with the published protocol, and adds the result to the community results when asked ([Benchmarking this Mac](#benchmarking-this-mac)). |
 | `kapitsa update [--check] [--version X.Y.Z] [--rollback] [--auto on\|off]` | Updates Kapitsa to its latest release; it also updates itself ([Updating](#updating)). |
+| `kapitsa stage --model M [--layers A-B]` | Holds a run of Flash-Next's layers for another Mac's `kapitsa serve --split` ([Flash-Next across Macs](#flash-next-across-macs)). |
 | `kapitsa --help`, `kapitsa COMMAND --help`, `kapitsa --version` | Help and version. |
 
 Exit codes: 0 success, 1 failure (download, port, model), 2 usage error (unknown option or model), 130 after Ctrl+C in a
@@ -266,16 +268,19 @@ cancels. Elsewhere (the app, scripts) the error names the `kapitsa rm` commands 
 ## Server options
 
 `kapitsa serve` checks the port, downloads the model if needed and loads it, then prints `Ready:` and the chat and API
-addresses. In a terminal the engine's log goes to `~/.cache/kapitsa/logs/serve-PORT.log` (`--verbose` shows it on
-screen too), otherwise to stderr; Ctrl+C stops it.
+addresses. A model this Mac would not hold whole that another Mac on the network runs whole is neither downloaded nor
+loaded: the server sends its requests there ([Several Macs](#several-macs)). In a terminal the engine's log goes to
+`~/.cache/kapitsa/logs/serve-PORT.log` (`--verbose` shows it on screen too), otherwise to stderr; Ctrl+C stops it.
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--model MODEL` | the best model for this Mac | A name, `name:variant`, `org/name[@revision]`, a folder or a `.gguf` file ([Models and downloads](#models-and-downloads)). |
-| `--host HOST` | `127.0.0.1` | Listen address; `0.0.0.0` serves your network ([API keys and network access](#api-keys-and-network-access)). |
-| `--port PORT` | `8000` | Listen port. A port in use is an error. |
+| `--host HOST` | `0.0.0.0` | Listen address: every address, this Mac's and its network's ([API keys and network access](#api-keys-and-network-access)). `127.0.0.1` keeps the server to this Mac, as `--private` does. |
+| `--port PORT` | `8000` | Listen port. A port in use is an error, on any address. |
+| `--private` | off | This Mac only: listen on `127.0.0.1`, stay out of sight of Kapitsa on the other Macs and never send them requests ([Several Macs](#several-macs)). |
+| `--local` | off | Run the model on this Mac even when another Mac on the network runs it whole ([Several Macs](#several-macs)). |
 | `--api-key KEY` | none | Require `Authorization: Bearer KEY` or `x-api-key: KEY`. |
-| `--allow-switch` | off | Let a request naming another model, or `POST /v1/models/switch`, load that model (it may download gigabytes). Off, the `model` field is ignored, as clients send names of their own. On a network `--host` it needs `--api-key`. |
+| `--allow-switch` | off | Let a request naming another model, or `POST /v1/models/switch`, load that model (it may download gigabytes). Off, the `model` field is ignored, as clients send names of their own. Without `--api-key` it keeps the server on this Mac, as `--private` does, and says so; with a network `--host` it needs `--api-key`. |
 | `--model-id ID` | the model's name | The model's name in the API. |
 | `--context N` | the model's limit (256K, 1M), less where memory is tight | Context per conversation: tokens (`131072`), `k` or `m` of them (`128k`, `1m`), or `max`, the model's own limit ([Context](#context)). `--ctx N` works too. |
 | `--slots N` | `4` where memory allows, else `3` or `2` | Requests that run at once, each with its conversation's cache kept for follow-ups; more wait for a free slot, first come first served. |
@@ -535,10 +540,65 @@ chat template and the request say (thinking on by default in Chat Completions an
 
 ### API keys and network access
 
-The server listens on `127.0.0.1` and needs no key: any key a client sends is accepted. With `--api-key KEY`, every
-request must carry `Authorization: Bearer KEY` or `x-api-key: KEY`, or it gets a 401. `GET /health` and the chat page
-need no key; the chat page asks for it once and keeps it in the browser. To serve other machines, listen on every
-address and always set a key: `kapitsa serve --host 0.0.0.0 --api-key YOUR-KEY` (see [SECURITY.md](../SECURITY.md)).
+The server listens on every address (`0.0.0.0`) and needs no key: any key a client sends is accepted, from this Mac
+and from any machine that reaches it on the network ([Several Macs](#several-macs)). With `--api-key KEY`, every request
+must carry `Authorization: Bearer KEY` or `x-api-key: KEY`, or it gets a 401. `GET /health`, `GET /cluster` and the
+chat page need no key; the chat page asks for it once and keeps it in the browser. `--private` keeps the server to this
+Mac (`127.0.0.1`), as before (see [SECURITY.md](../SECURITY.md)).
+
+## Several Macs
+
+Every `kapitsa serve` is visible to Kapitsa on the other Macs of its network, with no password: it registers itself
+over Bonjour (the service `_kapitsa._tcp`) with the model it serves, whether it holds it whole in memory, its recent
+decode speed and this Mac's computer name, chip and memory; `GET /cluster` gives the same as JSON. `--private` keeps a
+server to this Mac as before: it listens on `127.0.0.1`, is not visible and sends no request elsewhere. A `--host` of
+`127.0.0.1` does the same, so scripts that name it are unchanged, and so does `--allow-switch` without `--api-key`
+(any client could load models).
+
+A Mac that would not hold the model it is asked for whole sends its requests to a Mac on the network that does, as if
+that Mac were its own server. Whole means in memory: the engine's plan of the model fits this Mac's GPU memory budget
+(the check `kapitsa serve` makes before a download) and no routed experts would stream from the SSD (a
+Qwen3.8-Flash-Next Q2_0 pack whose experts do not all fit). Such a Mac looks for 1.5 s for a server that runs the same
+model whole and answers: the same variant first, else the most precise one, then the shortest round trip, then the
+fastest. If there is one, nothing downloads or loads here. Every request under `/v1` (Chat Completions, Messages,
+count_tokens, Responses, the model list) is forwarded with its headers, the API key included, and the reply relayed as
+it comes back, a stream chunk by chunk; the ready card says where the model runs, and each request's line says where it
+went. While that Mac does not answer (asleep, stopped, off the network), requests get a 503 that says so, and the server
+keeps looking: they go there again when it is back, or to another Mac that runs the model whole. `--local` runs the
+model here anyway. `kapitsa claude` and the other coding-agent commands download nothing for such a model either: the
+server they start sends its requests on.
+
+Two Macs that would each stream Qwen3.8-Flash-Next's experts from the SSD pair on their own, and then hold it in memory
+between them as [Flash-Next across Macs](#flash-next-across-macs) does with `--split`. A `kapitsa serve` that would
+stream the model looks for another server of the same model and variant that runs it alone and streamed, within a
+round trip of 15 ms (a pass of the split crosses the network once there and back). If the two Macs hold the model in
+memory between them, it becomes that server's stage: it loads the layers that server gives it and sends its own
+requests there, as a Mac that routes them does. The server that started first is the head: it places the layers, loads
+its own share again (requests get a 503 for the few seconds that takes) and runs the model across the two. Of two
+servers that started alone (at the same time, or before they could see each other), the later one gives way: it starts
+again as the other's stage. A head that has decoded alone measures the split: two replies in a row slower than 80% of
+its rate alone, and it runs alone again and does not pair with that Mac again. When the stage goes away, the reply in
+flight ends with an error and the head runs the model alone again; when the head goes away, the stage starts again on
+its own after 30 s. A Mac that streams the model says how much memory a second Mac needs to pair with it. `--local` and
+`--private` keep a server out of pairing. Not measured between two Macs yet: over Wi-Fi a long prompt's rows (189 MB
+for a 2048-token chunk) take seconds to cross, so its prefill can be slower paired than streamed alone.
+
+Models are matched by name: a catalog model by its name and variant (`qwen3.8-flash-next:4bit`), also when it is served
+from a folder named as the store names one (`qwen3.8-flash-next-q2_0` is `qwen3.8-flash-next:q2_0`), and any other
+folder or repo by its API id. `NI_CLUSTER_ROUTE=1` routes whenever another server runs the model whole, even one this
+Mac could run: two servers on one Mac, for a check.
+
+`kapitsa cluster` (or `kapitsa macs`) lists the Macs running Kapitsa on this network after about 2 seconds of looking:
+this Mac first, then each server with its chip and memory, the model it serves, how it runs it (`in memory`, `streams
+from SSD`, `proxy` to the Mac it sends its requests to, or `stage` of the Mac whose split it holds layers of), its recent decode speed and the link to it (this Mac,
+Wi-Fi, Ethernet or Thunderbolt, from the interface that reaches it) with the median of three round trips. A server that
+Bonjour lists but that does not answer is shown as `not answering`. `--json` gives the same as JSON, `--watch` keeps it
+up to date until Ctrl+C.
+
+macOS asks once whether the app that runs `kapitsa` (the terminal, or the app that starts the server) may find devices
+on the local network. Refused, nothing is found or advertised, and `kapitsa cluster` says so: allow it in System
+Settings > Privacy & Security > Local Network, on each Mac. With the macOS firewall on, allow `kapitsa`'s incoming
+connections too.
 
 ## Coding agents
 
@@ -692,6 +752,55 @@ refused before the download, on 24 GB at 19.3 GB it starts without its draft mod
 `--context 64k`), on 32 GB it runs with the draft model (0.7 GB at two slots) and 370K-970K tokens of KV cache, and from
 48 GB two conversations of its full 1M-token context fit.
 
+### Flash-Next across Macs
+
+Several Macs can run one Flash-Next together, each holding a run of its layers in memory: two 48 GB Macs hold the Q2_0
+pack (38.3 GB) with no experts read from the SSD; the 4-bit pack needs three of them, or one 128 GB Mac (two Macs
+that both run `kapitsa serve` with it pair on their own: [Several Macs](#several-macs)). The Mac that
+takes the requests, the head, holds the first layers, the embedding, the n-gram table, the final mix, the LM head and
+the MTP head; every other Mac runs `kapitsa stage` and holds a run of the layers after them:
+
+```
+# each other Mac
+kapitsa stage --model ~/models/flash-next-q2
+# this Mac: the head
+kapitsa serve --model ~/models/flash-next-q2 --split other-mac.local
+```
+
+The head asks each stage for its GPU memory budget and its memory bandwidth, and gives each Mac the run of layers that
+fits its memory with the fastest pass (`src/cluster/place.h`: a Mac's layers cost their decode bytes over its bandwidth,
+one Mac after another; a layer's weights count with two conversations' states on a linear-attention layer and two
+32K-token conversations' caches on a full-attention one); the stage loads them then. When the Macs' memory does not hold
+every routed expert of a Q2_0 pack, each Mac keeps its layers' dense weights and a store of 3 layers' experts and streams
+its other experts from its SSD, as one Mac alone does, and the head says so (how fast that runs is not measured). A
+stage started with `--layers A-B` keeps those instead, and every stage of the split must then be started that way.
+Several stages are listed in the order of their layers: `--split a.local,b.local`.
+
+A pass runs the head's layers, goes to the first stage, on through the others and back to the head
+(`src/cluster/pipe.h`): one hand-off per Mac whatever its rows, so a verify of the MTP head's two drafts costs the network
+what one token does. The rows travel as the fp32 state the layers read and write (51 KB a row for Flash-Next; 40 KB on
+a prefill's way back), so the replies are the same bits as the model whole on one Mac: `tools/split_check` compares a
+split model with the whole one pass by pass (prefill chunks, a checkpoint inside one, decode steps, the MTP head's
+drafts, verifies with pending rows, a restore, a reset, caches growing), and `tests/test_split.py` sends the same
+requests to a whole and a split server.
+
+Every Mac needs the model's `config.json` and its trunk's safetensors files, the same ones (the head checks a digest of
+them); a stage needs neither the n-gram table (`ple.safetensors`) nor the MTP head (`mtp.safetensors`). A stage serves
+one head at a time and waits for the next when it leaves. The head waits for each pass's rows on the CPU, not the GPU:
+a command buffer that waits on the GPU for about 5 s is killed with a GPU timeout, and a network can stall that long.
+When a stage stops answering (stopped, asleep or off the network; TCP keepalive notices a silent one in about 11-15 s), the request in flight ends with
+an error that says so, later ones at once, and the head needs a restart. macOS may ask, on a stage's first start,
+whether `kapitsa` may accept incoming connections (the firewall), and on the head whether the terminal may use the
+local network.
+
+What the network adds is a round trip per pass and its rows. Between two processes on one Mac (127.0.0.1; a synthetic
+pack of `tools/fn_synth.py --hidden 2560`, Flash-Next's own width, so its rows are the real 51 KB; M4 Pro, `split_check
+--repeat 15`, medians) the split added 0.46 ms to a decode step (1.47 -> 1.92 ms), 0.37 ms to a verify of 3 rows (2.44
+-> 2.80 ms) and 35.5 ms to a prefill chunk of 2048 rows (167 -> 202 ms: 105 MB out, 84 MB back). Between Macs it is
+not measured yet. Over Wi-Fi the rows also take their time on the air: a decode step's 102 KB and a 3-row verify's
+307 KB add a few milliseconds beside the network's own round trip (3-10 ms on a quiet network, an estimate), and a
+2048-row prefill chunk's 189 MB take seconds, so long prompts read far slower there than over Thunderbolt.
+
 ## Benchmarking this Mac
 
 `kapitsa bench` measures Kapitsa on this Mac the way the [published benchmarks](benchmarks.md) measured it, so its
@@ -796,6 +905,8 @@ this Mac, on `127.0.0.1:8000`) in the background and at each login, restarting i
 | `NI_V8_TREE_FUSE` | `0` | `1` fuses Qwen's eight-row KFlash tree-zone tail and the history-partial reduction. Each lane keeps the tail in registers instead of writing it to global scratch and reading it in another dispatch. The history chunks and summation order stay the same. Wide verifies, batched chains and other model backends keep their attention paths. |
 | `NI_DFLASH_CORE4` | Auto | `1` selects the newer four-row 4-bit drafter core, `0` the earlier core. Auto uses the newer core on Apple10 and the 32-core M1 Max. |
 | `NI_MEM_BUDGET` | | The GPU memory budget in GB, as `--mem-budget`. |
+| `NI_CLUSTER_ROUTE` | | `1`: `kapitsa serve` sends its requests to another server that runs the model whole even when this Mac could run it ([Several Macs](#several-macs)); for a check with two servers on one Mac. |
+| `NI_CLUSTER_PAIR` | | `1`: `kapitsa serve` pairs for any Flash-Next folder, even one this Mac holds whole, and counts it as streamed until it is split; a stage whose head went away runs alone after 5 s, not 30, and a head pairs again 3 s after a stage was lost, not 60 ([Several Macs](#several-macs)); for `tests/test_pair.py`, two servers on one Mac. |
 | `NI_VPF` | on for a dense target whose drafter drafts a 16-row block and that is big enough for the pass to pay (weight scale `hidden*intermediate*layers` >= 3e9, which the 27B meets and the 4B does not; the middle is unmeasured, so it stays off) | A cached turn's short new suffix (one chunk of at most `NI_VPF_MAX` rows over a cached prefix of at least 1K rows, no grammar mask, image rows or MTP speculation) runs as verify passes - one pass per up to 32 rows where the target's verify holds them (`NI_VPF_ROWS`), 16 or 8 where it does not - instead of the prefill path's small-T pass, whose GEMMs stream the weights at 53-115 GB/s where a verify pass reaches 210 GB/s. A cached follow-up's time to first token drops 16-27% on the 27B at a 4K to 16K prefix. `1` also takes the path on any target the default leaves out (a MoE model, whose verify reads the union of its rows' experts; a target whose tables hold 8 rows; a small dense model, where the pass costs more than the narrow prefill it replaces - the 4B pays ~30-40 ms for it), `0` restores the prefill path everywhere. |
 | `NI_VPF_MAX` | `64` | The longest cached suffix `NI_VPF` takes, in rows (clamped to 2047, the drafter's prompt-capture window). A pass costs one weights read whatever the suffix, and the prefill path's is a 64-row tile, so the crossover is where the prefill path stops staging its GEMMs: at a 16K prefix 47 rows run 399 ms as passes against 447 ms on the staged prefill path, 55 rows 378 against 484, while 73 rows prefill in 373 ms against 433 ms as passes and 124 rows in 442 against 665 (PR #366). `64`, the short-prefill boundary, caps the default just below that crossover. |
 | `NI_VPF_SPLIT_MIN` | `25` | The shortest suffix that still takes `NI_VPF` passes when the turn boundary falls *inside* it. A boundary inside the suffix needs the recurrence state folded up to that row for the checkpoint; the plain path saves that checkpoint from its chunk's snapshot for free, while the passes pay a fold pass (~70 ms at a 16K prefix) for it, and the plain path's own cost steps up as it gains a small-T pass. Measured at a 16K prefix on the 27B, two interleaved legs a setting: 21 rows 209/209 ms on the prefill path against 169/169 as passes, 24 rows 214/214 against 237/236, 25 rows 266/266 against 237/235, 26 rows 266/268 against 237/238, 38 rows 339/339 against 290/290. The crossover is between 24 and 25 rows, so a shorter suffix holding a boundary takes the prefill path, exactly the request it took before the passes existed. Rows alone do not decide it - the fold splits the suffix into two pass-quantised pieces - and 30 rows is the one measured size above the crossover where the passes lose (280/280 against 269/269). `0` takes the passes for every suffix `NI_VPF_MAX` allows. |

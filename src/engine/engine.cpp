@@ -544,6 +544,14 @@ std::string Engine::kflash_source() const {
   return "none";
 }
 
+std::string Engine::lost() const { return model_->lost(); }
+
+bool Engine::streams_experts() const {
+  auto* q4 = dynamic_cast<Qwen4Exp*>(model_.get());
+  const q20::ExpertStore* st = q4 ? q4->expert_store() : nullptr;
+  return st && !st->complete();
+}
+
 void Engine::save_kflash() {
   if (kf_budget_) kf_budget_->save();
   if (dfl_ && dfl_->budget()) dfl_->budget()->save();

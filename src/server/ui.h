@@ -2,6 +2,7 @@
 // ready card and request lines, list, pull, rm, and the coding agents' launcher. Output that is not a terminal keeps
 // the plain text of main.cpp and launch.cpp.
 #pragma once
+#include "cluster/cluster.h"
 #include "engine/engine.h"
 #include "hub/hub.h"
 
@@ -41,13 +42,39 @@ std::string serve_log_file(int port);
 // A spinner while the engine loads, showing its latest log line; then "✓ Loaded <what> in 6.1s"
 void loading_begin(const std::string& what);
 void loading_end(const std::string& what);
+// The server on the network (several Macs, docs/usage.md)
+struct Network {
+  bool visible = false;  // advertised to Kapitsa on the other Macs (not --private, not a loopback --host)
+  std::string name;      // as they see it: this Mac's computer name
+  std::string url;       // http://<this Mac's address>:<port>
+  bool api_key = false;  // the API needs its key
+  int others = -1;       // other Macs found running Kapitsa (-1: not looked)
+};
+// The line about it under the card: "Visible to Kapitsa on this network as ... (no password; --private hides it)"
+std::string network_line(const Network& n);
 struct Ready {
   std::string model, quant, base, api_key_note, log;
   size_t budget = 0, used = 0;
   int context = 0, context_fit = 0, slots = 0;
+  Network net;
 };
 // The card once the server listens
 void ready(const Ready& r);
+// The card of a server that sends its requests to another Mac (route.h), once it listens
+struct Routed {
+  std::string model;  // the model as that Mac serves it ("qwen3.8-flash-next:4bit")
+  cluster::MacInfo mac;
+  std::string base, api_key_note, log;
+  Network net;
+};
+void routed(const Routed& r);
+// "qwen3.8-flash-next runs on Studio (M3 Ultra, 512 GB) · Wi-Fi 4 ms: this Mac sends its requests there. --local runs
+// it here."
+std::string route_line(const std::string& model, const cluster::MacInfo& mac);
+// One request sent on to the other Mac: its line in the request log (the log file without the terminal UI)
+void forwarded(const httplib::Request& req, int status, double secs, const std::string& mac);
+// The decode rate of the latest request (tokens/s; 0 before any), which the server tells the other Macs
+double recent_tok_s();
 
 // One API request, for its line in the request log: the client (from the User-Agent), the time from its arrival to
 // its first token, the images it carries. nullptr when the terminal UI is off; the functions take that too.

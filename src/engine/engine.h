@@ -312,6 +312,11 @@ class Engine {
   int slots() const { return int(slots_.size()); }  // requests that run at once
   // Positions one conversation can hold in memory (the context, or less when the memory budget ends first)
   int context_fit() const { return context_fit_; }
+  // The model reads routed experts from the SSD as it runs (a Qwen3.8-Flash-Next Q2_0 pack whose store holds only part
+  // of them): it does not run whole in memory, as `kapitsa serve` tells the other Macs (src/cluster/)
+  bool streams_experts() const;
+  // Why the Macs that hold the rest of a split model no longer answer ("" while they do, and for a model on one Mac)
+  std::string lost() const;
   // The sampling settings a request gets when it names none: the model's (Nemotron-H: generation_config.json),
   // else Qwen's recommended 0.6 / 0.95 / 20.
   ChatRequest request_defaults() const { return defaults_; }
