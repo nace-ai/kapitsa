@@ -406,7 +406,7 @@ def cli_checks(kapitsa):
             return {"error": out + err}
     budgets = ["48", "16", "14.8"]
     dflt = {b: model(doctor(b)) for b in budgets}  # (the catalog is planned each time: about 40 s; four at once below)
-    runs = {(b, c): doctor(b, "--context", str(c)) for b in budgets for c in (131072, dflt[b].get("default_context", 0))}
+    runs = {(b, c): doctor(b, "--context", str(c)) for b in budgets for c in {131072, dflt[b].get("default_context", 0)}}  # (a set: one run where they are the same)
     for b in budgets:
         D = dflt[b].get("default_context", 0)
         old, new = model(runs[(b, 131072)]), model(runs[(b, D)])
