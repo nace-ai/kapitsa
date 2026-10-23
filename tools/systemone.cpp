@@ -251,6 +251,11 @@ class SystemOne {
       e->commit_and_wait();
       rows_put(n_state, cached->kv);
     } else {
+      // A state prefilled on top of the recurrent state the previous request of this process left behind answers from
+      // a diluted distribution (the first request of a process is clean and every later one is not), so the state is
+      // prefilled from an empty one. A cache hit does not reset: restore() writes the whole recurrent state back from
+      // the checkpoint, and the KV rows above n_state stay masked by position, so the KV caches need no reset.
+      model_->reset(*seq_);
       {
         auto e = g.begin();
         for (int pos = 0; pos < n_state;) {

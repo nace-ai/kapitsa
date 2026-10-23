@@ -48,8 +48,10 @@ states in one call with one model in memory.
   `fim_suffix` last. A branch's positions continue from the state's, so it attends to the state and to itself only.
   Text that looks like a delimiter is rewritten to `¦name¦` before tokenizing, so caller data cannot forge an
   option boundary (the reference does the same).
-- **The state once.** The state is prefilled, then the recurrent state (GDN conv and rec buffers) at that position
-  is checkpointed. Attention rows are positional, so a branch never reads another branch's rows.
+- **The state once.** The state is prefilled from an empty recurrent state, then the recurrent state (GDN conv and
+  rec buffers) at that position is checkpointed. Attention rows are positional, so a branch never reads another
+  branch's rows, and one request's state leaves nothing behind for the next: a batch element or a request to a
+  long-running server is prefilled exactly as it would be alone.
 - **A branch per question.** Each question restores the checkpoint, prefills only its own branch, and reads the
   layer-40 residual rows the head needs: the `fim_suffix` row (the pointer query) and the `box_end` rows (the
   keys). The final RMSNorm is applied on the host in f32, then the pointer head's two projections and the dot
