@@ -51,8 +51,8 @@ Flint × llama.cpp cell and sweep this run reuses.
   files: Kapitsa runs NVIDIA's published checkpoints, which keep some layers in BF16 or FP8 (the 9B v2's NVFP4 reads
   ~6.11 GB per token against 4.67 GB for mlx-community's 4-bit file; the 4B's FP8 is ~1 byte per parameter against
   Q4_K_M's ~0.6).
-- **Prefill at 4K: Kapitsa is ahead on all 8 models with a valid rival number**, 1.04x (Flint) to 1.85x (Nano 4B); the
-  Qwen dense models by the least (1.08-1.10x).
+- **Prefill at 4K: Kapitsa is ahead on all 8 models with a valid rival number**, 1.04x (Flint) to 1.85x (Nano 4B); the least on
+  Flint and the 9B (1.08x).
 - **The sweep keeps both orders at every size from 1K to 32K**: Kapitsa reads faster at every size on all seven models
   with a rival prefill number, and writes faster at every size on six of them; on the Nano 4B it writes 0.94-0.99x
   llama.cpp, on the Nano 9B v2 0.85-0.86x mlx-lm.
