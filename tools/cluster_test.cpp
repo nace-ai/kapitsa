@@ -2,11 +2,18 @@
 // encoded and read back; where a Mac that would not hold a model whole sends its requests (pick_server); and the table
 // of `kapitsa cluster`, laid out from made-up servers.
 //   cluster_test          the checks above; exit status 1 if any fails
+//   cluster_test --live   also on this Mac's network: a server advertised over Bonjour (a stand-in HTTP server on a
+//                         free port) must be found, read and timed by a Browser within a few seconds
 #include "cluster/cluster.h"
+#include "cluster/discovery.h"
 #include "util/term.h"
 
+#include <httplib/httplib.h>
+
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace ni;
@@ -236,13 +243,51 @@ void table_checks() {
         "table: no chip column where it does not fit");
 }
 
+// On this Mac's network: a stand-in server advertised, then found by a browser
+void live_checks() {
+  httplib::Server srv;
+  MacInfo me = this_mac();
+  me.id = new_id();
+  me.model = "cluster-test:4bit";
+  me.whole = true;
+  me.tok_s = 42;
+  srv.Get("/cluster", [&](const httplib::Request&, httplib::Response& res) { res.set_content(to_json(me).dump(), "application/json"); });
+  srv.Get("/health", [](const httplib::Request&, httplib::Response& res) { res.set_content(R"({"status":"ok"})", "application/json"); });
+  const int port = srv.bind_to_any_port("0.0.0.0");
+  me.port = port;
+  std::thread th([&] { srv.listen_after_bind(); });
+  check(port > 0 && !me.name.empty() && me.ram_gb > 0 && me.id.size() == 16, "live: this Mac and a stand-in server",
+        to_json(me).dump());
+  {
+    Advertiser ad(port, [&] { return me; });
+    Browser b;
+    b.wait(3);
+    const auto peers = b.peers();
+    const MacInfo* found = nullptr;
+    for (const auto& p : peers)
+      if (p.id == me.id) found = &p;
+    check(found && found->this_mac() && found->rtt_ms > 0 && found->model == me.model && found->port == port &&
+              found->host == "127.0.0.1",
+          "live: advertised, browsed, read and timed (link \"this Mac\")",
+          "error: " + b.error() + " / " + ad.error() + "; found " + std::to_string(peers.size()) + ": " +
+              (found ? to_json(*found).dump() : std::string("none")));
+    const auto route = pick_server(peers, "cluster-test:4bit", false);
+    check(route && route->id == me.id, "live: pick_server routes to it");
+    printf("     lan address %s; link to it: %s\n", lan_address().c_str(), lan_address().empty() ? "-" : link_to(lan_address()).c_str());
+  }
+  srv.stop();
+  th.join();
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  const bool live = argc > 1 && !strcmp(argv[1], "--live");
   txt_checks();
   json_checks();
   pick_checks();
   table_checks();
+  if (live) live_checks();
   printf("%d passed, %d failed\n", passes, fails);
   return fails ? 1 : 0;
 }
