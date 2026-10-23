@@ -383,6 +383,50 @@ def cli_checks(kapitsa):
             what = "flint:16gb keeps the usual start (2+ slots, 1024+ rows, 32K+)"
         check(f"cli: doctor on a {budget} GB budget: {what}", ok, json.dumps({k: m.get(k) for k in (
             "starts", "slots", "prefill_chunk", "default_context")}) + " " + json.dumps(cv.get("16gb")))
+    # The default context past 128K (the model's limit, less where memory is tight) keeps what the 128K default had: the
+    # slots and the prefill chunk, and is never less than 128K. A 35B-shaped model of 11 GB of weights (cfg35 above):
+    # 48 GB holds its whole 256K; 14.8 GB holds 128K with 2048-row buffers but 139264 only with 1024-row ones (the
+    # chunk guard); 16 GB holds 4 slots at 128K and the context that keeps them. Doctor reports each as the engine plans it.
+    fake = os.path.join(home, "fake-35b")
+    os.makedirs(fake)
+    hdr = json.dumps({"model.language_model.layers.0.mlp.switch_mlp.gate_proj.weight":
+                      {"dtype": "U8", "shape": [11 * 10**9], "data_offsets": [0, 11 * 10**9]}}).encode()
+    with open(os.path.join(fake, "config.json"), "w") as f:
+        json.dump(cfg35, f)
+    with open(os.path.join(fake, "model.safetensors"), "wb") as f:
+        f.write(len(hdr).to_bytes(8, "little") + hdr)
+    def doctor(budget, *ctx):
+        return subprocess.Popen([kapitsa, "doctor", "--json", "--model", fake, *ctx], env=dict(env, NI_MEM_BUDGET=budget),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    def model(p):
+        out, err = p.communicate(timeout=300)
+        try:
+            return json.loads(out)["models"][0]
+        except (ValueError, KeyError, IndexError):
+            return {"error": out + err}
+    budgets = ["48", "16", "14.8"]
+    dflt = {b: model(doctor(b)) for b in budgets}  # (the catalog is planned each time: about 40 s; four at once below)
+    runs = {(b, c): doctor(b, "--context", str(c)) for b in budgets for c in {131072, dflt[b].get("default_context", 0)}}  # (a set: one run where they are the same)
+    for b in budgets:
+        D = dflt[b].get("default_context", 0)
+        old, new = model(runs[(b, 131072)]), model(runs[(b, D)])
+        check(f"cli: doctor, a 35B-shaped model on {b} GB: the default context ({D}) keeps the slots and prefill chunk "
+              f"128K has ({old.get('slots')}, {old.get('prefill_chunk')}) and is not less",
+              D >= 131072 and new.get("slots", 0) >= old.get("slots", 1) and
+              new.get("prefill_chunk") == old.get("prefill_chunk") and old.get("prefill_chunk"),
+              json.dumps([dflt[b].get("default_context"), old.get("slots"), new.get("slots"), old.get("prefill_chunk"),
+                          new.get("prefill_chunk")]))
+    # an explicit --slots keeps nothing: on a tight Mac (13 GB: two slots hold 57344 tokens) `--slots 1` takes what one
+    # slot holds (65536), not the 32K floor
+    one = model(doctor("13", "--slots", "1"))
+    two = model(doctor("13"))
+    check("cli: doctor, a 35B-shaped model on 13 GB with --slots 1: the context one slot holds, more than the default's",
+          one.get("default_context", 0) > two.get("default_context", 1 << 30) >= 32768 and one.get("slots") == 1,
+          json.dumps([one.get("default_context"), one.get("slots"), two.get("default_context")]))
+    check("cli: doctor, 48 GB: the default context is the model's whole limit (256K)",
+          dflt["48"].get("default_context") == dflt["48"].get("context_limit") == 262144, json.dumps(dflt["48"])[:300])
+    check("cli: doctor, 14.8 GB: the default context stops at 128K, where 1024-row buffers would take the chunk down",
+          dflt["14.8"].get("default_context") == 131072, str(dflt["14.8"].get("default_context")))
     for a in ["flint:16gb", "flint:4bit"]:
         rc, out, err = run("rm", a)
         check(f"cli: rm {a} deletes it", rc == 0 and "Deleted flint:" + a.split(":")[1] in out, out + err)

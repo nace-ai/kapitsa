@@ -54,7 +54,7 @@
 #include <ctime>
 
 #ifndef KAPITSA_VERSION
-#define KAPITSA_VERSION "0.2.10"
+#define KAPITSA_VERSION "0.2.12"
 #endif
 #ifndef KAPITSA_GIT
 #define KAPITSA_GIT ""
@@ -313,8 +313,8 @@ static void print_serve_help() {
          "                         On a network address it needs --api-key\n"
          "  --model-id ID          the model's name in the API (default: the model's name)\n"
          "  --context N            context per conversation: tokens, k or m of them (128k, 1m), or max (the\n"
-         "                         model's limit). Default: 128K, or less where this Mac's memory is tight (the\n"
-         "                         most that keeps the draft model). --ctx N works too\n"
+         "                         model's limit). Default: the model's limit (128K where it states none), or less where this\n"
+         "                         Mac's memory is tight (the most that keeps the draft model). --ctx N works too\n"
          "  --slots N              requests that run at once, each keeping its conversation ready for instant\n"
          "                         follow-ups; more wait for a free slot (default: up to 4, as memory allows)\n"
          "  --dflash auto|none|DIR DFlash2 drafter: auto (default) takes the one downloaded with the model;\n"
@@ -843,12 +843,14 @@ static int serve(int argc, char** argv, int first) {
       const std::string c = "Context: " + term::context(opt.context) + " tokens per conversation";
       const std::string max = limit > opt.context ? " (--context max: " + term::context(limit) + ")" : "";
       switch (why) {
-        case ContextWhy::kDefault: say = c + max + "."; break;
-        case ContextWhy::kModelLimit: say = c + ", all that " + ref.name + " takes."; break;
-        case ContextWhy::kMemoryWithDrafter:
-          say = c + ", the most this Mac holds with the draft model (a longer --context runs without it, slower).";
+        case ContextWhy::kDefault: say = c + " (" + ref.name + " does not state a limit; --context sets another)."; break;
+        case ContextWhy::kModelLimit:
+          say = c + ", all that " + ref.name + " takes (--context sets a smaller one).";
           break;
-        case ContextWhy::kMemory: say = c + ", the most this Mac's memory holds."; break;
+        case ContextWhy::kMemoryWithDrafter:
+          say = c + max + ", the most this Mac holds with the draft model (a longer --context runs without it, slower).";
+          break;
+        case ContextWhy::kMemory: say = c + max + ", the most this Mac's memory holds."; break;
       }
     }
     if (!say.empty()) {

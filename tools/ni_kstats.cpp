@@ -1,6 +1,6 @@
 // Compiles the embedded Metal kernel library (and optionally creates pipelines for the given
 // kernel names) without running anything on the GPU. Exit code 0 = all good.
-//   ni_kstats [--stats] [kernel ...]
+//   ni_kstats [--stats | --limits] [kernel ...]
 // --stats prints each pipeline's temporary register count and stack spill bytes per thread, read
 // from the AGX pipeline object's private state (verified on macOS 15.3 / M4 Pro; prints "n/a" when
 // the layout differs). With --stats and no names, every kernel in the library is listed. Spill > 0
@@ -9,6 +9,8 @@
 #include "metal/gpu.h"
 
 #include <objc/runtime.h>
+
+namespace ni { extern const char* const kTensorKernelSource; }
 
 #include <cstdio>
 #include <cstring>
@@ -35,6 +37,10 @@ static bool agx_stats(void* pso, uint32_t* regs, uint32_t* spill) {
 int main(int argc, char** argv) {
   ni::Gpu& g = ni::Gpu::get();
   g.compile();
+  // The tensor_ops kernels (qmt_*, qattn_t_*: kernels/tensor/) are a Metal 4 library of their own, compiled where
+  // the models use them (an Apple10 GPU on macOS 26); without it their pipelines fail to create.
+  if (g.apple10())
+    if (__builtin_available(macOS 26.0, *)) g.compile_extra("tensor", ni::kTensorKernelSource, true);
   bool stats = false, limits = false;
   std::vector<std::string> names;
   for (int i = 1; i < argc; ++i) {
@@ -57,7 +63,8 @@ int main(int argc, char** argv) {
         ++over;
         continue;
       }
-      if (p.tg_mem > 32768 || p.tg_mem > dev || p.max_threads < 1024)
+      // named kernels always print; the full list only those over a limit
+      if (!names.empty() || p.tg_mem > 32768 || p.tg_mem > dev || p.max_threads < 1024)
         printf("%-36s threadgroup memory %6u B  max threads %4u%s\n", n.c_str(), p.tg_mem, p.max_threads,
                p.tg_mem > 32768 ? "  <-- over 32 KB" : "");
       over += p.tg_mem > 32768;

@@ -177,25 +177,27 @@ QATTN_T(qattn_t_g8s4k16, 4, 16, 256, 8)
 // lane instead of qattn_t_impl's 128: that kernel is bound by its registers; neither prefetching the next tile nor
 // 32-key tiles helped it). The pair adds its two partial score tiles through threadgroup memory (a + b in one, b + a
 // in the other: the same value), so both run the same online softmax; each multiplies P by its half of V.
-// NS simdgroups = NS / 2 pairs x TT tokens per threadgroup. Rows, buffers and result as qattn_t_impl.
-// grid: (ceil(T / (NS / 2 * TT)), Hkv) x 32 NS threads.
+// NS simdgroups = NS / 2 pairs x 16 rows per threadgroup (8 NS (token, head) rows). Buffers and result as qattn_t_impl.
+// grid: (ceil(T * G / (8 NS)), Hkv) x 32 NS threads.
 template <int NS, int G>
 NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, const device half* vc, const device float* qg,
                                device float* out, constant QaParams& p, uint2 tg, uint sg, ushort lane, threadgroup half* kt,
                                threadgroup half* vt, threadgroup float* xs) {
-  constexpr int D = 256, DH = 128, BK = 16, LD = 256, TT = 16 / G, SH = G == 8 ? 3 : 2, NP = NS / 2;
+  constexpr int D = 256, DH = 128, BK = 16, LD = 256, NP = NS / 2;
   const uint pi = sg >> 1, d0 = (sg & 1) * DH;
-  const uint t0 = (tg.x * NP + pi) * TT, kvh = tg.y;
-  const bool live = t0 < p.T;
+  // rows run over (token, head) pairs of the KV head, token-major: row R = token * G + head. A pair takes 16 rows from
+  // R0; when G does not divide 16 (the 27B's 6) a tile's rows span parts of three tokens, each with its causal limit.
+  const uint R0 = (tg.x * NP + pi) * 16, t0 = R0 / G, kvh = tg.y;
+  const bool live = R0 < p.T * G;
   const uint tid = sg * 32 + lane;
-  const uint tgl = p.pos0 + min(tg.x * NP * TT + NP * TT - 1, p.T - 1);
+  const uint tgl = p.pos0 + min((tg.x * NP * 16 + NP * 16 - 1) / G, p.T - 1);
   const short qid = lane >> 2, fm = (qid & 4) | ((lane >> 1) & 3), fn = ((qid & 2) | (lane & 1)) * 4;
   uint tk[2], hd[2], lim[2];
   _Pragma("clang loop unroll(full)")
   for (short i = 0; i < 2; ++i) {
-    const short r = fm + 8 * i;
-    tk[i] = t0 + (r >> SH);
-    hd[i] = kvh * G + (r & (G - 1));
+    const uint r = R0 + fm + 8 * i;
+    tk[i] = r / G;
+    hd[i] = kvh * G + r % G;
     lim[i] = p.pos0 + min(tk[i], p.T - 1);
   }
   const uint first = p.pos0 + t0;
@@ -306,6 +308,8 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
       uint lane [[thread_index_in_simdgroup]]) {                                                                     \
     threadgroup half kt[16 * 256], vt[16 * 256];                                                                     \
     threadgroup float xs[NS * 256];                                                                                  \
+    /* Apple7-Apple10 allow 32 KB per threadgroup; ni_kstats --limits prints the pipeline's own figure */            \
+    static_assert(sizeof(kt) + sizeof(vt) + sizeof(xs) <= 32768, "qattn_t d2: threadgroup memory over 32 KB");      \
     qattn_t_d2_impl<NS, G>(q, kc, vc, qg, out, p, tg, sg, ushort(lane), kt, vt, xs);                                 \
   }
 // The 35B (G = 8): 4 pairs x 2 tokens = 8 tokens per threadgroup. bench_attn on the M5 Pro, T 4224 against 8448 keys
@@ -313,3 +317,7 @@ NI_INLINE void qattn_t_d2_impl(const device float* q, const device half* kc, con
 // (1.82x / 1.76x); 4 simdgroups 30.65 / 58.69, 16 simdgroups 26.90 / 47.25. Error against the fp64 reference
 // 2.58e-4 / 3.09e-4 (g8s4k16: 2.60e-4 / 3.08e-4).
 QATTN_TD2(qattn_t_g8d2s8, 8, 8)
+// The 27B (G = 6): 4 pairs x 16 rows = 64 (token, head) rows per threadgroup. bench_attn on the M5 Pro, the 27B's heads
+// (24 over 4), T 141 / 512 / 2048 against 16141 / 16512 / 16384 keys: s6 4.10 / 13.74 / 53.33 ms, s8 4.16 / 12.76 /
+// 44.23, s12 3.90 / 13.86 / 45.72, s16 5.11 / 13.00 / 48.65 against attn_prefill11r's 10.93 / 30.77 / 111.64.
+QATTN_TD2(qattn_t_g6d2s8, 8, 6)

@@ -1849,16 +1849,12 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   }
 }
 
-// The keys of attn8m_partial_zone's rows from tree_zone(q) up to q (q = pos0 + the row's depth), as the last partial chunk
-// (index p.nchunks - 1): the keys below pos0 are cache rows, the ones from pos0 on the row's ancestors' and its own (slot
-// order = depth order), taken one by one in position order with an fp32 online softmax, so the result is a function of the
-// row's position and its path alone. grid (Hq, R) x one simdgroup.
-[[kernel]] void attn8_tree_zone(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
-                                const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
-                                device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
-                                const device int* tree [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
-                                uint lane [[thread_index_in_simdgroup]]) {
-  const uint hq = tg.x, t = tg.y;
+// The keys from tree_zone(q) up to q (q = pos0 + the row's depth): below pos0 they are cache rows, then the row's
+// ancestors and the row itself (slot order = depth order). Both tail kernels use this fp32 online softmax in position
+// order so the result depends on the row's position and path alone. acc, m and l stay in the caller's thread storage.
+NI_INLINE void attn8_tree_tail(const device float* q, const device half* kc, const device half* vc,
+                               constant AttnRowsParams& p, const device int* tree, uint hq, uint t, uint lane,
+                               thread float* acc, thread float& m, thread float& l) {
   const uint kvh = hq / (p.Hq / p.Hkv);
   const uint anc = uint(tree[kKfMask + t]);
   const uint dep = anc ? uint(popcount(anc)) - 1u : 0u;
@@ -1874,7 +1870,7 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
   const device half* kb = kc + kvh * p.max_seq * kHD + lane * 8;
   const device half* vb = vc + kvh * p.max_seq * kHD + lane * 8;
   const uint qp = p.pos0 + dep;
-  float m = -INFINITY, l = 0.0f, acc[8];
+  m = -INFINITY; l = 0.0f;
   for (uint i = 0; i < 8; ++i) acc[i] = 0.0f;
   for (uint k = tree_zone(qp); k <= qp; ++k) {
     const uint row = k < p.pos0 ? k : p.pos0 + arow[k - p.pos0];
@@ -1888,11 +1884,56 @@ NI_INLINE void attn8m_partial_impl(const device float* q, const device half* kc,
     for (uint i = 0; i < 8; ++i) acc[i] = fma(e, float(vb[row * kHD + i]), acc[i] * corr);
     m = m_new;
   }
+}
+
+// Write the tail as the last partial chunk (index p.nchunks - 1) for attn_rows_reduce.
+// grid (Hq, R) x one simdgroup.
+[[kernel]] void attn8_tree_zone(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                const device half* vc [[buffer(2)]], device float* part_o [[buffer(3)]],
+                                device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
+                                const device int* tree [[buffer(6)]], uint2 tg [[threadgroup_position_in_grid]],
+                                uint lane [[thread_index_in_simdgroup]]) {
+  const uint hq = tg.x, t = tg.y;
+  float acc[8], m, l;
+  attn8_tree_tail(q, kc, vc, p, tree, hq, t, lane, acc, m, l);
   const uint base = (t * p.Hq + hq) * p.nchunks + (p.nchunks - 1);
   for (uint i = 0; i < 8; ++i) part_o[base * kHD + lane * 8 + i] = acc[i];
   if (lane == 0) {
     part_ml[base * 2 + 0] = m;
     part_ml[base * 2 + 1] = l;
+  }
+}
+
+// The tree-zone tail stays in each lane's registers, then joins the history partials in the original order.
+// One simdgroup owns a (row, head), with eight output dimensions per lane; no global tail write or extra dispatch.
+[[kernel]] void attn8_tree_zone_reduce(const device float* q [[buffer(0)]], const device half* kc [[buffer(1)]],
+                                       const device half* vc [[buffer(2)]], const device float* part_o [[buffer(3)]],
+                                       const device float* part_ml [[buffer(4)]], constant AttnRowsParams& p [[buffer(5)]],
+                                       const device int* tree [[buffer(6)]], const device float* qg [[buffer(7)]],
+                                       device float* out [[buffer(8)]], uint2 tg [[threadgroup_position_in_grid]],
+                                       uint lane [[thread_index_in_simdgroup]]) {
+  const uint hq = tg.x, t = tg.y;
+  float acc[8], m, l;
+  attn8_tree_tail(q, kc, vc, p, tree, hq, t, lane, acc, m, l);
+  const uint base = (t * p.Hq + hq) * p.nchunks;
+  float M = -INFINITY;
+  for (uint c = 0; c + 1 < p.nchunks; ++c) M = max(M, part_ml[(base + c) * 2]);
+  M = max(M, m);
+  float num[8], den = 0.0f;
+  for (uint i = 0; i < 8; ++i) num[i] = 0.0f;
+  for (uint c = 0; c + 1 < p.nchunks; ++c) {
+    const float mc = part_ml[(base + c) * 2];
+    if (mc == -INFINITY) continue;
+    const float w = metal::fast::exp(mc - M);
+    for (uint i = 0; i < 8; ++i) num[i] += w * part_o[(base + c) * kHD + lane * 8 + i];
+    den += w * part_ml[(base + c) * 2 + 1];
+  }
+  const float w = metal::fast::exp(m - M);
+  den += w * l;
+  for (uint i = 0; i < 8; ++i) {
+    num[i] += w * acc[i];
+    const float gate = qg[(t * p.Hq + hq) * 2 * kHD + kHD + lane * 8 + i];
+    out[(t * p.Hq + hq) * kHD + lane * 8 + i] = (num[i] / den) * sigmoid(gate);
   }
 }
 

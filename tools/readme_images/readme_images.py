@@ -30,14 +30,19 @@ def fmt(v):
     return str(round(v)) if isinstance(v, (int, float)) else DASH
 
 
+NO_SPEC = "no spec"        # the record's method for plain decoding: shown as no label at all, on every engine
+
+
 def cell(row, engine):
-    """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run)"""
+    """(value, method, raw) of one cell: value is a number, None (a dash) or "x" (can't run); method is None for plain
+    decoding (no speculative decoding), so a label only ever names a real method"""
     c = row["cells"].get(engine)
     if c is None or c == "x":
         return c, None, c
     if isinstance(c, (int, float)):
         return c, None, c
-    return c.get("value"), c.get("method"), c
+    m = c.get("method")
+    return c.get("value"), None if m == NO_SPEC else m, c
 
 
 def is_num(v):
@@ -142,7 +147,7 @@ def tables(data):
     (tables.families) that has a row on that Mac, under the family's name when there are two or more"""
     T = data["tables"]
     out = [LEGEND + " (a lone number is decode: no prefill run) · 🟩 fastest decode · ≈ a decode tie with Kapitsa · "
-           "small type: the decoding method · × can't run on that Mac · — not measured</sub>"]
+           "small type: the decoding method (none: no speculative decoding) · × can't run on that Mac · — not measured</sub>"]
     for tmac in T["macs"]:
         rows = table_rows(data, tmac)
         groups = [(f["name"], [r for r in rows if r["model"] in f["models"]]) for f in T["families"]]

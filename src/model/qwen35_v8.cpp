@@ -662,6 +662,8 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
   // with the tree block's keys inside the MMA tiles; the zone and block kernels are 8-row kernels
   const bool zone = tree && tree_attn >= 2 && !v8w_R_;
   const bool block = tree && tree_attn == 1 && !v8w_R_;
+  static const bool tree_fuse = env_int("NI_V8_TREE_FUSE", 0) != 0;
+  const bool fused = zone && tree_fuse;
   const uint32_t Lmax = uint32_t(pos + R), gran = mma ? 32 : 16, extra = (block || zone) ? 1u : 0u;
   const uint32_t want = std::max<uint32_t>(1, (uint32_t(tg_target) + cfg_.hkv - 1) / cfg_.hkv);
   uint32_t chunk = std::max<uint32_t>(64, (Lmax + want - 1) / want);
@@ -689,10 +691,11 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
     if (v8w_R_) v8_disp(e, nch, uint32_t(cfg_.hkv), 1, kV8wX, 64 * G);
     else e.dispatch(nch, cfg_.hkv, 1, 64 * G);
     if (block || zone) {
-      e.use(pipe8(zone ? "attn8_tree_zone" : "attn8_tree_block"));
+      e.use(pipe8(fused ? "attn8_tree_zone_reduce" : zone ? "attn8_tree_zone" : "attn8_tree_block"));
       e.buf(0, qo_); e.buf(1, kc); e.buf(2, vc); e.buf(3, part_o_); e.buf(4, part_ml_);
       e.val(5, rp);
       e.buf(6, *v8_tree_);
+      if (fused) { e.buf(7, qg_); e.buf(8, attn_out_); }
       e.dispatch(cfg_.hq, R, 1, 32);
     }
   } else {
@@ -704,11 +707,13 @@ void Qwen35::enc_attn8(Encoder& e, const Seq& s, const Layer& L, const Buffer& k
     e.val(6, Ru);
     e.dispatch(nch, cfg_.hkv, (R + RB - 1) / RB, 32 * G * RB);
   }
-  e.use(pipe8("attn_rows_reduce"));
-  e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
-  e.val(4, rp);
-  if (v8w_R_) v8_disp(e, uint32_t(cfg_.hq), 1, 1, kV8wYrows, uint32_t(cfg_.head_dim));
-  else e.dispatch(cfg_.hq, R, 1, cfg_.head_dim);
+  if (!fused) {
+    e.use(pipe8("attn_rows_reduce"));
+    e.buf(0, part_o_); e.buf(1, part_ml_); e.buf(2, qg_); e.buf(3, attn_out_);
+    e.val(4, rp);
+    if (v8w_R_) v8_disp(e, uint32_t(cfg_.hq), 1, 1, kV8wYrows, uint32_t(cfg_.head_dim));
+    else e.dispatch(cfg_.hq, R, 1, cfg_.head_dim);
+  }
   const bool to = enc_x8(e, attn_out_, R, HD, nullptr, false, 0, nullptr, true);
   if (!(skip & 64)) enc_qmm8(e, {{&L.o, x_, uint32_t(D), true}}, R, v8t_, v8s_, false, to ? &v8tt_ : nullptr);
 }

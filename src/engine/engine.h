@@ -153,13 +153,14 @@ int parse_context(const std::string& s, std::string* why);
 int model_context_limit(const std::string& model_dir);
 // `context` within the model's limit, if it states one
 int context_within_limit(const std::string& model_dir, int context);
-// The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: kDefaultContext (128K),
-// or the model's limit where that is less, or less where this Mac's memory is tight: the largest, in 8K steps down to
-// kMinDefaultContext (32K), that keeps the drafter the model has at 32K, with one full conversation beside it (below
-// 32K, in 8K steps and 1K steps below 8K, only for a model one slot cannot hold 32K tokens in: Flint with 2-bit experts
-// on 16 GB, 8K). The
-// model and its precision are picked at 32K, and a context costs no memory until a conversation fills it (the KV
-// cache grows with it). *why, if given: why it is less than kDefaultContext.
+// The context `kapitsa serve` and `kapitsa claude|codex|opencode|pi` take when none is given: the model's limit
+// (model_context_limit: 256K, 1M), or kDefaultContext (128K) for a model that does not state one, or less where this
+// Mac's memory is tight: the largest, in 8K steps down to kMinDefaultContext (32K), that keeps the drafter the model
+// has at 32K, with one full conversation beside it (below 32K, in 8K steps and 1K steps below 8K, only for a model one
+// slot cannot hold 32K tokens in: Flint with 2-bit experts on 16 GB, 8K). The memory is the budget (default_mem_budget:
+// the GPU's working set less a 4% margin, 512 MB at least, or --mem-budget). The model and its precision are picked at
+// 32K, and a context costs no memory until a conversation fills it (the KV cache grows with it). *why, if given: why
+// it is not the model's limit (kModelLimit: it is; kDefault: the model states none).
 constexpr int kDefaultContext = 131072, kMinDefaultContext = 32768;
 enum class ContextWhy { kDefault, kModelLimit, kMemory, kMemoryWithDrafter };
 int default_context(const std::string& model_dir, const EngineOptions& opt, size_t budget, ContextWhy* why = nullptr);
@@ -371,7 +372,9 @@ class Engine {
     std::vector<std::unique_ptr<DFlashSeq>> dckpts;  // DFlash2: the drafter ring as it was at ckpts[i]
     uint64_t last_used = 0;
     uint64_t gen = 0;                 // requests run on this slot
-    int turns = 0;                    // requests of the conversation it holds (1: a one-off, never continued)
+    // requests of the conversation it holds. 1: its first turn so far; a short one that a request arrived beside is a
+    // one-off (a title, a summary), a longer one (over 1024 tokens and 4x that prompt) is a conversation (pick_slot)
+    int turns = 0;
     uint64_t done_at = 0;             // requests_ when its last request ended: one that arrived by then was sent beside it
     int loops = 0;                    // looped models: the loop count its cached state (KV) was computed with
     bool busy = false;                // a request runs on it (its state and KV cache are that request's)
@@ -440,6 +443,7 @@ class Engine {
   // The deepest stored state matching keys[0, pos), pos < n, deeper than `ram` (null hit: none); tag: what else the
   // state must match (Dory: the request's loop count); mm: the prompt's images (null for text), the same as stored
   pcache::Hit disk_lookup(const std::vector<int>& keys, int n, int ram, uint32_t tag, const vision::Prompt* mm);
+  void disk_note_prefill(int rows, double ms);  // the prefill speed a request's wait for an SSD copy is weighed against
   // Reads a stored state into slot (KV rows, recurrent state, drafter ring) and makes it the slot's live state; false
   // (the slot then holds nothing) when it cannot. With the GPU turn held (given up while reading).
   bool disk_restore(Slot& slot, const pcache::Hit& hit);

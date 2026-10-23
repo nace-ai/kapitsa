@@ -416,6 +416,19 @@ The full write-up, with the run conditions, the runs left out and one line per r
 [docs/benchmarks.md](benchmarks.md#kflash-trees-m4-pro-2026-10-21) and
 [bench/results/2026-10-21-kflash-trees](../bench/results/2026-10-21-kflash-trees/).
 
+## Fused tree-zone reduction
+
+`NI_V8_TREE_FUSE=1` combines the eight-row Qwen path's tree-zone tail and partial reduction in one kernel. One
+simdgroup owns a query head and row, with eight output dimensions per lane. The tail stays in registers and joins
+the history partials in the existing summation order, without a global tail write and a separate reduction dispatch.
+The reduction also computes its shared softmax statistics once per eight output dimensions rather than once per
+dimension. History chunk boundaries, KV reads and scratch allocation sizes do not change; neither do wide verifies,
+batched chains or the other model backends.
+
+For the 27B's eight rows and 24 query heads, the tail is 198,144 bytes per full-attention layer (256 output floats
+and two statistics per row/head). Fusion removes that logical scratch write and its subsequent read, not an
+allocation of that size. It does not fix the capacity-dependent history partition described below.
+
 ## Limitations
 
 - **Long agent turns gain little, or lose a few percent.** On the dense models, the part of a tree cycle that grows with

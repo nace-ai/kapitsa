@@ -21,6 +21,7 @@
 #include "metal/gpu.h"
 #include "model/moe_q20.h"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
@@ -48,6 +49,45 @@ struct StoreStats {
   double read_wait_ms = 0;     // ... of which waiting for reads
 };
 
+// The automatic store size (NI_EXPERT_STORE unset), a pure function of its inputs (bytes):
+//   all: every expert; least: three layers' experts; left: what the memory budget leaves the store;
+//   used / keep: the process's GPU memory so far / the budget's reserve (KV, tools); ram: hw.memsize;
+//   avail: the system's available memory now (0 = unknown); cap: the process's GPU memory as a share of the RAM
+//   (0 = no cap).
+// Steps: min(left, all); then no more than avail less max(4 GB, RAM/12) of headroom (another resident model shrinks
+// the store rather than raising memory pressure); then, for a store short of all the experts, the RAM-share cap.
+// Neither guard goes below least.
+struct AutoStoreIn {
+  size_t all = 0, least = 0, left = 0, used = 0, keep = 0, ram = 0, avail = 0;
+  double cap = 0;
+};
+enum class AutoStoreWhy { Budget, All, Avail, Cap };
+struct AutoStore {
+  size_t bytes = 0;
+  AutoStoreWhy why = AutoStoreWhy::Budget;
+  size_t headroom = 0;  // the avail guard's
+};
+inline AutoStore auto_store_size(const AutoStoreIn& in) {
+  AutoStore r;
+  r.bytes = std::min(in.left, in.all);
+  r.why = in.left >= in.all ? AutoStoreWhy::All : AutoStoreWhy::Budget;
+  r.headroom = std::max<size_t>(size_t(4) << 30, in.ram / 12);
+  if (in.avail) {
+    const size_t lim = std::max(in.least, in.avail > r.headroom ? in.avail - r.headroom : 0);
+    if (lim < r.bytes) r.bytes = lim, r.why = AutoStoreWhy::Avail;
+  }
+  if (r.bytes < in.all && in.cap > 0) {
+    const size_t c = size_t(in.cap * double(in.ram));
+    const size_t lim = std::max(in.least, c > in.used + in.keep ? c - in.used - in.keep : 0);
+    if (lim < r.bytes) r.bytes = lim, r.why = AutoStoreWhy::Cap;
+  }
+  return r;
+}
+// The system's available memory now (free, inactive and purgeable pages; free_count already includes the speculative ones), 0 if unknown. Inactive pages
+// include file cache, so the automatic store size depends on what the page cache held at launch: back-to-back launches
+// can pick different sizes.
+size_t available_memory();
+
 // One plane of a layer's stacked experts in a pack file: expert e's bytes at off + e * stride, len of them
 struct PlaneSrc {
   int file = -1;
@@ -72,6 +112,7 @@ class ExpertCache {
   struct Sync {
     std::function<uint64_t()> value;
     std::function<void(uint64_t)> set;
+    std::function<void()> warm;  // after each go: keeps the GPU busy until its next wait (Gpu::keep_warm); optional
   };
   struct Options {
     int readers = 16;     // reader threads (NI_EXPERT_READERS)
@@ -90,6 +131,7 @@ class ExpertCache {
     uint32_t npred = 0;
     int pred_layer = -1;
     bool pred_all = false, scan = false;
+    bool warm = false;  // a decode / verify pass's turn: Sync::warm after the go (never a prefill chunk's)
     uint64_t ready = 0, go = 0;
   };
 
@@ -197,7 +239,7 @@ class ExpertStore {
   // end() before its expert kernels; work encoded between them does not need the experts and overlaps the turn. See
   // ExpertCache::Req for pred / pred_layer / pred_all / scan.
   void begin(Encoder& e, int layer, const Buffer& ids, uint32_t n, const Buffer* pred, uint32_t npred, int pred_layer,
-             bool pred_all, bool scan);
+             bool pred_all, bool scan, bool warm = false);
   void end(Encoder& e);
   StoreStats stats() const { return cache_->stats(); }
   void reset_stats() { cache_->reset_stats(); }

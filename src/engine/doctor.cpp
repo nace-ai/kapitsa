@@ -497,8 +497,8 @@ int run_doctor(int argc, char** argv) {
            ane_bytes ? (", Neural Engine split " + std::to_string(int(ane_bytes / 1e6)) + " MB").c_str() : "",
            lp.dflash_bytes ? (std::string(", ") + drafter + " " + std::to_string(int(lp.dflash_bytes / 1e6)) + " MB").c_str() : "");
     if (m.streamed)
-      printf("    routed experts: %.1f GB streamed from the SSD through a store of what the budget leaves, the "
-             "process's GPU memory within 40%% of the RAM (the weights count its smallest size)\n",
+      printf("    routed experts: %.1f GB streamed from the SSD through a store of what the budget leaves, "
+             "within 40%% of the RAM before the M5 and the system's available memory (the weights count its smallest size)\n",
              m.streamed / 1e9);
     if (start_need > budget)
       printf("    fits: NO: needs %.1f GB with an 8k-token conversation, the budget is %.1f GB\n", start_need / 1e9,

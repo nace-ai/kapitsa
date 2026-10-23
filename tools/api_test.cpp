@@ -15,6 +15,7 @@
 #include "api/clients.h"
 #include "api/responses.h"
 #include "engine/output_parser.h"
+#include "engine/disk_wait.h"
 #include "engine/reasoning_memory.h"
 #include "tokenizer/tokenizer.h"
 
@@ -1069,6 +1070,37 @@ void reasoning_memory(const TmplModel& m, const std::string& tag) {
 
 // A float tool argument keeps its text through the Qwen3.5 / Nemotron templates' `| string` (without a model folder: a
 // minimal template with their argument line, so CI runs it).
+// Engine::disk_lookup's wait for a conversation's SSD copy still being written: bounded by the write and by the prefill
+void disk_wait_unit() {
+  using namespace disk_wait;
+  // 27B/35B scale: 1.5 GB queued at 3 GB/s = 500 ms; 17k rows at 0.5 rows/ms = 34 s: wait
+  Decision d = decide(1.5e9, 17000, 3e6, 0.5);
+  check(d.wait, "disk wait: a copy that writes in 0.5 s saves 34 s of prefill: waits");
+  check(d.limit_ms == kMaxWaitMs, "disk wait: the limit is capped at 3 s");
+  // a write slower than the cap would not finish: no wait (it cost +3 s before)
+  d = decide(60e9, 17000, 3e6, 0.5);
+  check(!d.wait, "disk wait: a copy over 3 s to write is not waited for");
+  // the copy saves only a few rows: prefilling them is quicker than the write
+  d = decide(0.5e9, 200, 3e6, 10);
+  check(!d.wait && d.limit_ms < 30, "disk wait: a copy saving 200 rows (20 ms of prefill) is not waited for");
+  // the queue ahead counts: the same copy behind a large one
+  check(decide(0.1e9, 8000, 3e6, 3).wait && !decide(20e9, 8000, 3e6, 3).wait,
+        "disk wait: bytes queued ahead lengthen the wait");
+  // nothing measured yet
+  check(!decide(1e8, 500, 0, 0).wait, "disk wait: unmeasured, a short gain is not waited for");
+  check(decide(1e8, 4000, 0, 0).wait, "disk wait: unmeasured, a long gain is waited for");
+  // first wait after a start: the queued bytes are weighed at the floor write speed (400 MB/s), so 1 GiB (2.7 s) waits
+  // but 2.2 GB (5.5 s, over the cap) does not
+  check(decide(1.0737e9, 17000, 0, 0).wait && !decide(2.2e9, 17000, 0, 0).wait,
+        "disk wait: unmeasured write speed: bounded by the queued bytes at the floor speed");
+  check(!decide(1e8, 0, 3e6, 3).wait, "disk wait: nothing saved: no wait");
+  // a conversation too large to copy in memory (27B, 16k tokens: 1.5 GB), written before it is replaced: the SSD takes
+  // 4 GB/s (0.4 s) against 33 s of prefill: written; a drive at 0.3 GB/s (5 s) is not, nor is a short conversation
+  check(decide(1.5e9, 16000, 4e6, 0.5).wait, "disk wait: 1.5 GB at 4 GB/s saves 32 s of prefill: written inline");
+  check(!decide(1.5e9, 16000, 0.3e6, 0.5).wait, "disk wait: 1.5 GB at 0.3 GB/s (5 s, over the cap): not written");
+  check(!decide(1.5e9, 100, 4e6, 0.5).wait, "disk wait: 1.5 GB for 100 rows (0.2 s of prefill): not written");
+}
+
 void float_arguments_text() {
   struct Form { const char* name; const char* tail; };  // the end of the real templates' argument line
   const Form forms[] = {{"plain", " else args_value | string %}"},
@@ -1290,6 +1322,7 @@ int main(int argc, char** argv) {
   clients();
   reasoning_memory_unit();
   float_arguments_text();
+  disk_wait_unit();
   std::vector<std::string> dirs;
   for (int i = 1; i < argc; ++i) {
     if (std::string(argv[i]) == "--dump" && i + 1 < argc) dump_cases(argv[++i]);
