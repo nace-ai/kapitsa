@@ -1,0 +1,10 @@
+  172  42.9 106688 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+66451  34.9 199024 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+  305  15.8  34768 /usr/libexec/cameracaptured
+66459  14.7 836144 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft 
+  189   9.1  28880 /usr/sbin/coreaudiod
+66458   8.3 486016 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft 
+66493   6.8 193936 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+66492   2.0  78240 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+  168   1.0   8208 /usr/libexec/corebrightnessd --launchd
+88271   0.7  75232 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor

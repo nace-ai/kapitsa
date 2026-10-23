@@ -1,0 +1,10 @@
+66459  45.9 1099648 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft
+66451  33.9 216992 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper.app/Contents/MacOS/Microsoft Edge Helper
+  172  31.2 105488 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+66457  19.4 312272 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft 
+66384  13.4 520944 /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge
+  305  12.3  36080 /usr/libexec/cameracaptured
+66316   8.6 354368 /Applications/Slack.app/Contents/MacOS/Slack
+  189   7.7  29792 /usr/sbin/coreaudiod
+66458   6.6 598992 /Applications/Microsoft Edge.app/Contents/Frameworks/Microsoft Edge Framework.framework/Versions/155.0.4283.62/Helpers/Microsoft Edge Helper (Renderer).app/Contents/MacOS/Microsoft 
+  365   4.5  43712 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha

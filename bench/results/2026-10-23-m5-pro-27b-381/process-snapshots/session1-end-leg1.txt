@@ -1,0 +1,10 @@
+ 3311   6.5  39184 gh pr checks 380 -R nace-ai/kapitsa
+ 1268   1.0  23824 /Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/MacOS/logioptionsplus_agent --launchd
+  143   1.0   8288 /System/Library/CoreServices/launchservicesd
+  146   0.8   6848 /usr/sbin/securityd -i
+    1   0.7  17440 /sbin/launchd
+19902   0.6 2138480 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+ 3312   0.6   1552 awk -F\t $1=="build-and-test"{print $2}
+  365   0.6  42288 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+  236   0.4  25632 /usr/libexec/airportd
+  140   0.4  25408 /usr/libexec/xprotectd

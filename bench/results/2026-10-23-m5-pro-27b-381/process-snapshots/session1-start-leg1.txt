@@ -1,0 +1,10 @@
+  283   1.2  12960 /usr/sbin/mDNSResponder
+  640   0.5   6400 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+  226   0.4   2288 /bin/bash <run-dir>/inner.sh 1
+  140   0.2  25344 /usr/libexec/xprotectd
+88271   0.1  44272 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  461   0.1  56208 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+  166   0.1   3712 /usr/sbin/notifyd
+    1   0.1  17152 /sbin/launchd
+99963   0.0  12992 /System/Library/Frameworks/Contacts.framework/Support/contactsd
+99962   0.0  13104 /System/Library/Frameworks/Contacts.framework/Support/contactsd

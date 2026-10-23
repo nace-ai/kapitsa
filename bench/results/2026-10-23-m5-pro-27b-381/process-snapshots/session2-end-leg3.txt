@@ -1,0 +1,10 @@
+78047 118.8 3587296 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent
+82124   9.9 2133904 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+78045   4.5  49888 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU
+78044   4.4  44752 ~/Applications/DSH.app/Contents/MacOS/DSH
+  365   3.1  44736 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+  640   1.8   6416 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python ~/.octarin/cowork/watch.py --watch
+  172   1.0  71264 /System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer -daemon
+88271   0.9  63680 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  140   0.6  26544 /usr/libexec/xprotectd
+85210   0.4  61616 /Applications/WhatsApp.app/Contents/PlugIns/ServiceExtension.appex/Contents/MacOS/ServiceExtension -AppleLanguages ("kk-KZ", "en-KZ")

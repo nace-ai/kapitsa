@@ -1,0 +1,10 @@
+    1  24.9  17136 /sbin/launchd
+19902   4.0 2191904 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+10148   3.2 17074048 /tmp/kap-n128b/build/kapitsa serve --model ~/Documents/nace/kapitsa-m5pro/models/qwen3.8-27b-4bit-mtp --model-id qwen3.8-27b --dflash ~/Doc
+  365   1.3  40784 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+  140   1.1  22896 /usr/libexec/xprotectd
+88271   1.0  44000 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+10361   0.7   2240 bash -c cd /tmp/kap-n128b && python3 - <<'EOF'\012import json,glob\012for f in sorted(glob.glob('results/rebal/*.json')):\012    d=json.load(open(f))\012    p=d.get('prefill') or []
+10366   0.6   2288 /bin/bash <run-dir>/inner.sh 2
+  143   0.5   6544 /System/Library/CoreServices/launchservicesd
+  676   0.4  22784 /Applications/1Focus.app/Contents/MacOS/1Focus

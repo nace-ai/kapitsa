@@ -1,0 +1,10 @@
+14175   2.2   2560 /bin/bash ~/.agents/bin/mem-guard.sh
+88271   0.7  43456 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+  143   0.4   6896 /System/Library/CoreServices/launchservicesd
+  321   0.3  52304 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/Metadata.framework/Versions/A/Support/mds_stores
+  140   0.3  24448 /usr/libexec/xprotectd
+  104   0.3   5440 /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/FSEvents.framework/Versions/A/Support/fseventsd
+19902   0.2 2061008 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+  676   0.2  22944 /Applications/1Focus.app/Contents/MacOS/1Focus
+90767   0.1  32224 ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/python ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/modal run --detach --env naceDM-test
+17099   0.1   2336 /bin/bash <run-dir>/inner.sh 3

@@ -1,0 +1,10 @@
+85480   1.1  14656 /System/Library/PrivateFrameworks/TCC.framework/Support/tccd system
+ 1268   0.6  22480 /Library/Application Support/Logitech.localized/LogiOptionsPlus/logioptionsplus_agent.app/Contents/MacOS/logioptionsplus_agent --launchd
+  143   0.6   6448 /System/Library/CoreServices/launchservicesd
+19902   0.4 736736 node --max-old-space-size=8192 --import tsx/esm apps/cli/src/bin.ts web
+24082   0.3  11072 /usr/libexec/trustd
+  461   0.3  46016 /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+  365   0.3  40352 /System/Library/DriverExtensions/AppleCentauriAlpha.dext/AppleCentauriAlpha com.apple.driver.AppleCentauriAlpha 0x10000127c com.apple.driver.AppleCentauriAlpha
+88271   0.1  41376 /System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor
+24629   0.1  31504 ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/python ~/.cache/uv/archive-v0/LsE_ZW3pQMjZkkbGEkaJL/bin/modal run --detach --env naceDM-test
+17091   0.1  44640 gh pr checks 387 -R nace-ai/kapitsa
