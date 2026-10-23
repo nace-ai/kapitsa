@@ -662,7 +662,7 @@ the CPU at every layer, and on a 48 GB M4 Pro every command buffer took 0.5-3.5 
 passed about 45% of the RAM (15-24 GB stores), while 4-12 GB stores ran at full speed.
 `kapitsa doctor` counts the smallest such store (2.1 GB) in its weights and lists the rest as streamed.
 `NI_EXPERT_STORE=<GB>` sets the store's size (any size), `all` keeps every expert, `off` loads them as stacked tensors
-(the whole pack must then fit); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. With `NI_LOG=1` each
+(the whole pack must then fit); `NI_EXPERT_CAP=<share>` (0 to 1; 0 = none, other values warn and are ignored) sets the RAM share the automatic size keeps the process's GPU memory within for a store short of all the experts (default 0.40 before the M5, none on it); `NI_EXPERT_READERS` (default 16) sets the SSD reader threads. With `NI_LOG=1` each
 request's log says how many of its experts were in memory and how much was read.
 
 On that 48 GB M4 Pro (macOS 27.0.1; a 12 GB store, 35% of the experts, the automatic size there; 17-20 GB peak

@@ -652,13 +652,20 @@ void Qwen4Exp::init_store(const std::string& dir) {
     // passed ~45% of the RAM (15-24 GB stores), so the automatic size kept them within 40% of the RAM. A 48 GB M5 Pro
     // (macOS 26.5) ran 12-30 GB stores (peak footprint up to 71% of the RAM) at full speed, the larger the faster
     // (85-token prompt 29.9 -> 120.6 tok/s, decode 24.5 -> 31.9 at 12 -> 30 GB), so the cap stays for chips before
-    // Apple10 only. NI_EXPERT_CAP=<share of the RAM> sets it on any chip (0 = none). The available-memory guard
+    // Apple10 only. That split is by chip, not by OS: the two runs also differ in macOS (27 vs 26.5), and which of
+    // the two explains the stall is not measured. NI_EXPERT_CAP=<share of the RAM, 0..1> sets it on any chip (0 = none). The available-memory guard
     // (q20::auto_store_size) applies on every chip: the budget assumes the Mac to itself.
     const char* cv = getenv("NI_EXPERT_CAP");
     q20::AutoStoreIn in;
     in.all = all, in.least = size_t(3) * E * lay.bytes, in.left = left, in.used = used, in.keep = keep;
     in.ram = size_t(ram), in.avail = q20::available_memory();
-    in.cap = cv && *cv ? atof(cv) : Gpu::get().apple10() ? 0.0 : 0.40;
+    in.cap = Gpu::get().apple10() ? 0.0 : 0.40;
+    if (cv && *cv) {
+      char* end = nullptr;
+      const double x = strtod(cv, &end);
+      if (end != cv && !*end && x >= 0 && x <= 1) in.cap = x;
+      else logi("NI_EXPERT_CAP=%s is not a share of the RAM between 0 and 1, ignored: using %.2f", cv, in.cap);
+    }
     const q20::AutoStore st = q20::auto_store_size(in);
     o.bytes = st.bytes;
     const double pct = ram ? 100.0 * double(used + st.bytes) / double(ram) : 0;
