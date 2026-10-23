@@ -183,15 +183,19 @@ def seed_of(nonce, turn):
     return int(hashlib.sha256(f"{nonce}/{turn}".encode()).hexdigest()[:8], 16) & 0x7FFFFFFF
 
 
+SIDE_TTFT = []  # the first-token time of every side request of the conversation being run, in order
+
+
 def side_requests(nonce):
     """The harness's side calls: each its own system prompt and a distinct text, so each wants a slot of its own."""
     for k in range(a.side):
         sysmsg = f"[{nonce}/side{k}/{random.getrandbits(32):08x}] Write a title of at most five words for this conversation."
-        chat({"model": a.model, "messages": [{"role": "system", "content": sysmsg},
+        r = chat({"model": a.model, "messages": [{"role": "system", "content": sysmsg},
                                               {"role": "user", "content": excerpt(150, 90000 + 1000 * k)}],
               "max_tokens": 12, "temperature": 0.0, "top_k": 1, "stream": True,
               "stream_options": {"include_usage": True},
               "chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"})
+        SIDE_TTFT.append(r["ttft"])
 
 
 def conversation(size, calls, nonce, word):
@@ -259,6 +263,7 @@ for size in [int(x) for x in a.sizes.split(",") if x]:
         for rep in range(a.reps):
             nonce = f"session {rng.getrandbits(64):016x}"
             word = WORDS[rng.randrange(len(WORDS))]
+            del SIDE_TTFT[:]
             steps, texts, made = conversation(size, calls, nonce, word)
             last = steps[-1]
             if last["kind"] == "q2":
@@ -270,6 +275,7 @@ for size in [int(x) for x in a.sizes.split(",") if x]:
             q = last if last["kind"] == "q2" else {}
             emit({"kind": "conversation", "size": size, "calls_asked": calls, "calls": made, "rep": rep,
                   "nonce": nonce, "q2_ttft": q.get("ttft"), "q2_prompt": q.get("prompt"), "q2_cached": q.get("cached"),
-                  "think_calls": think_calls, "steps": steps, "texts": texts})
+                  "think_calls": think_calls, "side_ttft": list(SIDE_TTFT), "steps": steps,
+                  "texts": texts})
 summary = {f"{s}/{c}": round(statistics.median(v), 4) for (s, c), v in q2.items()}
 print("SUMMARY", a.tag, json.dumps(summary), json.dumps(totals), flush=True)

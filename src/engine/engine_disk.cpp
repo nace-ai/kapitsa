@@ -534,17 +534,25 @@ void Engine::disk_leaving(Slot& slot, int start) {
     // too much to hold a copy of in memory (a 27B conversation of 16k tokens is 1.4-1.6 GB): written to the SSD straight
     // from the slot, the request that replaces it waiting for the write (no more than 3 s, and less than reading the
     // rows again would take: the same weighing as a wait for a capture), or else the conversation is replaced unsaved
+    // (only when the slot is the request's own: a slot dropped for memory is copied with the GPU turn held, and a
+    // write of seconds would stall every other stream)
     const int lost = int(p->entry.tokens.size()) - start;
     const disk_wait::Decision dec = disk_wait::decide(double(bytes), lost, d.write_bpms, d.prefill_tpms);
-    if (!dec.wait) {
-      logi("SSD cache: slot %d's conversation (%zu tokens) is replaced before it was saved: the %.0f MB the SSD lacks "
-           "of it exceed the %.0f MB copied at once, and writing them (about %.0f ms) would take longer than reading "
-           "its %d rows again (about %.0f ms, at most 3 s)", p->slot, p->entry.tokens.size(), bytes / 1e6,
-           d.capture_max / 1e6, dec.write_ms, lost, dec.prefill_ms ? dec.prefill_ms : disk_wait::kMaxWaitMs);
+    if (!slot.busy || !dec.wait) {
+      if (!slot.busy)
+        logi("SSD cache: slot %d's conversation (%zu tokens) is replaced before it was saved: the %.0f MB the SSD lacks "
+             "of it exceed the %.0f MB copied at once (a slot dropped for memory is not written with the GPU turn held)",
+             p->slot, p->entry.tokens.size(), bytes / 1e6, d.capture_max / 1e6);
+      else
+        logi("SSD cache: slot %d's conversation (%zu tokens) is replaced before it was saved: the %.0f MB the SSD lacks "
+             "of it exceed the %.0f MB copied at once, and writing them (about %.0f ms) would take longer than reading "
+             "its %d rows again (about %.0f ms, at most 3 s)", p->slot, p->entry.tokens.size(), bytes / 1e6,
+             d.capture_max / 1e6, dec.write_ms, lost, dec.prefill_ms ? dec.prefill_ms : disk_wait::kMaxWaitMs);
       return;
     }
     auto job = d.store.begin(p->pieces());
-    if (slot.busy) turn_.unlock();  // (the request's own slot is its alone: others take the GPU turn meanwhile)
+    const double w0 = now_ms();
+    turn_.unlock();  // (the request's own slot is its alone: others take the GPU turn meanwhile)
     bool ok = true;
     for (Disk::Piece& pc : c->pieces) {
       ok = d.store.write(*job, pc.kind, pc.key, pc.meta, pc.g.bytes, [&](uint64_t off, uint8_t* dst, size_t n) {
@@ -554,18 +562,18 @@ void Engine::disk_leaving(Slot& slot, int start) {
       if (!ok) break;
     }
     ok = ok && d.store.put(*job, p->entry);
-    if (slot.busy) turn_.lock();
-    const double ms = now_ms() - t0;
+    const double w1 = now_ms();  // (the write alone: the write speed is not the time spent waiting for the turn)
+    turn_.lock();
     if (!ok) {
       logi("SSD cache: slot %d's conversation (%zu tokens) could not be written before it is replaced (no room within "
            "the cache's limit, or a write failed)", p->slot, p->entry.tokens.size());
       return;
     }
-    if (bytes >= (8u << 20)) Disk::smooth(d.write_bpms, double(bytes) / std::max(ms, 1.0));
+    if (bytes >= (8u << 20)) Disk::smooth(d.write_bpms, double(bytes) / std::max(w1 - w0, 1.0));
     slot.disk_version = slot.version;
     logi("SSD cache: slot %d's conversation (%zu tokens, %.0f MB) was too large to copy in memory: written to the SSD "
-         "straight from the slot before it is replaced, in %.0f ms (the request waited for it)", p->slot,
-         p->entry.tokens.size(), bytes / 1e6, ms);
+         "straight from the slot before it is replaced, in %.0f ms (the request waited %.0f ms)", p->slot,
+         p->entry.tokens.size(), bytes / 1e6, w1 - w0, now_ms() - t0);
     return;
   }
   c->job = d.store.begin(p->pieces());
