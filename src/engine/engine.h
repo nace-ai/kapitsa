@@ -336,7 +336,7 @@ class Engine {
   // With DFlash2 the prefilled rows also enter the slot's drafter context ring, as prompt rows do.
   void prefill_history(const ChatRequest& r, const ChatResult& res);
   // The reasoning of a turn this engine wrote, put back into the same turn when a client sends it without (reasoning_memory.h)
-  void remember_reasoning(const ChatResult& res);
+  void remember_reasoning(const ChatRequest& r, const ChatResult& res);
   int restore_reasoning(ChatRequest& r);
   // KFlash: the budgets' cost tables and calibrations (KfBudget) to their cache files now. They are saved when the
   // engine ends and every KfBudget::kSaveEvery cycles between requests; a server stopped by a signal ends no

@@ -1552,11 +1552,11 @@ static std::string content_text(const ojson& c) {
   return a == std::string::npos ? "" : s.substr(a, b + 1 - a);
 }
 
-void Engine::remember_reasoning(const ChatResult& res) {
+void Engine::remember_reasoning(const ChatRequest& r, const ChatResult& res) {
   if (res.finish_reason != "stop" && res.finish_reason != "tool_calls") return;
   std::vector<std::pair<std::string, std::string>> calls;
   for (auto& tc : res.tool_calls) calls.emplace_back(tc.name, tc.arguments);
-  reasoning_.remember(res.content, calls, res.reasoning);
+  reasoning_.remember(r.messages, res.content, calls, res.reasoning);
 }
 
 int Engine::restore_reasoning(ChatRequest& r) { return reasoning_.restore(r.messages); }
@@ -3393,7 +3393,7 @@ ChatResult Engine::chat(const ChatRequest& r_in, const std::function<bool(const 
   }
   if (finish == "stop" && !res.tool_calls.empty()) finish = "tool_calls";
   res.finish_reason = finish;
-  remember_reasoning(res);
+  remember_reasoning(r, res);
   // rows [start, fed_until) are this request's; after tool calls the next request continues the live state as it is
   // (after a final answer the history prefill makes it so)
   disk_filled(slot, start, fed_until);
@@ -3471,8 +3471,8 @@ void Engine::prefill_history(const ChatRequest& r, const ChatResult& res) {
   // template renders answers before the last user query without their think block, so render it that
   // way and keep the text up to the placeholder turn's start
   ChatRequest r2 = r;
-  restore_reasoning(r2);  // as chat() rendered the request
   r2.messages.push_back({{"role", "assistant"}, {"content", res.content}});
+  restore_reasoning(r2);  // as chat() renders the next request: this answer too, when the client will send it without
   // with its reasoning when the client sends reasoning back (it asks to keep every turn's thinking, or an earlier
   // assistant turn came back with it): templates that render past reasoning (Qwen3.8; preserve_thinking) then render
   // this turn as the live state holds it, and there is nothing to prefill
