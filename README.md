@@ -13,7 +13,7 @@ Kapitsa is an inference engine for Apple silicon that runs Qwen, Nemotron and Re
 - [2026/10] 🪶 **Flint on a 16 GB Mac: 1.4× llama.cpp's decode on the same 2-bit GGUF.** `--model flint` takes unsloth's 2-bit GGUF on 16-24 GB Macs: its routed experts run as stored, the rest requantized to 3-6 bits. 61 tok/s decode on an M1 Pro, in 11.6 GB ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-with-2-bit-experts-m1-pro-16-gb-2026-10-22)).
 - [2026/10] 🪨 **Recursive's Flint 40B-A2.5B: on the M4 Pro, 1.1-1.2× the prompt speed of Recursive's own engine.** Decode is level with it on short prompts and pulls ahead as the context grows, to 1.3× at 128K tokens, and 1.6-1.9× llama.cpp's ([numbers](docs/benchmarks.md#recursive-flint-40b-a25b-m4-pro-2026-10-22)).
 - [2026/10] 🚀 **KFlash: tree speculative decoding, up to 3.5× llama.cpp and 2.2× oMLX.** One verify pass checks a whole tree of the drafter's guesses ([how it works](docs/kflash.md)).
-- [2026/10] 🏆 **Kapitsa: the fastest decode in 25 of 27 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
+- [2026/10] 🏆 **Kapitsa: the fastest decode in 32 of 36 model and Mac pairs** against nine engines, up to 2.6× MLX ([poster](#benchmarks)).
 - [2026/10] 🤝 **KFlash budget: subagents decode together.** Three requests at once share one verify pass, up to **+23% total throughput** on the 27B.
 - [2026/10] ⚡ **QMT prefill: read the prompt up to 1.5× faster on M5.** Metal 4 matrix units for the prompt (4B, M5 Pro).
 - [2026/10] 💾 **SSD prefix cache: restart the server, keep the conversation.** A 16K-token follow-up on the 35B starts in **0.16 s instead of 17 s**, about 100× (`--disk-cache`).
@@ -56,11 +56,11 @@ kapitsa update                  # update now (it also updates itself)
 
 ## Benchmarks
 
-Kapitsa has the fastest decode in 25 of the 27 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
+Kapitsa has the fastest decode in 32 of the 36 model and Mac pairs measured against nine engines ([how each number was measured](docs/benchmarks.md#how-the-readme-poster-was-measured)).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks-dark.webp">
-  <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
+  <img alt="Poster of prefill / decode speed for Kapitsa and nine other engines on a MacBook Pro M5 Max, M5 Pro, M4 Pro, M3 Pro and M1 Pro; the numbers are in the poster and in the Models section's tables" src="docs/assets/benchmarks-light.webp">
 </picture>
 
 <sub>**Each cell reads prefill / decode in tokens per second.** Prefill is a 4K-token prompt, decode a 512-token answer at T 0.6 (Flint at its card's T 1.0). × cannot run that model · — not measured. How these were measured, run dates and flags: [docs/benchmarks.md](docs/benchmarks.md#how-the-readme-poster-was-measured).</sub>
@@ -132,13 +132,29 @@ The catalog models measured on each Mac, against the engines that run them: one 
 </details>
 
 <details>
-<summary><b>MacBook Pro (16-inch, 2023) · M3 Pro · 36 GB</b> · 1 model</summary>
+<summary><b>MacBook Pro (16-inch, 2023) · M3 Pro · 36 GB</b> · 10 models</summary>
+
+**Qwen and Nemotron**
+
+| Model | <mark>**Kapitsa**</mark> | <sub>Ollama<br>0.40.8</sub> | <sub>MTPLX<br>2.12.2</sub> | <sub>MLX<br>mlx-lm 0.32.2, mlx-vlm 0.7.8</sub> | <sub>llama.cpp<br>b11669</sub> |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **Qwen3.5-4B** · `4b`<br><sub>dense · 4-bit, 4.6 GB</sub> | 🟩 703 / **120**<br><sub>KFlash</sub> | 600 / 67<br><sub>MTP</sub> | 612 / 64<br><sub>MTP</sub> | 642 / 56<br><sub>MTP</sub> | 512 / 50<br><sub>MTP · b11804</sub> |
+| **Qwen3.5-9B** · `9b`<br><sub>dense · 4-bit, 9.0 GB</sub> | 🟩 381 / **77**<br><sub>KFlash</sub> | — | — | 353 / 27<br><sub>no spec</sub> | 307 / 23<br><sub>no spec · b11804</sub> |
+| **Qwen3.8-27B** · `27b`<br><sub>dense · 4-bit, 20.2 GB</sub> | 🟩 110 / **40**<br><sub>KFlash</sub> | 99 / 23<br><sub>MTP</sub> | 99 / 22<br><sub>MTP</sub> | 102 / 18<br><sub>MTP</sub> | 86 / 16<br><sub>MTP · b11804</sub> |
+| **Qwen3.6-35B-A3B** · `35b`<br><sub>MoE, 3B active · 4-bit, 22.1 GB</sub> | 🟩 855 / **106**<br><sub>KFlash</sub> | 681 / 58<br><sub>MTP</sub> | 671 / 53<br><sub>MTP</sub> | 695 / 53<br><sub>DFlash2</sub> | 578 / 53<br><sub>MTP · b11804</sub> |
+| **Nemotron Dory1.0 4B** · `dory`<br><sub>looped dense · NVFP4, 3.2 GB</sub> | 🟩 450 / **36**<br><sub>no spec</sub> | × | × | 344 / 30<br><sub>no spec</sub> | — |
+| **Nemotron 3 Nano 4B** · `nano-4b`<br><sub>hybrid Mamba-2 · FP8, 5.3 GB</sub> | 765 / 34<br><sub>prompt lookup</sub> | — | — | — | 🟩 413 / **35**<br><sub>no spec · Q4_K_M, b11804</sub> |
+| **Nemotron Nano 9B v2** · `nano-9b`<br><sub>hybrid Mamba-2 · NVFP4, 7.9 GB</sub> | 330 / 21<br><sub>no spec</sub> | — | — | 🟩 **25**<br><sub>no spec · 4-bit</sub> | — |
+| **Nemotron 3.5 Lightning 30B-A3B** · `lightning`<br><sub>hybrid MoE, 3B active · NVFP4, 22.9 GB</sub> | 🟩 788 / **75**<br><sub>KFlash</sub> | — | — | 514 / 39<br><sub>DSpark</sub> | — |
+| **Nemotron 3.5 Bolt 74B-A9B** · `bolt`<br><sub>hybrid MoE, 9B active · 2/4/8-bit mix, 25.1 GB</sub> | 🟩 256 / **50**<br><sub>LiLiCorr</sub> | — | — | — | — |
+
+**Recursive Flint**
 
 | Model | <mark>**Kapitsa**</mark> | <sub>llama.cpp<br>b11804</sub> |
 | --- | ---: | ---: |
 | **Recursive Flint 40B-A2.5B** · `flint`<br><sub>MoE, 2.5B active · 4-bit, 22.6 GB</sub> | 🟩 801 / **74**<br><sub>no spec</sub> | 772 / 51<br><sub>no spec</sub> |
 
-<sub>macOS 14.1, on AC power: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). rec 0.1.0 refuses this Mac: it requires 48 GiB.</sub>
+<sub>macOS 14.1, on AC power: Kapitsa's macOS 14 kernels (macOS 15 and later run fused ones). mlx-serve, oMLX and Splash need a newer macOS (×); LM Studio was not installed; rec 0.1.0 refuses this Mac: it requires 48 GiB. Each cell is one run of the M4 Pro's protocol, the other engines in the M4 Pro's setup (not re-tuned here). Nano 4B and 9B v2: Kapitsa runs NVIDIA's published checkpoints, which keep some layers in BF16/FP8, so it reads more per token than the 4-bit files: the 4B's FP8 is ~1 byte per weight against Q4_K_M's ~0.6, the 9B's NVFP4 ~6.11 GB per token against 4.67 GB for mlx-lm's 4-bit. Nano 9B v2 on mlx-lm: no prefill shown, because its template ignores enable_thinking and the timed first token is a thinking token.</sub>
 
 </details>
 

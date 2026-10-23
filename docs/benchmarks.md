@@ -84,7 +84,25 @@ What each cell of the README's poster and its per-Mac tables under Models ran, M
 - Flint 40B-A2.5B: not measured on this Mac yet (the poster's row is dashes).
 
 **MacBook Pro M3 Pro 36 GB**
-- Flint 40B-A2.5B only, not on the poster: Kapitsa (main `cff1b1e`, #303's macOS 14 kernels) and llama.cpp b11804 on
+- On the poster from 2026-10-23: the 4B, 9B, 27B, 35B-A3B, Lightning and Flint; Dory, the Nano 4B and 9B v2 and Bolt
+  in its table only. macOS 14.1 on AC power, so Kapitsa runs its macOS 14 kernels.
+- Every cell but Flint's: one run of the M4 Pro's protocol through `bench/harness/compare_engines.py`, the models one
+  after another on 2026-10-22/23 ([bench/results/2026-10-22-m3pro-36gb](../bench/results/2026-10-22-m3pro-36gb/README.md),
+  [#369](https://github.com/nace-ai/kapitsa/pull/369)): Kapitsa built from main (`e86dea7` for the four Qwen,
+  `c490f81` for Lightning, Dory, both Nanos and Bolt), each in its catalog default; the other engines in the M4 Pro's
+  setup, not re-tuned on this Mac (Ollama 0.40.8's MLX runner, MTPLX 2.12.2, mlx-lm / mlx-vlm, llama.cpp b11804). Each
+  cell's prefill and decode are the same run. The same folder's `kapitsa bench` records read differently (the
+  35B-A3B's 4K prefill 911 there against the harness's 855), so the two are not mixed in a row: the cells are the
+  harness's only.
+- mlx-serve, oMLX and Splash do not run on macOS 14.1 (×); LM Studio was not installed (—).
+- Kapitsa is behind on the Nano 4B (34.4 against llama.cpp's 34.9 on NVIDIA's Q4_K_M GGUF) and the Nano 9B v2 (20.9
+  against mlx-lm's 24.9 on mlx-community's 4-bit): Kapitsa runs NVIDIA's own checkpoints (the 4B's FP8, the 9B's NVFP4
+  with BF16 layers), which read more bytes per token than those 4-bit files.
+- The Nano 9B v2 on mlx-lm shows no prefill: its chat template ignores `enable_thinking`, so its timed first token is a
+  thinking token and the harness marks those phases invalid; its decode (24.95) stands.
+- Several decode phases carry the harness's loop flag (Kapitsa's 4B and Dory, Ollama's 4B and 35B, MTPLX's 4B,
+  llama.cpp's 9B, mlx-lm's Dory); the cells' notes in `tools/readme_images/readme_images.json` say which.
+- Flint 40B-A2.5B: Kapitsa (main `cff1b1e`, #303's macOS 14 kernels) and llama.cpp b11804 on
   Recursive's Q4_1 GGUF at the card's T 1.0, on macOS 14.1 and AC power, each the mean of the clean pass's two runs
   ([#341](https://github.com/nace-ai/kapitsa/pull/341)); rec 0.1.0 refuses a 36 GB Mac (it requires 48 GiB)
   ([details](#recursive-flint-40b-a25b-m3-pro-36-gb-macos-14-2026-10-22)).
