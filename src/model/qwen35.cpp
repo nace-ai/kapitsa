@@ -202,11 +202,15 @@ static int shortpf_max() {
   return std::clamp(v, 0, 128);
 }
 // Row limits of the other short-prefill paths (read once; 0 turns a path off):
-//   NI_SHORTPF_ATTN_MAX (default 192): attention as (query, head) rows of one KV head with the keys
-//     split over threadgroups (attn_prefill11g / 11gs + attn11_reduce)
+//   NI_SHORTPF_ATTN_MAX (default 128): attention as (query, head) rows of one KV head with the keys
+//     split over threadgroups (attn_prefill11g / 11gs + attn11_reduce). This branch runs before the
+//     qattn_t one, so on an M5 a model whose heads it fits (4B qg4, 35B qg8) takes 11g for a chunk
+//     between the old bound and this one instead of qattn_t: 192 was measured at 141 rows (9.74
+//     against 11.16 ms) and 162 (11.27 against 12.71) on the 27B, which has no qattn_t form, and is
+//     left off the default for that reason.
 //   NI_SHORTPF_MOE_MAX (default 128): MoE experts in 8-row tiles (qmms_moe_gu / qmms_moe_dn)
 static int shortpf_attn_max() {
-  static const int v = std::clamp(env_int("NI_SHORTPF_ATTN_MAX", 192), 0, 512);
+  static const int v = std::clamp(env_int("NI_SHORTPF_ATTN_MAX", 128), 0, 512);
   return v;
 }
 static int shortpf_moe_max() {
@@ -251,16 +255,17 @@ static bool short_qmms(int M, double bytes, bool gu, bool multi, uint32_t K) {
   return bytes < 24e6 && M <= 56;
 }
 
-// A chunk of M new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64: qmt_on, 4-bit
+// A chunk of M >= 64 new rows whose GEMM this matrix's tensor_ops tile can serve (qmtg_m64_n64 / qmt_m64_n64: qmt_on, 4-bit
 // group 64, K a multiple of 64, M >= 64) is faster there than in the short-prefill families, which are sized for the
-// chunks under 64 rows (NI_SHORTPF's own comment). Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
+// chunks under 64 rows (NI_SHORTPF's own comment). qmr_sel().on is checked too: the qmt tile is only reached behind it,
+// so NI_QMM=0 keeps the short-prefill path the chunk had. Measured on the M5 Pro, 27B, 16K cached prefix, one chunk of new
 // rows, short-prefill against tensor_ops: 73 rows 679 -> 399 ms, 124 rows 1005 -> 483 ms. The short-prefill staging
 // bound (one weight read, fewer blocks) only wins below 64 rows, where qmt does not run; 8-bit and unaligned
 // projections, and every MoE expert GEMM, keep the short path they have.
 bool Qwen35::sp_qmt_pref(const QLinear& L, int M) const {
   static const bool on = env_int("NI_SP_QMT", 1) != 0;  // 0 restores the pre-change short-prefill preference
   if (!on || cfg_.moe) return false;  // a MoE model's chunk keeps the short-prefill / qmtm split it had
-  return M >= 64 && qmt_on() && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
+  return M >= 64 && qmt_on() && qmr_sel().on && L.bits == 4 && L.gs == 64 && L.K % 64 == 0;
 }
 
 // Short-prefill qmr tile for M <= 128 rows: R row tiles (1 up to 48 rows, 2 above; fused gate/up
