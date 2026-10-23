@@ -15,9 +15,12 @@ using ojson = nlohmann::ordered_json;
 
 namespace {
 
+// Numbers another Mac sends past this are taken as missing (or, shown, as this): no RAM, speed or round trip comes near
+constexpr double kMaxNum = 1e7;
+
 std::string fmt0(double v) {
   char b[32];
-  snprintf(b, sizeof b, "%.0f", std::isfinite(v) && v > 0 ? v : 0.0);
+  snprintf(b, sizeof b, "%.0f", std::isfinite(v) && v > 0 ? std::min(v, kMaxNum) : 0.0);
   return b;
 }
 
@@ -40,10 +43,11 @@ std::string cut(std::string s, size_t n) {
   return s;
 }
 
+// `v` as a number from 0 to kMaxNum, else `def`
 double to_num(const std::string& v, double def) {
   char* end = nullptr;
   const double x = strtod(v.c_str(), &end);
-  return v.empty() || *end || !std::isfinite(x) ? def : x;
+  return v.empty() || *end || !std::isfinite(x) || x < 0 || x > kMaxNum ? def : x;
 }
 
 // How precise a variant is, for picking among a model's variants: its bits (bf16 16, "4bit" 4, "q2_0" 2, FP8 8,
@@ -124,11 +128,19 @@ MacInfo from_json(const ojson& j) {
   auto str = [&](const char* k, std::string& out) {
     if (j.contains(k) && j[k].is_string()) out = j[k].get<std::string>();
   };
+  // numbers from -1 (a round trip not answered) to kMaxNum, integers within +-2^30; others stay at their defaults
   auto num = [&](const char* k, double& out) {
-    if (j.contains(k) && j[k].is_number()) out = j[k].get<double>();
+    if (!j.contains(k) || !j[k].is_number()) return;
+    const double x = j[k].get<double>();
+    if (std::isfinite(x) && x >= -1 && x <= kMaxNum) out = x;
   };
   auto integer = [&](const char* k, int& out) {
-    if (j.contains(k) && j[k].is_number_integer() && std::abs(j[k].get<int64_t>()) < (int64_t(1) << 30)) out = int(j[k].get<int64_t>());
+    if (!j.contains(k)) return;
+    const auto& v = j[k];
+    if (v.is_number_unsigned() ? v.get<uint64_t>() < (uint64_t(1) << 30)
+                               : v.is_number_integer() && v.get<int64_t>() > -(int64_t(1) << 30) &&
+                                     v.get<int64_t>() < (int64_t(1) << 30))
+      out = int(v.get<int64_t>());
   };
   integer("proto", m.proto);
   str("id", m.id);

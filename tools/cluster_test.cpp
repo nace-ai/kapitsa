@@ -117,6 +117,20 @@ void json_checks() {
         "json: mistyped fields stay at their defaults");
   check(from_json(ojson::parse("[1,2]")).proto == 0 && from_json(ojson::parse("{}")).proto == 0,
         "json: not an object, or no proto: not a Kapitsa server's");
+  // out of range: as missing (another Mac's numbers are not trusted to fit an int, or a line)
+  const MacInfo huge = from_json(ojson::parse(
+      R"({"proto":1,"port":18446744073709551615,"ram_gb":1e308,"tok_s":-5,"rtt_ms":1e30,"budget_gb":9223372036854775808})"));
+  check(huge.proto == 1 && huge.port == 0 && huge.ram_gb == 0 && huge.tok_s == 0 && huge.rtt_ms == 0 &&
+            huge.budget_gb == 0,
+        "json: numbers out of range stay at their defaults", to_json(huge).dump());
+  const std::string big = std::string(1, char(10)) + "proto=1e30" + std::string(1, char(10)) + "ram=1e308" +
+                          std::string(1, char(6)) + "tps=-3";
+  const MacInfo bt = decode_txt(big.data(), big.size());
+  check(bt.proto == 0 && bt.ram_gb == 0 && bt.tok_s == 0, "txt: numbers out of range taken as missing",
+        to_json(bt).dump());
+  MacInfo shown = server("Big", "m", true, 1e308, 1e300);
+  check(link_text(shown).size() < 40 && plain(format_table(shown, {shown}, 200)[2]).find("10000000") != std::string::npos,
+        "a number out of range is shown cut to 10000000, not as a wrong one", link_text(shown));
   const auto keys = to_json(MacInfo{});
   std::string names;
   for (const auto& [k, v] : keys.items()) names += k + " ";
